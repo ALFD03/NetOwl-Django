@@ -1,0 +1,274 @@
+{
+    "planes": [
+        {
+        "name": "Community Plus 100 Mbps"
+        },
+        {
+        "name": "Community Plus 10 Mbps"
+        },
+        {
+        "name": "Community Plus 150 Mbps"
+        },
+        {
+        "name": "Community Plus 15 Mbps"
+        },
+        {
+        "name": "Community Plus 20 Mbps"
+        },
+        {
+        "name": "Community Plus 25 Mbps"
+        },
+        {
+        "name": "Community Plus 30 Mbps"
+        },
+        {
+        "name": "Community Plus 35 Mbps"
+        },
+        {
+        "name": "Community Plus 40 Mbps"
+        },
+        {
+        "name": "Community Plus 45 Mbps"
+        },
+        {
+        "name": "Community Plus 4 Mbps"
+        },
+        {
+        "name": "Community Plus 50 Mbps"
+        },
+        {
+        "name": "Community Plus 60 Mbps"
+        },
+        {
+        "name": "Community Plus 70 Mbps"
+        },
+        {
+        "name": "Community Plus 80 Mbps"
+        },
+        {
+        "name": "Community Plus 8 Mbps"
+        },
+        {
+        "name": "MegaTV 150 Mbps"
+        },
+        {
+        "name": "MegaTV 150 Mbps may 26"
+        },
+        {
+        "name": "MegaTV 1 Gbps"
+        },
+        {
+        "name": "MegaTV 300 Mbps"
+        },
+        {
+        "name": "MegaTV 300 Mbps may 26"
+        },
+        {
+        "name": "MegaTV 500 Mbps"
+        },
+        {
+        "name": "MegaTV 500 Mbps may 26"
+        },
+        {
+        "name": "MegaTV 700 Mbps"
+        },
+        {
+        "name": "MegaTV 700 Mbps may 26"
+        },
+        {
+        "name": "MegaTV 800 Mbps"
+        },
+        {
+        "name": "MegaTV 800 Mbps may 26"
+        },
+        {
+        "name": "MegaTV 900 Mbps"
+        },
+        {
+        "name": "MegaTV 900 Mbps may 26"
+        },
+        {
+        "name": "Pyme 40 Mbps"
+        },
+        {
+        "name": "Pyme 50 Mbps"
+        },
+        {
+        "name": "Pyme FTTH 100 Mbps"
+        },
+        {
+        "name": "Pyme FTTH 100 Mbps MegaTV"
+        },
+        {
+        "name": "Pyme FTTH 2 Gbps"
+        },
+        {
+        "name": "Pyme FTTH 300 Mbps"
+        },
+        {
+        "name": "Pyme FTTH 300 Mbps MegaTV"
+        },
+        {
+        "name": "Pyme FTTH 350 Mbps"
+        },
+        {
+        "name": "Pyme FTTH 350 Mbps MegaTV"
+        },
+        {
+        "name": "Pyme FTTH 400 Mbps"
+        },
+        {
+        "name": "Pyme FTTH 400 Mbps MegaTV"
+        },
+        {
+        "name": "Pyme FTTH 450 Mbps"
+        },
+        {
+        "name": "Pyme FTTH 450 Mbps MegaTV"
+        },
+        {
+        "name": "Pyme FTTH 500 Mbps"
+        },
+        {
+        "name": "Pyme FTTH 500 Mbps MegaTV"
+        },
+        {
+        "name": "Pyme FTTH 60 Mbps"
+        },
+        {
+        "name": "Pyme FTTH 60 Mbps MegaTV"
+        },
+        {
+        "name": "Pyme Performance"
+        },
+        {
+        "name": "Pyme Plus Más"
+        },
+        {
+        "name": "Pyme Plus Ultra"
+        },
+        {
+        "name": "Pyme Ultra Asimétrico"
+        },
+        {
+        "name": "Pyme Básico Asimétrico"
+        },
+        {
+        "name": "Residencial Básico 10 Mbps"
+        },
+        {
+        "name": "Residencial Básico 4 Mbps"
+        },
+        {
+        "name": "Residencial Básico Plus"
+        },
+        {
+        "name": "Residencial Extreme Plus 100 Mbps"
+        },
+        {
+        "name": "Residencial Extreme Plus 80 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 100 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 100 Mbps PD24"
+        },
+        {
+        "name": "Residencial FTTH 10 Gbps"
+        },
+        {
+        "name": "Residencial FTTH 10 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 1 Gbps"
+        },
+        {
+        "name": "Residencial FTTH 1 Gbps PD24"
+        },
+        {
+        "name": "Residencial FTTH 200 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 200 Mbps PD24"
+        },
+        {
+        "name": "Residencial FTTH 20 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 250 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 2.5 Gbps"
+        },
+        {
+        "name": "Residencial FTTH 30 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 35 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 400 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 400 Mbps PD24"
+        },
+        {
+        "name": "Residencial FTTH 400 Mbps promocional día del amor"
+        },
+        {
+        "name": "Residencial FTTH 600 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 600 Mbps PD24"
+        },
+        {
+        "name": "Residencial FTTH 700 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 800 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 800 Mbps PD24"
+        },
+        {
+        "name": "Residencial FTTH 80 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 850 Mbps"
+        },
+        {
+        "name": "Residencial FTTH 85 Mbps"
+        },
+        {
+        "name": "Residencial FTTH Esencial - 50Mbps"
+        },
+        {
+        "name": "Residencial Performance Plus"
+        },
+        {
+        "name": "Residencial Performance Plus 50 Mbps"
+        },
+        {
+        "name": "Residencial RF 15 Mbps"
+        },
+        {
+        "name": "Residencial RF 50 Mbps"
+        },
+        {
+        "name": "Residencial Select 35 Mbps"
+        },
+        {
+        "name": "Residencial Ultra 30 Mbps"
+        },
+        {
+        "name": "Cancelado"
+        },
+        {
+        "name": "Transporte de Datos"
+        },
+        {
+        "name": "Internet Dedicado"
+        }
+    ]
+}

@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Importar {{ import_type }} - Churn Rate Analyzer{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Importar {{ import_type }}</h5>
+        <p class="text-muted">
+          Seleccione un archivo CSV para importar los datos de {{ import_type|lower }}.
+        </p>
+        <form method="post" enctype="multipart/form-data" data-loading>
+          {% csrf_token %}
+          <div class="mb-3">
+            {{ form.csv_file.label_tag }}
+            {{ form.csv_file }}
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              Subir e importar
+            </button>
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

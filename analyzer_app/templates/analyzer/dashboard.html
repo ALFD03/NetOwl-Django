@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - Churn Rate Analyzer{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Ejecutar análisis</h5>
+        <form method="post" data-loading>
+          {% csrf_token %}
+          <div class="mb-3">
+            {{ form.month.label_tag }}
+            {{ form.month }}
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            Ejecutar análisis
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mt-3">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Acciones rápidas</h5>
+        <div class="d-grid gap-2">
+          <a href="{% url 'import_subscriptions' %}" class="btn btn-outline-primary">
+            Importar Subscripciones CSV
+          </a>
+          <a href="{% url 'import_logs' %}" class="btn btn-outline-primary">
+            Importar Logs CSV
+          </a>
+          <a href="{% url 'results_list' %}" class="btn btn-outline-primary">
+            Ver resultados históricos
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    {% if periodo_label and summaries %}
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Resumen - {{ periodo_label }}</h6>
+        <a href="{% url 'results_detail' periodo_label %}" class="btn btn-sm btn-outline-primary">Ver detalle completo</a>
+      </div>
+      <div class="card-body">
+        {% for s in summaries %}
+        <div class="mb-3">
+          <h6 class="text-primary-emphasis mb-2">Método {{ s.metodo }}</h6>
+          <div class="row g-2">
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.activos_inicio }}</div>
+                <div class="metric-label">Activos inicio</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.activos_final }}</div>
+                <div class="metric-label">Activos final</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.nuevos_mes }}</div>
+                <div class="metric-label">Nuevos</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.bajas_netas_balance }}</div>
+                <div class="metric-label">Bajas netas</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.churn_neto_pct }}<span class="metric-unit">%</span></div>
+                <div class="metric-label">Churn neto</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.churn_bruto_pct }}<span class="metric-unit">%</span></div>
+                <div class="metric-label">Churn bruto</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.reactivaciones }}</div>
+                <div class="metric-label">Reactivaciones</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.tasa_aporte_react_pct }}<span class="metric-unit">%</span></div>
+                <div class="metric-label">Tasa aporte react.</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.tasa_winback_pct }}<span class="metric-unit">%</span></div>
+                <div class="metric-label">Winback</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.adiciones_brutas }}</div>
+                <div class="metric-label">Adiciones brutas</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.adiciones_netas }}</div>
+                <div class="metric-label">Adiciones netas</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">${{ s.total_billing }}</div>
+                <div class="metric-label">Billing</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">${{ s.arpu }}</div>
+                <div class="metric-label">ARPU</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.corte_impagado }}</div>
+                <div class="metric-label">Corte impagado</div>
+              </div>
+            </div>
+            <div class="col-4 col-md-3">
+              <div class="metric-card">
+                <div class="metric-value">{{ s.indice_reemplazo_react_pct }}<span class="metric-unit">%</span></div>
+                <div class="metric-label">Índice reemplazo</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% if not forloop.last %}<hr>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% elif periodo_label and not summaries %}
+    <div class="card shadow-sm">
+      <div class="card-body text-muted text-center py-4">
+        Análisis ejecutado para <strong>{{ periodo_label }}</strong>. No se encontraron métricas almacenadas.
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="mb-0">Últimos resultados</h6>
+        <a href="{% url 'results_list' %}" class="btn btn-sm btn-outline-primary">Ver todos</a>
+      </div>
+      <div class="card-body p-0">
+        {% if results %}
+        <div class="table-responsive">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Periodo</th>
+                <th>Método</th>
+                <th>Activos inicio</th>
+                <th>Activos final</th>
+                <th>Nuevos</th>
+                <th>Bajas netas</th>
+                <th>Churn neto</th>
+                <th>Churn bruto</th>
+                <th>React.</th>
+                <th>Winback</th>
+                <th>ARPU</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in results %}
+              <tr>
+                <td>{{ row.periodo }}</td>
+                <td>{{ row.metodo }}</td>
+                <td>{{ row.activos_inicio }}</td>
+                <td>{{ row.activos_final }}</td>
+                <td>{{ row.nuevos_mes }}</td>
+                <td>{{ row.bajas_netas_balance }}</td>
+                <td>{{ row.churn_neto_pct }}%</td>
+                <td>{{ row.churn_bruto_pct }}%</td>
+                <td>{{ row.reactivaciones }}</td>
+                <td>{{ row.tasa_winback_pct }}%</td>
+                <td>${{ row.arpu }}</td>
+                <td>
+                  <a href="{% url 'results_detail' row.periodo %}" class="btn btn-sm btn-outline-primary">
+                    Detalle
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-muted text-center">
+          No hay resultados aún. Seleccione un mes y ejecute el análisis.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
