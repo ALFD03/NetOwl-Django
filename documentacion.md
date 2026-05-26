@@ -1223,4 +1223,4 @@ python manage.py collectstatic --noinput
 
 ---
 
-*Documentacion generada el 25/05/2026*
+***Autor:*** *Angel Flores*
