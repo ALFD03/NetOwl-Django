@@ -1,11 +1,18 @@
+/* ============================================================
+   styles.css — Estilos personalizados de Churn Rate Analyzer
+   ============================================================ */
+
+/* Fondo general de la aplicación (gris muy claro) */
 body {
   background-color: #f0f4f8;
 }
 
+/* Barra de navegación: sobrescribe color primary de Bootstrap */
 .navbar.bg-primary {
   background-color: #1565c0 !important;
 }
 
+/* Botón primary personalizado */
 .btn-primary {
   background-color: #1565c0;
   border-color: #1565c0;
@@ -16,6 +23,7 @@ body {
   border-color: #0d47a1;
 }
 
+/* Botón outline-primary personalizado */
 .btn-outline-primary {
   color: #1565c0;
   border-color: #1565c0;
@@ -27,21 +35,25 @@ body {
   color: #fff;
 }
 
+/* Tarjetas: sin borde por defecto */
 .card {
   border: none;
 }
 
+/* Cabeceras de tarjetas: fondo azul claro */
 .card-header {
   background-color: #e3f2fd;
   border-bottom: 1px solid #bbdefb;
 }
 
+/* Títulos dentro de cabeceras de tarjeta */
 .card-header h5,
 .card-header h6 {
   font-weight: 600;
   color: #0d47a1;
 }
 
+/* Tablas: cabecera con fondo azul claro, texto sin wrap y tamaño reducido */
 .table thead.table-light th {
   background-color: #e3f2fd;
   color: #0d47a1;
@@ -49,15 +61,18 @@ body {
   font-size: 0.8125rem;
 }
 
+/* Celdas de tabla: tamaño compacto */
 .table td {
   font-size: 0.8125rem;
   vertical-align: middle;
 }
 
+/* Migas de pan: tamaño de letra */
 .breadcrumb {
   font-size: 0.875rem;
 }
 
+/* Tarjetas de métrica (KPI): centradas, con fondo gris claro y hover azul */
 .metric-card {
   text-align: center;
   padding: 1rem;
@@ -70,12 +85,14 @@ body {
   background: #e3f2fd;
 }
 
+/* Valor numérico de la métrica */
 .metric-card .metric-value {
   font-size: 1.5rem;
   font-weight: 700;
   color: #1565c0;
 }
 
+/* Etiqueta de la métrica (texto en mayúsculas pequeño) */
 .metric-card .metric-label {
   font-size: 0.75rem;
   color: #64748b;
@@ -84,11 +101,13 @@ body {
   margin-top: 0.25rem;
 }
 
+/* Unidad (ej. % o $) dentro del valor de métrica */
 .metric-card .metric-unit {
   font-size: 0.875rem;
   color: #1565c0;
 }
 
+/* Overlay de carga: cubre toda la pantalla con fondo semitransparente y blur */
 .loading-overlay {
   position: fixed;
   top: 0;
@@ -103,6 +122,7 @@ body {
   justify-content: center;
 }
 
+/* Caja central del overlay de carga (spinner + texto) */
 .loading-overlay .loading-box {
   background: white;
   padding: 2rem 3rem;

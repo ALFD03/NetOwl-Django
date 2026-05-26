@@ -1,3 +1,23 @@
+"""
+Vistas (controladores) de la aplicación analyzer_app.
+
+Cada función recibe un objeto HttpRequest y devuelve una HttpResponse,
+generalmente renderizando un template HTML. Cubre cuatro funcionalidades
+principales:
+
+    1. Dashboard: formulario de selección de mes, ejecución del análisis
+       de churn y visualización de resultados recientes.
+    2. Importación de CSVs: suscripciones y logs de llamadas.
+    3. Listado histórico de resultados.
+    4. Detalle de un período específico (resumen + dimensiones).
+
+Dependencias:
+    - django.contrib.messages (notificaciones flash al usuario)
+    - pandas (lectura de tablas desde DB)
+    - Backend: ChurnRateAnalyzer, DBConnector, import_*, Periodo
+    - Formularios: CSVUploadForm, MonthForm
+"""
+
 import io
 import os
 import sys
@@ -16,6 +36,23 @@ from .forms import CSVUploadForm, MonthForm
 
 
 def dashboard(request):
+    """
+    Vista principal del dashboard.
+
+    En GET: muestra el formulario de selección de mes y los últimos 10
+    resultados disponibles en la tabla 'cierre_churn_historico'.
+
+    En POST: ejecuta el análisis de churn para el mes seleccionado,
+    captura la salida de consola del backend y la muestra al usuario,
+    junto con las métricas resumidas de dicho período.
+
+    Args:
+        request (HttpRequest): Solicitud HTTP entrante.
+
+    Returns:
+        HttpResponse: Página renderizada con formulario, resultados y
+                      mensajes de información/error.
+    """
     initial_data = {"month": datetime.now().strftime("%Y-%m")}
     form = MonthForm(initial=initial_data)
     result_output = None
@@ -30,6 +67,8 @@ def dashboard(request):
                 periodo = Periodo.build(f"{mes}-01")
                 periodo_label = periodo.label()
 
+                # Redirige la salida estándar (stdout/stderr) a un buffer
+                # para capturar los logs generados por ChurnRateAnalyzer.run()
                 capture = io.StringIO()
                 old_out = sys.stdout
                 old_err = sys.stderr
@@ -66,6 +105,20 @@ def dashboard(request):
 
 
 def import_subscriptions(request):
+    """
+    Vista para importar un archivo CSV de suscripciones.
+
+    El archivo se guarda temporalmente en disco, se procesa mediante
+    import_subscriptions_csv() (que realiza limpieza y normalización),
+    y se redirige al dashboard. En caso de error, se muestra un mensaje
+    flash con la descripción.
+
+    Args:
+        request (HttpRequest): Solicitud HTTP (GET o POST).
+
+    Returns:
+        HttpResponse: Página de carga (GET) o redirección al dashboard (POST).
+    """
     if request.method == "POST":
         form = CSVUploadForm(request.POST, request.FILES)
         if form.is_valid():
@@ -99,6 +152,19 @@ def import_subscriptions(request):
 
 
 def import_logs(request):
+    """
+    Vista para importar un archivo CSV de logs de llamadas.
+
+    Similar a import_subscriptions, pero procesa el archivo mediante
+    import_logs_csv(). No realiza limpieza de datos duplicados, solo
+    carga los registros tal cual.
+
+    Args:
+        request (HttpRequest): Solicitud HTTP (GET o POST).
+
+    Returns:
+        HttpResponse: Página de carga (GET) o redirección al dashboard (POST).
+    """
     if request.method == "POST":
         form = CSVUploadForm(request.POST, request.FILES)
         if form.is_valid():
@@ -132,11 +198,40 @@ def import_logs(request):
 
 
 def results_list(request):
+    """
+    Vista que muestra el listado completo de todos los períodos analizados.
+
+    Obtiene todos los registros de la tabla 'cierre_churn_historico'
+    ordenados del más reciente al más antiguo.
+
+    Args:
+        request (HttpRequest): Solicitud HTTP.
+
+    Returns:
+        HttpResponse: Página con la tabla histórica completa.
+    """
     rows = _fetch_all_results()
     return render(request, "analyzer/results_list.html", {"periods": rows})
 
 
 def results_detail(request, periodo):
+    """
+    Vista de detalle para un período de análisis específico.
+
+    Consulta dos tablas:
+        - cierre_churn_historico : métricas resumidas del período.
+        - master_churn_dimensiones : desglose por dimensiones (plan,
+          zona, etc.) para ese mismo período.
+
+    Si una tabla no existe o está vacía, se omite silenciosamente.
+
+    Args:
+        request (HttpRequest): Solicitud HTTP.
+        periodo (str): Identificador del período (ej. "2025-01").
+
+    Returns:
+        HttpResponse: Página con el detalle del período.
+    """
     db = DBConnector()
     summaries = []
     dimensions = []
@@ -165,6 +260,14 @@ def results_detail(request, periodo):
 
 
 def _fetch_recent_results():
+    """
+    Consulta los últimos 10 períodos analizados (función auxiliar).
+
+    Returns:
+        list[dict]: Lista de diccionarios con los registros más recientes
+                    de la tabla 'cierre_churn_historico', o lista vacía
+                    si hay error o no hay datos.
+    """
     db = DBConnector()
     try:
         df = db.read_table("cierre_churn_historico")
@@ -177,6 +280,14 @@ def _fetch_recent_results():
 
 
 def _fetch_all_results():
+    """
+    Consulta todos los períodos analizados (función auxiliar).
+
+    Returns:
+        list[dict]: Lista completa de diccionarios con todos los registros
+                    de la tabla 'cierre_churn_historico', ordenados del
+                    más reciente al más antiguo.
+    """
     db = DBConnector()
     try:
         df = db.read_table("cierre_churn_historico")
@@ -189,6 +300,16 @@ def _fetch_all_results():
 
 
 def _fetch_summary_for_period(periodo_label):
+    """
+    Consulta las métricas resumidas de un período específico (función auxiliar).
+
+    Args:
+        periodo_label (str): Etiqueta del período (ej. "2025-01").
+
+    Returns:
+        list[dict]: Registros de 'cierre_churn_historico' filtrados por
+                    período, o lista vacía si no hay datos o hay error.
+    """
     db = DBConnector()
     try:
         df = db.read_table("cierre_churn_historico")
