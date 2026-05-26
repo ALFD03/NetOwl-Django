@@ -1,100 +1,152 @@
-# Churn Rate Analyzer V2
+# Churn Rate Analyzer
 
-Sistema modular para el cálculo de Churn Rate, métricas de reactivación, ARPU, tiempos de vida y análisis por dimensiones (zona, sucursal, municipio, campaña, producto).
+Sistema web para el cálculo de Churn Rate, métricas de reactivación, ARPU, tiempos de vida y análisis por dimensiones (zona, sucursal, municipio, campaña, producto).
+
+## Stack tecnológico
+
+| Capa | Tecnología |
+|------|-----------|
+| Backend | Django 5 + Python 3.11 |
+| Base de datos | PostgreSQL 15+ |
+| Frontend | Bootstrap 5, CSS propio, Flatpickr |
+| Estáticos | Whitenoise (comprimidos y cacheados) |
+| Servidor web | Gunicorn (timeout 300s) |
+| Contenedor | Docker + Docker Compose |
 
 ## Arquitectura
 
 ```
-ChurnRateAnalyzerV2/
-├── main.py                      # Punto de entrada (CLI + GUI)
-├── 
-├── Planes.json                  # Catálogo de 84 planes para validación
-├── Zonas.json                   # 45 zonas geográficas
+ChurnRateAnalyzer/
+├── manage.py                     # Entry point Django
+├── requirements.txt              # Dependencias Python
+├── Dockerfile                    # Imagen Docker para produccion
+├── .env.example                  # Template de variables de entorno
 │
-├── backend/
-│   ├── __init__.py
-│   ├── .env                     # Variables de entorno
-│   ├── config.py                # Constantes, variables de entorno
-│   ├── utils.py                 # normalize_text(), parse_date()
-│   ├── models.py                # Periodo (dataclass con build() y label())
-│   ├── database.py              # DBConnector (pool, read_table, save_historico, copy_dataframe)
-│   └── analyzer.py              # ChurnRateAnalyzer (núcleo del negocio)
+├── churn_web/                    # Proyecto Django
+│   ├── settings.py               # Configuracion (DB, static, middleware)
+│   ├── urls.py                   # Rutas raiz
+│   └── wsgi.py                   # WSGI para Gunicorn
 │
-└── frontend/
-    ├── __init__.py
-    ├── theme.py                 # Paleta de colores para la GUI
-    ├── imports.py               # Importación y limpieza de CSV
-    └── gui.py                   # Interfaz Flet
+├── analyzer_app/                 # App Django (logica de negocio)
+│   ├── backend/                  # Nucleo del analisis (sin cambios)
+│   │   ├── config.py             # Constantes y variables de entorno
+│   │   ├── utils.py              # normalize_text(), parse_date()
+│   │   ├── models.py             # Periodo (dataclass)
+│   │   ├── database.py           # DBConnector (pool, read, save, copy)
+│   │   ├── analyzer.py           # ChurnRateAnalyzer (pipeline completo)
+│   │   └── imports.py            # Importacion y limpieza de CSV
+│   ├── forms.py                  # MonthForm, CSVUploadForm
+│   ├── views.py                  # Dashboard, import, results
+│   └── templates/analyzer/       # Templates HTML
+│       ├── dashboard.html
+│       ├── import_csv.html
+│       ├── results_list.html
+│       └── results_detail.html
+│
+├── templates/                    # Templates raiz
+│   ├── base.html                 # Layout principal (Bootstrap + Flatpickr)
+│   └── includes/navbar.html      # Navegacion
+│
+├── static/                       # Archivos estaticos
+│   ├── css/styles.css
+│   └── js/main.js
+│
+├── Planes.json                   # Catalogo de planes para validacion
+└── Zonas.json                    # Zonas geograficas
 ```
 
 ## Requisitos
-```
-| **PostgreSQL** | 12+ | 15+ |
-| **Python** | 3.10+ | 3.12+ |
-```
-## Instalación
 
-```bash
-git clone https://github.com/ALFD03/ChurnRateAnalyzerV2
-cd ChurnRateAnalyzerV2
-python -m venv venv
-# Windows: .\venv\Scripts\activate
-# Linux/Mac: source venv/bin/activate
-pip install -r requirements.txt
-```
+- Docker y Docker Compose
+- PostgreSQL (en Docker o externo)
 
-## Configuración
+## Configuracion
 
-Crear archivo `.env` en backend:
+Variables de entorno necesarias (`.env` o en `environment` del compose):
 
 ```env
-HOST=localhost
-DB=churn_db
-USER=postgres
-PASS=tu_password
+HOST=db                           # Nombre del servicio PostgreSQL
+DB=Netcom                         # Nombre de la base de datos
+USER=metabase                     # Usuario de base de datos
+PASS=tu_password                  # Contrasena
 PORT=5432
 SCHEMA=public
+
+DJANGO_SECRET_KEY=genera-una-clave-unica
+DJANGO_DEBUG=False
+DJANGO_ALLOWED_HOSTS=*
 ```
 
-## Uso
+## Quick Start con Docker
 
-### Interfaz gráfica
+Agrega el servicio `app` a tu `docker-compose.yml`:
+
+```yaml
+app:
+    build: ./ChurnRateAnalyzer/
+    container_name: churn_app
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=db
+      - DB=Netcom
+      - USER=metabase
+      - PASS=tu_password
+      - PORT=5432
+      - SCHEMA=public
+      - DJANGO_SECRET_KEY=genera-una-clave-unica
+      - DJANGO_DEBUG=False
+      - DJANGO_ALLOWED_HOSTS=*
+    depends_on:
+      - db
+    restart: always
+```
 
 ```bash
-python main.py
+# Construir la imagen
+docker compose build app
+
+# Levantar el servicio
+docker compose up -d app
+
+# Migraciones de Django (solo primera vez)
+docker compose exec app python manage.py migrate
+
+# Acceder en el navegador
+# http://localhost:8000
 ```
 
-Ventana principal con:
-1. **Selector de mes** (YYYY-MM) — define el período de análisis
-2. **Importar CSV de Suscripciones** — carga y consolida suscripciones
-3. **Importar CSV de Logs** — carga historial de eventos
-4. **Ejecutar Análisis** — corre el pipeline completo
+## Uso web
 
-### Línea de comandos
+### Dashboard (`/`)
+- Seleccionar mes y ano con el calendario Flatpickr
+- Hacer clic en "Ejecutar analisis"
+- Ver metricas resumidas en tarjetas (activos, churn, reactivaciones, ARPU, etc.)
+- Tabla "Ultimos resultados" siempre visible al pie
 
-```bash
-# Ejecutar análisis para abril 2026
-python main.py --periodo 2026-04
+### Importar CSVs (`/import/subscriptions/` y `/import/logs/`)
+- Subir archivo CSV de suscripciones o logs
+- Se procesa automaticamente (limpieza, consolidacion, carga a DB)
 
-# Ejecutar con importación previa (suscripciones + logs)
-python main.py --periodo 2026-04 --subscriptions data/subs.csv --logs data/logs.csv
+### Resultados (`/results/`)
+- Lista historica de todos los periodos analizados
+- Detalle por periodo con KPIs y desglose por dimensiones
+
+## Pipeline de analisis (`analyzer_app/backend/analyzer.py`)
+
 ```
-
-## Pipeline de análisis (`backend/analyzer.py`)
-
-```
-1.  Carga de datos (DB → DataFrames)
-2.  Limpieza y normalización de logs
+1.  Carga de datos (DB   DataFrames)
+2.  Limpieza y normalizacion de logs
 3.  Fotos de cartera (activos inicio / activos final / nuevos)
-4.  Inactivos al inicio del período
-5.  ARPU (facturación total / activos final)
+4.  Inactivos al inicio del periodo
+5.  ARPU (facturacion total / activos final)
 6.  Reactivaciones segmentadas (solo si resultan activas al cierre)
 7.  Corte por factura impagada
-8.  Método Financiero (balance contable)
-9.  Método Operativo (transiciones en logs)
+8.  Metodo Financiero (balance contable)
+9.  Metodo Operativo (transiciones en logs)
 10. KPI final (churn neto/bruto, winback, ARPU, adiciones, etc.)
-11. Dimensiones (zona, sucursal, municipio, campaña, producto)
-12. Tiempos de vida (días activo, días cancelado)
+11. Dimensiones (zona, sucursal, municipio, campana, producto)
+12. Tiempos de vida (dias activo, dias cancelado)
 ```
 
 ## Tablas de base de datos
@@ -104,58 +156,106 @@ python main.py --periodo 2026-04 --subscriptions data/subs.csv --logs data/logs.
 | Tabla | Contenido |
 |---|---|
 | `Subscripciones` | Suscripciones consolidadas (una fila por orden) |
-| `Subscripciones-b` | Datos detallados por línea de orden |
+| `Subscripciones-b` | Datos detallados por linea de orden |
 | `Subscripciones-logs` | Historial de cambios de estado |
 
-### Salida (se generan en cada ejecución)
+### Salida (se generan en cada ejecucion)
 
 | Tabla | Columnas principales |
 |---|---|
 | `cierre_churn_historico` | `periodo`, `metodo`, `activos_inicio`, `activos_final`, `nuevos_mes`, `bajas_netas_balance`, `bajas_brutas_auditoria`, `churn_neto_pct`, `churn_bruto_pct`, `react_6_churn`, `react_8_30days`, `react_4_paused`, `total_inactivos`, `tasa_winback_pct`, `total_billing`, `arpu`, `reactivaciones`, `react_6_8`, `tasa_aporte_react_pct`, `indice_reemplazo_react_pct`, `adiciones_brutas`, `adiciones_netas`, `corte_impagado` |
-| `master_activos_cierre` | Cartera de activos al cierre del período |
-| `master_reactivaciones` | Reactivaciones del período |
+| `master_activos_cierre` | Cartera de activos al cierre del periodo |
+| `master_reactivaciones` | Reactivaciones del periodo |
 | `master_bajas_detalladas` | Bajas detalladas (Financiero y Operativo) |
 | `master_corte_impagado` | Suscripciones con corte por impago |
-| `master_inactivos_detallados` | Suscripciones inactivas al inicio del período |
-| `master_tiempos_vida` | Detalle por orden: días activo, días cancelado |
+| `master_inactivos_detallados` | Suscripciones inactivas al inicio del periodo |
+| `master_tiempos_vida` | Detalle por orden: dias activo, dias cancelado |
 | `master_tiempo_global` | Promedios globales de tiempos de vida |
-| `master_churn_dimensiones` | Métricas desglosadas por dimensión (`zona`, `sucursal`, `municipio`, `campanna`, `producto`) |
+| `master_churn_dimensiones` | Metricas desglosadas por dimension (`zona`, `sucursal`, `municipio`, `campanna`, `producto`) |
 
-## Métricas calculadas
+## Metricas calculadas
 
-| Métrica | Fórmula |
+| Metrica | Formula |
 |---|---|
-| **Churn neto (Financiero)** | `max(0, activos_inicio + nuevos - activos_final) / activos_inicio × 100` |
-| **Churn bruto (Auditoría)** | `(bajas_netas + react_audit) / activos_inicio × 100` |
+| **Churn neto (Financiero)** | `max(0, activos_inicio + nuevos - activos_final) / activos_inicio x 100` |
+| **Churn bruto (Auditoria)** | `(bajas_netas + react_audit) / activos_inicio x 100` |
 | **ARPU** | `sum(Total de activos final) / activos final` |
-| **Tasa Winback** | `reactivaciones_únicas / inactivos_inicio × 100` |
-| **Tasa Aporte Reactivaciones** | `react_6_8 / (nuevas + react_6_8) × 100` |
-| **Índice Reemplazo Reactivaciones** | `react_6_8 / bajas_fin_netas × 100` |
+| **Tasa Winback** | `reactivaciones_unicas / inactivos_inicio x 100` |
+| **Tasa Aporte Reactivaciones** | `react_6_8 / (nuevas + react_6_8) x 100` |
+| **Indice Reemplazo Reactivaciones** | `react_6_8 / bajas_fin_netas x 100` |
 | **Adiciones Brutas** | `nuevas - bajas_fin_netas` |
 | **Adiciones Netas** | `(nuevas + react_6_8) - bajas_fin_netas` |
-| **Promedio días activo** | `avg(f_churn - f_ini_dt)` sobre órdenes con churn |
-| **Promedio días cancelado** | `avg(f_react - f_churn)` sobre órdenes con reactivación |
+| **Promedio dias activo** | `avg(f_churn - f_ini_dt)` sobre ordenes con churn |
+| **Promedio dias cancelado** | `avg(f_react - f_churn)` sobre ordenes con reactivacion |
+
+## Flujo de trabajo Git y deploy
+
+### Ramas recomendadas
+
+```
+master        # Produccion (lo que corre en el servidor)
+  develop     # Desarrollo local
+    feature/* # Cambios especificos
+    fix/*     # Correcciones
+```
+
+### Desarrollo local
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/mi-cambio
+
+# ... codificar, probar en local ...
+
+git add -A
+git commit -m "Descripcion del cambio"
+git push origin feature/mi-cambio
+# Crear Pull Request a develop en GitHub
+```
+
+### Despliegue a produccion
+
+```bash
+# 1. Merge de develop a master
+git checkout master
+git merge develop
+git push origin master
+
+# 2. En el servidor
+ssh usuario@servidor
+cd /ruta/ChurnRateAnalyzer
+git pull origin master
+docker compose build app
+docker compose up -d app
+docker compose exec app python manage.py migrate   # si hay cambios de DB
+```
+
+### Script de deploy (opcional)
+
+Crea `deploy.sh` en el servidor:
+
+```bash
+#!/bin/bash
+git pull origin master
+docker compose build app
+docker compose up -d app
+docker compose exec app python manage.py migrate
+```
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
 
 ## Notas importantes
 
-- Reactivaciones solo se cuentan si la suscripción está **activa al cierre del período**
+- Reactivaciones solo se cuentan si la suscripcion esta **activa al cierre del periodo**
 - `react_6_8` considera solo reactivaciones provenientes de `6_churn` y `8_30days` (excluye `4_paused`)
-- El método **Financiero** usa fórmula de balance contable: `activos_inicio - (activos_final - nuevos)`
-- El método **Operativo** cuenta transiciones reales desde logs (`3_progress → 4_paused/6_churn`)
-- Los datos duplicados por período se evitan automáticamente vía DELETE + INSERT en `save_historico()`
-
-## Desarrollo
-
-```bash
-# Verificar sintaxis de todos los módulos
-python -c "
-import ast, pathlib
-for f in sorted(pathlib.Path('.').rglob('*.py')):
-    if 'venv' in str(f) or '__pycache__' in str(f): continue
-    ast.parse(f.read_text(encoding='utf-8'))
-    print(f'{f} OK')
-"
-```
+- El metodo **Financiero** usa formula de balance contable: `activos_inicio - (activos_final - nuevos)`
+- El metodo **Operativo** cuenta transiciones reales desde logs (`3_progress - 4_paused/6_churn`)
+- Los datos duplicados por periodo se evitan automaticamente via DELETE + INSERT en `save_historico()`
+- Los archivos estaticos se sirven con Whitenoise (no requiere nginx para produccion basica)
 
 ## Autor
 
