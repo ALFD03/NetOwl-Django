@@ -1,16 +1,23 @@
+<!-- [navbar.html] Barra de navegación principal incluida desde base.html.
+     Sin contexto Django adicional; usa únicamente etiquetas url. -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
   <div class="container-fluid">
+    <!-- Marca / logo del sitio, enlaza al dashboard -->
     <a class="navbar-brand fw-semibold" href="{% url 'dashboard' %}">
       Churn Analyzer
     </a>
+    <!-- Botón de colapso para pantallas pequeñas (hamburguesa) -->
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
       <span class="navbar-toggler-icon"></span>
     </button>
+    <!-- Menú de navegación colapsable -->
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav me-auto">
+        <!-- Enlace al dashboard -->
         <li class="nav-item">
           <a class="nav-link text-white" href="{% url 'dashboard' %}">Dashboard</a>
         </li>
+        <!-- Dropdown "Importar" con opciones para subir CSV de subscripciones y logs -->
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
             Importar
@@ -20,6 +27,7 @@
             <li><a class="dropdown-item text-white" href="{% url 'import_logs' %}">Logs</a></li>
           </ul>
         </li>
+        <!-- Enlace a la lista de resultados históricos -->
         <li class="nav-item">
           <a class="nav-link text-white" href="{% url 'results_list' %}">Resultados</a>
         </li>

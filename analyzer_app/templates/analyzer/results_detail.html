@@ -4,6 +4,11 @@
 {% block title %}Detalle {{ periodo }} - Churn Rate Analyzer{% endblock %}
 
 {% block content %}
+<!-- [results_detail.html] Vista detallada de un período específico. Contexto esperado:
+     - periodo (str): identificador del período (ej. "2025-01")
+     - summaries (list): lista de dicts con KPIs por método
+     - dimensions (list): lista de dicts con desglose por dimensión/segmento -->
+<!-- Migas de pan (breadcrumb): Dashboard > Resultados > [período actual] -->
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb">
     <li class="breadcrumb-item"><a href="{% url 'dashboard' %}">Dashboard</a></li>
@@ -14,6 +19,7 @@
 
 <h5 class="mb-3">Periodo: {{ periodo }}</h5>
 
+<!-- Tarjetas de resumen KPI, una por método de análisis -->
 <div class="row g-3 mb-4">
   {% for s in summaries %}
   <div class="col-md-6">
@@ -22,6 +28,7 @@
         <h6 class="mb-0">Método {{ s.metodo }}</h6>
       </div>
       <div class="card-body">
+        <!-- Pares etiqueta/valor organizados en grilla de 2 columnas -->
         <div class="row g-2">
           <div class="col-6"><small class="text-muted">Activos inicio</small><br><strong>{{ s.activos_inicio }}</strong></div>
           <div class="col-6"><small class="text-muted">Activos final</small><br><strong>{{ s.activos_final }}</strong></div>
@@ -44,12 +51,14 @@
     </div>
   </div>
   {% empty %}
+  <!-- Mensaje si no hay KPIs resumidos para este período -->
   <div class="col-12">
     <div class="alert alert-info">No hay resumen KPI para este período.</div>
   </div>
   {% endfor %}
 </div>
 
+<!-- Tabla de desglose por dimensiones (segmentación) -->
 {% if dimensions %}
 <div class="card shadow-sm">
   <div class="card-header d-flex justify-content-between align-items-center">
@@ -73,6 +82,7 @@
           </tr>
         </thead>
         <tbody>
+          <!-- Itera sobre cada fila de dimensión -->
           {% for d in dimensions %}
           <tr>
             <td>{{ d.dimension }}</td>

@@ -1,7 +1,21 @@
+# ---- ChurnRateAnalyzer - Dependencias ----
+# Framework web principal
 django>=5.0.0
+
+# Servidor WSGI para producción (Linux/Unix). En Windows usar waitress.
 gunicorn>=21.2.0
+
+# Middleware para servir archivos estáticos en producción sin Apache/Nginx
 whitenoise>=6.0.0
+
+# Manipulación y análisis de datos tabulares (DataFrames)
 pandas>=2.0.0
+
+# Operaciones numéricas requeridas internamente por pandas
 numpy>=1.24.0
+
+# Driver de PostgreSQL para conexión desde Django
 psycopg2-binary>=2.9.0
+
+# Carga de variables de entorno desde archivo .env
 python-dotenv>=1.0.0

@@ -4,11 +4,14 @@
 {% block title %}Resultados - Churn Rate Analyzer{% endblock %}
 
 {% block content %}
+<!-- [results_list.html] Lista completa de resultados históricos. Contexto esperado:
+     - periods (list): lista de dicts con KPIs por período y método -->
 <div class="card shadow-sm">
   <div class="card-header">
     <h5 class="mb-0">Resultados históricos</h5>
   </div>
   <div class="card-body p-0">
+    <!-- Si hay períodos, tabla responsiva con todos los resultados -->
     {% if periods %}
     <div class="table-responsive">
       <table class="table table-hover table-sm mb-0">
@@ -29,6 +32,7 @@
           </tr>
         </thead>
         <tbody>
+          <!-- Itera sobre cada registro de resultado histórico -->
           {% for r in periods %}
           <tr>
             <td>{{ r.periodo }}</td>
@@ -43,6 +47,7 @@
             <td>{{ r.tasa_winback_pct }}%</td>
             <td>${{ r.arpu }}</td>
             <td>
+              <!-- Enlace a la página de detalle del período -->
               <a href="{% url 'results_detail' r.periodo %}" class="btn btn-sm btn-outline-primary">
                 Detalle
               </a>
@@ -53,6 +58,7 @@
       </table>
     </div>
     {% else %}
+    <!-- Mensaje cuando no hay resultados almacenados -->
     <div class="p-4 text-muted text-center">
       No hay resultados almacenados. Ejecute un análisis desde el Dashboard.
     </div>

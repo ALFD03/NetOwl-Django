@@ -4,14 +4,23 @@
 {% block title %}Dashboard - Churn Rate Analyzer{% endblock %}
 
 {% block content %}
+<!-- [dashboard.html] Página principal de la aplicación. Contexto esperado:
+     - form: formulario MonthForm para seleccionar mes de análisis
+     - periodo_label (str): etiqueta del período analizado (ej. "2025-01")
+     - summaries (list): lista de dicts con KPIs resumidos por método
+     - results (list): lista de dicts con resultados históricos recientes -->
 <div class="row g-4">
+  <!-- Columna izquierda: formulario de análisis y acciones rápidas -->
   <div class="col-lg-5">
+    <!-- Tarjeta: formulario para ejecutar análisis de churn de un mes específico -->
     <div class="card shadow-sm">
       <div class="card-body">
         <h5 class="card-title mb-3">Ejecutar análisis</h5>
+        <!-- Formulario POST con data-loading para activar overlay de carga -->
         <form method="post" data-loading>
           {% csrf_token %}
           <div class="mb-3">
+            <!-- Label y campo month del formulario (usualmente un MonthPicker) -->
             {{ form.month.label_tag }}
             {{ form.month }}
           </div>
@@ -22,6 +31,7 @@
       </div>
     </div>
 
+    <!-- Tarjeta: accesos directos a importación de CSV e historial -->
     <div class="card shadow-sm mt-3">
       <div class="card-body">
         <h5 class="card-title mb-3">Acciones rápidas</h5>
@@ -40,7 +50,9 @@
     </div>
   </div>
 
+  <!-- Columna derecha: resumen de métricas del análisis ejecutado -->
   <div class="col-lg-7">
+    <!-- Si hay un periodo_label y summaries, renderiza las tarjetas de KPIs -->
     {% if periodo_label and summaries %}
     <div class="card shadow-sm">
       <div class="card-header d-flex justify-content-between align-items-center">
@@ -48,10 +60,12 @@
         <a href="{% url 'results_detail' periodo_label %}" class="btn btn-sm btn-outline-primary">Ver detalle completo</a>
       </div>
       <div class="card-body">
+        <!-- Itera sobre summaries, uno por método de análisis (ej. "Neto", "Bruto") -->
         {% for s in summaries %}
         <div class="mb-3">
           <h6 class="text-primary-emphasis mb-2">Método {{ s.metodo }}</h6>
           <div class="row g-2">
+            <!-- Tarjetas métrica: cada una muestra un KPI numérico con su etiqueta -->
             <div class="col-4 col-md-3">
               <div class="metric-card">
                 <div class="metric-value">{{ s.activos_inicio }}</div>
@@ -148,6 +162,7 @@
         {% endfor %}
       </div>
     </div>
+    <!-- Si hay periodo_label pero no summaries, muestra mensaje informativo -->
     {% elif periodo_label and not summaries %}
     <div class="card shadow-sm">
       <div class="card-body text-muted text-center py-4">
@@ -158,6 +173,7 @@
   </div>
 </div>
 
+<!-- Fila inferior: tabla con los últimos resultados históricos disponibles -->
 <div class="row mt-4">
   <div class="col-12">
     <div class="card shadow-sm">
@@ -166,6 +182,7 @@
         <a href="{% url 'results_list' %}" class="btn btn-sm btn-outline-primary">Ver todos</a>
       </div>
       <div class="card-body p-0">
+        <!-- Si hay results, tabla responsiva con KPIs por período/método -->
         {% if results %}
         <div class="table-responsive">
           <table class="table table-hover table-sm mb-0">
@@ -210,6 +227,7 @@
           </table>
         </div>
         {% else %}
+        <!-- Mensaje cuando no hay resultados -->
         <div class="p-4 text-muted text-center">
           No hay resultados aún. Seleccione un mes y ejecute el análisis.
         </div>
