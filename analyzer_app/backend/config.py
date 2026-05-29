@@ -43,3 +43,16 @@ VALID_REACT_ORIGINS = {"4_paused", "6_churn", "8_30days"}
 AUDIT_REACT_ORIGINS = {"6_churn", "8_30days"}
 # Texto exacto del evento de corte por factura impaga en los logs
 CORTE_IMPAGADO_EVENT = "corte automatico por factura impaga"
+
+# Estado que marca suscripciones excluidas (Cotizacion, Instalacion)
+EXCLUDED_STATE = "0_other"
+
+# Mapeo de estados de suscripcion a estados de log (formato normalizado)
+SUBS_STATE_TO_LOG_MAP = {
+    "en progreso": "3_progress",
+    "cancelado": "6_churn",
+    "en pausa": "4_paused",
+    "mas de 30 dias suspendidos": "8_30days",
+    "cotizacion": "0_other",
+    "instalacion": "0_other",
+}
