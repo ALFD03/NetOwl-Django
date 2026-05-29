@@ -44,13 +44,15 @@ SUBSCRIPTIONS_COLUMN_MAPPING = {
     "Campaña": "campanna",
     "Próxima Fecha de Factura": "fecha_factura",
     "Fecha de inicio": "fecha_inicio",
+    "Tarifa": "tarifa",
     "Total": "Total",
 }
 
 # Columnas de metadatos que se propagan hacia adelante dentro de un mismo grupo
 SUBSCRIPTIONS_METADATA_COLS = [
     "Cliente", "CI", "Sucursal", "Zona", "Municipio",
-    "Tipo", "Estado", "campanna", "fecha_factura", "fecha_inicio", "Total",
+    "Tipo", "Estado", "campanna", "fecha_factura", "fecha_inicio",
+    "tarifa", "Total",
 ]
 
 # Mapeo de nombres de columnas del CSV de logs a nombres internos

@@ -31,7 +31,9 @@ from .config import (
     ACTIVE_STATE,
     AUDIT_REACT_ORIGINS,
     CORTE_IMPAGADO_EVENT,
+    EXCLUDED_STATE,
     INACTIVE_STATES,
+    SUBS_STATE_TO_LOG_MAP,
     VALID_REACT_ORIGINS,
 )
 from .database import DBConnector
@@ -77,7 +79,7 @@ class ChurnRateAnalyzer:
         print("Sincronizando con base de datos...")
 
         # Columnas necesarias para cada tabla
-        subs_cols = ["Orden_Producto", "fecha_inicio", "Total"]
+        subs_cols = ["Orden_Producto", "fecha_inicio", "Total", "Estado"]
         logs_cols = ["orden", "fecha_log", "log", "estado"]
         logs_v15_cols = ["orden", "tipo", "categoria", "fecha"]
         # Ejecuta las tres lecturas concurrentemente para reducir latencia
@@ -134,6 +136,24 @@ class ChurnRateAnalyzer:
 
         # Convierte fecha inicio a datetime; errores quedan como NaT
         df["f_ini_dt"] = pd.to_datetime(df["f_ini"], errors="coerce")
+
+        # Normaliza estado de suscripcion y mapea a formato de log
+        if "estado" in df.columns:
+            df["estado"] = (
+                df["estado"].astype(str)
+                .str.normalize("NFKD")
+                .str.encode("ascii", errors="ignore")
+                .str.decode("utf-8")
+                .str.lower()
+                .str.strip()
+            )
+            df["estado"] = (
+                df["estado"]
+                .map(SUBS_STATE_TO_LOG_MAP)
+                .fillna(EXCLUDED_STATE)
+            )
+        else:
+            df["estado"] = EXCLUDED_STATE
         self.df_subs_full = df.drop_duplicates(subset=["orden"])
 
         # Normaliza logs v1: renombra columnas al estándar
@@ -199,6 +219,174 @@ class ChurnRateAnalyzer:
             "estado"
         ].shift(1)
         self.df_clean_logs = combined
+
+    def _apply_log_rules(self):
+        """
+        Aplica reglas de casos anomalos sobre la relacion suscripcion-log.
+
+        Operaciones:
+        1. Caso 3: Filtra logs que no tienen orden en Subscripciones.
+        2. Excluye subs con estado EXCLUDED_STATE (Cotizacion/Instalacion).
+        3. Caso 1 (vectorizado): Crea logs sinteticos para subs sin logs.
+        4. Caso 2 (vectorizado): Crea log 3_progress si ultimo log es inactivo
+           pero subs esta activa.
+        5. Caso 4 (vectorizado): Crea log con estado de subs si ultimo log
+           es 3_progress pero subs esta inactiva.
+
+        Marca logs sinteticos con columna ``_sintetico`` y expone
+        ``self._ordens_con_activity`` para filtrado de nuevos.
+        """
+        # --- Caso 3: solo logs cuyas ordenes existen en subs ---
+        valid_ordens = set(self.df_subs_full["orden"])
+        log_filtered = self.df_clean_logs[
+            self.df_clean_logs["orden"].isin(valid_ordens)
+        ].copy()
+        log_filtered["_sintetico"] = False
+
+        # --- Preparar container de filas sinteticas ---
+        synth_parts = []
+
+        # --- Caso 1: Subs sin logs en ninguna version ---
+        ordenes_con_log = set(log_filtered["orden"])
+        mask_no_logs = ~self.df_subs_full["orden"].isin(ordenes_con_log)
+        df_no_logs = self.df_subs_full[mask_no_logs].copy()
+        # Excluir 0_other (ya mapeados desde build_clean_data)
+        df_no_logs = df_no_logs[df_no_logs["estado"] != EXCLUDED_STATE]
+
+        if not df_no_logs.empty:
+            # Fecha sintetica: f_ini_dt si existe, si no 1900-01-01
+            df_no_logs["_synth_fecha"] = df_no_logs["f_ini_dt"].fillna(
+                pd.Timestamp("1900-01-01")
+            )
+            df_no_logs["f_dt"] = df_no_logs["_synth_fecha"]
+            df_no_logs["fecha"] = df_no_logs["f_dt"].dt.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            df_no_logs["nota"] = "sintetico - sin logs historicos"
+            df_no_logs["log_norm"] = "sintetico - sin logs historicos"
+            # estado ya esta mapeado (3_progress, 6_churn, etc.)
+            df_no_logs["estado_origen"] = None
+            df_no_logs["_sintetico"] = True
+            synth_parts.append(
+                df_no_logs[
+                    [
+                        "orden",
+                        "fecha",
+                        "nota",
+                        "estado",
+                        "f_dt",
+                        "log_norm",
+                        "estado_origen",
+                        "_sintetico",
+                    ]
+                ]
+            )
+
+        # --- Caso 2 y 4: Ultimo log inconsistente con estado de subs ---
+        # Obtener ultimo log real (no sintetico) de cada orden
+        idx_last = log_filtered.groupby("orden")["f_dt"].idxmax()
+        df_last_logs = log_filtered.loc[idx_last, ["orden", "f_dt", "estado"]].copy()
+        df_last_logs.columns = ["orden", "f_dt", "ultimo_estado_log"]
+
+        merged = df_last_logs.merge(
+            self.df_subs_full[["orden", "estado"]],
+            on="orden",
+            how="inner",
+        )
+        merged.columns = ["orden", "f_dt", "ultimo_estado_log", "estado_subs"]
+
+        # --- Caso 2: ultimo log inactivo, subs activa ---
+        mask_caso2 = (
+            merged["ultimo_estado_log"].isin(INACTIVE_STATES)
+            & (merged["estado_subs"] == ACTIVE_STATE)
+        )
+        df_caso2 = merged[mask_caso2].copy()
+        if not df_caso2.empty:
+            df_caso2["f_dt"] = df_caso2["f_dt"] + pd.Timedelta(seconds=1)
+            df_caso2["fecha"] = df_caso2["f_dt"].dt.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            df_caso2["nota"] = (
+                "sintetico - ultimo log inactivo, sub activa"
+            )
+            df_caso2["log_norm"] = (
+                "sintetico - ultimo log inactivo, sub activa"
+            )
+            df_caso2["estado"] = ACTIVE_STATE
+            df_caso2["estado_origen"] = None
+            df_caso2["_sintetico"] = True
+            synth_parts.append(
+                df_caso2[
+                    [
+                        "orden",
+                        "fecha",
+                        "nota",
+                        "estado",
+                        "f_dt",
+                        "log_norm",
+                        "estado_origen",
+                        "_sintetico",
+                    ]
+                ]
+            )
+
+        # --- Caso 4: ultimo log activo, subs inactiva (no 0_other) ---
+        mask_caso4 = (
+            (merged["ultimo_estado_log"] == ACTIVE_STATE)
+            & (merged["estado_subs"] != ACTIVE_STATE)
+            & (merged["estado_subs"] != EXCLUDED_STATE)
+        )
+        df_caso4 = merged[mask_caso4].copy()
+        if not df_caso4.empty:
+            df_caso4["f_dt"] = df_caso4["f_dt"] + pd.Timedelta(seconds=1)
+            df_caso4["fecha"] = df_caso4["f_dt"].dt.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            df_caso4["nota"] = (
+                "sintetico - ultimo log activo, sub inactiva"
+            )
+            df_caso4["log_norm"] = (
+                "sintetico - ultimo log activo, sub inactiva"
+            )
+            df_caso4["estado"] = df_caso4["estado_subs"]
+            df_caso4["estado_origen"] = None
+            df_caso4["_sintetico"] = True
+            synth_parts.append(
+                df_caso4[
+                    [
+                        "orden",
+                        "fecha",
+                        "nota",
+                        "estado",
+                        "f_dt",
+                        "log_norm",
+                        "estado_origen",
+                        "_sintetico",
+                    ]
+                ]
+            )
+
+        # --- Fusionar logs sinteticos con los reales ---
+        if synth_parts:
+            df_synth = pd.concat(synth_parts, ignore_index=True)
+            self.df_clean_logs = pd.concat(
+                [log_filtered, df_synth], ignore_index=True, sort=False
+            )
+        else:
+            self.df_clean_logs = log_filtered
+
+        self.df_clean_logs = self.df_clean_logs.sort_values(["orden", "f_dt"])
+        # Recalcular estado_origen con shift sobre datos ordenados
+        self.df_clean_logs["estado_origen"] = (
+            self.df_clean_logs.groupby("orden")["estado"].shift(1)
+        )
+
+        # --- Identificar ordenes con al menos un log 3_progress ---
+        self._ordens_con_activity = set(
+            self.df_clean_logs[
+                self.df_clean_logs["estado"] == ACTIVE_STATE
+            ]["orden"]
+        )
 
     def get_active_at(
         self, target_date, strictly_before: bool = False
@@ -332,6 +520,7 @@ class ChurnRateAnalyzer:
         """
         self.load_data()
         self.build_clean_data()
+        self._apply_log_rules()
         periodo_label = self.periodo.label()
 
         # Activos al inicio del período (estrictamente antes)
@@ -343,11 +532,15 @@ class ChurnRateAnalyzer:
             self.periodo.fecha_final, strictly_before=False
         )
         # Suscripciones nuevas que iniciaron dentro del período
+        # Solo cuentan si tienen al menos un log 3_progress
         nuevos = self.df_subs_full[
             (self.df_subs_full["f_ini_dt"] >= self.periodo.fecha_inicio)
             & (
                 self.df_subs_full["f_ini_dt"]
                 <= self.periodo.fecha_final
+            )
+            & self.df_subs_full["orden"].isin(
+                self._ordens_con_activity
             )
         ].copy()
 
@@ -438,8 +631,10 @@ class ChurnRateAnalyzer:
         bajas_fin_netas = len(df_bajas_fin)
 
         # Bajas operativas: órdenes que pasaron de activo a pausado/churn en el período
+        # Se excluyen logs sinteticos (Casos 1, 2, 4) para no generar falsas transiciones
         mask = (
-            ~self.df_clean_logs["orden"].isin(set_fin)
+            ~self.df_clean_logs["_sintetico"]
+            & ~self.df_clean_logs["orden"].isin(set_fin)
             & self.df_clean_logs["f_dt"].between(
                 self.periodo.fecha_inicio, self.periodo.fecha_final
             )
@@ -908,7 +1103,8 @@ class ChurnRateAnalyzer:
             self.df_subs_full["f_ini_dt"] <= self.periodo.fecha_final
         ].copy()
         df_logs = self.df_clean_logs[
-            self.df_clean_logs["f_dt"] <= self.periodo.fecha_final
+            (self.df_clean_logs["f_dt"] <= self.periodo.fecha_final)
+            & ~self.df_clean_logs["_sintetico"]
         ].copy()
 
         # Primer evento de churn (estado "6_churn") de cada orden
