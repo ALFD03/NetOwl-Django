@@ -3,3 +3,6 @@ __pycache__
 staticfiles/
 .venv/
 venv/
+AGENTS.md
+DESIGN.md
+docker-compose.yml

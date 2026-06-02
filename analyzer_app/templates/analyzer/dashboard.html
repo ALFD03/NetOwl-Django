@@ -1,239 +1,488 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Dashboard - Churn Rate Analyzer{% endblock %}
+{% block title %}NetOwl Analytics - Dashboard Principal{% endblock %}
+
+{% block extra_head %}
+<!-- Chart.js para la generación dinámica de gráficos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
 
 {% block content %}
-<!-- [dashboard.html] Página principal de la aplicación. Contexto esperado:
-     - form: formulario MonthForm para seleccionar mes de análisis
-     - periodo_label (str): etiqueta del período analizado (ej. "2025-01")
-     - summaries (list): lista de dicts con KPIs resumidos por método
-     - results (list): lista de dicts con resultados históricos recientes -->
-<div class="row g-4">
-  <!-- Formulario de análisis y acciones rápidas -->
-  <div class="col-lg-2">
-    <!-- Tarjeta: formulario para ejecutar análisis de churn de un mes específico -->
-    <div class="card border rounded-4 shadow">
-      <div class="card-body" style="height: 13rem;">
-        <h5 class="card-title mb-3">Ejecutar análisis</h5>
-        <!-- Formulario POST con data-loading para activar overlay de carga -->
-        <form method="post" data-loading>
-          {% csrf_token %}
-          <div class="mb-3">
-            <!-- Label y campo month del formulario (usualmente un MonthPicker) -->
-            {{ form.month.label_tag }}
-            {{ form.month }}
+<!-- [dashboard.html] Contenedor de la SPA (Single Page Application) -->
+
+<!-- SECCIÓN: DASHBOARD (EJECUTAR ANÁLISIS Y KPIs RECIENTES) -->
+<div id="tab-dashboard" class="spa-tab">
+  <div class="row g-4 mb-4">
+    <!-- Card de Ejecución de Análisis -->
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header">
+          <h5><i class="bi bi-play-circle me-2"></i>Ejecutar Análisis</h5>
+        </div>
+        <div class="card-body">
+          <form id="run-analysis-form" class="analysis-form">
+            <div class="form-group mb-3">
+              <label for="month-input" class="form-label">Seleccionar Período</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-calendar-date"></i></span>
+                <input type="text" id="month-input" class="form-control month-picker" placeholder="Seleccione mes y año" autocomplete="off" readonly required>
+              </div>
+              <small class="form-text text-muted">Seleccione el período (mes/año) para procesar el churn.</small>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 py-2">
+              <i class="bi bi-cpu me-2"></i>Ejecutar Cálculo
+            </button>
+          </form>
+          
+          <!-- Terminal de logs integrada -->
+          <div class="terminal-console mt-4 d-none" id="console-container">
+            <div class="terminal-header d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-terminal me-2"></i>Consola del Servidor</span>
+              <button class="btn btn-sm btn-link text-white-50 p-0" id="clear-console"><i class="bi bi-trash"></i></button>
+            </div>
+            <pre id="terminal-log">Esperando comando...</pre>
           </div>
-          <button type="submit" class="btn btn-primary w-100">
-            Ejecutar análisis
-          </button>
-        </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráfico de Tendencia de Nuevos -->
+    <div class="col-lg-8">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5><i class="bi bi-graph-up me-2"></i>Tendencia de Nuevos Suscriptores</h5>
+          <span class="badge bg-primary rounded-pill">Últimos 6 meses</span>
+        </div>
+        <div class="card-body d-flex flex-column justify-content-center">
+          <div class="chart-container" style="position: relative; height: 260px;">
+            <canvas id="nuevosTrendChart"></canvas>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Tarjeta: accesos directos a importación de CSV e historial -->
-   <div class="col-lg-2">
-    <div class="card border rounded-4 shadow">
-      <div class="card-body d-flex flex-column justify-content-between" style="height: 13rem;">
-        <h5 class="card-title mb-3">Acciones rápidas</h5>
-        <a href="{% url 'import_subscriptions' %}" class="btn btn-outline-primary">
-          Importar Subscripciones CSV
-        </a>
-        <a href="{% url 'import_logs' %}" class="btn btn-outline-primary">
-          Importar Logs CSV
-        </a>
-        <a href="{% url 'results_list' %}" class="btn btn-outline-primary">
-          Ver resultados históricos
-        </a>
+  <!-- Comparativa de Métodos (Último Período) -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Comparativa de Métodos (Último Cierre)</h5>
+      <div class="filter-input-group prominent-filter">
+        <span class="input-group-text"><i class="bi bi-funnel-fill"></i></span>
+        <select id="comparison-period-select" class="form-select form-select-sm" style="min-width: 220px;">
+          <option value="">Período</option>
+        </select>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-4" id="dashboard-comparison-container">
+        <!-- Churn Neto -->
+        <div class="col-md-4">
+          <div class="metric-card">
+            <div class="metric-label">Churn Neto (%)</div>
+            <div class="d-flex justify-content-around mt-3">
+              <div>
+                <span class="d-block text-muted small">Financiero</span>
+                <span class="fs-4 fw-bold text-primary" id="comp-churn-fin">--%</span>
+              </div>
+              <div class="border-end border-dark opacity-25"></div>
+              <div>
+                <span class="d-block text-muted small">Operativo</span>
+                <span class="fs-4 fw-bold text-secondary" id="comp-churn-op">--%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Ingresos Totales -->
+        <div class="col-md-4">
+          <div class="metric-card">
+            <div class="metric-label">Ingresos Totales</div>
+            <div class="d-flex justify-content-around mt-3">
+              <div>
+                <span class="d-block text-muted small">Financiero</span>
+                <span class="fs-4 fw-bold text-primary" id="comp-billing-fin">$--</span>
+              </div>
+              <div class="border-end border-dark opacity-25"></div>
+              <div>
+                <span class="d-block text-muted small">Operativo</span>
+                <span class="fs-4 fw-bold text-secondary" id="comp-billing-op">$--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- ARPU -->
+        <div class="col-md-4">
+          <div class="metric-card">
+            <div class="metric-label">ARPU Mensual</div>
+            <div class="d-flex justify-content-around mt-3">
+              <div>
+                <span class="d-block text-muted small">Financiero</span>
+                <span class="fs-4 fw-bold text-primary" id="comp-arpu-fin">$--</span>
+              </div>
+              <div class="border-end border-dark opacity-25"></div>
+              <div>
+                <span class="d-block text-muted small">Operativo</span>
+                <span class="fs-4 fw-bold text-secondary" id="comp-arpu-op">$--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Últimos Resultados Recientes -->
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5><i class="bi bi-clock-history me-2"></i>Resultados Recientes (Últimos Cierres)</h5>
+      <button class="btn btn-outline-primary btn-sm switch-tab-btn" data-target="results_list">
+        <i class="bi bi-list-ul me-1"></i>Ver Todos
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-theme">
+          <thead>
+            <tr>
+              <th class="text-start">Período</th>
+              <th class="text-center">Método</th>
+              <th class="text-end">Activos Inicio</th>
+              <th class="text-end">Activos Final</th>
+              <th class="text-end">Nuevos</th>
+              <th class="text-end">Churn Neto (%)</th>
+              <th class="text-end">ARPU</th>
+              <th class="text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-results-tbody">
+            <!-- Cargado por JS -->
+            <tr>
+              <td colspan="8" class="text-center py-4 text-muted">
+                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                Cargando historial reciente...
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Resumen de métricas del análisis ejecutado -->
-<div class="row g-4 mt-3">
-  <div class="col-lg">
-    <!-- Si hay un periodo_label y summaries, renderiza las tarjetas de KPIs -->
-    {% if periodo_label and summaries %}
-    <div class="card border rounded-4 shadow">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="mb-0">Resumen - {{ periodo_label }}</h6>
-        <a href="{% url 'results_detail' periodo_label %}" class="btn btn-sm btn-outline-primary">Ver detalle completo</a>
+<!-- SECCIÓN: ANALYTICS AVANZADA -->
+<div id="tab-analytics" class="spa-tab d-none">
+  <div class="d-flex justify-content-end mb-3">
+    <div class="filter-input-group prominent-filter">
+      <span class="input-group-text"><i class="bi bi-funnel-fill"></i></span>
+      <select id="analytics-periods-select" class="form-select form-select-sm" multiple size="4" style="min-width:360px;">
+        <!-- Opciones cargadas por JS -->
+      </select>
+    </div>
+  </div>
+  <!-- KPIs Principales -->
+  <div class="row g-4 mb-4" id="analytics-kpi-container">
+    <div class="col-xl-3 col-md-6">
+      <div class="metric-card">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <h3 class="fs-6 text-muted text-uppercase fw-semibold tracking-wider">Churn Neto</h3>
+            <p class="fs-2 fw-bold mb-0" id="kpi-churn-val">--%</p>
+          </div>
+          <div class="trend-indicator trend-neutral" id="kpi-churn-trend"><i class="bi bi-dash"></i> <span>--</span></div>
+        </div>
       </div>
-      <div class="card-body">
-        <!-- Itera sobre summaries, uno por método de análisis (ej. "Neto", "Bruto") -->
-        {% for s in summaries %}
-        <div class="mb-3">
-          <h6 class="text-primary-emphasis mb-2">Método {{ s.metodo }}</h6>
-          <div class="row g-2">
-            <!-- Tarjetas métrica: cada una muestra un KPI numérico con su etiqueta -->
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.activos_inicio }}</div>
-                <div class="metric-label">Activos inicio</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.activos_final }}</div>
-                <div class="metric-label">Activos final</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.nuevos_mes }}</div>
-                <div class="metric-label">Nuevos</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.bajas_netas_balance }}</div>
-                <div class="metric-label">Bajas netas</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.churn_neto_pct }}<span class="metric-unit">%</span></div>
-                <div class="metric-label">Churn neto</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.churn_bruto_pct }}<span class="metric-unit">%</span></div>
-                <div class="metric-label">Churn bruto</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.reactivaciones }}</div>
-                <div class="metric-label">Reactivaciones</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.tasa_aporte_react_pct }}<span class="metric-unit">%</span></div>
-                <div class="metric-label">Tasa aporte react.</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.tasa_winback_pct }}<span class="metric-unit">%</span></div>
-                <div class="metric-label">Winback</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.adiciones_brutas }}</div>
-                <div class="metric-label">Adiciones brutas</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.adiciones_netas }}</div>
-                <div class="metric-label">Adiciones netas</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">${{ s.total_billing }}</div>
-                <div class="metric-label">Billing</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">${{ s.arpu }}</div>
-                <div class="metric-label">ARPU</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.corte_impagado }}</div>
-                <div class="metric-label">Corte impagado</div>
-              </div>
-            </div>
-            <div class="col-4 col-md-3">
-              <div class="metric-card">
-                <div class="metric-value">{{ s.indice_reemplazo_react_pct }}<span class="metric-unit">%</span></div>
-                <div class="metric-label">Índice reemplazo</div>
-              </div>
-            </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+      <div class="metric-card">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <h3 class="fs-6 text-muted text-uppercase fw-semibold tracking-wider">ARPU Promedio</h3>
+            <p class="fs-2 fw-bold mb-0" id="kpi-arpu-val">$--</p>
+          </div>
+          <div class="trend-indicator trend-neutral" id="kpi-arpu-trend"><i class="bi bi-dash"></i> <span>--</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+      <div class="metric-card">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <h3 class="fs-6 text-muted text-uppercase fw-semibold tracking-wider">Tasa Winback</h3>
+            <p class="fs-2 fw-bold mb-0" id="kpi-winback-val">--%</p>
+          </div>
+          <div class="trend-indicator trend-neutral" id="kpi-winback-trend"><i class="bi bi-dash"></i> <span>--</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+      <div class="metric-card">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <h3 class="fs-6 text-muted text-uppercase fw-semibold tracking-wider">Adiciones Netas</h3>
+            <p class="fs-2 fw-bold mb-0" id="kpi-adiciones-val">--</p>
+          </div>
+          <div class="trend-indicator trend-neutral" id="kpi-adiciones-trend"><i class="bi bi-dash"></i> <span>--</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráficos de Tendencia -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <h5><i class="bi bi-activity me-2"></i>Churn Neto por Método</h5>
+        </div>
+        <div class="card-body">
+          <div class="chart-container" style="position: relative; height: 260px;">
+            <canvas id="churnTrendChart"></canvas>
           </div>
         </div>
-        {% if not forloop.last %}<hr>{% endif %}
-        {% endfor %}
       </div>
     </div>
-    <!-- Si hay periodo_label pero no summaries, muestra mensaje informativo -->
-    {% elif periodo_label and not summaries %}
-    <div class="card shadow-sm">
-      <div class="card-body text-muted text-center py-4">
-        Análisis ejecutado para <strong>{{ periodo_label }}</strong>. No se encontraron métricas almacenadas.
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <h5><i class="bi bi-bar-chart-steps me-2"></i>Crecimiento (Adiciones Netas)</h5>
+        </div>
+        <div class="card-body">
+          <div class="chart-container" style="position: relative; height: 260px;">
+            <canvas id="growthChart"></canvas>
+          </div>
+        </div>
       </div>
     </div>
-    {% endif %}
+  </div>
+
+  <!-- Tabla de Datos Históricos -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <h5><i class="bi bi-table me-2"></i>Datos Detallados (Últimos 12 Meses)</h5>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-theme">
+          <thead>
+            <tr>
+              <th>Período</th>
+              <th>Método</th>
+              <th class="text-end">Activos Inicio</th>
+              <th class="text-end">Activos Final</th>
+              <th class="text-end">Nuevos</th>
+              <th class="text-end">Churn Neto (%)</th>
+              <th class="text-end">ARPU</th>
+              <th class="text-end">Tasa Winback</th>
+            </tr>
+          </thead>
+          <tbody id="analytics-table-tbody">
+            <!-- Cargado por JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desglose por Dimensiones -->
+  <div class="card">
+    <div class="card-header">
+      <h5><i class="bi bi-grid-3x3-gap me-2"></i>Desglose Dimensional (Último Período disponible)</h5>
+    </div>
+    <div class="card-body">
+      <div class="row g-4" id="dimensions-grid-container">
+        <!-- Zona -->
+        <div class="col-lg-4 col-md-6">
+          <div class="dimension-card h-100">
+            <h6 class="dimension-title"><i class="bi bi-geo-alt me-2 text-primary"></i>Zona Geográfica</h6>
+            <div class="dimension-list" id="dim-zona-list"></div>
+          </div>
+        </div>
+        <!-- Sucursal -->
+        <div class="col-lg-4 col-md-6">
+          <div class="dimension-card h-100">
+            <h6 class="dimension-title"><i class="bi bi-building me-2 text-primary"></i>Sucursal</h6>
+            <div class="dimension-list" id="dim-sucursal-list"></div>
+          </div>
+        </div>
+        <!-- Producto -->
+        <div class="col-lg-4 col-md-6">
+          <div class="dimension-card h-100">
+            <h6 class="dimension-title"><i class="bi bi-box-seam me-2 text-primary"></i>Producto / Plan</h6>
+            <div class="dimension-list" id="dim-producto-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- Fila inferior: tabla con los últimos resultados históricos disponibles -->
-<div class="row mt-4">
-  <div class="col-12">
-    <div class="card border rounded-4 shadow">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="mb-0">Últimos resultados</h6>
-        <a href="{% url 'results_list' %}" class="btn btn-sm btn-outline-primary">Ver todos</a>
+<!-- SECCIÓN: IMPORTAR DATOS -->
+<div id="tab-import" class="spa-tab d-none">
+  <div class="row g-4">
+    <!-- Formulario drag & drop -->
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <h5><i class="bi bi-cloud-arrow-up me-2"></i>Cargar Archivo de Datos</h5>
+        </div>
+        <div class="card-body">
+          <form id="import-csv-form">
+            <!-- Selector de Tipo de Archivo -->
+            <div class="mb-4">
+              <label class="form-label fw-bold">Tipo de Datos</label>
+              <div class="d-flex gap-3">
+                <div class="form-check flex-fill p-3 border rounded-3 bg-light-subtle" style="cursor: pointer;" id="type-sub-container">
+                  <input class="form-check-input ms-0 me-2" type="radio" name="import_type" id="type-subscriptions" value="subscriptions" checked>
+                  <label class="form-check-label fw-medium" for="type-subscriptions">
+                    Suscripciones / Clientes
+                  </label>
+                </div>
+                <div class="form-check flex-fill p-3 border rounded-3 bg-light-subtle" style="cursor: pointer;" id="type-log-container">
+                  <input class="form-check-input ms-0 me-2" type="radio" name="import_type" id="type-logs" value="logs">
+                  <label class="form-check-label fw-medium" for="type-logs">
+                    Logs de Llamadas / Transiciones
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Zona de Arrastre -->
+            <div class="drop-zone" id="drop-zone-area">
+              <div class="drop-zone-icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
+              <h4 class="drop-zone-title">Arrastra y suelta tu archivo CSV aquí</h4>
+              <p class="drop-zone-text text-muted">o haz clic para explorar en tu equipo</p>
+              
+              <!-- Input file nativo oculto -->
+              <input type="file" id="csv-file-input" name="csv_file" class="d-none" accept=".csv" required>
+              
+              <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="browse-files-btn">
+                <i class="bi bi-search me-2"></i>Buscar Archivo
+              </button>
+            </div>
+
+            <!-- Nombre de archivo seleccionado -->
+            <div id="selected-file-display" class="alert alert-info mt-3 d-none">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <i class="bi bi-file-earmark-check me-2"></i>
+                  <span id="selected-file-name" class="fw-semibold">archivo.csv</span>
+                </div>
+                <button type="button" class="btn-close" id="remove-file-btn" aria-label="Quitar"></button>
+              </div>
+            </div>
+
+            <!-- Progreso de carga -->
+            <div class="progress mt-4 d-none" id="upload-progress-container" style="height: 8px;">
+              <div id="upload-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 0%"></div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 py-2 mt-4" id="submit-import-btn" disabled>
+              <i class="bi bi-upload me-2"></i>Iniciar Carga
+            </button>
+          </form>
+        </div>
       </div>
-      <div class="card-body p-0">
-        <!-- Si hay results, tabla responsiva con KPIs por período/método -->
-        {% if results %}
-        <div class="table-responsive">
-          <table class="table table-hover table-sm mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Periodo</th>
-                <th>Método</th>
-                <th>Activos inicio</th>
-                <th>Activos final</th>
-                <th>Nuevos</th>
-                <th>Bajas netas</th>
-                <th>Churn neto</th>
-                <th>Churn bruto</th>
-                <th>React.</th>
-                <th>Winback</th>
-                <th>ARPU</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in results %}
-              <tr>
-                <td>{{ row.periodo }}</td>
-                <td>{{ row.metodo }}</td>
-                <td>{{ row.activos_inicio }}</td>
-                <td>{{ row.activos_final }}</td>
-                <td>{{ row.nuevos_mes }}</td>
-                <td>{{ row.bajas_netas_balance }}</td>
-                <td>{{ row.churn_neto_pct }}%</td>
-                <td>{{ row.churn_bruto_pct }}%</td>
-                <td>{{ row.reactivaciones }}</td>
-                <td>{{ row.tasa_winback_pct }}%</td>
-                <td>${{ row.arpu }}</td>
-                <td>
-                  <a href="{% url 'results_detail' row.periodo %}" class="btn btn-sm btn-outline-primary">
-                    Detalle
-                  </a>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+    </div>
+
+    <!-- Panel Informativo -->
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header">
+          <h5><i class="bi bi-info-circle me-2"></i>Requisitos y Estructura</h5>
         </div>
-        {% else %}
-        <!-- Mensaje cuando no hay resultados -->
-        <div class="p-4 text-muted text-center">
-          No hay resultados aún. Seleccione un mes y ejecute el análisis.
+        <div class="card-body">
+          <div class="format-info mt-0">
+            <h6><i class="bi bi-filetype-csv text-primary"></i>Especificaciones del Archivo</h6>
+            <ul>
+              <li><strong>Formato:</strong> Archivo de texto delimitado por comas (`.csv`).</li>
+              <li><strong>Codificación:</strong> UTF-8 (requerido para acentos y caracteres especiales).</li>
+              <li><strong>Encabezado:</strong> La primera línea debe contener exactamente los nombres de las columnas.</li>
+            </ul>
+          </div>
+          
+          <div class="format-info mt-3" id="format-sub-details">
+            <h6><i class="bi bi-people text-primary"></i>Columnas para Suscripciones</h6>
+            <p class="small text-muted">Asegura que tu archivo incluya las columnas clave:</p>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">orden_producto</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">f_ini_dt</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">total</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">zona</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">sucursal</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">producto</div>
+          </div>
+          
+          <div class="format-info mt-3 d-none" id="format-log-details">
+            <h6><i class="bi bi-activity text-primary"></i>Columnas para Logs</h6>
+            <p class="small text-muted">Asegura que tu archivo incluya las columnas clave para el registro de estados:</p>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">orden</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">fecha</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">estado</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">nota</div>
+          </div>
         </div>
-        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECCIÓN: HISTORIAL DE RESULTADOS COMPLETOS -->
+<div id="tab-results" class="spa-tab d-none">
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5><i class="bi bi-journal-text me-2"></i>Historial de Cierres de Churn</h5>
+      <div class="d-flex gap-2">
+        <input type="text" id="search-results-input" class="form-control form-control-sm" placeholder="Buscar por período..." style="width: 200px;">
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-theme" id="full-results-table">
+          <thead>
+            <tr>
+              <th style="cursor: pointer;" id="sort-period">Período <i class="bi bi-sort-down-alt"></i></th>
+              <th>Método</th>
+              <th class="text-end">Activos Inicio</th>
+              <th class="text-end">Activos Final</th>
+              <th class="text-end">Nuevos</th>
+              <th class="text-end">Churn Neto (%)</th>
+              <th class="text-end">ARPU</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="results-table-tbody">
+            <!-- Cargado por JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLES DEL PERÍODO -->
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content" style="background-color: var(--surface-secondary); color: var(--text-primary); border: 1px solid var(--border-color);">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
+        <h5 class="modal-title" id="detailsModalLabel">Detalle del Período: <span id="modal-period-title" class="text-primary fw-bold">----</span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Fichas Comparativas -->
+        <h6 class="mb-3 text-uppercase tracking-wider fw-bold small text-muted"><i class="bi bi-sliders me-2"></i>Resumen por Método</h6>
+        <div class="row g-3 mb-4" id="modal-summaries-container">
+          <!-- Dinámico -->
+        </div>
+
+        <hr style="border-top: 1px solid var(--border-color);" class="my-4">
+
+        <!-- Dimensiones -->
+        <h6 class="mb-3 text-uppercase tracking-wider fw-bold small text-muted"><i class="bi bi-bar-chart me-2"></i>Desglose de Dimensiones</h6>
+        <div class="row g-3" id="modal-dimensions-container">
+          <!-- Dinámico -->
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Cerrar</button>
       </div>
     </div>
   </div>
