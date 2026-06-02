@@ -573,13 +573,6 @@ class ChurnRateAnalyzer:
 
         # Reactivaciones dentro del período
         df_react_all = self.get_reactivations(act_fin)
-        set_react_unicas = set(df_react_all["orden"]) if not df_react_all.empty else set()
-        n_react_unicas = len(set_react_unicas)
-        # Reactivaciones provenientes de churn (6) o 30 días (8)
-        set_react_6_8 = set(
-            df_react_all[df_react_all["estado_origen"].isin({"6_churn", "8_30days"})]["orden"]
-        ) if not df_react_all.empty else set()
-        n_react_6_8 = len(set_react_6_8)
         # Conteo por estado origen para el resumen
         counts_react: Dict[str, int] = {
             "4_paused": 0,
@@ -598,6 +591,10 @@ class ChurnRateAnalyzer:
                     )
                 ]["orden"]
             )
+
+        # Totales de reactivaciones del periodo (suma por estado de origen)
+        n_react_unicas = sum(counts_react.values())
+        n_react_6_8 = counts_react.get("6_churn", 0) + counts_react.get("8_30days", 0)
 
         # Cortes por factura impaga
         df_corte_impagado = self.get_corte_impagado()
@@ -689,7 +686,7 @@ class ChurnRateAnalyzer:
             ("Financiero", df_bajas_fin),
         ]:
             b_netas = len(df_b)
-            b_auditoria = b_netas + len(set_react_audit)
+            b_auditoria = b_netas + n_react_6_8
 
             summary.append(
                 {
@@ -785,7 +782,7 @@ class ChurnRateAnalyzer:
         )
         print(
             f"INACTIVOS: {total_inactivos}"
-            f" | Reactivaciones únicas: {n_react_unicas}"
+            f" | Reactivaciones totales: {n_react_unicas}"
             f" | Tasa Winback: {summary[0]['tasa_winback_pct']}%"
         )
 
@@ -974,8 +971,8 @@ class ChurnRateAnalyzer:
                 a_ini = d_act_ini.get(val, 0)
                 a_fin = d_act_fin.get(val, 0)
                 nv = d_nuevos.get(val, 0)
-                # Bajas netas: no pueden ser negativas
-                bn = max(0, a_ini + nv - a_fin)
+                # Bajas netas = IDs reales del metodo financiero (mismos que cierre_churn_historico)
+                bn = d_bajas.get(val, 0)
                 bb = bn + d_react_aud.get(val, 0)
                 inac = d_inact.get(val, 0)
                 reac = d_react.get(val, 0)
