@@ -22,14 +22,20 @@
         </div>
         <div class="card-body">
           <form id="run-analysis-form" class="analysis-form">
-            <div class="form-group mb-3">
-              <label for="month-input" class="form-label">Seleccionar Período</label>
-              <div class="input-group">
-                <span class="input-group-text"><i class="bi bi-calendar-date"></i></span>
-                <input type="text" id="month-input" class="form-control month-picker" placeholder="Seleccione mes y año" autocomplete="off" readonly required>
-              </div>
-              <small class="form-text text-muted">Seleccione el período (mes/año) para procesar el churn.</small>
-            </div>
+<div class="form-group mb-3">
+  <label for="month-input" class="form-label">Seleccionar Período</label>
+  <div class="input-group">
+    <span class="input-group-text calendar-adaptable"><i class="bi bi-calendar-date"></i></span>
+    <select id="month-select" class="form-select calendar-select" aria-label="Mes">
+      <option value="">Mes</option>
+    </select>
+    <select id="year-select" class="form-select calendar-select" aria-label="Año">
+      <option value="">Año</option>
+    </select>
+  </div>
+  <input type="text" id="month-input" class="d-none" name="month" placeholder="Seleccione mes y año" autocomplete="off" required>
+  <small class="form-text text-muted">Seleccione el período (mes/año) para procesar el churn.</small>
+</div>
             <button type="submit" class="btn btn-primary w-100 py-2">
               <i class="bi bi-cpu me-2"></i>Ejecutar Cálculo
             </button>
@@ -66,8 +72,8 @@
   <!-- Comparativa de Métodos (Último Período) -->
   <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Comparativa de Métodos (Último Cierre)</h5>
-      <div class="filter-input-group prominent-filter">
+      <h5 class="mb-0"><i class="bi bi-arrow-left-right me-2"></i>Comparativa de Métodos</h5>
+      <div class="filter-input-group prominent-filter gap-0">
         <span class="input-group-text"><i class="bi bi-funnel-fill"></i></span>
         <select id="comparison-period-select" class="form-select form-select-sm" style="min-width: 220px;">
           <option value="">Período</option>
@@ -171,11 +177,12 @@
 
 <!-- SECCIÓN: ANALYTICS AVANZADA -->
 <div id="tab-analytics" class="spa-tab d-none">
-  <div class="d-flex justify-content-end mb-3">
-    <div class="filter-input-group prominent-filter">
+  <div class="card-header rounded d-flex justify-content-end mb-3 align-items-center">
+    <h4 class="mb-0 me-auto"><i class="bi bi-bar-chart-line me-2"></i>Análisis Detallado</h4>
+    <div class="filter-input-group prominent-filter gap-0">
       <span class="input-group-text"><i class="bi bi-funnel-fill"></i></span>
-      <select id="analytics-periods-select" class="form-select form-select-sm" multiple size="4" style="min-width:360px;">
-        <!-- Opciones cargadas por JS -->
+      <select id="analytics-periods-select" class="form-select form-select-sm" style="min-width: 220px;">
+        <option value="">Período</option>
       </select>
     </div>
   </div>
@@ -286,7 +293,7 @@
   <!-- Desglose por Dimensiones -->
   <div class="card">
     <div class="card-header">
-      <h5><i class="bi bi-grid-3x3-gap me-2"></i>Desglose Dimensional (Último Período disponible)</h5>
+      <h5><i class="bi bi-grid-3x3-gap me-2"></i>Desglose Dimensional</h5>
     </div>
     <div class="card-body">
       <div class="row g-4" id="dimensions-grid-container">

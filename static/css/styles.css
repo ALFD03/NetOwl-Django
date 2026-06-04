@@ -838,10 +838,16 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
   background: var(--surface-hover) !important;
 }
 
+.calendar-adaptable{
+  background-color: var(--surface-tertiary) !important;
+  border: 0px;
+  color: var(--text-primary) !important;
+}
+
 /* Filtro destacado */
 .filter-input-group { display: inline-flex; align-items: center; gap: 0.5rem; }
-.filter-input-group .input-group-text { background: var(--surface-tertiary); border: 1px solid var(--border-color); color: var(--text-secondary); }
-.filter-input-group .form-select { background: var(--surface-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); }
+.filter-input-group .input-group-text { background: var(--surface-tertiary); border: 0px; color: var(--text-secondary); }
+.filter-input-group .form-select { background: var(--surface-tertiary); border: 0px; color: var(--text-primary); }
 
 /* Analytics multi-select tamaño y estilo */
 #analytics-periods-select { min-width: 320px; max-width: 520px; }
@@ -852,7 +858,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 .modal-content .card { background-color: var(--surface-tertiary) !important; border-color: var(--border-color) !important; }
 
 /* Small helper for prominent filter box */
-.prominent-filter { border: 1px solid rgba(255,255,255,0.04); padding: 0.35rem; border-radius: 8px; background: var(--surface-secondary); }
+.prominent-filter { border: 0px; padding: 0.35rem; background: var(--surface-tertiary); }
 
 /* Estilos para el Desglose Dimensional */
 .dimension-card {
@@ -927,4 +933,8 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 ::-webkit-scrollbar-thumb {
   background-color: var(--border-color);
   border-radius: 3px;
+}
+
+.calendar-select {
+  border: 0px;
 }
