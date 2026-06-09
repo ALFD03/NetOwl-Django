@@ -246,6 +246,41 @@ class ChurnRateAnalyzer:
         # --- Preparar container de filas sinteticas ---
         synth_parts = []
 
+        # --- Caso 5: Primer log es corte impago -> sintetico activo en f_ini_dt ---
+        # Si el primer log (mas antiguo) de una sub es "corte por factura impaga",
+        # se crea un log 3_progress sintetico en f_ini_dt para que la sub
+        # cuente como activa en todos los periodos anteriores al corte.
+        idx_first = log_filtered.groupby("orden")["f_dt"].idxmin()
+        df_first_logs = log_filtered.loc[idx_first, ["orden", "f_dt", "log_norm"]].copy()
+        mask_caso5 = df_first_logs["log_norm"].str.contains(CORTE_IMPAGADO_EVENT, na=False)
+        ordenes_caso5 = set(df_first_logs[mask_caso5]["orden"])
+        if ordenes_caso5:
+            df_subs_c5 = self.df_subs_full[self.df_subs_full["orden"].isin(ordenes_caso5)].copy()
+            if not df_subs_c5.empty:
+                df_subs_c5["f_dt"] = df_subs_c5["f_ini_dt"].fillna(
+                    pd.Timestamp("1900-01-01")
+                )
+                df_subs_c5["fecha"] = df_subs_c5["f_dt"].dt.strftime("%Y-%m-%d %H:%M:%S")
+                df_subs_c5["nota"] = "sintetico - primer log es corte impago"
+                df_subs_c5["log_norm"] = "sintetico - primer log es corte impago"
+                df_subs_c5["estado"] = ACTIVE_STATE
+                df_subs_c5["estado_origen"] = None
+                df_subs_c5["_sintetico"] = True
+                synth_parts.append(
+                    df_subs_c5[
+                        [
+                            "orden",
+                            "fecha",
+                            "nota",
+                            "estado",
+                            "f_dt",
+                            "log_norm",
+                            "estado_origen",
+                            "_sintetico",
+                        ]
+                    ]
+                )
+
         # --- Caso 1: Subs sin logs en ninguna version ---
         ordenes_con_log = set(log_filtered["orden"])
         mask_no_logs = ~self.df_subs_full["orden"].isin(ordenes_con_log)
@@ -269,6 +304,49 @@ class ChurnRateAnalyzer:
             df_no_logs["_sintetico"] = True
             synth_parts.append(
                 df_no_logs[
+                    [
+                        "orden",
+                        "fecha",
+                        "nota",
+                        "estado",
+                        "f_dt",
+                        "log_norm",
+                        "estado_origen",
+                        "_sintetico",
+                    ]
+                ]
+            )
+
+        # --- Caso 6: Log inactivo seguido de corte impago -> activo entre ambos ---
+        # Si un log X tiene estado inactivo y el siguiente log Y de la misma orden
+        # contiene "corte automatico por factura impaga", se inserta un log 3_progress
+        # sintetico entre X e Y. La sub cuenta como activa en el periodo entre ambos.
+        df_ordered = log_filtered.sort_values(["orden", "f_dt"]).copy()
+        df_ordered["next_log_norm"] = df_ordered.groupby("orden")["log_norm"].shift(-1)
+        df_ordered["next_f_dt"] = df_ordered.groupby("orden")["f_dt"].shift(-1)
+        df_ordered["next_orden"] = df_ordered.groupby("orden")["orden"].shift(-1)
+        mask_caso6 = (
+            df_ordered["estado"].isin(INACTIVE_STATES)
+            & df_ordered["next_log_norm"].str.contains(CORTE_IMPAGADO_EVENT, na=False)
+            & df_ordered["next_orden"].notna()
+        )
+        df_caso6 = df_ordered[mask_caso6].copy()
+        if not df_caso6.empty:
+            df_caso6["f_dt"] = df_caso6["f_dt"] + pd.Timedelta(seconds=1)
+            df_caso6["fecha"] = df_caso6["f_dt"].dt.strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            df_caso6["nota"] = (
+                "sintetico - activo entre inactivo y corte impago"
+            )
+            df_caso6["log_norm"] = (
+                "sintetico - activo entre inactivo y corte impago"
+            )
+            df_caso6["estado"] = ACTIVE_STATE
+            df_caso6["estado_origen"] = None
+            df_caso6["_sintetico"] = True
+            synth_parts.append(
+                df_caso6[
                     [
                         "orden",
                         "fecha",

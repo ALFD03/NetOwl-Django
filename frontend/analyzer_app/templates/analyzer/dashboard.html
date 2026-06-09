@@ -1,0 +1,298 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}NetOwl Analytics{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- DASHBOARD - Solo graficos, sin filtro, sin tarjetas -->
+<div id="tab-dashboard" class="spa-tab">
+  <!-- Tarjeta Churn Rate Comparativo -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <h6 class="text-muted mb-1"><i class="bi bi-speedometer2 me-2"></i>Churn Rate Comparativo</h6>
+              <div id="churn-comparativo-value" class="display-5 fw-bold">--</div>
+            </div>
+            <div class="text-end">
+              <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2">Promedio Financiero</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-graph-up me-2"></i>Churn Neto y Bruto por Metodo</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:340px"><canvas id="churnLineChart"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mb-4">
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-arrow-return-left me-2"></i>Tasa Winback</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="winbackBarChart"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-bar-chart me-2"></i>ARPU por Periodo</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="arpuBarChart"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-lg-4">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-bar-chart me-2"></i>Tasa Aporte Reactivacion</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="aporteReactBarChart"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-arrow-repeat me-2"></i>Indice de Reemplazo</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="reemplazoLineChart"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-bar-chart me-2"></i>Adiciones Netas y Brutas</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="adicionesBarChart"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-clock me-2"></i>Prom. Dias Activo</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="tiemposActivoChart"></canvas></div></div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-clock-fill me-2"></i>Prom. Dias Cancelado</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="tiemposCanceladoChart"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-activity me-2"></i>Cortes Automaticos vs Reactivaciones</h5></div>
+        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="cortesReactChart"></canvas></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabla Ultimos Periodos -->
+  <div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5><i class="bi bi-clock-history me-2"></i>Ultimos Periodos</h5>
+      <button class="btn btn-outline-primary btn-sm switch-tab-btn" data-target="results_list">
+        <i class="bi bi-list-ul me-1"></i>Ver Todos
+      </button>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-theme">
+          <thead><tr>
+            <th>Periodo</th><th>Metodo</th><th class="text-end">Activos Inicio</th><th class="text-end">Activos Final</th>
+            <th class="text-end">Nuevos</th><th class="text-end">Churn Neto</th><th class="text-end">Churn Bruto</th>
+            <th class="text-end">ARPU</th><th class="text-center">Accion</th>
+          </tr></thead>
+          <tbody id="dashboard-table-tbody">
+            <tr><td colspan="9" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ANALYTICS - Tarjetas con colores + filtro multiselect + dimensiones -->
+<div id="tab-analytics" class="spa-tab d-none">
+  <div class="card-header rounded d-flex justify-content-end mb-3 align-items-center">
+    <h4 class="mb-0 me-auto"><i class="bi bi-bar-chart-line me-2"></i>Analisis Detallado</h4>
+    <div class="dropdown" id="analytics-filter-dropdown">
+      <button class="btn dropdown-toggle prominent-filter d-flex align-items-center gap-2" type="button" id="analytics-filter-toggle">
+        <i class="bi bi-funnel-fill"></i><span id="analytics-filter-label">Seleccionar periodos...</span>
+      </button>
+      <div class="dropdown-menu p-3 analytics-filter-menu" id="analytics-filter-menu" style="min-width:320px;max-height:300px;overflow-y:auto">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="text-muted small">Periodos</span>
+        </div>
+        <div id="analytics-periods-checkboxes"></div>
+        <hr class="my-2">
+        <button class="btn btn-outline-light btn-sm w-100" id="analytics-reset-btn" type="button"><i class="bi bi-arrow-counterclockwise me-1"></i>Restablecer (mes actual)</button>
+      </div>
+    </div>
+  </div>
+  <!-- Tarjetas de metricas con colores -->
+  <div class="row g-3 mb-4" id="analytics-cards-container"></div>
+  <!-- Graficos por dimension -->
+  <div id="analytics-dimension-charts"></div>
+</div>
+
+<!-- IMPORT -->
+<div id="tab-import" class="spa-tab d-none">
+  <div class="row g-4">
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-cloud-arrow-up me-2"></i>Cargar Archivo</h5></div>
+        <div class="card-body">
+          <form id="import-csv-form">
+            <div class="mb-4">
+              <label class="form-label fw-bold">Tipo de Datos</label>
+              <div class="d-flex gap-3">
+                <div class="form-check flex-fill p-3 border rounded-3 bg-light-subtle" style="cursor:pointer">
+                  <input class="form-check-input ms-0 me-2" type="radio" name="import_type" id="type-subscriptions" value="subscriptions" checked>
+                  <label class="form-check-label fw-medium" for="type-subscriptions">Suscripciones / Clientes</label>
+                </div>
+                <div class="form-check flex-fill p-3 border rounded-3 bg-light-subtle" style="cursor:pointer">
+                  <input class="form-check-input ms-0 me-2" type="radio" name="import_type" id="type-logs" value="logs">
+                  <label class="form-check-label fw-medium" for="type-logs">Logs / Transiciones</label>
+                </div>
+              </div>
+            </div>
+            <div class="drop-zone" id="drop-zone-area">
+              <div class="drop-zone-icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
+              <h4 class="drop-zone-title">Arrastra tu archivo CSV aqui</h4>
+              <p class="drop-zone-text text-muted">o haz clic para explorar</p>
+              <input type="file" id="csv-file-input" name="csv_file" class="d-none" accept=".csv" required>
+              <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="browse-files-btn"><i class="bi bi-search me-2"></i>Buscar Archivo</button>
+            </div>
+            <div id="selected-file-display" class="alert alert-info mt-3 d-none">
+              <div class="d-flex align-items-center justify-content-between">
+                <div><i class="bi bi-file-earmark-check me-2"></i><span id="selected-file-name" class="fw-semibold"></span></div>
+                <button type="button" class="btn-close" id="remove-file-btn"></button>
+              </div>
+            </div>
+            <div class="progress mt-4 d-none" id="upload-progress-container" style="height:8px">
+              <div id="upload-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:0%"></div>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 py-2 mt-4" id="submit-import-btn" disabled><i class="bi bi-upload me-2"></i>Iniciar Carga</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card h-100">
+        <div class="card-header"><h5><i class="bi bi-info-circle me-2"></i>Requisitos</h5></div>
+        <div class="card-body">
+          <div class="format-info mt-0">
+            <h6><i class="bi bi-filetype-csv text-primary"></i>Especificaciones</h6>
+            <ul><li><strong>Formato:</strong> CSV (.csv)</li><li><strong>Codificacion:</strong> UTF-8</li><li><strong>Encabezado:</strong> Primera linea con nombres de columnas</li></ul>
+          </div>
+          <div class="format-info mt-3" id="format-sub-details">
+            <h6><i class="bi bi-people text-primary"></i>Columnas para Suscripciones</h6>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">orden_producto</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">fecha_inicio</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">total</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">zona</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">sucursal</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">producto</div>
+          </div>
+          <div class="format-info mt-3 d-none" id="format-log-details">
+            <h6><i class="bi bi-activity text-primary"></i>Columnas para Logs</h6>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">orden</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">fecha</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">estado</div>
+            <div class="badge bg-secondary-subtle text-secondary-emphasis p-2 mb-1">nota</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ejecutar Analisis -->
+  <div class="row g-4 mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header"><h5><i class="bi bi-play-circle me-2"></i>Ejecutar Analisis</h5></div>
+        <div class="card-body">
+          <form id="run-analysis-form" class="analysis-form">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-4">
+                <label class="form-label">Seleccionar Periodo</label>
+                <div class="input-group">
+                  <span class="input-group-text calendar-adaptable"><i class="bi bi-calendar-date"></i></span>
+                  <select id="month-select" class="form-select calendar-select"><option value="">Mes</option></select>
+                  <select id="year-select" class="form-select calendar-select"><option value="">Ano</option></select>
+                </div>
+                <input type="text" id="month-input" class="d-none" name="month" autocomplete="off" required>
+              </div>
+              <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100 py-2"><i class="bi bi-cpu me-2"></i>Ejecutar</button>
+              </div>
+            </div>
+          </form>
+          <div class="terminal-console mt-4 d-none" id="console-container">
+            <div class="terminal-header d-flex justify-content-between align-items-center">
+              <span><i class="bi bi-terminal me-2"></i>Consola</span>
+              <button class="btn btn-sm btn-link text-white-50 p-0" id="clear-console"><i class="bi bi-trash"></i></button>
+            </div>
+            <pre id="terminal-log">Esperando...</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULTADOS -->
+<div id="tab-results" class="spa-tab d-none">
+  <div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h5><i class="bi bi-journal-text me-2"></i>Historial de Cierres</h5>
+      <input type="text" id="search-results-input" class="form-control form-control-sm" placeholder="Buscar por periodo..." style="width:200px">
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 table-theme">
+          <thead><tr>
+            <th style="cursor:pointer" id="sort-period">Periodo <i class="bi bi-sort-down-alt"></i></th>
+            <th>Metodo</th><th class="text-end">Activos Inicio</th><th class="text-end">Activos Final</th>
+            <th class="text-end">Nuevos</th><th class="text-end">Churn Neto</th><th class="text-end">ARPU</th>
+            <th class="text-center">Accion</th>
+          </tr></thead>
+          <tbody id="results-table-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE -->
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content" style="background-color:var(--surface-secondary);color:var(--text-primary);border:1px solid var(--border-color)">
+      <div class="modal-header" style="border-bottom:1px solid var(--border-color)">
+        <h5 class="modal-title">Detalle: <span id="modal-period-title" class="text-primary fw-bold"></span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <h6 class="mb-3 text-uppercase small text-muted"><i class="bi bi-sliders me-2"></i>Resumen por Metodo</h6>
+        <div class="row g-3 mb-4" id="modal-summaries-container"></div>
+        <hr style="border-top:1px solid var(--border-color)" class="my-4">
+        <h6 class="mb-3 text-uppercase small text-muted"><i class="bi bi-bar-chart me-2"></i>Desglose Dimensiones</h6>
+        <div class="row g-3" id="modal-dimensions-container"></div>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--border-color)">
+        <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
