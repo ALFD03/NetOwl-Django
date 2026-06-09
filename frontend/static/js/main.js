@@ -1,8 +1,9 @@
 (function () {
   "use strict";
 
-  let churnLineChart = null, winbackBarChart = null, arpuPieChart = null;
-  let aporteReactBarChart = null, reemplazoLineChart = null, adicionesPieChart = null;
+  if (typeof ChartDataLabels !== "undefined") { Chart.register(ChartDataLabels); Chart.defaults.plugins.datalabels.display = false; }
+  let churnLineChart = null, winbackBarChart = null, arpuBarChart = null;
+  let aporteReactBarChart = null, reemplazoLineChart = null, adicionesBarChart = null;
   let churnTrendChart = null, growthChart = null;
   let allHistoricalPeriods = [];
 
@@ -189,8 +190,47 @@
   function loadDashboardData() {
     fetch("/api/dashboard-data/")
       .then(r => { if (!r.ok) throw Error("Error"); return r.json(); })
-      .then(data => renderDashboardCharts(data.periodos || []))
+      .then(data => {
+        const periodos = data.periodos || [];
+        renderDashboardCharts(periodos);
+        renderDashboardTable(periodos.slice(0, 6));
+        renderChurnComparativo(periodos);
+      })
       .catch(function () { showToast("Error cargando dashboard", "error"); });
+  }
+
+  function renderChurnComparativo(periodos) {
+    const el = document.getElementById("churn-comparativo-value");
+    if (!el) return;
+    const vals = [];
+    periodos.forEach(function (p) {
+      (p.metodos || []).forEach(function (m) {
+        if (m.metodo === "Financiero") vals.push(m.churn_neto_pct || 0);
+      });
+    });
+    if (!vals.length) { el.textContent = "N/A"; return; }
+    var avg = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    var colorClass = avg < 2.5 ? "text-success" : avg <= 3 ? "text-warning" : "text-danger";
+    el.textContent = avg.toFixed(2) + "%";
+    el.className = "display-5 fw-bold " + colorClass;
+  }
+
+  function renderDashboardTable(periodos) {
+    const tbody = document.getElementById("dashboard-table-tbody");
+    if (!tbody) return;
+    if (!periodos.length) {
+      tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">Sin datos</td></tr>';
+      return;
+    }
+    let html = "";
+    periodos.forEach(p => {
+      (p.metodos || []).forEach(m => {
+        const cn = m.churn_neto_pct || 0;
+        const churnClass = cn < 2.5 ? "text-success" : cn <= 3 ? "text-warning" : "text-danger";
+        html += '<tr><td class="fw-medium">' + p.periodo_reporte + '</td><td><span class="badge ' + (m.metodo === "Financiero" ? "bg-primary-subtle text-primary" : "bg-info-subtle text-info") + ' rounded-pill px-3 py-1">' + m.metodo + '</span></td><td class="text-end">' + (m.activos_inicio || 0).toLocaleString() + '</td><td class="text-end">' + (m.activos_final || 0).toLocaleString() + '</td><td class="text-end">' + (m.nuevos_mes || 0).toLocaleString() + '</td><td class="text-end fw-semibold ' + churnClass + '">' + cn.toFixed(2) + '%</td><td class="text-end">' + (m.churn_bruto_pct || 0).toFixed(2) + '%</td><td class="text-end">$' + (m.arpu || 0).toFixed(2) + '</td><td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + p.periodo_reporte + '"><i class="bi bi-eye"></i></button></td></tr>';
+      });
+    });
+    tbody.innerHTML = html;
   }
 
   function renderDashboardCharts(periodos) {
@@ -211,32 +251,92 @@
 
     function v(d, key) { return d ? d[key] || 0 : 0; }
 
-    const finVals = labels.map(l => v(finData[l], "churn_neto_pct"));
-    const opVals = labels.map(l => v(opData[l], "churn_neto_pct"));
+    // Helper para plugin de bandas de umbral + linea objetivo
+    function makeThresholdPlugin(id, zones, targetLine) {
+      return {
+        id: id,
+        beforeDraw: function (chart) {
+          var ya = chart.scales.y;
+          if (!ya) return;
+          var ca = chart.chartArea;
+          if (!ca || ca.left === undefined || ca.top === undefined) return;
+          var l = ca.left, r = ca.right, t = ca.top, b = ca.bottom;
+          var ctx = chart.ctx;
+          (zones || []).forEach(function (z) {
+            var y0 = ya.getPixelForValue(z.from);
+            var y1 = ya.getPixelForValue(z.to);
+            if (y0 === undefined || y1 === undefined) return;
+            var rectTop = Math.min(y0, y1);
+            var rectBottom = Math.max(y0, y1);
+            ctx.save();
+            ctx.fillStyle = z.color;
+            ctx.fillRect(l, Math.max(t, rectTop), r - l, Math.min(b, rectBottom) - Math.max(t, rectTop));
+            ctx.restore();
+          });
+          if (targetLine) {
+            var yTarget = ya.getPixelForValue(targetLine.value);
+            if (yTarget !== undefined && yTarget !== null) {
+              ctx.save();
+              ctx.setLineDash([6, 4]);
+              ctx.strokeStyle = targetLine.color || "#ffffff";
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.moveTo(l, yTarget);
+              ctx.lineTo(r, yTarget);
+              ctx.stroke();
+              if (targetLine.label) {
+                ctx.fillStyle = targetLine.color || "#ffffff";
+                ctx.font = "bold 10px sans-serif";
+                ctx.textAlign = "right";
+                ctx.fillText(targetLine.label, r - 4, yTarget - 5);
+              }
+              ctx.restore();
+            }
+          }
+        }
+      };
+    }
+
+    // 1. Churn Neto y Bruto - Financiero solido, Operativo punteado + barras de promedios
+    const finNeto = labels.map(l => v(finData[l], "churn_neto_pct"));
+    const opNeto = labels.map(l => v(opData[l], "churn_neto_pct"));
     const finBruto = labels.map(l => v(finData[l], "churn_bruto_pct"));
     const opBruto = labels.map(l => v(opData[l], "churn_bruto_pct"));
+    const promFin = labels.map((_, i) => (finNeto[i] + finBruto[i]) / 2);
+    const promOp = labels.map((_, i) => (opNeto[i] + opBruto[i]) / 2);
+    const promGeneral = labels.map((_, i) => (finNeto[i] + opNeto[i] + finBruto[i] + opBruto[i]) / 4);
+    const lblColor = tickColor;
 
-    // 1. Churn Neto y Bruto - Lineas
+    const churnPlugin = makeThresholdPlugin("churnLine", null, { value: 3, color: "#ffffff", label: "Objetivo 3%" });
+
+    function churnSeg(ctx) { if (!ctx || !ctx.p1 || !ctx.p1.parsed) return; var v = ctx.p1.parsed.y; return v < 2.5 ? "#22c55e" : v <= 3 ? "#eab308" : "#ef4444"; }
+    function churnPt(v) { return v < 2.5 ? "#22c55e" : v <= 3 ? "#eab308" : "#ef4444"; }
+    function churnBar(v) { return v < 2.5 ? "rgba(34,197,94,0.75)" : v <= 3 ? "rgba(234,179,8,0.75)" : "rgba(239,68,68,0.75)"; }
+
     const ctx1 = document.getElementById("churnLineChart");
     if (ctx1) {
       churnLineChart = new Chart(ctx1, {
-        type: "line",
+        type: "bar",
         data: {
           labels: labels,
           datasets: [
-            { label: "Churn Neto - Financiero", data: finVals, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3 },
-            { label: "Churn Neto - Operativo", data: opVals, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3 },
-            { label: "Churn Bruto - Financiero", data: finBruto, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, borderDash: [5, 5] },
-            { label: "Churn Bruto - Operativo", data: opBruto, borderColor: "#f59e0b", backgroundColor: "rgba(245,158,11,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, borderDash: [5, 5] },
+            { label: "Churn Neto - Financiero", data: finNeto, type: "line", borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: finNeto.map(churnPt) },
+            { label: "Churn Neto - Operativo", data: opNeto, type: "line", borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, borderDash: [5, 5], order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: opNeto.map(churnPt) },
+            { label: "Churn Bruto - Financiero", data: finBruto, type: "line", borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: finBruto.map(churnPt) },
+            { label: "Churn Bruto - Operativo", data: opBruto, type: "line", borderColor: "#f59e0b", backgroundColor: "rgba(245,158,11,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, borderDash: [5, 5], order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: opBruto.map(churnPt) },
+            { label: "Prom. Financiero", data: promFin, backgroundColor: promFin.map(churnBar), borderRadius: 3, order: 1, datalabels: { display: true, color: lblColor, anchor: "end", align: "end", font: { size: 14, weight: "bold" }, formatter: function (val) { return val.toFixed(1) + "%"; } } },
+            { label: "Prom. Operativo", data: promOp, backgroundColor: promOp.map(churnBar), borderRadius: 3, order: 1, datalabels: { display: true, color: lblColor, anchor: "end", align: "end", font: { size: 14, weight: "bold" }, formatter: function (val) { return val.toFixed(1) + "%"; } } },
+            { label: "Prom. General", data: promGeneral, backgroundColor: promGeneral.map(churnBar), borderRadius: 3, order: 1, datalabels: { display: true, color: lblColor, anchor: "end", align: "end", font: { size: 14, weight: "bold" }, formatter: function (val) { return val.toFixed(1) + "%"; } } },
           ]
         },
-        options: chartOpts(lineOpts(gridColor, tickColor))
+        options: chartOpts(Object.assign(barOpts(gridColor, tickColor), { plugins: { legend: { position: "top", labels: { color: tickColor, font: { size: 10 } } } } })),
+        plugins: [churnPlugin]
       });
     }
 
-    // 2. Winback - Barras
+    // 2. Winback - Barras solo Financiero (umbral: <80 rojo, 80-90 amarillo, >90 verde)
     const winbackFin = labels.map(l => v(finData[l], "tasa_winback_pct"));
-    const winbackOp = labels.map(l => v(opData[l], "tasa_winback_pct"));
+    const winbackPlugin = makeThresholdPlugin("winbackLine", null, { value: 80, color: "#ffffff", label: "Obj. 80%" });
     const ctx2 = document.getElementById("winbackBarChart");
     if (ctx2) {
       winbackBarChart = new Chart(ctx2, {
@@ -244,33 +344,34 @@
         data: {
           labels: labels,
           datasets: [
-            { label: "Financiero", data: winbackFin, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4 },
-            { label: "Operativo", data: winbackOp, backgroundColor: "rgba(16,185,129,0.8)", borderRadius: 4 },
+            { label: "Tasa Winback", data: winbackFin, backgroundColor: winbackFin.map(function (v) { return (v || 0) < 80 ? "rgba(239,68,68,0.8)" : (v || 0) <= 90 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4 },
           ]
         },
-        options: chartOpts(barOpts(gridColor, tickColor))
+        options: chartOpts(barOpts(gridColor, tickColor)),
+        plugins: [winbackPlugin]
       });
     }
 
-    // 3. ARPU - Torta
-    const lastPer = periodos[0];
-    const arpuFin = v(finData[lastPer.periodo_reporte], "arpu");
-    const arpuOp = v(opData[lastPer.periodo_reporte], "arpu");
-    const ctx3 = document.getElementById("arpuPieChart");
+    // 3. ARPU - Barras solo Financiero (umbral: <25 rojo, 25-30 amarillo, >30 verde)
+    const arpuFin = labels.map(l => v(finData[l], "arpu"));
+    const arpuPlugin = makeThresholdPlugin("arpuLine", null, { value: 25, color: "#ffffff", label: "Obj. 25" });
+    const ctx3 = document.getElementById("arpuBarChart");
     if (ctx3) {
-      arpuPieChart = new Chart(ctx3, {
-        type: "pie",
+      arpuBarChart = new Chart(ctx3, {
+        type: "bar",
         data: {
-          labels: ["Financiero", "Operativo"],
-          datasets: [{ data: [arpuFin, arpuOp], backgroundColor: ["#2563eb", "#10b981"], borderWidth: 0 }]
+          labels: labels,
+          datasets: [
+            { label: "ARPU Financiero", data: arpuFin, backgroundColor: arpuFin.map(function (v) { return (v || 0) < 25 ? "rgba(239,68,68,0.8)" : (v || 0) <= 30 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4 },
+          ]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", labels: { color: tickColor } } } }
+        options: chartOpts(barOpts(gridColor, tickColor)),
+        plugins: [arpuPlugin]
       });
     }
 
-    // 4. Tasa Aporte Reactivacion - Barras
+    // 4. Tasa Aporte Reactivacion - Barras solo Financiero
     const aporteFin = labels.map(l => v(finData[l], "tasa_aporte_react_pct"));
-    const aporteOp = labels.map(l => v(opData[l], "tasa_aporte_react_pct"));
     const ctx4 = document.getElementById("aporteReactBarChart");
     if (ctx4) {
       aporteReactBarChart = new Chart(ctx4, {
@@ -278,17 +379,15 @@
         data: {
           labels: labels,
           datasets: [
-            { label: "Financiero", data: aporteFin, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4 },
-            { label: "Operativo", data: aporteOp, backgroundColor: "rgba(16,185,129,0.8)", borderRadius: 4 },
+            { label: "Tasa Aporte React.", data: aporteFin, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4 },
           ]
         },
         options: chartOpts(barOpts(gridColor, tickColor))
       });
     }
 
-    // 5. Indice de Reemplazo - Lineas
+    // 5. Indice de Reemplazo - Linea solo Financiero
     const reempFin = labels.map(l => v(finData[l], "indice_reemplazo_react_pct"));
-    const reempOp = labels.map(l => v(opData[l], "indice_reemplazo_react_pct"));
     const ctx5 = document.getElementById("reemplazoLineChart");
     if (ctx5) {
       reemplazoLineChart = new Chart(ctx5, {
@@ -296,35 +395,38 @@
         data: {
           labels: labels,
           datasets: [
-            { label: "Financiero", data: reempFin, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3 },
-            { label: "Operativo", data: reempOp, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3 },
+            { label: "Indice Reemplazo", data: reempFin, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3 },
           ]
         },
         options: chartOpts(lineOpts(gridColor, tickColor))
       });
     }
 
-    // 6. Adiciones Netas y Brutas - Torta
-    const adNetasFin = v(finData[lastPer.periodo_reporte], "adiciones_netas");
-    const adBrutasFin = v(finData[lastPer.periodo_reporte], "adiciones_brutas");
-    const adNetasOp = v(opData[lastPer.periodo_reporte], "adiciones_netas");
-    const adBrutasOp = v(opData[lastPer.periodo_reporte], "adiciones_brutas");
-    const ctx6 = document.getElementById("adicionesPieChart");
+    // 6. Adiciones Netas y Brutas - Barras solo Financiero (umbral: <0 rojo, 0-1000 amarillo, >1000 verde)
+    const adNetasFin = labels.map(l => v(finData[l], "adiciones_netas"));
+    const adBrutasFin = labels.map(l => v(finData[l], "adiciones_brutas"));
+    function adColors(v) { return (v || 0) < 0 ? "rgba(239,68,68,0.8)" : (v || 0) <= 1000 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }
+    const adicionesPlugin = makeThresholdPlugin("adicionesLine", null, { value: 0, color: "#ffffff", label: "Obj. 0" });
+    const ctx6 = document.getElementById("adicionesBarChart");
     if (ctx6) {
-      adicionesPieChart = new Chart(ctx6, {
-        type: "pie",
+      adicionesBarChart = new Chart(ctx6, {
+        type: "bar",
         data: {
-          labels: ["Netas Fin", "Brutas Fin", "Netas Op", "Brutas Op"],
-          datasets: [{ data: [adNetasFin, adBrutasFin, adNetasOp, adBrutasOp], backgroundColor: ["#2563eb", "#93c5fd", "#10b981", "#6ee7b7"], borderWidth: 0 }]
+          labels: labels,
+          datasets: [
+            { label: "Adiciones Netas", data: adNetasFin, backgroundColor: adNetasFin.map(adColors), borderRadius: 4 },
+            { label: "Adiciones Brutas", data: adBrutasFin, backgroundColor: adBrutasFin.map(adColors), borderRadius: 4 },
+          ]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", labels: { color: tickColor, font: { size: 10 } } } } }
+        options: chartOpts(barOpts(gridColor, tickColor)),
+        plugins: [adicionesPlugin]
       });
     }
   }
 
   function destroyDashboardCharts() {
-    [churnLineChart, winbackBarChart, arpuPieChart, aporteReactBarChart, reemplazoLineChart, adicionesPieChart].forEach(c => { if (c) { c.destroy(); c = null; } });
-    churnLineChart = winbackBarChart = arpuPieChart = aporteReactBarChart = reemplazoLineChart = adicionesPieChart = null;
+    [churnLineChart, winbackBarChart, arpuBarChart, aporteReactBarChart, reemplazoLineChart, adicionesBarChart].forEach(c => { if (c) { c.destroy(); c = null; } });
+    churnLineChart = winbackBarChart = arpuBarChart = aporteReactBarChart = reemplazoLineChart = adicionesBarChart = null;
   }
 
   function chartOpts(specific) {
