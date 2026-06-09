@@ -4,6 +4,7 @@
   if (typeof ChartDataLabels !== "undefined") { Chart.register(ChartDataLabels); Chart.defaults.plugins.datalabels.display = false; }
   let churnLineChart = null, winbackBarChart = null, arpuBarChart = null;
   let aporteReactBarChart = null, reemplazoLineChart = null, adicionesBarChart = null;
+  let tiemposActivoChart = null, tiemposCanceladoChart = null, cortesReactChart = null;
   let dimChartInstances = [];
   let allHistoricalPeriods = [];
 
@@ -392,7 +393,8 @@
         data: {
           labels: labels,
           datasets: [
-            { label: "Tasa Winback", data: winbackFin, backgroundColor: winbackFin.map(function (v) { return (v || 0) < 80 ? "rgba(239,68,68,0.8)" : (v || 0) <= 90 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4 },
+            { label: "Tasa Winback", data: winbackFin, backgroundColor: winbackFin.map(function (v) { return (v || 0) < 80 ? "rgba(239,68,68,0.8)" : (v || 0) <= 90 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4, order: 1 },
+            { label: "Tendencia", data: winbackFin, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
           ]
         },
         options: chartOpts(barOpts(gridColor, tickColor)),
@@ -410,7 +412,8 @@
         data: {
           labels: labels,
           datasets: [
-            { label: "ARPU Financiero", data: arpuFin, backgroundColor: arpuFin.map(function (v) { return (v || 0) < 25 ? "rgba(239,68,68,0.8)" : (v || 0) <= 30 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4 },
+            { label: "ARPU Financiero", data: arpuFin, backgroundColor: arpuFin.map(function (v) { return (v || 0) < 25 ? "rgba(239,68,68,0.8)" : (v || 0) <= 30 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4, order: 1 },
+            { label: "Tendencia", data: arpuFin, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
           ]
         },
         options: chartOpts(barOpts(gridColor, tickColor)),
@@ -427,7 +430,8 @@
         data: {
           labels: labels,
           datasets: [
-            { label: "Tasa Aporte React.", data: aporteFin, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4 },
+            { label: "Tasa Aporte React.", data: aporteFin, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4, order: 1 },
+            { label: "Tendencia", data: aporteFin, type: "line", borderColor: "#fbbf24", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fbbf24", fill: false, order: 0 },
           ]
         },
         options: chartOpts(barOpts(gridColor, tickColor))
@@ -470,11 +474,63 @@
         plugins: [adicionesPlugin]
       });
     }
+
+    // 7a. Prom. Dias Activo - Bar + trend line
+    const tActivoData = labels.map(function(l) { return v(finData[l], "prom_dias_activo"); });
+    const ctx7a = document.getElementById("tiemposActivoChart");
+    if (ctx7a) {
+      tiemposActivoChart = new Chart(ctx7a, {
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [
+            { label: "Prom. Dias Activo", data: tActivoData, backgroundColor: "rgba(37,99,235,0.7)", borderRadius: 3, order: 1 },
+            { label: "Tendencia", data: tActivoData, type: "line", borderColor: "#2563eb", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#2563eb", fill: false, order: 0 },
+          ]
+        },
+        options: chartOpts(barOpts(gridColor, tickColor))
+      });
+    }
+
+    // 7b. Prom. Dias Cancelado - Bar + trend line
+    const tCanceladoData = labels.map(function(l) { return v(finData[l], "prom_dias_cancelado"); });
+    const ctx7b = document.getElementById("tiemposCanceladoChart");
+    if (ctx7b) {
+      tiemposCanceladoChart = new Chart(ctx7b, {
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [
+            { label: "Prom. Dias Cancelado", data: tCanceladoData, backgroundColor: "rgba(234,179,8,0.7)", borderRadius: 3, order: 1 },
+            { label: "Tendencia", data: tCanceladoData, type: "line", borderColor: "#eab308", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#eab308", fill: false, order: 0 },
+          ]
+        },
+        options: chartOpts(barOpts(gridColor, tickColor))
+      });
+    }
+
+    // 8. Cortes Automaticos vs Reactivaciones - Lineas
+    const cortesFin = labels.map(function(l) { return v(finData[l], "corte_impagado"); });
+    const reactFin = labels.map(function(l) { return v(finData[l], "reactivaciones"); });
+    const ctx8 = document.getElementById("cortesReactChart");
+    if (ctx8) {
+      cortesReactChart = new Chart(ctx8, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [
+            { label: "Cortes Automaticos", data: cortesFin, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#ef4444", fill: true },
+            { label: "Reactivaciones", data: reactFin, borderColor: "#22c55e", backgroundColor: "rgba(34,197,94,0.1)", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#22c55e", fill: true },
+          ]
+        },
+        options: chartOpts(lineOpts(gridColor, tickColor))
+      });
+    }
   }
 
   function destroyDashboardCharts() {
-    [churnLineChart, winbackBarChart, arpuBarChart, aporteReactBarChart, reemplazoLineChart, adicionesBarChart].forEach(c => { if (c) { c.destroy(); c = null; } });
-    churnLineChart = winbackBarChart = arpuBarChart = aporteReactBarChart = reemplazoLineChart = adicionesBarChart = null;
+    [churnLineChart, winbackBarChart, arpuBarChart, aporteReactBarChart, reemplazoLineChart, adicionesBarChart, tiemposActivoChart, tiemposCanceladoChart, cortesReactChart].forEach(c => { if (c) { c.destroy(); c = null; } });
+    churnLineChart = winbackBarChart = arpuBarChart = aporteReactBarChart = reemplazoLineChart = adicionesBarChart = tiemposActivoChart = tiemposCanceladoChart = cortesReactChart = null;
   }
 
   function chartOpts(specific) {

@@ -124,7 +124,14 @@ def get_tiempos_globales(periodos=None):
 
 def get_dashboard_data():
     """Datos completos para el dashboard."""
-    return {"periodos": get_cierre_churn()}
+    periodos_data = get_cierre_churn()
+    tiempos = get_tiempos_globales()
+    for p in periodos_data:
+        t = tiempos.get(p["periodo_reporte"], {})
+        for m in p.get("metodos", []):
+            m["prom_dias_activo"] = t.get("prom_dias_activo", 0)
+            m["prom_dias_cancelado"] = t.get("prom_dias_cancelado", 0)
+    return {"periodos": periodos_data}
 
 
 def get_analytics_data(periodos=None):
