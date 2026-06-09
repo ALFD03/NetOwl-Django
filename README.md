@@ -1,4 +1,4 @@
-# Churn Rate Analyzer
+# NetOwl
 
 Sistema web para el cálculo de Churn Rate, métricas de reactivación, ARPU, tiempos de vida y análisis por dimensiones (zona, sucursal, municipio, campaña, producto).
 
