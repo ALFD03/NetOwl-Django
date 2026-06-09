@@ -80,6 +80,9 @@ def get_dimensiones(periodos=None):
                 "indice_reemplazo_react_pct": float(row.get("indice_reemplazo_react_pct") or 0),
                 "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
                 "adiciones_netas": int(row.get("adiciones_netas") or 0),
+                "corte_impagado": int(row.get("corte_impagado") or 0),
+                "prom_dias_activo": float(row.get("prom_dias_activo") or 0),
+                "prom_dias_cancelado": float(row.get("prom_dias_cancelado") or 0),
             })
         return sorted(pd_dict.values(), key=lambda x: x["periodo_reporte"], reverse=True)
     except Exception:
@@ -98,14 +101,42 @@ def get_periodos():
         return []
 
 
+def get_tiempos_globales(periodos=None):
+    """prom_dias_activo y prom_dias_cancelado desde master_tiempo_global."""
+    db = DBConnector()
+    try:
+        df = db.read_table("master_tiempo_global")
+        if df.empty:
+            return {}
+        if periodos:
+            df = df[df["periodo_reporte"].isin(periodos)]
+        result = {}
+        for _, row in df.iterrows():
+            p = str(row.get("periodo_reporte", ""))
+            result[p] = {
+                "prom_dias_activo": float(row.get("prom_dias_activo") or 0),
+                "prom_dias_cancelado": float(row.get("prom_dias_cancelado") or 0),
+            }
+        return result
+    except Exception:
+        return {}
+
+
 def get_dashboard_data():
     """Datos completos para el dashboard."""
     return {"periodos": get_cierre_churn()}
 
 
 def get_analytics_data(periodos=None):
-    """Datos para analytics (cierre churn + dimensiones)."""
+    """Datos para analytics (cierre churn + dimensiones + tiempos)."""
+    periodos_data = get_cierre_churn(periodos)
+    tiempos = get_tiempos_globales(periodos)
+    for p in periodos_data:
+        t = tiempos.get(p["periodo_reporte"], {})
+        for m in p.get("metodos", []):
+            m["prom_dias_activo"] = t.get("prom_dias_activo", 0)
+            m["prom_dias_cancelado"] = t.get("prom_dias_cancelado", 0)
     return {
-        "periodos": get_cierre_churn(periodos),
+        "periodos": periodos_data,
         "dimensiones": get_dimensiones(periodos),
     }

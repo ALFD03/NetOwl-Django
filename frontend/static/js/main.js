@@ -4,7 +4,7 @@
   if (typeof ChartDataLabels !== "undefined") { Chart.register(ChartDataLabels); Chart.defaults.plugins.datalabels.display = false; }
   let churnLineChart = null, winbackBarChart = null, arpuBarChart = null;
   let aporteReactBarChart = null, reemplazoLineChart = null, adicionesBarChart = null;
-  let churnTrendChart = null, growthChart = null;
+  let dimChartInstances = [];
   let allHistoricalPeriods = [];
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -13,6 +13,7 @@
     initMonthPicker();
     loadComparisonPeriods();
     loadAnalyticsPeriodsList();
+    initAnalyticsFilter();
     initAnalysisExecutor();
     initCSVImporter();
     initResultsDetailsModal();
@@ -164,19 +165,66 @@
     }).catch(function () {});
   }
 
+  function initAnalyticsFilter() {
+    var toggle = document.getElementById("analytics-filter-toggle");
+    var menu = document.getElementById("analytics-filter-menu");
+    var container = document.getElementById("analytics-filter-dropdown");
+    if (!toggle || !menu || !container) return;
+
+    toggle.addEventListener("click", function (e) {
+      e.stopPropagation();
+      menu.classList.toggle("show");
+    });
+
+    document.addEventListener("click", function (e) {
+      if (!container.contains(e.target) && menu.classList.contains("show")) {
+        menu.classList.remove("show");
+      }
+    });
+  }
+
   function loadAnalyticsPeriodsList() {
     fetch("/api/periods/").then(r => r.ok ? r.json() : []).then(d => {
-      const sel = document.getElementById("analytics-periods-select");
-      if (!sel) return;
-      sel.innerHTML = "";
-      (d.periods || []).forEach(p => {
-        const o = document.createElement("option");
-        o.value = p; o.textContent = p; sel.appendChild(o);
+      var container = document.getElementById("analytics-periods-checkboxes");
+      if (!container) return;
+      container.innerHTML = "";
+      var periods = d.periods || [];
+      var now = new Date();
+      var curPeriod = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0");
+      var existsCur = periods.indexOf(curPeriod) !== -1;
+      periods.forEach(function (p) {
+        var div = document.createElement("div");
+        div.className = "form-check";
+        var cb = document.createElement("input");
+        cb.type = "checkbox"; cb.className = "form-check-input"; cb.value = p; cb.id = "aperiod-" + p;
+        if (p === curPeriod || (!existsCur && p === periods[0])) cb.checked = true;
+        var lb = document.createElement("label");
+        lb.className = "form-check-label"; lb.htmlFor = "aperiod-" + p; lb.textContent = p;
+        div.appendChild(cb); div.appendChild(lb); container.appendChild(div);
+        cb.addEventListener("change", function () {
+          var checked = document.querySelectorAll("#analytics-periods-checkboxes input:checked").length;
+          if (checked === 0) { this.checked = true; return; }
+          loadAnalyticsData();
+          updateAnalyticsFilterLabel();
+        });
       });
-      sel.addEventListener("change", function () { loadAnalyticsData(); });
-      if (d.periods && d.periods.length) sel.value = d.periods[0];
-      sel.dispatchEvent(new Event("change"));
+      var resetBtn = document.getElementById("analytics-reset-btn");
+      if (resetBtn) {
+        resetBtn.addEventListener("click", function () {
+          document.querySelectorAll("#analytics-periods-checkboxes input").forEach(function (cb) { cb.checked = cb.value === curPeriod || (!existsCur && cb.value === periods[0]); });
+          loadAnalyticsData();
+          updateAnalyticsFilterLabel();
+        });
+      }
+      if (periods.length) { updateAnalyticsFilterLabel(); loadAnalyticsData(); }
     }).catch(function () {});
+  }
+
+  function updateAnalyticsFilterLabel() {
+    var label = document.getElementById("analytics-filter-label");
+    if (!label) return;
+    var checked = document.querySelectorAll("#analytics-periods-checkboxes input:checked").length;
+    label.textContent = checked + " periodo" + (checked !== 1 ? "s" : "") + " seleccionado" + (checked !== 1 ? "s" : "");
   }
 
   function refreshAllCharts() {
@@ -430,7 +478,7 @@
   }
 
   function chartOpts(specific) {
-    return Object.assign({ responsive: true, maintainAspectRatio: false }, specific || {});
+    return Object.assign({ responsive: true, maintainAspectRatio: false, animation: { duration: 800, easing: "easeOutQuart" } }, specific || {});
   }
 
   function lineOpts(gridColor, tickColor) {
@@ -451,19 +499,15 @@
   // ANALYTICS - TARJETAS CON COLORES + GRAFICOS + TABLA + DIMENSIONES
   // ================================================================
   function loadAnalyticsData() {
-    const sel = document.getElementById("analytics-periods-select");
-    let url = "/api/analytics-data/";
-    if (sel && sel.selectedOptions && sel.selectedOptions.length) {
-      const vals = Array.from(sel.selectedOptions).map(o => o.value).filter(Boolean);
-      if (vals.length) url += "?periods=" + encodeURIComponent(vals.join(","));
-    }
-    fetch(url)
+    var cbs = document.querySelectorAll("#analytics-periods-checkboxes input[type=checkbox]:checked");
+    var vals = Array.from(cbs).map(function (cb) { return cb.value; }).filter(Boolean);
+    var url = "/api/analytics-data/";
+    if (vals.length) url += "?periods=" + encodeURIComponent(vals.join(","));
+    return fetch(url)
       .then(r => { if (!r.ok) throw Error("Error"); return r.json(); })
       .then(data => {
         renderAnalyticsCards(data.periodos || []);
-        renderAnalyticsCharts(data.periodos || []);
-        renderAnalyticsTable(data.periodos || []);
-        renderDimensions(data.dimensiones || []);
+        renderDimensionCharts(data.dimensiones || [], data.periodos || []);
       })
       .catch(function () { showToast("Error cargando analytics", "error"); });
   }
@@ -473,14 +517,18 @@
     if (!container) return;
     if (!periodos.length) { container.innerHTML = '<div class="col-12 text-center text-muted py-4">Sin datos</div>'; return; }
 
-    function avg(path) {
+    function avg(path, methodFilter) {
       const vals = [];
       periodos.forEach(p => (p.metodos || []).forEach(m => {
+        if (methodFilter && m.metodo !== methodFilter) return;
         const v = path.split(".").reduce((o, k) => (o && o[k] !== undefined) ? o[k] : undefined, m);
         if (v !== undefined) vals.push(Number(v));
       }));
       return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
     }
+
+    function avgFin(path) { return avg(path, "Financiero"); }
+    function avgOp(path) { return avg(path, "Operativo"); }
 
     function colorChurn(v) { return v < 2.5 ? "text-success" : v <= 3 ? "text-warning" : "text-danger"; }
     function colorNuevos(v) { return v > 2500 ? "text-success" : v >= 2000 ? "text-warning" : "text-danger"; }
@@ -490,128 +538,335 @@
     function colorAdiciones(v) { return v > 500 ? "text-success" : v >= 1 ? "text-warning" : "text-danger"; }
 
     const cards = [
-      { label: "Churn Neto", val: avg("churn_neto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
-      { label: "Churn Bruto", val: avg("churn_bruto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
-      { label: "Nuevos en el Mes", val: avg("nuevos_mes"), fmt: v => Math.round(v).toLocaleString(), clr: colorNuevos },
-      { label: "Bajas Netas", val: avg("bajas_netas_balance"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
-      { label: "Reactivaciones", val: avg("reactivaciones"), fmt: v => Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
-      { label: "Tasa Winback", val: avg("tasa_winback_pct"), fmt: v => v.toFixed(2) + "%", clr: colorWinback },
-      { label: "ARPU", val: avg("arpu"), fmt: v => "$" + v.toFixed(2), clr: colorArpu },
-      { label: "Total Billing", val: avg("total_billing"), fmt: v => "$" + Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
-      { label: "Tasa Aporte React.", val: avg("tasa_aporte_react_pct"), fmt: v => v.toFixed(2) + "%", clr: function () { return "text-success"; } },
-      { label: "Indice Reemplazo", val: avg("indice_reemplazo_react_pct"), fmt: v => v.toFixed(2) + "%", clr: function () { return "text-success"; } },
-      { label: "Adiciones Netas", val: avg("adiciones_netas"), fmt: v => Math.round(v).toLocaleString(), clr: colorAdiciones },
-      { label: "Adiciones Brutas", val: avg("adiciones_brutas"), fmt: v => Math.round(v).toLocaleString(), clr: colorAdiciones },
+      { label: "Churn Neto Fin.", val: avgFin("churn_neto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
+      { label: "Churn Neto Op.", val: avgOp("churn_neto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
+      { label: "Churn Bruto Fin.", val: avgFin("churn_bruto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
+      { label: "Churn Bruto Op.", val: avgOp("churn_bruto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
+      { label: "Bajas Netas Fin.", val: avgFin("bajas_netas_balance"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
+      { label: "Bajas Netas Op.", val: avgOp("bajas_netas_balance"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
+      { label: "Bajas Brutas Fin.", val: avgFin("bajas_brutas_auditoria"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
+      { label: "Bajas Brutas Op.", val: avgOp("bajas_brutas_auditoria"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
+      { label: "Nuevos en el Mes", val: avgFin("nuevos_mes"), fmt: v => Math.round(v).toLocaleString(), clr: colorNuevos },
+      { label: "Reactivaciones", val: avgFin("reactivaciones"), fmt: v => Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
+      { label: "Tasa Winback", val: avgFin("tasa_winback_pct"), fmt: v => v.toFixed(2) + "%", clr: colorWinback },
+      { label: "ARPU", val: avgFin("arpu"), fmt: v => "$" + v.toFixed(2), clr: colorArpu },
+      { label: "Total Billing", val: avgFin("total_billing"), fmt: v => "$" + Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
+      { label: "Tasa Aporte React.", val: avgFin("tasa_aporte_react_pct"), fmt: v => v.toFixed(2) + "%", clr: function () { return "text-success"; } },
+      { label: "Indice Reemplazo", val: avgFin("indice_reemplazo_react_pct"), fmt: v => v.toFixed(2) + "%", clr: function () { return "text-success"; } },
+      { label: "Adiciones Netas", val: avgFin("adiciones_netas"), fmt: v => Math.round(v).toLocaleString(), clr: colorAdiciones },
+      { label: "Adiciones Brutas", val: avgFin("adiciones_brutas"), fmt: v => Math.round(v).toLocaleString(), clr: colorAdiciones },
+      { label: "Corte Impago", val: avgFin("corte_impagado"), fmt: v => Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
+      { label: "Prom. Dias Activo", val: avgFin("prom_dias_activo"), fmt: v => v.toFixed(1) + " d", clr: function () { return "text-success"; } },
+      { label: "Prom. Dias Cancelado", val: avgFin("prom_dias_cancelado"), fmt: v => v.toFixed(1) + " d", clr: function () { return "text-success"; } },
     ];
 
     let html = "";
     cards.forEach(c => {
       const colorClass = c.clr(c.val);
-      html += '<div class="col-xl-3 col-md-4 col-sm-6"><div class="metric-card"><div class="metric-label">' + c.label + '</div><div class="fs-3 fw-bold ' + colorClass + '">' + c.fmt(c.val) + '</div></div></div>';
+      html += '<div class="col-xl-2 col-md-3 col-sm-4"><div class="metric-card"><div class="metric-label">' + c.label + '</div><div class="fs-3 fw-bold ' + colorClass + '">' + c.fmt(c.val) + '</div></div></div>';
     });
     container.innerHTML = html;
   }
 
-  function renderAnalyticsCharts(periodos) {
-    if (churnTrendChart) { churnTrendChart.destroy(); churnTrendChart = null; }
-    if (growthChart) { growthChart.destroy(); growthChart = null; }
-    if (!periodos.length) return;
-    const labels = periodos.map(p => p.periodo_reporte).reverse();
-    const isLight = document.documentElement.classList.contains("light-mode");
-    const gridColor = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
-    const tickColor = isLight ? "#64748b" : "#94a3b8";
-    const finData = {}, opData = {};
-    periodos.forEach(p => {
-      (p.metodos || []).forEach(m => {
-        const t = m.metodo === "Financiero" ? finData : opData;
-        t[p.periodo_reporte] = m;
-      });
-    });
-    function v(d, k) { return d ? d[k] || 0 : 0; }
-    const finChurn = labels.map(l => v(finData[l], "churn_neto_pct"));
-    const opChurn = labels.map(l => v(opData[l], "churn_neto_pct"));
-    const finAdNetas = labels.map(l => v(finData[l], "adiciones_netas"));
-    const opAdNetas = labels.map(l => v(opData[l], "adiciones_netas"));
 
-    const ctx1 = document.getElementById("churnTrendChart");
-    if (ctx1) {
-      churnTrendChart = new Chart(ctx1, {
-        type: "line",
-        data: {
-          labels: labels,
-          datasets: [
-            { label: "Financiero", data: finChurn, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, fill: true, pointRadius: 3 },
-            { label: "Operativo", data: opChurn, borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.05)", borderWidth: 2, tension: 0.35, fill: true, pointRadius: 3 },
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: "top", labels: { color: tickColor, font: { size: 11 } } } },
-          scales: { y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } }, x: { grid: { color: gridColor }, ticks: { color: tickColor } } }
-        }
-      });
-    }
 
-    const ctx2 = document.getElementById("growthChart");
-    if (ctx2) {
-      growthChart = new Chart(ctx2, {
-        type: "bar",
-        data: {
-          labels: labels,
-          datasets: [
-            { label: "Financiero", data: finAdNetas, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4 },
-            { label: "Operativo", data: opAdNetas, backgroundColor: "rgba(16,185,129,0.8)", borderRadius: 4 },
-          ]
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: "top", labels: { color: tickColor, font: { size: 11 } } } },
-          scales: { y: { grid: { color: gridColor }, ticks: { color: tickColor } }, x: { grid: { display: false }, ticks: { color: tickColor } } }
-        }
-      });
-    }
-  }
-
-  function renderAnalyticsTable(periodos) {
-    const tbody = document.getElementById("analytics-table-tbody");
-    if (!tbody) return;
-    let html = "";
-    periodos.forEach(p => {
-      (p.metodos || []).forEach(m => {
-        const cn = m.churn_neto_pct || 0;
-        const churnClass = cn < 2.5 ? "text-success" : cn <= 3 ? "text-warning" : "text-danger";
-        html += '<tr><td class="fw-medium">' + p.periodo_reporte + '</td><td><span class="badge ' + (m.metodo === "Financiero" ? "bg-primary-subtle text-primary" : "bg-info-subtle text-info") + ' rounded-pill px-3 py-1">' + m.metodo + '</span></td><td class="text-end">' + m.activos_inicio.toLocaleString() + '</td><td class="text-end">' + m.activos_final.toLocaleString() + '</td><td class="text-end">' + m.nuevos_mes.toLocaleString() + '</td><td class="text-end">' + m.bajas_netas_balance.toLocaleString() + '</td><td class="text-end fw-semibold ' + churnClass + '">' + cn.toFixed(2) + '%</td><td class="text-end">' + (m.churn_bruto_pct || 0).toFixed(2) + '%</td><td class="text-end">$' + (m.arpu || 0).toFixed(2) + '</td><td class="text-end">' + (m.tasa_winback_pct || 0).toFixed(2) + '%</td></tr>';
-      });
-    });
-    if (!html) html = '<tr><td colspan="10" class="text-center py-4 text-muted">Sin datos</td></tr>';
-    tbody.innerHTML = html;
-  }
-
-  function renderDimensions(dimensiones) {
-    const grid = document.getElementById("dimensions-grid-container");
-    if (!grid) return;
-    if (!dimensiones || !dimensiones.length) { grid.innerHTML = '<div class="col-12 text-center text-muted py-3">Sin datos</div>'; return; }
-    const dimData = dimensiones[0].dimensiones || {};
-    const nameMap = { "zona": "Zona Geografica", "sucursal": "Sucursal", "producto": "Producto / Plan", "municipio": "Municipio", "campana": "Campana" };
-    let html = "";
-    Object.keys(dimData).forEach(key => {
-      const items = dimData[key] || [];
-      const title = nameMap[key] || key.charAt(0).toUpperCase() + key.slice(1);
-      html += '<div class="col-lg-4 col-md-6"><div class="dimension-card h-100"><h6 class="dimension-title"><i class="bi bi-tag-fill me-2 text-primary"></i>' + title + '</h6><div class="dimension-list">';
-      if (!items.length) {
-        html += '<div class="text-center py-4 text-muted small">Sin datos</div>';
-      } else {
-        items.sort(function (a, b) { return b.activos_final - a.activos_final; });
-        items.forEach(function (item) {
-          const label = (!item.valor || item.valor === "None") ? "N/A" : item.valor;
-          const churnCls = (item.churn_neto_pct || 0) < 5 ? "text-success" : (item.churn_neto_pct || 0) < 10 ? "text-warning" : "text-danger";
-          html += '<div class="dimension-item mb-2 pb-2 border-bottom"><div class="d-flex justify-content-between align-items-center"><span class="fw-semibold text-truncate me-2" style="max-width:160px" title="' + label + '">' + label + '</span><span class="badge bg-secondary-subtle text-secondary small">' + (item.activos_final || 0).toLocaleString() + '</span></div><div class="d-flex justify-content-between mt-1 small"><span class="' + churnCls + ' fw-medium">' + (item.churn_neto_pct || 0).toFixed(2) + '% Churn</span><span class="text-primary">$' + (item.arpu || 0).toFixed(1) + '</span></div></div>';
+  function averageDimensionData(dimensiones) {
+    var accum = {};
+    dimensiones.forEach(function (period) {
+      var dims = period.dimensiones || {};
+      Object.keys(dims).forEach(function (dimKey) {
+        if (!accum[dimKey]) accum[dimKey] = {};
+        (dims[dimKey] || []).forEach(function (item) {
+          var val = item.valor || "N/A";
+          if (!accum[dimKey][val]) {
+            accum[dimKey][val] = { sum: { churn_neto_pct: 0, churn_bruto_pct: 0, arpu: 0, tasa_winback_pct: 0, adiciones_netas: 0, adiciones_brutas: 0, tasa_aporte_react_pct: 0, corte_impagado: 0, prom_dias_activo: 0, prom_dias_cancelado: 0, nuevos: 0, activos_final: 0 }, count: 0 };
+          }
+          ["churn_neto_pct","churn_bruto_pct","arpu","tasa_winback_pct","adiciones_netas","adiciones_brutas","tasa_aporte_react_pct","corte_impagado","prom_dias_activo","prom_dias_cancelado","nuevos","activos_final"].forEach(function (m) {
+            accum[dimKey][val].sum[m] += (item[m] || 0);
+          });
+          accum[dimKey][val].count++;
         });
+      });
+    });
+    var result = {};
+    Object.keys(accum).forEach(function (dimKey) {
+      result[dimKey] = [];
+      Object.keys(accum[dimKey]).forEach(function (valor) {
+        var entry = { valor: valor };
+        Object.keys(accum[dimKey][valor].sum).forEach(function (m) {
+          entry[m] = accum[dimKey][valor].sum[m] / accum[dimKey][valor].count;
+        });
+        result[dimKey].push(entry);
+      });
+    });
+    return result;
+  }
+
+  function renderDimensionCharts(dimensiones, periodos) {
+    var container = document.getElementById("analytics-dimension-charts");
+    if (!container) return;
+    dimChartInstances.forEach(function (c) { c.destroy(); });
+    dimChartInstances = [];
+    if (!dimensiones || !dimensiones.length) { container.innerHTML = '<div class="text-center text-muted py-4">Sin datos de dimensiones</div>'; return; }
+
+    var avgData = averageDimensionData(dimensiones);
+    var dimKeys = Object.keys(avgData).filter(function (k) { return avgData[k].length > 0; });
+    var dimLabels = { zona: "Zona", sucursal: "Sucursal", producto: "Producto", municipio: "Municipio", campana: "Campaña" };
+    var metrics = [
+      { key: "churn_neto_pct", label: "Churn Neto", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
+      { key: "churn_bruto_pct", label: "Churn Bruto", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
+      { key: "arpu", label: "ARPU", chartType: "hbar", fmt: function (v) { return "$" + v.toFixed(2); } },
+      { key: "tasa_winback_pct", label: "Tasa Winback", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
+      { key: "adiciones_netas", label: "Adiciones Netas", chartType: "bar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
+      { key: "adiciones_brutas", label: "Adiciones Brutas", chartType: "bar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
+      { key: "tasa_aporte_react_pct", label: "Aporte React.", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
+      { key: "corte_impagado", label: "Corte Impago", chartType: "hbar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
+      { key: "prom_dias_activo", label: "Prom. Dias Activo", chartType: "pie", fmt: function (v) { return v.toFixed(1) + " d"; } },
+      { key: "prom_dias_cancelado", label: "Prom. Dias Cancelado", chartType: "pie", fmt: function (v) { return v.toFixed(1) + " d"; } },
+    ];
+
+    var isLight = document.documentElement.classList.contains("light-mode");
+    var tickColor = isLight ? "#64748b" : "#94a3b8";
+    var bgColor = isLight ? "#fff" : "#1e293b";
+    var gridColor = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
+
+    var palette = ["#2563eb","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316","#6366f1","#84cc16","#06b6d4","#d946ef","#0d9488","#e11d48","#7c3aed","#65a30d","#0891b2","#c026d3","#dc2626","#ca8a04"];
+
+    function getWeight(item, metricKey) {
+      if (metricKey === "adiciones_netas" || metricKey === "adiciones_brutas" || metricKey === "corte_impagado") return item[metricKey] || 0;
+      if (metricKey === "arpu" || metricKey === "prom_dias_activo" || metricKey === "prom_dias_cancelado") return (item.activos_final || 0) * (item[metricKey] || 0);
+      return (item.activos_final || 0) * (item[metricKey] || 0) / 100;
+    }
+
+    function getGlobalMetric(metricKey, fallbackItems) {
+      var vals = [];
+      periodos.forEach(function(p) {
+        (p.metodos || []).forEach(function(m) {
+          if (m.metodo === "Financiero") {
+            var v = m[metricKey];
+            if (v !== undefined && v !== null) vals.push(Number(v));
+          }
+        });
+      });
+      if (vals.length) return vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+      if (fallbackItems && fallbackItems.length) {
+        var totalAct = 0, totalWeighted = 0;
+        fallbackItems.forEach(function(i) {
+          var af = i.activos_final || 0;
+          totalAct += af;
+          totalWeighted += af * (i[metricKey] || 0);
+        });
+        if (totalAct > 0) return totalWeighted / totalAct;
       }
+      return 0;
+    }
+
+    var html = "";
+    metrics.forEach(function (metric) {
+      html += '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-pie-chart me-2"></i>' + metric.label + '</h5></div><div class="card-body"><div class="row g-4">';
+      dimKeys.forEach(function (dimKey) {
+        var canvasId = "dimc-" + metric.key + "-" + dimKey;
+        html += '<div class="col-lg mb-4"><h6 class="text-muted small text-center mb-2">' + (dimLabels[dimKey] || dimKey) + '</h6><div class="chart-container" style="position:relative;height:280px"><canvas id="' + canvasId + '"></canvas></div></div>';
+      });
       html += '</div></div></div>';
     });
-    if (!Object.keys(dimData).length) html = '<div class="col-12 text-center text-muted py-3">Sin dimensiones</div>';
-    grid.innerHTML = html;
+    container.innerHTML = html;
+
+    var allItemsForFallback = Object.keys(avgData).reduce(function(acc, dk) {
+      return acc.concat(avgData[dk]);
+    }, []);
+
+    metrics.forEach(function (metric) {
+      var globalCenterVal = metric.fmt(getGlobalMetric(metric.key, allItemsForFallback));
+
+      dimKeys.forEach(function (dimKey) {
+        var items = avgData[dimKey];
+        if (!items.length) return;
+
+        var canvasId = "dimc-" + metric.key + "-" + dimKey;
+        var canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        if (metric.chartType === "doughnut" || metric.chartType === "pie") {
+          var totalWeight = 0;
+          items.forEach(function(i) { i._w = getWeight(i, metric.key); totalWeight += i._w; });
+          if (!totalWeight) return;
+
+          var mainItems = [], othersW = 0, othersAct = 0, othersMetricSum = 0, othersCount = 0;
+          items.forEach(function(i) {
+            var pct = (i._w / totalWeight) * 100;
+            if (pct < 2.5) {
+              othersW += i._w;
+              othersAct += (i.activos_final || 0);
+              othersMetricSum += (i[metric.key] || 0) * (i.activos_final || 0);
+              othersCount++;
+            } else {
+              mainItems.push(i);
+            }
+          });
+          if (othersW > 0) {
+            var o = { valor: "Otros", _w: othersCount > 0 ? othersW / othersCount : 0, activos_final: othersAct };
+            o[metric.key] = othersAct > 0 ? othersMetricSum / othersAct : 0;
+            mainItems.push(o);
+          }
+          mainItems.sort(function(a, b) { return b._w - a._w; });
+          // Si hay Otros, moverlo al final
+          var otrosIdx = mainItems.findIndex(function(i) { return i.valor === "Otros"; });
+          if (otrosIdx !== -1) {
+            var otrosItem = mainItems.splice(otrosIdx, 1)[0];
+            mainItems.push(otrosItem);
+          }
+
+          var labels = mainItems.map(function(i) { return i.valor || "N/A"; });
+          var values = mainItems.map(function(i) { return i._w; });
+          var colors = mainItems.map(function(_, i) { return palette[i % palette.length]; });
+
+          var isPie = metric.chartType === "pie";
+
+          var hoverPlugin = {
+            id: "centerText",
+            afterDraw: function(chart) {
+              if (isPie) return;
+              var w = chart.width, h = chart.height, ctx = chart.ctx;
+              var active = chart.getActiveElements();
+              var text = globalCenterVal;
+              if (active.length) {
+                var idx = active[0].index;
+                var item = mainItems[idx];
+                if (item) text = metric.fmt(item[metric.key] || 0);
+              }
+              ctx.save();
+              ctx.font = "bold " + Math.round(h / 8) + "px sans-serif";
+              ctx.textBaseline = "middle";
+              ctx.textAlign = "center";
+              ctx.fillStyle = tickColor;
+              ctx.fillText(text, w / 2, h / 2);
+              ctx.restore();
+            }
+          };
+
+          var chart = new Chart(canvas, {
+            type: isPie ? "pie" : "doughnut",
+            data: {
+              labels: labels,
+              datasets: [{
+                data: values,
+                backgroundColor: colors,
+                borderWidth: 2,
+                borderColor: bgColor,
+                spacing: 8
+              }]
+            },
+            options: {
+              cutout: isPie ? undefined : "60%",
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 800, easing: "easeOutQuart", animateRotate: true },
+              plugins: {
+                legend: { display: false },
+                datalabels: {
+                  display: function(ctx) {
+                    var idx = ctx.dataIndex;
+                    return mainItems[idx] && mainItems[idx].valor !== "Otros";
+                  },
+                  color: "#fff",
+                  font: { size: 10, weight: "bold" },
+                  formatter: function(val, ctx) {
+                    var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                    return (val / total * 100).toFixed(1) + "%";
+                  }
+                },
+                tooltip: {
+                  callbacks: {
+                    label: function(ctx) {
+                      var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+                      var contribPct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : "0.0";
+                      var idx = ctx.dataIndex;
+                      var item = mainItems[idx];
+                      if (!item) return ctx.label;
+                      return ctx.label + ": " + contribPct + "% del total — " + metric.fmt(item[metric.key] || 0) + " (" + Math.round(item.activos_final || 0).toLocaleString() + " act.)";
+                    }
+                  }
+                }
+              }
+            },
+            plugins: [hoverPlugin]
+          });
+          dimChartInstances.push(chart);
+
+        } else if (metric.chartType === "hbar") {
+          var total = items.reduce(function(s, i) { return s + (i[metric.key] || 0); }, 0);
+          var main = [], othersSum = 0, othersCount = 0;
+          items.forEach(function(i) {
+            var v = i[metric.key] || 0;
+            if (total > 0 && (v / total * 100) < 2.5) { othersSum += v; othersCount++; }
+            else { main.push(i); }
+          });
+          if (othersCount > 0) { var o = { valor: "Otros" }; o[metric.key] = othersSum / othersCount; main.push(o); }
+          main.sort(function(a, b) { return (b[metric.key] || 0) - (a[metric.key] || 0); });
+          // Mover Otros al final
+          var oIdx = main.findIndex(function(i) { return i.valor === "Otros"; });
+          if (oIdx !== -1) { var oi = main.splice(oIdx, 1)[0]; main.push(oi); }
+          var hlabels = main.map(function(i) { return i.valor || "N/A"; });
+          var hvalues = main.map(function(i) { return i[metric.key] || 0; });
+          var hcolors = main.map(function(_, i) { return palette[i % palette.length]; });
+
+          dimChartInstances.push(new Chart(canvas, {
+            type: "bar",
+            data: { labels: hlabels, datasets: [{ data: hvalues, backgroundColor: hcolors, borderRadius: 3 }] },
+            options: {
+              indexAxis: "y",
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 800, easing: "easeOutQuart" },
+              plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: function(ctx) { return metric.fmt(ctx.parsed.x); } } }
+              },
+              scales: {
+                y: { grid: { display: false }, ticks: { color: tickColor, font: { size: 9 } } },
+                x: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } }
+              }
+            }
+          }));
+
+        } else if (metric.chartType === "bar") {
+          var total = items.reduce(function(s, i) { return s + (i[metric.key] || 0); }, 0);
+          var main = [], othersSum = 0, othersCount = 0;
+          items.forEach(function(i) {
+            var v = i[metric.key] || 0;
+            if (total > 0 && (v / total * 100) < 2.5) { othersSum += v; othersCount++; }
+            else { main.push(i); }
+          });
+          if (othersCount > 0) { var o = { valor: "Otros" }; o[metric.key] = othersSum / othersCount; main.push(o); }
+          main.sort(function(a, b) { return (b[metric.key] || 0) - (a[metric.key] || 0); });
+          var oIdx = main.findIndex(function(i) { return i.valor === "Otros"; });
+          if (oIdx !== -1) { var oi = main.splice(oIdx, 1)[0]; main.push(oi); }
+          var blabels = main.map(function(i) { return i.valor || "N/A"; });
+          var bvalues = main.map(function(i) { return i[metric.key] || 0; });
+          var bcolors = main.map(function(_, i) { return palette[i % palette.length]; });
+
+          dimChartInstances.push(new Chart(canvas, {
+            type: "bar",
+            data: { labels: blabels, datasets: [{ data: bvalues, backgroundColor: bcolors, borderRadius: 3 }] },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 800, easing: "easeOutQuart" },
+              plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: function(ctx) { return metric.fmt(ctx.parsed.y); } } }
+              },
+              scales: {
+                x: { grid: { display: false }, ticks: { color: tickColor, font: { size: 9 } } },
+                y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } }
+              }
+            }
+          }));
+
+        }
+      });
+    });
   }
 
   // ================================================================

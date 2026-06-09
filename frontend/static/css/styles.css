@@ -858,7 +858,17 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 .modal-content .card { background-color: var(--surface-tertiary) !important; border-color: var(--border-color) !important; }
 
 /* Small helper for prominent filter box */
-.prominent-filter { border: 0px; padding: 0.35rem; background: var(--surface-tertiary); }
+.prominent-filter { border: 0px; padding: 0.35rem; background: var(--surface-tertiary); color: var(--text-primary); }
+.prominent-filter:hover, .prominent-filter:focus { background: var(--surface-secondary); color: var(--text-primary); }
+.analytics-filter-menu { background: var(--surface-secondary); border-color: var(--border-color); }
+.analytics-filter-menu .form-check-input { background-color: var(--surface-tertiary); border-color: var(--border-color); }
+.analytics-filter-menu .form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+.analytics-filter-menu .form-check-label { color: var(--text-primary); }
+.analytics-filter-menu hr { border-color: var(--border-color); }
+.analytics-filter-menu .btn-outline-secondary { color: var(--text-secondary); border-color: var(--border-color); }
+.analytics-filter-menu .btn-outline-secondary:hover { color: var(--text-primary); background: var(--surface-tertiary); border-color: var(--text-secondary); }
+.analytics-filter-menu .btn-outline-light { color: var(--text-secondary); border-color: var(--border-color); }
+.analytics-filter-menu .btn-outline-light:hover { color: var(--text-primary); background: var(--surface-tertiary); border-color: var(--text-secondary); }
 
 /* Estilos para el Desglose Dimensional */
 .dimension-card {

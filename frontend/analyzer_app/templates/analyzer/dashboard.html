@@ -5,7 +5,7 @@
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -102,50 +102,24 @@
 <div id="tab-analytics" class="spa-tab d-none">
   <div class="card-header rounded d-flex justify-content-end mb-3 align-items-center">
     <h4 class="mb-0 me-auto"><i class="bi bi-bar-chart-line me-2"></i>Analisis Detallado</h4>
-    <div class="filter-input-group prominent-filter gap-0">
-      <span class="input-group-text"><i class="bi bi-funnel-fill"></i></span>
-      <select id="analytics-periods-select" class="form-select form-select-sm" style="min-width:320px;max-width:520px" multiple>
-      </select>
+    <div class="dropdown" id="analytics-filter-dropdown">
+      <button class="btn dropdown-toggle prominent-filter d-flex align-items-center gap-2" type="button" id="analytics-filter-toggle">
+        <i class="bi bi-funnel-fill"></i><span id="analytics-filter-label">Seleccionar periodos...</span>
+      </button>
+      <div class="dropdown-menu p-3 analytics-filter-menu" id="analytics-filter-menu" style="min-width:320px;max-height:300px;overflow-y:auto">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="text-muted small">Periodos</span>
+        </div>
+        <div id="analytics-periods-checkboxes"></div>
+        <hr class="my-2">
+        <button class="btn btn-outline-light btn-sm w-100" id="analytics-reset-btn" type="button"><i class="bi bi-arrow-counterclockwise me-1"></i>Restablecer (mes actual)</button>
+      </div>
     </div>
   </div>
   <!-- Tarjetas de metricas con colores -->
   <div class="row g-3 mb-4" id="analytics-cards-container"></div>
-  <!-- Graficos de tendencia -->
-  <div class="row g-4 mb-4">
-    <div class="col-lg-6">
-      <div class="card h-100">
-        <div class="card-header"><h5><i class="bi bi-activity me-2"></i>Churn Neto por Metodo</h5></div>
-        <div class="card-body"><div class="chart-container" style="position:relative;height:260px"><canvas id="churnTrendChart"></canvas></div></div>
-      </div>
-    </div>
-    <div class="col-lg-6">
-      <div class="card h-100">
-        <div class="card-header"><h5><i class="bi bi-bar-chart-steps me-2"></i>Crecimiento (Adiciones Netas)</h5></div>
-        <div class="card-body"><div class="chart-container" style="position:relative;height:260px"><canvas id="growthChart"></canvas></div></div>
-      </div>
-    </div>
-  </div>
-  <!-- Tabla de datos -->
-  <div class="card mb-4">
-    <div class="card-header"><h5><i class="bi bi-table me-2"></i>Datos Detallados</h5></div>
-    <div class="card-body p-0">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0 table-theme">
-          <thead><tr>
-            <th>Periodo</th><th>Metodo</th><th class="text-end">Activos Inicio</th><th class="text-end">Activos Final</th>
-            <th class="text-end">Nuevos</th><th class="text-end">Bajas</th><th class="text-end">Churn Neto</th>
-            <th class="text-end">Churn Bruto</th><th class="text-end">ARPU</th><th class="text-end">Winback</th>
-          </tr></thead>
-          <tbody id="analytics-table-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-  <!-- Dimensiones -->
-  <div class="card">
-    <div class="card-header"><h5><i class="bi bi-grid-3x3-gap me-2"></i>Desglose Dimensional</h5></div>
-    <div class="card-body"><div class="row g-4" id="dimensions-grid-container"></div></div>
-  </div>
+  <!-- Graficos por dimension -->
+  <div id="analytics-dimension-charts"></div>
 </div>
 
 <!-- IMPORT -->
