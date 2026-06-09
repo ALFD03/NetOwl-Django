@@ -68,7 +68,7 @@ LOGS_REQUIRED_COLS = ["orden", "fecha_log", "log", "estado"]
 
 # Ruta al archivo JSON de planes (ubicado en el directorio raíz del proyecto)
 PLANES_PATH = (
-    pathlib.Path(__file__).resolve().parent.parent.parent / "Planes.json"
+    pathlib.Path(__file__).resolve().parent.parent / "Planes.json"
 )
 # Variable global para cachear el conjunto de nombres de planes
 _PLAN_SET = None
