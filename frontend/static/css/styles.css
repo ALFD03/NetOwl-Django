@@ -1,10 +1,13 @@
 /* ============================================================
    styles.css — Estilos personalizados de NetOwl-Django
    Sistema de Diseño: Netcom Digital Corporate
+   Dependencias: Bootstrap 5.3, Bootstrap Icons, Chart.js v3+,
+   Google Fonts (Inter). Todos cargados vía CDN en base.html.
    ============================================================ */
 
 /* Variables CSS para el sistema de diseño - COLORES ESPECÍFICOS DEL USUARIO */
 :root {
+  /* Modo oscuro (default): paleta azul-pizarra profunda */
   --surface-primary: #0b1326;        /* Fondo Principal - Azul-pizarra profundo */
   --surface-secondary: #0f1a36;      /* Superficies de contenedores - variante más clara */
   --surface-tertiary: #12214a;       /* Superficies elevadas */
@@ -15,8 +18,8 @@
   --primary-light: #3b82f6;          /* Primario más claro */
   --accent: #3b82f6;                 /* Acento azul */
   
-  --text-primary: #ffffff;           /* Texto primario */
-  --text-primary: #E6EEF6;           /* Texto primario (blanco atenuado) */
+  --text-primary: #ffffff;           /* Texto primario (referencia, sobrescrito abajo) */
+  --text-primary: #E6EEF6;           /* Texto primario efectivo: blanco atenuado */
   --text-secondary: #D5E6F0;         /* Texto secundario (tono claro) */
   --text-muted: #64748b;             /* Texto tenue */
   
@@ -34,6 +37,7 @@
 }
 
 .light-mode {
+  /* Modo claro: paleta Slate (gris neutro) para contraste legible */
   --surface-primary: #f8fafc;        /* Slate 50 */
   --surface-secondary: #ffffff;      /* Blanco puro */
   --surface-tertiary: #f1f5f9;       /* Slate 100 */
@@ -738,6 +742,7 @@ p, li, td, th, label, input, select, textarea {
 }
 
 /* --- Refinamientos de Animaciones y Transición de Tema --- */
+/* Aplica transición suave a todos los elementos que cambian con el tema (light/dark) */
 body, .sidebar, .main-content, .card, .card-header, .card-body, .btn, 
 .form-control, .form-select, table, th, td, label, .metric-card, .dimension-card, .terminal-console {
   transition: background-color var(--transition-speed) ease, 
@@ -764,6 +769,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 }
 
 /* Estilos de Consola de Logs Integrada (Terminal) */
+/* Fondo fijo oscuro independiente del tema para simular terminal real */
 .terminal-console {
   background-color: #050b18;
   border: 1px solid var(--border-color);
@@ -797,6 +803,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 
 /* ------------------ OVERRIDES THEME / UTILIDADES ------------------ */
 /* Forzar colores de utilidades Bootstrap a las variables del tema para modo oscuro */
+/* Esto asegura que text-muted, text-secondary, etc. usen las variables CSS del tema */
 .text-muted { color: var(--text-secondary) !important; }
 .text-secondary { color: var(--text-secondary) !important; }
 .text-primary { color: var(--text-primary) !important; }
@@ -816,6 +823,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 .badge.bg-info-subtle { background-color: rgba(56,189,248,0.06) !important; color: #06b6d4 !important; }
 
 /* Forzar que tablas no muestren fondo blanco y que las celdas hereden el tema */
+/* Bootstrap por defecto asigna fondos blancos a tablas; estos overrides los neutralizan */
 .table { background: transparent !important; color: var(--text-primary) !important; }
 .table td, .table th { background: transparent !important; }
 .table-responsive .table { background: transparent !important; }
@@ -839,13 +847,14 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
   background: var(--surface-hover) !important;
 }
 
+/* Selector de calendario (month-picker) adaptable al tema */
 .calendar-adaptable{
   background-color: var(--surface-tertiary) !important;
   border: 0px;
   color: var(--text-primary) !important;
 }
 
-/* Filtro destacado */
+/* Filtro destacado (grupo de elementos input + select en el filtro de analytics) */
 .filter-input-group { display: inline-flex; align-items: center; gap: 0.5rem; }
 .filter-input-group .input-group-text { background: var(--surface-tertiary); border: 0px; color: var(--text-secondary); }
 .filter-input-group .form-select { background: var(--surface-tertiary); border: 0px; color: var(--text-primary); }
@@ -854,17 +863,20 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 #analytics-periods-select { min-width: 320px; max-width: 520px; }
 
 /* Modal details: asegurar contraste de textos dentro del modal */
+/* Clases personalizadas que reemplazan las utilidades Bootstrap de texto */
 .modal-content { color: var(--text-primary) !important; }
-.modal-content .modal-label { color: var(--text-secondary); }
-.modal-content .modal-value-danger { color: var(--error); }
-.modal-content .modal-value-success { color: var(--success); }
-.modal-content .modal-value-warning { color: var(--warning); }
-.modal-content .modal-value-accent { color: var(--accent); }
+.modal-content .modal-label { color: var(--text-secondary); }         /* Etiquetas de campo */
+.modal-content .modal-value-danger { color: var(--error); }           /* Valores negativos (rojo) */
+.modal-content .modal-value-success { color: var(--success); }        /* Valores positivos (verde) */
+.modal-content .modal-value-warning { color: var(--warning); }        /* Valores de advertencia (amarillo) */
+.modal-content .modal-value-accent { color: var(--accent); }          /* Valores destacados (azul) */
 .modal-content .card { background-color: var(--surface-tertiary) !important; border-color: var(--border-color) !important; }
-.modal-content .badge-fin { background-color: var(--accent); color: #fff; }
-.modal-content .badge-op { background-color: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); }
+.modal-content .badge-fin { background-color: var(--accent); color: #fff; }   /* Badge método Financiero */
+.modal-content .badge-op { background-color: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); }  /* Badge método Operativo */
 
 /* Modal: tabla de dimensiones — sticky header + primera columna */
+/* sticky-header: cabecera fija arriba. sticky-col: primera columna fija a la izquierda */
+/* z-index: header (2), columna (3), header+columna (4) para evitar solapamientos */
 .modal-content .table-modal-dim { background: transparent !important; color: var(--text-primary) !important; border-collapse: separate; border-spacing: 0; }
 .modal-content .table-modal-dim th,
 .modal-content .table-modal-dim td { background-color: var(--surface-tertiary) !important; border-bottom: 1px solid var(--border-color); padding: 0.35rem 0.5rem; white-space: nowrap; }
@@ -875,12 +887,12 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 .modal-content .table-modal-dim tbody tr:hover td { background-color: var(--surface-hover) !important; }
 .modal-content .table-modal-dim tbody tr:hover td.sticky-col { background-color: var(--surface-hover) !important; }
 
-/* Modal: tabla de resumen por metodo — separadores visibles */
+/* Modal: tabla de resumen por metodo — separadores visibles entre filas */
 .modal-content .table-modal-sum { background: transparent !important; color: var(--text-primary) !important; }
 .modal-content .table-modal-sum td { padding: 0.25rem 0; border-bottom: 1px solid var(--surface-hover); }
 .modal-content .table-modal-sum tbody tr:last-child td { border-bottom: none; }
 
-/* Small helper for prominent filter box */
+/* Small helper for prominent filter box (filtro de analytics manual) */
 .prominent-filter { border: 0px; padding: 0.35rem; background: var(--surface-tertiary); color: var(--text-primary); }
 .prominent-filter:hover, .prominent-filter:focus { background: var(--surface-secondary); color: var(--text-primary); }
 .analytics-filter-menu { background: var(--surface-secondary); border-color: var(--border-color); }
@@ -893,7 +905,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 .analytics-filter-menu .btn-outline-light { color: var(--text-secondary); border-color: var(--border-color); }
 .analytics-filter-menu .btn-outline-light:hover { color: var(--text-primary); background: var(--surface-tertiary); border-color: var(--text-secondary); }
 
-/* Estilos para el Desglose Dimensional */
+/* Estilos para el Desglose Dimensional (paneles de analytics por zona/sucursal/etc) */
 .dimension-card {
   background-color: var(--surface-secondary);
   border: 1px solid var(--border-color);
@@ -930,6 +942,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 }
 
 /* Overrides de Modal de Bootstrap para respetar variables CSS */
+/* Neutraliza estilos por defecto de Bootstrap modal que usan blanco puro */
 .modal-content {
   background-color: var(--surface-secondary) !important;
   color: var(--text-primary) !important;
@@ -949,11 +962,13 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 }
 
 /* Estilos adicionales de tablas y scrollbars */
+/* Scrollbar delgada para navegadores Firefox (scrollbar-width) y WebKit (::webkit) */
 .table-responsive {
   scrollbar-width: thin;
   scrollbar-color: var(--border-color) transparent;
 }
 
+/* Scrollbar delgada para navegadores basados en WebKit (Chrome, Edge, Safari) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -968,6 +983,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
   border-radius: 3px;
 }
 
+/* Selector de fecha (calendar) sin bordes */
 .calendar-select {
   border: 0px;
 }

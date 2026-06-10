@@ -57,6 +57,8 @@ class ChurnRateAnalyzer:
 
     def __init__(self, db: DBConnector, periodo: Periodo):
         """
+        Inicializa el analizador con el conector a BD y el período.
+
         Args:
             db: Conector a la base de datos PostgreSQL.
             periodo: Período de análisis (inicio y fin).
@@ -74,7 +76,10 @@ class ChurnRateAnalyzer:
         - `Subscripciones-logs-v15`: logs v15 con orden, tipo, categoría y fecha.
 
         Los DataFrames resultantes se almacenan como atributos de instancia:
-        `df_subs_raw`, `df_logs`, `df_logs_v15`.
+        ``df_subs_raw``, ``df_logs``, ``df_logs_v15``.
+
+        Returns:
+            None. Los datos quedan disponibles en los atributos de instancia.
         """
         print("Sincronizando con base de datos...")
 
@@ -116,8 +121,11 @@ class ChurnRateAnalyzer:
         8. Calcula el estado origen de cada log (fila anterior del mismo orden).
 
         Atributos resultantes:
-        - `df_subs_full`: Suscripciones limpias y sin duplicados.
-        - `df_clean_logs`: Logs concatenados, ordenados y con estado origen.
+        - ``df_subs_full``: Suscripciones limpias y sin duplicados.
+        - ``df_clean_logs``: Logs concatenados, ordenados y con estado origen.
+
+        Returns:
+            None. Los DataFrames limpios quedan en atributos de instancia.
         """
         df = self.df_subs_raw.copy()
         df.columns = df.columns.str.lower()
@@ -235,6 +243,10 @@ class ChurnRateAnalyzer:
 
         Marca logs sinteticos con columna ``_sintetico`` y expone
         ``self._ordens_con_activity`` para filtrado de nuevos.
+
+        Returns:
+            None. Modifica ``self.df_clean_logs`` y asigna
+            ``self._ordens_con_activity``.
         """
         # --- Caso 3: solo logs cuyas ordenes existen en subs ---
         valid_ordens = set(self.df_subs_full["orden"])
@@ -480,7 +492,12 @@ class ChurnRateAnalyzer:
             strictly_before: Si True, usa `< target_date`; si False, `<= target_date`.
 
         Returns:
-            DataFrame con columna `orden` de suscripciones activas en esa fecha.
+            pd.DataFrame: DataFrame con columna ``orden`` de suscripciones
+            activas en esa fecha. Retorna DataFrame vacío si no hay logs.
+
+        Raises:
+            KeyError: Si los atributos de instancia necesarios
+                (``df_clean_logs``) no están inicializados o faltan columnas.
         """
         # Filtra logs hasta la fecha indicada
         if strictly_before:
@@ -514,7 +531,13 @@ class ChurnRateAnalyzer:
             act_fin: DataFrame con órdenes activas al cierre del período.
 
         Returns:
-            DataFrame con columnas `orden`, `fecha` y `estado_origen`.
+            pd.DataFrame: DataFrame con columnas ``orden``, ``fecha`` y
+            ``estado_origen``, filtrado a reactivaciones válidas.
+            Retorna DataFrame vacío si no hay reactivaciones.
+
+        Raises:
+            KeyError: Si ``df_clean_logs``, ``df_subs_full`` o el parámetro
+                ``act_fin`` no contienen las columnas esperadas.
         """
         df = self.df_clean_logs.copy()
         # Filtra logs que contengan "reactivacion" en la nota normalizada
@@ -557,7 +580,12 @@ class ChurnRateAnalyzer:
         `CORTE_IMPAGADO_EVENT` y filtra por el rango de fechas del período.
 
         Returns:
-            DataFrame con columnas `orden`, `fecha_corte` y `motivo_corte`.
+            pd.DataFrame: DataFrame con columnas ``orden``, ``fecha_corte``
+            y ``motivo_corte``. Retorna DataFrame vacío si no hay cortes.
+
+        Raises:
+            KeyError: Si ``df_clean_logs`` no está inicializado o le
+                faltan columnas requeridas (``log_norm``, ``f_dt``).
         """
         df = self.df_clean_logs.copy()
         # Filtra logs que contengan el texto exacto de corte impago
@@ -595,6 +623,16 @@ class ChurnRateAnalyzer:
         9. Genera resumen con indicadores calculados.
         10. Agrega por dimensiones geográficas y comerciales.
         11. Calcula tiempos de vida (días activo, días cancelado).
+
+        Returns:
+            None. Los resultados se persisten en la base de datos y se
+            imprimen en consola.
+
+        Raises:
+            psycopg2.Error: Si falla alguna operación de base de datos
+                durante la persistencia de tablas maestras.
+            KeyError: Si los DataFrames internos no están inicializados
+                o faltan columnas.
         """
         self.load_data()
         self.build_clean_data()
@@ -904,6 +942,14 @@ class ChurnRateAnalyzer:
             df_corte_impagado: Cortes por impago.
             set_react_audit: Conjunto de órdenes con reactivaciones auditables.
             df_lifecycle: DataFrame con métricas de ciclo de vida por orden.
+
+        Returns:
+            None. Los resultados se persisten en ``master_churn_dimensiones``
+            y se imprime resumen en consola.
+
+        Raises:
+            psycopg2.Error: Si falla la lectura de ``Subscripciones`` o la
+                escritura de ``master_churn_dimensiones``.
         """
         import json
         import pathlib
@@ -1169,7 +1215,15 @@ class ChurnRateAnalyzer:
         - `master_tiempo_global`: Promedios globales.
 
         Returns:
-            DataFrame con detalle de tiempos de vida por orden.
+            pd.DataFrame: DataFrame con detalle de tiempos de vida por
+            orden (columnas: ``orden``, ``f_ini_dt``, ``f_churn``,
+            ``f_react``, ``dias_activo``, ``dias_cancelado``).
+
+        Raises:
+            psycopg2.Error: Si falla la persistencia de
+                ``master_tiempos_vida`` o ``master_tiempo_global``.
+            KeyError: Si los DataFrames internos no tienen las columnas
+                esperadas.
         """
         periodo_label = self.periodo.label()
 

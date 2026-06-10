@@ -1,3 +1,16 @@
+"""
+NetOwl Churn Analysis – CLI entrypoint.
+
+Provides a command-line interface for importing data, running churn analysis,
+and executing the full ETL + analysis pipeline.
+
+Dependencies (backend packages):
+    - backend.database.DBConnector   : Database connection manager.
+    - backend.models.Periodo         : Period representation for analysis.
+    - backend.analyzer.ChurnRateAnalyzer : Core churn-rate computation engine.
+    - backend.imports                : CSV import utilities (subscriptions & logs).
+"""
+
 import argparse
 from backend.database import DBConnector
 from backend.models import Periodo
@@ -6,16 +19,41 @@ from backend.imports import import_subscriptions_csv, import_logs_csv
 
 
 def cmd_import_subs(args):
+    """Import subscription records from a CSV file.
+
+    Delegates to :func:`backend.imports.import_subscriptions_csv` and prints
+    the number of imported rows.
+
+    Args:
+        args: Parsed CLI namespace with attribute ``csv_path``.
+    """
     count = import_subscriptions_csv(args.csv_path)
     print(f"Importadas {count} suscripciones")
 
 
 def cmd_import_logs(args):
+    """Import log records from a CSV file.
+
+    Delegates to :func:`backend.imports.import_logs_csv` and prints the
+    number of imported rows.
+
+    Args:
+        args: Parsed CLI namespace with attribute ``csv_path``.
+    """
     count = import_logs_csv(args.csv_path)
     print(f"Importados {count} logs")
 
 
 def cmd_analyze(args):
+    """Run churn-rate analysis for a given month.
+
+    Builds a ``Periodo`` from the provided ``year_month`` string (``YYYY-MM``),
+    creates a ``DBConnector`` and a ``ChurnRateAnalyzer``, then executes the
+    analysis pipeline.
+
+    Args:
+        args: Parsed CLI namespace with attribute ``year_month``.
+    """
     db = DBConnector()
     periodo = Periodo.build(f"{args.year_month}-01")
     analyzer = ChurnRateAnalyzer(db, periodo)
@@ -23,6 +61,17 @@ def cmd_analyze(args):
 
 
 def cmd_run_all(args):
+    """Run the full ETL + analysis pipeline in one command.
+
+    Sequentially:
+    1. Import subscriptions from CSV.
+    2. Import logs from CSV.
+    3. Run churn analysis for the given period.
+
+    Args:
+        args: Parsed CLI namespace with attributes ``year_month``, ``subs_csv``
+              and ``logs_csv``.
+    """
     count_subs = import_subscriptions_csv(args.subs_csv)
     print(f"Importadas {count_subs} suscripciones")
     count_logs = import_logs_csv(args.logs_csv)
@@ -34,6 +83,14 @@ def cmd_run_all(args):
 
 
 def main():
+    """Parse CLI arguments and dispatch to the appropriate subcommand.
+
+    Supported subcommands:
+        ``import subs <csv_path>``   – Import subscriptions from a CSV.
+        ``import logs <csv_path>``   – Import logs from a CSV.
+        ``analyze <YYYY-MM>``        – Run churn analysis for a month.
+        ``run-all <YYYY-MM> <subs_csv> <logs_csv>`` – Full ETL + analysis.
+    """
     parser = argparse.ArgumentParser(
         prog="cli",
         formatter_class=argparse.RawDescriptionHelpFormatter,

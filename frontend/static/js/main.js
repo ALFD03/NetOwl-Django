@@ -1,13 +1,31 @@
+/**
+ * NetOwl Churn Analysis – Frontend main script.
+ *
+ * Handles SPA routing, dashboard/analytics chart rendering, CSV import,
+ * theme toggling, and historical results display.  All code runs inside an
+ * IIFE to avoid polluting the global scope.
+ */
+
 (function () {
   "use strict";
 
+  /* ------------------------------------------------------------------ */
+  /*  Chart.js datalabels plugin – register once, disabled by default    */
+  /* ------------------------------------------------------------------ */
   if (typeof ChartDataLabels !== "undefined") { Chart.register(ChartDataLabels); Chart.defaults.plugins.datalabels.display = false; }
+
+  /* ---------- Global chart instance references (one per canvas) ------ */
   let churnLineChart = null, winbackBarChart = null, arpuBarChart = null;
   let aporteReactBarChart = null, reemplazoLineChart = null, adicionesBarChart = null;
   let tiemposActivoChart = null, tiemposCanceladoChart = null, cortesReactChart = null;
+  /* Array of dimension chart instances (analytics tab) */
   let dimChartInstances = [];
+  /* Cached list of all historical periods for client-side search filtering */
   let allHistoricalPeriods = [];
 
+  /* ================================================================ */
+  /*  INIT – runs once the DOM is ready                               */
+  /* ================================================================ */
   document.addEventListener("DOMContentLoaded", function () {
     initSpaRouter();
     initThemeManager();
@@ -20,7 +38,16 @@
     initResultsDetailsModal();
   });
 
+  /* ================================================================ */
+  /*  SPA ROUTER                                                      */
+  /* ================================================================ */
+
+  /**
+   * Set up client-side routing: intercept link clicks and browser
+   * popstate events, then show/hide tabs without a full page reload.
+   */
   function initSpaRouter() {
+    /* Intercept sidebar / nav links with data-link attributes */
     document.querySelectorAll("a[data-link]").forEach(function (link) {
       link.addEventListener("click", function (e) {
         e.preventDefault();
@@ -29,6 +56,7 @@
         navigate(href);
       });
     });
+    /* Intercept "switch tab" buttons (e.g. dashboard ↔ results) */
     document.addEventListener("click", function (e) {
       const btn = e.target.closest(".switch-tab-btn");
       if (btn) {
@@ -38,12 +66,20 @@
         navigate(path);
       }
     });
+    /* Handle browser back/forward */
     window.addEventListener("popstate", function () { navigate(window.location.pathname); });
+    /* Initial navigation based on current URL */
     navigate(window.location.pathname);
   }
 
+  /**
+   * Show the SPA tab matching the given URL path and load its data.
+   * @param {string} path – URL pathname (e.g. "/dashboard", "/analytics").
+   */
   function navigate(path) {
+    /* Normalise: strip trailing slash unless path is just "/" */
     const cleanPath = path.endsWith("/") && path.length > 1 ? path.slice(0, -1) : path;
+    /* Hide all tabs and deactivate all nav links */
     document.querySelectorAll(".spa-tab").forEach(function (t) { t.classList.add("d-none"); });
     document.querySelectorAll(".sidebar-nav .nav-link").forEach(function (l) { l.classList.remove("active"); });
     if (cleanPath === "" || cleanPath === "/" || cleanPath === "/dashboard") {
@@ -63,22 +99,42 @@
       activateNavLink("results_list");
       loadResultsData();
     } else {
+      /* Fallback – show dashboard */
       document.getElementById("tab-dashboard").classList.remove("d-none");
       activateNavLink("dashboard");
       loadDashboardData();
     }
   }
 
+  /**
+   * Mark the sidebar nav link for a given page as active.
+   * @param {string} v – The data-link value of the nav item.
+   */
   function activateNavLink(v) {
     const el = document.querySelector('.sidebar-nav a[data-link="' + v + '"]');
     if (el) el.classList.add("active");
   }
 
+  /* ================================================================ */
+  /*  UTILITY HELPERS                                                 */
+  /* ================================================================ */
+
+  /**
+   * Read the CSRF token from the page's <meta> tag.
+   * Required for all POST requests to Django endpoints.
+   * @returns {string} The CSRF token value, or empty string if not found.
+   */
   function getCsrfToken() {
     const m = document.querySelector('meta[name="csrf-token"]');
     return m ? m.getAttribute("content") : "";
   }
 
+  /**
+   * Display a Bootstrap toast notification.
+   * @param {string} msg  – Message text.
+   * @param {string} type – One of "success", "error", "warning", or any
+   *                        other value (fallback to dark).
+   */
   function showToast(msg, type) {
     const el = document.getElementById("status-toast");
     const msgEl = document.getElementById("toast-message");
@@ -89,13 +145,25 @@
     new bootstrap.Toast(el, { delay: 5000 }).show();
   }
 
+  /* ---------- Full-screen loading overlay ---------- */
   const overlay = document.getElementById("loading-overlay");
   const loadingText = document.getElementById("loading-text");
+  /** Show the loading overlay with an optional custom message. */
   function showLoading(t) { if (overlay) { if (loadingText) loadingText.textContent = t || "Procesando..."; overlay.classList.remove("d-none"); } }
+  /** Hide the loading overlay. */
   function hideLoading() { if (overlay) overlay.classList.add("d-none"); }
+  /* Expose globally so Jinja templates / inline scripts can call them */
   window.showLoading = showLoading;
   window.hideLoading = hideLoading;
 
+  /* ================================================================ */
+  /*  THEME (LIGHT / DARK MODE)                                       */
+  /* ================================================================ */
+
+  /**
+   * Initialise the theme-toggle button and restore the user's saved
+   * preference from localStorage.
+   */
   function initThemeManager() {
     const btn = document.getElementById("theme-toggle");
     if (!btn) return;
@@ -106,28 +174,44 @@
       localStorage.setItem("netowl-theme", isLight ? "light" : "dark");
       refreshAllCharts();
     });
+    /* Restore saved preference on page load */
     const saved = localStorage.getItem("netowl-theme");
     updateThemeUI(saved === "light");
     if (saved === "light") document.documentElement.classList.add("light-mode");
   }
 
+  /**
+   * Update UI elements to reflect the current theme.
+   * @param {boolean} isLight – Whether light mode is active.
+   */
   function updateThemeUI(isLight) {
     const btn = document.getElementById("theme-toggle");
     if (btn) {
       btn.querySelector("span").textContent = isLight ? "Modo Oscuro" : "Modo Claro";
       btn.querySelector("i").className = isLight ? "bi bi-sun-fill me-2" : "bi bi-moon-stars me-2";
     }
+    /* Swap sidebar logo and favicon */
     const logo = document.getElementById("sidebar-logo");
     if (logo) logo.src = isLight ? "/static/img/logo_light.png" : "/static/img/logo_dark.png";
     const fav = document.getElementById("favicon-link");
     if (fav) fav.href = isLight ? "/static/img/favicon_light.png" : "/static/img/favicon_dark.png";
   }
 
+  /* ================================================================ */
+  /*  MONTH PICKER (month-select + year-select → hidden input)        */
+  /* ================================================================ */
+
+  /**
+   * Initialise the month/year dropdown pair used for the "run analysis"
+   * form. Populates options and synchronises their values into a hidden
+   * ``YYYY-MM`` input.
+   */
   function initMonthPicker() {
     const monthS = document.getElementById("month-select");
     const yearS = document.getElementById("year-select");
     const input = document.getElementById("month-input");
     if (!monthS || !yearS || !input) return;
+    /* Populate month dropdown – Spanish locale */
     monthS.innerHTML = '<option value="">Mes</option>';
     for (let m = 1; m <= 12; m++) {
       const o = document.createElement("option");
@@ -135,17 +219,20 @@
       o.textContent = new Date(0, m - 1).toLocaleString("es", { month: "long" });
       monthS.appendChild(o);
     }
+    /* Populate year dropdown – ±5 years around current year */
     const now = new Date(), curY = now.getFullYear();
     yearS.innerHTML = '<option value="">Ano</option>';
     for (let y = curY - 5; y <= curY + 5; y++) {
       const o = document.createElement("option");
       o.value = y; o.textContent = y; yearS.appendChild(o);
     }
+    /* Default to current month if no value is set */
     if (!input.value) {
       monthS.value = String(now.getMonth() + 1).padStart(2, "0");
       yearS.value = curY;
       input.value = curY + "-" + monthS.value;
     }
+    /* Update hidden input whenever a dropdown changes */
     function upd() {
       if (monthS.value && yearS.value) input.value = yearS.value + "-" + monthS.value;
       else input.value = "";
@@ -154,6 +241,14 @@
     yearS.addEventListener("change", upd);
   }
 
+  /* ================================================================ */
+  /*  PERIOD LOADING (shared across tabs)                             */
+  /* ================================================================ */
+
+  /**
+   * Fetch the list of available periods and populate the comparison
+   * period dropdown (used in results/historical views).
+   */
   function loadComparisonPeriods() {
     fetch("/api/periods/").then(r => r.ok ? r.json() : []).then(d => {
       const sel = document.getElementById("comparison-period-select");
@@ -166,6 +261,14 @@
     }).catch(function () {});
   }
 
+  /* ================================================================ */
+  /*  ANALYTICS FILTER DROPDOWN                                       */
+  /* ================================================================ */
+
+  /**
+   * Initialise the click-to-toggle behaviour of the analytics period
+   * filter dropdown, including click-outside-to-close.
+   */
   function initAnalyticsFilter() {
     var toggle = document.getElementById("analytics-filter-toggle");
     var menu = document.getElementById("analytics-filter-menu");
@@ -184,6 +287,12 @@
     });
   }
 
+  /**
+   * Fetch available periods from the API and build a checkbox list
+   * inside the analytics filter.  Auto-selects the current period (or
+   * the first one if the current period has no data yet).
+   * Reloads analytics data whenever a checkbox is toggled.
+   */
   function loadAnalyticsPeriodsList() {
     fetch("/api/periods/").then(r => r.ok ? r.json() : []).then(d => {
       var container = document.getElementById("analytics-periods-checkboxes");
@@ -191,6 +300,7 @@
       container.innerHTML = "";
       var periods = d.periods || [];
       var now = new Date();
+      /* Build current period string: YYYYMM */
       var curPeriod = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0");
       var existsCur = periods.indexOf(curPeriod) !== -1;
       periods.forEach(function (p) {
@@ -198,17 +308,20 @@
         div.className = "form-check";
         var cb = document.createElement("input");
         cb.type = "checkbox"; cb.className = "form-check-input"; cb.value = p; cb.id = "aperiod-" + p;
+        /* Auto-select current month, or first period if current isn't available */
         if (p === curPeriod || (!existsCur && p === periods[0])) cb.checked = true;
         var lb = document.createElement("label");
         lb.className = "form-check-label"; lb.htmlFor = "aperiod-" + p; lb.textContent = p;
         div.appendChild(cb); div.appendChild(lb); container.appendChild(div);
         cb.addEventListener("change", function () {
+          /* Prevent unchecking the last remaining checkbox */
           var checked = document.querySelectorAll("#analytics-periods-checkboxes input:checked").length;
           if (checked === 0) { this.checked = true; return; }
           loadAnalyticsData();
           updateAnalyticsFilterLabel();
         });
       });
+      /* Reset button: restore default selection */
       var resetBtn = document.getElementById("analytics-reset-btn");
       if (resetBtn) {
         resetBtn.addEventListener("click", function () {
@@ -221,6 +334,9 @@
     }).catch(function () {});
   }
 
+  /**
+   * Update the filter button label to show how many periods are selected.
+   */
   function updateAnalyticsFilterLabel() {
     var label = document.getElementById("analytics-filter-label");
     if (!label) return;
@@ -228,14 +344,23 @@
     label.textContent = checked + " periodo" + (checked !== 1 ? "s" : "") + " seleccionado" + (checked !== 1 ? "s" : "");
   }
 
+  /**
+   * Reload data for whichever tab is currently visible, so chart colours
+   * can adapt to the new theme.
+   */
   function refreshAllCharts() {
     if (!document.getElementById("tab-dashboard").classList.contains("d-none")) loadDashboardData();
     else if (!document.getElementById("tab-analytics").classList.contains("d-none")) loadAnalyticsData();
   }
 
-  // ================================================================
-  // DASHBOARD - GRAFICOS
-  // ================================================================
+  /* ================================================================ */
+  /*  DASHBOARD – CHARTS, TABLE & COMPARATIVE INDICATOR               */
+  /* ================================================================ */
+
+  /**
+   * Fetch dashboard data from the API and render all dashboard widgets.
+   * Shows the latest 6 periods in the table.
+   */
   function loadDashboardData() {
     fetch("/api/dashboard-data/")
       .then(r => { if (!r.ok) throw Error("Error"); return r.json(); })
@@ -248,6 +373,12 @@
       .catch(function () { showToast("Error cargando dashboard", "error"); });
   }
 
+  /**
+   * Render a large "average churn" figure at the top of the dashboard.
+   * Only considers the "Financiero" method for each period.
+   * Colours: green (<2.5 %), yellow (≤3 %), red (>3 %).
+   * @param {Array} periodos – Array of period objects from the API.
+   */
   function renderChurnComparativo(periodos) {
     const el = document.getElementById("churn-comparativo-value");
     if (!el) return;
@@ -264,6 +395,11 @@
     el.className = "display-5 fw-bold " + colorClass;
   }
 
+  /**
+   * Render the dashboard summary table showing key metrics per period/method.
+   * Each row includes a "details" button linking to the results modal.
+   * @param {Array} periodos – Array of period objects (sliced to latest N).
+   */
   function renderDashboardTable(periodos) {
     const tbody = document.getElementById("dashboard-table-tbody");
     if (!tbody) return;
@@ -282,10 +418,29 @@
     tbody.innerHTML = html;
   }
 
+  /**
+   * Create (or re-create) all eight dashboard charts.
+   * Calls destroyDashboardCharts first to clean up previous instances.
+   *
+   * Charts rendered (all using financial method data unless stated):
+   *   1. Churn Neto/Bruto (lines + avg. bars) – target line at 3 %.
+   *   2. Winback rate bar + trend line             – target line at 80 %.
+   *   3. ARPU bar + trend line                     – target line at 25.
+   *   4. Tasa Aporte Reactivación bar + trend line.
+   *   5. Índice de Reemplazo line.
+   *   6. Adiciones Netas & Brutas bars             – target line at 0.
+   *   7a. Prom. Días Activo bar + trend line.
+   *   7b. Prom. Días Cancelado bar + trend line.
+   *   8. Cortes Automáticos vs Reactivaciones (filled lines).
+   *
+   * @param {Array} periodos – Array of period objects from the API.
+   */
   function renderDashboardCharts(periodos) {
     destroyDashboardCharts();
     if (!periodos.length) return;
+    /* Build chronological labels (most recent last) */
     const labels = periodos.map(p => p.periodo_reporte).reverse();
+    /* Partition data by method: "Financiero" vs "Operativo" */
     const finData = {}, opData = {};
     periodos.forEach(p => {
       (p.metodos || []).forEach(m => {
@@ -294,13 +449,23 @@
         target[p.periodo_reporte] = m;
       });
     });
+    /* Theme-aware colours */
     const isLight = document.documentElement.classList.contains("light-mode");
     const gridColor = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
     const tickColor = isLight ? "#64748b" : "#94a3b8";
 
+    /** Safely read a numeric metric from a data dictionary. */
     function v(d, key) { return d ? d[key] || 0 : 0; }
 
-    // Helper para plugin de bandas de umbral + linea objetivo
+    /**
+     * Build a Chart.js plugin that draws coloured "threshold zone" bands
+     * and/or a horizontal target line on the canvas.
+     *
+     * @param {string}       id         – Unique plugin identifier.
+     * @param {Array|null}   zones      – Array of { from, to, color } for bands.
+     * @param {Object|null}  targetLine – { value, color, label } for goal line.
+     * @returns {Object} Chart.js plugin descriptor.
+     */
     function makeThresholdPlugin(id, zones, targetLine) {
       return {
         id: id,
@@ -311,6 +476,7 @@
           if (!ca || ca.left === undefined || ca.top === undefined) return;
           var l = ca.left, r = ca.right, t = ca.top, b = ca.bottom;
           var ctx = chart.ctx;
+          /* Draw coloured zone rectangles behind the data */
           (zones || []).forEach(function (z) {
             var y0 = ya.getPixelForValue(z.from);
             var y1 = ya.getPixelForValue(z.to);
@@ -322,6 +488,7 @@
             ctx.fillRect(l, Math.max(t, rectTop), r - l, Math.min(b, rectBottom) - Math.max(t, rectTop));
             ctx.restore();
           });
+          /* Draw dashed target line with label */
           if (targetLine) {
             var yTarget = ya.getPixelForValue(targetLine.value);
             if (yTarget !== undefined && yTarget !== null) {
@@ -346,7 +513,7 @@
       };
     }
 
-    // 1. Churn Neto y Bruto - Financiero solido, Operativo punteado + barras de promedios
+    /* -------- 1. Churn Neto / Bruto (lines + avg bars) -------- */
     const finNeto = labels.map(l => v(finData[l], "churn_neto_pct"));
     const opNeto = labels.map(l => v(opData[l], "churn_neto_pct"));
     const finBruto = labels.map(l => v(finData[l], "churn_bruto_pct"));
@@ -358,6 +525,7 @@
 
     const churnPlugin = makeThresholdPlugin("churnLine", null, { value: 3, color: "#ffffff", label: "Objetivo 3%" });
 
+    /* Segment colouring: green < 2.5, yellow ≤ 3, red > 3 */
     function churnSeg(ctx) { if (!ctx || !ctx.p1 || !ctx.p1.parsed) return; var v = ctx.p1.parsed.y; return v < 2.5 ? "#22c55e" : v <= 3 ? "#eab308" : "#ef4444"; }
     function churnPt(v) { return v < 2.5 ? "#22c55e" : v <= 3 ? "#eab308" : "#ef4444"; }
     function churnBar(v) { return v < 2.5 ? "rgba(34,197,94,0.75)" : v <= 3 ? "rgba(234,179,8,0.75)" : "rgba(239,68,68,0.75)"; }
@@ -383,7 +551,7 @@
       });
     }
 
-    // 2. Winback - Barras solo Financiero (umbral: <80 rojo, 80-90 amarillo, >90 verde)
+    /* -------- 2. Winback – bars + trend line (Financiero only) -------- */
     const winbackFin = labels.map(l => v(finData[l], "tasa_winback_pct"));
     const winbackPlugin = makeThresholdPlugin("winbackLine", null, { value: 80, color: "#ffffff", label: "Obj. 80%" });
     const ctx2 = document.getElementById("winbackBarChart");
@@ -402,7 +570,7 @@
       });
     }
 
-    // 3. ARPU - Barras solo Financiero (umbral: <25 rojo, 25-30 amarillo, >30 verde)
+    /* -------- 3. ARPU – bars + trend line (Financiero only) -------- */
     const arpuFin = labels.map(l => v(finData[l], "arpu"));
     const arpuPlugin = makeThresholdPlugin("arpuLine", null, { value: 25, color: "#ffffff", label: "Obj. 25" });
     const ctx3 = document.getElementById("arpuBarChart");
@@ -421,7 +589,7 @@
       });
     }
 
-    // 4. Tasa Aporte Reactivacion - Barras solo Financiero
+    /* -------- 4. Tasa Aporte Reactivación – bars + trend line -------- */
     const aporteFin = labels.map(l => v(finData[l], "tasa_aporte_react_pct"));
     const ctx4 = document.getElementById("aporteReactBarChart");
     if (ctx4) {
@@ -438,7 +606,7 @@
       });
     }
 
-    // 5. Indice de Reemplazo - Linea solo Financiero
+    /* -------- 5. Índice de Reemplazo – line (Financiero only) -------- */
     const reempFin = labels.map(l => v(finData[l], "indice_reemplazo_react_pct"));
     const ctx5 = document.getElementById("reemplazoLineChart");
     if (ctx5) {
@@ -454,9 +622,10 @@
       });
     }
 
-    // 6. Adiciones Netas y Brutas - Barras solo Financiero (umbral: <0 rojo, 0-1000 amarillo, >1000 verde)
+    /* -------- 6. Adiciones Netas & Brutas – bars (Financiero only) -------- */
     const adNetasFin = labels.map(l => v(finData[l], "adiciones_netas"));
     const adBrutasFin = labels.map(l => v(finData[l], "adiciones_brutas"));
+    /* Colour: red (<0), yellow (0–1000), green (>1000) */
     function adColors(v) { return (v || 0) < 0 ? "rgba(239,68,68,0.8)" : (v || 0) <= 1000 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }
     const adicionesPlugin = makeThresholdPlugin("adicionesLine", null, { value: 0, color: "#ffffff", label: "Obj. 0" });
     const ctx6 = document.getElementById("adicionesBarChart");
@@ -475,7 +644,7 @@
       });
     }
 
-    // 7a. Prom. Dias Activo - Bar + trend line
+    /* -------- 7a. Prom. Días Activo – bars + trend line -------- */
     const tActivoData = labels.map(function(l) { return v(finData[l], "prom_dias_activo"); });
     const ctx7a = document.getElementById("tiemposActivoChart");
     if (ctx7a) {
@@ -492,7 +661,7 @@
       });
     }
 
-    // 7b. Prom. Dias Cancelado - Bar + trend line
+    /* -------- 7b. Prom. Días Cancelado – bars + trend line -------- */
     const tCanceladoData = labels.map(function(l) { return v(finData[l], "prom_dias_cancelado"); });
     const ctx7b = document.getElementById("tiemposCanceladoChart");
     if (ctx7b) {
@@ -509,7 +678,7 @@
       });
     }
 
-    // 8. Cortes Automaticos vs Reactivaciones - Lineas
+    /* -------- 8. Cortes vs Reactivaciones – filled lines -------- */
     const cortesFin = labels.map(function(l) { return v(finData[l], "corte_impagado"); });
     const reactFin = labels.map(function(l) { return v(finData[l], "reactivaciones"); });
     const ctx8 = document.getElementById("cortesReactChart");
@@ -528,15 +697,31 @@
     }
   }
 
+  /**
+   * Destroy all existing dashboard chart instances to free memory
+   * before re-rendering on data refresh or theme toggle.
+   */
   function destroyDashboardCharts() {
     [churnLineChart, winbackBarChart, arpuBarChart, aporteReactBarChart, reemplazoLineChart, adicionesBarChart, tiemposActivoChart, tiemposCanceladoChart, cortesReactChart].forEach(c => { if (c) { c.destroy(); c = null; } });
     churnLineChart = winbackBarChart = arpuBarChart = aporteReactBarChart = reemplazoLineChart = adicionesBarChart = tiemposActivoChart = tiemposCanceladoChart = cortesReactChart = null;
   }
 
+  /**
+   * Merge common Chart.js options (responsive, animation) with
+   * chart-type-specific options.
+   * @param {Object} specific – Options specific to the chart type.
+   * @returns {Object} Merged options object.
+   */
   function chartOpts(specific) {
     return Object.assign({ responsive: true, maintainAspectRatio: false, animation: { duration: 800, easing: "easeOutQuart" } }, specific || {});
   }
 
+  /**
+   * Return standard Chart.js options for a line chart (with grid and ticks).
+   * @param {string} gridColor – CSS colour for grid lines.
+   * @param {string} tickColor – CSS colour for axis tick labels.
+   * @returns {Object} Options object.
+   */
   function lineOpts(gridColor, tickColor) {
     return {
       plugins: { legend: { position: "top", labels: { color: tickColor, font: { size: 10 } } } },
@@ -544,6 +729,13 @@
     };
   }
 
+  /**
+   * Return standard Chart.js options for a bar chart.
+   * Hides the x-axis grid lines.
+   * @param {string} gridColor – CSS colour for y-axis grid lines.
+   * @param {string} tickColor – CSS colour for axis tick labels.
+   * @returns {Object} Options object.
+   */
   function barOpts(gridColor, tickColor) {
     return {
       plugins: { legend: { position: "top", labels: { color: tickColor, font: { size: 10 } } } },
@@ -551,9 +743,15 @@
     };
   }
 
-  // ================================================================
-  // ANALYTICS - TARJETAS CON COLORES + GRAFICOS + TABLA + DIMENSIONES
-  // ================================================================
+  /* ================================================================ */
+  /*  ANALYTICS – METRIC CARDS + DIMENSION CHARTS                     */
+  /* ================================================================ */
+
+  /**
+   * Fetch analytics data from the API, passing the selected periods as
+   * a query parameter. Renders summary cards and dimension breakdowns.
+   * @returns {Promise} Resolves when data is loaded and rendered.
+   */
   function loadAnalyticsData() {
     var cbs = document.querySelectorAll("#analytics-periods-checkboxes input[type=checkbox]:checked");
     var vals = Array.from(cbs).map(function (cb) { return cb.value; }).filter(Boolean);
@@ -568,11 +766,24 @@
       .catch(function () { showToast("Error cargando analytics", "error"); });
   }
 
+  /**
+   * Render a grid of KPI metric cards (churn, winback, ARPU, etc.)
+   * showing the average value across the selected periods.
+   * Each card is colour-coded based on pre-defined thresholds.
+   * @param {Array} periodos – Array of period objects from the API.
+   */
   function renderAnalyticsCards(periodos) {
     const container = document.getElementById("analytics-cards-container");
     if (!container) return;
     if (!periodos.length) { container.innerHTML = '<div class="col-12 text-center text-muted py-4">Sin datos</div>'; return; }
 
+    /**
+     * Compute the average of a dot-path metric across periods,
+     * optionally filtered to a specific method.
+     * @param {string}  path         – Dot-delimited key, e.g. "churn_neto_pct".
+     * @param {string|null} methodFilter – "Financiero" or "Operativo".
+     * @returns {number} Average value.
+     */
     function avg(path, methodFilter) {
       const vals = [];
       periodos.forEach(p => (p.metodos || []).forEach(m => {
@@ -586,6 +797,7 @@
     function avgFin(path) { return avg(path, "Financiero"); }
     function avgOp(path) { return avg(path, "Operativo"); }
 
+    /* Colour helper functions with business-logic thresholds */
     function colorChurn(v) { return v < 2.5 ? "text-success" : v <= 3 ? "text-warning" : "text-danger"; }
     function colorNuevos(v) { return v > 2500 ? "text-success" : v >= 2000 ? "text-warning" : "text-danger"; }
     function colorBajas(v) { return v < 500 ? "text-success" : v <= 1000 ? "text-warning" : "text-danger"; }
@@ -593,6 +805,7 @@
     function colorArpu(v) { return v >= 30 ? "text-success" : v >= 25 ? "text-warning" : "text-danger"; }
     function colorAdiciones(v) { return v > 500 ? "text-success" : v >= 1 ? "text-warning" : "text-danger"; }
 
+    /* Define all 20 KPI cards */
     const cards = [
       { label: "Churn Neto Fin.", val: avgFin("churn_neto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
       { label: "Churn Neto Op.", val: avgOp("churn_neto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
@@ -626,6 +839,14 @@
 
 
 
+  /**
+   * Aggregate per-period dimension data into a single averaged dataset.
+   * Groups items by dimension key (e.g. "zona") and value (e.g. "Norte"),
+   * then averages all numeric metrics across the selected periods.
+   *
+   * @param {Array} dimensiones – Raw dimension array from API (one entry per period).
+   * @returns {Object} Normalised structure: { dimKey: [ { valor, churn_neto_pct, ... } ] }.
+   */
   function averageDimensionData(dimensiones) {
     var accum = {};
     dimensiones.forEach(function (period) {
@@ -637,6 +858,7 @@
           if (!accum[dimKey][val]) {
             accum[dimKey][val] = { sum: { churn_neto_pct: 0, churn_bruto_pct: 0, arpu: 0, tasa_winback_pct: 0, adiciones_netas: 0, adiciones_brutas: 0, tasa_aporte_react_pct: 0, corte_impagado: 0, prom_dias_activo: 0, prom_dias_cancelado: 0, nuevos: 0, activos_final: 0 }, count: 0 };
           }
+          /* Accumulate sums for each metric */
           ["churn_neto_pct","churn_bruto_pct","arpu","tasa_winback_pct","adiciones_netas","adiciones_brutas","tasa_aporte_react_pct","corte_impagado","prom_dias_activo","prom_dias_cancelado","nuevos","activos_final"].forEach(function (m) {
             accum[dimKey][val].sum[m] += (item[m] || 0);
           });
@@ -644,6 +866,7 @@
         });
       });
     });
+    /* Convert accumulator sums to averages */
     var result = {};
     Object.keys(accum).forEach(function (dimKey) {
       result[dimKey] = [];
@@ -658,16 +881,29 @@
     return result;
   }
 
+  /**
+   * Render dimension breakdown charts (doughnut, pie, horizontal bar).
+   * Creates one card per metric, each containing a chart per dimension.
+   * Small-contribution items ( < 2.5 %) are grouped into "Otros".
+   * Doughnut charts show a global average in the centre, switching to
+   * the hovered segment's value on hover.
+   *
+   * @param {Array} dimensiones – Raw dimension data from API.
+   * @param {Array} periodos    – Period list for computing global averages.
+   */
   function renderDimensionCharts(dimensiones, periodos) {
     var container = document.getElementById("analytics-dimension-charts");
     if (!container) return;
+    /* Destroy previous dimension chart instances */
     dimChartInstances.forEach(function (c) { c.destroy(); });
     dimChartInstances = [];
     if (!dimensiones || !dimensiones.length) { container.innerHTML = '<div class="text-center text-muted py-4">Sin datos de dimensiones</div>'; return; }
 
     var avgData = averageDimensionData(dimensiones);
     var dimKeys = Object.keys(avgData).filter(function (k) { return avgData[k].length > 0; });
+    /* Human-readable labels for each dimension key */
     var dimLabels = { zona: "Zona", sucursal: "Sucursal", producto: "Producto", municipio: "Municipio", campana: "Campaña" };
+    /* Define which metrics to chart and their type */
     var metrics = [
       { key: "churn_neto_pct", label: "Churn Neto", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
       { key: "churn_bruto_pct", label: "Churn Bruto", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
@@ -688,12 +924,20 @@
 
     var palette = ["#2563eb","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316","#6366f1","#84cc16","#06b6d4","#d946ef","#0d9488","#e11d48","#7c3aed","#65a30d","#0891b2","#c026d3","#dc2626","#ca8a04"];
 
+    /**
+     * Calculate the relative "weight" of a dimension item for chart sizing.
+     * Different metrics use different formulas (raw value vs active-base-weighted).
+     */
     function getWeight(item, metricKey) {
       if (metricKey === "adiciones_netas" || metricKey === "adiciones_brutas" || metricKey === "corte_impagado") return item[metricKey] || 0;
       if (metricKey === "arpu" || metricKey === "prom_dias_activo" || metricKey === "prom_dias_cancelado") return (item.activos_final || 0) * (item[metricKey] || 0);
       return (item.activos_final || 0) * (item[metricKey] || 0) / 100;
     }
 
+    /**
+     * Compute the global average for a metric across all selected periods
+     * (Financiero method only). Used as fallback centre value for doughnuts.
+     */
     function getGlobalMetric(metricKey, fallbackItems) {
       var vals = [];
       periodos.forEach(function(p) {
@@ -705,6 +949,7 @@
         });
       });
       if (vals.length) return vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
+      /* Fallback: weight-average from dimension items if per-period data is empty */
       if (fallbackItems && fallbackItems.length) {
         var totalAct = 0, totalWeighted = 0;
         fallbackItems.forEach(function(i) {
@@ -717,6 +962,7 @@
       return 0;
     }
 
+    /* Build the HTML grid: one card per metric, one column per dimension */
     var html = "";
     metrics.forEach(function (metric) {
       html += '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-pie-chart me-2"></i>' + metric.label + '</h5></div><div class="card-body"><div class="row g-4">';
@@ -728,10 +974,12 @@
     });
     container.innerHTML = html;
 
+    /* Collect all dimension items for global metric fallback computation */
     var allItemsForFallback = Object.keys(avgData).reduce(function(acc, dk) {
       return acc.concat(avgData[dk]);
     }, []);
 
+    /* Instantiate charts for each metric × dimension */
     metrics.forEach(function (metric) {
       var globalCenterVal = metric.fmt(getGlobalMetric(metric.key, allItemsForFallback));
 
@@ -743,11 +991,13 @@
         var canvas = document.getElementById(canvasId);
         if (!canvas) return;
 
+        /* ---------- DOUGHNUT / PIE ---------- */
         if (metric.chartType === "doughnut" || metric.chartType === "pie") {
           var totalWeight = 0;
           items.forEach(function(i) { i._w = getWeight(i, metric.key); totalWeight += i._w; });
           if (!totalWeight) return;
 
+          /* Group small contributors (< 2.5 %) into "Otros" */
           var mainItems = [], othersW = 0, othersAct = 0, othersMetricSum = 0, othersCount = 0;
           items.forEach(function(i) {
             var pct = (i._w / totalWeight) * 100;
@@ -766,7 +1016,7 @@
             mainItems.push(o);
           }
           mainItems.sort(function(a, b) { return b._w - a._w; });
-          // Si hay Otros, moverlo al final
+          /* Ensure "Otros" always appears last */
           var otrosIdx = mainItems.findIndex(function(i) { return i.valor === "Otros"; });
           if (otrosIdx !== -1) {
             var otrosItem = mainItems.splice(otrosIdx, 1)[0];
@@ -779,6 +1029,7 @@
 
           var isPie = metric.chartType === "pie";
 
+          /* Custom plugin to display the centre text on doughnut charts */
           var hoverPlugin = {
             id: "centerText",
             afterDraw: function(chart) {
@@ -850,6 +1101,7 @@
           });
           dimChartInstances.push(chart);
 
+        /* ---------- HORIZONTAL BAR ---------- */
         } else if (metric.chartType === "hbar") {
           var total = items.reduce(function(s, i) { return s + (i[metric.key] || 0); }, 0);
           var main = [], othersSum = 0, othersCount = 0;
@@ -860,7 +1112,7 @@
           });
           if (othersCount > 0) { var o = { valor: "Otros" }; o[metric.key] = othersSum / othersCount; main.push(o); }
           main.sort(function(a, b) { return (b[metric.key] || 0) - (a[metric.key] || 0); });
-          // Mover Otros al final
+          /* Move "Otros" to the end */
           var oIdx = main.findIndex(function(i) { return i.valor === "Otros"; });
           if (oIdx !== -1) { var oi = main.splice(oIdx, 1)[0]; main.push(oi); }
           var hlabels = main.map(function(i) { return i.valor || "N/A"; });
@@ -886,6 +1138,7 @@
             }
           }));
 
+        /* ---------- VERTICAL BAR ---------- */
         } else if (metric.chartType === "bar") {
           var total = items.reduce(function(s, i) { return s + (i[metric.key] || 0); }, 0);
           var main = [], othersSum = 0, othersCount = 0;
@@ -925,9 +1178,15 @@
     });
   }
 
-  // ================================================================
-  // EJECUTAR ANALISIS
-  // ================================================================
+  /* ================================================================ */
+  /*  RUN ANALYSIS (triggers backend ETL + churn computation)         */
+  /* ================================================================ */
+
+  /**
+   * Initialise the "Run Analysis" form: POST the selected month to the
+   * backend API, display live log output, and refresh the dashboard on
+   * success.
+   */
   function initAnalysisExecutor() {
     const form = document.getElementById("run-analysis-form");
     if (!form) return;
@@ -936,6 +1195,7 @@
       const month = document.getElementById("month-input").value;
       if (!month) { showToast("Seleccione un mes valido", "warning"); return; }
       showLoading("Ejecutando analisis...");
+      /* Show the terminal-style log container */
       const cc = document.getElementById("console-container");
       const tl = document.getElementById("terminal-log");
       if (cc) cc.classList.remove("d-none");
@@ -959,6 +1219,7 @@
         if (tl) tl.textContent += "\n[ERROR] Fallo de red.\n";
       });
     });
+    /* Clear button for the terminal log */
     const clearBtn = document.getElementById("clear-console");
     if (clearBtn) {
       clearBtn.addEventListener("click", function () {
@@ -968,15 +1229,29 @@
     }
   }
 
-  // ================================================================
-  // IMPORTADOR CSV
-  // ================================================================
+  /* ================================================================ */
+  /*  CSV IMPORTER (drag-&-drop + file upload)                        */
+  /* ================================================================ */
+
+  /**
+   * Switch the import tab between "subscriptions" and "logs", showing
+   * the relevant format-hint section.
+   * @param {string} type – "subscriptions" or "logs".
+   */
   function setImportType(type) {
     document.getElementById("type-" + type).checked = true;
     document.getElementById("format-sub-details").classList.toggle("d-none", type !== "subscriptions");
     document.getElementById("format-log-details").classList.toggle("d-none", type !== "logs");
   }
 
+  /**
+   * Initialise the CSV import UI:
+   *   - Radio toggles for subscriptions / logs.
+   *   - Drag-and-drop zone with visual feedback.
+   *   - "Browse files" button.
+   *   - Selected file display with remove action.
+   *   - Upload form with progress bar.
+   */
   function initCSVImporter() {
     document.getElementById("type-subscriptions").addEventListener("change", function () { setImportType("subscriptions"); });
     document.getElementById("type-logs").addEventListener("change", function () { setImportType("logs"); });
@@ -987,13 +1262,17 @@
     const displayName = document.getElementById("selected-file-name");
     const removeBtn = document.getElementById("remove-file-btn");
     const submitBtn = document.getElementById("submit-import-btn");
+    /* "Browse" click triggers hidden file input */
     if (browseBtn && fileInput) browseBtn.addEventListener("click", function () { fileInput.click(); });
     if (fileInput) {
       fileInput.addEventListener("change", function () { if (this.files.length) handleFile(this.files[0]); });
     }
     if (removeBtn) removeBtn.addEventListener("click", clearFile);
+    /* Drag-and-drop handlers */
     if (dropZone) {
+      /* Prevent default browser behaviour for all drag/drop events */
       ["dragenter", "dragover", "dragleave", "drop"].forEach(function (e) { dropZone.addEventListener(e, function (ev) { ev.preventDefault(); ev.stopPropagation(); }); });
+      /* Visual feedback on dragover */
       ["dragenter", "dragover"].forEach(function (e) { dropZone.addEventListener(e, function () { dropZone.classList.add("dragover"); }); });
       ["dragleave", "drop"].forEach(function (e) { dropZone.addEventListener(e, function () { dropZone.classList.remove("dragover"); }); });
       dropZone.addEventListener("drop", function (e) {
@@ -1002,6 +1281,7 @@
         else showToast("Solo archivos CSV", "warning");
       });
     }
+    /** Show the selected file name and enable the submit button. */
     function handleFile(f) {
       if (displayName && displayFile && submitBtn) {
         displayName.textContent = f.name + " (" + (f.size / 1024).toFixed(1) + " KB)";
@@ -1009,10 +1289,12 @@
         submitBtn.removeAttribute("disabled");
       }
     }
+    /** Clear the selected file and disable the submit button. */
     function clearFile() {
       if (fileInput) fileInput.value = "";
       if (displayFile && submitBtn) { displayFile.classList.add("d-none"); submitBtn.setAttribute("disabled", "true"); }
     }
+    /* Upload form submission */
     document.getElementById("import-csv-form").addEventListener("submit", function (e) {
       e.preventDefault();
       var file = fileInput.files[0];
@@ -1022,6 +1304,7 @@
       var endpoint = type === "subscriptions" ? "/api/import-subscriptions/" : "/api/import-logs/";
       var fd = new FormData();
       fd.append("csv_file", file);
+      /* Show and animate a simulated progress bar */
       var pc = document.getElementById("upload-progress-container");
       var pb = document.getElementById("upload-progress-bar");
       if (pc) pc.classList.remove("d-none");
@@ -1043,9 +1326,14 @@
     });
   }
 
-  // ================================================================
-  // HISTORIAL Y MODAL
-  // ================================================================
+  /* ================================================================ */
+  /*  HISTORICAL RESULTS – TABLE, SEARCH & DETAIL MODAL                */
+  /* ================================================================ */
+
+  /**
+   * Fetch all historical results from the API and render the table +
+   * search filter.
+   */
   function loadResultsData() {
     fetch("/api/results/").then(function (r) { if (!r.ok) throw Error("Error"); return r.json(); }).then(function (d) {
       allHistoricalPeriods = d.periods || [];
@@ -1054,6 +1342,11 @@
     }).catch(function () { showToast("Error cargando historial", "error"); });
   }
 
+  /**
+   * Render the historical results table.  Each row shows period, method,
+   * active counts, churn rates, ARPU, and a "view details" button.
+   * @param {Array} periods – Array of result objects from the API.
+   */
   function renderResultsTable(periods) {
     var tbody = document.getElementById("results-table-tbody");
     if (!tbody) return;
@@ -1067,6 +1360,10 @@
     tbody.innerHTML = html;
   }
 
+  /**
+   * Attach a live-search (filter-by-period-or-method) listener to the
+   * results table search input.
+   */
   function setupSearchFilter() {
     var input = document.getElementById("search-results-input");
     if (!input) return;
@@ -1076,6 +1373,10 @@
     });
   }
 
+  /**
+   * Set up a global click delegate that opens the period detail modal
+   * when any ``.view-details-btn`` is clicked (dashboard table + results table).
+   */
   function initResultsDetailsModal() {
     document.addEventListener("click", function (e) {
       var btn = e.target.closest(".view-details-btn");
@@ -1083,6 +1384,11 @@
     });
   }
 
+  /**
+   * Fetch the full detail for a single period and show it in a Bootstrap
+   * modal with summary cards and dimension tables.
+   * @param {string} periodo – Period identifier (e.g. "202501").
+   */
   function openPeriodDetailsModal(periodo) {
     showLoading("Consultando " + periodo + "...");
     fetch("/api/results/" + periodo + "/").then(function (r) { hideLoading(); if (!r.ok) throw Error("Error"); return r.json(); }).then(function (d) {
@@ -1095,6 +1401,12 @@
     }).catch(function () { hideLoading(); showToast("Error al obtener detalle", "error"); });
   }
 
+  /**
+   * Render the summary cards inside the detail modal.
+   * One card per method (Financiero / Operativo), each containing a
+   * compact key-value table of all metrics.
+   * @param {Array} summaries – Array of summary objects from the API.
+   */
   function renderModalSummaries(summaries) {
     var c = document.getElementById("modal-summaries-container");
     if (!c) return;
@@ -1123,12 +1435,20 @@
     c.innerHTML = html;
   }
 
+  /**
+   * Render dimension breakdown tables inside the detail modal.
+   * Each dimension key (zona, sucursal, etc.) gets a scrollable table
+   * with sticky headers and a column per metric.
+   * @param {Object} dimensions – Map of dimension key → array of items.
+   */
   function renderModalDimensions(dimensions) {
     var c = document.getElementById("modal-dimensions-container");
     if (!c) return;
     if (!dimensions || !Object.keys(dimensions).length) { c.innerHTML = '<div class="col-12 text-center py-3" style="color:var(--text-secondary)">Sin dimensiones</div>'; return; }
+    /* Human-readable labels for dimension keys */
     var nameMap = { "zona": "Zona Geografica", "sucursal": "Sucursal", "producto": "Producto / Plan", "municipio": "Municipio", "campana": "Campana" };
     var html = "";
+    /* Define the 18 metric columns for the dimension tables */
     var cols = [
       { k: "activos_inicio", label: "Act.Ini", fmt: function(v) { return (v || 0).toLocaleString(); } },
       { k: "activos_final", label: "Act.Fin", fmt: function(v) { return (v || 0).toLocaleString(); } },
@@ -1153,10 +1473,11 @@
       var items = dimensions[key] || [];
       var title = nameMap[key] || key.toUpperCase();
       html += '<div class="col-12 mb-3"><div class="card" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-header bg-transparent py-2"><span class="fw-bold" style="color:var(--text-primary)"><i class="bi bi-tag-fill me-2 modal-value-accent"></i>' + title + '</span></div><div class="card-body p-0"><div class="table-responsive" style="max-height:400px;overflow:auto"><table class="table table-sm table-hover align-middle mb-0 table-modal-dim" style="font-size:0.75rem;width:100%"><thead><tr>';
-      // Header
+      /* Sticky header row with fixed "Valor" column on the left */
       html += '<th class="sticky-col sticky-header" style="left:0;min-width:120px">Valor</th>';
       cols.forEach(function(col) { html += '<th class="text-end sticky-header" style="min-width:75px">' + col.label + '</th>'; });
       html += '</tr></thead><tbody>';
+      /* Sort rows by activos_final descending */
       items.sort(function(a, b) { return (b.activos_final || 0) - (a.activos_final || 0); });
       items.forEach(function (item) {
         var val = (!item.valor || item.valor === "None") ? "N/A" : item.valor;

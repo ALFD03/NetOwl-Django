@@ -1,4 +1,4 @@
-# Documentacion del Sistema - Churn Rate Analyzer
+# Documentacion del Sistema - NetOwl Churn Rate Analyzer
 
 ## Indice
 
@@ -11,7 +11,8 @@
    - [4.3 Proyecto Django](#43-proyecto-django)
    - [4.4 Templates](#44-templates)
    - [4.5 Archivos Estaticos](#45-archivos-estaticos)
-   - [4.6 Infraestructura](#46-infraestructura)
+   - [4.6 CLI](#46-cli)
+   - [4.7 Infraestructura](#47-infraestructura)
 5. [Flujo de Datos](#5-flujo-de-datos)
 6. [Pipeline de Analisis](#6-pipeline-de-analisis)
 7. [Base de Datos](#7-base-de-datos)
@@ -23,25 +24,31 @@
 
 ## 1. Vision General
 
-**Churn Rate Analyzer** es un sistema web para el calculo y analisis de la tasa de cancelacion de suscripciones (churn rate) de un proveedor de servicios de Internet. Permite importar datos desde archivos CSV, ejecutar un pipeline completo de analisis financiero y operativo, y visualizar metricas segmentadas por dimensiones geograficas y comerciales.
+**NetOwl Churn Rate Analyzer** es un sistema web SPA (Single Page Application) para el calculo y analisis de la tasa de cancelacion de suscripciones (churn rate) de un proveedor de servicios de Internet. Permite importar datos desde archivos CSV, ejecutar un pipeline completo de analisis financiero y operativo, y visualizar metricas segmentadas por dimensiones geograficas y comerciales con graficos interactivos.
 
 ### Funcionalidades principales
 
-- **Importacion de CSVs**: Carga y limpia archivos de suscripciones y logs de cambios
+- **Importacion de CSVs**: Carga y limpia archivos de suscripciones y logs de cambios con drag & drop
 - **Analisis mensual**: Calcula churn neto/bruto por metodo financiero y operativo
 - **Metricas de reactivacion**: Cuantifica winback, reactivaciones por origen y tasas de aporte
 - **Analisis dimensional**: Desglosa metricas por zona, sucursal, municipio, campana y producto
 - **Tiempos de vida**: Calcula promedios de dias activo y cancelado por suscripcion
-- **Visualizacion web**: Dashboard interactivo con tarjetas de metricas y tablas historicas
+- **Dashboard interactivo**: Graficos con Chart.js (lineas, barras, doughnut, pie) con animaciones y lineas de tendencia
+- **Panel Analytics**: Filtro multiselect de periodos, tarjetas KPI, graficos por dimension con agrupacion "Otros" (<2.5%)
+- **Modal de detalle**: Tablas completas con sticky header/columna y 22 metricas por metodo
+- **Tema claro/oscuro**: Persistencia en localStorage, todas las variables CSS adaptadas
+- **CLI**: Entrypoint de linea de comandos para importacion y analisis sin acceder al web
+- **Consola integrada**: Terminal en vivo que muestra el progreso del analisis
 
 ### Tecnologias
 
 | Componente | Tecnologia |
 |------------|-----------|
 | Backend web | Django 5 + Python 3.11 |
-| Logica de negocio | Python (pandas, numpy) |
+| Logica de negocio | Python (pandas, numpy, psycopg2) |
 | Base de datos | PostgreSQL 15+ |
-| Frontend | Bootstrap 5, Flatpickr, CSS propio |
+| Frontend | Bootstrap 5, Chart.js v3+, Bootstrap Icons, CSS propio |
+| Graficos | Chart.js con plugin datalabels y animaciones easeOutQuart |
 | Servidor WSGI | Gunicorn |
 | Estaticos | Whitenoise |
 | Contenedor | Docker + Docker Compose |
@@ -53,10 +60,12 @@
 ```
                      +---------------------+
                      |    Navegador Web     |
-                     |  (Bootstrap + JS)   |
+                     |  (SPA: Bootstrap 5,  |
+                     |   Chart.js, CSS propio)|
                      +----------+----------+
                                 |
                            HTTP :8000
+                     (JSON APIs + HTML shell)
                                 |
                      +----------+----------+
                      |     Gunicorn         |
@@ -65,92 +74,111 @@
                                 |
                      +----------+----------+
                      |      Django          |
-                     |   (churn_web/)       |
+                     |  (churn_web +        |
+                     |   analyzer_app)      |
+                     |  Sirve HTML + JSON   |
                      +----------+----------+
                                 |
                      +----------+----------+
-                     |   analyzer_app/      |
-                     |   (Vistas + Forms)   |
-                     +----------+----------+
-                                |
-                     +----------+----------+
-                     | analyzer_app/backend/|
-                     | (Logica de negocio)  |
+                     |      backend/        |
+                     |  (Logica de negocio  |
+                     |   independiente de   |
+                     |   Django)            |
                      +----------+----------+
                                 |
                      +----------+----------+
                      |     PostgreSQL       |
                      |  (Base de datos)     |
                      +---------------------+
+
+                     +---------------------+
+                     |  CLI (cli.py)        |
+                     |  import/analyze      |
+                     +----------+----------+
+                                |
+                     +----------+----------+
+                     |      backend/        |
+                     +----------+----------+
+                                |
+                     +----------+----------+
+                     |     PostgreSQL       |
+                     +---------------------+
 ```
 
-### Flujo de una peticion tipica
+### Flujo de peticion tipica (SPA)
 
-1. Usuario ingresa mes en el dashboard y hace clic en "Ejecutar analisis"
-2. Django recibe el POST en `views.dashboard()`
-3. Se construye un objeto `Periodo` con la fecha ingresada
-4. Se instancia `ChurnRateAnalyzer` con un `DBConnector` y el `Periodo`
-5. `analyzer.run()` ejecuta el pipeline completo:
-   - Lee tablas desde PostgreSQL mediante `DBConnector.read_table()`
-   - Procesa los DataFrames con pandas
-   - Guarda resultados en tablas historicas via `DBConnector.save_historico()`
-6. Django consulta `cierre_churn_historico` para obtener las metricas
-7. Las metricas se renderizan como tarjetas en el template HTML
-8. El navegador muestra el resultado al usuario
+1. Usuario navega a `/` → Django sirve `dashboard.html` (HTML inicial)
+2. El JS del cliente (`main.js`) toma el control con `initSpaRouter()`
+3. Segun la ruta (`/`, `/analytics`, `/results/`, etc.), carga datos via fetch a las APIs:
+   - `GET /api/dashboard-data/` → Datos para graficos del dashboard
+   - `GET /api/analytics-data/?periods=...` → Datos para analytics con filtro
+   - `GET /api/results/` → Historial completo
+   - `GET /api/results/<periodo>/` → Detalle de un periodo (modal)
+4. El usuario ejecuta analisis via `POST /api/run-analysis/` con `{month: "YYYY-MM"}`
+5. En el servidor:
+   - Se construye `Periodo` con la fecha
+   - Se instancia `ChurnRateAnalyzer(DBConnector(), periodo)`
+   - `analyzer.run()` ejecuta el pipeline completo
+   - El stdout se captura y se devuelve al cliente como log
+6. El frontend renderiza los graficos con Chart.js y animaciones
 
 ---
 
 ## 3. Estructura de Directorios
 
 ```
-ChurnRateAnalyzer/
+NetOwl-Django/
 ├── manage.py                          # Entry point de Django
 ├── requirements.txt                   # Dependencias Python
+├── cli.py                             # CLI entrypoint (import + analyze)
 ├── Dockerfile                         # Imagen Docker
+├── docker-compose.yml                 # Orquestacion Docker
 ├── .env.example                       # Template de variables de entorno
-├── .dockerignore                      # Exclusiones para Docker build
 ├── Planes.json                        # Catalogo de planes de Internet
 ├── Zonas.json                         # Catalogo de zonas geograficas
 ├── README.md                          # Guia rapida
 ├── documentacion.md                   # Este archivo
 │
-├── churn_web/                         # Proyecto Django
+├── backend/                           # Logica de negocio (independiente de Django)
+│   ├── __init__.py                    # Exportaciones del paquete
+│   ├── config.py                      # Constantes y carga de .env
+│   ├── utils.py                       # normalize_text(), parse_date()
+│   ├── models.py                      # Periodo (dataclass)
+│   ├── database.py                    # DBConnector (pool, read, save, copy)
+│   ├── analyzer.py                    # ChurnRateAnalyzer (pipeline completo ~1264 lineas)
+│   ├── imports.py                     # Importacion y limpieza de CSV
+│   └── data_api.py                    # Capa de acceso a datos para las vistas
+│
+├── frontend/                          # Aplicacion Django (frontend web)
 │   ├── __init__.py
-│   ├── settings.py                    # Configuracion general
-│   ├── urls.py                        # Rutas raiz
-│   ├── wsgi.py                        # WSGI para Gunicorn
-│   └── asgi.py                        # ASGI opcional
-│
-├── analyzer_app/                      # App Django principal
-│   ├── __init__.py
-│   ├── apps.py                        # Configuracion de la app
-│   ├── admin.py                       # Admin (vacio)
-│   ├── urls.py                        # Rutas de la app
-│   ├── views.py                       # Vistas (logica de controladores)
-│   ├── forms.py                       # Formularios Django
 │   │
-│   ├── backend/                       # Logica de negocio (nucleo)
-│   │   ├── __init__.py                # Exportaciones del paquete
-│   │   ├── config.py                  # Constantes y variables de entorno
-│   │   ├── utils.py                   # Funciones auxiliares
-│   │   ├── models.py                  # Modelos de dominio (Periodo)
-│   │   ├── database.py                # Conexion y operaciones con BD
-│   │   ├── analyzer.py                # Pipeline de analisis de churn
-│   │   └── imports.py                 # Importacion y limpieza de CSV
+│   ├── analyzer_app/                  # App Django principal
+│   │   ├── __init__.py
+│   │   ├── apps.py                    # Configuracion de la app
+│   │   ├── admin.py                   # Admin (vacio)
+│   │   ├── urls.py                    # Rutas SPA + API endpoints
+│   │   ├── views.py                   # Vistas delgadas (JsonResponse)
+│   │   ├── forms.py                   # MonthForm, CSVUploadForm
+│   │   │
+│   │   └── templates/analyzer/        # Templates HTML
+│   │       └── dashboard.html         # Unico template SPA
 │   │
-│   └── templates/analyzer/            # Templates HTML
-│       ├── dashboard.html             # Pagina principal
-│       ├── import_csv.html            # Formulario de subida de CSV
-│       ├── results_list.html          # Lista de periodos analizados
-│       └── results_detail.html        # Detalle de un periodo
+│   ├── churn_web/                     # Proyecto Django (config)
+│   │   ├── __init__.py
+│   │   ├── settings.py                # Configuracion general
+│   │   ├── urls.py                    # Rutas raiz (delega a analyzer_app)
+│   │   ├── wsgi.py                    # WSGI para Gunicorn
+│   │   └── asgi.py                    # ASGI opcional
+│   │
+│   ├── static/                        # Archivos estaticos
+│   │   ├── css/styles.css             # Estilos personalizados (~980 lineas, tema claro/oscuro)
+│   │   └── js/main.js                 # SPA JavaScript (~1170 lineas, Chart.js)
+│   │
+│   └── templates/                     # Templates raiz
+│       ├── base.html                  # Layout base (Bootstrap, Chart.js, Bootstrap Icons vía CDN)
+│       └── includes/navbar.html       # Barra de navegacion
 │
-├── templates/                         # Templates raiz
-│   ├── base.html                      # Layout base (Bootstrap + Flatpickr)
-│   └── includes/navbar.html           # Barra de navegacion
-│
-└── static/                            # Archivos estaticos
-    ├── css/styles.css                 # Estilos personalizados
-    └── js/main.js                     # JavaScript personalizado
+└── .venv/                             # Entorno virtual Python (no incluido en git)
 ```
 
 ---
@@ -159,14 +187,18 @@ ChurnRateAnalyzer/
 
 ### 4.1 Backend (analizador)
 
-#### `analyzer_app/backend/config.py`
+Todas las rutas en esta seccion son relativas a `backend/`.
+
+#### `backend/config.py`
 
 **Proposito**: Contiene todas las constantes de configuracion del sistema y carga las variables de entorno.
 
 **Que espera**:
 - Archivo `.env` en la raiz del proyecto con las variables:
-  - `HOST`, `DB`, `USER`, `PASS`, `PORT` → conexion a PostgreSQL
+  - `HOST`, `DB`, `DB_USER`, `PASS`, `PORT` → conexion a PostgreSQL
   - `SCHEMA` → esquema de base de datos (default: `public`)
+
+**Nota**: Se usa `DB_USER` (no `USER`) para evitar colision con la variable de entorno del sistema Linux `USER`.
 
 **Constantes definidas**:
 
@@ -184,7 +216,7 @@ ChurnRateAnalyzer/
 
 ---
 
-#### `analyzer_app/backend/utils.py`
+#### `backend/utils.py`
 
 **Proposito**: Funciones auxiliares de uso general en el sistema.
 
@@ -203,7 +235,7 @@ ChurnRateAnalyzer/
 
 ---
 
-#### `analyzer_app/backend/models.py`
+#### `backend/models.py`
 
 **Proposito**: Modelos de dominio del negocio.
 
@@ -235,7 +267,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 ---
 
-#### `analyzer_app/backend/database.py`
+#### `backend/database.py`
 
 **Proposito**: Manejador de conexiones a PostgreSQL. Proporciona operaciones de lectura/escritura de DataFrames.
 
@@ -249,7 +281,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 | Metodo | Descripcion |
 |--------|-------------|
-| `__init__()` | Inicializa pool de 1-10 conexiones usando variables de entorno (`HOST`, `DB`, `USER`, `PASS`, `PORT`) |
+| `__init__()` | Inicializa pool de 1-10 conexiones usando variables de entorno (`HOST`, `DB`, `DB_USER`, `PASS`, `PORT`) |
 | `get_connection()` | Context manager que obtiene y devuelve conexion del pool |
 | `connect()` | Crea conexion directa (sin pool) |
 | `read_table(table_name, columns=None)` | Lee tabla completa como DataFrame. Si `columns` es `None`, lee todas las columnas. |
@@ -257,7 +289,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 | `copy_dataframe(df, table_name)` | Carga masiva (COPY) de DataFrame a tabla existente usando formato TSV |
 
 **Que espera**:
-- Variables de entorno: `HOST`, `DB`, `USER`, `PASS`, `PORT` (default `5432`)
+- Variables de entorno: `HOST`, `DB`, `DB_USER`, `PASS`, `PORT` (default `5432`)
 - `read_table`: nombre de tabla existente en el esquema configurado
 - `save_historico`: DataFrame con columnas que coincidan o se agreguen a la tabla
 - `copy_dataframe`: DataFrame con columnas que coincidan exactamente con la tabla destino
@@ -276,9 +308,9 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 ---
 
-#### `analyzer_app/backend/analyzer.py`
+#### `backend/analyzer.py`
 
-**Proposito**: Nucleo del sistema. Implementa el pipeline completo de calculo de churn rate.
+**Proposito**: Nucleo del sistema. Implementa el pipeline completo de calculo de churn rate (~1264 lineas).
 
 **Clases**:
 
@@ -293,6 +325,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 | `__init__(db, periodo)` | Recibe un `DBConnector` y un `Periodo` |
 | `load_data()` | Carga concurrente (3 hilos) de Subscripciones, Subscripciones-logs y Subscripciones-logs-v15 |
 | `build_clean_data()` | Normaliza y combina logs v14 + v15 en un solo DataFrame limpio |
+| `_apply_log_rules()` | Aplica reglas de anomalias (logs sinteticos para casos 1-6) |
 | `get_active_at(target_date, strictly_before)` | Obtiene suscripciones activas en una fecha dada |
 | `get_reactivations(act_fin)` | Encuentra reactivaciones en el periodo filtradas por origen valido |
 | `get_corte_impagado()` | Extrae eventos de corte por factura impaga |
@@ -329,7 +362,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 ---
 
-#### `analyzer_app/backend/imports.py`
+#### `backend/imports.py`
 
 **Proposito**: Logica de importacion y limpieza de archivos CSV de suscripciones y logs.
 
@@ -366,9 +399,30 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 ---
 
+#### `backend/data_api.py`
+
+**Proposito**: Capa de acceso a datos que conecta las vistas web con las tablas de la BD.
+
+**Funciones**:
+
+| Funcion | Descripcion |
+|---------|-------------|
+| `get_cierre_churn(periodos=None)` | Retorna cierre_churn_historico agrupado por periodo_reporte con todos los metodos |
+| `get_dimensiones(periodos=None)` | Retorna master_churn_dimensiones agrupado por periodo_reporte → dimension → valores |
+| `get_periodos()` | Lista de periodos disponibles (desde cierre_churn_historico) |
+| `get_tiempos_globales(periodos=None)` | Retorna prom_dias_activo y prom_dias_cancelado desde master_tiempo_global |
+| `get_dashboard_data()` | Combina cierre_churn + tiempos globales para el dashboard |
+| `get_analytics_data(periodos=None)` | Combina cierre_churn + dimensiones + tiempos para analytics |
+
+**Dependencias**: `backend.database.DBConnector`
+
+---
+
 ### 4.2 App Django
 
-#### `analyzer_app/forms.py`
+Todas las rutas aqui son relativas a `frontend/analyzer_app/`.
+
+#### `frontend/analyzer_app/forms.py`
 
 **Proposito**: Formularios Django para la interfaz web.
 
@@ -376,82 +430,82 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 | Clase | Campos | Widget | Descripcion |
 |-------|--------|--------|-------------|
-| `MonthForm` | `month` (CharField) | `TextInput` con clase `month-picker` | Selector de mes con Flatpickr (calendario visual, solo lectura) |
+| `MonthForm` | `month` (CharField) | `TextInput` con clase `month-picker` | Selector de mes (YYYY-MM) |
 | `CSVUploadForm` | `csv_file` (FileField) | `FileInput` con `accept=.csv` | Subida de archivos CSV |
 
-**Que espera**:
-- `MonthForm`: valor en formato `YYYY-MM` (ej. `2026-04`)
-- `CSVUploadForm`: archivo con extension `.csv`
-
-**Validacion**:
-- `MonthForm`: max_length=7, el resto de la validacion se hace en la vista
-- `CSVUploadForm`: solo acepta archivos CSV (por el atributo `accept` en HTML)
+**Nota**: Los formularios se usan actualmente para validacion en las vistas API, no para renderizado directo (el frontend es SPA).
 
 ---
 
-#### `analyzer_app/views.py`
+#### `frontend/analyzer_app/views.py`
 
-**Proposito**: Controladores Django que manejan las peticiones HTTP y orquestan la logica.
+**Proposito**: Vistas delgadas que conectan el frontend SPA con el backend. Todas retornan `JsonResponse`.
 
 **Funciones**:
 
-| Funcion | Ruta | Metodos | Descripcion |
-|---------|------|---------|-------------|
-| `dashboard(request)` | `/` | GET, POST | Muestra formulario de mes, ejecuta analisis, muestra metricas |
-| `import_subscriptions(request)` | `/import/subscriptions/` | GET, POST | Sube CSV de suscripciones, lo procesa y redirige al dashboard |
-| `import_logs(request)` | `/import/logs/` | GET, POST | Sube CSV de logs, lo procesa y redirige al dashboard |
-| `results_list(request)` | `/results/` | GET | Lista todos los periodos analizados |
-| `results_detail(request, periodo)` | `/results/<periodo>/` | GET | Muestra metricas detalladas de un periodo |
+| Funcion | Ruta | Metodo | Descripcion |
+|---------|------|--------|-------------|
+| `dashboard(request)` | `/*` | GET | Sirve el HTML del contenedor SPA (unico template) |
+| `api_dashboard_data(request)` | `/api/dashboard-data/` | GET | Datos para graficos del dashboard (cierre + tiempos) |
+| `api_analytics_data(request)` | `/api/analytics-data/` | GET | Datos para analytics con filtro multiselect de periodos |
+| `api_periods_list(request)` | `/api/periods/` | GET | Lista de periodos disponibles |
+| `api_results_list(request)` | `/api/results/` | GET | Historial completo de resultados (plano) |
+| `api_results_detail(request, periodo)` | `/api/results/<periodo>/` | GET | Detalle de un periodo (resumen + dimensiones + tiempos) |
+| `api_run_analysis(request)` | `/api/run-analysis/` | POST | Ejecuta el analisis de churn, captura stdout/stderr |
+| `api_import_subscriptions(request)` | `/api/import-subscriptions/` | POST | Importa CSV de suscripciones |
+| `api_import_logs(request)` | `/api/import-logs/` | POST | Importa CSV de logs |
 
-**Funciones privadas**:
-
-| Funcion | Descripcion |
-|---------|-------------|
-| `_fetch_recent_results()` | Obtiene los ultimos 10 resultados de `cierre_churn_historico` |
-| `_fetch_all_results()` | Obtiene todos los resultados ordenados por periodo descendente |
-| `_fetch_summary_for_period(periodo_label)` | Obtiene resumen KPI para un periodo especifico |
-
-**Flujo de `dashboard` (POST)**:
-1. Valida el formulario (`MonthForm`)
-2. Construye un `Periodo` con la fecha ingresada
-3. Redirige stdout/stderr a un buffer para capturar logs del analisis
+**Flujo de `api_run_analysis` (POST)**:
+1. Recibe JSON `{"month": "YYYY-MM"}`
+2. Construye `Periodo.build(f"{mes}-01")`
+3. Redirige stdout/stderr a un buffer para capturar logs
 4. Ejecuta `ChurnRateAnalyzer(DBConnector(), periodo).run()`
-5. Captura cualquier excepcion
-6. Restaura stdout/stderr original
-7. Consulta `cierre_churn_historico` para obtener metricas estructuradas
-8. Renderiza el template con las metricas
+5. Restaura stdout/stderr y retorna el log capturado
 
-**Flujo de `import_subscriptions` / `import_logs`**:
-1. Valida el formulario (`CSVUploadForm`)
-2. Guarda el archivo subido temporalmente en disco
-3. Llama a `import_subscriptions_csv()` o `import_logs_csv()` con la ruta temporal
-4. Elimina el archivo temporal
-5. Redirige al dashboard con mensaje de exito/error
-
-**Que espera**:
-- Conexion a PostgreSQL operativa
-- Tablas de entrada existentes (Subscripciones, Subscripciones-logs)
-- Tablas de salida accesibles (cierre_churn_historico, master_churn_dimensiones)
+**Flujo de `api_import_subscriptions` / `api_import_logs`**:
+1. Recibe archivo via `request.FILES["csv_file"]`
+2. Guarda a archivo temporal
+3. Llama a `import_subscriptions_csv()` o `import_logs_csv()`
+4. Elimina archivo temporal
+5. Retorna JSON con conteo de filas
 
 ---
 
-#### `analyzer_app/urls.py`
+#### `frontend/analyzer_app/urls.py`
 
 **Proposito**: Mapeo de rutas URL a las vistas de la aplicacion.
+
+**Rutas SPA** (todas sirven el mismo template, el router JS decide que mostrar):
 
 | Ruta | Vista | Nombre |
 |------|-------|--------|
 | `/` | `dashboard` | `dashboard` |
-| `/import/subscriptions/` | `import_subscriptions` | `import_subscriptions` |
-| `/import/logs/` | `import_logs` | `import_logs` |
-| `/results/` | `results_list` | `results_list` |
-| `/results/<str:periodo>/` | `results_detail` | `results_detail` |
+| `/import/subscriptions/` | `dashboard` | `import_subscriptions` |
+| `/import/logs/` | `dashboard` | `import_logs` |
+| `/analytics/` | `dashboard` | `analytics` |
+| `/results/` | `dashboard` | `results_list` |
+| `/results/<str:periodo>/` | `dashboard` | `results_detail` |
+
+**Rutas API**:
+
+| Ruta | Vista | Nombre |
+|------|-------|--------|
+| `GET /api/dashboard-data/` | `api_dashboard_data` | `api_dashboard_data` |
+| `POST /api/run-analysis/` | `api_run_analysis` | `api_run_analysis` |
+| `GET /api/analytics-data/` | `api_analytics_data` | `api_analytics_data` |
+| `GET /api/periods/` | `api_periods_list` | `api_periods_list` |
+| `GET /api/results/` | `api_results_list` | `api_results_list` |
+| `GET /api/results/<str:periodo>/` | `api_results_detail` | `api_results_detail` |
+| `POST /api/import-subscriptions/` | `api_import_subscriptions` | `api_import_subscriptions` |
+| `POST /api/import-logs/` | `api_import_logs` | `api_import_logs` |
 
 ---
 
 ### 4.3 Proyecto Django
 
-#### `churn_web/settings.py`
+Todas las rutas aqui son relativas a `frontend/churn_web/`.
+
+#### `frontend/churn_web/settings.py`
 
 **Proposito**: Configuracion central del proyecto Django.
 
@@ -462,42 +516,36 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 | Seguridad | `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS` desde variables de entorno |
 | Apps instaladas | `staticfiles`, `sessions`, `messages`, `analyzer_app` |
 | Middleware | Security, Whitenoise, Session, Common, Csrf, Messages, XFrame |
-| Base de datos | PostgreSQL usando mismas env vars que el backend (`HOST`, `DB`, `USER`, `PASS`, `PORT`) |
+| Base de datos | PostgreSQL usando `DB_USER` (no `USER`) para evitar colision con variable de sistema |
 | Estaticos | Whitenoise con `CompressedManifestStaticFilesStorage` para produccion |
-| Templates | Directorio raiz `templates/` + directorios de apps |
+| Templates | Directorio `frontend/templates/` + directorios de apps |
 | i18n | `es`, `America/Caracas` |
 
 **Que espera**:
-- Variables de entorno: `HOST`, `DB`, `USER`, `PASS`, `PORT`, `SCHEMA`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`
-- Directorios `templates/` y `static/` en la raiz del proyecto
+- Variables de entorno: `HOST`, `DB`, `DB_USER`, `PASS`, `PORT`, `SCHEMA`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`
 
 ---
 
-#### `churn_web/wsgi.py`
+#### `frontend/churn_web/wsgi.py`
 
 **Proposito**: Punto de entrada WSGI para servidores como Gunicorn.
 
 **Uso**:
 ```bash
-gunicorn churn_web.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 300
+gunicorn frontend.churn_web.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 300
 ```
 
 ---
 
-#### `churn_web/asgi.py`
+#### `frontend/churn_web/asgi.py`
 
-**Proposito**: Punto de entrada ASGI para servidores async como Daphne o Uvicorn (uso opcional).
-
-**Uso**:
-```bash
-daphne churn_web.asgi:application
-```
+**Proposito**: Punto de entrada ASGI para servidores async (uso opcional).
 
 ---
 
 #### `manage.py`
 
-**Proposito**: Utilidad de linea de comandos de Django. Permite ejecutar comandos como `runserver`, `migrate`, `collectstatic`, etc.
+**Proposito**: Utilidad de linea de comandos de Django. Permite ejecutar `runserver`, `migrate`, `collectstatic`, etc.
 
 **Uso**:
 ```bash
@@ -511,9 +559,18 @@ python manage.py check --deploy
 
 ### 4.4 Templates
 
-#### `templates/base.html`
+Todos los templates estan en `frontend/templates/`.
 
-**Proposito**: Layout base de toda la aplicacion. Define la estructura HTML, carga Bootstrap 5 y Flatpickr via CDN, incluye el navbar y el loading overlay.
+#### `frontend/templates/base.html`
+
+**Proposito**: Layout base de toda la aplicacion. Define la estructura HTML y carga las dependencias via CDN.
+
+**CDN cargadas**:
+- Bootstrap 5.3 (CSS + JS Bundle)
+- Bootstrap Icons
+- Chart.js v3+
+- Chart.js Plugin Datalabels
+- Google Fonts (Inter)
 
 **Bloques Django**:
 | Bloque | Proposito |
@@ -523,122 +580,152 @@ python manage.py check --deploy
 | `content` | Contenido principal |
 | `extra_js` | JavaScript adicional por pagina |
 
-**Variables de contexto**: `messages` (django.contrib.messages)
-
 **Componentes**:
-- Loading overlay (oculto por defecto, se muestra via JavaScript)
+- Loading overlay (`#loading-overlay`) con spinner y texto dinámico
+- Status toast (`#status-toast`) de Bootstrap para notificaciones
 - Navbar incluido desde `includes/navbar.html`
-- Mensajes flash de Django
+- Meta tag `csrf-token` para peticiones AJAX
 
 ---
 
-#### `templates/includes/navbar.html`
+#### `frontend/templates/includes/navbar.html`
 
-**Proposito**: Barra de navegacion superior con enlaces a Dashboard, Importar (dropdown con Subscripciones/Logs) y Resultados.
+**Proposito**: Sidebar de navegacion lateral (no superior) con enlaces SPA usando `data-link`.
 
-**Urls usadas**: `dashboard`, `import_subscriptions`, `import_logs`, `results_list`
+**Enlaces**:
+- Dashboard (`/`)
+- Importar Subscripciones (`/import/subscriptions/`)
+- Importar Logs (`/import/logs/`)
+- Analytics (`/analytics/`)
+- Resultados Históricos (`/results/`)
 
----
-
-#### `analyzer_app/templates/analyzer/dashboard.html`
-
-**Proposito**: Pagina principal del sistema. Contiene:
-- Formulario para seleccionar mes (Flatpickr)
-- Boton "Ejecutar analisis" (con loading overlay)
-- Tarjetas de metricas (se muestran despues de ejecutar)
-- Tabla "Ultimos resultados" siempre visible al pie
-
-**Variables de contexto esperadas**:
-| Variable | Tipo | Descripcion |
-|----------|------|-------------|
-| `form` | `MonthForm` | Formulario de seleccion de mes |
-| `periodo_label` | `str` o `None` | Etiqueta del periodo analizado |
-| `summaries` | `list` de `dict` | Lista de resumenes KPI (uno por metodo: Operativo/Financiero) |
-| `results` | `list` de `dict` | Ultimos 10 periodos analizados |
-
-**Campos de cada dict en `summaries`**:
-`metodo`, `activos_inicio`, `activos_final`, `nuevos_mes`, `bajas_netas_balance`, `churn_neto_pct`, `churn_bruto_pct`, `reactivaciones`, `tasa_aporte_react_pct`, `tasa_winback_pct`, `adiciones_brutas`, `adiciones_netas`, `total_billing`, `arpu`, `corte_impagado`, `indice_reemplazo_react_pct`
+**Funcionamiento**: Usa `data-link` y `data-target` para navegacion SPA via JavaScript (`initSpaRouter()`).
 
 ---
 
-#### `analyzer_app/templates/analyzer/import_csv.html`
+#### `frontend/analyzer_app/templates/analyzer/dashboard.html`
 
-**Proposito**: Pagina de subida de archivos CSV. Usa el mismo template tanto para Subscripciones como para Logs, diferenciando por la variable `import_type`.
+**Proposito**: Unico template HTML del SPA. Contiene todas las secciones que se muestran/ocultan segun la ruta:
 
-**Variables de contexto esperadas**:
-| Variable | Tipo | Descripcion |
-|----------|------|-------------|
-| `form` | `CSVUploadForm` | Formulario de subida de archivo |
-| `import_type` | `str` | Tipo de importacion: "Subscripciones" o "Logs" |
+**Secciones**:
+- **Dashboard**: Formulario de mes + boton ejecutar + terminal de logs + tabla de ultimos resultados + graficos (churn, winback, ARPU, aporte, reemplazo, adiciones, tiempos, cortes vs reactivaciones)
+- **Importar**: Drag & drop zone + selector de tipo (subscriptions/logs) + barra de progreso
+- **Analytics**: Filtro multiselect de periodos + tarjetas KPI + graficos por dimension (doughnut, pie, bar, hbar)
+- **Resultados**: Tabla de historial + buscador + modal de detalle con resumen (22 campos) y desglose por dimensiones (18 columnas)
 
----
-
-#### `analyzer_app/templates/analyzer/results_list.html`
-
-**Proposito**: Lista completa de todos los periodos analizados, ordenados del mas reciente al mas antiguo.
-
-**Variables de contexto esperadas**:
-| Variable | Tipo | Descripcion |
-|----------|------|-------------|
-| `periods` | `list` de `dict` | Todos los registros de `cierre_churn_historico` |
-
-**Columnas mostradas**: Periodo, Metodo, Activos inicio/final, Nuevos, Bajas netas, Churn neto/bruto (%), Reactivaciones, Winback (%), ARPU, Detalle (link)
-
----
-
-#### `analyzer_app/templates/analyzer/results_detail.html`
-
-**Proposito**: Vista detallada de un periodo especifico. Muestra:
-- KPIs en formato de 2 columnas por metodo (Operativo/Financiero)
-- Tabla desglosada por dimensiones (zona, sucursal, municipio, campana, producto)
-
-**Variables de contexto esperadas**:
-| Variable | Tipo | Descripcion |
-|----------|------|-------------|
-| `periodo` | `str` | Etiqueta del periodo (ej. "2026-04-01 al 2026-04-30") |
-| `summaries` | `list` de `dict` | Resumenes KPI del periodo (filtrados por periodo_reporte) |
-| `dimensions` | `list` de `dict` | Filas de `master_churn_dimensiones` para el periodo |
+**No recibe variables de contexto del servidor** — todo se carga via fetch a las APIs.
 
 ---
 
 ### 4.5 Archivos Estaticos
 
-#### `static/css/styles.css`
+Todos en `frontend/static/`.
 
-**Proposito**: Estilos personalizados que complementan a Bootstrap 5.
+#### `frontend/static/css/styles.css`
 
-**Secciones**:
+**Proposito**: Estilos personalizados (~980 lineas) con sistema de tema claro/oscuro mediante variables CSS.
+
+**Sistema de diseño**:
+- `:root` define paleta oscura (azul-pizarra) y `.light-mode` sobreescribe con paleta Slate (gris neutro)
+- `--surface-*` fondos, `--text-*` colores de texto, `--primary`/`--accent` colores de accion
+- `--shadow-*` sombras progresivas, `--radius` borde uniforme de 8px
+
+**Secciones principales**:
+
 | Seccion | Descripcion |
 |---------|-------------|
-| body | Fondo gris claro (`#f0f4f8`) |
-| .navbar.bg-primary | Fondo azul oscuro (`#1565c0`) |
-| .btn-primary | Botones principales azules |
-| .card | Sin borde (shadow en lugar de border) |
-| .card-header | Fondo azul claro con texto azul oscuro |
-| .table thead | Cabeceras de tabla con fondo azul claro |
-| .metric-card | Tarjetas de metricas centradas con hover |
-| .loading-overlay | Overlay de carga con fondo semitransparente y blur |
+| Layout | Sidebar fijo (280px) + main-content con margen |
+| Sidebar | Branding, navegacion con hover/active, footer con toggle de tema |
+| Tarjetas | Cards con sombra y hover translateY(-2px) |
+| Metricas | `.metric-card` centradas con hover y label en uppercase |
+| Tablas | Sticky header con `z-index`, filas pares con fondo sutil |
+| Formularios | Inputs/selects con fondo del tema, focus con borde azul |
+| Drop zone | Drag & drop con borde dashed y hover |
+| Terminal | Consola con fondo fijo `#050b18` (independiente del tema) |
+| Overlay de carga | Fixed fullscreen con backdrop-filter blur y spinner |
+| Modal | Overrides de Bootstrap (.modal-content, sticky header/col) |
+| Tablas modales | `.table-modal-dim` con sticky header + columna, `.table-modal-sum` con separadores |
+| Scrollbar | Delgada (6px) con color del borde del tema |
+| Responsive | Breakpoints a 992px y 768px (sidebar se reduce) |
+
+**Dependencias**: Bootstrap 5.3, Bootstrap Icons, Chart.js v3+ (todos via CDN)
 
 ---
 
-#### `static/js/main.js`
+#### `frontend/static/js/main.js`
 
-**Proposito**: JavaScript personalizado del lado del cliente.
+**Proposito**: SPA JavaScript (~1170 lineas) que maneja toda la interaccion del cliente.
 
-**Funciones**:
+**Funciones principales**:
 
 | Funcion | Descripcion |
 |---------|-------------|
-| `showLoading()` | Muestra el overlay de carga |
-| `hideLoading()` | Oculta el overlay de carga |
-| `flatpickr_init` | Inicializa Flatpickr en elementos con clase `.month-picker` (modo mes, locale espanol) |
-| `form_loading_auto` | Agrega evento `submit` a formularios con atributo `data-loading` para mostrar loading |
-| `tooltips_init` | Inicializa tooltips de Bootstrap |
+| `initSpaRouter()` | Router SPA: captura clicks en `a[data-link]`, maneja `popstate`, navega sin recargar |
+| `navigate(path)` | Muestra/oculta pestañas SPA, carga datos via API segun la ruta |
+| `initThemeManager()` | Toggle claro/oscuro, persiste en localStorage, refresca graficos |
+| `initMonthPicker()` | Selector de mes/ano con dos `<select>` sincronizados |
+| `loadDashboardData()` | Fetch a `/api/dashboard-data/` → renderiza graficos + tabla |
+| `renderDashboardCharts()` | 9 graficos Chart.js con animaciones (800ms, easeOutQuart) |
+| `renderChurnComparativo()` | Promedio de churn coloreado (verde/amarillo/rojo) |
+| `makeThresholdPlugin()` | Plugin personalizado de Chart.js para bandas de umbral + linea objetivo |
+| `destroyDashboardCharts()` | Destruye todas las instancias de graficos del dashboard |
+| `loadAnalyticsData()` | Fetch a `/api/analytics-data/` con filtro multiselect |
+| `renderAnalyticsCards()` | 20 tarjetas KPI con colores condicionales |
+| `renderDimensionCharts()` | Graficos por dimension con agrupacion "Otros" (<2.5%) |
+| `averageDimensionData()` | Promedia datos de multiples periodos para analytics |
+| `initAnalysisExecutor()` | POST a `/api/run-analysis/` con captura de terminal en vivo |
+| `initCSVImporter()` | Drag & drop + upload con barra de progreso |
+| `initResultsDetailsModal()` | Modal de detalle con resumen y dimensiones |
+| `renderModalSummaries()` | Tabla de 22 campos por metodo con colores condicionales |
+| `renderModalDimensions()` | Tabla de 18 columnas con sticky header/columna |
+| `chartOpts()` / `lineOpts()` / `barOpts()` | Helpers de opciones de Chart.js |
 
-**Que espera**:
-- Elemento HTML con `id="loading-overlay"` (definido en `base.html`)
-- Elementos con clase `.month-picker` para Flatpickr
-- Formularios con atributo `data-loading` (definido en `dashboard.html` e `import_csv.html`)
+**Graficos del Dashboard** (9 en total):
+1. `churnLineChart` — Barras de promedios + 4 lineas de churn (segmentadas por color verde/amarillo/rojo)
+2. `winbackBarChart` — Barras + linea de tendencia blanca
+3. `arpuBarChart` — Barras + linea de tendencia blanca
+4. `aporteReactBarChart` — Barras + linea de tendencia amarilla
+5. `reemplazoLineChart` — Linea simple
+6. `adicionesBarChart` — Barras apiladas netas+brutas
+7a. `tiemposActivoChart` — Barras azules + linea de tendencia
+7b. `tiemposCanceladoChart` — Barras amarillas + linea de tendencia
+8. `cortesReactChart` — Dos lineas con area (roja para cortes, verde para reactivaciones)
+
+**Graficos de Analytics** (por dimension × metrica):
+- doughnut: churn_neto, churn_bruto, winback, aporte_react
+- pie: prom_dias_activo, prom_dias_cancelado
+- bar (vertical): adiciones_netas, adiciones_brutas
+- hbar (horizontal): ARPU, corte_impagado
+- Todos aplican umbral <2.5% para agrupar en "Otros" (promedio, siempre al final)
+
+**Dependencias**: Bootstrap 5 JS, Chart.js v3+, Chart.js Plugin Datalabels, Bootstrap Icons (todos via CDN)
+
+---
+
+### 4.6 CLI
+
+#### `cli.py`
+
+**Proposito**: Entrypoint de linea de comandos independiente de Django. Permite importar datos y ejecutar analisis directamente desde la terminal.
+
+**Dependencias**: `backend.*` (database, models, analyzer, imports). No carga `.env` — el backend lo hace internamente.
+
+**Comandos**:
+
+| Comando | Descripcion |
+|---------|-------------|
+| `python cli.py import subs <csv_path>` | Importa suscripciones desde CSV |
+| `python cli.py import logs <csv_path>` | Importa logs desde CSV |
+| `python cli.py analyze <YYYY-MM>` | Ejecuta analisis de churn para el mes dado |
+| `python cli.py run-all <YYYY-MM> <subs_csv> <logs_csv>` | Importa ambos CSVs + ejecuta analisis |
+
+**Ejemplos**:
+```bash
+python cli.py import subs ./datos/suscripciones.csv
+python cli.py import logs ./datos/logs.csv
+python cli.py analyze 2026-04
+python cli.py run-all 2026-06 ./subs.csv ./logs.csv
+```
 
 ---
 
@@ -684,98 +771,88 @@ python manage.py check --deploy
 ### 5.1 Importacion de CSV → Base de Datos
 
 ```
-CSV Subscripciones
-       │
-       ▼
-import_subscriptions_csv()
-       │
-       ├──► Lee CSV con pandas
-       ├──► Renombra columnas segun mapping
-       ├──► Limpia encabezados repetidos
-       ├──► Propaga metadatos (ffill por orden)
-       ├──► Consolida productos (primer match en Planes.json)
-       │
-       ├──► Subscripciones-b (detalle)  ──► PostgreSQL (COPY)
-       └──► Subscripciones (consolidado) ──► PostgreSQL (COPY)
+Via CLI:                           Via Web:
+python cli.py import subs ./a.csv  POST /api/import-subscriptions/ (drag & drop)
+python cli.py import logs ./b.csv  POST /api/import-logs/
 
 
-CSV Logs
-       │
-       ▼
-import_logs_csv()
-       │
-       ├──► Lee CSV con pandas
-       ├──► Valida columnas requeridas
-       ├──► Limpia nulos
-       │
-       └──► Subscripciones-logs ──► PostgreSQL (COPY)
+               CSV
+                │
+                ▼
+         import_subscriptions_csv()  /  import_logs_csv()
+                │
+                ├──► Lee CSV con pandas
+                ├──► Renombra columnas segun mapping
+                ├──► Limpia encabezados repetidos / valida columnas
+                ├──► Propaga metadatos (ffill por orden) [solo subs]
+                ├──► Consolida productos (primer match en Planes.json) [solo subs]
+                │
+                ├──► Subscripciones / Subscripciones-b ──► PostgreSQL (COPY)
+                └──► Subscripciones-logs ──► PostgreSQL (COPY)
 ```
 
 ### 5.2 Ejecucion de Analisis → Resultados
 
 ```
-Dashboard (usuario selecciona mes)
-       │
-       ▼
-views.dashboard()
-       │
-       ├──► Periodo.build("2026-04")
-       │
-       ├──► ChurnRateAnalyzer(DBConnector, periodo).run()
-       │        │
-       │        ├──► load_data()
-       │        │       └──► read_table("Subscripciones") ──► DataFrame
-       │        │       └──► read_table("Subscripciones-logs") ──► DataFrame
-       │        │       └──► read_table("Subscripciones-logs-v15") ──► DataFrame
-       │        │
-       │        ├──► build_clean_data()
-       │        │       └──► Normaliza y combina logs v14 + v15
-       │        │
-       │        ├──► get_active_at(inicio) → activos_inicio
-       │        ├──► get_active_at(final)   → activos_final
-       │        ├──► get_reactivations(act_fin) → reactivaciones
-       │        ├──► get_corte_impagado()  → cortes
-       │        │
-       │        ├──► Calculo KPI (churn, winback, ARPU, etc.)
-       │        │
-       │        ├──► save_historico → master_activos_cierre
-       │        ├──► save_historico → master_reactivaciones
-       │        ├──► save_historico → master_bajas_detalladas
-       │        ├──► save_historico → master_corte_impagado
-       │        ├──► save_historico → cierre_churn_historico (KPI)
-       │        │
-       │        ├──► calculate_lifetime_metrics()
-       │        │       └──► save_historico → master_tiempos_vida
-       │        │       └──► save_historico → master_tiempo_global
-       │        │
-       │        └──► aggregate_dimensions()
-       │                └──► save_historico → master_churn_dimensiones
-       │
-       ├──► _fetch_summary_for_period(periodo_label)
-       │       └──► read_table("cierre_churn_historico") → summaries
-       │
-       └──► Render template dashboard.html con summaries
+Via CLI:                           Via Web:
+python cli.py analyze 2026-06     POST /api/run-analysis/ {month:"2026-06"}
+                │                               │
+                ▼                               ▼
+         ChurnRateAnalyzer(DBConnector, periodo).run()
+                │
+                ├──► load_data()
+                │       ├──► read_table("Subscripciones") ──► DataFrame
+                │       ├──► read_table("Subscripciones-logs") ──► DataFrame
+                │       └──► read_table("Subscripciones-logs-v15") ──► DataFrame
+                │
+                ├──► build_clean_data()
+                │       └──► Normaliza y combina logs v14 + v15
+                │
+                ├──► get_active_at(inicio) → activos_inicio
+                ├──► get_active_at(final)   → activos_final
+                ├──► nuevos → suscripciones con f_ini_dt en el periodo
+                ├──► get_reactivations(act_fin) → reactivaciones
+                ├──► get_corte_impagado()  → cortes
+                │
+                ├──► Calculo KPI (churn neto/bruto, winback, ARPU, etc.)
+                │
+                ├──► save_historico → master_activos_cierre
+                ├──► save_historico → master_reactivaciones
+                ├──► save_historico → master_bajas_detalladas (Financiero y Operativo)
+                ├──► save_historico → master_corte_impagado
+                ├──► save_historico → cierre_churn_historico (KPI)
+                │
+                ├──► calculate_lifetime_metrics()
+                │       ├──► save_historico → master_tiempos_vida
+                │       └──► save_historico → master_tiempo_global
+                │
+                └──► aggregate_dimensions()
+                        └──► save_historico → master_churn_dimensiones
+
+                ▼
+         CLI: stdout en terminal
+         Web: JSON con log capturado → terminal en el navegador
 ```
 
-### 5.3 Visualizacion de Resultados
+### 5.3 Visualizacion de Resultados (SPA)
 
 ```
-Dashboard (/)                              Resultados (/results/)
-       │                                            │
-       ▼                                            ▼
-_fetch_recent_results()                    _fetch_all_results()
-       │                                            │
-       ▼                                            ▼
-read_table("cierre_churn_historico")       read_table("cierre_churn_historico")
-       │                                            │
-       ▼                                            ▼
-dashboard.html (tabla ultimos 10)          results_list.html (tabla completa)
-       │                                            │
-       ▼                                            ▼
-(results_detail.html) ─── /results/<periodo>/
-                            │
-                            ├── read_table("cierre_churn_historico") → KPIs
-                            └── read_table("master_churn_dimensiones") → dimensiones
+Navegador (SPA)
+       │
+       ├──► /  → dashboard
+       │       fetch(/api/dashboard-data/) → 9 graficos + tabla
+       │
+       ├──► /analytics/ → analytics
+       │       fetch(/api/analytics-data/?periods=...) → 20 KPI + graficos por dimension
+       │
+       ├──► /results/ → historial
+       │       fetch(/api/results/) → tabla completa + buscador
+       │       click en boton → fetch(/api/results/<periodo>/) → modal con:
+       │           ├── Resumen (22 campos por metodo, tabla compacta)
+       │           └── Dimensiones (18 columnas, sticky header + columna)
+       │
+       └──► /import/subscriptions|logs → importador
+               POST /api/import-subscriptions|logs con FormData → barra de progreso
 ```
 
 ---
@@ -1072,74 +1149,102 @@ assert elapsed < 300, "El analisis no debe exceder 5 minutos"
 
 ## 9. Ejemplos de Uso
 
-### 9.1 Ejecutar analisis para abril 2026
+### 9.1 CLI: Importar suscripciones
+
+```bash
+python cli.py import subs ./datos/suscripciones.csv
+# Output: Importadas 2345 suscripciones
+```
+
+### 9.2 CLI: Importar logs
+
+```bash
+python cli.py import logs ./datos/logs.csv
+# Output: Importados 15678 logs
+```
+
+### 9.3 CLI: Ejecutar analisis
+
+```bash
+python cli.py analyze 2026-06
+# Output: Sincronizando con base de datos...
+# ANALISIS COMPLETADO | Periodo: 2026-06-01 al 2026-06-30
+# Base Inicio: 1234 | Nuevos: 98 | Base Final: 1289
+# ...
+```
+
+### 9.4 CLI: Pipeline completo (import + analyze)
+
+```bash
+python cli.py run-all 2026-06 ./subs.csv ./logs.csv
+```
+
+### 9.5 Web: Ejecutar analisis
 
 ```
 1. Abrir http://servidor:8000
-2. Hacer clic en el campo "Mes" → se abre calendario Flatpickr
-3. Seleccionar abril 2026
-4. Hacer clic en "Ejecutar analisis"
-5. Esperar a que el loading overlay desaparezca
-6. Ver tarjetas de metricas:
-   - Activos inicio: 1,234
-   - Activos final: 1,289
-   - Nuevos: 98
-   - Churn neto (Financiero): 3.32%
-   - ARPU: $45.67
-   - Reactivaciones: 34
-   - Tasa Winback: 8.45%
+2. Seleccionar mes y año con los dropdowns (Mes/Año)
+3. Hacer clic en "Ejecutar analisis"
+4. Ver la consola integrada con el progreso del analisis
+5. Al finalizar, ver los 9 graficos del dashboard con animaciones
 ```
 
-### 9.2 Importar suscripciones
+### 9.6 Web: Importar CSVs (drag & drop)
 
 ```
-1. Ir a "Importar" > "Subscripciones" en el navbar
-2. Seleccionar archivo CSV con el boton "Seleccionar archivo"
-3. Hacer clic en "Subir e importar"
-4. Esperar mensaje de exito: "Subscripciones: 2,345 filas importadas"
-5. Ser redirigido al dashboard
+1. Ir a "Importar" por el sidebar
+2. Seleccionar tipo: Subscripciones o Logs
+3. Arrastrar archivo CSV al área de drop o hacer clic en "Buscar archivos"
+4. Hacer clic en "Subir e importar"
+5. Ver barra de progreso animada
+6. Ser redirigido al dashboard automaticamente
 ```
 
-### 9.3 Importar logs
+### 9.7 Web: Ver Analytics
 
 ```
-1. Ir a "Importar" > "Logs" en el navbar
-2. Seleccionar archivo CSV de logs
-3. Hacer clic en "Subir e importar"
-4. Esperar mensaje de exito: "Logs: 15,678 filas importadas"
+1. Ir a "Analytics" por el sidebar
+2. Usar el filtro multiselect para seleccionar periodos
+3. Ver 20 tarjetas KPI con colores condicionales (verde/amarillo/rojo)
+4. Desplazarse para ver graficos por dimension:
+   - Doughnut: Churn Neto, Churn Bruto, Winback, Aporte React.
+   - Pie: Prom. Días Activo, Prom. Días Cancelado
+   - Barras: Adiciones Netas/Brutas
+   - Barras horizontales: ARPU, Corte Impago
 ```
 
-### 9.4 Ver resultados historicos
+### 9.8 Web: Ver resultados historicos
 
 ```
-1. Ir a "Resultados" en el navbar
-2. Ver tabla completa con todos los periodos analizados
-3. Hacer clic en "Detalle" de cualquier periodo
-4. Ver KPIs detallados y tabla de dimensiones
+1. Ir a "Resultados" por el sidebar
+2. Ver tabla completa con buscador por periodo/metodo
+3. Hacer clic en el ojo (👁) de cualquier fila
+4. Modal muestra:
+   - Resumen por metodo con 22 metricas (Base Inicio, Churn, ARPU, etc.)
+   - Desglose por dimensiones con 18 columnas (tabla con scroll horizontal,
+     cabecera sticky y primera columna fija)
 ```
 
-### 9.5 Desplegar actualizacion (servidor)
+### 9.9 Desplegar actualizacion (servidor)
 
 ```bash
-# En el servidor
-cd /ruta/ChurnRateAnalyzer
+cd /ruta/NetOwl-Django
 git pull origin master
 docker compose build app
 docker compose up -d app
-docker compose exec app python manage.py migrate
 ```
 
-### 9.6 Acceder a logs del container
+### 9.10 Acceder a logs del container
 
 ```bash
 docker compose logs -f app
 ```
 
-### 9.7 Prueba de conexion a BD desde el container
+### 9.11 Prueba de conexion a BD
 
 ```bash
 docker compose exec app python -c "
-from analyzer_app.backend.database import DBConnector
+from backend.database import DBConnector
 db = DBConnector()
 with db.get_connection() as conn:
     cur = conn.cursor()
@@ -1201,7 +1306,7 @@ python manage.py collectstatic --noinput
 
 **Causa**: Credenciales incorrectas.
 
-**Solucion**: Verificar las variables `USER`, `PASS` en el environment del compose contra las credenciales reales de PostgreSQL.
+**Solucion**: Verificar las variables `DB_USER`, `PASS` en el environment del compose contra las credenciales reales de PostgreSQL. Recordar que se usa `DB_USER` (no `USER`) para evitar colision con la variable de sistema `USER` de Linux.
 
 ### 10.7 Error: El analisis tarda mas de 5 minutos
 
