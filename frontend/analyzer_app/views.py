@@ -10,7 +10,7 @@ from django.shortcuts import render
 
 from backend.data_api import (
     get_cierre_churn, get_dimensiones, get_periodos,
-    get_dashboard_data, get_analytics_data,
+    get_dashboard_data, get_analytics_data, get_tiempos_globales,
 )
 from backend.analyzer import ChurnRateAnalyzer
 from backend.database import DBConnector
@@ -55,6 +55,11 @@ def api_results_detail(request, periodo):
     cierre = get_cierre_churn([periodo])
     dims = get_dimensiones([periodo])
     summaries = cierre[0]["metodos"] if cierre else []
+    tiempos = get_tiempos_globales([periodo])
+    t = tiempos.get(periodo, {})
+    for m in summaries:
+        m["prom_dias_activo"] = t.get("prom_dias_activo", 0)
+        m["prom_dias_cancelado"] = t.get("prom_dias_cancelado", 0)
     dimensions = dims[0]["dimensiones"] if dims else {}
     return JsonResponse({
         "periodo": periodo,

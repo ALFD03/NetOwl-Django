@@ -45,7 +45,7 @@ class DBConnector:
         self.conn_params: Dict[str, Any] = {
             "host": os.getenv("HOST"),
             "database": os.getenv("DB"),
-            "user": os.getenv("USER"),
+            "user": os.getenv("DB_USER"),
             "password": os.getenv("PASS"),
             "port": os.getenv("PORT", "5432"),
         }
