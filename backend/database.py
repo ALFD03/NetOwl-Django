@@ -41,7 +41,17 @@ class DBConnector:
     """
 
     def __init__(self):
-        """Inicializa el pool de conexiones a partir de variables de entorno."""
+        """
+        Inicializa el pool de conexiones a partir de variables de entorno.
+
+        Lee ``HOST``, ``DB``, ``DB_USER``, ``PASS`` y ``PORT`` (default 5432)
+        del entorno y crea un ``SimpleConnectionPool`` de 1 a 10 conexiones.
+
+        Raises:
+            psycopg2.OperationalError: Si no se puede establecer la conexión
+                inicial con la base de datos al crear el pool.
+        """
+        # Parámetros de conexión desde variables de entorno
         self.conn_params: Dict[str, Any] = {
             "host": os.getenv("HOST"),
             "database": os.getenv("DB"),
@@ -49,6 +59,7 @@ class DBConnector:
             "password": os.getenv("PASS"),
             "port": os.getenv("PORT", "5432"),
         }
+        # Pool reutilizable de 1 a 10 conexiones simultáneas
         self.pool = pool.SimpleConnectionPool(1, 10, **self.conn_params)
 
     @contextmanager
@@ -72,10 +83,15 @@ class DBConnector:
         """
         Crea una conexión directa (no del pool) a la base de datos.
 
-        Útil para operaciones que requieren una conexión dedicada.
+        Útil para operaciones que requieren una conexión dedicada fuera
+        del esquema del context manager.
 
         Returns:
-            Conexión psycopg2.
+            psycopg2 connection: Conexión activa a la base de datos.
+
+        Raises:
+            psycopg2.OperationalError: Si los parámetros de conexión
+                son inválidos o el servidor no está accesible.
         """
         return psycopg2.connect(**self.conn_params)
 
@@ -87,6 +103,7 @@ class DBConnector:
 
         Construye dinámicamente la consulta SELECT respetando el esquema
         configurado y, opcionalmente, seleccionando sólo ciertas columnas.
+        Usa identificadores SQL parametrizados para prevenir inyección SQL.
 
         Args:
             table_name: Nombre de la tabla (sin esquema).
@@ -94,7 +111,12 @@ class DBConnector:
                      Si es None, se seleccionan todas (*).
 
         Returns:
-            DataFrame con los datos de la tabla.
+            pd.DataFrame: DataFrame con los datos de la tabla.
+
+        Raises:
+            pd.io.sql.DatabaseError: Si la tabla no existe o hay error
+                en la consulta SQL.
+            psycopg2.OperationalError: Si la conexión falla.
         """
         # Construye la cláusula SELECT con identificadores seguros (SQL injection safe)
         cols_sql = (
@@ -123,18 +145,25 @@ class DBConnector:
         Guarda un DataFrame en una tabla histórica, creando columnas si es necesario.
 
         Flujo:
-        1. Agrega columnas `periodo_reporte` y opcionalmente `metodo_calculo`.
+        1. Agrega columnas ``periodo_reporte`` y opcionalmente ``metodo_calculo``.
         2. Sanitiza nombres de columnas (caracteres especiales → texto).
         3. Crea la tabla si no existe.
-        4. Agrega columnas faltantes (ALTER TABLE ADD COLUMN IF NOT EXISTS).
+        4. Agrega columnas faltantes (``ALTER TABLE ADD COLUMN IF NOT EXISTS``).
         5. Elimina registros previos del mismo período (y método si aplica).
-        6. Inserta los datos mediante `execute_values`.
+        6. Inserta los datos mediante ``execute_values``.
+
+        Si el DataFrame está vacío, la función retorna sin ejecutar ninguna
+        operación de base de datos.
 
         Args:
             df: DataFrame con los datos a persistir.
-            table_name: Nombre de la tabla destino.
+            table_name: Nombre de la tabla destino (sin esquema).
             periodo: Etiqueta del período (se agrega como columna).
             metodo: Opcional, identificador del método de cálculo.
+
+        Raises:
+            psycopg2.Error: Si alguna operación SQL falla (CREATE,
+                ALTER, DELETE o INSERT).
         """
         if df.empty:
             return
@@ -230,12 +259,18 @@ class DBConnector:
         """
         Copia un DataFrame a una tabla PostgreSQL usando COPY (carga masiva).
 
-        Convierte el DataFrame a formato TSV en memoria y ejecuta COPY
-        con delimitador de tabulación y representación NULL como 'NULL'.
+        Convierte el DataFrame a formato TSV en memoria y ejecuta ``COPY
+        FROM STDIN`` con delimitador de tabulación y representación NULL
+        como la cadena ``'NULL'``.
 
         Args:
             df: DataFrame con los datos a copiar.
-            table_name: Nombre de la tabla destino (con esquema).
+            table_name: Nombre de la tabla destino (sin esquema; se
+                        antepone ``DB_SCHEMA`` automáticamente).
+
+        Raises:
+            psycopg2.Error: Si la tabla no existe o hay error en la
+                operación COPY.
         """
         # Serializa el DataFrame a TSV en un buffer en memoria
         output = io.StringIO()

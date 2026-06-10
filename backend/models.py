@@ -29,6 +29,13 @@ class Periodo:
     Encapsula la lógica de construcción del intervalo:
     - Si solo se da una fecha, se asume un mes completo (1er al último día).
     - Si se dan ambas fechas, se normalizan los extremos del día.
+
+    Attributes:
+        fecha_inicio (datetime): Fecha y hora de inicio del período
+            (siempre a las 00:00:00).
+        fecha_final (datetime): Fecha y hora de fin del período
+            (siempre a las 23:59:59 si se especificó; o último día del mes
+            si solo se dio fecha de inicio).
     """
 
     fecha_inicio: datetime
