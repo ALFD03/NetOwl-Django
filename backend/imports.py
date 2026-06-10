@@ -145,6 +145,11 @@ def import_subscriptions_csv(csv_path: str) -> int:
 
     Returns:
         Número de órdenes consolidadas importadas.
+
+    Raises:
+        FileNotFoundError: Si el archivo CSV no existe en la ruta indicada.
+        pd.errors.EmptyDataError: Si el archivo CSV está vacío.
+        psycopg2.Error: Si falla alguna operación de base de datos.
     """
     df_local = pd.read_csv(csv_path)
     df_local.rename(columns=SUBSCRIPTIONS_COLUMN_MAPPING, inplace=True)
