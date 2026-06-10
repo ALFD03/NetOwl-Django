@@ -1098,11 +1098,27 @@
   function renderModalSummaries(summaries) {
     var c = document.getElementById("modal-summaries-container");
     if (!c) return;
-    if (!summaries.length) { c.innerHTML = '<div class="col-12 text-center text-muted py-3">Sin resumen</div>'; return; }
+    if (!summaries.length) { c.innerHTML = '<div class="col-12 text-center py-3" style="color:var(--text-secondary)">Sin resumen</div>'; return; }
     var html = "";
     summaries.forEach(function (s) {
       var isFin = s.metodo === "Financiero";
-      html += '<div class="col-md-6"><div class="card h-100 border-1" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-header d-flex justify-content-between align-items-center bg-transparent py-2"><span class="fw-bold text-primary">' + s.metodo + '</span><span class="badge ' + (isFin ? "bg-primary text-white" : "bg-info text-dark") + ' rounded-pill px-2 py-1">' + s.metodo + '</span></div><div class="card-body p-3"><div class="row g-2 text-center"><div class="col-4"><span class="d-block text-muted small">Base Inicio</span><span class="fw-semibold">' + (s.activos_inicio || 0).toLocaleString() + '</span></div><div class="col-4"><span class="d-block text-muted small">Base Final</span><span class="fw-semibold">' + (s.activos_final || 0).toLocaleString() + '</span></div><div class="col-4"><span class="d-block text-muted small">Nuevos</span><span class="fw-semibold">' + (s.nuevos_mes || 0).toLocaleString() + '</span></div></div><hr class="my-2" style="border-top:1px solid var(--border-color)"><div class="row g-2 text-center mt-1"><div class="col-4"><span class="d-block text-muted small">Churn Neto</span><span class="fw-bold text-danger">' + (s.churn_neto_pct || 0).toFixed(2) + '%</span></div><div class="col-4"><span class="d-block text-muted small">ARPU</span><span class="fw-bold text-success">$' + (s.arpu || 0).toFixed(2) + '</span></div><div class="col-4"><span class="d-block text-muted small">Billing</span><span class="fw-bold text-primary">$' + Math.round(s.total_billing || 0).toLocaleString() + '</span></div></div><hr class="my-2" style="border-top:1px solid var(--border-color)"><div class="row g-2 text-center mt-1 small"><div class="col-6"><span class="text-muted">Winback:</span><span class="fw-medium">' + (s.tasa_winback_pct || 0).toFixed(2) + '% (' + (s.reactivaciones || 0) + ')</span></div><div class="col-6"><span class="text-muted">Impagos:</span><span class="fw-medium text-warning">' + (s.corte_impagado || 0) + '</span></div></div></div></div></div>';
+      var f = function(v, d) { return (v || 0).toLocaleString(undefined, {minimumFractionDigits: d||0, maximumFractionDigits: d||0}); };
+      var pct = function(v) { return f(v, 2) + "%"; };
+      var usd = function(v) { return "$" + f(v, 2); };
+      var intl = function(v) { return f(v, 0); };
+      html += '<div class="col-md-6"><div class="card h-100 border-1" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-header d-flex justify-content-between align-items-center bg-transparent py-2"><span style="color:var(--text-primary);font-weight:bold">' + s.metodo + '</span><span class="badge rounded-pill px-2 py-1 ' + (isFin ? "badge-fin" : "badge-op") + '">' + s.metodo + '</span></div><div class="card-body p-3"><table class="table table-sm mb-0 table-modal-sum" style="font-size:0.8rem"><tbody>';
+      html += '<tr><td class="modal-label ps-0">Base Inicio</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.activos_inicio) + '</td><td class="modal-label ps-3">Base Final</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.activos_final) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">Nuevos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.nuevos_mes) + '</td><td class="modal-label ps-3">Bajas Netas</td><td class="text-end modal-value-danger">' + intl(s.bajas_netas_balance) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">Bajas Brutas</td><td class="text-end modal-value-danger">' + intl(s.bajas_brutas_auditoria) + '</td><td class="modal-label ps-3">Churn Neto</td><td class="text-end modal-value-danger">' + pct(s.churn_neto_pct) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">Churn Bruto</td><td class="text-end modal-value-danger">' + pct(s.churn_bruto_pct) + '</td><td class="modal-label ps-3">ARPU</td><td class="text-end modal-value-success">' + usd(s.arpu) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">Total Billing</td><td class="text-end modal-value-accent">' + usd(s.total_billing) + '</td><td class="modal-label ps-3">Corte Impago</td><td class="text-end modal-value-warning">' + intl(s.corte_impagado) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">Winback</td><td class="text-end modal-value-success">' + pct(s.tasa_winback_pct) + '</td><td class="modal-label ps-3">Reactivaciones</td><td class="text-end modal-value-success">' + intl(s.reactivaciones) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">React 6_churn</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_6_churn) + '</td><td class="modal-label ps-3">React 8_30days</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_8_30days) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">React 4_paused</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_4_paused) + '</td><td class="modal-label ps-3">Total Inactivos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.total_inactivos) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">Aporte React.</td><td class="text-end modal-value-accent">' + pct(s.tasa_aporte_react_pct) + '</td><td class="modal-label ps-3">Indice Reemplazo</td><td class="text-end modal-value-accent">' + pct(s.indice_reemplazo_react_pct) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">Adic. Netas</td><td class="text-end modal-value-success">' + intl(s.adiciones_netas) + '</td><td class="modal-label ps-3">Adic. Brutas</td><td class="text-end modal-value-success">' + intl(s.adiciones_brutas) + '</td></tr>';
+      html += '<tr><td class="modal-label ps-0">Prom. Dias Activo</td><td class="text-end" style="color:var(--text-primary)">' + (s.prom_dias_activo || 0).toFixed(1) + ' d</td><td class="modal-label ps-3">Prom. Dias Cancelado</td><td class="text-end" style="color:var(--text-primary)">' + (s.prom_dias_cancelado || 0).toFixed(1) + ' d</td></tr>';
+      html += '</tbody></table></div></div></div>';
     });
     c.innerHTML = html;
   }
@@ -1110,18 +1126,43 @@
   function renderModalDimensions(dimensions) {
     var c = document.getElementById("modal-dimensions-container");
     if (!c) return;
-    if (!dimensions || !Object.keys(dimensions).length) { c.innerHTML = '<div class="col-12 text-center text-muted py-3">Sin dimensiones</div>'; return; }
+    if (!dimensions || !Object.keys(dimensions).length) { c.innerHTML = '<div class="col-12 text-center py-3" style="color:var(--text-secondary)">Sin dimensiones</div>'; return; }
     var nameMap = { "zona": "Zona Geografica", "sucursal": "Sucursal", "producto": "Producto / Plan", "municipio": "Municipio", "campana": "Campana" };
     var html = "";
+    var cols = [
+      { k: "activos_inicio", label: "Act.Ini", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "activos_final", label: "Act.Fin", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "nuevos", label: "Nuevos", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "bajas_netas", label: "Baj.Net", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "bajas_brutas", label: "Baj.Bru", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "churn_neto_pct", label: "Ch.Net%", fmt: function(v) { return (v || 0).toFixed(2) + "%"; } },
+      { k: "churn_bruto_pct", label: "Ch.Bru%", fmt: function(v) { return (v || 0).toFixed(2) + "%"; } },
+      { k: "reactivaciones", label: "React.", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "tasa_winback_pct", label: "Winback", fmt: function(v) { return (v || 0).toFixed(2) + "%"; } },
+      { k: "arpu", label: "ARPU", fmt: function(v) { return "$" + (v || 0).toFixed(2); } },
+      { k: "total_billing", label: "Billing", fmt: function(v) { return "$" + Math.round(v || 0).toLocaleString(); } },
+      { k: "tasa_aporte_react_pct", label: "Ap.Reac", fmt: function(v) { return (v || 0).toFixed(2) + "%"; } },
+      { k: "indice_reemplazo_react_pct", label: "Ind.Reem", fmt: function(v) { return (v || 0).toFixed(2) + "%"; } },
+      { k: "adiciones_netas", label: "Ad.Net", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "adiciones_brutas", label: "Ad.Bru", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "corte_impagado", label: "Corte", fmt: function(v) { return (v || 0).toLocaleString(); } },
+      { k: "prom_dias_activo", label: "Dias.Act", fmt: function(v) { return (v || 0).toFixed(1) + "d"; } },
+      { k: "prom_dias_cancelado", label: "Dias.Can", fmt: function(v) { return (v || 0).toFixed(1) + "d"; } },
+    ];
     Object.keys(dimensions).forEach(function (key) {
       var items = dimensions[key] || [];
       var title = nameMap[key] || key.toUpperCase();
-      html += '<div class="col-lg-6"><div class="card h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-header bg-transparent py-2"><span class="fw-bold"><i class="bi bi-tag-fill me-2 text-primary"></i>' + title + '</span></div><div class="card-body p-0"><div class="table-responsive" style="max-height:250px"><table class="table table-sm table-hover align-middle mb-0 table-theme" style="font-size:0.85rem"><thead><tr><th class="ps-3">Valor</th><th class="text-end">Activos</th><th class="text-end">Churn</th><th class="text-end pe-3">ARPU</th></tr></thead><tbody>';
-      items.sort(function (a, b) { return (b.activos_final || 0) - (a.activos_final || 0); });
+      html += '<div class="col-12 mb-3"><div class="card" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-header bg-transparent py-2"><span class="fw-bold" style="color:var(--text-primary)"><i class="bi bi-tag-fill me-2 modal-value-accent"></i>' + title + '</span></div><div class="card-body p-0"><div class="table-responsive" style="max-height:400px;overflow:auto"><table class="table table-sm table-hover align-middle mb-0 table-modal-dim" style="font-size:0.75rem;width:100%"><thead><tr>';
+      // Header
+      html += '<th class="sticky-col sticky-header" style="left:0;min-width:120px">Valor</th>';
+      cols.forEach(function(col) { html += '<th class="text-end sticky-header" style="min-width:75px">' + col.label + '</th>'; });
+      html += '</tr></thead><tbody>';
+      items.sort(function(a, b) { return (b.activos_final || 0) - (a.activos_final || 0); });
       items.forEach(function (item) {
         var val = (!item.valor || item.valor === "None") ? "N/A" : item.valor;
-        var churnCls = (item.churn_neto_pct || 0) < 5 ? "text-success" : (item.churn_neto_pct || 0) < 10 ? "text-warning" : "text-danger";
-        html += '<tr><td class="ps-3 fw-medium text-truncate" style="max-width:150px" title="' + val + '">' + val + '</td><td class="text-end">' + (item.activos_final || 0).toLocaleString() + '</td><td class="text-end fw-semibold ' + churnCls + '">' + (item.churn_neto_pct || 0).toFixed(2) + '%</td><td class="text-end pe-3">$' + (item.arpu || 0).toFixed(1) + '</td></tr>';
+        html += '<tr><td class="sticky-col fw-medium text-truncate" style="left:0;max-width:120px;color:var(--text-primary)" title="' + val + '">' + val + '</td>';
+        cols.forEach(function(col) { html += '<td class="text-end" style="color:var(--text-primary)">' + col.fmt(item[col.k]) + '</td>'; });
+        html += '</tr>';
       });
       html += '</tbody></table></div></div></div></div>';
     });
