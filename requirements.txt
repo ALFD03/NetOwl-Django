@@ -19,3 +19,6 @@ psycopg2-binary>=2.9.0
 
 # Carga de variables de entorno desde archivo .env
 python-dotenv>=1.0.0
+
+# Análisis de supervivencia Kaplan-Meier (curvas de retención)
+lifelines>=0.28.0
