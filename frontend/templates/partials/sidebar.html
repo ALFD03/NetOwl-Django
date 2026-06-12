@@ -1,0 +1,24 @@
+{% load static %}
+<nav class="sidebar flex-shrink-0">
+  <div class="sidebar-brand d-flex align-items-center p-3">
+    <a href="/" class="navbar-brand text-decoration-none fw-bold">
+      <img src="{% static 'img/logo.png' %}" alt="NetOwl Logo" width="100%" class="img-fluid" id="sidebar-logo">
+    </a>
+  </div>
+  <div class="sidebar-nav p-3" id="sidebar-nav">
+    <ul class="nav flex-column" id="module-list">
+      <li class="nav-item">
+        <a class="nav-link d-flex align-items-center py-2 rounded-3 module-link active" href="/subscriptions/dashboard/" data-module="subscriptions">
+          <i class="bi bi-layers me-2"></i>
+          <span>Subscriptions</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+  <div class="sidebar-footer mt-auto p-3">
+    <button id="theme-toggle" class="btn btn-outline-light w-100 rounded-3">
+      <i class="bi bi-moon-stars me-2"></i>
+      <span>Modo Claro</span>
+    </button>
+  </div>
+</nav>

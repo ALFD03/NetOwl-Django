@@ -6,7 +6,7 @@ Sistema web SPA para el cálculo de Churn Rate, métricas de reactivación, ARPU
 
 | Capa | Tecnología |
 |------|-----------|
-| Backend | Python 3.11 (pandas, numpy, psycopg2) |
+| Backend | Python 3.11 (pandas, numpy, psycopg2, lifelines) |
 | Backend web | Django 5 |
 | Base de datos | PostgreSQL 15+ |
 | Frontend | Bootstrap 5, Chart.js v3+, Bootstrap Icons, CSS propio |
@@ -30,7 +30,7 @@ NetOwl-Django/
 │   ├── utils.py                       # normalize_text(), parse_date()
 │   ├── models.py                      # Periodo (dataclass)
 │   ├── database.py                    # DBConnector (pool, read, save, copy)
-│   ├── analyzer.py                    # ChurnRateAnalyzer (pipeline ~1264 líneas)
+│   ├── analyzer.py                    # ChurnRateAnalyzer (pipeline ~1400 líneas)
 │   ├── imports.py                     # Importación y limpieza de CSV
 │   └── data_api.py                    # Capa de acceso a datos para vistas
 │
@@ -45,7 +45,7 @@ NetOwl-Django/
 │   ├── churn_web/                     # Proyecto Django (settings, wsgi)
 │   ├── static/
 │   │   ├── css/styles.css             # Estilos ~980 líneas (tema claro/oscuro)
-│   │   └── js/main.js                 # SPA JavaScript ~1170 líneas (Chart.js)
+│   │   └── js/main.js                 # SPA JavaScript ~1765 líneas (Chart.js + KM)
 │   │
 │   └── templates/
 │       ├── base.html                  # Layout base (CDN: Bootstrap, Chart.js, Icons)
@@ -137,12 +137,13 @@ python cli.py run-all 2026-06 ./subs.csv ./logs.csv
 - Seleccionar mes/año con los dropdowns
 - Hacer clic en "Ejecutar análisis"
 - Ver consola integrada con el progreso
-- Explorar 9 gráficos animados: churn, winback, ARPU, aporte reactivaciones, índice de reemplazo, adiciones, tiempos promedio, cortes vs reactivaciones
+- Explorar 8 gráficos animados: churn, winback, ARPU, aporte reactivaciones, índice de reemplazo, adiciones, curva KM, cortes vs reactivaciones
+- **Curva Kaplan-Meier**: supervivencia con IC 95%, curvas por método (Financiero/Operativo), toggle de cohortes mensuales, risk table y estadísticas (mediana, P25, P75)
 
 ### Analytics (`/analytics/`)
 - Filtro multiselect de períodos
 - 20 tarjetas KPI con colores condicionales
-- Gráficos por dimensión: doughnut (churn, winback, aporte), pie (días activo/cancelado), barras (adiciones), barras horizontales (ARPU, corte impago)
+- Gráficos por dimensión: doughnut (churn, winback, aporte), pie (mediana días activo/cancelado), barras (adiciones), barras horizontales (ARPU, corte impago)
 - Umbral <2.5% agrupa en "Otros" (promedio, siempre al final)
 
 ### Importar CSVs (`/import/subscriptions/` y `/import/logs/`)
@@ -153,8 +154,8 @@ python cli.py run-all 2026-06 ./subs.csv ./logs.csv
 ### Resultados (`/results/`)
 - Tabla histórica con buscador
 - Modal de detalle con:
-  - Resumen por método: 22 métricas (Base Inicio, Churn, ARPU, Winback, etc.)
-  - Desglose por dimensiones: 18 columnas con sticky header + primera columna fija
+  - Resumen por método: 24 métricas (Base Inicio, Churn, ARPU, Winback, Mediana/P25/P75 días activo, etc.)
+  - Desglose por dimensiones: 22 columnas con sticky header + primera columna fija
 
 ## Pipeline de análisis (`backend/analyzer.py`)
 
@@ -171,7 +172,7 @@ python cli.py run-all 2026-06 ./subs.csv ./logs.csv
 10. Método Operativo (transiciones en logs)
 11. KPI final (churn neto/bruto, winback, ARPU, adiciones, etc.)
 12. Dimensiones (zona, sucursal, municipio, campaña, producto)
-13. Tiempos de vida (días activo, días cancelado)
+13. Kaplan-Meier (mediana/P25/P75 vida activo y cancelado, curvas por método y cohorte)
 ```
 
 ## Tablas de base de datos
@@ -189,15 +190,15 @@ python cli.py run-all 2026-06 ./subs.csv ./logs.csv
 
 | Tabla | Columnas principales |
 |---|---|
-| `cierre_churn_historico` | `periodo_reporte`, `metodo_calculo`, `activos_inicio`, `activos_final`, `nuevos_mes`, `bajas_netas_balance`, `bajas_brutas_auditoria`, `churn_neto_pct`, `churn_bruto_pct`, `react_6_churn`, `react_8_30days`, `react_4_paused`, `total_inactivos`, `tasa_winback_pct`, `total_billing`, `arpu`, `reactivaciones`, `react_6_8`, `tasa_aporte_react_pct`, `indice_reemplazo_react_pct`, `adiciones_brutas`, `adiciones_netas`, `corte_impagado`, `prom_dias_activo`, `prom_dias_cancelado` |
+| `cierre_churn_historico` | `periodo_reporte`, `metodo`, `activos_inicio`, `activos_final`, `nuevos_mes`, `bajas_netas_balance`, `bajas_brutas_auditoria`, `churn_neto_pct`, `churn_bruto_pct`, `react_6_churn`, `react_8_30days`, `react_4_paused`, `total_inactivos`, `tasa_winback_pct`, `total_billing`, `arpu`, `reactivaciones`, `react_6_8`, `tasa_aporte_react_pct`, `indice_reemplazo_react_pct`, `adiciones_brutas`, `adiciones_netas`, `corte_impagado` |
 | `master_activos_cierre` | Cartera de activos al cierre del período |
 | `master_reactivaciones` | Reactivaciones del período |
 | `master_bajas_detalladas` | Bajas detalladas (Financiero y Operativo) |
 | `master_corte_impagado` | Suscripciones con corte por impago |
 | `master_inactivos_detallados` | Suscripciones inactivas al inicio del período |
 | `master_tiempos_vida` | Detalle por orden: días activo, días cancelado |
-| `master_tiempo_global` | Promedios globales de tiempos de vida |
-| `master_churn_dimensiones` | Métricas desglosadas por dimensión (`zona`, `sucursal`, `municipio`, `campanna`, `producto`) |
+| `master_tiempo_global` | Curvas Kaplan-Meier por método (Global/Financiero/Operativo): `mediana_activo`, `p25_activo`, `p75_activo`, `mediana_cancelado`, `p25_cancelado`, `p75_cancelado`, `curva_activo_json`, `curva_cancelado_json`, `cohortes_activo_json`, `cohortes_cancelado_json` |
+| `master_churn_dimensiones` | Métricas desglosadas por dimensión (`zona`, `sucursal`, `municipio`, `campanna`, `producto`) — incluye medianas KM: `mediana_activo`, `p25_activo`, `p75_activo`, `mediana_cancelado`, `p25_cancelado`, `p75_cancelado` |
 
 ## Métricas calculadas
 
@@ -211,8 +212,19 @@ python cli.py run-all 2026-06 ./subs.csv ./logs.csv
 | **Índice Reemplazo Reactivaciones** | `react_6_8 / bajas_fin_netas × 100` |
 | **Adiciones Brutas** | `nuevas - bajas_fin_netas` |
 | **Adiciones Netas** | `(nuevas + react_6_8) - bajas_fin_netas` |
-| **Promedio días activo** | `avg(f_churn - f_ini_dt)` sobre órdenes con churn |
-| **Promedio días cancelado** | `avg(f_react - f_churn)` sobre órdenes con reactivación |
+| **Vida mediana activo** | `S(t) ≤ 0.50` (Kaplan-Meier, censura por órdenes activas) |
+| **P25 / P75 activo** | `S(t) ≤ 0.75` / `S(t) ≤ 0.25` (percentiles KM) |
+| **Vida mediana cancelado** | `S(t) ≤ 0.50` sobre días desde churn hasta reactivación |
+| **Intervalo confianza 95 %** | Fórmula de Greenwood (`lifelines.KaplanMeierFitter`) |
+
+## Interpretación de Kaplan-Meier
+
+- La **vida mediana** (P50) es el día donde el 50 % de las órdenes ha churnado. Es la métrica central de retención.
+- **P25**: el 25 % de las órdenes churnea antes de este día.
+- **P75**: el 75 % de las órdenes churnea antes de este día (el 25 % sobrevive más allá).
+- La **censura** corrige el sesgo de las órdenes que siguen activas al cierre del período (no han churnado aún).
+- Las curvas por **método** (Financiero/Operativo) usan definiciones distintas de "baja" como evento.
+- Las curvas por **cohorte mensual** muestran si la retención mejora o empeora entre lotes de suscripciones.
 
 ## Notas importantes
 

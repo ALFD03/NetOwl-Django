@@ -32,10 +32,11 @@
 - **Analisis mensual**: Calcula churn neto/bruto por metodo financiero y operativo
 - **Metricas de reactivacion**: Cuantifica winback, reactivaciones por origen y tasas de aporte
 - **Analisis dimensional**: Desglosa metricas por zona, sucursal, municipio, campana y producto
-- **Tiempos de vida**: Calcula promedios de dias activo y cancelado por suscripcion
+- **Tiempos de vida**: Calcula curvas Kaplan-Meier (mediana, P25, P75) con intervalos de confianza y curvas por cohorte mensual
 - **Dashboard interactivo**: Graficos con Chart.js (lineas, barras, doughnut, pie) con animaciones y lineas de tendencia
+- **Curva de supervivencia KM**: Kaplan-Meier con IC 95%, curvas por metodo (Financiero/Operativo), toggle de cohortes, risk table
 - **Panel Analytics**: Filtro multiselect de periodos, tarjetas KPI, graficos por dimension con agrupacion "Otros" (<2.5%)
-- **Modal de detalle**: Tablas completas con sticky header/columna y 22 metricas por metodo
+- **Modal de detalle**: Tablas completas con sticky header/columna y 24 metricas por metodo (incluye medianas KM)
 - **Tema claro/oscuro**: Persistencia en localStorage, todas las variables CSS adaptadas
 - **CLI**: Entrypoint de linea de comandos para importacion y analisis sin acceder al web
 - **Consola integrada**: Terminal en vivo que muestra el progreso del analisis
@@ -45,7 +46,7 @@
 | Componente | Tecnologia |
 |------------|-----------|
 | Backend web | Django 5 + Python 3.11 |
-| Logica de negocio | Python (pandas, numpy, psycopg2) |
+| Logica de negocio | Python (pandas, numpy, psycopg2, lifelines) |
 | Base de datos | PostgreSQL 15+ |
 | Frontend | Bootstrap 5, Chart.js v3+, Bootstrap Icons, CSS propio |
 | Graficos | Chart.js con plugin datalabels y animaciones easeOutQuart |
@@ -355,7 +356,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 12. Guardado de tablas historicas
 13. Calculo de KPIs (churn neto/bruto, winback, etc.)
 14. Analisis por dimensiones
-15. Calculo de tiempos de vida
+15. Calculo de tiempos de vida (Kaplan-Meier con lifelines)
 ```
 
 **Dependencias**: `concurrent.futures`, `collections`, `pandas`, `backend.config.*`, `backend.database.DBConnector`, `backend.models.Periodo`, `backend.utils.parse_date`
@@ -410,9 +411,9 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 | `get_cierre_churn(periodos=None)` | Retorna cierre_churn_historico agrupado por periodo_reporte con todos los metodos |
 | `get_dimensiones(periodos=None)` | Retorna master_churn_dimensiones agrupado por periodo_reporte → dimension → valores |
 | `get_periodos()` | Lista de periodos disponibles (desde cierre_churn_historico) |
-| `get_tiempos_globales(periodos=None)` | Retorna prom_dias_activo y prom_dias_cancelado desde master_tiempo_global |
-| `get_dashboard_data()` | Combina cierre_churn + tiempos globales para el dashboard |
-| `get_analytics_data(periodos=None)` | Combina cierre_churn + dimensiones + tiempos para analytics |
+| `get_tiempos_globales(periodos=None)` | Retorna curvas Kaplan-Meier (mediana, P25, P75, curvas CI, cohortes) desde master_tiempo_global |
+| `get_dashboard_data()` | Combina cierre_churn + tiempos KM para el dashboard |
+| `get_analytics_data(periodos=None)` | Combina cierre_churn + dimensiones + tiempos KM para analytics |
 
 **Dependencias**: `backend.database.DBConnector`
 
@@ -608,7 +609,7 @@ Todos los templates estan en `frontend/templates/`.
 **Proposito**: Unico template HTML del SPA. Contiene todas las secciones que se muestran/ocultan segun la ruta:
 
 **Secciones**:
-- **Dashboard**: Formulario de mes + boton ejecutar + terminal de logs + tabla de ultimos resultados + graficos (churn, winback, ARPU, aporte, reemplazo, adiciones, tiempos, cortes vs reactivaciones)
+- **Dashboard**: Formulario de mes + boton ejecutar + terminal de logs + tabla de ultimos resultados + graficos (churn, winback, ARPU, aporte, reemplazo, adiciones, curva KM, cortes vs reactivaciones)
 - **Importar**: Drag & drop zone + selector de tipo (subscriptions/logs) + barra de progreso
 - **Analytics**: Filtro multiselect de periodos + tarjetas KPI + graficos por dimension (doughnut, pie, bar, hbar)
 - **Resultados**: Tabla de historial + buscador + modal de detalle con resumen (22 campos) y desglose por dimensiones (18 columnas)
@@ -687,8 +688,13 @@ Todos en `frontend/static/`.
 4. `aporteReactBarChart` — Barras + linea de tendencia amarilla
 5. `reemplazoLineChart` — Linea simple
 6. `adicionesBarChart` — Barras apiladas netas+brutas
-7a. `tiemposActivoChart` — Barras azules + linea de tendencia
-7b. `tiemposCanceladoChart` — Barras amarillas + linea de tendencia
+7. `kmSurvivalChart` — Curva Kaplan-Meier (step chart) con:
+    - Curva Global con IC 95% (área sombreada)
+    - Curvas Financiero/Operativo (líneas punteadas)
+    - Cohortes mensuales (toggle, opacidad reducida)
+    - Risk table: n_riesgo y supervivencia en tiempos clave
+    - Stats row: mediana, P25, P75, n_total, eventos, censurados
+    - Radio toggle: "Días Activo" / "Días Cancelado"
 8. `cortesReactChart` — Dos lineas con area (roja para cortes, verde para reactivaciones)
 
 **Graficos de Analytics** (por dimension × metrica):
@@ -822,9 +828,10 @@ python cli.py analyze 2026-06     POST /api/run-analysis/ {month:"2026-06"}
                 ├──► save_historico → master_corte_impagado
                 ├──► save_historico → cierre_churn_historico (KPI)
                 │
-                ├──► calculate_lifetime_metrics()
-                │       ├──► save_historico → master_tiempos_vida
-                │       └──► save_historico → master_tiempo_global
+                ├──► calculate_lifetime_metrics(bajas_fin_set, bajas_op_set)
+                │       ├──► _compute_km() # Kaplan-Meier interno
+                │       ├──► save_historico → master_tiempos_vida (detalle por orden)
+                │       └──► save_historico → master_tiempo_global (curvas KM + cohortes)
                 │
                 └──► aggregate_dimensions()
                         └──► save_historico → master_churn_dimensiones
@@ -935,8 +942,8 @@ Para cada dimension se calculan las mismas metricas que en el resumen global.
 | `master_bajas_detalladas` | Bajas (Financiero y Operativo) | DELETE + INSERT por periodo+metodo |
 | `master_corte_impagado` | Cortes por factura impaga | DELETE + INSERT por periodo |
 | `master_inactivos_detallados` | Inactivos al inicio del periodo | DELETE + INSERT por periodo |
-| `master_tiempos_vida` | Tiempo activo y cancelado por orden | DELETE + INSERT por periodo |
-| `master_tiempo_global` | Promedios globales de tiempos de vida | DELETE + INSERT por periodo |
+| `master_tiempos_vida` | Tiempo activo y cancelado por orden (para referencia) | DELETE + INSERT por periodo |
+| `master_tiempo_global` | Curvas Kaplan-Meier (mediana, P25, P75, curva_activo_json, curva_cancelado_json, cohortes) por método (Global/Financiero/Operativo) | DELETE + INSERT por periodo |
 | `master_churn_dimensiones` | Metricas por dimension | DELETE + INSERT por periodo |
 
 ### 7.3 Esquema
