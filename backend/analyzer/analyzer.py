@@ -15,19 +15,18 @@ La clase `ChurnRateAnalyzer` orquesta todo el flujo:
 1. Carga datos desde BD (3 tablas en paralelo).
 2. Limpia y normaliza los datos (logs v1 y v15 se concatenan).
 3. Calcula indicadores: activos inicio/fin, nuevos, bajas, reactivaciones,
-   corte impagado, tiempos de vida.
+   corte impagado.
 4. Agrega por dimensiones (zona, sucursal, municipio, campaña, producto).
 5. Persiste todos los resultados en tablas históricas.
 """
 
 from __future__ import annotations
 import concurrent.futures
-from collections import defaultdict
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 import pandas as pd
 
-from .config import (
+from ..config import (
     ACTIVE_STATE,
     AUDIT_REACT_ORIGINS,
     CORTE_IMPAGADO_EVENT,
@@ -36,9 +35,9 @@ from .config import (
     SUBS_STATE_TO_LOG_MAP,
     VALID_REACT_ORIGINS,
 )
-from .database import DBConnector
-from .models import Periodo
-from .utils import parse_date
+from ..database import DBConnector
+from ..models import Periodo
+from ..utils import parse_date
 
 
 class ChurnRateAnalyzer:
@@ -616,23 +615,19 @@ class ChurnRateAnalyzer:
         2. Limpia y normaliza.
         3. Calcula activos al inicio y al final del período.
         4. Identifica suscripciones nuevas, inactivas y reactivaciones.
-        5. Calcula métricas financieras (billing total, ARPU).
-        6. Clasifica bajas (financieras vs operativas).
-        7. Detecta cortes por impago.
-        8. Persiste tablas maestras en BD.
-        9. Genera resumen con indicadores calculados.
-        10. Agrega por dimensiones geográficas y comerciales.
-        11. Calcula tiempos de vida (días activo, días cancelado).
+        5. Calcula métricas (billing, ARPU, churn, winback, etc.).
+        6. Persiste tablas maestras en BD.
+        7. Genera resumen único del período.
+        8. Calcula Kaplan-Meier (tiempos de vida).
+        9. Agrega por dimensiones.
 
         Returns:
             None. Los resultados se persisten en la base de datos y se
             imprimen en consola.
 
         Raises:
-            psycopg2.Error: Si falla alguna operación de base de datos
-                durante la persistencia de tablas maestras.
-            KeyError: Si los DataFrames internos no están inicializados
-                o faltan columnas.
+            psycopg2.Error: Si falla alguna operación de base de datos.
+            KeyError: Si los DataFrames internos no están inicializados.
         """
         self.load_data()
         self.build_clean_data()
@@ -648,24 +643,17 @@ class ChurnRateAnalyzer:
             self.periodo.fecha_final, strictly_before=False
         )
         # Suscripciones nuevas que iniciaron dentro del período
-        # Solo cuentan si tienen al menos un log 3_progress
         nuevos = self.df_subs_full[
             (self.df_subs_full["f_ini_dt"] >= self.periodo.fecha_inicio)
-            & (
-                self.df_subs_full["f_ini_dt"]
-                <= self.periodo.fecha_final
-            )
-            & self.df_subs_full["orden"].isin(
-                self._ordens_con_activity
-            )
+            & (self.df_subs_full["f_ini_dt"] <= self.periodo.fecha_final)
+            & self.df_subs_full["orden"].isin(self._ordens_con_activity)
         ].copy()
 
-        # Conjuntos de órdenes para operaciones de conjuntos rápidas
         set_ini: Set[str] = set(act_ini["orden"])
         set_fin: Set[str] = set(act_fin["orden"])
         set_nue: Set[str] = set(nuevos["orden"])
 
-        # Inactivos: último estado antes del período en estados de inactividad
+        # Inactivos al inicio del período
         last_logs = self.df_clean_logs[
             self.df_clean_logs["f_dt"] < self.periodo.fecha_inicio
         ]
@@ -676,237 +664,98 @@ class ChurnRateAnalyzer:
         ].copy()
         total_inactivos = len(df_inactivos)
 
-        # Mapa de facturación por orden para calcular billing y ARPU
+        # Mapa de facturación por orden
         billing_map = self.df_subs_full.set_index("orden")["total"]
-        total_billing = round(
-            billing_map.reindex(set_fin).fillna(0).sum(), 2
-        )
+        total_billing = round(billing_map.reindex(set_fin).fillna(0).sum(), 2)
         arpu = (
-            round(total_billing / len(act_fin), 2)
-            if len(act_fin) > 0
-            else 0.0
+            round(total_billing / len(act_fin), 2) if len(act_fin) > 0 else 0.0
         )
 
         # Reactivaciones dentro del período
         df_react_all = self.get_reactivations(act_fin)
-        # Conteo por estado origen para el resumen
-        counts_react: Dict[str, int] = {
-            "4_paused": 0,
-            "6_churn": 0,
-            "8_30days": 0,
-        }
+        counts_react: Dict[str, int] = {"4_paused": 0, "6_churn": 0, "8_30days": 0}
         set_react_audit: Set[str] = set()
         if not df_react_all.empty:
-            counts_react.update(
-                df_react_all["estado_origen"].value_counts().to_dict()
-            )
+            counts_react.update(df_react_all["estado_origen"].value_counts().to_dict())
             set_react_audit = set(
-                df_react_all[
-                    df_react_all["estado_origen"].isin(
-                        AUDIT_REACT_ORIGINS
-                    )
-                ]["orden"]
+                df_react_all[df_react_all["estado_origen"].isin(AUDIT_REACT_ORIGINS)]["orden"]
             )
 
-        # Totales de reactivaciones del periodo (suma por estado de origen)
         n_react_unicas = sum(counts_react.values())
         n_react_6_8 = counts_react.get("6_churn", 0) + counts_react.get("8_30days", 0)
 
         # Cortes por factura impaga
         df_corte_impagado = self.get_corte_impagado()
         set_corte_impagado = (
-            set(df_corte_impagado["orden"])
-            if not df_corte_impagado.empty
-            else set()
+            set(df_corte_impagado["orden"]) if not df_corte_impagado.empty else set()
         )
 
-        # Bajas netas: activos al inicio que no sobrevivieron
+        # Bajas netas (método financiero)
         sobrevivientes = set_fin - set_nue
         bajas_fin_netas_ids = set_ini - sobrevivientes
-
-        # Ajuste por tamaño objetivo (no puede exceder activos iniciales)
         target_size = len(act_ini) - (len(act_fin) - len(nuevos))
         target_size = max(0, target_size)
-
-        # DataFrame de bajas financieras, ordenado y limitado a target_size
-        df_bajas_fin = self.df_subs_full[
-            self.df_subs_full["orden"].isin(bajas_fin_netas_ids)
-        ].copy()
-        if "f_ini_dt" in df_bajas_fin.columns:
-            df_bajas_fin = df_bajas_fin.sort_values(
-                by=["f_ini_dt", "orden"], na_position="last"
-            )
+        df_bajas = self.df_subs_full[self.df_subs_full["orden"].isin(bajas_fin_netas_ids)].copy()
+        if "f_ini_dt" in df_bajas.columns:
+            df_bajas = df_bajas.sort_values(by=["f_ini_dt", "orden"], na_position="last")
         else:
-            df_bajas_fin = df_bajas_fin.sort_values(by=["orden"])
-        df_bajas_fin = (
-            df_bajas_fin.head(target_size).reset_index(drop=True)
-        )
-        bajas_fin_netas = len(df_bajas_fin)
-
-        # Bajas operativas: órdenes que pasaron de activo a pausado/churn en el período
-        # Se excluyen logs sinteticos (Casos 1, 2, 4) para no generar falsas transiciones
-        mask = (
-            ~self.df_clean_logs["_sintetico"]
-            & ~self.df_clean_logs["orden"].isin(set_fin)
-            & self.df_clean_logs["f_dt"].between(
-                self.periodo.fecha_inicio, self.periodo.fecha_final
-            )
-            & (self.df_clean_logs["estado_origen"] == ACTIVE_STATE)
-            & self.df_clean_logs["estado"].isin({"4_paused", "6_churn"})
-        )
-        candidates = self.df_clean_logs[mask]
-        # Primer evento de baja de cada orden
-        first_idx = candidates.groupby("orden")["f_dt"].idxmin()
-        df_bajas_op = (
-            candidates.loc[first_idx][
-                ["orden", "f_dt", "nota"]
-            ]
-            .rename(columns={"f_dt": "fecha", "nota": "motivo"})
-            .reset_index(drop=True)
-        )
-        if not df_bajas_op.empty:
-            # Enriquece con datos de suscripción
-            df_bajas_op = df_bajas_op.merge(
-                self.df_subs_full, on="orden", how="left"
-            )
+            df_bajas = df_bajas.sort_values(by=["orden"])
+        df_bajas = df_bajas.head(target_size).reset_index(drop=True)
+        bajas_netas = len(df_bajas)
+        bajas_brutas = bajas_netas + n_react_6_8
 
         # Persiste tablas maestras
-        self.db.save_historico(
-            act_fin, "master_activos_cierre", periodo_label
-        )
-        self.db.save_historico(
-            df_react_all, "master_reactivaciones", periodo_label
-        )
-        self.db.save_historico(
-            df_bajas_fin,
-            "master_bajas_detalladas",
-            periodo_label,
-            "Financiero",
-        )
-        self.db.save_historico(
-            df_bajas_op,
-            "master_bajas_detalladas",
-            periodo_label,
-            "Operativo",
-        )
-        self.db.save_historico(
-            df_corte_impagado,
-            "master_corte_impagado",
-            periodo_label,
-        )
+        self.db.save_historico(act_fin, "analyzer_activos_cierre", periodo_label)
+        self.db.save_historico(df_react_all, "analyzer_reactivaciones", periodo_label)
+        self.db.save_historico(df_bajas, "analyzer_bajas_detalladas", periodo_label)
+        self.db.save_historico(df_corte_impagado, "analyzer_corte_impagado", periodo_label)
 
-        # Construye resumen de indicadores para ambos métodos (Operativo y Financiero)
-        summary: List[Dict] = []
-        for met, df_b in [
-            ("Operativo", df_bajas_op),
-            ("Financiero", df_bajas_fin),
-        ]:
-            b_netas = len(df_b)
-            b_auditoria = b_netas + n_react_6_8
+        # Resumen único del período
+        summary = {
+            "periodo": periodo_label,
+            "activos_inicio": len(act_ini),
+            "activos_final": len(act_fin),
+            "nuevos_mes": len(set_nue),
+            "bajas_netas_balance": bajas_netas,
+            "bajas_brutas_auditoria": bajas_brutas,
+            "churn_neto_pct": round((bajas_netas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
+            "churn_bruto_pct": round((bajas_brutas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
+            "corte_impagado": len(set_corte_impagado),
+            "total_inactivos": total_inactivos,
+            "reactivaciones": n_react_unicas,
+            "react_6_churn": int(counts_react.get("6_churn", 0)),
+            "react_8_30days": int(counts_react.get("8_30days", 0)),
+            "react_4_paused": int(counts_react.get("4_paused", 0)),
+            "tasa_winback_pct": round((n_react_unicas / total_inactivos) * 100, 4) if total_inactivos > 0 else 0,
+            "total_billing": total_billing,
+            "arpu": arpu,
+            "react_6_8": n_react_6_8,
+            "tasa_aporte_react_pct": round((n_react_6_8 / (len(set_nue) + n_react_6_8)) * 100, 4) if (len(set_nue) + n_react_6_8) > 0 else 0,
+            "indice_reemplazo_react_pct": round((n_react_6_8 / bajas_netas) * 100, 4) if bajas_netas > 0 else 0,
+            "adiciones_brutas": len(set_nue) - bajas_netas,
+            "adiciones_netas": (len(set_nue) + n_react_6_8) - bajas_netas,
+        }
+        self.db.save_historico(pd.DataFrame([summary]), "analyzer_cierre_historico", periodo_label)
 
-            summary.append(
-                {
-                    "periodo": periodo_label,
-                    "metodo": met,
-                    "activos_inicio": len(act_ini),
-                    "activos_final": len(act_fin),
-                    "nuevos_mes": len(set_nue),
-                    "bajas_netas_balance": b_netas,
-                    "bajas_brutas_auditoria": b_auditoria,
-                    "react_6_churn": int(
-                        counts_react.get("6_churn", 0)
-                    ),
-                    "react_8_30days": int(
-                        counts_react.get("8_30days", 0)
-                    ),
-                    "react_4_paused": int(
-                        counts_react.get("4_paused", 0)
-                    ),
-                    "churn_neto_pct": (
-                        round((b_netas / len(act_ini) * 100), 4)
-                        if len(act_ini) > 0
-                        else 0
-                    ),
-                    "churn_bruto_pct": (
-                        round((b_auditoria / len(act_ini) * 100), 4)
-                        if len(act_ini) > 0
-                        else 0
-                    ),
-                    "corte_impagado": len(set_corte_impagado),
-                    "total_inactivos": total_inactivos,
-                    "tasa_winback_pct": (
-                        round(
-                            (n_react_unicas / total_inactivos) * 100, 4
-                        )
-                        if total_inactivos > 0
-                        else 0
-                    ),
-                    "total_billing": total_billing,
-                    "arpu": arpu,
-                    "reactivaciones": n_react_unicas,
-                    "react_6_8": n_react_6_8,
-                    "tasa_aporte_react_pct": (
-                        round(
-                            (n_react_6_8 / (len(set_nue) + n_react_6_8)) * 100, 4
-                        )
-                        if (len(set_nue) + n_react_6_8) > 0
-                        else 0
-                    ),
-                    "indice_reemplazo_react_pct": (
-                        round((n_react_6_8 / bajas_fin_netas) * 100, 4)
-                        if bajas_fin_netas > 0
-                        else 0
-                    ),
-                    "adiciones_brutas": len(set_nue) - bajas_fin_netas,
-                    "adiciones_netas": (len(set_nue) + n_react_6_8) - bajas_fin_netas,
-                }
-            )
-
-        # Persiste el resumen
-        self.db.save_historico(
-            pd.DataFrame(summary), "cierre_churn_historico", periodo_label
-        )
-
-        # Detalle de inactivos si existen
+        # Detalle de inactivos
         if not df_inactivos.empty:
             detalle_inac = df_inactivos[["orden", "f_dt", "estado"]].rename(
                 columns={"f_dt": "fecha_evento", "estado": "estado_inactivo"}
             )
-            self.db.save_historico(
-                detalle_inac, "master_inactivos_detallados", periodo_label
-            )
+            self.db.save_historico(detalle_inac, "analyzer_inactivos_detallados", periodo_label)
 
-        # Impresión de resultados en consola
-        print(
-            f"\nANÁLISIS COMPLETADO | Periodo: {periodo_label}"
-        )
-        print(
-            f"Base Inicio: {len(act_ini)} | Nuevos: {len(set_nue)}"
-            f" | Base Final: {len(act_fin)}"
-        )
-        print(
-            f"FINANCIERO -> Balance Neto: {len(df_bajas_fin)}"
-            f" | Auditoría: {summary[1]['bajas_brutas_auditoria']}"
-        )
-        print(
-            f"OPERATIVO  -> Balance Neto: {len(df_bajas_op)}"
-            f" | Auditoría: {summary[0]['bajas_brutas_auditoria']}"
-        )
-        print(
-            f"CORTE IMPAGADO: {len(set_corte_impagado)}"
-            " suscripciones afectadas"
-        )
-        print(
-            f"INACTIVOS: {total_inactivos}"
-            f" | Reactivaciones totales: {n_react_unicas}"
-            f" | Tasa Winback: {summary[0]['tasa_winback_pct']}%"
-        )
+        # Impresión de resultados
+        print(f"\nANÁLISIS COMPLETADO | Periodo: {periodo_label}")
+        print(f"Base Inicio: {len(act_ini)} | Nuevos: {len(set_nue)} | Base Final: {len(act_fin)}")
+        print(f"BAJAS -> Netas: {bajas_netas} | Brutas: {bajas_brutas}")
+        print(f"Churn Neto: {summary['churn_neto_pct']}% | Bruto: {summary['churn_bruto_pct']}%")
+        print(f"CORTE IMPAGADO: {len(set_corte_impagado)} | INACTIVOS: {total_inactivos} | Winback: {summary['tasa_winback_pct']}%")
 
-        # Agregación por dimensiones + tiempos de vida
+        # Agregación por dimensiones
         self.aggregate_dimensions(
-            act_ini, act_fin, nuevos, df_bajas_fin,
+            act_ini, act_fin, nuevos, df_bajas,
             df_inactivos, df_react_all, df_corte_impagado,
-            set_react_audit, self.calculate_lifetime_metrics()
+            set_react_audit,
         )
 
     def aggregate_dimensions(
@@ -914,44 +763,28 @@ class ChurnRateAnalyzer:
         act_ini: pd.DataFrame,
         act_fin: pd.DataFrame,
         nuevos: pd.DataFrame,
-        df_bajas_fin: pd.DataFrame,
+        df_bajas: pd.DataFrame,
         df_inactivos: pd.DataFrame,
         df_react_all: pd.DataFrame,
         df_corte_impagado: pd.DataFrame,
         set_react_audit: Set[str],
-        df_lifecycle: pd.DataFrame,
     ):
         """
         Agrega los indicadores por cada dimensión (zona, sucursal, municipio, campaña, producto).
-
-        Para cada dimensión:
-        1. Lee la tabla de suscripciones completa para obtener el mapeo orden → valor.
-        2. Cuenta activos inicio, activos fin, nuevos, bajas, inactivos, reactivaciones,
-           cortes impago, etc. para cada valor de la dimensión.
-        3. Calcula indicadores derivados: churn neto/bruto, tasas, billing, ARPU.
-        4. Integra métricas de tiempos de vida (días activo promedio, días cancelado promedio).
-        5. Persiste todo en `master_churn_dimensiones`.
 
         Args:
             act_ini: Activos al inicio del período.
             act_fin: Activos al final del período.
             nuevos: Suscripciones nuevas en el período.
-            df_bajas_fin: Bajas según método financiero.
+            df_bajas: Bajas del período.
             df_inactivos: Suscripciones inactivas antes del período.
             df_react_all: Reactivaciones en el período.
             df_corte_impagado: Cortes por impago.
             set_react_audit: Conjunto de órdenes con reactivaciones auditables.
-            df_lifecycle: DataFrame con métricas de ciclo de vida por orden.
 
         Returns:
-            None. Los resultados se persisten en ``master_churn_dimensiones``
-            y se imprime resumen en consola.
-
-        Raises:
-            psycopg2.Error: Si falla la lectura de ``Subscripciones`` o la
-                escritura de ``master_churn_dimensiones``.
+            None. Los resultados se persisten en ``analyzer_churn_dimensiones``.
         """
-        import json
         import pathlib
 
         periodo_label = self.periodo.label()
@@ -1036,7 +869,7 @@ class ChurnRateAnalyzer:
             d_act_ini = cnt(act_ini)
             d_act_fin = cnt(act_fin)
             d_nuevos = cnt(nuevos)
-            d_bajas = cnt(df_bajas_fin)
+            d_bajas = cnt(df_bajas)
             d_inact = cnt(df_inactivos)
             d_react = cnt(df_react_all)
             d_react_aud = cnt(df_react_audit)
@@ -1057,22 +890,6 @@ class ChurnRateAnalyzer:
                 )
             )
 
-            # Métricas de ciclo de vida agrupadas por valor de dimensión
-            lc = df_lifecycle.copy()
-            lc["_dim"] = (
-                lc["orden"]
-                .astype(str)
-                .str.strip()
-                .map(map_dict)
-                .fillna(default)
-            )
-            g_lc = lc.groupby("_dim")
-            d_total = g_lc.size().to_dict()
-            d_con_churn = g_lc["dias_activo"].count().to_dict()
-            d_con_react = g_lc["dias_cancelado"].count().to_dict()
-            d_prom_act = g_lc["dias_activo"].mean().to_dict()
-            d_prom_can = g_lc["dias_cancelado"].mean().to_dict()
-
             # Todos los valores únicos presentes en cualquier conteo
             valores = sorted(
                 set(
@@ -1086,7 +903,6 @@ class ChurnRateAnalyzer:
                     + list(d_react_6)
                     + list(d_react_8)
                     + list(d_react_4)
-                    + list(d_total)
                 )
             )
 
@@ -1167,20 +983,7 @@ class ChurnRateAnalyzer:
                             else 0
                         ),
                         "corte_impagado": d_corte.get(val, 0),
-                        "total_ordenes": d_total.get(val, 0),
-                        "con_churn": d_con_churn.get(val, 0),
-                        "con_reactivacion": d_con_react.get(val, 0),
-                        "prom_dias_activo": (
-                            round(d_prom_act.get(val, 0), 2)
-                            if pd.notna(d_prom_act.get(val))
-                            else 0
-                        ),
-                        "prom_dias_cancelado": (
-                            round(d_prom_can.get(val, 0), 2)
-                            if pd.notna(d_prom_can.get(val))
-                        else 0
-                    ),
-                    "total_billing": billing_val,
+                        "total_billing": billing_val,
                     "arpu": (
                         round(billing_val / a_fin, 2)
                         if a_fin > 0
@@ -1192,127 +995,12 @@ class ChurnRateAnalyzer:
         # Persiste el resultado de dimensiones
         df_result = pd.DataFrame(all_rows)
         self.db.save_historico(
-            df_result, "master_churn_dimensiones", periodo_label
+            df_result, "analyzer_churn_dimensiones", periodo_label
         )
 
         dims_ok = [d for d in DIMS if d in df_subs.columns]
         print(
             f"\nDIMENSIONES | {len(dims_ok)} calculadas:"
             f" {', '.join(dims_ok)}"
-            f" | {len(all_rows)} filas en master_churn_dimensiones"
+            f" | {len(all_rows)} filas en analyzer_churn_dimensiones"
         )
-
-    def calculate_lifetime_metrics(self):
-        """
-        Calcula métricas de tiempo de vida de las suscripciones.
-
-        Para cada orden que haya tenido al menos un evento de churn:
-        - `dias_activo`: Días desde `f_ini_dt` hasta el primer churn.
-        - `dias_cancelado`: Días desde el primer churn hasta la primera reactivación.
-
-        También computa un resumen global (promedios) y persiste ambos:
-        - `master_tiempos_vida`: Detalle por orden.
-        - `master_tiempo_global`: Promedios globales.
-
-        Returns:
-            pd.DataFrame: DataFrame con detalle de tiempos de vida por
-            orden (columnas: ``orden``, ``f_ini_dt``, ``f_churn``,
-            ``f_react``, ``dias_activo``, ``dias_cancelado``).
-
-        Raises:
-            psycopg2.Error: Si falla la persistencia de
-                ``master_tiempos_vida`` o ``master_tiempo_global``.
-            KeyError: Si los DataFrames internos no tienen las columnas
-                esperadas.
-        """
-        periodo_label = self.periodo.label()
-
-        # Filtra suscripciones y logs hasta el final del período
-        df_subs = self.df_subs_full[
-            self.df_subs_full["f_ini_dt"] <= self.periodo.fecha_final
-        ].copy()
-        df_logs = self.df_clean_logs[
-            (self.df_clean_logs["f_dt"] <= self.periodo.fecha_final)
-            & ~self.df_clean_logs["_sintetico"]
-        ].copy()
-
-        # Primer evento de churn (estado "6_churn") de cada orden
-        churn_logs = df_logs[df_logs["estado"] == "6_churn"]
-        first_churn_idx = churn_logs.groupby("orden")["f_dt"].idxmin()
-        df_first_churn = churn_logs.loc[first_churn_idx][
-            ["orden", "f_dt"]
-        ].rename(columns={"f_dt": "f_churn"})
-
-        # Primera reactivación después del churn (vuelta a "3_progress")
-        progress_logs = df_logs[df_logs["estado"] == "3_progress"]
-        merged = progress_logs.merge(
-            df_first_churn, on="orden", how="inner"
-        )
-        after_churn = merged[merged["f_dt"] > merged["f_churn"]]
-        first_react_idx = after_churn.groupby("orden")["f_dt"].idxmin()
-        df_first_react = after_churn.loc[first_react_idx][
-            ["orden", "f_dt"]
-        ].rename(columns={"f_dt": "f_react"})
-
-        # Combina fechas de inicio, churn y reactivación
-        df_detail = (
-            df_subs[["orden", "f_ini_dt"]]
-            .merge(df_first_churn, on="orden", how="left")
-            .merge(df_first_react, on="orden", how="left")
-        )
-        # Calcula días activo y días cancelado
-        df_detail["dias_activo"] = (
-            df_detail["f_churn"] - df_detail["f_ini_dt"]
-        ).dt.days
-        df_detail["dias_cancelado"] = (
-            df_detail["f_react"] - df_detail["f_churn"]
-        ).dt.days
-
-        # Persiste detalle
-        self.db.save_historico(
-            df_detail, "master_tiempos_vida", periodo_label
-        )
-        total_ords = len(df_detail)
-        n_churn = df_detail["dias_activo"].notna().sum()
-        n_react = df_detail["dias_cancelado"].notna().sum()
-        avg_activo = df_detail["dias_activo"].mean()
-        avg_cancelado = df_detail["dias_cancelado"].mean()
-
-        # Resumen global
-        df_global = pd.DataFrame(
-            [
-                {
-                    "total_ordenes": total_ords,
-                    "con_churn": n_churn,
-                    "con_reactivacion": n_react,
-                    "prom_dias_activo": (
-                        round(avg_activo, 2)
-                        if pd.notna(avg_activo)
-                        else 0
-                    ),
-                    "prom_dias_cancelado": (
-                        round(avg_cancelado, 2)
-                        if pd.notna(avg_cancelado)
-                        else 0
-                    ),
-                }
-            ]
-        )
-        self.db.save_historico(
-            df_global, "master_tiempo_global", periodo_label
-        )
-
-        print(
-            f"\nTIEMPOS DE VIDA | {total_ords} órdenes"
-        )
-        print(
-            f"  Promedio días activo: {df_global.iloc[0]['prom_dias_activo']}"
-            f" | basado en {n_churn} órdenes con churn"
-        )
-        print(
-            f"  Promedio días cancelado: "
-            f"{df_global.iloc[0]['prom_dias_cancelado']}"
-            f" | basado en {n_react} órdenes con reactivación"
-        )
-
-        return df_detail

@@ -16,6 +16,7 @@ from backend.database import DBConnector
 from backend.models import Periodo
 from backend.analyzer import ChurnRateAnalyzer
 from backend.imports import import_subscriptions_csv, import_logs_csv
+from backend.lifetime import run_lifecycle_analysis
 
 
 def cmd_import_subs(args):
@@ -60,6 +61,16 @@ def cmd_analyze(args):
     analyzer.run()
 
 
+def cmd_lifecycle(args):
+    """Run the global lifecycle analysis (independent of per-period analysis).
+
+    Reads all logs from the DB, reconstructs every subscriber's state
+    transitions, and computes KM curves for active/canceled periods.
+    """
+    metrics = run_lifecycle_analysis()
+    print(f"\nResultados guardados en lifetime_metricas / lifetime_periodos / lifetime_dimensiones")
+
+
 def cmd_run_all(args):
     """Run the full ETL + analysis pipeline in one command.
 
@@ -100,6 +111,7 @@ def main():
             - import subs <csv_path>: Importa suscripciones desde un CSV
             - import logs <csv_path>: Importa logs desde un CSV
             - analyze <YYYY-MM>: Analiza el churn rate para el mes dado
+            - lifecycle: Ejecuta el analisis global de ciclo de vida (independiente del periodo)
             - run-all <YYYY-MM> <subs_csv> <logs_csv>: Ejecuta todo el proceso de importación y análisis para el mes dado
             """
     )
@@ -121,6 +133,10 @@ def main():
     p_analyze = sub.add_parser("analyze")
     p_analyze.add_argument("year_month", help="Mes a analizar en formato YYYY-MM")
     p_analyze.set_defaults(func=cmd_analyze)
+
+    # lifecycle (no arguments needed)
+    p_lifecycle = sub.add_parser("lifecycle", help="Ejecuta analisis global de ciclo de vida")
+    p_lifecycle.set_defaults(func=cmd_lifecycle)
 
     # run-all <YYYY-MM> <subs_csv> <logs_csv>
     p_run = sub.add_parser("run-all")

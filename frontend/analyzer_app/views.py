@@ -17,20 +17,27 @@ Dependencias:
 
 import json
 import io
+import logging
 import os
 import sys
 import tempfile
 
+logger = logging.getLogger(__name__)
+
+import pandas as pd
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from backend.data_api import (
+from backend.analyzer import (
+    ChurnRateAnalyzer,
     get_cierre_churn, get_dimensiones, get_periodos,
-    get_dashboard_data, get_analytics_data, get_tiempos_globales,
+    get_dashboard_data, get_analytics_data,
 )
-from backend.analyzer import ChurnRateAnalyzer
 from backend.database import DBConnector
 from backend.imports import import_logs_csv, import_subscriptions_csv
+from backend.lifetime import (
+    run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
+)
 from backend.models import Periodo
 
 
@@ -82,7 +89,7 @@ def api_analytics_data(request):
 
     Returns:
         JsonResponse con los datos analíticos para los periodos
-        solicitados (métricas de churn por metodo, evolución temporal, etc.).
+        solicitados.
     """
     # Extraer y sanitizar el parámetro de periodos desde la query string
     periods_param = request.GET.get("periods")
@@ -108,56 +115,32 @@ def api_results_list(request):
     """
     Endpoint que devuelve el historial completo de resultados de churn.
 
-    Aplana la estructura anidada devuelta por `get_cierre_churn()` para
-    facilitar el consumo desde el frontend. Cada elemento contiene el
-    periodo de reporte junto con los datos del método.
-
-    Args:
-        request: HttpRequest de Django (GET).
-
     Returns:
         JsonResponse con la clave "periods" y una lista plana de
-        objetos {periodo, metodo, ...}.
+        objetos {periodo, ...}.
     """
-    data = get_cierre_churn()
-    flat = []
-    for p in data:
-        # Aplanar: cada método dentro de un periodo se convierte en un item independiente
-        for m in p["metodos"]:
-            flat.append({"periodo": p["periodo_reporte"], **m})
-    return JsonResponse({"periods": flat})
+    return JsonResponse({"periods": get_cierre_churn()})
 
 
 def api_results_detail(request, periodo):
     """
     Endpoint que devuelve el detalle de resultados para un periodo específico.
 
-    Combina la información del cierre de churn, las dimensiones y los
-    tiempos globales en una sola respuesta.
-
     Args:
         request: HttpRequest de Django (GET).
         periodo: Cadena con el periodo en formato YYYY-MM.
 
     Returns:
-        JsonResponse con:
-          - "periodo":    el periodo solicitado.
-          - "summaries":  lista de métodos con sus métricas de churn.
-          - "dimensions": desglose por dimensiones (plan, país, etc.).
+        JsonResponse con ``periodo``, ``summary`` (dict único),
+        ``dimensions``.
     """
     cierre = get_cierre_churn([periodo])
     dims = get_dimensiones([periodo])
-    summaries = cierre[0]["metodos"] if cierre else []
-    # Obtener promedios de días activo/cancelado y añadirlos a cada método
-    tiempos = get_tiempos_globales([periodo])
-    t = tiempos.get(periodo, {})
-    for m in summaries:
-        m["prom_dias_activo"] = t.get("prom_dias_activo", 0)
-        m["prom_dias_cancelado"] = t.get("prom_dias_cancelado", 0)
+    summary = cierre[0] if cierre else {}
     dimensions = dims[0]["dimensiones"] if dims else {}
     return JsonResponse({
         "periodo": periodo,
-        "summaries": summaries,
+        "summary": summary,
         "dimensions": dimensions,
     })
 
@@ -221,6 +204,82 @@ def api_run_analysis(request):
         })
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+def api_survival_data(request):
+    """
+    Endpoint para la página de supervivencia Kaplan-Meier.
+
+    Retorna curvas KM globales (desde el analisis de ciclo de vida)
+    y curvas por dimension opcionalmente filtradas.
+
+    Args:
+        request: HttpRequest de Django (GET con ?dim=zona opcional).
+        periodo: Ignorado (se retornan datos globales).
+
+    Returns:
+        JsonResponse con ``curva_activo``, ``curva_reactivacion``,
+        ``stats``, ``curvas_dimension``.
+    """
+    lc = get_lifecycle_results()
+    if not lc:
+        return JsonResponse({
+            "periodo": "global",
+            "curva_activo": [],
+            "curva_reactivacion": [],
+            "stats": {},
+            "curvas_dimension": {},
+        })
+
+    dim = request.GET.get("dim")
+    curvas_dim = {}
+    if dim:
+        DIM_MAP = {
+            "zona": "zona",
+            "sucursal": "sucursal",
+            "producto": "producto",
+            "municipio": "municipio",
+            "campana": "campanna",
+        }
+        db_dim = DIM_MAP.get(dim)
+        if db_dim:
+            try:
+                dim_data = get_lifetime_dimensiones(db_dim)
+                for d, valores in dim_data.items():
+                    for val, info in valores.items():
+                        curva = info.get("curva_activo", [])
+                        if curva:
+                            curvas_dim[val] = curva
+            except Exception:
+                logger.exception("Error reading lifetime dimension curves for dim=%s", dim)
+                curvas_dim = {}
+
+    curva_activo = lc.get("curva_activo", [])
+    total = lc.get("n_total_activo", 0)
+    n_evento = lc.get("n_evento_activo", 0)
+    n_censurado = lc.get("n_censurado_activo", 0)
+
+    return JsonResponse({
+        "periodo": "global",
+        "curva_activo": curva_activo,
+        "curva_reactivacion": lc.get("curva_reactivacion", []),
+        "stats": {
+            "mediana_activo": lc.get("mediana_activo"),
+            "promedio_activo": lc.get("promedio_activo"),
+            "p25_activo": lc.get("p25_activo"),
+            "p75_activo": lc.get("p75_activo"),
+            "mediana_reactivacion": lc.get("mediana_reactivacion"),
+            "p25_reactivacion": lc.get("p25_reactivacion"),
+            "p75_reactivacion": lc.get("p75_reactivacion"),
+            "promedio_reactivacion": lc.get("promedio_reactivacion"),
+            "total_suscriptores": total,
+            "total_eventos": n_evento,
+            "n_censurado_activo": n_censurado,
+            "tasa_censura": round(n_censurado / total, 4) if total and total > 0 else None,
+            "tiempo_maximo": max((p["tiempo"] for p in (curva_activo or [])), default=None),
+        },
+        "curvas_dimension": curvas_dim,
+    })
 
 
 def api_import_subscriptions(request):
@@ -316,3 +375,35 @@ def api_import_logs(request):
                 os.unlink(tmp_path)
             except OSError:
                 pass
+
+
+def api_lifecycle_run(request):
+    """Ejecuta el analisis de ciclo de vida global (POST)."""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
+    try:
+        metrics = run_lifecycle_analysis()
+        return JsonResponse({
+            "status": "success",
+            "message": "Analisis de ciclo de vida completado",
+            "mediana_activo": metrics.get("mediana_activo"),
+            "promedio_activo": metrics.get("promedio_activo"),
+            "p25_activo": metrics.get("p25_activo"),
+            "p75_activo": metrics.get("p75_activo"),
+            "mediana_reactivacion": metrics.get("mediana_reactivacion"),
+            "p25_reactivacion": metrics.get("p25_reactivacion"),
+            "p75_reactivacion": metrics.get("p75_reactivacion"),
+            "promedio_reactivacion": metrics.get("promedio_reactivacion"),
+        })
+    except Exception as e:
+        logger.exception("Error en lifecycle run")
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+def api_lifecycle_results(request):
+    """Recupera los resultados del analisis de ciclo de vida (GET)."""
+    data = get_lifecycle_results()
+    if not data:
+        return JsonResponse({"status": "empty", "message": "Ejecute el analisis de ciclo de vida primero"})
+    dimensiones = get_lifetime_dimensiones()
+    return JsonResponse({"status": "success", "data": data, "dimensiones": dimensiones})

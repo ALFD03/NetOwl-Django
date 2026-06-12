@@ -871,8 +871,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 .modal-content .modal-value-warning { color: var(--warning); }        /* Valores de advertencia (amarillo) */
 .modal-content .modal-value-accent { color: var(--accent); }          /* Valores destacados (azul) */
 .modal-content .card { background-color: var(--surface-tertiary) !important; border-color: var(--border-color) !important; }
-.modal-content .badge-fin { background-color: var(--accent); color: #fff; }   /* Badge método Financiero */
-.modal-content .badge-op { background-color: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); }  /* Badge método Operativo */
+
 
 /* Modal: tabla de dimensiones — sticky header + primera columna */
 /* sticky-header: cabecera fija arriba. sticky-col: primera columna fija a la izquierda */
@@ -887,7 +886,7 @@ body, .sidebar, .main-content, .card, .card-header, .card-body, .btn,
 .modal-content .table-modal-dim tbody tr:hover td { background-color: var(--surface-hover) !important; }
 .modal-content .table-modal-dim tbody tr:hover td.sticky-col { background-color: var(--surface-hover) !important; }
 
-/* Modal: tabla de resumen por metodo — separadores visibles entre filas */
+/* Modal: tabla de resumen — separadores visibles entre filas */
 .modal-content .table-modal-sum { background: transparent !important; color: var(--text-primary) !important; }
 .modal-content .table-modal-sum td { padding: 0.25rem 0; border-bottom: 1px solid var(--surface-hover); }
 .modal-content .table-modal-sum tbody tr:last-child td { border-bottom: none; }

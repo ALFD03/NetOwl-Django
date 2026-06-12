@@ -31,6 +31,8 @@ urlpatterns = [
     path("results/", views.dashboard, name="results_list"),
     # Vista de detalle de un resultado por periodo
     path("results/<str:periodo>/", views.dashboard, name="results_detail"),
+    # Vista de supervivencia Kaplan-Meier
+    path("survival/", views.dashboard, name="survival"),
 
     # --- Endpoints de la API REST ---
     # Datos agregados para el dashboard
@@ -45,8 +47,14 @@ urlpatterns = [
     path("api/results/", views.api_results_list, name="api_results_list"),
     # Detalle de resultado por periodo
     path("api/results/<str:periodo>/", views.api_results_detail, name="api_results_detail"),
+    # Datos de supervivencia Kaplan-Meier (global, desde ciclo de vida)
+    path("api/survival/global/", views.api_survival_data, name="api_survival_data"),
     # Importación de CSV de suscripciones (POST)
     path("api/import-subscriptions/", views.api_import_subscriptions, name="api_import_subscriptions"),
     # Importación de CSV de logs (POST)
     path("api/import-logs/", views.api_import_logs, name="api_import_logs"),
+    # Analisis de ciclo de vida global (POST)
+    path("api/lifecycle/run/", views.api_lifecycle_run, name="api_lifecycle_run"),
+    # Resultados del analisis de ciclo de vida (GET)
+    path("api/lifecycle/results/", views.api_lifecycle_results, name="api_lifecycle_results"),
 ]

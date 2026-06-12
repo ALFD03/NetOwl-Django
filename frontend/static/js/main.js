@@ -17,7 +17,7 @@
   /* ---------- Global chart instance references (one per canvas) ------ */
   let churnLineChart = null, winbackBarChart = null, arpuBarChart = null;
   let aporteReactBarChart = null, reemplazoLineChart = null, adicionesBarChart = null;
-  let tiemposActivoChart = null, tiemposCanceladoChart = null, cortesReactChart = null;
+  let cortesReactChart = null, kmSurvivalChartS = null;
   /* Array of dimension chart instances (analytics tab) */
   let dimChartInstances = [];
   /* Cached list of all historical periods for client-side search filtering */
@@ -36,6 +36,7 @@
     initAnalysisExecutor();
     initCSVImporter();
     initResultsDetailsModal();
+    initSurvivalPage();
   });
 
   /* ================================================================ */
@@ -94,6 +95,11 @@
       document.getElementById("tab-import").classList.remove("d-none");
       activateNavLink("import_subscriptions");
       setImportType(cleanPath.includes("/logs") ? "logs" : "subscriptions");
+    } else if (cleanPath === "/survival" || cleanPath === "/survival/") {
+      document.getElementById("tab-survival").classList.remove("d-none");
+      activateNavLink("survival");
+      loadSurvivalPage();
+      loadLifecycleResults();
     } else if (cleanPath.startsWith("/results")) {
       document.getElementById("tab-results").classList.remove("d-none");
       activateNavLink("results_list");
@@ -300,16 +306,16 @@
       container.innerHTML = "";
       var periods = d.periods || [];
       var now = new Date();
-      /* Build current period string: YYYYMM */
-      var curPeriod = now.getFullYear() + String(now.getMonth() + 1).padStart(2, "0");
-      var existsCur = periods.indexOf(curPeriod) !== -1;
+      /* Detect current period by Year-Month substring (the DB may use any format) */
+      var yearMonth = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+      var existsCur = periods.some(function (p) { return p.indexOf(yearMonth) !== -1; });
       periods.forEach(function (p) {
         var div = document.createElement("div");
         div.className = "form-check";
         var cb = document.createElement("input");
         cb.type = "checkbox"; cb.className = "form-check-input"; cb.value = p; cb.id = "aperiod-" + p;
-        /* Auto-select current month, or first period if current isn't available */
-        if (p === curPeriod || (!existsCur && p === periods[0])) cb.checked = true;
+        /* Auto-select current month (substring match), or first period if current isn't available */
+        if (p.indexOf(yearMonth) !== -1 || (!existsCur && p === periods[0])) cb.checked = true;
         var lb = document.createElement("label");
         lb.className = "form-check-label"; lb.htmlFor = "aperiod-" + p; lb.textContent = p;
         div.appendChild(cb); div.appendChild(lb); container.appendChild(div);
@@ -325,7 +331,7 @@
       var resetBtn = document.getElementById("analytics-reset-btn");
       if (resetBtn) {
         resetBtn.addEventListener("click", function () {
-          document.querySelectorAll("#analytics-periods-checkboxes input").forEach(function (cb) { cb.checked = cb.value === curPeriod || (!existsCur && cb.value === periods[0]); });
+          document.querySelectorAll("#analytics-periods-checkboxes input").forEach(function (cb) { cb.checked = cb.value.indexOf(yearMonth) !== -1 || (!existsCur && cb.value === periods[0]); });
           loadAnalyticsData();
           updateAnalyticsFilterLabel();
         });
@@ -351,6 +357,10 @@
   function refreshAllCharts() {
     if (!document.getElementById("tab-dashboard").classList.contains("d-none")) loadDashboardData();
     else if (!document.getElementById("tab-analytics").classList.contains("d-none")) loadAnalyticsData();
+    else if (!document.getElementById("tab-survival").classList.contains("d-none")) {
+      loadSurvivalPage();
+      loadSurvivalEvolution();
+    }
   }
 
   /* ================================================================ */
@@ -375,19 +385,13 @@
 
   /**
    * Render a large "average churn" figure at the top of the dashboard.
-   * Only considers the "Financiero" method for each period.
    * Colours: green (<2.5 %), yellow (≤3 %), red (>3 %).
    * @param {Array} periodos – Array of period objects from the API.
    */
   function renderChurnComparativo(periodos) {
     const el = document.getElementById("churn-comparativo-value");
     if (!el) return;
-    const vals = [];
-    periodos.forEach(function (p) {
-      (p.metodos || []).forEach(function (m) {
-        if (m.metodo === "Financiero") vals.push(m.churn_neto_pct || 0);
-      });
-    });
+    const vals = periodos.map(function (p) { return p.churn_neto_pct || 0; });
     if (!vals.length) { el.textContent = "N/A"; return; }
     var avg = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
     var colorClass = avg < 2.5 ? "text-success" : avg <= 3 ? "text-warning" : "text-danger";
@@ -396,7 +400,7 @@
   }
 
   /**
-   * Render the dashboard summary table showing key metrics per period/method.
+   * Render the dashboard summary table showing key metrics per period.
    * Each row includes a "details" button linking to the results modal.
    * @param {Array} periodos – Array of period objects (sliced to latest N).
    */
@@ -404,68 +408,47 @@
     const tbody = document.getElementById("dashboard-table-tbody");
     if (!tbody) return;
     if (!periodos.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">Sin datos</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Sin datos</td></tr>';
       return;
     }
     let html = "";
-    periodos.forEach(p => {
-      (p.metodos || []).forEach(m => {
-        const cn = m.churn_neto_pct || 0;
-        const churnClass = cn < 2.5 ? "text-success" : cn <= 3 ? "text-warning" : "text-danger";
-        html += '<tr><td class="fw-medium">' + p.periodo_reporte + '</td><td><span class="badge ' + (m.metodo === "Financiero" ? "bg-primary-subtle text-primary" : "bg-info-subtle text-info") + ' rounded-pill px-3 py-1">' + m.metodo + '</span></td><td class="text-end">' + (m.activos_inicio || 0).toLocaleString() + '</td><td class="text-end">' + (m.activos_final || 0).toLocaleString() + '</td><td class="text-end">' + (m.nuevos_mes || 0).toLocaleString() + '</td><td class="text-end fw-semibold ' + churnClass + '">' + cn.toFixed(2) + '%</td><td class="text-end">' + (m.churn_bruto_pct || 0).toFixed(2) + '%</td><td class="text-end">$' + (m.arpu || 0).toFixed(2) + '</td><td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + p.periodo_reporte + '"><i class="bi bi-eye"></i></button></td></tr>';
-      });
+    periodos.forEach(function (p) {
+      var cn = p.churn_neto_pct || 0;
+      var churnClass = cn < 2.5 ? "text-success" : cn <= 3 ? "text-warning" : "text-danger";
+      html += '<tr><td class="fw-medium">' + p.periodo_reporte + '</td><td class="text-end">' + (p.activos_inicio || 0).toLocaleString() + '</td><td class="text-end">' + (p.activos_final || 0).toLocaleString() + '</td><td class="text-end">' + (p.nuevos_mes || 0).toLocaleString() + '</td><td class="text-end fw-semibold ' + churnClass + '">' + cn.toFixed(2) + '%</td><td class="text-end">' + (p.churn_bruto_pct || 0).toFixed(2) + '%</td><td class="text-end">$' + (p.arpu || 0).toFixed(2) + '</td><td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + p.periodo_reporte + '"><i class="bi bi-eye"></i></button></td></tr>';
     });
     tbody.innerHTML = html;
   }
 
   /**
-   * Create (or re-create) all eight dashboard charts.
+   * Create (or re-create) all dashboard charts.
    * Calls destroyDashboardCharts first to clean up previous instances.
    *
-   * Charts rendered (all using financial method data unless stated):
+   * Charts rendered:
    *   1. Churn Neto/Bruto (lines + avg. bars) – target line at 3 %.
    *   2. Winback rate bar + trend line             – target line at 80 %.
    *   3. ARPU bar + trend line                     – target line at 25.
    *   4. Tasa Aporte Reactivación bar + trend line.
    *   5. Índice de Reemplazo line.
    *   6. Adiciones Netas & Brutas bars             – target line at 0.
-   *   7a. Prom. Días Activo bar + trend line.
-   *   7b. Prom. Días Cancelado bar + trend line.
-   *   8. Cortes Automáticos vs Reactivaciones (filled lines).
+   *   7. Cortes Automáticos vs Reactivaciones (filled lines).
    *
    * @param {Array} periodos – Array of period objects from the API.
    */
   function renderDashboardCharts(periodos) {
     destroyDashboardCharts();
     if (!periodos.length) return;
-    /* Build chronological labels (most recent last) */
     const labels = periodos.map(p => p.periodo_reporte).reverse();
-    /* Partition data by method: "Financiero" vs "Operativo" */
-    const finData = {}, opData = {};
-    periodos.forEach(p => {
-      (p.metodos || []).forEach(m => {
-        const target = m.metodo === "Financiero" ? finData : opData;
-        if (!target[p.periodo_reporte]) target[p.periodo_reporte] = {};
-        target[p.periodo_reporte] = m;
-      });
-    });
-    /* Theme-aware colours */
+    /* Build map by periodo for quick lookup */
+    const pdata = {};
+    periodos.forEach(p => { pdata[p.periodo_reporte] = p; });
+
+    function v(key) { return function(l) { var d = pdata[l]; return d ? d[key] || 0 : 0; }; }
+
     const isLight = document.documentElement.classList.contains("light-mode");
     const gridColor = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
     const tickColor = isLight ? "#64748b" : "#94a3b8";
 
-    /** Safely read a numeric metric from a data dictionary. */
-    function v(d, key) { return d ? d[key] || 0 : 0; }
-
-    /**
-     * Build a Chart.js plugin that draws coloured "threshold zone" bands
-     * and/or a horizontal target line on the canvas.
-     *
-     * @param {string}       id         – Unique plugin identifier.
-     * @param {Array|null}   zones      – Array of { from, to, color } for bands.
-     * @param {Object|null}  targetLine – { value, color, label } for goal line.
-     * @returns {Object} Chart.js plugin descriptor.
-     */
     function makeThresholdPlugin(id, zones, targetLine) {
       return {
         id: id,
@@ -514,36 +497,24 @@
     }
 
     /* -------- 1. Churn Neto / Bruto (lines + avg bars) -------- */
-    const finNeto = labels.map(l => v(finData[l], "churn_neto_pct"));
-    const opNeto = labels.map(l => v(opData[l], "churn_neto_pct"));
-    const finBruto = labels.map(l => v(finData[l], "churn_bruto_pct"));
-    const opBruto = labels.map(l => v(opData[l], "churn_bruto_pct"));
-    const promFin = labels.map((_, i) => (finNeto[i] + finBruto[i]) / 2);
-    const promOp = labels.map((_, i) => (opNeto[i] + opBruto[i]) / 2);
-    const promGeneral = labels.map((_, i) => (finNeto[i] + opNeto[i] + finBruto[i] + opBruto[i]) / 4);
-    const lblColor = tickColor;
-
-    const churnPlugin = makeThresholdPlugin("churnLine", null, { value: 3, color: "#ffffff", label: "Objetivo 3%" });
-
-    /* Segment colouring: green < 2.5, yellow ≤ 3, red > 3 */
-    function churnSeg(ctx) { if (!ctx || !ctx.p1 || !ctx.p1.parsed) return; var v = ctx.p1.parsed.y; return v < 2.5 ? "#22c55e" : v <= 3 ? "#eab308" : "#ef4444"; }
+    var churnNeto = labels.map(v("churn_neto_pct"));
+    var churnBruto = labels.map(v("churn_bruto_pct"));
+    var churnAvg = labels.map(function(_, i) { return (churnNeto[i] + churnBruto[i]) / 2; });
+    var lblColor = tickColor;
+    var churnPlugin = makeThresholdPlugin("churnLine", null, { value: 3, color: "#ffffff", label: "Objetivo 3%" });
+    function churnSeg(ctx) { if (!ctx || !ctx.p1 || !ctx.p1.parsed) return; var val = ctx.p1.parsed.y; return val < 2.5 ? "#22c55e" : val <= 3 ? "#eab308" : "#ef4444"; }
     function churnPt(v) { return v < 2.5 ? "#22c55e" : v <= 3 ? "#eab308" : "#ef4444"; }
     function churnBar(v) { return v < 2.5 ? "rgba(34,197,94,0.75)" : v <= 3 ? "rgba(234,179,8,0.75)" : "rgba(239,68,68,0.75)"; }
-
-    const ctx1 = document.getElementById("churnLineChart");
+    var ctx1 = document.getElementById("churnLineChart");
     if (ctx1) {
       churnLineChart = new Chart(ctx1, {
         type: "bar",
         data: {
           labels: labels,
           datasets: [
-            { label: "Churn Neto - Financiero", data: finNeto, type: "line", borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: finNeto.map(churnPt) },
-            { label: "Churn Neto - Operativo", data: opNeto, type: "line", borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, borderDash: [5, 5], order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: opNeto.map(churnPt) },
-            { label: "Churn Bruto - Financiero", data: finBruto, type: "line", borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: finBruto.map(churnPt) },
-            { label: "Churn Bruto - Operativo", data: opBruto, type: "line", borderColor: "#f59e0b", backgroundColor: "rgba(245,158,11,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, borderDash: [5, 5], order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: opBruto.map(churnPt) },
-            { label: "Prom. Financiero", data: promFin, backgroundColor: promFin.map(churnBar), borderRadius: 3, order: 1, datalabels: { display: true, color: lblColor, anchor: "end", align: "end", font: { size: 14, weight: "bold" }, formatter: function (val) { return val.toFixed(1) + "%"; } } },
-            { label: "Prom. Operativo", data: promOp, backgroundColor: promOp.map(churnBar), borderRadius: 3, order: 1, datalabels: { display: true, color: lblColor, anchor: "end", align: "end", font: { size: 14, weight: "bold" }, formatter: function (val) { return val.toFixed(1) + "%"; } } },
-            { label: "Prom. General", data: promGeneral, backgroundColor: promGeneral.map(churnBar), borderRadius: 3, order: 1, datalabels: { display: true, color: lblColor, anchor: "end", align: "end", font: { size: 14, weight: "bold" }, formatter: function (val) { return val.toFixed(1) + "%"; } } },
+            { label: "Churn Neto", data: churnNeto, type: "line", borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: churnNeto.map(churnPt) },
+            { label: "Churn Bruto", data: churnBruto, type: "line", borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3, order: 0, segment: { borderColor: churnSeg }, pointBackgroundColor: churnBruto.map(churnPt) },
+            { label: "Promedio", data: churnAvg, backgroundColor: churnAvg.map(churnBar), borderRadius: 3, order: 1, datalabels: { display: true, color: lblColor, anchor: "end", align: "end", font: { size: 14, weight: "bold" }, formatter: function (val) { return val.toFixed(1) + "%"; } } },
           ]
         },
         options: chartOpts(Object.assign(barOpts(gridColor, tickColor), { plugins: { legend: { position: "top", labels: { color: tickColor, font: { size: 10 } } } } })),
@@ -551,18 +522,18 @@
       });
     }
 
-    /* -------- 2. Winback – bars + trend line (Financiero only) -------- */
-    const winbackFin = labels.map(l => v(finData[l], "tasa_winback_pct"));
-    const winbackPlugin = makeThresholdPlugin("winbackLine", null, { value: 80, color: "#ffffff", label: "Obj. 80%" });
-    const ctx2 = document.getElementById("winbackBarChart");
+    /* -------- 2. Winback – bars + trend line -------- */
+    var winbackData = labels.map(v("tasa_winback_pct"));
+    var winbackPlugin = makeThresholdPlugin("winbackLine", null, { value: 80, color: "#ffffff", label: "Obj. 80%" });
+    var ctx2 = document.getElementById("winbackBarChart");
     if (ctx2) {
       winbackBarChart = new Chart(ctx2, {
         type: "bar",
         data: {
           labels: labels,
           datasets: [
-            { label: "Tasa Winback", data: winbackFin, backgroundColor: winbackFin.map(function (v) { return (v || 0) < 80 ? "rgba(239,68,68,0.8)" : (v || 0) <= 90 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4, order: 1 },
-            { label: "Tendencia", data: winbackFin, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
+            { label: "Tasa Winback", data: winbackData, backgroundColor: winbackData.map(function (v) { return (v || 0) < 80 ? "rgba(239,68,68,0.8)" : (v || 0) <= 90 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4, order: 1 },
+            { label: "Tendencia", data: winbackData, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
           ]
         },
         options: chartOpts(barOpts(gridColor, tickColor)),
@@ -570,18 +541,18 @@
       });
     }
 
-    /* -------- 3. ARPU – bars + trend line (Financiero only) -------- */
-    const arpuFin = labels.map(l => v(finData[l], "arpu"));
-    const arpuPlugin = makeThresholdPlugin("arpuLine", null, { value: 25, color: "#ffffff", label: "Obj. 25" });
-    const ctx3 = document.getElementById("arpuBarChart");
+    /* -------- 3. ARPU – bars + trend line -------- */
+    var arpuData = labels.map(v("arpu"));
+    var arpuPlugin = makeThresholdPlugin("arpuLine", null, { value: 25, color: "#ffffff", label: "Obj. 25" });
+    var ctx3 = document.getElementById("arpuBarChart");
     if (ctx3) {
       arpuBarChart = new Chart(ctx3, {
         type: "bar",
         data: {
           labels: labels,
           datasets: [
-            { label: "ARPU Financiero", data: arpuFin, backgroundColor: arpuFin.map(function (v) { return (v || 0) < 25 ? "rgba(239,68,68,0.8)" : (v || 0) <= 30 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4, order: 1 },
-            { label: "Tendencia", data: arpuFin, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
+            { label: "ARPU", data: arpuData, backgroundColor: arpuData.map(function (v) { return (v || 0) < 25 ? "rgba(239,68,68,0.8)" : (v || 0) <= 30 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4, order: 1 },
+            { label: "Tendencia", data: arpuData, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
           ]
         },
         options: chartOpts(barOpts(gridColor, tickColor)),
@@ -590,53 +561,52 @@
     }
 
     /* -------- 4. Tasa Aporte Reactivación – bars + trend line -------- */
-    const aporteFin = labels.map(l => v(finData[l], "tasa_aporte_react_pct"));
-    const ctx4 = document.getElementById("aporteReactBarChart");
+    var aporteData = labels.map(v("tasa_aporte_react_pct"));
+    var ctx4 = document.getElementById("aporteReactBarChart");
     if (ctx4) {
       aporteReactBarChart = new Chart(ctx4, {
         type: "bar",
         data: {
           labels: labels,
           datasets: [
-            { label: "Tasa Aporte React.", data: aporteFin, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4, order: 1 },
-            { label: "Tendencia", data: aporteFin, type: "line", borderColor: "#fbbf24", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fbbf24", fill: false, order: 0 },
+            { label: "Tasa Aporte React.", data: aporteData, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4, order: 1 },
+            { label: "Tendencia", data: aporteData, type: "line", borderColor: "#fbbf24", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fbbf24", fill: false, order: 0 },
           ]
         },
         options: chartOpts(barOpts(gridColor, tickColor))
       });
     }
 
-    /* -------- 5. Índice de Reemplazo – line (Financiero only) -------- */
-    const reempFin = labels.map(l => v(finData[l], "indice_reemplazo_react_pct"));
-    const ctx5 = document.getElementById("reemplazoLineChart");
+    /* -------- 5. Índice de Reemplazo – line -------- */
+    var reempData = labels.map(v("indice_reemplazo_react_pct"));
+    var ctx5 = document.getElementById("reemplazoLineChart");
     if (ctx5) {
       reemplazoLineChart = new Chart(ctx5, {
         type: "line",
         data: {
           labels: labels,
           datasets: [
-            { label: "Indice Reemplazo", data: reempFin, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3 },
+            { label: "Indice Reemplazo", data: reempData, borderColor: "#2563eb", backgroundColor: "rgba(37,99,235,0.05)", borderWidth: 2, tension: 0.35, pointRadius: 3 },
           ]
         },
         options: chartOpts(lineOpts(gridColor, tickColor))
       });
     }
 
-    /* -------- 6. Adiciones Netas & Brutas – bars (Financiero only) -------- */
-    const adNetasFin = labels.map(l => v(finData[l], "adiciones_netas"));
-    const adBrutasFin = labels.map(l => v(finData[l], "adiciones_brutas"));
-    /* Colour: red (<0), yellow (0–1000), green (>1000) */
+    /* -------- 6. Adiciones Netas & Brutas – bars -------- */
+    var adNetasData = labels.map(v("adiciones_netas"));
+    var adBrutasData = labels.map(v("adiciones_brutas"));
     function adColors(v) { return (v || 0) < 0 ? "rgba(239,68,68,0.8)" : (v || 0) <= 1000 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }
-    const adicionesPlugin = makeThresholdPlugin("adicionesLine", null, { value: 0, color: "#ffffff", label: "Obj. 0" });
-    const ctx6 = document.getElementById("adicionesBarChart");
+    var adicionesPlugin = makeThresholdPlugin("adicionesLine", null, { value: 0, color: "#ffffff", label: "Obj. 0" });
+    var ctx6 = document.getElementById("adicionesBarChart");
     if (ctx6) {
       adicionesBarChart = new Chart(ctx6, {
         type: "bar",
         data: {
           labels: labels,
           datasets: [
-            { label: "Adiciones Netas", data: adNetasFin, backgroundColor: adNetasFin.map(adColors), borderRadius: 4 },
-            { label: "Adiciones Brutas", data: adBrutasFin, backgroundColor: adBrutasFin.map(adColors), borderRadius: 4 },
+            { label: "Adiciones Netas", data: adNetasData, backgroundColor: adNetasData.map(adColors), borderRadius: 4 },
+            { label: "Adiciones Brutas", data: adBrutasData, backgroundColor: adBrutasData.map(adColors), borderRadius: 4 },
           ]
         },
         options: chartOpts(barOpts(gridColor, tickColor)),
@@ -644,52 +614,18 @@
       });
     }
 
-    /* -------- 7a. Prom. Días Activo – bars + trend line -------- */
-    const tActivoData = labels.map(function(l) { return v(finData[l], "prom_dias_activo"); });
-    const ctx7a = document.getElementById("tiemposActivoChart");
-    if (ctx7a) {
-      tiemposActivoChart = new Chart(ctx7a, {
-        type: "bar",
-        data: {
-          labels: labels,
-          datasets: [
-            { label: "Prom. Dias Activo", data: tActivoData, backgroundColor: "rgba(37,99,235,0.7)", borderRadius: 3, order: 1 },
-            { label: "Tendencia", data: tActivoData, type: "line", borderColor: "#2563eb", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#2563eb", fill: false, order: 0 },
-          ]
-        },
-        options: chartOpts(barOpts(gridColor, tickColor))
-      });
-    }
-
-    /* -------- 7b. Prom. Días Cancelado – bars + trend line -------- */
-    const tCanceladoData = labels.map(function(l) { return v(finData[l], "prom_dias_cancelado"); });
-    const ctx7b = document.getElementById("tiemposCanceladoChart");
-    if (ctx7b) {
-      tiemposCanceladoChart = new Chart(ctx7b, {
-        type: "bar",
-        data: {
-          labels: labels,
-          datasets: [
-            { label: "Prom. Dias Cancelado", data: tCanceladoData, backgroundColor: "rgba(234,179,8,0.7)", borderRadius: 3, order: 1 },
-            { label: "Tendencia", data: tCanceladoData, type: "line", borderColor: "#eab308", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#eab308", fill: false, order: 0 },
-          ]
-        },
-        options: chartOpts(barOpts(gridColor, tickColor))
-      });
-    }
-
-    /* -------- 8. Cortes vs Reactivaciones – filled lines -------- */
-    const cortesFin = labels.map(function(l) { return v(finData[l], "corte_impagado"); });
-    const reactFin = labels.map(function(l) { return v(finData[l], "reactivaciones"); });
-    const ctx8 = document.getElementById("cortesReactChart");
+    /* -------- 7. Cortes vs Reactivaciones – filled lines -------- */
+    var cortesData = labels.map(v("corte_impagado"));
+    var reactData = labels.map(v("reactivaciones"));
+    var ctx8 = document.getElementById("cortesReactChart");
     if (ctx8) {
       cortesReactChart = new Chart(ctx8, {
         type: "line",
         data: {
           labels: labels,
           datasets: [
-            { label: "Cortes Automaticos", data: cortesFin, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#ef4444", fill: true },
-            { label: "Reactivaciones", data: reactFin, borderColor: "#22c55e", backgroundColor: "rgba(34,197,94,0.1)", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#22c55e", fill: true },
+            { label: "Cortes Automaticos", data: cortesData, borderColor: "#ef4444", backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#ef4444", fill: true },
+            { label: "Reactivaciones", data: reactData, borderColor: "#22c55e", backgroundColor: "rgba(34,197,94,0.1)", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#22c55e", fill: true },
           ]
         },
         options: chartOpts(lineOpts(gridColor, tickColor))
@@ -702,8 +638,8 @@
    * before re-rendering on data refresh or theme toggle.
    */
   function destroyDashboardCharts() {
-    [churnLineChart, winbackBarChart, arpuBarChart, aporteReactBarChart, reemplazoLineChart, adicionesBarChart, tiemposActivoChart, tiemposCanceladoChart, cortesReactChart].forEach(c => { if (c) { c.destroy(); c = null; } });
-    churnLineChart = winbackBarChart = arpuBarChart = aporteReactBarChart = reemplazoLineChart = adicionesBarChart = tiemposActivoChart = tiemposCanceladoChart = cortesReactChart = null;
+    [churnLineChart, winbackBarChart, arpuBarChart, aporteReactBarChart, reemplazoLineChart, adicionesBarChart, cortesReactChart].forEach(c => { if (c) { c.destroy(); c = null; } });
+    churnLineChart = winbackBarChart = arpuBarChart = aporteReactBarChart = reemplazoLineChart = adicionesBarChart = cortesReactChart = null;
   }
 
   /**
@@ -744,6 +680,179 @@
   }
 
   /* ================================================================ */
+  /*  SURVIVAL PAGE – KAPLAN-MEIER                                    */
+  /* ================================================================ */
+
+  function initSurvivalPage() {
+    document.querySelectorAll('input[name="kmTipoS"]').forEach(function (r) { r.addEventListener("change", loadSurvivalPage); });
+    var dimSel = document.getElementById("survivalDim");
+    if (dimSel) dimSel.addEventListener("change", loadSurvivalPage);
+    loadSurvivalPage();
+  }
+
+  function loadSurvivalPage() {
+    var dim = document.getElementById("survivalDim");
+    var dimVal = dim ? dim.value : "";
+    var url = "/api/survival/global/";
+    if (dimVal) url += "?dim=" + encodeURIComponent(dimVal);
+    fetch(url).then(function (r) { if (!r.ok) throw Error("Error"); return r.json(); }).then(function (data) {
+      renderKMSurvivalChartS(data);
+      renderKMRiskTableS(data);
+      renderKMStatsS(data);
+    }).catch(function () { showToast("Error cargando supervivencia", "error"); });
+  }
+
+  function renderKMSurvivalChartS(data) {
+    if (kmSurvivalChartS) { kmSurvivalChartS.destroy(); kmSurvivalChartS = null; }
+    var ctx = document.getElementById("kmSurvivalChartS");
+    if (!ctx) return;
+    var tipo = document.querySelector('input[name="kmTipoS"]:checked');
+    var sufijo = (tipo && tipo.value) || "activo";
+    var emptyMsg = document.getElementById("kmSurvivalEmptyMsg");
+    var curve = data["curva_" + sufijo] || [];
+    if (!curve.length) {
+      if (kmSurvivalChartS) { kmSurvivalChartS.destroy(); kmSurvivalChartS = null; }
+      if (emptyMsg) emptyMsg.classList.remove("d-none");
+      return;
+    }
+    if (emptyMsg) emptyMsg.classList.add("d-none");
+    var isLight = document.documentElement.classList.contains("light-mode");
+    var gridColor = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
+    var tickColor = isLight ? "#64748b" : "#94a3b8";
+    var datasets = [];
+    datasets.push({
+      label: "Global", data: curve.map(function (p) { return p.sup; }),
+      borderColor: "#2563eb", backgroundColor: "transparent",
+      borderWidth: 2.5, stepped: "before", pointRadius: 0, fill: false, tension: 0, order: 1,
+    });
+    datasets.push({
+      label: "IC 95%", data: curve.map(function (p) { return p.ci_high; }),
+      borderColor: "rgba(37,99,235,0.2)", backgroundColor: "rgba(37,99,235,0.08)",
+      borderWidth: 1, pointRadius: 0, fill: "+1", stepped: "before", order: 3,
+    });
+    datasets.push({
+      label: "IC 95%", data: curve.map(function (p) { return p.ci_low; }),
+      borderColor: "transparent", backgroundColor: "transparent",
+      pointRadius: 0, fill: false, stepped: "before", order: 4,
+    });
+    var dimCurves = data.curvas_dimension || {};
+    var dimIdx = 0;
+    var dimPalette = ["#f59e0b", "#10b981", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#6366f1", "#84cc16"];
+    Object.keys(dimCurves).forEach(function (dimVal) {
+      var cData = dimCurves[dimVal] || [];
+      if (!cData.length) return;
+      datasets.push({
+        label: dimVal, data: cData.map(function (p) { return p.sup; }),
+        borderColor: dimPalette[dimIdx % dimPalette.length], backgroundColor: "transparent",
+        borderWidth: 2, borderDash: [4, 3], stepped: "before", pointRadius: 0, fill: false, tension: 0, order: 2,
+      });
+      dimIdx++;
+    });
+    kmSurvivalChartS = new Chart(ctx, {
+      type: "line",
+      data: { labels: curve.map(function (p) { return p.tiempo; }), datasets: datasets },
+      options: chartOpts({
+        plugins: {
+          legend: { position: "top", labels: { color: tickColor, font: { size: 10 } } },
+          tooltip: { mode: "index", intersect: false, callbacks: { label: function (tc) { var raw = tc.parsed ? tc.parsed.y : 0; return tc.dataset.label + ": " + (raw * 100).toFixed(1) + "%"; } } },
+        },
+        scales: {
+          y: { min: 0, max: 1.05, grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 }, callback: function (v) { return (v * 100).toFixed(0) + "%"; } } },
+          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } }, title: { display: true, text: "Dias", color: tickColor, font: { size: 10 } } },
+        },
+      }),
+    });
+  }
+
+  function renderKMRiskTableS(data) {
+    var container = document.getElementById("kmRiskTableContainerS");
+    if (!container) return;
+    var tipo = document.querySelector('input[name="kmTipoS"]:checked');
+    var sufijo = (tipo && tipo.value) || "activo";
+    var curve = data["curva_" + sufijo] || [];
+    if (!curve.length) { container.innerHTML = ""; return; }
+    var keyTimes = [0, 30, 60, 90, 120, 180, 365, 540, 730];
+    var maxT = curve[curve.length - 1].tiempo;
+    keyTimes = keyTimes.filter(function (t) { return t <= maxT; });
+    // Precompute cumulative events
+    var cumMap = [];
+    var running = 0;
+    for (var i = 0; i < curve.length; i++) {
+      running += curve[i].n_eventos;
+      cumMap.push({tiempo: curve[i].tiempo, cum: running});
+    }
+    function lastAtOrBefore(arr, target) {
+      var best = null;
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i].tiempo <= target) best = arr[i];
+        else break;
+      }
+      return best;
+    }
+    var html = '<div class="table-responsive"><table class="table table-sm mb-0 table-theme table-modal-dim" style="font-size:0.72rem;width:100%"><thead><tr>';
+    html += '<th class="sticky-header" style="min-width:80px">Tiempo (d)</th>';
+    keyTimes.forEach(function (t) { html += '<th class="text-end sticky-header" style="min-width:65px">' + t + '</th>'; });
+    html += '</tr></thead><tbody>';
+    // Row: Supervivencia
+    html += '<tr><td class="fw-medium" style="color:var(--text-primary)">Supervivencia</td>';
+    keyTimes.forEach(function (t) {
+      var pt = t === 0 ? {sup: 1.0} : (lastAtOrBefore(curve, t) || {sup: curve[0].sup});
+      html += '<td class="text-end" style="color:var(--text-primary)">' + (pt.sup * 100).toFixed(1) + '%</td>';
+    });
+    html += '</tr>';
+    // Row: IC 95%
+    html += '<tr><td class="fw-medium" style="color:var(--text-secondary)">IC 95%</td>';
+    keyTimes.forEach(function (t) {
+      if (t === 0) { html += '<td class="text-end" style="color:var(--text-secondary)">—</td>'; return; }
+      var pt = lastAtOrBefore(curve, t);
+      if (!pt) { html += '<td class="text-end" style="color:var(--text-secondary)">—</td>'; return; }
+      var dLow = (pt.sup - pt.ci_low) * 100;
+      var dHigh = (pt.ci_high - pt.sup) * 100;
+      var delta = Math.max(dLow, dHigh);
+      html += '<td class="text-end" style="color:var(--text-secondary)">' + (delta < 0.001 ? '\u2014' : '\u00B1' + delta.toFixed(1) + '%') + '</td>';
+    });
+    html += '</tr>';
+    // Row: Churnes acumulados
+    html += '<tr><td class="fw-medium" style="color:var(--text-primary)">Churnes acum.</td>';
+    keyTimes.forEach(function (t) {
+      var cum = t === 0 ? 0 : (lastAtOrBefore(cumMap, t) || {cum: 0}).cum;
+      html += '<td class="text-end" style="color:var(--text-primary)">' + cum.toLocaleString() + '</td>';
+    });
+    html += '</tr>';
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  }
+
+  function renderKMStatsS(data) {
+    var container = document.getElementById("kmStatsRowS");
+    if (!container) return;
+    var stats = data.stats || {};
+    var tipo = document.querySelector('input[name="kmTipoS"]:checked');
+    var sufijo = (tipo && tipo.value) || "activo";
+    var medKey = "mediana_" + sufijo;
+    var promKey = "promedio_" + sufijo;
+    var p25Key = "p25_" + sufijo;
+    var p75Key = "p75_" + sufijo;
+    var html = '<div class="d-flex flex-wrap gap-4 justify-content-center align-items-center py-2" style="font-size:0.85rem">';
+    function statBox(label, value, color, unit) {
+      if (unit === undefined) unit = " d";
+      if (value == null) value = "-";
+      else value = value.toFixed(0) + unit;
+      return '<div class="text-center px-3"><div class="small" style="color:var(--text-secondary)">' + label + '</div><div class="fw-bold fs-5" style="color:' + color + '">' + value + '</div></div>';
+    }
+    html += statBox("Mediana", stats[medKey], "#2563eb");
+    html += statBox("Promedio", stats[promKey], "#3b82f6");
+    html += statBox("P25", stats[p25Key], "#64748b");
+    html += statBox("P75", stats[p75Key], "#94a3b8");
+    if (stats.total_suscriptores != null) html += statBox("Total", stats.total_suscriptores, "#94a3b8", "");
+    if (stats.total_eventos != null) html += statBox("Eventos", stats.total_eventos, "#94a3b8", "");
+    if (stats.tasa_censura != null) html += statBox("Censura", stats.tasa_censura * 100, "#94a3b8", "%");
+    if (stats.tiempo_maximo != null) html += statBox("Tiempo max", stats.tiempo_maximo, "#94a3b8");
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  /* ================================================================ */
   /*  ANALYTICS – METRIC CARDS + DIMENSION CHARTS                     */
   /* ================================================================ */
 
@@ -778,24 +887,18 @@
     if (!periodos.length) { container.innerHTML = '<div class="col-12 text-center text-muted py-4">Sin datos</div>'; return; }
 
     /**
-     * Compute the average of a dot-path metric across periods,
-     * optionally filtered to a specific method.
-     * @param {string}  path         – Dot-delimited key, e.g. "churn_neto_pct".
-     * @param {string|null} methodFilter – "Financiero" or "Operativo".
+     * Compute the average of a dot-path metric across periods.
+     * @param {string} path – Dot-delimited key, e.g. "churn_neto_pct".
      * @returns {number} Average value.
      */
-    function avg(path, methodFilter) {
+    function avg(path) {
       const vals = [];
-      periodos.forEach(p => (p.metodos || []).forEach(m => {
-        if (methodFilter && m.metodo !== methodFilter) return;
-        const v = path.split(".").reduce((o, k) => (o && o[k] !== undefined) ? o[k] : undefined, m);
+      periodos.forEach(function (p) {
+        const v = path.split(".").reduce(function (o, k) { return (o && o[k] !== undefined) ? o[k] : undefined; }, p);
         if (v !== undefined) vals.push(Number(v));
-      }));
-      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+      });
+      return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : 0;
     }
-
-    function avgFin(path) { return avg(path, "Financiero"); }
-    function avgOp(path) { return avg(path, "Operativo"); }
 
     /* Colour helper functions with business-logic thresholds */
     function colorChurn(v) { return v < 2.5 ? "text-success" : v <= 3 ? "text-warning" : "text-danger"; }
@@ -807,26 +910,20 @@
 
     /* Define all 20 KPI cards */
     const cards = [
-      { label: "Churn Neto Fin.", val: avgFin("churn_neto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
-      { label: "Churn Neto Op.", val: avgOp("churn_neto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
-      { label: "Churn Bruto Fin.", val: avgFin("churn_bruto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
-      { label: "Churn Bruto Op.", val: avgOp("churn_bruto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
-      { label: "Bajas Netas Fin.", val: avgFin("bajas_netas_balance"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
-      { label: "Bajas Netas Op.", val: avgOp("bajas_netas_balance"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
-      { label: "Bajas Brutas Fin.", val: avgFin("bajas_brutas_auditoria"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
-      { label: "Bajas Brutas Op.", val: avgOp("bajas_brutas_auditoria"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
-      { label: "Nuevos en el Mes", val: avgFin("nuevos_mes"), fmt: v => Math.round(v).toLocaleString(), clr: colorNuevos },
-      { label: "Reactivaciones", val: avgFin("reactivaciones"), fmt: v => Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
-      { label: "Tasa Winback", val: avgFin("tasa_winback_pct"), fmt: v => v.toFixed(2) + "%", clr: colorWinback },
-      { label: "ARPU", val: avgFin("arpu"), fmt: v => "$" + v.toFixed(2), clr: colorArpu },
-      { label: "Total Billing", val: avgFin("total_billing"), fmt: v => "$" + Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
-      { label: "Tasa Aporte React.", val: avgFin("tasa_aporte_react_pct"), fmt: v => v.toFixed(2) + "%", clr: function () { return "text-success"; } },
-      { label: "Indice Reemplazo", val: avgFin("indice_reemplazo_react_pct"), fmt: v => v.toFixed(2) + "%", clr: function () { return "text-success"; } },
-      { label: "Adiciones Netas", val: avgFin("adiciones_netas"), fmt: v => Math.round(v).toLocaleString(), clr: colorAdiciones },
-      { label: "Adiciones Brutas", val: avgFin("adiciones_brutas"), fmt: v => Math.round(v).toLocaleString(), clr: colorAdiciones },
-      { label: "Corte Impago", val: avgFin("corte_impagado"), fmt: v => Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
-      { label: "Prom. Dias Activo", val: avgFin("prom_dias_activo"), fmt: v => v.toFixed(1) + " d", clr: function () { return "text-success"; } },
-      { label: "Prom. Dias Cancelado", val: avgFin("prom_dias_cancelado"), fmt: v => v.toFixed(1) + " d", clr: function () { return "text-success"; } },
+      { label: "Churn Neto", val: avg("churn_neto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
+      { label: "Churn Bruto", val: avg("churn_bruto_pct"), fmt: v => v.toFixed(2) + "%", clr: colorChurn },
+      { label: "Bajas Netas", val: avg("bajas_netas_balance"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
+      { label: "Bajas Brutas", val: avg("bajas_brutas_auditoria"), fmt: v => Math.round(v).toLocaleString(), clr: colorBajas },
+      { label: "Nuevos en el Mes", val: avg("nuevos_mes"), fmt: v => Math.round(v).toLocaleString(), clr: colorNuevos },
+      { label: "Reactivaciones", val: avg("reactivaciones"), fmt: v => Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
+      { label: "Tasa Winback", val: avg("tasa_winback_pct"), fmt: v => v.toFixed(2) + "%", clr: colorWinback },
+      { label: "ARPU", val: avg("arpu"), fmt: v => "$" + v.toFixed(2), clr: colorArpu },
+      { label: "Total Billing", val: avg("total_billing"), fmt: v => "$" + Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
+      { label: "Tasa Aporte React.", val: avg("tasa_aporte_react_pct"), fmt: v => v.toFixed(2) + "%", clr: function () { return "text-success"; } },
+      { label: "Indice Reemplazo", val: avg("indice_reemplazo_react_pct"), fmt: v => v.toFixed(2) + "%", clr: function () { return "text-success"; } },
+      { label: "Adiciones Netas", val: avg("adiciones_netas"), fmt: v => Math.round(v).toLocaleString(), clr: colorAdiciones },
+      { label: "Adiciones Brutas", val: avg("adiciones_brutas"), fmt: v => Math.round(v).toLocaleString(), clr: colorAdiciones },
+      { label: "Corte Impago", val: avg("corte_impagado"), fmt: v => Math.round(v).toLocaleString(), clr: function () { return "text-success"; } },
     ];
 
     let html = "";
@@ -856,10 +953,10 @@
         (dims[dimKey] || []).forEach(function (item) {
           var val = item.valor || "N/A";
           if (!accum[dimKey][val]) {
-            accum[dimKey][val] = { sum: { churn_neto_pct: 0, churn_bruto_pct: 0, arpu: 0, tasa_winback_pct: 0, adiciones_netas: 0, adiciones_brutas: 0, tasa_aporte_react_pct: 0, corte_impagado: 0, prom_dias_activo: 0, prom_dias_cancelado: 0, nuevos: 0, activos_final: 0 }, count: 0 };
+            accum[dimKey][val] = { sum: { churn_neto_pct: 0, churn_bruto_pct: 0, arpu: 0, tasa_winback_pct: 0, adiciones_netas: 0, adiciones_brutas: 0, tasa_aporte_react_pct: 0, corte_impagado: 0, nuevos: 0, activos_final: 0 }, count: 0 };
           }
           /* Accumulate sums for each metric */
-          ["churn_neto_pct","churn_bruto_pct","arpu","tasa_winback_pct","adiciones_netas","adiciones_brutas","tasa_aporte_react_pct","corte_impagado","prom_dias_activo","prom_dias_cancelado","nuevos","activos_final"].forEach(function (m) {
+          ["churn_neto_pct","churn_bruto_pct","arpu","tasa_winback_pct","adiciones_netas","adiciones_brutas","tasa_aporte_react_pct","corte_impagado","nuevos","activos_final"].forEach(function (m) {
             accum[dimKey][val].sum[m] += (item[m] || 0);
           });
           accum[dimKey][val].count++;
@@ -913,8 +1010,6 @@
       { key: "adiciones_brutas", label: "Adiciones Brutas", chartType: "bar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
       { key: "tasa_aporte_react_pct", label: "Aporte React.", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
       { key: "corte_impagado", label: "Corte Impago", chartType: "hbar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
-      { key: "prom_dias_activo", label: "Prom. Dias Activo", chartType: "pie", fmt: function (v) { return v.toFixed(1) + " d"; } },
-      { key: "prom_dias_cancelado", label: "Prom. Dias Cancelado", chartType: "pie", fmt: function (v) { return v.toFixed(1) + " d"; } },
     ];
 
     var isLight = document.documentElement.classList.contains("light-mode");
@@ -930,26 +1025,21 @@
      */
     function getWeight(item, metricKey) {
       if (metricKey === "adiciones_netas" || metricKey === "adiciones_brutas" || metricKey === "corte_impagado") return item[metricKey] || 0;
-      if (metricKey === "arpu" || metricKey === "prom_dias_activo" || metricKey === "prom_dias_cancelado") return (item.activos_final || 0) * (item[metricKey] || 0);
+      if (metricKey === "arpu" || metricKey === "mediana_activo") return (item.activos_final || 0) * (item[metricKey] || 0);
       return (item.activos_final || 0) * (item[metricKey] || 0) / 100;
     }
 
     /**
-     * Compute the global average for a metric across all selected periods
-     * (Financiero method only). Used as fallback centre value for doughnuts.
+     * Compute the global average for a metric across all selected periods.
+     * Used as fallback centre value for doughnuts.
      */
     function getGlobalMetric(metricKey, fallbackItems) {
       var vals = [];
       periodos.forEach(function(p) {
-        (p.metodos || []).forEach(function(m) {
-          if (m.metodo === "Financiero") {
-            var v = m[metricKey];
-            if (v !== undefined && v !== null) vals.push(Number(v));
-          }
-        });
+        var v = p[metricKey];
+        if (v !== undefined && v !== null) vals.push(Number(v));
       });
       if (vals.length) return vals.reduce(function(a, b) { return a + b; }, 0) / vals.length;
-      /* Fallback: weight-average from dimension items if per-period data is empty */
       if (fallbackItems && fallbackItems.length) {
         var totalAct = 0, totalWeighted = 0;
         fallbackItems.forEach(function(i) {
@@ -1343,25 +1433,25 @@
   }
 
   /**
-   * Render the historical results table.  Each row shows period, method,
+   * Render the historical results table.  Each row shows period,
    * active counts, churn rates, ARPU, and a "view details" button.
    * @param {Array} periods – Array of result objects from the API.
    */
   function renderResultsTable(periods) {
     var tbody = document.getElementById("results-table-tbody");
     if (!tbody) return;
-    if (!periods.length) { tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Sin datos</td></tr>'; return; }
+    if (!periods.length) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">Sin datos</td></tr>'; return; }
     var html = "";
     periods.forEach(function (r) {
       var cn = r.churn_neto_pct || 0;
       var churnClass = cn < 2.5 ? "text-success" : cn <= 3 ? "text-warning" : "text-danger";
-      html += '<tr><td class="fw-semibold">' + r.periodo + '</td><td><span class="badge ' + (r.metodo === "Financiero" ? "bg-primary-subtle text-primary" : "bg-info-subtle text-info") + ' rounded-pill px-3 py-1">' + r.metodo + '</span></td><td class="text-end">' + (r.activos_inicio || 0).toLocaleString() + '</td><td class="text-end">' + (r.activos_final || 0).toLocaleString() + '</td><td class="text-end">' + (r.nuevos_mes || 0).toLocaleString() + '</td><td class="text-end fw-semibold ' + churnClass + '">' + cn.toFixed(2) + '%</td><td class="text-end">$' + (r.arpu || 0).toFixed(2) + '</td><td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + r.periodo + '"><i class="bi bi-eye"></i></button></td></tr>';
+      html += '<tr><td class="fw-semibold">' + r.periodo_reporte + '</td><td class="text-end">' + (r.activos_inicio || 0).toLocaleString() + '</td><td class="text-end">' + (r.activos_final || 0).toLocaleString() + '</td><td class="text-end">' + (r.nuevos_mes || 0).toLocaleString() + '</td><td class="text-end fw-semibold ' + churnClass + '">' + cn.toFixed(2) + '%</td><td class="text-end">$' + (r.arpu || 0).toFixed(2) + '</td><td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + r.periodo_reporte + '"><i class="bi bi-eye"></i></button></td></tr>';
     });
     tbody.innerHTML = html;
   }
 
   /**
-   * Attach a live-search (filter-by-period-or-method) listener to the
+   * Attach a live-search (filter-by-period) listener to the
    * results table search input.
    */
   function setupSearchFilter() {
@@ -1369,7 +1459,7 @@
     if (!input) return;
     input.addEventListener("input", function () {
       var q = this.value.toLowerCase().trim();
-      renderResultsTable(allHistoricalPeriods.filter(function (r) { return r.periodo.toLowerCase().includes(q) || r.metodo.toLowerCase().includes(q); }));
+      renderResultsTable(allHistoricalPeriods.filter(function (r) { return r.periodo_reporte.toLowerCase().includes(q); }));
     });
   }
 
@@ -1395,43 +1485,38 @@
       var el = document.getElementById("detailsModal");
       if (!el) return;
       document.getElementById("modal-period-title").textContent = d.periodo;
-      renderModalSummaries(d.summaries || []);
+      renderModalSummary(d.summary || {}, d.tiempos || {});
       renderModalDimensions(d.dimensions || {});
       new bootstrap.Modal(el).show();
     }).catch(function () { hideLoading(); showToast("Error al obtener detalle", "error"); });
   }
 
   /**
-   * Render the summary cards inside the detail modal.
-   * One card per method (Financiero / Operativo), each containing a
-   * compact key-value table of all metrics.
-   * @param {Array} summaries – Array of summary objects from the API.
-   */
-  function renderModalSummaries(summaries) {
-    var c = document.getElementById("modal-summaries-container");
+    * Render the summary card inside the detail modal.
+    * @param {Object} summary – Summary dict with all metrics.
+    * @param {Object} tiempos – KM object {mediana_activo, ...}.
+    */
+  function renderModalSummary(summary, tiempos) {
+    var c = document.getElementById("modal-summary-container");
     if (!c) return;
-    if (!summaries.length) { c.innerHTML = '<div class="col-12 text-center py-3" style="color:var(--text-secondary)">Sin resumen</div>'; return; }
-    var html = "";
-    summaries.forEach(function (s) {
-      var isFin = s.metodo === "Financiero";
-      var f = function(v, d) { return (v || 0).toLocaleString(undefined, {minimumFractionDigits: d||0, maximumFractionDigits: d||0}); };
-      var pct = function(v) { return f(v, 2) + "%"; };
-      var usd = function(v) { return "$" + f(v, 2); };
-      var intl = function(v) { return f(v, 0); };
-      html += '<div class="col-md-6"><div class="card h-100 border-1" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-header d-flex justify-content-between align-items-center bg-transparent py-2"><span style="color:var(--text-primary);font-weight:bold">' + s.metodo + '</span><span class="badge rounded-pill px-2 py-1 ' + (isFin ? "badge-fin" : "badge-op") + '">' + s.metodo + '</span></div><div class="card-body p-3"><table class="table table-sm mb-0 table-modal-sum" style="font-size:0.8rem"><tbody>';
-      html += '<tr><td class="modal-label ps-0">Base Inicio</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.activos_inicio) + '</td><td class="modal-label ps-3">Base Final</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.activos_final) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">Nuevos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.nuevos_mes) + '</td><td class="modal-label ps-3">Bajas Netas</td><td class="text-end modal-value-danger">' + intl(s.bajas_netas_balance) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">Bajas Brutas</td><td class="text-end modal-value-danger">' + intl(s.bajas_brutas_auditoria) + '</td><td class="modal-label ps-3">Churn Neto</td><td class="text-end modal-value-danger">' + pct(s.churn_neto_pct) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">Churn Bruto</td><td class="text-end modal-value-danger">' + pct(s.churn_bruto_pct) + '</td><td class="modal-label ps-3">ARPU</td><td class="text-end modal-value-success">' + usd(s.arpu) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">Total Billing</td><td class="text-end modal-value-accent">' + usd(s.total_billing) + '</td><td class="modal-label ps-3">Corte Impago</td><td class="text-end modal-value-warning">' + intl(s.corte_impagado) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">Winback</td><td class="text-end modal-value-success">' + pct(s.tasa_winback_pct) + '</td><td class="modal-label ps-3">Reactivaciones</td><td class="text-end modal-value-success">' + intl(s.reactivaciones) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">React 6_churn</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_6_churn) + '</td><td class="modal-label ps-3">React 8_30days</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_8_30days) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">React 4_paused</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_4_paused) + '</td><td class="modal-label ps-3">Total Inactivos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.total_inactivos) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">Aporte React.</td><td class="text-end modal-value-accent">' + pct(s.tasa_aporte_react_pct) + '</td><td class="modal-label ps-3">Indice Reemplazo</td><td class="text-end modal-value-accent">' + pct(s.indice_reemplazo_react_pct) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">Adic. Netas</td><td class="text-end modal-value-success">' + intl(s.adiciones_netas) + '</td><td class="modal-label ps-3">Adic. Brutas</td><td class="text-end modal-value-success">' + intl(s.adiciones_brutas) + '</td></tr>';
-      html += '<tr><td class="modal-label ps-0">Prom. Dias Activo</td><td class="text-end" style="color:var(--text-primary)">' + (s.prom_dias_activo || 0).toFixed(1) + ' d</td><td class="modal-label ps-3">Prom. Dias Cancelado</td><td class="text-end" style="color:var(--text-primary)">' + (s.prom_dias_cancelado || 0).toFixed(1) + ' d</td></tr>';
-      html += '</tbody></table></div></div></div>';
-    });
+    if (!summary || !Object.keys(summary).length) { c.innerHTML = '<div class="col-12 text-center py-3" style="color:var(--text-secondary)">Sin resumen</div>'; return; }
+    var f = function(v, d) { return (v || 0).toLocaleString(undefined, {minimumFractionDigits: d||0, maximumFractionDigits: d||0}); };
+    var pct = function(v) { return f(v, 2) + "%"; };
+    var usd = function(v) { return "$" + f(v, 2); };
+    var intl = function(v) { return f(v, 0); };
+    var s = summary;
+    var html = '<div class="col-12"><div class="card border-1" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3"><table class="table table-sm mb-0 table-modal-sum" style="font-size:0.8rem"><tbody>';
+    html += '<tr><td class="modal-label ps-0">Base Inicio</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.activos_inicio) + '</td><td class="modal-label ps-3">Base Final</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.activos_final) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Nuevos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.nuevos_mes) + '</td><td class="modal-label ps-3">Bajas Netas</td><td class="text-end modal-value-danger">' + intl(s.bajas_netas_balance) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Bajas Brutas</td><td class="text-end modal-value-danger">' + intl(s.bajas_brutas_auditoria) + '</td><td class="modal-label ps-3">Churn Neto</td><td class="text-end modal-value-danger">' + pct(s.churn_neto_pct) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Churn Bruto</td><td class="text-end modal-value-danger">' + pct(s.churn_bruto_pct) + '</td><td class="modal-label ps-3">ARPU</td><td class="text-end modal-value-success">' + usd(s.arpu) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Total Billing</td><td class="text-end modal-value-accent">' + usd(s.total_billing) + '</td><td class="modal-label ps-3">Corte Impago</td><td class="text-end modal-value-warning">' + intl(s.corte_impagado) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Winback</td><td class="text-end modal-value-success">' + pct(s.tasa_winback_pct) + '</td><td class="modal-label ps-3">Reactivaciones</td><td class="text-end modal-value-success">' + intl(s.reactivaciones) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">React 6_churn</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_6_churn) + '</td><td class="modal-label ps-3">React 8_30days</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_8_30days) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">React 4_paused</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_4_paused) + '</td><td class="modal-label ps-3">Total Inactivos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.total_inactivos) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Aporte React.</td><td class="text-end modal-value-accent">' + pct(s.tasa_aporte_react_pct) + '</td><td class="modal-label ps-3">Indice Reemplazo</td><td class="text-end modal-value-accent">' + pct(s.indice_reemplazo_react_pct) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Adic. Netas</td><td class="text-end modal-value-success">' + intl(s.adiciones_netas) + '</td><td class="modal-label ps-3">Adic. Brutas</td><td class="text-end modal-value-success">' + intl(s.adiciones_brutas) + '</td></tr>';
+    html += '</tbody></table></div></div></div>';
     c.innerHTML = html;
   }
 
@@ -1466,8 +1551,6 @@
       { k: "adiciones_netas", label: "Ad.Net", fmt: function(v) { return (v || 0).toLocaleString(); } },
       { k: "adiciones_brutas", label: "Ad.Bru", fmt: function(v) { return (v || 0).toLocaleString(); } },
       { k: "corte_impagado", label: "Corte", fmt: function(v) { return (v || 0).toLocaleString(); } },
-      { k: "prom_dias_activo", label: "Dias.Act", fmt: function(v) { return (v || 0).toFixed(1) + "d"; } },
-      { k: "prom_dias_cancelado", label: "Dias.Can", fmt: function(v) { return (v || 0).toFixed(1) + "d"; } },
     ];
     Object.keys(dimensions).forEach(function (key) {
       var items = dimensions[key] || [];
@@ -1488,5 +1571,105 @@
       html += '</tbody></table></div></div></div></div>';
     });
     c.innerHTML = html;
+  }
+
+  // --- Lifecycle Analysis ---
+  var lifecycleCharts = { activo: null, reactivacion: null };
+  window.runLifecycleAnalysis = function () {
+    showLoading("Ejecutando analisis de ciclo de vida...");
+    fetch("/api/lifecycle/run/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (resp) {
+        hideLoading();
+        if (resp.status === "success") {
+          loadLifecycleResults();
+        } else {
+          showToast("Error: " + (resp.message || "Desconocido"), "error");
+        }
+      })
+      .catch(function () { hideLoading(); showToast("Error de conexion", "error"); });
+  };
+  function loadLifecycleResults() {
+    fetch("/api/lifecycle/results/")
+      .then(function (r) { return r.json(); })
+      .then(function (resp) {
+        if (resp.status === "success") {
+          renderLifecycleResults(resp.data);
+          loadSurvivalPage();
+          showToast("Analisis de ciclo de vida completado", "success");
+        } else {
+          var el = document.getElementById("lifecycleEmptyMsg");
+          if (el) el.classList.remove("d-none");
+          var cont = document.getElementById("lifecycleResults");
+          if (cont) cont.classList.add("d-none");
+        }
+      })
+      .catch(function () {});
+  }
+  function renderLifecycleResults(data) {
+    document.getElementById("lifecycleEmptyMsg").classList.add("d-none");
+    document.getElementById("lifecycleResults").classList.remove("d-none");
+    var isLight = document.documentElement.classList.contains("light-mode");
+    var gridColor = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
+    var tickColor = isLight ? "#64748b" : "#94a3b8";
+    // Stats rows
+    var statsHtml = "";
+    function statBox(label, value, color, unit) {
+      if (unit === undefined) unit = " d";
+      if (value == null || (typeof value === "number" && isNaN(value))) value = "-";
+      else value = String(Math.round(value)) + unit;
+      return '<div class="col text-center px-2 py-2 border-end" style="border-color:' + gridColor + '"><div class="small text-secondary">' + label + '</div><div class="fw-bold fs-5" style="color:' + color + '">' + value + '</div></div>';
+    }
+    function sepRow() { return '</div></div><div class="col-12 mt-2"><div class="d-flex flex-wrap border rounded-3" style="border-color:' + gridColor + '">'; }
+    // Row 1: Activo
+    statsHtml += '<div class="col-12"><div class="d-flex flex-wrap border rounded-3" style="border-color:' + gridColor + '">';
+    statsHtml += statBox("Mediana Activo", data.mediana_activo, "#2563eb");
+    statsHtml += statBox("Promedio Activo", data.promedio_activo, "#3b82f6");
+    statsHtml += statBox("P25 Activo", data.p25_activo, "#64748b");
+    statsHtml += statBox("P75 Activo", data.p75_activo, "#94a3b8");
+    statsHtml += statBox("Ciclos x Sub (prom)", data.ciclos_por_suscriptor && data.ciclos_por_suscriptor.promedio != null ? data.ciclos_por_suscriptor.promedio : "-", "#8b5cf6", "");
+    statsHtml += statBox("Subs. Totales", data.suscriptores_totales, "#94a3b8", "");
+    statsHtml += statBox("Nunca Inactivos", data.suscriptores_nunca_inactivos, "#94a3b8", "");
+    // Row 2: Reactivacion
+    statsHtml += sepRow();
+    statsHtml += statBox("Mediana Reactivacion", data.mediana_reactivacion, "#10b981");
+    statsHtml += statBox("Promedio Reactivacion", data.promedio_reactivacion, "#34d399");
+    statsHtml += statBox("P25 Reactivacion", data.p25_reactivacion, "#64748b");
+    statsHtml += statBox("P75 Reactivacion", data.p75_reactivacion, "#94a3b8");
+    statsHtml += statBox("Total Reactivaciones", data.n_total_reactivacion, "#94a3b8", "");
+    statsHtml += '</div></div>';
+    document.getElementById("lifecycleStatsRow").innerHTML = statsHtml;
+    // KM charts
+    var opts = chartOpts({
+      plugins: {
+        legend: { display: false },
+        tooltip: { mode: "index", intersect: false, callbacks: { label: function (tc) { return tc.dataset.label + ": " + (tc.parsed ? (tc.parsed.y * 100).toFixed(1) + "%" : ""); } } },
+      },
+      scales: {
+        y: { min: 0, max: 1.05, grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 }, callback: function (v) { return (v * 100).toFixed(0) + "%"; } } },
+        x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } }, title: { display: true, text: "Dias", color: tickColor, font: { size: 10 } } },
+      },
+    });
+    function drawLifecycleChart(canvasId, curve, color) {
+      if (lifecycleCharts[canvasId.replace("lifecycleChart", "").toLowerCase()]) {
+        lifecycleCharts[canvasId.replace("lifecycleChart", "").toLowerCase()].destroy();
+      }
+      var ctx = document.getElementById(canvasId);
+      if (!ctx || !curve || !curve.length) return;
+      var chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: curve.map(function (p) { return p.tiempo; }),
+          datasets: [{ label: "Supervivencia", data: curve.map(function (p) { return p.sup; }), borderColor: color, backgroundColor: "transparent", borderWidth: 2, pointRadius: 0, stepped: "before", fill: false, tension: 0 }],
+        },
+        options: opts,
+      });
+      lifecycleCharts[canvasId.replace("lifecycleChart", "").toLowerCase()] = chart;
+    }
+    drawLifecycleChart("lifecycleChartActivo", data.curva_activo, "#2563eb");
+    drawLifecycleChart("lifecycleChartReactivacion", data.curva_reactivacion, "#10b981");
   }
 })();

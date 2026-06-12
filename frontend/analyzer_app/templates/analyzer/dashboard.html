@@ -22,18 +22,19 @@
               <div id="churn-comparativo-value" class="display-5 fw-bold">--</div>
             </div>
             <div class="text-end">
-              <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2">Promedio Financiero</span>
-            </div>
-          </div>
-        </div>
+              <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2">Promedio General</span>
       </div>
+    </div>
+  </div>
+
+</div>
     </div>
   </div>
 
   <div class="row g-4 mb-4">
     <div class="col-12">
       <div class="card h-100">
-        <div class="card-header"><h5><i class="bi bi-graph-up me-2"></i>Churn Neto y Bruto por Metodo</h5></div>
+        <div class="card-header"><h5><i class="bi bi-graph-up me-2"></i>Churn Neto y Bruto</h5></div>
         <div class="card-body"><div class="chart-container" style="position:relative;height:340px"><canvas id="churnLineChart"></canvas></div></div>
       </div>
     </div>
@@ -76,21 +77,7 @@
   <div class="row g-4 mb-4">
     <div class="col-lg-6">
       <div class="card h-100">
-        <div class="card-header"><h5><i class="bi bi-clock me-2"></i>Prom. Dias Activo</h5></div>
-        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="tiemposActivoChart"></canvas></div></div>
-      </div>
-    </div>
-    <div class="col-lg-6">
-      <div class="card h-100">
-        <div class="card-header"><h5><i class="bi bi-clock-fill me-2"></i>Prom. Dias Cancelado</h5></div>
-        <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="tiemposCanceladoChart"></canvas></div></div>
-      </div>
-    </div>
-  </div>
-  <div class="row g-4 mb-4">
-    <div class="col-lg-6">
-      <div class="card h-100">
-        <div class="card-header"><h5><i class="bi bi-activity me-2"></i>Cortes Automaticos vs Reactivaciones</h5></div>
+        <div class="card-header"><h5><i class="bi bi-activity me-2"></i>Cortes vs Reactivaciones</h5></div>
         <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="cortesReactChart"></canvas></div></div>
       </div>
     </div>
@@ -108,17 +95,18 @@
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0 table-theme">
           <thead><tr>
-            <th>Periodo</th><th>Metodo</th><th class="text-end">Activos Inicio</th><th class="text-end">Activos Final</th>
+            <th>Periodo</th><th class="text-end">Activos Inicio</th><th class="text-end">Activos Final</th>
             <th class="text-end">Nuevos</th><th class="text-end">Churn Neto</th><th class="text-end">Churn Bruto</th>
             <th class="text-end">ARPU</th><th class="text-center">Accion</th>
           </tr></thead>
           <tbody id="dashboard-table-tbody">
-            <tr><td colspan="9" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando...</td></tr>
+            <tr><td colspan="8" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
   </div>
+
 </div>
 
 <!-- ANALYTICS - Tarjetas con colores + filtro multiselect + dimensiones -->
@@ -283,12 +271,91 @@
         <table class="table table-hover align-middle mb-0 table-theme">
           <thead><tr>
             <th style="cursor:pointer" id="sort-period">Periodo <i class="bi bi-sort-down-alt"></i></th>
-            <th>Metodo</th><th class="text-end">Activos Inicio</th><th class="text-end">Activos Final</th>
+            <th class="text-end">Activos Inicio</th><th class="text-end">Activos Final</th>
             <th class="text-end">Nuevos</th><th class="text-end">Churn Neto</th><th class="text-end">ARPU</th>
             <th class="text-center">Accion</th>
           </tr></thead>
           <tbody id="results-table-tbody"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SURVIVAL PAGE -->
+<div id="tab-survival" class="spa-tab d-none">
+  <!-- Ciclo de Vida Global -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <h5 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Ciclo de Vida Global</h5>
+          <div class="d-flex align-items-center gap-2">
+            <button id="btnRunLifecycle" class="btn btn-sm btn-outline-primary" onclick="runLifecycleAnalysis()">
+              <i class="bi bi-play-fill me-1"></i>Ejecutar Analisis
+            </button>
+            <span id="lifecycleSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="lifecycleEmptyMsg" class="text-center py-4" style="color:var(--text-secondary)">
+            <i class="bi bi-info-circle me-2"></i>Ejecute el analisis de ciclo de vida para ver resultados globales.
+          </div>
+          <div id="lifecycleResults" class="d-none">
+            <div class="row g-3 mb-3" id="lifecycleStatsRow"></div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <h6 class="small fw-bold mb-2" style="color:var(--text-secondary)">
+                  <i class="bi bi-graph-up me-1"></i>Primer Periodo Activo (KM)
+                </h6>
+                <div class="chart-container" style="position:relative;height:280px"><canvas id="lifecycleChartActivo"></canvas></div>
+              </div>
+              <div class="col-md-6">
+                <h6 class="small fw-bold mb-2" style="color:var(--text-secondary)">
+                  <i class="bi bi-arrow-return-right me-1"></i>Reactivacion (KM)
+                </h6>
+                <div class="chart-container" style="position:relative;height:280px"><canvas id="lifecycleChartReactivacion"></canvas></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Curva Kaplan-Meier por tipo -->
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Supervivencia Kaplan-Meier</h5>
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="btn-group btn-group-sm" role="group">
+              <input type="radio" class="btn-check" name="kmTipoS" id="kmTipoActivoS" value="activo" checked autocomplete="off">
+              <label class="btn btn-outline-secondary btn-sm" for="kmTipoActivoS">Dias Activo</label>
+              <input type="radio" class="btn-check" name="kmTipoS" id="kmTipoReactivacionS" value="reactivacion" autocomplete="off">
+              <label class="btn btn-outline-secondary btn-sm" for="kmTipoReactivacionS">Dias Reactivacion</label>
+            </div>
+            <select id="survivalDim" class="form-select form-select-sm" style="width:auto;font-size:0.85rem">
+              <option value="">Sin dimensión</option>
+              <option value="zona">Zona</option>
+              <option value="sucursal">Sucursal</option>
+              <option value="producto">Producto</option>
+              <option value="municipio">Municipio</option>
+              <option value="campana">Campaña</option>
+            </select>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="chart-container" style="position:relative;height:380px"><canvas id="kmSurvivalChartS"></canvas></div>
+              <div id="kmSurvivalEmptyMsg" class="text-center py-5 d-none" style="color:var(--text-secondary)"><i class="bi bi-exclamation-circle me-2"></i>Ejecute el analisis de ciclo de vida primero.</div>
+            </div>
+            <div class="col-12" id="kmRiskTableContainerS"></div>
+            <div class="col-12" id="kmStatsRowS"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -303,8 +370,8 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <h6 class="mb-3 text-uppercase small text-muted"><i class="bi bi-sliders me-2"></i>Resumen por Metodo</h6>
-        <div class="row g-3 mb-4" id="modal-summaries-container"></div>
+        <h6 class="mb-3 text-uppercase small text-muted"><i class="bi bi-sliders me-2"></i>Resumen</h6>
+        <div class="row g-3 mb-4" id="modal-summary-container"></div>
         <hr style="border-top:1px solid var(--border-color)" class="my-4">
         <h6 class="mb-3 text-uppercase small text-muted"><i class="bi bi-bar-chart me-2"></i>Desglose Dimensiones</h6>
         <div class="row g-3" id="modal-dimensions-container"></div>
