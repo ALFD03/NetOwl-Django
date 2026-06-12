@@ -10,7 +10,7 @@ Dependencias esperadas:
     - Django >= 5.0
     - pandas, numpy
     - psycopg2-binary (conexión PostgreSQL)
-    - Conexión a base de datos PostgreSQL configurada en churn_web.settings
+    - Conexión a base de datos PostgreSQL configurada en netowl_web.settings
 
 Submódulos:
     - backend/analyzer.py       : Lógica central del análisis de churn

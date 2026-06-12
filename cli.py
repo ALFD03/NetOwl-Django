@@ -7,14 +7,14 @@ and executing the full ETL + analysis pipeline.
 Dependencies (backend packages):
     - backend.database.DBConnector   : Database connection manager.
     - backend.models.Periodo         : Period representation for analysis.
-    - backend.analyzer.ChurnRateAnalyzer : Core churn-rate computation engine.
+    - backend.analyzer.MetricsAnalyzer : Core churn-rate computation engine.
     - backend.imports                : CSV import utilities (subscriptions & logs).
 """
 
 import argparse
 from backend.database import DBConnector
 from backend.models import Periodo
-from backend.analyzer import ChurnRateAnalyzer
+from backend.analyzer import MetricsAnalyzer
 from backend.imports import import_subscriptions_csv, import_logs_csv
 from backend.lifetime import run_lifecycle_analysis
 
@@ -49,7 +49,7 @@ def cmd_analyze(args):
     """Run churn-rate analysis for a given month.
 
     Builds a ``Periodo`` from the provided ``year_month`` string (``YYYY-MM``),
-    creates a ``DBConnector`` and a ``ChurnRateAnalyzer``, then executes the
+    creates a ``DBConnector`` and a ``MetricsAnalyzer``, then executes the
     analysis pipeline.
 
     Args:
@@ -57,7 +57,7 @@ def cmd_analyze(args):
     """
     db = DBConnector()
     periodo = Periodo.build(f"{args.year_month}-01")
-    analyzer = ChurnRateAnalyzer(db, periodo)
+    analyzer = MetricsAnalyzer(db, periodo)
     analyzer.run()
 
 
@@ -89,7 +89,7 @@ def cmd_run_all(args):
     print(f"Importados {count_logs} logs")
     db = DBConnector()
     periodo = Periodo.build(f"{args.year_month}-01")
-    analyzer = ChurnRateAnalyzer(db, periodo)
+    analyzer = MetricsAnalyzer(db, periodo)
     analyzer.run()
 
 

@@ -1,20 +1,3 @@
-"""
-Vistas delgadas — conectan el frontend Django con la API del backend.
-
-Cada función recibe una petición HTTP (request), delega la lógica
-de negocio a los módulos de backend (data_api, analyzer, database,
-imports, models) y devuelve una respuesta JSON o una plantilla HTML.
-
-Dependencias:
-  - Django (django.http, django.shortcuts)
-  - backend.data_api          — consultas analíticas precalculadas
-  - backend.analyzer           — ejecutor del análisis de churn
-  - backend.database           — conexión a base de datos
-  - backend.imports            — importación de CSV
-  - backend.models             — modelo Periodo
-  - json, io, os, sys, tempfile (estándar)
-"""
-
 import json
 import io
 import logging
@@ -29,7 +12,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 
 from backend.analyzer import (
-    ChurnRateAnalyzer,
+    MetricsAnalyzer,
     get_cierre_churn, get_dimensiones, get_periodos,
     get_dashboard_data, get_analytics_data,
 )
@@ -41,99 +24,48 @@ from backend.lifetime import (
 from backend.models import Periodo
 
 
-def dashboard(request, periodo=None):
-    """
-    Renderiza la plantilla SPA (Single Page Application) del dashboard.
+TEMPLATE_PREFIX = "subscriptions/"
 
-    Todas las rutas que no comienzan con /api/ caen aquí; el enrutamiento
-    interno se maneja del lado del cliente con JavaScript.
 
-    Args:
-        request:  HttpRequest de Django.
-        periodo:  Opcional. Cadena con el periodo (YYYY-MM) para vistas
-                  que incluyen un periodo en la URL.
+def dashboard(request):
+    return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
 
-    Returns:
-        HttpResponse con el HTML de la plantilla "analyzer/dashboard.html".
-    """
-    return render(request, "analyzer/dashboard.html")
+
+def analytics(request):
+    return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
+
+
+def imports(request):
+    return render(request, f"{TEMPLATE_PREFIX}imports.html", {"section": "imports"})
+
+
+def results(request, periodo=None):
+    return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
+
+
+def lifetime(request):
+    return render(request, f"{TEMPLATE_PREFIX}lifetime.html", {"section": "lifetime"})
 
 
 def api_dashboard_data(request):
-    """
-    Endpoint que devuelve los datos agregados para el dashboard.
-
-    Consulta la función `get_dashboard_data()` del backend y retorna
-    el resultado como JSON.
-
-    Args:
-        request: HttpRequest de Django (GET).
-
-    Returns:
-        JsonResponse con los datos del dashboard (por ejemplo, totales
-        de suscriptores, altas, bajas, tasas de churn, etc.).
-    """
     return JsonResponse(get_dashboard_data())
 
 
 def api_analytics_data(request):
-    """
-    Endpoint que devuelve datos analíticos filtrados por periodos.
-
-    Lee el parámetro GET "periods" (lista separada por comas de periodos
-    en formato YYYY-MM). Si no se envía, retorna datos para todos los
-    periodos disponibles.
-
-    Args:
-        request: HttpRequest de Django (GET con ?periods=...).
-
-    Returns:
-        JsonResponse con los datos analíticos para los periodos
-        solicitados.
-    """
-    # Extraer y sanitizar el parámetro de periodos desde la query string
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     return JsonResponse(get_analytics_data(periodos))
 
 
 def api_periods_list(request):
-    """
-    Endpoint que devuelve la lista de periodos disponibles en la BD.
-
-    Args:
-        request: HttpRequest de Django (GET).
-
-    Returns:
-        JsonResponse con la clave "periods" cuyo valor es una lista
-        de cadenas en formato YYYY-MM.
-    """
     return JsonResponse({"periods": get_periodos()})
 
 
 def api_results_list(request):
-    """
-    Endpoint que devuelve el historial completo de resultados de churn.
-
-    Returns:
-        JsonResponse con la clave "periods" y una lista plana de
-        objetos {periodo, ...}.
-    """
     return JsonResponse({"periods": get_cierre_churn()})
 
 
 def api_results_detail(request, periodo):
-    """
-    Endpoint que devuelve el detalle de resultados para un periodo específico.
-
-    Args:
-        request: HttpRequest de Django (GET).
-        periodo: Cadena con el periodo en formato YYYY-MM.
-
-    Returns:
-        JsonResponse con ``periodo``, ``summary`` (dict único),
-        ``dimensions``.
-    """
     cierre = get_cierre_churn([periodo])
     dims = get_dimensiones([periodo])
     summary = cierre[0] if cierre else {}
@@ -146,29 +78,6 @@ def api_results_detail(request, periodo):
 
 
 def api_run_analysis(request):
-    """
-    Ejecuta el análisis de churn para un periodo dado.
-
-    Recibe un JSON con el campo "month" (YYYY-MM). Construye un objeto
-    Periodo, instancia el analizador y lo ejecuta. Captura toda la salida
-    estándar y de error generada durante el análisis para devolverla al
-    frontend.
-
-    Args:
-        request: HttpRequest de Django (POST con body JSON).
-
-    Returns:
-        JsonResponse con:
-          - "status":        "success" o "error".
-          - "periodo_label": etiqueta legible del periodo (solo en éxito).
-          - "log_output":    texto capturado de stdout/stderr (solo en éxito).
-          - "message":       mensaje de error (solo en error).
-
-    Raises:
-        JsonResponse con status 400 si el JSON es inválido o falta el mes.
-        JsonResponse con status 405 si el método HTTP no es POST.
-        JsonResponse con status 500 si ocurre un error durante el análisis.
-    """
     if request.method != "POST":
         return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
     try:
@@ -181,20 +90,17 @@ def api_run_analysis(request):
     try:
         periodo = Periodo.build(f"{mes}-01")
         periodo_label = periodo.label()
-        # Redirigir stdout/stderr a un buffer para capturar los logs del análisis
         capture = io.StringIO()
         old_out, old_err = sys.stdout, sys.stderr
         sys.stdout = capture
         sys.stderr = capture
         try:
-            analyzer = ChurnRateAnalyzer(DBConnector(), periodo)
+            analyzer = MetricsAnalyzer(DBConnector(), periodo)
             analyzer.run()
         except Exception as e:
-            # Restaurar los streams originales antes de responder con error
             sys.stdout, sys.stderr = old_out, old_err
             return JsonResponse({"status": "error", "message": str(e)}, status=500)
         finally:
-            # Obtener el contenido capturado y restaurar los streams originales
             result_output = capture.getvalue()
             sys.stdout, sys.stderr = old_out, old_err
         return JsonResponse({
@@ -207,20 +113,6 @@ def api_run_analysis(request):
 
 
 def api_survival_data(request):
-    """
-    Endpoint para la página de supervivencia Kaplan-Meier.
-
-    Retorna curvas KM globales (desde el analisis de ciclo de vida)
-    y curvas por dimension opcionalmente filtradas.
-
-    Args:
-        request: HttpRequest de Django (GET con ?dim=zona opcional).
-        periodo: Ignorado (se retornan datos globales).
-
-    Returns:
-        JsonResponse con ``curva_activo``, ``curva_reactivacion``,
-        ``stats``, ``curvas_dimension``.
-    """
     lc = get_lifecycle_results()
     if not lc:
         return JsonResponse({
@@ -235,10 +127,8 @@ def api_survival_data(request):
     curvas_dim = {"activo": {}, "reactivacion": {}}
     if dim:
         DIM_MAP = {
-            "zona": "Zona",
-            "sucursal": "Sucursal",
-            "municipio": "Municipio",
-            "campana": "campanna",
+            "zona": "Zona", "sucursal": "Sucursal",
+            "municipio": "Municipio", "campana": "campanna",
             "producto": "Producto",
         }
         db_dim = DIM_MAP.get(dim)
@@ -286,28 +176,6 @@ def api_survival_data(request):
 
 
 def api_import_subscriptions(request):
-    """
-    Importa un archivo CSV de suscripciones a la base de datos.
-
-    Recibe el archivo mediante multipart/form-data, lo escribe en un
-    archivo temporal, invoca `import_subscriptions_csv` del backend y
-    elimina el temporal al finalizar.
-
-    Args:
-        request: HttpRequest de Django (POST con archivo en
-                 request.FILES["csv_file"]).
-
-    Returns:
-        JsonResponse con:
-          - "status":  "success" o "error".
-          - "message": descripción del resultado (número de filas
-                       importadas o mensaje de error).
-
-    Raises:
-        JsonResponse con status 405 si el método no es POST.
-        JsonResponse con status 400 si no se envía el archivo.
-        JsonResponse con status 500 si ocurre un error de importación.
-    """
     if request.method != "POST":
         return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
     if "csv_file" not in request.FILES:
@@ -315,7 +183,6 @@ def api_import_subscriptions(request):
     csv_file = request.FILES["csv_file"]
     tmp_path = None
     try:
-        # Guardar el archivo subido en un temporal para procesarlo
         with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
             for chunk in csv_file.chunks():
                 tmp.write(chunk)
@@ -325,7 +192,6 @@ def api_import_subscriptions(request):
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
     finally:
-        # Asegurar la limpieza del archivo temporal
         if tmp_path:
             try:
                 os.unlink(tmp_path)
@@ -334,27 +200,6 @@ def api_import_subscriptions(request):
 
 
 def api_import_logs(request):
-    """
-    Importa un archivo CSV de logs a la base de datos.
-
-    Funciona de manera análoga a `api_import_subscriptions` pero invoca
-    `import_logs_csv` del backend.
-
-    Args:
-        request: HttpRequest de Django (POST con archivo en
-                 request.FILES["csv_file"]).
-
-    Returns:
-        JsonResponse con:
-          - "status":  "success" o "error".
-          - "message": descripción del resultado (número de filas
-                       importadas o mensaje de error).
-
-    Raises:
-        JsonResponse con status 405 si el método no es POST.
-        JsonResponse con status 400 si no se envía el archivo.
-        JsonResponse con status 500 si ocurre un error de importación.
-    """
     if request.method != "POST":
         return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
     if "csv_file" not in request.FILES:
@@ -362,7 +207,6 @@ def api_import_logs(request):
     csv_file = request.FILES["csv_file"]
     tmp_path = None
     try:
-        # Guardar el archivo subido en un temporal para procesarlo
         with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
             for chunk in csv_file.chunks():
                 tmp.write(chunk)
@@ -372,7 +216,6 @@ def api_import_logs(request):
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
     finally:
-        # Asegurar la limpieza del archivo temporal
         if tmp_path:
             try:
                 os.unlink(tmp_path)
@@ -381,7 +224,6 @@ def api_import_logs(request):
 
 
 def api_lifecycle_run(request):
-    """Ejecuta el analisis de ciclo de vida global (POST)."""
     if request.method != "POST":
         return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
     try:
@@ -404,7 +246,6 @@ def api_lifecycle_run(request):
 
 
 def api_lifecycle_results(request):
-    """Recupera los resultados del analisis de ciclo de vida (GET)."""
     data = get_lifecycle_results()
     if not data:
         return JsonResponse({"status": "empty", "message": "Ejecute el analisis de ciclo de vida primero"})

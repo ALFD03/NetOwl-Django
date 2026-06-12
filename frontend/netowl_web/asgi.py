@@ -1,4 +1,4 @@
 import os
 from django.core.asgi import get_asgi_application
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'frontend.churn_web.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'frontend.netowl_web.settings')
 application = get_asgi_application()

@@ -1,5 +1,5 @@
 """
-Módulo de configuración global del backend de ChurnRateAnalyzer.
+Módulo de configuración global del backend de MetricsAnalyzer.
 
 Dependencias esperadas:
 - `python-dotenv`: Carga variables de entorno desde un archivo `.env`.

@@ -12,7 +12,7 @@ def compute_km(
 ) -> Dict[str, Any]:
     """
     Compute Kaplan-Meier survival curve with 95 % confidence intervals.
-    Standalone version extracted from ChurnRateAnalyzer._compute_km.
+    Standalone version extracted from MetricsAnalyzer._compute_km.
     """
     if events.sum() == 0 or len(durations) < 2:
         return {

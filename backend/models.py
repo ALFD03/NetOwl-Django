@@ -1,5 +1,5 @@
 """
-Modelos de datos del dominio de ChurnRateAnalyzer.
+Modelos de datos del dominio de MetricsAnalyzer.
 
 Dependencias esperadas:
 - `utils.parse_date`: Conversión de cadenas a objetos datetime.

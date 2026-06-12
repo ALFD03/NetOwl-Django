@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",   # Servir archivos estáticos
     "django.contrib.sessions",      # Soporte de sesiones
     "django.contrib.messages",      # Framework de mensajes (flash)
-    "frontend.analyzer_app",        # Aplicación principal del frontend
+    "frontend.subscriptions",        # Aplicación principal del frontend
 ]
 
 # --- Middleware ---
@@ -54,7 +54,7 @@ MIDDLEWARE = [
 ]
 
 # módulo raíz de las URLs
-ROOT_URLCONF = "frontend.churn_web.urls"
+ROOT_URLCONF = "frontend.netowl_web.urls"
 
 # --- Configuración de plantillas ---
 TEMPLATES = [
@@ -108,7 +108,7 @@ STORAGES = {
 }
 
 # Aplicación WSGI para servidores compatibles
-WSGI_APPLICATION = "frontend.churn_web.wsgi.application"
+WSGI_APPLICATION = "frontend.netowl_web.wsgi.application"
 
 # --- Internacionalización y localización ---
 LANGUAGE_CODE = "es"               # Idioma español

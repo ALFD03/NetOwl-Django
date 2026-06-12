@@ -1,0 +1,72 @@
+:root {
+  --surface-primary: #0b1326;
+  --surface-secondary: #0f1a36;
+  --surface-tertiary: #12214a;
+  --surface-hover: #15285d;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: #3b82f6;
+  --accent: #3b82f6;
+  --text-primary: #E6EEF6;
+  --text-secondary: #D5E6F0;
+  --text-muted: #64748b;
+  --border-color: #1e293b;
+  --error: #ef4444;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --radius: 8px;
+  --transition-speed: 0.3s;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.12),0 1px 2px rgba(0,0,0,0.24);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.1),0 2px 4px rgba(0,0,0,0.15);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1),0 4px 6px rgba(0,0,0,0.15);
+}
+
+.light-mode {
+  --surface-primary: #f8fafc;
+  --surface-secondary: #ffffff;
+  --surface-tertiary: #f1f5f9;
+  --surface-hover: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border-color: #cbd5e1;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -1px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1),0 4px 6px -2px rgba(0,0,0,0.05);
+}
+
+.light-mode .btn-close { filter: invert(1) grayscale(100%) brightness(0%); }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+
+body {
+  background-color: var(--surface-primary);
+  color: var(--text-primary);
+  font-family: 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,'Open Sans','Helvetica Neue',sans-serif;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+h1,h2,h3,h4,h5,h6 { font-weight: 600; line-height: 1.3; margin-bottom: 0.5rem; }
+h1 { font-size: 2.25rem; } h2 { font-size: 1.875rem; } h3 { font-size: 1.5rem; }
+h4 { font-size: 1.25rem; } h5 { font-size: 1.125rem; } h6 { font-size: 1rem; }
+
+p,li,td,th,label,input,select,textarea { font-size: 1rem; font-weight: 400; }
+
+.text-muted { color: var(--text-secondary) !important; }
+.text-primary { color: var(--text-primary) !important; }
+.text-white-50 { color: rgba(255,255,255,0.5) !important; }
+.text-primary-emphasis { color: var(--text-primary) !important; }
+.bg-light-subtle { background-color: var(--surface-tertiary) !important; color: var(--text-primary) !important; }
+.bg-secondary-subtle { background-color: rgba(255,255,255,0.03) !important; color: var(--text-secondary) !important; }
+.bg-primary-subtle { background-color: rgba(37,99,235,0.06) !important; color: var(--primary) !important; }
+
+body,.sidebar,.main-content,.card,.card-header,.card-body,.btn,
+.form-control,.form-select,table,th,td,label,.metric-card,.terminal-console {
+  transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease,
+              border-color var(--transition-speed) ease, box-shadow var(--transition-speed) ease,
+              transform var(--transition-speed) ease;
+}
+
+
