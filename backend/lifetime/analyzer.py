@@ -22,7 +22,7 @@ from .km_utils import compute_km
 
 
 RELEVANT_STATES = {ACTIVE_STATE} | INACTIVE_STATES
-DIMS = ["zona", "sucursal", "municipio", "campanna", "producto"]
+DIMS = ["Zona", "Sucursal", "Municipio", "campanna", "Producto"]
 
 
 def _normalize_estado(series: pd.Series) -> pd.Series:
@@ -469,6 +469,19 @@ def get_lifecycle_results() -> Dict[str, Any]:
         return {}
 
 
+def _safe_int(v):
+    """Convierte a int manejando None y strings float como '128.0'."""
+    if v is None:
+        return 0
+    try:
+        return int(v)
+    except (ValueError, TypeError):
+        try:
+            return int(float(v))
+        except (ValueError, TypeError):
+            return 0
+
+
 def get_lifetime_dimensiones(
     dim: Optional[str] = None,
 ) -> Dict[str, Any]:
@@ -500,16 +513,16 @@ def get_lifetime_dimensiones(
                 "p25_activo": _safe_float(row.get("p25_activo")),
                 "p75_activo": _safe_float(row.get("p75_activo")),
                 "curva_activo": curva_act,
-                "n_total_activo": int(row.get("n_total_activo") or 0),
-                "n_evento_activo": int(row.get("n_evento_activo") or 0),
+                "n_total_activo": _safe_int(row.get("n_total_activo")),
+                "n_evento_activo": _safe_int(row.get("n_evento_activo")),
                 # Tiempo hasta reactivacion
                 "promedio_reactivacion": _safe_float(row.get("promedio_reactivacion")),
                 "mediana_reactivacion": _safe_float(row.get("mediana_reactivacion")),
                 "p25_reactivacion": _safe_float(row.get("p25_reactivacion")),
                 "p75_reactivacion": _safe_float(row.get("p75_reactivacion")),
-                "n_total_reactivacion": int(row.get("n_total_reactivacion") or 0),
-                "n_evento_reactivacion": int(row.get("n_evento_reactivacion") or 0),
-                "n_censurado_reactivacion": int(row.get("n_censurado_reactivacion") or 0),
+                "n_total_reactivacion": _safe_int(row.get("n_total_reactivacion")),
+                "n_evento_reactivacion": _safe_int(row.get("n_evento_reactivacion")),
+                "n_censurado_reactivacion": _safe_int(row.get("n_censurado_reactivacion")),
                 "curva_reactivacion": curva_react,
             }
         return result

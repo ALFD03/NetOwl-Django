@@ -232,14 +232,14 @@ def api_survival_data(request):
         })
 
     dim = request.GET.get("dim")
-    curvas_dim = {}
+    curvas_dim = {"activo": {}, "reactivacion": {}}
     if dim:
         DIM_MAP = {
-            "zona": "zona",
-            "sucursal": "sucursal",
-            "producto": "producto",
-            "municipio": "municipio",
+            "zona": "Zona",
+            "sucursal": "Sucursal",
+            "municipio": "Municipio",
             "campana": "campanna",
+            "producto": "Producto",
         }
         db_dim = DIM_MAP.get(dim)
         if db_dim:
@@ -247,12 +247,15 @@ def api_survival_data(request):
                 dim_data = get_lifetime_dimensiones(db_dim)
                 for d, valores in dim_data.items():
                     for val, info in valores.items():
-                        curva = info.get("curva_activo", [])
-                        if curva:
-                            curvas_dim[val] = curva
+                        ca = info.get("curva_activo", [])
+                        if ca:
+                            curvas_dim["activo"][val] = ca
+                        cr = info.get("curva_reactivacion", [])
+                        if cr:
+                            curvas_dim["reactivacion"][val] = cr
             except Exception:
                 logger.exception("Error reading lifetime dimension curves for dim=%s", dim)
-                curvas_dim = {}
+                curvas_dim = {"activo": {}, "reactivacion": {}}
 
     curva_activo = lc.get("curva_activo", [])
     total = lc.get("n_total_activo", 0)

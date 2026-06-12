@@ -735,7 +735,7 @@
       borderColor: "transparent", backgroundColor: "transparent",
       pointRadius: 0, fill: false, stepped: "before", order: 4,
     });
-    var dimCurves = data.curvas_dimension || {};
+    var dimCurves = (data.curvas_dimension || {})[sufijo] || {};
     var dimIdx = 0;
     var dimPalette = ["#f59e0b", "#10b981", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316", "#6366f1", "#84cc16"];
     Object.keys(dimCurves).forEach(function (dimVal) {
