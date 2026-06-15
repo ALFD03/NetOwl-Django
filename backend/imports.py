@@ -249,7 +249,8 @@ def import_logs_csv(csv_path: str) -> int:
     1. Lee el CSV y renombra columnas según el mapeo definido.
     2. Valida que todas las columnas requeridas estén presentes.
     3. Convierte cadenas vacías a NaN y valores nulos a None.
-    4. Trunca la tabla `Subscripciones-logs` y copia los datos mediante COPY.
+    4. Crea la tabla `Subscripciones-logs` si no existe.
+    5. Trunca la tabla `Subscripciones-logs` y copia los datos mediante COPY.
 
     Args:
         csv_path: Ruta al archivo CSV de logs de cambios.

@@ -1,6 +1,6 @@
 # NetOwl
 
-Sistema web SPA para el cálculo de Churn Rate, métricas de reactivación, ARPU, tiempos de vida y análisis por dimensiones (zona, sucursal, municipio, campaña, producto).
+Sistema web para el cálculo de Churn Rate, métricas de reactivación, ARPU, tiempos de vida y análisis por dimensiones (zona, sucursal, municipio, campaña, producto).
 
 ## Stack tecnológico
 
@@ -30,26 +30,76 @@ NetOwl-Django/
 │   ├── utils.py                       # normalize_text(), parse_date()
 │   ├── models.py                      # Periodo (dataclass)
 │   ├── database.py                    # DBConnector (pool, read, save, copy)
-│   ├── analyzer.py                    # ChurnRateAnalyzer (pipeline ~1400 líneas)
+│   ├── analyzer.py                    # ChurnRateAnalyzer (pipeline, split en módulos)
+│   ├── loader.py                      # Carga de datos desde BD a DataFrames
+│   ├── cleaner.py                     # Limpieza y normalización de logs
+│   ├── rules.py                       # Reglas de anomalías (logs sintéticos)
+│   ├── metrics_calc.py                # Cálculo de KPIs y métricas
+│   ├── dimensions.py                  # Análisis por dimensiones
 │   ├── imports.py                     # Importación y limpieza de CSV
 │   └── data_api.py                    # Capa de acceso a datos para vistas
 │
+├── lifetime/                          # Módulo de análisis de tiempos de vida (Kaplan-Meier)
+│   ├── __init__.py
+│   ├── analyzer.py                    # LifecycleAnalyzer
+│   ├── loader.py                      # Carga de datos BD → DataFrames
+│   ├── lifecycle.py                   # Cálculo de métricas de ciclo de vida
+│   ├── dimensions.py                  # Análisis dimensional de tiempos de vida
+│   ├── runner.py                      # Orquestador del pipeline
+│   └── queries.py                     # Consultas SQL específicas
+│
 ├── frontend/                          # Aplicación Django
-│   ├── analyzer_app/                  # App Django (vistas delgadas, forms, urls)
-│   │   ├── views.py                   # Vistas API (JsonResponse)
+│   ├── __init__.py
+│   ├── netowl_web/                    # Proyecto Django (settings, wsgi, asgi, urls raíz)
+│   │   ├── settings.py
+│   │   ├── urls.py
+│   │   ├── wsgi.py
+│   │   ├── asgi.py
+│   │   └── __init__.py
+│   │
+│   ├── subscriptions/                 # App Django (vistas, urls, forms, templates, static)
+│   │   ├── views.py                   # Vistas por página + API (JsonResponse)
+│   │   ├── urls.py                    # Rutas por página + API
 │   │   ├── forms.py                   # MonthForm, CSVUploadForm
-│   │   ├── urls.py                    # Rutas SPA + API
-│   │   └── templates/analyzer/
-│   │       └── dashboard.html         # Único template SPA
+│   │   ├── apps.py
+│   │   ├── admin.py
+│   │   │
+│   │   ├── templates/subscriptions/   # Templates por página
+│   │   │   ├── dashboard.html
+│   │   │   ├── analytics.html
+│   │   │   ├── imports.html
+│   │   │   ├── results.html
+│   │   │   ├── lifetime.html
+│   │   │   └── partials/
+│   │   │       ├── header.html        # Header sticky por módulo
+│   │   │       ├── sidebar.html       # Sidebar de navegación
+│   │   │       ├── results_table.html
+│   │   │       └── results_detail_modal.html
+│   │   │
+│   │   └── static/subscriptions/js/   # JavaScript por página
+│   │       ├── dashboard.js           # Dashboard (charts + tabla)
+│   │       ├── analytics.js           # Analytics (KPI + charts)
+│   │       ├── imports.js             # Importación CSV
+│   │       ├── results.js             # Resultados históricos
+│   │       └── lifetime.js            # Curvas Kaplan-Meier
 │   │
-│   ├── churn_web/                     # Proyecto Django (settings, wsgi)
-│   ├── static/
-│   │   ├── css/styles.css             # Estilos ~980 líneas (tema claro/oscuro)
-│   │   └── js/main.js                 # SPA JavaScript ~1765 líneas (Chart.js + KM)
+│   ├── static/                        # Archivos estáticos globales
+│   │   ├── css/
+│   │   │   ├── base.css               # Variables CSS, tema claro/oscuro, reset
+│   │   │   ├── sidebar.css            # Estilos del sidebar
+│   │   │   ├── components.css         # Cards, botones, tablas, formularios
+│   │   │   └── subscriptions.css      # Estilos específicos del módulo
+│   │   └── js/
+│   │       ├── core.js                # Utilidades comunes, tema, toast, loading
+│   │       ├── theme.js               # Toggle claro/oscuro, persistencia
+│   │       └── sidebar.js             # Interacción del sidebar
 │   │
-│   └── templates/
-│       ├── base.html                  # Layout base (CDN: Bootstrap, Chart.js, Icons)
-│       └── includes/navbar.html       # Sidebar de navegación
+│   └── templates/                     # Templates raíz
+│       └── base.html                  # Layout base (CDN: Bootstrap, Chart.js, Icons)
+│
+├── _legacy/                           # Archivos legacy (versión SPA anterior)
+│   ├── main.js
+│   └── styles.css
 │
 ├── Planes.json                        # Catálogo de planes para validación
 └── Zonas.json                         # Zonas geográficas
@@ -133,29 +183,33 @@ python cli.py run-all 2026-06 ./subs.csv ./logs.csv
 
 ## Uso web
 
-### Dashboard (`/`)
+### Dashboard (`/subscriptions/dashboard/`)
 - Seleccionar mes/año con los dropdowns
 - Hacer clic en "Ejecutar análisis"
 - Ver consola integrada con el progreso
-- Explorar 8 gráficos animados: churn, winback, ARPU, aporte reactivaciones, índice de reemplazo, adiciones, curva KM, cortes vs reactivaciones
+- Explorar gráficos animados: churn, activos inicio/final, winback, ARPU, aporte reactivaciones, índice de reemplazo, adiciones, cortes vs reactivaciones, curva KM
 - **Curva Kaplan-Meier**: supervivencia con IC 95%, curvas por método (Financiero/Operativo), toggle de cohortes mensuales, risk table y estadísticas (mediana, P25, P75)
 
-### Analytics (`/analytics/`)
+### Analytics (`/subscriptions/analytics/`)
 - Filtro multiselect de períodos
 - 20 tarjetas KPI con colores condicionales
 - Gráficos por dimensión: doughnut (churn, winback, aporte), pie (mediana días activo/cancelado), barras (adiciones), barras horizontales (ARPU, corte impago)
 - Umbral <2.5% agrupa en "Otros" (promedio, siempre al final)
 
-### Importar CSVs (`/import/subscriptions/` y `/import/logs/`)
-- Drag & drop o seleccionar archivo
+### Importar CSVs (`/subscriptions/import/`)
+- Drag & drop o seleccionar archivo (tipo: subscripciones o logs)
 - Barra de progreso animada
 - Se procesa automáticamente (limpieza, consolidación, carga a DB)
 
-### Resultados (`/results/`)
+### Resultados (`/subscriptions/results/`)
 - Tabla histórica con buscador
 - Modal de detalle con:
   - Resumen por método: 24 métricas (Base Inicio, Churn, ARPU, Winback, Mediana/P25/P75 días activo, etc.)
   - Desglose por dimensiones: 22 columnas con sticky header + primera columna fija
+
+### Tiempos de Vida (`/subscriptions/lifetime/`)
+- Curvas Kaplan-Meier de cartera activa y cancelada
+- Tabla de órdenes con tiempos de vida
 
 ## Pipeline de análisis (`backend/analyzer.py`)
 
