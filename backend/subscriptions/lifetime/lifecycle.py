@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 import pandas as pd
-from ..config import ACTIVE_STATE, INACTIVE_STATES
+from ...config import ACTIVE_STATE, INACTIVE_STATES
 from .km_utils import compute_km
 
 

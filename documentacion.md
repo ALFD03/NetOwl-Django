@@ -155,23 +155,30 @@ NetOwl-Django/
 │   ├── utils.py                       # normalize_text(), parse_date()
 │   ├── models.py                      # Periodo (dataclass)
 │   ├── database.py                    # DBConnector (pool, read, save, copy)
-│   ├── analyzer.py                    # ChurnRateAnalyzer (orquestador, delega a modulos)
-│   ├── loader.py                      # Carga de datos desde BD a DataFrames
-│   ├── cleaner.py                     # Limpieza y normalizacion de logs
-│   ├── rules.py                       # Reglas de anomalias (logs sinteticos)
-│   ├── metrics_calc.py                # Calculo de KPIs y metricas
-│   ├── dimensions.py                  # Analisis por dimensiones
-│   ├── imports.py                     # Importacion y limpieza de CSV
-│   └── data_api.py                    # Capa de acceso a datos para las vistas
-│
-├── lifetime/                          # Modulo de analisis de tiempos de vida (Kaplan-Meier)
-│   ├── __init__.py
-│   ├── analyzer.py                    # LifecycleAnalyzer
-│   ├── loader.py                      # Carga de datos BD → DataFrames
-│   ├── lifecycle.py                   # Calculo de metricas de ciclo de vida
-│   ├── dimensions.py                  # Analisis dimensional de tiempos de vida
-│   ├── runner.py                      # Orquestador del pipeline
-│   └── queries.py                     # Consultas SQL especificas
+│   │
+│   └── subscriptions/                 # Modulo: subscriptions
+│       ├── __init__.py                # Exporta MetricsAnalyzer, data_api, imports
+│       ├── imports.py                 # Importacion y limpieza de CSV
+│       ├── data_api.py                # Capa de acceso a datos para las vistas
+│       │
+│       ├── analyzer/                  # Churn analysis
+│       │   ├── __init__.py
+│       │   ├── analyzer.py            # MetricsAnalyzer (orquestador)
+│       │   ├── cleaner.py             # Limpieza y normalizacion de logs
+│       │   ├── dimensions.py          # Analisis por dimensiones
+│       │   ├── loader.py              # Carga de datos BD → DataFrames
+│       │   ├── metrics_calc.py        # Calculo de KPIs y metricas
+│       │   └── rules.py               # Reglas de anomalias (logs sinteticos)
+│       │
+│       └── lifetime/                  # Lifecycle analysis (Kaplan-Meier)
+│           ├── __init__.py
+│           ├── analyzer.py            # LifecycleAnalyzer
+│           ├── dimensions.py          # Analisis dimensional de tiempos de vida
+│           ├── km_utils.py            # Funciones auxiliares Kaplan-Meier
+│           ├── lifecycle.py           # Calculo de metricas de ciclo de vida
+│           ├── loader.py              # Carga de datos BD → DataFrames
+│           ├── queries.py             # Consultas SQL especificas
+│           └── runner.py              # Orquestador del pipeline
 │
 ├── frontend/                          # Aplicacion Django
 │   ├── __init__.py
@@ -236,7 +243,7 @@ NetOwl-Django/
 
 ### 4.1 Backend (analizador)
 
-Todas las rutas en esta seccion son relativas a `backend/`.
+Todas las rutas en esta seccion son relativas a `backend/`. Los modulos de cada app estan agrupados bajo `backend/<modulo>/`.
 
 #### `backend/config.py`
 
@@ -357,7 +364,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 ---
 
-#### `backend/analyzer.py`
+#### `backend/subscriptions/analyzer/analyzer.py`
 
 **Proposito**: Nucleo del sistema. Orquestador del pipeline de calculo de churn rate que delega en modulos especializados.
 
@@ -374,7 +381,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 | `__init__(db, periodo)` | Recibe un `DBConnector` y un `Periodo` |
 | `run()` | Ejecuta el pipeline completo delegando en modulos especializados |
 
-**Modulos internos** (mismo paquete `backend/`):
+**Modulos internos** (bajo `backend/subscriptions/analyzer/`):
 
 | Modulo | Funcion principal | Descripcion |
 |--------|-------------------|-------------|
@@ -407,14 +414,14 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 13. Guardado de tablas historicas                → analyzer.py
 14. Calculo de KPIs (churn neto/bruto, winback)  → metrics_calc.py
 15. Analisis por dimensiones                     → dimensions.py
-16. Calculo de tiempos de vida (Kaplan-Meier)    → lifetime/ (modulo externo)
+16. Calculo de tiempos de vida (Kaplan-Meier)    → backend/subscriptions/lifetime/
 ```
 
-**Dependencias**: `concurrent.futures`, `collections`, `pandas`, `backend.config.*`, `backend.database.DBConnector`, `backend.models.Periodo`, `backend.utils.parse_date`, `backend.loader`, `backend.cleaner`, `backend.rules`, `backend.metrics_calc`, `backend.dimensions`
+**Dependencias**: `concurrent.futures`, `collections`, `pandas`, `backend.config.*`, `backend.database.DBConnector`, `backend.models.Periodo`, `backend.utils.parse_date`, `backend.subscriptions.analyzer.loader`, `backend.subscriptions.analyzer.cleaner`, `backend.subscriptions.analyzer.rules`, `backend.subscriptions.analyzer.metrics_calc`, `backend.subscriptions.analyzer.dimensions`
 
 ---
 
-#### `backend/imports.py`
+#### `backend/subscriptions/imports.py`
 
 **Proposito**: Logica de importacion y limpieza de archivos CSV de suscripciones y logs.
 
@@ -451,7 +458,7 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 ---
 
-#### `backend/data_api.py`
+#### `backend/subscriptions/data_api.py`
 
 **Proposito**: Capa de acceso a datos que conecta las vistas web con las tablas de la BD.
 
@@ -473,9 +480,9 @@ Periodo.build("2026-04-01", "2026-04-15")  # rango exacto
 
 ### 4.2 Modulo de Tiempos de Vida (lifetime)
 
-Todas las rutas en esta seccion son relativas a `lifetime/`.
+Todas las rutas en esta seccion son relativas a `backend/subscriptions/lifetime/`.
 
-#### `lifetime/analyzer.py`
+#### `backend/subscriptions/lifetime/analyzer.py`
 
 **Proposito**: Orquestador del analisis de tiempos de vida (Kaplan-Meier), independiente del modulo de churn.
 
@@ -485,12 +492,13 @@ Todas las rutas en esta seccion son relativas a `lifetime/`.
 |-------|-------------|
 | `LifecycleAnalyzer` | Coordina carga, calculo de metricas de ciclo de vida y analisis dimensional |
 
-**Modulos internos**:
+**Modulos internos** (bajo `backend/subscriptions/lifetime/`):
 
 | Modulo | Funcion principal | Descripcion |
 |--------|-------------------|-------------|
 | `loader.py` | `load_data(db, periodo)` | Carga datos de BD: activos, bajas, nuevos desde Subscripciones |
 | `lifecycle.py` | `LifecycleMetricsCalculator` | Calcula dias activo, cancelado y curvas Kaplan-Meier (mediana, P25, P75, IC 95%) |
+| `km_utils.py` | `compute_km()` | Funciones auxiliares para calculo Kaplan-Meier con lifelines |
 | `dimensions.py` | `LifecycleDimensionAnalyzer` | Desglosa metricas de ciclo de vida por zona, sucursal, municipio, campana, producto |
 | `runner.py` | `run_lifecycle_pipeline(db, periodo)` | Orquestador independiente para uso desde CLI o API |
 | `queries.py` | Consultas SQL reutilizables | Queries especificas para datos de ciclo de vida |

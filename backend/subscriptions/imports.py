@@ -26,8 +26,8 @@ import numpy as np
 import pandas as pd
 from psycopg2 import sql
 
-from .config import DB_SCHEMA
-from .database import DBConnector
+from ..config import DB_SCHEMA
+from ..database import DBConnector
 
 # Mapeo de nombres de columnas del CSV de suscripciones a nombres internos
 SUBSCRIPTIONS_COLUMN_MAPPING = {
@@ -68,7 +68,7 @@ LOGS_REQUIRED_COLS = ["orden", "fecha_log", "log", "estado"]
 
 # Ruta al archivo JSON de planes (ubicado en el directorio raíz del proyecto)
 PLANES_PATH = (
-    pathlib.Path(__file__).resolve().parent.parent / "Planes.json"
+    pathlib.Path(__file__).resolve().parent.parent.parent / "Planes.json"
 )
 # Variable global para cachear el conjunto de nombres de planes
 _PLAN_SET = None

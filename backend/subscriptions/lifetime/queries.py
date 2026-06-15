@@ -3,7 +3,7 @@ import json
 import math
 from typing import Any, Dict, Optional
 import pandas as pd
-from ..database import DBConnector
+from ...database import DBConnector
 
 
 def get_lifecycle_results(db=None) -> Dict[str, Any]:

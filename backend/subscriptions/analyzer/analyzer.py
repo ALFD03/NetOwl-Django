@@ -3,11 +3,11 @@ from typing import Any, Dict, List, Set
 
 import pandas as pd
 
-from ..config import ACTIVE_STATE, AUDIT_REACT_ORIGINS, CORTE_IMPAGADO_EVENT, EXCLUDED_STATE, INACTIVE_STATES
-from ..database import DBConnector
-from ..models import Periodo
+from ...config import ACTIVE_STATE, AUDIT_REACT_ORIGINS, CORTE_IMPAGADO_EVENT, EXCLUDED_STATE, INACTIVE_STATES
+from ...database import DBConnector
+from ...models import Periodo
 from . import cleaner, dimensions, loader, metrics_calc, rules
-from ..utils import parse_date
+from ...utils import parse_date
 
 
 class MetricsAnalyzer:

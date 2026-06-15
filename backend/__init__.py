@@ -6,10 +6,10 @@ Dependencias esperadas:
 - `utils`: Funciones auxiliares de normalización de texto y parseo de fechas.
 - `models`: Clase `Periodo` que encapsula un rango de fechas de análisis.
 - `database`: Clase `DBConnector` que maneja la conexión y operaciones con PostgreSQL.
-- `analyzer`: Clase `MetricsAnalyzer` que ejecuta el cálculo de tasa de churn.
+- `subscriptions`: Subpaquete con la lógica del módulo de suscripciones (churn, imports, data API, lifetime).
 
 Exporta todos los símbolos públicos para que estén disponibles
-desde `from analyzer_app.backend import ...`.
+desde `from backend import ...`.
 """
 
 from .config import (
@@ -20,7 +20,7 @@ from .config import (
 from .utils import normalize_text, parse_date
 from .models import Periodo
 from .database import DBConnector
-from .analyzer import MetricsAnalyzer
+from .subscriptions import MetricsAnalyzer
 
 __all__ = [
     "DB_SCHEMA", "DATE_FORMATS", "ACTIVE_STATE", "EXCLUDED_STATE",

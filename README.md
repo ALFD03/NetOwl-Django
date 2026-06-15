@@ -30,23 +30,30 @@ NetOwl-Django/
 │   ├── utils.py                       # normalize_text(), parse_date()
 │   ├── models.py                      # Periodo (dataclass)
 │   ├── database.py                    # DBConnector (pool, read, save, copy)
-│   ├── analyzer.py                    # ChurnRateAnalyzer (pipeline, split en módulos)
-│   ├── loader.py                      # Carga de datos desde BD a DataFrames
-│   ├── cleaner.py                     # Limpieza y normalización de logs
-│   ├── rules.py                       # Reglas de anomalías (logs sintéticos)
-│   ├── metrics_calc.py                # Cálculo de KPIs y métricas
-│   ├── dimensions.py                  # Análisis por dimensiones
-│   ├── imports.py                     # Importación y limpieza de CSV
-│   └── data_api.py                    # Capa de acceso a datos para vistas
-│
-├── lifetime/                          # Módulo de análisis de tiempos de vida (Kaplan-Meier)
-│   ├── __init__.py
-│   ├── analyzer.py                    # LifecycleAnalyzer
-│   ├── loader.py                      # Carga de datos BD → DataFrames
-│   ├── lifecycle.py                   # Cálculo de métricas de ciclo de vida
-│   ├── dimensions.py                  # Análisis dimensional de tiempos de vida
-│   ├── runner.py                      # Orquestador del pipeline
-│   └── queries.py                     # Consultas SQL específicas
+│   │
+│   └── subscriptions/                 # Módulo: subscriptions
+│       ├── __init__.py                # Exporta MetricsAnalyzer, data_api, imports
+│       ├── imports.py                 # Importación y limpieza de CSV
+│       ├── data_api.py                # Capa de acceso a datos para vistas
+│       │
+│       ├── analyzer/                  # Churn analysis
+│       │   ├── __init__.py
+│       │   ├── analyzer.py            # MetricsAnalyzer (orquestador)
+│       │   ├── cleaner.py             # Limpieza y normalización de logs
+│       │   ├── dimensions.py          # Análisis por dimensiones
+│       │   ├── loader.py              # Carga de datos BD → DataFrames
+│       │   ├── metrics_calc.py        # Cálculo de KPIs y métricas
+│       │   └── rules.py               # Reglas de anomalías (logs sintéticos)
+│       │
+│       └── lifetime/                  # Lifecycle analysis (Kaplan-Meier)
+│           ├── __init__.py
+│           ├── analyzer.py            # LifecycleAnalyzer
+│           ├── dimensions.py          # Análisis dimensional de tiempos de vida
+│           ├── km_utils.py            # Funciones auxiliares Kaplan-Meier
+│           ├── lifecycle.py           # Cálculo de métricas de ciclo de vida
+│           ├── loader.py              # Carga de datos BD → DataFrames
+│           ├── queries.py             # Consultas SQL específicas
+│           └── runner.py              # Orquestador del pipeline
 │
 ├── frontend/                          # Aplicación Django
 │   ├── __init__.py
