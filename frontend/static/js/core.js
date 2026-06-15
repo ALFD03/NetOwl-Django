@@ -11,6 +11,7 @@
     aporteReactBarChart: null, reemplazoLineChart: null, adicionesBarChart: null,
     cortesReactChart: null, kmSurvivalChartS: null,
     activosInicioChart: null, activosFinalChart: null,
+    suspensionChart: null,
     dimChartInstances: [],
     allHistoricalPeriods: [],
   };
@@ -125,6 +126,7 @@
     html += '<tr><td class="modal-label ps-0">React 4_paused</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_4_paused) + '</td><td class="modal-label ps-3">Total Inactivos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.total_inactivos) + '</td></tr>';
     html += '<tr><td class="modal-label ps-0">Aporte React.</td><td class="text-end modal-value-accent">' + pct(s.tasa_aporte_react_pct) + '</td><td class="modal-label ps-3">Indice Reemplazo</td><td class="text-end modal-value-accent">' + pct(s.indice_reemplazo_react_pct) + '</td></tr>';
     html += '<tr><td class="modal-label ps-0">Adic. Netas</td><td class="text-end modal-value-success">' + intl(s.adiciones_netas) + '</td><td class="modal-label ps-3">Adic. Brutas</td><td class="text-end modal-value-success">' + intl(s.adiciones_brutas) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Porcentaje de Suspenciones</td><td class="text-end modal-value-success">' + pct(s.porcentaje_suspensiones) + '</td>';
     html += '</tbody></table></div></div></div>';
     c.innerHTML = html;
   };
@@ -154,6 +156,7 @@
       { k: "adiciones_netas", label: "Ad.Net", fmt: function (v) { return (v || 0).toLocaleString(); } },
       { k: "adiciones_brutas", label: "Ad.Bru", fmt: function (v) { return (v || 0).toLocaleString(); } },
       { k: "corte_impagado", label: "Corte", fmt: function (v) { return (v || 0).toLocaleString(); } },
+      { k: "porcentaje_suspensiones", label: "Susp.%", fmt: function (v) { return (v || 0).toFixed(2) + "%"; } },
     ];
     var html = "";
     Object.keys(dimensions).forEach(function (key) {

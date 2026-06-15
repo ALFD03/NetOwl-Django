@@ -47,8 +47,8 @@
   }
 
   function destroyDashboardCharts() {
-    [N.churnLineChart, N.winbackBarChart, N.arpuBarChart, N.aporteReactBarChart, N.reemplazoLineChart, N.adicionesBarChart, N.cortesReactChart, N.activosInicioChart, N.activosFinalChart, N.bajasNetBrutChart].forEach(function (c) { if (c) { c.destroy(); c = null; } });
-    N.churnLineChart = N.winbackBarChart = N.arpuBarChart = N.aporteReactBarChart = N.reemplazoLineChart = N.adicionesBarChart = N.cortesReactChart = N.activosInicioChart = N.activosFinalChart = N.bajasNetBrutChart = null;
+    [N.churnLineChart, N.winbackBarChart, N.arpuBarChart, N.aporteReactBarChart, N.reemplazoLineChart, N.adicionesBarChart, N.cortesReactChart, N.activosInicioChart, N.activosFinalChart, N.bajasNetBrutChart, N.suspensionChart].forEach(function (c) { if (c) { c.destroy(); c = null; } });
+    N.churnLineChart = N.winbackBarChart = N.arpuBarChart = N.aporteReactBarChart = N.reemplazoLineChart = N.adicionesBarChart = N.cortesReactChart = N.activosInicioChart = N.activosFinalChart = N.bajasNetBrutChart = N.suspensionChart = null;
   }
 
   function renderDashboardCharts(periodos) {
@@ -211,6 +211,27 @@
           { label: "Bajas Brutas", data: bajasBrutasData, backgroundColor: "rgba(168,85,247,0.75)", borderRadius: 4 },
         ] },
         options: N.chartOpts(N.barOpts(gridColor, tickColor))
+      });
+    }
+
+    var suspensionData = labels.map(v("porcentaje_suspensiones"));
+    var suspensionZones = [
+      { from: 40, to: 999, color: "rgba(239,68,68,0.06)" },
+      { from: 35, to: 40, color: "rgba(234,179,8,0.06)" },
+      { from: 0, to: 35, color: "rgba(34,197,94,0.06)" },
+    ];
+    var suspensionPlugin = makeThresholdPlugin("suspensionLine", suspensionZones, { value: 40, color: "#ef4444", label: "Obj. 40%" });
+    function suspensionBarColor(v) { return (v || 0) >= 40 ? "#ef4444" : (v || 0) >= 35 ? "#eab308" : "#22c55e"; }
+    var ctxSusp = document.getElementById("suspensionChart");
+    if (ctxSusp) {
+      N.suspensionChart = new Chart(ctxSusp, {
+        type: "bar",
+        data: { labels: labels, datasets: [
+          { label: "% Suspensiones", data: suspensionData, backgroundColor: suspensionData.map(suspensionBarColor), borderRadius: 4 },
+          { label: "Tendencia", data: suspensionData, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
+        ] },
+        options: N.chartOpts(N.barOpts(gridColor, tickColor)),
+        plugins: [suspensionPlugin]
       });
     }
   }

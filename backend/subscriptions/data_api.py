@@ -60,6 +60,7 @@ def get_cierre_churn(
                 "total_billing": float(row.get("total_billing") or 0),
                 "arpu": float(row.get("arpu") or 0),
                 "corte_impagado": int(row.get("corte_impagado") or 0),
+                "porcentaje_suspensiones": float(row.get("porcentaje_suspensiones") or 0),
                 "total_inactivos": int(row.get("total_inactivos") or 0),
                 "tasa_aporte_react_pct": float(row.get("tasa_aporte_react_pct") or 0),
                 "indice_reemplazo_react_pct": float(row.get("indice_reemplazo_react_pct") or 0),
@@ -123,6 +124,7 @@ def get_dimensiones(
                 "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
                 "adiciones_netas": int(row.get("adiciones_netas") or 0),
                 "corte_impagado": int(row.get("corte_impagado") or 0),
+                "porcentaje_suspensiones": float(row.get("porcentaje_suspensiones") or 0),
             })
         return sorted(pd_dict.values(), key=lambda x: x["periodo_reporte"], reverse=True)
     except Exception:

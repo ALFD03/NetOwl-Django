@@ -117,6 +117,7 @@ def aggregate_dimensions(
                 "adiciones_netas": (nv + react_6_8_count) - bn,
                 "tasa_winback_pct": round((reac / inac) * 100, 4) if inac > 0 else 0,
                 "corte_impagado": d_corte.get(val, 0),
+                "porcentaje_suspensiones": round((d_corte.get(val, 0) / a_ini) * 100, 4) if a_ini > 0 else 0,
                 "total_billing": billing_val,
                 "arpu": round(billing_val / a_fin, 2) if a_fin > 0 else 0.0,
             })

@@ -121,6 +121,7 @@ class MetricsAnalyzer:
             "churn_neto_pct": round((bajas_netas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
             "churn_bruto_pct": round((bajas_brutas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
             "corte_impagado": len(set_corte_impagado),
+            "porcentaje_suspensiones": round((len(set_corte_impagado) / len(act_ini)) * 100, 4) if len(act_ini) > 0 else 0,
             "total_inactivos": total_inactivos,
             "reactivaciones": n_react_unicas,
             "react_6_churn": int(counts_react.get("6_churn", 0)),
