@@ -125,15 +125,28 @@
       if (pc) pc.classList.remove("d-none");
       if (pb) pb.style.width = "0%";
       submitBtn.setAttribute("disabled", "true");
-      var iv = setInterval(function () { if (pb) pb.style.width = Math.min(pct += 10, 90) + "%"; var pct = 0; }, 150);
+      var pct = 0;
+      var iv = setInterval(function () { if (pb) pb.style.width = Math.min(pct += 10, 90) + "%"; }, 150);
       fetch(endpoint, { method: "POST", headers: { "X-CSRFToken": N.getCsrfToken() }, body: fd })
-        .then(function (r) { clearInterval(iv); if (pb) pb.style.width = "100%"; setTimeout(function () { if (pc) pc.classList.add("d-none"); }, 600); if (!r.ok) throw Error("Error"); return r.json(); })
+        .then(function (r) {
+          clearInterval(iv);
+          if (pb) pb.style.width = "100%";
+          setTimeout(function () { if (pc) pc.classList.add("d-none"); }, 600);
+          if (!r.ok) return r.json().then(function (err) { throw new Error(err.message || "Error del servidor"); });
+          return r.json();
+        })
         .then(function (d) {
           N.hideLoading();
           if (d.status === "success") { N.showToast(d.message, "success"); clearFile(); }
           else { N.showToast(d.message || "Error", "error"); submitBtn.removeAttribute("disabled"); }
         })
-        .catch(function () { clearInterval(iv); if (pc) pc.classList.add("d-none"); submitBtn.removeAttribute("disabled"); N.hideLoading(); N.showToast("Error de conexion", "error"); });
+        .catch(function (e) {
+          clearInterval(iv);
+          if (pc) pc.classList.add("d-none");
+          submitBtn.removeAttribute("disabled");
+          N.hideLoading();
+          N.showToast(e && e.message ? e.message : "Error de conexion", "error");
+        });
     });
   }
 

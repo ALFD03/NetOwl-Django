@@ -10,6 +10,7 @@
     churnLineChart: null, winbackBarChart: null, arpuBarChart: null,
     aporteReactBarChart: null, reemplazoLineChart: null, adicionesBarChart: null,
     cortesReactChart: null, kmSurvivalChartS: null,
+    activosInicioChart: null, activosFinalChart: null,
     dimChartInstances: [],
     allHistoricalPeriods: [],
   };
