@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Set
 import pandas as pd
-from ..config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, EXCLUDED_STATE, INACTIVE_STATES
+from ...config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, EXCLUDED_STATE, INACTIVE_STATES
 
 
 def apply_log_rules(df_clean_logs, df_subs_full):

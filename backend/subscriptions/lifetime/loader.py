@@ -1,7 +1,7 @@
 from __future__ import annotations
 import pandas as pd
-from ..config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
-from ..database import DBConnector
+from ...config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
+from ...database import DBConnector
 
 
 DIMS = ["Zona", "Sucursal", "Municipio", "campanna", "Producto"]

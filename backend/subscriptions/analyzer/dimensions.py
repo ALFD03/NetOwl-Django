@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, List, Set
 import pandas as pd
-from ..config import AUDIT_REACT_ORIGINS
+from ...config import AUDIT_REACT_ORIGINS
 
 
 def aggregate_dimensions(
