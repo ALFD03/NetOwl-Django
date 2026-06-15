@@ -45,7 +45,7 @@ SUBSCRIPTIONS_COLUMN_MAPPING = {
     "Próxima Fecha de Factura": "fecha_factura",
     "Fecha de inicio": "fecha_inicio",
     "Tarifa": "tarifa",
-    "Total": "Total",
+    "Subtotal": "Total",
 }
 
 # Columnas de metadatos que se propagan hacia adelante dentro de un mismo grupo
