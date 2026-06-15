@@ -47,8 +47,8 @@
   }
 
   function destroyDashboardCharts() {
-    [N.churnLineChart, N.winbackBarChart, N.arpuBarChart, N.aporteReactBarChart, N.reemplazoLineChart, N.adicionesBarChart, N.cortesReactChart].forEach(function (c) { if (c) { c.destroy(); c = null; } });
-    N.churnLineChart = N.winbackBarChart = N.arpuBarChart = N.aporteReactBarChart = N.reemplazoLineChart = N.adicionesBarChart = N.cortesReactChart = null;
+    [N.churnLineChart, N.winbackBarChart, N.arpuBarChart, N.aporteReactBarChart, N.reemplazoLineChart, N.adicionesBarChart, N.cortesReactChart, N.activosInicioChart, N.activosFinalChart, N.bajasNetBrutChart].forEach(function (c) { if (c) { c.destroy(); c = null; } });
+    N.churnLineChart = N.winbackBarChart = N.arpuBarChart = N.aporteReactBarChart = N.reemplazoLineChart = N.adicionesBarChart = N.cortesReactChart = N.activosInicioChart = N.activosFinalChart = N.bajasNetBrutChart = null;
   }
 
   function renderDashboardCharts(periodos) {
@@ -85,6 +85,32 @@
         },
         options: N.chartOpts(Object.assign(N.barOpts(gridColor, tickColor), { plugins: { legend: { position: "top", labels: { color: tickColor, font: { size: 10 } } } } })),
         plugins: [churnPlugin]
+      });
+    }
+
+    var activosInicioData = labels.map(v("activos_inicio"));
+    var activosFinalData = labels.map(v("activos_final"));
+    var ctxActivosInicio = document.getElementById("activosInicioChart");
+    if (ctxActivosInicio) {
+      N.activosInicioChart = new Chart(ctxActivosInicio, {
+        type: "bar",
+        data: { labels: labels, datasets: [
+          { label: "Activos Inicio", data: activosInicioData, backgroundColor: "rgba(37,99,235,0.75)", borderRadius: 4, order: 1 },
+          { label: "Activos Final", data: activosFinalData, type: "line", borderColor: "#10b981", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 3, pointBackgroundColor: "#10b981", fill: false, order: 0 },
+        ] },
+        options: N.chartOpts(N.barOpts(gridColor, tickColor))
+      });
+    }
+
+    var ctxActivosFinal = document.getElementById("activosFinalChart");
+    if (ctxActivosFinal) {
+      N.activosFinalChart = new Chart(ctxActivosFinal, {
+        type: "bar",
+        data: { labels: labels, datasets: [
+          { label: "Activos Final", data: activosFinalData, backgroundColor: "rgba(16,185,129,0.75)", borderRadius: 4, order: 1 },
+          { label: "Activos Inicio", data: activosInicioData, type: "line", borderColor: "#2563eb", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 3, pointBackgroundColor: "#2563eb", fill: false, order: 0 },
+        ] },
+        options: N.chartOpts(N.barOpts(gridColor, tickColor))
       });
     }
 
@@ -171,6 +197,20 @@
           { label: "Reactivaciones", data: reactData, borderColor: "#22c55e", backgroundColor: "rgba(34,197,94,0.1)", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#22c55e", fill: true },
         ] },
         options: N.chartOpts(N.lineOpts(gridColor, tickColor))
+      });
+    }
+
+    var bajasNetasData = labels.map(v("bajas_netas_balance"));
+    var bajasBrutasData = labels.map(v("bajas_brutas_auditoria"));
+    var ctxBajas = document.getElementById("bajasNetBrutChart");
+    if (ctxBajas) {
+      N.bajasNetBrutChart = new Chart(ctxBajas, {
+        type: "bar",
+        data: { labels: labels, datasets: [
+          { label: "Bajas Netas", data: bajasNetasData, backgroundColor: "rgba(239,68,68,0.75)", borderRadius: 4 },
+          { label: "Bajas Brutas", data: bajasBrutasData, backgroundColor: "rgba(168,85,247,0.75)", borderRadius: 4 },
+        ] },
+        options: N.chartOpts(N.barOpts(gridColor, tickColor))
       });
     }
   }

@@ -45,7 +45,7 @@ SUBSCRIPTIONS_COLUMN_MAPPING = {
     "Próxima Fecha de Factura": "fecha_factura",
     "Fecha de inicio": "fecha_inicio",
     "Tarifa": "tarifa",
-    "Total": "Total",
+    "Subtotal": "Total",
 }
 
 # Columnas de metadatos que se propagan hacia adelante dentro de un mismo grupo
@@ -249,7 +249,8 @@ def import_logs_csv(csv_path: str) -> int:
     1. Lee el CSV y renombra columnas según el mapeo definido.
     2. Valida que todas las columnas requeridas estén presentes.
     3. Convierte cadenas vacías a NaN y valores nulos a None.
-    4. Trunca la tabla `Subscripciones-logs` y copia los datos mediante COPY.
+    4. Crea la tabla `Subscripciones-logs` si no existe.
+    5. Trunca la tabla `Subscripciones-logs` y copia los datos mediante COPY.
 
     Args:
         csv_path: Ruta al archivo CSV de logs de cambios.
@@ -283,9 +284,21 @@ def import_logs_csv(csv_path: str) -> int:
         )
 
     db_tool = DBConnector()
-    # Trunca la tabla existente y copia los nuevos datos
     with db_tool.get_connection() as conn:
         with conn.cursor() as cur:
+            col_defs = [
+                sql.SQL("{} text").format(sql.Identifier(c))
+                for c in df_logs.columns
+            ]
+            cur.execute(
+                sql.SQL(
+                    "CREATE TABLE IF NOT EXISTS"
+                    " {schema_table} ({fields})"
+                ).format(
+                    schema_table=sql.Identifier(DB_SCHEMA, "Subscripciones-logs"),
+                    fields=sql.SQL(", ").join(col_defs),
+                )
+            )
             cur.execute(
                 sql.SQL("TRUNCATE TABLE {schema_table}").format(
                     schema_table=sql.Identifier(
