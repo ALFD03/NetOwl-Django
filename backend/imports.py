@@ -283,9 +283,21 @@ def import_logs_csv(csv_path: str) -> int:
         )
 
     db_tool = DBConnector()
-    # Trunca la tabla existente y copia los nuevos datos
     with db_tool.get_connection() as conn:
         with conn.cursor() as cur:
+            col_defs = [
+                sql.SQL("{} text").format(sql.Identifier(c))
+                for c in df_logs.columns
+            ]
+            cur.execute(
+                sql.SQL(
+                    "CREATE TABLE IF NOT EXISTS"
+                    " {schema_table} ({fields})"
+                ).format(
+                    schema_table=sql.Identifier(DB_SCHEMA, "Subscripciones-logs"),
+                    fields=sql.SQL(", ").join(col_defs),
+                )
+            )
             cur.execute(
                 sql.SQL("TRUNCATE TABLE {schema_table}").format(
                     schema_table=sql.Identifier(

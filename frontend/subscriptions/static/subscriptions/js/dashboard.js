@@ -47,8 +47,8 @@
   }
 
   function destroyDashboardCharts() {
-    [N.churnLineChart, N.winbackBarChart, N.arpuBarChart, N.aporteReactBarChart, N.reemplazoLineChart, N.adicionesBarChart, N.cortesReactChart].forEach(function (c) { if (c) { c.destroy(); c = null; } });
-    N.churnLineChart = N.winbackBarChart = N.arpuBarChart = N.aporteReactBarChart = N.reemplazoLineChart = N.adicionesBarChart = N.cortesReactChart = null;
+    [N.churnLineChart, N.winbackBarChart, N.arpuBarChart, N.aporteReactBarChart, N.reemplazoLineChart, N.adicionesBarChart, N.cortesReactChart, N.activosInicioChart, N.activosFinalChart].forEach(function (c) { if (c) { c.destroy(); c = null; } });
+    N.churnLineChart = N.winbackBarChart = N.arpuBarChart = N.aporteReactBarChart = N.reemplazoLineChart = N.adicionesBarChart = N.cortesReactChart = N.activosInicioChart = N.activosFinalChart = null;
   }
 
   function renderDashboardCharts(periodos) {
@@ -85,6 +85,26 @@
         },
         options: N.chartOpts(Object.assign(N.barOpts(gridColor, tickColor), { plugins: { legend: { position: "top", labels: { color: tickColor, font: { size: 10 } } } } })),
         plugins: [churnPlugin]
+      });
+    }
+
+    var activosInicioData = labels.map(v("activos_inicio"));
+    var ctxActivosInicio = document.getElementById("activosInicioChart");
+    if (ctxActivosInicio) {
+      N.activosInicioChart = new Chart(ctxActivosInicio, {
+        type: "bar",
+        data: { labels: labels, datasets: [{ label: "Activos Inicio", data: activosInicioData, backgroundColor: "rgba(37,99,235,0.75)", borderRadius: 4 }] },
+        options: N.chartOpts(N.barOpts(gridColor, tickColor))
+      });
+    }
+
+    var activosFinalData = labels.map(v("activos_final"));
+    var ctxActivosFinal = document.getElementById("activosFinalChart");
+    if (ctxActivosFinal) {
+      N.activosFinalChart = new Chart(ctxActivosFinal, {
+        type: "bar",
+        data: { labels: labels, datasets: [{ label: "Activos Final", data: activosFinalData, backgroundColor: "rgba(16,185,129,0.75)", borderRadius: 4 }] },
+        options: N.chartOpts(N.barOpts(gridColor, tickColor))
       });
     }
 
