@@ -14,9 +14,8 @@ Dependencies (backend packages):
 import argparse
 from backend.database import DBConnector
 from backend.models import Periodo
-from backend.analyzer import MetricsAnalyzer
-from backend.imports import import_subscriptions_csv, import_logs_csv
-from backend.lifetime import run_lifecycle_analysis
+from backend.subscriptions import MetricsAnalyzer, import_subscriptions_csv, import_logs_csv
+from backend.subscriptions.lifetime import run_lifecycle_analysis
 
 
 def cmd_import_subs(args):

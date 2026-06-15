@@ -1,6 +1,6 @@
 from __future__ import annotations
 import pandas as pd
-from ..config import ACTIVE_STATE, EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
+from ...config import ACTIVE_STATE, EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
 
 
 def build_clean_data(df_subs_raw, df_logs, df_logs_v15):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Set
 import pandas as pd
-from ..config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, VALID_REACT_ORIGINS
+from ...config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, VALID_REACT_ORIGINS
 
 
 def get_active_at(df_clean_logs, target_date, strictly_before=False):

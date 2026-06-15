@@ -11,17 +11,17 @@ import pandas as pd
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from backend.analyzer import (
+from backend.database import DBConnector
+from backend.models import Periodo
+from backend.subscriptions import (
     MetricsAnalyzer,
     get_cierre_churn, get_dimensiones, get_periodos,
     get_dashboard_data, get_analytics_data,
+    import_logs_csv, import_subscriptions_csv,
 )
-from backend.database import DBConnector
-from backend.imports import import_logs_csv, import_subscriptions_csv
-from backend.lifetime import (
+from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
 )
-from backend.models import Periodo
 
 
 TEMPLATE_PREFIX = "subscriptions/"
