@@ -53,6 +53,7 @@ def get_cierre_churn(
                 "churn_neto_pct": float(row.get("churn_neto_pct") or 0),
                 "churn_bruto_pct": float(row.get("churn_bruto_pct") or 0),
                 "reactivaciones": int(row.get("reactivaciones") or 0),
+                "react_6_8": int(row.get("react_6_8") or 0),
                 "react_6_churn": int(row.get("react_6_churn") or 0),
                 "react_8_30days": int(row.get("react_8_30days") or 0),
                 "react_4_paused": int(row.get("react_4_paused") or 0),
