@@ -106,10 +106,11 @@
     var cards = [
       { label: "Churn Neto", val: avg("churn_neto_pct"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: colorChurn },
       { label: "Churn Bruto", val: avg("churn_bruto_pct"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: colorChurn },
-      { label: "Bajas Netas", val: avg("bajas_netas_balance"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorBajas },
-      { label: "Bajas Brutas", val: avg("bajas_brutas_auditoria"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorBajas },
+      { label: "Bajas Netas", val: avg("bajas_netas"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorBajas },
+      { label: "Bajas Brutas", val: avg("bajas_brutas"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorBajas },
       { label: "Nuevos en el Mes", val: avg("nuevos_mes"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorNuevos },
-      { label: "Reactivaciones", val: avg("reactivaciones"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
+      { label: "Reactivaciones Totales", val: avg("reactivaciones"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
+      { label: "Reactivaciones", val: avg("react_val"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
       { label: "Tasa Winback", val: avg("tasa_winback_pct"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: colorWinback },
       { label: "ARPU", val: avg("arpu"), fmt: function (v) { return "$" + v.toFixed(2); }, clr: colorArpu },
       { label: "Total Billing", val: avg("total_billing"), fmt: function (v) { return "$" + Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
@@ -118,6 +119,7 @@
       { label: "Adiciones Netas", val: avg("adiciones_netas"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorAdiciones },
       { label: "Adiciones Brutas", val: avg("adiciones_brutas"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorAdiciones },
       { label: "Corte Impago", val: avg("corte_impagado"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
+      { label: "% Suspensiones", val: avg("porcentaje_suspensiones"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: function (v) { return v >= 40 ? "text-danger" : v >= 35 ? "text-warning" : "text-success"; } },
     ];
 
     var html = "";
@@ -136,9 +138,9 @@
         (dims[dimKey] || []).forEach(function (item) {
           var val = item.valor || "N/A";
           if (!accum[dimKey][val]) {
-            accum[dimKey][val] = { sum: { churn_neto_pct: 0, churn_bruto_pct: 0, arpu: 0, tasa_winback_pct: 0, adiciones_netas: 0, adiciones_brutas: 0, tasa_aporte_react_pct: 0, corte_impagado: 0, nuevos: 0, activos_final: 0 }, count: 0 };
+            accum[dimKey][val] = { sum: { churn_neto_pct: 0, churn_bruto_pct: 0, arpu: 0, tasa_winback_pct: 0, adiciones_netas: 0, adiciones_brutas: 0, tasa_aporte_react_pct: 0, corte_impagado: 0, porcentaje_suspensiones: 0, nuevos: 0, activos_final: 0 }, count: 0 };
           }
-          ["churn_neto_pct", "churn_bruto_pct", "arpu", "tasa_winback_pct", "adiciones_netas", "adiciones_brutas", "tasa_aporte_react_pct", "corte_impagado", "nuevos", "activos_final"].forEach(function (m) {
+          ["churn_neto_pct", "churn_bruto_pct", "arpu", "tasa_winback_pct", "adiciones_netas", "adiciones_brutas", "tasa_aporte_react_pct", "corte_impagado", "porcentaje_suspensiones", "nuevos", "activos_final"].forEach(function (m) {
             accum[dimKey][val].sum[m] += (item[m] || 0);
           });
           accum[dimKey][val].count++;
@@ -160,7 +162,7 @@
   }
 
   function getWeight(item, metricKey) {
-    if (metricKey === "adiciones_netas" || metricKey === "adiciones_brutas" || metricKey === "corte_impagado") return item[metricKey] || 0;
+    if (metricKey === "adiciones_netas" || metricKey === "adiciones_brutas") return item[metricKey] || 0;
     if (metricKey === "arpu") return (item.activos_final || 0) * (item[metricKey] || 0);
     return (item.activos_final || 0) * (item[metricKey] || 0) / 100;
   }
@@ -205,7 +207,7 @@
       { key: "adiciones_netas", label: "Adiciones Netas", chartType: "bar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
       { key: "adiciones_brutas", label: "Adiciones Brutas", chartType: "bar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
       { key: "tasa_aporte_react_pct", label: "Aporte React.", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
-      { key: "corte_impagado", label: "Corte Impago", chartType: "hbar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
+      { key: "porcentaje_suspensiones", label: "% Suspensiones", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
     ];
 
     var isLight = document.documentElement.classList.contains("light-mode");
