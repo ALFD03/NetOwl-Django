@@ -200,8 +200,8 @@
       });
     }
 
-    var bajasNetasData = labels.map(v("bajas_netas_balance"));
-    var bajasBrutasData = labels.map(v("bajas_brutas_auditoria"));
+    var bajasNetasData = labels.map(v("bajas_netas"));
+    var bajasBrutasData = labels.map(v("bajas_brutas"));
     var ctxBajas = document.getElementById("bajasNetBrutChart");
     if (ctxBajas) {
       N.bajasNetBrutChart = new Chart(ctxBajas, {

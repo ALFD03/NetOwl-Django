@@ -117,16 +117,17 @@
     var s = summary;
     var html = '<div class="col-12"><div class="card border-1" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3"><table class="table table-sm mb-0 table-modal-sum" style="font-size:0.8rem"><tbody>';
     html += '<tr><td class="modal-label ps-0">Base Inicio</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.activos_inicio) + '</td><td class="modal-label ps-3">Base Final</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.activos_final) + '</td></tr>';
-    html += '<tr><td class="modal-label ps-0">Nuevos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.nuevos_mes) + '</td><td class="modal-label ps-3">Bajas Netas</td><td class="text-end modal-value-danger">' + intl(s.bajas_netas_balance) + '</td></tr>';
-    html += '<tr><td class="modal-label ps-0">Bajas Brutas</td><td class="text-end modal-value-danger">' + intl(s.bajas_brutas_auditoria) + '</td><td class="modal-label ps-3">Churn Neto</td><td class="text-end modal-value-danger">' + pct(s.churn_neto_pct) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Nuevos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.nuevos_mes) + '</td><td class="modal-label ps-3">Bajas Netas</td><td class="text-end modal-value-danger">' + intl(s.bajas_netas) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Bajas Brutas</td><td class="text-end modal-value-danger">' + intl(s.bajas_brutas) + '</td><td class="modal-label ps-3">Churn Neto</td><td class="text-end modal-value-danger">' + pct(s.churn_neto_pct) + '</td></tr>';
     html += '<tr><td class="modal-label ps-0">Churn Bruto</td><td class="text-end modal-value-danger">' + pct(s.churn_bruto_pct) + '</td><td class="modal-label ps-3">ARPU</td><td class="text-end modal-value-success">' + usd(s.arpu) + '</td></tr>';
     html += '<tr><td class="modal-label ps-0">Total Billing</td><td class="text-end modal-value-accent">' + usd(s.total_billing) + '</td><td class="modal-label ps-3">Corte Impago</td><td class="text-end modal-value-warning">' + intl(s.corte_impagado) + '</td></tr>';
     html += '<tr><td class="modal-label ps-0">Winback</td><td class="text-end modal-value-success">' + pct(s.tasa_winback_pct) + '</td><td class="modal-label ps-3">Reactivaciones Totales</td><td class="text-end modal-value-success">' + intl(s.reactivaciones) + '</td></tr>';
     html += '<tr><td class="modal-label ps-0">React Canceladas</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_6_churn) + '</td><td class="modal-label ps-3">React + 30 Dias</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_8_30days) + '</td></tr>';
-    html += '<tr><td class="modal-label ps-0">React En Pausa</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_4_paused) + '</td><td class="modal-label ps-3">Total Inactivos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.total_inactivos) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">React En Pausa</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_4_paused) + '</td><td class="modal-label ps-3">Reactivaciones Auditoras</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_val) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">React En Pausa del periodo</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_4_P) + '</td><td class="modal-label ps-3">React En Pausa de Otros periodos</td><td class="text-end" style="color:var(--text-primary)">' + intl(s.react_4_H) + '</td></tr>';
     html += '<tr><td class="modal-label ps-0">Aporte React.</td><td class="text-end modal-value-accent">' + pct(s.tasa_aporte_react_pct) + '</td><td class="modal-label ps-3">Indice Reemplazo</td><td class="text-end modal-value-accent">' + pct(s.indice_reemplazo_react_pct) + '</td></tr>';
     html += '<tr><td class="modal-label ps-0">Adic. Netas</td><td class="text-end modal-value-success">' + intl(s.adiciones_netas) + '</td><td class="modal-label ps-3">Adic. Brutas</td><td class="text-end modal-value-success">' + intl(s.adiciones_brutas) + '</td></tr>';
-    html += '<tr><td class="modal-label ps-0">Porcentaje de Suspenciones</td><td class="text-end modal-value-success">' + pct(s.porcentaje_suspensiones) + '</td><td class="modal-label ps-0">Reactivaciones</td><td class="text-end modal-value-success">' + intl(s.react_6_8) + '</td></tr>';
+    html += '<tr><td class="modal-label ps-0">Porcentaje de Suspenciones</td><td class="text-end modal-value-success">' + pct(s.porcentaje_suspensiones) + '</td><td class="modal-label ps-0">Total Inactivos</td><td class="text-end modal-value-success">' + intl(s.total_inactivos) + '</td></tr>';
     html += '</tbody></table></div></div></div>';
     c.innerHTML = html;
   };
@@ -148,7 +149,12 @@
       { k: "churn_neto_pct", label: "Ch.Net%", fmt: function (v) { return (v || 0).toFixed(2) + "%"; } },
       { k: "churn_bruto_pct", label: "Ch.Bru%", fmt: function (v) { return (v || 0).toFixed(2) + "%"; } },
       { k: "reactivaciones", label: "Total. React.", fmt: function (v) { return (v || 0).toLocaleString(); } },
-      { k: "react_6_8", label: "React.", fmt: function (v) { return (v || 0).toLocaleString(); } },
+      { k: "react_val", label: "React. Audit", fmt: function (v) { return (v || 0).toLocaleString(); } },
+      { k: "react_4_P", label: "React. En Pausa peri", fmt: function (v) { return (v || 0).toLocaleString(); } },
+      { k: "react_4_H", label: "React. En pausa hist", fmt: function (v) { return (v || 0).toLocaleString(); } },
+      { k: "react_4_paused", label: "React. En pausa", fmt: function (v) { return (v || 0).toLocaleString(); } },
+      { k: "react_6_churn", label: "React. Canceladas", fmt: function (v) { return (v || 0).toLocaleString(); } },
+      { k: "react_8_30days", label: "React. +30 dias", fmt: function (v) { return (v || 0).toLocaleString(); } },
       { k: "tasa_winback_pct", label: "Winback", fmt: function (v) { return (v || 0).toFixed(2) + "%"; } },
       { k: "arpu", label: "ARPU", fmt: function (v) { return "$" + (v || 0).toFixed(2); } },
       { k: "total_billing", label: "Billing", fmt: function (v) { return "$" + Math.round(v || 0).toLocaleString(); } },
