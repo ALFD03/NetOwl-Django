@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Set
 import pandas as pd
 from ...config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, VALID_REACT_ORIGINS
 
@@ -20,15 +19,27 @@ def get_active_at(df_clean_logs, target_date, strictly_before=False):
 def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin):
     """Identifica reactivaciones ocurridas dentro del periodo de analisis."""
     df = df_clean_logs.copy()
-    mask_react = df["log_norm"].str.contains("reactivacion", na=False)
-    df_react = df[mask_react]
-    df_react = df_react.assign(f_min=df_react["f_dt"].dt.floor("min"))
-    df_react = df_react.drop_duplicates(subset=["orden", "f_min"])
+    mask_react_text = df["log_norm"].str.contains("reactivacion", na=False)
+    mask_react_state = df["estado_origen"].isin(VALID_REACT_ORIGINS) & (df["estado"] == ACTIVE_STATE)
+    df_react = df[mask_react_text | mask_react_state]
+    # Primero filtrar por fecha del periodo, luego deduplicar por orden
     df_react = df_react[
         (df_react["f_dt"] >= periodo.fecha_inicio)
         & (df_react["f_dt"] <= periodo.fecha_final)
     ]
-    df_react = df_react[df_react["estado_origen"].isin(VALID_REACT_ORIGINS)]
+    # Una reactivación por orden, priorizando el estado de origen más severo
+    priority_map = {"6_churn": 0, "8_30days": 1, "4_paused": 2}
+    df_react = df_react.assign(
+        _prioridad=df_react["estado_origen"].map(priority_map)
+    )
+    df_react = df_react.sort_values("_prioridad").drop_duplicates(subset=["orden"], keep="first")
+    df_react = df_react.drop(columns=["_prioridad"])
+    # Origen válido conocido, o texto "reactivacion" sin origen (primer evento)
+    mask_valid_origin = df_react["estado_origen"].isin(VALID_REACT_ORIGINS)
+    mask_unknown_text = df_react["estado_origen"].isna() & df_react["log_norm"].str.contains("reactivacion", na=False)
+    df_react = df_react[mask_valid_origin | mask_unknown_text]
+    # Asignar origen por defecto cuando es desconocido
+    df_react["estado_origen"] = df_react["estado_origen"].fillna("reactivacion_sin_origen")
     df_react = df_react[["orden", "f_dt", "estado_origen"]].rename(
         columns={"f_dt": "fecha"}
     )

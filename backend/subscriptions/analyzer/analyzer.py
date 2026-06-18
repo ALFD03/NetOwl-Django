@@ -1,13 +1,12 @@
 from __future__ import annotations
-from typing import Any, Dict, List, Set
+from typing import Dict, Set
 
 import pandas as pd
 
-from ...config import ACTIVE_STATE, AUDIT_REACT_ORIGINS, CORTE_IMPAGADO_EVENT, EXCLUDED_STATE, INACTIVE_STATES
+from ...config import INACTIVE_STATES
 from ...database import DBConnector
 from ...models import Periodo
 from . import cleaner, dimensions, loader, metrics_calc, rules
-from ...utils import parse_date
 
 
 class MetricsAnalyzer:
@@ -78,16 +77,38 @@ class MetricsAnalyzer:
         arpu = round(total_billing / len(act_fin), 2) if len(act_fin) > 0 else 0.0
 
         df_react_all = self.get_reactivations(act_fin)
-        counts_react: Dict[str, int] = {"4_paused": 0, "6_churn": 0, "8_30days": 0}
-        set_react_audit: Set[str] = set()
+        counts_react: Dict[str, int] = {}
         if not df_react_all.empty:
             counts_react.update(df_react_all["estado_origen"].value_counts().to_dict())
-            set_react_audit = set(
-                df_react_all[df_react_all["estado_origen"].isin(AUDIT_REACT_ORIGINS)]["orden"]
-            )
 
         n_react_unicas = sum(counts_react.values())
-        n_react_6_8 = counts_react.get("6_churn", 0) + counts_react.get("8_30days", 0)
+
+        # 6_churn y 8_30days solo cuentan histórico (no en set_ini)
+        if not df_react_all.empty:
+            df_6 = df_react_all[df_react_all["estado_origen"] == "6_churn"]
+            df_8 = df_react_all[df_react_all["estado_origen"] == "8_30days"]
+            n_react_6_churn = len(df_6[~df_6["orden"].isin(set_ini)])
+            n_react_8_30days = len(df_8[~df_8["orden"].isin(set_ini)])
+        else:
+            n_react_6_churn = n_react_8_30days = 0
+
+        # Separar 4_paused: P = mismo periodo (en set_ini), H = histórica (no en set_ini)
+        react_4_df = df_react_all[df_react_all["estado_origen"] == "4_paused"] if not df_react_all.empty else pd.DataFrame()
+        if not react_4_df.empty:
+            n_react_4_P = len(react_4_df[react_4_df["orden"].isin(set_ini)])
+            n_react_4_H = len(react_4_df[~react_4_df["orden"].isin(set_ini)])
+        else:
+            n_react_4_P = n_react_4_H = 0
+
+        # reactivacion_sin_origen: detectadas por texto sin origen conocido, solo histórico
+        if not df_react_all.empty:
+            df_sin = df_react_all[df_react_all["estado_origen"] == "reactivacion_sin_origen"]
+            n_react_sin_origen = len(df_sin[~df_sin["orden"].isin(set_ini)])
+        else:
+            n_react_sin_origen = 0
+
+        n_react_6_churn += n_react_sin_origen
+        n_react_val = n_react_6_churn + n_react_8_30days + n_react_4_H
 
         df_corte_impagado = self.get_corte_impagado()
         set_corte_impagado = (
@@ -96,19 +117,15 @@ class MetricsAnalyzer:
 
         sobrevivientes = set_fin - set_nue
         bajas_fin_netas_ids = set_ini - sobrevivientes
-        target_size = max(0, len(act_ini) - (len(act_fin) - len(nuevos)))
         df_bajas = self.df_subs_full[self.df_subs_full["orden"].isin(bajas_fin_netas_ids)].copy()
-        if "f_ini_dt" in df_bajas.columns:
-            df_bajas = df_bajas.sort_values(by=["f_ini_dt", "orden"], na_position="last")
-        else:
-            df_bajas = df_bajas.sort_values(by=["orden"])
-        df_bajas = df_bajas.head(target_size).reset_index(drop=True)
-        bajas_netas = len(df_bajas)
-        bajas_brutas = bajas_netas + n_react_6_8
+        bajas_netas = max(0, len(act_ini) - (len(act_fin) - len(set_nue)))
+        df_react_not_in_ini = df_react_all[~df_react_all["orden"].isin(set_ini)] if not df_react_all.empty else pd.DataFrame()
+        n_react_not_in_ini = len(df_react_not_in_ini)
+        bajas_brutas = bajas_netas + n_react_not_in_ini
 
-        self.db.save_historico(act_fin, "analyzer_activos_cierre", periodo_label)
+        self.db.save_historico(act_fin[["orden", "f_dt", "estado"]], "analyzer_activos_cierre", periodo_label)
         self.db.save_historico(df_react_all, "analyzer_reactivaciones", periodo_label)
-        self.db.save_historico(df_bajas, "analyzer_bajas_detalladas", periodo_label)
+        self.db.save_historico(df_bajas[["orden", "f_ini_dt", "estado"]], "analyzer_bajas_detalladas", periodo_label)
         self.db.save_historico(df_corte_impagado, "analyzer_corte_impagado", periodo_label)
 
         summary = {
@@ -116,24 +133,27 @@ class MetricsAnalyzer:
             "activos_inicio": len(act_ini),
             "activos_final": len(act_fin),
             "nuevos_mes": len(set_nue),
-            "bajas_netas_balance": bajas_netas,
-            "bajas_brutas_auditoria": bajas_brutas,
+            "bajas_netas": bajas_netas,
+            "bajas_brutas": bajas_brutas,
             "churn_neto_pct": round((bajas_netas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
             "churn_bruto_pct": round((bajas_brutas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
             "corte_impagado": len(set_corte_impagado),
+            "porcentaje_suspensiones": round((len(set_corte_impagado) / len(act_ini)) * 100, 4) if len(act_ini) > 0 else 0,
             "total_inactivos": total_inactivos,
             "reactivaciones": n_react_unicas,
-            "react_6_churn": int(counts_react.get("6_churn", 0)),
-            "react_8_30days": int(counts_react.get("8_30days", 0)),
-            "react_4_paused": int(counts_react.get("4_paused", 0)),
+            "react_6_churn": n_react_6_churn,
+            "react_8_30days": n_react_8_30days,
+            "react_4_paused": n_react_4_P + n_react_4_H,
+            "react_4_P": n_react_4_P,
+            "react_4_H": n_react_4_H,
             "tasa_winback_pct": round((n_react_unicas / total_inactivos) * 100, 4) if total_inactivos > 0 else 0,
             "total_billing": total_billing,
             "arpu": arpu,
-            "react_6_8": n_react_6_8,
-            "tasa_aporte_react_pct": round((n_react_6_8 / (len(set_nue) + n_react_6_8)) * 100, 4) if (len(set_nue) + n_react_6_8) > 0 else 0,
-            "indice_reemplazo_react_pct": round((n_react_6_8 / bajas_netas) * 100, 4) if bajas_netas > 0 else 0,
-            "adiciones_brutas": len(set_nue) - bajas_netas,
-            "adiciones_netas": (len(set_nue) + n_react_6_8) - bajas_netas,
+            "react_val": n_react_val,
+            "tasa_aporte_react_pct": round((n_react_val / (len(set_nue) + n_react_val)) * 100, 4) if (len(set_nue) + n_react_val) > 0 else 0,
+            "indice_reemplazo_react_pct": round((n_react_val / bajas_netas) * 100, 4) if bajas_netas > 0 else 0,
+            "adiciones_netas": len(set_nue) - bajas_netas,
+            "adiciones_brutas": (len(set_nue) + n_react_not_in_ini) - bajas_netas,
         }
         self.db.save_historico(pd.DataFrame([summary]), "analyzer_cierre_historico", periodo_label)
 
@@ -148,23 +168,25 @@ class MetricsAnalyzer:
         print(f"BAJAS -> Netas: {bajas_netas} | Brutas: {bajas_brutas}")
         print(f"Churn Neto: {summary['churn_neto_pct']}% | Bruto: {summary['churn_bruto_pct']}%")
         print(f"CORTE IMPAGADO: {len(set_corte_impagado)} | INACTIVOS: {total_inactivos} | Winback: {summary['tasa_winback_pct']}%")
+        print(f"COMPARATIVA -> Detalle: {len(df_bajas)} | Netas: {bajas_netas} | Brutas: {bajas_brutas}")
+        print(f"  REACTIVACIONES: 6_churn={counts_react.get('6_churn', 0)} | 8_30days={counts_react.get('8_30days', 0)} | 4_paused={counts_react.get('4_paused', 0)}")
 
         dimensions.aggregate_dimensions(
             self.db, self.periodo,
             act_ini, act_fin, nuevos, df_bajas,
             df_inactivos, df_react_all, df_corte_impagado,
-            set_react_audit,
+            df_react_not_in_ini=df_react_not_in_ini,
         )
 
     def aggregate_dimensions(
         self,
         act_ini, act_fin, nuevos, df_bajas,
         df_inactivos, df_react_all, df_corte_impagado,
-        set_react_audit,
+        df_react_not_in_ini=None,
     ):
         dimensions.aggregate_dimensions(
             self.db, self.periodo,
             act_ini, act_fin, nuevos, df_bajas,
             df_inactivos, df_react_all, df_corte_impagado,
-            set_react_audit,
+            df_react_not_in_ini=df_react_not_in_ini,
         )
