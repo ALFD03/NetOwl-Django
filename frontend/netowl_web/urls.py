@@ -5,4 +5,5 @@ from django.shortcuts import redirect
 urlpatterns = [
     path("", lambda r: redirect("subscriptions:dashboard")),
     path("subscriptions/", include("frontend.subscriptions.urls")),
+    path("crm/", include("frontend.crm.urls")),
 ]

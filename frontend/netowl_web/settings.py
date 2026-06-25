@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",      # Soporte de sesiones
     "django.contrib.messages",      # Framework de mensajes (flash)
     "frontend.subscriptions",        # Aplicación principal del frontend
+    "frontend.crm",                  # Módulo CRM (clientes, etc.)
 ]
 
 # --- Middleware ---

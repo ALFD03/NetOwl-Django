@@ -134,6 +134,22 @@ class DBConnector:
         with self.get_connection() as conn:
             return pd.read_sql(query.as_string(conn), conn)
 
+    def query(
+        self, sql_query: str, params: Optional[List[Any]] = None
+    ) -> pd.DataFrame:
+        """
+        Ejecuta una consulta SQL arbitraria con parámetros y retorna DataFrame.
+
+        Args:
+            sql_query: Consulta SQL con placeholders %s para parámetros.
+            params: Lista de parámetros para la consulta.
+
+        Returns:
+            pd.DataFrame: Resultado de la consulta.
+        """
+        with self.get_connection() as conn:
+            return pd.read_sql(sql_query, conn, params=params)
+
     def save_historico(
         self,
         df: pd.DataFrame,

@@ -1,0 +1,37 @@
+{% extends 'crm/base.html' %}
+{% load static %}
+
+{% block title %}NetOwl - CRM Results{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'css/subscriptions.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <h5><i class="bi bi-journal-text me-2"></i>Historial de Cierres CRM</h5>
+    <input type="text" id="search-results-input" class="form-control form-control-sm" placeholder="Buscar por periodo..." style="width:200px">
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 table-theme">
+        <thead><tr>
+          <th>Periodo</th><th class="text-end">Total Clientes</th><th class="text-end">Ganados</th>
+          <th class="text-end">Perdidos</th><th class="text-end">Etapa 8</th><th class="text-end">T. Instalación (h)</th>
+          <th class="text-end">Efectividad 3</th><th class="text-end">Efectividad 4</th>
+          <th class="text-end">Efectividad 5</th><th class="text-end">Efectividad Ventas</th>
+          <th class="text-end">Rescate %</th><th class="text-center">Accion</th>
+        </tr></thead>
+        <tbody id="results-table-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% include 'crm/partials/results_detail_modal.html' %}
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'crm/js/results.js' %}"></script>
+{% endblock %}
