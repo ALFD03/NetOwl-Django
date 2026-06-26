@@ -8,10 +8,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h5><i class="bi bi-journal-text me-2"></i>Historial de Cierres CRM</h5>
-    <input type="text" id="search-results-input" class="form-control form-control-sm" placeholder="Buscar por periodo..." style="width:200px">
+<div class="card mb-4">
+  <div class="card-header">
+    <h5><i class="bi bi-journal-text me-2"></i>Resumen General CRM</h5>
   </div>
   <div class="card-body p-0">
     <div class="table-responsive">
@@ -21,15 +20,19 @@
           <th class="text-end">Perdidos</th><th class="text-end">Etapa 8</th><th class="text-end">T. Instalación (h)</th>
           <th class="text-end">Efectividad 3</th><th class="text-end">Efectividad 4</th>
           <th class="text-end">Efectividad 5</th><th class="text-end">Efectividad Ventas</th>
-          <th class="text-end">Rescate %</th><th class="text-center">Accion</th>
+          <th class="text-end">Rescate %</th>
         </tr></thead>
-        <tbody id="results-table-tbody"></tbody>
+        <tbody id="results-table-tbody">
+          <tr><td colspan="11" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando...</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
 </div>
 
-{% include 'crm/partials/results_detail_modal.html' %}
+<div id="results-detail-container">
+  <div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando detalle...</div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

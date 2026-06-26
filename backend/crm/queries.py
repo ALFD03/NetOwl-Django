@@ -13,16 +13,13 @@ def get_crm_cierre(
     periodos: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Recupera los datos de cierre CRM por período desde crm_metricas_globales.
+    Recupera los datos de cierre CRM desde crm_metricas_globales.
     """
     db = DBConnector()
     try:
         df = db.read_table("crm_metricas_globales")
         if df.empty:
             return []
-
-        if periodos:
-            df = df[df["periodo"].isin(periodos)]
 
         result = []
         for _, row in df.sort_values("periodo", ascending=False).iterrows():
@@ -118,9 +115,7 @@ def get_crm_cierre(
         return []
 
 
-def get_crm_dimensiones(
-    periodos: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+def get_crm_dimensiones() -> List[Dict[str, Any]]:
     """
     Recupera datos de CRM desglosados por dimensiones.
     Lee crm_dimensiones_historico.
@@ -130,9 +125,6 @@ def get_crm_dimensiones(
         df = db.read_table("crm_dimensiones_historico")
         if df.empty:
             return []
-
-        if periodos:
-            df = df[df["periodo"].isin(periodos)]
 
         pd_dict: Dict[str, Dict] = {}
         for _, row in df.iterrows():
@@ -194,43 +186,60 @@ def get_crm_dashboard_data() -> Dict[str, Any]:
     return {"periodos": get_crm_cierre()}
 
 
-def get_crm_analytics_data(
-    periodos: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+def get_crm_analytics_data() -> Dict[str, Any]:
     return {
-        "periodos": get_crm_cierre(periodos),
-        "dimensiones": get_crm_dimensiones(periodos),
+        "periodos": get_crm_cierre(),
+        "dimensiones": get_crm_dimensiones(),
     }
 
 
-def get_crm_results_detail(periodo: str) -> Dict[str, Any]:
-    """Detalle completo de un período: resumen + dimensiones."""
-    cierre = get_crm_cierre([periodo])
-    dims = get_crm_dimensiones([periodo])
+def get_crm_results_detail() -> Dict[str, Any]:
+    """Detalle completo: resumen + dimensiones + motivos + estadísticas."""
+    cierre = get_crm_cierre()
+    dims = get_crm_dimensiones()
     summary = cierre[0] if cierre else {}
     dimensions = dims[0]["dimensiones"] if dims else {}
 
-    # Enriquecer con motivos de pérdida desde tabla detalle
     try:
         db = DBConnector()
+        # Motivos de pérdida (solo filas globales, sin duplicados por dimensión)
         df = db.read_table("crm_motivos_perdida")
         if not df.empty:
-            df_periodo = df[df["periodo"] == periodo]
-            if not df_periodo.empty:
-                motivos_raw = df_periodo.to_dict("records")
-                motivos = []
-                for m in motivos_raw:
-                    motivos.append({
-                        "motivo_perdida": m.get("motivo_perdida"),
-                        "cantidad": _int(m.get("cantidad")),
-                        "pct": _float(m.get("pct")),
-                    })
-                summary["probabilidad_etapa8_perdidos"]["motivos_perdida"] = motivos
+            df_global = df[(df["dimension"] == "global") & (df["dimension_valor"] == "global")]
+            motivos_raw = df_global.to_dict("records") if not df_global.empty else df.head(0).to_dict("records")
+            motivos = []
+            for m in motivos_raw:
+                motivos.append({
+                    "motivo_perdida": m.get("motivo_perdida"),
+                    "cantidad": _int(m.get("cantidad")),
+                    "pct": _float(m.get("pct")),
+                })
+            summary["probabilidad_etapa8_perdidos"]["motivos_perdida"] = motivos
+
+        # Efectividad estadísticas por cliente
+        df_est = db.read_table("crm_efectividad_estadisticas")
+        if not df_est.empty:
+            est_raw = df_est.to_dict("records")
+            summary["efectividad_estadisticas"] = []
+            for e in est_raw:
+                summary["efectividad_estadisticas"].append({
+                    "etapa": e.get("etapa"),
+                    "total_clientes": _int(e.get("total_clientes")),
+                    "total_salidas": _int(e.get("total_salidas")),
+                    "total_retornos": _int(e.get("total_retornos")),
+                    "efectividad_promedio": _float(e.get("efectividad_promedio")),
+                    "efectividad_mediana": _float(e.get("efectividad_mediana")),
+                    "efectividad_p25": _float(e.get("efectividad_p25")),
+                    "efectividad_p75": _float(e.get("efectividad_p75")),
+                    "efectividad_min": _float(e.get("efectividad_min")),
+                    "efectividad_max": _float(e.get("efectividad_max")),
+                    "efectividad_std": _float(e.get("efectividad_std")),
+                })
     except Exception:
         pass
 
     return {
-        "periodo": periodo,
+        "periodo": "completo",
         "summary": summary,
         "dimensions": dimensions,
     }

@@ -13,7 +13,9 @@ import pandas as pd
 
 from ..database import DBConnector
 from ..config import DB_SCHEMA
-from .config import ETAPA_ORDER, DIMENSIONES, EFECTIVIDAD_REGLAS, dim_col
+from .config import ETAPA_ORDER, DIMENSIONES, EFECTIVIDAD_REGLAS, FAILURE_STAGES, dim_col
+
+_PERIODO = "completo"
 
 
 # ---------------------------------------------------------------------------
@@ -39,12 +41,12 @@ def _build_fecha_fin_sql(fecha_fin: datetime | None, alias: str = "c") -> tuple[
     return f"AND {alias}.created_at_log <= %s", [fecha_fin]
 
 
-def _delete_periodo(db: DBConnector, table: str, periodo: str, dimension: str = "global", dimension_valor: str = "global"):
+def _delete_periodo(db: DBConnector, table: str, dimension: str = "global", dimension_valor: str = "global"):
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"DELETE FROM {DB_SCHEMA}.{table} WHERE periodo = %s AND dimension = %s AND dimension_valor = %s",
-                [periodo, dimension, dimension_valor]
+                [_PERIODO, dimension, dimension_valor]
             )
         conn.commit()
 
@@ -71,7 +73,6 @@ def _clean_nan(obj: Any) -> Any:
 
 def compute_tiempo_por_etapa(
     db: DBConnector,
-    periodo: str,
     fecha_fin: datetime | None = None,
     filtros: dict | None = None,
     dimension: str = "global",
@@ -81,7 +82,6 @@ def compute_tiempo_por_etapa(
     fecha_sql, fecha_params = _build_fecha_fin_sql(fecha_fin, "l")
     params = params_dim + fecha_params
 
-    # SQL solo para extraer datos crudos (excluye etapa_7, se calcula aparte)
     query = f"""
         SELECT l.etapa_anterior AS etapa, l.duracion_horas
         FROM {DB_SCHEMA}.crm_logs l
@@ -95,7 +95,6 @@ def compute_tiempo_por_etapa(
     if df.empty:
         return []
 
-    # Cálculos con pandas
     etapa_order_map = {e: i for i, e in enumerate(ETAPA_ORDER)}
     records = []
     for etapa, group in df.groupby("etapa", sort=False):
@@ -113,10 +112,9 @@ def compute_tiempo_por_etapa(
 
     records.sort(key=lambda r: etapa_order_map.get(r["etapa"], 999))
 
-    # Guardar en tabla detalle
-    _delete_periodo(db, "crm_tiempo_por_etapa", periodo, dimension, dimension_valor)
+    _delete_periodo(db, "crm_tiempo_por_etapa", dimension, dimension_valor)
     out = pd.DataFrame(records)
-    out["periodo"] = periodo
+    out["periodo"] = _PERIODO
     out["dimension"] = dimension
     out["dimension_valor"] = dimension_valor
     _insert_df(db, "crm_tiempo_por_etapa", out)
@@ -130,7 +128,6 @@ def compute_tiempo_por_etapa(
 
 def compute_tiempo_instalacion(
     db: DBConnector,
-    periodo: str,
     fecha_fin: datetime | None = None,
     filtros: dict | None = None,
     dimension: str = "global",
@@ -165,10 +162,10 @@ def compute_tiempo_instalacion(
     df = db.query(query, params=params)
     result = df.to_dict("records")[0] if not df.empty else {}
 
-    _delete_periodo(db, "crm_tiempo_instalacion", periodo, dimension, dimension_valor)
+    _delete_periodo(db, "crm_tiempo_instalacion", dimension, dimension_valor)
     if result:
         out = pd.DataFrame([result])
-        out["periodo"] = periodo
+        out["periodo"] = _PERIODO
         out["dimension"] = dimension
         out["dimension_valor"] = dimension_valor
         _insert_df(db, "crm_tiempo_instalacion", out)
@@ -180,9 +177,76 @@ def compute_tiempo_instalacion(
 # 3. Efectividad etapas 3, 4, 5 y Ventas
 # ---------------------------------------------------------------------------
 
+def _classify_forward_cycles(
+    df: pd.DataFrame, etapa_key: str, forward_stages: list[str]
+) -> tuple[int, int, int]:
+    """Por cada transición forward desde etapa_key, rastrea el primer evento terminal
+    usando bfill (vectorizado)."""
+    terminal_types = ["etapa_7_instalados"] + FAILURE_STAGES + [etapa_key]
+    term_map = {
+        "etapa_7_instalados": "success",
+        "etapa_8_devueltos": "failure",
+        "perdido": "failure",
+        etapa_key: "return",
+    }
+
+    df_sorted = df.sort_values(["client_id", "created_at_log"])
+    is_term = df_sorted["nueva_etapa"].isin(terminal_types)
+    next_term = df_sorted["nueva_etapa"].where(is_term).map(term_map)
+    next_term = next_term.groupby(df_sorted["client_id"], sort=False).bfill()
+
+    is_fwd = (
+        (df_sorted["etapa_anterior"] == etapa_key) &
+        (df_sorted["nueva_etapa"].isin(forward_stages))
+    )
+    fwd_types = next_term[is_fwd]
+    return (
+        int((fwd_types == "success").sum()),
+        int((fwd_types == "failure").sum()),
+        int((fwd_types == "return").sum()),
+    )
+
+
+def _classify_ventas(df: pd.DataFrame) -> tuple[int, int, int, pd.Series | None]:
+    """Clientes que entraron a pipeline (e1/e2→e3).
+    Retorna (n_exito, n_parcial, n_fracaso, serie_efectividad_por_cliente o None)."""
+    entrada_mask = (
+        (df["nueva_etapa"] == "etapa_3_factibilidad") &
+        (df["etapa_anterior"].isin(["etapa_1_contacto", "etapa_2_recepcion"]))
+    )
+    entrada_cli = df[entrada_mask]["client_id"].unique()
+    if not len(entrada_cli):
+        return 0, 0, 0, None
+
+    # Build per-client: has etapa_7? has failure?
+    has_e7 = df[df["nueva_etapa"] == "etapa_7_instalados"]["client_id"].unique()
+    has_fail = df[df["nueva_etapa"].isin(FAILURE_STAGES)]["client_id"].unique()
+    set_e7 = set(has_e7)
+    set_fail = set(has_fail)
+    set_entrada = set(entrada_cli)
+
+    scores = {}
+    for cid in set_entrada:
+        in_e7 = cid in set_e7
+        in_fail = cid in set_fail
+        if in_e7 and not in_fail:
+            scores[cid] = 100.0
+        elif in_e7 and in_fail:
+            scores[cid] = 50.0
+        elif not in_e7 and in_fail:
+            scores[cid] = 0.0
+
+    if not scores:
+        return 0, 0, 0, None
+
+    n_exito = sum(1 for v in scores.values() if v == 100.0)
+    n_parcial = sum(1 for v in scores.values() if v == 50.0)
+    n_fracaso = sum(1 for v in scores.values() if v == 0.0)
+    return n_exito, n_parcial, n_fracaso, pd.Series(list(scores.values()))
+
+
 def compute_efectividad(
     db: DBConnector,
-    periodo: str,
     fecha_fin: datetime | None = None,
     filtros: dict | None = None,
     dimension: str = "global",
@@ -198,61 +262,170 @@ def compute_efectividad(
         JOIN {DB_SCHEMA}.crm_clients c ON l.client_id = c.id
         WHERE {where_dim}
           {fecha_sql}
-        ORDER BY l.client_id, l.created_at_log
     """
     df_trans = db.query(transitions_q, params=params)
     resultados: list[dict] = []
 
-    if not df_trans.empty:
-        for etapa_key, regla in EFECTIVIDAD_REGLAS.items():
-            origen_retorno = regla["origen_retorno"]
+    if df_trans.empty:
+        return resultados
 
-            if etapa_key == "ventas":
-                # "ventas" no es una etapa real; salidas = traspasos a etapa_7
-                # retornos = traspasos desde etapa_8 hacia etapa_3/2 de esos mismos clientes
-                salidas = df_trans[df_trans["nueva_etapa"] == "etapa_7_instalados"]
-                total_salidas = len(salidas)
-                if total_salidas == 0:
-                    resultados.append({
-                        "etapa": etapa_key, "total_salidas": 0, "retornos": 0,
-                        "efectividad_pct": 100.0, "origen_retorno": ", ".join(origen_retorno)
-                    })
-                    continue
-                ret_mask = (df_trans["etapa_anterior"] == "etapa_8_devueltos") & \
-                           (df_trans["nueva_etapa"].isin(origen_retorno))
-                retornos = df_trans[ret_mask]
-                clientes_salida = salidas["client_id"].unique()
-                retornos_filtrados = retornos[retornos["client_id"].isin(clientes_salida)]
-                n_retornos = len(retornos_filtrados)
-            else:
-                salidas = df_trans[df_trans["etapa_anterior"] == etapa_key]
-                total_salidas = len(salidas)
-                if total_salidas == 0:
-                    resultados.append({
-                        "etapa": etapa_key, "total_salidas": 0, "retornos": 0,
-                        "efectividad_pct": 100.0, "origen_retorno": ", ".join(origen_retorno)
-                    })
-                    continue
-                ret_mask = (df_trans["nueva_etapa"] == etapa_key) & (df_trans["etapa_anterior"].isin(origen_retorno))
-                retornos = df_trans[ret_mask]
-                clientes_salida = salidas["client_id"].unique()
-                retornos_filtrados = retornos[retornos["client_id"].isin(clientes_salida)]
-                n_retornos = len(retornos_filtrados)
-
-            efectividad = round((1 - n_retornos / total_salidas) * 100, 2) if total_salidas > 0 else 100.0
+    for etapa_key, regla in EFECTIVIDAD_REGLAS.items():
+        if etapa_key == "ventas":
+            n_exito, n_parcial, n_fracaso, _ = _classify_ventas(df_trans)
+            n_clientes = n_exito + n_parcial + n_fracaso
+            efectividad = round(
+                (n_exito + n_parcial * 0.5) / n_clientes * 100, 2
+            ) if n_clientes > 0 else 0.0
             resultados.append({
-                "etapa": etapa_key, "total_salidas": int(total_salidas),
-                "retornos": int(n_retornos), "efectividad_pct": efectividad,
-                "origen_retorno": ", ".join(origen_retorno)
+                "etapa": etapa_key, "total_salidas": n_clientes,
+                "retornos": n_parcial + n_fracaso,
+                "efectividad_pct": efectividad,
+                "origen_retorno": (
+                    f"exito={n_exito}, parcial={n_parcial}, fracaso={n_fracaso}"
+                )
+            })
+        else:
+            forward_stages = regla["forward"]
+            n_exitoso, n_fallido, n_retorna = _classify_forward_cycles(
+                df_trans, etapa_key, forward_stages
+            )
+            n_lost_directo = len(df_trans[
+                (df_trans["etapa_anterior"] == etapa_key) &
+                (df_trans["nueva_etapa"].isin(FAILURE_STAGES))
+            ])
+            total = n_exitoso + n_fallido + n_retorna + n_lost_directo
+            efectividad = round(n_exitoso / total * 100, 2) if total > 0 else 0.0
+            resultados.append({
+                "etapa": etapa_key,
+                "total_salidas": total,
+                "retornos": n_retorna,
+                "efectividad_pct": efectividad,
+                "origen_retorno": (
+                    f"exitosos={n_exitoso}, fallidos={n_fallido}, "
+                    f"retornan={n_retorna}, perdida_directa={n_lost_directo}"
+                )
             })
 
-    _delete_periodo(db, "crm_efectividad", periodo, dimension, dimension_valor)
+    _delete_periodo(db, "crm_efectividad", dimension, dimension_valor)
     if resultados:
         out = pd.DataFrame(resultados)
-        out["periodo"] = periodo
+        out["periodo"] = _PERIODO
         out["dimension"] = dimension
         out["dimension_valor"] = dimension_valor
         _insert_df(db, "crm_efectividad", out)
+
+    return resultados
+
+
+# ---------------------------------------------------------------------------
+# 3b. Efectividad - estadísticas por cliente (P25, mediana, P75, etc.)
+# ---------------------------------------------------------------------------
+
+def compute_efectividad_estadisticas(
+    db: DBConnector,
+    fecha_fin: datetime | None = None,
+    filtros: dict | None = None,
+    dimension: str = "global",
+    dimension_valor: str = "global",
+) -> list[dict]:
+    where_dim, params_dim = _build_where_filtros(filtros)
+    fecha_sql, fecha_params = _build_fecha_fin_sql(fecha_fin, "l")
+    params = params_dim + fecha_params
+
+    q = f"""
+        SELECT l.client_id, l.etapa_anterior, l.nueva_etapa, l.created_at_log
+        FROM {DB_SCHEMA}.crm_logs l
+        JOIN {DB_SCHEMA}.crm_clients c ON l.client_id = c.id
+        WHERE {where_dim}
+          {fecha_sql}
+    """
+    df_trans = db.query(q, params=params)
+    if df_trans.empty:
+        return []
+
+    ETAPAS_EFECTIVIDAD = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi", "ventas"]
+    resultados: list[dict] = []
+
+    for etapa_key in ETAPAS_EFECTIVIDAD:
+        if etapa_key == "ventas":
+            n_exito, n_parcial, n_fracaso, vals = _classify_ventas(df_trans)
+            if vals is None:
+                continue
+            n_clientes = len(vals)
+        else:
+            forward_stages = EFECTIVIDAD_REGLAS[etapa_key]["forward"]
+            df_sorted = df_trans.sort_values(["client_id", "created_at_log"])
+
+            # Mark next terminal event via bfill
+            term_types_set = ["etapa_7_instalados"] + FAILURE_STAGES + [etapa_key]
+            term_map = {
+                "etapa_7_instalados": "success",
+                "etapa_8_devueltos": "failure",
+                "perdido": "failure",
+                etapa_key: "return",
+            }
+            is_term = df_sorted["nueva_etapa"].isin(term_types_set)
+            next_term = df_sorted["nueva_etapa"].where(is_term).map(term_map)
+            next_term = next_term.groupby(df_sorted["client_id"], sort=False).bfill()
+
+            # Forward transitions with their next terminal type
+            is_fwd = (
+                (df_sorted["etapa_anterior"] == etapa_key) &
+                (df_sorted["nueva_etapa"].isin(forward_stages))
+            )
+            is_lost = (
+                (df_sorted["etapa_anterior"] == etapa_key) &
+                (df_sorted["nueva_etapa"].isin(FAILURE_STAGES))
+            )
+
+            if not is_fwd.any() and not is_lost.any():
+                continue
+
+            # Per-client counts of forward events by terminal type
+            fwd_df = df_sorted[is_fwd][["client_id"]].copy()
+            fwd_df["terminal_type"] = next_term[is_fwd]
+            cli_class = fwd_df.groupby(["client_id", "terminal_type"]).size().unstack(fill_value=0)
+
+            # Per-client direct loss counts
+            lost_df = df_sorted[is_lost][["client_id"]].copy()
+            lost_counts = lost_df.groupby("client_id").size().to_frame("lost_directo")
+
+            all_clients = set(cli_class.index) | set(lost_counts.index)
+            if not all_clients:
+                continue
+
+            scores = {}
+            for cid in all_clients:
+                r_ex = int(cli_class.get("success", pd.Series(dtype=int)).get(cid, 0))
+                r_fa = int(cli_class.get("failure", pd.Series(dtype=int)).get(cid, 0))
+                r_re = int(cli_class.get("return", pd.Series(dtype=int)).get(cid, 0))
+                r_lo = int(lost_counts.get("lost_directo", pd.Series(dtype=int)).get(cid, 0))
+                if r_ex > 0 and r_fa == 0 and r_re == 0 and r_lo == 0:
+                    scores[cid] = 100.0
+                elif r_ex == 0:
+                    scores[cid] = 0.0
+                else:
+                    scores[cid] = 50.0
+
+            n_clientes = len(scores)
+            vals = pd.Series(list(scores.values()))
+
+        resultados.append({
+            "periodo": _PERIODO,
+            "etapa": etapa_key,
+            "total_clientes": n_clientes,
+            "total_salidas": 0,
+            "total_retornos": 0,
+            "efectividad_promedio": round(float(vals.mean()), 2),
+            "efectividad_mediana": round(float(vals.median()), 2),
+            "efectividad_p25": round(float(vals.quantile(0.25)), 2),
+            "efectividad_p75": round(float(vals.quantile(0.75)), 2),
+            "efectividad_min": round(float(vals.min()), 2),
+            "efectividad_max": round(float(vals.max()), 2),
+            "efectividad_std": round(float(vals.std(ddof=0)), 2) if len(vals) > 1 else 0.0,
+            "dimension": dimension,
+            "dimension_valor": dimension_valor,
+        })
 
     return resultados
 
@@ -263,7 +436,6 @@ def compute_efectividad(
 
 def compute_probabilidad_etapa8(
     db: DBConnector,
-    periodo: str,
     fecha_fin: datetime | None = None,
     filtros: dict | None = None,
     dimension: str = "global",
@@ -308,18 +480,18 @@ def compute_probabilidad_etapa8(
     df_mot = db.query(motivos_q, params=params)
 
     # Guardar probabilidad
-    _delete_periodo(db, "crm_probabilidad_etapa8", periodo, dimension, dimension_valor)
+    _delete_periodo(db, "crm_probabilidad_etapa8", dimension, dimension_valor)
     if resumen:
         out = pd.DataFrame([resumen])
-        out["periodo"] = periodo
+        out["periodo"] = _PERIODO
         out["dimension"] = dimension
         out["dimension_valor"] = dimension_valor
         _insert_df(db, "crm_probabilidad_etapa8", out)
 
     # Guardar motivos
-    _delete_periodo(db, "crm_motivos_perdida", periodo, dimension, dimension_valor)
+    _delete_periodo(db, "crm_motivos_perdida", dimension, dimension_valor)
     if not df_mot.empty:
-        df_mot["periodo"] = periodo
+        df_mot["periodo"] = _PERIODO
         df_mot["dimension"] = dimension
         df_mot["dimension_valor"] = dimension_valor
         _insert_df(db, "crm_motivos_perdida", df_mot)
@@ -336,7 +508,6 @@ def compute_probabilidad_etapa8(
 
 def compute_rescate_perdidos(
     db: DBConnector,
-    periodo: str,
     fecha_fin: datetime | None = None,
     filtros: dict | None = None,
     dimension: str = "global",
@@ -352,8 +523,6 @@ def compute_rescate_perdidos(
 
     params = params_dim + fecha_params
 
-    # Perdidos se detecta desde crm_clients.ganado = 'perdido'
-    # Rescatados = de esos, los que tienen al menos un log a etapa_7_instalados
     query = f"""
         WITH perdidos AS (
             SELECT id FROM {DB_SCHEMA}.crm_clients c
@@ -374,10 +543,10 @@ def compute_rescate_perdidos(
     df = db.query(query, params=params)
     result = df.to_dict("records")[0] if not df.empty else {}
 
-    _delete_periodo(db, "crm_rescate_perdidos", periodo, dimension, dimension_valor)
+    _delete_periodo(db, "crm_rescate_perdidos", dimension, dimension_valor)
     if result:
         out = pd.DataFrame([result])
-        out["periodo"] = periodo
+        out["periodo"] = _PERIODO
         out["dimension"] = dimension
         out["dimension_valor"] = dimension_valor
         _insert_df(db, "crm_rescate_perdidos", out)
@@ -419,7 +588,6 @@ def _compute_totals(db: DBConnector, fecha_fin: datetime | None = None, filtros:
 
 def compute_and_save_all_global(
     db: DBConnector,
-    periodo_label: str,
     fecha_fin: datetime | None = None,
 ) -> dict:
     """
@@ -429,42 +597,39 @@ def compute_and_save_all_global(
     """
     results: dict = {}
 
-    # 1. Totals
     totals = _compute_totals(db, fecha_fin)
     results.update(totals)
 
-    # 2. Tiempo instalación
-    ti = compute_tiempo_instalacion(db, periodo_label, fecha_fin)
+    ti = compute_tiempo_instalacion(db, fecha_fin)
     results["tiempo_instalacion"] = ti
 
-    # 3. Tiempo por etapa
-    tpe = compute_tiempo_por_etapa(db, periodo_label, fecha_fin)
+    tpe = compute_tiempo_por_etapa(db, fecha_fin)
     results["tiempo_por_etapa"] = {r["etapa"]: r for r in tpe}
 
-    # 4. Efectividad
-    ef = compute_efectividad(db, periodo_label, fecha_fin)
+    ef = compute_efectividad(db, fecha_fin)
     results["efectividad"] = ef
 
-    # 5. Probabilidad etapa 8
-    prob = compute_probabilidad_etapa8(db, periodo_label, fecha_fin)
+    ef_stats = compute_efectividad_estadisticas(db, fecha_fin)
+    results["efectividad_estadisticas"] = ef_stats
+
+    if ef_stats:
+        _delete_periodo(db, "crm_efectividad_estadisticas")
+        out = pd.DataFrame(ef_stats)
+        _insert_df(db, "crm_efectividad_estadisticas", out)
+
+    prob = compute_probabilidad_etapa8(db, fecha_fin)
     results["probabilidad_etapa8_perdidos"] = prob
 
-    # 6. Rescate
-    resc = compute_rescate_perdidos(db, periodo_label, fecha_fin)
+    resc = compute_rescate_perdidos(db, fecha_fin)
     results["rescate_perdidos"] = resc
 
-    # -- Actualizar crm_metricas_globales --
-    _upsert_globales(
-        db, periodo_label, totals, ti, tpe, ef,
-        prob.get("resumen", {}), resc
-    )
+    _upsert_globales(db, totals, ti, tpe, ef, prob.get("resumen", {}), resc)
 
     return results
 
 
 def _upsert_globales(
     db: DBConnector,
-    periodo: str,
     totals: dict,
     ti: dict,
     tpe_list: list[dict],
@@ -476,7 +641,7 @@ def _upsert_globales(
     ef_json = json.dumps(_clean_nan(efectividad_list), default=str)
 
     row = {
-        "periodo": periodo,
+        "periodo": _PERIODO,
         "ti_total_instalados": ti.get("total_instalados"),
         "ti_horas_promedio": ti.get("horas_promedio"),
         "ti_horas_p25": ti.get("horas_p25"),

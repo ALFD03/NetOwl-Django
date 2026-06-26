@@ -17,7 +17,7 @@ from backend.database import DBConnector
 from backend.models import Periodo
 from backend.subscriptions import MetricsAnalyzer, import_subscriptions_csv, import_logs_csv
 from backend.subscriptions.lifetime import run_lifecycle_analysis
-from backend.crm import CRMAnalyzer, import_crm_csv
+from backend.crm import run_crm_analysis, import_crm_csv
 
 
 def cmd_import_subs(args):
@@ -102,21 +102,15 @@ def cmd_crm_import(args):
 
 
 def cmd_crm_analyze(args):
-    """Run CRM analysis for a given month."""
-    db = DBConnector()
-    periodo = Periodo.build(f"{args.year_month}-01")
-    analyzer = CRMAnalyzer(db, periodo)
-    analyzer.run()
+    """Run CRM analysis on all data."""
+    run_crm_analysis()
 
 
 def cmd_crm_run_all(args):
     """Run full CRM ETL + analysis pipeline."""
     rows_clients, rows_logs = import_crm_csv(args.csv_path)
     print(f"Importados {rows_clients} clientes | {rows_logs} logs")
-    db = DBConnector()
-    periodo = Periodo.build(f"{args.year_month}-01")
-    analyzer = CRMAnalyzer(db, periodo)
-    analyzer.run()
+    run_crm_analysis()
 
 
 def main():
@@ -127,9 +121,9 @@ def main():
         ``import logs <csv_path>``       – Import logs from a CSV.
         ``import crm <csv_path>``        – Import CRM from Odoo CSV.
         ``analyze <YYYY-MM>``            – Run churn analysis for a month.
-        ``crm-analyze <YYYY-MM>``        – Run CRM analysis for a month.
+        ``crm-analyze``        – Run CRM analysis on all data.
         ``run-all <YYYY-MM> <subs_csv> <logs_csv>``   – Full Subscriptions ETL + analysis.
-        ``crm-run-all <YYYY-MM> <crm_csv>``           – Full CRM ETL + analysis.
+        ``crm-run-all <crm_csv>``           – Full CRM ETL + analysis.
         ``lifecycle``                    – Global lifecycle analysis.
     """
     parser = argparse.ArgumentParser(
@@ -145,8 +139,8 @@ def main():
 
             Comandos CRM:
             - import crm <csv_path>: Importa CRM desde export Odoo CSV
-            - crm-analyze <YYYY-MM>: Analiza métricas CRM para el mes dado
-            - crm-run-all <YYYY-MM> <crm_csv>: Ejecuta importación y análisis CRM
+            - crm-analyze: Analiza todas las métricas CRM (sin filtro temporal)
+            - crm-run-all <crm_csv>: Importa y analiza CRM completo
 
             Otros:
             - lifecycle: Ejecuta el analisis global de ciclo de vida (independiente del periodo)
@@ -175,9 +169,8 @@ def main():
     p_analyze.add_argument("year_month", help="Mes a analizar en formato YYYY-MM")
     p_analyze.set_defaults(func=cmd_analyze)
 
-    # crm-analyze <YYYY-MM>
-    p_crm_analyze = sub.add_parser("crm-analyze")
-    p_crm_analyze.add_argument("year_month", help="Mes a analizar en formato YYYY-MM")
+    # crm-analyze (without month, analyzes all data)
+    p_crm_analyze = sub.add_parser("crm-analyze", help="Analiza todos los datos CRM sin filtro temporal")
     p_crm_analyze.set_defaults(func=cmd_crm_analyze)
 
     # lifecycle (no arguments needed)
@@ -191,9 +184,8 @@ def main():
     p_run.add_argument("logs_csv")
     p_run.set_defaults(func=cmd_run_all)
 
-    # crm-run-all <YYYY-MM> <crm_csv>
-    p_crm_run = sub.add_parser("crm-run-all")
-    p_crm_run.add_argument("year_month", help="Mes a analizar en formato YYYY-MM")
+    # crm-run-all <crm_csv>
+    p_crm_run = sub.add_parser("crm-run-all", help="Importa y analiza CRM (sin filtro temporal)")
     p_crm_run.add_argument("csv_path")
     p_crm_run.set_defaults(func=cmd_crm_run_all)
 

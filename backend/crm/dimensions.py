@@ -21,17 +21,14 @@ from .metrics import (
     _compute_totals,
 )
 
+_PERIODO = "completo"
+
 
 def _compute_prob_dimension_e8(
     db: DBConnector,
-    periodo_label: str,
     fecha_fin: datetime | None = None,
     prob_dim: str = "devolver_oportunidad",
 ) -> list[dict]:
-    """
-    Calcula desglose de pct_etapa8 por devolver_oportunidad.
-    Retorna filas para crm_dimensiones_historico.
-    """
     from ..config import DB_SCHEMA
     col = dim_col(prob_dim)
     fecha_sql, fecha_params = "", []
@@ -68,7 +65,7 @@ def _compute_prob_dimension_e8(
         e8 = tot.get("etapa_8_count", 0) or 0
 
         rows.append({
-            "periodo": periodo_label,
+            "periodo": _PERIODO,
             "dimension": prob_dim,
             "valor": valor,
             "total_clientes": tc,
@@ -89,14 +86,9 @@ def _compute_prob_dimension_e8(
 
 def _compute_prob_dimension_perdidos_rescate(
     db: DBConnector,
-    periodo_label: str,
     fecha_fin: datetime | None = None,
     prob_dim: str = "motivo_perdida",
 ) -> list[dict]:
-    """
-    Calcula desglose de pct_perdidos y pct_rescate por motivo_perdida.
-    Retorna filas para crm_dimensiones_historico.
-    """
     from ..config import DB_SCHEMA
     col = dim_col(prob_dim)
     fecha_sql, fecha_params = "", []
@@ -145,7 +137,7 @@ def _compute_prob_dimension_perdidos_rescate(
         rescatados = df_resc.iloc[0]["rescatados"] if not df_resc.empty else 0
 
         rows.append({
-            "periodo": periodo_label,
+            "periodo": _PERIODO,
             "dimension": prob_dim,
             "valor": valor,
             "total_clientes": tc,
@@ -166,15 +158,8 @@ def _compute_prob_dimension_perdidos_rescate(
 
 def aggregate_dimensions(
     db: DBConnector,
-    periodo_label: str,
     fecha_fin: datetime | None = None,
 ):
-    """
-    Para cada dimensión (municipio, campana, etc.) itera sobre sus valores
-    y calcula métricas con filtro dimensional. Guarda en tablas detalle
-    y también en crm_dimensiones_historico para compatibilidad.
-    """
-    # 1. Dimensiones normales (aplican a todas las métricas)
     dim_values: dict[str, list[str]] = {}
     for dim in DIMENSIONES:
         col = dim_col(dim)
@@ -196,18 +181,18 @@ def aggregate_dimensions(
         for valor in dim_values[dim]:
             filtros = {dim: valor}
 
-            ti = compute_tiempo_instalacion(db, periodo_label, fecha_fin, filtros, dim, valor)
-            tpe = compute_tiempo_por_etapa(db, periodo_label, fecha_fin, filtros, dim, valor)
-            ef = compute_efectividad(db, periodo_label, fecha_fin, filtros, dim, valor)
-            prob = compute_probabilidad_etapa8(db, periodo_label, fecha_fin, filtros, dim, valor)
-            resc = compute_rescate_perdidos(db, periodo_label, fecha_fin, filtros, dim, valor)
+            ti = compute_tiempo_instalacion(db, fecha_fin, filtros, dim, valor)
+            tpe = compute_tiempo_por_etapa(db, fecha_fin, filtros, dim, valor)
+            ef = compute_efectividad(db, fecha_fin, filtros, dim, valor)
+            prob = compute_probabilidad_etapa8(db, fecha_fin, filtros, dim, valor)
+            resc = compute_rescate_perdidos(db, fecha_fin, filtros, dim, valor)
             totals = _compute_totals(db, fecha_fin, filtros)
 
             tpe_dict = {r["etapa"]: r.get("tiempo_promedio_horas") for r in tpe}
             ef_dict = {r["etapa"]: r.get("efectividad_pct") for r in ef}
 
             all_dim_rows.append({
-                "periodo": periodo_label,
+                "periodo": _PERIODO,
                 "dimension": dim,
                 "valor": valor,
                 "total_clientes": totals.get("total_clientes", 0),
@@ -225,13 +210,13 @@ def aggregate_dimensions(
 
     # 2. Dimensiones especiales SOLO para métricas específicas
     for prob_dim in PROB_DIM_E8:
-        prob_rows = _compute_prob_dimension_e8(db, periodo_label, fecha_fin, prob_dim)
+        prob_rows = _compute_prob_dimension_e8(db, fecha_fin, prob_dim)
         all_dim_rows.extend(prob_rows)
     for prob_dim in PROB_DIM_PERDIDOS_RESCATE:
-        prob_rows = _compute_prob_dimension_perdidos_rescate(db, periodo_label, fecha_fin, prob_dim)
+        prob_rows = _compute_prob_dimension_perdidos_rescate(db, fecha_fin, prob_dim)
         all_dim_rows.extend(prob_rows)
 
-    # Guardar en crm_dimensiones_historico (reemplazar período)
+    # Guardar en crm_dimensiones_historico (reemplazar)
     if all_dim_rows:
         df_result = pd.DataFrame(all_dim_rows)
 
@@ -239,11 +224,11 @@ def aggregate_dimensions(
             with conn.cursor() as cur:
                 cur.execute(
                     f"DELETE FROM {DB_SCHEMA}.crm_dimensiones_historico WHERE periodo = %s",
-                    [periodo_label]
+                    [_PERIODO]
                 )
             conn.commit()
 
-        db.save_historico(df_result, "crm_dimensiones_historico", periodo_label)
+        db.save_historico(df_result, "crm_dimensiones_historico", _PERIODO)
 
     dims_ok = [d for d in DIMENSIONES if dim_values.get(d)]
     prob_e8 = [d for d in PROB_DIM_E8]

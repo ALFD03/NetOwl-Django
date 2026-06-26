@@ -43,11 +43,14 @@ def dim_col(dim: str) -> str:
 
 # Reglas de efectividad: qué retornos afectan a cada etapa
 EFECTIVIDAD_REGLAS = {
-    "etapa_3_factibilidad": {"origen_retorno": ["etapa_5_gpi", "etapa_6_contratistas"]},
-    "etapa_4_adecuaciones": {"origen_retorno": ["etapa_5_gpi", "etapa_6_contratistas"]},
-    "etapa_5_gpi": {"origen_retorno": ["etapa_6_contratistas"]},
-    "ventas": {"origen_retorno": ["etapa_3_factibilidad", "etapa_2_recepcion"]},
+    "etapa_3_factibilidad": {"forward": ["etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"]},
+    "etapa_4_adecuaciones": {"forward": ["etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"]},
+    "etapa_5_gpi":          {"forward": ["etapa_6_contratistas", "etapa_7_instalados"]},
+    "ventas":               {"forward": []},  # lógica especial en código
 }
+
+# Etapas consideradas como pérdida/fracaso
+FAILURE_STAGES = ["etapa_8_devueltos", "perdido"]
 
 # Normalización de columnas CSV Odoo -> snake_case
 CSV_COLUMN_MAP = {

@@ -124,86 +124,9 @@
     }
   }
 
-  function initRunAnalysis() {
-    var monthSelect = document.getElementById("month-select");
-    var yearSelect = document.getElementById("year-select");
-    var monthInput = document.getElementById("month-input");
-    var form = document.getElementById("run-analysis-form");
-    var consoleContainer = document.getElementById("console-container");
-    var terminalLog = document.getElementById("terminal-log");
-    var clearConsole = document.getElementById("clear-console");
-
-    var currentYear = new Date().getFullYear();
-    for (var y = currentYear; y >= currentYear - 5; y--) {
-      var opt = document.createElement("option");
-      opt.value = y; opt.textContent = y;
-      yearSelect.appendChild(opt);
-    }
-    for (var m = 1; m <= 12; m++) {
-      var opt = document.createElement("option");
-      opt.value = String(m).padStart(2, "0");
-      opt.textContent = String(m).padStart(2, "0");
-      monthSelect.appendChild(opt);
-    }
-
-    var now = new Date();
-    yearSelect.value = now.getFullYear();
-    monthSelect.value = String(now.getMonth() + 1).padStart(2, "0");
-
-    function updateMonthInput() {
-      monthInput.value = yearSelect.value + "-" + monthSelect.value;
-    }
-    yearSelect.addEventListener("change", updateMonthInput);
-    monthSelect.addEventListener("change", updateMonthInput);
-    updateMonthInput();
-
-    clearConsole.addEventListener("click", function () {
-      terminalLog.textContent = "";
-    });
-
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      runAnalysis(monthInput.value);
-    });
-
-    function runAnalysis(month) {
-      N.showLoading("Ejecutando análisis para " + month + "...");
-      consoleContainer.classList.remove("d-none");
-      terminalLog.textContent = "Iniciando análisis para " + month + "...\n";
-      
-      fetch("/crm/api/run-analysis/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": N.getCsrfToken()
-        },
-        body: JSON.stringify({ month: month })
-      })
-      .then(function (r) { N.hideLoading(); return r.json(); })
-      .then(function (data) {
-        if (data.status === "success") {
-          terminalLog.textContent += data.log_output + "\n";
-          terminalLog.textContent += "\n✓ Análisis completado: " + data.periodo_label + "\n";
-          N.showToast("Análisis CRM completado: " + data.periodo_label, "success");
-        } else {
-          terminalLog.textContent += "\n✗ Error: " + data.message + "\n";
-          N.showToast("Error: " + data.message, "error");
-        }
-      })
-      .catch(function (err) {
-        N.hideLoading();
-        terminalLog.textContent += "\n✗ Error de conexión: " + err + "\n";
-        N.showToast("Error de conexión", "error");
-      });
-    }
-  }
-
   document.addEventListener("DOMContentLoaded", function () {
     if (document.getElementById("drop-zone-area")) {
       initDropZone();
-    }
-    if (document.getElementById("run-analysis-form")) {
-      initRunAnalysis();
     }
   });
 })();

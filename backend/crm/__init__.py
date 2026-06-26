@@ -4,7 +4,7 @@ CRM Analytics Module - Backend Package.
 from __future__ import annotations
 
 from .loader import import_crm_csv
-from .analyzer import CRMAnalyzer, run_crm_analysis
+from .analyzer import run_crm_analysis
 from .queries import (
     get_crm_cierre,
     get_crm_dimensiones,
@@ -16,7 +16,6 @@ from .queries import (
 
 __all__ = [
     "import_crm_csv",
-    "CRMAnalyzer",
     "run_crm_analysis",
     "get_crm_cierre",
     "get_crm_dimensiones",

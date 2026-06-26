@@ -278,6 +278,26 @@ def _create_tables_if_not_exist(db: DBConnector):
             created_at TIMESTAMP DEFAULT NOW()
         )
         """,
+        f"""
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_efectividad_estadisticas (
+            id BIGSERIAL PRIMARY KEY,
+            periodo TEXT NOT NULL,
+            etapa TEXT NOT NULL,
+            total_clientes INTEGER,
+            total_salidas INTEGER,
+            total_retornos INTEGER,
+            efectividad_promedio NUMERIC,
+            efectividad_mediana NUMERIC,
+            efectividad_p25 NUMERIC,
+            efectividad_p75 NUMERIC,
+            efectividad_min NUMERIC,
+            efectividad_max NUMERIC,
+            efectividad_std NUMERIC,
+            dimension TEXT DEFAULT 'global',
+            dimension_valor TEXT DEFAULT 'global',
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+        """,
         # ---- Tabla global (resumen rápido para dashboards) ----
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_metricas_globales (
@@ -340,6 +360,7 @@ def _create_tables_if_not_exist(db: DBConnector):
         f"CREATE INDEX IF NOT EXISTS idx_crm_ef_periodo ON {DB_SCHEMA}.crm_efectividad(periodo, dimension, dimension_valor)",
         f"CREATE INDEX IF NOT EXISTS idx_crm_prob_periodo ON {DB_SCHEMA}.crm_probabilidad_etapa8(periodo, dimension, dimension_valor)",
         f"CREATE INDEX IF NOT EXISTS idx_crm_rescate_periodo ON {DB_SCHEMA}.crm_rescate_perdidos(periodo, dimension, dimension_valor)",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_ef_est_periodo ON {DB_SCHEMA}.crm_efectividad_estadisticas(periodo, dimension, dimension_valor)",
         f"CREATE INDEX IF NOT EXISTS idx_crm_dim_periodo ON {DB_SCHEMA}.crm_dimensiones_historico(periodo, dimension)",
     ]
     

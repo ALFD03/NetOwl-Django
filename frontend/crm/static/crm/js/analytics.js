@@ -3,77 +3,8 @@
 
   var N = window.NetOwl;
 
-  function updateAnalyticsFilterLabel() {
-    var label = document.getElementById("analytics-filter-label");
-    if (!label) return;
-    var checked = document.querySelectorAll("#analytics-periods-checkboxes input:checked").length;
-    label.textContent = checked + " periodo" + (checked !== 1 ? "s" : "") + " seleccionado" + (checked !== 1 ? "s" : "");
-  }
-
-  function initAnalyticsFilter() {
-    var toggle = document.getElementById("analytics-filter-toggle");
-    var menu = document.getElementById("analytics-filter-menu");
-    var container = document.getElementById("analytics-filter-dropdown");
-    if (!toggle || !menu || !container) return;
-
-    toggle.addEventListener("click", function (e) {
-      e.stopPropagation();
-      menu.classList.toggle("show");
-    });
-
-    document.addEventListener("click", function (e) {
-      if (!container.contains(e.target) && menu.classList.contains("show")) {
-        menu.classList.remove("show");
-      }
-    });
-  }
-
-  function loadAnalyticsPeriodsList() {
-    fetch("/crm/api/periods/")
-      .then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (d) {
-        var container = document.getElementById("analytics-periods-checkboxes");
-        if (!container) return;
-        container.innerHTML = "";
-        var periods = d.periods || [];
-        var now = new Date();
-        var yearMonth = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
-        var existsCur = periods.some(function (p) { return p.indexOf(yearMonth) !== -1; });
-        periods.forEach(function (p) {
-          var div = document.createElement("div");
-          div.className = "form-check";
-          var cb = document.createElement("input");
-          cb.type = "checkbox"; cb.className = "form-check-input"; cb.value = p; cb.id = "aperiod-" + p;
-          if (p.indexOf(yearMonth) !== -1 || (!existsCur && p === periods[0])) cb.checked = true;
-          var lb = document.createElement("label");
-          lb.className = "form-check-label"; lb.htmlFor = "aperiod-" + p; lb.textContent = p;
-          div.appendChild(cb); div.appendChild(lb); container.appendChild(div);
-          cb.addEventListener("change", function () {
-            var checked = document.querySelectorAll("#analytics-periods-checkboxes input:checked").length;
-            if (checked === 0) { this.checked = true; return; }
-            loadAnalyticsData();
-            updateAnalyticsFilterLabel();
-          });
-        });
-        var resetBtn = document.getElementById("analytics-reset-btn");
-        if (resetBtn) {
-          resetBtn.addEventListener("click", function () {
-            document.querySelectorAll("#analytics-periods-checkboxes input").forEach(function (cb) { cb.checked = cb.value.indexOf(yearMonth) !== -1 || (!existsCur && cb.value === periods[0]); });
-            loadAnalyticsData();
-            updateAnalyticsFilterLabel();
-          });
-        }
-        if (periods.length) { updateAnalyticsFilterLabel(); loadAnalyticsData(); }
-      })
-      .catch(function () {});
-  }
-
   function loadAnalyticsData() {
-    var cbs = document.querySelectorAll("#analytics-periods-checkboxes input[type=checkbox]:checked");
-    var vals = Array.from(cbs).map(function (cb) { return cb.value; }).filter(Boolean);
-    var url = "/crm/api/analytics-data/";
-    if (vals.length) url += "?periods=" + encodeURIComponent(vals.join(","));
-    return fetch(url)
+    return fetch("/crm/api/analytics-data/")
       .then(function (r) { if (!r.ok) throw Error("Error"); return r.json(); })
       .then(function (data) {
         renderAnalyticsCards(data.periodos || []);
@@ -382,9 +313,8 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    if (document.getElementById("analytics-periods-checkboxes")) {
-      initAnalyticsFilter();
-      loadAnalyticsPeriodsList();
+    if (document.getElementById("analytics-cards-container")) {
+      loadAnalyticsData();
     }
   });
 })();

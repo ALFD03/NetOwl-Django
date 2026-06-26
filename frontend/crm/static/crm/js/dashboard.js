@@ -178,7 +178,7 @@
   function renderDashboardTable(periodos) {
     var tbody = document.getElementById("dashboard-table-tbody");
     if (!tbody) return;
-    if (!periodos.length) { tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">Sin datos</td></tr>'; return; }
+    if (!periodos.length) { tbody.innerHTML = '<tr><td colspan="11" class="text-center py-4 text-muted">Sin datos</td></tr>'; return; }
     var html = "";
     periodos.forEach(function (p) {
       var ti = p.tiempo_instalacion || {};
@@ -202,7 +202,6 @@
         '<td class="text-end">' + (ef5.efectividad_pct || 0).toFixed(1) + '%</td>' +
         '<td class="text-end">' + (efv.efectividad_pct || 0).toFixed(1) + '%</td>' +
         '<td class="text-end">' + (rescate.pct_rescate || 0).toFixed(1) + '%</td>' +
-        '<td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + p.periodo + '"><i class="bi bi-eye"></i></button></td>' +
       '</tr>';
     });
     tbody.innerHTML = html;
@@ -222,7 +221,6 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     if (document.getElementById("tiempoInstalacionChart")) {
-      N.initCRMResultsDetailsModal();
       loadDashboardData();
     }
   });
