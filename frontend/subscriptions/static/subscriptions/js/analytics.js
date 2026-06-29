@@ -102,30 +102,41 @@
     function colorWinback(v) { return v >= 90 ? "text-success" : v >= 80 ? "text-warning" : "text-danger"; }
     function colorArpu(v) { return v >= 30 ? "text-success" : v >= 25 ? "text-warning" : "text-danger"; }
     function colorAdiciones(v) { return v > 500 ? "text-success" : v >= 1 ? "text-warning" : "text-danger"; }
+    function colorSuspensiones(v) { return v >= 40 ? "text-danger" : v >= 35 ? "text-warning" : "text-success"; }
 
-    var cards = [
-      { label: "Churn Neto", val: avg("churn_neto_pct"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: colorChurn },
-      { label: "Churn Bruto", val: avg("churn_bruto_pct"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: colorChurn },
-      { label: "Bajas Netas", val: avg("bajas_netas"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorBajas },
-      { label: "Bajas Brutas", val: avg("bajas_brutas"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorBajas },
-      { label: "Nuevos en el Mes", val: avg("nuevos_mes"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorNuevos },
-      { label: "Reactivaciones Totales", val: avg("reactivaciones"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
-      { label: "Reactivaciones", val: avg("react_val"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
-      { label: "Tasa Winback", val: avg("tasa_winback_pct"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: colorWinback },
-      { label: "ARPU", val: avg("arpu"), fmt: function (v) { return "$" + v.toFixed(2); }, clr: colorArpu },
-      { label: "Total Billing", val: avg("total_billing"), fmt: function (v) { return "$" + Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
-      { label: "Tasa Aporte React.", val: avg("tasa_aporte_react_pct"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: function () { return "text-success"; } },
-      { label: "Indice Reemplazo", val: avg("indice_reemplazo_react_pct"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: function () { return "text-success"; } },
-      { label: "Adiciones Netas", val: avg("adiciones_netas"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorAdiciones },
-      { label: "Adiciones Brutas", val: avg("adiciones_brutas"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: colorAdiciones },
-      { label: "Corte Impago", val: avg("corte_impagado"), fmt: function (v) { return Math.round(v).toLocaleString(); }, clr: function () { return "text-success"; } },
-      { label: "% Suspensiones", val: avg("porcentaje_suspensiones"), fmt: function (v) { return v.toFixed(2) + "%"; }, clr: function (v) { return v >= 40 ? "text-danger" : v >= 35 ? "text-warning" : "text-success"; } },
-    ];
+    function card(label, val, fmt, clr) {
+      return '<div class="col-xl-2 col-md-3 col-sm-4"><div class="metric-card"><div class="metric-label">' + label + '</div><div class="fs-3 fw-bold ' + clr(val) + '">' + fmt(val) + '</div></div></div>';
+    }
+    function group(title, items) {
+      var inner = items.map(function (c) { return card(c[0], c[1], c[2], c[3]); }).join("");
+      return '<div class="col-12 mb-3"><h6 class="text-muted mb-2" style="font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px">' + title + '</h6><div class="row g-2">' + inner + '</div></div>';
+    }
 
     var html = "";
-    cards.forEach(function (c) {
-      html += '<div class="col-xl-2 col-md-3 col-sm-4"><div class="metric-card"><div class="metric-label">' + c.label + '</div><div class="fs-3 fw-bold ' + c.clr(c.val) + '">' + c.fmt(c.val) + '</div></div></div>';
-    });
+    html += group("Churn", [
+      ["Churn Neto", avg("churn_neto_pct"), function (v) { return v.toFixed(2) + "%"; }, colorChurn],
+      ["Churn Bruto", avg("churn_bruto_pct"), function (v) { return v.toFixed(2) + "%"; }, colorChurn],
+      ["Bajas Netas", avg("bajas_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
+      ["Bajas Brutas", avg("bajas_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
+      ["Corte Impago", avg("corte_impagado"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["% Suspensiones", avg("porcentaje_suspensiones"), function (v) { return v.toFixed(2) + "%"; }, colorSuspensiones],
+    ]);
+    html += group("Crecimiento", [
+      ["Nuevos en el Mes", avg("nuevos_mes"), function (v) { return Math.round(v).toLocaleString(); }, colorNuevos],
+      ["Reactivaciones Totales", avg("reactivaciones"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["Reactivaciones", avg("react_val"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["Tasa Winback", avg("tasa_winback_pct"), function (v) { return v.toFixed(2) + "%"; }, colorWinback],
+    ]);
+    html += group("Ingresos", [
+      ["ARPU", avg("arpu"), function (v) { return "$" + v.toFixed(2); }, colorArpu],
+      ["Total Billing", avg("total_billing"), function (v) { return "$" + Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["Tasa Aporte React.", avg("tasa_aporte_react_pct"), function (v) { return v.toFixed(2) + "%"; }, function () { return "text-success"; }],
+      ["Indice Reemplazo", avg("indice_reemplazo_react_pct"), function (v) { return v.toFixed(2) + "%"; }, function () { return "text-success"; }],
+    ]);
+    html += group("Adiciones", [
+      ["Adiciones Netas", avg("adiciones_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
+      ["Adiciones Brutas", avg("adiciones_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
+    ]);
     container.innerHTML = html;
   }
 

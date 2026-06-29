@@ -38,10 +38,10 @@
     }
 
     function colorChurn(v) { return v < 2.5 ? "text-success" : v <= 3 ? "text-warning" : "text-danger"; }
-    function colorTiempo(v) { return v < 24 ? "text-success" : v <= 48 ? "text-warning" : "text-danger"; }
-    function colorEfectividad(v) { return v >= 90 ? "text-success" : v >= 70 ? "text-warning" : "text-danger"; }
-    function colorProb(v) { return v < 10 ? "text-success" : v <= 20 ? "text-warning" : "text-danger"; }
-    function colorRescate(v) { return v >= 50 ? "text-success" : v >= 20 ? "text-warning" : "text-danger"; }
+    function colorTiempo(v) { return v <= 72 ? "text-success" : v <= 120 ? "text-warning" : "text-danger"; }
+    function colorEfectividad(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
+    function colorProb(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
+    function colorRescate(v) { return v <= 30 ? "text-danger" : v <= 60 ? "text-warning" : "text-success"; }
 
     function card(c) {
       return '<div class="col-xl-2 col-md-3 col-sm-4"><div class="metric-card"><div class="metric-label">' + c.label + '</div><div class="fs-3 fw-bold ' + c.clr(c.val) + '">' + c.fmt(c.val) + '</div></div></div>';

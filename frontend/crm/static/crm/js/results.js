@@ -3,6 +3,10 @@
 
   var N = window.NetOwl;
   var allHistoricalPeriods = [];
+  function colorTiempo(v) { return v <= 72 ? "text-success" : v <= 120 ? "text-warning" : "text-danger"; }
+  function colorEfectividad(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
+  function colorProb(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
+  function colorRescate(v) { return v <= 30 ? "text-danger" : v <= 60 ? "text-warning" : "text-success"; }
 
   function renderResultsTable(periods) {
     var tbody = document.getElementById("results-table-tbody");
@@ -19,18 +23,24 @@
       var rescate = r.rescate_perdidos || {};
       var ti = r.tiempo_instalacion || {};
 
+      var tiHoras = ti.horas_promedio ? Number(ti.horas_promedio) : 0;
+      var ef3v = ef3.efectividad_pct || 0;
+      var ef4v = ef4.efectividad_pct || 0;
+      var ef5v = ef5.efectividad_pct || 0;
+      var efvv = efv.efectividad_pct || 0;
+      var rescv = rescate.pct_rescate || 0;
       html += '<tr>' +
         '<td class="fw-semibold">' + r.periodo + '</td>' +
         '<td class="text-end">' + (r.total_clientes || 0).toLocaleString() + '</td>' +
         '<td class="text-end text-success">' + (r.ganados || 0).toLocaleString() + '</td>' +
         '<td class="text-end text-danger">' + (r.perdidos || 0).toLocaleString() + '</td>' +
         '<td class="text-end text-warning">' + (r.etapa_8_count || 0).toLocaleString() + '</td>' +
-        '<td class="text-end">' + (ti.horas_promedio ? Number(ti.horas_promedio).toFixed(1) : 0) + '</td>' +
-        '<td class="text-end">' + (ef3.efectividad_pct || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (ef4.efectividad_pct || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (ef5.efectividad_pct || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (efv.efectividad_pct || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (rescate.pct_rescate || 0).toFixed(1) + '%</td>' +
+        '<td class="text-end fw-bold ' + colorTiempo(tiHoras) + '">' + tiHoras.toFixed(1) + '</td>' +
+        '<td class="text-end fw-bold ' + colorEfectividad(ef3v) + '">' + ef3v.toFixed(1) + '%</td>' +
+        '<td class="text-end fw-bold ' + colorEfectividad(ef4v) + '">' + ef4v.toFixed(1) + '%</td>' +
+        '<td class="text-end fw-bold ' + colorEfectividad(ef5v) + '">' + ef5v.toFixed(1) + '%</td>' +
+        '<td class="text-end fw-bold ' + colorEfectividad(efvv) + '">' + efvv.toFixed(1) + '%</td>' +
+        '<td class="text-end fw-bold ' + colorRescate(rescv) + '">' + rescv.toFixed(1) + '%</td>' +
       '</tr>';
     });
     tbody.innerHTML = html;
@@ -47,13 +57,13 @@
       return '<div class="col-md-3 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">' + label + '</div><div class="fs-5 fw-bold ' + cls + '">' + value + '</div></div></div></div>';
     }
     html += card("Total Instalados", (ti.total_instalados || 0).toLocaleString(), "text-success");
-    html += card("Promedio", v(ti.horas_promedio, "h"), "text-primary");
-    html += card("Mediana", v(ti.horas_mediana, "h"), "text-primary");
-    html += card("P25", v(ti.horas_p25, "h"), "text-info");
-    html += card("P75", v(ti.horas_p75, "h"), "text-info");
-    html += card("Mínimo", v(ti.horas_min, "h"), "text-warning");
-    html += card("Máximo", v(ti.horas_max, "h"), "text-warning");
-    html += card("Desv. Estándar", v(ti.horas_std, "h"), "text-secondary");
+    html += card("Promedio", v(ti.horas_promedio, "h"), colorTiempo(ti.horas_promedio || 0));
+    html += card("Mediana", v(ti.horas_mediana, "h"), colorTiempo(ti.horas_mediana || 0));
+    html += card("P25", v(ti.horas_p25, "h"), colorTiempo(ti.horas_p25 || 0));
+    html += card("P75", v(ti.horas_p75, "h"), colorTiempo(ti.horas_p75 || 0));
+    html += card("Mínimo", v(ti.horas_min, "h"), colorTiempo(ti.horas_min || 0));
+    html += card("Máximo", v(ti.horas_max, "h"), colorTiempo(ti.horas_max || 0));
+    html += card("Desv. Estándar", v(ti.horas_std, "h"), colorTiempo(ti.horas_std || 0));
     html += '</div></div></div>';
     return html;
   }
@@ -80,13 +90,16 @@
   function renderEfectividad(ef) {
     if (!ef || !ef.length) return { html: "" };
     var efLabels = { "etapa_3_factibilidad": "Etapa 3 Factibilidad", "etapa_4_adecuaciones": "Etapa 4 Adecuaciones", "etapa_5_gpi": "Etapa 5 GPI", "ventas": "Ventas (Etapa 8)" };
-    var html = '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-check-circle me-2"></i>Efectividad por Etapa</h5></div><div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Etapa</th><th class="text-end">Salidas</th><th class="text-end">Retornos</th><th class="text-end">Efectividad</th><th>Origen Retorno</th></tr></thead><tbody>';
+    var html = '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-check-circle me-2"></i>Efectividad por Etapa</h5></div><div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Etapa</th><th class="text-end">Salidas</th><th class="text-end">Retornos</th><th class="text-end">Exitosos</th><th class="text-end">Fallidos</th><th class="text-end">Retornan</th><th class="text-end">P. Directa</th><th class="text-end">Efectividad</th></tr></thead><tbody>';
     ef.forEach(function (e) {
       html += '<tr><td>' + (efLabels[e.etapa] || e.etapa) + '</td>' +
         '<td class="text-end">' + (e.total_salidas || 0).toLocaleString() + '</td>' +
         '<td class="text-end">' + (e.retornos || 0).toLocaleString() + '</td>' +
-        '<td class="text-end fw-bold ' + ((e.efectividad_pct || 0) >= 90 ? 'text-success' : (e.efectividad_pct || 0) >= 70 ? 'text-warning' : 'text-danger') + '">' + (e.efectividad_pct || 0).toFixed(1) + '%</td>' +
-        '<td class="text-muted small">' + (e.origen_retorno || "-") + '</td></tr>';
+        '<td class="text-end text-success fw-bold">' + (e.exitosos ?? 0).toLocaleString() + '</td>' +
+        '<td class="text-end text-danger fw-bold">' + (e.fallidos ?? 0).toLocaleString() + '</td>' +
+        '<td class="text-end text-warning fw-bold">' + (e.retornan ?? 0).toLocaleString() + '</td>' +
+        '<td class="text-end text-danger">' + (e.perdida_directa ?? 0).toLocaleString() + '</td>' +
+        '<td class="text-end fw-bold ' + colorEfectividad(e.efectividad_pct || 0) + '">' + (e.efectividad_pct || 0).toFixed(1) + '%</td></tr>';
     });
     html += '</tbody></table></div></div></div>';
     return { html: html };
@@ -95,37 +108,41 @@
   function renderEfectividadEstadisticas(est) {
     if (!est || !est.length) return "";
     var efLabels = { "etapa_3_factibilidad": "Etapa 3", "etapa_4_adecuaciones": "Etapa 4", "etapa_5_gpi": "Etapa 5", "ventas": "Ventas" };
-    var html = '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-bar-chart me-2"></i>Efectividad por Cliente (Estadísticas)</h5></div><div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Etapa</th><th class="text-end">Clientes</th><th class="text-end">Salidas</th><th class="text-end">Retornos</th><th class="text-end">Promedio</th><th class="text-end">Mediana</th><th class="text-end">P25</th><th class="text-end">P75</th><th class="text-end">Mín</th><th class="text-end">Máx</th><th class="text-end">Std</th></tr></thead><tbody>';
+    var html = '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-bar-chart me-2"></i>Efectividad por Cliente (Estadísticas)</h5></div><div class="card-body"><div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Etapa</th><th class="text-end">Clientes</th><th class="text-end">Salidas</th><th class="text-end">Retornos</th><th class="text-end">Promedio</th><th class="text-end">Std</th></tr></thead><tbody>';
     est.forEach(function (e) {
       html += '<tr><td>' + (efLabels[e.etapa] || e.etapa) + '</td>' +
         '<td class="text-end">' + (e.total_clientes || 0).toLocaleString() + '</td>' +
         '<td class="text-end">' + (e.total_salidas || 0).toLocaleString() + '</td>' +
         '<td class="text-end">' + (e.total_retornos || 0).toLocaleString() + '</td>' +
         '<td class="text-end fw-bold">' + (e.efectividad_promedio || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (e.efectividad_mediana || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (e.efectividad_p25 || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (e.efectividad_p75 || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (e.efectividad_min || 0).toFixed(1) + '%</td>' +
-        '<td class="text-end">' + (e.efectividad_max || 0).toFixed(1) + '%</td>' +
         '<td class="text-end">' + (e.efectividad_std || 0).toFixed(1) + '</td></tr>';
     });
     html += '</tbody></table></div></div></div>';
     return html;
   }
 
-  function renderProbabilidad(prob) {
+  function renderProbabilidad(prob, dimensions) {
     var pr = prob.resumen || {};
     var motivos = prob.motivos_perdida || [];
+    var devolverItems = (dimensions && dimensions.devolver_oportunidad) || [];
     var html = '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-pie-chart me-2"></i>Probabilidad Etapa 8 y Pérdidas</h5></div><div class="card-body">';
     html += '<div class="row g-3 mb-3">';
-    html += '<div class="col-md-3 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">% Etapa 8</div><div class="fs-4 fw-bold ' + ((pr.pct_etapa8 || 0) < 10 ? 'text-success' : (pr.pct_etapa8 || 0) < 20 ? 'text-warning' : 'text-danger') + '">' + (pr.pct_etapa8 || 0).toFixed(1) + '%</div></div></div></div>';
-    html += '<div class="col-md-3 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">% Perdidos</div><div class="fs-4 fw-bold ' + ((pr.pct_perdidos || 0) < 15 ? 'text-success' : (pr.pct_perdidos || 0) < 30 ? 'text-warning' : 'text-danger') + '">' + (pr.pct_perdidos || 0).toFixed(1) + '%</div></div></div></div>';
-    html += '<div class="col-md-3 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">Total Clientes</div><div class="fs-4 fw-bold">' + (pr.total_clientes || 0).toLocaleString() + '</div></div></div></div>';
+    html += '<div class="col-md-3 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">% Etapa 8</div><div class="fs-4 fw-bold ' + colorProb(pr.pct_etapa8 || 0) + '">' + (pr.pct_etapa8 || 0).toFixed(1) + '%</div></div></div></div>';
+    html += '<div class="col-md-3 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">% Perdidos</div><div class="fs-4 fw-bold ' + colorProb(pr.pct_perdidos || 0) + '">' + (pr.pct_perdidos || 0).toFixed(1) + '%</div></div></div></div>';
+    html += '<div class="col-md-3 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">Total Clientes</div><div class="fs-4 fw-bold text-success">' + (pr.total_clientes || 0).toLocaleString() + '</div></div></div></div>';
     html += '<div class="col-md-3 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">Etapa 8 Count</div><div class="fs-4 fw-bold text-warning">' + (pr.count_etapa8 || 0).toLocaleString() + '</div></div></div></div>';
     html += '</div>';
 
+    if (devolverItems.length) {
+      html += '<h6 class="text-muted mb-2">Motivos de Devolución (Etapa 8)</h6><div class="table-responsive" style="max-height:250px;overflow:auto"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Motivo</th><th class="text-end">Clientes</th><th class="text-end">% Etapa 8</th></tr></thead><tbody>';
+      devolverItems.forEach(function (item) {
+        html += '<tr><td>' + (item.valor || "N/A") + '</td><td class="text-end">' + (item.total_clientes || 0).toLocaleString() + '</td><td class="text-end fw-bold ' + colorProb(item.pct_etapa8 || 0) + '">' + (item.pct_etapa8 || 0).toFixed(1) + '%</td></tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
     if (motivos.length) {
-      html += '<h6 class="text-muted mb-2">Motivos de Pérdida</h6><div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Motivo</th><th class="text-end">Cantidad</th><th class="text-end">%</th></tr></thead><tbody>';
+      html += '<h6 class="text-muted mb-2 mt-2">Motivos de Pérdida</h6><div class="table-responsive" style="max-height:250px;overflow:auto"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Motivo</th><th class="text-end">Cantidad</th><th class="text-end">%</th></tr></thead><tbody>';
       motivos.forEach(function (m) {
         html += '<tr><td>' + (m.motivo_perdida || "N/A") + '</td><td class="text-end">' + (m.cantidad || 0).toLocaleString() + '</td><td class="text-end">' + (m.pct || 0).toFixed(1) + '%</td></tr>';
       });
@@ -140,15 +157,17 @@
     return '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-arrow-repeat me-2"></i>Rescate de Perdidos</h5></div><div class="card-body"><div class="row g-3">' +
       '<div class="col-md-4 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">Total Perdidos</div><div class="fs-4 fw-bold text-danger">' + (resc.total_perdidos || 0).toLocaleString() + '</div></div></div></div>' +
       '<div class="col-md-4 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">Rescatados</div><div class="fs-4 fw-bold text-success">' + (resc.rescatados || 0).toLocaleString() + '</div></div></div></div>' +
-      '<div class="col-md-4 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">% Rescate</div><div class="fs-4 fw-bold ' + ((resc.pct_rescate || 0) >= 50 ? 'text-success' : (resc.pct_rescate || 0) >= 20 ? 'text-warning' : 'text-danger') + '">' + (resc.pct_rescate || 0).toFixed(1) + '%</div></div></div></div>' +
+      '<div class="col-md-4 col-6"><div class="card border-1 h-100" style="background-color:var(--surface-tertiary);border-color:var(--border-color)"><div class="card-body p-3 text-center"><div class="text-muted small">% Rescate</div><div class="fs-4 fw-bold ' + colorRescate(resc.pct_rescate || 0) + '">' + (resc.pct_rescate || 0).toFixed(1) + '%</div></div></div></div>' +
     '</div></div></div>';
   }
 
   function renderDimensiones(dimensions) {
     if (!dimensions || !Object.keys(dimensions).length) return "";
-    var nameMap = { municipio: "Municipio", campana: "Campaña", sucursal: "Sucursal", vendedor: "Vendedor", equipo_ventas: "Equipo Ventas", motivo_perdida: "Motivo Pérdida", devolver_oportunidad: "Devolver Oportunidad" };
+    var nameMap = { municipio: "Municipio", campana: "Campaña", sucursal: "Sucursal", vendedor: "Vendedor", equipo_ventas: "Equipo Ventas" };
     var html = '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-layers me-2"></i>Desglose por Dimensiones</h5></div><div class="card-body">';
+    var excludeKeys = { devolver_oportunidad: 1, motivo_perdida: 1 };
     Object.keys(dimensions).forEach(function (key) {
+      if (excludeKeys[key]) return;
       var items = dimensions[key] || [];
       var title = nameMap[key] || key;
       html += '<div class="mb-3"><h6 class="text-muted">' + title + '</h6><div class="table-responsive" style="max-height:300px;overflow:auto"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Valor</th><th class="text-end">Clientes</th><th class="text-end">Ganados</th><th class="text-end">Perdidos</th><th class="text-end">% E8</th><th class="text-end">% Perd</th><th class="text-end">Ti Inst (h)</th><th class="text-end">Rescate %</th></tr></thead><tbody>';
@@ -157,10 +176,10 @@
           '<td class="text-end">' + (item.total_clientes || 0).toLocaleString() + '</td>' +
           '<td class="text-end text-success">' + (item.ganados || 0).toLocaleString() + '</td>' +
           '<td class="text-end text-danger">' + (item.perdidos || 0).toLocaleString() + '</td>' +
-          '<td class="text-end">' + (item.pct_etapa8 || 0).toFixed(1) + '%</td>' +
-          '<td class="text-end">' + (item.pct_perdidos || 0).toFixed(1) + '%</td>' +
-          '<td class="text-end">' + (item.tiempo_instalacion_promedio_horas || 0).toFixed(1) + '</td>' +
-          '<td class="text-end">' + (item.pct_rescate_perdidos || 0).toFixed(1) + '%</td></tr>';
+          '<td class="text-end fw-bold ' + colorProb(item.pct_etapa8 || 0) + '">' + (item.pct_etapa8 || 0).toFixed(1) + '%</td>' +
+          '<td class="text-end fw-bold ' + colorProb(item.pct_perdidos || 0) + '">' + (item.pct_perdidos || 0).toFixed(1) + '%</td>' +
+          '<td class="text-end fw-bold ' + colorTiempo(item.tiempo_instalacion_promedio_horas || 0) + '">' + (item.tiempo_instalacion_promedio_horas || 0).toFixed(1) + '</td>' +
+          '<td class="text-end fw-bold ' + colorRescate(item.pct_rescate_perdidos || 0) + '">' + (item.pct_rescate_perdidos || 0).toFixed(1) + '%</td></tr>';
       });
       html += '</tbody></table></div></div>';
     });
@@ -234,7 +253,7 @@
 
     html += renderEfectividadEstadisticas(s.efectividad_estadisticas || []);
 
-    html += renderProbabilidad(s.probabilidad_etapa8_perdidos || {});
+    html += renderProbabilidad(s.probabilidad_etapa8_perdidos || {}, d);
 
     html += renderRescate(s.rescate_perdidos || {});
 

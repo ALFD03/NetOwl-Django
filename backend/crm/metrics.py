@@ -280,6 +280,10 @@ def compute_efectividad(
                 "etapa": etapa_key, "total_salidas": n_clientes,
                 "retornos": n_parcial + n_fracaso,
                 "efectividad_pct": efectividad,
+                "exitosos": n_exito,
+                "fallidos": n_parcial,
+                "retornan": n_fracaso,
+                "perdida_directa": 0,
                 "origen_retorno": (
                     f"exito={n_exito}, parcial={n_parcial}, fracaso={n_fracaso}"
                 )
@@ -300,6 +304,10 @@ def compute_efectividad(
                 "total_salidas": total,
                 "retornos": n_retorna,
                 "efectividad_pct": efectividad,
+                "exitosos": n_exitoso,
+                "fallidos": n_fallido,
+                "retornan": n_retorna,
+                "perdida_directa": n_lost_directo,
                 "origen_retorno": (
                     f"exitosos={n_exitoso}, fallidos={n_fallido}, "
                     f"retornan={n_retorna}, perdida_directa={n_lost_directo}"
@@ -351,6 +359,8 @@ def compute_efectividad_estadisticas(
             n_exito, n_parcial, n_fracaso, vals = _classify_ventas(df_trans)
             if vals is None:
                 continue
+            total_salidas = len(vals)
+            total_retornos = n_parcial + n_fracaso
             n_clientes = len(vals)
         else:
             forward_stages = EFECTIVIDAD_REGLAS[etapa_key]["forward"]
@@ -394,18 +404,18 @@ def compute_efectividad_estadisticas(
             if not all_clients:
                 continue
 
+            total_salidas = 0
+            total_retornos = 0
             scores = {}
             for cid in all_clients:
                 r_ex = int(cli_class.get("success", pd.Series(dtype=int)).get(cid, 0))
                 r_fa = int(cli_class.get("failure", pd.Series(dtype=int)).get(cid, 0))
                 r_re = int(cli_class.get("return", pd.Series(dtype=int)).get(cid, 0))
                 r_lo = int(lost_counts.get("lost_directo", pd.Series(dtype=int)).get(cid, 0))
-                if r_ex > 0 and r_fa == 0 and r_re == 0 and r_lo == 0:
-                    scores[cid] = 100.0
-                elif r_ex == 0:
-                    scores[cid] = 0.0
-                else:
-                    scores[cid] = 50.0
+                total = r_ex + r_fa + r_re + r_lo
+                scores[cid] = round(r_ex / total * 100, 2) if total > 0 else 0.0
+                total_salidas += total
+                total_retornos += r_re
 
             n_clientes = len(scores)
             vals = pd.Series(list(scores.values()))
@@ -414,14 +424,12 @@ def compute_efectividad_estadisticas(
             "periodo": _PERIODO,
             "etapa": etapa_key,
             "total_clientes": n_clientes,
-            "total_salidas": 0,
-            "total_retornos": 0,
+            "total_salidas": total_salidas,
+            "total_retornos": total_retornos,
             "efectividad_promedio": round(float(vals.mean()), 2),
             "efectividad_mediana": round(float(vals.median()), 2),
             "efectividad_p25": round(float(vals.quantile(0.25)), 2),
             "efectividad_p75": round(float(vals.quantile(0.75)), 2),
-            "efectividad_min": round(float(vals.min()), 2),
-            "efectividad_max": round(float(vals.max()), 2),
             "efectividad_std": round(float(vals.std(ddof=0)), 2) if len(vals) > 1 else 0.0,
             "dimension": dimension,
             "dimension_valor": dimension_valor,

@@ -231,8 +231,6 @@ def get_crm_results_detail() -> Dict[str, Any]:
                     "efectividad_mediana": _float(e.get("efectividad_mediana")),
                     "efectividad_p25": _float(e.get("efectividad_p25")),
                     "efectividad_p75": _float(e.get("efectividad_p75")),
-                    "efectividad_min": _float(e.get("efectividad_min")),
-                    "efectividad_max": _float(e.get("efectividad_max")),
                     "efectividad_std": _float(e.get("efectividad_std")),
                 })
     except Exception:
