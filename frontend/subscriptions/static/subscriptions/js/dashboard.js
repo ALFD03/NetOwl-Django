@@ -96,19 +96,7 @@
         type: "bar",
         data: { labels: labels, datasets: [
           { label: "Activos Inicio", data: activosInicioData, backgroundColor: "rgba(37,99,235,0.75)", borderRadius: 4, order: 1 },
-          { label: "Activos Final", data: activosFinalData, type: "line", borderColor: "#10b981", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 3, pointBackgroundColor: "#10b981", fill: false, order: 0 },
-        ] },
-        options: N.chartOpts(N.barOpts(gridColor, tickColor))
-      });
-    }
-
-    var ctxActivosFinal = document.getElementById("activosFinalChart");
-    if (ctxActivosFinal) {
-      N.activosFinalChart = new Chart(ctxActivosFinal, {
-        type: "bar",
-        data: { labels: labels, datasets: [
           { label: "Activos Final", data: activosFinalData, backgroundColor: "rgba(16,185,129,0.75)", borderRadius: 4, order: 1 },
-          { label: "Activos Inicio", data: activosInicioData, type: "line", borderColor: "#2563eb", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 3, pointBackgroundColor: "#2563eb", fill: false, order: 0 },
         ] },
         options: N.chartOpts(N.barOpts(gridColor, tickColor))
       });
