@@ -118,25 +118,30 @@
       ["Churn Bruto", avg("churn_bruto_pct"), function (v) { return v.toFixed(2) + "%"; }, colorChurn],
       ["Bajas Netas", avg("bajas_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
       ["Bajas Brutas", avg("bajas_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
-      ["Corte Impago", avg("corte_impagado"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-      ["% Suspensiones", avg("porcentaje_suspensiones"), function (v) { return v.toFixed(2) + "%"; }, colorSuspensiones],
-    ]);
+      ]);
     html += group("Crecimiento", [
       ["Nuevos en el Mes", avg("nuevos_mes"), function (v) { return Math.round(v).toLocaleString(); }, colorNuevos],
-      ["Reactivaciones Totales", avg("reactivaciones"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-      ["Reactivaciones", avg("react_val"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-      ["Tasa Winback", avg("tasa_winback_pct"), function (v) { return v.toFixed(2) + "%"; }, colorWinback],
-    ]);
+      ["Adiciones Netas", avg("adiciones_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
+      ["Adiciones Brutas", avg("adiciones_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
+      ]);
+    html += group("Retención",
+      [
+        ["Corte Impago", avg("corte_impagado"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+        ["% Suspensiones", avg("porcentaje_suspensiones"), function (v) { return v.toFixed(2) + "%"; }, colorSuspensiones],
+        ["Reactivaciones Totales", avg("reactivaciones"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+        ["Reactivaciones", avg("react_val"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+        ["Tasa Winback", avg("tasa_winback_pct"), function (v) { return v.toFixed(2) + "%"; }, colorWinback],
+        ["Reactivaciones de Pausados en el mes", avg("react_4_P"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+        ["% de React. en pausados", (avg("react_4_P") / avg("corte_impagado"))*100 , function (v) { return v.toFixed(2) + "%"; }, function () { return "text-success"; }],
+      ]);
     html += group("Ingresos", [
       ["ARPU", avg("arpu"), function (v) { return "$" + v.toFixed(2); }, colorArpu],
       ["Total Billing", avg("total_billing"), function (v) { return "$" + Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
       ["Tasa Aporte React.", avg("tasa_aporte_react_pct"), function (v) { return v.toFixed(2) + "%"; }, function () { return "text-success"; }],
       ["Indice Reemplazo", avg("indice_reemplazo_react_pct"), function (v) { return v.toFixed(2) + "%"; }, function () { return "text-success"; }],
     ]);
-    html += group("Adiciones", [
-      ["Adiciones Netas", avg("adiciones_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
-      ["Adiciones Brutas", avg("adiciones_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
-    ]);
+    // html += group("Adiciones", [
+    //   []);
     container.innerHTML = html;
   }
 
