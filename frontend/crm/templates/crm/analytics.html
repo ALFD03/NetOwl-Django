@@ -1,0 +1,21 @@
+{% extends 'crm/base.html' %}
+{% load static %}
+
+{% block title %}NetOwl - CRM Analytics{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'css/subscriptions.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="card-header rounded d-flex mb-3 align-items-center">
+  <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Analisis Detallado CRM</h4>
+</div>
+
+<div class="row g-3 mb-4" id="analytics-cards-container"></div>
+<div id="analytics-dimension-charts"></div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'crm/js/analytics.js' %}"></script>
+{% endblock %}

@@ -132,6 +132,10 @@
     c.innerHTML = html;
   };
 
+
+
+
+
   N.renderModalDimensions = function (dimensions) {
     var c = document.getElementById("modal-dimensions-container");
     if (!c) return;

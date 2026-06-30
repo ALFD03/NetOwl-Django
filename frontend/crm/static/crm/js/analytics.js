@@ -3,83 +3,14 @@
 
   var N = window.NetOwl;
 
-  function updateAnalyticsFilterLabel() {
-    var label = document.getElementById("analytics-filter-label");
-    if (!label) return;
-    var checked = document.querySelectorAll("#analytics-periods-checkboxes input:checked").length;
-    label.textContent = checked + " periodo" + (checked !== 1 ? "s" : "") + " seleccionado" + (checked !== 1 ? "s" : "");
-  }
-
-  function initAnalyticsFilter() {
-    var toggle = document.getElementById("analytics-filter-toggle");
-    var menu = document.getElementById("analytics-filter-menu");
-    var container = document.getElementById("analytics-filter-dropdown");
-    if (!toggle || !menu || !container) return;
-
-    toggle.addEventListener("click", function (e) {
-      e.stopPropagation();
-      menu.classList.toggle("show");
-    });
-
-    document.addEventListener("click", function (e) {
-      if (!container.contains(e.target) && menu.classList.contains("show")) {
-        menu.classList.remove("show");
-      }
-    });
-  }
-
-  function loadAnalyticsPeriodsList() {
-    fetch("/subscriptions/api/periods/")
-      .then(function (r) { return r.ok ? r.json() : []; })
-      .then(function (d) {
-        var container = document.getElementById("analytics-periods-checkboxes");
-        if (!container) return;
-        container.innerHTML = "";
-        var periods = d.periods || [];
-        var now = new Date();
-        var yearMonth = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
-        var existsCur = periods.some(function (p) { return p.indexOf(yearMonth) !== -1; });
-        periods.forEach(function (p) {
-          var div = document.createElement("div");
-          div.className = "form-check";
-          var cb = document.createElement("input");
-          cb.type = "checkbox"; cb.className = "form-check-input"; cb.value = p; cb.id = "aperiod-" + p;
-          if (p.indexOf(yearMonth) !== -1 || (!existsCur && p === periods[0])) cb.checked = true;
-          var lb = document.createElement("label");
-          lb.className = "form-check-label"; lb.htmlFor = "aperiod-" + p; lb.textContent = p;
-          div.appendChild(cb); div.appendChild(lb); container.appendChild(div);
-          cb.addEventListener("change", function () {
-            var checked = document.querySelectorAll("#analytics-periods-checkboxes input:checked").length;
-            if (checked === 0) { this.checked = true; return; }
-            loadAnalyticsData();
-            updateAnalyticsFilterLabel();
-          });
-        });
-        var resetBtn = document.getElementById("analytics-reset-btn");
-        if (resetBtn) {
-          resetBtn.addEventListener("click", function () {
-            document.querySelectorAll("#analytics-periods-checkboxes input").forEach(function (cb) { cb.checked = cb.value.indexOf(yearMonth) !== -1 || (!existsCur && cb.value === periods[0]); });
-            loadAnalyticsData();
-            updateAnalyticsFilterLabel();
-          });
-        }
-        if (periods.length) { updateAnalyticsFilterLabel(); loadAnalyticsData(); }
-      })
-      .catch(function () {});
-  }
-
   function loadAnalyticsData() {
-    var cbs = document.querySelectorAll("#analytics-periods-checkboxes input[type=checkbox]:checked");
-    var vals = Array.from(cbs).map(function (cb) { return cb.value; }).filter(Boolean);
-    var url = "/subscriptions/api/analytics-data/";
-    if (vals.length) url += "?periods=" + encodeURIComponent(vals.join(","));
-    return fetch(url)
+    return fetch("/crm/api/analytics-data/")
       .then(function (r) { if (!r.ok) throw Error("Error"); return r.json(); })
       .then(function (data) {
         renderAnalyticsCards(data.periodos || []);
         renderDimensionCharts(data.dimensiones || [], data.periodos || []);
       })
-      .catch(function () { N.showToast("Error cargando analytics", "error"); });
+      .catch(function () { N.showToast("Error cargando analytics CRM", "error"); });
   }
 
   function renderAnalyticsCards(periodos) {
@@ -91,57 +22,73 @@
       var vals = [];
       periodos.forEach(function (p) {
         var v = path.split(".").reduce(function (o, k) { return (o && o[k] !== undefined) ? o[k] : undefined; }, p);
-        if (v !== undefined) vals.push(Number(v));
+        if (v !== undefined && v !== null) vals.push(Number(v));
+      });
+      return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : 0;
+    }
+
+    function avgEfectividad(etapaKey) {
+      var vals = [];
+      periodos.forEach(function (p) {
+        var ef = p.efectividad || [];
+        var e = ef.find(function(x) { return x.etapa === etapaKey; });
+        if (e && e.efectividad_pct !== undefined && e.efectividad_pct !== null) vals.push(Number(e.efectividad_pct));
       });
       return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : 0;
     }
 
     function colorChurn(v) { return v < 2.5 ? "text-success" : v <= 3 ? "text-warning" : "text-danger"; }
-    function colorNuevos(v) { return v > 2500 ? "text-success" : v >= 2000 ? "text-warning" : "text-danger"; }
-    function colorBajas(v) { return v < 500 ? "text-success" : v <= 1000 ? "text-warning" : "text-danger"; }
-    function colorWinback(v) { return v >= 90 ? "text-success" : v >= 80 ? "text-warning" : "text-danger"; }
-    function colorArpu(v) { return v >= 30 ? "text-success" : v >= 25 ? "text-warning" : "text-danger"; }
-    function colorAdiciones(v) { return v > 500 ? "text-success" : v >= 1 ? "text-warning" : "text-danger"; }
-    function colorSuspensiones(v) { return v >= 40 ? "text-danger" : v >= 35 ? "text-warning" : "text-success"; }
+    function colorTiempo(v) { return v <= 72 ? "text-success" : v <= 120 ? "text-warning" : "text-danger"; }
+    function colorEfectividad(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
+    function colorProb(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
+    function colorRescate(v) { return v <= 30 ? "text-danger" : v <= 60 ? "text-warning" : "text-success"; }
 
-    function card(label, val, fmt, clr) {
-      return '<div class="col-xl-2 col-md-3 col-sm-4"><div class="metric-card"><div class="metric-label">' + label + '</div><div class="fs-3 fw-bold ' + clr(val) + '">' + fmt(val) + '</div></div></div>';
+    function card(c) {
+      return '<div class="col-xl-2 col-md-3 col-sm-4"><div class="metric-card"><div class="metric-label">' + c.label + '</div><div class="fs-3 fw-bold ' + c.clr(c.val) + '">' + c.fmt(c.val) + '</div></div></div>';
     }
     function group(title, items) {
-      var inner = items.map(function (c) { return card(c[0], c[1], c[2], c[3]); }).join("");
+      var inner = items.map(function (c) { return c instanceof Array ? card({ label: c[0], val: c[1], fmt: c[2], clr: c[3] }) : card(c); }).join("");
       return '<div class="col-12 mb-3"><h6 class="text-muted mb-2" style="font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px">' + title + '</h6><div class="row g-2">' + inner + '</div></div>';
     }
 
+    var tiProm = avg("tiempo_instalacion.horas_promedio");
+    var tiMed = avg("tiempo_instalacion.horas_mediana");
+    var tip25 = avg("tiempo_instalacion.horas_p25");
+    var tip75 = avg("tiempo_instalacion.horas_p75");
+    var tiMin = avg("tiempo_instalacion.horas_min");
+    var tiMax = avg("tiempo_instalacion.horas_max");
+    var tiStd = avg("tiempo_instalacion.horas_std");
+
     var html = "";
-    html += group("Churn", [
-      ["Churn Neto", avg("churn_neto_pct"), function (v) { return v.toFixed(2) + "%"; }, colorChurn],
-      ["Churn Bruto", avg("churn_bruto_pct"), function (v) { return v.toFixed(2) + "%"; }, colorChurn],
-      ["Bajas Netas", avg("bajas_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
-      ["Bajas Brutas", avg("bajas_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
-      ]);
-    html += group("Crecimiento", [
-      ["Nuevos en el Mes", avg("nuevos_mes"), function (v) { return Math.round(v).toLocaleString(); }, colorNuevos],
-      ["Adiciones Netas", avg("adiciones_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
-      ["Adiciones Brutas", avg("adiciones_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
-      ]);
-    html += group("Retención",
-      [
-        ["Corte Impago", avg("corte_impagado"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-        ["% Suspensiones", avg("porcentaje_suspensiones"), function (v) { return v.toFixed(2) + "%"; }, colorSuspensiones],
-        ["Reactivaciones Totales", avg("reactivaciones"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-        ["Reactivaciones", avg("react_val"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-        ["Tasa Winback", avg("tasa_winback_pct"), function (v) { return v.toFixed(2) + "%"; }, colorWinback],
-        ["Reactivaciones de Pausados en el mes", avg("react_4_P"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-        ["% de React. en pausados", (avg("react_4_P") / avg("corte_impagado"))*100 , function (v) { return v.toFixed(2) + "%"; }, function () { return "text-success"; }],
-      ]);
-    html += group("Ingresos", [
-      ["ARPU", avg("arpu"), function (v) { return "$" + v.toFixed(2); }, colorArpu],
-      ["Total Billing", avg("total_billing"), function (v) { return "$" + Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-      ["Tasa Aporte React.", avg("tasa_aporte_react_pct"), function (v) { return v.toFixed(2) + "%"; }, function () { return "text-success"; }],
-      ["Indice Reemplazo", avg("indice_reemplazo_react_pct"), function (v) { return v.toFixed(2) + "%"; }, function () { return "text-success"; }],
+    html += group("Tiempo Instalación", [
+      ["Promedio", tiProm, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Mediana", tiMed, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["P25", tip25, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["P75", tip75, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Mínimo", tiMin, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Máximo", tiMax, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Desviación Estándar", tiStd, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Total Instalados", avg("tiempo_instalacion.total_instalados"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
     ]);
-    // html += group("Adiciones", [
-    //   []);
+    html += group("Efectividad", [
+      ["Etapa 3", avgEfectividad("etapa_3_factibilidad"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
+      ["Etapa 4", avgEfectividad("etapa_4_adecuaciones"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
+      ["Etapa 5", avgEfectividad("etapa_5_gpi"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
+      ["Ventas", avgEfectividad("ventas"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
+    ]);
+    html += group("Probabilidad", [
+      ["% Etapa 8", avg("probabilidad_etapa8_perdidos.resumen.pct_etapa8"), function (v) { return v.toFixed(1) + "%"; }, colorProb],
+      ["% Perdidos", avg("probabilidad_etapa8_perdidos.resumen.pct_perdidos"), function (v) { return v.toFixed(1) + "%"; }, colorProb],
+    ]);
+    html += group("Rescate", [
+      ["Rescate Perdidos", avg("rescate_perdidos.pct_rescate"), function (v) { return v.toFixed(1) + "%"; }, colorRescate],
+    ]);
+    html += group("Totales", [
+      ["Total Clientes", avg("total_clientes"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["Ganados", avg("ganados"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["Perdidos", avg("perdidos"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-danger"; }],
+      ["Etapa 8", avg("etapa_8_count"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-warning"; }],
+    ]);
     container.innerHTML = html;
   }
 
@@ -154,11 +101,24 @@
         (dims[dimKey] || []).forEach(function (item) {
           var val = item.valor || "N/A";
           if (!accum[dimKey][val]) {
-            accum[dimKey][val] = { sum: { churn_neto_pct: 0, churn_bruto_pct: 0, arpu: 0, tasa_winback_pct: 0, adiciones_netas: 0, adiciones_brutas: 0, tasa_aporte_react_pct: 0, corte_impagado: 0, porcentaje_suspensiones: 0, nuevos: 0, activos_final: 0 }, count: 0 };
+            accum[dimKey][val] = { 
+              sum: { 
+                tiempo_instalacion_promedio_horas: 0, pct_etapa8: 0, pct_perdidos: 0, 
+                pct_rescate_perdidos: 0, total_clientes: 0, ganados: 0, perdidos: 0,
+                etapa_8_count: 0, efecto_3: 0, efecto_4: 0, efecto_5: 0, efecto_ventas: 0
+              }, 
+              count: 0 
+            };
           }
-          ["churn_neto_pct", "churn_bruto_pct", "arpu", "tasa_winback_pct", "adiciones_netas", "adiciones_brutas", "tasa_aporte_react_pct", "corte_impagado", "porcentaje_suspensiones", "nuevos", "activos_final"].forEach(function (m) {
+          ["tiempo_instalacion_promedio_horas", "pct_etapa8", "pct_perdidos", "pct_rescate_perdidos", "total_clientes", "ganados", "perdidos", "etapa_8_count"].forEach(function (m) {
             accum[dimKey][val].sum[m] += (item[m] || 0);
           });
+          // Efectividad
+          var ef = item.efectividad || {};
+          accum[dimKey][val].sum.efecto_3 += (ef["etapa_3_factibilidad"] || 0);
+          accum[dimKey][val].sum.efecto_4 += (ef["etapa_4_adecuaciones"] || 0);
+          accum[dimKey][val].sum.efecto_5 += (ef["etapa_5_gpi"] || 0);
+          accum[dimKey][val].sum.efecto_ventas += (ef["ventas"] || 0);
           accum[dimKey][val].count++;
         });
       });
@@ -178,9 +138,8 @@
   }
 
   function getWeight(item, metricKey) {
-    if (metricKey === "adiciones_netas" || metricKey === "adiciones_brutas") return item[metricKey] || 0;
-    if (metricKey === "arpu") return (item.activos_final || 0) * (item[metricKey] || 0);
-    return (item.activos_final || 0) * (item[metricKey] || 0) / 100;
+    if (metricKey === "tiempo_instalacion_promedio_horas") return item.total_clientes || 0;
+    return (item.total_clientes || 0);
   }
 
   function getGlobalMetric(metricKey, fallbackItems) {
@@ -195,7 +154,7 @@
     if (fallbackItems && fallbackItems.length) {
       var totalAct = 0, totalWeighted = 0;
       fallbackItems.forEach(function (i) {
-        var af = i.activos_final || 0;
+        var af = i.total_clientes || 0;
         totalAct += af;
         totalWeighted += af * (i[metricKey] || 0);
       });
@@ -214,16 +173,16 @@
 
     var avgData = averageDimensionData(dimensiones);
     var dimKeys = Object.keys(avgData).filter(function (k) { return avgData[k].length > 0; });
-    var dimLabels = { zona: "Zona", sucursal: "Sucursal", producto: "Producto", municipio: "Municipio", campana: "Campana" };
+    var dimLabels = { zona: "Zona", sucursal: "Sucursal", municipio: "Municipio", campana: "Campaña", vendedor: "Vendedor", equipo_ventas: "Equipo Ventas", motivo_perdida: "Motivo Pérdida", devolver_oportunidad: "Devolver Oportunidad" };
     var metrics = [
-      { key: "churn_neto_pct", label: "Churn Neto", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
-      { key: "churn_bruto_pct", label: "Churn Bruto", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
-      { key: "arpu", label: "ARPU", chartType: "hbar", fmt: function (v) { return "$" + v.toFixed(2); } },
-      { key: "tasa_winback_pct", label: "Tasa Winback", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
-      { key: "adiciones_netas", label: "Adiciones Netas", chartType: "bar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
-      { key: "adiciones_brutas", label: "Adiciones Brutas", chartType: "bar", fmt: function (v) { return Math.round(v).toLocaleString(); } },
-      { key: "tasa_aporte_react_pct", label: "Aporte React.", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
-      { key: "porcentaje_suspensiones", label: "% Suspensiones", chartType: "doughnut", fmt: function (v) { return v.toFixed(2) + "%"; } },
+      { key: "tiempo_instalacion_promedio_horas", label: "Tiempo Instalación (h)", chartType: "hbar", fmt: function (v) { return v.toFixed(1) + "h"; } },
+      { key: "pct_etapa8", label: "% Etapa 8", chartType: "doughnut", fmt: function (v) { return v.toFixed(1) + "%"; } },
+      { key: "pct_perdidos", label: "% Perdidos", chartType: "doughnut", fmt: function (v) { return v.toFixed(1) + "%"; } },
+      { key: "pct_rescate_perdidos", label: "Rescate %", chartType: "doughnut", fmt: function (v) { return v.toFixed(1) + "%"; } },
+      { key: "efecto_3", label: "Efectividad Etapa 3", chartType: "doughnut", fmt: function (v) { return v.toFixed(1) + "%"; } },
+      { key: "efecto_4", label: "Efectividad Etapa 4", chartType: "doughnut", fmt: function (v) { return v.toFixed(1) + "%"; } },
+      { key: "efecto_5", label: "Efectividad Etapa 5", chartType: "doughnut", fmt: function (v) { return v.toFixed(1) + "%"; } },
+      { key: "efecto_ventas", label: "Efectividad Ventas", chartType: "doughnut", fmt: function (v) { return v.toFixed(1) + "%"; } },
     ];
 
     var isLight = document.documentElement.classList.contains("light-mode");
@@ -232,10 +191,23 @@
     var gridColor = isLight ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.05)";
     var palette = ["#2563eb", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#6366f1", "#84cc16", "#06b6d4", "#d946ef", "#0d9488", "#e11d48", "#7c3aed", "#65a30d", "#0891b2", "#c026d3", "#dc2626", "#ca8a04"];
 
+    var normalDims = ["municipio", "campana", "sucursal", "vendedor", "equipo_ventas"];
+    function getApplicableDimKeys(metricKey) {
+      if (metricKey === "pct_etapa8") {
+        return dimKeys.filter(function (d) { return d === "devolver_oportunidad" || normalDims.indexOf(d) !== -1; });
+      } else if (metricKey === "pct_perdidos" || metricKey === "pct_rescate_perdidos") {
+        return dimKeys.filter(function (d) { return d === "motivo_perdida" || normalDims.indexOf(d) !== -1; });
+      } else {
+        return dimKeys.filter(function (d) { return normalDims.indexOf(d) !== -1; });
+      }
+    }
+
     var html = "";
     metrics.forEach(function (metric) {
+      var metricDimKeys = getApplicableDimKeys(metric.key);
+      if (!metricDimKeys.length) return;
       html += '<div class="card mb-4"><div class="card-header"><h5><i class="bi bi-pie-chart me-2"></i>' + metric.label + '</h5></div><div class="card-body"><div class="row g-4">';
-      dimKeys.forEach(function (dimKey) {
+      metricDimKeys.forEach(function (dimKey) {
         var canvasId = "dimc-" + metric.key + "-" + dimKey;
         html += '<div class="col-lg mb-4"><h6 class="text-muted small text-center mb-2">' + (dimLabels[dimKey] || dimKey) + '</h6><div class="chart-container" style="position:relative;height:280px"><canvas id="' + canvasId + '"></canvas></div></div>';
       });
@@ -246,8 +218,10 @@
     var allItemsForFallback = Object.keys(avgData).reduce(function (acc, dk) { return acc.concat(avgData[dk]); }, []);
 
     metrics.forEach(function (metric) {
+      var metricDimKeys = getApplicableDimKeys(metric.key);
+      if (!metricDimKeys.length) return;
       var globalCenterVal = metric.fmt(getGlobalMetric(metric.key, allItemsForFallback));
-      dimKeys.forEach(function (dimKey) {
+      metricDimKeys.forEach(function (dimKey) {
         var items = avgData[dimKey];
         if (!items.length) return;
         var canvasId = "dimc-" + metric.key + "-" + dimKey;
@@ -258,13 +232,13 @@
           var totalWeight = 0;
           items.forEach(function (i) { i._w = getWeight(i, metric.key); totalWeight += i._w; });
           if (!totalWeight) return;
-          var mainItems = [], othersW = 0, othersAct = 0, othersMetricSum = 0, othersCount = 0;
+          var mainItems = [], othersW = 0, othersMetricSum = 0, othersCount = 0;
           items.forEach(function (i) {
             var pct = (i._w / totalWeight) * 100;
-            if (pct < 2.5) { othersW += i._w; othersAct += (i.activos_final || 0); othersMetricSum += (i[metric.key] || 0) * (i.activos_final || 0); othersCount++; }
+            if (pct < 2.5) { othersW += i._w; othersMetricSum += (i[metric.key] || 0) * i._w; othersCount++; }
             else { mainItems.push(i); }
           });
-          if (othersW > 0) { var o = { valor: "Otros", _w: othersCount > 0 ? othersW / othersCount : 0, activos_final: othersAct }; o[metric.key] = othersAct > 0 ? othersMetricSum / othersAct : 0; mainItems.push(o); }
+          if (othersW > 0) { var o = { valor: "Otros", _w: othersCount > 0 ? othersW / othersCount : 0 }; o[metric.key] = othersMetricSum / othersW; mainItems.push(o); }
           mainItems.sort(function (a, b) { return b._w - a._w; });
           var otrosIdx = mainItems.findIndex(function (i) { return i.valor === "Otros"; });
           if (otrosIdx !== -1) { var otrosItem = mainItems.splice(otrosIdx, 1)[0]; mainItems.push(otrosItem); }
@@ -339,9 +313,8 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    if (document.getElementById("analytics-periods-checkboxes")) {
-      initAnalyticsFilter();
-      loadAnalyticsPeriodsList();
+    if (document.getElementById("analytics-cards-container")) {
+      loadAnalyticsData();
     }
   });
 })();
