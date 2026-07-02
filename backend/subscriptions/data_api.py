@@ -12,8 +12,12 @@ retornando estructuras vacías ante errores.
 """
 
 from __future__ import annotations
+import logging
 from typing import Any, Dict, List, Optional
+from ..config import TableNames
 from ..database import DBConnector
+
+logger = logging.getLogger(__name__)
 
 
 def get_cierre_churn(
@@ -36,11 +40,9 @@ def get_cierre_churn(
     """
     db = DBConnector()
     try:
-        df = db.read_table("analyzer_cierre_historico")
+        df = db.read_table_filtered(TableNames.ANALYZER_CIERRE_HISTORICO, "periodo_reporte", periodos)
         if df.empty:
             return []
-        if periodos:
-            df = df[df["periodo_reporte"].isin(periodos)]
         result: List[Dict[str, Any]] = []
         for _, row in df.iterrows():
             result.append({
@@ -72,6 +74,7 @@ def get_cierre_churn(
             })
         return sorted(result, key=lambda x: x["periodo_reporte"], reverse=True)
     except Exception:
+        logger.exception("Error getting churn cierre")
         return []
 
 
@@ -94,11 +97,9 @@ def get_dimensiones(
     """
     db = DBConnector()
     try:
-        df = db.read_table("analyzer_churn_dimensiones")
+        df = db.read_table_filtered(TableNames.ANALYZER_CHURN_DIMENSIONES, "periodo_reporte", periodos)
         if df.empty:
             return []
-        if periodos:
-            df = df[df["periodo_reporte"].isin(periodos)]
 
         # Construye estructura anidada periodo → dimensión → lista de valores
         pd_dict: Dict[str, Dict] = {}
@@ -137,6 +138,7 @@ def get_dimensiones(
             })
         return sorted(pd_dict.values(), key=lambda x: x["periodo_reporte"], reverse=True)
     except Exception:
+        logger.exception("Error getting churn dimensiones")
         return []
 
 
@@ -153,11 +155,12 @@ def get_periodos() -> List[str]:
     """
     db = DBConnector()
     try:
-        df = db.read_table("analyzer_cierre_historico")
+        df = db.read_table(TableNames.ANALYZER_CIERRE_HISTORICO)
         if df.empty:
             return []
         return sorted(df["periodo_reporte"].unique().tolist(), reverse=True)
     except Exception:
+        logger.exception("Error getting periodos list")
         return []
 
 

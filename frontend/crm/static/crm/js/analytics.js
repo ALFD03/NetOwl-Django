@@ -3,41 +3,11 @@
 
   var N = window.NetOwl;
 
-  function loadAnalyticsData() {
-    return fetch("/crm/api/analytics-data/")
-      .then(function (r) { if (!r.ok) throw Error("Error"); return r.json(); })
-      .then(function (data) {
-        renderAnalyticsCards(data.periodos || []);
-        renderDimensionCharts(data.dimensiones || [], data.periodos || []);
-      })
-      .catch(function () { N.showToast("Error cargando analytics CRM", "error"); });
-  }
-
-  function renderAnalyticsCards(periodos) {
+  function renderAnalyticsCards(totals, ti, tpe, ef, e8, perd, resc) {
     var container = document.getElementById("analytics-cards-container");
     if (!container) return;
-    if (!periodos.length) { container.innerHTML = '<div class="col-12 text-center text-muted py-4">Sin datos</div>'; return; }
+    if (!totals || !totals.total_clientes) { container.innerHTML = '<div class="col-12 text-center text-muted py-4">Sin datos</div>'; return; }
 
-    function avg(path) {
-      var vals = [];
-      periodos.forEach(function (p) {
-        var v = path.split(".").reduce(function (o, k) { return (o && o[k] !== undefined) ? o[k] : undefined; }, p);
-        if (v !== undefined && v !== null) vals.push(Number(v));
-      });
-      return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : 0;
-    }
-
-    function avgEfectividad(etapaKey) {
-      var vals = [];
-      periodos.forEach(function (p) {
-        var ef = p.efectividad || [];
-        var e = ef.find(function(x) { return x.etapa === etapaKey; });
-        if (e && e.efectividad_pct !== undefined && e.efectividad_pct !== null) vals.push(Number(e.efectividad_pct));
-      });
-      return vals.length ? vals.reduce(function (a, b) { return a + b; }, 0) / vals.length : 0;
-    }
-
-    function colorChurn(v) { return v < 2.5 ? "text-success" : v <= 3 ? "text-warning" : "text-danger"; }
     function colorTiempo(v) { return v <= 72 ? "text-success" : v <= 120 ? "text-warning" : "text-danger"; }
     function colorEfectividad(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
     function colorProb(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
@@ -51,128 +21,110 @@
       return '<div class="col-12 mb-3"><h6 class="text-muted mb-2" style="font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px">' + title + '</h6><div class="row g-2">' + inner + '</div></div>';
     }
 
-    var tiProm = avg("tiempo_instalacion.horas_promedio");
-    var tiMed = avg("tiempo_instalacion.horas_mediana");
-    var tip25 = avg("tiempo_instalacion.horas_p25");
-    var tip75 = avg("tiempo_instalacion.horas_p75");
-    var tiMin = avg("tiempo_instalacion.horas_min");
-    var tiMax = avg("tiempo_instalacion.horas_max");
-    var tiStd = avg("tiempo_instalacion.horas_std");
+    function avgEf(etapaKey) {
+      if (!ef || !ef.length) return 0;
+      var e = ef.find(function(x) { return x.etapa === etapaKey; });
+      return e && e.efectividad_pct != null ? Number(e.efectividad_pct) : 0;
+    }
+
+    var tiData = ti || {};
+    var e8Data = e8 || {};
+    var perdData = perd || {};
+    var rescData = resc || {};
 
     var html = "";
     html += group("Tiempo Instalación", [
-      ["Promedio", tiProm, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
-      ["Mediana", tiMed, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
-      ["P25", tip25, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
-      ["P75", tip75, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
-      ["Mínimo", tiMin, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
-      ["Máximo", tiMax, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
-      ["Desviación Estándar", tiStd, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
-      ["Total Instalados", avg("tiempo_instalacion.total_instalados"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["Promedio", tiData.horas_promedio || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Mediana", tiData.horas_mediana || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["P25", tiData.horas_p25 || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["P75", tiData.horas_p75 || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Mínimo", tiData.horas_min || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Máximo", tiData.horas_max || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Desviación Estándar", tiData.horas_std || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Total Instalados", tiData.total_instalados || 0, function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
     ]);
     html += group("Efectividad", [
-      ["Etapa 3", avgEfectividad("etapa_3_factibilidad"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
-      ["Etapa 4", avgEfectividad("etapa_4_adecuaciones"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
-      ["Etapa 5", avgEfectividad("etapa_5_gpi"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
-      ["Ventas", avgEfectividad("ventas"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
+      ["Etapa 3", avgEf("etapa_3_factibilidad"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
+      ["Etapa 4", avgEf("etapa_4_adecuaciones"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
+      ["Etapa 5", avgEf("etapa_5_gpi"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
+      ["Ventas", avgEf("ventas"), function (v) { return v.toFixed(1) + "%"; }, colorEfectividad],
     ]);
     html += group("Probabilidad", [
-      ["% Etapa 8", avg("probabilidad_etapa8_perdidos.resumen.pct_etapa8"), function (v) { return v.toFixed(1) + "%"; }, colorProb],
-      ["% Perdidos", avg("probabilidad_etapa8_perdidos.resumen.pct_perdidos"), function (v) { return v.toFixed(1) + "%"; }, colorProb],
+      ["% Etapa 8", e8Data.pct || 0, function (v) { return v.toFixed(1) + "%"; }, colorProb],
+      ["% Perdidos", perdData.pct || 0, function (v) { return v.toFixed(1) + "%"; }, colorProb],
     ]);
     html += group("Rescate", [
-      ["Rescate Perdidos", avg("rescate_perdidos.pct_rescate"), function (v) { return v.toFixed(1) + "%"; }, colorRescate],
+      ["Rescate Perdidos", rescData.pct_rescate || 0, function (v) { return v.toFixed(1) + "%"; }, colorRescate],
     ]);
     html += group("Totales", [
-      ["Total Clientes", avg("total_clientes"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-      ["Ganados", avg("ganados"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
-      ["Perdidos", avg("perdidos"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-danger"; }],
-      ["Etapa 8", avg("etapa_8_count"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-warning"; }],
+      ["Total Clientes", totals.total_clientes || 0, function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["Ganados", totals.ganados || 0, function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
+      ["Perdidos", totals.perdidos || 0, function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-danger"; }],
+      ["Etapa 8", totals.etapa_8_count || 0, function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-warning"; }],
     ]);
     container.innerHTML = html;
   }
 
-  function averageDimensionData(dimensiones) {
-    var accum = {};
-    dimensiones.forEach(function (period) {
-      var dims = period.dimensiones || {};
-      Object.keys(dims).forEach(function (dimKey) {
-        if (!accum[dimKey]) accum[dimKey] = {};
-        (dims[dimKey] || []).forEach(function (item) {
-          var val = item.valor || "N/A";
-          if (!accum[dimKey][val]) {
-            accum[dimKey][val] = { 
-              sum: { 
-                tiempo_instalacion_promedio_horas: 0, pct_etapa8: 0, pct_perdidos: 0, 
-                pct_rescate_perdidos: 0, total_clientes: 0, ganados: 0, perdidos: 0,
-                etapa_8_count: 0, efecto_3: 0, efecto_4: 0, efecto_5: 0, efecto_ventas: 0
-              }, 
-              count: 0 
-            };
-          }
-          ["tiempo_instalacion_promedio_horas", "pct_etapa8", "pct_perdidos", "pct_rescate_perdidos", "total_clientes", "ganados", "perdidos", "etapa_8_count"].forEach(function (m) {
-            accum[dimKey][val].sum[m] += (item[m] || 0);
-          });
-          // Efectividad
-          var ef = item.efectividad || {};
-          accum[dimKey][val].sum.efecto_3 += (ef["etapa_3_factibilidad"] || 0);
-          accum[dimKey][val].sum.efecto_4 += (ef["etapa_4_adecuaciones"] || 0);
-          accum[dimKey][val].sum.efecto_5 += (ef["etapa_5_gpi"] || 0);
-          accum[dimKey][val].sum.efecto_ventas += (ef["ventas"] || 0);
-          accum[dimKey][val].count++;
-        });
+  function mergeDimensionData(dimTotals, dimTi, dimTpe, dimEf, dimE8, dimPerd, dimResc) {
+    var merged = {};
+    function setField(arr, field) {
+      (arr || []).forEach(function (item) {
+        var key = item.dimension + "|||" + item.valor;
+        if (!merged[key]) merged[key] = { dimension: item.dimension, valor: item.valor };
+        merged[key][field] = item.data;
       });
-    });
+    }
+    setField(dimTotals, "totals");
+    setField(dimTi, "tiempo_instalacion");
+    setField(dimTpe, "tiempo_por_etapa");
+    setField(dimEf, "efectividad");
+    setField(dimE8, "etapa8");
+    setField(dimPerd, "perdido");
+    setField(dimResc, "rescate");
+
     var result = {};
-    Object.keys(accum).forEach(function (dimKey) {
-      result[dimKey] = [];
-      Object.keys(accum[dimKey]).forEach(function (valor) {
-        var entry = { valor: valor };
-        Object.keys(accum[dimKey][valor].sum).forEach(function (m) {
-          entry[m] = accum[dimKey][valor].sum[m] / accum[dimKey][valor].count;
-        });
-        result[dimKey].push(entry);
+    Object.keys(merged).forEach(function (key) {
+      var item = merged[key];
+      var dim = item.dimension;
+      if (!result[dim]) result[dim] = [];
+      var totals = item.totals || {};
+      var ti = item.tiempo_instalacion || {};
+      var tpe = item.tiempo_por_etapa || [];
+      var ef = item.efectividad || [];
+      var e8 = item.etapa8 || {};
+      var perd = item.perdido || {};
+      var resc = item.rescate || {};
+
+      var efVals = {};
+      (ef || []).forEach(function (r) { if (r.etapa) efVals[r.etapa] = r.efectividad_pct || 0; });
+
+      result[dim].push({
+        valor: item.valor,
+        tiempo_instalacion_promedio_horas: ti.horas_promedio || 0,
+        pct_etapa8: e8.pct_etapa8 || 0,
+        pct_perdidos: perd.pct_perdidos || 0,
+        pct_rescate_perdidos: resc.pct_rescate || 0,
+        total_clientes: totals.total_clientes || e8.total_clientes || perd.total_clientes || resc.total_clientes || 0,
+        ganados: totals.ganados || 0,
+        perdidos: totals.perdidos || perd.count_perdido || 0,
+        etapa_8_count: totals.etapa_8_count || e8.count_etapa8 || 0,
+        efecto_3: efVals["etapa_3_factibilidad"] || 0,
+        efecto_4: efVals["etapa_4_adecuaciones"] || 0,
+        efecto_5: efVals["etapa_5_gpi"] || 0,
+        efecto_ventas: efVals["ventas"] || 0,
       });
     });
     return result;
   }
 
-  function getWeight(item, metricKey) {
-    if (metricKey === "tiempo_instalacion_promedio_horas") return item.total_clientes || 0;
-    return (item.total_clientes || 0);
-  }
-
-  function getGlobalMetric(metricKey, fallbackItems) {
-    var vals = [];
-    if (window.lastPeriodos) {
-      window.lastPeriodos.forEach(function (p) {
-        var v = p[metricKey];
-        if (v !== undefined && v !== null) vals.push(Number(v));
-      });
-    }
-    if (vals.length) return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
-    if (fallbackItems && fallbackItems.length) {
-      var totalAct = 0, totalWeighted = 0;
-      fallbackItems.forEach(function (i) {
-        var af = i.total_clientes || 0;
-        totalAct += af;
-        totalWeighted += af * (i[metricKey] || 0);
-      });
-      if (totalAct > 0) return totalWeighted / totalAct;
-    }
-    return 0;
-  }
-
-  function renderDimensionCharts(dimensiones, periodos) {
-    window.lastPeriodos = periodos;
+  function renderDimensionCharts(avgData, totals, ti, ef, e8, perd, resc) {
     var container = document.getElementById("analytics-dimension-charts");
     if (!container) return;
     N.dimChartInstances.forEach(function (c) { c.destroy(); });
     N.dimChartInstances = [];
-    if (!dimensiones || !dimensiones.length) { container.innerHTML = '<div class="text-center text-muted py-4">Sin datos de dimensiones</div>'; return; }
-
-    var avgData = averageDimensionData(dimensiones);
     var dimKeys = Object.keys(avgData).filter(function (k) { return avgData[k].length > 0; });
+    if (!dimKeys.length) { container.innerHTML = '<div class="text-center text-muted py-4">Sin datos de dimensiones</div>'; return; }
+
     var dimLabels = { zona: "Zona", sucursal: "Sucursal", municipio: "Municipio", campana: "Campaña", vendedor: "Vendedor", equipo_ventas: "Equipo Ventas", motivo_perdida: "Motivo Pérdida", devolver_oportunidad: "Devolver Oportunidad" };
     var metrics = [
       { key: "tiempo_instalacion_promedio_horas", label: "Tiempo Instalación (h)", chartType: "hbar", fmt: function (v) { return v.toFixed(1) + "h"; } },
@@ -202,6 +154,23 @@
       }
     }
 
+    function getGlobalMetricVal(metricKey) {
+      if (metricKey === "tiempo_instalacion_promedio_horas") return (ti || {}).horas_promedio || 0;
+      if (metricKey === "pct_etapa8") return (e8 || {}).pct || 0;
+      if (metricKey === "pct_perdidos") return (perd || {}).pct || 0;
+      if (metricKey === "pct_rescate_perdidos") return (resc || {}).pct_rescate || 0;
+      if (metricKey.indexOf("efecto_") === 0) {
+        var etapaMap = { efecto_3: "etapa_3_factibilidad", efecto_4: "etapa_4_adecuaciones", efecto_5: "etapa_5_gpi", efecto_ventas: "ventas" };
+        var etapa = etapaMap[metricKey];
+        if (etapa && ef) {
+          var found = ef.find(function (r) { return r.etapa === etapa; });
+          if (found) return found.efectividad_pct || 0;
+        }
+        return 0;
+      }
+      return 0;
+    }
+
     var html = "";
     metrics.forEach(function (metric) {
       var metricDimKeys = getApplicableDimKeys(metric.key);
@@ -215,15 +184,13 @@
     });
     container.innerHTML = html;
 
-    var allItemsForFallback = Object.keys(avgData).reduce(function (acc, dk) { return acc.concat(avgData[dk]); }, []);
-
     metrics.forEach(function (metric) {
       var metricDimKeys = getApplicableDimKeys(metric.key);
       if (!metricDimKeys.length) return;
-      var globalCenterVal = metric.fmt(getGlobalMetric(metric.key, allItemsForFallback));
+      var globalCenterVal = metric.fmt(getGlobalMetricVal(metric.key));
       metricDimKeys.forEach(function (dimKey) {
         var items = avgData[dimKey];
-        if (!items.length) return;
+        if (!items || !items.length) return;
         var canvasId = "dimc-" + metric.key + "-" + dimKey;
         var canvas = document.getElementById(canvasId);
         if (!canvas) return;
@@ -310,6 +277,34 @@
         }
       });
     });
+  }
+
+  function getWeight(item, metricKey) {
+    if (metricKey === "tiempo_instalacion_promedio_horas") return item.total_clientes || 0;
+    return (item.total_clientes || 0);
+  }
+
+  function loadAnalyticsData() {
+    function check(r) { if (!r.ok) throw Error("HTTP " + r.status); return r.json(); }
+    Promise.all([
+      fetch("/crm/api/metricas/totals/").then(check),
+      fetch("/crm/api/metricas/tiempo-instalacion/").then(check),
+      fetch("/crm/api/metricas/tiempo-por-etapa/").then(check),
+      fetch("/crm/api/metricas/efectividad/").then(check),
+      fetch("/crm/api/metricas/etapa8/").then(check),
+      fetch("/crm/api/metricas/perdido/").then(check),
+      fetch("/crm/api/metricas/rescate/").then(check),
+      fetch("/crm/api/dimensiones/totals/").then(check),
+      fetch("/crm/api/dimensiones/tiempo-instalacion/").then(check),
+      fetch("/crm/api/dimensiones/efectividad/").then(check),
+      fetch("/crm/api/dimensiones/etapa8/").then(check),
+      fetch("/crm/api/dimensiones/perdido/").then(check),
+      fetch("/crm/api/dimensiones/rescate/").then(check),
+    ]).then(function (resps) {
+      renderAnalyticsCards(resps[0], resps[1], resps[2], resps[3], resps[4], resps[5], resps[6]);
+      var avgData = mergeDimensionData(resps[7], resps[8], null, resps[9], resps[10], resps[11], resps[12]);
+      renderDimensionCharts(avgData, resps[0], resps[1], resps[3], resps[4], resps[5], resps[6]);
+    }).catch(function () { N.showToast("Error cargando analytics CRM", "error"); });
   }
 
   document.addEventListener("DOMContentLoaded", function () {

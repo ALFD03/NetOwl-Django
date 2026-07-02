@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, List
 import pandas as pd
+from ...config import TableNames
 
 
 def aggregate_dimensions(
@@ -12,7 +13,7 @@ def aggregate_dimensions(
     periodo_label = periodo.label()
     DIMS = ["zona", "sucursal", "municipio", "campanna", "producto"]
 
-    df_subs = db.read_table("Subscripciones")
+    df_subs = db.read_table(TableNames.SUBSCRIPCIONES)
     df_subs.columns = df_subs.columns.str.lower()
     for c in ["orden_producto"] + DIMS:
         if c in df_subs.columns:
@@ -137,7 +138,7 @@ def aggregate_dimensions(
             })
 
     df_result = pd.DataFrame(all_rows)
-    db.save_historico(df_result, "analyzer_churn_dimensiones", periodo_label)
+    db.save_historico(df_result, TableNames.ANALYZER_CHURN_DIMENSIONES, periodo_label)
 
     dims_ok = [d for d in DIMS if d in df_subs.columns]
     print(

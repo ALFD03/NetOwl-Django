@@ -41,16 +41,107 @@ def dim_col(dim: str) -> str:
     """Retorna el nombre real de la columna en BD para una dimensión."""
     return DIMENSION_COL_MAP.get(dim, dim)
 
-# Reglas de efectividad: qué retornos afectan a cada etapa
+# Reglas de efectividad: term_map y direct_loss por etapa
+# etapa_8_devueltos se clasifica como "devuelto" para todas las etapas
+# La atribución real se hace via ETAPA8_ATRIBUCION en post-procesamiento
 EFECTIVIDAD_REGLAS = {
-    "etapa_3_factibilidad": {"forward": ["etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"]},
-    "etapa_4_adecuaciones": {"forward": ["etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"]},
-    "etapa_5_gpi":          {"forward": ["etapa_6_contratistas", "etapa_7_instalados"]},
-    "ventas":               {"forward": []},  # lógica especial en código
+    "etapa_3_factibilidad": {
+        "forward": ["etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"],
+        "term_map": {
+            "etapa_7_instalados": "success",
+            "etapa_8_devueltos": "devuelto",
+            "perdido": "failure",
+            "etapa_3_factibilidad": "return",
+        },
+        "direct_loss": ["perdido"],
+    },
+    "etapa_4_adecuaciones": {
+        "forward": ["etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"],
+        "term_map": {
+            "etapa_7_instalados": "success",
+            "etapa_8_devueltos": "devuelto",
+            "perdido": "failure",
+            "etapa_4_adecuaciones": "return",
+            "etapa_3_factibilidad": "failure",
+        },
+        "direct_loss": ["perdido"],
+    },
+    "etapa_5_gpi": {
+        "forward": ["etapa_6_contratistas", "etapa_7_instalados"],
+        "term_map": {
+            "etapa_7_instalados": "success",
+            "etapa_8_devueltos": "devuelto",
+            "perdido": "failure",
+            "etapa_5_gpi": "return",
+            "etapa_3_factibilidad": "devuelto",
+            "etapa_4_adecuaciones": "devuelto",
+        },
+        "direct_loss": ["perdido"],
+    },
+    "ventas": {
+        "forward_key": "etapa_3_factibilidad",
+        "forward": ["etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"],
+        "term_map": {
+            "etapa_7_instalados": "success",
+            "etapa_8_devueltos": "devuelto",
+            "perdido": "failure",
+            "etapa_3_factibilidad": "return",
+        },
+        "direct_loss": ["perdido"],
+    },
 }
 
-# Etapas consideradas como pérdida/fracaso
-FAILURE_STAGES = ["etapa_8_devueltos", "perdido"]
+# Motivos que nunca penalizan ninguna etapa (devuelto)
+ETAPA8_EXCEPTION_MOTIVOS = [
+    "No es factible por tuberías/tanquillas obstruidas",
+    "No responde llamadas y/o mensajes",
+    "Cliente en espera del Router",
+    "Cliente no atiende las llamadas por ninguno de los 2 numeros",
+    "Cliente no contesta. Numero opcional no se encuentra con el cliente",
+]
+
+# Atribución de etapa_8: orden importa (primera coincidencia gana)
+# forward_to: la etapa a la que la etapa origen hizo forward para que aplique
+#   None = cualquier forward
+ETAPA8_ATRIBUCION = [
+    {
+        "etapa": "etapa_3_factibilidad",
+        "motivos": [
+            "No es factible por posteadura",
+            "No es factible por estar fuera del área de cobertura",
+            "No factible por línea de vista",
+        ],
+        "forward_to": "etapa_5_gpi",
+    },
+    {
+        "etapa": "etapa_4_adecuaciones",
+        "motivos": [
+            "No es factible por posteadura",
+            "No es factible por estar fuera del área de cobertura",
+            "No factible por línea de vista",
+        ],
+        "forward_to": "etapa_5_gpi",
+    },
+    {
+        "etapa": "etapa_5_gpi",
+        "motivos": [
+            "No cuenta con el dinero, sin disponibilidad económica",
+            "Se requieren permisos de inspección, acceso, instalación y/o verticalización",
+            "No desea el servicio",
+            "No está disponible aún, le avisará a su asesor",
+            "Tiene dudas en relación a su pre-contrato",
+            "El Router no es compatible",
+            "Cambio de titular o ya instaló con otro nombre",
+        ],
+        "forward_to": "etapa_6_contratistas",
+    },
+]
+
+# Retornos que se consideran falla (sin motivo necesario)
+RETORNO_ATRIBUCION = [
+    {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_5_gpi"},
+    {"etapa": "etapa_4_adecuaciones", "forward_to": "etapa_5_gpi"},
+]
 
 # Normalización de columnas CSV Odoo -> snake_case
 CSV_COLUMN_MAP = {

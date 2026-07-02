@@ -1,9 +1,13 @@
 from __future__ import annotations
 import json
+import logging
 import math
 from typing import Any, Dict, Optional
 import pandas as pd
+from ...config import TableNames
 from ...database import DBConnector
+
+logger = logging.getLogger(__name__)
 
 
 def get_lifecycle_results(db=None) -> Dict[str, Any]:
@@ -11,7 +15,7 @@ def get_lifecycle_results(db=None) -> Dict[str, Any]:
     if db is None:
         db = DBConnector()
     try:
-        df = db.read_table("lifetime_metricas")
+        df = db.read_table(TableNames.LIFETIME_METRICAS)
         if df.empty:
             return {}
         row = df.iloc[-1]
@@ -39,6 +43,7 @@ def get_lifecycle_results(db=None) -> Dict[str, Any]:
                     result[col] = None
         return result
     except Exception:
+        logger.exception("Error getting lifecycle results")
         return {}
 
 
@@ -63,7 +68,7 @@ def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, An
     if db is None:
         db = DBConnector()
     try:
-        df = db.read_table("lifetime_dimensiones")
+        df = db.read_table(TableNames.LIFETIME_DIMENSIONES)
         if df.empty:
             return {}
         if dim:
@@ -94,6 +99,7 @@ def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, An
             }
         return result
     except Exception:
+        logger.exception("Error getting lifetime dimensiones")
         return {}
 
 

@@ -1,0 +1,47 @@
+{% extends 'config/base.html' %}
+{% load static %}
+
+{% block title %}NetOwl - {{ editing|yesno:"Editar,Crear" }} Usuario{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h4 class="mb-0"><i class="bi bi-person-{{ editing|yesno:"gear,plus" }} me-2"></i>{{ editing|yesno:"Editar,Crear" }} Usuario</h4>
+</div>
+
+<div class="card" style="max-width:560px">
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if messages %}
+        {% for msg in messages %}
+          <div class="alert alert-{{ msg.tags }} py-2 small">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+      <div class="mb-3">
+        <label class="form-label small fw-medium">Nombre de Usuario</label>
+        <input type="text" name="username" class="form-control" value="{{ edit_user.username|default:'' }}" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-medium">Correo Electrónico</label>
+        <input type="email" name="email" class="form-control" value="{{ edit_user.email|default:'' }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-medium">Rol</label>
+        <select name="role" class="form-select">
+          <option value="analyst" {% if profile.role == 'analyst' or not editing %}selected{% endif %}>Analista</option>
+          <option value="admin" {% if profile.role == 'admin' or edit_user.is_staff %}selected{% endif %}>Administrador</option>
+          <option value="viewer" {% if profile.role == 'viewer' %}selected{% endif %}>Solo Vista</option>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label class="form-label small fw-medium">Contraseña</label>
+        <input type="password" name="password" class="form-control" placeholder="{% if editing %}Dejar vacío para mantener{% else %}Mínimo 8 caracteres{% endif %}">
+      </div>
+      <div class="d-flex justify-content-between">
+        <a href="{% url 'config:user_list' %}" class="btn btn-outline-secondary">Cancelar</a>
+        <button type="submit" class="btn btn-primary">{{ editing|yesno:"Guardar Cambios,Crear Usuario" }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -58,9 +58,12 @@ class DBConnector:
             "user": os.getenv("DB_USER"),
             "password": os.getenv("PASS"),
             "port": os.getenv("PORT", "5432"),
+            "sslmode": os.getenv("DB_SSLMODE", "prefer"),
         }
         # Pool reutilizable de 1 a 10 conexiones simultáneas
         self.pool = pool.SimpleConnectionPool(1, 10, **self.conn_params)
+        # Cache de esquemas: table_name → set de columnas conocidas
+        self._schema_cache: Dict[str, set] = {}
 
     @contextmanager
     def get_connection(self):
@@ -134,6 +137,54 @@ class DBConnector:
         with self.get_connection() as conn:
             return pd.read_sql(query.as_string(conn), conn)
 
+    def read_table_filtered(
+        self,
+        table_name: str,
+        filter_column: str,
+        filter_values: Optional[List[str]] = None,
+        columns: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """
+        Lee una tabla con filtro WHERE col IN (...).
+
+        Args:
+            table_name: Nombre de la tabla (sin esquema).
+            filter_column: Nombre de la columna para filtrar.
+            filter_values: Lista de valores para la cláusula IN.
+            columns: Lista opcional de columnas a seleccionar.
+                     Si es None, se seleccionan todas (*).
+
+        Returns:
+            pd.DataFrame con los datos filtrados.
+        """
+        cols_sql = (
+            sql.SQL("*")
+            if columns is None
+            else sql.SQL(", ").join(sql.Identifier(col) for col in columns)
+        )
+        query = sql.SQL(
+            "SELECT {cols} FROM {schema}.{table}"
+        ).format(
+            cols=cols_sql,
+            schema=sql.Identifier(DB_SCHEMA),
+            table=sql.Identifier(table_name),
+        )
+        params: List[Any] = []
+        if filter_values:
+            placeholders = sql.SQL(", ").join(sql.Placeholder() for _ in filter_values)
+            query = sql.SQL(
+                "SELECT {cols} FROM {schema}.{table} WHERE {fcol} IN ({placeholders})"
+            ).format(
+                cols=cols_sql,
+                schema=sql.Identifier(DB_SCHEMA),
+                table=sql.Identifier(table_name),
+                fcol=sql.Identifier(filter_column),
+                placeholders=placeholders,
+            )
+            params = filter_values
+        with self.get_connection() as conn:
+            return pd.read_sql(query.as_string(conn), conn, params=params)
+
     def query(
         self, sql_query: str, params: Optional[List[Any]] = None
     ) -> pd.DataFrame:
@@ -203,36 +254,40 @@ class DBConnector:
             )
 
         columns = list(df.columns)
+        known_columns = self._schema_cache.get(table_name)
         with self.get_connection() as conn:
             with conn.cursor() as cur:
-                # CREATE TABLE IF NOT EXISTS con columnas tipo text
-                col_defs = [
-                    sql.SQL("{} text").format(sql.Identifier(c))
-                    for c in columns
-                ]
-                cur.execute(
-                    sql.SQL(
-                        "CREATE TABLE IF NOT EXISTS"
-                        " {schema}.{table} ({fields})"
-                    ).format(
-                        schema=sql.Identifier(DB_SCHEMA),
-                        table=sql.Identifier(table_name),
-                        fields=sql.SQL(", ").join(col_defs),
-                    )
-                )
-
-                # Agrega columnas nuevas que no existían antes
-                for col in columns:
+                if known_columns is None:
+                    # CREATE TABLE IF NOT EXISTS con columnas tipo text
+                    col_defs = [
+                        sql.SQL("{} text").format(sql.Identifier(c))
+                        for c in columns
+                    ]
                     cur.execute(
                         sql.SQL(
-                            "ALTER TABLE {schema}.{table}"
-                            " ADD COLUMN IF NOT EXISTS {c} text"
+                            "CREATE TABLE IF NOT EXISTS"
+                            " {schema}.{table} ({fields})"
                         ).format(
                             schema=sql.Identifier(DB_SCHEMA),
                             table=sql.Identifier(table_name),
-                            c=sql.Identifier(col),
+                            fields=sql.SQL(", ").join(col_defs),
                         )
                     )
+
+                    # Agrega columnas nuevas que no existían antes
+                    for col in columns:
+                        cur.execute(
+                            sql.SQL(
+                                "ALTER TABLE {schema}.{table}"
+                                " ADD COLUMN IF NOT EXISTS {c} text"
+                            ).format(
+                                schema=sql.Identifier(DB_SCHEMA),
+                                table=sql.Identifier(table_name),
+                                c=sql.Identifier(col),
+                            )
+                        )
+
+                    self._schema_cache[table_name] = set(columns)
 
                 # Elimina datos previos del mismo período (y método si especificado)
                 delete_q = (

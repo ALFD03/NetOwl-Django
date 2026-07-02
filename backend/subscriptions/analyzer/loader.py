@@ -1,5 +1,6 @@
 from __future__ import annotations
 import concurrent.futures
+from ...config import TableNames
 
 
 def load_data(db):
@@ -14,9 +15,9 @@ def load_data(db):
     logs_v15_cols = ["orden", "tipo", "categoria", "fecha"]
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        future_subs = executor.submit(db.read_table, "Subscripciones", subs_cols)
-        future_logs = executor.submit(db.read_table, "Subscripciones-logs", logs_cols)
-        future_logs_v15 = executor.submit(db.read_table, "Subscripciones-logs-v15", logs_v15_cols)
+        future_subs = executor.submit(db.read_table, TableNames.SUBSCRIPCIONES, subs_cols)
+        future_logs = executor.submit(db.read_table, TableNames.SUBSCRIPCIONES_LOGS, logs_cols)
+        future_logs_v15 = executor.submit(db.read_table, TableNames.SUBSCRIPCIONES_LOGS_V15, logs_v15_cols)
 
         return (
             future_subs.result(),

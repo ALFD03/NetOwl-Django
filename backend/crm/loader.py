@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from typing import Iterator, Tuple
 from ..database import DBConnector
-from ..config import DB_SCHEMA
+from ..config import DB_SCHEMA, TableNames
 from .config import CSV_COLUMN_MAP, CLIENT_FIELDS, LOG_FIELDS, ETAPA_MAP, GANADO_STATES
 
 
@@ -132,7 +132,7 @@ def import_crm_csv(csv_path: str) -> Tuple[int, int]:
     # Solo dropear tablas de datos crudos, no métricas históricas
     with db.get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(f"DROP TABLE IF EXISTS {DB_SCHEMA}.crm_clients, {DB_SCHEMA}.crm_logs CASCADE")
+            cur.execute(f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.CRM_CLIENTS}, {DB_SCHEMA}.{TableNames.CRM_LOGS} CASCADE")
         conn.commit()
     
     _create_tables_if_not_exist(db)
@@ -141,21 +141,21 @@ def import_crm_csv(csv_path: str) -> Tuple[int, int]:
         df_clients, df_logs = parse_odoo_chunk(chunk)
         
         if not df_clients.empty:
-            db.copy_dataframe(df_clients, "crm_clients")
+            db.copy_dataframe(df_clients, TableNames.CRM_CLIENTS)
             total_clients += len(df_clients)
         
         if not df_logs.empty:
-            db.copy_dataframe(df_logs, "crm_logs")
+            db.copy_dataframe(df_logs, TableNames.CRM_LOGS)
             total_logs += len(df_logs)
     
     return total_clients, total_logs
 
 
 def _create_tables_if_not_exist(db: DBConnector):
-    """Crea las tablas CRM si no existen (datos + métricas por separado)."""
+    """Crea las tablas CRM (datos + JSONB de métricas)."""
     statements = [
         f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_clients (
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_CLIENTS} (
             id TEXT PRIMARY KEY,
             oportunidad TEXT,
             cliente TEXT,
@@ -181,7 +181,7 @@ def _create_tables_if_not_exist(db: DBConnector):
         )
         """,
         f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_logs (
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_LOGS} (
             id BIGSERIAL PRIMARY KEY,
             client_id TEXT NOT NULL,
             entrada_id TEXT,
@@ -192,180 +192,41 @@ def _create_tables_if_not_exist(db: DBConnector):
             created_at TIMESTAMP DEFAULT NOW()
         )
         """,
-        # ---- Tablas de métricas (per-periodo, por dimensión) ----
+        # ---- Tabla global singleton (JSONB por métrica) ----
         f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_tiempo_instalacion (
-            id BIGSERIAL PRIMARY KEY,
-            periodo TEXT NOT NULL,
-            total_instalados INTEGER,
-            horas_promedio NUMERIC,
-            horas_p25 NUMERIC,
-            horas_mediana NUMERIC,
-            horas_p75 NUMERIC,
-            horas_min NUMERIC,
-            horas_max NUMERIC,
-            horas_std NUMERIC,
-            dimension TEXT DEFAULT 'global',
-            dimension_valor TEXT DEFAULT 'global',
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_tiempo_por_etapa (
-            id BIGSERIAL PRIMARY KEY,
-            periodo TEXT NOT NULL,
-            etapa TEXT NOT NULL,
-            total_movimientos INTEGER DEFAULT 0,
-            tiempo_promedio_horas NUMERIC,
-            tiempo_mediana_horas NUMERIC,
-            tiempo_min_horas NUMERIC,
-            tiempo_max_horas NUMERIC,
-            tiempo_std_horas NUMERIC,
-            dimension TEXT DEFAULT 'global',
-            dimension_valor TEXT DEFAULT 'global',
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_efectividad (
-            id BIGSERIAL PRIMARY KEY,
-            periodo TEXT NOT NULL,
-            etapa TEXT NOT NULL,
-            total_salidas INTEGER DEFAULT 0,
-            retornos INTEGER DEFAULT 0,
-            exitosos INTEGER DEFAULT 0,
-            fallidos INTEGER DEFAULT 0,
-            retornan INTEGER DEFAULT 0,
-            perdida_directa INTEGER DEFAULT 0,
-            efectividad_pct NUMERIC,
-            origen_retorno TEXT,
-            dimension TEXT DEFAULT 'global',
-            dimension_valor TEXT DEFAULT 'global',
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_probabilidad_etapa8 (
-            id BIGSERIAL PRIMARY KEY,
-            periodo TEXT NOT NULL,
-            total_clientes INTEGER DEFAULT 0,
-            count_etapa8 INTEGER DEFAULT 0,
-            count_perdidos INTEGER DEFAULT 0,
-            pct_etapa8 NUMERIC,
-            pct_perdidos NUMERIC,
-            dimension TEXT DEFAULT 'global',
-            dimension_valor TEXT DEFAULT 'global',
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_motivos_perdida (
-            id BIGSERIAL PRIMARY KEY,
-            periodo TEXT NOT NULL,
-            motivo_perdida TEXT,
-            cantidad INTEGER DEFAULT 0,
-            pct NUMERIC,
-            dimension TEXT DEFAULT 'global',
-            dimension_valor TEXT DEFAULT 'global',
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_rescate_perdidos (
-            id BIGSERIAL PRIMARY KEY,
-            periodo TEXT NOT NULL,
-            total_perdidos INTEGER DEFAULT 0,
-            rescatados INTEGER DEFAULT 0,
-            pct_rescate NUMERIC,
-            dimension TEXT DEFAULT 'global',
-            dimension_valor TEXT DEFAULT 'global',
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_efectividad_estadisticas (
-            id BIGSERIAL PRIMARY KEY,
-            periodo TEXT NOT NULL,
-            etapa TEXT NOT NULL,
-            total_clientes INTEGER,
-            total_salidas INTEGER,
-            total_retornos INTEGER,
-            efectividad_promedio NUMERIC,
-            efectividad_mediana NUMERIC,
-            efectividad_p25 NUMERIC,
-            efectividad_p75 NUMERIC,
-            efectividad_min NUMERIC,
-            efectividad_max NUMERIC,
-            efectividad_std NUMERIC,
-            dimension TEXT DEFAULT 'global',
-            dimension_valor TEXT DEFAULT 'global',
-            created_at TIMESTAMP DEFAULT NOW()
-        )
-        """,
-        # ---- Tabla global (resumen rápido para dashboards) ----
-        f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_metricas_globales (
-            periodo TEXT PRIMARY KEY,
-            ti_total_instalados INTEGER,
-            ti_horas_promedio NUMERIC,
-            ti_horas_p25 NUMERIC,
-            ti_horas_mediana NUMERIC,
-            ti_horas_p75 NUMERIC,
-            ti_horas_min NUMERIC,
-            ti_horas_max NUMERIC,
-            ti_horas_std NUMERIC,
-            pe8_total_clientes INTEGER,
-            pe8_count_etapa8 INTEGER,
-            pe8_count_perdidos INTEGER,
-            pe8_pct_etapa8 NUMERIC,
-            pe8_pct_perdidos NUMERIC,
-            rp_total_perdidos INTEGER,
-            rp_rescatados INTEGER,
-            rp_pct_rescate NUMERIC,
-            total_clientes INTEGER,
-            ganados INTEGER,
-            perdidos INTEGER,
-            etapa_8_count INTEGER,
-            etapa_7_count INTEGER,
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} (
+            id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+            totals JSONB,
+            tiempo_instalacion JSONB,
             tiempo_por_etapa JSONB,
             efectividad JSONB,
-            created_at TIMESTAMP DEFAULT NOW(),
-            updated_at TIMESTAMP DEFAULT NOW()
+            etapa8 JSONB,
+            perdido JSONB,
+            rescate JSONB
         )
         """,
+        # ---- Dimensiones (JSONB por métrica, sin periodo) ----
         f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.crm_dimensiones_historico (
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO} (
             id BIGSERIAL PRIMARY KEY,
-            periodo TEXT NOT NULL,
             dimension TEXT NOT NULL,
             valor TEXT NOT NULL,
-            total_clientes INTEGER,
-            ganados INTEGER,
-            perdidos INTEGER,
-            etapa_8_count INTEGER,
-            etapa_7_count INTEGER,
-            pct_etapa8 NUMERIC,
-            pct_perdidos NUMERIC,
-            tiempo_instalacion_promedio_horas NUMERIC,
-            tiempo_por_etapa_json JSONB,
-            efectividad_json JSONB,
-            pct_rescate_perdidos NUMERIC,
-            created_at TIMESTAMP DEFAULT NOW()
+            totals JSONB,
+            tiempo_instalacion JSONB,
+            tiempo_por_etapa JSONB,
+            efectividad JSONB,
+            etapa8 JSONB,
+            perdido JSONB,
+            rescate JSONB
         )
         """,
         # Índices
-        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_client ON {DB_SCHEMA}.crm_logs(client_id)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_created ON {DB_SCHEMA}.crm_logs(created_at_log)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_etapa ON {DB_SCHEMA}.crm_clients(etapa_actual)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_ganado ON {DB_SCHEMA}.crm_clients(ganado)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_dims ON {DB_SCHEMA}.crm_clients(cliente_municipio, campana, sucursal, vendedor, equipo_ventas)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_ti_periodo ON {DB_SCHEMA}.crm_tiempo_instalacion(periodo, dimension, dimension_valor)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_tpe_periodo ON {DB_SCHEMA}.crm_tiempo_por_etapa(periodo, dimension, dimension_valor)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_ef_periodo ON {DB_SCHEMA}.crm_efectividad(periodo, dimension, dimension_valor)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_prob_periodo ON {DB_SCHEMA}.crm_probabilidad_etapa8(periodo, dimension, dimension_valor)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_rescate_periodo ON {DB_SCHEMA}.crm_rescate_perdidos(periodo, dimension, dimension_valor)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_ef_est_periodo ON {DB_SCHEMA}.crm_efectividad_estadisticas(periodo, dimension, dimension_valor)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_dim_periodo ON {DB_SCHEMA}.crm_dimensiones_historico(periodo, dimension)",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_client ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(client_id)",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_created ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(created_at_log)",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_etapa ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(etapa_actual)",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_ganado ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(ganado)",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_dims ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(cliente_municipio, campana, sucursal, vendedor, equipo_ventas)",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_dimension ON {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO}(dimension)",
     ]
     
     with db.get_connection() as conn:

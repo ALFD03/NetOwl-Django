@@ -3,7 +3,7 @@ from typing import Dict, Set
 
 import pandas as pd
 
-from ...config import INACTIVE_STATES
+from ...config import INACTIVE_STATES, TableNames
 from ...database import DBConnector
 from ...models import Periodo
 from . import cleaner, dimensions, loader, metrics_calc, rules
@@ -123,10 +123,10 @@ class MetricsAnalyzer:
         n_react_not_in_ini = len(df_react_not_in_ini)
         bajas_brutas = bajas_netas + n_react_not_in_ini
 
-        self.db.save_historico(act_fin[["orden", "f_dt", "estado"]], "analyzer_activos_cierre", periodo_label)
-        self.db.save_historico(df_react_all, "analyzer_reactivaciones", periodo_label)
-        self.db.save_historico(df_bajas[["orden", "f_ini_dt", "estado"]], "analyzer_bajas_detalladas", periodo_label)
-        self.db.save_historico(df_corte_impagado, "analyzer_corte_impagado", periodo_label)
+        self.db.save_historico(act_fin[["orden", "f_dt", "estado"]], TableNames.ANALYZER_ACTIVOS_CIERRE, periodo_label)
+        self.db.save_historico(df_react_all, TableNames.ANALYZER_REACTIVACIONES, periodo_label)
+        self.db.save_historico(df_bajas[["orden", "f_ini_dt", "estado"]], TableNames.ANALYZER_BAJAS_DETALLADAS, periodo_label)
+        self.db.save_historico(df_corte_impagado, TableNames.ANALYZER_CORTE_IMPAGADO, periodo_label)
 
         summary = {
             "periodo": periodo_label,
@@ -155,13 +155,13 @@ class MetricsAnalyzer:
             "adiciones_netas": len(set_nue) - bajas_netas,
             "adiciones_brutas": (len(set_nue) + n_react_not_in_ini) - bajas_netas,
         }
-        self.db.save_historico(pd.DataFrame([summary]), "analyzer_cierre_historico", periodo_label)
+        self.db.save_historico(pd.DataFrame([summary]), TableNames.ANALYZER_CIERRE_HISTORICO, periodo_label)
 
         if not df_inactivos.empty:
             detalle_inac = df_inactivos[["orden", "f_dt", "estado"]].rename(
                 columns={"f_dt": "fecha_evento", "estado": "estado_inactivo"}
             )
-            self.db.save_historico(detalle_inac, "analyzer_inactivos_detallados", periodo_label)
+            self.db.save_historico(detalle_inac, TableNames.ANALYZER_INACTIVOS_DETALLADOS, periodo_label)
 
         print(f"\nANALISIS COMPLETADO | Periodo: {periodo_label}")
         print(f"Base Inicio: {len(act_ini)} | Nuevos: {len(set_nue)} | Base Final: {len(act_fin)}")

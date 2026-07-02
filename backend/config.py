@@ -39,8 +39,6 @@ ACTIVE_STATE = "3_progress"
 INACTIVE_STATES = {"4_paused", "6_churn", "8_30days"}
 # Estados desde los cuales se permite una reactivación
 VALID_REACT_ORIGINS = {"4_paused", "6_churn", "8_30days"}
-# Subconjunto de orígenes auditables para reactivaciones (churn y 30 días)
-AUDIT_REACT_ORIGINS = {"6_churn", "8_30days"}
 # Texto exacto del evento de corte por factura impaga en los logs
 CORTE_IMPAGADO_EVENT = "corte automatico por factura impaga"
 
@@ -56,3 +54,24 @@ SUBS_STATE_TO_LOG_MAP = {
     "cotizacion": "0_other",
     "instalacion": "0_other",
 }
+
+
+class TableNames:
+    CRM_CLIENTS = "crm_clients"
+    CRM_LOGS = "crm_logs"
+    CRM_METRICAS_GLOBALES = "crm_metricas_globales"
+    CRM_DIMENSIONES_HISTORICO = "crm_dimensiones_historico"
+    ANALYZER_ACTIVOS_CIERRE = "analyzer_activos_cierre"
+    ANALYZER_REACTIVACIONES = "analyzer_reactivaciones"
+    ANALYZER_BAJAS_DETALLADAS = "analyzer_bajas_detalladas"
+    ANALYZER_CORTE_IMPAGADO = "analyzer_corte_impagado"
+    ANALYZER_CIERRE_HISTORICO = "analyzer_cierre_historico"
+    ANALYZER_INACTIVOS_DETALLADOS = "analyzer_inactivos_detallados"
+    ANALYZER_CHURN_DIMENSIONES = "analyzer_churn_dimensiones"
+    LIFETIME_PERIODOS = "lifetime_periodos"
+    LIFETIME_METRICAS = "lifetime_metricas"
+    LIFETIME_DIMENSIONES = "lifetime_dimensiones"
+    SUBSCRIPCIONES = "Subscripciones"
+    SUBSCRIPCIONES_B = "Subscripciones-b"
+    SUBSCRIPCIONES_LOGS = "Subscripciones-logs"
+    SUBSCRIPCIONES_LOGS_V15 = "Subscripciones-logs-v15"

@@ -2,15 +2,18 @@ import json
 import io
 import logging
 import os
-import sys
-import tempfile
+from contextlib import redirect_stdout, redirect_stderr
 
 logger = logging.getLogger(__name__)
 
-import pandas as pd
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.conf import settings
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
 
+from frontend.config.decorators import analyst_or_admin_required, handle_csv_upload, cleanup_tempfile
 from backend.database import DBConnector
 from backend.models import Periodo
 from backend.subscriptions import (
@@ -25,46 +28,58 @@ from backend.subscriptions.lifetime import (
 
 
 TEMPLATE_PREFIX = "subscriptions/"
+LOGIN_URL = settings.LOGIN_URL
 
 
+@login_required(login_url=LOGIN_URL)
 def dashboard(request):
     return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
 
 
+@login_required(login_url=LOGIN_URL)
 def analytics(request):
     return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
 
 
+@login_required(login_url=LOGIN_URL)
+@analyst_or_admin_required
 def imports(request):
     return render(request, f"{TEMPLATE_PREFIX}imports.html", {"section": "imports"})
 
 
+@login_required(login_url=LOGIN_URL)
 def results(request, periodo=None):
     return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
 
 
+@login_required(login_url=LOGIN_URL)
 def lifetime(request):
     return render(request, f"{TEMPLATE_PREFIX}lifetime.html", {"section": "lifetime"})
 
 
+@login_required(login_url=LOGIN_URL)
 def api_dashboard_data(request):
     return JsonResponse(get_dashboard_data())
 
 
+@login_required(login_url=LOGIN_URL)
 def api_analytics_data(request):
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     return JsonResponse(get_analytics_data(periodos))
 
 
+@login_required(login_url=LOGIN_URL)
 def api_periods_list(request):
     return JsonResponse({"periods": get_periodos()})
 
 
+@login_required(login_url=LOGIN_URL)
 def api_results_list(request):
     return JsonResponse({"periods": get_cierre_churn()})
 
 
+@login_required(login_url=LOGIN_URL)
 def api_results_detail(request, periodo):
     cierre = get_cierre_churn([periodo])
     dims = get_dimensiones([periodo])
@@ -77,41 +92,39 @@ def api_results_detail(request, periodo):
     })
 
 
+@login_required(login_url=LOGIN_URL)
+@analyst_or_admin_required
+@ratelimit(key="ip", rate="10/m", method="POST")
+@require_POST
 def api_run_analysis(request):
-    if request.method != "POST":
-        return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
     try:
         data = json.loads(request.body)
         mes = data.get("month")
     except Exception:
+        logger.exception("Invalid JSON in request body")
         return JsonResponse({"status": "error", "message": "JSON invalido"}, status=400)
     if not mes or len(mes) != 7:
         return JsonResponse({"status": "error", "message": "Periodo invalido (YYYY-MM)"}, status=400)
     try:
         periodo = Periodo.build(f"{mes}-01")
         periodo_label = periodo.label()
-        capture = io.StringIO()
-        old_out, old_err = sys.stdout, sys.stderr
-        sys.stdout = capture
-        sys.stderr = capture
-        try:
-            analyzer = MetricsAnalyzer(DBConnector(), periodo)
-            analyzer.run()
-        except Exception as e:
-            sys.stdout, sys.stderr = old_out, old_err
-            return JsonResponse({"status": "error", "message": str(e)}, status=500)
-        finally:
-            result_output = capture.getvalue()
-            sys.stdout, sys.stderr = old_out, old_err
+        out = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(out):
+            try:
+                analyzer = MetricsAnalyzer(DBConnector(), periodo)
+                analyzer.run()
+            except Exception as e:
+                return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
         return JsonResponse({
             "status": "success",
             "periodo_label": periodo_label,
-            "log_output": result_output,
+            "log_output": out.getvalue(),
         })
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 
+@login_required(login_url=LOGIN_URL)
 def api_survival_data(request):
     lc = get_lifecycle_results()
     if not lc:
@@ -175,57 +188,45 @@ def api_survival_data(request):
     })
 
 
+@login_required(login_url=LOGIN_URL)
+@analyst_or_admin_required
+@ratelimit(key="ip", rate="10/m", method="POST")
+@require_POST
 def api_import_subscriptions(request):
-    if request.method != "POST":
-        return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
-    if "csv_file" not in request.FILES:
-        return JsonResponse({"status": "error", "message": "Archivo no enviado"}, status=400)
-    csv_file = request.FILES["csv_file"]
-    tmp_path = None
+    tmp_path, error = handle_csv_upload(request)
+    if error:
+        return error
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
-            for chunk in csv_file.chunks():
-                tmp.write(chunk)
-            tmp_path = tmp.name
         rows = import_subscriptions_csv(tmp_path)
         return JsonResponse({"status": "success", "message": f"Subscripciones: {rows} filas importadas."})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
     finally:
-        if tmp_path:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        cleanup_tempfile(tmp_path)
 
 
+@login_required(login_url=LOGIN_URL)
+@analyst_or_admin_required
+@ratelimit(key="ip", rate="10/m", method="POST")
+@require_POST
 def api_import_logs(request):
-    if request.method != "POST":
-        return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
-    if "csv_file" not in request.FILES:
-        return JsonResponse({"status": "error", "message": "Archivo no enviado"}, status=400)
-    csv_file = request.FILES["csv_file"]
-    tmp_path = None
+    tmp_path, error = handle_csv_upload(request)
+    if error:
+        return error
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
-            for chunk in csv_file.chunks():
-                tmp.write(chunk)
-            tmp_path = tmp.name
         rows = import_logs_csv(tmp_path)
         return JsonResponse({"status": "success", "message": f"Logs: {rows} filas importadas."})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
     finally:
-        if tmp_path:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        cleanup_tempfile(tmp_path)
 
 
+@login_required(login_url=LOGIN_URL)
+@analyst_or_admin_required
+@ratelimit(key="ip", rate="10/m", method="POST")
+@require_POST
 def api_lifecycle_run(request):
-    if request.method != "POST":
-        return JsonResponse({"status": "error", "message": "Metodo no permitido"}, status=405)
     try:
         metrics = run_lifecycle_analysis()
         return JsonResponse({
@@ -245,6 +246,7 @@ def api_lifecycle_run(request):
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 
+@login_required(login_url=LOGIN_URL)
 def api_lifecycle_results(request):
     data = get_lifecycle_results()
     if not data:

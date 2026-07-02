@@ -1,287 +1,447 @@
-"""
-Capa de acceso a datos para las vistas del frontend CRM.
-Lee de crm_metricas_globales (dashboard) y tablas detalle + dimensiones.
-"""
 from __future__ import annotations
 import json
-from typing import Any, Dict, List, Optional
+import logging
+import math
+from typing import Any
 
+import pandas as pd
+
+from ..config import DB_SCHEMA, TableNames
 from ..database import DBConnector
+from .config import DIMENSIONES, PROB_DIM_E8, PROB_DIM_PERDIDOS_RESCATE, dim_col
+
+logger = logging.getLogger(__name__)
 
 
-def get_crm_cierre(
-    periodos: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Recupera los datos de cierre CRM desde crm_metricas_globales.
-    """
-    db = DBConnector()
-    try:
-        df = db.read_table("crm_metricas_globales")
-        if df.empty:
-            return []
-
-        result = []
-        for _, row in df.sort_values("periodo", ascending=False).iterrows():
-            entry: dict = {"periodo": row["periodo"]}
-
-            ti_total = row["ti_total_instalados"]
-            ti_total = int(ti_total) if pd_notnull(ti_total) else 0
-            ti_prom = row["ti_horas_promedio"]
-            ti_prom = float(ti_prom) if pd_notnull(ti_prom) else None
-            ti_p25 = row["ti_horas_p25"]
-            ti_p25 = float(ti_p25) if pd_notnull(ti_p25) else None
-            ti_med = row["ti_horas_mediana"]
-            ti_med = float(ti_med) if pd_notnull(ti_med) else None
-            ti_p75 = row["ti_horas_p75"]
-            ti_p75 = float(ti_p75) if pd_notnull(ti_p75) else None
-            ti_min = row["ti_horas_min"]
-            ti_min = float(ti_min) if pd_notnull(ti_min) else None
-            ti_max = row["ti_horas_max"]
-            ti_max = float(ti_max) if pd_notnull(ti_max) else None
-            ti_std = row["ti_horas_std"]
-            ti_std = float(ti_std) if pd_notnull(ti_std) else None
-
-            entry["tiempo_instalacion"] = {
-                "total_instalados": ti_total,
-                "horas_promedio": ti_prom,
-                "horas_p25": ti_p25,
-                "horas_mediana": ti_med,
-                "horas_p75": ti_p75,
-                "horas_min": ti_min,
-                "horas_max": ti_max,
-                "horas_std": ti_std,
-            }
-
-            tpe_raw = row.get("tiempo_por_etapa")
-            if tpe_raw is not None and not pd_isna(tpe_raw):
-                if isinstance(tpe_raw, str):
-                    tpe_raw = json.loads(tpe_raw)
-                entry["tiempo_por_etapa"] = tpe_raw
-            else:
-                entry["tiempo_por_etapa"] = {}
-
-            ef_raw = row.get("efectividad")
-            if ef_raw is not None and not pd_isna(ef_raw):
-                if isinstance(ef_raw, str):
-                    ef_raw = json.loads(ef_raw)
-                entry["efectividad"] = ef_raw
-            else:
-                entry["efectividad"] = []
-
-            pe8_tc = row["pe8_total_clientes"]
-            pe8_c8 = row["pe8_count_etapa8"]
-            pe8_cp = row["pe8_count_perdidos"]
-            pe8_p8 = row["pe8_pct_etapa8"]
-            pe8_pp = row["pe8_pct_perdidos"]
-
-            entry["probabilidad_etapa8_perdidos"] = {
-                "resumen": {
-                    "total_clientes": int(pe8_tc) if pd_notnull(pe8_tc) else 0,
-                    "count_etapa8": int(pe8_c8) if pd_notnull(pe8_c8) else 0,
-                    "count_perdidos": int(pe8_cp) if pd_notnull(pe8_cp) else 0,
-                    "pct_etapa8": float(pe8_p8) if pd_notnull(pe8_p8) else 0,
-                    "pct_perdidos": float(pe8_pp) if pd_notnull(pe8_pp) else 0,
-                },
-                "motivos_perdida": [],
-            }
-
-            rp_tp = row["rp_total_perdidos"]
-            rp_r = row["rp_rescatados"]
-            rp_pr = row["rp_pct_rescate"]
-            entry["rescate_perdidos"] = {
-                "total_perdidos": int(rp_tp) if pd_notnull(rp_tp) else 0,
-                "rescatados": int(rp_r) if pd_notnull(rp_r) else 0,
-                "pct_rescate": float(rp_pr) if pd_notnull(rp_pr) else 0,
-            }
-
-            tc = row["total_clientes"]
-            g = row["ganados"]
-            p = row["perdidos"]
-            e8 = row["etapa_8_count"]
-            e7 = row["etapa_7_count"]
-            entry["total_clientes"] = int(tc) if pd_notnull(tc) else 0
-            entry["ganados"] = int(g) if pd_notnull(g) else 0
-            entry["perdidos"] = int(p) if pd_notnull(p) else 0
-            entry["etapa_8_count"] = int(e8) if pd_notnull(e8) else 0
-            entry["etapa_7_count"] = int(e7) if pd_notnull(e7) else 0
-
-            result.append(entry)
-
-        return result
-    except Exception:
-        import traceback
-        traceback.print_exc()
-        return []
+def _parse_jsonb(val: Any) -> Any:
+    if val is None:
+        return None
+    if isinstance(val, (dict, list)):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return val
+    if hasattr(val, 'shape'):  # pandas Series
+        return _parse_jsonb(val.iloc[0]) if len(val) > 0 else None
+    return val
 
 
-def get_crm_dimensiones() -> List[Dict[str, Any]]:
-    """
-    Recupera datos de CRM desglosados por dimensiones.
-    Lee crm_dimensiones_historico.
-    """
-    db = DBConnector()
-    try:
-        df = db.read_table("crm_dimensiones_historico")
-        if df.empty:
-            return []
+def _clean_nan(obj: Any) -> Any:
+    if isinstance(obj, float) and math.isnan(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _clean_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clean_nan(v) for v in obj]
+    return obj
 
-        pd_dict: Dict[str, Dict] = {}
-        for _, row in df.iterrows():
-            p = str(row.get("periodo", ""))
-            if p not in pd_dict:
-                pd_dict[p] = {"periodo": p, "dimensiones": {}}
 
-            dim = str(row.get("dimension", ""))
-            if dim not in pd_dict[p]["dimensiones"]:
-                pd_dict[p]["dimensiones"][dim] = []
+# ── helpers for on-the-fly dimension GROUP BY ──
 
-            tpe_raw = row.get("tiempo_por_etapa_json", "{}")
-            if isinstance(tpe_raw, str):
-                try:
-                    tpe_raw = json.loads(tpe_raw)
-                except Exception:
-                    tpe_raw = {}
-
-            ef_raw = row.get("efectividad_json", "{}")
-            if isinstance(ef_raw, str):
-                try:
-                    ef_raw = json.loads(ef_raw)
-                except Exception:
-                    ef_raw = {}
-
-            pd_dict[p]["dimensiones"][dim].append({
-                "valor": str(row.get("valor", "")),
-                "total_clientes": _int(row.get("total_clientes")),
-                "ganados": _int(row.get("ganados")),
-                "perdidos": _int(row.get("perdidos")),
-                "etapa_8_count": _int(row.get("etapa_8_count")),
-                "etapa_7_count": _int(row.get("etapa_7_count")),
-                "pct_etapa8": _float(row.get("pct_etapa8")),
-                "pct_perdidos": _float(row.get("pct_perdidos")),
-                "tiempo_instalacion_promedio_horas": _float(row.get("tiempo_instalacion_promedio_horas")),
-                "tiempo_por_etapa": tpe_raw if isinstance(tpe_raw, dict) else {},
-                "efectividad": ef_raw if isinstance(ef_raw, dict) else {},
-                "pct_rescate_perdidos": _float(row.get("pct_rescate_perdidos")),
+def _dim_totals(db: DBConnector) -> list[dict]:
+    rows = []
+    for dim in DIMENSIONES:
+        col = dim_col(dim)
+        df = db.query(f"""
+            SELECT {col} AS valor,
+                   COUNT(*)::int AS total_clientes,
+                   COUNT(*) FILTER (WHERE ganado = 'ganado')::int AS ganados,
+                   COUNT(*) FILTER (WHERE ganado = 'perdido')::int AS perdidos,
+                   COUNT(*) FILTER (WHERE etapa_actual = 'etapa_8_devueltos')::int AS etapa_8_count,
+                   COUNT(*) FILTER (WHERE etapa_actual = 'etapa_7_instalados')::int AS etapa_7_count
+            FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS}
+            WHERE {col} IS NOT NULL AND {col} != ''
+            GROUP BY {col}
+            ORDER BY {col}
+        """)
+        for _, r in df.iterrows():
+            rows.append({
+                "dimension": dim,
+                "valor": r["valor"],
+                "data": {k: r[k] for k in df.columns if k != "valor"},
             })
-
-        return sorted(pd_dict.values(), key=lambda x: x["periodo"], reverse=True)
-    except Exception:
-        return []
+    return rows
 
 
-def get_crm_periodos() -> List[str]:
-    """Períodos disponibles en crm_metricas_globales."""
+def _dim_tiempo_instalacion(db: DBConnector) -> list[dict]:
+    rows = []
+    for dim in DIMENSIONES:
+        col = dim_col(dim)
+        df = db.query(f"""
+            SELECT {col} AS valor,
+                   COUNT(*)::int AS total_instalados,
+                   ROUND(AVG(duracion_total_horas)::numeric, 2)::float8 AS horas_promedio,
+                   ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY duracion_total_horas)::numeric, 2)::float8 AS horas_mediana,
+                   ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY duracion_total_horas)::numeric, 2)::float8 AS horas_p25,
+                   ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY duracion_total_horas)::numeric, 2)::float8 AS horas_p75,
+                   ROUND(MIN(duracion_total_horas)::numeric, 2)::float8 AS horas_min,
+                   ROUND(MAX(duracion_total_horas)::numeric, 2)::float8 AS horas_max,
+                   ROUND(STDDEV(duracion_total_horas)::numeric, 2)::float8 AS horas_std
+            FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS}
+            WHERE {col} IS NOT NULL AND {col} != ''
+              AND ganado = 'ganado'
+              AND duracion_total_horas IS NOT NULL
+            GROUP BY {col}
+            ORDER BY {col}
+        """)
+        for _, r in df.iterrows():
+            rows.append({
+                "dimension": dim,
+                "valor": r["valor"],
+                "data": {k: r[k] for k in df.columns if k != "valor"},
+            })
+    return rows
+
+
+def _dim_etapa8(db: DBConnector) -> list[dict]:
+    rows = []
+    for dim in DIMENSIONES:
+        col = dim_col(dim)
+        df = db.query(f"""
+            SELECT {col} AS valor,
+                   COUNT(*)::int AS total_clientes,
+                   COUNT(*) FILTER (WHERE etapa_actual = 'etapa_8_devueltos'
+                                     OR id IN (SELECT client_id FROM {DB_SCHEMA}.{TableNames.CRM_LOGS}
+                                               WHERE nueva_etapa = 'etapa_8_devueltos'))::int AS count_etapa8
+            FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS}
+            WHERE {col} IS NOT NULL AND {col} != ''
+            GROUP BY {col}
+            ORDER BY {col}
+        """)
+        for _, r in df.iterrows():
+            tc = int(r["total_clientes"])
+            e8 = int(r["count_etapa8"])
+            rows.append({
+                "dimension": dim,
+                "valor": r["valor"],
+                "data": {"total_clientes": tc, "count_etapa8": e8, "pct_etapa8": round(e8 * 100.0 / tc, 2) if tc > 0 else 0.0},
+            })
+    return rows
+
+
+def _dim_perdido(db: DBConnector) -> list[dict]:
+    rows = []
+    for dim in DIMENSIONES:
+        col = dim_col(dim)
+        df = db.query(f"""
+            SELECT {col} AS valor,
+                   COUNT(*)::int AS total_clientes,
+                   COUNT(*) FILTER (WHERE ganado = 'perdido')::int AS count_perdido,
+                   ROUND(COUNT(*) FILTER (WHERE ganado = 'perdido') * 100.0 / NULLIF(COUNT(*), 0), 2) AS pct_perdidos
+            FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS}
+            WHERE {col} IS NOT NULL AND {col} != ''
+            GROUP BY {col}
+            ORDER BY {col}
+        """)
+        for _, r in df.iterrows():
+            rows.append({
+                "dimension": dim,
+                "valor": r["valor"],
+                "data": {k: r[k] for k in df.columns if k != "valor"},
+            })
+    return rows
+
+
+def _dim_rescate(db: DBConnector) -> list[dict]:
+    rows = []
+    for dim in DIMENSIONES:
+        col = dim_col(dim)
+        df = db.query(f"""
+            SELECT p.{col} AS valor,
+                   p.total_perdidos,
+                   COALESCE(r.rescatados, 0)::int AS rescatados,
+                   ROUND(COALESCE(r.rescatados, 0) * 100.0 / NULLIF(p.total_perdidos, 0), 2) AS pct_rescate
+            FROM (
+                SELECT {col}, COUNT(*)::int AS total_perdidos
+                FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS}
+                WHERE {col} IS NOT NULL AND {col} != ''
+                  AND ganado = 'perdido'
+                GROUP BY {col}
+            ) p
+            LEFT JOIN (
+                SELECT c.{col}, COUNT(DISTINCT l.client_id)::int AS rescatados
+                FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
+                JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
+                WHERE c.{col} IS NOT NULL AND c.{col} != ''
+                  AND c.ganado = 'perdido'
+                  AND l.nueva_etapa = 'etapa_7_instalados'
+                GROUP BY c.{col}
+            ) r ON p.{col} = r.{col}
+            ORDER BY p.{col}
+        """)
+        for _, r in df.iterrows():
+            rows.append({
+                "dimension": dim,
+                "valor": r["valor"],
+                "data": {k: r[k] for k in df.columns if k != "valor"},
+            })
+    return rows
+
+
+def _dim_especial_etapa8(db: DBConnector) -> list[dict]:
+    rows = []
+    for prob_dim in PROB_DIM_E8:
+        col = dim_col(prob_dim)
+        col_expr = f"c.{col}::text"
+        df = db.query(f"""
+            SELECT {col_expr} AS valor,
+                   COUNT(*)::int AS total_clientes,
+                   COUNT(*) FILTER (WHERE c.etapa_actual = 'etapa_8_devueltos')::int AS count_etapa8
+            FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c
+            WHERE {col_expr} IS NOT NULL AND {col_expr} != ''
+            GROUP BY {col_expr}
+            ORDER BY {col_expr}
+        """)
+        for _, r in df.iterrows():
+            tc = int(r["total_clientes"])
+            e8 = int(r["count_etapa8"])
+            rows.append({
+                "dimension": prob_dim,
+                "valor": r["valor"],
+                "data": {"total_clientes": tc, "count_etapa8": e8, "pct_etapa8": round(e8 * 100.0 / tc, 2) if tc > 0 else 0.0},
+            })
+    return rows
+
+
+def _dim_especial_perdidos_rescate(db: DBConnector) -> list[dict]:
+    rows = []
+    for prob_dim in PROB_DIM_PERDIDOS_RESCATE:
+        col = dim_col(prob_dim)
+        col_expr = f"c.{col}::text"
+
+        df_group = db.query(f"""
+            SELECT {col_expr} AS valor,
+                   COUNT(*)::int AS total_clientes,
+                   COUNT(*) FILTER (WHERE c.ganado = 'perdido')::int AS perdidos
+            FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c
+            WHERE {col_expr} IS NOT NULL AND {col_expr} != ''
+            GROUP BY {col_expr}
+            ORDER BY {col_expr}
+        """)
+
+        df_resc = db.query(f"""
+            SELECT {col_expr} AS valor,
+                   COUNT(DISTINCT l.client_id)::int AS rescatados
+            FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
+            JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
+            WHERE {col_expr} IS NOT NULL AND {col_expr} != ''
+              AND c.ganado = 'perdido'
+              AND l.nueva_etapa = 'etapa_7_instalados'
+            GROUP BY {col_expr}
+        """)
+        resc_map = {}
+        for _, r in df_resc.iterrows():
+            resc_map[r["valor"]] = int(r["rescatados"])
+
+        for _, r in df_group.iterrows():
+            v = r["valor"]
+            tc = int(r["total_clientes"])
+            perd = int(r["perdidos"])
+            pct = round(perd * 100.0 / tc, 2) if tc > 0 else 0.0
+            rescatados = resc_map.get(v, 0)
+            rows.append({
+                "dimension": prob_dim,
+                "valor": v,
+                "data": {"total_clientes": tc, "count_perdido": perd, "pct_perdidos": pct,
+                         "total_perdidos": perd, "rescatados": rescatados,
+                         "pct_rescate": round(rescatados * 100.0 / perd, 2) if perd > 0 else 0.0},
+            })
+    return rows
+
+
+# --- Per-metric global getters ---
+
+def get_metric_totals() -> dict:
     db = DBConnector()
     try:
-        df = db.read_table("crm_metricas_globales")
+        df = db.query(f"SELECT totals FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
+        if df.empty:
+            return {}
+        return _clean_nan(_parse_jsonb(df.iloc[0]["totals"]) or {})
+    except Exception:
+        logger.exception("Error getting metric totals")
+        return {}
+
+
+def get_metric_tiempo_instalacion() -> dict:
+    db = DBConnector()
+    try:
+        df = db.query(f"SELECT tiempo_instalacion FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
+        if df.empty:
+            return {}
+        return _clean_nan(_parse_jsonb(df.iloc[0]["tiempo_instalacion"]) or {})
+    except Exception:
+        logger.exception("Error getting metric tiempo_instalacion")
+        return {}
+
+
+def get_metric_tiempo_por_etapa() -> dict:
+    db = DBConnector()
+    try:
+        df = db.query(f"SELECT tiempo_por_etapa FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
+        if df.empty:
+            return {}
+        return _clean_nan(_parse_jsonb(df.iloc[0]["tiempo_por_etapa"]) or {})
+    except Exception:
+        logger.exception("Error getting metric tiempo_por_etapa")
+        return {}
+
+
+def get_metric_efectividad() -> list:
+    db = DBConnector()
+    try:
+        df = db.query(f"SELECT efectividad FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
         if df.empty:
             return []
-        return sorted(df["periodo"].unique().tolist(), reverse=True)
+        return _clean_nan(_parse_jsonb(df.iloc[0]["efectividad"]) or [])
     except Exception:
+        logger.exception("Error getting metric efectividad")
         return []
 
 
-def get_crm_dashboard_data() -> Dict[str, Any]:
-    return {"periodos": get_crm_cierre()}
+def get_metric_etapa8() -> dict:
+    db = DBConnector()
+    try:
+        df = db.query(f"SELECT etapa8 FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
+        if df.empty:
+            return {}
+        return _clean_nan(_parse_jsonb(df.iloc[0]["etapa8"]) or {})
+    except Exception:
+        logger.exception("Error getting metric etapa8")
+        return {}
 
 
-def get_crm_analytics_data() -> Dict[str, Any]:
-    return {
-        "periodos": get_crm_cierre(),
-        "dimensiones": get_crm_dimensiones(),
+def get_metric_perdido() -> dict:
+    db = DBConnector()
+    try:
+        df = db.query(f"SELECT perdido FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
+        if df.empty:
+            return {}
+        return _clean_nan(_parse_jsonb(df.iloc[0]["perdido"]) or {})
+    except Exception:
+        logger.exception("Error getting metric perdido")
+        return {}
+
+
+def get_metric_rescate() -> dict:
+    db = DBConnector()
+    try:
+        df = db.query(f"SELECT rescate FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
+        if df.empty:
+            return {}
+        return _clean_nan(_parse_jsonb(df.iloc[0]["rescate"]) or {})
+    except Exception:
+        logger.exception("Error getting metric rescate")
+        return {}
+
+
+# ── On-the-fly dimension getters (GROUP BY, no pre-computed table) ──
+
+def get_dimension_totals() -> list[dict]:
+    db = DBConnector()
+    try:
+        return _clean_nan(_dim_totals(db) + _dim_especial_etapa8(db) + _dim_especial_perdidos_rescate(db))
+    except Exception:
+        logger.exception("Error getting dimension totals")
+        return []
+
+def get_dimension_tiempo_instalacion() -> list[dict]:
+    db = DBConnector()
+    try:
+        return _clean_nan(_dim_tiempo_instalacion(db))
+    except Exception:
+        logger.exception("Error getting dimension tiempo_instalacion")
+        return []
+
+def _dim_efectividad(db: DBConnector) -> list[dict]:
+    ETAPAS = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi", "ventas"]
+    FWD = {
+        "etapa_3_factibilidad": ["etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"],
+        "etapa_4_adecuaciones": ["etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"],
+        "etapa_5_gpi":          ["etapa_6_contratistas", "etapa_7_instalados"],
     }
+    FWD_TUPLES = [(e, f) for e, fwd in FWD.items() for f in fwd]
+    FWD_COND = " OR ".join(f"(l.etapa_anterior = '{e}' AND l.nueva_etapa = '{f}')" for e, f in FWD_TUPLES)
+
+    rows = []
+    for dim in DIMENSIONES:
+        col = dim_col(dim)
+        df = db.query(f"""
+            SELECT c.{col} AS valor,
+                   l.etapa_anterior,
+                   COUNT(*)::int AS total_salidas,
+                   COUNT(*) FILTER (WHERE c.ganado = 'ganado')::int AS exitosos,
+                   COUNT(*) FILTER (WHERE c.ganado = 'perdido')::int AS fallidos
+            FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
+            JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
+            WHERE c.{col} IS NOT NULL AND c.{col} != ''
+              AND ({FWD_COND})
+            GROUP BY c.{col}, l.etapa_anterior
+            ORDER BY c.{col}, l.etapa_anterior
+        """)
+        pivoted: dict[str, dict[str, Any]] = {}
+        for _, r in df.iterrows():
+            v = r["valor"]
+            if v not in pivoted:
+                pivoted[v] = {"etapa_3_factibilidad": {}, "etapa_4_adecuaciones": {}, "etapa_5_gpi": {}, "ventas": {}}
+            et = r["etapa_anterior"]
+            sal = int(r["total_salidas"])
+            ex = int(r["exitosos"])
+            fa = int(r["fallidos"])
+            pivoted[v][et] = {"total_salidas": sal, "exitosos": ex, "fallidos": fa}
+
+        for v, etapas_data in pivoted.items():
+            e3 = etapas_data.get("etapa_3_factibilidad", {})
+            if not etapas_data.get("ventas"):
+                etapas_data["ventas"] = dict(e3)
+            stages = []
+            for et in ETAPAS:
+                d = etapas_data.get(et, {})
+                sal = d.get("total_salidas", 0)
+                ex = d.get("exitosos", 0)
+                fa = d.get("fallidos", 0)
+                pct = round(ex * 100.0 / sal, 2) if sal > 0 else 0.0
+                stages.append({"etapa": et, "total_salidas": sal, "exitosos": ex, "fallidos": fa, "efectividad_pct": pct})
+            rows.append({"dimension": dim, "valor": v, "data": stages})
+    return rows
 
 
-def get_crm_results_detail() -> Dict[str, Any]:
-    """Detalle completo: resumen + dimensiones + motivos + estadísticas."""
-    cierre = get_crm_cierre()
-    dims = get_crm_dimensiones()
-    summary = cierre[0] if cierre else {}
-    dimensions = dims[0]["dimensiones"] if dims else {}
+def get_dimension_tiempo_por_etapa() -> list[dict]:
+    return []
 
+def get_dimension_efectividad() -> list[dict]:
+    db = DBConnector()
     try:
-        db = DBConnector()
-        # Motivos de pérdida (solo filas globales, sin duplicados por dimensión)
-        df = db.read_table("crm_motivos_perdida")
-        if not df.empty:
-            df_global = df[(df["dimension"] == "global") & (df["dimension_valor"] == "global")]
-            motivos_raw = df_global.to_dict("records") if not df_global.empty else df.head(0).to_dict("records")
-            motivos = []
-            for m in motivos_raw:
-                motivos.append({
-                    "motivo_perdida": m.get("motivo_perdida"),
-                    "cantidad": _int(m.get("cantidad")),
-                    "pct": _float(m.get("pct")),
-                })
-            summary["probabilidad_etapa8_perdidos"]["motivos_perdida"] = motivos
-
-        # Efectividad estadísticas por cliente
-        df_est = db.read_table("crm_efectividad_estadisticas")
-        if not df_est.empty:
-            est_raw = df_est.to_dict("records")
-            summary["efectividad_estadisticas"] = []
-            for e in est_raw:
-                summary["efectividad_estadisticas"].append({
-                    "etapa": e.get("etapa"),
-                    "total_clientes": _int(e.get("total_clientes")),
-                    "total_salidas": _int(e.get("total_salidas")),
-                    "total_retornos": _int(e.get("total_retornos")),
-                    "efectividad_promedio": _float(e.get("efectividad_promedio")),
-                    "efectividad_mediana": _float(e.get("efectividad_mediana")),
-                    "efectividad_p25": _float(e.get("efectividad_p25")),
-                    "efectividad_p75": _float(e.get("efectividad_p75")),
-                    "efectividad_std": _float(e.get("efectividad_std")),
-                })
+        return _clean_nan(_dim_efectividad(db))
     except Exception:
-        pass
+        logger.exception("Error getting dimension efectividad")
+        return []
 
-    return {
-        "periodo": "completo",
-        "summary": summary,
-        "dimensions": dimensions,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _int(v: Any) -> int:
+def get_dimension_etapa8() -> list[dict]:
+    db = DBConnector()
     try:
-        return int(v)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _float(v: Any) -> float:
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def pd_notnull(v) -> bool:
-    """Verifica si un valor no es nulo."""
-    if v is None:
-        return False
-    if isinstance(v, dict):
-        return True
-    try:
-        import pandas as pd
-        return not bool(pd.isna(v).any()) if hasattr(pd.isna(v), 'any') else not pd.isna(v)
+        return _clean_nan(_dim_etapa8(db) + _dim_especial_etapa8(db))
     except Exception:
-        return v is not None
+        logger.exception("Error getting dimension etapa8")
+        return []
 
-
-def pd_isna(v) -> bool:
-    if v is None:
-        return True
-    if isinstance(v, (dict, list)):
-        return False
+def get_dimension_perdido() -> list[dict]:
+    db = DBConnector()
     try:
-        import pandas as pd
-        result = pd.isna(v)
-        return bool(result.any()) if hasattr(result, 'any') else bool(result)
+        return _clean_nan(_dim_perdido(db) + _dim_especial_perdidos_rescate(db))
     except Exception:
-        return False
+        logger.exception("Error getting dimension perdido")
+        return []
+
+def get_dimension_rescate() -> list[dict]:
+    db = DBConnector()
+    try:
+        return _clean_nan(_dim_rescate(db) + _dim_especial_perdidos_rescate(db))
+    except Exception:
+        logger.exception("Error getting dimension rescate")
+        return []
+
+
+

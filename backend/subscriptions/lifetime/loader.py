@@ -1,7 +1,11 @@
 from __future__ import annotations
+import logging
 import pandas as pd
-from ...config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
+from ...config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP, TableNames
 from ...database import DBConnector
+
+
+logger = logging.getLogger(__name__)
 
 
 DIMS = ["Zona", "Sucursal", "Municipio", "campanna", "Producto"]
@@ -20,7 +24,7 @@ def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     if db is None:
         db = DBConnector()
-    subs = db.read_table("Subscripciones")
+    subs = db.read_table(TableNames.SUBSCRIPCIONES)
     subs = subs.rename(columns={"Orden_Producto": "orden", "fecha_inicio": "f_ini"})
     subs["orden"] = subs["orden"].astype(str).str.strip()
     subs["f_ini_dt"] = pd.to_datetime(subs["f_ini"], errors="coerce")
@@ -37,18 +41,19 @@ def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         subs["estado_subs"] = EXCLUDED_STATE
     subs = subs.drop_duplicates(subset=["orden"])
 
-    l1 = db.read_table("Subscripciones-logs", columns=["orden", "fecha_log", "log", "estado"])
+    l1 = db.read_table(TableNames.SUBSCRIPCIONES_LOGS, columns=["orden", "fecha_log", "log", "estado"])
     l1 = l1.rename(columns={"fecha_log": "fecha"})
     l1["fuente"] = "v1"
 
     try:
-        l2 = db.read_table("Subscripciones-logs-v15", columns=["orden", "tipo", "categoria", "fecha"])
+        l2 = db.read_table(TableNames.SUBSCRIPCIONES_LOGS_V15, columns=["orden", "tipo", "categoria", "fecha"])
         l2["nota"] = l2["tipo"]
         l2["estado"] = _normalize_estado(
             l2["categoria"].map({"En progreso": "3_progress", "Cerrado": "6_churn"}).fillna(l2["categoria"])
         )
         l2["fuente"] = "v15"
     except Exception:
+        logger.exception("Failed to load v15 logs table")
         l2 = pd.DataFrame(columns=["orden", "fecha", "estado", "fuente"])
 
     return subs, l1, l2

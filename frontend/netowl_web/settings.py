@@ -16,6 +16,7 @@ Dependencias:
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Cargar variables de entorno desde el archivo .env (si existe)
 load_dotenv()
@@ -25,21 +26,49 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # --- Seguridad ---
-# Clave secreta de Django (definir DJANGO_SECRET_KEY en producción)
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "django-insecure-change-me-in-production")
 # Modo debug: deshabilitar en producción (DJANGO_DEBUG=False)
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes")
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in ("true", "1", "yes")
+# Clave secreta de Django (definir DJANGO_SECRET_KEY en producción)
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        import warnings
+        SECRET_KEY = __import__("secrets").token_urlsafe(50)
+        warnings.warn("DJANGO_SECRET_KEY no está definido. Se generó uno temporal para desarrollo.", stacklevel=2)
+    else:
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in .env for production")
 # Hosts permitidos (lista separada por comas, ej: "localhost,ejemplo.com")
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+
+# --- Seguridad HTTPS / Headers ---
+SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL", "False").lower() in ("true", "1", "yes")
+SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
+CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
+SECURE_HSTS_SECONDS = 31536000 if SECURE_SSL_REDIRECT else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_SSL_REDIRECT
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+
+# --- Autenticación ---
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/subscriptions/dashboard/"
+LOGOUT_REDIRECT_URL = "/login/"
+
+# --- Límites de subida ---
+MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
+FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
 
 # --- Aplicaciones instaladas ---
-# Solo se incluyen los módulos mínimos necesarios (sin admin ni auth)
 INSTALLED_APPS = [
     "django.contrib.staticfiles",   # Servir archivos estáticos
+    "django.contrib.auth",          # Autenticación de usuarios
+    "django.contrib.contenttypes",  # Requerido por auth
     "django.contrib.sessions",      # Soporte de sesiones
     "django.contrib.messages",      # Framework de mensajes (flash)
     "frontend.subscriptions",        # Aplicación principal del frontend
     "frontend.crm",                  # Módulo CRM (clientes, etc.)
+    "frontend.config",               # Gestión de usuarios y configuración
 ]
 
 # --- Middleware ---
@@ -50,6 +79,7 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",       # Manejo de sesiones
     "django.middleware.common.CommonMiddleware",                  # Varios (URL slashes, etc.)
     "django.middleware.csrf.CsrfViewMiddleware",                  # Protección CSRF
+    "django.contrib.auth.middleware.AuthenticationMiddleware",    # Autenticación por sesión
     "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
     "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
 ]
@@ -69,6 +99,7 @@ TEMPLATES = [
             "context_processors": [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
         },
@@ -120,3 +151,33 @@ USE_TZ = True                      # Usar zona horaria consciente (UTC en BD)
 # --- Campos auto-generados ---
 # Tipo de campo por defecto para claves primarias auto-generadas
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Logging de requests ---
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "request_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "requests.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "verbose",
+            "delay": True,
+        },
+    },
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} {levelname} {message}",
+            "style": "{",
+        },
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["request_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
