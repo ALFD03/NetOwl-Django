@@ -93,7 +93,6 @@ EFECTIVIDAD_REGLAS = {
 
 # Motivos que nunca penalizan ninguna etapa (devuelto)
 ETAPA8_EXCEPTION_MOTIVOS = [
-    "No es factible por tuberías/tanquillas obstruidas",
     "No responde llamadas y/o mensajes",
     "Cliente en espera del Router",
     "Cliente no atiende las llamadas por ninguno de los 2 numeros",
@@ -110,6 +109,7 @@ ETAPA8_ATRIBUCION = [
             "No es factible por posteadura",
             "No es factible por estar fuera del área de cobertura",
             "No factible por línea de vista",
+            "No es factible por tuberías/tanquillas obstruidas",
         ],
         "forward_to": "etapa_5_gpi",
     },
@@ -119,6 +119,7 @@ ETAPA8_ATRIBUCION = [
             "No es factible por posteadura",
             "No es factible por estar fuera del área de cobertura",
             "No factible por línea de vista",
+            "No es factible por tuberías/tanquillas obstruidas",
         ],
         "forward_to": "etapa_5_gpi",
     },
@@ -139,7 +140,9 @@ ETAPA8_ATRIBUCION = [
 
 # Retornos que se consideran falla (sin motivo necesario)
 RETORNO_ATRIBUCION = [
+    {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_4_adecuaciones"},
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_5_gpi"},
+    {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_6_contratistas"},
     {"etapa": "etapa_4_adecuaciones", "forward_to": "etapa_5_gpi"},
 ]
 

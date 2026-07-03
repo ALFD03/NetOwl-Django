@@ -9,7 +9,7 @@
     if (!totals || !totals.total_clientes) { container.innerHTML = '<div class="col-12 text-center text-muted py-4">Sin datos</div>'; return; }
 
     function colorTiempo(v) { return v <= 72 ? "text-success" : v <= 120 ? "text-warning" : "text-danger"; }
-    function colorEfectividad(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
+    function colorEfectividad(v) { return v >= 70 ? "text-success" : v >= 40 ? "text-warning" : "text-danger"; }
     function colorProb(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
     function colorRescate(v) { return v <= 30 ? "text-danger" : v <= 60 ? "text-warning" : "text-success"; }
 
@@ -108,6 +108,7 @@
         ganados: totals.ganados || 0,
         perdidos: totals.perdidos || perd.count_perdido || 0,
         etapa_8_count: totals.etapa_8_count || e8.count_etapa8 || 0,
+        rescatados: resc.rescatados || perd.rescatados || 0,
         efecto_3: efVals["etapa_3_factibilidad"] || 0,
         efecto_4: efVals["etapa_4_adecuaciones"] || 0,
         efecto_5: efVals["etapa_5_gpi"] || 0,
@@ -280,7 +281,9 @@
   }
 
   function getWeight(item, metricKey) {
-    if (metricKey === "tiempo_instalacion_promedio_horas") return item.total_clientes || 0;
+    if (metricKey === "pct_etapa8") return item.etapa_8_count || 0;
+    if (metricKey === "pct_perdidos") return item.perdidos || 0;
+    if (metricKey === "pct_rescate_perdidos") return item.perdidos || 0;
     return (item.total_clientes || 0);
   }
 

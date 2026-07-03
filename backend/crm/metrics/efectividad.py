@@ -58,19 +58,34 @@ def _count_e8_attribution(
     """Atribuye cada cliente en etapa_8 a una etapa.
     Returns {etapa: count_failures}
     """
-    # Collect all unique client_ids with "devuelto" outcome per stage
+    # Collect all unique client_ids with "devuelto" outcome per stage (from forward cycles)
     stage_e8_clients: dict[str, set[str]] = {}
     for stage, df in all_stage_detailed.items():
         dev = df[df["outcome"] == "devuelto"]
         stage_e8_clients[stage] = set(dev["client_id"].unique())
 
-    client_attributed: dict[str, str | None] = {}
+    # Collect direct exits to etapa_8 (etapa_anterior -> etapa_8) that are NOT forward moves
+    # This captures cases where a client was directly sent to etapa_8 from a stage
+    # without having made any forward move from that stage first
+    TRACKED_STAGES = list(all_stage_detailed.keys())
+    direct_e8_map: dict[str, set[str]] = {s: set() for s in TRACKED_STAGES}
+    direct_exits = df_trans[df_trans["nueva_etapa"] == "etapa_8_devueltos"]
+    for _, row in direct_exits.iterrows():
+        origin = row["etapa_anterior"]
+        cid = row["client_id"]
+        if origin in direct_e8_map:
+            # Only add if this client was NOT already captured by a forward cycle devuelto
+            # for this stage (avoids double-counting)
+            if cid not in stage_e8_clients.get(origin, set()):
+                direct_e8_map[origin].add(cid)
+
+    result: dict[str, int] = {}
 
     def _check_stage_rules(cid: str, motivo_str: str, stage: str) -> bool:
         rules = [r for r in ETAPA8_ATRIBUCION if r["etapa"] == stage]
         if not rules:
             return False
-        dmot = df_detailed.get(stage)
+        dmot = all_stage_detailed.get(stage)
         if dmot is None:
             return False
         rows = dmot[dmot["client_id"] == cid]
@@ -85,31 +100,41 @@ def _count_e8_attribution(
                         return True
         return False
 
-    df_detailed = all_stage_detailed
-
-    # Pass 1: attribute to e3, e4, e5
     ATTR_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi"]
-    for cid in {c for s in stage_e8_clients.values() for c in s}:
+
+    # All clients that reached etapa_8: from forward cycles OR direct exits
+    all_dev_clients: set[str] = {c for s in stage_e8_clients.values() for c in s}
+    for s in direct_e8_map.values():
+        all_dev_clients |= s
+
+    for cid in all_dev_clients:
         motivo = _get_client_motivo(df_trans, cid)
         m_lower = _safe_motivo(motivo)
         if m_lower in {_safe_motivo(e) for e in ETAPA8_EXCEPTION_MOTIVOS}:
-            client_attributed[cid] = None
             continue
+
+        if m_lower == "":
+            # None motive -> penalize all stages where this client had a devuelto outcome
+            # (from forward cycles) AND stages from which it exited directly to etapa_8
+            penalized: set[str] = set()
+            for stage in stage_e8_clients:
+                if cid in stage_e8_clients[stage]:
+                    penalized.add(stage)
+            for stage, direct_clients in direct_e8_map.items():
+                if cid in direct_clients:
+                    penalized.add(stage)
+            for stage in penalized:
+                result[stage] = result.get(stage, 0) + 1
+            continue
+
         attributed = False
         for stage in ATTR_ORDER:
             if _check_stage_rules(cid, m_lower, stage):
-                client_attributed[cid] = stage
+                result[stage] = result.get(stage, 0) + 1
                 attributed = True
                 break
         if not attributed:
-            client_attributed[cid] = "ventas"
-
-    # Count per stage
-    result: dict[str, int] = {}
-    for cid, stage in client_attributed.items():
-        if stage is None:
-            continue
-        result[stage] = result.get(stage, 0) + 1
+            result["ventas"] = result.get("ventas", 0) + 1
 
     return result
 
@@ -209,9 +234,5 @@ def compute_efectividad(
         total = r["exitosos"] + r["fallidos"] + r["retornan"] + r["perdida_directa"]
         r["total_salidas"] = total
         r["efectividad_pct"] = round(r["exitosos"] / total * 100, 2) if total > 0 else 100.0
-        r["origen_retorno"] = (
-            f"exitosos={r['exitosos']}, fallidos={r['fallidos']}, "
-            f"retornan={r['retornan']}, perdida_directa={r['perdida_directa']}"
-        )
 
     return resultados

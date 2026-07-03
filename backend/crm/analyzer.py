@@ -7,12 +7,14 @@ from typing import Any, Dict
 
 from ..database import DBConnector
 from .metrics import compute_and_save_all_global
+from .dimensions import aggregate_dimensions
 
 
 def run_crm_analysis() -> dict:
     """Ejecuta análisis completo sin filtro temporal."""
     db = DBConnector()
     datos = compute_and_save_all_global(db)
+    aggregate_dimensions(db)
     _print_summary(datos)
     return datos
 

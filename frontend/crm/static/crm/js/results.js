@@ -5,7 +5,7 @@
   var _detailChart = null;
 
   function colorTiempo(v) { return v <= 72 ? "text-success" : v <= 120 ? "text-warning" : "text-danger"; }
-  function colorEfectividad(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
+  function colorEfectividad(v) { return v >= 70 ? "text-success" : v >= 40 ? "text-warning" : "text-danger"; }
   function colorProb(v) { return v <= 30 ? "text-success" : v <= 60 ? "text-warning" : "text-danger"; }
   function colorRescate(v) { return v <= 30 ? "text-danger" : v <= 60 ? "text-warning" : "text-success"; }
 
@@ -114,7 +114,7 @@
     if (dimensions && dimensions.motivo_perdida && dimensions.motivo_perdida.length) {
       html += '<h6 class="text-muted mb-2 mt-2">Motivos de Perdida</h6><div class="table-responsive" style="max-height:250px;overflow:auto"><table class="table table-sm table-hover align-middle mb-0 table-theme"><thead><tr><th>Motivo</th><th class="text-end">Cantidad</th><th class="text-end">%</th></tr></thead><tbody>';
       dimensions.motivo_perdida.forEach(function (m) {
-        html += '<tr><td>' + (m.valor || "N/A") + '</td><td class="text-end">' + (m.total_clientes || 0).toLocaleString() + '</td><td class="text-end">' + (m.pct_etapa8 || 0).toFixed(1) + '%</td></tr>';
+        html += '<tr><td>' + (m.valor || "N/A") + '</td><td class="text-end">' + (m.total_clientes || 0).toLocaleString() + '</td><td class="text-end">' + (m.pct_perdidos || 0).toFixed(1) + '%</td></tr>';
       });
       html += '</tbody></table></div>';
     }
