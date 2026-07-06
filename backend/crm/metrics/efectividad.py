@@ -40,11 +40,11 @@ def _classify_forward_cycles_detailed(
     return result
 
 
-def _get_client_motivo(df: pd.DataFrame, client_id: str) -> str | None:
-    """Obtiene devolver_oportunidad para un cliente (no nulo)."""
-    mask = df["client_id"] == client_id
-    valores = df.loc[mask, "devolver_oportunidad"].dropna().unique()
-    return str(valores[0]).strip() if len(valores) > 0 else None
+# def _get_client_motivo(df: pd.DataFrame, client_id: str) -> str | None:
+#     """Obtiene devolver_oportunidad para un cliente (no nulo)."""
+#     mask = df["client_id"] == client_id
+#     valores = df.loc[mask, "devolver_oportunidad"].dropna().unique()
+#     return str(valores[0]).strip() if len(valores) > 0 else None
 
 
 def _safe_motivo(m: str | None) -> str:
@@ -58,6 +58,26 @@ def _count_e8_attribution(
     """Atribuye cada cliente en etapa_8 a una etapa.
     Returns {etapa: count_failures}
     """
+    motivo_map = (
+        df_trans.dropna(subset=["devolver_oportunidad"])
+        .drop_duplicates(subset=["client_id"], keep="first")
+        .set_index("client_id")["devolver_oportunidad"]
+        .to_dict()
+    )
+
+    # Precálculo O(1): forward_to por cliente en cada etapa
+    forward_to_maps = {
+        stage: df.drop_duplicates("client_id").set_index("client_id")["forward_to"].to_dict()
+        for stage, df in all_stage_detailed.items()
+    }
+
+    # Precálculo O(1): reglas de atribución indexadas por etapa+motivo
+    from collections import defaultdict
+    attr_rules_by_stage: dict[str, dict[str, str | None]] = defaultdict(dict)
+    for rule in ETAPA8_ATRIBUCION:
+        for m in rule["motivos"]:
+            attr_rules_by_stage[rule["etapa"]][_safe_motivo(m)] = rule.get("forward_to")
+
     # Collect all unique client_ids with "devuelto" outcome per stage (from forward cycles)
     stage_e8_clients: dict[str, set[str]] = {}
     for stage, df in all_stage_detailed.items():
@@ -81,24 +101,32 @@ def _count_e8_attribution(
 
     result: dict[str, int] = {}
 
+    # def _check_stage_rules(cid: str, motivo_str: str, stage: str) -> bool:
+    #     rules = [r for r in ETAPA8_ATRIBUCION if r["etapa"] == stage]
+    #     if not rules:
+    #         return False
+    #     dmot = all_stage_detailed.get(stage)
+    #     if dmot is None:
+    #         return False
+    #     rows = dmot[dmot["client_id"] == cid]
+    #     if rows.empty:
+    #         return False
+    #     forward_to = rows["forward_to"].iloc[0]
+    #     for rule in rules:
+    #         for rm in rule["motivos"]:
+    #             if _safe_motivo(rm) == motivo_str:
+    #                 req = rule.get("forward_to")
+    #                 if req is None or forward_to == req:
+    #                     return True
+    #     return False
     def _check_stage_rules(cid: str, motivo_str: str, stage: str) -> bool:
-        rules = [r for r in ETAPA8_ATRIBUCION if r["etapa"] == stage]
-        if not rules:
+        rules_for_stage = attr_rules_by_stage.get(stage)
+        if not rules_for_stage or motivo_str not in rules_for_stage:
             return False
-        dmot = all_stage_detailed.get(stage)
-        if dmot is None:
-            return False
-        rows = dmot[dmot["client_id"] == cid]
-        if rows.empty:
-            return False
-        forward_to = rows["forward_to"].iloc[0]
-        for rule in rules:
-            for rm in rule["motivos"]:
-                if _safe_motivo(rm) == motivo_str:
-                    req = rule.get("forward_to")
-                    if req is None or forward_to == req:
-                        return True
-        return False
+        req = rules_for_stage[motivo_str]
+        if req is None:
+            return True
+        return forward_to_maps.get(stage, {}).get(cid) == req
 
     ATTR_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi"]
 
@@ -107,8 +135,11 @@ def _count_e8_attribution(
     for s in direct_e8_map.values():
         all_dev_clients |= s
 
+    # for cid in all_dev_clients:
+    #     motivo = _get_client_motivo(df_trans, cid)
+    #     m_lower = _safe_motivo(motivo)
     for cid in all_dev_clients:
-        motivo = _get_client_motivo(df_trans, cid)
+        motivo = motivo_map.get(cid)
         m_lower = _safe_motivo(motivo)
         if m_lower in {_safe_motivo(e) for e in ETAPA8_EXCEPTION_MOTIVOS}:
             continue
