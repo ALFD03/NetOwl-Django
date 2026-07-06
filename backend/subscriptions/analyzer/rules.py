@@ -5,12 +5,6 @@ from ...config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, EXCLUDED_STATE, INACTI
 
 
 def apply_log_rules(df_clean_logs, df_subs_full):
-    """Aplica reglas de casos anomalos sobre la relacion suscripcion-log.
-
-    Returns:
-        (df_clean_logs, ordens_con_activity): DataFrame corregido y conjunto
-        de ordenes con al menos un log activo.
-    """
     valid_ordens = set(df_subs_full["orden"])
     log_filtered = df_clean_logs[
         df_clean_logs["orden"].isin(valid_ordens)
@@ -18,7 +12,6 @@ def apply_log_rules(df_clean_logs, df_subs_full):
     log_filtered["_sintetico"] = False
     synth_parts = []
 
-    # Caso 5: Primer log es corte impago -> sintetico activo en f_ini_dt
     idx_first = log_filtered.groupby("orden")["f_dt"].idxmin()
     df_first_logs = log_filtered.loc[idx_first, ["orden", "f_dt", "log_norm"]].copy()
     mask_caso5 = df_first_logs["log_norm"].str.contains(CORTE_IMPAGADO_EVENT, na=False)
@@ -35,7 +28,6 @@ def apply_log_rules(df_clean_logs, df_subs_full):
             df_subs_c5["_sintetico"] = True
             synth_parts.append(df_subs_c5[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
 
-    # Caso 1: Subs sin logs en ninguna version
     ordenes_con_log = set(log_filtered["orden"])
     mask_no_logs = ~df_subs_full["orden"].isin(ordenes_con_log)
     df_no_logs = df_subs_full[mask_no_logs].copy()
@@ -50,7 +42,6 @@ def apply_log_rules(df_clean_logs, df_subs_full):
         df_no_logs["_sintetico"] = True
         synth_parts.append(df_no_logs[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
 
-    # Caso 6: Log inactivo seguido de corte impago -> activo entre ambos
     df_ordered = log_filtered.sort_values(["orden", "f_dt"]).copy()
     df_ordered["next_log_norm"] = df_ordered.groupby("orden")["log_norm"].shift(-1)
     df_ordered["next_f_dt"] = df_ordered.groupby("orden")["f_dt"].shift(-1)
@@ -71,7 +62,6 @@ def apply_log_rules(df_clean_logs, df_subs_full):
         df_caso6["_sintetico"] = True
         synth_parts.append(df_caso6[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
 
-    # Caso 2 y 4: Ultimo log inconsistente con estado de subs
     idx_last = log_filtered.groupby("orden")["f_dt"].idxmax()
     df_last_logs = log_filtered.loc[idx_last, ["orden", "f_dt", "estado"]].copy()
     df_last_logs.columns = ["orden", "f_dt", "ultimo_estado_log"]
@@ -80,7 +70,6 @@ def apply_log_rules(df_clean_logs, df_subs_full):
     )
     merged.columns = ["orden", "f_dt", "ultimo_estado_log", "estado_subs"]
 
-    # Caso 2: ultimo log inactivo, subs activa
     mask_caso2 = (
         merged["ultimo_estado_log"].isin(INACTIVE_STATES)
         & (merged["estado_subs"] == ACTIVE_STATE)
@@ -96,7 +85,6 @@ def apply_log_rules(df_clean_logs, df_subs_full):
         df_caso2["_sintetico"] = True
         synth_parts.append(df_caso2[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
 
-    # Caso 4: ultimo log activo, subs inactiva (no 0_other)
     mask_caso4 = (
         (merged["ultimo_estado_log"] == ACTIVE_STATE)
         & (merged["estado_subs"] != ACTIVE_STATE)

@@ -18,12 +18,6 @@ def _classify_forward_cycles_detailed(
     forward_stages: list[str],
     term_map: dict[str, str],
 ) -> pd.DataFrame:
-    """Returns DataFrame with columns: [client_id, forward_to, outcome]
-    
-    outcome: success | failure | return | devuelto | NaN
-    - 'devuelto' means the forward move's next terminal was etapa_8
-    - NaN means no terminal found after the forward move
-    """
     terminal_types = list(term_map.keys())
     df_sorted = df.sort_values(["client_id", "created_at_log"])
     is_term = df_sorted["nueva_etapa"].isin(terminal_types)
@@ -39,25 +33,13 @@ def _classify_forward_cycles_detailed(
     result["outcome"] = next_term[is_fwd]
     return result
 
-
-# def _get_client_motivo(df: pd.DataFrame, client_id: str) -> str | None:
-#     """Obtiene devolver_oportunidad para un cliente (no nulo)."""
-#     mask = df["client_id"] == client_id
-#     valores = df.loc[mask, "devolver_oportunidad"].dropna().unique()
-#     return str(valores[0]).strip() if len(valores) > 0 else None
-
-
 def _safe_motivo(m: str | None) -> str:
     return "" if m is None else str(m).strip().lower()
-
 
 def _count_e8_attribution(
     all_stage_detailed: dict[str, pd.DataFrame],
     df_trans: pd.DataFrame,
 ) -> dict[str, int]:
-    """Atribuye cada cliente en etapa_8 a una etapa.
-    Returns {etapa: count_failures}
-    """
     motivo_map = (
         df_trans.dropna(subset=["devolver_oportunidad"])
         .drop_duplicates(subset=["client_id"], keep="first")
@@ -65,28 +47,21 @@ def _count_e8_attribution(
         .to_dict()
     )
 
-    # Precálculo O(1): forward_to por cliente en cada etapa
     forward_to_maps = {
         stage: df.drop_duplicates("client_id").set_index("client_id")["forward_to"].to_dict()
         for stage, df in all_stage_detailed.items()
     }
-
-    # Precálculo O(1): reglas de atribución indexadas por etapa+motivo
     from collections import defaultdict
     attr_rules_by_stage: dict[str, dict[str, str | None]] = defaultdict(dict)
     for rule in ETAPA8_ATRIBUCION:
         for m in rule["motivos"]:
             attr_rules_by_stage[rule["etapa"]][_safe_motivo(m)] = rule.get("forward_to")
 
-    # Collect all unique client_ids with "devuelto" outcome per stage (from forward cycles)
     stage_e8_clients: dict[str, set[str]] = {}
     for stage, df in all_stage_detailed.items():
         dev = df[df["outcome"] == "devuelto"]
         stage_e8_clients[stage] = set(dev["client_id"].unique())
 
-    # Collect direct exits to etapa_8 (etapa_anterior -> etapa_8) that are NOT forward moves
-    # This captures cases where a client was directly sent to etapa_8 from a stage
-    # without having made any forward move from that stage first
     TRACKED_STAGES = list(all_stage_detailed.keys())
     direct_e8_map: dict[str, set[str]] = {s: set() for s in TRACKED_STAGES}
     direct_exits = df_trans[df_trans["nueva_etapa"] == "etapa_8_devueltos"]
@@ -94,31 +69,11 @@ def _count_e8_attribution(
         origin = row["etapa_anterior"]
         cid = row["client_id"]
         if origin in direct_e8_map:
-            # Only add if this client was NOT already captured by a forward cycle devuelto
-            # for this stage (avoids double-counting)
             if cid not in stage_e8_clients.get(origin, set()):
                 direct_e8_map[origin].add(cid)
 
     result: dict[str, int] = {}
 
-    # def _check_stage_rules(cid: str, motivo_str: str, stage: str) -> bool:
-    #     rules = [r for r in ETAPA8_ATRIBUCION if r["etapa"] == stage]
-    #     if not rules:
-    #         return False
-    #     dmot = all_stage_detailed.get(stage)
-    #     if dmot is None:
-    #         return False
-    #     rows = dmot[dmot["client_id"] == cid]
-    #     if rows.empty:
-    #         return False
-    #     forward_to = rows["forward_to"].iloc[0]
-    #     for rule in rules:
-    #         for rm in rule["motivos"]:
-    #             if _safe_motivo(rm) == motivo_str:
-    #                 req = rule.get("forward_to")
-    #                 if req is None or forward_to == req:
-    #                     return True
-    #     return False
     def _check_stage_rules(cid: str, motivo_str: str, stage: str) -> bool:
         rules_for_stage = attr_rules_by_stage.get(stage)
         if not rules_for_stage or motivo_str not in rules_for_stage:
@@ -130,14 +85,10 @@ def _count_e8_attribution(
 
     ATTR_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi"]
 
-    # All clients that reached etapa_8: from forward cycles OR direct exits
     all_dev_clients: set[str] = {c for s in stage_e8_clients.values() for c in s}
     for s in direct_e8_map.values():
         all_dev_clients |= s
-
-    # for cid in all_dev_clients:
-    #     motivo = _get_client_motivo(df_trans, cid)
-    #     m_lower = _safe_motivo(motivo)
+        
     for cid in all_dev_clients:
         motivo = motivo_map.get(cid)
         m_lower = _safe_motivo(motivo)
@@ -145,8 +96,6 @@ def _count_e8_attribution(
             continue
 
         if m_lower == "":
-            # None motive -> penalize all stages where this client had a devuelto outcome
-            # (from forward cycles) AND stages from which it exited directly to etapa_8
             penalized: set[str] = set()
             for stage in stage_e8_clients:
                 if cid in stage_e8_clients[stage]:
@@ -209,7 +158,6 @@ def compute_efectividad(
     if df_trans.empty:
         return resultados
 
-    # Phase 1: Run forward cycles for all stages
     all_detailed: dict[str, pd.DataFrame] = {}
     for etapa_key, regla in EFECTIVIDAD_REGLAS.items():
         forward_stages = regla["forward"]
@@ -243,7 +191,6 @@ def compute_efectividad(
             "e8_atribuidos": 0,
         })
 
-    # Phase 2: Post-process returns (reclassify return -> failure for some routes)
     return_attr = _count_return_attribution(all_detailed)
     for r in resultados:
         stage = r["etapa"]
@@ -252,7 +199,6 @@ def compute_efectividad(
             r["fallidos"] += n_ret
             r["retornan"] -= n_ret
 
-    # Phase 3: Post-process e8 attribution
     e8_attr = _count_e8_attribution(all_detailed, df_trans)
     for r in resultados:
         stage = r["etapa"]
@@ -260,7 +206,6 @@ def compute_efectividad(
         r["fallidos"] += n_e8
         r["e8_atribuidos"] = n_e8
 
-    # Phase 4: Calculate totals and efectividad_pct
     for r in resultados:
         total = r["exitosos"] + r["fallidos"] + r["retornan"] + r["perdida_directa"]
         r["total_salidas"] = total

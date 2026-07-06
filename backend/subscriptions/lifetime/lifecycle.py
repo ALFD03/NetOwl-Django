@@ -9,11 +9,6 @@ RELEVANT_STATES = {ACTIVE_STATE} | INACTIVE_STATES
 
 
 def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFrame:
-    """Construye periodos de vida activo/cancelado por suscriptor.
-
-    Returns:
-        DataFrame con columnas: orden, tipo, f_inicio, f_fin, duracion, evento, periodo_idx.
-    """
     relevant = logs[logs["estado"].isin(RELEVANT_STATES)].copy()
     last_global = relevant["f_dt"].max()
     f_ini_map = subs.set_index("orden")["f_ini_dt"].to_dict()
@@ -81,9 +76,7 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
 
     return pd.DataFrame(rows)
 
-
 def compute_metrics(periods: pd.DataFrame) -> Dict[str, Any]:
-    """Calcula metricas globales de ciclo de vida."""
     result: Dict[str, Any] = {}
 
     first_active = (

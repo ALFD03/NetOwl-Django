@@ -4,11 +4,6 @@ from ...config import TableNames
 
 
 def load_data(db):
-    """Carga las tres tablas fuente desde la base de datos en paralelo.
-
-    Returns:
-        (df_subs_raw, df_logs, df_logs_v15): DataFrames con datos crudos.
-    """
     print("Sincronizando con base de datos...")
     subs_cols = ["Orden_Producto", "fecha_inicio", "Total", "Estado"]
     logs_cols = ["orden", "fecha_log", "log", "estado"]

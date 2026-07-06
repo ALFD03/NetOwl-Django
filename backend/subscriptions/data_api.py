@@ -1,16 +1,3 @@
-"""
-Capa de acceso a datos para las vistas del frontend (thin views).
-
-Dependencias esperadas:
-- `database.DBConnector`: Conexión a PostgreSQL para lectura de tablas.
-- `pandas` (transitivo): DataFrames para manipulación de datos.
-
-Proporciona funciones de lectura que transforman tablas de base de datos
-en estructuras anidadas (dicts/listas) listas para serializar a JSON
-y consumir desde el frontend. Cada función maneja excepciones de BD
-retornando estructuras vacías ante errores.
-"""
-
 from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
@@ -19,25 +6,9 @@ from ..database import DBConnector
 
 logger = logging.getLogger(__name__)
 
-
 def get_cierre_churn(
     periodos: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Recupera los datos de cierre de churn por período (lista plana).
-
-    Lee la tabla ``analyzer_cierre_historico`` y retorna una lista de
-    diccionarios, uno por período, con todos los indicadores calculados.
-
-    Args:
-        periodos: Lista opcional de períodos a filtrar.
-
-    Returns:
-        Lista de dicts ordenada por período descendente, con campos:
-        ``periodo_reporte``, ``activos_inicio``, ``activos_final``,
-        ``nuevos_mes``, ``churn_neto_pct``, ``churn_bruto_pct``, etc.
-        Retorna lista vacía si la tabla está vacía o hay error.
-    """
     db = DBConnector()
     try:
         df = db.read_table_filtered(TableNames.ANALYZER_CIERRE_HISTORICO, "periodo_reporte", periodos)
@@ -77,31 +48,15 @@ def get_cierre_churn(
         logger.exception("Error getting churn cierre")
         return []
 
-
 def get_dimensiones(
     periodos: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Recupera datos de churn desglosados por dimensiones.
-
-    Lee la tabla ``analyzer_churn_dimensiones`` y agrupa en una estructura
-    anidada de tres niveles: ``periodo_reporte → dimensión → valores``.
-
-    Args:
-        periodos: Lista opcional de períodos a filtrar.
-
-    Returns:
-        Lista de dicts ordenada por período descendente, cada uno con:
-        ``{"periodo_reporte": str, "dimensiones": {dim: [valor_dict, ...]}}``.
-        Retorna lista vacía si la tabla está vacía o hay error.
-    """
     db = DBConnector()
     try:
         df = db.read_table_filtered(TableNames.ANALYZER_CHURN_DIMENSIONES, "periodo_reporte", periodos)
         if df.empty:
             return []
 
-        # Construye estructura anidada periodo → dimensión → lista de valores
         pd_dict: Dict[str, Dict] = {}
         for _, row in df.iterrows():
             p = str(row.get("periodo_reporte", ""))
@@ -141,18 +96,7 @@ def get_dimensiones(
         logger.exception("Error getting churn dimensiones")
         return []
 
-
 def get_periodos() -> List[str]:
-    """
-    Obtiene la lista de períodos disponibles en los datos históricos.
-
-    Lee todos los valores únicos de la columna ``periodo_reporte`` en
-    ``analyzer_cierre_historico``.
-
-    Returns:
-        Lista de etiquetas de período ordenadas descendente.
-        Retorna lista vacía si la tabla está vacía o hay error.
-    """
     db = DBConnector()
     try:
         df = db.read_table(TableNames.ANALYZER_CIERRE_HISTORICO)
@@ -163,32 +107,13 @@ def get_periodos() -> List[str]:
         logger.exception("Error getting periodos list")
         return []
 
-
 def get_dashboard_data() -> Dict[str, Any]:
-    """
-    Ensambla los datos completos para la vista del dashboard.
-
-    Returns:
-        Dict con ``"periodos"`` (lista plana).
-    """
     return {"periodos": get_cierre_churn()}
 
 
 def get_analytics_data(
     periodos: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    """
-    Ensambla datos completos para la vista de analytics.
-
-    Combina resultados de ``get_cierre_churn`` y ``get_dimensiones``,
-    opcionalmente filtrados por período.
-
-    Args:
-        periodos: Lista opcional de períodos a filtrar.
-
-    Returns:
-        Dict con las claves ``"periodos"`` y ``"dimensiones"``.
-    """
     return {
         "periodos": get_cierre_churn(periodos),
         "dimensiones": get_dimensiones(periodos),

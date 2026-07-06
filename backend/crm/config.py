@@ -1,9 +1,5 @@
-"""
-Configuración CRM Analytics - Etapas, dimensiones, reglas de efectividad.
-"""
 from __future__ import annotations
 
-# Mapeo etapas Odoo -> claves canónicas (normalizado: minúsculas, sin acentos, snake_case)
 ETAPA_MAP = {
     "1. Contacto inicial, manejo de objeciones, presentación del servicio y envío de información": "etapa_1_contacto",
     "2. Recepción de datos y creación de ficha": "etapa_2_recepcion",
@@ -18,7 +14,6 @@ ETAPA_MAP = {
     "Perdido": "perdido",
 }
 
-# Orden canónico para sorting
 ETAPA_ORDER = [
     "etapa_1_contacto", "etapa_2_recepcion", "etapa_3_factibilidad",
     "etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas",
@@ -26,24 +21,16 @@ ETAPA_ORDER = [
     "etapa_10_proyectos", "perdido"
 ]
 
-# Dimensiones para desglose (aplican a todas las métricas)
 DIMENSIONES = ["municipio", "campana", "sucursal", "vendedor", "equipo_ventas"]
 
-# Dimensiones especiales que SOLO aplican a métricas específicas (no a todas)
-PROB_DIM_E8 = ["devolver_oportunidad"]           # Solo % Etapa 8
-PROB_DIM_PERDIDOS_RESCATE = ["motivo_perdida"]    # Solo % Perdidos y % Rescate
+PROB_DIM_E8 = ["devolver_oportunidad"]
+PROB_DIM_PERDIDOS_RESCATE = ["motivo_perdida"]
 
-# Mapeo dimensión -> columna real en BD (cuando el nombre difiere)
 DIMENSION_COL_MAP = {"municipio": "cliente_municipio"}
 
-
 def dim_col(dim: str) -> str:
-    """Retorna el nombre real de la columna en BD para una dimensión."""
     return DIMENSION_COL_MAP.get(dim, dim)
 
-# Reglas de efectividad: term_map y direct_loss por etapa
-# etapa_8_devueltos se clasifica como "devuelto" para todas las etapas
-# La atribución real se hace via ETAPA8_ATRIBUCION en post-procesamiento
 EFECTIVIDAD_REGLAS = {
     "etapa_3_factibilidad": {
         "forward": ["etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"],
@@ -91,7 +78,6 @@ EFECTIVIDAD_REGLAS = {
     },
 }
 
-# Motivos que nunca penalizan ninguna etapa (devuelto)
 ETAPA8_EXCEPTION_MOTIVOS = [
     "No responde llamadas y/o mensajes",
     "Cliente en espera del Router",
@@ -99,9 +85,6 @@ ETAPA8_EXCEPTION_MOTIVOS = [
     "Cliente no contesta. Numero opcional no se encuentra con el cliente",
 ]
 
-# Atribución de etapa_8: orden importa (primera coincidencia gana)
-# forward_to: la etapa a la que la etapa origen hizo forward para que aplique
-#   None = cualquier forward
 ETAPA8_ATRIBUCION = [
     {
         "etapa": "etapa_3_factibilidad",
@@ -138,7 +121,6 @@ ETAPA8_ATRIBUCION = [
     },
 ]
 
-# Retornos que se consideran falla (sin motivo necesario)
 RETORNO_ATRIBUCION = [
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_4_adecuaciones"},
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_5_gpi"},
@@ -146,7 +128,6 @@ RETORNO_ATRIBUCION = [
     {"etapa": "etapa_4_adecuaciones", "forward_to": "etapa_5_gpi"},
 ]
 
-# Normalización de columnas CSV Odoo -> snake_case
 CSV_COLUMN_MAP = {
     "ID": "id",
     "Oportunidad": "oportunidad",
@@ -177,10 +158,8 @@ CSV_COLUMN_MAP = {
 CLIENT_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if not k.startswith("Entradas de Tiempo")]
 LOG_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if k.startswith("Entradas de Tiempo")]
 
-# Estados válidos para ganado
 GANADO_STATES = {"perdido", "ganado", "pendiente"}
 
-# Métricas disponibles
 METRICAS = [
     "tiempo_por_etapa",
     "tiempo_instalacion",

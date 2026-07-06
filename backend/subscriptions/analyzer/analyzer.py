@@ -10,7 +10,6 @@ from . import cleaner, dimensions, loader, metrics_calc, rules
 
 
 class MetricsAnalyzer:
-    """Analizador de tasa de churn para suscripciones."""
 
     def __init__(self, db: DBConnector, periodo: Periodo):
         self.db = db
@@ -83,7 +82,6 @@ class MetricsAnalyzer:
 
         n_react_unicas = sum(counts_react.values())
 
-        # 6_churn y 8_30days solo cuentan histórico (no en set_ini)
         if not df_react_all.empty:
             df_6 = df_react_all[df_react_all["estado_origen"] == "6_churn"]
             df_8 = df_react_all[df_react_all["estado_origen"] == "8_30days"]
@@ -92,7 +90,6 @@ class MetricsAnalyzer:
         else:
             n_react_6_churn = n_react_8_30days = 0
 
-        # Separar 4_paused: P = mismo periodo (en set_ini), H = histórica (no en set_ini)
         react_4_df = df_react_all[df_react_all["estado_origen"] == "4_paused"] if not df_react_all.empty else pd.DataFrame()
         if not react_4_df.empty:
             n_react_4_P = len(react_4_df[react_4_df["orden"].isin(set_ini)])
@@ -100,7 +97,6 @@ class MetricsAnalyzer:
         else:
             n_react_4_P = n_react_4_H = 0
 
-        # reactivacion_sin_origen: detectadas por texto sin origen conocido, solo histórico
         if not df_react_all.empty:
             df_sin = df_react_all[df_react_all["estado_origen"] == "reactivacion_sin_origen"]
             n_react_sin_origen = len(df_sin[~df_sin["orden"].isin(set_ini)])

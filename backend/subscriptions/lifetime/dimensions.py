@@ -7,11 +7,6 @@ from .loader import DIMS
 
 
 def compute_dimension_metrics(subs: pd.DataFrame, periods: pd.DataFrame) -> pd.DataFrame:
-    """Calcula curvas KM por dimension (zona, sucursal, municipio, etc.).
-
-    Returns:
-        DataFrame con metricas por dimension.
-    """
     rows: List[Dict[str, Any]] = []
     subs_dedup = subs.drop_duplicates(subset=["orden"]).set_index("orden")
 

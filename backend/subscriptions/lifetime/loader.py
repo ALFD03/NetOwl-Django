@@ -4,24 +4,14 @@ import pandas as pd
 from ...config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP, TableNames
 from ...database import DBConnector
 
-
 logger = logging.getLogger(__name__)
-
 
 DIMS = ["Zona", "Sucursal", "Municipio", "campanna", "Producto"]
 
-
 def _normalize_estado(series: pd.Series) -> pd.Series:
-    """Normaliza estados a formato interno."""
     return series.astype(str).str.strip().str.lower()
 
-
 def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Carga suscripciones y logs desde la BD.
-
-    Returns:
-        (df_subs, df_logs_v1, df_logs_v15): DataFrames con datos crudos.
-    """
     if db is None:
         db = DBConnector()
     subs = db.read_table(TableNames.SUBSCRIPCIONES)
@@ -58,13 +48,7 @@ def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     return subs, l1, l2
 
-
 def build_clean_logs(l1: pd.DataFrame, l2: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza y combina logs v1 y v15.
-
-    Returns:
-        DataFrame con columnas: orden, f_dt, estado.
-    """
     cols_base = ["orden", "fecha", "estado"]
     for df in [l1, l2]:
         for c in list(df.columns):

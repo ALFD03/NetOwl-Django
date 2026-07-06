@@ -7,16 +7,7 @@ from ...database import DBConnector
 from . import lifecycle, dimensions as dim_module
 from .loader import load_data, build_clean_logs
 
-
 def run_lifecycle_analysis(db=None) -> Dict[str, Any]:
-    """Ejecuta el analisis de ciclo de vida completo.
-
-    Carga datos, construye periodos, calcula metricas globales y
-    por dimension, y persiste todo.
-
-    Returns:
-        Dict con metricas calculadas.
-    """
     if db is None:
         db = DBConnector()
     subs, l1, l2 = load_data(db)

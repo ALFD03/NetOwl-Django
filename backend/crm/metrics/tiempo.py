@@ -49,11 +49,6 @@ def compute_tiempo_por_etapa(
     records.sort(key=lambda r: etapa_order_map.get(r["etapa"], 999))
     return records
 
-
-# ---------------------------------------------------------------------------
-# 2. Tiempo instalación (solo ganados, usa duracion_total_horas de Odoo)
-# ---------------------------------------------------------------------------
-
 def compute_tiempo_instalacion(
     db: DBConnector,
     fecha_fin: datetime | None = None,

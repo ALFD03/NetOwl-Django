@@ -9,7 +9,6 @@ def aggregate_dimensions(
     df_inactivos, df_react_all, df_corte_impagado,
     df_react_not_in_ini=None,
 ):
-    """Agrega los indicadores por cada dimension (zona, sucursal, municipio, campanna, producto)."""
     periodo_label = periodo.label()
     DIMS = ["zona", "sucursal", "municipio", "campanna", "producto"]
 
@@ -61,11 +60,9 @@ def aggregate_dimensions(
         d_inact = cnt(df_inactivos)
         d_react = cnt(df_react_all)
         d_corte = cnt(df_corte_impagado.drop_duplicates(subset=["orden"]))
-        # 6_churn y 8_30days solo cuentan histórico (no en act_ini)
         ini_ordens = set(act_ini["orden"].astype(str).str.strip()) if not act_ini.empty else set()
         d_react_6 = cnt(pd.DataFrame({"orden": react_by_origin["6_churn"][~react_by_origin["6_churn"].isin(ini_ordens)]}))
         d_react_8 = cnt(pd.DataFrame({"orden": react_by_origin["8_30days"][~react_by_origin["8_30days"].isin(ini_ordens)]}))
-        # Split 4_paused: P = en act_ini (mismo periodo), H = fuera de act_ini (histórica)
         react_4_series = react_by_origin["4_paused"]
         if not act_ini.empty and not react_4_series.empty:
             react_4_in_ini = react_4_series[react_4_series.isin(ini_ordens)]
@@ -75,7 +72,6 @@ def aggregate_dimensions(
             react_4_not_in_ini_4 = pd.Series(dtype=str)
         d_react_4_P = cnt(pd.DataFrame({"orden": react_4_in_ini}))
         d_react_4_H = cnt(pd.DataFrame({"orden": react_4_not_in_ini_4}))
-        # reactivacion_sin_origen: detectadas por texto sin origen conocido, solo histórico
         react_sin_series = df_react_all[df_react_all["estado_origen"] == "reactivacion_sin_origen"]["orden"] if not df_react_all.empty else pd.Series(dtype=str)
         if not act_ini.empty and not react_sin_series.empty:
             react_sin_not_ini = react_sin_series[~react_sin_series.isin(ini_ordens)]

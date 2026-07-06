@@ -4,11 +4,6 @@ from ...config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
 
 
 def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
-    """Limpia y normaliza los datos crudos en un DataFrame unificado de logs.
-
-    Returns:
-        (df_subs_full, df_clean_logs): DataFrames limpios.
-    """
     df = df_subs_raw.copy()
     df.columns = df.columns.str.lower()
     df = df.rename(columns={"orden_producto": "orden", "fecha_inicio": "f_ini"})

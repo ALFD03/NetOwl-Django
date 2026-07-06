@@ -9,9 +9,7 @@ from ...database import DBConnector
 
 logger = logging.getLogger(__name__)
 
-
 def get_lifecycle_results(db=None) -> Dict[str, Any]:
-    """Recupera metricas de ciclo de vida desde la BD."""
     if db is None:
         db = DBConnector()
     try:
@@ -46,7 +44,6 @@ def get_lifecycle_results(db=None) -> Dict[str, Any]:
         logger.exception("Error getting lifecycle results")
         return {}
 
-
 def _safe_int(v):
     if v is None:
         return 0
@@ -58,13 +55,7 @@ def _safe_int(v):
         except (ValueError, TypeError):
             return 0
 
-
 def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, Any]:
-    """Recupera curvas KM por dimension desde la BD.
-
-    Returns:
-        Dict ``{dimension: {valor: {mediana_activo, curva_activo, ...}}}``.
-    """
     if db is None:
         db = DBConnector()
     try:
@@ -101,7 +92,6 @@ def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, An
     except Exception:
         logger.exception("Error getting lifetime dimensiones")
         return {}
-
 
 def _safe_float(val):
     if val is None:

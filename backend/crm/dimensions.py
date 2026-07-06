@@ -11,9 +11,7 @@ from .config import DIMENSIONES, PROB_DIM_E8, PROB_DIM_PERDIDOS_RESCATE, dim_col
 from .metrics import _clean_nan
 from .queries import _dim_efectividad
 
-
 def _df_to_nested_dict(df: pd.DataFrame, key_col: str = "valor") -> dict:
-    """Convert DataFrame with dimension/valor columns to {dim: {valor: {cols}}}."""
     if df.empty:
         return {}
     result: dict[str, dict[str, dict]] = {}
@@ -24,29 +22,9 @@ def _df_to_nested_dict(df: pd.DataFrame, key_col: str = "valor") -> dict:
         result.setdefault(dim, {})[k] = d
     return result
 
-
-# def _union_grouped(db: DBConnector, select_expr: str, from_clause: str,
-#                    fecha_sql: str, fecha_params: list, order: bool = True,
-#                    extra_where: str = "") -> pd.DataFrame:
-#     """Build a UNION ALL query over all dimensions for a metric."""
-#     parts = []
-#     for dim in DIMENSIONES:
-#         col = dim_col(dim)
-#         parts.append(f"""
-#             SELECT '{dim}' AS dimension, {col} AS valor,
-#                    {select_expr}
-#             FROM {from_clause}
-#             WHERE {col} IS NOT NULL AND {col} != ''
-#               {extra_where}
-#               {fecha_sql}
-#             GROUP BY {col}
-#             {f"ORDER BY {col}" if order else ""}
-#         """)
-#     return db.query(" UNION ALL ".join(parts), params=fecha_params)
 def _union_grouped(db: DBConnector, select_expr: str, from_clause: str,
                    fecha_sql: str, fecha_params: list, order: bool = True,
                    extra_where: str = "") -> pd.DataFrame:
-    """Build a UNION ALL query over all dimensions for a metric."""
     parts = []
     for dim in DIMENSIONES:
         col = dim_col(dim)
@@ -62,7 +40,6 @@ def _union_grouped(db: DBConnector, select_expr: str, from_clause: str,
         )""")
     return db.query(" UNION ALL ".join(parts), params=fecha_params)
 
-
 def _grouped_totals_all(db: DBConnector, fecha_sql: str, fecha_params: list) -> pd.DataFrame:
     return _union_grouped(db, """
                COUNT(*)::int AS total_clientes,
@@ -71,7 +48,6 @@ def _grouped_totals_all(db: DBConnector, fecha_sql: str, fecha_params: list) -> 
                COUNT(*) FILTER (WHERE etapa_actual = 'etapa_8_devueltos')::int AS etapa_8_count,
                COUNT(*) FILTER (WHERE etapa_actual = 'etapa_7_instalados')::int AS etapa_7_count
            """, f"{DB_SCHEMA}.{TableNames.CRM_CLIENTS}", fecha_sql, fecha_params)
-
 
 def _grouped_tiempo_instalacion_all(db: DBConnector, fecha_sql: str, fecha_params: list) -> pd.DataFrame:
     return _union_grouped(db, """
@@ -86,23 +62,10 @@ def _grouped_tiempo_instalacion_all(db: DBConnector, fecha_sql: str, fecha_param
            """, f"{DB_SCHEMA}.{TableNames.CRM_CLIENTS}", fecha_sql, fecha_params,
            extra_where="AND ganado = 'ganado' AND duracion_total_horas IS NOT NULL")
 
-
 def _grouped_etapa8_all(db: DBConnector, fecha_sql: str, fecha_params: list) -> pd.DataFrame:
     parts = []
     for dim in DIMENSIONES:
         col = dim_col(dim)
-        # parts.append(f"""
-        #     SELECT '{dim}' AS dimension, {col} AS valor,
-        #            COUNT(*)::int AS total_clientes,
-        #            COUNT(*) FILTER (WHERE etapa_actual = 'etapa_8_devueltos'
-        #                               OR id IN (SELECT client_id FROM {DB_SCHEMA}.{TableNames.CRM_LOGS}
-        #                                         WHERE nueva_etapa = 'etapa_8_devueltos'))::int AS count_etapa8
-        #     FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS}
-        #     WHERE {col} IS NOT NULL AND {col} != ''
-        #       {fecha_sql}
-        #     GROUP BY {col}
-        #     ORDER BY {col}
-        # """)
         parts.append(f"""(
             SELECT '{dim}' AS dimension, {col} AS valor,
                    COUNT(*)::int AS total_clientes,
@@ -129,36 +92,10 @@ def _grouped_perdido_all(db: DBConnector, fecha_sql: str, fecha_params: list) ->
                ROUND(COUNT(*) FILTER (WHERE ganado = 'perdido') * 100.0 / NULLIF(COUNT(*), 0), 2) AS pct
            """, f"{DB_SCHEMA}.{TableNames.CRM_CLIENTS}", fecha_sql, fecha_params)
 
-
 def _grouped_rescate_all(db: DBConnector, fecha_sql: str, fecha_params: list) -> pd.DataFrame:
     parts = []
     for dim in DIMENSIONES:
         col = dim_col(dim)
-        # parts.append(f"""
-        #     SELECT '{dim}' AS dimension, p.{col} AS valor,
-        #            p.total_perdidos,
-        #            COALESCE(r.rescatados, 0)::int AS rescatados,
-        #            ROUND(COALESCE(r.rescatados, 0) * 100.0 / NULLIF(p.total_perdidos, 0), 2) AS pct_rescate
-        #     FROM (
-        #         SELECT {col}, COUNT(*)::int AS total_perdidos
-        #         FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS}
-        #         WHERE {col} IS NOT NULL AND {col} != ''
-        #           AND ganado = 'perdido'
-        #           {fecha_sql}
-        #         GROUP BY {col}
-        #     ) p
-        #     LEFT JOIN (
-        #         SELECT c.{col}, COUNT(DISTINCT l.client_id)::int AS rescatados
-        #         FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
-        #         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
-        #         WHERE c.{col} IS NOT NULL AND c.{col} != ''
-        #           AND c.ganado = 'perdido'
-        #           AND l.nueva_etapa = 'etapa_7_instalados'
-        #           {fecha_sql}
-        #         GROUP BY c.{col}
-        #     ) r ON p.{col} = r.{col}
-        #     ORDER BY p.{col}
-        # """)
         parts.append(f"""(
             SELECT '{dim}' AS dimension, p.{col} AS valor,
                    p.total_perdidos,
@@ -186,7 +123,6 @@ def _grouped_rescate_all(db: DBConnector, fecha_sql: str, fecha_params: list) ->
         )""")
     return db.query(" UNION ALL ".join(parts), params=fecha_params)
 
-
 def _build_dim_rows_grouped(
     db: DBConnector,
     fecha_fin: datetime | None = None,
@@ -203,14 +139,6 @@ def _build_dim_rows_grouped(
         ef_fecha_sql = "AND c.creado_el <= %s"
         ef_fecha_params = [fecha_fin]
 
-    # ef_lookup: dict[tuple[str, str], list] = {}
-    # try:
-    #     ef_data = _dim_efectividad(db, ef_fecha_sql, ef_fecha_params)
-    #     for item in ef_data:
-    #         key = (item["dimension"], item["valor"])
-    #         ef_lookup[key] = item["data"]
-    # except Exception:
-    #     pass
     ef_lookup: dict[tuple[str, str], list] = {}
     try:
         ef_data = _dim_efectividad(db, ef_fecha_sql, ef_fecha_params)
@@ -260,7 +188,6 @@ def _build_dim_rows_grouped(
             })
 
     return all_rows
-
 
 def _build_special_dim_rows_grouped(
     db: DBConnector,
@@ -366,7 +293,6 @@ def _build_special_dim_rows_grouped(
             })
 
     return all_rows
-
 
 def aggregate_dimensions(
     db: DBConnector,

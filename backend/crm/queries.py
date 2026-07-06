@@ -12,7 +12,6 @@ from .config import DIMENSIONES, PROB_DIM_E8, PROB_DIM_PERDIDOS_RESCATE, dim_col
 
 logger = logging.getLogger(__name__)
 
-
 def _parse_jsonb(val: Any) -> Any:
     if val is None:
         return None
@@ -37,9 +36,6 @@ def _clean_nan(obj: Any) -> Any:
         return [_clean_nan(v) for v in obj]
     return obj
 
-
-# ── helpers for on-the-fly dimension GROUP BY ──
-
 def _dim_totals(db: DBConnector) -> list[dict]:
     rows = []
     for dim in DIMENSIONES:
@@ -63,7 +59,6 @@ def _dim_totals(db: DBConnector) -> list[dict]:
                 "data": {k: r[k] for k in df.columns if k != "valor"},
             })
     return rows
-
 
 def _dim_tiempo_instalacion(db: DBConnector) -> list[dict]:
     rows = []
@@ -94,7 +89,6 @@ def _dim_tiempo_instalacion(db: DBConnector) -> list[dict]:
             })
     return rows
 
-
 def _dim_etapa8(db: DBConnector) -> list[dict]:
     rows = []
     for dim in DIMENSIONES:
@@ -120,7 +114,6 @@ def _dim_etapa8(db: DBConnector) -> list[dict]:
             })
     return rows
 
-
 def _dim_perdido(db: DBConnector) -> list[dict]:
     rows = []
     for dim in DIMENSIONES:
@@ -142,7 +135,6 @@ def _dim_perdido(db: DBConnector) -> list[dict]:
                 "data": {k: r[k] for k in df.columns if k != "valor"},
             })
     return rows
-
 
 def _dim_rescate(db: DBConnector) -> list[dict]:
     rows = []
@@ -179,7 +171,6 @@ def _dim_rescate(db: DBConnector) -> list[dict]:
             })
     return rows
 
-
 def _dim_especial_etapa8(db: DBConnector) -> list[dict]:
     rows = []
     for prob_dim in PROB_DIM_E8:
@@ -205,7 +196,6 @@ def _dim_especial_etapa8(db: DBConnector) -> list[dict]:
                          "pct_etapa8": round(e8 * 100.0 / total_e8, 2) if total_e8 > 0 else 0.0},
             })
     return rows
-
 
 def _dim_especial_perdidos_rescate(db: DBConnector) -> list[dict]:
     rows = []
@@ -253,9 +243,6 @@ def _dim_especial_perdidos_rescate(db: DBConnector) -> list[dict]:
             })
     return rows
 
-
-# --- Per-metric global getters ---
-
 def get_metric_totals() -> dict:
     db = DBConnector()
     try:
@@ -266,7 +253,6 @@ def get_metric_totals() -> dict:
     except Exception:
         logger.exception("Error getting metric totals")
         return {}
-
 
 def get_metric_tiempo_instalacion() -> dict:
     db = DBConnector()
@@ -279,7 +265,6 @@ def get_metric_tiempo_instalacion() -> dict:
         logger.exception("Error getting metric tiempo_instalacion")
         return {}
 
-
 def get_metric_tiempo_por_etapa() -> dict:
     db = DBConnector()
     try:
@@ -290,7 +275,6 @@ def get_metric_tiempo_por_etapa() -> dict:
     except Exception:
         logger.exception("Error getting metric tiempo_por_etapa")
         return {}
-
 
 def get_metric_efectividad() -> list:
     db = DBConnector()
@@ -303,7 +287,6 @@ def get_metric_efectividad() -> list:
         logger.exception("Error getting metric efectividad")
         return []
 
-
 def get_metric_etapa8() -> dict:
     db = DBConnector()
     try:
@@ -314,7 +297,6 @@ def get_metric_etapa8() -> dict:
     except Exception:
         logger.exception("Error getting metric etapa8")
         return {}
-
 
 def get_metric_perdido() -> dict:
     db = DBConnector()
@@ -327,7 +309,6 @@ def get_metric_perdido() -> dict:
         logger.exception("Error getting metric perdido")
         return {}
 
-
 def get_metric_rescate() -> dict:
     db = DBConnector()
     try:
@@ -338,9 +319,6 @@ def get_metric_rescate() -> dict:
     except Exception:
         logger.exception("Error getting metric rescate")
         return {}
-
-
-# ── On-the-fly dimension getters (GROUP BY, no pre-computed table) ──
 
 def get_dimension_totals() -> list[dict]:
     db = DBConnector()
@@ -359,8 +337,6 @@ def get_dimension_tiempo_instalacion() -> list[dict]:
         return []
 
 def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | None = None) -> list[dict]:
-    # from .config import EFECTIVIDAD_REGLAS, ETAPA8_ATRIBUCION, ETAPA8_EXCEPTION_MOTIVOS, RETORNO_ATRIBUCION
-    # from .metrics.efectividad import _classify_forward_cycles_detailed, _get_client_motivo, _safe_motivo
     from .config import EFECTIVIDAD_REGLAS, ETAPA8_ATRIBUCION, ETAPA8_EXCEPTION_MOTIVOS, RETORNO_ATRIBUCION
     from .metrics.efectividad import _classify_forward_cycles_detailed, _safe_motivo
 
@@ -373,19 +349,11 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
         WHERE 1=1 {fecha_sql}
     """
-    # df_trans = db.query(transitions_q, params=fecha_params or [])
-    # if df_trans.empty:
-    #     return []
-
-    # # Map client_id to its dimension values
-    # client_dims = df_trans.drop_duplicates("client_id")[["client_id"] + DIMENSIONES].set_index("client_id").to_dict("index")
     df_trans = db.query(transitions_q, params=fecha_params or [])
     if df_trans.empty:
         return []
 
-    # Map client_id to its dimension values
     client_dims = df_trans.drop_duplicates("client_id")[["client_id"] + DIMENSIONES].set_index("client_id").to_dict("index")
-    # Formato "long": cada cliente aparece una vez por cada dimensión (evita 5 lookups por cliente)
     dims_long = (
         df_trans.drop_duplicates("client_id")[["client_id"] + DIMENSIONES]
         .melt(id_vars="client_id", var_name="dimension", value_name="valor")
@@ -393,7 +361,6 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
     dims_long["valor"] = dims_long["valor"].astype(str).str.strip()
     dims_long = dims_long[(dims_long["valor"] != "") & (dims_long["valor"].str.lower() != "none")]
     
-    # Precálculo O(1): motivo por cliente (evita re-escanear df_trans por cada cliente)
     motivo_map = (
         df_trans.dropna(subset=["devolver_oportunidad"])
         .drop_duplicates(subset=["client_id"], keep="first")
@@ -401,7 +368,6 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         .to_dict()
     )
 
-    # Calculate detailed outcomes
     all_detailed = {}
     for etapa_key, regla in EFECTIVIDAD_REGLAS.items():
         forward_stages = regla["forward"]
@@ -413,59 +379,9 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         )
         all_detailed[etapa_key] = detailed
 
-    # Group by dimension and value
-    # dimension_results = {}
-
-    # for dim in DIMENSIONES:
-    #     dimension_results[dim] = {}
-    #     unique_vals = df_trans[dim].dropna().unique()
-    #     unique_vals = [v for v in unique_vals if str(v).strip() != ""]
-        
-    #     for v in unique_vals:
-    #         stages_data = {}
-    #         for stage in EFECTIVIDAD_REGLAS:
-    #             stages_data[stage] = {
-    #                 "exitosos": 0,
-    #                 "fallidos": 0,
-    #                 "retornan": 0,
-    #                 "perdida_directa": 0,
-    #                 "total_salidas": 0,
-    #             }
-    #         dimension_results[dim][v] = stages_data
-
-    # def get_dim_val(cid, dim):
-    #     return client_dims.get(cid, {}).get(dim, None)
-
-    # # Count base outcomes
-    # for stage, detailed in all_detailed.items():
-    #     for _, row in detailed.iterrows():
-    #         cid = row["client_id"]
-    #         outcome = row["outcome"]
-    #         fwd_to = row["forward_to"]
-            
-    #         for dim in DIMENSIONES:
-    #             v = get_dim_val(cid, dim)
-    #             if v is None or str(v).strip() == "":
-    #                 continue
-                
-    #             stages_data = dimension_results[dim][v]
-    #             if outcome == "success":
-    #                 stages_data[stage]["exitosos"] += 1
-    #             elif outcome == "failure":
-    #                 stages_data[stage]["fallidos"] += 1
-    #             elif outcome == "return":
-    #                 is_reclass = False
-    #                 for rule in RETORNO_ATRIBUCION:
-    #                     if rule["etapa"] == stage and rule["forward_to"] == fwd_to:
-    #                         stages_data[stage]["fallidos"] += 1
-    #                         is_reclass = True
-    #                         break
-    #                 if not is_reclass:
-    #                     stages_data[stage]["retornan"] += 1
     def get_dim_val(cid, dim):
         return client_dims.get(cid, {}).get(dim, None)
 
-    # Concatenar todos los stages en un solo DataFrame con columna "stage"
     base_parts = []
     for stage, detailed in all_detailed.items():
         d = detailed.copy()
@@ -475,7 +391,6 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         columns=["client_id", "forward_to", "outcome", "stage"]
     )
 
-    # Reclasificación de "return" -> "fallidos" según RETORNO_ATRIBUCION (vectorizado)
     reclass_df = pd.DataFrame(RETORNO_ATRIBUCION).rename(columns={"etapa": "stage"})
     reclass_df["is_reclass"] = True
 
@@ -492,29 +407,10 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
             {True: "fallidos", False: "retornan"}
         ).values
 
-    # Una sola pasada: merge con dims_long + groupby (en vez de 5 lookups por fila)
     base_events = base_df.loc[base_df["field"].notna(), ["client_id", "stage", "field"]]
     base_merged = base_events.merge(dims_long, on="client_id", how="inner")
     base_counts = base_merged.groupby(["dimension", "valor", "stage", "field"]).size()
 
-    # Count direct losses
-    # for etapa_key, regla in EFECTIVIDAD_REGLAS.items():
-    #     fwd_key = regla.get("forward_key", etapa_key)
-    #     direct_loss = regla["direct_loss"]
-        
-    #     dl_rows = df_trans[
-    #         (df_trans["etapa_anterior"] == fwd_key) &
-    #         (df_trans["nueva_etapa"].isin(direct_loss))
-    #     ]
-        
-    #     for _, row in dl_rows.iterrows():
-    #         cid = row["client_id"]
-    #         for dim in DIMENSIONES:
-    #             v = get_dim_val(cid, dim)
-    #             if v is None or str(v).strip() == "":
-    #                 continue
-    #             dimension_results[dim][v][etapa_key]["perdida_directa"] += 1
-    # Count direct losses (vectorizado: acumular eventos, un solo merge+groupby)
     dl_parts = []
     for etapa_key, regla in EFECTIVIDAD_REGLAS.items():
         fwd_key = regla.get("forward_key", etapa_key)
@@ -531,13 +427,11 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
     dl_merged = dl_df.merge(dims_long, on="client_id", how="inner")
     dl_counts = dl_merged.groupby(["dimension", "valor", "stage", "field"]).size()
 
-    # Attribute Stage 8 devueltos
     stage_e8_clients = {}
     for stage, df in all_detailed.items():
         dev = df[df["outcome"] == "devuelto"]
         stage_e8_clients[stage] = set(dev["client_id"].unique())
 
-    # Collect direct exits to etapa_8 that are NOT from forward cycles
     TRACKED_STAGES = list(all_detailed.keys())
     direct_e8_map: dict[str, set] = {s: set() for s in TRACKED_STAGES}
     direct_exits = df_trans[df_trans["nueva_etapa"] == "etapa_8_devueltos"]
@@ -548,35 +442,13 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
             if cid not in stage_e8_clients.get(origin, set()):
                 direct_e8_map[origin].add(cid)
 
-    # ATTR_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi"]
-
-    # def _check_stage_rules(cid: str, motivo_str: str, stage: str) -> bool:
-    #     rules = [r for r in ETAPA8_ATRIBUCION if r["etapa"] == stage]
-    #     if not rules:
-    #         return False
-    #     dmot = all_detailed.get(stage)
-    #     if dmot is None:
-    #         return False
-    #     rows = dmot[dmot["client_id"] == cid]
-    #     if rows.empty:
-    #         return False
-    #     forward_to = rows["forward_to"].iloc[0]
-    #     for rule in rules:
-    #         for rm in rule["motivos"]:
-    #             if _safe_motivo(rm) == motivo_str:
-    #                 req = rule.get("forward_to")
-    #                 if req is None or forward_to == req:
-    #                     return True
-    #     return False
     ATTR_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi"]
 
-    # Precálculo O(1): forward_to por cliente en cada etapa
     forward_to_maps = {
         stage: df.drop_duplicates("client_id").set_index("client_id")["forward_to"].to_dict()
         for stage, df in all_detailed.items()
     }
 
-    # Precálculo O(1): reglas de atribución indexadas por etapa+motivo
     from collections import defaultdict
     attr_rules_by_stage: dict[str, dict[str, str | None]] = defaultdict(dict)
     for rule in ETAPA8_ATRIBUCION:
@@ -598,47 +470,11 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         
     e8_events: list[tuple[str, str]] = []
     for cid in all_dev_clients:
-        # motivo = _get_client_motivo(df_trans, cid)
-        # m_lower = _safe_motivo(motivo)
         motivo = motivo_map.get(cid)
         m_lower = _safe_motivo(motivo)
         if m_lower in {_safe_motivo(e) for e in ETAPA8_EXCEPTION_MOTIVOS}:
             continue
 
-        # if m_lower == "":
-        #     # Penalize all stages from forward-cycle devueltos AND direct exits to etapa_8
-        #     penalized: set = set()
-        #     for stage in stage_e8_clients:
-        #         if cid in stage_e8_clients[stage]:
-        #             penalized.add(stage)
-        #     for stage, direct_clients in direct_e8_map.items():
-        #         if cid in direct_clients:
-        #             penalized.add(stage)
-        #     for stage in penalized:
-        #         for dim in DIMENSIONES:
-        #             v = get_dim_val(cid, dim)
-        #             if v is None or str(v).strip() == "":
-        #                 continue
-        #             dimension_results[dim][v][stage]["fallidos"] += 1
-        #     continue
-
-        # attributed = False
-        # for stage in ATTR_ORDER:
-        #     if _check_stage_rules(cid, m_lower, stage):
-        #         for dim in DIMENSIONES:
-        #             v = get_dim_val(cid, dim)
-        #             if v is None or str(v).strip() == "":
-        #                 continue
-        #             dimension_results[dim][v][stage]["fallidos"] += 1
-        #         attributed = True
-        #         break
-                
-        # if not attributed:
-        #     for dim in DIMENSIONES:
-        #         v = get_dim_val(cid, dim)
-        #         if v is None or str(v).strip() == "":
-        #             continue
-        #         dimension_results[dim][v]["ventas"]["fallidos"] += 1
         if m_lower == "":
             penalized: set = set()
             for stage in stage_e8_clients:
@@ -666,7 +502,6 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
     e8_merged = e8_df.merge(dims_long, on="client_id", how="inner")
     e8_counts = e8_merged.groupby(["dimension", "valor", "stage", "field"]).size() if not e8_df.empty else pd.Series(dtype=int)
 
-    # Combinar los tres conteos vectorizados en uno solo
     all_counts = base_counts.add(dl_counts, fill_value=0).add(e8_counts, fill_value=0)
     counts_df = all_counts.unstack(fill_value=0).reset_index() if not all_counts.empty else pd.DataFrame(
         columns=["dimension", "valor", "stage", "exitosos", "fallidos", "retornan", "perdida_directa"]
@@ -675,29 +510,6 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         if f not in counts_df.columns:
             counts_df[f] = 0
 
-    # Format the final rows list
-    # rows = []
-    # ETAPAS_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi", "ventas"]
-    # for dim in DIMENSIONES:
-    #     for v, stages_data in dimension_results[dim].items():
-    #         stages = []
-    #         for et in ETAPAS_ORDER:
-    #             data = stages_data[et]
-    #             total = data["exitosos"] + data["fallidos"] + data["retornan"] + data["perdida_directa"]
-    #             pct = round(data["exitosos"] / total * 100, 2) if total > 0 else 100.0
-    #             stages.append({
-    #                 "etapa": et,
-    #                 "total_salidas": total,
-    #                 "exitosos": data["exitosos"],
-    #                 "fallidos": data["fallidos"],
-    #                 "retornan": data["retornan"],
-    #                 "perdida_directa": data["perdida_directa"],
-    #                 "efectividad_pct": pct
-    #             })
-    #         rows.append({"dimension": dim, "valor": v, "data": stages})
-
-    # return rows
-    # Asegurar que TODOS los valores únicos por dimensión aparezcan, aunque tengan 0 en todo
     ETAPAS_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi", "ventas"]
     base_index = []
     for dim in DIMENSIONES:
@@ -739,7 +551,6 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         rows.append({"dimension": dim, "valor": v, "data": stages})
 
     return rows
-
 
 def get_dimension_tiempo_por_etapa() -> list[dict]:
     return []
