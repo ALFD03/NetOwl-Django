@@ -385,7 +385,14 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
 
     # Map client_id to its dimension values
     client_dims = df_trans.drop_duplicates("client_id")[["client_id"] + DIMENSIONES].set_index("client_id").to_dict("index")
-
+    # Formato "long": cada cliente aparece una vez por cada dimensión (evita 5 lookups por cliente)
+    dims_long = (
+        df_trans.drop_duplicates("client_id")[["client_id"] + DIMENSIONES]
+        .melt(id_vars="client_id", var_name="dimension", value_name="valor")
+    )
+    dims_long["valor"] = dims_long["valor"].astype(str).str.strip()
+    dims_long = dims_long[(dims_long["valor"] != "") & (dims_long["valor"].str.lower() != "none")]
+    
     # Precálculo O(1): motivo por cliente (evita re-escanear df_trans por cada cliente)
     motivo_map = (
         df_trans.dropna(subset=["devolver_oportunidad"])
@@ -407,72 +414,122 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         all_detailed[etapa_key] = detailed
 
     # Group by dimension and value
-    dimension_results = {}
+    # dimension_results = {}
 
-    for dim in DIMENSIONES:
-        dimension_results[dim] = {}
-        unique_vals = df_trans[dim].dropna().unique()
-        unique_vals = [v for v in unique_vals if str(v).strip() != ""]
+    # for dim in DIMENSIONES:
+    #     dimension_results[dim] = {}
+    #     unique_vals = df_trans[dim].dropna().unique()
+    #     unique_vals = [v for v in unique_vals if str(v).strip() != ""]
         
-        for v in unique_vals:
-            stages_data = {}
-            for stage in EFECTIVIDAD_REGLAS:
-                stages_data[stage] = {
-                    "exitosos": 0,
-                    "fallidos": 0,
-                    "retornan": 0,
-                    "perdida_directa": 0,
-                    "total_salidas": 0,
-                }
-            dimension_results[dim][v] = stages_data
+    #     for v in unique_vals:
+    #         stages_data = {}
+    #         for stage in EFECTIVIDAD_REGLAS:
+    #             stages_data[stage] = {
+    #                 "exitosos": 0,
+    #                 "fallidos": 0,
+    #                 "retornan": 0,
+    #                 "perdida_directa": 0,
+    #                 "total_salidas": 0,
+    #             }
+    #         dimension_results[dim][v] = stages_data
 
+    # def get_dim_val(cid, dim):
+    #     return client_dims.get(cid, {}).get(dim, None)
+
+    # # Count base outcomes
+    # for stage, detailed in all_detailed.items():
+    #     for _, row in detailed.iterrows():
+    #         cid = row["client_id"]
+    #         outcome = row["outcome"]
+    #         fwd_to = row["forward_to"]
+            
+    #         for dim in DIMENSIONES:
+    #             v = get_dim_val(cid, dim)
+    #             if v is None or str(v).strip() == "":
+    #                 continue
+                
+    #             stages_data = dimension_results[dim][v]
+    #             if outcome == "success":
+    #                 stages_data[stage]["exitosos"] += 1
+    #             elif outcome == "failure":
+    #                 stages_data[stage]["fallidos"] += 1
+    #             elif outcome == "return":
+    #                 is_reclass = False
+    #                 for rule in RETORNO_ATRIBUCION:
+    #                     if rule["etapa"] == stage and rule["forward_to"] == fwd_to:
+    #                         stages_data[stage]["fallidos"] += 1
+    #                         is_reclass = True
+    #                         break
+    #                 if not is_reclass:
+    #                     stages_data[stage]["retornan"] += 1
     def get_dim_val(cid, dim):
         return client_dims.get(cid, {}).get(dim, None)
 
-    # Count base outcomes
+    # Concatenar todos los stages en un solo DataFrame con columna "stage"
+    base_parts = []
     for stage, detailed in all_detailed.items():
-        for _, row in detailed.iterrows():
-            cid = row["client_id"]
-            outcome = row["outcome"]
-            fwd_to = row["forward_to"]
-            
-            for dim in DIMENSIONES:
-                v = get_dim_val(cid, dim)
-                if v is None or str(v).strip() == "":
-                    continue
-                
-                stages_data = dimension_results[dim][v]
-                if outcome == "success":
-                    stages_data[stage]["exitosos"] += 1
-                elif outcome == "failure":
-                    stages_data[stage]["fallidos"] += 1
-                elif outcome == "return":
-                    is_reclass = False
-                    for rule in RETORNO_ATRIBUCION:
-                        if rule["etapa"] == stage and rule["forward_to"] == fwd_to:
-                            stages_data[stage]["fallidos"] += 1
-                            is_reclass = True
-                            break
-                    if not is_reclass:
-                        stages_data[stage]["retornan"] += 1
+        d = detailed.copy()
+        d["stage"] = stage
+        base_parts.append(d)
+    base_df = pd.concat(base_parts, ignore_index=True) if base_parts else pd.DataFrame(
+        columns=["client_id", "forward_to", "outcome", "stage"]
+    )
+
+    # Reclasificación de "return" -> "fallidos" según RETORNO_ATRIBUCION (vectorizado)
+    reclass_df = pd.DataFrame(RETORNO_ATRIBUCION).rename(columns={"etapa": "stage"})
+    reclass_df["is_reclass"] = True
+
+    base_df["field"] = None
+    base_df.loc[base_df["outcome"] == "success", "field"] = "exitosos"
+    base_df.loc[base_df["outcome"] == "failure", "field"] = "fallidos"
+
+    is_return = base_df["outcome"] == "return"
+    if is_return.any():
+        ret_merged = base_df[is_return].merge(
+            reclass_df[["stage", "forward_to", "is_reclass"]], on=["stage", "forward_to"], how="left"
+        )
+        base_df.loc[is_return, "field"] = ret_merged["is_reclass"].fillna(False).map(
+            {True: "fallidos", False: "retornan"}
+        ).values
+
+    # Una sola pasada: merge con dims_long + groupby (en vez de 5 lookups por fila)
+    base_events = base_df.loc[base_df["field"].notna(), ["client_id", "stage", "field"]]
+    base_merged = base_events.merge(dims_long, on="client_id", how="inner")
+    base_counts = base_merged.groupby(["dimension", "valor", "stage", "field"]).size()
 
     # Count direct losses
+    # for etapa_key, regla in EFECTIVIDAD_REGLAS.items():
+    #     fwd_key = regla.get("forward_key", etapa_key)
+    #     direct_loss = regla["direct_loss"]
+        
+    #     dl_rows = df_trans[
+    #         (df_trans["etapa_anterior"] == fwd_key) &
+    #         (df_trans["nueva_etapa"].isin(direct_loss))
+    #     ]
+        
+    #     for _, row in dl_rows.iterrows():
+    #         cid = row["client_id"]
+    #         for dim in DIMENSIONES:
+    #             v = get_dim_val(cid, dim)
+    #             if v is None or str(v).strip() == "":
+    #                 continue
+    #             dimension_results[dim][v][etapa_key]["perdida_directa"] += 1
+    # Count direct losses (vectorizado: acumular eventos, un solo merge+groupby)
+    dl_parts = []
     for etapa_key, regla in EFECTIVIDAD_REGLAS.items():
         fwd_key = regla.get("forward_key", etapa_key)
         direct_loss = regla["direct_loss"]
-        
         dl_rows = df_trans[
             (df_trans["etapa_anterior"] == fwd_key) &
             (df_trans["nueva_etapa"].isin(direct_loss))
-        ]
-        
-        for _, row in dl_rows.iterrows():
-            cid = row["client_id"]
-            for dim in DIMENSIONES:
-                v = get_dim_val(cid, dim)
-                if v is None or str(v).strip() == "":
-                    continue
-                dimension_results[dim][v][etapa_key]["perdida_directa"] += 1
+        ][["client_id"]].copy()
+        dl_rows["stage"] = etapa_key
+        dl_parts.append(dl_rows)
+
+    dl_df = pd.concat(dl_parts, ignore_index=True) if dl_parts else pd.DataFrame(columns=["client_id", "stage"])
+    dl_df["field"] = "perdida_directa"
+    dl_merged = dl_df.merge(dims_long, on="client_id", how="inner")
+    dl_counts = dl_merged.groupby(["dimension", "valor", "stage", "field"]).size()
 
     # Attribute Stage 8 devueltos
     stage_e8_clients = {}
@@ -538,7 +595,8 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
     all_dev_clients: set = {c for s in stage_e8_clients.values() for c in s}
     for s in direct_e8_map.values():
         all_dev_clients |= s
-
+        
+    e8_events: list[tuple[str, str]] = []
     for cid in all_dev_clients:
         # motivo = _get_client_motivo(df_trans, cid)
         # m_lower = _safe_motivo(motivo)
@@ -547,8 +605,41 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         if m_lower in {_safe_motivo(e) for e in ETAPA8_EXCEPTION_MOTIVOS}:
             continue
 
+        # if m_lower == "":
+        #     # Penalize all stages from forward-cycle devueltos AND direct exits to etapa_8
+        #     penalized: set = set()
+        #     for stage in stage_e8_clients:
+        #         if cid in stage_e8_clients[stage]:
+        #             penalized.add(stage)
+        #     for stage, direct_clients in direct_e8_map.items():
+        #         if cid in direct_clients:
+        #             penalized.add(stage)
+        #     for stage in penalized:
+        #         for dim in DIMENSIONES:
+        #             v = get_dim_val(cid, dim)
+        #             if v is None or str(v).strip() == "":
+        #                 continue
+        #             dimension_results[dim][v][stage]["fallidos"] += 1
+        #     continue
+
+        # attributed = False
+        # for stage in ATTR_ORDER:
+        #     if _check_stage_rules(cid, m_lower, stage):
+        #         for dim in DIMENSIONES:
+        #             v = get_dim_val(cid, dim)
+        #             if v is None or str(v).strip() == "":
+        #                 continue
+        #             dimension_results[dim][v][stage]["fallidos"] += 1
+        #         attributed = True
+        #         break
+                
+        # if not attributed:
+        #     for dim in DIMENSIONES:
+        #         v = get_dim_val(cid, dim)
+        #         if v is None or str(v).strip() == "":
+        #             continue
+        #         dimension_results[dim][v]["ventas"]["fallidos"] += 1
         if m_lower == "":
-            # Penalize all stages from forward-cycle devueltos AND direct exits to etapa_8
             penalized: set = set()
             for stage in stage_e8_clients:
                 if cid in stage_e8_clients[stage]:
@@ -557,51 +648,95 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
                 if cid in direct_clients:
                     penalized.add(stage)
             for stage in penalized:
-                for dim in DIMENSIONES:
-                    v = get_dim_val(cid, dim)
-                    if v is None or str(v).strip() == "":
-                        continue
-                    dimension_results[dim][v][stage]["fallidos"] += 1
+                e8_events.append((cid, stage))
             continue
 
         attributed = False
         for stage in ATTR_ORDER:
             if _check_stage_rules(cid, m_lower, stage):
-                for dim in DIMENSIONES:
-                    v = get_dim_val(cid, dim)
-                    if v is None or str(v).strip() == "":
-                        continue
-                    dimension_results[dim][v][stage]["fallidos"] += 1
+                e8_events.append((cid, stage))
                 attributed = True
                 break
-                
+
         if not attributed:
-            for dim in DIMENSIONES:
-                v = get_dim_val(cid, dim)
-                if v is None or str(v).strip() == "":
-                    continue
-                dimension_results[dim][v]["ventas"]["fallidos"] += 1
+            e8_events.append((cid, "ventas"))
+    
+    e8_df = pd.DataFrame(e8_events, columns=["client_id", "stage"])
+    e8_df["field"] = "fallidos"
+    e8_merged = e8_df.merge(dims_long, on="client_id", how="inner")
+    e8_counts = e8_merged.groupby(["dimension", "valor", "stage", "field"]).size() if not e8_df.empty else pd.Series(dtype=int)
+
+    # Combinar los tres conteos vectorizados en uno solo
+    all_counts = base_counts.add(dl_counts, fill_value=0).add(e8_counts, fill_value=0)
+    counts_df = all_counts.unstack(fill_value=0).reset_index() if not all_counts.empty else pd.DataFrame(
+        columns=["dimension", "valor", "stage", "exitosos", "fallidos", "retornan", "perdida_directa"]
+    )
+    for f in ["exitosos", "fallidos", "retornan", "perdida_directa"]:
+        if f not in counts_df.columns:
+            counts_df[f] = 0
 
     # Format the final rows list
-    rows = []
+    # rows = []
+    # ETAPAS_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi", "ventas"]
+    # for dim in DIMENSIONES:
+    #     for v, stages_data in dimension_results[dim].items():
+    #         stages = []
+    #         for et in ETAPAS_ORDER:
+    #             data = stages_data[et]
+    #             total = data["exitosos"] + data["fallidos"] + data["retornan"] + data["perdida_directa"]
+    #             pct = round(data["exitosos"] / total * 100, 2) if total > 0 else 100.0
+    #             stages.append({
+    #                 "etapa": et,
+    #                 "total_salidas": total,
+    #                 "exitosos": data["exitosos"],
+    #                 "fallidos": data["fallidos"],
+    #                 "retornan": data["retornan"],
+    #                 "perdida_directa": data["perdida_directa"],
+    #                 "efectividad_pct": pct
+    #             })
+    #         rows.append({"dimension": dim, "valor": v, "data": stages})
+
+    # return rows
+    # Asegurar que TODOS los valores únicos por dimensión aparezcan, aunque tengan 0 en todo
     ETAPAS_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi", "ventas"]
+    base_index = []
     for dim in DIMENSIONES:
-        for v, stages_data in dimension_results[dim].items():
-            stages = []
+        unique_vals = df_trans[dim].dropna().unique()
+        unique_vals = [v for v in unique_vals if str(v).strip() != ""]
+        for v in unique_vals:
             for et in ETAPAS_ORDER:
-                data = stages_data[et]
-                total = data["exitosos"] + data["fallidos"] + data["retornan"] + data["perdida_directa"]
-                pct = round(data["exitosos"] / total * 100, 2) if total > 0 else 100.0
-                stages.append({
-                    "etapa": et,
-                    "total_salidas": total,
-                    "exitosos": data["exitosos"],
-                    "fallidos": data["fallidos"],
-                    "retornan": data["retornan"],
-                    "perdida_directa": data["perdida_directa"],
-                    "efectividad_pct": pct
-                })
-            rows.append({"dimension": dim, "valor": v, "data": stages})
+                base_index.append((dim, v, et))
+    full_df = pd.DataFrame(base_index, columns=["dimension", "valor", "stage"])
+
+    merged_final = full_df.merge(counts_df, on=["dimension", "valor", "stage"], how="left")
+    for f in ["exitosos", "fallidos", "retornan", "perdida_directa"]:
+        merged_final[f] = merged_final[f].fillna(0).astype(int)
+
+    merged_final["total_salidas"] = (
+        merged_final["exitosos"] + merged_final["fallidos"]
+        + merged_final["retornan"] + merged_final["perdida_directa"]
+    )
+    merged_final["efectividad_pct"] = merged_final.apply(
+        lambda r: round(r["exitosos"] / r["total_salidas"] * 100, 2) if r["total_salidas"] > 0 else 100.0,
+        axis=1,
+    )
+
+    rows = []
+    for (dim, v), grp in merged_final.groupby(["dimension", "valor"], sort=False):
+        grp = grp.set_index("stage").loc[ETAPAS_ORDER]
+        stages = [
+            {
+                "etapa": et,
+                "total_salidas": int(grp.loc[et, "total_salidas"]),
+                "exitosos": int(grp.loc[et, "exitosos"]),
+                "fallidos": int(grp.loc[et, "fallidos"]),
+                "retornan": int(grp.loc[et, "retornan"]),
+                "perdida_directa": int(grp.loc[et, "perdida_directa"]),
+                "efectividad_pct": float(grp.loc[et, "efectividad_pct"]),
+            }
+            for et in ETAPAS_ORDER
+        ]
+        rows.append({"dimension": dim, "valor": v, "data": stages})
 
     return rows
 
