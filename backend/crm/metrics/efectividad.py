@@ -4,8 +4,8 @@ from datetime import datetime
 import pandas as pd
 
 from ...database import DBConnector
-from ...config import DB_SCHEMA, TableNames
-from ..config import (
+from ...conf_config import DB_SCHEMA, TableNames
+from ..crm_config import (
     DIMENSIONES, EFECTIVIDAD_REGLAS, ETAPA8_ATRIBUCION,
     ETAPA8_EXCEPTION_MOTIVOS, RETORNO_ATRIBUCION, dim_col,
 )

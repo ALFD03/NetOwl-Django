@@ -10,7 +10,7 @@ import psycopg2
 from psycopg2 import pool, sql
 from psycopg2.extras import execute_values
 
-from .config import DB_SCHEMA
+from .conf_config import DB_SCHEMA
 
 
 class DBConnector:

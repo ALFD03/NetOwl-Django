@@ -2,9 +2,9 @@
 CRM Analytics Module - Backend Package.
 """
 
-from .loader import import_crm_csv
-from .analyzer import run_crm_analysis
-from .queries import (
+from .crm_loader import import_crm_csv
+from .crm_analyzer import run_crm_analysis
+from .crm_queries import (
     get_metric_totals,
     get_metric_tiempo_instalacion,
     get_metric_tiempo_por_etapa,

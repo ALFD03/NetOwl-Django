@@ -1,4 +1,4 @@
-from .config import (
+from .conf_config import (
     DB_SCHEMA, DATE_FORMATS, ACTIVE_STATE, EXCLUDED_STATE,
     VALID_REACT_ORIGINS, CORTE_IMPAGADO_EVENT,
     SUBS_STATE_TO_LOG_MAP, TableNames,

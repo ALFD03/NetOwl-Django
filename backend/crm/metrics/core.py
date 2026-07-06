@@ -5,8 +5,8 @@ from datetime import datetime
 from typing import Any, Dict
 
 from ...database import DBConnector
-from ...config import DB_SCHEMA, TableNames
-from ..config import DIMENSIONES, dim_col
+from ...conf_config import DB_SCHEMA, TableNames
+from ..crm_config import DIMENSIONES, dim_col
 
 
 def _build_where_filtros(filtros: Dict[str, Any] | None) -> tuple[str, list]:

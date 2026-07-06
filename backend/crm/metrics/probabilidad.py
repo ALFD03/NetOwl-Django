@@ -2,8 +2,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from ...database import DBConnector
-from ...config import DB_SCHEMA, TableNames
-from ..config import DIMENSIONES, dim_col
+from ...conf_config import DB_SCHEMA, TableNames
+from ..crm_config import DIMENSIONES, dim_col
 from .core import _build_where_filtros, _build_fecha_fin_sql
 
 

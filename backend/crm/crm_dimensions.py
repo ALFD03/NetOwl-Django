@@ -6,10 +6,10 @@ import pandas as pd
 from psycopg2.extras import execute_values
 
 from ..database import DBConnector
-from ..config import DB_SCHEMA, TableNames
-from .config import DIMENSIONES, PROB_DIM_E8, PROB_DIM_PERDIDOS_RESCATE, dim_col
+from ..conf_config import DB_SCHEMA, TableNames
+from .crm_config import DIMENSIONES, PROB_DIM_E8, PROB_DIM_PERDIDOS_RESCATE, dim_col
 from .metrics import _clean_nan
-from .queries import _dim_efectividad
+from .crm_queries import _dim_efectividad
 
 def _df_to_nested_dict(df: pd.DataFrame, key_col: str = "valor") -> dict:
     if df.empty:

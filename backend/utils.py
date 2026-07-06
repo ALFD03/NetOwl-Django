@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from .config import DATE_FORMATS
+from .conf_config import DATE_FORMATS
 
 
 def parse_date(value: Any) -> Optional[datetime]:

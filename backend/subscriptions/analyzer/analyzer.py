@@ -3,7 +3,7 @@ from typing import Dict, Set
 
 import pandas as pd
 
-from ...config import INACTIVE_STATES, TableNames
+from ...conf_config import INACTIVE_STATES, TableNames
 from ...database import DBConnector
 from ...models import Periodo
 from . import cleaner, dimensions, loader, metrics_calc, rules

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
-from ..config import TableNames
+from ..conf_config import TableNames
 from ..database import DBConnector
 
 logger = logging.getLogger(__name__)

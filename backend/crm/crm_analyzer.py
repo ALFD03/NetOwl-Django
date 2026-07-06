@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from ..database import DBConnector
 from .metrics import compute_and_save_all_global
-from .dimensions import aggregate_dimensions
+from .crm_dimensions import aggregate_dimensions
 
 
 def run_crm_analysis() -> dict:

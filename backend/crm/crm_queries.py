@@ -6,9 +6,9 @@ from typing import Any
 
 import pandas as pd
 
-from ..config import DB_SCHEMA, TableNames
+from ..conf_config import DB_SCHEMA, TableNames
 from ..database import DBConnector
-from .config import DIMENSIONES, PROB_DIM_E8, PROB_DIM_PERDIDOS_RESCATE, dim_col
+from .crm_config import DIMENSIONES, PROB_DIM_E8, PROB_DIM_PERDIDOS_RESCATE, dim_col
 
 logger = logging.getLogger(__name__)
 
@@ -337,7 +337,7 @@ def get_dimension_tiempo_instalacion() -> list[dict]:
         return []
 
 def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | None = None) -> list[dict]:
-    from .config import EFECTIVIDAD_REGLAS, ETAPA8_ATRIBUCION, ETAPA8_EXCEPTION_MOTIVOS, RETORNO_ATRIBUCION
+    from .crm_config import EFECTIVIDAD_REGLAS, ETAPA8_ATRIBUCION, ETAPA8_EXCEPTION_MOTIVOS, RETORNO_ATRIBUCION
     from .metrics.efectividad import _classify_forward_cycles_detailed, _safe_motivo
 
     select_dims = ", ".join(f"c.{dim_col(d)} AS {d}" for d in DIMENSIONES)

@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict
 import pandas as pd
-from ...config import TableNames
+from ...conf_config import TableNames
 from ...database import DBConnector
 from . import lifecycle, dimensions as dim_module
 from .loader import load_data, build_clean_logs

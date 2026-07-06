@@ -4,7 +4,7 @@ import logging
 import math
 from typing import Any, Dict, Optional
 import pandas as pd
-from ...config import TableNames
+from ...conf_config import TableNames
 from ...database import DBConnector
 
 logger = logging.getLogger(__name__)

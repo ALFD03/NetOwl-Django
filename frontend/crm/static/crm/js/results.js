@@ -203,19 +203,19 @@
   function loadResultsData() {
     function check(r) { if (!r.ok) throw Error("HTTP " + r.status); return r.json(); }
     Promise.all([
-      fetch("/crm/api/metricas/totals/").then(check),
-      fetch("/crm/api/metricas/tiempo-instalacion/").then(check),
-      fetch("/crm/api/metricas/tiempo-por-etapa/").then(check),
-      fetch("/crm/api/metricas/efectividad/").then(check),
-      fetch("/crm/api/metricas/etapa8/").then(check),
-      fetch("/crm/api/metricas/perdido/").then(check),
-      fetch("/crm/api/metricas/rescate/").then(check),
-      fetch("/crm/api/dimensiones/totals/").then(check),
-      fetch("/crm/api/dimensiones/tiempo-instalacion/").then(check),
-      fetch("/crm/api/dimensiones/efectividad/").then(check),
-      fetch("/crm/api/dimensiones/etapa8/").then(check),
-      fetch("/crm/api/dimensiones/perdido/").then(check),
-      fetch("/crm/api/dimensiones/rescate/").then(check),
+      fetch("/crm/api/metrics/totals/").then(check),
+      fetch("/crm/api/metrics/tiempo-instalacion/").then(check),
+      fetch("/crm/api/metrics/tiempo-por-etapa/").then(check),
+      fetch("/crm/api/metrics/efectividad/").then(check),
+      fetch("/crm/api/metrics/etapa8/").then(check),
+      fetch("/crm/api/metrics/perdido/").then(check),
+      fetch("/crm/api/metrics/rescate/").then(check),
+      fetch("/crm/api/dimensions/totals/").then(check),
+      fetch("/crm/api/dimensions/tiempo-instalacion/").then(check),
+      fetch("/crm/api/dimensions/efectividad/").then(check),
+      fetch("/crm/api/dimensions/etapa8/").then(check),
+      fetch("/crm/api/dimensions/perdido/").then(check),
+      fetch("/crm/api/dimensions/rescate/").then(check),
     ])
     .then(function (results) {
       var totals = results[0];

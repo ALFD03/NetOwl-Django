@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from psycopg2 import sql
 
-from ..config import DB_SCHEMA, TableNames
+from ..conf_config import DB_SCHEMA, TableNames
 from ..database import DBConnector
 
 SUBSCRIPTIONS_COLUMN_MAPPING = {
@@ -124,8 +124,8 @@ def import_subscriptions_csv(csv_path: str) -> int:
     with db_tool.get_connection() as conn:
         with conn.cursor() as cur:
             for t_name, d_frame in [
-                (TableNames.SUBSCRIPCIONES_B, df_local),
-                (TableNames.SUBSCRIPCIONES, df_consolidated),
+                (TableNames.SUBSCRIPTIONS_B, df_local),
+                (TableNames.SUBSCRIPTIONS, df_consolidated),
             ]:
                 cols_def = [
                     sql.SQL("{} text").format(sql.Identifier(c))
@@ -147,8 +147,8 @@ def import_subscriptions_csv(csv_path: str) -> int:
                 )
             conn.commit()
 
-    db_tool.copy_dataframe(df_local, TableNames.SUBSCRIPCIONES_B)
-    db_tool.copy_dataframe(df_consolidated, TableNames.SUBSCRIPCIONES)
+    db_tool.copy_dataframe(df_local, TableNames.SUBSCRIPTIONS_B)
+    db_tool.copy_dataframe(df_consolidated, TableNames.SUBSCRIPTIONS)
 
     return len(df_consolidated)
 
@@ -186,18 +186,18 @@ def import_logs_csv(csv_path: str) -> int:
                     "CREATE TABLE IF NOT EXISTS"
                     " {schema_table} ({fields})"
                 ).format(
-                    schema_table=sql.Identifier(DB_SCHEMA, TableNames.SUBSCRIPCIONES_LOGS),
+                    schema_table=sql.Identifier(DB_SCHEMA, TableNames.SUBSCRIPTIONS_LOGS),
                     fields=sql.SQL(", ").join(col_defs),
                 )
             )
             cur.execute(
                 sql.SQL("TRUNCATE TABLE {schema_table}").format(
                     schema_table=sql.Identifier(
-                        DB_SCHEMA, TableNames.SUBSCRIPCIONES_LOGS
+                        DB_SCHEMA, TableNames.SUBSCRIPTIONS_LOGS
                     )
                 )
             )
         conn.commit()
-    db_tool.copy_dataframe(df_logs, TableNames.SUBSCRIPCIONES_LOGS)
+    db_tool.copy_dataframe(df_logs, TableNames.SUBSCRIPTIONS_LOGS)
 
     return len(df_logs)
