@@ -117,13 +117,17 @@ class DBConnector:
         ]
         df.columns = [re.sub(r"[^a-z0-9_]", "", c) for c in df.columns]
 
+        # Normalización vectorial rápida
         for col in df.columns:
-            df[col] = df[col].apply(
-                lambda x: str(x) if pd.notna(x) else None
-            )
+            if df[col].dtype == object or pd.api.types.is_string_dtype(df[col]):
+                df[col] = df[col].where(df[col].notna(), None)
+            else:
+                df[col] = df[col].astype(str).where(df[col].notna(), None)
+                df[col] = df[col].replace("nan", None)
 
         columns = list(df.columns)
         known_columns = self._schema_cache.get(table_name)
+        
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 if known_columns is None:
@@ -156,6 +160,7 @@ class DBConnector:
 
                     self._schema_cache[table_name] = set(columns)
 
+                # Limpieza de registros previos del mismo periodo
                 delete_q = (
                     "DELETE FROM {schema}.{table}"
                     " WHERE periodo_reporte = %s"
@@ -172,23 +177,47 @@ class DBConnector:
                     params,
                 )
 
-                insert_sql = sql.SQL(
-                    "INSERT INTO {schema}.{table} ({fields}) VALUES %s"
-                ).format(
-                    schema=sql.Identifier(DB_SCHEMA),
-                    table=sql.Identifier(table_name),
-                    fields=sql.SQL(", ").join(
-                        sql.Identifier(c) for c in columns
-                    ),
-                )
-                execute_values(
-                    cur,
-                    insert_sql.as_string(conn),
-                    [
-                        tuple(row)
-                        for row in df.itertuples(index=False, name=None)
-                    ],
-                )
+                # OPTIMIZACIÓN CRÍTICA: Conmutación a COPY para volumen masivo
+                if len(df) > 1000:
+                    output = io.StringIO()
+                    df_to_copy = df.copy()
+                    # Sustituir None por string 'NULL' requerido por el motor COPY
+                    for col in df_to_copy.columns:
+                        df_to_copy[col] = df_to_copy[col].fillna("NULL")
+                        
+                    df_to_copy.to_csv(
+                        output, sep="\t", header=False, index=False, na_rep="NULL"
+                    )
+                    output.seek(0)
+
+                    table_id = sql.Identifier(DB_SCHEMA, table_name)
+                    cols_id = sql.SQL(", ").join(map(sql.Identifier, columns))
+
+                    copy_query = sql.SQL(
+                        "COPY {table} ({fields}) FROM STDIN WITH"
+                        " (FORMAT csv, DELIMITER '\t', NULL 'NULL')"
+                    ).format(table=table_id, fields=cols_id)
+
+                    cur.copy_expert(copy_query, output)
+                else:
+                    # Para datasets pequeños (< 1000 filas) mantenemos execute_values por simplicidad
+                    insert_sql = sql.SQL(
+                        "INSERT INTO {schema}.{table} ({fields}) VALUES %s"
+                    ).format(
+                        schema=sql.Identifier(DB_SCHEMA),
+                        table=sql.Identifier(table_name),
+                        fields=sql.SQL(", ").join(
+                            sql.Identifier(c) for c in columns
+                        ),
+                    )
+                    execute_values(
+                        cur,
+                        insert_sql.as_string(conn),
+                        [
+                            tuple(row)
+                            for row in df.itertuples(index=False, name=None)
+                        ],
+                    )
             conn.commit()
 
     def copy_dataframe(self, df: pd.DataFrame, table_name: str):

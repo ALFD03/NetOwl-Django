@@ -58,7 +58,8 @@ def build_clean_logs(l1: pd.DataFrame, l2: pd.DataFrame) -> pd.DataFrame:
     combined = pd.concat([l1, l2], ignore_index=True, sort=False)
     combined["orden"] = combined["orden"].astype(str).str.strip()
     combined["estado"] = _normalize_estado(combined["estado"])
-    combined["f_dt"] = pd.to_datetime(combined["fecha"], errors="coerce")
+    combined["f_dt"] = pd.to_datetime(combined["fecha"], format="mixed", errors="coerce")
+    
     combined = combined.dropna(subset=["orden", "f_dt"])
     combined = combined.sort_values(["orden", "f_dt"]).reset_index(drop=True)
     return combined

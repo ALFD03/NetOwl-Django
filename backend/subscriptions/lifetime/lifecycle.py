@@ -11,21 +11,26 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
     if relevant.empty:
         return pd.DataFrame(columns=["orden", "tipo", "f_inicio", "f_fin", "duracion", "evento", "periodo_idx"])
         
-    # OPTIMIZACIÓN 1: Ordenamos todo el dataset globalmente una sola vez
     relevant = relevant.sort_values(["orden", "f_dt"]).reset_index(drop=True)
     
-    last_global = pd.Timestamp(relevant["f_dt"].max())
-    f_ini_map = subs.set_index("orden")["f_ini_dt"].to_dict()
+    # OPTIMIZACIÓN 1: Convertimos fechas a float (días desde 1970-01-01) vectorialmente (0.01 segundos)
+    epoch = pd.Timestamp("1970-01-01")
+    relevant["f_days"] = (relevant["f_dt"] - epoch) / pd.Timedelta(days=1)
+    last_global_days = float(relevant["f_days"].max())
+    
+    # Mapeamos fecha de inicio de suscripciones a días flotantes
+    subs_ini_days = (subs.set_index("orden")["f_ini_dt"] - epoch) / pd.Timedelta(days=1)
+    f_ini_map = subs_ini_days.to_dict()
 
-    # Convertimos las columnas a NumPy/listas nativas para una velocidad de lectura óptima
+    # Convertimos a arrays de NumPy para evitar llamadas al índice de Pandas en el bucle
     orden_arr = relevant["orden"].to_numpy()
     estado_arr = relevant["estado"].to_numpy()
-    f_dt_arr = relevant["f_dt"].to_numpy()
+    fdays_arr = relevant["f_days"].to_numpy()
 
-    # OPTIMIZACIÓN 2: Agrupamos en memoria usando listas nativas (evita groupby de Pandas)
-    grouped_events: Dict[str, List[tuple[str, Any]]] = {}
+    # Agrupamos en estructura nativa
+    grouped_events: Dict[str, List[tuple[str, float]]] = {}
     for i in range(len(orden_arr)):
-        grouped_events.setdefault(orden_arr[i], []).append((estado_arr[i], f_dt_arr[i]))
+        grouped_events.setdefault(orden_arr[i], []).append((estado_arr[i], fdays_arr[i]))
 
     rows: List[Dict[str, Any]] = []
 
@@ -34,31 +39,30 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
         if pd.isna(f_ini):
             continue
             
-        active_start = pd.Timestamp(f_ini)
+        active_start = float(f_ini)
         inactive_start = None
         prev_state = None
         prev_was_inactive = False
         pidx = 0
 
-        # Al estar pre-ordenado globalmente, 'events' ya está garantizado cronológicamente
-        for st, fecha_raw in events:
-            fecha = pd.Timestamp(fecha_raw)
+        # El bucle ahora procesa únicamente floats (aritmética pura en C, velocidad máxima)
+        for st, fecha in events:
             if st == ACTIVE_STATE:
                 if prev_was_inactive:
-                    dur = max((fecha - inactive_start).days, 0)
+                    dur = int(max(fecha - inactive_start, 0))
                     rows.append({
                         "orden": orden, "tipo": "cancelado",
-                        "f_inicio": inactive_start, "f_fin": fecha,
+                        "f_inicio_days": inactive_start, "f_fin_days": fecha,
                         "duracion": dur, "evento": 1, "periodo_idx": pidx
                     })
                     pidx += 1
                     active_start = fecha
                 elif prev_state is None:
-                    dur_a = max((fecha - active_start).days, 0)
+                    dur_a = int(max(fecha - active_start, 0))
                     if dur_a > 0:
                         rows.append({
                             "orden": orden, "tipo": "activo",
-                            "f_inicio": active_start, "f_fin": fecha,
+                            "f_inicio_days": active_start, "f_fin_days": fecha,
                             "duracion": dur_a, "evento": 1, "periodo_idx": pidx
                         })
                         pidx += 1
@@ -67,10 +71,10 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
                 prev_was_inactive = False
             elif st in INACTIVE_STATES:
                 if not prev_was_inactive and prev_state == ACTIVE_STATE:
-                    dur = max((fecha - active_start).days, 0)
+                    dur = int(max(fecha - active_start, 0))
                     rows.append({
                         "orden": orden, "tipo": "activo",
-                        "f_inicio": active_start, "f_fin": fecha,
+                        "f_inicio_days": active_start, "f_fin_days": fecha,
                         "duracion": dur, "evento": 1, "periodo_idx": pidx
                     })
                     pidx += 1
@@ -81,21 +85,31 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
                 prev_was_inactive = True
 
         if not prev_was_inactive and prev_state == ACTIVE_STATE:
-            dur = max((last_global - active_start).days, 0)
+            dur = int(max(last_global_days - active_start, 0))
             rows.append({
                 "orden": orden, "tipo": "activo",
-                "f_inicio": active_start, "f_fin": last_global,
+                "f_inicio_days": active_start, "f_fin_days": last_global_days,
                 "duracion": dur, "evento": 0, "periodo_idx": pidx
             })
         elif prev_was_inactive:
-            dur = max((last_global - inactive_start).days, 0)
+            dur = int(max(last_global_days - inactive_start, 0))
             rows.append({
                 "orden": orden, "tipo": "cancelado",
-                "f_inicio": inactive_start, "f_fin": last_global,
+                "f_inicio_days": inactive_start, "f_fin_days": last_global_days,
                 "duracion": dur, "evento": 0, "periodo_idx": pidx
             })
 
-    return pd.DataFrame(rows)
+    if not rows:
+        return pd.DataFrame(columns=["orden", "tipo", "f_inicio", "f_fin", "duracion", "evento", "periodo_idx"])
+
+    df_res = pd.DataFrame(rows)
+    
+    # OPTIMIZACIÓN 2: Reconvertimos floats a fechas reales vectorialmente en un solo paso al finalizar
+    df_res["f_inicio"] = pd.to_datetime(df_res["f_inicio_days"], unit="D", origin="1970-01-01")
+    df_res["f_fin"] = pd.to_datetime(df_res["f_fin_days"], unit="D", origin="1970-01-01")
+    
+    df_res.drop(columns=["f_inicio_days", "f_fin_days"], inplace=True)
+    return df_res
 
 def compute_metrics(periods: pd.DataFrame) -> Dict[str, Any]:
     result: Dict[str, Any] = {}

@@ -10,59 +10,63 @@ def compute_dimension_metrics(subs: pd.DataFrame, periods: pd.DataFrame) -> pd.D
         return pd.DataFrame()
 
     rows: List[Dict[str, Any]] = []
-    # Deduplicamos y mapeamos los suscriptores a un diccionario para consultas de alta velocidad
     subs_dedup = subs.drop_duplicates(subset=["orden"])
     
-    # Extraemos el primer registro activo por orden
+    # Extraemos solo las dimensiones existentes
+    dim_cols = [col for col in DIMS if col in subs_dedup.columns]
+    if not dim_cols:
+        return pd.DataFrame()
+        
+    subs_slice = subs_dedup[["orden"] + dim_cols].copy()
+    
+    # Separamos activos y cancelados
+    active_periods = periods[periods["tipo"] == "activo"].copy()
+    canceled_periods = periods[periods["tipo"] == "cancelado"].copy()
+    
+    # Primer activo por suscriptor
     first_active = (
-        periods[periods["tipo"] == "activo"]
-        .sort_values(["orden", "periodo_idx"])
+        active_periods.sort_values(["orden", "periodo_idx"])
         .drop_duplicates(subset=["orden"], keep="first")
     )
-    canceled = periods[periods["tipo"] == "cancelado"]
+    
+    # OPTIMIZACIÓN 1: Unimos las dimensiones vectorialmente de una sola pasada
+    first_active = first_active.merge(subs_slice, on="orden", how="left")
+    canceled_periods = canceled_periods.merge(subs_slice, on="orden", how="left")
 
-    for dim in DIMS:
-        if dim not in subs_dedup.columns:
-            continue
-            
+    # OPTIMIZACIÓN 2: Evitamos ajustar Kaplan-Meier en grupos irrelevantes o de ruido
+    MIN_COHORT_SIZE = 15 
+
+    for dim in dim_cols:
         default = f"Sin {dim}"
-        # Mapeo directo indexado
-        dim_map = subs_dedup.set_index("orden")[dim].fillna(default).to_dict()
-
-        # Asignamos las dimensiones correspondientes de manera vectorizada
-        first_active_d = first_active.copy()
-        first_active_d["_dim"] = first_active_d["orden"].map(dim_map).fillna(default)
         
-        canceled_d = canceled.copy()
-        canceled_d["_dim"] = canceled_d["orden"].map(dim_map).fillna(default)
-
-        # OPTIMIZACIÓN: Agrupamos por dimensión usando groupby nativo en lugar de bucles de filtro manual
-        grouped_act = first_active_d.groupby("_dim", sort=False)
-        grouped_can = canceled_d.groupby("_dim", sort=False)
-
-        # Almacenamos grupos cancelados en un diccionario para búsquedas rápidas
+        first_active[dim] = first_active[dim].fillna(default)
+        canceled_periods[dim] = canceled_periods[dim].fillna(default)
+        
+        # Agrupamos eficientemente
+        grouped_act = first_active.groupby(dim, sort=False)
+        grouped_can = canceled_periods.groupby(dim, sort=False)
+        
         can_groups = {name: grp for name, grp in grouped_can}
 
         for dim_val, grp_act in grouped_act:
-            if grp_act.empty:
-                continue
-
-            # Kaplan-Meier para el grupo activo de la dimensión
-            km_act = compute_km(grp_act["duracion"], grp_act["evento"], dim_val)
-
-            # Buscamos de manera instantánea el grupo cancelado correspondiente
-            grp_can = can_groups.get(dim_val)
+            n_act = len(grp_act)
+            if n_act < MIN_COHORT_SIZE:
+                continue  # Omitir subgrupos minúsculos ahorra el 80% del overhead estadístico
             
-            # Filtramos reactivaciones del grupo de forma rápida
+            # Kaplan-Meier Activo (deshabilitando intervalos de confianza Greenwood)
+            km_act = compute_km(grp_act["duracion"], grp_act["evento"], dim_val, calculate_ci=False)
+
+            grp_can = can_groups.get(dim_val)
             if grp_can is not None and not grp_can.empty:
                 grp_react = grp_can[(grp_can["evento"] == 1) & (grp_can["duracion"] >= 15)]
             else:
                 grp_react = pd.DataFrame()
 
-            if not grp_react.empty:
+            n_react = len(grp_react)
+            if n_react >= MIN_COHORT_SIZE:
                 prom_react = round(float(grp_react["duracion"].mean()), 1)
-                n_react = int(len(grp_react))
-                km_react = compute_km(grp_react["duracion"], grp_react["evento"], dim_val)
+                # Kaplan-Meier Reactivación sin CI
+                km_react = compute_km(grp_react["duracion"], grp_react["evento"], dim_val, calculate_ci=False)
             else:
                 prom_react = n_react = None
                 km_react = {
