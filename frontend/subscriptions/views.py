@@ -26,41 +26,33 @@ from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
 )
 
-
 TEMPLATE_PREFIX = "subscriptions/"
 LOGIN_URL = settings.LOGIN_URL
-
 
 @login_required(login_url=LOGIN_URL)
 def dashboard(request):
     return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
 
-
 @login_required(login_url=LOGIN_URL)
 def analytics(request):
     return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
-
 
 @login_required(login_url=LOGIN_URL)
 @analyst_or_admin_required
 def imports(request):
     return render(request, f"{TEMPLATE_PREFIX}imports.html", {"section": "imports"})
 
-
 @login_required(login_url=LOGIN_URL)
 def results(request, periodo=None):
     return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
-
 
 @login_required(login_url=LOGIN_URL)
 def lifetime(request):
     return render(request, f"{TEMPLATE_PREFIX}lifetime.html", {"section": "lifetime"})
 
-
 @login_required(login_url=LOGIN_URL)
 def api_dashboard_data(request):
     return JsonResponse(get_dashboard_data())
-
 
 @login_required(login_url=LOGIN_URL)
 def api_analytics_data(request):
@@ -68,16 +60,13 @@ def api_analytics_data(request):
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     return JsonResponse(get_analytics_data(periodos))
 
-
 @login_required(login_url=LOGIN_URL)
 def api_periods_list(request):
     return JsonResponse({"periods": get_periodos()})
 
-
 @login_required(login_url=LOGIN_URL)
 def api_results_list(request):
     return JsonResponse({"periods": get_cierre_churn()})
-
 
 @login_required(login_url=LOGIN_URL)
 def api_results_detail(request, periodo):
@@ -90,7 +79,6 @@ def api_results_detail(request, periodo):
         "summary": summary,
         "dimensions": dimensions,
     })
-
 
 @login_required(login_url=LOGIN_URL)
 @analyst_or_admin_required
@@ -123,7 +111,6 @@ def api_run_analysis(request):
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
-
 @login_required(login_url=LOGIN_URL)
 def api_survival_data(request):
     lc = get_lifecycle_results()
@@ -140,9 +127,9 @@ def api_survival_data(request):
     curvas_dim = {"activo": {}, "reactivacion": {}}
     if dim:
         DIM_MAP = {
-            "zona": "Zona", "sucursal": "Sucursal",
-            "municipio": "Municipio", "campana": "campanna",
-            "producto": "Producto",
+            "zona": "zona", "sucursal": "sucursal",
+            "municipio": "municipio", "campana": "campanna",
+            "producto": "producto",
         }
         db_dim = DIM_MAP.get(dim)
         if db_dim:
@@ -187,7 +174,6 @@ def api_survival_data(request):
         "curvas_dimension": curvas_dim,
     })
 
-
 @login_required(login_url=LOGIN_URL)
 @analyst_or_admin_required
 @ratelimit(key="ip", rate="10/m", method="POST")
@@ -204,7 +190,6 @@ def api_import_subscriptions(request):
     finally:
         cleanup_tempfile(tmp_path)
 
-
 @login_required(login_url=LOGIN_URL)
 @analyst_or_admin_required
 @ratelimit(key="ip", rate="10/m", method="POST")
@@ -220,7 +205,6 @@ def api_import_logs(request):
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
     finally:
         cleanup_tempfile(tmp_path)
-
 
 @login_required(login_url=LOGIN_URL)
 @analyst_or_admin_required
@@ -244,7 +228,6 @@ def api_lifecycle_run(request):
     except Exception as e:
         logger.exception("Error en lifecycle run")
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
 
 @login_required(login_url=LOGIN_URL)
 def api_lifecycle_results(request):

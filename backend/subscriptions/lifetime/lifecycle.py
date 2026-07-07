@@ -4,48 +4,63 @@ import pandas as pd
 from ...conf_config import ACTIVE_STATE, INACTIVE_STATES
 from .km_utils import compute_km
 
-
 RELEVANT_STATES = {ACTIVE_STATE} | INACTIVE_STATES
-
 
 def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFrame:
     relevant = logs[logs["estado"].isin(RELEVANT_STATES)].copy()
-    last_global = relevant["f_dt"].max()
+    if relevant.empty:
+        return pd.DataFrame(columns=["orden", "tipo", "f_inicio", "f_fin", "duracion", "evento", "periodo_idx"])
+        
+    # OPTIMIZACIÓN 1: Ordenamos todo el dataset globalmente una sola vez
+    relevant = relevant.sort_values(["orden", "f_dt"]).reset_index(drop=True)
+    
+    last_global = pd.Timestamp(relevant["f_dt"].max())
     f_ini_map = subs.set_index("orden")["f_ini_dt"].to_dict()
+
+    # Convertimos las columnas a NumPy/listas nativas para una velocidad de lectura óptima
+    orden_arr = relevant["orden"].to_numpy()
+    estado_arr = relevant["estado"].to_numpy()
+    f_dt_arr = relevant["f_dt"].to_numpy()
+
+    # OPTIMIZACIÓN 2: Agrupamos en memoria usando listas nativas (evita groupby de Pandas)
+    grouped_events: Dict[str, List[tuple[str, Any]]] = {}
+    for i in range(len(orden_arr)):
+        grouped_events.setdefault(orden_arr[i], []).append((estado_arr[i], f_dt_arr[i]))
 
     rows: List[Dict[str, Any]] = []
 
-    for orden, group in relevant.groupby("orden"):
-        if orden not in f_ini_map:
-            continue
-        f_ini = f_ini_map[orden]
+    for orden, events in grouped_events.items():
+        f_ini = f_ini_map.get(orden)
         if pd.isna(f_ini):
             continue
-        group = group.sort_values("f_dt")
-        estados = group["estado"].tolist()
-        fechas = group["f_dt"].tolist()
-
-        active_start = f_ini
+            
+        active_start = pd.Timestamp(f_ini)
         inactive_start = None
         prev_state = None
         prev_was_inactive = False
         pidx = 0
 
-        for st, fecha in zip(estados, fechas):
+        # Al estar pre-ordenado globalmente, 'events' ya está garantizado cronológicamente
+        for st, fecha_raw in events:
+            fecha = pd.Timestamp(fecha_raw)
             if st == ACTIVE_STATE:
                 if prev_was_inactive:
                     dur = max((fecha - inactive_start).days, 0)
-                    rows.append({"orden": orden, "tipo": "cancelado",
-                                 "f_inicio": inactive_start, "f_fin": fecha,
-                                 "duracion": dur, "evento": 1, "periodo_idx": pidx})
+                    rows.append({
+                        "orden": orden, "tipo": "cancelado",
+                        "f_inicio": inactive_start, "f_fin": fecha,
+                        "duracion": dur, "evento": 1, "periodo_idx": pidx
+                    })
                     pidx += 1
                     active_start = fecha
                 elif prev_state is None:
                     dur_a = max((fecha - active_start).days, 0)
                     if dur_a > 0:
-                        rows.append({"orden": orden, "tipo": "activo",
-                                     "f_inicio": active_start, "f_fin": fecha,
-                                     "duracion": dur_a, "evento": 1, "periodo_idx": pidx})
+                        rows.append({
+                            "orden": orden, "tipo": "activo",
+                            "f_inicio": active_start, "f_fin": fecha,
+                            "duracion": dur_a, "evento": 1, "periodo_idx": pidx
+                        })
                         pidx += 1
                         active_start = fecha
                 prev_state = ACTIVE_STATE
@@ -53,9 +68,11 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
             elif st in INACTIVE_STATES:
                 if not prev_was_inactive and prev_state == ACTIVE_STATE:
                     dur = max((fecha - active_start).days, 0)
-                    rows.append({"orden": orden, "tipo": "activo",
-                                 "f_inicio": active_start, "f_fin": fecha,
-                                 "duracion": dur, "evento": 1, "periodo_idx": pidx})
+                    rows.append({
+                        "orden": orden, "tipo": "activo",
+                        "f_inicio": active_start, "f_fin": fecha,
+                        "duracion": dur, "evento": 1, "periodo_idx": pidx
+                    })
                     pidx += 1
                     inactive_start = fecha
                 elif prev_state is None:
@@ -65,14 +82,18 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
 
         if not prev_was_inactive and prev_state == ACTIVE_STATE:
             dur = max((last_global - active_start).days, 0)
-            rows.append({"orden": orden, "tipo": "activo",
-                         "f_inicio": active_start, "f_fin": last_global,
-                         "duracion": dur, "evento": 0, "periodo_idx": pidx})
+            rows.append({
+                "orden": orden, "tipo": "activo",
+                "f_inicio": active_start, "f_fin": last_global,
+                "duracion": dur, "evento": 0, "periodo_idx": pidx
+            })
         elif prev_was_inactive:
             dur = max((last_global - inactive_start).days, 0)
-            rows.append({"orden": orden, "tipo": "cancelado",
-                         "f_inicio": inactive_start, "f_fin": last_global,
-                         "duracion": dur, "evento": 0, "periodo_idx": pidx})
+            rows.append({
+                "orden": orden, "tipo": "cancelado",
+                "f_inicio": inactive_start, "f_fin": last_global,
+                "duracion": dur, "evento": 0, "periodo_idx": pidx
+            })
 
     return pd.DataFrame(rows)
 

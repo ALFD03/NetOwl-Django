@@ -5,51 +5,74 @@ import pandas as pd
 from .km_utils import compute_km
 from .loader import DIMS
 
-
 def compute_dimension_metrics(subs: pd.DataFrame, periods: pd.DataFrame) -> pd.DataFrame:
-    rows: List[Dict[str, Any]] = []
-    subs_dedup = subs.drop_duplicates(subset=["orden"]).set_index("orden")
+    if periods.empty:
+        return pd.DataFrame()
 
+    rows: List[Dict[str, Any]] = []
+    # Deduplicamos y mapeamos los suscriptores a un diccionario para consultas de alta velocidad
+    subs_dedup = subs.drop_duplicates(subset=["orden"])
+    
+    # Extraemos el primer registro activo por orden
     first_active = (
         periods[periods["tipo"] == "activo"]
         .sort_values(["orden", "periodo_idx"])
-        .groupby("orden").first().reset_index()
+        .drop_duplicates(subset=["orden"], keep="first")
     )
-    canceled = periods[periods["tipo"] == "cancelado"].copy()
+    canceled = periods[periods["tipo"] == "cancelado"]
 
     for dim in DIMS:
         if dim not in subs_dedup.columns:
             continue
+            
         default = f"Sin {dim}"
-        dim_map = subs_dedup[dim].fillna(default).to_dict()
+        # Mapeo directo indexado
+        dim_map = subs_dedup.set_index("orden")[dim].fillna(default).to_dict()
 
+        # Asignamos las dimensiones correspondientes de manera vectorizada
         first_active_d = first_active.copy()
         first_active_d["_dim"] = first_active_d["orden"].map(dim_map).fillna(default)
+        
         canceled_d = canceled.copy()
         canceled_d["_dim"] = canceled_d["orden"].map(dim_map).fillna(default)
 
-        for dim_val in first_active_d["_dim"].unique():
-            grp_act = first_active_d[first_active_d["_dim"] == dim_val]
-            grp_can = canceled_d[canceled_d["_dim"] == dim_val]
+        # OPTIMIZACIÓN: Agrupamos por dimensión usando groupby nativo en lugar de bucles de filtro manual
+        grouped_act = first_active_d.groupby("_dim", sort=False)
+        grouped_can = canceled_d.groupby("_dim", sort=False)
 
+        # Almacenamos grupos cancelados en un diccionario para búsquedas rápidas
+        can_groups = {name: grp for name, grp in grouped_can}
+
+        for dim_val, grp_act in grouped_act:
             if grp_act.empty:
                 continue
 
+            # Kaplan-Meier para el grupo activo de la dimensión
             km_act = compute_km(grp_act["duracion"], grp_act["evento"], dim_val)
 
-            grp_react = grp_can[grp_can["evento"] == 1].copy()
-            grp_react = grp_react[grp_react["duracion"] >= 15]
+            # Buscamos de manera instantánea el grupo cancelado correspondiente
+            grp_can = can_groups.get(dim_val)
+            
+            # Filtramos reactivaciones del grupo de forma rápida
+            if grp_can is not None and not grp_can.empty:
+                grp_react = grp_can[(grp_can["evento"] == 1) & (grp_can["duracion"] >= 15)]
+            else:
+                grp_react = pd.DataFrame()
+
             if not grp_react.empty:
                 prom_react = round(float(grp_react["duracion"].mean()), 1)
                 n_react = int(len(grp_react))
                 km_react = compute_km(grp_react["duracion"], grp_react["evento"], dim_val)
             else:
                 prom_react = n_react = None
-                km_react = {"mediana": None, "p25": None, "p75": None,
-                            "n_total": 0, "n_evento": 0, "n_censurado": 0, "curva": []}
+                km_react = {
+                    "mediana": None, "p25": None, "p75": None,
+                    "n_total": 0, "n_evento": 0, "n_censurado": 0, "curva": []
+                }
 
             rows.append({
-                "dimension": dim, "valor": dim_val,
+                "dimension": dim, 
+                "valor": dim_val,
                 "mediana_activo": km_act["mediana"],
                 "p25_activo": km_act["p25"],
                 "p75_activo": km_act["p75"],

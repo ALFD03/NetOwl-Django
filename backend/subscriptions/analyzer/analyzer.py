@@ -172,6 +172,7 @@ class MetricsAnalyzer:
             act_ini, act_fin, nuevos, df_bajas,
             df_inactivos, df_react_all, df_corte_impagado,
             df_react_not_in_ini=df_react_not_in_ini,
+            df_subs_full=self.df_subs_full
         )
 
     def aggregate_dimensions(

@@ -403,9 +403,10 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         ret_merged = base_df[is_return].merge(
             reclass_df[["stage", "forward_to", "is_reclass"]], on=["stage", "forward_to"], how="left"
         )
-        base_df.loc[is_return, "field"] = ret_merged["is_reclass"].fillna(False).map(
-            {True: "fallidos", False: "retornan"}
-        ).values
+        is_reclass_bool = ret_merged["is_reclass"] == True
+        base_df.loc[is_return, "field"] = (
+            is_reclass_bool.map({True: "fallidos", False: "retornan"}).values
+        )
 
     base_events = base_df.loc[base_df["field"].notna(), ["client_id", "stage", "field"]]
     base_merged = base_events.merge(dims_long, on="client_id", how="inner")

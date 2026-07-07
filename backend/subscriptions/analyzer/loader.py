@@ -5,7 +5,7 @@ from ...conf_config import TableNames
 
 def load_data(db):
     print("Sincronizando con base de datos...")
-    subs_cols = ["Orden_Producto", "fecha_inicio", "Total", "Estado"]
+    subs_cols = ["orden_producto", "fecha_inicio", "total", "estado"]
     logs_cols = ["orden", "fecha_log", "log", "estado"]
     logs_v15_cols = ["orden", "tipo", "categoria", "fecha"]
 

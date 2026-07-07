@@ -6,7 +6,7 @@ from ...database import DBConnector
 
 logger = logging.getLogger(__name__)
 
-DIMS = ["Zona", "Sucursal", "Municipio", "campanna", "Producto"]
+DIMS = ["zona", "sucursal", "municipio", "campanna", "producto"]
 
 def _normalize_estado(series: pd.Series) -> pd.Series:
     return series.astype(str).str.strip().str.lower()
@@ -15,7 +15,7 @@ def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     if db is None:
         db = DBConnector()
     subs = db.read_table(TableNames.SUBSCRIPTIONS)
-    subs = subs.rename(columns={"Orden_Producto": "orden", "fecha_inicio": "f_ini"})
+    subs = subs.rename(columns={"orden_producto": "orden", "fecha_inicio": "f_ini"})
     subs["orden"] = subs["orden"].astype(str).str.strip()
     subs["f_ini_dt"] = pd.to_datetime(subs["f_ini"], errors="coerce")
     for col in DIMS:

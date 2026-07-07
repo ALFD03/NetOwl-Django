@@ -10,27 +10,27 @@ from ..conf_config import DB_SCHEMA, TableNames
 from ..database import DBConnector
 
 SUBSCRIPTIONS_COLUMN_MAPPING = {
-    "Líneas de la orden/Referencia de la orden": "Orden_Producto",
-    "Líneas de la orden/Producto": "Producto",
-    "Líneas de la orden/Producto/Nombre": "Producto",
-    "Líneas de la orden/Cliente": "Cliente",
-    "Líneas de la orden/Cliente/CI/RIF": "CI",
-    "Sucursal": "Sucursal",
-    "Zona": "Zona",
-    "Líneas de la orden/Cliente/Municipio": "Municipio",
-    "Tipo de Servicio": "Tipo",
-    "Estado de la Suscripción": "Estado",
+    "Líneas de la orden/Referencia de la orden": "orden_producto",
+    # "Líneas de la orden/Producto": "producto",
+    "Líneas de la orden/Producto/Nombre": "producto",
+    "Líneas de la orden/Cliente": "cliente",
+    "Líneas de la orden/Cliente/CI/RIF": "ci",
+    "Sucursal": "sucursal",
+    "Zona": "zona",
+    "Líneas de la orden/Cliente/Municipio": "municipio",
+    "Tipo de Servicio": "tipo",
+    "Estado de la Suscripción": "estado",
     "Campaña": "campanna",
     "Próxima Fecha de Factura": "fecha_factura",
     "Fecha de inicio": "fecha_inicio",
     "Tarifa": "tarifa",
-    "Subtotal": "Total",
+    "Subtotal": "total",
 }
 
 SUBSCRIPTIONS_METADATA_COLS = [
-    "Cliente", "CI", "Sucursal", "Zona", "Municipio",
-    "Tipo", "Estado", "campanna", "fecha_factura", "fecha_inicio",
-    "tarifa", "Total",
+    "cliente", "ci", "sucursal", "zona", "municipio",
+    "tipo", "estado", "campanna", "fecha_factura", "fecha_inicio",
+    "tarifa", "total", "producto"
 ]
 
 LOGS_COLUMN_MAPPING = {
@@ -77,7 +77,7 @@ def import_subscriptions_csv(csv_path: str) -> int:
 
     if not df_local.empty:
         df_local = df_local[
-            ~df_local["Orden_Producto"]
+            ~df_local["orden_producto"]
             .astype(str)
             .str.contains(
                 "Líneas de la orden/Referencia de la orden",
@@ -91,20 +91,22 @@ def import_subscriptions_csv(csv_path: str) -> int:
     ]
 
     df_local = df_local.apply(_clean_empty_strings)
+    # if "producto_nombre" in df_local.columns:
+    #     df_local["producto"] = df_local["producto_nombre"].fillna(df_local["producto"])
 
     df_local[SUBSCRIPTIONS_METADATA_COLS] = (
-        df_local.groupby("Orden_Producto")[SUBSCRIPTIONS_METADATA_COLS]
+        df_local.groupby("orden_producto")[SUBSCRIPTIONS_METADATA_COLS]
         .ffill()
     )
 
     agg_rules = {col: "first" for col in SUBSCRIPTIONS_METADATA_COLS}
-    if "Producto" in df_local.columns:
-        agg_rules["Producto"] = _first_matching_plan
+    if "producto" in df_local.columns:
+        agg_rules["producto"] = _first_matching_plan
 
     df_consolidated = df_local.groupby(
-        "Orden_Producto", as_index=False
+        "orden_producto", as_index=False
     ).agg(agg_rules)
-    df_consolidated = df_consolidated.dropna(subset=["Orden_Producto"])
+    df_consolidated = df_consolidated.dropna(subset=["orden_producto"])
 
     for col in df_consolidated.columns:
         df_consolidated[col] = (
