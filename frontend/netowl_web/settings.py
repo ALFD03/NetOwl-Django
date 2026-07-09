@@ -49,11 +49,6 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_SSL_REDIRECT
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
 
-# --- Autenticación ---
-LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "/subscriptions/dashboard/"
-LOGOUT_REDIRECT_URL = "/login/"
-
 # --- Límites de subida ---
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
@@ -68,7 +63,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",      # Framework de mensajes (flash)
     "frontend.subscriptions",        # Aplicación principal del frontend
     "frontend.crm",                  # Módulo CRM (clientes, etc.)
-    "frontend.config",               # Gestión de usuarios y configuración
 ]
 
 # --- Middleware ---

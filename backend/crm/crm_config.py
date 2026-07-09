@@ -126,6 +126,8 @@ RETORNO_ATRIBUCION = [
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_5_gpi"},
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_6_contratistas"},
     {"etapa": "etapa_4_adecuaciones", "forward_to": "etapa_5_gpi"},
+    {"etapa": "etapa_4_adecuaciones", "forward_to": "etapa_6_contratistas"},
+    {"etapa": "etapa_5_gpi", "forward_to": "etapa_6_contratistas"}, 
 ]
 
 CSV_COLUMN_MAP = {

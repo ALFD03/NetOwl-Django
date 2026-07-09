@@ -76,11 +76,11 @@ class MetricsAnalyzer:
         arpu = round(total_billing / len(act_fin), 2) if len(act_fin) > 0 else 0.0
 
         df_react_all = self.get_reactivations(act_fin)
-        counts_react: Dict[str, int] = {}
-        if not df_react_all.empty:
-            counts_react.update(df_react_all["estado_origen"].value_counts().to_dict())
+        # counts_react: Dict[str, int] = {}
+        # if not df_react_all.empty:
+        #     counts_react.update(df_react_all["estado_origen"].value_counts().to_dict())
 
-        n_react_unicas = sum(counts_react.values())
+        # n_react_unicas = sum(counts_react.values())
 
         if not df_react_all.empty:
             df_6 = df_react_all[df_react_all["estado_origen"] == "6_churn"]
@@ -105,6 +105,7 @@ class MetricsAnalyzer:
 
         n_react_6_churn += n_react_sin_origen
         n_react_val = n_react_6_churn + n_react_8_30days + n_react_4_H
+        n_react_unicas = n_react_val + n_react_4_P
 
         df_corte_impagado = self.get_corte_impagado()
         set_corte_impagado = (
@@ -147,9 +148,9 @@ class MetricsAnalyzer:
             "arpu": arpu,
             "react_val": n_react_val,
             "tasa_aporte_react_pct": round((n_react_val / (len(set_nue) + n_react_val)) * 100, 4) if (len(set_nue) + n_react_val) > 0 else 0,
-            "indice_reemplazo_react_pct": round((n_react_val / bajas_netas) * 100, 4) if bajas_netas > 0 else 0,
-            "adiciones_netas": len(set_nue) - bajas_netas,
-            "adiciones_brutas": (len(set_nue) + n_react_not_in_ini) - bajas_netas,
+            "indice_reemplazo_react_pct": round((n_react_val / bajas_brutas) * 100, 4) if bajas_brutas > 0 else 0,
+            "adiciones_netas": len(set_nue) - bajas_brutas,
+            "adiciones_brutas": (len(set_nue) + n_react_not_in_ini) - bajas_brutas,
         }
         self.db.save_historico(pd.DataFrame([summary]), TableNames.ANALYZER_CIERRE_HISTORICO, periodo_label)
 
@@ -165,7 +166,7 @@ class MetricsAnalyzer:
         print(f"Churn Neto: {summary['churn_neto_pct']}% | Bruto: {summary['churn_bruto_pct']}%")
         print(f"CORTE IMPAGADO: {len(set_corte_impagado)} | INACTIVOS: {total_inactivos} | Winback: {summary['tasa_winback_pct']}%")
         print(f"COMPARATIVA -> Detalle: {len(df_bajas)} | Netas: {bajas_netas} | Brutas: {bajas_brutas}")
-        print(f"  REACTIVACIONES: 6_churn={counts_react.get('6_churn', 0)} | 8_30days={counts_react.get('8_30days', 0)} | 4_paused={counts_react.get('4_paused', 0)}")
+        print(f"  REACTIVACIONES: 6_churn={n_react_6_churn} | 8_30days={n_react_8_30days} | 4_paused={n_react_4_P + n_react_4_H} | Total={n_react_unicas}")
 
         dimensions.aggregate_dimensions(
             self.db, self.periodo,
