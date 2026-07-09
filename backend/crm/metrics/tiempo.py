@@ -1,6 +1,5 @@
 from __future__ import annotations
 from datetime import datetime
-
 import pandas as pd
 
 from ...database import DBConnector
@@ -18,12 +17,14 @@ def compute_tiempo_por_etapa(
     fecha_sql, fecha_params = _build_fecha_fin_sql(fecha_fin, "l")
     params = params_dim + fecha_params
 
+    # Defensa básica: Excluimos duraciones negativas (inconsistencias de reloj de Odoo)
     query = f"""
         SELECT l.etapa_anterior AS etapa, l.duracion_horas
         FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
         WHERE {where_dim}
           AND l.duracion_horas IS NOT NULL
+          AND l.duracion_horas >= 0
           AND l.etapa_anterior != 'etapa_7_instalados'
           {fecha_sql}
     """
@@ -33,9 +34,13 @@ def compute_tiempo_por_etapa(
 
     etapa_order_map = {e: i for i, e in enumerate(ETAPA_ORDER)}
     records = []
+    
     for etapa, group in df.groupby("etapa", sort=False):
         h = group["duracion_horas"].dropna()
         n = len(h)
+        if n == 0:
+            continue
+
         records.append({
             "etapa": etapa,
             "total_movimientos": n,
@@ -48,6 +53,7 @@ def compute_tiempo_por_etapa(
 
     records.sort(key=lambda r: etapa_order_map.get(r["etapa"], 999))
     return records
+
 
 def compute_tiempo_instalacion(
     db: DBConnector,
@@ -64,6 +70,8 @@ def compute_tiempo_instalacion(
 
     params = params_dim + fecha_params
 
+    # Retornamos al cálculo matemático real sobre el 100% de la población (79h),
+    # filtrando únicamente registros con duraciones negativas por seguridad.
     query = f"""
         SELECT
             COUNT(*)::int AS total_instalados,
@@ -78,6 +86,7 @@ def compute_tiempo_instalacion(
         WHERE {where_dim}
           AND c.ganado = 'ganado'
           AND c.duracion_total_horas IS NOT NULL
+          AND c.duracion_total_horas >= 0
           {fecha_sql}
     """
     df = db.query(query, params=params)

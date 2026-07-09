@@ -64,9 +64,9 @@ def parse_odoo_chunk(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     }
     df_logs.columns = [rename_map.get(c, c) for c in df_logs.columns]
     
-    df_clients["etapa_actual"] = df_clients["etapa"].map(ETAPA_MAP).fillna(df_clients["etapa"])
-    df_logs["etapa_anterior"] = df_logs["etapa_anterior"].map(ETAPA_MAP).fillna(df_logs["etapa_anterior"])
-    df_logs["nueva_etapa"] = df_logs["nueva_etapa"].map(ETAPA_MAP).fillna(df_logs["nueva_etapa"])
+    df_clients["etapa_actual"] = df_clients["etapa"].apply(map_stage_canonically)
+    df_logs["etapa_anterior"] = df_logs["etapa_anterior"].apply(map_stage_canonically)
+    df_logs["nueva_etapa"] = df_logs["nueva_etapa"].apply(map_stage_canonically)
     
     for col in ["creado_el", "fecha_cierre", "ultima_actualizacion"]:
         if col in df_clients.columns:
@@ -203,3 +203,56 @@ def _create_tables_if_not_exist(db: DBConnector):
             for stmt in statements:
                 cur.execute(stmt)
         conn.commit()
+
+def map_stage_canonically(stage_value: Any) -> str:
+    """
+    Normaliza y traduce nombres de etapas de Odoo a claves de forma adaptativa.
+    Soporta cambios de texto en Odoo siempre que se mantenga el número o palabras clave.
+    """
+    if pd.isna(stage_value) or not stage_value:
+        return "desconocido"
+        
+    val_str = str(stage_value).strip()
+    
+    # Capa 1: Coincidencia rápida exacta contra el mapa estático
+    from .crm_config import ETAPA_MAP
+    if val_str in ETAPA_MAP:
+        return ETAPA_MAP[val_str]
+        
+    # Capa 2: Extracción por prefijo numérico (ej: "5. GPI" o "5- GPI" o "5 GPI" -> 5)
+    import re
+    num_match = re.match(r"^(\d+)", val_str)
+    if num_match:
+        num = int(num_match.group(1))
+        num_map = {
+            1: "etapa_1_contacto",
+            2: "etapa_2_recepcion",
+            3: "etapa_3_factibilidad",
+            4: "etapa_4_adecuaciones",
+            5: "etapa_5_gpi",
+            6: "etapa_6_contratistas",
+            7: "etapa_7_instalados",
+            8: "etapa_8_devueltos",
+            9: "etapa_9_disponibles",
+            10: "etapa_10_proyectos",
+        }
+        if num in num_map:
+            return num_map[num]
+            
+    # Capa 3: Coincidencia por heurística de palabras clave (si Odoo no usa números de etapa)
+    from ..utils import normalize_text
+    norm = normalize_text(val_str)
+    
+    if "contacto" in norm: return "etapa_1_contacto"
+    if "recepcion" in norm: return "etapa_2_recepcion"
+    if "factibilidad" in norm or "evaluacion" in norm: return "etapa_3_factibilidad"
+    if "adecuacion" in norm or "red optica" in norm: return "etapa_4_adecuaciones"
+    if "gpi" in norm or "planificacion" in norm: return "etapa_5_gpi"
+    if "contratista" in norm: return "etapa_6_contratistas"
+    if "instalado" in norm: return "etapa_7_instalados"
+    if "devuelto" in norm: return "etapa_8_devueltos"
+    if "disponible" in norm or "otra fecha" in norm: return "etapa_9_disponibles"
+    if "proyecto" in norm: return "etapa_10_proyectos"
+    if "perdido" in norm: return "perdido"
+    
+    return "desconocido"

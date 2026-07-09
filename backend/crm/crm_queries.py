@@ -338,11 +338,11 @@ def get_dimension_tiempo_instalacion() -> list[dict]:
 
 def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | None = None) -> list[dict]:
     from .crm_config import EFECTIVIDAD_REGLAS, ETAPA8_ATRIBUCION, ETAPA8_EXCEPTION_MOTIVOS, RETORNO_ATRIBUCION
-    from .metrics.efectividad import _classify_forward_cycles_detailed, _safe_motivo
+    from .metrics.efectividad import _classify_forward_cycles_detailed, _safe_motivo, get_e8_client_attribution_mapping
 
     select_dims = ", ".join(f"c.{dim_col(d)} AS {d}" for d in DIMENSIONES)
     transitions_q = f"""
-        SELECT l.client_id, l.etapa_anterior, l.nueva_etapa,
+        SELECT l.id, l.client_id, l.etapa_anterior, l.nueva_etapa,
                l.created_at_log, c.devolver_oportunidad,
                {select_dims}
         FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
@@ -428,75 +428,12 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
     dl_merged = dl_df.merge(dims_long, on="client_id", how="inner")
     dl_counts = dl_merged.groupby(["dimension", "valor", "stage", "field"]).size()
 
-    stage_e8_clients = {}
-    for stage, df in all_detailed.items():
-        dev = df[df["outcome"] == "devuelto"]
-        stage_e8_clients[stage] = set(dev["client_id"].unique())
-
-    TRACKED_STAGES = list(all_detailed.keys())
-    direct_e8_map: dict[str, set] = {s: set() for s in TRACKED_STAGES}
-    direct_exits = df_trans[df_trans["nueva_etapa"] == "etapa_8_devueltos"]
-    for _, row in direct_exits.iterrows():
-        origin = row["etapa_anterior"]
-        cid = row["client_id"]
-        if origin in direct_e8_map:
-            if cid not in stage_e8_clients.get(origin, set()):
-                direct_e8_map[origin].add(cid)
-
-    ATTR_ORDER = ["etapa_3_factibilidad", "etapa_4_adecuaciones", "etapa_5_gpi"]
-
-    forward_to_maps = {
-        stage: df.drop_duplicates("client_id").set_index("client_id")["forward_to"].to_dict()
-        for stage, df in all_detailed.items()
-    }
-
-    from collections import defaultdict
-    attr_rules_by_stage: dict[str, dict[str, str | None]] = defaultdict(dict)
-    for rule in ETAPA8_ATRIBUCION:
-        for m in rule["motivos"]:
-            attr_rules_by_stage[rule["etapa"]][_safe_motivo(m)] = rule.get("forward_to")
-
-    def _check_stage_rules(cid: str, motivo_str: str, stage: str) -> bool:
-        rules_for_stage = attr_rules_by_stage.get(stage)
-        if not rules_for_stage or motivo_str not in rules_for_stage:
-            return False
-        req = rules_for_stage[motivo_str]
-        if req is None:
-            return True
-        return forward_to_maps.get(stage, {}).get(cid) == req
-
-    all_dev_clients: set = {c for s in stage_e8_clients.values() for c in s}
-    for s in direct_e8_map.values():
-        all_dev_clients |= s
-        
+    e8_mapping = get_e8_client_attribution_mapping(all_detailed, df_trans)
     e8_events: list[tuple[str, str]] = []
-    for cid in all_dev_clients:
-        motivo = motivo_map.get(cid)
-        m_lower = _safe_motivo(motivo)
-        if m_lower in {_safe_motivo(e) for e in ETAPA8_EXCEPTION_MOTIVOS}:
-            continue
+    for cid, stages in e8_mapping.items():
+        for stage in stages:
+            e8_events.append((cid, stage))
 
-        if m_lower == "":
-            penalized: set = set()
-            for stage in stage_e8_clients:
-                if cid in stage_e8_clients[stage]:
-                    penalized.add(stage)
-            for stage, direct_clients in direct_e8_map.items():
-                if cid in direct_clients:
-                    penalized.add(stage)
-            for stage in penalized:
-                e8_events.append((cid, stage))
-            continue
-
-        attributed = False
-        for stage in ATTR_ORDER:
-            if _check_stage_rules(cid, m_lower, stage):
-                e8_events.append((cid, stage))
-                attributed = True
-                break
-
-        if not attributed:
-            e8_events.append((cid, "ventas"))
     
     e8_df = pd.DataFrame(e8_events, columns=["client_id", "stage"])
     e8_df["field"] = "fallidos"

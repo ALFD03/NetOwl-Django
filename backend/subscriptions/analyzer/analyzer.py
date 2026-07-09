@@ -112,8 +112,8 @@ class MetricsAnalyzer:
         )
 
         sobrevivientes = set_fin - set_nue
-        bajas_fin_netas_ids = set_ini - sobrevivientes
-        df_bajas = self.df_subs_full[self.df_subs_full["orden"].isin(bajas_fin_netas_ids)].copy()
+        bajas_idx = set_ini - sobrevivientes
+        df_bajas = self.df_subs_full[self.df_subs_full["orden"].isin(bajas_idx)].copy()
         bajas_netas = max(0, len(act_ini) - (len(act_fin) - len(set_nue)))
         df_react_not_in_ini = df_react_all[~df_react_all["orden"].isin(set_ini)] if not df_react_all.empty else pd.DataFrame()
         n_react_not_in_ini = len(df_react_not_in_ini)
@@ -129,8 +129,8 @@ class MetricsAnalyzer:
             "activos_inicio": len(act_ini),
             "activos_final": len(act_fin),
             "nuevos_mes": len(set_nue),
-            "bajas_netas": bajas_netas,
-            "bajas_brutas": bajas_brutas,
+            "crecimiento": round(((len(act_fin) - len(act_ini)) / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
+            "bajas": bajas_brutas,
             "churn_neto_pct": round((bajas_netas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
             "churn_bruto_pct": round((bajas_brutas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
             "corte_impagado": len(set_corte_impagado),

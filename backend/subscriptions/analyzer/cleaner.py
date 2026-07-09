@@ -1,21 +1,14 @@
 from __future__ import annotations
 import pandas as pd
-import unicodedata
 from ...conf_config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
+# OPTIMIZACIÓN Y REUTILIZACIÓN: Importamos la función de utilidades compartida del sistema
+from ...utils import normalize_text
 
 def _normalize_string_series(series: pd.Series) -> pd.Series:
     """Normaliza una serie de texto mapeando solo los valores únicos para máxima velocidad."""
     unique_vals = series.dropna().unique()
-    mapping = {}
-    for val in unique_vals:
-        val_str = str(val).strip().lower()
-        # Normalización unicode rápida para remover acentos
-        normalized = (
-            unicodedata.normalize("NFKD", val_str)
-            .encode("ascii", "ignore")
-            .decode("utf-8")
-        )
-        mapping[val] = normalized.strip()
+    # Mapeamos vectorialmente usando la única fuente de verdad alfanumérica
+    mapping = {val: normalize_text(val) for val in unique_vals}
     return series.map(mapping)
 
 def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
