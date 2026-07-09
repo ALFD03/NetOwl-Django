@@ -11,8 +11,8 @@
     var html = "";
     periods.forEach(function (r) {
       var cn = r.churn_neto_pct || 0;
-      var churnClass = cn < 2.5 ? "text-success" : cn <= 3 ? "text-warning" : "text-danger";
-      html += '<tr><td class="fw-semibold">' + r.periodo_reporte + '</td><td class="text-end">' + (r.activos_inicio || 0).toLocaleString() + '</td><td class="text-end">' + (r.activos_final || 0).toLocaleString() + '</td><td class="text-end">' + (r.nuevos_mes || 0).toLocaleString() + '</td><td class="text-end fw-semibold ' + churnClass + '">' + cn.toFixed(2) + '%</td><td class="text-end">$' + (r.arpu || 0).toFixed(2) + '</td><td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + r.periodo_reporte + '"><i class="bi bi-eye"></i></button></td></tr>';
+      var cb = r.churn_bruto_pct || 0;
+      html += '<tr><td class="fw-semibold">' + r.periodo_reporte + '</td><td class="text-end">' + (r.activos_inicio || 0).toLocaleString() + '</td><td class="text-end">' + (r.activos_final || 0).toLocaleString() + '</td><td class="text-end" style="color: green !important;">' + (r.nuevos_mes || 0).toLocaleString() + '</td><td class="text-end" style="color: red !important;">' + (r.bajas || 0).toLocaleString() + '</td><td class="text-end" style="color: red !important;">' + cn.toFixed(2) + '%</td><td class="text-end" style="color: red !important;">' + cb.toFixed(2) + '%</td><td class="text-end" style="color: green !important;">' + (r.crecimiento || 0).toFixed(2) + '%</td><td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + r.periodo_reporte + '"><i class="bi bi-eye"></i></button></td></tr>';
     });
     tbody.innerHTML = html;
   }
