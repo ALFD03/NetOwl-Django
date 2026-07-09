@@ -1,66 +1,82 @@
 from __future__ import annotations
 from typing import Any, Dict, List
 import pandas as pd
-from ...config import ACTIVE_STATE, INACTIVE_STATES
+from ...conf_config import ACTIVE_STATE, INACTIVE_STATES
 from .km_utils import compute_km
-
 
 RELEVANT_STATES = {ACTIVE_STATE} | INACTIVE_STATES
 
-
 def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFrame:
-    """Construye periodos de vida activo/cancelado por suscriptor.
-
-    Returns:
-        DataFrame con columnas: orden, tipo, f_inicio, f_fin, duracion, evento, periodo_idx.
-    """
     relevant = logs[logs["estado"].isin(RELEVANT_STATES)].copy()
-    last_global = relevant["f_dt"].max()
-    f_ini_map = subs.set_index("orden")["f_ini_dt"].to_dict()
+    if relevant.empty:
+        return pd.DataFrame(columns=["orden", "tipo", "f_inicio", "f_fin", "duracion", "evento", "periodo_idx"])
+        
+    relevant = relevant.sort_values(["orden", "f_dt"]).reset_index(drop=True)
+    
+    # OPTIMIZACIÓN 1: Convertimos fechas a float (días desde 1970-01-01) vectorialmente (0.01 segundos)
+    epoch = pd.Timestamp("1970-01-01")
+    relevant["f_days"] = (relevant["f_dt"] - epoch) / pd.Timedelta(days=1)
+    last_global_days = float(relevant["f_days"].max())
+    
+    # Mapeamos fecha de inicio de suscripciones a días flotantes
+    subs_ini_days = (subs.set_index("orden")["f_ini_dt"] - epoch) / pd.Timedelta(days=1)
+    f_ini_map = subs_ini_days.to_dict()
+
+    # Convertimos a arrays de NumPy para evitar llamadas al índice de Pandas en el bucle
+    orden_arr = relevant["orden"].to_numpy()
+    estado_arr = relevant["estado"].to_numpy()
+    fdays_arr = relevant["f_days"].to_numpy()
+
+    # Agrupamos en estructura nativa
+    grouped_events: Dict[str, List[tuple[str, float]]] = {}
+    for i in range(len(orden_arr)):
+        grouped_events.setdefault(orden_arr[i], []).append((estado_arr[i], fdays_arr[i]))
 
     rows: List[Dict[str, Any]] = []
 
-    for orden, group in relevant.groupby("orden"):
-        if orden not in f_ini_map:
-            continue
-        f_ini = f_ini_map[orden]
+    for orden, events in grouped_events.items():
+        f_ini = f_ini_map.get(orden)
         if pd.isna(f_ini):
             continue
-        group = group.sort_values("f_dt")
-        estados = group["estado"].tolist()
-        fechas = group["f_dt"].tolist()
-
-        active_start = f_ini
+            
+        active_start = float(f_ini)
         inactive_start = None
         prev_state = None
         prev_was_inactive = False
         pidx = 0
 
-        for st, fecha in zip(estados, fechas):
+        # El bucle ahora procesa únicamente floats (aritmética pura en C, velocidad máxima)
+        for st, fecha in events:
             if st == ACTIVE_STATE:
                 if prev_was_inactive:
-                    dur = max((fecha - inactive_start).days, 0)
-                    rows.append({"orden": orden, "tipo": "cancelado",
-                                 "f_inicio": inactive_start, "f_fin": fecha,
-                                 "duracion": dur, "evento": 1, "periodo_idx": pidx})
+                    dur = int(max(fecha - inactive_start, 0))
+                    rows.append({
+                        "orden": orden, "tipo": "cancelado",
+                        "f_inicio_days": inactive_start, "f_fin_days": fecha,
+                        "duracion": dur, "evento": 1, "periodo_idx": pidx
+                    })
                     pidx += 1
                     active_start = fecha
                 elif prev_state is None:
-                    dur_a = max((fecha - active_start).days, 0)
+                    dur_a = int(max(fecha - active_start, 0))
                     if dur_a > 0:
-                        rows.append({"orden": orden, "tipo": "activo",
-                                     "f_inicio": active_start, "f_fin": fecha,
-                                     "duracion": dur_a, "evento": 1, "periodo_idx": pidx})
+                        rows.append({
+                            "orden": orden, "tipo": "activo",
+                            "f_inicio_days": active_start, "f_fin_days": fecha,
+                            "duracion": dur_a, "evento": 1, "periodo_idx": pidx
+                        })
                         pidx += 1
                         active_start = fecha
                 prev_state = ACTIVE_STATE
                 prev_was_inactive = False
             elif st in INACTIVE_STATES:
                 if not prev_was_inactive and prev_state == ACTIVE_STATE:
-                    dur = max((fecha - active_start).days, 0)
-                    rows.append({"orden": orden, "tipo": "activo",
-                                 "f_inicio": active_start, "f_fin": fecha,
-                                 "duracion": dur, "evento": 1, "periodo_idx": pidx})
+                    dur = int(max(fecha - active_start, 0))
+                    rows.append({
+                        "orden": orden, "tipo": "activo",
+                        "f_inicio_days": active_start, "f_fin_days": fecha,
+                        "duracion": dur, "evento": 1, "periodo_idx": pidx
+                    })
                     pidx += 1
                     inactive_start = fecha
                 elif prev_state is None:
@@ -69,21 +85,33 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
                 prev_was_inactive = True
 
         if not prev_was_inactive and prev_state == ACTIVE_STATE:
-            dur = max((last_global - active_start).days, 0)
-            rows.append({"orden": orden, "tipo": "activo",
-                         "f_inicio": active_start, "f_fin": last_global,
-                         "duracion": dur, "evento": 0, "periodo_idx": pidx})
+            dur = int(max(last_global_days - active_start, 0))
+            rows.append({
+                "orden": orden, "tipo": "activo",
+                "f_inicio_days": active_start, "f_fin_days": last_global_days,
+                "duracion": dur, "evento": 0, "periodo_idx": pidx
+            })
         elif prev_was_inactive:
-            dur = max((last_global - inactive_start).days, 0)
-            rows.append({"orden": orden, "tipo": "cancelado",
-                         "f_inicio": inactive_start, "f_fin": last_global,
-                         "duracion": dur, "evento": 0, "periodo_idx": pidx})
+            dur = int(max(last_global_days - inactive_start, 0))
+            rows.append({
+                "orden": orden, "tipo": "cancelado",
+                "f_inicio_days": inactive_start, "f_fin_days": last_global_days,
+                "duracion": dur, "evento": 0, "periodo_idx": pidx
+            })
 
-    return pd.DataFrame(rows)
+    if not rows:
+        return pd.DataFrame(columns=["orden", "tipo", "f_inicio", "f_fin", "duracion", "evento", "periodo_idx"])
 
+    df_res = pd.DataFrame(rows)
+    
+    # OPTIMIZACIÓN 2: Reconvertimos floats a fechas reales vectorialmente en un solo paso al finalizar
+    df_res["f_inicio"] = pd.to_datetime(df_res["f_inicio_days"], unit="D", origin="1970-01-01")
+    df_res["f_fin"] = pd.to_datetime(df_res["f_fin_days"], unit="D", origin="1970-01-01")
+    
+    df_res.drop(columns=["f_inicio_days", "f_fin_days"], inplace=True)
+    return df_res
 
 def compute_metrics(periods: pd.DataFrame) -> Dict[str, Any]:
-    """Calcula metricas globales de ciclo de vida."""
     result: Dict[str, Any] = {}
 
     first_active = (

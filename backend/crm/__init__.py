@@ -1,26 +1,22 @@
 """
 CRM Analytics Module - Backend Package.
 """
-from __future__ import annotations
 
-from .loader import import_crm_csv
-from .analyzer import run_crm_analysis
-from .queries import (
-    get_crm_cierre,
-    get_crm_dimensiones,
-    get_crm_periodos,
-    get_crm_dashboard_data,
-    get_crm_analytics_data,
-    get_crm_results_detail,
+from .crm_loader import import_crm_csv
+from .crm_analyzer import run_crm_analysis
+from .crm_queries import (
+    get_metric_totals,
+    get_metric_tiempo_instalacion,
+    get_metric_tiempo_por_etapa,
+    get_metric_efectividad,
+    get_metric_etapa8,
+    get_metric_perdido,
+    get_metric_rescate,
+    get_dimension_totals,
+    get_dimension_tiempo_instalacion,
+    get_dimension_tiempo_por_etapa,
+    get_dimension_efectividad,
+    get_dimension_etapa8,
+    get_dimension_perdido,
+    get_dimension_rescate,
 )
-
-__all__ = [
-    "import_crm_csv",
-    "run_crm_analysis",
-    "get_crm_cierre",
-    "get_crm_dimensiones",
-    "get_crm_periodos",
-    "get_crm_dashboard_data",
-    "get_crm_analytics_data",
-    "get_crm_results_detail",
-]

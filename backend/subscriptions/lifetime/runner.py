@@ -2,20 +2,12 @@ from __future__ import annotations
 import json
 from typing import Any, Dict
 import pandas as pd
+from ...conf_config import TableNames
 from ...database import DBConnector
 from . import lifecycle, dimensions as dim_module
 from .loader import load_data, build_clean_logs
 
-
 def run_lifecycle_analysis(db=None) -> Dict[str, Any]:
-    """Ejecuta el analisis de ciclo de vida completo.
-
-    Carga datos, construye periodos, calcula metricas globales y
-    por dimension, y persiste todo.
-
-    Returns:
-        Dict con metricas calculadas.
-    """
     if db is None:
         db = DBConnector()
     subs, l1, l2 = load_data(db)
@@ -27,7 +19,7 @@ def run_lifecycle_analysis(db=None) -> Dict[str, Any]:
         periods_out = periods.copy()
         for col in ["f_inicio", "f_fin"]:
             periods_out[col] = periods_out[col].astype(str)
-        db.save_historico(periods_out, "lifetime_periodos", "global", "lifetime")
+        db.save_historico(periods_out, TableNames.LIFETIME_PERIODOS, "global", "lifetime")
 
     metrics_flat: Dict[str, Any] = {}
     for k, v in metrics.items():
@@ -40,11 +32,11 @@ def run_lifecycle_analysis(db=None) -> Dict[str, Any]:
     metrics_flat["curva_activo_json"] = json.dumps(metrics.get("curva_activo", []))
     metrics_flat["curva_reactivacion_json"] = json.dumps(metrics.get("curva_reactivacion", []))
     df_metrics = pd.DataFrame([metrics_flat])
-    db.save_historico(df_metrics, "lifetime_metricas", "global", "lifetime")
+    db.save_historico(df_metrics, TableNames.LIFETIME_METRICAS, "global", "lifetime")
 
     dim_df = dim_module.compute_dimension_metrics(subs, periods)
     if not dim_df.empty:
-        db.save_historico(dim_df, "lifetime_dimensiones", "global", "lifetime")
+        db.save_historico(dim_df, TableNames.LIFETIME_DIMENSIONES, "global", "lifetime")
 
     print(f"\nLIFECYCLE ANALYSIS COMPLETE")
     print(f"  Suscriptores analizados: {metrics.get('suscriptores_totales', 0)}")
