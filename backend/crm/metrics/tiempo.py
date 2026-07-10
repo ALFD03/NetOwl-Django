@@ -24,7 +24,7 @@ def compute_tiempo_por_etapa(
         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
         WHERE {where_dim}
           AND l.duracion_horas IS NOT NULL
-          AND l.duracion_horas >= 0
+          AND l.duracion_horas >= 4
           AND l.etapa_anterior != 'etapa_7_instalados'
           {fecha_sql}
     """
@@ -70,24 +70,37 @@ def compute_tiempo_instalacion(
 
     params = params_dim + fecha_params
 
-    # Retornamos al cálculo matemático real sobre el 100% de la población (79h),
-    # filtrando únicamente registros con duraciones negativas por seguridad.
+    # OPTIMIZACIÓN: Añadimos el cálculo del porcentaje de casos que superan el promedio (s.mu)
     query = f"""
+        WITH base_data AS (
+            SELECT c.duracion_total_horas
+            FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c
+            WHERE {where_dim}
+              AND c.ganado = 'ganado'
+              AND c.duracion_total_horas IS NOT NULL
+              AND c.duracion_total_horas >= 0
+              {fecha_sql}
+        ),
+        stats AS (
+            SELECT 
+                COALESCE(AVG(duracion_total_horas), 0) AS mu
+            FROM base_data
+        )
         SELECT
-            COUNT(*)::int AS total_instalados,
-            ROUND(AVG(c.duracion_total_horas)::numeric, 2)::float8 AS horas_promedio,
-            ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY c.duracion_total_horas)::numeric, 2)::float8 AS horas_p25,
-            ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY c.duracion_total_horas)::numeric, 2)::float8 AS horas_mediana,
-            ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY c.duracion_total_horas)::numeric, 2)::float8 AS horas_p75,
-            ROUND(MIN(c.duracion_total_horas)::numeric, 2)::float8 AS horas_min,
-            ROUND(MAX(c.duracion_total_horas)::numeric, 2)::float8 AS horas_max,
-            ROUND(STDDEV(c.duracion_total_horas)::numeric, 2)::float8 AS horas_std
-        FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c
-        WHERE {where_dim}
-          AND c.ganado = 'ganado'
-          AND c.duracion_total_horas IS NOT NULL
-          AND c.duracion_total_horas >= 0
-          {fecha_sql}
+            (SELECT COUNT(*) FROM base_data)::int AS total_instalados,
+            ROUND(s.mu::numeric, 2)::float8 AS horas_promedio,
+            ROUND(PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY b.duracion_total_horas)::numeric, 2)::float8 AS horas_p25,
+            ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY b.duracion_total_horas)::numeric, 2)::float8 AS horas_mediana,
+            ROUND(PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY b.duracion_total_horas)::numeric, 2)::float8 AS horas_p75,
+            ROUND(MIN(b.duracion_total_horas)::numeric, 2)::float8 AS horas_min,
+            ROUND(MAX(b.duracion_total_horas)::numeric, 2)::float8 AS horas_max,
+            ROUND(STDDEV(b.duracion_total_horas)::numeric, 2)::float8 AS horas_std,
+            ROUND(
+                (COUNT(*) FILTER (WHERE b.duracion_total_horas > s.mu) * 100.0) / NULLIF(COUNT(*), 0), 2
+            )::float8 AS pct_excede_promedio
+        FROM base_data b
+        CROSS JOIN stats s
+        GROUP BY s.mu
     """
     df = db.query(query, params=params)
     return df.to_dict("records")[0] if not df.empty else {}
