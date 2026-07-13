@@ -109,15 +109,15 @@ document.addEventListener("DOMContentLoaded", function() {
                         <tr>
                           <td class="fw-semibold">${r.zona}</td>
                           <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${r.sucursal}</span></td>
-                          <td class="text-end text-muted">${activos_inicio}</td>
-                          <td class="text-end text-success">+${nuevos}</td>
-                          <td class="text-end text-danger">-${bajas}</td>
-                          <td class="text-end text-success">${crecimiento.toFixed(2)}%</td>
-                          <td class="text-end text-info">+${reactivaciones}</td>
+                          <td class="text-end">${activos_inicio}</td>
+                          <td class="text-end" style="color: green !important;">+${nuevos}</td>
+                          <td class="text-end" style="color: red !important;">-${bajas}</td>
+                          <td class="text-end" style="color: green !important;">${crecimiento.toFixed(2)}%</td>
+                          <td class="text-end" style="color: blue !important;">+${reactivaciones}</td>
                           <td class="text-end fw-bold">${activos_final}</td>
-                          <td class="text-end ${churn_bruto_pct > 2.5 ? 'text-warning' : ''}">${churn_bruto_pct.toFixed(2)}%</td>
+                          <td class="text-end" style="color: red !important;">${churn_bruto_pct.toFixed(2)}%</td>
                           <td class="text-end">$${arpu.toFixed(2)}</td>
-                          <td class="text-end fw-semibold text-primary">$${total_billing.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                          <td class="text-end fw-semibold" style="color: blue !important;">$${total_billing.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                         </tr>
                       `;
                       }).join("")}
@@ -126,14 +126,14 @@ document.addEventListener("DOMContentLoaded", function() {
                       <tr class="subtotal-row">
                         <td colspan="2">SUBTOTAL REGIONAL (${site})</td>
                         <td class="text-end">${totIni}</td>
-                        <td class="text-end text-success">+${totNue}</td>
-                        <td class="text-end text-danger">-${totBaj}</td>
-                        <td class="text-end text-success">${totalCreac}%</td>
-                        <td class="text-end text-info">+${totReac}</td>
-                        <td class="text-end text-primary">${totFin}</td>
-                        <td class="text-end">${siteChurn}%</td>
+                        <td class="text-end" style="color: green !important;">+${totNue}</td>
+                        <td class="text-end" style="color: red !important;">-${totBaj}</td>
+                        <td class="text-end" style="color: green !important;">${totalCreac}%</td>
+                        <td class="text-end" style="color: blue !important;">+${totReac}</td>
+                        <td class="text-end">${totFin}</td>
+                        <td class="text-end" style="color: red !important;">${siteChurn}%</td>
                         <td class="text-end">$${siteARPU}</td>
-                        <td class="text-end text-primary">$${totBill.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="text-end" style="color: blue !important;">$${totBill.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                       </tr>
                     </tbody>
                   </table>
