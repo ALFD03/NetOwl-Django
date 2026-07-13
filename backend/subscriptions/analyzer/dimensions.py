@@ -10,10 +10,10 @@ def aggregate_dimensions(
     df_react_not_in_ini=None, df_subs_full=None
 ):
     periodo_label = periodo.label()
-    DIMS = ["zona", "sucursal", "municipio", "campanna", "producto"]
+    DIMS = ["zona", "sucursal", "municipio", "campanna", "producto", "zona_sucursal"]
 
     # Comprobamos si df_subs_full tiene todas las dimensiones requeridas
-    has_dims = df_subs_full is not None and all(d in df_subs_full.columns for d in DIMS)
+    has_dims = df_subs_full is not None and all(d in df_subs_full.columns for d in DIMS[:-1])
 
     if has_dims:
         df_subs_dedup = df_subs_full.copy()
@@ -25,6 +25,10 @@ def aggregate_dimensions(
         df_subs = db.read_table(TableNames.SUBSCRIPTIONS)
         df_subs.columns = df_subs.columns.str.lower()
         df_subs_dedup = df_subs.drop_duplicates(subset=["orden_producto"])
+        
+    df_subs_dedup["zona"] = df_subs_dedup["zona"].fillna("Sin Zona").astype(str).str.strip()
+    df_subs_dedup["sucursal"] = df_subs_dedup["sucursal"].fillna("Sin Sucursal").astype(str).str.strip()
+    df_subs_dedup["zona_sucursal"] = df_subs_dedup["zona"] + " - " + df_subs_dedup["sucursal"]
 
     # Normalizamos el índice de la tabla de suscripciones para búsquedas O(1)
     df_subs_dedup["orden_producto"] = df_subs_dedup["orden_producto"].astype(str).str.strip()
@@ -120,9 +124,9 @@ def aggregate_dimensions(
                 "activos_inicio": a_ini,
                 "activos_final": a_fin,
                 "nuevos": nv,
-                "bajas_netas": bn,
+                "bajas": bb,
+                "crecimiento": round(((a_fin - a_ini) / a_ini) * 100, 4) if a_ini > 0 else 0.0,
                 "churn_neto_pct": round((bn / a_ini) * 100, 4) if a_ini > 0 else 0.0,
-                "bajas_brutas": bb,
                 "churn_bruto_pct": round((bb / a_ini) * 100, 4) if a_ini > 0 else 0.0,
                 "react_6_churn": d_react_6.get(val, 0),
                 "react_8_30days": d_react_8.get(val, 0),
@@ -133,7 +137,7 @@ def aggregate_dimensions(
                 "reactivaciones": reac,
                 "react_val": react_val,
                 "tasa_aporte_react_pct": round((react_val / (nv + react_val)) * 100, 4) if (nv + react_val) > 0 else 0.0,
-                "indice_reemplazo_react_pct": round((react_val / bn) * 100, 4) if bn > 0 else 0.0,
+                "indice_reemplazo_react_pct": round((react_val / bb) * 100, 4) if bb > 0 else 0.0,
                 "adiciones_netas": nv - bn,
                 "adiciones_brutas": (nv + d_react_not_in_ini.get(val, 0)) - bn,
                 "tasa_winback_pct": round((reac / inac) * 100, 4) if inac > 0 else 0.0,
