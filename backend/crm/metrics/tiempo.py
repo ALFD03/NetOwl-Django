@@ -78,7 +78,7 @@ def compute_tiempo_instalacion(
             WHERE {where_dim}
               AND c.ganado = 'ganado'
               AND c.duracion_total_horas IS NOT NULL
-              AND c.duracion_total_horas >= 0
+              AND c.duracion_total_horas >= 4
               {fecha_sql}
         ),
         stats AS (
@@ -96,7 +96,7 @@ def compute_tiempo_instalacion(
             ROUND(MAX(b.duracion_total_horas)::numeric, 2)::float8 AS horas_max,
             ROUND(STDDEV(b.duracion_total_horas)::numeric, 2)::float8 AS horas_std,
             ROUND(
-                (COUNT(*) FILTER (WHERE b.duracion_total_horas > s.mu) * 100.0) / NULLIF(COUNT(*), 0), 2
+                (COUNT(*) FILTER (WHERE b.duracion_total_horas > s.mu) * 100.0) / NULLIF(COUNT(*) FILTER (WHERE b.duracion_total_horas >= 4), 0), 2
             )::float8 AS pct_excede_promedio
         FROM base_data b
         CROSS JOIN stats s

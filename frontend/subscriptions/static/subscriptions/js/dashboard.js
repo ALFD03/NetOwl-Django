@@ -103,32 +103,26 @@
     }
 
     var winbackData = labels.map(v("tasa_winback_pct"));
-    var winbackPlugin = makeThresholdPlugin("winbackLine", null, { value: 80, color: "#ffffff", label: "Obj. 80%" });
     var ctx2 = document.getElementById("winbackBarChart");
     if (ctx2) {
       N.winbackBarChart = new Chart(ctx2, {
         type: "bar",
         data: { labels: labels, datasets: [
           { label: "Tasa Winback", data: winbackData, backgroundColor: winbackData.map(function (v) { return (v || 0) < 80 ? "rgba(239,68,68,0.8)" : (v || 0) <= 90 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4, order: 1 },
-          { label: "Tendencia", data: winbackData, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
         ] },
         options: N.chartOpts(N.barOpts(gridColor, tickColor)),
-        plugins: [winbackPlugin]
       });
     }
 
     var arpuData = labels.map(v("arpu"));
-    var arpuPlugin = makeThresholdPlugin("arpuLine", null, { value: 25, color: "#ffffff", label: "Obj. 25" });
     var ctx3 = document.getElementById("arpuBarChart");
     if (ctx3) {
       N.arpuBarChart = new Chart(ctx3, {
         type: "bar",
         data: { labels: labels, datasets: [
           { label: "ARPU", data: arpuData, backgroundColor: arpuData.map(function (v) { return (v || 0) < 25 ? "rgba(239,68,68,0.8)" : (v || 0) <= 30 ? "rgba(234,179,8,0.8)" : "rgba(34,197,94,0.8)"; }), borderRadius: 4, order: 1 },
-          { label: "Tendencia", data: arpuData, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
         ] },
         options: N.chartOpts(N.barOpts(gridColor, tickColor)),
-        plugins: [arpuPlugin]
       });
     }
 
@@ -139,7 +133,6 @@
         type: "bar",
         data: { labels: labels, datasets: [
           { label: "Tasa Aporte React.", data: aporteData, backgroundColor: "rgba(37,99,235,0.8)", borderRadius: 4, order: 1 },
-          { label: "Tendencia", data: aporteData, type: "line", borderColor: "#fbbf24", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fbbf24", fill: false, order: 0 },
         ] },
         options: N.chartOpts(N.barOpts(gridColor, tickColor))
       });
@@ -188,19 +181,19 @@
       });
     }
 
-    var bajasNetasData = labels.map(v("bajas_netas"));
-    var bajasBrutasData = labels.map(v("bajas_brutas"));
-    var ctxBajas = document.getElementById("bajasNetBrutChart");
-    if (ctxBajas) {
-      N.bajasNetBrutChart = new Chart(ctxBajas, {
-        type: "bar",
-        data: { labels: labels, datasets: [
-          { label: "Bajas Netas", data: bajasNetasData, backgroundColor: "rgba(239,68,68,0.75)", borderRadius: 4 },
-          { label: "Bajas Brutas", data: bajasBrutasData, backgroundColor: "rgba(168,85,247,0.75)", borderRadius: 4 },
-        ] },
-        options: N.chartOpts(N.barOpts(gridColor, tickColor))
-      });
-    }
+    // var bajasNetasData = labels.map(v("bajas_netas"));
+    // var bajasBrutasData = labels.map(v("bajas_brutas"));
+    // var ctxBajas = document.getElementById("bajasNetBrutChart");
+    // if (ctxBajas) {
+    //   N.bajasNetBrutChart = new Chart(ctxBajas, {
+    //     type: "bar",
+    //     data: { labels: labels, datasets: [
+    //       { label: "Bajas Netas", data: bajasNetasData, backgroundColor: "rgba(239,68,68,0.75)", borderRadius: 4 },
+    //       { label: "Bajas Brutas", data: bajasBrutasData, backgroundColor: "rgba(168,85,247,0.75)", borderRadius: 4 },
+    //     ] },
+    //     options: N.chartOpts(N.barOpts(gridColor, tickColor))
+    //   });
+    // }
 
     var suspensionData = labels.map(v("porcentaje_suspensiones"));
     var suspensionZones = [

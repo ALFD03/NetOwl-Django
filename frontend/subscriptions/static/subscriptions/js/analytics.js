@@ -101,7 +101,7 @@
     function colorBajas(v) { return v < 500 ? "text-success" : v <= 1000 ? "text-warning" : "text-danger"; }
     function colorWinback(v) { return v >= 90 ? "text-success" : v >= 80 ? "text-warning" : "text-danger"; }
     function colorArpu(v) { return v >= 30 ? "text-success" : v >= 25 ? "text-warning" : "text-danger"; }
-    function colorAdiciones(v) { return v > 500 ? "text-success" : v >= 1 ? "text-warning" : "text-danger"; }
+    function colorAdiciones(v) { return v > 1500 ? "text-success" : v >= 500 ? "text-warning" : "text-danger"; }
     function colorcrecimiento(v) { return v < 4 ? "text-danger" : v <= 5 ? "text-warning" : "text-success"; }
     function colorSuspensiones(v) { return v >= 40 ? "text-danger" : v >= 35 ? "text-warning" : "text-success"; }
 
