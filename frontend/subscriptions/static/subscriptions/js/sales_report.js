@@ -47,7 +47,7 @@ document.addEventListener("DOMContentLoaded", function() {
         // Recorremos cada Site regional (Valencia, Aragua, etc.)
         for (const [site, rows] of Object.entries(data)) {
             // Calculamos subtotales de la región para gerencia
-            let totIni = 0, totFin = 0, totNue = 0, totBaj = 0, totReac = 0, totBill = 0;
+            let totIni = 0, totFin = 0, totNue = 0, totBaj = 0, totReac = 0;
 
             rows.forEach(r => {
               const activos_inicio = parseInt(r.activos_inicio) || 0;
@@ -55,18 +55,16 @@ document.addEventListener("DOMContentLoaded", function() {
               const nuevos = parseInt(r.nuevos) || 0;
               const bajas = parseInt(r.bajas) || 0;
               const reactivaciones = parseInt(r.reactivaciones) || 0;
-              const total_billing = parseFloat(r.total_billing) || 0;
 
               totIni += activos_inicio;
               totFin += activos_final;
               totNue += nuevos;
               totBaj += bajas;
               totReac += reactivaciones;
-              totBill += total_billing;
             });
 
             const siteChurn = totIni > 0 ? (((totBaj) / totIni) * 100).toFixed(2) : "0.00";
-            const siteARPU = totFin > 0 ? (totBill / totFin).toFixed(2) : "0.00";
+            const siteChurnNet = totIni > 0 ? (((totIni - totFin + totNue) / totIni) * 100).toFixed(2) : "0.00";
             const totalCreac = totIni > 0 ? (((totFin - totIni) / totIni) * 100).toFixed(2) : "0.00";
 
             html += `
@@ -88,9 +86,8 @@ document.addEventListener("DOMContentLoaded", function() {
                         <th class="text-end">Crecimiento</th>
                         <th class="text-end">Reactivaciones</th>
                         <th class="text-end">Activos Final</th>
-                        <th class="text-end">Churn %</th>
-                        <th class="text-end">ARPU</th>
-                        <th class="text-end">Facturación Total</th>
+                        <th class="text-end">Churn Bruto%</th>
+                        <th class="text-end">Churn Neto%</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -102,8 +99,7 @@ document.addEventListener("DOMContentLoaded", function() {
                           const reactivaciones = parseInt(r.reactivaciones) || 0;
                           const activos_final = parseInt(r.activos_final) || 0;
                           const churn_bruto_pct = parseFloat(r.churn_bruto_pct) || 0;
-                          const arpu = parseFloat(r.arpu) || 0;
-                          const total_billing = parseFloat(r.total_billing) || 0;
+                          const churn_neto_pct = parseFloat(r.churn_neto_pct) || 0;
 
                           return `
                         <tr>
@@ -116,8 +112,7 @@ document.addEventListener("DOMContentLoaded", function() {
                           <td class="text-end" style="color: blue !important;">+${reactivaciones}</td>
                           <td class="text-end fw-bold">${activos_final}</td>
                           <td class="text-end" style="color: red !important;">${churn_bruto_pct.toFixed(2)}%</td>
-                          <td class="text-end">$${arpu.toFixed(2)}</td>
-                          <td class="text-end fw-semibold" style="color: blue !important;">$${total_billing.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                          <td class="text-end" style="color: red !important;">${churn_neto_pct.toFixed(2)}%</td>
                         </tr>
                       `;
                       }).join("")}
@@ -132,8 +127,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         <td class="text-end" style="color: blue !important;">+${totReac}</td>
                         <td class="text-end">${totFin}</td>
                         <td class="text-end" style="color: red !important;">${siteChurn}%</td>
-                        <td class="text-end">$${siteARPU}</td>
-                        <td class="text-end" style="color: blue !important;">$${totBill.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="text-end" style="color: red !important;">${siteChurnNet}%</td>
                       </tr>
                     </tbody>
                   </table>
