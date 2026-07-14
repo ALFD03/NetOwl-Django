@@ -14,6 +14,7 @@ urlpatterns = [
     path("results/", views.results, name="results"),
     path("results/<str:periodo>/", views.results, name="results_detail"),
     path("lifetime/", views.lifetime, name="lifetime"),
+    path("sales-report/", views.sales_report, name="sales_report"),
 
     path("api/dashboard-data/", views.api_dashboard_data, name="api_dashboard_data"),
     path("api/run-analysis/", views.api_run_analysis, name="api_run_analysis"),
@@ -26,4 +27,5 @@ urlpatterns = [
     path("api/import-logs/", views.api_import_logs, name="api_import_logs"),
     path("api/lifecycle/run/", views.api_lifecycle_run, name="api_lifecycle_run"),
     path("api/lifecycle/results/", views.api_lifecycle_results, name="api_lifecycle_results"),
+    path("api/sales-report/", views.api_sales_report, name="api_sales_report"),
 ]

@@ -38,6 +38,7 @@
       ["Mediana", tiData.horas_mediana || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
       ["P25", tiData.horas_p25 || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
       ["P75", tiData.horas_p75 || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
+      ["Probabilidad", tiData.pct_excede_promedio || 0, function (v) { return v.toFixed(1) + "%"; }, colorTiempo],
       ["Mínimo", tiData.horas_min || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
       ["Máximo", tiData.horas_max || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
       ["Desviación Estándar", tiData.horas_std || 0, function (v) { return v.toFixed(1) + "h"; }, colorTiempo],
