@@ -19,7 +19,7 @@ from backend.subscriptions import (
     MetricsAnalyzer,
     get_cierre_churn, get_dimensiones, get_periodos,
     get_dashboard_data, get_analytics_data,
-    import_logs_csv, import_subscriptions_csv,
+    import_logs_csv, import_subscriptions_csv, get_sales_report_data,
 )
 from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
@@ -27,8 +27,6 @@ from backend.subscriptions.lifetime import (
 
 TEMPLATE_PREFIX = "subscriptions/"
 
-
-# === HELPERS LOCALES PARA EL MANEJO DE SUBIDAS (PÚBLICOS) ===
 def handle_csv_upload(request):
     if "csv_file" not in request.FILES:
         return None, JsonResponse({"status": "error", "message": "Archivo no enviado"}, status=400)
@@ -69,6 +67,9 @@ def results(request, periodo=None):
 
 def lifetime(request):
     return render(request, f"{TEMPLATE_PREFIX}lifetime.html", {"section": "lifetime"})
+
+def sales_report(request):
+    return render(request, f"{TEMPLATE_PREFIX}sales_report.html", {"section": "sales_report"})
 
 def api_dashboard_data(request):
     return JsonResponse(get_dashboard_data())
@@ -140,6 +141,7 @@ def api_survival_data(request):
             "zona": "zona", "sucursal": "sucursal",
             "municipio": "municipio", "campana": "campanna",
             "producto": "producto",
+            "zona_sucursal": "zona_sucursal",
         }
         db_dim = DIM_MAP.get(dim)
         if db_dim:
@@ -233,3 +235,7 @@ def api_lifecycle_results(request):
         return JsonResponse({"status": "empty", "message": "Ejecute el analisis de ciclo de vida primero"})
     dimensiones = get_lifetime_dimensiones()
     return JsonResponse({"status": "success", "data": data, "dimensiones": dimensiones})
+
+def api_sales_report(request):
+    periodo = request.GET.get("period")
+    return JsonResponse(get_sales_report_data(periodo))

@@ -10,7 +10,11 @@ def compute_dimension_metrics(subs: pd.DataFrame, periods: pd.DataFrame) -> pd.D
         return pd.DataFrame()
 
     rows: List[Dict[str, Any]] = []
-    subs_dedup = subs.drop_duplicates(subset=["orden"])
+    subs_dedup = subs.drop_duplicates(subset=["orden"]).copy()
+
+    subs_dedup["zona"] = subs_dedup["zona"].fillna("Sin Zona").astype(str).str.strip()
+    subs_dedup["sucursal"] = subs_dedup["sucursal"].fillna("Sin Sucursal").astype(str).str.strip()
+    subs_dedup["zona_sucursal"] = subs_dedup["zona"] + " - " + subs_dedup["sucursal"]
     
     # Extraemos solo las dimensiones existentes
     dim_cols = [col for col in DIMS if col in subs_dedup.columns]

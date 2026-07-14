@@ -101,7 +101,8 @@
     function colorBajas(v) { return v < 500 ? "text-success" : v <= 1000 ? "text-warning" : "text-danger"; }
     function colorWinback(v) { return v >= 90 ? "text-success" : v >= 80 ? "text-warning" : "text-danger"; }
     function colorArpu(v) { return v >= 30 ? "text-success" : v >= 25 ? "text-warning" : "text-danger"; }
-    function colorAdiciones(v) { return v > 500 ? "text-success" : v >= 1 ? "text-warning" : "text-danger"; }
+    function colorAdiciones(v) { return v > 1500 ? "text-success" : v >= 500 ? "text-warning" : "text-danger"; }
+    function colorcrecimiento(v) { return v < 4 ? "text-danger" : v <= 5 ? "text-warning" : "text-success"; }
     function colorSuspensiones(v) { return v >= 40 ? "text-danger" : v >= 35 ? "text-warning" : "text-success"; }
 
     function card(label, val, fmt, clr) {
@@ -116,14 +117,15 @@
     html += group("Churn", [
       ["Churn Neto", avg("churn_neto_pct"), function (v) { return v.toFixed(2) + "%"; }, colorChurn],
       ["Churn Bruto", avg("churn_bruto_pct"), function (v) { return v.toFixed(2) + "%"; }, colorChurn],
-      ["Bajas Netas", avg("bajas_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
-      ["Bajas Brutas", avg("bajas_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
+      ["Bajas", avg("bajas"), function (v) { return Math.round(v).toLocaleString(); }, colorBajas],
       ]);
     html += group("Crecimiento", [
       ["Nuevos en el Mes", avg("nuevos_mes"), function (v) { return Math.round(v).toLocaleString(); }, colorNuevos],
       ["Adiciones Netas", avg("adiciones_netas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
       ["Adiciones Brutas", avg("adiciones_brutas"), function (v) { return Math.round(v).toLocaleString(); }, colorAdiciones],
-      ]);
+      ["Crecimiento", avg("crecimiento"), function (v) { return v.toFixed(2) + "%"; }, colorcrecimiento],
+      
+    ]);
     html += group("Retención",
       [
         ["Corte Impago", avg("corte_impagado"), function (v) { return Math.round(v).toLocaleString(); }, function () { return "text-success"; }],
