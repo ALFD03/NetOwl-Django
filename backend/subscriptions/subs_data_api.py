@@ -8,6 +8,29 @@ from ..database import DBConnector
 
 logger = logging.getLogger(__name__)
 
+
+CUSTOM_SITE_ORDER = [
+    "Valencia",
+    "Naguanagua",
+    "Los Guayos",
+    "Libertador",
+    "San Joaquin",
+    "Guacara",
+    "Puerto Cabello",
+    "Moron",
+    "Maracay",
+    "Turmero",
+    "Cagua",
+    "La Victoria",
+    "San Diego",
+]
+
+def get_site_sort_index(site_name: str) -> int:
+    try:
+        return CUSTOM_SITE_ORDER.index(site_name)
+    except ValueError:
+        return len(CUSTOM_SITE_ORDER)  # Los no listados van al final
+
 def get_cierre_churn(
     periodos: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
@@ -123,11 +146,45 @@ def get_analytics_data(
 
 ZONAS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Zonas.json"
 
+def calculate_aggregation_totals(nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Suma los valores absolutos de un conjunto de nodos y recalcula
+    los indicadores porcentuales para evitar el error de promediar promedios.
+    """
+    act_ini = sum(n["activos_inicio"] for n in nodes)
+    act_fin = sum(n["activos_final"] for n in nodes)
+    nuevos = sum(n["nuevos"] for n in nodes)
+    bajas = sum(n["bajas"] for n in nodes)
+    react = sum(n["reactivaciones"] for n in nodes)
+    corte = sum(n["corte_impagado"] for n in nodes)
+    ad_netas = sum(n["adiciones_netas"] for n in nodes)
+    ad_brutas = sum(n["adiciones_brutas"] for n in nodes)
+
+    # Fórmulas de agregación consistentes
+    crecimiento = round(((act_fin - act_ini) / act_ini * 100), 2) if act_ini > 0 else 0.0
+    
+    bajas_netas_calc = max(0, act_ini - (act_fin - nuevos))
+    churn_neto = round((bajas_netas_calc / act_ini * 100), 2) if act_ini > 0 else 0.0
+    churn_bruto = round((bajas / act_ini * 100), 2) if act_ini > 0 else 0.0
+
+    return {
+        "activos_inicio": act_ini,
+        "activos_final": act_fin,
+        "nuevos": nuevos,
+        "bajas": bajas,
+        "reactivaciones": react,
+        "crecimiento": crecimiento,
+        "churn_neto_pct": churn_neto,
+        "churn_bruto_pct": churn_bruto,
+        "adiciones_netas": ad_netas,
+        "adiciones_brutas": ad_brutas,
+        "corte_impagado": corte,
+    }
+
 def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, Any]:
     """
-    Lee la dimensión compuesta 'zona_sucursal' del período seleccionado,
-    asocia cada zona a su Site regional usando Zonas.json, y agrupa
-    todos los KPI para renderizado gerencial.
+    Agrupa las métricas del periodo por Site regional -> Type (Tecnología) -> Nodos,
+    calculando subtotales para cada tecnología y totales generales para cada Site.
     """
     db = DBConnector()
     try:
@@ -135,24 +192,27 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
         if not available_periods:
             return {"status": "empty", "message": "No hay periodos calculados"}
         
-        # Tomamos el último periodo calculado si no se especifica uno
         target_period = periodo_reporte or available_periods[0]
         
-        # 1. Cargar el mapeo de Zonas a Sites regionales
         if not ZONAS_PATH.exists():
             return {"status": "error", "message": "No se encontró el archivo Zonas.json en la raíz"}
             
         with open(ZONAS_PATH, "r", encoding="utf-8") as f:
             zonas_data = json.load(f)
         
-        # Mapeador insensible a mayúsculas y espacios
-        zone_to_site = {z["name"].strip().lower(): z.get("Site", "Valencia").strip() for z in zonas_data["zonas"]}
+        # Mapeamos zonas a su respectivo Site y Type (Tecnología)
+        zone_info = {}
+        for z in zonas_data["zonas"]:
+            name = z["name"].strip().lower()
+            zone_info[name] = {
+                "site": z.get("Site", "Valencia").strip(),
+                "type": z.get("Type", "GPON").strip()  # "GPON" como fallback por defecto
+            }
         
-        # 2. Consultar las métricas de "zona_sucursal" para el periodo seleccionado
         df = db.query(f"""
             SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
-                   churn_neto_pct, churn_bruto_pct, react_val, 
-                   total_billing, arpu, adiciones_netas, adiciones_brutas, corte_impagado
+                   churn_neto_pct, churn_bruto_pct, react_val,
+                   adiciones_netas, adiciones_brutas, corte_impagado
             FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
             WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
         """, params=[target_period])
@@ -160,8 +220,9 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
         if df.empty:
             return {"status": "empty", "period": target_period, "periods": available_periods}
             
-        # 3. Agrupación por Site regional en memoria
-        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        # Agrupación en estructura anidada en memoria
+        # Estructura: site_groups[site][tech_type] = List[nodos]
+        site_groups: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
         
         for _, row in df.iterrows():
             val_str = str(row["valor"])
@@ -169,13 +230,14 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
             zona_name = parts[0].strip() if len(parts) > 0 else val_str
             sucursal_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
             
-            # Obtenemos el Site correspondiente
-            site = zone_to_site.get(zona_name.lower(), "Otros / Desconocido")
+            z_data = zone_info.get(zona_name.lower(), {"site": "Otros / Desconocido", "type": "GPON"})
+            site = z_data["site"]
+            tech_type = z_data["type"]
             
-            if site not in grouped:
-                grouped[site] = []
-                
-            grouped[site].append({
+            site_groups.setdefault(site, {})
+            site_groups[site].setdefault(tech_type, [])
+            
+            site_groups[site][tech_type].append({
                 "zona_sucursal": val_str,
                 "zona": zona_name,
                 "sucursal": sucursal_name,
@@ -187,24 +249,51 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
                 "churn_neto_pct": float(row.get("churn_neto_pct") or 0),
                 "churn_bruto_pct": float(row.get("churn_bruto_pct") or 0),
                 "reactivaciones": int(row.get("react_val") or 0),
-                "total_billing": float(row.get("total_billing") or 0),
-                "arpu": float(row.get("arpu") or 0),
                 "adiciones_netas": int(row.get("adiciones_netas") or 0),
                 "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
                 "corte_impagado": int(row.get("corte_impagado") or 0),
             })
+
+        # Estructurar la respuesta final aplicando las ordenaciones y sumatorias de subtotales
+        final_data_list = []
+        
+        # Ordenamos los sites según la lista de orden personalizada
+        sorted_sites = sorted(site_groups.keys(), key=get_site_sort_index)
+        
+        for site in sorted_sites:
+            site_tech_list = []
+            all_site_nodes = []
             
-        # Ordenamos los Sites alfabéticamente y los elementos internos por activos final
-        ordered_grouped = {}
-        for site in sorted(grouped.keys()):
-            ordered_grouped[site] = sorted(grouped[site], key=lambda x: x["activos_final"], reverse=True)
+            # Ordenamos las tecnologías alfabéticamente dentro de cada Site
+            sorted_techs = sorted(site_groups[site].keys())
+            
+            for tech in sorted_techs:
+                nodes_in_tech = sorted(site_groups[site][tech], key=lambda x: x["activos_final"], reverse=True)
+                tech_totals = calculate_aggregation_totals(nodes_in_tech)
+                
+                site_tech_list.append({
+                    "technology": tech,
+                    "totals": tech_totals,
+                    "nodes": nodes_in_tech
+                })
+                all_site_nodes.extend(nodes_in_tech)
+                
+            # Totales de todo el Site completo (unión de todas sus tecnologías)
+            site_overall_totals = calculate_aggregation_totals(all_site_nodes)
+            
+            final_data_list.append({
+                "site": site,
+                "totals": site_overall_totals,
+                "technologies": site_tech_list
+            })
             
         return {
             "status": "success",
             "period": target_period,
             "periods": available_periods,
-            "data": ordered_grouped
+            "data": final_data_list
         }
     except Exception as e:
-        logger.exception("Error en get_sales_report_data")
+        import traceback
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}

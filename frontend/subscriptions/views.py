@@ -11,6 +11,7 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.conf import settings
 from django.views.decorators.http import require_POST
+from django_ratelimit.decorators import ratelimit
 
 # Conectores y lógica de negocio del backend
 from backend.database import DBConnector
@@ -24,25 +25,66 @@ from backend.subscriptions import (
 from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
 )
+from backend.utils import validate_csv_structure
 
 TEMPLATE_PREFIX = "subscriptions/"
 
-def handle_csv_upload(request):
+REQUIRED_SUBS_HEADERS = {
+    "Líneas de la orden/Referencia de la orden": "orden_producto",
+    "Líneas de la orden/Producto/Nombre": "producto",
+    "Líneas de la orden/Cliente": "cliente",
+    "Líneas de la orden/Cliente/CI/RIF": "ci",
+    "Sucursal": "sucursal",
+    "Zona": "zona",
+    "Líneas de la orden/Cliente/Municipio": "municipio",
+    "Tipo de Servicio": "tipo",
+    "Estado de la Suscripción": "estado",
+    "Campaña": "campanna",
+    "Próxima Fecha de Factura": "fecha_factura",
+    "Fecha de inicio": "fecha_inicio",
+    "Tarifa": "tarifa",
+    "Subtotal": "total",
+}
+
+REQUIRED_LOGS_HEADERS = {
+    "Logs de Cambios/Suscripción": "orden",
+    "Logs de Cambios/Fecha de Cambio": "fecha_log",
+    "Logs de Cambios/Nota": "log",
+    "Logs de Cambios/Estado Interno de Suscripción": "estado",
+}
+
+def handle_csv_upload(request, required_headers=None):
     if "csv_file" not in request.FILES:
         return None, JsonResponse({"status": "error", "message": "Archivo no enviado"}, status=400)
+    
     csv_file = request.FILES["csv_file"]
+    
+    # 1. Validación básica de tipo por extensión
     if not csv_file.name.endswith(".csv"):
-        return None, JsonResponse({"status": "error", "message": "Solo archivos .csv"}, status=400)
+        return None, JsonResponse({"status": "error", "message": "Solo se permiten archivos con extensión .csv"}, status=400)
+    
+    # 2. Validación de tamaño
     if csv_file.size > settings.MAX_UPLOAD_SIZE:
-        return None, JsonResponse({"status": "error", "message": "Archivo muy grande"}, status=400)
+        return None, JsonResponse({"status": "error", "message": "El archivo excede el tamaño máximo permitido"}, status=400)
+    
+    # Guardar en un archivo temporal seguro
     try:
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
         for chunk in csv_file.chunks():
             tmp.write(chunk)
         tmp_path = tmp.name
         tmp.close()
+        
+        # 3. Validación avanzada de estructura de cabeceras
+        if required_headers:
+            is_valid, err_msg = validate_csv_structure(tmp_path, required_headers)
+            if not is_valid:
+                cleanup_tempfile(tmp_path)
+                return None, JsonResponse({"status": "error", "message": err_msg}, status=400)
+                
     except Exception as e:
         return None, JsonResponse({"status": "error", "message": str(e)}, status=500)
+        
     return tmp_path, None
 
 
@@ -96,6 +138,8 @@ def api_results_detail(request, periodo):
         "dimensions": dimensions,
     })
 
+
+@ratelimit(key='ip', rate='2/m', block=True)
 def api_run_analysis(request):
     try:
         data = json.loads(request.body)
@@ -186,8 +230,10 @@ def api_survival_data(request):
         "curvas_dimension": curvas_dim,
     })
 
+@ratelimit(key='ip', rate='5/m', block=True)
 def api_import_subscriptions(request):
-    tmp_path, error = handle_csv_upload(request)
+    # Pasamos las cabeceras requeridas de suscripciones para que handle_csv_upload las valide
+    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_SUBS_HEADERS)
     if error:
         return error
     try:
@@ -198,8 +244,10 @@ def api_import_subscriptions(request):
     finally:
         cleanup_tempfile(tmp_path)
 
+@ratelimit(key='ip', rate='5/m', block=True)
 def api_import_logs(request):
-    tmp_path, error = handle_csv_upload(request)
+    # Pasamos las cabeceras requeridas de logs
+    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_LOGS_HEADERS)
     if error:
         return error
     try:
@@ -210,6 +258,7 @@ def api_import_logs(request):
     finally:
         cleanup_tempfile(tmp_path)
 
+@ratelimit(key='ip', rate='2/m', block=True)
 def api_lifecycle_run(request):
     try:
         metrics = run_lifecycle_analysis()

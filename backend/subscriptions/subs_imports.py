@@ -11,7 +11,6 @@ from ..database import DBConnector
 
 SUBSCRIPTIONS_COLUMN_MAPPING = {
     "Líneas de la orden/Referencia de la orden": "orden_producto",
-    # "Líneas de la orden/Producto": "producto",
     "Líneas de la orden/Producto/Nombre": "producto",
     "Líneas de la orden/Cliente": "cliente",
     "Líneas de la orden/Cliente/CI/RIF": "ci",
