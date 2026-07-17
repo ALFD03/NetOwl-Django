@@ -61,6 +61,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         <th class="text-end fw-bold">Crecimiento %</th>
                         <th class="text-end fw-bold">Churn Neto %</th>
                         <th class="text-end fw-bold">Churn Bruto %</th>
+                        <th class="text-end fw-bold">Adiciones Netas</th>
+                        <th class="text-end fw-bold">Adiciones Brutas</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -87,8 +89,10 @@ document.addEventListener("DOMContentLoaded", () => {
                         <td class="text-end text-info">+${node.reactivaciones.toLocaleString()}</td>
                         <td class="text-end text-primary">${node.activos_final.toLocaleString()}</td>
                         <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${node.crecimiento.toFixed(2)}%</td>
-                        <td class="text-end text-warning">${node.churn_neto_pct.toFixed(2)}%</td>
-                        <td class="text-end text-danger">${node.churn_bruto_pct.toFixed(2)}%</td>
+                        <td class="text-end ${node.churn_neto_pct <= 3 ? 'text-success' : node.churn_neto_pct <= 4 ? 'text-warning': 'text-danger'}">${node.churn_neto_pct.toFixed(2)}%</td>
+                        <td class="text-end ${node.churn_bruto_pct <= 3 ? 'text-success' : node.churn_bruto_pct <= 4 ? 'text-warning': 'text-danger'}">${node.churn_bruto_pct.toFixed(2)}%</td>
+                        <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${node.adiciones_netas.toLocaleString()}</td>
+                        <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${node.adiciones_brutas.toLocaleString()}</td>
                       </tr>
                     `;
                 });
@@ -104,8 +108,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td class="text-end text-info fw-bold">+${t.reactivaciones.toLocaleString()}</td>
                     <td class="text-end text-primary fw-bold">${t.activos_final.toLocaleString()}</td>
                     <td class="text-end ${t.crecimiento >= 2 ? 'text-success' : t.crecimiento >= 0 ? 'text-warning' : 'text-danger'} fw-bold">${t.crecimiento.toFixed(2)}%</td>
-                    <td class="text-end text-warning fw-bold">${t.churn_neto_pct.toFixed(2)}%</td>
-                    <td class="text-end text-danger fw-bold">${t.churn_bruto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${t.churn_neto_pct <= 3 ? 'text-success' : t.churn_neto_pct <= 4 ? 'text-warning': 'text-danger'}">${t.churn_neto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${t.churn_bruto_pct <= 3 ? 'text-success' : t.churn_bruto_pct <= 4 ? 'text-warning': 'text-danger'}">${t.churn_bruto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${t.crecimiento >= 2 ? 'text-success' : t.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${t.adiciones_netas.toLocaleString()}</td>
+                    <td class="text-end ${t.crecimiento >= 2 ? 'text-success' : t.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${t.adiciones_brutas.toLocaleString()}</td>                      
                   </tr>
                 `;
             });
@@ -121,8 +127,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td class="text-end text-info fw-bold">+${s.reactivaciones.toLocaleString()}</td>
                     <td class="text-end text-primary fw-bold">${s.activos_final.toLocaleString()}</td>
                     <td class="text-end ${s.crecimiento >= 2 ? 'text-success' : s.crecimiento >= 0 ? 'text-warning' : 'text-danger'} fw-bold">${s.crecimiento.toFixed(2)}%</td>
-                    <td class="text-end text-warning fw-bold">${s.churn_neto_pct.toFixed(2)}%</td>
-                    <td class="text-end text-danger fw-bold">${s.churn_bruto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${s.churn_neto_pct <= 3 ? 'text-success' : s.churn_neto_pct <= 4 ? 'text-warning': 'text-danger'}">${s.churn_neto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${s.churn_bruto_pct <= 3 ? 'text-success' : s.churn_bruto_pct <= 4 ? 'text-warning': 'text-danger'}">${s.churn_bruto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${s.crecimiento >= 2 ? 'text-success' : s.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${s.adiciones_netas.toLocaleString()}</td>
+                    <td class="text-end ${s.crecimiento >= 2 ? 'text-success' : s.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${s.adiciones_brutas.toLocaleString()}</td>
                   </tr>
                 </tbody>
               </table>
