@@ -44,8 +44,6 @@ if not SECRET_KEY:
 allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
 if allowed_hosts_env:
     ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
-else:
-    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.3.0.43"]
 
 # --- Seguridad HTTPS / Headers ---
 SECURE_SSL_REDIRECT = False # Cambiar a True solo con  HTTPS habilitado
