@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% load static %}
+
+
+{% block title %}NetOwl - Configuración de Permisos{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header"><h5><i class="bi bi-person-plus me-2 text-primary"></i>Nuevo Usuario</h5></div>
+      <div class="card-body">
+        <form id="create-user-form">
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Nombre de Usuario</label>
+            <input type="text" id="new-username" class="form-control" required placeholder="ej: aflores">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Contraseña</label>
+            <input type="password" id="new-password" class="form-control" required placeholder="Mínimo 8 caracteres">
+          </div>
+          <div class="mb-4">
+            <label class="form-label small fw-bold">Nivel de Acceso (Rol)</label>
+            <select id="new-role" class="form-select">
+              {% for val, display in roles %}
+                <option value="{{ val }}">{{ display }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary w-100 py-2"><i class="bi bi-save me-2"></i>Guardar Usuario</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header"><h5><i class="bi bi-people me-2 text-primary"></i>Usuarios Registrados</h5></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 table-theme">
+            <thead>
+              <tr>
+                <th>Nombre de Usuario</th>
+                <th>Rol / Permiso</th>
+                <th class="text-center">Cambiar Rol</th>
+                <th class="text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in users %}
+                <tr id="user-row-{{ u.id }}">
+                  <td>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="badge bg-secondary-subtle text-primary p-2"><i class="bi bi-person"></i></span>
+                      <span class="fw-semibold">{{ u.username }}</span>
+                      {% if u.id == request.user.id %}
+                        <span class="badge bg-primary-subtle text-primary rounded-pill small" style="font-size:0.75rem">Tú</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge {% if u.profile.role == 'admin' %}bg-primary-subtle text-primary{% elif u.profile.role == 'analyst' %}bg-info-subtle text-info{% else %}bg-secondary-subtle text-secondary-emphasis{% endif %} px-2 py-1">
+                      {{ u.profile.get_role_display }}
+                    </span>
+                  </td>
+                  <td class="text-center" style="min-width: 220px; max-width: 240px;">
+                    <div class="d-flex align-items-center gap-1">
+                      <!-- Selector bloqueado por defecto -->
+                      <select class="form-select form-select-sm role-changer-select" id="role-select-{{ u.id }}" style="background-color: var(--surface-tertiary)" disabled>
+                        {% for val, display in roles %}
+                          <option value="{{ val }}" {% if u.profile.role == val %}selected{% endif %}>{{ display }}</option>
+                        {% endfor %}
+                      </select>
+                      
+                      <!-- Botón para alternar Edición / Guardado (Oculto para ti mismo para evitar autobloqueos) -->
+                      {% if u.id != request.user.id %}
+                        <button class="btn btn-sm btn-outline-primary toggle-edit-role-btn" id="role-btn-{{ u.id }}" data-user-id="{{ u.id }}" title="Editar Rol">
+                          <i class="bi bi-pencil-square"></i>
+                        </button>
+                      {% endif %}
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    <div class="d-flex justify-content-center gap-1">
+                      <!-- Llave para cambiar contraseña -->
+                      <button class="btn btn-sm btn-outline-warning change-password-btn" data-user-id="{{ u.id }}" data-username="{{ u.username }}" title="Cambiar Contraseña">
+                        <i class="bi bi-key"></i>
+                      </button>
+                      <!-- Tacho para eliminar usuario -->
+                      <button class="btn btn-sm btn-outline-danger delete-user-btn" data-user-id="{{ u.id }}" data-username="{{ u.username }}" {% if u.id == request.user.id %}disabled{% endif %} title="Eliminar Usuario">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 1: Cambiar Contraseña -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background-color: var(--surface-secondary); border-color: var(--border-color);">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-key-fill text-warning me-2"></i>Actualizar Contraseña</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="change-password-form">
+          <input type="hidden" id="change-pass-user-id">
+          <div class="mb-3">
+            <label class="form-label small fw-bold">Usuario Seleccionado</label>
+            <input type="text" id="change-pass-username" class="form-control-plaintext text-primary fw-bold" readonly style="font-size: 1.1rem; padding: 0;">
+          </div>
+          <div class="mb-4">
+            <label class="form-label small fw-bold">Nueva Contraseña</label>
+            <input type="password" id="change-pass-new-password" class="form-control" required placeholder="Escriba la nueva contraseña (Mín. 8 caracteres)" style="background-color: var(--surface-tertiary)">
+          </div>
+          <button type="submit" class="btn btn-warning w-100 py-2 text-dark fw-bold"><i class="bi bi-check-circle me-2"></i>Actualizar Contraseña</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 2: Confirmación de Eliminación Personalizado -->
+<div class="modal fade" id="deleteUserModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background-color: var(--surface-secondary); border-color: var(--border-color);">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Confirmar Eliminación</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Estás seguro de que deseas eliminar permanentemente al usuario <span id="delete-username-span" class="text-primary fw-bold"></span> del sistema?</p>
+        <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Esta acción no se puede deshacer y revocará sus accesos de forma inmediata.</p>
+        <input type="hidden" id="delete-user-id">
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" id="confirm-delete-btn" class="btn btn-danger btn-sm"><i class="bi bi-trash me-1"></i>Eliminar Usuario</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <!-- Se carga al final de la página garantizando que Bootstrap y NetOwl ya existan en memoria -->
+  <script src="{% static 'config/js/management.js' %}"></script>
+{% endblock %}

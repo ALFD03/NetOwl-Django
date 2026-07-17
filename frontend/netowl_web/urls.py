@@ -9,4 +9,5 @@ urlpatterns = [
     # Módulos del sistema
     path("subscriptions/", include("frontend.subscriptions.urls")),
     path("crm/", include("frontend.crm.urls")),
+    path("auth/", include("frontend.config.urls")),
 ]

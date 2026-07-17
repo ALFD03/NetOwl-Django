@@ -40,6 +40,6 @@ EXPOSE 8000
 ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["gunicorn", "frontend.netowl_web.wsgi:application", \
      "--bind", "0.0.0.0:8000", \
-     "--workers", "2", \
+     "--workers", "5", \
      "--timeout", "300", \
      "--access-logfile", "-"]

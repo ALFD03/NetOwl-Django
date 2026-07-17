@@ -25,9 +25,12 @@ load_dotenv()
 # (frontend/churn_web/settings.py → raíz del repo)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+LOGIN_URL = "/auth/login/"
+LOGOUT_REDIRECT_URL = "/auth/login/"
+
 # --- Seguridad ---
 # Modo debug: deshabilitar en producción (DJANGO_DEBUG=False)
-DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in ("true", "1", "yes")
+DEBUG = False
 # Clave secreta de Django (definir DJANGO_SECRET_KEY en producción)
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
@@ -45,7 +48,7 @@ else:
     ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.3.0.43"]
 
 # --- Seguridad HTTPS / Headers ---
-SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL", "False").lower() in ("true", "1", "yes")
+SECURE_SSL_REDIRECT = False # Cambiar a True solo con  HTTPS habilitado
 
 # 1. Encabezado de Proxy SSL (CRÍTICO para producción)
 # Informa a Django que la petición original es HTTPS cuando corre detrás de un Proxy 
@@ -99,6 +102,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",      # Framework de mensajes (flash)
     "frontend.subscriptions",        # Aplicación principal del frontend
     "frontend.crm",                  # Módulo CRM (clientes, etc.)
+    "frontend.config",
 ]
 
 # --- Middleware ---
