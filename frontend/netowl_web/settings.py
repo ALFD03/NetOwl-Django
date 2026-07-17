@@ -41,9 +41,10 @@ if not SECRET_KEY:
     else:
         raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in .env for production")
 # Hosts permitidos (lista separada por comas, ej: "localhost,ejemplo.com")
-allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
-if allowed_hosts_env:
-    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+#allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
+#if allowed_hosts_env:
+#    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+ALLOWED_HOSTS = ['*']
 
 # --- Seguridad HTTPS / Headers ---
 SECURE_SSL_REDIRECT = False # Cambiar a True solo con  HTTPS habilitado
