@@ -1,0 +1,118 @@
+{% comment %} {% extends 'base.html' %}
+{% block title %}NetOwl - Iniciar Sesión{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-center" style="min-height: 80vh;">
+  <div class="card shadow-lg" style="width: 100%; max-width: 420px; background-color: var(--surface-secondary);">
+    <div class="card-header text-center py-4" style="border-bottom: 1px solid var(--border-color);">
+      <h4 class="mb-0 fw-bold text-primary"><i class="bi bi-shield-lock-fill me-2"></i>NetOwl Portal</h4>
+      <p class="text-muted small mb-0 mt-1">Acceso seguro a analíticas corporativas</p>
+    </div>
+    <div class="card-body p-4">
+      {% if error_message %}
+        <div class="alert alert-danger d-flex align-items-center mb-4 py-2 px-3 small">
+          <i class="bi bi-exclamation-triangle-fill me-2"></i>
+          <div>{{ error_message }}</div>
+        </div>
+      {% endif %}
+      
+      <form method="POST" action="{% url 'config:login' %}">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label for="id_username" class="form-label small fw-bold">Nombre de Usuario</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light-subtle text-muted"><i class="bi bi-person"></i></span>
+            <input type="text" name="username" id="id_username" class="form-control" placeholder="Escribe tu usuario" required autocomplete="username">
+          </div>
+        </div>
+        <div class="mb-4">
+          <label for="id_password" class="form-label small fw-bold">Contraseña</label>
+          <div class="input-group">
+            <span class="input-group-text bg-light-subtle text-muted"><i class="bi bi-key"></i></span>
+            <input type="password" name="password" id="id_password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary w-100 py-2 fw-bold"><i class="bi bi-box-arrow-in-right me-2"></i>Ingresar al Sistema</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %} {% endcomment %}
+
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>NetOwl - Iniciar Sesión</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/sidebar.css' %}">
+  <link rel="stylesheet" href="{% static 'css/components.css' %}">
+  <link id="favicon-link" rel="icon" href="{% static 'img/favicon_light.png' %}">
+</head>
+<body>
+  <div class="d-flex min-vh-100 justify-content-center align-items-center">
+        <div class="d-flex align-items-center justify-content-center" style="min-height: 40vh;">
+          <div class="card shadow-lg" style="width: 100%; max-width: 420px; background-color: var(--surface-secondary);">
+            <div class="card-header text-center py-4" style="border-bottom: 1px solid var(--border-color);">
+              <img src="{% static 'img/logo.png' %}" alt="NetOwl Logo" width="100%" class="img-fluid" id="sidebar-logo">
+              <h4 class="mb-0 fw-bold text-primary"><i class="bi bi-shield-lock-fill me-2"></i>NetOwl</h4>
+              <p class="text-muted small mb-0 mt-1">Acceso seguro a analíticas corporativas</p>
+            </div>
+            <div class="card-body p-4">
+              {% if error_message %}
+                <div class="alert alert-danger d-flex align-items-center mb-4 py-2 px-3 small">
+                  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                  <div>{{ error_message }}</div>
+                </div>
+              {% endif %}
+              
+              <form method="POST" action="{% url 'config:login' %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                  <label for="id_username" class="form-label small fw-bold">Nombre de Usuario</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-light-subtle text-muted border-0"><i class="bi bi-person"></i></span>
+                    <input type="text" name="username" id="id_username" class="form-control" placeholder="Escribe tu usuario" required autocomplete="username">
+                  </div>
+                </div>
+                <div class="mb-4">
+                  <label for="id_password" class="form-label small fw-bold">Contraseña</label>
+                  <div class="input-group">
+                    <span class="input-group-text bg-light-subtle text-muted border-0"><i class="bi bi-key"></i></span>
+                    <input type="password" name="password" id="id_password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold"><i class="bi bi-box-arrow-in-right me-2"></i>Ingresar al Sistema</button>
+              </form>
+            </div>
+          </div>
+        </div>
+  </div>
+
+  {% include 'partials/toast.html' %}
+  {% include 'partials/loading_overlay.html' %}
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
+  {% load static %}
+  <script src="{% static 'js/core.js' %}"></script>
+  <script src="{% static 'js/theme.js' %}"></script>
+  <script src="{% static 'js/sidebar.js' %}"></script>
+  <script>
+    try {
+      const savedTheme = localStorage.getItem('netowl-theme');
+      const fav = document.getElementById('favicon-link');
+      if (fav) fav.href = savedTheme === 'light' ? '/static/img/favicon_light.png' : '/static/img/favicon_dark.png';
+    } catch(e) {}
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

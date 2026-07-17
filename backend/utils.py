@@ -1,6 +1,8 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional
+from typing import Iterable
+
 import pandas as pd
 from .conf_config import DATE_FORMATS
 
@@ -51,7 +53,7 @@ def normalize_text(value: Any) -> str:
     
     return text
 
-def validate_csv_structure(file_path: str, required_headers: list[str], delimiter: str = ",") -> tuple[bool, str | None]:
+def validate_csv_structure(file_path: str, required_headers: Iterable[str], delimiter: str = ",") -> tuple[bool, str | None]:
     """
     Verifica rápidamente si un archivo CSV tiene las columnas obligatorias.
     Retorna (True, None) si es válido, o (False, "mensaje de error") si falla.

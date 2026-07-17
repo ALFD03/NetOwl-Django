@@ -22,6 +22,25 @@
     </ul>
   </div>
   <div class="sidebar-footer mt-auto p-3">
+    {% if request.user.is_authenticated and request.user.profile.role == 'admin' %}
+        <button class="btn btn-outline-light w-100 rounded-3 mt-2">
+          <a class="nav-link d-flex align-items-center py-2 rounded-3" href="{% url 'config:user_management' %}">
+            <i class="bi bi-shield-lock me-2 text-primary"></i>
+            <span>Config</span>
+          </a>
+        </button>
+      {% endif %}
+    {% if request.user.is_authenticated %}
+      <div class="d-flex align-items-center justify-content-between p-2 mb-2 mt-2 rounded-3" style="background-color: var(--surface-tertiary);">
+        <div class="text-truncate" style="max-width: 140px;">
+          <small class="d-block text-muted" style="font-size: 0.7rem;">Sesión como:</small>
+          <span class="fw-semibold text-primary-emphasis small">{{ request.user.username }}</span>
+        </div>
+        <a href="{% url 'config:logout' %}" class="btn btn-sm btn-outline-danger p-1" title="Cerrar Sesión">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
+      </div>
+    {% endif %}
     <button id="theme-toggle" class="btn btn-outline-light w-100 rounded-3 mt-2">
       <i class="bi bi-moon-stars me-2"></i>
       <span>Modo Claro</span>
