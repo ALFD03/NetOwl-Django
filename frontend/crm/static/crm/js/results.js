@@ -256,9 +256,74 @@
     });
   }
 
+  async function loadTiemposEtapaTable() {
+    const tbody = document.getElementById("tiempos-etapa-tbody");
+    if (!tbody) return;
+
+    try {
+      const response = await fetch("/crm/api/metrics/tiempo-por-etapa/");
+      const data = await response.json();
+
+      // Si es un objeto indexado por etapa, lo convertimos a un array ordenado
+      const records = Array.isArray(data) ? data : Object.values(data);
+
+      if (records.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No hay datos de transiciones registrados en este periodo.</td></tr>`;
+          return;
+      }
+
+      tbody.innerHTML = "";
+      records.forEach(r => {
+          const pct = r.pct_excede_promedio !== undefined ? r.pct_excede_promedio : 0;
+          
+          // Asignación de color según nivel de riesgo o probabilidad de atraso
+          let badgeClass = "bg-success-subtle text-success";
+          if (pct > 50) badgeClass = "bg-danger-subtle text-danger";
+          else if (pct > 35) badgeClass = "bg-warning-subtle text-warning";
+
+          // Formatear el nombre de la etapa para mostrarlo amigable
+          const etapaLabel = r.etapa.replace(/_/g, " ").replace("etapa ", "").toUpperCase();
+
+          const row = document.createElement("tr");
+          row.innerHTML = `
+              <td>
+                  <span class="fw-semibold text-primary-emphasis">${etapaLabel}</span>
+              </td>
+              <td class="text-end fw-medium">${r.total_movimientos}</td>
+              <td class="text-end text-white-50">${r.tiempo_promedio_horas}h</td>
+              <td class="text-end">${r.tiempo_mediana_horas}h</td>
+              <td class="text-end">${r.tiempo_max_horas}h</td>
+              <td class="text-end text-muted">${r.tiempo_std_horas ? r.tiempo_std_horas + "h" : "-"}</td>
+              <td class="text-center">
+                  <div class="d-flex align-items-center justify-content-center gap-2">
+                      <div class="progress flex-grow-1" style="height: 6px; max-width: 100px; background-color: var(--border-color)">
+                          <div class="progress-bar ${pct > 50 ? 'bg-danger' : (pct > 35 ? 'bg-warning' : 'bg-success')}" 
+                                role="progressbar" 
+                                style="width: ${pct}%" 
+                                aria-valuenow="${pct}" 
+                                aria-valuemin="0" 
+                                aria-valuemax="100">
+                          </div>
+                      </div>
+                      <span class="badge ${badgeClass} px-2 py-1 rounded-pill" style="min-width: 55px;">
+                          ${pct.toFixed(1)}%
+                      </span>
+                  </div>
+              </td>
+          `;
+          tbody.appendChild(row);
+      });
+
+    } catch (error) {
+        console.error("Error al cargar la tabla de tiempos por etapa:", error);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error al cargar los datos del servidor.</td></tr>`;
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     if (document.getElementById("results-table-tbody")) {
       loadResultsData();
+      loadTiemposEtapaTable();
     }
   });
 })();

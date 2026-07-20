@@ -30,6 +30,32 @@
   </div>
 </div>
 
+<div class="card mb-4" id="tiempos-etapa-card">
+  <div class="card-header">
+    <h5><i class="bi bi-clock-history me-2"></i>Tiempos y Desviación por Etapa de Venta</h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 table-theme">
+        <thead>
+          <tr>
+            <th>Etapa del Proceso</th>
+            <th class="text-end">Transiciones Analizadas</th>
+            <th class="text-end">Tiempo Promedio (h)</th>
+            <th class="text-end">Tiempo Mediana (h)</th>
+            <th class="text-end">Tiempo Máximo (h)</th>
+            <th class="text-end">Desviación Estándar (h)</th>
+            <th class="text-center">Probabilidad de Exceder Promedio</th>
+          </tr>
+        </thead>
+        <tbody id="tiempos-etapa-tbody">
+          <tr><td colspan="7" class="text-center py-4 text-muted">Cargando análisis de tiempos...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div id="results-detail-container">
   <div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando detalle...</div>
 </div>
