@@ -1,153 +1,144 @@
-document.addEventListener("DOMContentLoaded", function() {
+// frontend/subscriptions/static/subscriptions/js/sales_report.js
+
+document.addEventListener("DOMContentLoaded", () => {
     const periodSelect = document.getElementById("salesPeriodSelect");
     const container = document.getElementById("salesReportContainer");
 
-    // 1. Cargar períodos disponibles
+    // Cargar la lista de períodos disponibles
     fetch("/subscriptions/api/periods/")
         .then(res => res.json())
         .then(data => {
             if (data.periods && data.periods.length > 0) {
                 periodSelect.innerHTML = data.periods.map(p => `<option value="${p}">${p}</option>`).join("");
+                // Cargar reporte del periodo más reciente
                 loadSalesReport(data.periods[0]);
             } else {
-                container.innerHTML = `<div class="text-center py-5 text-muted"><i class="bi bi-info-circle me-2"></i>No hay periodos calculados aún. Realice el análisis de Churn primero.</div>`;
+                container.innerHTML = `<div class="text-center py-5 text-muted"><i class="bi bi-info-circle me-2"></i>No hay datos históricos disponibles.</div>`;
             }
         });
 
-    periodSelect.addEventListener("change", function() {
-        loadSalesReport(this.value);
+    periodSelect.addEventListener("change", (e) => {
+        loadSalesReport(e.target.value);
     });
 
     function loadSalesReport(period) {
-        NetOwl.showLoading("Cargando reporte de ventas...");
+        container.innerHTML = `<div class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando reporte de ventas...</div>`;
+        
         fetch(`/subscriptions/api/sales-report/?period=${period}`)
             .then(res => res.json())
             .then(res => {
-                NetOwl.hideLoading();
-                if (res.status === "empty") {
-                    container.innerHTML = `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>No se encontraron datos dimensionales de 'zona_sucursal' para el periodo ${period}.</div>`;
-                    return;
+                if (res.status === "success") {
+                    renderReportTable(res.data);
+                } else {
+                    container.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error: ${res.message || 'No se pudieron recuperar los datos.'}</div>`;
                 }
-                if (res.status === "error") {
-                    container.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Error: ${res.message}</div>`;
-                    return;
-                }
-
-                renderReport(res.data);
             })
             .catch(err => {
-                NetOwl.hideLoading();
-                container.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Error de conexión al cargar el reporte.</div>`;
+                container.innerHTML = `<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>Error de red: ${err.message}</div>`;
             });
     }
 
-    function renderReport(data) {
+    function renderReportTable(sitesList) {
         let html = "";
 
-        // Recorremos cada Site regional (Valencia, Aragua, etc.)
-        for (const [site, rows] of Object.entries(data)) {
-            // Calculamos subtotales de la región para gerencia
-            let totIni = 0, totFin = 0, totNue = 0, totBaj = 0, totReac = 0, totaddN = 0, totaddB = 0;
-
-            rows.forEach(r => {
-              const activos_inicio = parseInt(r.activos_inicio) || 0;
-              const activos_final = parseInt(r.activos_final) || 0;
-              const nuevos = parseInt(r.nuevos) || 0;
-              const bajas = parseInt(r.bajas) || 0;
-              const reactivaciones = parseInt(r.reactivaciones) || 0;
-              const addNetas = parseInt(r.adiciones_netas) || 0;
-              const addBrutas = parseInt(r.adiciones_brutas) || 0;
-
-              totIni += activos_inicio;
-              totFin += activos_final;
-              totNue += nuevos;
-              totBaj += bajas;
-              totReac += reactivaciones;
-              totaddN += addNetas;
-              totaddB += addBrutas;
-            });
-
-            const siteChurn = totIni > 0 ? (((totBaj) / totIni) * 100).toFixed(2) : "0.00";
-            const siteChurnNet = totIni > 0 ? (((totIni - totFin + totNue) / totIni) * 100).toFixed(2) : "0.00";
-            const totalCreac = totIni > 0 ? (((totFin - totIni) / totIni) * 100).toFixed(2) : "0.00";
-
+        sitesList.forEach(siteData => {
             html += `
-            <div class="card site-card shadow-sm">
-              <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 text-uppercase small tracking-wider text-primary fw-bold"><i class="bi bi-geo-alt-fill me-2"></i>Región: ${site}</h5>
-                <span class="badge bg-primary-subtle text-primary rounded-pill px-3">${rows.length} Nodos Socios</span>
+            <div class="card site-card shadow-sm mb-4">
+              <div class="card-header d-flex justify-content-between align-items-center" style="height: 6rem !important;">
+                <h4 class="mb-0 fw-bold text-primary"><i class="bi bi-geo-alt-fill me-2 text-primary"></i>SITE REGIONAL: ${siteData.site}</h4>
               </div>
               <div class="card-body p-0">
                 <div class="table-responsive">
-                  <table class="table align-middle mb-0 table-sales table-theme">
-                    <thead>
+                  <table class="table table-sm table-hover align-middle mb-0 table-sales">
+                    <thead style="height: 5rem">
                       <tr>
-                        <th>Zona / Nodo</th>
-                        <th>Sucursal</th>
-                        <th class="text-end">Activos Inicio</th>
-                        <th class="text-end">Nuevos</th>
-                        <th class="text-end">Bajas</th>
-                        <th class="text-end">Crecimiento</th>
-                        <th class="text-end">Reactivaciones</th>
-                        <th class="text-end">Activos Final</th>
-                        <th class="text-end">Churn Bruto%</th>
-                        <th class="text-end">Churn Neto%</th>
-                        <th class="text-end">Add Netas</th>
-                        <th class="text-end">Add Brutas</th>
+                        <th class="fw-bold">Nodos (Zona - Sucursal)</th>
+                        <th class="text-end fw-bold">Activos Inicio</th>
+                        <th class="text-end fw-bold">Nuevos (Altas)</th>
+                        <th class="text-end fw-bold">Bajas Brutas</th>
+                        <th class="text-end fw-bold">Reactivaciones</th>
+                        <th class="text-end fw-bold">Activos Final</th>
+                        <th class="text-end fw-bold">Crecimiento %</th>
+                        <th class="text-end fw-bold">Churn Neto %</th>
+                        <th class="text-end fw-bold">Churn Bruto %</th>
+                        <th class="text-end fw-bold">Adiciones Netas</th>
+                        <th class="text-end fw-bold">Adiciones Brutas</th>
                       </tr>
                     </thead>
                     <tbody>
-                      ${rows.map(r => {
-                          const activos_inicio = parseInt(r.activos_inicio) || 0;
-                          const nuevos = parseInt(r.nuevos) || 0;
-                          const bajas = parseInt(r.bajas) || 0;
-                          const crecimiento = parseFloat(r.crecimiento) || 0;
-                          const reactivaciones = parseInt(r.reactivaciones) || 0;
-                          const activos_final = parseInt(r.activos_final) || 0;
-                          const churn_bruto_pct = parseFloat(r.churn_bruto_pct) || 0;
-                          const churn_neto_pct = parseFloat(r.churn_neto_pct) || 0;
-                          const addNetas = parseInt(r.adiciones_netas) || 0;
-                          const addBrutas = parseInt(r.adiciones_brutas) || 0;
-
-                          return `
-                        <tr>
-                          <td class="fw-semibold">${r.zona}</td>
-                          <td><span class="badge bg-secondary-subtle text-secondary-emphasis">${r.sucursal}</span></td>
-                          <td class="text-end">${activos_inicio}</td>
-                          <td class="text-end" style="color: green !important;">+${nuevos}</td>
-                          <td class="text-end" style="color: red !important;">-${bajas}</td>
-                          <td class="text-end" style="color: green !important;">${crecimiento.toFixed(2)}%</td>
-                          <td class="text-end" style="color: blue !important;">+${reactivaciones}</td>
-                          <td class="text-end fw-bold">${activos_final}</td>
-                          <td class="text-end" style="color: red !important;">${churn_bruto_pct.toFixed(2)}%</td>
-                          <td class="text-end" style="color: red !important;">${churn_neto_pct.toFixed(2)}%</td>
-                          <td class="text-end" style="color: green !important;">${addNetas}</td>
-                          <td class="text-end" style="color: green !important;">${addBrutas}</td>
-                        </tr>
-                      `;
-                      }).join("")}
-                      
-                      <!-- Fila de Subtotales de la Región -->
-                      <tr class="subtotal-row">
-                        <td colspan="2">SUBTOTAL REGIONAL (${site})</td>
-                        <td class="text-end">${totIni}</td>
-                        <td class="text-end" style="color: green !important;">+${totNue}</td>
-                        <td class="text-end" style="color: red !important;">-${totBaj}</td>
-                        <td class="text-end" style="color: green !important;">${totalCreac}%</td>
-                        <td class="text-end" style="color: blue !important;">+${totReac}</td>
-                        <td class="text-end">${totFin}</td>
-                        <td class="text-end" style="color: red !important;">${siteChurn}%</td>
-                        <td class="text-end" style="color: red !important;">${siteChurnNet}%</td>
-                        <td class="text-end" style="color: green !important;">${totaddN}</td>
-                        <td class="text-end" style="color: green !important;">${totaddB}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
             `;
-        }
+
+            siteData.technologies.forEach(techGroup => {
+                // Sub-encabezado de Tecnología dentro del Site
+                html += `
+                  <tr class="table" style="background-color: var(--surface-tertiary) !important; height: 4rem !important;">
+                    <td colspan="11" class="text-primary text-uppercase fw-bold" style="padding-left: 1.25rem; font-size: 0.85rem; letter-spacing: 0.05em;">
+                      <i class="bi bi-cpu-fill me-1"></i> Tecnología: ${techGroup.technology}
+                    </td>
+                  </tr>
+                `;
+
+                // Filas de los Nodos pertenecientes a esa tecnología
+                techGroup.nodes.forEach(node => {
+                    html += `
+                      <tr>
+                        <td class="text-primary" style="padding-left: 2rem;">${node.zona_sucursal}</td>
+                        <td class="text-end text-primary">${node.activos_inicio.toLocaleString()}</td>
+                        <td class="text-end text-success">+${node.nuevos.toLocaleString()}</td>
+                        <td class="text-end text-danger">-${node.bajas.toLocaleString()}</td>
+                        <td class="text-end text-info">+${node.reactivaciones.toLocaleString()}</td>
+                        <td class="text-end text-primary">${node.activos_final.toLocaleString()}</td>
+                        <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${node.crecimiento.toFixed(2)}%</td>
+                        <td class="text-end ${node.churn_neto_pct <= 3 ? 'text-success' : node.churn_neto_pct <= 4 ? 'text-warning': 'text-danger'}">${node.churn_neto_pct.toFixed(2)}%</td>
+                        <td class="text-end ${node.churn_bruto_pct <= 3 ? 'text-success' : node.churn_bruto_pct <= 4 ? 'text-warning': 'text-danger'}">${node.churn_bruto_pct.toFixed(2)}%</td>
+                        <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${node.adiciones_netas.toLocaleString()}</td>
+                        <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${node.adiciones_brutas.toLocaleString()}</td>
+                      </tr>
+                    `;
+                });
+
+                // Fila de Subtotal por Tecnología
+                const t = techGroup.totals;
+                html += `
+                  <tr class="subtotal-row" style="font-weight: 600; height: 3rem !important;">
+                    <td style="padding-left: 1.5rem;" class="text-primary-emphasis fw-bold"><i class="bi bi-calculator me-1"></i> Subtotal ${techGroup.technology}</td>
+                    <td class="text-end text-primary fw-bold">${t.activos_inicio.toLocaleString()}</td>
+                    <td class="text-end text-success fw-bold">+${t.nuevos.toLocaleString()}</td>
+                    <td class="text-end text-danger fw-bold">-${t.bajas.toLocaleString()}</td>
+                    <td class="text-end text-info fw-bold">+${t.reactivaciones.toLocaleString()}</td>
+                    <td class="text-end text-primary fw-bold">${t.activos_final.toLocaleString()}</td>
+                    <td class="text-end ${t.crecimiento >= 2 ? 'text-success' : t.crecimiento >= 0 ? 'text-warning' : 'text-danger'} fw-bold">${t.crecimiento.toFixed(2)}%</td>
+                    <td class="text-end ${t.churn_neto_pct <= 3 ? 'text-success' : t.churn_neto_pct <= 4 ? 'text-warning': 'text-danger'}">${t.churn_neto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${t.churn_bruto_pct <= 3 ? 'text-success' : t.churn_bruto_pct <= 4 ? 'text-warning': 'text-danger'}">${t.churn_bruto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${t.crecimiento >= 2 ? 'text-success' : t.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${t.adiciones_netas.toLocaleString()}</td>
+                    <td class="text-end ${t.crecimiento >= 2 ? 'text-success' : t.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${t.adiciones_brutas.toLocaleString()}</td>                      
+                  </tr>
+                `;
+            });
+
+            // Fila de Total General por Site Regional (Suma de todas sus tecnologías)
+            const s = siteData.totals;
+            html += `
+                  <tr class="table style="background-color: var(--surface-hover) !important; font-weight: 700; border-top: 2px solid var(--primary); height: 5rem !important;">
+                    <td class="text-primary fw-bold"><i class="bi bi-globe me-1 text-primary"></i> TOTAL REGIONAL ${siteData.site}</td>
+                    <td class="text-end text-primary fw-bold">${s.activos_inicio.toLocaleString()}</td>
+                    <td class="text-end text-success fw-bold">+${s.nuevos.toLocaleString()}</td>
+                    <td class="text-end text-danger fw-bold">-${s.bajas.toLocaleString()}</td>
+                    <td class="text-end text-info fw-bold">+${s.reactivaciones.toLocaleString()}</td>
+                    <td class="text-end text-primary fw-bold">${s.activos_final.toLocaleString()}</td>
+                    <td class="text-end ${s.crecimiento >= 2 ? 'text-success' : s.crecimiento >= 0 ? 'text-warning' : 'text-danger'} fw-bold">${s.crecimiento.toFixed(2)}%</td>
+                    <td class="text-end ${s.churn_neto_pct <= 3 ? 'text-success' : s.churn_neto_pct <= 4 ? 'text-warning': 'text-danger'}">${s.churn_neto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${s.churn_bruto_pct <= 3 ? 'text-success' : s.churn_bruto_pct <= 4 ? 'text-warning': 'text-danger'}">${s.churn_bruto_pct.toFixed(2)}%</td>
+                    <td class="text-end ${s.crecimiento >= 2 ? 'text-success' : s.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${s.adiciones_netas.toLocaleString()}</td>
+                    <td class="text-end ${s.crecimiento >= 2 ? 'text-success' : s.crecimiento >= 0 ? 'text-warning': 'text-danger'}">${s.adiciones_brutas.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+            `;
+        });
 
         container.innerHTML = html;
     }

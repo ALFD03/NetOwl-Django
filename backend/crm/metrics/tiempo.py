@@ -40,6 +40,10 @@ def compute_tiempo_por_etapa(
         n = len(h)
         if n == 0:
             continue
+        
+        promedio = float(h.mean())
+        excede_cnt = (h > promedio).sum()
+        pct_excede = round((excede_cnt / n) * 100, 2) if n > 0 else 0.0
 
         records.append({
             "etapa": etapa,
@@ -49,6 +53,7 @@ def compute_tiempo_por_etapa(
             "tiempo_min_horas": round(float(h.min()), 2),
             "tiempo_max_horas": round(float(h.max()), 2),
             "tiempo_std_horas": round(float(h.std(ddof=0)), 2) if n > 1 else None,
+            "pct_excede_promedio": pct_excede,
         })
 
     records.sort(key=lambda r: etapa_order_map.get(r["etapa"], 999))
@@ -78,7 +83,7 @@ def compute_tiempo_instalacion(
             WHERE {where_dim}
               AND c.ganado = 'ganado'
               AND c.duracion_total_horas IS NOT NULL
-              AND c.duracion_total_horas >= 4
+              AND c.duracion_total_horas >= 0
               {fecha_sql}
         ),
         stats AS (
@@ -96,7 +101,7 @@ def compute_tiempo_instalacion(
             ROUND(MAX(b.duracion_total_horas)::numeric, 2)::float8 AS horas_max,
             ROUND(STDDEV(b.duracion_total_horas)::numeric, 2)::float8 AS horas_std,
             ROUND(
-                (COUNT(*) FILTER (WHERE b.duracion_total_horas > s.mu) * 100.0) / NULLIF(COUNT(*) FILTER (WHERE b.duracion_total_horas >= 4), 0), 2
+                (COUNT(*) FILTER (WHERE b.duracion_total_horas > s.mu) * 100.0) / NULLIF(COUNT(*), 0), 2
             )::float8 AS pct_excede_promedio
         FROM base_data b
         CROSS JOIN stats s

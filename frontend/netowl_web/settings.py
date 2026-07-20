@@ -25,9 +25,12 @@ load_dotenv()
 # (frontend/churn_web/settings.py → raíz del repo)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+LOGIN_URL = "/auth/login/"
+LOGOUT_REDIRECT_URL = "/auth/login/"
+
 # --- Seguridad ---
 # Modo debug: deshabilitar en producción (DJANGO_DEBUG=False)
-DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in ("true", "1", "yes")
+DEBUG = False
 # Clave secreta de Django (definir DJANGO_SECRET_KEY en producción)
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 if not SECRET_KEY:
@@ -38,16 +41,51 @@ if not SECRET_KEY:
     else:
         raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in .env for production")
 # Hosts permitidos (lista separada por comas, ej: "localhost,ejemplo.com")
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,10.2.103.248,0.0.0.0").split(",")
+#allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
+#if allowed_hosts_env:
+#    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
+ALLOWED_HOSTS = ['*']
 
 # --- Seguridad HTTPS / Headers ---
-SECURE_SSL_REDIRECT = os.getenv("DJANGO_SECURE_SSL", "False").lower() in ("true", "1", "yes")
+SECURE_SSL_REDIRECT = False # Cambiar a True solo con  HTTPS habilitado
+
+# 1. Encabezado de Proxy SSL (CRÍTICO para producción)
+# Informa a Django que la petición original es HTTPS cuando corre detrás de un Proxy 
+# (como Nginx, Traefik o balanceadores de carga). Evita bucles infinitos de redirección.
+if SECURE_SSL_REDIRECT:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# 2. Cookies seguras
+# Las cookies de sesión y CSRF solo se transmitirán por conexiones HTTPS cifradas.
 SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
 CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
+
+# 3. Cabecera HSTS (HTTP Strict Transport Security)
+# Fuerza a los navegadores a conectarse exclusivamente mediante HTTPS durante un año.
 SECURE_HSTS_SECONDS = 31536000 if SECURE_SSL_REDIRECT else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_SSL_REDIRECT
-SECURE_CONTENT_TYPE_NOSNIFF = True
-SECURE_BROWSER_XSS_FILTER = True
+SECURE_HSTS_PRELOAD = SECURE_SSL_REDIRECT
+
+# 4. Cabeceras de protección del navegador
+SECURE_CONTENT_TYPE_NOSNIFF = True  # Evita que el navegador adivine el tipo MIME (previene inyección de scripts)
+SECURE_BROWSER_XSS_FILTER = True    # Activa el filtro XSS del navegador
+X_FRAME_OPTIONS = "DENY"            # Protege contra Clickjacking (impide que el sitio se cargue en <frame> o <iframe> externos)
+
+# 5. Política de Referrer (Referrer Policy)
+# Limita la cantidad de información del path que tu servidor envía a enlaces externos.
+SECURE_REFERRER_POLICY = "same-origin"
+
+# 6. Orígenes de confianza para CSRF (CRÍTICO en Django 5+)
+# En producción con HTTPS, Django 5+ rechaza peticiones POST si el origen no está listado aquí.
+csrf_origins_env = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS")
+if csrf_origins_env:
+    CSRF_TRUSTED_ORIGINS = [
+        origin.strip()
+        for origin in csrf_origins_env.split(",")
+        if origin.strip()
+    ]
+else:
+    CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"]
 
 # --- Límites de subida ---
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
@@ -63,6 +101,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",      # Framework de mensajes (flash)
     "frontend.subscriptions",        # Aplicación principal del frontend
     "frontend.crm",                  # Módulo CRM (clientes, etc.)
+    "frontend.config",
 ]
 
 # --- Middleware ---
@@ -76,6 +115,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",    # Autenticación por sesión
     "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
     "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
+    "frontend.netowl_web.middleware.RateLimitMiddleware",
 ]
 
 # módulo raíz de las URLs
@@ -102,14 +142,19 @@ TEMPLATES = [
 
 # --- Base de datos (PostgreSQL) ---
 # Los parámetros de conexión se obtienen de variables de entorno
+# Se añade soporte explícito para SSL y límite de tiempo de conexión (seguridad y estabilidad)
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB"),          # Nombre de la base de datos
-        "USER": os.getenv("DB_USER"),      # Usuario de BD
-        "PASSWORD": os.getenv("PASS"),     # Contraseña
-        "HOST": os.getenv("HOST"),         # Host del servidor PostgreSQL
-        "PORT": os.getenv("PORT", "5432"), # Puerto (por defecto 5432)
+        "NAME": os.getenv("DB"),
+        "USER": os.getenv("DB_USER"),
+        "PASSWORD": os.getenv("PASS"),
+        "HOST": os.getenv("HOST"),
+        "PORT": os.getenv("PORT", "5432"),
+        "OPTIONS": {
+            "sslmode": os.getenv("DB_SSLMODE", "prefer"),
+            "connect_timeout": 10,  # Timeout de 10 segundos para evitar colgar hilos de Gunicorn si la BD no responde
+        }
     }
 }
 

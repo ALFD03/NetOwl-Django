@@ -15,7 +15,7 @@ pandas>=2.0.0
 numpy>=1.24.0
 
 # Driver de PostgreSQL para conexión desde Django
-psycopg2-binary>=2.9.0
+psycopg2>=2.9.0
 
 # Carga de variables de entorno desde archivo .env
 python-dotenv>=1.0.0

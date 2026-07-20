@@ -11,7 +11,6 @@ from ..database import DBConnector
 
 SUBSCRIPTIONS_COLUMN_MAPPING = {
     "Líneas de la orden/Referencia de la orden": "orden_producto",
-    # "Líneas de la orden/Producto": "producto",
     "Líneas de la orden/Producto/Nombre": "producto",
     "Líneas de la orden/Cliente": "cliente",
     "Líneas de la orden/Cliente/CI/RIF": "ci",
@@ -25,12 +24,15 @@ SUBSCRIPTIONS_COLUMN_MAPPING = {
     "Fecha de inicio": "fecha_inicio",
     "Tarifa": "tarifa",
     "Subtotal": "total",
+    "Teléfono": "telefono",
+    "Cliente/Phone 1": "phone",
+    "Cliente/Phone 2": "phone2",
 }
 
 SUBSCRIPTIONS_METADATA_COLS = [
     "cliente", "ci", "sucursal", "zona", "municipio",
     "tipo", "estado", "campanna", "fecha_factura", "fecha_inicio",
-    "tarifa", "total", "producto"
+    "tarifa", "total", "producto", "telefono", "phone", "phone2"
 ]
 
 LOGS_COLUMN_MAPPING = {

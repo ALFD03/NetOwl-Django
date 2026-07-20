@@ -11,6 +11,9 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.conf import settings
 from django.views.decorators.http import require_POST
+from django_ratelimit.decorators import ratelimit
+from django.contrib.auth.decorators import login_required
+from frontend.config.decorators import admin_required, analyst_or_admin_required
 
 # Conectores y lógica de negocio del backend
 from backend.database import DBConnector
@@ -24,27 +27,67 @@ from backend.subscriptions import (
 from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
 )
+from backend.utils import validate_csv_structure
 
 TEMPLATE_PREFIX = "subscriptions/"
 
-def handle_csv_upload(request):
+REQUIRED_SUBS_HEADERS = {
+    "Líneas de la orden/Referencia de la orden": "orden_producto",
+    "Líneas de la orden/Producto/Nombre": "producto",
+    "Líneas de la orden/Cliente": "cliente",
+    "Líneas de la orden/Cliente/CI/RIF": "ci",
+    "Sucursal": "sucursal",
+    "Zona": "zona",
+    "Líneas de la orden/Cliente/Municipio": "municipio",
+    "Tipo de Servicio": "tipo",
+    "Estado de la Suscripción": "estado",
+    "Campaña": "campanna",
+    "Próxima Fecha de Factura": "fecha_factura",
+    "Fecha de inicio": "fecha_inicio",
+    "Tarifa": "tarifa",
+    "Subtotal": "total",
+}
+
+REQUIRED_LOGS_HEADERS = {
+    "Logs de Cambios/Suscripción": "orden",
+    "Logs de Cambios/Fecha de Cambio": "fecha_log",
+    "Logs de Cambios/Nota": "log",
+    "Logs de Cambios/Estado Interno de Suscripción": "estado",
+}
+
+def handle_csv_upload(request, required_headers=None):
     if "csv_file" not in request.FILES:
         return None, JsonResponse({"status": "error", "message": "Archivo no enviado"}, status=400)
+    
     csv_file = request.FILES["csv_file"]
+    
     if not csv_file.name.endswith(".csv"):
-        return None, JsonResponse({"status": "error", "message": "Solo archivos .csv"}, status=400)
+        return None, JsonResponse({"status": "error", "message": "Solo se permiten archivos con extensión .csv"}, status=400)
+    
     if csv_file.size > settings.MAX_UPLOAD_SIZE:
-        return None, JsonResponse({"status": "error", "message": "Archivo muy grande"}, status=400)
+        return None, JsonResponse({"status": "error", "message": "El archivo excede el tamaño máximo permitido"}, status=400)
+    
+    tmp_path = None
     try:
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+        tmp_path = tmp.name  # Guardamos la ruta inmediatamente
+        
         for chunk in csv_file.chunks():
             tmp.write(chunk)
-        tmp_path = tmp.name
         tmp.close()
+        
+        if required_headers:
+            is_valid, err_msg = validate_csv_structure(tmp_path, required_headers)
+            if not is_valid:
+                cleanup_tempfile(tmp_path)  # Limpieza en caso de validación fallida
+                return None, JsonResponse({"status": "error", "message": err_msg}, status=400)
+                
     except Exception as e:
-        return None, JsonResponse({"status": "error", "message": str(e)}, status=500)
+        if tmp_path:
+            cleanup_tempfile(tmp_path)  # Limpieza garantizada en caso de excepción de escritura
+        return None, JsonResponse({"status": "error", "message": f"Error al procesar el archivo: {str(e)}"}, status=500)
+        
     return tmp_path, None
-
 
 def cleanup_tempfile(tmp_path):
     if tmp_path:
@@ -53,38 +96,50 @@ def cleanup_tempfile(tmp_path):
         except OSError:
             pass
 
+@login_required
 def dashboard(request):
     return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
 
+@login_required
 def analytics(request):
     return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
 
+@login_required
+@analyst_or_admin_required
 def imports(request):
     return render(request, f"{TEMPLATE_PREFIX}imports.html", {"section": "imports"})
 
+@login_required
 def results(request, periodo=None):
     return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
 
+@login_required
 def lifetime(request):
     return render(request, f"{TEMPLATE_PREFIX}lifetime.html", {"section": "lifetime"})
 
+@login_required
 def sales_report(request):
     return render(request, f"{TEMPLATE_PREFIX}sales_report.html", {"section": "sales_report"})
 
+@login_required
 def api_dashboard_data(request):
     return JsonResponse(get_dashboard_data())
 
+@login_required
 def api_analytics_data(request):
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     return JsonResponse(get_analytics_data(periodos))
 
+@login_required
 def api_periods_list(request):
     return JsonResponse({"periods": get_periodos()})
 
+@login_required
 def api_results_list(request):
     return JsonResponse({"periods": get_cierre_churn()})
 
+@login_required
 def api_results_detail(request, periodo):
     cierre = get_cierre_churn([periodo])
     dims = get_dimensiones([periodo])
@@ -96,6 +151,10 @@ def api_results_detail(request, periodo):
         "dimensions": dimensions,
     })
 
+@login_required
+@ratelimit(key='ip', rate='2/m', block=True)
+@analyst_or_admin_required
+@require_POST
 def api_run_analysis(request):
     try:
         data = json.loads(request.body)
@@ -123,6 +182,7 @@ def api_run_analysis(request):
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
+@login_required
 def api_survival_data(request):
     lc = get_lifecycle_results()
     if not lc:
@@ -186,8 +246,13 @@ def api_survival_data(request):
         "curvas_dimension": curvas_dim,
     })
 
+@login_required
+@ratelimit(key='ip', rate='5/m', block=True)
+@analyst_or_admin_required
+@require_POST
 def api_import_subscriptions(request):
-    tmp_path, error = handle_csv_upload(request)
+    # Pasamos las cabeceras requeridas de suscripciones para que handle_csv_upload las valide
+    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_SUBS_HEADERS)
     if error:
         return error
     try:
@@ -198,8 +263,13 @@ def api_import_subscriptions(request):
     finally:
         cleanup_tempfile(tmp_path)
 
+@login_required
+@ratelimit(key='ip', rate='5/m', block=True)
+@analyst_or_admin_required
+@require_POST
 def api_import_logs(request):
-    tmp_path, error = handle_csv_upload(request)
+    # Pasamos las cabeceras requeridas de logs
+    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_LOGS_HEADERS)
     if error:
         return error
     try:
@@ -210,6 +280,10 @@ def api_import_logs(request):
     finally:
         cleanup_tempfile(tmp_path)
 
+@login_required
+@ratelimit(key='ip', rate='2/m', block=True)
+@analyst_or_admin_required
+@require_POST
 def api_lifecycle_run(request):
     try:
         metrics = run_lifecycle_analysis()
@@ -229,6 +303,7 @@ def api_lifecycle_run(request):
         logger.exception("Error en lifecycle run")
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
+@login_required
 def api_lifecycle_results(request):
     data = get_lifecycle_results()
     if not data:
@@ -236,6 +311,7 @@ def api_lifecycle_results(request):
     dimensiones = get_lifetime_dimensiones()
     return JsonResponse({"status": "success", "data": data, "dimensiones": dimensiones})
 
+@login_required
 def api_sales_report(request):
     periodo = request.GET.get("period")
     return JsonResponse(get_sales_report_data(periodo))

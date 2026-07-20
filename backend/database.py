@@ -22,7 +22,7 @@ class DBConnector:
             "user": os.getenv("DB_USER"),
             "password": os.getenv("PASS"),
             "port": os.getenv("PORT", "5432"),
-            "sslmode": os.getenv("DB_SSLMODE", "prefer"),
+            "sslmode": 'prefer',
         }
         self.pool = pool.SimpleConnectionPool(1, 10, **self.conn_params)
         self._schema_cache: Dict[str, set] = {}
