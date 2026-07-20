@@ -347,7 +347,8 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
                {select_dims}
         FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
-        WHERE 1=1 {fecha_sql}
+        WHERE c.duracion_total_horas >= 4
+        {fecha_sql}
     """
     df_trans = db.query(transitions_q, params=fecha_params or [])
     if df_trans.empty:

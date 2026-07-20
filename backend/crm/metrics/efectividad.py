@@ -198,6 +198,7 @@ def compute_efectividad(
         FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
         WHERE {where_dim}
+            AND c.duracion_total_horas >= 4
           {fecha_sql}
     """
     df_trans = db.query(transitions_q, params=params)
