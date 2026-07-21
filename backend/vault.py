@@ -30,7 +30,13 @@ from typing import List
 
 import hvac
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
 
 # Carga las variables VAULT_* del .env (si existe) antes de leerlas
 load_dotenv()
@@ -96,11 +102,19 @@ class VaultSettings:
 
         try:
             validated = VaultDataStructure(**raw_secrets)
-        except Exception as e:
+        except ValidationError as e:
+            # Solo se reportan la ruta del campo y el motivo. El mensaje que
+            # genera pydantic incluye el valor recibido (`input_value`), así
+            # que nunca debe propagarse: acabaría en el log de gunicorn.
+            # El `from None` corta el encadenado por el mismo motivo.
+            detalle = "; ".join(
+                f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}"
+                for err in e.errors()
+            )
             raise VaultConfigError(
                 "Los secretos leídos de Vault no tienen la estructura esperada "
-                f"(se esperan las claves DJANGOCONFIG y DBCONFIG): {e}"
-            ) from e
+                f"(se esperan las claves DJANGOCONFIG y DBCONFIG) -> {detalle}"
+            ) from None
 
         self.django = validated.DJANGOCONFIG
         self.db = validated.DBCONFIG
