@@ -1,11 +1,15 @@
 from __future__ import annotations
+import os
 import warnings
 
-from .vault import get_config
+from dotenv import load_dotenv
 
+load_dotenv()
 warnings.filterwarnings("ignore", category=UserWarning)
 
-DB_SCHEMA = get_config().db.DB_SCHEMA
+# El esquema no es un secreto y cambia según el entorno (prod / pruebas),
+# por eso vive en el .env junto a VAULT_PATH y no dentro del secreto.
+DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
 
 DATE_FORMATS = [
     "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d",

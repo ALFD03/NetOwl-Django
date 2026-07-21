@@ -51,10 +51,7 @@ class DjangoModel(BaseModel):
     ALLOWED_HOSTS: List[str]
     # Orígenes de confianza para CSRF. Ojo: aquí cada valor lleva esquema
     # (https://ejemplo.com), a diferencia de ALLOWED_HOSTS.
-    CSRF_TRUSTED_ORIGINS: List[str] = [
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-    ]
+    CSRF_TRUSTED_ORIGINS: List[str]
 
     @field_validator("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIGINS", mode="before")
     @classmethod
@@ -66,12 +63,13 @@ class DjangoModel(BaseModel):
 
 
 class DBConfigModel(BaseModel):
+    # El esquema NO está aquí: vive en el .env (DB_SCHEMA), porque no es
+    # un secreto y cambia según el entorno al que apunte el despliegue.
     DB_NAME: str
     DB_USER: str
     DB_PASSWORD: str
     DB_HOST: str
     DB_PORT: int = 5432
-    DB_SCHEMA: str = "public"
     DB_SSLMODE: str = "prefer"
 
 

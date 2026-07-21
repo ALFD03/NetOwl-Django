@@ -181,9 +181,14 @@ VAULT_ROLE_ID=<role_id>
 VAULT_SECRET_ID=<secret_id>
 VAULT_MOUNT_PATH=kv
 VAULT_PATH=netowl/config
+DB_SCHEMA=public
 ```
 
 > El `.env` debe tener permisos `600` y nunca se versiona (está en `.gitignore`).
+
+`DB_SCHEMA` no es un secreto y cambia entre entornos, por eso vive aquí y no
+en Vault: cambiar de producción a pruebas es cuestión de ajustar `VAULT_PATH`
+y `DB_SCHEMA`. Si se omite, se usa `public`.
 
 ### Secreto en Vault
 
@@ -205,7 +210,6 @@ esta estructura:
     "DB_PASSWORD": "tu_password",
     "DB_HOST": "db",
     "DB_PORT": 5432,
-    "DB_SCHEMA": "public",
     "DB_SSLMODE": "prefer"
   }
 }
