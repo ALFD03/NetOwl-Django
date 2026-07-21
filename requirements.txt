@@ -17,8 +17,14 @@ numpy>=1.24.0
 # Driver de PostgreSQL para conexión desde Django
 psycopg2>=2.9.0
 
-# Carga de variables de entorno desde archivo .env
+# Carga de las variables VAULT_* de arranque desde archivo .env
 python-dotenv>=1.0.0
+
+# Cliente de HashiCorp Vault (secretos: credenciales de BD, SECRET_KEY)
+hvac>=2.3.0
+
+# Validación y conversión de tipos de la configuración leída de Vault
+pydantic>=2.7.0
 
 # Análisis de supervivencia Kaplan-Meier (curvas de retención)
 lifelines>=0.28.0

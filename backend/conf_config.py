@@ -1,13 +1,11 @@
 from __future__ import annotations
-import os
 import warnings
 
-from dotenv import load_dotenv
+from .vault import get_config
 
-load_dotenv()
 warnings.filterwarnings("ignore", category=UserWarning)
 
-DB_SCHEMA = os.getenv("SCHEMA", "public")
+DB_SCHEMA = get_config().db.DB_SCHEMA
 
 DATE_FORMATS = [
     "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d",

@@ -21,16 +21,15 @@ NetOwl-Django/
 ├── cli.py                             # Entrypoint CLI (import + analyze)
 ├── manage.py                          # Entrypoint Django
 ├── requirements.txt                   # Dependencias Python
-├── Dockerfile                         # Imagen Docker multi‑stage (builder y runner)
-├── nginx.conf                         # Configuración del proxy inverso Nginx
-├── docker-compose.yml                 # Orquestación de servicios en producción
-├── entrypoint.sh                      # Generación automática de SECRET_KEY si falta
-├── .env.example                       # Template de variables de entorno
+├── Dockerfile                         # Imagen Docker multi‑stage, usuario no‑root
+├── entrypoint.sh                      # collectstatic en runtime + arranque de gunicorn
+├── .env.example                       # Template de variables de arranque (VAULT_*)
 │
 ├── backend/                           # Lógica de negocio (independiente de Django)
 │   ├── __init__.py                    # Exportaciones del paquete
-│   ├── config.py                      # Constantes + carga de .env + TableNames
-│   ├── utils.py                       # parse_date() y validaciones estructurales de CSV
+│   ├── vault.py                       # Configuración y secretos desde HashiCorp Vault
+│   ├── config.py                      # Constantes + TableNames
+│   ├── utils.py                       # parse_date()
 │   ├── models.py                      # Periodo (dataclass)
 │   ├── database.py                    # DBConnector (pool con sslmode, read, save, copy, schema cache)
 │   │
@@ -152,58 +151,81 @@ NetOwl-Django/
 
 | Módulo | Detalle |
 |---|---|
-| **Seguridad de Despliegue** | Incorporación de **Nginx** como proxy inverso de red. Se aísla el contenedor de Gunicorn para que no reciba tráfico directo desde el exterior del host. |
-| **Optimización de Docker** | Estructura de `Dockerfile` en formato **Multi-stage** (etapa de compilación y etapa de producción limpia). Compilación de `psycopg2` nativo desde las fuentes, dejando la imagen final libre de compiladores y herramientas vulnerables. |
-| **Control de Accesos (RBAC)** | Autenticación nativa habilitada. Soporte para 3 niveles de rol: **Administrador**, **Analista** y **Visualizador (Solo Lectura)**. |
-| **Gestión de Permisos** | Panel de administración dinámico en `/auth/users/` (protegido con rol `admin`). Permite crear usuarios, alternar roles mediante selectores bloqueables con guardado seguro y eliminar cuentas mediante ventanas modales integradas. |
-| **Reporte de Ventas Jerárquico** | Reporte regional (`/subscriptions/sales-report/`) reestructurado en tres niveles jerárquicos: **Site → Tecnología (Type) → Nodos**. Suma valores absolutos y recalcula los indicadores porcentuales de crecimiento, ARPU y Churn para garantizar la precisión matemática del subtotal. |
-| **Validación Avanzada de CSV** | Validación estructural rápida de cabeceras en el backend antes de escribir o procesar los archivos en memoria para mitigar inyecciones o consumo excesivo de recursos. |
-| **Manejo de Excepciones** | Implementación de `RateLimitMiddleware` para interceptar la saturación de peticiones por IP y retornar respuestas estructuradas en JSON con código `429 Too Many Requests`. |
+| **CRM Analytics** | Nuevo módulo completo: pipeline Odoo → JSONB → API REST con 6 métricas + 7 dimensiones |
+| **Persistencia JSONB** | ~10 tablas intermedias reemplazadas por 2 tablas con columnas JSONB (`crm_metricas_globales`, `crm_dimensiones_historico`) |
+| **Per‑metric APIs** | 14 nuevos endpoints (`/crm/api/metricas/*` y `/crm/api/dimensiones/*`) |
+| **Autenticación** | `django.contrib.auth` habilitado; todas las vistas requieren login |
+| **App `config`** | Nueva app Django para login, setup inicial, decoradores de permisos |
+| **Seguridad** | Cabeceras HTTP seguras, SSL redirect configurable, logging rotativo de requests |
+| **Docker** | Usuario no‑root, `entrypoint.sh` con `collectstatic` en runtime, `sslmode` en conexión BD |
+| **Secretos** | Credenciales de BD y `SECRET_KEY` en HashiCorp Vault (KV v2 + AppRole); el `.env` solo guarda las variables `VAULT_*` |
+| **Rate limiting** | `django-ratelimit` en endpoints de importación y análisis (10 req/min/IP) |
+| **Archivos eliminados** | `asgi.py`, `admin.py`, `forms.py`, `cleaner.py` (CRM), `metrics.py` (monolítico) |
 
 ## Configuración de Entorno
 
-Variables de entorno necesarias (`.env` o sección `environment` del compose):
+- Docker y Docker Compose
+- PostgreSQL (en Docker o externo)
+- Acceso a un servidor HashiCorp Vault (motor KV v2 + AppRole)
+
+## Configuración
+
+Los secretos (credenciales de PostgreSQL y `SECRET_KEY` de Django) **no se
+guardan en archivos**: viven en Vault y se leen al arrancar la aplicación
+(`backend/vault.py`). El `.env` solo contiene los datos de arranque para
+autenticarse contra Vault — copiar `.env.example` y completar:
 
 ```env
-# Conexión a Base de Datos
-HOST=                            # Nombre del servicio PostgreSQL en Docker Compose
-DB=                              # Nombre de la base de datos
-DB_USER=                         # Usuario de base de datos
-PASS=                            # Contraseña
-PORT=
-SCHEMA=
-
-# Configuración de Django
-DJANGO_SECRET_KEY=tu_clave_criptografica_segura
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,tu_ip_privada_o_dominio
-DJANGO_CSRF_TRUSTED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000,http://tu_ip_privada:8000
+VAULT_URL=https://vault.ejemplo.com
+VAULT_ROLE_ID=<role_id>
+VAULT_SECRET_ID=<secret_id>
+VAULT_MOUNT_PATH=kv
+VAULT_PATH=netowl/config
 ```
 
-## Quick Start en Producción (Docker Compose)
+> El `.env` debe tener permisos `600` y nunca se versiona (está en `.gitignore`).
+
+### Secreto en Vault
+
+En la ruta `VAULT_MOUNT_PATH/VAULT_PATH` debe existir un secreto KV v2 con
+esta estructura:
+
+```json
+{
+  "DJANGOCONFIG": {
+    "DJANGO_SECRET_KEY": "clave-única-de-50+-caracteres",
+    "DJANGO_DEBUG": false,
+    "DJANGO_SECURE_SSL": false,
+    "ALLOWED_HOSTS": "localhost,127.0.0.1",
+    "CSRF_TRUSTED_ORIGINS": "http://localhost:8000"
+  },
+  "DBCONFIG": {
+    "DB_NAME": "Netcom",
+    "DB_USER": "metabase",
+    "DB_PASSWORD": "tu_password",
+    "DB_HOST": "db",
+    "DB_PORT": 5432,
+    "DB_SCHEMA": "public",
+    "DB_SSLMODE": "prefer"
+  }
+}
+```
+
+El AppRole de la aplicación debe tener una política de **solo lectura** sobre
+`VAULT_MOUNT_PATH/data/VAULT_PATH`. Si Vault no está accesible o el secreto no
+tiene esta estructura, la aplicación falla al arrancar con un `VaultConfigError`
+descriptivo (no arranca con valores por defecto inseguros).
 
 El despliegue separa la aplicación en una red interna y expone únicamente el puerto web gestionado por Nginx:
 
 ```yaml
-version: '3.8'
-
-services:
-  db:
-    image: postgres:latest
-    container_name: netowl_db
-    environment:
-      - POSTGRES_DB=
-      - POSTGRES_USER=m
-      - POSTGRES_PASSWORD=
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    restart: always
-
-  netowl:
-    build: .
+app:
+    build: ./
     container_name: netowl_app
-    env_file: .env
-    expose:
-      - "8000"  # Expuesto solo de forma interna para Nginx
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env          # solo las variables VAULT_*
     depends_on:
       - db
     restart: always

@@ -30,10 +30,9 @@ COPY --from=builder /usr/local /usr/local
 
 # Copiar el código fuente con los permisos para el usuario app
 COPY --chown=app:app . .
-
-# Crear carpeta de logs y recolectar estáticos (ahora accesible por root)
-RUN mkdir -p /app/logs && chown app:app /app/logs && \
-    DJANGO_SECRET_KEY=build-only python manage.py collectstatic --noinput
+# collectstatic se ejecuta en entrypoint.sh (runtime), no aquí: settings.py
+# lee los secretos de Vault al importarse y Vault no está disponible en build.
+RUN mkdir -p /app/logs /app/staticfiles && chown app:app /app/logs /app/staticfiles
 
 USER app
 EXPOSE 8000
