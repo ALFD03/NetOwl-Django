@@ -26,6 +26,7 @@ Dependencias:
 from __future__ import annotations
 
 import os
+import time
 from typing import List
 
 import hvac
@@ -91,6 +92,9 @@ class VaultDataStructure(BaseModel):
 class VaultSettings:
     """Autentica contra Vault, lee el secreto y expone la configuración validada."""
 
+    MAX_INTENTOS = 3
+    ESPERA_ENTRE_INTENTOS = 0.5  # segundos, se multiplica por el nº de intento
+
     def __init__(self):
         self._vault_url = os.getenv("VAULT_URL")
         self._role_id = os.getenv("VAULT_ROLE_ID")
@@ -137,6 +141,20 @@ class VaultSettings:
                 f"{', '.join(missing)}. Revise el archivo .env (ver .env.example)."
             )
 
+        # Se reintenta el ciclo completo (login + lectura) porque en un Vault
+        # en HA el token emitido por un nodo puede tardar en propagarse, y la
+        # lectura inmediata lo rechaza con "invalid token". Sin reintento, un
+        # arranque de cada ocho fallaba por este motivo.
+        for intento in range(1, self.MAX_INTENTOS + 1):
+            ultimo = intento == self.MAX_INTENTOS
+            try:
+                return self._login_y_leer()
+            except VaultConfigError:
+                if ultimo:
+                    raise
+                time.sleep(self.ESPERA_ENTRE_INTENTOS * intento)
+
+    def _login_y_leer(self) -> dict:
         try:
             client = hvac.Client(url=self._vault_url)
             client.auth.approle.login(
