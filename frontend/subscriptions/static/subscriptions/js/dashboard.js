@@ -209,7 +209,6 @@
         type: "bar",
         data: { labels: labels, datasets: [
           { label: "% Suspensiones", data: suspensionData, backgroundColor: suspensionData.map(suspensionBarColor), borderRadius: 4 },
-          { label: "Tendencia", data: suspensionData, type: "line", borderColor: "#fff", backgroundColor: "transparent", borderWidth: 2, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fff", fill: false, order: 0 },
         ] },
         options: N.chartOpts(N.barOpts(gridColor, tickColor)),
         plugins: [suspensionPlugin]
