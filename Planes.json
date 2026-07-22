@@ -1,274 +1,864 @@
 {
     "planes": [
         {
-        "name": "Community Plus 100 Mbps"
-        },
-        {
-        "name": "Community Plus 10 Mbps"
-        },
-        {
-        "name": "Community Plus 150 Mbps"
-        },
-        {
-        "name": "Community Plus 15 Mbps"
-        },
-        {
-        "name": "Community Plus 20 Mbps"
-        },
-        {
-        "name": "Community Plus 25 Mbps"
-        },
-        {
-        "name": "Community Plus 30 Mbps"
-        },
-        {
-        "name": "Community Plus 35 Mbps"
-        },
-        {
-        "name": "Community Plus 40 Mbps"
-        },
-        {
-        "name": "Community Plus 45 Mbps"
-        },
-        {
-        "name": "Community Plus 4 Mbps"
-        },
-        {
-        "name": "Community Plus 50 Mbps"
-        },
-        {
-        "name": "Community Plus 60 Mbps"
-        },
-        {
-        "name": "Community Plus 70 Mbps"
-        },
-        {
-        "name": "Community Plus 80 Mbps"
-        },
-        {
-        "name": "Community Plus 8 Mbps"
-        },
-        {
-        "name": "MegaTV 150 Mbps"
-        },
-        {
-        "name": "MegaTV 150 Mbps may 26"
-        },
-        {
-        "name": "MegaTV 1 Gbps"
-        },
-        {
-        "name": "MegaTV 300 Mbps"
-        },
-        {
-        "name": "MegaTV 300 Mbps may 26"
-        },
-        {
-        "name": "MegaTV 500 Mbps"
-        },
-        {
-        "name": "MegaTV 500 Mbps may 26"
-        },
-        {
-        "name": "MegaTV 700 Mbps"
-        },
-        {
-        "name": "MegaTV 700 Mbps may 26"
-        },
-        {
-        "name": "MegaTV 800 Mbps"
-        },
-        {
-        "name": "MegaTV 800 Mbps may 26"
-        },
-        {
-        "name": "MegaTV 900 Mbps"
-        },
-        {
-        "name": "MegaTV 900 Mbps may 26"
-        },
-        {
-        "name": "Pyme 40 Mbps"
-        },
-        {
-        "name": "Pyme 50 Mbps"
-        },
-        {
-        "name": "Pyme FTTH 100 Mbps"
-        },
-        {
-        "name": "Pyme FTTH 100 Mbps MegaTV"
-        },
-        {
-        "name": "Pyme FTTH 2 Gbps"
-        },
-        {
-        "name": "Pyme FTTH 300 Mbps"
-        },
-        {
-        "name": "Pyme FTTH 300 Mbps MegaTV"
-        },
-        {
-        "name": "Pyme FTTH 350 Mbps"
-        },
-        {
-        "name": "Pyme FTTH 350 Mbps MegaTV"
-        },
-        {
-        "name": "Pyme FTTH 400 Mbps"
-        },
-        {
-        "name": "Pyme FTTH 400 Mbps MegaTV"
-        },
-        {
-        "name": "Pyme FTTH 450 Mbps"
-        },
-        {
-        "name": "Pyme FTTH 450 Mbps MegaTV"
-        },
-        {
-        "name": "Pyme FTTH 500 Mbps"
-        },
-        {
-        "name": "Pyme FTTH 500 Mbps MegaTV"
-        },
-        {
-        "name": "Pyme FTTH 60 Mbps"
-        },
-        {
-        "name": "Pyme FTTH 60 Mbps MegaTV"
-        },
-        {
-        "name": "Pyme Performance"
-        },
-        {
-        "name": "Pyme Plus Más"
-        },
-        {
-        "name": "Pyme Plus Ultra"
-        },
-        {
-        "name": "Pyme Ultra Asimétrico"
-        },
-        {
-        "name": "Pyme Básico Asimétrico"
-        },
-        {
-        "name": "Residencial Básico 10 Mbps"
-        },
-        {
-        "name": "Residencial Básico 4 Mbps"
-        },
-        {
-        "name": "Residencial Básico Plus"
-        },
-        {
-        "name": "Residencial Extreme Plus 100 Mbps"
-        },
-        {
-        "name": "Residencial Extreme Plus 80 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 100 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 100 Mbps PD24"
-        },
-        {
-        "name": "Residencial FTTH 10 Gbps"
-        },
-        {
-        "name": "Residencial FTTH 10 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 1 Gbps"
-        },
-        {
-        "name": "Residencial FTTH 1 Gbps PD24"
-        },
-        {
-        "name": "Residencial FTTH 200 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 200 Mbps PD24"
-        },
-        {
-        "name": "Residencial FTTH 20 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 250 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 2.5 Gbps"
-        },
-        {
-        "name": "Residencial FTTH 30 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 35 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 400 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 400 Mbps PD24"
-        },
-        {
-        "name": "Residencial FTTH 400 Mbps promocional día del amor"
-        },
-        {
-        "name": "Residencial FTTH 600 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 600 Mbps PD24"
-        },
-        {
-        "name": "Residencial FTTH 700 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 800 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 800 Mbps PD24"
-        },
-        {
-        "name": "Residencial FTTH 80 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 850 Mbps"
-        },
-        {
-        "name": "Residencial FTTH 85 Mbps"
-        },
-        {
-        "name": "Residencial FTTH Esencial - 50Mbps"
-        },
-        {
-        "name": "Residencial Performance Plus"
-        },
-        {
-        "name": "Residencial Performance Plus 50 Mbps"
-        },
-        {
-        "name": "Residencial RF 15 Mbps"
-        },
-        {
-        "name": "Residencial RF 50 Mbps"
-        },
-        {
-        "name": "Residencial Select 35 Mbps"
-        },
-        {
-        "name": "Residencial Ultra 30 Mbps"
-        },
-        {
-        "name": "Cancelado"
-        },
-        {
-        "name": "Transporte de Datos"
-        },
-        {
-        "name": "Internet Dedicado"
+        "name": "Community Plus 100 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 60 Mbps",
+        "TV" : "False",
+        "datas": "60",
+        "price": "60"
+        },
+        {
+        "name": "Community Plus 10 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 10 Mbps",
+        "TV" : "False",
+        "datas": "10",
+        "price": "20"
+        },
+        {
+        "name": "Community Plus 150 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 150 Mbps",
+        "TV" : "False",
+        "datas": "150",
+        "price": "90"
+        },
+        {
+        "name": "Community Plus 15 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "30"
+        },
+        {
+        "name": "Community Plus 20 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "30"
+        },
+        {
+        "name": "Community Plus 25 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 50 Mbps",
+        "TV" : "False",
+        "datas": "50",
+        "price": "40"
+        },
+        {
+        "name": "Community Plus 30 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 50 Mbps",
+        "TV" : "False",
+        "datas": "50",
+        "price": "40"
+        },
+        {
+        "name": "Community Plus 35 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 60 Mbps",
+        "TV" : "False",
+        "datas": "60",
+        "price": "60"
+        },
+        {
+        "name": "Community Plus 40 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 70 Mbps",
+        "TV" : "False",
+        "datas": "70",
+        "price": "70"
+        },
+        {
+        "name": "Community Plus 45 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 60 Mbps",
+        "TV" : "False",
+        "datas": "60",
+        "price": "60"
+        },
+        {
+        "name": "Community Plus 4 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "30"
+        },
+        {
+        "name": "Community Plus 50 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 150 Mbps",
+        "TV" : "False",
+        "datas": "150",
+        "price": "90"
+        },
+        {
+        "name": "Community Plus 60 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 60 Mbps",
+        "TV" : "False",
+        "datas": "60",
+        "price": "60"
+        },
+        {
+        "name": "Community Plus 70 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 70 Mbps",
+        "TV" : "False",
+        "datas": "70",
+        "price": "70"
+        },
+        {
+        "name": "Community Plus 80 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 150 Mbps",
+        "TV" : "False",
+        "datas": "150",
+        "price": "90"
+        },
+        {
+        "name": "Community Plus 8 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "COMMUNITY PLUS  HASTA 10 Mbps",
+        "TV" : "False",
+        "datas": "10",
+        "price": "20"
+        },
+        {
+        "name": "MegaTV 150 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 150 Mbps",
+        "TV" : "True",
+        "datas": "150",
+        "price": "25"
+        },
+        {
+        "name": "MegaTV 150 Mbps may 26",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 150 Mbps",
+        "TV" : "True",
+        "datas": "150",
+        "price": "25"
+        },
+        {
+        "name": "MegaTV 1 Gbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 1Gbps",
+        "TV" : "True",
+        "datas": "1000",
+        "price": "70"
+        },
+        {
+        "name": "MegaTV 300 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 300 Mbps",
+        "TV" : "True",
+        "datas": "300",
+        "price": "30"
+        },
+        {
+        "name": "MegaTV 300 Mbps may 26",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 300 Mbps",
+        "TV" : "True",
+        "datas": "300",
+        "price": "30"
+        },
+        {
+        "name": "MegaTV 500 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 500 Mbps",
+        "TV" : "True",
+        "datas": "500",
+        "price": "33"
+        },
+        {
+        "name": "MegaTV 500 Mbps may 26",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 500 Mbps",
+        "TV" : "True",
+        "datas": "500",
+        "price": "33"
+        },
+        {
+        "name": "MegaTV 700 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 700 Mbps",
+        "TV" : "True",
+        "datas": "700",
+        "price": "40"
+        },
+        {
+        "name": "MegaTV 700 Mbps may 26",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 700 Mbps",
+        "TV" : "True",
+        "datas": "700",
+        "price": "40"
+        },
+        {
+        "name": "MegaTV 800 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 800 Mbps",
+        "TV" : "True",
+        "datas": "800",
+        "price": "50"
+        },
+        {
+        "name": "MegaTV 800 Mbps may 26",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 800 Mbps",
+        "TV" : "True",
+        "datas": "800",
+        "price": "50"
+        },
+        {
+        "name": "MegaTV 900 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 900 Mbps",
+        "TV" : "True",
+        "datas": "900",
+        "price": "60"
+        },
+        {
+        "name": "MegaTV 900 Mbps may 26",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "MEGA TV FTTH HASTA 900 Mbps",
+        "TV" : "True",
+        "datas": "900",
+        "price": "60"
+        },
+        {
+        "name": "Pyme 40 Mbps",
+        "type" : "RF",
+        "people" : "PYME",
+        "ref" : "PYME PC HASTA - 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "200"
+        },
+        {
+        "name": "Pyme 50 Mbps",
+        "type" : "RF",
+        "people" : "PYME",
+        "ref" : "PYME PC HASTA - 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "200"
+        },
+        {
+        "name": "Pyme FTTH 100 Mbps",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME FTTH - HASTA 100 Mbps",
+        "TV" : "False",
+        "datas": "100",
+        "price": "50"
+        },
+        {
+        "name": "Pyme FTTH 100 Mbps MegaTV",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME MEGATV FTTH - HASTA 100 Mbps",
+        "TV" : "True",
+        "datas": "100",
+        "price": "50"
+        },
+        {
+        "name": "Pyme FTTH 2 Gbps",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME FTTH - HASTA 2 Gbps",
+        "TV" : "False",
+        "datas": "2000",
+        "price": "900"
+        },
+        {
+        "name": "Pyme FTTH 300 Mbps",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME FTTH - HASTA 300 Mbps",
+        "TV" : "False",
+        "datas": "300",
+        "price": "60"
+        },
+        {
+        "name": "Pyme FTTH 300 Mbps MegaTV",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME MEGATV FTTH - HASTA 300 Mbps",
+        "TV" : "True",
+        "datas": "300",
+        "price": "60"
+        },
+        {
+        "name": "Pyme FTTH 350 Mbps",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME FTTH - HASTA 350 Mbps",
+        "TV" : "False",
+        "datas": "350",
+        "price": "80"
+        },
+        {
+        "name": "Pyme FTTH 350 Mbps MegaTV",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME MEGATV FTTH - HASTA 350 Mbps",
+        "TV" : "True",
+        "datas": "350",
+        "price": "80"
+        },
+        {
+        "name": "Pyme FTTH 400 Mbps",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME FTTH - HASTA 400 Mbps",
+        "TV" : "False",
+        "datas": "400",
+        "price": "100"
+        },
+        {
+        "name": "Pyme FTTH 400 Mbps MegaTV",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME MEGATV FTTH - HASTA 400 Mbps",
+        "TV" : "True",
+        "datas": "400",
+        "price": "100"
+        },
+        {
+        "name": "Pyme FTTH 450 Mbps",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME FTTH - HASTA 450 Mbps",
+        "TV" : "False",
+        "datas": "450",
+        "price": "120"
+        },
+        {
+        "name": "Pyme FTTH 450 Mbps MegaTV",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME MEGATV FTTH - HASTA 450 Mbps",
+        "TV" : "True",
+        "datas": "450",
+        "price": "120"
+        },
+        {
+        "name": "Pyme FTTH 500 Mbps",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME FTTH - HASTA 500 Mbps",
+        "TV" : "False",
+        "datas": "500",
+        "price": "180"
+        },
+        {
+        "name": "Pyme FTTH 500 Mbps MegaTV",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME MEGATV FTTH - HASTA 500 Mbps",
+        "TV" : "True",
+        "datas": "500",
+        "price": "180"
+        },
+        {
+        "name": "Pyme FTTH 60 Mbps",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME FTTH - HASTA 60 Mbps",
+        "TV" : "False",
+        "datas": "60",
+        "price": "40"
+        },
+        {
+        "name": "Pyme FTTH 60 Mbps MegaTV",
+        "type" : "FTTH",
+        "people" : "PYME",
+        "ref" : "PYME MEGATV FTTH - HASTA 60 Mbps",
+        "TV" : "True",
+        "datas": "60",
+        "price": "40"
+        },
+        {
+        "name": "Pyme Performance",
+        "type" : "RF",
+        "people" : "PYME",
+        "ref" : "PYME-HASTA 30 Mbps",
+        "TV" : "False",
+        "datas": "30",
+        "price": "190"
+        },
+        {
+        "name": "Pyme Plus Más",
+        "type" : "RF",
+        "people" : "PYME",
+        "ref" : "PYME - HASTA 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "100"
+        },
+        {
+        "name": "Pyme Plus Ultra",
+        "type" : "RF",
+        "people" : "PYME",
+        "ref" : "PYME PC HASTA- 15 Mbps",
+        "TV" : "False",
+        "datas": "15",
+        "price": "125"
+        },
+        {
+        "name": "Pyme Ultra Asimétrico",
+        "type" : "RF",
+        "people" : "PYME",
+        "ref" : "PYME-HASTA 15 Mbps",
+        "TV" : "False",
+        "datas": "15",
+        "price": "125"
+        },
+        {
+        "name": "Pyme Básico Asimétrico",
+        "type" : "RF",
+        "people" : "PYME",
+        "ref" : "PYME-HASTA 10 Mbps",
+        "TV" : "False",
+        "datas": "10",
+        "price": "56"
+        },
+        {
+        "name": "Residencial Básico 10 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 100 Mbps",
+        "TV" : "False",
+        "datas": "100",
+        "price": "20"
+        },
+        {
+        "name": "Residencial Básico 4 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL-HASTA 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "40"
+        },
+        {
+        "name": "Residencial Básico 4 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL PC- HASTA 15 Mbps",
+        "TV" : "False",
+        "datas": "15",
+        "price": "40",
+        "tarifa": "Planes Banda Ancha Puerto Cabello (USD)"
+        },
+        {
+        "name": "Residencial Básico Plus",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL-HASTA 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "40"
+        },
+        {
+        "name": "Residencial Básico Plus",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL PC- HASTA 15 Mbps",
+        "TV" : "False",
+        "datas": "15",
+        "price": "40",
+        "tarifa": "Planes Banda Ancha Puerto Cabello (USD)"
+        },
+        {
+        "name": "Residencial Extreme Plus 100 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL - HASTA 70Mbos",
+        "TV" : "False",
+        "datas": "70",
+        "price": "150"
+        },
+        {
+        "name": "Residencial Extreme Plus 80 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL - HASTA 70Mbos",
+        "TV" : "False",
+        "datas": "70",
+        "price": "150"
+        },
+        {
+        "name": "Residencial FTTH 100 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 100 Mbps",
+        "TV" : "False",
+        "datas": "100",
+        "price": "20"
+        },
+        {
+        "name": "Residencial FTTH 100 Mbps PD24",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 100 Mbps",
+        "TV" : "False",
+        "datas": "100",
+        "price": "20"
+        },
+        {
+        "name": "Residencial FTTH 10 Gbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH - HASTA 1 Gbps",
+        "TV" : "False",
+        "datas": "1000",
+        "price": "90"
+        },
+        {
+        "name": "Residencial FTTH 10 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 100 Mbps",
+        "TV" : "False",
+        "datas": "100",
+        "price": "20"
+        },
+        {
+        "name": "Residencial FTTH 1 Gbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH - HASTA 1 Gbps",
+        "TV" : "False",
+        "datas": "1000",
+        "price": "90"
+        },
+        {
+        "name": "Residencial FTTH 1 Gbps PD24",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH - HASTA 1 Gbps",
+        "TV" : "False",
+        "datas": "1000",
+        "price": "90"
+        },
+        {
+        "name": "Residencial FTTH 200 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH - HASTA 200 Mbps",
+        "TV" : "False",
+        "datas": "200",
+        "price": "25"
+        },
+        {
+        "name": "Residencial FTTH 200 Mbps PD24",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH - HASTA 200 Mbps",
+        "TV" : "False",
+        "datas": "200",
+        "price": "25"
+        },
+        {
+        "name": "Residencial FTTH 20 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH - HASTA 200 Mbps",
+        "TV" : "False",
+        "datas": "200",
+        "price": "25"
+        },
+        {
+        "name": "Residencial FTTH 250 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 100 Mbps",
+        "TV" : "False",
+        "datas": "100",
+        "price": "20"
+        },
+        {
+        "name": "Residencial FTTH 2.5 Gbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH - HASTA 1 Gbps",
+        "TV" : "False",
+        "datas": "1000",
+        "price": "90"
+        },
+        {
+        "name": "Residencial FTTH 30 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 400 Mbps",
+        "TV" : "False",
+        "datas": "400",
+        "price": "30"
+        },
+        {
+        "name": "Residencial FTTH 35 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 400 Mbps",
+        "TV" : "False",
+        "datas": "400",
+        "price": "30"
+        },
+        {
+        "name": "Residencial FTTH 400 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 400 Mbps",
+        "TV" : "False",
+        "datas": "400",
+        "price": "30"
+        },
+        {
+        "name": "Residencial FTTH 400 Mbps PD24",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 400 Mbps",
+        "TV" : "False",
+        "datas": "400",
+        "price": "30"
+        },
+        {
+        "name": "Residencial FTTH 400 Mbps promocional día del amor",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 400 Mbps",
+        "TV" : "False",
+        "datas": "400",
+        "price": "30"
+        },
+        {
+        "name": "Residencial FTTH 600 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 600 Mbps",
+        "TV" : "False",
+        "datas": "600",
+        "price": "40"
+        },
+        {
+        "name": "Residencial FTTH 600 Mbps PD24",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 600 Mbps",
+        "TV" : "False",
+        "datas": "600",
+        "price": "40"
+        },
+        {
+        "name": "Residencial FTTH 700 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 700 Mbps",
+        "TV" : "False",
+        "datas": "700",
+        "price": "50"
+        },
+        {
+        "name": "Residencial FTTH 800 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 800 Mbps",
+        "TV" : "False",
+        "datas": "800",
+        "price": "60"
+        },
+        {
+        "name": "Residencial FTTH 800 Mbps PD24",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 800 Mbps",
+        "TV" : "False",
+        "datas": "800",
+        "price": "60"
+        },
+        {
+        "name": "Residencial FTTH 80 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 800 Mbps",
+        "TV" : "False",
+        "datas": "800",
+        "price": "60"
+        },
+        {
+        "name": "Residencial FTTH 850 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 850 Mbps",
+        "TV" : "False",
+        "datas": "850",
+        "price": "70"
+        },
+        {
+        "name": "Residencial FTTH 85 Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 850 Mbps",
+        "TV" : "False",
+        "datas": "850",
+        "price": "70"
+        },
+        {
+        "name": "Residencial FTTH Esencial - 50Mbps",
+        "type" : "FTTH",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL FTTH HASTA 850 Mbps",
+        "TV" : "False",
+        "datas": "850",
+        "price": "70"
+        },
+        {
+        "name": "Residencial Performance Plus",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL - HASTA 50Mbps",
+        "TV" : "False",
+        "datas": "50",
+        "price": "100"
+        },
+        {
+        "name": "Residencial Performance Plus 50 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL - HASTA 50Mbps",
+        "TV" : "False",
+        "datas": "50",
+        "price": "100"
+        },
+        {
+        "name": "Residencial RF 15 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL-HASTA 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "40"
+        },
+        {
+        "name": "Residencial RF 15 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL PC- HASTA 15 Mbps",
+        "TV" : "False",
+        "datas": "15",
+        "price": "40",
+        "tarifa": "Planes Banda Ancha Puerto Cabello (USD)"
+        },
+        {
+        "name": "Residencial RF 50 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL-HASTA 35 Mbps",
+        "TV" : "False",
+        "datas": "35",
+        "price": "70"
+        },
+        {
+        "name": "Residencial Select 35 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL-HASTA 35 Mbps",
+        "TV" : "False",
+        "datas": "35",
+        "price": "75"
+        },
+        {
+        "name": "Residencial Select 35 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL PC- HASTA 30 Mbps",
+        "TV" : "False",
+        "datas": "30",
+        "price": "70",
+        "tarifa": "Planes Banda Ancha Puerto Cabello (USD)"
+        },
+        {
+        "name": "Residencial Ultra 30 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL-HASTA 30 Mbps",
+        "TV" : "False",
+        "datas": "30",
+        "price": "60"
+        },
+        {
+        "name": "Residencial Ultra 30 Mbps",
+        "type" : "RF",
+        "people" : "nat",
+        "ref" : "RESIDENCIAL PC- HASTA 20 Mbps",
+        "TV" : "False",
+        "datas": "20",
+        "price": "50",
+        "tarifa": "Planes Banda Ancha Puerto Cabello (USD)"
+        },
+        {
+        "name": "Cancelado",
+        "type" : "",
+        "people" : "",
+        "ref" : "",
+        "TV" : "",
+        "datas": "",
+        "price": ""
+        },
+        {
+        "name": "Transporte de Datos",
+        "type" : "",
+        "people" : "",
+        "ref" : "",
+        "TV" : "",
+        "datas": "",
+        "price": ""
+        },
+        {
+        "name": "Internet Dedicado",
+        "type" : "",
+        "people" : "",
+        "ref" : "",
+        "TV" : "",
+        "datas": "",
+        "price": ""
         }
     ]
 }
