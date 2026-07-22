@@ -844,19 +844,19 @@
         },
         {
         "name": "Transporte de Datos",
-        "type" : "",
-        "people" : "",
+        "type" : "FTTH",
+        "people" : "PYME",
         "ref" : "",
-        "TV" : "",
+        "TV" : "False",
         "datas": "",
         "price": ""
         },
         {
         "name": "Internet Dedicado",
-        "type" : "",
-        "people" : "",
+        "type" : "FTTH",
+        "people" : "PYME",
         "ref" : "",
-        "TV" : "",
+        "TV" : "False",
         "datas": "",
         "price": ""
         }
