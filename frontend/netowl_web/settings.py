@@ -5,21 +5,19 @@ Define todos los parámetros de la aplicación Django que sirve el
 frontend del analizador de churn: base de datos, plantillas, archivos
 estáticos, middleware, aplicaciones instaladas, etc.
 
-Los valores sensibles se cargan desde variables de entorno mediante
-python-dotenv.
+Los valores sensibles se leen de HashiCorp Vault (ver backend/vault.py).
+Si Vault no está accesible, la aplicación no arranca.
 
 Dependencias:
-    - os, pathlib (estándar)
-    - python-dotenv (carga de .env)
+    - pathlib (estándar)
+    - backend.vault (configuración desde Vault)
 """
 
-import os
 from pathlib import Path
-from dotenv import load_dotenv
-from django.core.exceptions import ImproperlyConfigured
+from backend.vault import get_config
 
-# Cargar variables de entorno desde el archivo .env (si existe)
-load_dotenv()
+# Configuración sensible (Django + base de datos) obtenida de Vault
+config = get_config()
 
 # Ruta base del proyecto: tres niveles arriba de este archivo
 # (frontend/churn_web/settings.py → raíz del repo)
@@ -29,34 +27,15 @@ LOGIN_URL = "/auth/login/"
 LOGOUT_REDIRECT_URL = "/auth/login/"
 
 # --- Seguridad ---
-# Modo debug: deshabilitar en producción (DJANGO_DEBUG=False)
-DEBUG = False
-# Clave secreta de Django (definir DJANGO_SECRET_KEY en producción)
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
-if not SECRET_KEY:
-    if DEBUG:
-        import warnings
-        SECRET_KEY = __import__("secrets").token_urlsafe(50)
-        warnings.warn("DJANGO_SECRET_KEY no está definido. Se generó uno temporal para desarrollo.", stacklevel=2)
-    else:
-        raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in .env for production")
-# Hosts permitidos (lista separada por comas, ej: "localhost,ejemplo.com")
-#allowed_hosts_env = os.getenv("DJANGO_ALLOWED_HOSTS")
-#if allowed_hosts_env:
-#    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_env.split(",") if host.strip()]
-ALLOWED_HOSTS = ['*']
+# Modo debug: deshabilitar en producción (DJANGOCONFIG.DJANGO_DEBUG=false)
+DEBUG = config.django.DEBUG
+# Clave secreta de Django
+SECRET_KEY = config.django.SECRET_KEY
+# Hosts permitidos (en Vault: cadena separada por comas o lista)
+ALLOWED_HOSTS = config.django.ALLOWED_HOSTS
 
 # --- Seguridad HTTPS / Headers ---
-SECURE_SSL_REDIRECT = False # Cambiar a True solo con  HTTPS habilitado
-
-# 1. Encabezado de Proxy SSL (CRÍTICO para producción)
-# Informa a Django que la petición original es HTTPS cuando corre detrás de un Proxy 
-# (como Nginx, Traefik o balanceadores de carga). Evita bucles infinitos de redirección.
-if SECURE_SSL_REDIRECT:
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-
-# 2. Cookies seguras
-# Las cookies de sesión y CSRF solo se transmitirán por conexiones HTTPS cifradas.
+SECURE_SSL_REDIRECT = config.django.SECURE_SSL
 SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
 CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
 
@@ -77,15 +56,9 @@ SECURE_REFERRER_POLICY = "same-origin"
 
 # 6. Orígenes de confianza para CSRF (CRÍTICO en Django 5+)
 # En producción con HTTPS, Django 5+ rechaza peticiones POST si el origen no está listado aquí.
-csrf_origins_env = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS")
-if csrf_origins_env:
-    CSRF_TRUSTED_ORIGINS = [
-        origin.strip()
-        for origin in csrf_origins_env.split(",")
-        if origin.strip()
-    ]
-else:
-    CSRF_TRUSTED_ORIGINS = ["http://localhost:8000", "http://127.0.0.1:8000"]
+# En Vault: cadena separada por comas o lista. Si no se define, se usan
+# los orígenes locales por defecto (ver DjangoModel en backend/vault.py).
+CSRF_TRUSTED_ORIGINS = config.django.CSRF_TRUSTED_ORIGINS
 
 # --- Límites de subida ---
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
@@ -141,20 +114,18 @@ TEMPLATES = [
 ]
 
 # --- Base de datos (PostgreSQL) ---
-# Los parámetros de conexión se obtienen de variables de entorno
-# Se añade soporte explícito para SSL y límite de tiempo de conexión (seguridad y estabilidad)
+# Los parámetros de conexión se obtienen de Vault (DBCONFIG)
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("PASS"),
-        "HOST": os.getenv("HOST"),
-        "PORT": os.getenv("PORT", "5432"),
+        "NAME": config.db.DB_NAME,          # Nombre de la base de datos
+        "USER": config.db.DB_USER,          # Usuario de BD
+        "PASSWORD": config.db.DB_PASSWORD,  # Contraseña
+        "HOST": config.db.DB_HOST,          # Host del servidor PostgreSQL
+        "PORT": str(config.db.DB_PORT),     # Puerto (por defecto 5432)
         "OPTIONS": {
-            "sslmode": os.getenv("DB_SSLMODE", "prefer"),
-            "connect_timeout": 10,  # Timeout de 10 segundos para evitar colgar hilos de Gunicorn si la BD no responde
-        }
+            "sslmode": config.db.DB_SSLMODE,  # Modo SSL de la conexión
+        },
     }
 }
 

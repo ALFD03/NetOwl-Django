@@ -1,9 +1,8 @@
 #!/bin/bash
 set -e
 
-if [ -z "$DJANGO_SECRET_KEY" ]; then
-    DJANGO_SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(50))')
-    export DJANGO_SECRET_KEY
-fi
+# Los secretos (SECRET_KEY, credenciales de BD) se leen de Vault al importar
+# settings.py, por lo que collectstatic solo puede ejecutarse en runtime.
+python manage.py collectstatic --noinput
 
 exec "$@"

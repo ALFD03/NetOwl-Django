@@ -1,6 +1,5 @@
 from __future__ import annotations
 import io
-import os
 import re
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
@@ -11,18 +10,20 @@ from psycopg2 import pool, sql
 from psycopg2.extras import execute_values
 
 from .conf_config import DB_SCHEMA
+from .vault import get_config
 
 
 class DBConnector:
-    
+
     def __init__(self):
+        db = get_config().db
         self.conn_params: Dict[str, Any] = {
-            "host": os.getenv("HOST"),
-            "database": os.getenv("DB"),
-            "user": os.getenv("DB_USER"),
-            "password": os.getenv("PASS"),
-            "port": os.getenv("PORT", "5432"),
-            "sslmode": 'prefer',
+            "host": db.DB_HOST,
+            "database": db.DB_NAME,
+            "user": db.DB_USER,
+            "password": db.DB_PASSWORD,
+            "port": str(db.DB_PORT),
+            "sslmode": db.DB_SSLMODE,
         }
         self.pool = pool.SimpleConnectionPool(1, 10, **self.conn_params)
         self._schema_cache: Dict[str, set] = {}

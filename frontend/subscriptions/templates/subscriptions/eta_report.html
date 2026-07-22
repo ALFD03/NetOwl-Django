@@ -1,0 +1,166 @@
+<!-- --- START OF FILE NetOwl-Django/frontend/subscriptions/templates/subscriptions/eta_report.html --- -->
+{% extends 'subscriptions/base.html' %}
+{% load static %}
+
+{% block title %}NetOwl - ETA Report{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'css/subscriptions.css' %}">
+  <style>
+    .kpi-eta-card { border-left: 4px solid var(--primary); background: var(--surface-secondary); }
+    .eta-badge-card {
+        background-color: var(--surface-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 0.75rem 1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: transform 0.2s;
+    }
+    .eta-badge-card:hover {
+        transform: translateY(-2px);
+        background-color: var(--surface-hover);
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="card-header rounded d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 py-2" style="background: var(--surface-secondary); border: 1px solid var(--border-color);">
+  <h4 class="mb-0 px-2"><i class="bi bi-file-earmark-bar-graph-fill text-primary me-2"></i>Reporte Regulatorio ETA</h4>
+  <div class="d-flex align-items-center gap-3">
+    <div class="d-flex align-items-center gap-2">
+      <label class="form-label mb-0 text-muted small fw-bold">Mes:</label>
+      <select id="etaPeriodSelect" class="form-select form-select-sm prominent-filter" style="width:auto"></select>
+    </div>
+    <div id="etaLockSection" class="d-none">
+      <button id="etaLockBtn" class="btn btn-sm btn-outline-danger d-flex align-items-center gap-2">
+        <i id="etaLockIcon" class="bi bi-unlock"></i><span id="etaLockText">Bloquear Mes</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <!-- Navegación General -->
+        <ul class="nav nav-tabs border-bottom-0" id="mainEtaTab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" id="report-view-tab" data-bs-toggle="tab" data-bs-target="#tab-report-view" type="button">Ver Reporte</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="config-manage-tab" data-bs-toggle="tab" data-bs-target="#tab-config-manage" type="button">Gestión Suscripciones Especiales</button>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<div class="tab-content" id="mainEtaTabContent">
+    <!-- PESTAÑA 1: VISUALIZACIÓN DEL REPORTE -->
+    <div class="tab-pane fade show active" id="tab-report-view">
+        <div id="etaReportContent">
+          <div class="text-center py-5 text-muted" id="etaMainSpinner">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando reporte regulatoria...
+          </div>
+        </div>
+    </div>
+
+    <!-- PESTAÑA 2: GESTIÓN DE SUSCRIPCIONES ESPECIALES (DEDICADO / TRANSPORTE) -->
+    <div class="tab-pane fade" id="tab-config-manage">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-sliders2 me-2"></i>Gestión de Clientes Dedicados y Transporte de Datos</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">A continuación se listan las cuentas especiales configuradas individualmente de manera persistente en el sistema.</p>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-theme align-middle">
+                        <thead>
+                            <tr>
+                                <th>Orden</th>
+                                <th>Cliente</th>
+                                <th>Servicio</th>
+                                <th>Tecnología</th>
+                                <th>Persona</th>
+                                <th>Velocidad (Mbps)</th>
+                                <th>Tiene TV</th>
+                                <th>Tipo de Cuenta</th>
+                                <th class="text-center">Modificar</th>
+                            </tr>
+                        </thead>
+                        <tbody id="configuredSubsTbody">
+                            <tr><td colspan="9" class="text-center py-4 text-muted">No hay suscripciones configuradas actualmente.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL UNIFICADO: PARAMETRIZACIÓN DE ELEMENTOS NO CONFIGURADOS -->
+<div class="modal fade" id="unmappedElementsModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-warning"><i class="bi bi-exclamation-triangle-fill me-2"></i>Mapeo Obligatorio Requerido</h5>
+      </div>
+      <div class="modal-body">
+        
+        <!-- Panel 1: Planes Globales -->
+        <div id="unmappedPlanesSection" class="mb-4 d-none">
+            <h6 class="fw-bold text-white mb-2"><i class="bi bi-layers me-2 text-info"></i>Planes Globales por Homologar</h6>
+            <div class="table-responsive">
+              <table class="table table-bordered table-theme align-middle">
+                <thead>
+                  <tr>
+                    <th>Nombre del Plan</th>
+                    <th style="width:120px;">Reportar</th>
+                    <th>Tecnología</th>
+                    <th>Persona</th>
+                    <th>Tiene TV</th>
+                    <th>Velocidad (Mbps)</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="unmappedPlanesTbody"></tbody>
+              </table>
+            </div>
+        </div>
+
+        <!-- Panel 2: Suscripciones Individuales -->
+        <div id="unmappedSubsSection" class="d-none">
+            <h6 class="fw-bold text-white mb-2"><i class="bi bi-person-badge me-2 text-warning"></i>Cuentas Corporativas Individuales por Configurar</h6>
+            <div class="table-responsive">
+              <table class="table table-bordered table-theme align-middle">
+                <thead>
+                  <tr>
+                    <th>Orden</th>
+                    <th>Cliente</th>
+                    <th>Servicio Original</th>
+                    <th>Tecnología</th>
+                    <th>Persona</th>
+                    <th>Velocidad (Mbps)</th>
+                    <th>Tiene TV</th>
+                    <th>Especialidad</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="unmappedSubsTbody"></tbody>
+              </table>
+            </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button id="recheckCalculationsBtn" class="btn btn-primary btn-sm"><i class="bi bi-arrow-clockwise me-1"></i>Finalizar y Recalcular Reporte</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'subscriptions/js/eta_report.js' %}"></script>
+{% endblock %}
+<!-- --- END OF FILE NetOwl-Django/frontend/subscriptions/templates/subscriptions/eta_report.html --- -->
