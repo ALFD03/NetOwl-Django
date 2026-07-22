@@ -23,6 +23,7 @@ from backend.subscriptions import (
     get_cierre_churn, get_dimensiones, get_periodos,
     get_dashboard_data, get_analytics_data,
     import_logs_csv, import_subscriptions_csv, get_sales_report_data,
+    ETAReportManager,
 )
 from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
@@ -138,6 +139,11 @@ def api_periods_list(request):
 @login_required
 def api_results_list(request):
     return JsonResponse({"periods": get_cierre_churn()})
+
+@login_required
+def eta_report(request):
+    """Renderiza el cascarón HTML de la vista de reportes de telecomunicación ETA."""
+    return render(request, f"{TEMPLATE_PREFIX}eta_report.html", {"section": "eta_report"})
 
 @login_required
 def api_results_detail(request, periodo):
@@ -315,3 +321,100 @@ def api_lifecycle_results(request):
 def api_sales_report(request):
     periodo = request.GET.get("period")
     return JsonResponse(get_sales_report_data(periodo))
+@login_required
+def api_eta_report_data(request):
+    periodo = request.GET.get("period")
+    if not periodo or len(periodo) != 7:
+        periodos_activos = get_periodos()
+        if not periodos_activos:
+            return JsonResponse({"status": "empty", "message": "No se encontraron periodos cerrados."})
+        periodo = periodos_activos[0][:7]
+
+    force = request.GET.get("force", "false").lower() == "true"
+    db = DBConnector()
+    manager = ETAReportManager(db)
+    try:
+        report_data = manager.calculate_eta_report(periodo, force_recalc=force)
+        report_data["periods"] = [p[:7] for p in get_periodos()]
+        # Adición: Lista de configuraciones individuales ya guardadas
+        report_data["individual_configs"] = manager.get_configured_individual_subs()
+        return JsonResponse(report_data)
+    except Exception as e:
+        logger.exception("Error en cálculo de reporte ETA")
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+@login_required
+@analyst_or_admin_required
+@require_POST
+def api_eta_report_lock(request):
+    try:
+        data = json.loads(request.body)
+        periodo = data.get("period")
+        lock = bool(data.get("lock", False))
+    except Exception:
+        return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
+
+    db = DBConnector()
+    manager = ETAReportManager(db)
+    manager.set_lock_status(periodo, lock)
+    if lock:
+        manager.calculate_eta_report(periodo, force_recalc=True)
+    return JsonResponse({"status": "success", "esta_bloqueado": lock, "message": f"Periodo {periodo} actualizado."})
+
+@login_required
+@analyst_or_admin_required
+@require_POST
+def api_eta_report_save_plan_config(request):
+    try:
+        data = json.loads(request.body)
+        plan_name = data.get("plan_name")
+        config = {
+            "reportar": bool(data.get("reportar", True)),
+            "tecnologia": data.get("tecnologia"),
+            "tipo_persona": data.get("tipo_persona"),
+            "tiene_tv": bool(data.get("tiene_tv", False)),
+            "datas_mbps": float(data.get("datas_mbps", 0))
+        }
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+    db = DBConnector()
+    manager = ETAReportManager(db)
+    try:
+        manager.save_plan_custom_config(plan_name, config)
+        return JsonResponse({"status": "success"})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+@login_required
+@analyst_or_admin_required
+@require_POST
+def api_eta_report_save_sub_config(request):
+    """API para guardar o modificar la homologación de una suscripción individual (Internet Dedicado / Transporte)."""
+    try:
+        data = json.loads(request.body)
+        orden = data.get("orden")
+        config = {
+            "cliente": data.get("cliente", ""),
+            "producto": data.get("producto", ""),
+            "reportar": bool(data.get("reportar", True)),
+            "tecnologia": data.get("tecnologia"),
+            "tipo_persona": data.get("tipo_persona"),
+            "tiene_tv": bool(data.get("tiene_tv", False)),
+            "datas_mbps": float(data.get("datas_mbps", 0)),
+            "es_transporte": bool(data.get("es_transporte", False)),
+            "es_dedicado": bool(data.get("es_dedicado", False))
+        }
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+    if not orden:
+        return JsonResponse({"status": "error", "message": "El campo orden es requerido"}, status=400)
+
+    db = DBConnector()
+    manager = ETAReportManager(db)
+    try:
+        manager.save_sub_individual_config(orden, config)
+        return JsonResponse({"status": "success", "message": f"Suscripción {orden} guardada."})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
