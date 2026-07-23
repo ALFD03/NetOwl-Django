@@ -252,5 +252,6 @@
 }
 .nav-link:hover {
   background-color: var(--primary-hover);
-  border-color: var(--primary-hover);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
