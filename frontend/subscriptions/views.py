@@ -1,8 +1,9 @@
+# --- START OF FILE NetOwl-Django/frontend/subscriptions/views.py ---
 import json
 import io
 import logging
 import os
-import tempfile  # <-- Requerido para crear el archivo temporal de subida
+import tempfile
 from contextlib import redirect_stdout, redirect_stderr
 
 logger = logging.getLogger(__name__)
@@ -13,7 +14,7 @@ from django.conf import settings
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from django.contrib.auth.decorators import login_required
-from frontend.config.decorators import admin_required, analyst_or_admin_required
+from frontend.config.decorators import permission_required
 
 # Conectores y lógica de negocio del backend
 from backend.database import DBConnector
@@ -61,18 +62,15 @@ def handle_csv_upload(request, required_headers=None):
         return None, JsonResponse({"status": "error", "message": "Archivo no enviado"}, status=400)
     
     csv_file = request.FILES["csv_file"]
-    
     if not csv_file.name.endswith(".csv"):
         return None, JsonResponse({"status": "error", "message": "Solo se permiten archivos con extensión .csv"}, status=400)
-    
     if csv_file.size > settings.MAX_UPLOAD_SIZE:
         return None, JsonResponse({"status": "error", "message": "El archivo excede el tamaño máximo permitido"}, status=400)
     
     tmp_path = None
     try:
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
-        tmp_path = tmp.name  # Guardamos la ruta inmediatamente
-        
+        tmp_path = tmp.name
         for chunk in csv_file.chunks():
             tmp.write(chunk)
         tmp.close()
@@ -80,12 +78,11 @@ def handle_csv_upload(request, required_headers=None):
         if required_headers:
             is_valid, err_msg = validate_csv_structure(tmp_path, required_headers)
             if not is_valid:
-                cleanup_tempfile(tmp_path)  # Limpieza en caso de validación fallida
+                cleanup_tempfile(tmp_path)
                 return None, JsonResponse({"status": "error", "message": err_msg}, status=400)
-                
     except Exception as e:
         if tmp_path:
-            cleanup_tempfile(tmp_path)  # Limpieza garantizada en caso de excepción de escritura
+            cleanup_tempfile(tmp_path)
         return None, JsonResponse({"status": "error", "message": f"Error al procesar el archivo: {str(e)}"}, status=500)
         
     return tmp_path, None
@@ -97,55 +94,69 @@ def cleanup_tempfile(tmp_path):
         except OSError:
             pass
 
+# --- VISTAS HTML PROTEGIDAS POR PERMISO GRANULAR ---
+
 @login_required
+@permission_required('can_view_subscriptions')
 def dashboard(request):
     return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
 
 @login_required
+@permission_required('can_view_subs_analytics')
 def analytics(request):
     return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
 
 @login_required
-@analyst_or_admin_required
+@permission_required('can_import_data')
 def imports(request):
     return render(request, f"{TEMPLATE_PREFIX}imports.html", {"section": "imports"})
 
 @login_required
+@permission_required('can_view_subs_results')
 def results(request, periodo=None):
     return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
 
 @login_required
+@permission_required('can_view_subs_lifetime')
 def lifetime(request):
     return render(request, f"{TEMPLATE_PREFIX}lifetime.html", {"section": "lifetime"})
 
 @login_required
+@permission_required('can_view_subs_sales')
 def sales_report(request):
     return render(request, f"{TEMPLATE_PREFIX}sales_report.html", {"section": "sales_report"})
 
 @login_required
+@permission_required('can_view_eta')
+def eta_report(request):
+    return render(request, f"{TEMPLATE_PREFIX}eta_report.html", {"section": "eta_report"})
+
+# --- APIS DE LECTURA DE DATOS ---
+
+@login_required
+@permission_required('can_view_subscriptions')
 def api_dashboard_data(request):
     return JsonResponse(get_dashboard_data())
 
 @login_required
+@permission_required('can_view_subs_analytics')
 def api_analytics_data(request):
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     return JsonResponse(get_analytics_data(periodos))
 
 @login_required
+@permission_required('can_view_subscriptions')
 def api_periods_list(request):
     return JsonResponse({"periods": get_periodos()})
 
 @login_required
+@permission_required('can_view_subs_results')
 def api_results_list(request):
     return JsonResponse({"periods": get_cierre_churn()})
 
 @login_required
-def eta_report(request):
-    """Renderiza el cascarón HTML de la vista de reportes de telecomunicación ETA."""
-    return render(request, f"{TEMPLATE_PREFIX}eta_report.html", {"section": "eta_report"})
-
-@login_required
+@permission_required('can_view_subs_results')
 def api_results_detail(request, periodo):
     cierre = get_cierre_churn([periodo])
     dims = get_dimensiones([periodo])
@@ -158,37 +169,7 @@ def api_results_detail(request, periodo):
     })
 
 @login_required
-@ratelimit(key='ip', rate='2/m', block=True)
-@analyst_or_admin_required
-@require_POST
-def api_run_analysis(request):
-    try:
-        data = json.loads(request.body)
-        mes = data.get("month")
-    except Exception:
-        logger.exception("Invalid JSON in request body")
-        return JsonResponse({"status": "error", "message": "JSON invalido"}, status=400)
-    if not mes or len(mes) != 7:
-        return JsonResponse({"status": "error", "message": "Periodo invalido (YYYY-MM)"}, status=400)
-    try:
-        periodo = Periodo.build(f"{mes}-01")
-        periodo_label = periodo.label()
-        out = io.StringIO()
-        with redirect_stdout(out), redirect_stderr(out):
-            try:
-                analyzer = MetricsAnalyzer(DBConnector(), periodo)
-                analyzer.run()
-            except Exception as e:
-                return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
-        return JsonResponse({
-            "status": "success",
-            "periodo_label": periodo_label,
-            "log_output": out.getvalue(),
-        })
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
-@login_required
+@permission_required('can_view_subs_lifetime')
 def api_survival_data(request):
     lc = get_lifecycle_results()
     if not lc:
@@ -253,11 +234,70 @@ def api_survival_data(request):
     })
 
 @login_required
+@permission_required('can_view_subs_sales')
+def api_sales_report(request):
+    periodo = request.GET.get("period")
+    return JsonResponse(get_sales_report_data(periodo))
+
+@login_required
+@permission_required('can_view_eta')
+def api_eta_report_data(request):
+    periodo = request.GET.get("period")
+    if not periodo or len(periodo) != 7:
+        periodos_activos = get_periodos()
+        if not periodos_activos:
+            return JsonResponse({"status": "empty", "message": "No hay periodos calculados."})
+        periodo = periodos_activos[0][:7]
+
+    force = request.GET.get("force", "false").lower() == "true"
+    db = DBConnector()
+    manager = ETAReportManager(db)
+    try:
+        report_data = manager.calculate_eta_report(periodo, force_recalc=force)
+        report_data["periods"] = [p[:7] for p in get_periodos()]
+        report_data["individual_configs"] = manager.get_configured_individual_subs()
+        return JsonResponse(report_data)
+    except Exception as e:
+        logger.exception("Error en cálculo de reporte ETA")
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+# --- APIS DE ESCRITURA Y CÁLCULOS ESPECIALES ---
+
+@login_required
+@ratelimit(key='ip', rate='2/m', block=True)
+@permission_required('can_run_calculations')
+@require_POST
+def api_run_analysis(request):
+    try:
+        data = json.loads(request.body)
+        mes = data.get("month")
+    except Exception:
+        return JsonResponse({"status": "error", "message": "JSON invalido"}, status=400)
+    if not mes or len(mes) != 7:
+        return JsonResponse({"status": "error", "message": "Periodo invalido (YYYY-MM)"}, status=400)
+    try:
+        periodo = Periodo.build(f"{mes}-01")
+        periodo_label = periodo.label()
+        out = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(out):
+            try:
+                analyzer = MetricsAnalyzer(DBConnector(), periodo)
+                analyzer.run()
+            except Exception as e:
+                return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
+        return JsonResponse({
+            "status": "success",
+            "periodo_label": periodo_label,
+            "log_output": out.getvalue(),
+        })
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+@login_required
 @ratelimit(key='ip', rate='5/m', block=True)
-@analyst_or_admin_required
+@permission_required('can_import_data')
 @require_POST
 def api_import_subscriptions(request):
-    # Pasamos las cabeceras requeridas de suscripciones para que handle_csv_upload las valide
     tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_SUBS_HEADERS)
     if error:
         return error
@@ -271,10 +311,9 @@ def api_import_subscriptions(request):
 
 @login_required
 @ratelimit(key='ip', rate='5/m', block=True)
-@analyst_or_admin_required
+@permission_required('can_import_data')
 @require_POST
 def api_import_logs(request):
-    # Pasamos las cabeceras requeridas de logs
     tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_LOGS_HEADERS)
     if error:
         return error
@@ -288,63 +327,27 @@ def api_import_logs(request):
 
 @login_required
 @ratelimit(key='ip', rate='2/m', block=True)
-@analyst_or_admin_required
+@permission_required('can_run_lifetime') # <-- CONTROL ESPECÍFICO DE EJECUCIÓN DE LIFETIME
 @require_POST
 def api_lifecycle_run(request):
     try:
         metrics = run_lifecycle_analysis()
-        return JsonResponse({
-            "status": "success",
-            "message": "Analisis de ciclo de vida completado",
-            "mediana_activo": metrics.get("mediana_activo"),
-            "promedio_activo": metrics.get("promedio_activo"),
-            "p25_activo": metrics.get("p25_activo"),
-            "p75_activo": metrics.get("p75_activo"),
-            "mediana_reactivacion": metrics.get("mediana_reactivacion"),
-            "p25_reactivacion": metrics.get("p25_reactivacion"),
-            "p75_reactivacion": metrics.get("p75_reactivacion"),
-            "promedio_reactivacion": metrics.get("promedio_reactivacion"),
-        })
+        return JsonResponse({"status": "success", "message": "Análisis de ciclo de vida completado", **metrics})
     except Exception as e:
         logger.exception("Error en lifecycle run")
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 @login_required
+@permission_required('can_view_subs_lifetime')
 def api_lifecycle_results(request):
     data = get_lifecycle_results()
     if not data:
-        return JsonResponse({"status": "empty", "message": "Ejecute el analisis de ciclo de vida primero"})
+        return JsonResponse({"status": "empty", "message": "Ejecute el análisis de ciclo de vida primero"})
     dimensiones = get_lifetime_dimensiones()
     return JsonResponse({"status": "success", "data": data, "dimensiones": dimensiones})
 
 @login_required
-def api_sales_report(request):
-    periodo = request.GET.get("period")
-    return JsonResponse(get_sales_report_data(periodo))
-@login_required
-def api_eta_report_data(request):
-    periodo = request.GET.get("period")
-    if not periodo or len(periodo) != 7:
-        periodos_activos = get_periodos()
-        if not periodos_activos:
-            return JsonResponse({"status": "empty", "message": "No se encontraron periodos cerrados."})
-        periodo = periodos_activos[0][:7]
-
-    force = request.GET.get("force", "false").lower() == "true"
-    db = DBConnector()
-    manager = ETAReportManager(db)
-    try:
-        report_data = manager.calculate_eta_report(periodo, force_recalc=force)
-        report_data["periods"] = [p[:7] for p in get_periodos()]
-        # Adición: Lista de configuraciones individuales ya guardadas
-        report_data["individual_configs"] = manager.get_configured_individual_subs()
-        return JsonResponse(report_data)
-    except Exception as e:
-        logger.exception("Error en cálculo de reporte ETA")
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
-@login_required
-@analyst_or_admin_required
+@permission_required('can_manage_eta')
 @require_POST
 def api_eta_report_lock(request):
     try:
@@ -352,7 +355,7 @@ def api_eta_report_lock(request):
         periodo = data.get("period")
         lock = bool(data.get("lock", False))
     except Exception:
-        return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
+        return JsonResponse({"status": "error", "message": "JSON invalido"}, status=400)
 
     db = DBConnector()
     manager = ETAReportManager(db)
@@ -362,7 +365,7 @@ def api_eta_report_lock(request):
     return JsonResponse({"status": "success", "esta_bloqueado": lock, "message": f"Periodo {periodo} actualizado."})
 
 @login_required
-@analyst_or_admin_required
+@permission_required('can_manage_eta')
 @require_POST
 def api_eta_report_save_plan_config(request):
     try:
@@ -387,10 +390,9 @@ def api_eta_report_save_plan_config(request):
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 @login_required
-@analyst_or_admin_required
+@permission_required('can_manage_eta')
 @require_POST
 def api_eta_report_save_sub_config(request):
-    """API para guardar o modificar la homologación de una suscripción individual (Internet Dedicado / Transporte)."""
     try:
         data = json.loads(request.body)
         orden = data.get("orden")
@@ -418,3 +420,4 @@ def api_eta_report_save_sub_config(request):
         return JsonResponse({"status": "success", "message": f"Suscripción {orden} guardada."})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
+# --- END OF FILE NetOwl-Django/frontend/subscriptions/views.py ---

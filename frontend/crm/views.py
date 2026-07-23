@@ -1,6 +1,7 @@
+# --- START OF FILE NetOwl-Django/frontend/crm/views.py ---
 import io
 import os
-import tempfile  # <-- Requerido para crear el archivo temporal de subida
+import tempfile
 from contextlib import redirect_stdout, redirect_stderr
 
 from django.http import JsonResponse
@@ -9,7 +10,7 @@ from django.conf import settings
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from django.contrib.auth.decorators import login_required
-from frontend.config.decorators import admin_required, analyst_or_admin_required
+from frontend.config.decorators import permission_required  # <-- IMPORTACIÓN DEL DECORADOR DINÁMICO
 
 # Conectores y lógica de negocio del CRM
 from backend.crm import (
@@ -61,25 +62,20 @@ REQUIRED_CRM_HEADERS = {
     "Entradas de Tiempo/Nueva Etapa": "entradas_de_tiempo_nueva_etapa",
 }
 
-
-# === HELPERS LOCALES PARA EL MANEJO DE SUBIDAS (PÚBLICOS) ===
 def handle_csv_upload(request, required_headers=None):
     if "csv_file" not in request.FILES:
         return None, JsonResponse({"status": "error", "message": "Archivo no enviado"}, status=400)
     
     csv_file = request.FILES["csv_file"]
-    
     if not csv_file.name.endswith(".csv"):
         return None, JsonResponse({"status": "error", "message": "Solo se permiten archivos con extensión .csv"}, status=400)
-    
     if csv_file.size > settings.MAX_UPLOAD_SIZE:
         return None, JsonResponse({"status": "error", "message": "El archivo excede el tamaño máximo permitido"}, status=400)
     
     tmp_path = None
     try:
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
-        tmp_path = tmp.name  # Guardamos la ruta inmediatamente
-        
+        tmp_path = tmp.name
         for chunk in csv_file.chunks():
             tmp.write(chunk)
         tmp.close()
@@ -87,12 +83,11 @@ def handle_csv_upload(request, required_headers=None):
         if required_headers:
             is_valid, err_msg = validate_csv_structure(tmp_path, required_headers)
             if not is_valid:
-                cleanup_tempfile(tmp_path)  # Limpieza en caso de validación fallida
+                cleanup_tempfile(tmp_path)
                 return None, JsonResponse({"status": "error", "message": err_msg}, status=400)
-                
     except Exception as e:
         if tmp_path:
-            cleanup_tempfile(tmp_path)  # Limpieza garantizada en caso de excepción de escritura
+            cleanup_tempfile(tmp_path)
         return None, JsonResponse({"status": "error", "message": f"Error al procesar el archivo: {str(e)}"}, status=500)
         
     return tmp_path, None
@@ -104,25 +99,32 @@ def cleanup_tempfile(tmp_path):
         except OSError:
             pass
 
+# --- VISTAS HTML DEL MÓDULO CRM CON PERMISOS INDIVIDUALES ---
+
 @login_required
+@permission_required('can_view_crm')
 def dashboard(request):
     return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
 
 @login_required
+@permission_required('can_view_crm_analytics')
 def analytics(request):
     return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
 
 @login_required
+@permission_required('can_view_crm_results')
 def results(request):
     return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
 
 @login_required
-@analyst_or_admin_required
+@permission_required('can_import_data')
 def imports(request):
     return render(request, f"{TEMPLATE_PREFIX}imports.html", {"section": "imports"})
 
+# --- ACCIONES DE ESCRITURA Y CÁLCULO EN CRM ---
+
 @login_required
-@analyst_or_admin_required
+@permission_required('can_import_data')
 @ratelimit(key='ip', rate='5/m', block=True)
 def api_import_crm(request):
     tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_CRM_HEADERS)
@@ -151,7 +153,7 @@ def api_import_crm(request):
         cleanup_tempfile(tmp_path)
 
 @login_required
-@analyst_or_admin_required
+@permission_required('can_run_calculations')
 @ratelimit(key='ip', rate='2/m', block=True)
 def api_run_analysis(request):
     out = io.StringIO()
@@ -162,59 +164,75 @@ def api_run_analysis(request):
             return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
     return JsonResponse({"status": "success", "log_output": out.getvalue()})
 
-# --- Per-Metric API endpoints ---
+# --- APIS DE MÉTRICAS CRM (LECTURA) ---
+
 @login_required
+@permission_required('can_view_crm')
 def api_metric_totals(request):
     return JsonResponse(get_metric_totals(), safe=False)
 
 @login_required
+@permission_required('can_view_crm')
 def api_metric_tiempo_instalacion(request):
     return JsonResponse(get_metric_tiempo_instalacion(), safe=False)
 
 @login_required
+@permission_required('can_view_crm')
 def api_metric_tiempo_por_etapa(request):
     return JsonResponse(get_metric_tiempo_por_etapa(), safe=False)
 
 @login_required
+@permission_required('can_view_crm')
 def api_metric_efectividad(request):
     return JsonResponse(get_metric_efectividad(), safe=False)
 
 @login_required
+@permission_required('can_view_crm')
 def api_metric_etapa8(request):
     return JsonResponse(get_metric_etapa8(), safe=False)
 
 @login_required
+@permission_required('can_view_crm')
 def api_metric_perdido(request):
     return JsonResponse(get_metric_perdido(), safe=False)
 
 @login_required
+@permission_required('can_view_crm')
 def api_metric_rescate(request):
     return JsonResponse(get_metric_rescate(), safe=False)
 
 @login_required
+@permission_required('can_view_crm_analytics')
 def api_dimension_totals(request):
     return JsonResponse(get_dimension_totals(), safe=False)
 
 @login_required
+@permission_required('can_view_crm_analytics')
 def api_dimension_tiempo_instalacion(request):
     return JsonResponse(get_dimension_tiempo_instalacion(), safe=False)
 
 @login_required
+@permission_required('can_view_crm_analytics')
 def api_dimension_tiempo_por_etapa(request):
     return JsonResponse(get_dimension_tiempo_por_etapa(), safe=False)
 
 @login_required
+@permission_required('can_view_crm_analytics')
 def api_dimension_efectividad(request):
     return JsonResponse(get_dimension_efectividad(), safe=False)
 
 @login_required
+@permission_required('can_view_crm_analytics')
 def api_dimension_etapa8(request):
     return JsonResponse(get_dimension_etapa8(), safe=False)
 
 @login_required
+@permission_required('can_view_crm_analytics')
 def api_dimension_perdido(request):
     return JsonResponse(get_dimension_perdido(), safe=False)
 
 @login_required
+@permission_required('can_view_crm_analytics')
 def api_dimension_rescate(request):
     return JsonResponse(get_dimension_rescate(), safe=False)
+# --- END OF FILE NetOwl-Django/frontend/crm/views.py ---

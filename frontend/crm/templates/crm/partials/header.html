@@ -1,3 +1,4 @@
+<!-- --- START OF FILE NetOwl-Django/frontend/crm/templates/crm/partials/header.html --- -->
 <div class="module-header">
   <div class="module-header-top">
     <div class="module-header-title">
@@ -6,19 +7,31 @@
     </div>
   </div>
   <nav class="module-nav">
+    <!-- Dashboard -->
     <a href="/crm/dashboard/" class="module-nav-link {% if section == 'dashboard' %}active{% endif %}">
       <i class="bi bi-speedometer2"></i>Dashboard
     </a>
-    <a href="/crm/analytics/" class="module-nav-link {% if section == 'analytics' %}active{% endif %}">
-      <i class="bi bi-bar-chart"></i>Analytics
-    </a>
-    {% if request.user.profile.role == 'admin' or request.user.profile.role == 'analyst' %}
+    
+    <!-- Analytics -->
+    {% if request.user.profile.can_view_crm_analytics or request.user.is_superuser %}
+      <a href="/crm/analytics/" class="module-nav-link {% if section == 'analytics' %}active{% endif %}">
+        <i class="bi bi-bar-chart"></i>Analytics
+      </a>
+    {% endif %}
+
+    <!-- Imports -->
+    {% if request.user.profile.can_import_data or request.user.is_superuser %}
       <a href="/crm/import/" class="module-nav-link {% if section == 'imports' %}active{% endif %}">
         <i class="bi bi-cloud-arrow-down"></i>Imports
       </a>
     {% endif %}
-    <a href="/crm/results/" class="module-nav-link {% if section == 'results' %}active{% endif %}">
-      <i class="bi bi-table"></i>Results
-    </a>
+
+    <!-- Results -->
+    {% if request.user.profile.can_view_crm_results or request.user.is_superuser %}
+      <a href="/crm/results/" class="module-nav-link {% if section == 'results' %}active{% endif %}">
+        <i class="bi bi-table"></i>Results
+      </a>
+    {% endif %}
   </nav>
 </div>
+<!-- --- END OF FILE NetOwl-Django/frontend/crm/templates/crm/partials/header.html --- -->

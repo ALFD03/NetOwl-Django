@@ -1,3 +1,4 @@
+<!-- --- START OF FILE NetOwl-Django/frontend/subscriptions/templates/subscriptions/lifetime.html --- -->
 {% extends 'subscriptions/base.html' %}
 {% load static %}
 
@@ -13,10 +14,12 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h5 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Ciclo de Vida Global</h5>
-        {% if request.user.profile.role == 'admin' or request.user.profile.role == 'analyst' %}
+        
+        <!-- Botón Ejecutar Análisis condicionado al permiso dinámico can_run_lifetime -->
+        {% if request.user.profile.can_run_lifetime or request.user.is_superuser %}
           <div class="d-flex align-items-center gap-2">
             <button id="btnRunLifecycle" class="btn btn-sm btn-outline-primary" onclick="runLifecycleAnalysis()">
-              <i class="bi bi-play-fill me-1"></i>Ejecutar Analisis
+              <i class="bi bi-play-fill me-1"></i>Ejecutar Análisis
             </button>
             <span id="lifecycleSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
           </div>
@@ -38,7 +41,7 @@
             </div>
             <div class="col-md-6">
               <h6 class="small fw-bold mb-2" style="color:var(--text-secondary)">
-                <i class="bi bi-arrow-return-right me-1"></i>Reactivacion (KM)
+                <i class="bi bi-arrow-return-right me-1"></i>Reactivación (KM)
               </h6>
               <div class="chart-container" style="position:relative;height:280px"><canvas id="lifecycleChartReactivacion"></canvas></div>
             </div>
@@ -57,17 +60,17 @@
         <div class="d-flex align-items-center gap-3 flex-wrap">
           <div class="btn-group btn-group-sm" role="group">
             <input type="radio" class="btn-check" name="kmTipoS" id="kmTipoActivoS" value="activo" checked autocomplete="off">
-            <label class="btn btn-outline-secondary btn-sm" for="kmTipoActivoS">Dias Activo</label>
+            <label class="btn btn-outline-secondary btn-sm" for="kmTipoActivoS">Días Activo</label>
             <input type="radio" class="btn-check" name="kmTipoS" id="kmTipoReactivacionS" value="reactivacion" autocomplete="off">
-            <label class="btn btn-outline-secondary btn-sm" for="kmTipoReactivacionS">Dias Reactivacion</label>
+            <label class="btn btn-outline-secondary btn-sm" for="kmTipoReactivacionS">Días Reactivación</label>
           </div>
           <select id="survivalDim" class="form-select form-select-sm" style="width:auto;font-size:0.85rem">
-            <option value="">Sin dimension</option>
+            <option value="">Sin dimensión</option>
             <option value="zona">Zona</option>
             <option value="sucursal">Sucursal</option>
             <option value="producto">Producto</option>
             <option value="municipio">Municipio</option>
-            <option value="campana">Campana</option>
+            <option value="campana">Campaña</option>
             <option value="zona_sucursal">Zona - Sucursal</option>
           </select>
         </div>
@@ -89,3 +92,4 @@
 {% block extra_js %}
   <script src="{% static 'subscriptions/js/lifetime.js' %}"></script>
 {% endblock %}
+<!-- --- END OF FILE NetOwl-Django/frontend/subscriptions/templates/subscriptions/lifetime.html --- -->
