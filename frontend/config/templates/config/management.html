@@ -1,109 +1,472 @@
+<!-- --- START OF FILE NetOwl-Django/frontend/config/templates/config/management.html --- -->
 {% extends 'base.html' %}
 {% load static %}
 
-
-{% block title %}NetOwl - Configuración de Permisos{% endblock %}
+{% block title %}NetOwl - Configuración de Permisos y Grupos{% endblock %}
 
 {% block content %}
-<div class="row g-4 mb-4">
-  <div class="col-lg-4">
-    <div class="card h-100">
-      <div class="card-header"><h5><i class="bi bi-person-plus me-2 text-primary"></i>Nuevo Usuario</h5></div>
-      <div class="card-body">
-        <form id="create-user-form">
-          <div class="mb-3">
-            <label class="form-label small fw-bold">Nombre de Usuario</label>
-            <input type="text" id="new-username" class="form-control" required placeholder="ej: aflores">
+<div class="row mb-4">
+  <div class="col-12">
+    <ul class="nav nav-tabs border-bottom-0" id="configMainTab" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#tab-users" type="button"><i class="bi bi-people me-2"></i>Gestión de Usuarios</button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" id="groups-tab" data-bs-toggle="tab" data-bs-target="#tab-groups" type="button"><i class="bi bi-collection me-2"></i>Grupos de Permisos</button>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<div class="tab-content" id="configMainTabContent">
+  <!-- PESTAÑA 1: GESTIÓN DE USUARIOS Y ASIGNACIONES DE GRUPOS -->
+  <div class="tab-pane fade show active" id="tab-users">
+    <div class="row g-4 mb-4">
+      <!-- Formulario Crear Usuario -->
+      <div class="col-xl-4">
+        <div class="card overflow-auto" style="max-height: 80vh !important">
+          <div class="card-header"><h5><i class="bi bi-person-plus me-2 text-primary"></i>Nuevo Usuario</h5></div>
+          <div class="card-body overflow-auto" style="max-height: 80vh !important">
+            <form id="create-user-form">
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Nombre de Usuario</label>
+                <input type="text" id="new-username" class="form-control" required placeholder="ej: aflores">
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Contraseña</label>
+                <input type="password" id="new-password" class="form-control" required placeholder="Mínimo 8 caracteres">
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Rol Descriptivo</label>
+                <select id="new-role" class="form-select">
+                  {% for val, display in roles %}
+                    <option value="{{ val }}">{{ display }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label small fw-bold text-info"><i class="bi bi-collection me-1"></i>Asignar a Grupo de Permisos</label>
+                <select id="new-group" class="form-select border-info">
+                  <option value="">-- Sin Grupo (Permisos Personalizados) --</option>
+                  {% for g in groups %}
+                    <option value="{{ g.id }}">{{ g.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              
+              <h6 class="mt-4 text-white small fw-bold"><i class="bi bi-shield-lock me-1 text-primary"></i>Permisos Iniciales (Si no elige grupo)</h6>
+              <hr class="my-2 border-secondary">
+              
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="p-view-subs" checked>
+                <label class="form-check-label small text-primary" for="p-view-subs">Ver Módulo Subscriptions</label>
+              </div>
+
+              <div class="form-check form-switch mb-2 ms-3">
+                <input class="form-check-input" type="checkbox" id="p-subs-analytics" checked>
+                <label class="form-check-label small text-muted" for="p-subs-analytics">Pestaña: Subs Analytics</label>
+              </div>
+              <div class="form-check form-switch mb-2 ms-3">
+                <input class="form-check-input" type="checkbox" id="p-subs-results" checked>
+                <label class="form-check-label small text-muted" for="p-subs-results">Pestaña: Subs Results</label>
+              </div>
+              <div class="form-check form-switch mb-2 ms-3">
+                <input class="form-check-input" type="checkbox" id="p-subs-lifetime" checked>
+                <label class="form-check-label small text-muted" for="p-subs-lifetime">Pestaña: Life Time Cycle</label>
+              </div>
+              <div class="form-check form-switch mb-2 ms-3">
+                <input class="form-check-input" type="checkbox" id="p-subs-sales" checked>
+                <label class="form-check-label small text-muted" for="p-subs-sales">Pestaña: Sales Report</label>
+              </div>
+              <div class="form-check form-switch mb-2 ms-3">
+                <input class="form-check-input" type="checkbox" id="p-view-eta" checked>
+                <label class="form-check-label small text-muted" for="p-view-eta">Pestaña: ETA Report</label>
+              </div>
+
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="p-view-crm" checked>
+                <label class="form-check-label small text-primary" for="p-view-crm">Ver Módulo CRM</label>
+              </div>
+
+              <div class="form-check form-switch mb-2 ms-3">
+                <input class="form-check-input" type="checkbox" id="p-crm-analytics" checked>
+                <label class="form-check-label small text-muted" for="p-crm-analytics">Pestaña: CRM Analytics</label>
+              </div>
+              <div class="form-check form-switch mb-2 ms-3">
+                <input class="form-check-input" type="checkbox" id="p-crm-results" checked>
+                <label class="form-check-label small text-muted" for="p-crm-results">Pestaña: CRM Results</label>
+              </div>
+
+              <div class="form-check form-switch mb-2 mt-3">
+                <input class="form-check-input" type="checkbox" id="p-import">
+                <label class="form-check-label small text-primary" for="p-import">Importar Archivos (CSVs)</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="p-calc">
+                <label class="form-check-label small text-primary" for="p-calc">Ejecutar Análisis Churn/ETL</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="p-run-lifetime">
+                <label class="form-check-label small text-primary" for="p-run-lifetime">Ejecutar Análisis Lifetime</label>
+              </div>
+              <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="p-manage-eta">
+                <label class="form-check-label small text-primary" for="p-manage-eta">Bloquear y Configurar ETA</label>
+              </div>
+              <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" id="p-admin">
+                <label class="form-check-label small text-warning fw-semibold" for="p-admin">Administrar Usuarios (Config)</label>
+              </div>
+
+              <button type="submit" class="btn btn-primary w-100 py-2"><i class="bi bi-save me-2"></i>Guardar Usuario</button>
+            </form>
           </div>
-          <div class="mb-3">
-            <label class="form-label small fw-bold">Contraseña</label>
-            <input type="password" id="new-password" class="form-control" required placeholder="Mínimo 8 caracteres">
+        </div>
+      </div>
+
+      <!-- Lista de Usuarios y Selección de Grupo -->
+      <div class="col-xl-8">
+        <div class="card" style="max-height: 80vh !important">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-people me-2 text-primary"></i>Panel de Accesos y Grupos</h5>
           </div>
-          <div class="mb-4">
-            <label class="form-label small fw-bold">Nivel de Acceso (Rol)</label>
-            <select id="new-role" class="form-select">
-              {% for val, display in roles %}
-                <option value="{{ val }}">{{ display }}</option>
-              {% endfor %}
-            </select>
+          <div class="card-body p-0">
+            <div class="table-responsive" style="max-height: 80vh !important">
+              <table class="table table-hover align-middle mb-0 table-theme">
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Grupo Asignado</th>
+                    <th>Matriz de Permisos</th>
+                    <th class="text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for u in users %}
+                    <tr id="user-row-{{ u.id }}">
+                      <td>
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="badge bg-secondary-subtle text-primary p-2"><i class="bi bi-person"></i></span>
+                          <div>
+                            <span class="fw-semibold d-block">{{ u.username }}</span>
+                            {% if u.id == request.user.id %}
+                              <span class="badge bg-primary-subtle text-primary rounded-pill small" style="font-size:0.7rem;">Tú</span>
+                            {% endif %}
+                          </div>
+                        </div>
+                      </td>
+                      <td style="min-width: 180px;">
+                        <!-- Selector de asignación rápida de Grupo -->
+                        <select class="form-select form-select-sm group-assign-select border-secondary" data-user-id="{{ u.id }}">
+                          <option value="">-- Personalizado --</option>
+                          {% for g in groups %}
+                            <option value="{{ g.id }}" {% if u.profile.group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+                          {% endfor %}
+                        </select>
+                      </td>
+                      <td>
+                        <div class="row g-2 py-2" style="max-width: 480px;">
+                            <div class="col-12 border-bottom border-secondary">
+                                <div class="form-check form-switch">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="vsub-{{ u.id }}" {% if u.profile.can_view_subscriptions %}checked{% endif %}>
+                                  <label class="form-check-label text-white small" for="vsub-{{ u.id }}">Módulo Subs</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch ms-2">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="sanalytics-{{ u.id }}" {% if u.profile.can_view_subs_analytics %}checked{% endif %}>
+                                  <label class="form-check-label text-muted small" for="sanalytics-{{ u.id }}">Subs Analytics</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch ms-2">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="sresults-{{ u.id }}" {% if u.profile.can_view_subs_results %}checked{% endif %}>
+                                  <label class="form-check-label text-muted small" for="sresults-{{ u.id }}">Subs Results</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch ms-2">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="slifetime-{{ u.id }}" {% if u.profile.can_view_subs_lifetime %}checked{% endif %}>
+                                  <label class="form-check-label text-muted small" for="slifetime-{{ u.id }}">Lifetime Cycle</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch ms-2">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="ssales-{{ u.id }}" {% if u.profile.can_view_subs_sales %}checked{% endif %}>
+                                  <label class="form-check-label text-muted small" for="ssales-{{ u.id }}">Sales Report</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch ms-2">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="veta-{{ u.id }}" {% if u.profile.can_view_eta %}checked{% endif %}>
+                                  <label class="form-check-label text-muted small" for="veta-{{ u.id }}">ETA Report</label>
+                                </div>
+                            </div>
+                            
+                            <div class="col-12 border-bottom border-secondary">
+                                <div class="form-check form-switch">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="vcrm-{{ u.id }}" {% if u.profile.can_view_crm %}checked{% endif %}>
+                                  <label class="form-check-label text-white small" for="vcrm-{{ u.id }}">Módulo CRM</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch ms-2">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="canalytics-{{ u.id }}" {% if u.profile.can_view_crm_analytics %}checked{% endif %}>
+                                  <label class="form-check-label text-muted small" for="canalytics-{{ u.id }}">CRM Analytics</label>
+                                </div>
+                            </div>
+                            <div class="col-6 ms-auto">
+                                <div class="form-check form-switch ms-2">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="cresults-{{ u.id }}" {% if u.profile.can_view_crm_results %}checked{% endif %}>
+                                  <label class="form-check-label text-muted small" for="cresults-{{ u.id }}">CRM Results</label>
+                                </div>
+                            </div>
+
+                            <div class="col-12 border-bottom border-secondary"></div>
+                            <div class="col-6">
+                                <div class="form-check form-switch">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="imp-{{ u.id }}" {% if u.profile.can_import_data %}checked{% endif %}>
+                                  <label class="form-check-label text-primary small" for="imp-{{ u.id }}">Importar CSVs</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="calc-{{ u.id }}" {% if u.profile.can_run_calculations %}checked{% endif %}>
+                                  <label class="form-check-label text-primary small" for="calc-{{ u.id }}">Correr Churn</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="rlifetime-{{ u.id }}" {% if u.profile.can_run_lifetime %}checked{% endif %}>
+                                  <label class="form-check-label text-primary small" for="rlifetime-{{ u.id }}">Correr Lifetime</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="meta-{{ u.id }}" {% if u.profile.can_manage_eta %}checked{% endif %}>
+                                  <label class="form-check-label text-primary small" for="meta-{{ u.id }}">Gestionar ETA</label>
+                                </div>
+                            </div>
+
+                            <div class="col-12 border-top border-secondary pt-1 mt-1">
+                                <div class="form-check form-switch">
+                                  <input class="form-check-input perm-switch" type="checkbox" data-user-id="{{ u.id }}" id="musr-{{ u.id }}" {% if u.profile.can_manage_users %}checked{% endif %} {% if u.id == request.user.id and not request.user.is_superuser %}disabled{% endif %}>
+                                  <label class="form-check-label text-warning fw-semibold small" for="musr-{{ u.id }}">Admin Config</label>
+                                </div>
+                            </div>
+                        </div>
+                      </td>
+                      <td class="text-center">
+                        <div class="d-flex justify-content-center gap-1">
+                          <button class="btn btn-sm btn-outline-warning change-password-btn" data-user-id="{{ u.id }}" data-username="{{ u.username }}" title="Cambiar Contraseña">
+                            <i class="bi bi-key"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-danger delete-user-btn" data-user-id="{{ u.id }}" data-username="{{ u.username }}" {% if u.id == request.user.id %}disabled{% endif %} title="Eliminar Usuario">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <button type="submit" class="btn btn-primary w-100 py-2"><i class="bi bi-save me-2"></i>Guardar Usuario</button>
-        </form>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="col-lg-8">
-    <div class="card h-100">
-      <div class="card-header"><h5><i class="bi bi-people me-2 text-primary"></i>Usuarios Registrados</h5></div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0 table-theme">
-            <thead>
-              <tr>
-                <th>Nombre de Usuario</th>
-                <th>Rol / Permiso</th>
-                <th class="text-center">Cambiar Rol</th>
-                <th class="text-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for u in users %}
-                <tr id="user-row-{{ u.id }}">
-                  <td>
-                    <div class="d-flex align-items-center gap-2">
-                      <span class="badge bg-secondary-subtle text-primary p-2"><i class="bi bi-person"></i></span>
-                      <span class="fw-semibold">{{ u.username }}</span>
-                      {% if u.id == request.user.id %}
-                        <span class="badge bg-primary-subtle text-primary rounded-pill small" style="font-size:0.75rem">Tú</span>
-                      {% endif %}
-                    </div>
-                  </td>
-                  <td>
-                    <span class="badge {% if u.profile.role == 'admin' %}bg-primary-subtle text-primary{% elif u.profile.role == 'analyst' %}bg-info-subtle text-info{% else %}bg-secondary-subtle text-secondary-emphasis{% endif %} px-2 py-1">
-                      {{ u.profile.get_role_display }}
-                    </span>
-                  </td>
-                  <td class="text-center" style="min-width: 220px; max-width: 240px;">
-                    <div class="d-flex align-items-center gap-1">
-                      <!-- Selector bloqueado por defecto -->
-                      <select class="form-select form-select-sm role-changer-select" id="role-select-{{ u.id }}" style="background-color: var(--surface-tertiary)" disabled>
-                        {% for val, display in roles %}
-                          <option value="{{ val }}" {% if u.profile.role == val %}selected{% endif %}>{{ display }}</option>
-                        {% endfor %}
-                      </select>
-                      
-                      <!-- Botón para alternar Edición / Guardado (Oculto para ti mismo para evitar autobloqueos) -->
-                      {% if u.id != request.user.id %}
-                        <button class="btn btn-sm btn-outline-primary toggle-edit-role-btn" id="role-btn-{{ u.id }}" data-user-id="{{ u.id }}" title="Editar Rol">
-                          <i class="bi bi-pencil-square"></i>
-                        </button>
-                      {% endif %}
-                    </div>
-                  </td>
-                  <td class="text-center">
-                    <div class="d-flex justify-content-center gap-1">
-                      <!-- Llave para cambiar contraseña -->
-                      <button class="btn btn-sm btn-outline-warning change-password-btn" data-user-id="{{ u.id }}" data-username="{{ u.username }}" title="Cambiar Contraseña">
-                        <i class="bi bi-key"></i>
-                      </button>
-                      <!-- Tacho para eliminar usuario -->
-                      <button class="btn btn-sm btn-outline-danger delete-user-btn" data-user-id="{{ u.id }}" data-username="{{ u.username }}" {% if u.id == request.user.id %}disabled{% endif %} title="Eliminar Usuario">
-                        <i class="bi bi-trash"></i>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+  <!-- PESTAÑA 2: CREACIÓN Y GESTIÓN DE GRUPOS DE PERMISOS -->
+  <div class="tab-pane fade" id="tab-groups">
+    <div class="row g-4">
+      <!-- Formulario Crear/Editar Grupo -->
+      <div class="col-xl-5">
+        <div class="card overflow-auto" style="max-height: 80vh !important">
+          <div class="card-header">
+            <h5><i class="bi bi-plus-circle me-2 text-success"></i>Crear / Editar Grupo de Permisos</h5>
+          </div>
+          <div class="card-body overflow-auto" style="max-height: 80vh !important">
+            <form id="group-form">
+              <input type="hidden" id="group-id">
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Nombre del Grupo</label>
+                <input type="text" id="group-name" class="form-control" required placeholder="ej: Analistas de Operaciones">
+              </div>
+              <div class="mb-3">
+                <label class="form-label small fw-bold">Descripción Corta</label>
+                <input type="text" id="group-desc" class="form-control" placeholder="ej: Acceso total a reportes pero sin permisos de importación">
+              </div>
+
+              <h6 class="mt-4 text-white small fw-bold"><i class="bi bi-sliders me-1 text-success"></i>Matriz de Permisos del Grupo</h6>
+              <hr class="my-2 border-secondary">
+
+              <div class="row g-2">
+                <div class="col-12 border-bottom border-secondary">
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="g-view-subs" checked>
+                    <label class="form-check-label small text-primary" for="g-view-subs">Módulo Subscriptions</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2 ms-2">
+                    <input class="form-check-input" type="checkbox" id="g-subs-analytics" checked>
+                    <label class="form-check-label small text-muted" for="g-subs-analytics">Subs Analytics</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2 ms-2">
+                    <input class="form-check-input" type="checkbox" id="g-subs-results" checked>
+                    <label class="form-check-label small text-muted" for="g-subs-results">Subs Results</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2 ms-2">
+                    <input class="form-check-input" type="checkbox" id="g-subs-lifetime" checked>
+                    <label class="form-check-label small text-muted" for="g-subs-lifetime">Lifetime Cycle</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2 ms-2">
+                    <input class="form-check-input" type="checkbox" id="g-subs-sales" checked>
+                    <label class="form-check-label small text-muted" for="g-subs-sales">Sales Report</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2 ms-2">
+                    <input class="form-check-input" type="checkbox" id="g-view-eta" checked>
+                    <label class="form-check-label small text-muted" for="g-view-eta">ETA Report</label>
+                  </div>
+                </div>
+
+                <div class="col-12 border-bottom border-secondary">
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="g-view-crm" checked>
+                    <label class="form-check-label small text-primary" for="g-view-crm">Módulo CRM</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2 ms-2">
+                    <input class="form-check-input" type="checkbox" id="g-crm-analytics" checked>
+                    <label class="form-check-label small text-muted" for="g-crm-analytics">CRM Analytics</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2 ms-2">
+                    <input class="form-check-input" type="checkbox" id="g-crm-results" checked>
+                    <label class="form-check-label small text-muted" for="g-crm-results">CRM Results</label>
+                  </div>
+                </div>
+
+                <div class="col-12 border-bottom border-secondary"></div>
+                <div class="col-6 border-top border-secondary pt-2 mt-2">
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="g-import">
+                    <label class="form-check-label small text-primary" for="g-import">Importar CSVs</label>
+                  </div>
+                </div>
+                <div class="col-6 border-top border-secondary pt-2 mt-2">
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="g-calc">
+                    <label class="form-check-label small text-primary" for="g-calc">Correr Churn/ETL</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="g-run-lifetime">
+                    <label class="form-check-label small text-primary" for="g-run-lifetime">Correr Lifetime</label>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="g-manage-eta">
+                    <label class="form-check-label small text-primary" for="g-manage-eta">Gestionar ETA</label>
+                  </div>
+                </div>
+                <div class="col-12 border-top border-secondary pt-2 mt-2">
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="g-admin">
+                    <label class="form-check-label small text-warning fw-semibold" for="g-admin">Administrar Sistema (Config)</label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success flex-grow-1"><i class="bi bi-save me-1"></i>Guardar Grupo</button>
+                <button type="button" id="cancel-group-edit-btn" class="btn btn-outline-secondary d-none"><i class="bi bi-x"></i> Cancelar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista de Grupos Registrados -->
+      <div class="col-xl-7">
+        <div class="card">
+          <div class="card-header">
+            <h5><i class="bi bi-collection me-2 text-primary"></i>Grupos de Permisos Registrados</h5>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0 table-theme">
+                <thead>
+                  <tr>
+                    <th>Nombre del Grupo</th>
+                    <th>Descripción</th>
+                    <th class="text-center">Miembros</th>
+                    <th class="text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for g in groups %}
+                    <tr id="group-row-{{ g.id }}">
+                      <td><span class="fw-bold text-info">{{ g.name }}</span></td>
+                      <td class="small text-muted">{{ g.description|default:"Sin descripción" }}</td>
+                      <td class="text-center"><span class="badge bg-secondary-subtle text-primary">{{ g.members.count }}</span></td>
+                      <td class="text-center">
+                        <div class="d-flex justify-content-center gap-1">
+                          <button class="btn btn-sm btn-outline-primary edit-group-btn" 
+                            data-id="{{ g.id }}"
+                            data-name="{{ g.name }}"
+                            data-desc="{{ g.description }}"
+                            data-vsub="{{ g.can_view_subscriptions|yesno:'true,false' }}"
+                            data-vcrm="{{ g.can_view_crm|yesno:'true,false' }}"
+                            data-sanalytics="{{ g.can_view_subs_analytics|yesno:'true,false' }}"
+                            data-sresults="{{ g.can_view_subs_results|yesno:'true,false' }}"
+                            data-slifetime="{{ g.can_view_subs_lifetime|yesno:'true,false' }}"
+                            data-ssales="{{ g.can_view_subs_sales|yesno:'true,false' }}"
+                            data-veta="{{ g.can_view_eta|yesno:'true,false' }}"
+                            data-canalytics="{{ g.can_view_crm_analytics|yesno:'true,false' }}"
+                            data-cresults="{{ g.can_view_crm_results|yesno:'true,false' }}"
+                            data-imp="{{ g.can_import_data|yesno:'true,false' }}"
+                            data-calc="{{ g.can_run_calculations|yesno:'true,false' }}"
+                            data-rlifetime="{{ g.can_run_lifetime|yesno:'true,false' }}"
+                            data-meta="{{ g.can_manage_eta|yesno:'true,false' }}"
+                            data-musr="{{ g.can_manage_users|yesno:'true,false' }}"
+                            title="Editar Grupo">
+                            <i class="bi bi-pencil"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-danger delete-group-btn" data-id="{{ g.id }}" data-name="{{ g.name }}" title="Eliminar Grupo">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  {% empty %}
+                    <tr><td colspan="4" class="text-center py-4 text-muted">No se han creado grupos de permisos aún.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Modal 1: Cambiar Contraseña -->
+<!-- Modales -->
 <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content" style="background-color: var(--surface-secondary); border-color: var(--border-color);">
@@ -120,7 +483,7 @@
           </div>
           <div class="mb-4">
             <label class="form-label small fw-bold">Nueva Contraseña</label>
-            <input type="password" id="change-pass-new-password" class="form-control" required placeholder="Escriba la nueva contraseña (Mín. 8 caracteres)" style="background-color: var(--surface-tertiary)">
+            <input type="password" id="change-pass-new-password" class="form-control" required placeholder="Mínimo 8 caracteres" style="background-color: var(--surface-tertiary)">
           </div>
           <button type="submit" class="btn btn-warning w-100 py-2 text-dark fw-bold"><i class="bi bi-check-circle me-2"></i>Actualizar Contraseña</button>
         </form>
@@ -129,7 +492,6 @@
   </div>
 </div>
 
-<!-- Modal 2: Confirmación de Eliminación Personalizado -->
 <div class="modal fade" id="deleteUserModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content" style="background-color: var(--surface-secondary); border-color: var(--border-color);">
@@ -138,8 +500,7 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <p>¿Estás seguro de que deseas eliminar permanentemente al usuario <span id="delete-username-span" class="text-primary fw-bold"></span> del sistema?</p>
-        <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>Esta acción no se puede deshacer y revocará sus accesos de forma inmediata.</p>
+        <p>¿Estás seguro de que deseas eliminar permanentemente al usuario <span id="delete-username-span" class="text-primary fw-bold"></span>?</p>
         <input type="hidden" id="delete-user-id">
       </div>
       <div class="modal-footer" style="border-top: 1px solid var(--border-color);">
@@ -152,6 +513,6 @@
 {% endblock %}
 
 {% block extra_js %}
-  <!-- Se carga al final de la página garantizando que Bootstrap y NetOwl ya existan en memoria -->
   <script src="{% static 'config/js/management.js' %}"></script>
 {% endblock %}
+<!-- --- END OF FILE NetOwl-Django/frontend/config/templates/config/management.html --- -->
