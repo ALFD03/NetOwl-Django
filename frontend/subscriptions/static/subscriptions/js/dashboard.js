@@ -46,13 +46,7 @@
     };
   }
 
-  function destroyDashboardCharts() {
-    [N.churnLineChart, N.winbackBarChart, N.arpuBarChart, N.aporteReactBarChart, N.reemplazoLineChart, N.adicionesBarChart, N.cortesReactChart, N.activosInicioChart, N.activosFinalChart, N.bajasNetBrutChart, N.suspensionChart].forEach(function (c) { if (c) { c.destroy(); c = null; } });
-    N.churnLineChart = N.winbackBarChart = N.arpuBarChart = N.aporteReactBarChart = N.reemplazoLineChart = N.adicionesBarChart = N.cortesReactChart = N.activosInicioChart = N.activosFinalChart = N.bajasNetBrutChart = N.suspensionChart = null;
-  }
-
   function renderDashboardCharts(periodos) {
-    destroyDashboardCharts();
     if (!periodos.length) return;
     var labels = periodos.map(function (p) { return p.periodo_reporte; }).reverse();
     var pdata = {};
@@ -181,20 +175,6 @@
       });
     }
 
-    // var bajasNetasData = labels.map(v("bajas_netas"));
-    // var bajasBrutasData = labels.map(v("bajas_brutas"));
-    // var ctxBajas = document.getElementById("bajasNetBrutChart");
-    // if (ctxBajas) {
-    //   N.bajasNetBrutChart = new Chart(ctxBajas, {
-    //     type: "bar",
-    //     data: { labels: labels, datasets: [
-    //       { label: "Bajas Netas", data: bajasNetasData, backgroundColor: "rgba(239,68,68,0.75)", borderRadius: 4 },
-    //       { label: "Bajas Brutas", data: bajasBrutasData, backgroundColor: "rgba(168,85,247,0.75)", borderRadius: 4 },
-    //     ] },
-    //     options: N.chartOpts(N.barOpts(gridColor, tickColor))
-    //   });
-    // }
-
     var suspensionData = labels.map(v("porcentaje_suspensiones"));
     var suspensionZones = [
       { from: 40, to: 999, color: "rgba(239,68,68,0.06)" },
@@ -217,6 +197,8 @@
   }
 
   function renderChurnComparativo(periodos) {
+
+    // Churn neto Comparativo
     var el = document.getElementById("churn-comparativo-value");
     if (!el) return;
     var vals = periodos.map(function (p) { return p.churn_neto_pct || 0; });
@@ -225,19 +207,17 @@
     var colorClass = avg < 2.5 ? "text-success" : avg <= 3 ? "text-warning" : "text-danger";
     el.textContent = avg.toFixed(2) + "%";
     el.className = "display-5 fw-bold " + colorClass;
-  }
 
-  function renderDashboardTable(periodos) {
-    var tbody = document.getElementById("dashboard-table-tbody");
-    if (!tbody) return;
-    if (!periodos.length) { tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">Sin datos</td></tr>'; return; }
-    var html = "";
-    periodos.forEach(function (p) {
-      var cn = p.churn_neto_pct || 0;
-      var churnClass = cn < 2.5 ? "text-success" : cn <= 3 ? "text-warning" : "text-danger";
-      html += '<tr><td class="fw-medium">' + p.periodo_reporte + '</td><td class="text-end">' + (p.activos_inicio || 0).toLocaleString() + '</td><td class="text-end">' + (p.activos_final || 0).toLocaleString() + '</td><td class="text-end">' + (p.nuevos_mes || 0).toLocaleString() + '</td><td class="text-end fw-semibold ' + churnClass + '">' + cn.toFixed(2) + '%</td><td class="text-end">' + (p.churn_bruto_pct || 0).toFixed(2) + '%</td><td class="text-end">$' + (p.arpu || 0).toFixed(2) + '</td><td class="text-center"><button class="btn btn-sm btn-outline-primary view-details-btn" data-periodo="' + p.periodo_reporte + '"><i class="bi bi-eye"></i></button></td></tr>';
-    });
-    tbody.innerHTML = html;
+    // Churn Bruto Comparativo
+    var el = document.getElementById("churn-bruto-comparativo-value");
+    if (!el) return;
+    var vals = periodos.map(function (p) { return p.churn_bruto_pct || 0; });
+    if (!vals.length) { el.textContent = "N/A"; return; }
+    var avg = vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+    var colorClass = avg < 2.5 ? "text-success" : avg <= 3 ? "text-warning" : "text-danger";
+    el.textContent = avg.toFixed(2) + "%";
+    el.className = "display-5 fw-bold " + colorClass;
+
   }
 
   function loadDashboardData() {
@@ -246,7 +226,6 @@
       .then(function (data) {
         var periodos = data.periodos || [];
         renderDashboardCharts(periodos);
-        renderDashboardTable(periodos.slice(0, 6));
         renderChurnComparativo(periodos);
       })
       .catch(function () { N.showToast("Error cargando dashboard", "error"); });
