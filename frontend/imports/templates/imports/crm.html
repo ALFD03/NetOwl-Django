@@ -1,7 +1,7 @@
-{% extends 'crm/base.html' %}
+{% extends 'imports/base.html' %}
 {% load static %}
 
-{% block title %}NetOwl - Importar Datos CRM{% endblock %}
+{% block title %}NetOwl - Importar CRM{% endblock %}
 
 {% block extra_css %}
   <link rel="stylesheet" href="{% static 'css/subscriptions.css' %}">
@@ -20,9 +20,9 @@
           </div>
           <div class="drop-zone" id="drop-zone-area">
             <div class="drop-zone-icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
-            <h4 class="drop-zone-title">Arrastra tu archivo CSV aqui</h4>
+            <h4 class="drop-zone-title">Arrastra tu archivo CSV aquí</h4>
             <p class="drop-zone-text text-muted">o haz clic para explorar</p>
-            <input type="file" id="csv-file-input" name="csv_file" class="d-none" accept=".csv" required>
+            <input type="file" id="csv-file-input" name="csv_file" class="d-none" accept=".csv">
             <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="browse-files-btn"><i class="bi bi-search me-2"></i>Buscar Archivo</button>
           </div>
           <div id="selected-file-display" class="alert alert-info mt-3 d-none">
@@ -30,9 +30,6 @@
               <div><i class="bi bi-file-earmark-check me-2"></i><span id="selected-file-name" class="fw-semibold"></span></div>
               <button type="button" class="btn-close" id="remove-file-btn"></button>
             </div>
-          </div>
-          <div class="progress mt-4 d-none" id="upload-progress-container" style="height:8px">
-            <div id="upload-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:0%"></div>
           </div>
           <button type="submit" class="btn btn-primary w-100 py-2 mt-4" id="submit-import-btn" disabled><i class="bi bi-upload me-2"></i>Iniciar Carga</button>
         </form>
@@ -88,9 +85,29 @@
   </div>
 </div>
 
-
+<div class="row g-4 mt-2">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><h5><i class="bi bi-play-circle me-2"></i>Ejecutar Análisis Global CRM</h5></div>
+      <div class="card-body">
+        <form id="run-crm-analysis-form">
+          <div class="d-flex align-items-center gap-3">
+            <button type="submit" class="btn btn-primary py-2 px-4"><i class="bi bi-cpu me-2"></i>Iniciar Cálculo de Métricas CRM</button>
+            <span class="text-muted small">Recalcula tiempos de instalación, efectividad y atribuciones.</span>
+          </div>
+        </form>
+        <div class="terminal-console mt-4 d-none" id="console-container-crm">
+          <div class="terminal-header">
+            <span><i class="bi bi-terminal me-2"></i>Consola de Ejecución CRM</span>
+          </div>
+          <pre id="terminal-log-crm">Esperando orden de cálculo...</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'crm/js/imports.js' %}"></script>
+  <script src="{% static 'imports/js/imports.js' %}"></script>
 {% endblock %}

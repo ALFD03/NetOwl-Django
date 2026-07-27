@@ -1,4 +1,4 @@
-# --- START OF FILE NetOwl-Django/frontend/config/models.py ---
+# frontend/config/models.py
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
@@ -13,6 +13,7 @@ class PermissionGroup(models.Model):
     # --- MATRIZ DE PERMISOS DEL GRUPO ---
     can_view_subscriptions = models.BooleanField(default=True)
     can_view_crm = models.BooleanField(default=True)
+    can_view_imports = models.BooleanField(default=True) # <-- NUEVO
 
     can_view_subs_analytics = models.BooleanField(default=True)
     can_view_subs_results = models.BooleanField(default=True)
@@ -46,12 +47,12 @@ class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='viewer')
     
-    # Vinculación opcional a un Grupo de Permisos
     group = models.ForeignKey(PermissionGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
 
     # --- PERMISOS INDIVIDUALES DE LA CUENTA ---
     can_view_subscriptions = models.BooleanField(default=True)
     can_view_crm = models.BooleanField(default=True)
+    can_view_imports = models.BooleanField(default=True) # <-- NUEVO
 
     can_view_subs_analytics = models.BooleanField(default=True)
     can_view_subs_results = models.BooleanField(default=True)
@@ -69,7 +70,6 @@ class Profile(models.Model):
     can_manage_users = models.BooleanField(default=False)
 
     def has_permission(self, perm_name: str) -> bool:
-        """Evalúa el permiso. Si el usuario pertenece a un grupo, prevalecen los permisos del grupo."""
         if self.user.is_superuser:
             return True
         if self.group:
@@ -77,14 +77,13 @@ class Profile(models.Model):
         return getattr(self, perm_name, False)
 
     def sync_permissions_from_group(self):
-        """Sincroniza las banderas locales del perfil con las de su grupo asignado."""
         if self.group:
             for field in [
-                'can_view_subscriptions', 'can_view_crm', 'can_view_subs_analytics',
-                'can_view_subs_results', 'can_view_subs_lifetime', 'can_view_subs_sales',
-                'can_view_eta', 'can_view_crm_analytics', 'can_view_crm_results',
-                'can_import_data', 'can_run_calculations', 'can_run_lifetime',
-                'can_manage_eta', 'can_manage_users'
+                'can_view_subscriptions', 'can_view_crm', 'can_view_imports',
+                'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
+                'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
+                'can_view_crm_results', 'can_import_data', 'can_run_calculations',
+                'can_run_lifetime', 'can_manage_eta', 'can_manage_users'
             ]:
                 setattr(self, field, getattr(self.group, field, False))
             self.save()
@@ -103,6 +102,7 @@ def create_user_profile(sender, instance, created, **kwargs):
             role='admin' if is_first else 'viewer',
             can_view_subscriptions=True,
             can_view_crm=True,
+            can_view_imports=True,
             can_view_subs_analytics=True,
             can_view_subs_results=True,
             can_view_subs_lifetime=True,
@@ -126,6 +126,7 @@ def save_user_profile(sender, instance, **kwargs):
             role='admin' if is_first else 'viewer',
             can_view_subscriptions=True,
             can_view_crm=True,
+            can_view_imports=True,
             can_view_subs_analytics=True,
             can_view_subs_results=True,
             can_view_subs_lifetime=True,
@@ -140,4 +141,3 @@ def save_user_profile(sender, instance, **kwargs):
             can_manage_users=is_first
         )
     instance.profile.save()
-# --- END OF FILE NetOwl-Django/frontend/config/models.py ---

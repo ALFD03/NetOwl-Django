@@ -1,7 +1,7 @@
-{% extends 'subscriptions/base.html' %}
+{% extends 'imports/base.html' %}
 {% load static %}
 
-{% block title %}NetOwl - Importar Datos{% endblock %}
+{% block title %}NetOwl - Importar Subscriptions{% endblock %}
 
 {% block extra_css %}
   <link rel="stylesheet" href="{% static 'css/subscriptions.css' %}">
@@ -29,9 +29,9 @@
           </div>
           <div class="drop-zone" id="drop-zone-area">
             <div class="drop-zone-icon"><i class="bi bi-file-earmark-arrow-up"></i></div>
-            <h4 class="drop-zone-title">Arrastra tu archivo CSV aqui</h4>
+            <h4 class="drop-zone-title">Arrastra tu archivo CSV aquí</h4>
             <p class="drop-zone-text text-muted">o haz clic para explorar</p>
-            <input type="file" id="csv-file-input" name="csv_file" class="d-none" accept=".csv" required>
+            <input type="file" id="csv-file-input" name="csv_file" class="d-none" accept=".csv">
             <button type="button" class="btn btn-outline-primary btn-sm mt-2" id="browse-files-btn"><i class="bi bi-search me-2"></i>Buscar Archivo</button>
           </div>
           <div id="selected-file-display" class="alert alert-info mt-3 d-none">
@@ -40,14 +40,12 @@
               <button type="button" class="btn-close" id="remove-file-btn"></button>
             </div>
           </div>
-          <div class="progress mt-4 d-none" id="upload-progress-container" style="height:8px">
-            <div id="upload-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:0%"></div>
-          </div>
           <button type="submit" class="btn btn-primary w-100 py-2 mt-4" id="submit-import-btn" disabled><i class="bi bi-upload me-2"></i>Iniciar Carga</button>
         </form>
       </div>
     </div>
   </div>
+
   <div class="col-lg-6">
     <div class="card h-100">
       <div class="card-header"><h5><i class="bi bi-info-circle me-2"></i>Requisitos</h5></div>
@@ -85,21 +83,10 @@
   </div>
 </div>
 
-<div class="row g-4 mt-4">
+<div class="row g-4 mt-2">
   <div class="col-12">
     <div class="card">
-      <div class="card-header"><h5><i class="bi bi-cloud-arrow-up me-2"></i>Importar via API</h5></div>
-      <div class="card-body">
-        <button class="btn btn-outline-primary" disabled><i class="bi bi-cloud-arrow-up me-2"></i>Importar</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-4 mt-4">
-  <div class="col-12">
-    <div class="card">
-      <div class="card-header"><h5><i class="bi bi-play-circle me-2"></i>Ejecutar Analisis</h5></div>
+      <div class="card-header"><h5><i class="bi bi-play-circle me-2"></i>Ejecutar Análisis de Churn</h5></div>
       <div class="card-body">
         <form id="run-analysis-form" class="analysis-form">
           <div class="row g-3 align-items-end">
@@ -108,21 +95,20 @@
               <div class="input-group">
                 <span class="input-group-text calendar-adaptable"><i class="bi bi-calendar-date"></i></span>
                 <select id="month-select" class="form-select calendar-select"><option value="">Mes</option></select>
-                <select id="year-select" class="form-select calendar-select"><option value="">Ano</option></select>
+                <select id="year-select" class="form-select calendar-select"><option value="">Año</option></select>
               </div>
-              <input type="text" id="month-input" class="d-none" name="month" autocomplete="off" required>
             </div>
             <div class="col-md-2">
-              <button type="submit" class="btn btn-primary w-100 py-2"><i class="bi bi-cpu me-2"></i>Ejecutar</button>
+              <button type="submit" class="btn btn-primary w-100 p-3"><i class="bi bi-cpu me-2"></i>Ejecutar</button>
             </div>
           </div>
         </form>
         <div class="terminal-console mt-4 d-none" id="console-container">
           <div class="terminal-header d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-terminal me-2"></i>Consola</span>
+            <span><i class="bi bi-terminal me-2"></i>Consola de Ejecución</span>
             <button class="btn btn-sm btn-link text-white-50 p-0" id="clear-console"><i class="bi bi-trash"></i></button>
           </div>
-          <pre id="terminal-log">Esperando...</pre>
+          <pre id="terminal-log">Esperando orden de cálculo...</pre>
         </div>
       </div>
     </div>
@@ -131,5 +117,5 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script src="{% static 'subscriptions/js/imports.js' %}"></script>
+  <script src="{% static 'imports/js/imports.js' %}"></script>
 {% endblock %}
