@@ -48,9 +48,41 @@
               <div class="mb-3">
                 <label class="form-label small fw-bold text-info"><i class="bi bi-collection me-1"></i>Asignar a Grupo de Permisos</label>
                 <select id="new-group" class="form-select border-info">
-                  <option value="">-- Sin Grupo (Permisos Personalizados) --</option>
+                  <option value=""
+                    data-vsub="true"
+                    data-sanalytics="true"
+                    data-sresults="true"
+                    data-slifetime="true"
+                    data-ssales="true"
+                    data-veta="true"
+                    data-vcrm="true"
+                    data-canalytics="true"
+                    data-cresults="true"
+                    data-imp="false"
+                    data-calc="false"
+                    data-rlifetime="false"
+                    data-meta="false"
+                    data-musr="false">
+                    -- Sin Grupo (Permisos Personalizados) --
+                  </option>
                   {% for g in groups %}
-                    <option value="{{ g.id }}">{{ g.name }}</option>
+                    <option value="{{ g.id }}"
+                      data-vsub="{{ g.can_view_subscriptions|yesno:'true,false' }}"
+                      data-sanalytics="{{ g.can_view_subs_analytics|yesno:'true,false' }}"
+                      data-sresults="{{ g.can_view_subs_results|yesno:'true,false' }}"
+                      data-slifetime="{{ g.can_view_subs_lifetime|yesno:'true,false' }}"
+                      data-ssales="{{ g.can_view_subs_sales|yesno:'true,false' }}"
+                      data-veta="{{ g.can_view_eta|yesno:'true,false' }}"
+                      data-vcrm="{{ g.can_view_crm|yesno:'true,false' }}"
+                      data-canalytics="{{ g.can_view_crm_analytics|yesno:'true,false' }}"
+                      data-cresults="{{ g.can_view_crm_results|yesno:'true,false' }}"
+                      data-imp="{{ g.can_import_data|yesno:'true,false' }}"
+                      data-calc="{{ g.can_run_calculations|yesno:'true,false' }}"
+                      data-rlifetime="{{ g.can_run_lifetime|yesno:'true,false' }}"
+                      data-meta="{{ g.can_manage_eta|yesno:'true,false' }}"
+                      data-musr="{{ g.can_manage_users|yesno:'true,false' }}">
+                      {{ g.name }}
+                    </option>
                   {% endfor %}
                 </select>
               </div>
@@ -360,13 +392,13 @@
                 </div>
 
                 <div class="col-12 border-bottom border-secondary"></div>
-                <div class="col-6 border-top border-secondary pt-2 mt-2">
+                <div class="col-6 pt-2 mt-2">
                   <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" id="g-import">
                     <label class="form-check-label small text-primary" for="g-import">Importar CSVs</label>
                   </div>
                 </div>
-                <div class="col-6 border-top border-secondary pt-2 mt-2">
+                <div class="col-6 pt-2 mt-2">
                   <div class="form-check form-switch mb-2">
                     <input class="form-check-input" type="checkbox" id="g-calc">
                     <label class="form-check-label small text-primary" for="g-calc">Correr Churn/ETL</label>
