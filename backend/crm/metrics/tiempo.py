@@ -24,7 +24,7 @@ def compute_tiempo_por_etapa(
         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
         WHERE {where_dim}
           AND l.duracion_horas IS NOT NULL
-          AND l.duracion_horas >= 4
+          AND l.duracion_horas >= 0
           AND l.etapa_anterior != 'etapa_7_instalados'
           {fecha_sql}
     """

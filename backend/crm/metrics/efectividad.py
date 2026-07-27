@@ -41,7 +41,7 @@ def _classify_forward_cycles_detailed(
     # REGLA DE CONTROL DE CALIDAD COMERCIAL:
     # Oportunidades que no han concluido y llevan más de 45 días estancadas en el pipeline
     # se penalizan como fallos ("failure") para evitar inflar la efectividad real.
-    STALE_THRESHOLD_DAYS = 45  # Parámetro editable según política de la empresa
+    STALE_THRESHOLD_DAYS = 3  # Parámetro editable según política de la empresa
     max_date = df_sorted["created_at_log"].max()
     
     if not result.empty and pd.notna(max_date):
@@ -194,11 +194,10 @@ def compute_efectividad(
 
     transitions_q = f"""
         SELECT l.id, l.client_id, l.etapa_anterior, l.nueva_etapa,
-               l.created_at_log, c.devolver_oportunidad
+               l.created_at_log, c.devolver_oportunidad, c.ganado
         FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
         WHERE {where_dim}
-            AND c.duracion_total_horas >= 4
           {fecha_sql}
     """
     df_trans = db.query(transitions_q, params=params)
@@ -223,10 +222,12 @@ def compute_efectividad(
         n_fallido = int((detailed["outcome"] == "failure").sum())
         n_retorna = int((detailed["outcome"] == "return").sum())
 
-        n_lost_directo = len(df_trans[
+        lost_clients = df_trans[
             (df_trans["etapa_anterior"] == fwd_key) &
-            (df_trans["nueva_etapa"].isin(direct_loss))
-        ])
+            (df_trans["ganado"] == "perdido")
+        ]["client_id"].unique()
+
+        n_lost_directo = len(lost_clients)
 
         resultados.append({
             "etapa": etapa_key,
