@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     "frontend.subscriptions",        # Aplicación principal del frontend
     "frontend.crm",                  # Módulo CRM (clientes, etc.)
     "frontend.config",
+    "frontend.imports",
 ]
 
 # --- Middleware ---
