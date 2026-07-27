@@ -115,6 +115,7 @@ def api_create_user(request):
         else:
             profile.can_view_subscriptions = bool(data.get("can_view_subscriptions", True))
             profile.can_view_crm = bool(data.get("can_view_crm", True))
+            profile.can_view_imports = bool(data.get("can_view_imports", True)) # <-- NUEVO
             profile.can_view_subs_analytics = bool(data.get("can_view_subs_analytics", True))
             profile.can_view_subs_results = bool(data.get("can_view_subs_results", True))
             profile.can_view_subs_lifetime = bool(data.get("can_view_subs_lifetime", True))
@@ -133,26 +134,25 @@ def api_create_user(request):
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
+
 @login_required
 @permission_required('can_manage_users')
 @require_POST
 def api_update_user_permissions(request):
-    """Actualiza la matriz de permisos individuales enviada desde la UI."""
     try:
         data = json.loads(request.body)
         uid = data.get("user_id")
         
         if request.user.id == int(uid) and not request.user.is_superuser:
-            return JsonResponse({"status": "error", "message": "No puedes modificar tus propios permisos de administración."}, status=400)
+            return JsonResponse({"status": "error", "message": "No puedes modificar tus propios permisos."}, status=400)
             
         user = User.objects.get(pk=uid)
         profile = user.profile
-        
-        # Al modificar permisos manualmente, se desvincula del grupo para mantener personalización
-        profile.group = None
+        profile.group = None # Desvincula de grupo al personalizar
         
         profile.can_view_subscriptions = bool(data.get("can_view_subscriptions", True))
         profile.can_view_crm = bool(data.get("can_view_crm", True))
+        profile.can_view_imports = bool(data.get("can_view_imports", True)) # <-- NUEVO
         profile.can_view_subs_analytics = bool(data.get("can_view_subs_analytics", True))
         profile.can_view_subs_results = bool(data.get("can_view_subs_results", True))
         profile.can_view_subs_lifetime = bool(data.get("can_view_subs_lifetime", True))
@@ -173,13 +173,11 @@ def api_update_user_permissions(request):
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
-# --- APIS DE GESTIÓN DE GRUPOS DE PERMISOS ---
 
 @login_required
 @permission_required('can_manage_users')
 @require_POST
 def api_save_permission_group(request):
-    """Crea o edita un Grupo de Permisos y sincroniza a sus usuarios miembros."""
     try:
         data = json.loads(request.body)
         group_id = data.get("group_id")
@@ -198,6 +196,7 @@ def api_save_permission_group(request):
 
         group.can_view_subscriptions = bool(data.get("can_view_subscriptions", True))
         group.can_view_crm = bool(data.get("can_view_crm", True))
+        group.can_view_imports = bool(data.get("can_view_imports", True)) # <-- NUEVO
         group.can_view_subs_analytics = bool(data.get("can_view_subs_analytics", True))
         group.can_view_subs_results = bool(data.get("can_view_subs_results", True))
         group.can_view_subs_lifetime = bool(data.get("can_view_subs_lifetime", True))
@@ -212,7 +211,6 @@ def api_save_permission_group(request):
         group.can_manage_users = bool(data.get("can_manage_users", False))
         group.save()
 
-        # Sincronizar permisos a los miembros vinculados a este grupo
         for member in group.members.all():
             member.sync_permissions_from_group()
 

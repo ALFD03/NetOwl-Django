@@ -27,6 +27,15 @@
         </a>
       </li>
       {% endif %}
+
+      {% if request.user.profile.can_view_imports or request.user.is_superuser %}
+      <li class="nav-item">
+        <a class="nav-link d-flex align-items-center py-2 rounded-3 module-link" href="/imports/subscriptions/" data-module="imports">
+          <i class="bi bi-cloud-arrow-down me-2"></i>
+          <span>Imports</span>
+        </a>
+      </li>
+      {% endif %}
     </ul>
   </div>
   <div class="sidebar-footer mt-auto p-3">
