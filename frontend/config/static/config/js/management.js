@@ -350,5 +350,43 @@ document.addEventListener("DOMContentLoaded", () => {
         const meta = document.querySelector('meta[name="csrf-token"]');
         return meta ? meta.getAttribute("content") : "";
     }
+
+    // Actualizar los selectores de Nuevo usuario segun el grupo
+    const groupSelect = document.getElementById('new-group');
+    
+    if (groupSelect) {
+        groupSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (!selectedOption) return;
+
+            // Función auxiliar para activar/desactivar cada checkbox según el atributo data-*
+            const updateSwitch = (elementId, dataAttr) => {
+                const el = document.getElementById(elementId);
+                if (el) {
+                    el.checked = selectedOption.getAttribute(dataAttr) === 'true';
+                }
+            };
+
+            // Módulo Subscriptions
+            updateSwitch('p-view-subs', 'data-vsub');
+            updateSwitch('p-subs-analytics', 'data-sanalytics');
+            updateSwitch('p-subs-results', 'data-sresults');
+            updateSwitch('p-subs-lifetime', 'data-slifetime');
+            updateSwitch('p-subs-sales', 'data-ssales');
+            updateSwitch('p-view-eta', 'data-veta');
+
+            // Módulo CRM
+            updateSwitch('p-view-crm', 'data-vcrm');
+            updateSwitch('p-crm-analytics', 'data-canalytics');
+            updateSwitch('p-crm-results', 'data-cresults');
+
+            // Permisos Operativos / Gestión
+            updateSwitch('p-import', 'data-imp');
+            updateSwitch('p-calc', 'data-calc');
+            updateSwitch('p-run-lifetime', 'data-rlifetime');
+            updateSwitch('p-manage-eta', 'data-meta');
+            updateSwitch('p-admin', 'data-musr');
+        });
+    }
 });
 // --- END OF FILE NetOwl-Django/frontend/static/config/js/management.js ---
