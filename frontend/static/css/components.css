@@ -240,3 +240,18 @@
     flex-shrink: 0;
   }
 }
+
+.nav-tabs .nav-link.active {
+  background-color: var(--primary);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.nav-link.active:hover {
+  background-color: var(--primary-hover);
+}
+.nav-link:hover {
+  background-color: var(--primary-hover);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}

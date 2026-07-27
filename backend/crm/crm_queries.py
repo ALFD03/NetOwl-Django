@@ -343,11 +343,10 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
     select_dims = ", ".join(f"c.{dim_col(d)} AS {d}" for d in DIMENSIONES)
     transitions_q = f"""
         SELECT l.id, l.client_id, l.etapa_anterior, l.nueva_etapa,
-               l.created_at_log, c.devolver_oportunidad,
+               l.created_at_log, c.devolver_oportunidad, c.ganado,
                {select_dims}
         FROM {DB_SCHEMA}.{TableNames.CRM_LOGS} l
         JOIN {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c ON l.client_id = c.id
-        WHERE c.duracion_total_horas >= 4
         {fecha_sql}
     """
     df_trans = db.query(transitions_q, params=fecha_params or [])
@@ -419,8 +418,8 @@ def _dim_efectividad(db: DBConnector, fecha_sql: str = "", fecha_params: list | 
         direct_loss = regla["direct_loss"]
         dl_rows = df_trans[
             (df_trans["etapa_anterior"] == fwd_key) &
-            (df_trans["nueva_etapa"].isin(direct_loss))
-        ][["client_id"]].copy()
+            (df_trans["ganado"] == "perdido")
+        ][["client_id"]].drop_duplicates()
         dl_rows["stage"] = etapa_key
         dl_parts.append(dl_rows)
 
