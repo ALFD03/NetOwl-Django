@@ -14,8 +14,12 @@
       <div class="card-body">
         <div class="d-flex align-items-center justify-content-between">
           <div>
-            <h6 class="text-muted mb-1"><i class="bi bi-speedometer2 me-2"></i>Churn Rate Comparativo</h6>
+            <h6 class="text-muted mb-1"><i class="bi bi-speedometer2 me-2"></i>Churn Rate Neto Comparativo</h6>
             <div id="churn-comparativo-value" class="display-5 fw-bold">--</div>
+          </div>
+          <div>
+            <h6 class="text-muted mb-1"><i class="bi bi-speedometer2 me-2"></i>Churn Rate Bruto Comparativo</h6>
+            <div id="churn-bruto-comparativo-value" class="display-5 fw-bold">--</div>
           </div>
           <div class="text-end">
             <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2">Promedio General</span>
@@ -87,12 +91,6 @@
       <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="cortesReactChart"></canvas></div></div>
     </div>
   </div>
-  {% comment %} <div class="col-lg-6">
-    <div class="card h-100">
-      <div class="card-header"><h5><i class="bi bi-bar-chart me-2"></i>Bajas Netas y Brutas</h5></div>
-      <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="bajasNetBrutChart"></canvas></div></div>
-    </div>
-  </div> {% endcomment %}
 </div>
 
 <div class="row g-4 mb-4">
@@ -100,29 +98,6 @@
     <div class="card h-100">
       <div class="card-header"><h5><i class="bi bi-exclamation-triangle me-2"></i>% Suspensiones (Corte Impago / Activos Inicio)</h5></div>
       <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="suspensionChart"></canvas></div></div>
-    </div>
-  </div>
-</div>
-
-<div class="card mb-4">
-  <div class="card-header d-flex justify-content-between align-items-center">
-    <h5><i class="bi bi-clock-history me-2"></i>Ultimos Periodos</h5>
-    <a href="/subscriptions/results/" class="btn btn-outline-primary btn-sm">
-      <i class="bi bi-list-ul me-1"></i>Ver Todos
-    </a>
-  </div>
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 table-theme">
-        <thead><tr>
-          <th>Periodo</th><th class="text-end">Activos Inicio</th><th class="text-end">Activos Final</th>
-          <th class="text-end">Nuevos</th><th class="text-end">Churn Neto</th><th class="text-end">Churn Bruto</th>
-          <th class="text-end">ARPU</th><th class="text-center">Accion</th>
-        </tr></thead>
-        <tbody id="dashboard-table-tbody">
-          <tr><td colspan="8" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Cargando...</td></tr>
-        </tbody>
-      </table>
     </div>
   </div>
 </div>
