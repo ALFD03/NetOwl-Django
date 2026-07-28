@@ -19,13 +19,6 @@
       </a>
     {% endif %}
 
-    <!-- Imports -->
-    {% if request.user.profile.can_import_data or request.user.is_superuser %}
-      <a href="/crm/import/" class="module-nav-link {% if section == 'imports' %}active{% endif %}">
-        <i class="bi bi-cloud-arrow-down"></i>Imports
-      </a>
-    {% endif %}
-
     <!-- Results -->
     {% if request.user.profile.can_view_crm_results or request.user.is_superuser %}
       <a href="/crm/results/" class="module-nav-link {% if section == 'results' %}active{% endif %}">

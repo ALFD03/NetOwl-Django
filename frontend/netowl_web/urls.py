@@ -10,4 +10,5 @@ urlpatterns = [
     path("subscriptions/", include("frontend.subscriptions.urls")),
     path("crm/", include("frontend.crm.urls")),
     path("auth/", include("frontend.config.urls")),
+    path("imports/", include("frontend.imports.urls")),
 ]
