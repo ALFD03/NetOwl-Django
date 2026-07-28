@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from backend.conf_config import DB_SCHEMA 
 
 class ImportActionLog(models.Model):
     MODULE_CHOICES = [
@@ -25,7 +26,7 @@ class ImportActionLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'import_action_logs'
+        db_table = f'"{DB_SCHEMA}"."import_action_logs"' if DB_SCHEMA else 'import_action_logs'
         ordering = ['-created_at']
 
     def __str__(self):
