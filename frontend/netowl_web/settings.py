@@ -60,6 +60,9 @@ SECURE_REFERRER_POLICY = "same-origin"
 # los orígenes locales por defecto (ver DjangoModel en backend/vault.py).
 CSRF_TRUSTED_ORIGINS = config.django.CSRF_TRUSTED_ORIGINS
 
+# Limite de tiempo se sesiones 
+SESSION_COOKIE_AGE = 8*60*60
+
 # --- Límites de subida ---
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
