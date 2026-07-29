@@ -41,12 +41,10 @@
   <div class="sidebar-footer mt-auto p-3">
     <!-- Botón Config: Solo si tiene permiso de administrar usuarios -->
     {% if request.user.is_authenticated and request.user.profile.can_manage_users or request.user.is_superuser %}
-        <button class="btn btn-outline-light w-100 rounded-3 mt-2">
-          <a class="nav-link d-flex align-items-center py-2 rounded-3" href="{% url 'config:user_management' %}">
-            <i class="bi bi-shield-lock me-2 text-primary"></i>
-            <span>Config</span>
-          </a>
-        </button>
+        <a class="btn btn-outline-light w-100 rounded-3 mt-2 d-flex justify-content-center py-2 rounded-3" href="{% url 'config:user_management' %}">
+          <i class="bi bi-shield-lock me-2 text-primary"></i>
+          <span>Config</span>
+        </a>
       {% endif %}
     {% if request.user.is_authenticated %}
       <div class="d-flex align-items-center justify-content-between p-2 mb-2 mt-2 rounded-3" style="background-color: var(--surface-tertiary);">
