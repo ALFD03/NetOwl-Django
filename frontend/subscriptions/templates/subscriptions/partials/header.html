@@ -40,6 +40,13 @@
       </a>
     {% endif %}
 
+    <!-- Business Units -->
+    {% if request.user.profile.can_view_subs_sales or request.user.is_superuser %}
+      <a href="/subscriptions/business-units/" class="module-nav-link {% if section == 'business_units' %}active{% endif %}">
+        <i class="bi bi-person-badge"></i>Business units
+      </a>
+    {% endif %}
+
     <!-- ETA Report -->
     {% if request.user.profile.can_view_eta or request.user.is_superuser %}
       <a href="/subscriptions/eta-report/" class="module-nav-link {% if section == 'eta_report' %}active{% endif %}">
