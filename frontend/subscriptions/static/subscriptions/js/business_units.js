@@ -34,11 +34,20 @@ document.addEventListener("DOMContentLoaded", function () {
         coordinadores.forEach(item => {
             const coordName = item.coordinador;
             const sub = item.totals;
+            const isRf = item.is_rf;
+
+            const cardBorder = isRf ? 'border-warning border-3' : '';
+            const headerIcon = isRf ? 'bi-broadcast-pin text-warning' : 'bi-person-circle text-primary';
+            const badgeClass = isRf ? 'bg-warning text-dark' : 'bg-primary';
+            const titleLabel = isRf ? 'Grupo Consolidado:' : 'Coordinador:';
 
             html += `
-            <div class="card coord-card shadow-sm mb-4">
+            <div class="card coord-card shadow-sm mb-4 ${cardBorder}">
                 <div class="card-header d-flex justify-content-between align-items-center" style="height: 6rem !important;">
-                    <h5 class="mb-0 text-primary fw-bold"><i class="bi bi-person-circle me-2"></i>Coordinador: ${coordName}</h5>
+                    <h5 class="mb-0 fw-bold d-flex align-items-center">
+                        <i class="bi ${headerIcon} me-2 fs-4"></i>
+                        <span>${titleLabel} <strong class="${isRf ? 'text-warning' : 'text-primary'}">${coordName}</strong></span>
+                    </h5>
                     <span class="badge bg-primary fs-6">Crecimiento: ${sub.crecimiento.toFixed(2)}%</span>
                 </div>
                 <div class="card-body p-0">
@@ -81,7 +90,8 @@ document.addEventListener("DOMContentLoaded", function () {
             // Fila de Total acumulado por Coordinador
             html += `
                                 <tr class="subtotal-row">
-                                    <td class="text-end text-primary fw-bold">TOTAL COORDINADOR ${coordName.toUpperCase()}</td>
+                                    <td class="text-end text-primary fw-bold">${isRf ? 'RF (RADIOFRECUENCIA)' : 'COORDINADOR ' + coordName.toUpperCase()}</td>
+
                                     <td class="text-end text-primary">${sub.activos_inicio.toLocaleString()}</td>
                                     <td class="text-end text-primary">${sub.activos_final.toLocaleString()}</td>
                                     <td class="text-end text-success">${sub.nuevos.toLocaleString()}</td>

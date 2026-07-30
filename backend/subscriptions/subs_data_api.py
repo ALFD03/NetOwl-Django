@@ -300,8 +300,9 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
     
 def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, Any]:
     """
-    Genera el reporte de Business Units filtrando ÚNICAMENTE las zonas
-    que poseen el campo 'Coordinador' en Zonas.json, agrupando directamente por Coordinador -> Nodos.
+    Genera el reporte de Business Units:
+    1. Agrupa por Coordinador y sus zonas configuradas.
+    2. Agrega al final un grupo consolidado para TODAS las zonas de tipo RF (Radiofrecuencia).
     """
     db = DBConnector()
     try:
@@ -317,16 +318,24 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
         with open(ZONAS_PATH, "r", encoding="utf-8") as f:
             zonas_data = json.load(f)
         
-        # Mapeamos SOLAMENTE las zonas que tienen el campo 'Coordinador' no vacío
-        zone_info = {}
+        # 1. Indexar zonas por Coordinador y por Tipo RF
+        zone_coord_map = {}
+        rf_zones_set = set()
+
         for z in zonas_data.get("zonas", []):
+            z_name = z.get("name", "").strip().lower()
+            if not z_name:
+                continue
+
+            # Mapeo de Coordinadores
             coordinador = z.get("Coordinador")
             if coordinador and str(coordinador).strip():
-                name = z["name"].strip().lower()
-                zone_info[name] = str(coordinador).strip()
-        
-        if not zone_info:
-            return {"status": "empty", "message": "No hay zonas configuradas con Coordinador en Zonas.json"}
+                zone_coord_map[z_name] = str(coordinador).strip()
+
+            # Mapeo de Zonas de tipo RF
+            z_type = str(z.get("Type", "")).strip().upper()
+            if z_type == "RF":
+                rf_zones_set.add(z_name)
 
         df = db.query(f"""
             SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
@@ -339,8 +348,9 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
         if df.empty:
             return {"status": "empty", "period": target_period, "periods": available_periods}
             
-        # Agrupación: coord_groups[coordinador] = List[nodos]
+        # 2. Agrupadores
         coord_groups: Dict[str, List[Dict[str, Any]]] = {}
+        rf_nodes: List[Dict[str, Any]] = []
         
         for _, row in df.iterrows():
             val_str = str(row["valor"])
@@ -348,16 +358,9 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
             zona_name = parts[0].strip() if len(parts) > 0 else val_str
             sucursal_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
             
-            # FILTRO CLAVE: Si la zona no tiene coordinador en Zonas.json, la ignoramos
             z_key = zona_name.lower()
-            if z_key not in zone_info:
-                continue
 
-            coordinador = zone_info[z_key]
-            
-            coord_groups.setdefault(coordinador, [])
-            
-            coord_groups[coordinador].append({
+            node_data = {
                 "zona_sucursal": val_str,
                 "zona": zona_name,
                 "sucursal": sucursal_name,
@@ -372,9 +375,18 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
                 "adiciones_netas": int(row.get("adiciones_netas") or 0),
                 "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
                 "corte_impagado": int(row.get("corte_impagado") or 0),
-            })
+            }
 
-        # Construcción del payload final
+            # Si pertenece a un Coordinador
+            if z_key in zone_coord_map:
+                coord = zone_coord_map[z_key]
+                coord_groups.setdefault(coord, []).append(node_data)
+
+            # Si la zona es de tipo RF, la agregamos al grupo especial RF
+            if z_key in rf_zones_set:
+                rf_nodes.append(node_data)
+
+        # 3. Construcción de respuesta
         final_data_list = []
         sorted_coordinadores = sorted(coord_groups.keys())
         
@@ -385,9 +397,21 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
             final_data_list.append({
                 "coordinador": coordinador,
                 "totals": coord_totals,
-                "nodes": nodes
+                "nodes": nodes,
+                "is_rf": False
             })
             
+        # 4. Agregar al final el bloque consolidado RF
+        if rf_nodes:
+            sorted_rf_nodes = sorted(rf_nodes, key=lambda x: x["activos_final"], reverse=True)
+            rf_totals = calculate_aggregation_totals(sorted_rf_nodes)
+            final_data_list.append({
+                "coordinador": "NODOS RADIOFRECUENCIA (RF)",
+                "totals": rf_totals,
+                "nodes": sorted_rf_nodes,
+                "is_rf": True
+            })
+
         return {
             "status": "success",
             "period": target_period,
