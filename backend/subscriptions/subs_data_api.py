@@ -301,8 +301,9 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
 def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, Any]:
     """
     Genera el reporte de Business Units:
-    1. Agrupa por Coordinador y sus zonas configuradas.
-    2. Agrega al final un grupo consolidado para TODAS las zonas de tipo RF (Radiofrecuencia).
+    1. Incluye un resumen consolidado en tarjeta al inicio para TODOS los nodos FTTH.
+    2. Agrupa por Coordinador y sus zonas configuradas.
+    3. Agrega al final un grupo consolidado para TODAS las zonas de tipo RF (Radiofrecuencia).
     """
     db = DBConnector()
     try:
@@ -318,9 +319,10 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
         with open(ZONAS_PATH, "r", encoding="utf-8") as f:
             zonas_data = json.load(f)
         
-        # 1. Indexar zonas por Coordinador y por Tipo RF
+        # 1. Indexar zonas por Coordinador, RF y FTTH
         zone_coord_map = {}
         rf_zones_set = set()
+        ftth_zones_set = set()
 
         for z in zonas_data.get("zonas", []):
             z_name = z.get("name", "").strip().lower()
@@ -332,10 +334,12 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
             if coordinador and str(coordinador).strip():
                 zone_coord_map[z_name] = str(coordinador).strip()
 
-            # Mapeo de Zonas de tipo RF
+            # Mapeo por Tecnología
             z_type = str(z.get("Type", "")).strip().upper()
             if z_type == "RF":
                 rf_zones_set.add(z_name)
+            elif z_type == "FTTH":
+                ftth_zones_set.add(z_name)
 
         df = db.query(f"""
             SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
@@ -351,7 +355,8 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
         # 2. Agrupadores
         coord_groups: Dict[str, List[Dict[str, Any]]] = {}
         rf_nodes: List[Dict[str, Any]] = []
-        
+        ftth_nodes: List[Dict[str, Any]] = []
+
         for _, row in df.iterrows():
             val_str = str(row["valor"])
             parts = val_str.split(" - ")
@@ -382,11 +387,20 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
                 coord = zone_coord_map[z_key]
                 coord_groups.setdefault(coord, []).append(node_data)
 
-            # Si la zona es de tipo RF, la agregamos al grupo especial RF
+            # Si la zona es RF
             if z_key in rf_zones_set:
                 rf_nodes.append(node_data)
 
-        # 3. Construcción de respuesta
+            # Si la zona es FTTH
+            if z_key in ftth_zones_set:
+                ftth_nodes.append(node_data)
+
+        # 3. Resumen FTTH global
+        ftth_summary = calculate_aggregation_totals(ftth_nodes) if ftth_nodes else {}
+        if ftth_summary:
+            ftth_summary["total_nodos"] = len(ftth_nodes)
+
+        # 4. Construcción de respuesta por coordinador
         final_data_list = []
         sorted_coordinadores = sorted(coord_groups.keys())
         
@@ -401,7 +415,7 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
                 "is_rf": False
             })
             
-        # 4. Agregar al final el bloque consolidado RF
+        # 5. Agregar al final el bloque consolidado RF
         if rf_nodes:
             sorted_rf_nodes = sorted(rf_nodes, key=lambda x: x["activos_final"], reverse=True)
             rf_totals = calculate_aggregation_totals(sorted_rf_nodes)
@@ -416,6 +430,7 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
             "status": "success",
             "period": target_period,
             "periods": available_periods,
+            "ftth_summary": ftth_summary,
             "data": final_data_list
         }
     except Exception as e:

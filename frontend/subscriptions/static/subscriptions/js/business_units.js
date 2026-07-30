@@ -21,17 +21,99 @@ document.addEventListener("DOMContentLoaded", function () {
                 periodSelect.innerHTML = resData.periods.map(p => `<option value="${p}" ${p === resData.period ? 'selected' : ''}>${p}</option>`).join('');
             }
 
-            renderBusinessUnits(resData.data);
+            renderBusinessUnits(resData);
         } catch (e) {
             console.error("Error cargando Business Units:", e);
             container.innerHTML = `<div class="alert alert-danger text-center py-4"><i class="bi bi-exclamation-triangle me-2"></i>Ocurrió un error al cargar los datos.</div>`;
         }
     }
 
-    function renderBusinessUnits(coordinadores) {
+    function renderBusinessUnits(resData) {
         let html = "";
 
-        coordinadores.forEach(item => {
+        // 1. TARJETA RESUMEN FTTH ARRIBA DEL TODO
+        if (resData.ftth_summary && resData.ftth_summary.activos_final !== undefined) {
+            const ftth = resData.ftth_summary;
+            html += `
+            <div class="card border-0 shadow-sm mb-4" style="background: var(--surface-secondary); border-left: 4px solid #10b981 !important;">
+                <div class="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center flex-wrap py-3">
+                    <h5 class="mb-0 fw-bold text-success d-flex align-items-center">
+                        <i class="bi bi-hdd-network-fill me-2 fs-4 text-success"></i>
+                        <span>Resumen General - Nodos FTTH (Fibra Óptica)</span>
+                    </h5>
+                    <span class="badge bg-success-subtle text-success fs-6 px-3 py-2 border border-success border-opacity-25">
+                        ${ftth.total_nodos} Nodos FTTH Analizados
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value text-primary">${ftth.activos_inicio.toLocaleString()}</div>
+                                <div class="metric-label">Activos Inicio</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value text-primary">${ftth.activos_final.toLocaleString()}</div>
+                                <div class="metric-label">Activos Finales</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value text-success">+${ftth.nuevos.toLocaleString()}</div>
+                                <div class="metric-label">Nuevos Ingresos</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value text-danger">-${ftth.bajas.toLocaleString()}</div>
+                                <div class="metric-label">Bajas Totales</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value ${ftth.crecimiento >= 2 ? 'text-success' : ftth.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${ftth.adiciones_netas.toLocaleString()}</div>
+                                <div class="metric-label">Adiciones Netas</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value ${ftth.crecimiento >= 2 ? 'text-success' : ftth.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${ftth.adiciones_brutas.toLocaleString()}</div>
+                                <div class="metric-label">Adiciones Brutas</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value text-info">${ftth.reactivaciones.toLocaleString()}</div>
+                                <div class="metric-label">Reactivaciones</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value ${ftth.churn_neto_pct < 3 ? 'text-success' : ftth.churn_neto_pct <= 4 ? 'text-warning' : 'text-danger'}">${ftth.churn_neto_pct.toFixed(2)}%</div>
+                                <div class="metric-label">Churn Neto</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value ${ftth.churn_bruto_pct < 3 ? 'text-success' : ftth.churn_bruto_pct <= 4 ? 'text-warning' : 'text-danger'}">${ftth.churn_bruto_pct.toFixed(2)}%</div>
+                                <div class="metric-label">Churn Neto</div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value ${ftth.crecimiento >= 2 ? 'text-success' : ftth.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${ftth.crecimiento.toFixed(2)}%</div>
+                                <div class="metric-label">Crecimiento</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // 2. TABLAS DE COORDINADORES Y RF
+        resData.data.forEach(item => {
             const coordName = item.coordinador;
             const sub = item.totals;
             const isRf = item.is_rf;
