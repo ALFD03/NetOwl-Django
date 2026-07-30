@@ -297,3 +297,143 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+    
+def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Genera el reporte de Business Units:
+    1. Incluye un resumen consolidado en tarjeta al inicio para TODOS los nodos FTTH.
+    2. Agrupa por Coordinador y sus zonas configuradas.
+    3. Agrega al final un grupo consolidado para TODAS las zonas de tipo RF (Radiofrecuencia).
+    """
+    db = DBConnector()
+    try:
+        available_periods = get_periodos()
+        if not available_periods:
+            return {"status": "empty", "message": "No hay periodos calculados"}
+        
+        target_period = periodo_reporte or available_periods[0]
+        
+        if not ZONAS_PATH.exists():
+            return {"status": "error", "message": "No se encontró el archivo Zonas.json en la raíz"}
+            
+        with open(ZONAS_PATH, "r", encoding="utf-8") as f:
+            zonas_data = json.load(f)
+        
+        # 1. Indexar zonas por Coordinador, RF y FTTH
+        zone_coord_map = {}
+        rf_zones_set = set()
+        ftth_zones_set = set()
+
+        for z in zonas_data.get("zonas", []):
+            z_name = z.get("name", "").strip().lower()
+            if not z_name:
+                continue
+
+            # Mapeo de Coordinadores
+            coordinador = z.get("Coordinador")
+            if coordinador and str(coordinador).strip():
+                zone_coord_map[z_name] = str(coordinador).strip()
+
+            # Mapeo por Tecnología
+            z_type = str(z.get("Type", "")).strip().upper()
+            if z_type == "RF":
+                rf_zones_set.add(z_name)
+            elif z_type == "FTTH":
+                ftth_zones_set.add(z_name)
+
+        df = db.query(f"""
+            SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
+                   churn_neto_pct, churn_bruto_pct, react_val,
+                   adiciones_netas, adiciones_brutas, corte_impagado
+            FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+            WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
+        """, params=[target_period])
+        
+        if df.empty:
+            return {"status": "empty", "period": target_period, "periods": available_periods}
+            
+        # 2. Agrupadores
+        coord_groups: Dict[str, List[Dict[str, Any]]] = {}
+        rf_nodes: List[Dict[str, Any]] = []
+        ftth_nodes: List[Dict[str, Any]] = []
+
+        for _, row in df.iterrows():
+            val_str = str(row["valor"])
+            parts = val_str.split(" - ")
+            zona_name = parts[0].strip() if len(parts) > 0 else val_str
+            sucursal_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
+            
+            z_key = zona_name.lower()
+
+            node_data = {
+                "zona_sucursal": val_str,
+                "zona": zona_name,
+                "sucursal": sucursal_name,
+                "activos_inicio": int(row.get("activos_inicio") or 0),
+                "activos_final": int(row.get("activos_final") or 0),
+                "nuevos": int(row.get("nuevos") or 0),
+                "bajas": int(row.get("bajas") or 0),
+                "crecimiento": float(row.get("crecimiento") or 0),
+                "churn_neto_pct": float(row.get("churn_neto_pct") or 0),
+                "churn_bruto_pct": float(row.get("churn_bruto_pct") or 0),
+                "reactivaciones": int(row.get("react_val") or 0),
+                "adiciones_netas": int(row.get("adiciones_netas") or 0),
+                "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
+                "corte_impagado": int(row.get("corte_impagado") or 0),
+            }
+
+            # Si pertenece a un Coordinador
+            if z_key in zone_coord_map:
+                coord = zone_coord_map[z_key]
+                coord_groups.setdefault(coord, []).append(node_data)
+
+            # Si la zona es RF
+            if z_key in rf_zones_set:
+                rf_nodes.append(node_data)
+
+            # Si la zona es FTTH
+            if z_key in ftth_zones_set:
+                ftth_nodes.append(node_data)
+
+        # 3. Resumen FTTH global
+        ftth_summary = calculate_aggregation_totals(ftth_nodes) if ftth_nodes else {}
+        if ftth_summary:
+            ftth_summary["total_nodos"] = len(ftth_nodes)
+
+        # 4. Construcción de respuesta por coordinador
+        final_data_list = []
+        sorted_coordinadores = sorted(coord_groups.keys())
+        
+        for coordinador in sorted_coordinadores:
+            nodes = sorted(coord_groups[coordinador], key=lambda x: x["activos_final"], reverse=True)
+            coord_totals = calculate_aggregation_totals(nodes)
+            
+            final_data_list.append({
+                "coordinador": coordinador,
+                "totals": coord_totals,
+                "nodes": nodes,
+                "is_rf": False
+            })
+            
+        # 5. Agregar al final el bloque consolidado RF
+        if rf_nodes:
+            sorted_rf_nodes = sorted(rf_nodes, key=lambda x: x["activos_final"], reverse=True)
+            rf_totals = calculate_aggregation_totals(sorted_rf_nodes)
+            final_data_list.append({
+                "coordinador": "NODOS RADIOFRECUENCIA (RF)",
+                "totals": rf_totals,
+                "nodes": sorted_rf_nodes,
+                "is_rf": True
+            })
+
+        return {
+            "status": "success",
+            "period": target_period,
+            "periods": available_periods,
+            "ftth_summary": ftth_summary,
+            "data": final_data_list
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}

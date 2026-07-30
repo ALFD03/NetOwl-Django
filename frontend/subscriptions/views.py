@@ -24,7 +24,7 @@ from backend.subscriptions import (
     get_cierre_churn, get_dimensiones, get_periodos,
     get_dashboard_data, get_analytics_data,
     import_logs_csv, import_subscriptions_csv, get_sales_report_data,
-    ETAReportManager,
+    ETAReportManager,get_business_units_data,
 )
 from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
@@ -420,4 +420,14 @@ def api_eta_report_save_sub_config(request):
         return JsonResponse({"status": "success", "message": f"Suscripción {orden} guardada."})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
-# --- END OF FILE NetOwl-Django/frontend/subscriptions/views.py ---
+    
+@login_required
+@permission_required('can_view_subs_sales')
+def business_units(request):
+    return render(request, f"{TEMPLATE_PREFIX}business_units.html", {"section": "business_units"})
+
+@login_required
+@permission_required('can_view_subs_sales')
+def api_business_units_report(request):
+    periodo = request.GET.get("period")
+    return JsonResponse(get_business_units_data(periodo))
