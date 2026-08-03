@@ -44,17 +44,31 @@ document.addEventListener("DOMContentLoaded", () => {
         let Faltante = 0;
         let porcentajeFaltante = 0;
         let objetivosite = 0;
+        let cierreesperadosite = 0;
         let Faltantesite = 0;
         let porcentajeFaltantesite = 0;
         let objetivotech = 0;
         let Faltantetech = 0;
         let porcentajeFaltantetech = 0;
+        let cierreesperadotech = 0;
 
         sitesList.forEach(siteData => {
+          const s = siteData.totals;
+          objetivosite = parseInt((s.activos_inicio *1.06) - s.activos_inicio)
+          Faltantesite = objetivosite - s.adiciones_brutas
+          porcentajeFaltantesite = objetivosite > 0 ? 100 - ((Faltantesite / objetivosite) * 100) : 0
+          cierreesperadosite = parseInt(s.activos_inicio) * 1.06
+
             html += `
             <div class="card site-card shadow-sm mb-4">
               <div class="card-header d-flex justify-content-between align-items-center" style="height: 6rem !important;">
                 <h4 class="mb-0 fw-bold text-primary"><i class="bi bi-geo-alt-fill me-2 text-primary"></i>SITE REGIONAL: ${siteData.site}</h4>
+                <div>
+                  <span class="badge bg-primary fs-6">Meta: ${Faltantesite.toFixed(0)}</span>
+                  <span class="badge bg-primary fs-6">Objetivo: ${objetivosite.toFixed(0)}</span>
+                  <span class="badge bg-primary fs-6">Cierre Esperado: ${cierreesperadosite.toFixed(0)}</span>
+                  <span class="badge bg-primary fs-6">Tasa de Cumplimiento: ${porcentajeFaltantesite.toFixed(2)}%</span>
+                </div>
               </div>
               <div class="card-body p-0">
                 <div class="table-responsive">
@@ -79,10 +93,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
             siteData.technologies.forEach(techGroup => {
                 // Sub-encabezado de Tecnología dentro del Site
+                const t = techGroup.totals;
+                objetivotech = parseInt((t.activos_inicio *1.06) - t.activos_inicio)
+                Faltantetech = objetivotech - t.adiciones_brutas
+                porcentajeFaltantetech = objetivotech > 0 ? 100 - ((Faltantetech / objetivotech) * 100) : 0
+                cierreesperadotech = parseInt(t.activos_inicio) * 1.06
+                
                 html += `
                   <tr class="table" style="background-color: var(--surface-tertiary) !important; height: 4rem !important;">
-                    <td colspan="12" class="text-primary text-uppercase fw-bold" style="padding-left: 1.25rem; font-size: 0.85rem; letter-spacing: 0.05em;">
-                      <i class="bi bi-cpu-fill me-1"></i> Tecnología: ${techGroup.technology}
+                    <td colspan="11" class="text-primary text-uppercase fw-bold p-0" style="font-size: 0.85rem; letter-spacing: 0.05em;">
+                      <div class="d-flex justify-content-between align-items-center p-2">
+                        <div class="text-primary p-0" style="background-color: var(--surface-tertiary) !important"><i class="bi bi-cpu-fill me-1"></i> Tecnología: ${techGroup.technology}</div>
+                        <div class="p-0" style="background-color: var(--surface-tertiary) !important">
+                          <span class="badge bg-primary fs-8">Meta: ${Faltantetech.toFixed(0)}</span>
+                          <span class="badge bg-primary fs-8">Objetivo: ${objetivotech.toFixed(0)}</span>
+                          <span class="badge bg-primary fs-8">Cierre Esperado: ${cierreesperadotech.toFixed(0)}</span>
+                          <span class="badge bg-primary fs-8">Tasa de Cumplimiento: ${porcentajeFaltantetech.toFixed(2)}%</span>
+                        </div>
+                      </div>
                     </td>
                   </tr>
                 `;
@@ -111,7 +139,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
 
                 // Fila de Subtotal por Tecnología
-                const t = techGroup.totals;
                 objetivotech = parseInt((t.activos_inicio *1.06) - t.activos_inicio)
                 Faltantetech = objetivotech - t.adiciones_brutas
                 porcentajeFaltantetech = objetivotech > 0 ? 100 - ((Faltantetech / objetivotech) * 100) : 0
@@ -134,7 +161,6 @@ document.addEventListener("DOMContentLoaded", () => {
             });
 
             // Fila de Total General por Site Regional (Suma de todas sus tecnologías)
-            const s = siteData.totals;
             objetivosite = parseInt((s.activos_inicio *1.06) - s.activos_inicio)
             Faltantesite = objetivosite - s.adiciones_brutas
             porcentajeFaltantesite = objetivosite > 0 ? 100 - ((Faltantesite / objetivosite) * 100) : 0

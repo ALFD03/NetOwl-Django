@@ -30,10 +30,29 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function renderBusinessUnits(resData) {
         let html = "";
+        let ftth_objetivo = 0
+        let ftth_objetivocierre = 0
+        let ftth_faltante = 0
+        let ftth_cumplimiento = 0
+
+        let cord_objetivo = 0
+        let cord_objetivocierre = 0
+        let cord_faltante = 0
+        let cord_cumplimiento = 0
+
+        let total_objetivo = 0
+        let total_objetivocierre = 0
+        let total_faltante = 0
+        let total_cumplimiento = 0
 
         // 1. TARJETA RESUMEN FTTH ARRIBA DEL TODO
         if (resData.ftth_summary && resData.ftth_summary.activos_final !== undefined) {
             const ftth = resData.ftth_summary;
+            ftth_objetivo = ftth.activos_inicio * 0.06;
+            ftth_objetivocierre = ftth.activos_inicio * 1.06;
+            ftth_faltante = ftth_objetivocierre - ftth.activos_final;
+            ftth_cumplimiento = ftth_objetivo > 0 ? 100 - ((ftth_faltante / ftth_objetivo) * 100) : 0;
+
             html += `
             <div class="card border-0 shadow-sm mb-4" style="background: var(--surface-secondary); border-left: 4px solid #10b981 !important;">
                 <div class="card-header bg-transparent border-bottom d-flex justify-content-between align-items-center flex-wrap py-3">
@@ -107,6 +126,20 @@ document.addEventListener("DOMContentLoaded", function () {
                                 <div class="metric-label">Crecimiento</div>
                             </div>
                         </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value ${ftth_cumplimiento >= 100 ? 'text-success' : ftth_cumplimiento >= 80 ? 'text-warning' : 'text-danger'}">${ftth_faltante.toFixed(0)}</div>
+                                <div class="metric-label">Faltante</div>
+                                <small class="text-muted d-block mt-1">Cumplimiento: ${ftth_cumplimiento.toFixed(2)}%</small>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-4 col-xl-2">
+                            <div class="metric-card h-100">
+                                <div class="metric-value ${ftth_cumplimiento >= 100 ? 'text-success' : ftth_cumplimiento >= 80 ? 'text-warning' : 'text-danger'}">${ftth_objetivo.toFixed(0)}</div>
+                                <div class="metric-label">Objetivo</div>
+                                <small class="text-muted d-block mt-1">Cierre: ${ftth_objetivocierre.toFixed(0)}</small>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>`;
@@ -123,6 +156,12 @@ document.addEventListener("DOMContentLoaded", function () {
             const badgeClass = isRf ? 'bg-warning text-dark' : 'bg-primary';
             const titleLabel = isRf ? 'Grupo Consolidado:' : 'Coordinador:';
 
+            total_objetivo = sub.activos_inicio * 0.06;
+            total_objetivocierre = sub.activos_inicio * 1.06;
+            total_faltante = total_objetivocierre - sub.activos_final;
+            total_cumplimiento = total_objetivo > 0 ? 100 - ((total_faltante / total_objetivo) * 100) : 0;
+
+
             html += `
             <div class="card coord-card shadow-sm mb-4 ${cardBorder}">
                 <div class="card-header d-flex justify-content-between align-items-center" style="height: 6rem !important;">
@@ -130,7 +169,12 @@ document.addEventListener("DOMContentLoaded", function () {
                         <i class="bi ${headerIcon} me-2 fs-4"></i>
                         <span>${titleLabel} <strong class="${isRf ? 'text-warning' : 'text-primary'}">${coordName}</strong></span>
                     </h5>
-                    <span class="badge bg-primary fs-6">Crecimiento: ${sub.crecimiento.toFixed(2)}%</span>
+                    <div>
+                        <span class="badge bg-primary fs-6">Meta: ${total_faltante.toFixed(0)}</span>
+                        <span class="badge bg-primary fs-6">Objetivo: ${total_objetivo.toFixed(0)}</span>
+                        <span class="badge bg-primary fs-6">Cierre Esperado: ${total_objetivocierre.toFixed(0)}</span>
+                        <span class="badge bg-primary fs-6">Tasa de Cumplimiento: ${total_cumplimiento.toFixed(2)}%</span>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -143,16 +187,21 @@ document.addEventListener("DOMContentLoaded", function () {
                                     <th class="text-end">Nuevos</th>
                                     <th class="text-end">Bajas</th>
                                     <th class="text-end">Reactivaciones</th>
-                                    <th class="text-end">Ad. Netas</th>
-                                    <th class="text-end">Ad. Brutas</th>
                                     <th class="text-end">Churn Neto %</th>
                                     <th class="text-end">Churn Bruto %</th>
                                     <th class="text-end">Crecimiento %</th>
+                                    <th class="text-end fw-bold">Faltante</th>
+                                    <th class="text-end fw-bold">Cumplimiento %</th>
                                 </tr>
                             </thead>
                             <tbody>`;
 
             item.nodes.forEach(node => {
+                cord_objetivo = node.activos_inicio * 0.06;
+                cord_objetivocierre = node.activos_inicio * 1.06;
+                cord_faltante = cord_objetivocierre - node.activos_final;
+                cord_cumplimiento = cord_objetivo > 0 ? 100 - ((cord_faltante / cord_objetivo) * 100) : 0;
+
                 html += `
                                 <tr>
                                     <td><span class="text-end text-primary fw-bold">${node.zona_sucursal}</span></td>
@@ -161,11 +210,11 @@ document.addEventListener("DOMContentLoaded", function () {
                                     <td class="text-end text-success">${node.nuevos.toLocaleString()}</td>
                                     <td class="text-end text-danger">${node.bajas.toLocaleString()}</td>
                                     <td class="text-end text-info">${node.reactivaciones.toLocaleString()}</td>
-                                    <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${node.adiciones_netas.toLocaleString()}</td>
-                                    <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${node.adiciones_brutas.toLocaleString()}</td>
                                     <td class="text-end ${node.churn_neto_pct < 3 ? 'text-success' : node.churn_neto_pct <= 4 ? 'text-warning' : 'text-danger'}">${node.churn_neto_pct.toFixed(2)}%</td>
                                     <td class="text-end ${node.churn_bruto_pct < 3 ? 'text-success' : node.churn_bruto_pct <= 4 ? 'text-warning' : 'text-danger'}">${node.churn_bruto_pct.toFixed(2)}%</td>
                                     <td class="text-end ${node.crecimiento >= 2 ? 'text-success' : node.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${node.crecimiento.toFixed(2)}%</td>
+                                    <td class="text-end fw-bold ${cord_cumplimiento >= 100 ? 'text-success' : cord_cumplimiento >= 80 ? 'text-warning' : 'text-danger'}">${cord_faltante.toFixed(0)}</td>
+                                    <td class="text-end fw-bold ${cord_cumplimiento >= 100 ? 'text-success' : cord_cumplimiento >= 80 ? 'text-warning' : 'text-danger'}">${cord_cumplimiento.toFixed(2)}%</td>
                                 </tr>`;
             });
 
@@ -179,11 +228,11 @@ document.addEventListener("DOMContentLoaded", function () {
                                     <td class="text-end text-success">${sub.nuevos.toLocaleString()}</td>
                                     <td class="text-end text-danger">${sub.bajas.toLocaleString()}</td>
                                     <td class="text-end text-info">${sub.reactivaciones.toLocaleString()}</td>
-                                    <td class="text-end ${sub.crecimiento >= 2 ? 'text-success' : sub.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${sub.adiciones_netas.toLocaleString()}</td>
-                                    <td class="text-end ${sub.crecimiento >= 2 ? 'text-success' : sub.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${sub.adiciones_brutas.toLocaleString()}</td>
                                     <td class="text-end ${sub.churn_neto_pct < 3 ? 'text-success' : sub.churn_neto_pct <= 4 ? 'text-warning' : 'text-danger'}">${sub.churn_neto_pct.toFixed(2)}%</td>
                                     <td class="text-end ${sub.churn_bruto_pct < 3 ? 'text-success' : sub.churn_bruto_pct <= 4 ? 'text-warning' : 'text-danger'}">${sub.churn_bruto_pct.toFixed(2)}%</td>
                                     <td class="text-end ${sub.crecimiento >= 2 ? 'text-success' : sub.crecimiento >= 0 ? 'text-warning' : 'text-danger'}">${sub.crecimiento.toFixed(2)}%</td>
+                                    <td class="text-end fw-bold ${total_cumplimiento >= 100 ? 'text-success' : total_cumplimiento >= 80 ? 'text-warning' : 'text-danger'}">${total_faltante.toFixed(0)}</td>
+                                    <td class="text-end fw-bold ${total_cumplimiento >= 100 ? 'text-success' : total_cumplimiento >= 80 ? 'text-warning' : 'text-danger'}">${total_cumplimiento.toFixed(2)}%</td>
                                 </tr>
                             </tbody>
                         </table>
