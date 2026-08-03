@@ -115,7 +115,7 @@ class MetricsAnalyzer:
         sobrevivientes = set_fin - set_nue
         bajas_idx = set_ini - sobrevivientes
         df_bajas = self.df_subs_full[self.df_subs_full["orden"].isin(bajas_idx)].copy()
-        bajas_netas = max(0, len(act_ini) - (len(act_fin) - len(set_nue)))
+        bajas_netas = len(act_ini) - (len(act_fin) - len(set_nue))
         df_react_not_in_ini = df_react_all[~df_react_all["orden"].isin(set_ini)] if not df_react_all.empty else pd.DataFrame()
         n_react_not_in_ini = len(df_react_not_in_ini)
         bajas_brutas = bajas_netas + n_react_not_in_ini
