@@ -106,7 +106,7 @@ def aggregate_dimensions(
             a_ini = d_act_ini.get(val, 0)
             a_fin = d_act_fin.get(val, 0)
             nv = d_nuevos.get(val, 0)
-            bn = max(0, a_ini - (a_fin - nv))
+            bn = a_ini - (a_fin - nv)
             bb = bn + d_react_not_in_ini.get(val, 0)
             inac = d_inact.get(val, 0)
             reac = d_react.get(val, 0)
