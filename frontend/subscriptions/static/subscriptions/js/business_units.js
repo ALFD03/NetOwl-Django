@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         <div class="col-6 col-md-4 col-xl-2">
                             <div class="metric-card h-100">
                                 <div class="metric-value ${ftth.churn_bruto_pct < 3 ? 'text-success' : ftth.churn_bruto_pct <= 4 ? 'text-warning' : 'text-danger'}">${ftth.churn_bruto_pct.toFixed(2)}%</div>
-                                <div class="metric-label">Churn Neto</div>
+                                <div class="metric-label">Churn Bruto</div>
                             </div>
                         </div>
                         <div class="col-6 col-md-4 col-xl-2">
