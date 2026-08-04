@@ -53,3 +53,6 @@ class TableNames:
     SUBSCRIPTIONS_B = "subscriptions-b"
     SUBSCRIPTIONS_LOGS = "subscriptions-logs"
     SUBSCRIPTIONS_LOGS_V15 = "subscriptions-logs-v15"
+    SUPPORT_TICKETS = "support_tickets"
+    SUPPORT_METRICAS_GLOBALES = "support_metricas_globales"
+    SUPPORT_DIMENSIONES_HISTORICO = "support_dimensiones_historico"

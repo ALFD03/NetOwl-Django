@@ -18,7 +18,7 @@ from backend.models import Periodo
 from backend.subscriptions import MetricsAnalyzer, import_subscriptions_csv, import_logs_csv
 from backend.subscriptions.lifetime import run_lifecycle_analysis
 from backend.crm import run_crm_analysis, import_crm_csv
-
+from backend.support import import_support_csv, run_support_analysis
 
 def cmd_import_subs(args):
     """Import subscription records from a CSV file.
@@ -111,6 +111,21 @@ def cmd_crm_run_all(args):
     rows_clients, rows_logs = import_crm_csv(args.csv_path)
     print(f"Importados {rows_clients} clientes | {rows_logs} logs")
     run_crm_analysis()
+    
+def cmd_support_import(args):
+    """Import Support tickets data from Odoo CSV export."""
+    count = import_support_csv(args.csv_path)
+    print(f"Importados {count} tickets de soporte técnico")
+
+def cmd_support_analyze(args):
+    """Run Technical Support analysis on all data."""
+    run_support_analysis()
+
+def cmd_support_run_all(args):
+    """Run full Technical Support ETL + analysis pipeline."""
+    count = import_support_csv(args.csv_path)
+    print(f"Importados {count} tickets de soporte técnico")
+    run_support_analysis()
 
 
 def main():
@@ -188,6 +203,17 @@ def main():
     p_crm_run = sub.add_parser("crm-run-all", help="Importa y analiza CRM (sin filtro temporal)")
     p_crm_run.add_argument("csv_path")
     p_crm_run.set_defaults(func=cmd_crm_run_all)
+    
+    p_support = p_import_sub.add_parser("support")
+    p_support.add_argument("csv_path")
+    p_support.set_defaults(func=cmd_support_import)
+
+    p_support_analyze = sub.add_parser("support-analyze", help="Analiza métricas de Soporte Técnico")
+    p_support_analyze.set_defaults(func=cmd_support_analyze)
+
+    p_support_run = sub.add_parser("support-run-all", help="Importa y analiza Soporte Técnico completo")
+    p_support_run.add_argument("csv_path")
+    p_support_run.set_defaults(func=cmd_support_run_all)
 
     args = parser.parse_args()
     args.func(args)
