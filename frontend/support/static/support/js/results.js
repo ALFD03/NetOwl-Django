@@ -20,10 +20,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             tblHistorico.innerHTML = list.map(item => `
                 <tr>
-                    <td><span class="badge bg-primary-subtle text-primary">${item.periodo_reporte}</span></td>
-                    <td><span class="fw-bold">${item.grupo_trabajo}</span></td>
+                    <td><span class="badge bg-primary-subtle text-primary fw-bold" style="font-size:0.9rem;">${item.periodo_reporte}</span></td>
                     <td class="text-end fw-semibold">${(item.total_tickets || 0).toLocaleString()}</td>
                     <td class="text-end text-success fw-semibold">${(item.tickets_resueltos || 0).toLocaleString()}</td>
+                    <td class="text-end text-warning">${(item.tickets_rezagados || 0).toLocaleString()}</td>
                     <td class="text-end fw-bold">${item.pct_resueltos || 0}%</td>
                     <td class="text-end fw-bold text-success">${item.tiempo_medio_cierre_horas || 0} h</td>
                     <td class="text-end fw-bold text-info">${item.tiempo_mediana_cierre_horas || 0} h</td>
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <td class="text-end text-muted">${item.tiempo_p75_cierre_horas || 0} h</td>
                     <td class="text-end text-muted">${item.tiempo_std_cierre_horas || 0} h</td>
                     <td class="text-end text-warning">${item.pct_excede_promedio_cierre || 0}%</td>
-                    <td class="text-end text-warning">${item.pct_excede_mediana_cierre || 0}%</td>
+                    <td class="text-end text-muted">${item.tiempo_promedio_primera_respuesta_horas || 0} h</td>
                 </tr>
             `).join('');
 

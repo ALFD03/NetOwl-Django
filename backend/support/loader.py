@@ -85,8 +85,7 @@ def _create_support_tables_if_not_exist(db: DBConnector):
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} (
             id BIGSERIAL PRIMARY KEY,
-            periodo_reporte VARCHAR(7) NOT NULL,
-            grupo_trabajo TEXT NOT NULL DEFAULT 'GLOBAL',
+            periodo_reporte VARCHAR(7) NOT NULL UNIQUE,
             total_tickets INT DEFAULT 0,
             tickets_resueltos INT DEFAULT 0,
             tickets_rezagados INT DEFAULT 0,
@@ -100,8 +99,7 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             pct_excede_mediana_cierre NUMERIC DEFAULT 0,
             pct_rezagados NUMERIC DEFAULT 0,
             tiempo_promedio_primera_respuesta_horas NUMERIC DEFAULT 0,
-            updated_at TIMESTAMP DEFAULT NOW(),
-            CONSTRAINT uq_support_cierre UNIQUE(periodo_reporte, grupo_trabajo)
+            updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
         f"""

@@ -31,6 +31,7 @@ def get_support_periodos() -> list[str]:
         return []
 
 def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict]:
+    """Retorna el histórico de cierres mensuales globales (1 sola fila por periodo)."""
     db = DBConnector()
     try:
         where_clause = ""
@@ -41,7 +42,7 @@ def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict
             params = periodos
 
         df = db.query(f"""
-            SELECT periodo_reporte, grupo_trabajo, total_tickets, tickets_resueltos,
+            SELECT periodo_reporte, total_tickets, tickets_resueltos,
                    tickets_rezagados, pct_resueltos, 
                    tiempo_medio_cierre_horas, tiempo_mediana_cierre_horas,
                    tiempo_p25_cierre_horas, tiempo_p75_cierre_horas, tiempo_std_cierre_horas,
@@ -49,7 +50,7 @@ def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict
                    pct_rezagados, tiempo_promedio_primera_respuesta_horas
             FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
             {where_clause}
-            ORDER BY periodo_reporte DESC, grupo_trabajo ASC
+            ORDER BY periodo_reporte DESC
         """, params=params)
 
         if df.empty:
@@ -59,39 +60,36 @@ def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict
         logger.exception("Error al consultar cierre histórico de soporte")
         return []
 
+
 def get_support_metric_totals(periodo: str | None = None) -> dict:
+    """Retorna el resumen global del periodo y busca los grupos de trabajo en las dimensiones."""
     db = DBConnector()
     try:
         if periodo and periodo != "ALL":
-            df = db.query(f"""
-                SELECT grupo_trabajo, total_tickets, tickets_resueltos, tickets_rezagados,
-                       pct_resueltos, tiempo_medio_cierre_horas, pct_rezagados,
-                       tiempo_promedio_primera_respuesta_horas
+            # 1. Obtener fila global del periodo desde Cierre Histórico
+            df_global = db.query(f"""
+                SELECT total_tickets, tickets_resueltos, tickets_rezagados,
+                       pct_resueltos, tiempo_medio_cierre_horas, tiempo_mediana_cierre_horas,
+                       tiempo_p25_cierre_horas, tiempo_p75_cierre_horas, tiempo_std_cierre_horas,
+                       pct_excede_promedio_cierre, pct_excede_mediana_cierre,
+                       pct_rezagados, tiempo_promedio_primera_respuesta_horas
                 FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
                 WHERE periodo_reporte = %s
             """, params=[periodo])
-            
-            if df.empty:
-                return {"resumen_global": {}, "por_grupo_trabajo": {}}
-                
-            resumen_global = {}
+
+            # 2. Obtener los grupos de trabajo del periodo desde Dimensiones
+            df_grupos = db.query(f"""
+                SELECT valor AS grupo_trabajo, metricas
+                FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
+                WHERE periodo_reporte = %s AND dimension = 'grupo_trabajo'
+            """, params=[periodo])
+
+            resumen_global = df_global.iloc[0].to_dict() if not df_global.empty else {}
             por_grupo = {}
-            for _, r in df.iterrows():
-                gt = r["grupo_trabajo"]
-                m = {
-                    "total_tickets": int(r["total_tickets"]),
-                    "tickets_resueltos": int(r["tickets_resueltos"]),
-                    "tickets_rezagados": int(r["tickets_rezagados"]),
-                    "pct_resueltos": float(r["pct_resueltos"]),
-                    "tiempo_medio_cierre_horas": float(r["tiempo_medio_cierre_horas"]),
-                    "pct_rezagados": float(r["pct_rezagados"]),
-                    "tiempo_promedio_primera_respuesta_horas": float(r["tiempo_promedio_primera_respuesta_horas"]),
-                }
-                if gt == "GLOBAL":
-                    resumen_global = m
-                else:
-                    por_grupo[gt] = m
-                    
+            if not df_grupos.empty:
+                for _, r in df_grupos.iterrows():
+                    por_grupo[r["grupo_trabajo"]] = _parse_jsonb(r["metricas"]) or {}
+
             return {"resumen_global": resumen_global, "por_grupo_trabajo": por_grupo}
         else:
             df = db.query(f"SELECT resumen_global, por_grupo_trabajo FROM {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} WHERE id = 1")
