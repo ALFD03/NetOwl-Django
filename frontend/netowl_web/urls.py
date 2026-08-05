@@ -11,4 +11,5 @@ urlpatterns = [
     path("crm/", include("frontend.crm.urls")),
     path("auth/", include("frontend.config.urls")),
     path("imports/", include("frontend.imports.urls")),
+    path("support/", include("frontend.support.urls")),
 ]

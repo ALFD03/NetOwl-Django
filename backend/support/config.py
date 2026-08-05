@@ -14,16 +14,16 @@ SUPPORT_CSV_COLUMN_MAP = {
     "Razón de la falla": "razon_falla",
     "Solución de la falla": "solucion_falla",
     "Creado el": "creado_el",
-    "Ultima Actualizacion de la etapa": "ultima_actualizacion_etapa",
-    "Duracion total (Horas)": "duracion_total_horas",
+    "Última actualización de la etapa": "ultima_actualizacion_etapa",
+    "Duración total (horas)": "duracion_total_horas",
 }
 
 # Cabeceras mínimas obligatorias para validar la estructura del CSV
 REQUIRED_SUPPORT_HEADERS = {
-    "Secuencia de Ticket": "ticket_sequence",
+    "Secuencia ID del ticket": "ticket_sequence",
     "Cliente": "cliente",
     "Etapa": "etapa",
-    "Grupo de trabajo": "grupo_trabajo",
+    "Equipo de soporte al cliente": "grupo_trabajo",
     "Creado el": "creado_el",
 }
 
@@ -32,5 +32,5 @@ SUPPORT_DIMENSIONES = ["sucursal", "zona", "municipio", "grupo_trabajo"]
 
 # Lista de nombres/palabras clave que identifican un ticket como RESUELTO
 RESOLVED_STAGES = {
-    "Resuelto"
+    "Resuelto", "resuelto"
 }

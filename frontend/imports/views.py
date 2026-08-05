@@ -21,6 +21,9 @@ from backend.crm import import_crm_csv, run_crm_analysis
 from backend.database import DBConnector
 from backend.models import Periodo
 from .models import ImportActionLog
+from backend.support import import_support_csv, run_support_analysis
+from backend.support.config import REQUIRED_SUPPORT_HEADERS
+
 
 logger = logging.getLogger(__name__)
 
@@ -211,3 +214,55 @@ def api_run_analysis(request):
     except Exception as e:
         register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", 0, 'error', str(e))
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    
+@login_required
+@permission_required('can_view_imports')
+def support_import_view(request):
+    return render(request, f"{TEMPLATE_PREFIX}support.html", {"section": "support"})
+
+@login_required
+@ratelimit(key='ip', rate='5/m', block=True)
+@permission_required('can_import_data')
+@require_POST
+def api_import_support(request):
+    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
+    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_SUPPORT_HEADERS)
+    if error:
+        register_import_log(request.user, 'support', file_name, 0, 'error', 'Error en la estructura del CSV de Support.')
+        return error
+    try:
+        rows = import_support_csv(tmp_path)
+        msg = f"Technical Support: {rows} tickets importados correctamente."
+        register_import_log(request.user, 'support', file_name, rows, 'success', msg, f"Carga realizada exitosamente con {rows} registros.")
+        return JsonResponse({"status": "success", "message": msg})
+    except Exception as e:
+        err_msg = str(e)
+        register_import_log(request.user, 'support', file_name, 0, 'error', f"Fallo al importar tickets: {err_msg}", err_msg)
+        return JsonResponse({"status": "error", "message": err_msg}, status=500)
+    finally:
+        cleanup_tempfile(tmp_path)
+
+@login_required
+@permission_required('can_run_calculations')
+@ratelimit(key='ip', rate='2/m', block=True)
+@require_POST
+def api_run_support_analysis(request):
+    periodo = None
+    try:
+        data = json.loads(request.body)
+        periodo = data.get("month")
+    except Exception:
+        pass
+
+    out = io.StringIO()
+    with redirect_stdout(out), redirect_stderr(out):
+        try:
+            run_support_analysis(periodo)
+        except Exception as e:
+            err_text = f"Error durante el cálculo de métricas Support: {str(e)}"
+            register_import_log(request.user, 'support_analysis', 'Análisis Global', 0, 'error', err_text, out.getvalue())
+            return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
+
+    msg = f"Análisis de Technical Support completado ({periodo or 'Histórico completo'})."
+    register_import_log(request.user, 'support_analysis', f"Periodo {periodo or 'Global'}", 0, 'success', msg, out.getvalue())
+    return JsonResponse({"status": "success", "message": msg, "log_output": out.getvalue()})

@@ -1,0 +1,25 @@
+<div class="module-header">
+  <div class="module-header-top">
+    <div class="module-header-title">
+      <i class="bi bi-headset"></i>
+      <span>Technical Support</span>
+    </div>
+  </div>
+  <nav class="module-nav">
+    <a href="/support/dashboard/" class="module-nav-link {% if section == 'dashboard' %}active{% endif %}">
+      <i class="bi bi-speedometer2"></i>Dashboard
+    </a>
+    
+    {% if request.user.profile.can_view_support_analytics or request.user.is_superuser %}
+      <a href="/support/analytics/" class="module-nav-link {% if section == 'analytics' %}active{% endif %}">
+        <i class="bi bi-bar-chart"></i>Analytics
+      </a>
+    {% endif %}
+
+    {% if request.user.profile.can_view_support_results or request.user.is_superuser %}
+      <a href="/support/results/" class="module-nav-link {% if section == 'results' %}active{% endif %}">
+        <i class="bi bi-table"></i>Results
+      </a>
+    {% endif %}
+  </nav>
+</div>

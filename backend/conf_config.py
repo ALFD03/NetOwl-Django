@@ -56,3 +56,4 @@ class TableNames:
     SUPPORT_TICKETS = "support_tickets"
     SUPPORT_METRICAS_GLOBALES = "support_metricas_globales"
     SUPPORT_DIMENSIONES_HISTORICO = "support_dimensiones_historico"
+    SUPPORT_CIERRE_HISTORICO = "support_cierre_historico"

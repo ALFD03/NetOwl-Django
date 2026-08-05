@@ -1,4 +1,3 @@
-# backend/support/loader.py
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -10,13 +9,9 @@ from backend.support.config import SUPPORT_CSV_COLUMN_MAP
 logger = logging.getLogger(__name__)
 
 def import_support_csv(csv_path: str) -> int:
-    """Importa el CSV exportado de Odoo Support a la base de datos PostgreSQL."""
     db = DBConnector()
-    
-    # Leer CSV asegurando lectura correcta de texto
     df = pd.read_csv(csv_path, dtype=str, keep_default_na=False, encoding="utf-8")
     
-    # Normalización de cabeceras
     df = df.rename(columns=SUPPORT_CSV_COLUMN_MAP)
     
     if "ticket_sequence" not in df.columns:
@@ -25,12 +20,21 @@ def import_support_csv(csv_path: str) -> int:
     df["ticket_sequence"] = df["ticket_sequence"].astype(str).str.strip()
     df = df[df["ticket_sequence"] != ""].copy()
     
-    # Formateo de fechas y números
-    df["creado_el"] = pd.to_datetime(df["creado_el"], errors="coerce")
-    df["ultima_actualizacion_etapa"] = pd.to_datetime(df["ultima_actualizacion_etapa"], errors="coerce")
-    df["duracion_total_horas"] = pd.to_numeric(df["duracion_total_horas"], errors="coerce").fillna(0.0)
+    if "creado_el" in df.columns:
+        df["creado_el"] = pd.to_datetime(df["creado_el"], errors="coerce")
+    else:
+        df["creado_el"] = pd.NaT
+
+    if "ultima_actualizacion_etapa" in df.columns:
+        df["ultima_actualizacion_etapa"] = pd.to_datetime(df["ultima_actualizacion_etapa"], errors="coerce")
+    else:
+        df["ultima_actualizacion_etapa"] = df["creado_el"]
+
+    if "duracion_total_horas" in df.columns:
+        df["duracion_total_horas"] = pd.to_numeric(df["duracion_total_horas"], errors="coerce").fillna(0.0)
+    else:
+        df["duracion_total_horas"] = 0.0
     
-    # Limpieza de textos y valores nulos
     text_cols = [
         "cliente", "etapa", "grupo_trabajo", "sucursal",
         "zona", "municipio", "tipo_solicitud", "razon_falla", "solucion_falla"
@@ -41,7 +45,6 @@ def import_support_csv(csv_path: str) -> int:
         else:
             df[col] = "Sin Especificar"
 
-    # Seleccionar sólo columnas conocidas
     cols_to_keep = [
         "ticket_sequence", "cliente", "etapa", "grupo_trabajo", "sucursal",
         "zona", "municipio", "tipo_solicitud", "razon_falla", "solucion_falla",
@@ -49,7 +52,6 @@ def import_support_csv(csv_path: str) -> int:
     ]
     df = df[cols_to_keep]
 
-    # Recrear tablas si no existen y truncar
     _create_support_tables_if_not_exist(db)
     
     with db.get_connection() as conn:
@@ -57,13 +59,11 @@ def import_support_csv(csv_path: str) -> int:
             cur.execute(f"TRUNCATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}")
         conn.commit()
         
-    # Inserción rápida mediante COPY
     db.copy_dataframe(df, TableNames.SUPPORT_TICKETS)
     return len(df)
 
 
 def _create_support_tables_if_not_exist(db: DBConnector):
-    """Crea la estructura de tablas para el módulo Technical Support si no existen."""
     statements = [
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS} (
@@ -84,6 +84,22 @@ def _create_support_tables_if_not_exist(db: DBConnector):
         );
         """,
         f"""
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} (
+            id BIGSERIAL PRIMARY KEY,
+            periodo_reporte VARCHAR(7) NOT NULL,
+            grupo_trabajo TEXT NOT NULL DEFAULT 'GLOBAL',
+            total_tickets INT DEFAULT 0,
+            tickets_resueltos INT DEFAULT 0,
+            tickets_rezagados INT DEFAULT 0,
+            pct_resueltos NUMERIC DEFAULT 0,
+            tiempo_medio_cierre_horas NUMERIC DEFAULT 0,
+            pct_rezagados NUMERIC DEFAULT 0,
+            tiempo_promedio_primera_respuesta_horas NUMERIC DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT uq_support_cierre UNIQUE(periodo_reporte, grupo_trabajo)
+        );
+        """,
+        f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} (
             id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
             resumen_global JSONB,
@@ -94,16 +110,16 @@ def _create_support_tables_if_not_exist(db: DBConnector):
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO} (
             id BIGSERIAL PRIMARY KEY,
+            periodo_reporte VARCHAR(7) NOT NULL,
             dimension TEXT NOT NULL,
             valor TEXT NOT NULL,
-            grupo_trabajo TEXT,
+            grupo_trabajo TEXT NOT NULL,
             metricas JSONB,
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
-        f"CREATE INDEX IF NOT EXISTS idx_support_tickets_grupo ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(grupo_trabajo);",
-        f"CREATE INDEX IF NOT EXISTS idx_support_tickets_sucursal ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(sucursal);",
-        f"CREATE INDEX IF NOT EXISTS idx_support_tickets_zona ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(zona);",
+        f"CREATE INDEX IF NOT EXISTS idx_support_cierre_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}(periodo_reporte);",
+        f"CREATE INDEX IF NOT EXISTS idx_support_dim_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(periodo_reporte);",
     ]
     with db.get_connection() as conn:
         with conn.cursor() as cur:

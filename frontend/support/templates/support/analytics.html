@@ -1,0 +1,30 @@
+{% extends 'support/base.html' %}
+{% load static %}
+
+{% block title %}NetOwl - Technical Support Analytics{% endblock %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{% static 'css/subscriptions.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="card-header rounded d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Análisis Dimensional de Soporte</h4>
+  <div class="d-flex align-items-center gap-2">
+    <label class="form-label mb-0 text-muted small fw-bold">Filtrar por Grupo:</label>
+    <select id="filterGrupoTrabajo" class="form-select form-select-sm prominent-filter" style="width:auto">
+      <option value="ALL">Todos los Grupos de Trabajo</option>
+    </select>
+  </div>
+</div>
+
+<div id="dimensionChartsContainer" class="row g-4">
+  <div class="col-12 text-center py-5 text-muted">
+    <div class="spinner-border spinner-border-sm text-primary me-2"></div>Cargando dimensiones...
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+  <script src="{% static 'support/js/analytics.js' %}"></script>
+{% endblock %}
