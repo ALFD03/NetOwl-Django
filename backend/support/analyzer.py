@@ -1,18 +1,20 @@
+# backend/support/analyzer.py
 from __future__ import annotations
 import json
 import logging
 import pandas as pd
 from backend.database import DBConnector
 from backend.conf_config import DB_SCHEMA, TableNames
-from backend.support.metrics import compute_metrics_set
+from backend.support.config import RESOLVED_STAGES
+from backend.support.metrics import compute_metrics_for_period
 
 logger = logging.getLogger(__name__)
 
 def run_support_analysis(periodo_str: str | None = None) -> dict:
     """
     Ejecuta el análisis de soporte técnico por periodos.
-    Si periodo_str es 'YYYY-MM', analiza sólo ese mes.
-    Si es None, analiza e históriza TODOS los meses detectados en los tickets.
+    - Creados: filtrados por YYYY-MM de 'creado_el'
+    - Resueltos: filtrados por YYYY-MM de 'ultima_actualizacion_etapa' y etapa en RESOLVED_STAGES
     """
     db = DBConnector()
     df_all = db.read_table(TableNames.SUPPORT_TICKETS)
@@ -21,31 +23,52 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
         print("⚠️ No hay tickets de soporte para analizar.")
         return {"status": "empty", "message": "No hay tickets cargados."}
 
-    df_all["periodo"] = pd.to_datetime(df_all["creado_el"], errors="coerce").dt.strftime("%Y-%m")
-    df_valid = df_all.dropna(subset=["periodo"]).copy()
+    # Asignar periodos
+    df_all["periodo_creacion"] = pd.to_datetime(df_all["creado_el"], errors="coerce").dt.strftime("%Y-%m")
+    df_all["periodo_cierre"] = pd.to_datetime(df_all["ultima_actualizacion_etapa"], errors="coerce").dt.strftime("%Y-%m")
+    
+    df_all["etapa_clean"] = df_all["etapa"].astype(str).str.strip().str.lower()
+    df_all["es_resuelto"] = df_all["etapa_clean"].isin(RESOLVED_STAGES)
 
+    # Detectar periodos a procesar
     if periodo_str and len(periodo_str) == 7:
         periodos_target = [periodo_str]
     else:
-        periodos_target = sorted(df_valid["periodo"].unique().tolist(), reverse=True)
+        p_creados = df_all.dropna(subset=["periodo_creacion"])["periodo_creacion"].unique().tolist()
+        p_cierres = df_all.dropna(subset=["periodo_cierre"])["periodo_cierre"].unique().tolist()
+        periodos_target = sorted(list(set(p_creados + p_cierres)), reverse=True)
 
-    print(f"\n📊 PROCESANDO SOPORTE TÉCNICO PARA {len(periodos_target)} PERIODO(S): {', '.join(periodos_target)}")
+    print(f"\n📊 PROCESANDO SOPORTE TÉCNICO (Cierre por Última Actualización) PARA {len(periodos_target)} PERIODO(S): {', '.join(periodos_target)}")
 
     all_summaries = {}
 
     for p in periodos_target:
-        df_p = df_valid[df_valid["periodo"] == p].copy()
-        if df_p.empty:
+        # Creados en este periodo
+        df_creados = df_all[df_all["periodo_creacion"] == p].copy()
+        
+        # Resueltos en este periodo (etapa resuelto Y fecha de actualización en p)
+        df_resueltos = df_all[(df_all["periodo_cierre"] == p) & (df_all["es_resuelto"] == True)].copy()
+
+        if df_creados.empty and df_resueltos.empty:
             continue
 
-        global_m = compute_metrics_set(df_p)
+        # 1. Conglomerado Global del Mes
+        global_m = compute_metrics_for_period(df_creados, df_resueltos)
         
+        # 2. Desglose Por Grupo del Mes
         grupos_m = {}
-        for grupo, df_grupo in df_p.groupby("grupo_trabajo"):
-            grupos_m[str(grupo)] = compute_metrics_set(df_grupo)
+        todos_grupos = set(df_creados["grupo_trabajo"].unique()).union(set(df_resueltos["grupo_trabajo"].unique()))
+        
+        for grupo in todos_grupos:
+            df_cr_g = df_creados[df_creados["grupo_trabajo"] == grupo]
+            df_re_g = df_resueltos[df_resueltos["grupo_trabajo"] == grupo]
+            grupos_m[str(grupo)] = compute_metrics_for_period(df_cr_g, df_re_g)
 
+        # 3. Guardar Cierre Histórico
         _save_support_cierre_historico(db, p, global_m, grupos_m)
-        _save_support_dimensiones_periodo(db, p, df_p)
+
+        # 4. Guardar Dimensiones
+        _save_support_dimensiones_periodo(db, p, df_creados, df_resueltos)
 
         all_summaries[p] = {
             "global": global_m,
@@ -56,7 +79,7 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
         latest = periodos_target[0]
         _save_global_support_metrics(db, all_summaries[latest]["global"], all_summaries[latest]["por_grupo"])
 
-    print("✅ ANÁLISIS POR PERIODOS DE SUPPORT COMPLETADO CON ÉXITO.\n")
+    print("✅ ANÁLISIS DE SUPPORT COMPLETADO CON ÉXITO.\n")
     return all_summaries
 
 
@@ -91,18 +114,31 @@ def _save_support_cierre_historico(db: DBConnector, periodo: str, global_m: dict
         conn.commit()
 
 
-def _save_support_dimensiones_periodo(db: DBConnector, periodo: str, df_p: pd.DataFrame):
+def _save_support_dimensiones_periodo(db: DBConnector, periodo: str, df_creados: pd.DataFrame, df_resueltos: pd.DataFrame):
     rows_to_insert = []
     
     for dim in ["sucursal", "zona", "municipio"]:
-        if dim not in df_p.columns:
+        if dim not in df_creados.columns and dim not in df_resueltos.columns:
             continue
-        for (dim_val, grupo), df_sub in df_p.groupby([dim, "grupo_trabajo"]):
-            m = compute_metrics_set(df_sub)
+            
+        combo_keys = set(
+            df_creados.groupby([dim, "grupo_trabajo"]).groups.keys()
+        ).union(
+            set(df_resueltos.groupby([dim, "grupo_trabajo"]).groups.keys())
+        )
+        
+        for (dim_val, grupo) in combo_keys:
+            df_cr_sub = df_creados[(df_creados[dim] == dim_val) & (df_creados["grupo_trabajo"] == grupo)]
+            df_re_sub = df_resueltos[(df_resueltos[dim] == dim_val) & (df_resueltos["grupo_trabajo"] == grupo)]
+            m = compute_metrics_for_period(df_cr_sub, df_re_sub)
             rows_to_insert.append((periodo, dim, str(dim_val), str(grupo), json.dumps(m)))
 
-    for grupo, df_grupo in df_p.groupby("grupo_trabajo"):
-        m = compute_metrics_set(df_grupo)
+    # Dimensión pura por grupo de trabajo
+    todos_grupos = set(df_creados["grupo_trabajo"].unique()).union(set(df_resueltos["grupo_trabajo"].unique()))
+    for grupo in todos_grupos:
+        df_cr_g = df_creados[df_creados["grupo_trabajo"] == grupo]
+        df_re_g = df_resueltos[df_resueltos["grupo_trabajo"] == grupo]
+        m = compute_metrics_for_period(df_cr_g, df_re_g)
         rows_to_insert.append((periodo, "grupo_trabajo", str(grupo), str(grupo), json.dumps(m)))
 
     with db.get_connection() as conn:

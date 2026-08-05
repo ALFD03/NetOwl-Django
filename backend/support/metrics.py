@@ -1,3 +1,4 @@
+# backend/support/metrics.py
 from __future__ import annotations
 import math
 import pandas as pd
@@ -13,9 +14,19 @@ def _clean_nan(obj: Any) -> Any:
         return [_clean_nan(v) for v in obj]
     return obj
 
-def compute_metrics_set(df_subset: pd.DataFrame) -> Dict[str, Any]:
-    total_tickets = len(df_subset)
-    if total_tickets == 0:
+def compute_metrics_for_period(
+    df_creados: pd.DataFrame,
+    df_resueltos: pd.DataFrame
+) -> Dict[str, Any]:
+    """
+    Calcula las 4 métricas usando la fecha de última actualización para los resueltos:
+    - total_tickets: Creados en el periodo YYYY-MM
+    - tickets_resueltos: Resueltos cuya 'ultima_actualizacion_etapa' cayó en YYYY-MM
+    """
+    total_creados = len(df_creados)
+    total_resueltos = len(df_resueltos)
+
+    if total_creados == 0 and total_resueltos == 0:
         return {
             "total_tickets": 0,
             "tickets_resueltos": 0,
@@ -26,30 +37,28 @@ def compute_metrics_set(df_subset: pd.DataFrame) -> Dict[str, Any]:
             "tiempo_promedio_primera_respuesta_horas": 0.0
         }
 
-    df_subset = df_subset.copy()
-    df_subset["etapa_clean"] = df_subset["etapa"].astype(str).str.strip().str.lower()
-    df_subset["es_resuelto"] = df_subset["etapa_clean"].isin(RESOLVED_STAGES)
-    
-    df_resueltos = df_subset[df_subset["es_resuelto"] == True]
-    num_resueltos = len(df_resueltos)
-    
-    pct_resueltos = round((num_resueltos / total_tickets) * 100, 2)
-    mttr = round(float(df_resueltos["duracion_total_horas"].mean()), 2) if num_resueltos > 0 else 0.0
-    num_rezagados = total_tickets - num_resueltos
-    pct_rezagados = round((num_rezagados / total_tickets) * 100, 2)
-    
-    t_creado = pd.to_datetime(df_subset["creado_el"], errors="coerce")
-    if "ultima_actualizacion_etapa" in df_subset.columns:
-        t_actualizacion = pd.to_datetime(df_subset["ultima_actualizacion_etapa"], errors="coerce").fillna(t_creado)
+    # 1. Porcentaje de tickets resueltos = (Tickets Resueltos en el periodo / Total Creados en el periodo) * 100
+    pct_resueltos = round((total_resueltos / total_creados) * 100, 2) if total_creados > 0 else 0.0
+
+    # 2. Tiempo medio de cierre (MTTR) = Promedio de duración de los tickets resueltos en este periodo
+    mttr = round(float(df_resueltos["duracion_total_horas"].mean()), 2) if total_resueltos > 0 else 0.0
+
+    # 3. Porcentaje de tickets rezagados
+    num_rezagados = max(0, total_creados - total_resueltos)
+    pct_rezagados = round((num_rezagados / total_creados) * 100, 2) if total_creados > 0 else 0.0
+
+    # 4. Tiempo promedio de primera respuesta de los tickets creados en el periodo
+    if total_creados > 0:
+        t_creado = pd.to_datetime(df_creados["creado_el"], errors="coerce")
+        t_act = pd.to_datetime(df_creados["ultima_actualizacion_etapa"], errors="coerce").fillna(t_creado)
+        tiempo_resp_series = (t_act - t_creado).dt.total_seconds() / 3600.0
+        tiempo_promedio_respuesta = round(float(tiempo_resp_series.clip(lower=0).fillna(0.0).mean()), 2)
     else:
-        t_actualizacion = t_creado
-        
-    tiempo_resp_series = (t_actualizacion - t_creado).dt.total_seconds() / 3600.0
-    tiempo_promedio_respuesta = round(float(tiempo_resp_series.clip(lower=0).fillna(0.0).mean()), 2) if total_tickets > 0 else 0.0
+        tiempo_promedio_respuesta = 0.0
 
     metrics = {
-        "total_tickets": total_tickets,
-        "tickets_resueltos": num_resueltos,
+        "total_tickets": total_creados,
+        "tickets_resueltos": total_resueltos,
         "tickets_rezagados": num_rezagados,
         "pct_resueltos": pct_resueltos,
         "tiempo_medio_cierre_horas": mttr,
