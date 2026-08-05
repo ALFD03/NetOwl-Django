@@ -88,8 +88,11 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             periodo_reporte VARCHAR(7) NOT NULL UNIQUE,
             total_tickets INT DEFAULT 0,
             tickets_resueltos INT DEFAULT 0,
+            tickets_cancelados INT DEFAULT 0,
             tickets_rezagados INT DEFAULT 0,
             pct_resueltos NUMERIC DEFAULT 0,
+            pct_cancelados NUMERIC DEFAULT 0,
+            pct_rezagados NUMERIC DEFAULT 0,
             tiempo_medio_cierre_horas NUMERIC DEFAULT 0,
             tiempo_mediana_cierre_horas NUMERIC DEFAULT 0,
             tiempo_p25_cierre_horas NUMERIC DEFAULT 0,
@@ -97,11 +100,12 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             tiempo_std_cierre_horas NUMERIC DEFAULT 0,
             pct_excede_promedio_cierre NUMERIC DEFAULT 0,
             pct_excede_mediana_cierre NUMERIC DEFAULT 0,
-            pct_rezagados NUMERIC DEFAULT 0,
             tiempo_promedio_primera_respuesta_horas NUMERIC DEFAULT 0,
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
+        f"ALTER TABLE {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS tickets_cancelados INT DEFAULT 0;",
+        f"ALTER TABLE {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS pct_cancelados NUMERIC DEFAULT 0;",
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} (
             id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),

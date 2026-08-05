@@ -8,86 +8,72 @@
 {% endblock %}
 
 {% block content %}
-<div class="card-header rounded d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 py-2" style="background: var(--surface-secondary); border: 1px solid var(--border-color);">
-  <h4 class="mb-0 px-2"><i class="bi bi-headset text-primary me-2"></i>Technical Support Dashboard</h4>
-  <div class="d-flex align-items-center gap-2">
-    <label class="form-label mb-0 text-muted small fw-bold">Periodo:</label>
-    <select id="supportPeriodSelect" class="form-select form-select-sm prominent-filter" style="width:auto">
-      <option value="ALL">Último Periodo Calculado</option>
-    </select>
-  </div>
+<div class="card-header rounded mb-4 py-2" style="background: var(--surface-secondary); border: 1px solid var(--border-color);">
+  <h4 class="mb-0 px-2"><i class="bi bi-speedometer2 text-primary me-2"></i>Technical Support Dashboard (Promedio Histórico)</h4>
 </div>
 
+<!-- Tarjetas KPI Promedio -->
 <div class="row g-4 mb-4">
   <div class="col-md-3">
     <div class="metric-card">
       <div class="metric-value text-primary" id="kpi-resueltos">--%</div>
-      <div class="metric-label">% Tickets Resueltos</div>
-      <small class="text-muted mt-1" id="kpi-resueltos-sub">0 / 0 tickets</small>
+      <div class="metric-label">% Resueltos Promedio</div>
+      <small class="text-muted mt-1" id="kpi-resueltos-sub">0 resueltos / mes</small>
     </div>
   </div>
   <div class="col-md-3">
     <div class="metric-card">
       <div class="metric-value text-success" id="kpi-mttr">-- h</div>
-      <div class="metric-label">Tiempo Medio de Cierre</div>
-      <small class="text-muted mt-1">Horas en estado resuelto</small>
+      <div class="metric-label">Tiempo Medio Cierre</div>
+      <small class="text-muted mt-1" id="kpi-mttr-sub">Promedio: -- h | Mediana: -- h</small>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="metric-card">
+      <div class="metric-value text-danger" id="kpi-cancelados">--%</div>
+      <div class="metric-label">% Cancelados Promedio</div>
+      <small class="text-muted mt-1" id="kpi-cancelados-sub">0 cancelados / mes</small>
     </div>
   </div>
   <div class="col-md-3">
     <div class="metric-card">
       <div class="metric-value text-warning" id="kpi-rezagados">--%</div>
-      <div class="metric-label">% Tickets Rezagados</div>
-      <small class="text-muted mt-1" id="kpi-rezagados-sub">0 pendientes</small>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="metric-card">
-      <div class="metric-value text-info" id="kpi-respuesta">-- h</div>
-      <div class="metric-label">Tiempo 1ª Respuesta</div>
-      <small class="text-muted mt-1">Promedio desde creación</small>
+      <div class="metric-label">% Rezagados Promedio</div>
+      <small class="text-muted mt-1" id="kpi-rezagados-sub">0 pendientes / mes</small>
     </div>
   </div>
 </div>
 
+<!-- Fila 1: Dona de Resultado Global + Tendencia MTTR -->
 <div class="row g-4 mb-4">
-  <div class="col-lg-6">
+  <div class="col-lg-5">
     <div class="card h-100">
-      <div class="card-header"><h5><i class="bi bi-bar-chart me-2"></i>Porcentaje de Resueltos vs. Rezagados por Grupo</h5></div>
-      <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="chartResueltosGrupo"></canvas></div></div>
+      <div class="card-header"><h5><i class="bi bi-pie-chart me-2"></i>Distribución Global por Mes</h5></div>
+      <div class="card-body d-flex align-items-center justify-content-center">
+        <div class="chart-container" style="position:relative;height:280px;width:100%;">
+          <canvas id="chartOutcomePie"></canvas>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="col-lg-6">
+  <div class="col-lg-7">
     <div class="card h-100">
-      <div class="card-header"><h5><i class="bi bi-clock-history me-2"></i>Tiempo Medio de Cierre (MTTR) por Grupo (Horas)</h5></div>
-      <div class="card-body"><div class="chart-container" style="position:relative;height:300px"><canvas id="chartMttrGrupo"></canvas></div></div>
+      <div class="card-header"><h5><i class="bi bi-graph-up me-2"></i>Evolución de Tiempos de Cierre (MTTR Promedio vs. Mediana)</h5></div>
+      <div class="card-body"><div class="chart-container" style="position:relative;height:280px"><canvas id="chartMttrTrend"></canvas></div></div>
     </div>
   </div>
 </div>
 
+<!-- Fila 2: Gráficos de Torta por cada Grupo de Trabajo (Dinámico) -->
 <div class="row g-4 mb-4">
   <div class="col-12">
     <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0"><i class="bi bi-people me-2"></i>Evaluación Separada por Grupo de Trabajo</h5>
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-pie-chart-fill me-2 text-primary"></i>Distribución de Rendimiento por Grupo de Trabajo</h5>
       </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0 table-theme">
-            <thead>
-              <tr>
-                <th>Grupo de Trabajo</th>
-                <th class="text-end">Total Tickets</th>
-                <th class="text-end">Resueltos</th>
-                <th class="text-end">% Resueltos</th>
-                <th class="text-end">Tiempo Medio Cierre (h)</th>
-                <th class="text-end">% Rezagados</th>
-                <th class="text-end">Tiempo 1ª Respuesta (h)</th>
-              </tr>
-            </thead>
-            <tbody id="tbl-grupos-body">
-              <tr><td colspan="7" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Cargando datos...</td></tr>
-            </tbody>
-          </table>
+      <div class="card-body">
+        <div class="row g-4" id="grupo-charts-container">
+          <div class="col-12 text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div>Cargando gráficos por grupo...</div>
         </div>
       </div>
     </div>

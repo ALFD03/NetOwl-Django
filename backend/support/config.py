@@ -34,3 +34,7 @@ SUPPORT_HIERARCHY_DIMS = ["grupo_trabajo", "tipo_solicitud", "razon_falla", "suc
 RESOLVED_STAGES = {
     "Resuelto", "resuelto"
 }
+
+CANCELED_STAGES = {
+    "Cancelado", "cancelado", "cancelada", "anulado", "anulada", "rechazado", "rechazada", "canceled", "cancelled"
+}
