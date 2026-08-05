@@ -62,7 +62,6 @@ def import_support_csv(csv_path: str) -> int:
     db.copy_dataframe(df, TableNames.SUPPORT_TICKETS)
     return len(df)
 
-
 def _create_support_tables_if_not_exist(db: DBConnector):
     statements = [
         f"""
@@ -93,6 +92,12 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             tickets_rezagados INT DEFAULT 0,
             pct_resueltos NUMERIC DEFAULT 0,
             tiempo_medio_cierre_horas NUMERIC DEFAULT 0,
+            tiempo_mediana_cierre_horas NUMERIC DEFAULT 0,
+            tiempo_p25_cierre_horas NUMERIC DEFAULT 0,
+            tiempo_p75_cierre_horas NUMERIC DEFAULT 0,
+            tiempo_std_cierre_horas NUMERIC DEFAULT 0,
+            pct_excede_promedio_cierre NUMERIC DEFAULT 0,
+            pct_excede_mediana_cierre NUMERIC DEFAULT 0,
             pct_rezagados NUMERIC DEFAULT 0,
             tiempo_promedio_primera_respuesta_horas NUMERIC DEFAULT 0,
             updated_at TIMESTAMP DEFAULT NOW(),
@@ -112,14 +117,17 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             id BIGSERIAL PRIMARY KEY,
             periodo_reporte VARCHAR(7) NOT NULL,
             dimension TEXT NOT NULL,
+            grupo_trabajo TEXT NOT NULL DEFAULT 'Todos',
+            tipo_solicitud TEXT NOT NULL DEFAULT 'Todas',
+            razon_falla TEXT NOT NULL DEFAULT 'Todas',
             valor TEXT NOT NULL,
-            grupo_trabajo TEXT NOT NULL,
             metricas JSONB,
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
         f"CREATE INDEX IF NOT EXISTS idx_support_cierre_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}(periodo_reporte);",
         f"CREATE INDEX IF NOT EXISTS idx_support_dim_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(periodo_reporte);",
+        f"CREATE INDEX IF NOT EXISTS idx_support_dim_jerarquia ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(dimension, grupo_trabajo, tipo_solicitud);",
     ]
     with db.get_connection() as conn:
         with conn.cursor() as cur:

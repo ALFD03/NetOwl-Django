@@ -42,7 +42,10 @@ def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict
 
         df = db.query(f"""
             SELECT periodo_reporte, grupo_trabajo, total_tickets, tickets_resueltos,
-                   tickets_rezagados, pct_resueltos, tiempo_medio_cierre_horas,
+                   tickets_rezagados, pct_resueltos, 
+                   tiempo_medio_cierre_horas, tiempo_mediana_cierre_horas,
+                   tiempo_p25_cierre_horas, tiempo_p75_cierre_horas, tiempo_std_cierre_horas,
+                   pct_excede_promedio_cierre, pct_excede_mediana_cierre,
                    pct_rezagados, tiempo_promedio_primera_respuesta_horas
             FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
             {where_clause}
@@ -114,10 +117,10 @@ def get_support_dimension_metrics(periodos: list[str] | None = None) -> list[dic
             params = periodos
 
         df = db.query(f"""
-            SELECT periodo_reporte, dimension, valor, grupo_trabajo, metricas
+            SELECT periodo_reporte, dimension, grupo_trabajo, tipo_solicitud, razon_falla, valor, metricas
             FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
             {where_clause}
-            ORDER BY periodo_reporte DESC
+            ORDER BY periodo_reporte DESC, grupo_trabajo ASC, tipo_solicitud ASC
         """, params=params)
 
         if df.empty:
@@ -128,8 +131,10 @@ def get_support_dimension_metrics(periodos: list[str] | None = None) -> list[dic
             result.append({
                 "periodo": row["periodo_reporte"],
                 "dimension": row["dimension"],
-                "valor": row["valor"],
                 "grupo_trabajo": row["grupo_trabajo"],
+                "tipo_solicitud": row["tipo_solicitud"],
+                "razon_falla": row["razon_falla"],
+                "valor": row["valor"],
                 "metricas": _parse_jsonb(row["metricas"]) or {}
             })
         return result

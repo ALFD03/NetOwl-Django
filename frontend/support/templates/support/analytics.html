@@ -8,19 +8,32 @@
 {% endblock %}
 
 {% block content %}
-<div class="card-header rounded d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-  <h4 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Análisis Dimensional de Soporte</h4>
-  <div class="d-flex align-items-center gap-2">
-    <label class="form-label mb-0 text-muted small fw-bold">Filtrar por Grupo:</label>
-    <select id="filterGrupoTrabajo" class="form-select form-select-sm prominent-filter" style="width:auto">
-      <option value="ALL">Todos los Grupos de Trabajo</option>
-    </select>
+<div class="card-header rounded d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 py-2" style="background: var(--surface-secondary); border: 1px solid var(--border-color);">
+  <h4 class="mb-0 px-2"><i class="bi bi-diagram-3 text-primary me-2"></i>Análisis Jerárquico de Soporte</h4>
+  
+  <div class="d-flex align-items-center gap-3 flex-wrap">
+    <div class="d-flex align-items-center gap-2">
+      <label class="form-label mb-0 text-muted small fw-bold">Periodo:</label>
+      <select id="filterPeriodoAnalytics" class="form-select form-select-sm prominent-filter" style="width:auto"></select>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <label class="form-label mb-0 text-muted small fw-bold">Grupo:</label>
+      <select id="filterGrupoTrabajo" class="form-select form-select-sm prominent-filter" style="width:auto">
+        <option value="ALL">Todos los Grupos</option>
+      </select>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <label class="form-label mb-0 text-muted small fw-bold">Tipo Solicitud:</label>
+      <select id="filterTipoSolicitud" class="form-select form-select-sm prominent-filter" style="width:auto">
+        <option value="ALL">Todas las Solicitudes</option>
+      </select>
+    </div>
   </div>
 </div>
 
 <div id="dimensionChartsContainer" class="row g-4">
   <div class="col-12 text-center py-5 text-muted">
-    <div class="spinner-border spinner-border-sm text-primary me-2"></div>Cargando dimensiones...
+    <div class="spinner-border spinner-border-sm text-primary me-2"></div>Cargando jerarquía de soporte...
   </div>
 </div>
 {% endblock %}
