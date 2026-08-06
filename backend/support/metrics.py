@@ -1,4 +1,5 @@
-# backend/support/metrics.py
+# NetOwl-Django/backend/support/metrics.py
+
 from __future__ import annotations
 import math
 import pandas as pd
@@ -49,37 +50,27 @@ def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
 def compute_metrics_for_period(
     df_creados: pd.DataFrame,
     df_resueltos: pd.DataFrame,
-    df_cancelados: pd.DataFrame | None = None
+    df_cancelados: pd.DataFrame,
+    df_rezagados: pd.DataFrame
 ) -> Dict[str, Any]:
+    """Calcula las métricas del periodo respetando el ciclo de vida del ticket."""
     total_creados = len(df_creados)
     total_resueltos = len(df_resueltos)
-    
-    if df_cancelados is None and not df_creados.empty:
-        df_creados_copy = df_creados.copy()
-        df_creados_copy["etapa_clean"] = df_creados_copy["etapa"].astype(str).str.strip().str.lower()
-        df_cancelados = df_creados_copy[df_creados_copy["etapa_clean"].isin(CANCELED_STAGES)]
-    
-    total_cancelados = len(df_cancelados) if df_cancelados is not None else 0
+    total_cancelados = len(df_cancelados)
+    total_rezagados = len(df_rezagados)
 
-    if total_creados == 0 and total_resueltos == 0:
-        return {
-            "total_tickets": 0, "tickets_resueltos": 0, "tickets_cancelados": 0, "tickets_rezagados": 0,
-            "pct_resueltos": 0.0, "pct_cancelados": 0.0, "pct_rezagados": 0.0,
-            "tiempo_medio_cierre_horas": 0.0, "tiempo_mediana_cierre_horas": 0.0,
-            "tiempo_p25_cierre_horas": 0.0, "tiempo_p75_cierre_horas": 0.0, "tiempo_std_cierre_horas": 0.0,
-            "pct_excede_promedio_cierre": 0.0, "pct_excede_mediana_cierre": 0.0,
-            "tiempo_promedio_primera_respuesta_horas": 0.0
-        }
+    # Universo total gestionado en el mes
+    total_universo = total_resueltos + total_cancelados + total_rezagados
+    if total_universo == 0:
+        total_universo = max(1, total_creados)
 
-    pct_resueltos = round((total_resueltos / total_creados) * 100, 2) if total_creados > 0 else 0.0
-    pct_cancelados = round((total_cancelados / total_creados) * 100, 2) if total_creados > 0 else 0.0
-    
-    num_rezagados = max(0, total_creados - (total_resueltos + total_cancelados))
-    pct_rezagados = round((num_rezagados / total_creados) * 100, 2) if total_creados > 0 else 0.0
+    pct_resueltos = round((total_resueltos / total_universo) * 100, 2)
+    pct_cancelados = round((total_cancelados / total_universo) * 100, 2)
+    pct_rezagados = round((total_rezagados / total_universo) * 100, 2)
 
-    stats_cierre = _compute_stats_for_series(df_resueltos["duracion_total_horas"])
+    stats_cierre = _compute_stats_for_series(df_resueltos["duracion_total_horas"]) if "duracion_total_horas" in df_resueltos.columns else _compute_stats_for_series(pd.Series())
 
-    if total_creados > 0:
+    if total_creados > 0 and "creado_el" in df_creados.columns:
         t_creado = pd.to_datetime(df_creados["creado_el"], errors="coerce")
         t_act = pd.to_datetime(df_creados["ultima_actualizacion_etapa"], errors="coerce").fillna(t_creado)
         tiempo_resp_series = (t_act - t_creado).dt.total_seconds() / 3600.0
@@ -91,7 +82,7 @@ def compute_metrics_for_period(
         "total_tickets": total_creados,
         "tickets_resueltos": total_resueltos,
         "tickets_cancelados": total_cancelados,
-        "tickets_rezagados": num_rezagados,
+        "tickets_rezagados": total_rezagados,
         "pct_resueltos": pct_resueltos,
         "pct_cancelados": pct_cancelados,
         "pct_rezagados": pct_rezagados,
