@@ -28,6 +28,15 @@
       </li>
       {% endif %}
 
+      {% if request.user.profile.can_view_support or request.user.is_superuser %}
+      <li class="nav-item">
+        <a class="nav-link d-flex align-items-center py-2 rounded-3 module-link" href="/support/dashboard/" data-module="support">
+          <i class="bi bi-headset me-2"></i>
+          <span>Technical Support</span>
+        </a>
+      </li>
+      {% endif %}
+
       {% if request.user.profile.can_view_imports or request.user.is_superuser %}
       <li class="nav-item">
         <a class="nav-link d-flex align-items-center py-2 rounded-3 module-link" href="/imports/subscriptions/" data-module="imports">

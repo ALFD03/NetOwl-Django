@@ -29,6 +29,10 @@ class PermissionGroup(models.Model):
     can_run_lifetime = models.BooleanField(default=False)
     can_manage_eta = models.BooleanField(default=False)
     can_manage_users = models.BooleanField(default=False)
+    
+    can_view_support = models.BooleanField(default=True)
+    can_view_support_analytics = models.BooleanField(default=True)
+    can_view_support_results = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -68,6 +72,10 @@ class Profile(models.Model):
     can_run_lifetime = models.BooleanField(default=False)
     can_manage_eta = models.BooleanField(default=False)
     can_manage_users = models.BooleanField(default=False)
+    
+    can_view_support = models.BooleanField(default=True)
+    can_view_support_analytics = models.BooleanField(default=True)
+    can_view_support_results = models.BooleanField(default=True)
 
     def has_permission(self, perm_name: str) -> bool:
         if self.user.is_superuser:
@@ -79,14 +87,16 @@ class Profile(models.Model):
     def sync_permissions_from_group(self):
         if self.group:
             for field in [
-                'can_view_subscriptions', 'can_view_crm', 'can_view_imports',
+                'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
                 'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
                 'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
-                'can_view_crm_results', 'can_import_data', 'can_run_calculations',
-                'can_run_lifetime', 'can_manage_eta', 'can_manage_users'
+                'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
+                'can_import_data', 'can_run_calculations', 'can_run_lifetime',
+                'can_manage_eta', 'can_manage_users'
             ]:
                 setattr(self, field, getattr(self.group, field, False))
             self.save()
+
 
     def __str__(self):
         group_str = f" [{self.group.name}]" if self.group else ""

@@ -9,6 +9,7 @@ urlpatterns = [
     path("subscriptions/", views.subscriptions_import_view, name="subscriptions"),
     path("crm/", views.crm_import_view, name="crm"),
     path("history/", views.history_view, name="history"),
+    path("support/", views.support_import_view, name="support"),
 
     # APIs protegidas
     path("api/import-subscriptions/", views.api_import_subscriptions, name="api_import_subscriptions"),
@@ -17,4 +18,6 @@ urlpatterns = [
     path("api/run-analysis/", views.api_run_analysis, name="api_run_analysis"),
     path("api/run-crm-analysis/", views.api_run_crm_analysis, name="api_run_crm_analysis"), # <-- AGREGADO
     path("api/history/", views.api_history_list, name="api_history"),
+    path("api/import-support/", views.api_import_support, name="api_import_support"),
+    path("api/run-support-analysis/", views.api_run_support_analysis, name="api_run_support_analysis"),
 ]
