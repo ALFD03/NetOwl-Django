@@ -1,4 +1,5 @@
-# --- START OF FILE NetOwl-Django/frontend/config/views.py ---
+# NetOwl-Django/frontend/config/views.py
+
 import json
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
@@ -34,7 +35,6 @@ def logout_view(request):
     return redirect('config:login')
 
 def setup_view(request):
-    """Crea la primera cuenta Administradora únicamente si la BD está vacía."""
     if User.objects.count() > 0:
         return redirect('config:login')
         
@@ -54,6 +54,8 @@ def setup_view(request):
             profile.role = 'admin'
             profile.can_view_subscriptions = True
             profile.can_view_crm = True
+            profile.can_view_imports = True
+            profile.can_view_support = True
             profile.can_view_subs_analytics = True
             profile.can_view_subs_results = True
             profile.can_view_subs_lifetime = True
@@ -61,6 +63,8 @@ def setup_view(request):
             profile.can_view_eta = True
             profile.can_view_crm_analytics = True
             profile.can_view_crm_results = True
+            profile.can_view_support_analytics = True
+            profile.can_view_support_results = True
             profile.can_import_data = True
             profile.can_run_calculations = True
             profile.can_run_lifetime = True
@@ -74,7 +78,6 @@ def setup_view(request):
 @login_required
 @permission_required('can_manage_users')
 def user_management_view(request):
-    """Pantalla para administrar usuarios, sus permisos y sus grupos."""
     users = User.objects.all().select_related('profile', 'profile__group').order_by('username')
     groups = PermissionGroup.objects.all().order_by('name')
     roles = Profile.ROLE_CHOICES
@@ -111,25 +114,21 @@ def api_create_user(request):
                 profile.group = grp
                 profile.sync_permissions_from_group()
             except PermissionGroup.DoesNotExist:
-                pass
+                profile.group = None
         else:
-            profile.can_view_subscriptions = bool(data.get("can_view_subscriptions", True))
-            profile.can_view_crm = bool(data.get("can_view_crm", True))
-            profile.can_view_imports = bool(data.get("can_view_imports", True)) # <-- NUEVO
-            profile.can_view_subs_analytics = bool(data.get("can_view_subs_analytics", True))
-            profile.can_view_subs_results = bool(data.get("can_view_subs_results", True))
-            profile.can_view_subs_lifetime = bool(data.get("can_view_subs_lifetime", True))
-            profile.can_view_subs_sales = bool(data.get("can_view_subs_sales", True))
-            profile.can_view_eta = bool(data.get("can_view_eta", True))
-            profile.can_view_crm_analytics = bool(data.get("can_view_crm_analytics", True))
-            profile.can_view_crm_results = bool(data.get("can_view_crm_results", True))
-            profile.can_import_data = bool(data.get("can_import_data", False))
-            profile.can_run_calculations = bool(data.get("can_run_calculations", False))
-            profile.can_run_lifetime = bool(data.get("can_run_lifetime", False))
-            profile.can_manage_eta = bool(data.get("can_manage_eta", False))
-            profile.can_manage_users = bool(data.get("can_manage_users", False))
-            profile.save()
-        
+            profile.group = None
+            for f in [
+                'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
+                'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
+                'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
+                'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
+                'can_import_data', 'can_run_calculations', 'can_run_lifetime',
+                'can_manage_eta', 'can_manage_users'
+            ]:
+                if f in data:
+                    setattr(profile, f, bool(data[f]))
+
+        profile.save()
         return JsonResponse({"status": "success", "message": f"Usuario '{usr}' creado con éxito."})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
@@ -143,30 +142,43 @@ def api_update_user_permissions(request):
         data = json.loads(request.body)
         uid = data.get("user_id")
         
+        if not uid:
+            return JsonResponse({"status": "error", "message": "ID de usuario no enviado."}, status=400)
+
         if request.user.id == int(uid) and not request.user.is_superuser:
             return JsonResponse({"status": "error", "message": "No puedes modificar tus propios permisos."}, status=400)
             
         user = User.objects.get(pk=uid)
         profile = user.profile
-        profile.group = None # Desvincula de grupo al personalizar
         
-        profile.can_view_subscriptions = bool(data.get("can_view_subscriptions", True))
-        profile.can_view_crm = bool(data.get("can_view_crm", True))
-        profile.can_view_imports = bool(data.get("can_view_imports", True)) # <-- NUEVO
-        profile.can_view_subs_analytics = bool(data.get("can_view_subs_analytics", True))
-        profile.can_view_subs_results = bool(data.get("can_view_subs_results", True))
-        profile.can_view_subs_lifetime = bool(data.get("can_view_subs_lifetime", True))
-        profile.can_view_subs_sales = bool(data.get("can_view_subs_sales", True))
-        profile.can_view_eta = bool(data.get("can_view_eta", True))
-        profile.can_view_crm_analytics = bool(data.get("can_view_crm_analytics", True))
-        profile.can_view_crm_results = bool(data.get("can_view_crm_results", True))
-        profile.can_import_data = bool(data.get("can_import_data", False))
-        profile.can_run_calculations = bool(data.get("can_run_calculations", False))
-        profile.can_run_lifetime = bool(data.get("can_run_lifetime", False))
-        profile.can_manage_eta = bool(data.get("can_manage_eta", False))
-        profile.can_manage_users = bool(data.get("can_manage_users", False))
+        # 1. Actualizar Rol Descriptivo
+        if "role" in data:
+            profile.role = data.get("role", profile.role)
+
+        # 2. Manejo de Grupo de Permisos vs Permisos Individuales
+        group_id = data.get("group_id")
+        if group_id:
+            try:
+                grp = PermissionGroup.objects.get(pk=group_id)
+                profile.group = grp
+                profile.sync_permissions_from_group()
+            except PermissionGroup.DoesNotExist:
+                profile.group = None
+        else:
+            profile.group = None
+            # Guardar permisos individuales explícitos
+            for f in [
+                'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
+                'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
+                'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
+                'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
+                'can_import_data', 'can_run_calculations', 'can_run_lifetime',
+                'can_manage_eta', 'can_manage_users'
+            ]:
+                if f in data:
+                    setattr(profile, f, bool(data[f]))
+
         profile.save()
-        
         return JsonResponse({"status": "success", "message": f"Permisos de '{user.username}' actualizados."})
     except User.DoesNotExist:
         return JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
@@ -194,23 +206,20 @@ def api_save_permission_group(request):
         else:
             group = PermissionGroup(name=name, description=description)
 
-        group.can_view_subscriptions = bool(data.get("can_view_subscriptions", True))
-        group.can_view_crm = bool(data.get("can_view_crm", True))
-        group.can_view_imports = bool(data.get("can_view_imports", True)) # <-- NUEVO
-        group.can_view_subs_analytics = bool(data.get("can_view_subs_analytics", True))
-        group.can_view_subs_results = bool(data.get("can_view_subs_results", True))
-        group.can_view_subs_lifetime = bool(data.get("can_view_subs_lifetime", True))
-        group.can_view_subs_sales = bool(data.get("can_view_subs_sales", True))
-        group.can_view_eta = bool(data.get("can_view_eta", True))
-        group.can_view_crm_analytics = bool(data.get("can_view_crm_analytics", True))
-        group.can_view_crm_results = bool(data.get("can_view_crm_results", True))
-        group.can_import_data = bool(data.get("can_import_data", False))
-        group.can_run_calculations = bool(data.get("can_run_calculations", False))
-        group.can_run_lifetime = bool(data.get("can_run_lifetime", False))
-        group.can_manage_eta = bool(data.get("can_manage_eta", False))
-        group.can_manage_users = bool(data.get("can_manage_users", False))
+        for f in [
+            'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
+            'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
+            'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
+            'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
+            'can_import_data', 'can_run_calculations', 'can_run_lifetime',
+            'can_manage_eta', 'can_manage_users'
+        ]:
+            if f in data:
+                setattr(group, f, bool(data[f]))
+
         group.save()
 
+        # Sincronizar todos los miembros del grupo
         for member in group.members.all():
             member.sync_permissions_from_group()
 
@@ -222,7 +231,6 @@ def api_save_permission_group(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_delete_permission_group(request):
-    """Elimina un Grupo de Permisos."""
     try:
         data = json.loads(request.body)
         group_id = data.get("group_id")
@@ -235,7 +243,6 @@ def api_delete_permission_group(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_assign_user_group(request):
-    """Asigna un usuario a un Grupo de Permisos o lo desvincula para personalizarlo."""
     try:
         data = json.loads(request.body)
         uid = data.get("user_id")
@@ -257,8 +264,6 @@ def api_assign_user_group(request):
         return JsonResponse({"status": "success", "message": msg})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
-# --- APIS EXISTENTES ---
 
 @login_required
 @permission_required('can_manage_users')
@@ -318,4 +323,3 @@ def api_admin_change_password(request):
         return JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
-# --- END OF FILE NetOwl-Django/frontend/config/views.py ---

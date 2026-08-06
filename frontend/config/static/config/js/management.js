@@ -1,463 +1,449 @@
-// --- START OF FILE NetOwl-Django/frontend/static/config/js/management.js ---
+// NetOwl-Django/frontend/static/config/js/management.js
 
-/**
- * NetOwl - Módulo de Gestión de Usuarios y Grupos de Permisos
- * Manejo de eventos, sincronización dinámica y peticiones API.
- */
-
-document.addEventListener("DOMContentLoaded", () => {
-    initUserPermissionSwitches();
-    initGroupAssignSelects();
-    initGroupForm();
-    initEditGroupButtons();
-    initDeleteGroupButtons();
-    initCreateUserForm();
-    initChangePasswordModal();
-    initDeleteUserModal();
-    initNewUserGroupSelector();
-});
-
-// ==========================================
-// UTILIDADES
-// ==========================================
-
-function getCsrfToken() {
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    return meta ? meta.getAttribute("content") : "";
-}
-
-function safeGetChecked(id) {
-    const el = document.getElementById(id);
-    return el ? el.checked : false;
-}
-
-function safeSetChecked(id, condition) {
-    const el = document.getElementById(id);
-    if (el) el.checked = Boolean(condition);
-}
-
-// ==========================================
-// 1. GUARDADO AUTOMÁTICO DE PERMISOS POR USUARIO
-// ==========================================
-
-function initUserPermissionSwitches() {
-    const permSwitches = document.querySelectorAll(".perm-switch");
-    permSwitches.forEach(sw => {
-        sw.addEventListener("change", () => {
-            const userId = sw.getAttribute("data-user-id");
-            saveUserPermissions(userId);
-        });
-    });
-}
-
-function saveUserPermissions(userId) {
-    const payload = {
-        user_id: userId,
-        can_view_subscriptions: safeGetChecked(`vsub-${userId}`),
-        can_view_crm: safeGetChecked(`vcrm-${userId}`),
-        can_view_imports: safeGetChecked(`vimp-${userId}`), // <-- NUEVO
-        can_view_subs_analytics: safeGetChecked(`sanalytics-${userId}`),
-        can_view_subs_results: safeGetChecked(`sresults-${userId}`),
-        can_view_subs_lifetime: safeGetChecked(`slifetime-${userId}`),
-        can_view_subs_sales: safeGetChecked(`ssales-${userId}`),
-        can_view_eta: safeGetChecked(`veta-${userId}`),
-        can_view_crm_analytics: safeGetChecked(`canalytics-${userId}`),
-        can_view_crm_results: safeGetChecked(`cresults-${userId}`),
-        can_import_data: safeGetChecked(`imp-${userId}`),
-        can_run_calculations: safeGetChecked(`calc-${userId}`),
-        can_run_lifetime: safeGetChecked(`rlifetime-${userId}`),
-        can_manage_eta: safeGetChecked(`meta-${userId}`),
-        can_manage_users: safeGetChecked(`musr-${userId}`)
-    };
-
-    fetch(`/auth/api/users/update-permissions/`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": getCsrfToken()
-        },
-        body: JSON.stringify(payload)
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === "success") {
-            NetOwl.showToast(data.message, "success");
-            // Al personalizar manualmente, resetea el selector de grupo a 'Personalizado'
-            const groupSelect = document.querySelector(`.group-assign-select[data-user-id="${userId}"]`);
-            if (groupSelect) groupSelect.value = "";
-        } else {
-            alert("Error: " + data.message);
-            window.location.reload();
+document.addEventListener('DOMContentLoaded', () => {
+    function showToast(msg, type = 'success') {
+        if (typeof window.showToast === 'function') {
+            window.showToast(msg, type);
+            return;
         }
-    })
-    .catch(err => {
-        console.error(err);
-        window.location.reload();
-    });
-}
+        const toastEl = document.getElementById('status-toast');
+        const msgEl = document.getElementById('toast-message');
+        if (toastEl && msgEl) {
+            msgEl.textContent = msg;
+            toastEl.className = `toast align-items-center border-0 text-white bg-${type === 'danger' ? 'danger' : type === 'warning' ? 'warning text-dark' : 'success'}`;
+            const toast = new bootstrap.Toast(toastEl);
+            toast.show();
+        } else {
+            alert(msg);
+        }
+    }
 
-// ==========================================
-// 2. ASIGNACIÓN RÁPIDA DE GRUPO A UN USUARIO
-// ==========================================
+    const editUserModalEl = document.getElementById('editUserModal');
+    const editGroupModalEl = document.getElementById('editGroupModal');
+    const changePasswordModalEl = document.getElementById('changePasswordModal');
+    const deleteUserModalEl = document.getElementById('deleteUserModal');
 
-function initGroupAssignSelects() {
-    const groupAssignSelects = document.querySelectorAll(".group-assign-select");
-    groupAssignSelects.forEach(sel => {
-        sel.addEventListener("change", () => {
-            const userId = sel.getAttribute("data-user-id");
-            const groupId = sel.value;
+    const editUserModal = editUserModalEl ? new bootstrap.Modal(editUserModalEl) : null;
+    const editGroupModal = editGroupModalEl ? new bootstrap.Modal(editGroupModalEl) : null;
+    const changePasswordModal = changePasswordModalEl ? new bootstrap.Modal(changePasswordModalEl) : null;
+    const deleteUserModal = deleteUserModalEl ? new bootstrap.Modal(deleteUserModalEl) : null;
 
-            NetOwl.showLoading("Sincronizando grupo de permisos...");
-            fetch(`/auth/api/users/assign-group/`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCsrfToken()
-                },
-                body: JSON.stringify({ user_id: userId, group_id: groupId || null })
-            })
-            .then(res => res.json())
-            .then(data => {
-                NetOwl.hideLoading();
-                if (data.status === "success") {
-                    NetOwl.showToast(data.message, "success");
-                    setTimeout(() => window.location.reload(), 600);
-                } else {
-                    alert("Error: " + data.message);
-                    window.location.reload();
-                }
-            })
-            .catch(err => {
-                NetOwl.hideLoading();
-                console.error(err);
-                window.location.reload();
-            });
+    const btnOpenCreateUser = document.getElementById('btnOpenCreateUserModal');
+    const btnOpenCreateGroup = document.getElementById('btnOpenCreateGroupModal');
+    const btnSaveUserModal = document.getElementById('btnSaveUserModal');
+    const btnSaveGroupModal = document.getElementById('btnSaveGroupModal');
+
+    const usersTabBtn = document.getElementById('users-tab');
+    const groupsTabBtn = document.getElementById('groups-tab');
+
+    if (usersTabBtn && groupsTabBtn) {
+        usersTabBtn.addEventListener('click', () => {
+            if (btnOpenCreateUser) btnOpenCreateUser.classList.remove('d-none');
+            if (btnOpenCreateGroup) btnOpenCreateGroup.classList.add('d-none');
         });
-    });
-}
-
-// ==========================================
-// 3. GESTIÓN DE GRUPOS DE PERMISOS (CREAR/EDITAR/ELIMINAR)
-// ==========================================
-
-function initGroupForm() {
-    const groupForm = document.getElementById("group-form");
-    const cancelGroupEditBtn = document.getElementById("cancel-group-edit-btn");
-
-    if (groupForm) {
-        groupForm.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const groupId = document.getElementById("group-id").value;
-            const name = document.getElementById("group-name").value.trim();
-            const desc = document.getElementById("group-desc").value.trim();
-
-            const payload = {
-                group_id: groupId || null,
-                name: name,
-                description: desc,
-                can_view_subscriptions: safeGetChecked("g-view-subs"),
-                can_view_crm: safeGetChecked("g-view-crm"),
-                can_view_imports: safeGetChecked("g-view-imports"), // <-- NUEVO
-                can_view_subs_analytics: safeGetChecked("g-subs-analytics"),
-                can_view_subs_results: safeGetChecked("g-subs-results"),
-                can_view_subs_lifetime: safeGetChecked("g-subs-lifetime"),
-                can_view_subs_sales: safeGetChecked("g-subs-sales"),
-                can_view_eta: safeGetChecked("g-view-eta"),
-                can_view_crm_analytics: safeGetChecked("g-crm-analytics"),
-                can_view_crm_results: safeGetChecked("g-crm-results"),
-                can_import_data: safeGetChecked("g-import"),
-                can_run_calculations: safeGetChecked("g-calc"),
-                can_run_lifetime: safeGetChecked("g-run-lifetime"),
-                can_manage_eta: safeGetChecked("g-manage-eta"),
-                can_manage_users: safeGetChecked("g-admin")
-            };
-
-            NetOwl.showLoading("Guardando grupo de permisos...");
-            fetch(`/auth/api/groups/save/`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCsrfToken()
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(res => res.json())
-            .then(data => {
-                NetOwl.hideLoading();
-                if (data.status === "success") {
-                    NetOwl.showToast(data.message, "success");
-                    setTimeout(() => window.location.reload(), 600);
-                } else {
-                    alert("Error: " + data.message);
-                }
-            })
-            .catch(err => {
-                NetOwl.hideLoading();
-                console.error(err);
-            });
+        groupsTabBtn.addEventListener('click', () => {
+            if (btnOpenCreateUser) btnOpenCreateUser.classList.add('d-none');
+            if (btnOpenCreateGroup) btnOpenCreateGroup.classList.remove('d-none');
         });
     }
 
-    if (cancelGroupEditBtn) {
-        cancelGroupEditBtn.addEventListener("click", () => {
-            document.getElementById("group-id").value = "";
-            if (groupForm) groupForm.reset();
-            cancelGroupEditBtn.classList.add("d-none");
+    // 1. Abrir Modal para Crear Usuario
+    if (btnOpenCreateUser) {
+        btnOpenCreateUser.addEventListener('click', () => {
+            document.getElementById('userModalTitle').innerHTML = '<i class="bi bi-person-plus text-primary me-2"></i>Nuevo Usuario';
+            document.getElementById('modal-user-id').value = '';
+            document.getElementById('modal-username').value = '';
+            document.getElementById('modal-username').readOnly = false;
+            document.getElementById('modal-password').value = '';
+            document.getElementById('modal-password-container').classList.remove('d-none');
+            document.getElementById('modal-role').value = 'viewer';
+            document.getElementById('modal-group').value = '';
+
+            setModalUserSwitches({
+                vsub: true, sanalytics: true, sresults: true, slifetime: true, ssales: true, veta: true,
+                vcrm: true, canalytics: true, cresults: true,
+                vsup: true, sartanalytics: true, sartresults: true,
+                vimp: true, imp: false, calc: false, rlifetime: false, meta: false, musr: false
+            });
+
+            if (editUserModal) editUserModal.show();
         });
     }
-}
 
-function initEditGroupButtons() {
-    const cancelGroupEditBtn = document.getElementById("cancel-group-edit-btn");
+    // 2. Abrir Modal para Editar Permisos de Usuario
+    document.querySelectorAll('.edit-user-perms-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const el = e.currentTarget;
+            document.getElementById('userModalTitle').innerHTML = `<i class="bi bi-gear-fill text-primary me-2"></i>Permisos: ${el.getAttribute('data-username')}`;
+            document.getElementById('modal-user-id').value = el.getAttribute('data-user-id');
+            document.getElementById('modal-username').value = el.getAttribute('data-username');
+            document.getElementById('modal-username').readOnly = true;
+            document.getElementById('modal-password-container').classList.add('d-none');
+            document.getElementById('modal-role').value = el.getAttribute('data-role') || 'viewer';
+            document.getElementById('modal-group').value = el.getAttribute('data-group-id') || '';
 
-    document.querySelectorAll(".edit-group-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            document.getElementById("group-id").value = btn.getAttribute("data-id") || "";
-            document.getElementById("group-name").value = btn.getAttribute("data-name") || "";
-            document.getElementById("group-desc").value = btn.getAttribute("data-desc") || "";
+            setModalUserSwitches({
+                vsub: el.getAttribute('data-vsub') === 'true',
+                sanalytics: el.getAttribute('data-sanalytics') === 'true',
+                sresults: el.getAttribute('data-sresults') === 'true',
+                slifetime: el.getAttribute('data-slifetime') === 'true',
+                ssales: el.getAttribute('data-ssales') === 'true',
+                veta: el.getAttribute('data-veta') === 'true',
+                vcrm: el.getAttribute('data-vcrm') === 'true',
+                canalytics: el.getAttribute('data-canalytics') === 'true',
+                cresults: el.getAttribute('data-cresults') === 'true',
+                vsup: el.getAttribute('data-vsup') === 'true',
+                sartanalytics: el.getAttribute('data-sartanalytics') === 'true',
+                sartresults: el.getAttribute('data-sartresults') === 'true',
+                vimp: el.getAttribute('data-vimp') === 'true',
+                imp: el.getAttribute('data-imp') === 'true',
+                calc: el.getAttribute('data-calc') === 'true',
+                rlifetime: el.getAttribute('data-rlifetime') === 'true',
+                meta: el.getAttribute('data-meta') === 'true',
+                musr: el.getAttribute('data-musr') === 'true',
+            });
 
-            safeSetChecked("g-view-subs", btn.getAttribute("data-vsub") === "true");
-            safeSetChecked("g-view-crm", btn.getAttribute("data-vcrm") === "true");
-            safeSetChecked("g-view-imports", btn.getAttribute("data-vimp") === "true"); // <-- NUEVO
-            safeSetChecked("g-subs-analytics", btn.getAttribute("data-sanalytics") === "true");
-            safeSetChecked("g-subs-results", btn.getAttribute("data-sresults") === "true");
-            safeSetChecked("g-subs-lifetime", btn.getAttribute("data-slifetime") === "true");
-            safeSetChecked("g-subs-sales", btn.getAttribute("data-ssales") === "true");
-            safeSetChecked("g-view-eta", btn.getAttribute("data-veta") === "true");
-            safeSetChecked("g-crm-analytics", btn.getAttribute("data-canalytics") === "true");
-            safeSetChecked("g-crm-results", btn.getAttribute("data-cresults") === "true");
-            safeSetChecked("g-import", btn.getAttribute("data-imp") === "true");
-            safeSetChecked("g-calc", btn.getAttribute("data-calc") === "true");
-            safeSetChecked("g-run-lifetime", btn.getAttribute("data-rlifetime") === "true");
-            safeSetChecked("g-manage-eta", btn.getAttribute("data-meta") === "true");
-            safeSetChecked("g-admin", btn.getAttribute("data-musr") === "true");
-
-            if (cancelGroupEditBtn) cancelGroupEditBtn.classList.remove("d-none");
+            if (editUserModal) editUserModal.show();
         });
     });
-}
 
-function initDeleteGroupButtons() {
-    document.querySelectorAll(".delete-group-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const gid = btn.getAttribute("data-id");
-            const gname = btn.getAttribute("data-name");
-            if (confirm(`¿Desea eliminar el grupo '${gname}'? Los usuarios vinculados conservarán sus permisos actuales de forma individual.`)) {
-                fetch(`/auth/api/groups/delete/`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": getCsrfToken()
-                    },
-                    body: JSON.stringify({ group_id: gid })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === "success") {
-                        NetOwl.showToast(data.message, "success");
-                        setTimeout(() => window.location.reload(), 600);
-                    } else {
-                        alert("Error: " + data.message);
-                    }
+    // Cambiar switches automáticamente si selecciona un Grupo en el modal
+    const modalGroupSelect = document.getElementById('modal-group');
+    if (modalGroupSelect) {
+        modalGroupSelect.addEventListener('change', (e) => {
+            const opt = e.target.options[e.target.selectedIndex];
+            if (opt.value) {
+                setModalUserSwitches({
+                    vsub: opt.getAttribute('data-vsub') === 'true',
+                    sanalytics: opt.getAttribute('data-sanalytics') === 'true',
+                    sresults: opt.getAttribute('data-sresults') === 'true',
+                    slifetime: opt.getAttribute('data-slifetime') === 'true',
+                    ssales: opt.getAttribute('data-ssales') === 'true',
+                    veta: opt.getAttribute('data-veta') === 'true',
+                    vcrm: opt.getAttribute('data-vcrm') === 'true',
+                    canalytics: opt.getAttribute('data-canalytics') === 'true',
+                    cresults: opt.getAttribute('data-cresults') === 'true',
+                    vsup: opt.getAttribute('data-vsup') === 'true',
+                    sartanalytics: opt.getAttribute('data-sartanalytics') === 'true',
+                    sartresults: opt.getAttribute('data-sartresults') === 'true',
+                    vimp: opt.getAttribute('data-vimp') === 'true',
+                    imp: opt.getAttribute('data-imp') === 'true',
+                    calc: opt.getAttribute('data-calc') === 'true',
+                    rlifetime: opt.getAttribute('data-rlifetime') === 'true',
+                    meta: opt.getAttribute('data-meta') === 'true',
+                    musr: opt.getAttribute('data-musr') === 'true',
                 });
             }
         });
-    });
-}
+    }
 
-// ==========================================
-// 4. CREACIÓN DE USUARIO NUEVO
-// ==========================================
-
-function initCreateUserForm() {
-    const createUserForm = document.getElementById("create-user-form");
-    if (!createUserForm) return;
-
-    createUserForm.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const username = document.getElementById("new-username").value.trim();
-        const password = document.getElementById("new-password").value.trim();
-        const role = document.getElementById("new-role").value;
-        const groupId = document.getElementById("new-group").value;
-
-        const payload = {
-            username: username,
-            password: password,
-            role: role,
-            group_id: groupId || null,
-            can_view_subscriptions: safeGetChecked("p-view-subs"),
-            can_view_crm: safeGetChecked("p-view-crm"),
-            can_view_imports: safeGetChecked("p-view-imports"), // <-- NUEVO
-            can_view_subs_analytics: safeGetChecked("p-subs-analytics"),
-            can_view_subs_results: safeGetChecked("p-subs-results"),
-            can_view_subs_lifetime: safeGetChecked("p-subs-lifetime"),
-            can_view_subs_sales: safeGetChecked("p-subs-sales"),
-            can_view_eta: safeGetChecked("p-view-eta"),
-            can_view_crm_analytics: safeGetChecked("p-crm-analytics"),
-            can_view_crm_results: safeGetChecked("p-crm-results"),
-            can_import_data: safeGetChecked("p-import"),
-            can_run_calculations: safeGetChecked("p-calc"),
-            can_run_lifetime: safeGetChecked("p-run-lifetime"),
-            can_manage_eta: safeGetChecked("p-manage-eta"),
-            can_manage_users: safeGetChecked("p-admin")
-        };
-
-        NetOwl.showLoading("Registrando nuevo usuario...");
-        fetch(`/auth/api/users/create/`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": getCsrfToken()
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(res => res.json())
-        .then(data => {
-            NetOwl.hideLoading();
-            if (data.status === "success") {
-                NetOwl.showToast(data.message, "success");
-                setTimeout(() => window.location.reload(), 600);
-            } else {
-                alert("Error al crear usuario: " + data.message);
-            }
-        })
-        .catch(err => {
-            NetOwl.hideLoading();
-            console.error(err);
-        });
-    });
-}
-
-// ==========================================
-// 5. MODALES (CAMBIAR PASSWORD / ELIMINAR USUARIO)
-// ==========================================
-
-function initChangePasswordModal() {
-    const changePassModalEl = document.getElementById("changePasswordModal");
-    const changePassModal = changePassModalEl ? new bootstrap.Modal(changePassModalEl) : null;
-    const changePassForm = document.getElementById("change-password-form");
-
-    document.querySelectorAll(".change-password-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const uid = btn.getAttribute("data-user-id");
-            const uname = btn.getAttribute("data-username");
-            document.getElementById("change-pass-user-id").value = uid;
-            document.getElementById("change-pass-username").value = uname;
-            document.getElementById("change-pass-new-password").value = "";
-            if (changePassModal) changePassModal.show();
-        });
-    });
-
-    if (changePassForm) {
-        changePassForm.addEventListener("submit", (e) => {
+    // 3. Guardar Cambios de Usuario
+    if (btnSaveUserModal) {
+        btnSaveUserModal.addEventListener('click', async (e) => {
             e.preventDefault();
-            const uid = document.getElementById("change-pass-user-id").value;
-            const newPassword = document.getElementById("change-pass-new-password").value.trim();
+            const uid = document.getElementById('modal-user-id').value;
+            const isNew = !uid;
 
-            fetch(`/auth/api/users/change-password/`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCsrfToken()
-                },
-                body: JSON.stringify({ user_id: uid, password: newPassword })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === "success") {
-                    if (changePassModal) changePassModal.hide();
-                    NetOwl.showToast(data.message, "success");
+            const usernameVal = document.getElementById('modal-username').value.trim();
+            const passwordVal = document.getElementById('modal-password').value.trim();
+
+            if (!usernameVal) {
+                showToast('El nombre de usuario es obligatorio.', 'warning');
+                return;
+            }
+            if (isNew && (!passwordVal || passwordVal.length < 8)) {
+                showToast('La contraseña debe tener al menos 8 caracteres.', 'warning');
+                return;
+            }
+
+            const endpoint = isNew ? '/auth/api/users/create/' : '/auth/api/users/update-permissions/';
+            const data = {
+                user_id: uid || null,
+                username: usernameVal,
+                password: isNew ? passwordVal : null,
+                role: document.getElementById('modal-role').value,
+                group_id: document.getElementById('modal-group').value || null,
+
+                can_view_subscriptions: getSwitchVal('mu-vsub'),
+                can_view_subs_analytics: getSwitchVal('mu-sanalytics'),
+                can_view_subs_results: getSwitchVal('mu-sresults'),
+                can_view_subs_lifetime: getSwitchVal('mu-slifetime'),
+                can_view_subs_sales: getSwitchVal('mu-ssales'),
+                can_view_eta: getSwitchVal('mu-veta'),
+
+                can_view_crm: getSwitchVal('mu-vcrm'),
+                can_view_crm_analytics: getSwitchVal('mu-canalytics'),
+                can_view_crm_results: getSwitchVal('mu-cresults'),
+
+                can_view_support: getSwitchVal('mu-vsup'),
+                can_view_support_analytics: getSwitchVal('mu-sartanalytics'),
+                can_view_support_results: getSwitchVal('mu-sartresults'),
+
+                can_view_imports: getSwitchVal('mu-vimp'),
+                can_import_data: getSwitchVal('mu-imp'),
+                can_run_calculations: getSwitchVal('mu-calc'),
+                can_run_lifetime: getSwitchVal('mu-rlifetime'),
+                can_manage_eta: getSwitchVal('mu-meta'),
+                can_manage_users: getSwitchVal('mu-musr'),
+            };
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                    body: JSON.stringify(data)
+                });
+                const resData = await res.json();
+                if (resData.status === 'success') {
+                    showToast(resData.message, 'success');
+                    if (editUserModal) editUserModal.hide();
+                    setTimeout(() => location.reload(), 600);
                 } else {
-                    alert("Error: " + data.message);
+                    showToast(resData.message, 'danger');
                 }
-            });
+            } catch (err) {
+                console.error(err);
+                showToast('Error procesando usuario', 'danger');
+            }
         });
     }
-}
 
-function initDeleteUserModal() {
-    const deleteUserModalEl = document.getElementById("deleteUserModal");
-    const deleteUserModal = deleteUserModalEl ? new bootstrap.Modal(deleteUserModalEl) : null;
-    const confirmDeleteBtn = document.getElementById("confirm-delete-btn");
+    // 4. Abrir Modal para Crear/Editar Grupo
+    if (btnOpenCreateGroup) {
+        btnOpenCreateGroup.addEventListener('click', () => {
+            document.getElementById('groupModalTitle').innerHTML = '<i class="bi bi-collection text-success me-2"></i>Nuevo Grupo de Permisos';
+            document.getElementById('mg-group-id').value = '';
+            document.getElementById('mg-name').value = '';
+            document.getElementById('mg-desc').value = '';
 
-    document.querySelectorAll(".delete-user-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const uid = btn.getAttribute("data-user-id");
-            const uname = btn.getAttribute("data-username");
-            document.getElementById("delete-user-id").value = uid;
-            document.getElementById("delete-username-span").textContent = uname;
+            setModalGroupSwitches({
+                vsub: true, sanalytics: true, sresults: true, slifetime: true, ssales: true, veta: true,
+                vcrm: true, canalytics: true, cresults: true,
+                vsup: true, sartanalytics: true, sartresults: true,
+                vimp: true, imp: false, calc: false, rlifetime: false, meta: false, musr: false
+            });
+
+            if (editGroupModal) editGroupModal.show();
+        });
+    }
+
+    document.querySelectorAll('.edit-group-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const el = e.currentTarget;
+            document.getElementById('groupModalTitle').innerHTML = `<i class="bi bi-pencil-square text-success me-2"></i>Editar Grupo: ${el.getAttribute('data-name')}`;
+            document.getElementById('mg-group-id').value = el.getAttribute('data-id');
+            document.getElementById('mg-name').value = el.getAttribute('data-name');
+            document.getElementById('mg-desc').value = el.getAttribute('data-desc') || '';
+
+            setModalGroupSwitches({
+                vsub: el.getAttribute('data-vsub') === 'true',
+                sanalytics: el.getAttribute('data-sanalytics') === 'true',
+                sresults: el.getAttribute('data-sresults') === 'true',
+                slifetime: el.getAttribute('data-slifetime') === 'true',
+                ssales: el.getAttribute('data-ssales') === 'true',
+                veta: el.getAttribute('data-veta') === 'true',
+                vcrm: el.getAttribute('data-vcrm') === 'true',
+                canalytics: el.getAttribute('data-canalytics') === 'true',
+                cresults: el.getAttribute('data-cresults') === 'true',
+                vsup: el.getAttribute('data-vsup') === 'true',
+                sartanalytics: el.getAttribute('data-sartanalytics') === 'true',
+                sartresults: el.getAttribute('data-sartresults') === 'true',
+                vimp: el.getAttribute('data-vimp') === 'true',
+                imp: el.getAttribute('data-imp') === 'true',
+                calc: el.getAttribute('data-calc') === 'true',
+                rlifetime: el.getAttribute('data-rlifetime') === 'true',
+                meta: el.getAttribute('data-meta') === 'true',
+                musr: el.getAttribute('data-musr') === 'true',
+            });
+
+            if (editGroupModal) editGroupModal.show();
+        });
+    });
+
+    // 5. Guardar Grupo de Permisos
+    if (btnSaveGroupModal) {
+        btnSaveGroupModal.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const groupNameVal = document.getElementById('mg-name').value.trim();
+            if (!groupNameVal) {
+                showToast('El nombre del grupo es obligatorio.', 'warning');
+                return;
+            }
+
+            const data = {
+                group_id: document.getElementById('mg-group-id').value || null,
+                name: groupNameVal,
+                description: document.getElementById('mg-desc').value.trim(),
+
+                can_view_subscriptions: getSwitchVal('mg-vsub'),
+                can_view_subs_analytics: getSwitchVal('mg-sanalytics'),
+                can_view_subs_results: getSwitchVal('mg-sresults'),
+                can_view_subs_lifetime: getSwitchVal('mg-slifetime'),
+                can_view_subs_sales: getSwitchVal('mg-ssales'),
+                can_view_eta: getSwitchVal('mg-veta'),
+
+                can_view_crm: getSwitchVal('mg-vcrm'),
+                can_view_crm_analytics: getSwitchVal('mg-canalytics'),
+                can_view_crm_results: getSwitchVal('mg-cresults'),
+
+                can_view_support: getSwitchVal('mg-vsup'),
+                can_view_support_analytics: getSwitchVal('mg-sartanalytics'),
+                can_view_support_results: getSwitchVal('mg-sartresults'),
+
+                can_view_imports: getSwitchVal('mg-vimp'),
+                can_import_data: getSwitchVal('mg-imp'),
+                can_run_calculations: getSwitchVal('mg-calc'),
+                can_run_lifetime: getSwitchVal('mg-rlifetime'),
+                can_manage_eta: getSwitchVal('mg-meta'),
+                can_manage_users: getSwitchVal('mg-musr'),
+            };
+
+            try {
+                const res = await fetch('/auth/api/groups/save/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                    body: JSON.stringify(data)
+                });
+                const resData = await res.json();
+                if (resData.status === 'success') {
+                    showToast(resData.message, 'success');
+                    if (editGroupModal) editGroupModal.hide();
+                    setTimeout(() => location.reload(), 600);
+                } else {
+                    showToast(resData.message, 'danger');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Error guardando grupo', 'danger');
+            }
+        });
+    }
+
+    // 6. Cambiar Contraseña y Eliminar
+    document.querySelectorAll('.change-password-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const el = e.currentTarget;
+            document.getElementById('change-pass-user-id').value = el.getAttribute('data-user-id');
+            document.getElementById('change-pass-username').value = el.getAttribute('data-username');
+            document.getElementById('change-pass-new-password').value = '';
+            if (changePasswordModal) changePasswordModal.show();
+        });
+    });
+
+    const changePassForm = document.getElementById('change-password-form');
+    if (changePassForm) {
+        changePassForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                user_id: document.getElementById('change-pass-user-id').value,
+                password: document.getElementById('change-pass-new-password').value.trim()
+            };
+            try {
+                const res = await fetch('/auth/api/users/change-password/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                    body: JSON.stringify(data)
+                });
+                const resData = await res.json();
+                if (resData.status === 'success') {
+                    showToast(resData.message, 'success');
+                    if (changePasswordModal) changePasswordModal.hide();
+                } else {
+                    showToast(resData.message, 'danger');
+                }
+            } catch (err) {
+                showToast('Error cambiando contraseña', 'danger');
+            }
+        });
+    }
+
+    document.querySelectorAll('.delete-user-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const el = e.currentTarget;
+            document.getElementById('delete-user-id').value = el.getAttribute('data-user-id');
+            document.getElementById('delete-username-span').textContent = el.getAttribute('data-username');
             if (deleteUserModal) deleteUserModal.show();
         });
     });
 
+    const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
     if (confirmDeleteBtn) {
-        confirmDeleteBtn.addEventListener("click", () => {
-            const uid = document.getElementById("delete-user-id").value;
-            fetch(`/auth/api/users/delete/`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": getCsrfToken()
-                },
-                body: JSON.stringify({ user_id: uid })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === "success") {
+        confirmDeleteBtn.addEventListener('click', async () => {
+            const uid = document.getElementById('delete-user-id').value;
+            try {
+                const res = await fetch('/auth/api/users/delete/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+                    body: JSON.stringify({ user_id: uid })
+                });
+                const resData = await res.json();
+                if (resData.status === 'success') {
+                    showToast(resData.message, 'success');
                     if (deleteUserModal) deleteUserModal.hide();
-                    const row = document.getElementById(`user-row-${uid}`);
-                    if (row) row.remove();
-                    NetOwl.showToast(data.message, "success");
+                    setTimeout(() => location.reload(), 600);
                 } else {
-                    alert("Error: " + data.message);
+                    showToast(resData.message, 'danger');
                 }
-            });
+            } catch (err) {
+                showToast('Error eliminando usuario', 'danger');
+            }
         });
     }
-}
 
-// ==========================================
-// 6. CAMBIO DINÁMICO DE SWITCHES SEGÚN EL GRUPO SELECCIONADO
-// ==========================================
+    // Funciones Auxiliares
+    function getSwitchVal(id) {
+        const el = document.getElementById(id);
+        return el ? el.checked : false;
+    }
 
-function initNewUserGroupSelector() {
-    const groupSelect = document.getElementById('new-group');
-    if (!groupSelect) return;
+    function setModalUserSwitches(s) {
+        setCheck('mu-vsub', s.vsub);
+        setCheck('mu-sanalytics', s.sanalytics);
+        setCheck('mu-sresults', s.sresults);
+        setCheck('mu-slifetime', s.slifetime);
+        setCheck('mu-ssales', s.ssales);
+        setCheck('mu-veta', s.veta);
+        setCheck('mu-vcrm', s.vcrm);
+        setCheck('mu-canalytics', s.canalytics);
+        setCheck('mu-cresults', s.cresults);
+        setCheck('mu-vsup', s.vsup);
+        setCheck('mu-sartanalytics', s.sartanalytics);
+        setCheck('mu-sartresults', s.sartresults);
+        setCheck('mu-vimp', s.vimp);
+        setCheck('mu-imp', s.imp);
+        setCheck('mu-calc', s.calc);
+        setCheck('mu-rlifetime', s.rlifetime);
+        setCheck('mu-meta', s.meta);
+        setCheck('mu-musr', s.musr);
+    }
 
-    groupSelect.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        if (!selectedOption) return;
+    function setModalGroupSwitches(s) {
+        setCheck('mg-vsub', s.vsub);
+        setCheck('mg-sanalytics', s.sanalytics);
+        setCheck('mg-sresults', s.sresults);
+        setCheck('mg-slifetime', s.slifetime);
+        setCheck('mg-ssales', s.ssales);
+        setCheck('mg-veta', s.veta);
+        setCheck('mg-vcrm', s.vcrm);
+        setCheck('mg-canalytics', s.canalytics);
+        setCheck('mg-cresults', s.cresults);
+        setCheck('mg-vsup', s.vsup);
+        setCheck('mg-sartanalytics', s.sartanalytics);
+        setCheck('mg-sartresults', s.sartresults);
+        setCheck('mg-vimp', s.vimp);
+        setCheck('mg-imp', s.imp);
+        setCheck('mg-calc', s.calc);
+        setCheck('mg-rlifetime', s.rlifetime);
+        setCheck('mg-meta', s.meta);
+        setCheck('mg-musr', s.musr);
+    }
 
-        const updateSwitch = (elementId, dataAttr) => {
-            const el = document.getElementById(elementId);
-            if (el) {
-                el.checked = selectedOption.getAttribute(dataAttr) === 'true';
-            }
-        };
+    function setCheck(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.checked = !!val;
+    }
 
-        // Módulo Subscriptions
-        updateSwitch('p-view-subs', 'data-vsub');
-        updateSwitch('p-subs-analytics', 'data-sanalytics');
-        updateSwitch('p-subs-results', 'data-sresults');
-        updateSwitch('p-subs-lifetime', 'data-slifetime');
-        updateSwitch('p-subs-sales', 'data-ssales');
-        updateSwitch('p-view-eta', 'data-veta');
-
-        // Módulo CRM
-        updateSwitch('p-view-crm', 'data-vcrm');
-        updateSwitch('p-crm-analytics', 'data-canalytics');
-        updateSwitch('p-crm-results', 'data-cresults');
-
-        // Módulo Imports
-        updateSwitch('p-view-imports', 'data-vimp'); // <-- NUEVO
-
-        // Permisos Operativos / Gestión
-        updateSwitch('p-import', 'data-imp');
-        updateSwitch('p-calc', 'data-calc');
-        updateSwitch('p-run-lifetime', 'data-rlifetime');
-        updateSwitch('p-manage-eta', 'data-meta');
-        updateSwitch('p-admin', 'data-musr');
-    });
-}
-
-// --- END OF FILE NetOwl-Django/frontend/static/config/js/management.js ---
+    function getCsrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    }
+});
