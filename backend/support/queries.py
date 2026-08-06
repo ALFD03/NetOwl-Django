@@ -1,14 +1,17 @@
-# backend/support/queries.py
+# NetOwl-Django/backend/support/queries.py
 
 from __future__ import annotations
 import json
 import logging
+import pathlib
 from typing import Any
 import pandas as pd
 from backend.database import DBConnector
 from backend.conf_config import DB_SCHEMA, TableNames
 
 logger = logging.getLogger(__name__)
+
+ZONAS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Zonas.json"
 
 def _parse_jsonb(val: Any) -> Any:
     if val is None:
@@ -57,87 +60,152 @@ def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict
         return []
 
 def get_support_metric_totals(periodo: str | None = None) -> dict:
-    """Calcula al vuelo (en memoria) el promedio histórico general asegurando que no existan KeyErrors."""
     db = DBConnector()
     try:
-        df_hist = db.query(f"SELECT * FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} ORDER BY periodo_reporte ASC")
+        df_mg = db.query(f"SELECT resumen_global, por_grupo_trabajo FROM {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} WHERE id = 1")
         
-        expected_cols = [
-            "total_tickets", "tickets_resueltos", "tickets_cancelados", "tickets_rezagados",
-            "pct_resueltos", "pct_cancelados", "pct_rezagados",
-            "tiempo_medio_cierre_horas", "tiempo_mediana_cierre_horas",
-            "tiempo_promedio_primera_respuesta_horas"
-        ]
-        
-        historico = []
         resumen_global = {}
-
-        if not df_hist.empty:
-            for col in expected_cols:
-                if col not in df_hist.columns:
-                    df_hist[col] = 0.0
-                else:
-                    df_hist[col] = pd.to_numeric(df_hist[col], errors="coerce").fillna(0.0)
-
-            historico = df_hist.to_dict(orient="records")
-
-            resumen_global = {
-                "total_tickets_promedio_mensual": round(float(df_hist["total_tickets"].mean()), 2),
-                "tickets_resueltos_promedio_mensual": round(float(df_hist["tickets_resueltos"].mean()), 2),
-                "tickets_cancelados_promedio_mensual": round(float(df_hist["tickets_cancelados"].mean()), 2),
-                "tickets_rezagados_promedio_mensual": round(float(df_hist["tickets_rezagados"].mean()), 2),
-                "pct_resueltos": round(float(df_hist["pct_resueltos"].mean()), 2),
-                "pct_cancelados": round(float(df_hist["pct_cancelados"].mean()), 2),
-                "pct_rezagados": round(float(df_hist["pct_rezagados"].mean()), 2),
-                "tiempo_medio_cierre_horas": round(float(df_hist["tiempo_medio_cierre_horas"].mean()), 2),
-                "tiempo_mediana_cierre_horas": round(float(df_hist["tiempo_mediana_cierre_horas"].mean()), 2),
-                "tiempo_promedio_primera_respuesta_horas": round(float(df_hist["tiempo_promedio_primera_respuesta_horas"].mean()), 2),
-            }
-
-        # 2. Leer dimensiones por grupo de trabajo y promediar en memoria
-        df_grupos = db.query(f"""
-            SELECT grupo_trabajo, valor, metricas
-            FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
-            WHERE dimension = 'grupo_trabajo'
-        """)
-
         por_grupo = {}
-        if not df_grupos.empty:
-            group_records = []
-            for _, r in df_grupos.iterrows():
-                m = _parse_jsonb(r["metricas"]) or {}
-                m["grupo_trabajo"] = r["valor"]
-                group_records.append(m)
+        if not df_mg.empty:
+            resumen_global = _parse_jsonb(df_mg.iloc[0]["resumen_global"]) or {}
+            por_grupo = _parse_jsonb(df_mg.iloc[0]["por_grupo_trabajo"]) or {}
 
-            df_g = pd.DataFrame(group_records)
-            for col in expected_cols:
-                if col not in df_g.columns:
-                    df_g[col] = 0.0
-                else:
-                    df_g[col] = pd.to_numeric(df_g[col], errors="coerce").fillna(0.0)
+        df_hist = db.query(f"""
+            SELECT * FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
+            ORDER BY periodo_reporte ASC
+        """)
+        historico = df_hist.to_dict(orient="records") if not df_hist.empty else []
 
-            for g_name, df_sub in df_g.groupby("grupo_trabajo"):
-                por_grupo[g_name] = {
-                    "total_tickets": round(float(df_sub["total_tickets"].mean()), 2),
-                    "tickets_resueltos": round(float(df_sub["tickets_resueltos"].mean()), 2),
-                    "tickets_cancelados": round(float(df_sub["tickets_cancelados"].mean()), 2),
-                    "tickets_rezagados": round(float(df_sub["tickets_rezagados"].mean()), 2),
-                    "pct_resueltos": round(float(df_sub["pct_resueltos"].mean()), 2),
-                    "pct_cancelados": round(float(df_sub["pct_cancelados"].mean()), 2),
-                    "pct_rezagados": round(float(df_sub["pct_rezagados"].mean()), 2),
-                    "tiempo_medio_cierre_horas": round(float(df_sub["tiempo_medio_cierre_horas"].mean()), 2),
-                    "tiempo_mediana_cierre_horas": round(float(df_sub["tiempo_mediana_cierre_horas"].mean()), 2),
-                    "tiempo_promedio_primera_respuesta_horas": round(float(df_sub["tiempo_promedio_primera_respuesta_horas"].mean()), 2),
-                }
+        if not resumen_global and historico:
+            df_h = pd.DataFrame(historico)
+            resumen_global = {
+                "total_tickets_promedio_mensual": round(float(df_h["total_tickets"].mean()), 2),
+                "tickets_resueltos_promedio_mensual": round(float(df_h["tickets_resueltos"].mean()), 2),
+                "tickets_cancelados_promedio_mensual": round(float(df_h["tickets_cancelados"].fillna(0).mean()), 2),
+                "tickets_rezagados_promedio_mensual": round(float(df_h["tickets_rezagados"].fillna(0).mean()), 2),
+                "pct_resueltos": round(float(df_h["pct_resueltos"].mean()), 2),
+                "pct_cancelados": round(float(df_h["pct_cancelados"].fillna(0).mean()), 2),
+                "pct_rezagados": round(float(df_h["pct_rezagados"].fillna(0).mean()), 2),
+                "tiempo_medio_cierre_horas": round(float(df_h["tiempo_medio_cierre_horas"].mean()), 2),
+                "tiempo_mediana_cierre_horas": round(float(df_h["tiempo_mediana_cierre_horas"].fillna(0).mean()), 2),
+                "tiempo_promedio_primera_respuesta_horas": round(float(df_h["tiempo_promedio_primera_respuesta_horas"].fillna(0).mean()), 2),
+            }
 
         return {
             "resumen_global": resumen_global,
             "por_grupo_trabajo": por_grupo,
             "historico_tendencias": historico
         }
-    except Exception as e:
-        logger.exception("Error al calcular promedios globales de soporte: %s", str(e))
+    except Exception:
+        logger.exception("Error al consultar métricas globales de soporte")
         return {"resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": []}
+
+def get_support_analytics_structured(periodo: str | None = None) -> dict:
+    """Estructura las métricas de Analytics garantizando unicidad en Sucursales y Zonas."""
+    db = DBConnector()
+    try:
+        zone_info = {}
+        if ZONAS_PATH.exists():
+            with open(ZONAS_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                for z in data.get("zonas", []):
+                    zone_info[z["name"].strip().lower()] = {
+                        "site": z.get("Site", "Valencia").strip(),
+                        "type": z.get("Type", "RF").strip()
+                    }
+
+        where_p = ""
+        params_p = []
+        if periodo and periodo != "ALL":
+            where_p = "WHERE periodo_reporte = %s"
+            params_p = [periodo]
+        else:
+            periodos = get_support_periodos()
+            if periodos:
+                where_p = "WHERE periodo_reporte = %s"
+                params_p = [periodos[0]]
+
+        df = db.query(f"""
+            SELECT periodo_reporte, dimension, grupo_trabajo, tipo_solicitud, razon_falla, valor, metricas
+            FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
+            {where_p}
+        """, params=params_p)
+
+        if df.empty:
+            return {"grupos": {}}
+
+        grupos_dict = {}
+
+        for _, row in df.iterrows():
+            g = row["grupo_trabajo"]
+            dim = row["dimension"]
+            t_sol = row["tipo_solicitud"]
+            r_fal = row["razon_falla"]
+            val = row["valor"]
+            m = _parse_jsonb(row["metricas"]) or {}
+
+            if g not in grupos_dict:
+                grupos_dict[g] = {
+                    "total_tickets_grupo": 0,
+                    "tipos_solicitud": [],
+                    "razones_falla": [],
+                    "sucursales": [],
+                    "zonas_raw": []
+                }
+
+            if dim == "grupo_trabajo":
+                grupos_dict[g]["total_tickets_grupo"] = m.get("total_tickets", 0)
+            elif dim == "tipo_solicitud" and t_sol != "Todas" and r_fal == "Todas":
+                grupos_dict[g]["tipos_solicitud"].append({"nombre": val, "metricas": m})
+            elif dim == "razon_falla" and r_fal != "Todas":
+                grupos_dict[g]["razones_falla"].append({"nombre": val, "metricas": m})
+            # Filtro estricto para evitar duplicados de Sucursal y Zona
+            elif dim == "sucursal" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
+                grupos_dict[g]["sucursales"].append({"nombre": val, "metricas": m})
+            elif dim == "zona" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
+                grupos_dict[g]["zonas_raw"].append({"zona_sucursal": val, "metricas": m})
+
+        for g, data_g in grupos_dict.items():
+            tot_g = data_g["total_tickets_grupo"] or 1
+            
+            for r in data_g["razones_falla"]:
+                cant = r["metricas"].get("total_tickets", 0)
+                r["metricas"]["pct_del_grupo"] = round((cant / tot_g) * 100, 2)
+
+            site_groups = {}
+            for z_item in data_g["zonas_raw"]:
+                val_zs = z_item["zona_sucursal"]
+                parts = val_zs.split(" - ")
+                z_name = parts[0].strip() if len(parts) > 0 else val_zs
+                
+                z_meta = zone_info.get(z_name.lower(), {"site": "Otros / Desconocido", "type": "RF"})
+                site = z_meta["site"]
+                tech = z_meta["type"]
+
+                site_groups.setdefault(site, {}).setdefault(tech, []).append({
+                    "zona_sucursal": val_zs,
+                    "metricas": z_item["metricas"]
+                })
+
+            regional_list = []
+            for site_name, tech_dict in sorted(site_groups.items()):
+                tech_list = []
+                for tech_name, zonas_list in sorted(tech_dict.items()):
+                    tech_list.append({
+                        "technology": tech_name,
+                        "zonas": sorted(zonas_list, key=lambda x: x["metricas"].get("total_tickets", 0), reverse=True)
+                    })
+                regional_list.append({
+                    "site": site_name,
+                    "technologies": tech_list
+                })
+            data_g["zonas_regional"] = regional_list
+            del data_g["zonas_raw"]
+
+        return {"grupos": grupos_dict}
+    except Exception:
+        logger.exception("Error estructurando Analytics de Soporte")
+        return {"grupos": {}}
 
 def get_support_dimension_metrics(periodos: list[str] | None = None) -> list[dict]:
     db = DBConnector()
@@ -153,7 +221,7 @@ def get_support_dimension_metrics(periodos: list[str] | None = None) -> list[dic
             SELECT periodo_reporte, dimension, grupo_trabajo, tipo_solicitud, razon_falla, valor, metricas
             FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
             {where_clause}
-            ORDER BY periodo_reporte DESC, grupo_trabajo ASC, tipo_solicitud ASC
+            ORDER BY periodo_reporte DESC, grupo_trabajo ASC
         """, params=params)
 
         if df.empty:

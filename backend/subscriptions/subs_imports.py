@@ -27,12 +27,13 @@ SUBSCRIPTIONS_COLUMN_MAPPING = {
     "Teléfono": "telefono",
     "Cliente/Phone 1": "phone",
     "Cliente/Phone 2": "phone2",
+    "Vendedor": "vendedor",
 }
 
 SUBSCRIPTIONS_METADATA_COLS = [
     "cliente", "ci", "sucursal", "zona", "municipio",
     "tipo", "estado", "campanna", "fecha_factura", "fecha_inicio",
-    "tarifa", "total", "producto", "telefono", "phone", "phone2"
+    "tarifa", "total", "producto", "telefono", "phone", "phone2", "vendedor"
 ]
 
 LOGS_COLUMN_MAPPING = {

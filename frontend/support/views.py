@@ -1,4 +1,5 @@
-# frontend/support/views.py
+# NetOwl-Django/frontend/support/views.py
+
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
@@ -7,7 +8,7 @@ from backend.support.queries import (
     get_support_periodos,
     get_support_cierre_historico,
     get_support_metric_totals,
-    get_support_dimension_metrics,
+    get_support_analytics_structured,
     get_support_tickets_list
 )
 
@@ -51,9 +52,8 @@ def api_cierre_historico(request):
 @login_required
 @permission_required('can_view_support_analytics')
 def api_dimension_metrics(request):
-    periods_param = request.GET.get("periods")
-    periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
-    return JsonResponse(get_support_dimension_metrics(periodos), safe=False)
+    periodo = request.GET.get("period")
+    return JsonResponse(get_support_analytics_structured(periodo))
 
 @login_required
 @permission_required('can_view_support_results')

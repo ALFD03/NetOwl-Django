@@ -28,7 +28,7 @@ REQUIRED_SUPPORT_HEADERS = {
 }
 
 # Dimensiones para desglosar métricas
-SUPPORT_HIERARCHY_DIMS = ["grupo_trabajo", "tipo_solicitud", "razon_falla", "sucursal", "zona", "municipio"]
+SUPPORT_HIERARCHY_DIMS = ["grupo_trabajo", "tipo_solicitud", "razon_falla", "sucursal", "zona"]
 
 # Lista de nombres/palabras clave que identifican un ticket como RESUELTO
 RESOLVED_STAGES = {
