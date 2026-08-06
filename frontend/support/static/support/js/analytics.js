@@ -7,7 +7,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = document.getElementById('analyticsGroupsContainer');
     const selectPeriodo = document.getElementById('filterPeriodoAnalytics');
 
-    // Plugin para Texto Central MATEMÁTICAMENTE CENTRADO en el Agujero de la Dona
+    // Registrar Plugin DataLabels para mostrar % dentro de las rebanadas
+    if (typeof ChartDataLabels !== 'undefined') {
+        Chart.register(ChartDataLabels);
+    }
+
+    // Plugin para Texto Central MATEMÁTICAMENTE CENTRADO
     const centerTextPlugin = {
         id: 'centerTextPlugin',
         beforeDraw(chart) {
@@ -17,7 +22,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const centerConfig = chart.config.options.plugins.centerText;
             if (!centerConfig) return;
 
-            // Calcular el centro exacto del área del gráfico excluyendo la leyenda
             const centerX = chartArea.left + (chartArea.right - chartArea.left) / 2;
             const centerY = chartArea.top + (chartArea.bottom - chartArea.top) / 2;
 
@@ -104,7 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function renderGroupSection(gName, groupData, idx) {
         return `
-            <div class="card mb-5 p-3" style="background-color: var(--surface-secondary);">
+            <div class="card mb-5 border p-3" style="background-color: var(--surface-secondary);">
                 <div class="card-header rounded mb-4" style="background-color: var(--surface-tertiary);">
                     <h4 class="mb-0 text-primary"><i class="bi bi-people-fill me-2"></i>Grupo de Trabajo: ${gName}</h4>
                 </div>
@@ -147,7 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     </div>
                 </div>
 
-                <!-- 4. Zonas Estilo Sales Report ("Zona - Sucursal por Site") -->
+                <!-- 4. Zonas Estilo Sales Report -->
                 <div class="row g-4">
                     <div class="col-12">
                         <div class="card">
@@ -164,8 +168,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     function initGroupCharts(gName, groupData, idx) {
         const totGrupo = groupData.total_tickets_grupo || 0;
+        const colorPalette = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#3b82f6', '#14b8a6', '#a855f7', '#f43f5e'];
 
-        // 1. Chart Tipos de Solicitud (Dona Sencilla con Centro Interactivo)
+        // 1. Chart Tipos de Solicitud (Estilo Subscriptions)
         const tipos = groupData.tipos_solicitud || [];
         const canvasTipo = document.getElementById(`chart-tipo-pie-${idx}`);
         if (canvasTipo && tipos.length > 0) {
@@ -175,23 +180,34 @@ document.addEventListener('DOMContentLoaded', async () => {
                     labels: tipos.map(t => t.nombre),
                     datasets: [{
                         data: tipos.map(t => t.metricas.total_tickets || 0),
-                        backgroundColor: ['#2563eb', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6'],
-                        borderWidth: 0,
-                        borderColor: 'transparent'
+                        backgroundColor: colorPalette,
+                        borderWidth: 2,
+                        borderColor: '#0f1a36'
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    cutout: '58%',
+                    cutout: '60%',
                     plugins: {
                         legend: { position: 'bottom', labels: { color: '#E6EEF6', font: { size: 11 } } },
+                        datalabels: {
+                            color: '#FFFFFF',
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (value, ctx) => {
+                                const dataset = ctx.chart.data.datasets[0];
+                                const total = dataset.data.reduce((a, b) => a + b, 0);
+                                if (total === 0) return '';
+                                const pct = (value / total) * 100;
+                                return pct >= 2.5 ? `${pct.toFixed(1)}%` : '';
+                            }
+                        },
                         centerText: { defaultText: `${totGrupo.toLocaleString()}`, defaultSubtext: 'Total Tickets' }
                     }
                 }
             });
         }
 
-        // 2. Chart Razones de Falla (Barras Horizontales con % de Causa Raíz)
+        // 2. Chart Razones de Falla (Barras Horizontales)
         const razones = (groupData.razones_falla || []).sort((a,b) => (b.metricas.total_tickets||0) - (a.metricas.total_tickets||0)).slice(0, 8);
         const canvasRazon = document.getElementById(`chart-razon-bar-${idx}`);
         if (canvasRazon && razones.length > 0) {
@@ -209,12 +225,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 },
                 options: {
                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                    scales: { x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } }
+                    scales: { x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } },
+                    plugins: {
+                        datalabels: {
+                            anchor: 'end', align: 'end', color: '#E6EEF6', font: { weight: 'bold', size: 10 },
+                            formatter: v => `${v}%`
+                        }
+                    }
                 }
             });
         }
 
-        // 3. Chart Sucursal (Deduplicación estricta en JS)
+        // 3. Chart Sucursal (Dona Sencilla Estilo Subscriptions)
         const sucursalesMap = new Map();
         (groupData.sucursales || []).forEach(s => {
             if (s.nombre && !sucursalesMap.has(s.nombre)) {
@@ -231,16 +253,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                     labels: sucursales.map(s => s.nombre),
                     datasets: [{
                         data: sucursales.map(s => s.metricas.total_tickets || 0),
-                        backgroundColor: ['#2563eb', '#10b981', '#06b6d4', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'],
-                        borderWidth: 0,
-                        borderColor: 'transparent'
+                        backgroundColor: colorPalette,
+                        borderWidth: 2,
+                        borderColor: '#0f1a36'
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    cutout: '58%',
+                    cutout: '60%',
                     plugins: {
                         legend: { position: 'bottom', labels: { color: '#E6EEF6', font: { size: 11 } } },
+                        datalabels: {
+                            color: '#FFFFFF',
+                            font: { weight: 'bold', size: 11 },
+                            formatter: (value, ctx) => {
+                                const dataset = ctx.chart.data.datasets[0];
+                                const total = dataset.data.reduce((a, b) => a + b, 0);
+                                if (total === 0) return '';
+                                const pct = (value / total) * 100;
+                                return pct >= 2.5 ? `${pct.toFixed(1)}%` : '';
+                            }
+                        },
                         centerText: { defaultText: `${totGrupo.toLocaleString()}`, defaultSubtext: 'Total Tickets' }
                     }
                 }
