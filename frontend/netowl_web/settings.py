@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "frontend.crm",                  # Módulo CRM (clientes, etc.)
     "frontend.config",
     "frontend.imports",
+    "frontend.support",
 ]
 
 # --- Middleware ---
