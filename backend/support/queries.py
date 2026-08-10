@@ -89,6 +89,8 @@ def get_support_metric_totals(periodo: str | None = None) -> dict:
                 "tiempo_medio_cierre_horas": round(float(df_h["tiempo_medio_cierre_horas"].mean()), 2),
                 "tiempo_mediana_cierre_horas": round(float(df_h["tiempo_mediana_cierre_horas"].fillna(0).mean()), 2),
                 "tiempo_promedio_primera_respuesta_horas": round(float(df_h["tiempo_promedio_primera_respuesta_horas"].fillna(0).mean()), 2),
+                "pct_excede_promedio_cierre": round(float(df_h["pct_excede_promedio_cierre"].fillna(0).mean()), 2),
+                "pct_excede_mediana_cierre": round(float(df_h["pct_excede_mediana_cierre"].fillna(0).mean()), 2),
             }
 
         return {
@@ -101,7 +103,7 @@ def get_support_metric_totals(periodo: str | None = None) -> dict:
         return {"resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": []}
 
 def get_support_analytics_structured(periodo: str | None = None) -> dict:
-    """Estructura las métricas de Analytics garantizando unicidad en Sucursales y Zonas."""
+    """Estructura las métricas de Analytics incluyendo probabilidades de exceder tiempos."""
     db = DBConnector()
     try:
         zone_info = {}
@@ -147,6 +149,7 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
             if g not in grupos_dict:
                 grupos_dict[g] = {
                     "total_tickets_grupo": 0,
+                    "metricas_grupo": {},
                     "tipos_solicitud": [],
                     "razones_falla": [],
                     "sucursales": [],
@@ -155,11 +158,11 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
 
             if dim == "grupo_trabajo":
                 grupos_dict[g]["total_tickets_grupo"] = m.get("total_tickets", 0)
+                grupos_dict[g]["metricas_grupo"] = m
             elif dim == "tipo_solicitud" and t_sol != "Todas" and r_fal == "Todas":
                 grupos_dict[g]["tipos_solicitud"].append({"nombre": val, "metricas": m})
             elif dim == "razon_falla" and r_fal != "Todas":
                 grupos_dict[g]["razones_falla"].append({"nombre": val, "metricas": m})
-            # Filtro estricto para evitar duplicados de Sucursal y Zona
             elif dim == "sucursal" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
                 grupos_dict[g]["sucursales"].append({"nombre": val, "metricas": m})
             elif dim == "zona" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
@@ -206,6 +209,7 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
     except Exception:
         logger.exception("Error estructurando Analytics de Soporte")
         return {"grupos": {}}
+
 
 def get_support_dimension_metrics(periodos: list[str] | None = None) -> list[dict]:
     db = DBConnector()

@@ -4,7 +4,6 @@ from __future__ import annotations
 import math
 import pandas as pd
 from typing import Any, Dict
-from backend.support.config import RESOLVED_STAGES, CANCELED_STAGES
 
 def _clean_nan(obj: Any) -> Any:
     if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
@@ -53,13 +52,12 @@ def compute_metrics_for_period(
     df_cancelados: pd.DataFrame,
     df_rezagados: pd.DataFrame
 ) -> Dict[str, Any]:
-    """Calcula las métricas del periodo respetando el ciclo de vida del ticket."""
+    """Calcula métricas usando la primera fecha de asignada para cierre y respuesta."""
     total_creados = len(df_creados)
     total_resueltos = len(df_resueltos)
     total_cancelados = len(df_cancelados)
     total_rezagados = len(df_rezagados)
 
-    # Universo total gestionado en el mes
     total_universo = total_resueltos + total_cancelados + total_rezagados
     if total_universo == 0:
         total_universo = max(1, total_creados)
@@ -68,12 +66,34 @@ def compute_metrics_for_period(
     pct_cancelados = round((total_cancelados / total_universo) * 100, 2)
     pct_rezagados = round((total_rezagados / total_universo) * 100, 2)
 
-    stats_cierre = _compute_stats_for_series(df_resueltos["duracion_total_horas"]) if "duracion_total_horas" in df_resueltos.columns else _compute_stats_for_series(pd.Series())
+    # 1. TIEMPO DE CIERRE (MTTR): (ultima_actualizacion_etapa con Resuelto - primera_fecha_asignada) / resueltos
+    duraciones_cierre_series = pd.Series(dtype=float)
+    if not df_resueltos.empty:
+        t_cierre = pd.to_datetime(df_resueltos["ultima_actualizacion_etapa"], errors="coerce")
+        t_asig = pd.to_datetime(df_resueltos.get("primera_fecha_asignada"), errors="coerce")
+        t_crea = pd.to_datetime(df_resueltos["creado_el"], errors="coerce")
 
+        # Usar primera_fecha_asignada; si falta, respalda con creado_el
+        t_inicio_cierre = t_asig.fillna(t_crea)
+        dur_hrs = (t_cierre - t_inicio_cierre).dt.total_seconds() / 3600.0
+
+        if "duracion_total_horas" in df_resueltos.columns:
+            dur_fallback = pd.to_numeric(df_resueltos["duracion_total_horas"], errors="coerce").fillna(0.0)
+            dur_hrs = dur_hrs.where(dur_hrs > 0, dur_fallback)
+
+        duraciones_cierre_series = dur_hrs.clip(lower=0)
+
+    stats_cierre = _compute_stats_for_series(duraciones_cierre_series)
+
+    # 2. TIEMPO DE PRIMERA RESPUESTA: (primera_fecha_asignada - creado_el) / total_tickets
     if total_creados > 0 and "creado_el" in df_creados.columns:
         t_creado = pd.to_datetime(df_creados["creado_el"], errors="coerce")
-        t_act = pd.to_datetime(df_creados["ultima_actualizacion_etapa"], errors="coerce").fillna(t_creado)
-        tiempo_resp_series = (t_act - t_creado).dt.total_seconds() / 3600.0
+        t_asig_cr = pd.to_datetime(df_creados.get("primera_fecha_asignada"), errors="coerce")
+        t_act_cr = pd.to_datetime(df_creados["ultima_actualizacion_etapa"], errors="coerce")
+
+        # Usar primera_fecha_asignada; si no hay fecha de asignación, usar ultima_actualizacion
+        t_resp = t_asig_cr.fillna(t_act_cr)
+        tiempo_resp_series = (t_resp - t_creado).dt.total_seconds() / 3600.0
         tiempo_promedio_respuesta = round(float(tiempo_resp_series.clip(lower=0).fillna(0.0).mean()), 2)
     else:
         tiempo_promedio_respuesta = 0.0

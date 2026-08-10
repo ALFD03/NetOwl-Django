@@ -14,6 +14,7 @@ SUPPORT_CSV_COLUMN_MAP = {
     "Razón de la falla": "razon_falla",
     "Solución de la falla": "solucion_falla",
     "Creado el": "creado_el",
+    "Primera fecha asignada":"primera_fecha_asignada",
     "Última actualización de la etapa": "ultima_actualizacion_etapa",
     "Duración total (horas)": "duracion_total_horas",
 }

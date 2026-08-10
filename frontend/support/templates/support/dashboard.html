@@ -12,34 +12,50 @@
   <h4 class="mb-0 px-2"><i class="bi bi-speedometer2 text-primary me-2"></i>Technical Support Dashboard (Promedio Histórico)</h4>
 </div>
 
-<!-- Tarjetas KPI Promedio -->
-<div class="row g-4 mb-4">
-  <div class="col-md-3">
+<!-- Tarjetas KPI Promedio + Probabilidades de Exceder Tiempos -->
+<div class="row g-3 mb-4">
+  <div class="col-md-2">
     <div class="metric-card">
       <div class="metric-value text-primary" id="kpi-resueltos">--%</div>
-      <div class="metric-label">% Resueltos Promedio</div>
-      <small class="text-muted mt-1" id="kpi-resueltos-sub">0 resueltos / mes</small>
+      <div class="metric-label">% Resueltos</div>
+      <small class="text-muted mt-1" id="kpi-resueltos-sub">0 / mes</small>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-md-2">
     <div class="metric-card">
       <div class="metric-value text-success" id="kpi-mttr">-- h</div>
-      <div class="metric-label">Tiempo Medio Cierre</div>
-      <small class="text-muted mt-1" id="kpi-mttr-sub">Promedio: -- h | Mediana: -- h</small>
+      <div class="metric-label">Tiempo Medio</div>
+      <small class="text-muted mt-1" id="kpi-mttr-sub">Mediana: -- h</small>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-md-2">
     <div class="metric-card">
       <div class="metric-value text-danger" id="kpi-cancelados">--%</div>
-      <div class="metric-label">% Cancelados Promedio</div>
-      <small class="text-muted mt-1" id="kpi-cancelados-sub">0 cancelados / mes</small>
+      <div class="metric-label">% Cancelados</div>
+      <small class="text-muted mt-1" id="kpi-cancelados-sub">0 / mes</small>
     </div>
   </div>
-  <div class="col-md-3">
+  <div class="col-md-2">
     <div class="metric-card">
       <div class="metric-value text-warning" id="kpi-rezagados">--%</div>
-      <div class="metric-label">% Rezagados Promedio</div>
-      <small class="text-muted mt-1" id="kpi-rezagados-sub">0 pendientes / mes</small>
+      <div class="metric-label">% Rezagados</div>
+      <small class="text-muted mt-1" id="kpi-rezagados-sub">0 / mes</small>
+    </div>
+  </div>
+
+  <!-- NUEVAS TARJETAS: PROBABILIDAD DE EXCEDER PROMEDIO Y MEDIANA -->
+  <div class="col-md-2">
+    <div class="metric-card border-info">
+      <div class="metric-value text-info" id="kpi-exc-promedio">--%</div>
+      <div class="metric-label">Prob. > Promedio</div>
+      <small class="text-muted mt-1">Excede media (h)</small>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="metric-card border-warning">
+      <div class="metric-value text-warning" id="kpi-exc-mediana">--%</div>
+      <div class="metric-label">Prob. > Mediana</div>
+      <small class="text-muted mt-1">Excede mediana (h)</small>
     </div>
   </div>
 </div>
@@ -50,7 +66,7 @@
     <div class="card h-100">
       <div class="card-header"><h5><i class="bi bi-pie-chart me-2"></i>Distribución Global por Mes</h5></div>
       <div class="card-body d-flex align-items-center justify-content-center">
-        <div class="chart-container" style="position:relative;height:280px;width:100%;">
+        <div class="chart-container" style="position:relative; height:320px; width:100%;">
           <canvas id="chartOutcomePie"></canvas>
         </div>
       </div>
@@ -59,17 +75,17 @@
   <div class="col-lg-7">
     <div class="card h-100">
       <div class="card-header"><h5><i class="bi bi-graph-up me-2"></i>Evolución de Tiempos de Cierre (MTTR Promedio vs. Mediana)</h5></div>
-      <div class="card-body"><div class="chart-container" style="position:relative;height:280px"><canvas id="chartMttrTrend"></canvas></div></div>
+      <div class="card-body"><div class="chart-container" style="position:relative; height:320px;"><canvas id="chartMttrTrend"></canvas></div></div>
     </div>
   </div>
 </div>
 
-<!-- Fila 2: Gráficos de Torta por cada Grupo de Trabajo (Dinámico) -->
+<!-- Fila 2: Gráficos por Grupo de Trabajo (Grilla Dinámica al 100%) -->
 <div class="row g-4 mb-4">
   <div class="col-12">
     <div class="card">
       <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-pie-chart-fill me-2 text-primary"></i>Distribución de Rendimiento por Grupo de Trabajo</h5>
+        <h5 class="mb-0"><i class="bi bi-pie-chart-fill me-2 text-primary"></i>Rendimiento y Riesgo de Tiempo por Grupo de Trabajo</h5>
       </div>
       <div class="card-body">
         <div class="row g-4" id="grupo-charts-container">

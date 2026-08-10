@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = document.getElementById('analyticsGroupsContainer');
     const selectPeriodo = document.getElementById('filterPeriodoAnalytics');
 
-    // Registrar Plugin DataLabels para mostrar % dentro de las rebanadas
     if (typeof ChartDataLabels !== 'undefined') {
         Chart.register(ChartDataLabels);
     }
@@ -94,7 +93,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 return;
             }
 
-            // Destruir instancias previas
             Object.values(chartInstances).forEach(c => c.destroy());
             chartInstances = {};
 
@@ -107,12 +105,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function renderGroupSection(gName, groupData, idx) {
+        const mG = groupData.metricas_grupo || {};
         return `
             <div class="card mb-5 border p-3" style="background-color: var(--surface-secondary);">
-                <div class="card-header rounded mb-4" style="background-color: var(--surface-tertiary);">
+                <!-- Encabezado del Grupo -->
+                <div class="card-header rounded mb-3 style="background-color: var(--surface-tertiary);">
                     <h4 class="mb-0 text-primary"><i class="bi bi-people-fill me-2"></i>Grupo de Trabajo: ${gName}</h4>
                 </div>
 
+                <!-- CARDS DE TIEMPO Y MTTR DEL GRUPO -->
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="metric-card border-success">
+                            <div class="metric-value text-success">${mG.tiempo_medio_cierre_horas || 0} h</div>
+                            <div class="metric-label">MTTR Promedio</div>
+                            <small class="text-muted mt-1">Mediana: <strong>${mG.tiempo_mediana_cierre_horas || 0} h</strong></small>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="metric-card border-info">
+                            <div class="metric-value text-info">${mG.tiempo_p25_cierre_horas || 0} - ${mG.tiempo_p75_cierre_horas || 0} h</div>
+                            <div class="metric-label">Rango P25 - P75</div>
+                            <small class="text-muted mt-1">Desviación σ: <strong>${mG.tiempo_std_cierre_horas || 0} h</strong></small>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="metric-card border-primary">
+                            <div class="metric-value text-primary">${mG.tiempo_promedio_primera_respuesta_horas || 0} h</div>
+                            <div class="metric-label">1ª Respuesta Promedio</div>
+                            <small class="text-muted mt-1">Tiempo primer contacto</small>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="metric-card border-warning">
+                            <div class="metric-value text-warning">${mG.pct_excede_promedio_cierre || 0}%</div>
+                            <div class="metric-label">Prob. > Promedio</div>
+                            <small class="text-muted mt-1">Prob. > Mediana: <strong>${mG.pct_excede_mediana_cierre || 0}%</strong></small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GRÁFICOS DEL GRUPO -->
                 <div class="row g-4 mb-4">
                     <!-- 1. Dona Tipos de Solicitud -->
                     <div class="col-lg-4">
@@ -126,7 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                     </div>
 
-                    <!-- 2. Barras Horizontales Razones de Falla (% Causa Raíz) -->
+                    <!-- 2. Barras Horizontales Razones de Falla -->
                     <div class="col-lg-4">
                         <div class="card h-100">
                             <div class="card-header"><h5><i class="bi bi-bar-chart-steps me-2"></i>Causa Raíz (% sobre Grupo)</h5></div>
@@ -170,7 +206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const totGrupo = groupData.total_tickets_grupo || 0;
         const colorPalette = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#3b82f6', '#14b8a6', '#a855f7', '#f43f5e'];
 
-        // 1. Chart Tipos de Solicitud (Estilo Subscriptions)
+        // 1. Chart Tipos de Solicitud
         const tipos = groupData.tipos_solicitud || [];
         const canvasTipo = document.getElementById(`chart-tipo-pie-${idx}`);
         if (canvasTipo && tipos.length > 0) {
@@ -207,7 +243,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // 2. Chart Razones de Falla (Barras Horizontales)
+        // 2. Chart Razones de Falla
         const razones = (groupData.razones_falla || []).sort((a,b) => (b.metricas.total_tickets||0) - (a.metricas.total_tickets||0)).slice(0, 8);
         const canvasRazon = document.getElementById(`chart-razon-bar-${idx}`);
         if (canvasRazon && razones.length > 0) {
@@ -236,7 +272,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // 3. Chart Sucursal (Dona Sencilla Estilo Subscriptions)
+        // 3. Chart Sucursal
         const sucursalesMap = new Map();
         (groupData.sucursales || []).forEach(s => {
             if (s.nombre && !sucursalesMap.has(s.nombre)) {

@@ -251,6 +251,8 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
             "tiempo_medio_cierre_horas": round(float(df_sum["tiempo_medio_cierre_horas"].mean()), 2),
             "tiempo_mediana_cierre_horas": round(float(df_sum["tiempo_mediana_cierre_horas"].mean()), 2),
             "tiempo_promedio_primera_respuesta_horas": round(float(df_sum["tiempo_promedio_primera_respuesta_horas"].mean()), 2),
+            "pct_excede_promedio_cierre": round(float(df_sum["pct_excede_promedio_cierre"].fillna(0).mean()), 2),
+            "pct_excede_mediana_cierre": round(float(df_sum["pct_excede_mediana_cierre"].fillna(0).mean()), 2),
         }
 
         grupo_records = []
@@ -275,6 +277,8 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
                     "tiempo_medio_cierre_horas": round(float(df_g_sub["tiempo_medio_cierre_horas"].mean()), 2),
                     "tiempo_mediana_cierre_horas": round(float(df_g_sub["tiempo_mediana_cierre_horas"].mean()), 2),
                     "tiempo_promedio_primera_respuesta_horas": round(float(df_g_sub["tiempo_promedio_primera_respuesta_horas"].mean()), 2),
+                    "pct_excede_promedio_cierre": round(float(df_g_sub["pct_excede_promedio_cierre"].fillna(0).mean()), 2),
+                    "pct_excede_mediana_cierre": round(float(df_g_sub["pct_excede_mediana_cierre"].fillna(0).mean()), 2),
                 }
 
         _save_global_support_metrics(db, resumen_global_avg, por_grupo_avg)
