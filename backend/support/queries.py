@@ -103,7 +103,7 @@ def get_support_metric_totals(periodo: str | None = None) -> dict:
         return {"resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": []}
 
 def get_support_analytics_structured(periodo: str | None = None) -> dict:
-    """Estructura las métricas de Analytics incluyendo probabilidades de exceder tiempos."""
+    """Estructura Analytics calculando la Tasa de Incidencia por Cliente (%) por Site."""
     db = DBConnector()
     try:
         zone_info = {}
@@ -116,29 +116,59 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
                         "type": z.get("Type", "RF").strip()
                     }
 
+        # 1. Consultar base de suscriptores para sacar la población real de clientes por zona
+        df_subs_cnt = db.query(f"""
+            SELECT zona, COUNT(*)::int AS total_suscriptores
+            FROM {DB_SCHEMA}.{TableNames.SUBSCRIPTIONS}
+            GROUP BY zona
+        """)
+        
+        site_subs_map = {}
+        if not df_subs_cnt.empty:
+            for _, srow in df_subs_cnt.iterrows():
+                z_name = str(srow["zona"]).strip().lower()
+                z_meta = zone_info.get(z_name, {"site": "Otros / Desconocido"})
+                s_name = z_meta["site"]
+                site_subs_map[s_name] = site_subs_map.get(s_name, 0) + int(srow["total_suscriptores"])
+
         where_p = ""
         params_p = []
+        where_t = ""
+        params_t = []
         if periodo and periodo != "ALL":
             where_p = "WHERE periodo_reporte = %s"
             params_p = [periodo]
+            where_t = "WHERE TO_CHAR(creado_el, 'YYYY-MM') = %s"
+            params_t = [periodo]
         else:
             periodos = get_support_periodos()
             if periodos:
                 where_p = "WHERE periodo_reporte = %s"
                 params_p = [periodos[0]]
+                where_t = "WHERE TO_CHAR(creado_el, 'YYYY-MM') = %s"
+                params_t = [periodos[0]]
 
-        df = db.query(f"""
+        df_dims = db.query(f"""
             SELECT periodo_reporte, dimension, grupo_trabajo, tipo_solicitud, razon_falla, valor, metricas
             FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
             {where_p}
         """, params=params_p)
 
-        if df.empty:
+        df_soluciones = db.query(f"""
+            SELECT grupo_trabajo, solucion_falla, COUNT(*)::int AS total
+            FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
+            {where_t}
+              AND solucion_falla IS NOT NULL AND solucion_falla != '' AND solucion_falla != 'Sin Especificar'
+            GROUP BY grupo_trabajo, solucion_falla
+            ORDER BY total DESC
+        """, params=params_t)
+
+        if df_dims.empty:
             return {"grupos": {}}
 
         grupos_dict = {}
 
-        for _, row in df.iterrows():
+        for _, row in df_dims.iterrows():
             g = row["grupo_trabajo"]
             dim = row["dimension"]
             t_sol = row["tipo_solicitud"]
@@ -152,8 +182,9 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
                     "metricas_grupo": {},
                     "tipos_solicitud": [],
                     "razones_falla": [],
+                    "soluciones_falla": [],
                     "sucursales": [],
-                    "zonas_raw": []
+                    "sites_summary": []
                 }
 
             if dim == "grupo_trabajo":
@@ -166,8 +197,37 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
             elif dim == "sucursal" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
                 grupos_dict[g]["sucursales"].append({"nombre": val, "metricas": m})
             elif dim == "zona" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
-                grupos_dict[g]["zonas_raw"].append({"zona_sucursal": val, "metricas": m})
+                val_zs = val
+                parts = val_zs.split(" - ")
+                z_name = parts[0].strip() if len(parts) > 0 else val_zs
+                z_meta = zone_info.get(z_name.lower(), {"site": "Otros / Desconocido", "type": "RF"})
+                site_name = z_meta["site"]
 
+                sites_map = grupos_dict[g].setdefault("_sites_temp", {})
+                if site_name not in sites_map:
+                    sites_map[site_name] = {"site": site_name, "total_tickets": 0, "tickets_resueltos": 0, "suma_mttr": 0.0, "count_mttr": 0}
+
+                s_obj = sites_map[site_name]
+                s_obj["total_tickets"] += m.get("total_tickets", 0)
+                s_obj["tickets_resueltos"] += m.get("tickets_resueltos", 0)
+                s_obj["suma_mttr"] += (m.get("tiempo_medio_cierre_horas", 0) * m.get("tickets_resueltos", 0))
+                s_obj["count_mttr"] += m.get("tickets_resueltos", 0)
+
+        # Cargar soluciones técnicas
+        if not df_soluciones.empty:
+            for _, srow in df_soluciones.iterrows():
+                g = srow["grupo_trabajo"]
+                if g in grupos_dict:
+                    tot_g = grupos_dict[g]["total_tickets_grupo"] or 1
+                    cant = int(srow["total"])
+                    pct = round((cant / tot_g) * 100, 2)
+                    grupos_dict[g]["soluciones_falla"].append({
+                        "nombre": srow["solucion_falla"],
+                        "total": cant,
+                        "pct": pct
+                    })
+
+        # Estructurar la Tasa de Incidencia por Cliente (%) por Site
         for g, data_g in grupos_dict.items():
             tot_g = data_g["total_tickets_grupo"] or 1
             
@@ -175,41 +235,33 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
                 cant = r["metricas"].get("total_tickets", 0)
                 r["metricas"]["pct_del_grupo"] = round((cant / tot_g) * 100, 2)
 
-            site_groups = {}
-            for z_item in data_g["zonas_raw"]:
-                val_zs = z_item["zona_sucursal"]
-                parts = val_zs.split(" - ")
-                z_name = parts[0].strip() if len(parts) > 0 else val_zs
+            sites_temp = data_g.pop("_sites_temp", {})
+            sites_summary = []
+
+            for s_name, s_data in sites_temp.items():
+                tot_tkts = s_data["total_tickets"]
+                pop_subs = site_subs_map.get(s_name, 0)
                 
-                z_meta = zone_info.get(z_name.lower(), {"site": "Otros / Desconocido", "type": "RF"})
-                site = z_meta["site"]
-                tech = z_meta["type"]
+                # TASA DE INCIDENCIA REAL: (Tickets del Site / Suscriptores del Site) * 100
+                tasa_incidencia = round((tot_tkts / pop_subs) * 100, 2) if pop_subs > 0 else 0.0
+                mttr_avg = round(s_data["suma_mttr"] / s_data["count_mttr"], 2) if s_data["count_mttr"] > 0 else 0.0
 
-                site_groups.setdefault(site, {}).setdefault(tech, []).append({
-                    "zona_sucursal": val_zs,
-                    "metricas": z_item["metricas"]
+                sites_summary.append({
+                    "site": s_name,
+                    "total_tickets": tot_tkts,
+                    "total_suscriptores": pop_subs,
+                    "tasa_incidencia_pct": tasa_incidencia,
+                    "mttr_promedio": mttr_avg
                 })
 
-            regional_list = []
-            for site_name, tech_dict in sorted(site_groups.items()):
-                tech_list = []
-                for tech_name, zonas_list in sorted(tech_dict.items()):
-                    tech_list.append({
-                        "technology": tech_name,
-                        "zonas": sorted(zonas_list, key=lambda x: x["metricas"].get("total_tickets", 0), reverse=True)
-                    })
-                regional_list.append({
-                    "site": site_name,
-                    "technologies": tech_list
-                })
-            data_g["zonas_regional"] = regional_list
-            del data_g["zonas_raw"]
+            # Ordenar los Sites de mayor a menor Tasa de Incidencia (%) para destacar los Sites con más fallas por cliente
+            sites_summary.sort(key=lambda x: x["tasa_incidencia_pct"], reverse=True)
+            data_g["sites_summary"] = sites_summary
 
         return {"grupos": grupos_dict}
     except Exception:
         logger.exception("Error estructurando Analytics de Soporte")
         return {"grupos": {}}
-
 
 def get_support_dimension_metrics(periodos: list[str] | None = None) -> list[dict]:
     db = DBConnector()

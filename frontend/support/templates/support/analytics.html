@@ -6,16 +6,42 @@
 {% block extra_css %}
   <link rel="stylesheet" href="{% static 'css/subscriptions.css' %}">
   <style>
-    .site-card { margin-bottom: 1.5rem; border-left: 4px solid var(--primary); }
-    .table-sales th, .table-sales td { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
-    .table-sales thead th { background-color: var(--surface-tertiary) !important; font-weight: 600; }
+    /* Estilos Borderless Ejecutivo */
+    .card, .metric-card, .card-header {
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .group-section-container {
+      background: var(--surface-secondary);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .group-header-title {
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+      padding: 0.85rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .timing-strip-item {
+      background: var(--surface-tertiary);
+      border-radius: 8px;
+      padding: 1.1rem 1.25rem;
+      height: 100%;
+    }
+    .chart-box-card {
+      background: var(--surface-tertiary);
+      border-radius: 10px;
+      padding: 1rem;
+      height: 100%;
+    }
   </style>
 {% endblock %}
 
 {% block content %}
-<!-- Cabecera únicamente con Filtro de Periodo -->
-<div class="card-header rounded d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 py-2" style="background: var(--surface-secondary); border: 1px solid var(--border-color);">
-  <h4 class="mb-0 px-2"><i class="bi bi-diagram-3 text-primary me-2"></i>Análisis por Equipo de Trabajo</h4>
+<!-- Cabecera de Control -->
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2 p-3 rounded-3" style="background: var(--surface-secondary);">
+  <h4 class="mb-0 fw-bold"><i class="bi bi-diagram-3 text-primary me-2"></i>Análisis Jerárquico por Equipo de Trabajo</h4>
   
   <div class="d-flex align-items-center gap-2">
     <label class="form-label mb-0 text-muted small fw-bold">Periodo:</label>
@@ -23,10 +49,10 @@
   </div>
 </div>
 
-<!-- Contenedor Dinámico para cada Grupo de Trabajo -->
+<!-- Contenedor Dinámico Borderless por Grupo de Trabajo -->
 <div id="analyticsGroupsContainer">
   <div class="text-center py-5 text-muted">
-    <div class="spinner-border spinner-border-sm text-primary me-2"></div>Cargando analíticas por grupo...
+    <div class="spinner-border spinner-border-sm text-primary me-2"></div>Cargando analíticas ejecutivas por grupo...
   </div>
 </div>
 {% endblock %}
