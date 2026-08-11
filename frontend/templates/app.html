@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>NetOwl Analytics</title>
+  {% load static %}
+  <link rel="icon" href="{% static 'img/favicon_dark.png' %}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  {% if debug %}
+    <!-- Script Preamble de React Fast Refresh para Vite -->
+    <script type="module">
+      import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
+      RefreshRuntime.injectIntoGlobalHook(window)
+      window.$RefreshReg$ = () => {}
+      window.$RefreshSig$ = () => (type) => type
+      window.__vite_plugin_react_preamble_installed__ = true
+    </script>
+    <script type="module" src="http://localhost:5173/static/@vite/client"></script>
+    <script type="module" src="http://localhost:5173/static/src/main.tsx"></script>
+  {% else %}
+    <!-- En producción lee el bundle compilado -->
+    <link rel="stylesheet" href="{% static 'dist/assets/main-BM48q7hf.css' %}">
+    <script type="module" src="{% static 'dist/assets/main-DtMFC_iq.js' %}"></script>
+  {% endif %}
+</head>
+<body class="bg-[#0b1326] text-[#E6EEF6] font-sans antialiased min-h-screen">
+  {% block inertia %}
+  {% endblock inertia %}
+</body>
+</html>

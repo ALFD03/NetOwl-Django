@@ -5,6 +5,7 @@ import logging
 from contextlib import redirect_stdout, redirect_stderr
 
 from django.shortcuts import render
+from inertia import render as render_inertia
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
@@ -50,19 +51,41 @@ def register_import_log(user, module, file_name='N/A', rows=0, status='success',
 @login_required
 @permission_required('can_view_imports')
 def subscriptions_import_view(request):
-    return render(request, f"{TEMPLATE_PREFIX}subscriptions.html", {"section": "subscriptions"})
-
+    return render_inertia(request, "Imports/Subscriptions", {"section": "subscriptions"})
 
 @login_required
 @permission_required('can_view_imports')
 def crm_import_view(request):
-    return render(request, f"{TEMPLATE_PREFIX}crm.html", {"section": "crm"})
+    return render_inertia(request, "Imports/Crm", {"section": "crm"})
 
+@login_required
+@permission_required('can_view_imports')
+def support_import_view(request):
+    return render_inertia(request, "Imports/Support", {"section": "support"})
 
 @login_required
 @permission_required('can_view_imports')
 def history_view(request):
-    return render(request, f"{TEMPLATE_PREFIX}history.html", {"section": "history"})
+    logs = ImportActionLog.objects.all()[:200]
+    history_data = []
+    for l in logs:
+        history_data.append({
+            "id": l.id,
+            "timestamp": l.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "username": l.username,
+            "module": l.module,
+            "module_display": l.get_module_display(),
+            "file_name": l.file_name,
+            "rows_processed": l.rows_processed,
+            "status": l.status,
+            "status_display": l.get_status_display(),
+            "message": l.message,
+            "details": l.details,
+        })
+    return render_inertia(request, "Imports/History", {
+        "history": history_data,
+        "section": "history"
+    })
 
 
 @login_required
@@ -215,10 +238,6 @@ def api_run_analysis(request):
         register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", 0, 'error', str(e))
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
     
-@login_required
-@permission_required('can_view_imports')
-def support_import_view(request):
-    return render(request, f"{TEMPLATE_PREFIX}support.html", {"section": "support"})
 
 @login_required
 @ratelimit(key='ip', rate='5/m', block=True)

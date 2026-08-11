@@ -3,6 +3,7 @@ import io
 import os
 import tempfile
 from contextlib import redirect_stdout, redirect_stderr
+from inertia import render as render_inertia
 
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -104,17 +105,42 @@ def cleanup_tempfile(tmp_path):
 @login_required
 @permission_required('can_view_crm')
 def dashboard(request):
-    return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
+    return render_inertia(request, "CRM/Dashboard", {
+        "totals": get_metric_totals(),
+        "tiempoInstalacion": get_metric_tiempo_instalacion(),
+        "tiempoPorEtapa": get_metric_tiempo_por_etapa(),
+        "efectividad": get_metric_efectividad(),
+        "etapa8": get_metric_etapa8(),
+        "perdidos": get_metric_perdido(),
+        "rescate": get_metric_rescate(),
+        "section": "dashboard"
+    })
 
 @login_required
 @permission_required('can_view_crm_analytics')
 def analytics(request):
-    return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
+    return render_inertia(request, "CRM/Analytics", {
+        "dimensionTotals": get_dimension_totals(),
+        "dimensionTiempoInstalacion": get_dimension_tiempo_instalacion(),
+        "dimensionEfectividad": get_dimension_efectividad(),
+        "dimensionEtapa8": get_dimension_etapa8(),
+        "dimensionPerdidos": get_dimension_perdido(),
+        "dimensionRescate": get_dimension_rescate(),
+        "section": "analytics"
+    })
 
 @login_required
 @permission_required('can_view_crm_results')
 def results(request):
-    return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
+    return render_inertia(request, "CRM/Results", {
+        "totals": get_metric_totals(),
+        "tiempoInstalacion": get_metric_tiempo_instalacion(),
+        "tiempoPorEtapa": get_metric_tiempo_por_etapa(),
+        "efectividad": get_metric_efectividad(),
+        "etapa8": get_metric_etapa8(),
+        "rescate": get_metric_rescate(),
+        "section": "results"
+    })
 
 @login_required
 @permission_required('can_import_data')

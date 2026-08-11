@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 from contextlib import redirect_stdout, redirect_stderr
+from inertia import render as render_inertia
 
 logger = logging.getLogger(__name__)
 
@@ -99,12 +100,23 @@ def cleanup_tempfile(tmp_path):
 @login_required
 @permission_required('can_view_subscriptions')
 def dashboard(request):
-    return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
+    periodos_data = get_cierre_churn()
+    return render_inertia(request, "Subscriptions/Dashboard", {
+        "periodos": periodos_data,
+        "section": "dashboard"
+    })
 
 @login_required
 @permission_required('can_view_subs_analytics')
 def analytics(request):
-    return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
+    periods_param = request.GET.get("periods")
+    periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
+    data = get_analytics_data(periodos)
+    return render_inertia(request, "Subscriptions/Analytics", {
+        "periodos": data.get("periodos", []),
+        "dimensiones": data.get("dimensiones", []),
+        "section": "analytics"
+    })
 
 @login_required
 @permission_required('can_import_data')
@@ -114,22 +126,54 @@ def imports(request):
 @login_required
 @permission_required('can_view_subs_results')
 def results(request, periodo=None):
-    return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
+    cierres = get_cierre_churn([periodo] if periodo else None)
+    return render_inertia(request, "Subscriptions/Results", {
+        "periodos": cierres,
+        "selected_periodo": periodo,
+        "section": "results"
+    })
 
 @login_required
 @permission_required('can_view_subs_lifetime')
 def lifetime(request):
-    return render(request, f"{TEMPLATE_PREFIX}lifetime.html", {"section": "lifetime"})
+    results_data = get_lifecycle_results()
+    dims_data = get_lifetime_dimensiones()
+    return render_inertia(request, "Subscriptions/Lifetime", {
+        "lifecycle": results_data,
+        "dimensiones": dims_data,
+        "section": "lifetime"
+    })
 
 @login_required
 @permission_required('can_view_subs_sales')
 def sales_report(request):
-    return render(request, f"{TEMPLATE_PREFIX}sales_report.html", {"section": "sales_report"})
+    periodo = request.GET.get("period")
+    data = get_sales_report_data(periodo)
+    return render_inertia(request, "Subscriptions/SalesReport", {
+        "reportData": data,
+        "section": "sales_report"
+    })
+
+@login_required
+@permission_required('can_view_subs_sales')
+def business_units(request):
+    periodo = request.GET.get("period")
+    data = get_business_units_data(periodo)
+    return render_inertia(request, "Subscriptions/BusinessUnits", {
+        "buData": data,
+        "section": "business_units"
+    })
 
 @login_required
 @permission_required('can_view_eta')
 def eta_report(request):
-    return render(request, f"{TEMPLATE_PREFIX}eta_report.html", {"section": "eta_report"})
+    periodo = request.GET.get("period")
+    manager = ETAReportManager(DBConnector())
+    data = manager.calculate_eta_report(periodo or "2026-01")
+    return render_inertia(request, "Subscriptions/EtaReport", {
+        "etaData": data,
+        "section": "eta_report"
+    })
 
 # --- APIS DE LECTURA DE DATOS ---
 
@@ -420,11 +464,6 @@ def api_eta_report_save_sub_config(request):
         return JsonResponse({"status": "success", "message": f"Suscripción {orden} guardada."})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
-    
-@login_required
-@permission_required('can_view_subs_sales')
-def business_units(request):
-    return render(request, f"{TEMPLATE_PREFIX}business_units.html", {"section": "business_units"})
 
 @login_required
 @permission_required('can_view_subs_sales')

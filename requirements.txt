@@ -1,33 +1,13 @@
-# ---- ChurnRateAnalyzer - Dependencias ----
-# Framework web principal
+# ---- NetOwl - Dependencias ----
 django>=5.0.0
-
-# Servidor WSGI para producción (Linux/Unix). En Windows usar waitress.
 gunicorn>=21.2.0
-
-# Middleware para servir archivos estáticos en producción sin Apache/Nginx
 whitenoise>=6.0.0
-
-# Manipulación y análisis de datos tabulares (DataFrames)
 pandas>=2.0.0
-
-# Operaciones numéricas requeridas internamente por pandas
 numpy>=1.24.0
-
-# Driver de PostgreSQL para conexión desde Django
 psycopg2>=2.9.0
-
-# Carga de las variables VAULT_* de arranque desde archivo .env
 python-dotenv>=1.0.0
-
-# Cliente de HashiCorp Vault (secretos: credenciales de BD, SECRET_KEY)
 hvac>=2.3.0
-
-# Validación y conversión de tipos de la configuración leída de Vault
 pydantic>=2.7.0
-
-# Análisis de supervivencia Kaplan-Meier (curvas de retención)
 lifelines>=0.28.0
-
-# Rate limiting para endpoints
 django-ratelimit>=4.0.0
+inertia-django>=0.6.0

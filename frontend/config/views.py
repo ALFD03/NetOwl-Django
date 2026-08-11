@@ -7,17 +7,30 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import ensure_csrf_cookie
 from .decorators import permission_required
 from .models import Profile, PermissionGroup
+from inertia import render as render_inertia
 
+@ensure_csrf_cookie
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('subscriptions:dashboard')
     
     error_message = None
     if request.method == "POST":
-        usr = request.POST.get("username", "").strip()
-        pas = request.POST.get("password", "").strip()
+        # Soporta tanto payload JSON de Inertia/React como Form URL-Encoded
+        if request.content_type == "application/json":
+            try:
+                body = json.loads(request.body)
+                usr = body.get("username", "").strip()
+                pas = body.get("password", "").strip()
+            except json.JSONDecodeError:
+                usr, pas = "", ""
+        else:
+            usr = request.POST.get("username", "").strip()
+            pas = request.POST.get("password", "").strip()
+
         user = authenticate(request, username=usr, password=pas)
         if user is not None:
             login(request, user)
@@ -28,7 +41,7 @@ def login_view(request):
     if User.objects.count() == 0:
         return redirect('config:setup')
         
-    return render(request, "config/login.html", {"error_message": error_message})
+    return render_inertia(request, "Config/Login", {"errorMessage": error_message})
 
 def logout_view(request):
     logout(request)
@@ -73,18 +86,80 @@ def setup_view(request):
             profile.save()
             return redirect('config:login')
             
-    return render(request, "config/setup.html", {"error_message": error_message})
+    return render_inertia(request, "Config/Setup", {"errorMessage": error_message})
 
 @login_required
 @permission_required('can_manage_users')
 def user_management_view(request):
     users = User.objects.all().select_related('profile', 'profile__group').order_by('username')
     groups = PermissionGroup.objects.all().order_by('name')
-    roles = Profile.ROLE_CHOICES
-    return render(request, "config/management.html", {
-        "users": users,
-        "groups": groups,
-        "roles": roles,
+    
+    users_data = []
+    for u in users:
+        prof = getattr(u, 'profile', None)
+        users_data.append({
+            "id": u.id,
+            "username": u.username,
+            "is_superuser": u.is_superuser,
+            "role": prof.role if prof else 'viewer',
+            "role_display": prof.get_role_display() if prof else 'Visualizador',
+            "group_id": prof.group_id if prof else None,
+            "group_name": prof.group.name if (prof and prof.group) else None,
+            "permissions": {
+                "can_view_subscriptions": prof.can_view_subscriptions if prof else True,
+                "can_view_crm": prof.can_view_crm if prof else True,
+                "can_view_imports": prof.can_view_imports if prof else True,
+                "can_view_support": prof.can_view_support if prof else True,
+                "can_view_subs_analytics": prof.can_view_subs_analytics if prof else True,
+                "can_view_subs_results": prof.can_view_subs_results if prof else True,
+                "can_view_subs_lifetime": prof.can_view_subs_lifetime if prof else True,
+                "can_view_subs_sales": prof.can_view_subs_sales if prof else True,
+                "can_view_eta": prof.can_view_eta if prof else True,
+                "can_view_crm_analytics": prof.can_view_crm_analytics if prof else True,
+                "can_view_crm_results": prof.can_view_crm_results if prof else True,
+                "can_view_support_analytics": prof.can_view_support_analytics if prof else True,
+                "can_view_support_results": prof.can_view_support_results if prof else True,
+                "can_import_data": prof.can_import_data if prof else False,
+                "can_run_calculations": prof.can_run_calculations if prof else False,
+                "can_run_lifetime": prof.can_run_lifetime if prof else False,
+                "can_manage_eta": prof.can_manage_eta if prof else False,
+                "can_manage_users": prof.can_manage_users if prof else False,
+            }
+        })
+
+    groups_data = []
+    for g in groups:
+        groups_data.append({
+            "id": g.id,
+            "name": g.name,
+            "description": g.description,
+            "members_count": g.members.count(),
+            "permissions": {
+                "can_view_subscriptions": g.can_view_subscriptions,
+                "can_view_crm": g.can_view_crm,
+                "can_view_imports": g.can_view_imports,
+                "can_view_support": g.can_view_support,
+                "can_view_subs_analytics": g.can_view_subs_analytics,
+                "can_view_subs_results": g.can_view_subs_results,
+                "can_view_subs_lifetime": g.can_view_subs_lifetime,
+                "can_view_subs_sales": g.can_view_subs_sales,
+                "can_view_eta": g.can_view_eta,
+                "can_view_crm_analytics": g.can_view_crm_analytics,
+                "can_view_crm_results": g.can_view_crm_results,
+                "can_view_support_analytics": g.can_view_support_analytics,
+                "can_view_support_results": g.can_view_support_results,
+                "can_import_data": g.can_import_data,
+                "can_run_calculations": g.can_run_calculations,
+                "can_run_lifetime": g.can_run_lifetime,
+                "can_manage_eta": g.can_manage_eta,
+                "can_manage_users": g.can_manage_users,
+            }
+        })
+
+    return render_inertia(request, "Config/Management", {
+        "users": users_data,
+        "groups": groups_data,
+        "roles": Profile.ROLE_CHOICES,
         "section": "management"
     })
 

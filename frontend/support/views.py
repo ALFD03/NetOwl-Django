@@ -2,6 +2,7 @@
 
 from django.shortcuts import render
 from django.http import JsonResponse
+from inertia import render as render_inertia
 from django.contrib.auth.decorators import login_required
 from frontend.config.decorators import permission_required
 from backend.support.queries import (
@@ -17,17 +18,35 @@ TEMPLATE_PREFIX = "support/"
 @login_required
 @permission_required('can_view_support')
 def dashboard(request):
-    return render(request, f"{TEMPLATE_PREFIX}dashboard.html", {"section": "dashboard"})
+    periodo = request.GET.get("period")
+    metrics = get_support_metric_totals(periodo)
+    return render_inertia(request, "Support/Dashboard", {
+        "metrics": metrics,
+        "section": "dashboard"
+    })
 
 @login_required
 @permission_required('can_view_support_analytics')
 def analytics(request):
-    return render(request, f"{TEMPLATE_PREFIX}analytics.html", {"section": "analytics"})
+    periodo = request.GET.get("period")
+    analytics_data = get_support_analytics_structured(periodo)
+    periodos = get_support_periodos()
+    return render_inertia(request, "Support/Analytics", {
+        "analyticsData": analytics_data,
+        "periods": periodos,
+        "section": "analytics"
+    })
 
 @login_required
 @permission_required('can_view_support_results')
 def results(request):
-    return render(request, f"{TEMPLATE_PREFIX}results.html", {"section": "results"})
+    periods_param = request.GET.get("periods")
+    periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
+    historico = get_support_cierre_historico(periodos)
+    return render_inertia(request, "Support/Results", {
+        "historico": historico,
+        "section": "results"
+    })
 
 # --- ENDPOINTS API ---
 
