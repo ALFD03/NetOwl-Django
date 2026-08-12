@@ -4,6 +4,7 @@ import { SubHeader } from '@/components/Navigation/SubHeader';
 import { MetricCard } from '@/components/UI/MetricCard';
 import { Modal } from '@/components/UI/Modal';
 import { Line, Bar } from 'react-chartjs-2';
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -15,6 +16,9 @@ import {
   Tooltip,
   Legend,
   Filler,
+  BarController,
+  LineController,
+  layouts,
 } from 'chart.js';
 
 ChartJS.register(
@@ -26,7 +30,10 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  BarController,
+  LineController,
+  ChartDataLabels
 );
 
 interface PeriodoData {
@@ -37,7 +44,7 @@ interface PeriodoData {
   bajas: number;
   churn_neto_pct: number;
   churn_bruto_pct: number;
-  reactivaciones: number;
+  react_val: number;
   tasa_winback_pct: number;
   arpu: number;
   corte_impagado: number;
@@ -50,27 +57,77 @@ interface Props {
   periodos: PeriodoData[];
 }
 
+const formatPeriodoLabel = (str: string) => {
+  if (!str) return '';
+  const match = str.match(/(\d{4})-(\d{2})/);
+  if (!match) return str;
+
+  const year = match[1];
+  const monthNum = parseInt(match[2], 10);
+  const monthNames = [
+    'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+    'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+  ];
+  const monthName = monthNames[monthNum - 1] || match[2];
+  return `${monthName} ${year}`;
+};
+
 export default function SubscriptionsDashboard({ periodos = [] }: Props) {
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodoData | null>(null);
 
-  const latest = periodos[0] || {
-    churn_neto_pct: 0,
-    churn_bruto_pct: 0,
-    activos_final: 0,
-    arpu: 0,
-    reactivaciones: 0,
-    tasa_winback_pct: 0,
-    adiciones_netas: 0,
+  const latest = periodos[0] || { arpu: 0 };
+  const totalPeriodos = periodos.length;
+
+  // --- CÁLCULO DE PROMEDIOS GLOBALES ---
+  const avgChurnNetoNum = totalPeriodos > 0
+    ? periodos.reduce((acc, p) => acc + (p.churn_neto_pct || 0), 0) / totalPeriodos
+    : 0;
+
+  const avgChurnBrutoNum = totalPeriodos > 0
+    ? periodos.reduce((acc, p) => acc + (p.churn_bruto_pct || 0), 0) / totalPeriodos
+    : 0;
+
+  const avgCrecimientoNum = totalPeriodos > 0
+    ? periodos.reduce((acc, p) => {
+        const crec = p.activos_inicio > 0 
+          ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 
+          : 0;
+        return acc + crec;
+      }, 0) / totalPeriodos
+    : 0;
+
+  const getChurnColor = (val: number): 'green' | 'yellow' | 'red' => {
+    if (val < 3.0) return 'green';
+    if (val < 4.0) return 'yellow';
+    return 'red';
   };
 
-  const labels = [...periodos].map((p) => p.periodo_reporte).reverse();
+  const getCrecimientoColor = (val: number): 'red' | 'yellow' | 'green' => {
+    if (val < 0) return 'red';
+    if (val < 2.0) return 'yellow';
+    return 'green';
+  };
 
-  // Opciones base de gráficos
-  const chartOptions = {
+  const labelsFormatted = [...periodos].map((p) => formatPeriodoLabel(p.periodo_reporte)).reverse();
+
+  // --- OPCIONES GRÁFICO CHURN ---
+  const churnChartOptions: any = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+      legend: {
+        display: true,
+        position: 'top' as const,
+        align: 'end' as const,
+        labels: {
+          color: '#cbd5e1',
+          font: { size: 11, weight: '500' },
+          usePointStyle: true,
+          pointStyle: 'circle',
+          padding: 15,
+        },
+      },
+      datalabels: { display: false },
     },
     scales: {
       x: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
@@ -78,71 +135,225 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
     },
   };
 
-  // Datos para Gráfico Churn
+  // --- OPCIONES GRÁFICO CRECIMIENTO (Aprovamiento total de espacio y sin error IDE) ---
+  const crecimientoChartOptions: any = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: {
+      padding: { top: 0, bottom: 0 },
+    },
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top' as const,
+        align: 'end' as const,
+        labels: {
+          color: '#cbd5e1',
+          font: { size: 11, weight: '500' },
+          usePointStyle: true,
+          pointStyle: 'circle',
+          padding: 10
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            const index = context.dataIndex;
+            const rawIndex = periodos.length - 1 - index;
+            const p = periodos[rawIndex];
+            const label = context.dataset.label || '';
+            const val = Math.abs(context.parsed.y || 0);
+
+            if (label.includes('Churn Bruto')) {
+              return `${label}: -${val.toFixed(2)}% (${p.bajas?.toLocaleString()} bajas)`;
+            }
+            if (label.includes('Reactivaciones')) {
+              const totalEntradas = (p.nuevos_mes || 0) + (p.react_val || 0);
+              const tasaAporte = totalEntradas > 0 ? (p.react_val / totalEntradas) * 100 : 0;
+              return `${label}: +${val.toFixed(2)}% (${p.react_val?.toLocaleString()} reactivaciones - Aporte: ${tasaAporte.toFixed(1)}%)`;
+            }
+            if (label.includes('Nuevos')) {
+              return `${label}: +${val.toFixed(2)}% (${p.nuevos_mes?.toLocaleString()} clientes nuevos)`;
+            }
+            return `${label}: ${val.toFixed(2)}%`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        stacked: false,
+        grid: { color: 'rgba(30, 41, 59, 0.4)' },
+        ticks: { color: '#94a3b8', font: { size: 10, weight: '500' } },
+      },
+      y: {
+        stacked: true,
+        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+        ticks: { color: '#94a3b8', font: { size: 10 } },
+        grace: '15%',
+      },
+    },
+  };
+
+  // --- GRADIENTE CHURN LÍNEA ---
+  const createChurnGradient = (context: any) => {
+    const chart = context.chart;
+    const { ctx, chartArea } = chart;
+    if (!chartArea) return '#00d2ff';
+
+    const gradient = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+    const data = context.dataset.data;
+    const totalPoints = data.length;
+
+    data.forEach((val: number, index: number) => {
+      const position = totalPoints > 1 ? index / (totalPoints - 1) : 0;
+      let color = '#00ff88';
+      if (val >= 4.0) color = '#ff2a5f';
+      else if (val >= 3.0) color = '#ffb703';
+      gradient.addColorStop(position, color);
+    });
+
+    return gradient;
+  };
+
+  // --- DATASETS CHURN ---
   const churnChartData = {
-    labels,
+    labels: labelsFormatted,
     datasets: [
       {
         label: 'Churn Neto %',
         data: [...periodos].map((p) => p.churn_neto_pct).reverse(),
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.15)',
-        fill: true,
-        tension: 0.3,
+        borderColor: createChurnGradient,
+        borderWidth: 3.5,
+        fill: false,
+        tension: 0.35,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        pointBackgroundColor: [...periodos].map((p) => {
+          const val = p.churn_neto_pct;
+          if (val >= 4.0) return '#ff2a5f';
+          if (val >= 3.0) return '#ffb703';
+          return '#00ff88';
+        }).reverse(),
       },
       {
         label: 'Churn Bruto %',
         data: [...periodos].map((p) => p.churn_bruto_pct).reverse(),
-        borderColor: '#ef4444',
-        borderDash: [4, 4],
-        tension: 0.3,
+        borderColor: '#ff2a5f',
+        borderDash: [5, 5],
+        borderWidth: 2.5,
+        fill: false,
+        tension: 0.35,
+        pointRadius: 4,
       },
     ],
   };
 
-  // Datos para Gráfico Adiciones Netas vs Brutas
-  const adicionesChartData = {
-    labels,
+  // --- DATASETS CRECIMIENTO (VALORES POR FUERA CON CLIP FALSE) ---
+  const crecimientoChartData = {
+    labels: labelsFormatted,
     datasets: [
       {
-        label: 'Adiciones Netas',
-        data: [...periodos].map((p) => p.adiciones_netas).reverse(),
-        backgroundColor: '#10b981',
+        type: 'bar' as const,
+        label: 'Churn Bruto',
+        stack: 'loss',
+        data: [...periodos].map((p) => -p.churn_bruto_pct).reverse(),
+        backgroundColor: 'rgba(255, 42, 95, 0.85)',
+        borderColor: '#ff2a5f',
+        borderWidth: 1.5,
         borderRadius: 6,
+        datalabels: {
+          display: true,
+          clip: false,
+          anchor: 'end' as const,
+          align: 'end' as const, // Posiciona en la punta exterior de la barra negativa
+          offset: 4,
+          color: '#ff2a5f',
+          font: { weight: 'bold' as const, size: 10 },
+          formatter: (val: number) => `-${Math.abs(val).toFixed(2)}%`,
+        },
       },
       {
-        label: 'Adiciones Brutas',
-        data: [...periodos].map((p) => p.adiciones_brutas).reverse(),
-        backgroundColor: '#3b82f6',
+        type: 'bar' as const,
+        label: 'Reactivaciones',
+        stack: 'growth',
+        data: [...periodos].map((p) => {
+          const crec = p.activos_inicio > 0 
+            ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 
+            : 0;
+          const totalEntradas = (p.nuevos_mes || 0) + (p.react_val || 0);
+          const tasaAporte = totalEntradas > 0 ? (p.react_val / totalEntradas) : 0;
+          return Number((crec * tasaAporte).toFixed(2));
+        }).reverse(),
+        backgroundColor: 'rgba(37, 99, 235, 0.85)',
+        borderColor: '#3b82f6',
+        borderWidth: 1.5,
         borderRadius: 6,
+        datalabels: {
+          display: false,
+        },
+      },
+      {
+        type: 'bar' as const,
+        label: 'Nuevos Clientes',
+        stack: 'growth',
+        data: [...periodos].map((p) => {
+          const crec = p.activos_inicio > 0 
+            ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 
+            : 0;
+          const totalEntradas = (p.nuevos_mes || 0) + (p.react_val || 0);
+          const tasaAporte = totalEntradas > 0 ? (p.react_val / totalEntradas) : 0;
+          return Number((crec * (1 - tasaAporte)).toFixed(2));
+        }).reverse(),
+        backgroundColor: 'rgba(0, 255, 136, 0.85)',
+        borderColor: '#00ff88',
+        borderWidth: 1.5,
+        borderRadius: 6,
+        datalabels: {
+          display: true,
+          clip: false,
+          anchor: 'end' as const,
+          align: 'end' as const, // Posiciona en la punta exterior superior
+          offset: 4,
+          color: '#00ff88',
+          font: { weight: 'bold' as const, size: 10 },
+          formatter: (val: number, context: any) => {
+            const index = context.dataIndex;
+            const rawIndex = periodos.length - 1 - index;
+            const p = periodos[rawIndex];
+            const crecTotal = p.activos_inicio > 0 
+              ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 
+              : 0;
+            return `${crecTotal > 0 ? '+' : ''}${crecTotal.toFixed(2)}%`;
+          },
+        },
       },
     ],
   };
 
   return (
     <AppLayout title="Subscriptions Analytics">
-      {/* Navegación por pestañas del módulo */}
       <SubHeader activeTab="dashboard" />
 
       {/* Tarjetas KPI Superiores */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MetricCard
-          label="Churn Rate Neto"
-          value={`${latest.churn_neto_pct}%`}
-          color="blue"
-          subValue="Último periodo cerrado"
+          label="Churn Rate Neto Promedio"
+          value={`${avgChurnNetoNum.toFixed(4)}%`}
+          color={getChurnColor(avgChurnNetoNum)}
+          subValue={`Promedio de ${totalPeriodos} periodos`}
         />
         <MetricCard
-          label="Churn Rate Bruto"
-          value={`${latest.churn_bruto_pct}%`}
-          color="red"
-          subValue="Sin adiciones"
+          label="Churn Rate Bruto Promedio"
+          value={`${avgChurnBrutoNum.toFixed(4)}%`}
+          color={getChurnColor(avgChurnBrutoNum)}
+          subValue={`Promedio de ${totalPeriodos} periodos`}
         />
         <MetricCard
-          label="Suscriptores Activos"
-          value={latest.activos_final.toLocaleString()}
-          color="green"
-          subValue="Total al cierre"
+          label="Crecimiento Promedio"
+          value={`${avgCrecimientoNum.toFixed(2)}%`}
+          color={getCrecimientoColor(avgCrecimientoNum)}
+          subValue="Variación neta promedio"
         />
         <MetricCard
           label="ARPU Promedio"
@@ -155,21 +366,37 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
       {/* Gráficos Principales */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-surface-secondary border border-slate-800 rounded-xl p-5 shadow-xl">
-          <h3 className="text-sm font-bold text-white mb-4">Evolución Churn Rate Neto vs Bruto</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-white">Evolución Churn Rate (Neto vs Bruto)</h3>
+            <div className="flex items-center gap-3 text-[10px]">
+              <span className="flex items-center gap-1">Reglas de Churn</span>
+              <span className="flex items-center gap-1 text-[#00ff88]"><span className="w-2 h-2 rounded-full bg-[#00ff88]"></span>&lt;3.0%</span>
+              <span className="flex items-center gap-1 text-[#ffb703]"><span className="w-2 h-2 rounded-full bg-[#ffb703]"></span>3.0-4.0%</span>
+              <span className="flex items-center gap-1 text-[#ff2a5f]"><span className="w-2 h-2 rounded-full bg-[#ff2a5f]"></span>&gt;4.0%</span>
+            </div>
+          </div>
           <div className="h-72">
-            <Line data={churnChartData} options={chartOptions} />
+            <Line data={churnChartData} options={churnChartOptions} />
           </div>
         </div>
 
         <div className="bg-surface-secondary border border-slate-800 rounded-xl p-5 shadow-xl">
-          <h3 className="text-sm font-bold text-white mb-4">Adiciones Netas vs Brutas</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-bold text-white">Análisis de Crecimiento</h3>
+            <div className="flex items-center gap-3 text-[10px]">
+              <span className="flex items-center gap-1">Reglas de Crecimiento</span>
+              <span className="flex items-center gap-1 text-[#00ff88]"><span className="w-2 h-2 rounded-full bg-[#00ff88]"></span>&gt;2.0%</span>
+              <span className="flex items-center gap-1 text-[#ffb703]"><span className="w-2 h-2 rounded-full bg-[#ffb703]"></span>0.0-2.0%</span>
+              <span className="flex items-center gap-1 text-[#ff2a5f]"><span className="w-2 h-2 rounded-full bg-[#ff2a5f]"></span>&lt;0.0%</span>
+            </div>
+          </div>
           <div className="h-72">
-            <Bar data={adicionesChartData} options={chartOptions} />
+            <Bar data={crecimientoChartData} options={crecimientoChartOptions} />
           </div>
         </div>
       </div>
 
-      {/* Tabla Resumen Interactiva */}
+      {/* Tabla Resumen */}
       <div className="bg-surface-secondary border border-slate-800 rounded-xl overflow-hidden shadow-xl">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <h3 className="text-sm font-bold text-white">Resumen por Periodo</h3>
@@ -211,7 +438,7 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
         </div>
       </div>
 
-      {/* Modal de Detalle de Periodo */}
+      {/* Modal de Detalle */}
       <Modal
         isOpen={!!selectedPeriod}
         onClose={() => setSelectedPeriod(null)}
@@ -238,7 +465,7 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
             </div>
             <div className="p-3 rounded-lg bg-surface-tertiary">
               <p className="text-slate-400">Reactivaciones</p>
-              <p className="text-base font-bold text-amber-400 mt-1">{selectedPeriod.reactivaciones}</p>
+              <p className="text-base font-bold text-amber-400 mt-1">{selectedPeriod.react_val}</p>
             </div>
             <div className="p-3 rounded-lg bg-surface-tertiary">
               <p className="text-slate-400">% Suspensiones</p>
