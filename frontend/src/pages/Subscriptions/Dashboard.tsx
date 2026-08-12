@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { SubHeader } from '@/components/Navigation/SubHeader';
 import { MetricCard } from '@/components/UI/MetricCard';
-import { Modal } from '@/components/UI/Modal';
-import { Line, Bar } from 'react-chartjs-2';
+import { Chart, Line, Bar } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import {
   Chart as ChartJS,
@@ -18,7 +17,6 @@ import {
   Filler,
   BarController,
   LineController,
-  layouts,
 } from 'chart.js';
 
 ChartJS.register(
@@ -44,17 +42,27 @@ interface PeriodoData {
   bajas: number;
   churn_neto_pct: number;
   churn_bruto_pct: number;
+  react_4_P: number;
   react_val: number;
   tasa_winback_pct: number;
+  tasa_aporte_react_pct: number;
+  indice_reemplazo_react_pct: number;
+  porcentaje_suspensiones: number;
   arpu: number;
   corte_impagado: number;
-  porcentaje_suspensiones: number;
-  adiciones_netas: number;
-  adiciones_brutas: number;
+}
+
+interface ZonaData {
+  valor: string;
+  bajas: number;
+  nuevos: number;
+  churn_bruto_pct: number;
+  crecimiento: number;
 }
 
 interface Props {
   periodos: PeriodoData[];
+  dimensiones?: Record<string, ZonaData[]>;
 }
 
 const formatPeriodoLabel = (str: string) => {
@@ -72,13 +80,11 @@ const formatPeriodoLabel = (str: string) => {
   return `${monthName} ${year}`;
 };
 
-export default function SubscriptionsDashboard({ periodos = [] }: Props) {
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodoData | null>(null);
-
+export default function SubscriptionsDashboard({ periodos = [], dimensiones = {} }: Props) {
   const latest = periodos[0] || { arpu: 0 };
   const totalPeriodos = periodos.length;
 
-  // --- CÁLCULO DE PROMEDIOS GLOBALES ---
+  // --- CÁLCULO DE PROMEDIOS DE TODAS LAS CARDS ---
   const avgChurnNetoNum = totalPeriodos > 0
     ? periodos.reduce((acc, p) => acc + (p.churn_neto_pct || 0), 0) / totalPeriodos
     : 0;
@@ -96,6 +102,23 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
       }, 0) / totalPeriodos
     : 0;
 
+  const avgTasaAporte = totalPeriodos > 0
+    ? periodos.reduce((acc, p) => acc + (p.tasa_aporte_react_pct || 0), 0) / totalPeriodos
+    : 0;
+
+  const avgIndiceReemplazo = totalPeriodos > 0
+    ? periodos.reduce((acc, p) => acc + (p.indice_reemplazo_react_pct || 0), 0) / totalPeriodos
+    : 0;
+
+  const avgSuspensiones = totalPeriodos > 0
+    ? periodos.reduce((acc, p) => acc + (p.porcentaje_suspensiones || 0), 0) / totalPeriodos
+    : 0;
+
+  const avgWinback = totalPeriodos > 0
+    ? periodos.reduce((acc, p) => acc + (p.tasa_winback_pct || 0), 0) / totalPeriodos
+    : 0;
+
+  // Helpers de color
   const getChurnColor = (val: number): 'green' | 'yellow' | 'red' => {
     if (val < 3.0) return 'green';
     if (val < 4.0) return 'yellow';
@@ -110,8 +133,33 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
 
   const labelsFormatted = [...periodos].map((p) => formatPeriodoLabel(p.periodo_reporte)).reverse();
 
-  // --- OPCIONES GRÁFICO CHURN ---
-  const churnChartOptions: any = {
+  // --- DATOS ZONAS TOP ---
+  const zonasList = dimensiones.zona || [];
+  const topZonasChurn = [...zonasList].sort((a, b) => b.bajas - a.bajas).slice(0, 6);
+  const topZonasCrecimiento = [...zonasList].sort((a, b) => b.nuevos - a.nuevos).slice(0, 6);
+
+  // --- OPCIONES BASE GRÁFICOS DE LÍNEAS ---
+  const baseLineOptions: any = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top' as const,
+        align: 'end' as const,
+        labels: { color: '#cbd5e1', font: { size: 11 } },
+      },
+      datalabels: { display: false },
+    },
+    scales: {
+      x: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } }, grace: '5%' },
+    },
+  };
+
+  // --- OPCIONES BARRAS ZONAS HORIZONTALES ---
+  const horizontalBarOptions: any = {
+    indexAxis: 'x' as const,
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -127,116 +175,35 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
           padding: 15,
         },
       },
-      datalabels: { display: false },
+      datalabels: {
+        anchor: 'end' as const,
+        align: 'center' as const,
+        font: { weight: 'bold' as const, size: 10 },
+        formatter: (val: number) => val.toLocaleString(),
+        offset: 4,
+      },
     },
     scales: {
       x: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
-      y: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } }, grace: '5%' },
     },
   };
 
-  // --- OPCIONES GRÁFICO CRECIMIENTO (Aprovamiento total de espacio y sin error IDE) ---
-  const crecimientoChartOptions: any = {
-    responsive: true,
-    maintainAspectRatio: false,
-    layout: {
-      padding: { top: 0, bottom: 0 },
-    },
-    plugins: {
-      legend: {
-        display: true,
-        position: 'top' as const,
-        align: 'end' as const,
-        labels: {
-          color: '#cbd5e1',
-          font: { size: 11, weight: '500' },
-          usePointStyle: true,
-          pointStyle: 'circle',
-          padding: 10
-        },
-      },
-      tooltip: {
-        callbacks: {
-          label: (context: any) => {
-            const index = context.dataIndex;
-            const rawIndex = periodos.length - 1 - index;
-            const p = periodos[rawIndex];
-            const label = context.dataset.label || '';
-            const val = Math.abs(context.parsed.y || 0);
-
-            if (label.includes('Churn Bruto')) {
-              return `${label}: -${val.toFixed(2)}% (${p.bajas?.toLocaleString()} bajas)`;
-            }
-            if (label.includes('Reactivaciones')) {
-              const totalEntradas = (p.nuevos_mes || 0) + (p.react_val || 0);
-              const tasaAporte = totalEntradas > 0 ? (p.react_val / totalEntradas) * 100 : 0;
-              return `${label}: +${val.toFixed(2)}% (${p.react_val?.toLocaleString()} reactivaciones - Aporte: ${tasaAporte.toFixed(1)}%)`;
-            }
-            if (label.includes('Nuevos')) {
-              return `${label}: +${val.toFixed(2)}% (${p.nuevos_mes?.toLocaleString()} clientes nuevos)`;
-            }
-            return `${label}: ${val.toFixed(2)}%`;
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        stacked: false,
-        grid: { color: 'rgba(30, 41, 59, 0.4)' },
-        ticks: { color: '#94a3b8', font: { size: 10, weight: '500' } },
-      },
-      y: {
-        stacked: true,
-        grid: { color: 'rgba(255, 255, 255, 0.1)' },
-        ticks: { color: '#94a3b8', font: { size: 10 } },
-        grace: '15%',
-      },
-    },
-  };
-
-  // --- GRADIENTE CHURN LÍNEA ---
-  const createChurnGradient = (context: any) => {
-    const chart = context.chart;
-    const { ctx, chartArea } = chart;
-    if (!chartArea) return '#00d2ff';
-
-    const gradient = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-    const data = context.dataset.data;
-    const totalPoints = data.length;
-
-    data.forEach((val: number, index: number) => {
-      const position = totalPoints > 1 ? index / (totalPoints - 1) : 0;
-      let color = '#00ff88';
-      if (val >= 4.0) color = '#ff2a5f';
-      else if (val >= 3.0) color = '#ffb703';
-      gradient.addColorStop(position, color);
-    });
-
-    return gradient;
-  };
-
-  // --- DATASETS CHURN ---
+  // 1. Churn Neto vs Bruto
   const churnChartData = {
     labels: labelsFormatted,
     datasets: [
       {
+        type: 'line' as const,
         label: 'Churn Neto %',
         data: [...periodos].map((p) => p.churn_neto_pct).reverse(),
-        borderColor: createChurnGradient,
-        borderWidth: 3.5,
+        borderColor: '#00ff88',
+        borderWidth: 3,
         fill: false,
         tension: 0.35,
-        pointRadius: 6,
-        pointHoverRadius: 8,
-        pointBackgroundColor: [...periodos].map((p) => {
-          const val = p.churn_neto_pct;
-          if (val >= 4.0) return '#ff2a5f';
-          if (val >= 3.0) return '#ffb703';
-          return '#00ff88';
-        }).reverse(),
       },
       {
+        type: 'line' as const,
         label: 'Churn Bruto %',
         data: [...periodos].map((p) => p.churn_bruto_pct).reverse(),
         borderColor: '#ff2a5f',
@@ -244,12 +211,11 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
         borderWidth: 2.5,
         fill: false,
         tension: 0.35,
-        pointRadius: 4,
       },
     ],
   };
 
-  // --- DATASETS CRECIMIENTO (VALORES POR FUERA CON CLIP FALSE) ---
+  // 2. Crecimiento
   const crecimientoChartData = {
     labels: labelsFormatted,
     datasets: [
@@ -266,7 +232,7 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
           display: true,
           clip: false,
           anchor: 'end' as const,
-          align: 'end' as const, // Posiciona en la punta exterior de la barra negativa
+          align: 'end' as const,
           offset: 4,
           color: '#ff2a5f',
           font: { weight: 'bold' as const, size: 10 },
@@ -278,9 +244,7 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
         label: 'Reactivaciones',
         stack: 'growth',
         data: [...periodos].map((p) => {
-          const crec = p.activos_inicio > 0 
-            ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 
-            : 0;
+          const crec = p.activos_inicio > 0 ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 : 0;
           const totalEntradas = (p.nuevos_mes || 0) + (p.react_val || 0);
           const tasaAporte = totalEntradas > 0 ? (p.react_val / totalEntradas) : 0;
           return Number((crec * tasaAporte).toFixed(2));
@@ -289,18 +253,14 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
         borderColor: '#3b82f6',
         borderWidth: 1.5,
         borderRadius: 6,
-        datalabels: {
-          display: false,
-        },
+        datalabels: { display: false },
       },
       {
         type: 'bar' as const,
         label: 'Nuevos Clientes',
         stack: 'growth',
         data: [...periodos].map((p) => {
-          const crec = p.activos_inicio > 0 
-            ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 
-            : 0;
+          const crec = p.activos_inicio > 0 ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 : 0;
           const totalEntradas = (p.nuevos_mes || 0) + (p.react_val || 0);
           const tasaAporte = totalEntradas > 0 ? (p.react_val / totalEntradas) : 0;
           return Number((crec * (1 - tasaAporte)).toFixed(2));
@@ -313,7 +273,7 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
           display: true,
           clip: false,
           anchor: 'end' as const,
-          align: 'end' as const, // Posiciona en la punta exterior superior
+          align: 'end' as const,
           offset: 4,
           color: '#00ff88',
           font: { weight: 'bold' as const, size: 10 },
@@ -321,12 +281,107 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
             const index = context.dataIndex;
             const rawIndex = periodos.length - 1 - index;
             const p = periodos[rawIndex];
-            const crecTotal = p.activos_inicio > 0 
-              ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 
-              : 0;
+            const crecTotal = p.activos_inicio > 0 ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 : 0;
             return `${crecTotal > 0 ? '+' : ''}${crecTotal.toFixed(2)}%`;
           },
         },
+      },
+    ],
+  };
+
+  // 3. Tasa de Aporte vs Índice de Reemplazo
+  const aporteReemplazoData = {
+    labels: labelsFormatted,
+    datasets: [
+      {
+        type: 'bar' as const,
+        label: 'Tasa Aporte Reactivación %',
+        data: [...periodos].map((p) => p.tasa_aporte_react_pct || 0).reverse(),
+        // borderColor: '#3b82f6',
+        backgroundColor: '#3b82f6',
+        borderWidth: 1.5,
+        borderRadius: 6,
+        datalabels: {
+          display: true,
+          clip: false,
+          anchor: 'end' as const,
+          align: 'end' as const,
+          offset: 4,
+          color: '#3b82f6',
+          font: { weight: 'bold' as const, size: 10 },
+          formatter: (val: number) => `${val.toFixed(2)}%`,
+        },
+      },
+      {
+        type: 'bar' as const,
+        label: 'Índice Reemplazo %',
+        data: [...periodos].map((p) => p.indice_reemplazo_react_pct || 0).reverse(),
+        // borderColor: '#10b981',
+        backgroundColor: '#10b981',
+        borderWidth: 1.5,
+        borderRadius: 6,
+        datalabels: {
+          display: true,
+          clip: false,
+          anchor: 'end' as const,
+          align: 'end' as const,
+          offset: 4,
+          color: '#10b981',
+          font: { weight: 'bold' as const, size: 10 },
+          formatter: (val: number) => `${val.toFixed(2)}%`,
+        },
+      },
+    ],
+  };
+
+  // 4. Suspensiones vs Winback
+  const suspensionWinbackData = {
+    labels: labelsFormatted,
+    datasets: [
+      {
+        label: '% Suspensiones',
+        data: [...periodos].map((p) => p.corte_impagado|| 0).reverse(),
+        borderColor: '#ef4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+        fill: true,
+        tension: 0.35,
+      },
+      {
+        label: 'Tasa Winback %',
+        data: [...periodos].map((p) => p.react_4_P || 0).reverse(),
+        borderColor: '#13f50b',
+        backgroundColor: '#13f50b33',
+        borderDash: [4, 4],
+        fill: true,
+        tension: 0.35,
+      },
+    ],
+  };
+
+  // 5. Top Zonas Churn Bruto
+  const zonasChurnData = {
+    labels: topZonasChurn.map((z) => z.valor),
+    datasets: [
+      {
+        label: 'Bajas por Zona',
+        data: topZonasChurn.map((z) => z.bajas),
+        backgroundColor: 'rgba(255, 42, 95, 0.85)',
+        borderColor: '#ff2a5f',
+        borderRadius: 6,
+      },
+    ],
+  };
+
+  // 6. Top Zonas Crecimiento
+  const zonasCrecimientoData = {
+    labels: topZonasCrecimiento.map((z) => z.valor),
+    datasets: [
+      {
+        label: 'Nuevos por Zona',
+        data: topZonasCrecimiento.map((z) => z.nuevos),
+        backgroundColor: 'rgba(0, 255, 136, 0.85)',
+        borderColor: '#00ff88',
+        borderRadius: 6,
       },
     ],
   };
@@ -335,8 +390,8 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
     <AppLayout title="Subscriptions Analytics">
       <SubHeader activeTab="dashboard" />
 
-      {/* Tarjetas KPI Superiores */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {/* FILA 1: TARJETAS KPI PRINCIPALES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <MetricCard
           label="Churn Rate Neto Promedio"
           value={`${avgChurnNetoNum.toFixed(4)}%`}
@@ -363,117 +418,84 @@ export default function SubscriptionsDashboard({ periodos = [] }: Props) {
         />
       </div>
 
-      {/* Gráficos Principales */}
+      {/* FILA 2: NUEVAS TARJETAS KPI SOLICITADAS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <MetricCard
+          label="Tasa Aporte Reactivaciones"
+          value={`${avgTasaAporte.toFixed(2)}%`}
+          color="blue"
+          subValue="Peso de reactivados en ingresos"
+        />
+        <MetricCard
+          label="Índice Reemplazo Bajas"
+          value={`${avgIndiceReemplazo.toFixed(2)}%`}
+          color="green"
+          subValue="Cobertura winback de bajas"
+        />
+        <MetricCard
+          label="Porcentaje Suspensiones"
+          value={`${avgSuspensiones.toFixed(2)}%`}
+          color="red"
+          subValue="Corte impago / Activos inicio"
+        />
+        <MetricCard
+          label="Tasa Winback Promedio"
+          value={`${avgWinback.toFixed(2)}%`}
+          color="yellow"
+          subValue="Recuperación sobre inactivos"
+        />
+      </div>
+
+      {/* FILA DE GRÁFICOS 1: CHURN Y CRECIMIENTO */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-surface-secondary border border-slate-800 rounded-xl p-5 shadow-xl">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold text-white">Evolución Churn Rate (Neto vs Bruto)</h3>
-            <div className="flex items-center gap-3 text-[10px]">
-              <span className="flex items-center gap-1">Reglas de Churn</span>
-              <span className="flex items-center gap-1 text-[#00ff88]"><span className="w-2 h-2 rounded-full bg-[#00ff88]"></span>&lt;3.0%</span>
-              <span className="flex items-center gap-1 text-[#ffb703]"><span className="w-2 h-2 rounded-full bg-[#ffb703]"></span>3.0-4.0%</span>
-              <span className="flex items-center gap-1 text-[#ff2a5f]"><span className="w-2 h-2 rounded-full bg-[#ff2a5f]"></span>&gt;4.0%</span>
-            </div>
-          </div>
+          <h3 className="text-sm font-bold text-white mb-3">Evolución Churn Rate</h3>
           <div className="h-72">
-            <Line data={churnChartData} options={churnChartOptions} />
+            <Line data={churnChartData} options={baseLineOptions} />
           </div>
         </div>
 
         <div className="bg-surface-secondary border border-slate-800 rounded-xl p-5 shadow-xl">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold text-white">Análisis de Crecimiento</h3>
-            <div className="flex items-center gap-3 text-[10px]">
-              <span className="flex items-center gap-1">Reglas de Crecimiento</span>
-              <span className="flex items-center gap-1 text-[#00ff88]"><span className="w-2 h-2 rounded-full bg-[#00ff88]"></span>&gt;2.0%</span>
-              <span className="flex items-center gap-1 text-[#ffb703]"><span className="w-2 h-2 rounded-full bg-[#ffb703]"></span>0.0-2.0%</span>
-              <span className="flex items-center gap-1 text-[#ff2a5f]"><span className="w-2 h-2 rounded-full bg-[#ff2a5f]"></span>&lt;0.0%</span>
-            </div>
-          </div>
+          <h3 className="text-sm font-bold text-white mb-3">Análisis de Crecimiento</h3>
           <div className="h-72">
-            <Bar data={crecimientoChartData} options={crecimientoChartOptions} />
+            <Bar data={crecimientoChartData} options={horizontalBarOptions} />
           </div>
         </div>
       </div>
 
-      {/* Tabla Resumen */}
-      <div className="bg-surface-secondary border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white">Resumen por Periodo</h3>
-          <span className="text-xs text-slate-400">Haz clic en una fila para ver el detalle</span>
+      {/* FILA DE GRÁFICOS 2: APORTE VS REEMPLAZO Y SUSPENSIONES VS WINBACK */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-surface-secondary border border-slate-800 rounded-xl p-5 shadow-xl">
+          <h3 className="text-sm font-bold text-white mb-3">Tasa de Aporte vs Índice de Reemplazo</h3>
+          <div className="h-72">
+            <Bar data={aporteReemplazoData} options={horizontalBarOptions} />
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-surface-tertiary text-slate-400 uppercase font-semibold border-b border-slate-800">
-              <tr>
-                <th className="p-3.5">Periodo</th>
-                <th className="p-3.5 text-right">Inicio</th>
-                <th className="p-3.5 text-right">Final</th>
-                <th className="p-3.5 text-right">Nuevos</th>
-                <th className="p-3.5 text-right">Bajas</th>
-                <th className="p-3.5 text-right">Churn Neto</th>
-                <th className="p-3.5 text-right">Churn Bruto</th>
-                <th className="p-3.5 text-right">ARPU</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {periodos.map((p) => (
-                <tr
-                  key={p.periodo_reporte}
-                  onClick={() => setSelectedPeriod(p)}
-                  className="hover:bg-surface-hover cursor-pointer transition-colors"
-                >
-                  <td className="p-3.5 font-bold text-white">{p.periodo_reporte}</td>
-                  <td className="p-3.5 text-right">{p.activos_inicio.toLocaleString()}</td>
-                  <td className="p-3.5 text-right">{p.activos_final.toLocaleString()}</td>
-                  <td className="p-3.5 text-right text-emerald-400 font-medium">+{p.nuevos_mes}</td>
-                  <td className="p-3.5 text-right text-rose-400 font-medium">-{p.bajas}</td>
-                  <td className="p-3.5 text-right font-semibold text-blue-400">{p.churn_neto_pct}%</td>
-                  <td className="p-3.5 text-right font-semibold text-rose-400">{p.churn_bruto_pct}%</td>
-                  <td className="p-3.5 text-right text-amber-400 font-medium">${p.arpu}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        <div className="bg-surface-secondary border border-slate-800 rounded-xl p-5 shadow-xl">
+          <h3 className="text-sm font-bold text-white mb-3">Porcentaje Suspensiones vs Tasa Winback</h3>
+          <div className="h-72">
+            <Line data={suspensionWinbackData} options={baseLineOptions} />
+          </div>
         </div>
       </div>
 
-      {/* Modal de Detalle */}
-      <Modal
-        isOpen={!!selectedPeriod}
-        onClose={() => setSelectedPeriod(null)}
-        title={`Detalle Periodo: ${selectedPeriod?.periodo_reporte || ''}`}
-        size="lg"
-      >
-        {selectedPeriod && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-            <div className="p-3 rounded-lg bg-surface-tertiary">
-              <p className="text-slate-400">Activos Inicio</p>
-              <p className="text-base font-bold text-white mt-1">{selectedPeriod.activos_inicio}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface-tertiary">
-              <p className="text-slate-400">Activos Cierre</p>
-              <p className="text-base font-bold text-emerald-400 mt-1">{selectedPeriod.activos_final}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface-tertiary">
-              <p className="text-slate-400">Nuevas Adiciones</p>
-              <p className="text-base font-bold text-blue-400 mt-1">+{selectedPeriod.nuevos_mes}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface-tertiary">
-              <p className="text-slate-400">Total Bajas</p>
-              <p className="text-base font-bold text-rose-400 mt-1">-{selectedPeriod.bajas}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface-tertiary">
-              <p className="text-slate-400">Reactivaciones</p>
-              <p className="text-base font-bold text-amber-400 mt-1">{selectedPeriod.react_val}</p>
-            </div>
-            <div className="p-3 rounded-lg bg-surface-tertiary">
-              <p className="text-slate-400">% Suspensiones</p>
-              <p className="text-base font-bold text-purple-400 mt-1">{selectedPeriod.porcentaje_suspensiones}%</p>
-            </div>
+      {/* FILA DE GRÁFICOS 3: TOP ZONAS APORTE A CHURN Y CRECIMIENTO */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-surface-secondary border border-slate-800 rounded-xl p-5 shadow-xl">
+          <h3 className="text-sm font-bold text-white mb-3">Top Zonas - Aporte al Churn Rate Bruto (Bajas)</h3>
+          <div className="h-72">
+            <Bar data={zonasChurnData} options={horizontalBarOptions} />
           </div>
-        )}
-      </Modal>
+        </div>
+
+        <div className="bg-surface-secondary border border-slate-800 rounded-xl p-5 shadow-xl">
+          <h3 className="text-sm font-bold text-white mb-3">Top Zonas - Aporte al Crecimiento (Nuevos)</h3>
+          <div className="h-72">
+            <Bar data={zonasCrecimientoData} options={horizontalBarOptions} />
+          </div>
+        </div>
+      </div>
     </AppLayout>
   );
 }

@@ -101,8 +101,11 @@ def cleanup_tempfile(tmp_path):
 @permission_required('can_view_subscriptions')
 def dashboard(request):
     periodos_data = get_cierre_churn()
+    dims_data = get_dimensiones() # <--- Trae la lista ordenada DESC de dimensiones
+    
     return render_inertia(request, "Subscriptions/Dashboard", {
         "periodos": periodos_data,
+        "dimensiones": dims_data[0]["dimensiones"] if dims_data else {},
         "section": "dashboard"
     })
 
