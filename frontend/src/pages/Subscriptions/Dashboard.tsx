@@ -252,9 +252,17 @@ const zonasChurnElasticidad = useMemo(() => {
         const index = elements[0].index;
         const labelName = churnDoughnutLabels[index];
         const zoneObj = zonasChurnElasticidad.find((z) => z.zona === labelName);
-        setHoveredChurnZone(zoneObj ? { name: zoneObj.zona, churnPct: zoneObj.churnZonaPct } : { name: labelName, churnPct: 0 });
+        
+        const newZone = zoneObj 
+          ? { name: zoneObj.zona, churnPct: zoneObj.churnZonaPct } 
+          : { name: labelName, churnPct: 0 };
+
+        setHoveredChurnZone((prev) => {
+          if (prev?.name === newZone.name) return prev;
+          return newZone;
+        });
       } else {
-        setHoveredChurnZone(null);
+        setHoveredChurnZone((prev) => (prev !== null ? null : null));
       }
     }
   );
@@ -272,13 +280,17 @@ const zonasChurnElasticidad = useMemo(() => {
       const index = elements[0].index;
       const labelName = crecimientoDoughnutLabels[index];
       const zoneObj = zonasCrecimientoElasticidad.find((z) => z.zona === labelName);
-      setHoveredCrecimientoZone(
-        zoneObj 
-          ? { name: zoneObj.zona, crecPct: zoneObj.avgCrecimiento } 
-          : { name: labelName, crecPct: 0 }
-      );
+      
+      const newZone = zoneObj 
+        ? { name: zoneObj.zona, crecPct: zoneObj.avgCrecimiento } 
+        : { name: labelName, crecPct: 0 };
+
+      setHoveredCrecimientoZone((prev) => {
+        if (prev?.name === newZone.name) return prev;
+        return newZone;
+      });
     } else {
-      setHoveredCrecimientoZone(null);
+      setHoveredCrecimientoZone((prev) => (prev !== null ? null : null));
     }
   });
 
