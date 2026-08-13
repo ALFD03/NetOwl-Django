@@ -1,3 +1,5 @@
+import { col } from "framer-motion/client";
+
 export const baseLineOptions: any = {
   responsive: true,
   maintainAspectRatio: false,
@@ -51,10 +53,11 @@ export const horizontalBarOptions: any = {
       display: true,
       clip: false,
       anchor: 'end' as const,
-      align: 'right' as const,
+      align: 'end' as const,
       font: { weight: 'bold' as const, size: 10 },
-      formatter: (val: number) => `${val.toLocaleString()}%`,
+      formatter: (val: number) => `${val.toLocaleString()}`,
       offset: 4,
+      color: "#ffffff"
     },
     tooltip: {
       enabled: true,
@@ -77,27 +80,48 @@ export const horizontalBarOptions: any = {
   },
 };
 
+export const getHorizontalBarOptions = (customDatalabelsColor?: string, customDatalabelssufijo?: string, customOptions?: any) => ({
+  ...horizontalBarOptions,
+  ...customOptions,
+  plugins: {
+    ...horizontalBarOptions.plugins,
+    ...customOptions?.plugins,
+    datalabels: {
+      ...horizontalBarOptions.plugins?.datalabels,
+      ...(customDatalabelsColor ? { color: customDatalabelsColor } : {}),
+      ...(customDatalabelsColor ? {  formatter: (val: number) => `${val.toLocaleString()}` + `${customDatalabelssufijo}` } : {}),
+      ...customOptions?.plugins?.datalabels,
+    },
+  },
+});
+
 export const getDoughnutOptions = (
-  customCenterText: { title: string; value: string; color: string },
-  onHoverCallback: (event: any, elements: any[]) => void
+  centerText: { title: string; value: string; color: string },
+  onHover?: (event: any, elements: any[]) => void
 ): any => ({
   responsive: true,
   maintainAspectRatio: false,
-  cutout: '60%',
-  customCenterText,
-  onHover: onHoverCallback,
+  cutout: '65%', // Un poco más amplio para que el texto respire
+  customCenterText: centerText, // El plugin lee esta propiedad
+  onHover: onHover || null,
   plugins: {
     legend: {
       display: true,
       position: 'right' as const,
-      labels: { color: '#cbd5e1', font: { size: 10, weight: '500' }, padding: 10, usePointStyle: true },
+      labels: {
+        color: '#cbd5e1',
+        font: { size: 10, weight: '500' },
+        padding: 12,
+        usePointStyle: true,
+        pointStyle: 'circle'
+      },
     },
     datalabels: {
       display: true,
       color: '#ffffff',
-      font: { weight: 'bold' as const, size: 10 },
-      formatter: (val: number) => (val >= 1.0 ? `${val.toFixed(1)}%` : ''),
+      font: { weight: 'bold' as const, size: 9 },
+      formatter: (val: number) => (val >= 3.0 ? `${val.toFixed(1)}%` : ''), // Solo muestra si es > 3% para no amontonar
     },
-    tooltip: { enabled: false },
+    tooltip: { enabled: false }, // Desactivamos tooltips porque la info está en el centro
   },
 });

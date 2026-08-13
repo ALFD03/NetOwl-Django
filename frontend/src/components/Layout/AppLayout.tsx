@@ -108,13 +108,13 @@ export const AppLayout: React.FC<Props> = ({ children, title }) => {
             </div>
           )}
 
-          <button
+          {/* <button
             onClick={toggleTheme}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-slate-700 text-xs font-medium text-slate-300 hover:bg-surface-hover transition-colors"
           >
             {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-400" />}
             <span>{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
-          </button>
+          </button> */}
         </div>
       </aside>
 
