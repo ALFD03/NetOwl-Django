@@ -220,7 +220,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
               <Bar 
                 data={{
                   labels: getTopRanking(currentDimData, 'churn_neto_pct').map(d => d.valor),
-                  datasets: [{ label: '% Churn', data: getTopRanking(currentDimData, 'churn_neto_pct').map(d => d.churn_neto_pct.toFixed(2)), backgroundColor: '#ff2a5f' }]
+                  datasets: [{ label: '% Churn', data: getTopRanking(currentDimData, 'churn_neto_pct').map(d => d.churn_neto_pct.toFixed(2)), backgroundColor: '#ff2a5f', borderRadius: 6 }]
                 }}
                 options={getHorizontalBarOptions('#ff2a5f',' %')}
               />
@@ -229,7 +229,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
               <Bar 
                 data={{
                   labels: getTopRanking(currentDimData, 'churn_bruto_pct').map(d => d.valor),
-                  datasets: [{ label: '% Churn', data: getTopRanking(currentDimData, 'churn_bruto_pct').map(d => d.churn_bruto_pct.toFixed(2)), backgroundColor: '#e11d48' }]
+                  datasets: [{ label: '% Churn', data: getTopRanking(currentDimData, 'churn_bruto_pct').map(d => d.churn_bruto_pct.toFixed(2)), backgroundColor: '#e11d48', borderRadius: 6 }]
                 }}
                 options={getHorizontalBarOptions('#ff2a5f',' %')}
               />
@@ -238,7 +238,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
               <Bar 
                 data={{
                   labels: getTopRanking(currentDimData, 'porcentaje_suspensiones').map(d => d.valor),
-                  datasets: [{ label: '% Suspensiones', data: getTopRanking(currentDimData, 'porcentaje_suspensiones').map(d => d.porcentaje_suspensiones.toFixed(2)), backgroundColor: '#f59e0b' }]
+                  datasets: [{ label: '% Suspensiones', data: getTopRanking(currentDimData, 'porcentaje_suspensiones').map(d => d.porcentaje_suspensiones.toFixed(2)), backgroundColor: '#f59e0b', borderRadius: 6 }]
                 }}
                 options={getHorizontalBarOptions('#f59e0b',' %')}
               />
@@ -330,7 +330,8 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
                   datasets: [{ 
                     label: 'Cant.', 
                     data: getTopRanking(currentDimData, 'adiciones_brutas').map(d => d.adiciones_brutas),
-                    backgroundColor: (ctx:any) => ctx.raw > 0 ? '#10b981' : '#f43f5e'
+                    backgroundColor: (ctx:any) => ctx.raw > 0 ? '#10b981' : '#f43f5e', 
+                    borderRadius: 6
                   }]
                 }}
                 options={getHorizontalBarOptions('#ffffffff','')}
@@ -361,7 +362,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
               <Bar 
                 data={{
                   labels: getTopRanking(currentDimData, 'tasa_aporte_react_pct').map(d => d.valor),
-                  datasets: [{ label: '%', data: getTopRanking(currentDimData, 'tasa_aporte_react_pct').map(d => d.tasa_aporte_react_pct), backgroundColor: '#3b82f6' }]
+                  datasets: [{ label: '%', data: getTopRanking(currentDimData, 'tasa_aporte_react_pct').map(d => d.tasa_aporte_react_pct), backgroundColor: '#3b82f6', borderRadius: 6 }]
                 }}
                 options={getHorizontalBarOptions('#3b82f6',' %')}
               />
@@ -372,7 +373,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
               <Bar 
                 data={{
                   labels: getTopRanking(currentDimData, 'indice_reemplazo_react_pct').map(d => d.valor),
-                  datasets: [{ label: '%', data: getTopRanking(currentDimData, 'indice_reemplazo_react_pct').map(d => d.indice_reemplazo_react_pct), backgroundColor: '#8b5cf6' }]
+                  datasets: [{ label: '%', data: getTopRanking(currentDimData, 'indice_reemplazo_react_pct').map(d => d.indice_reemplazo_react_pct), backgroundColor: '#8b5cf6', borderRadius: 6 }]
                 }}
                 options={getHorizontalBarOptions('#8b5cf6',' %')}
               />
@@ -381,7 +382,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
               <Bar 
                 data={{
                   labels: getTopRanking(currentDimData, 'react_4_P').map(d => d.valor),
-                  datasets: [{ label: 'Clientes', data: getTopRanking(currentDimData, 'react_4_P').map(d => d.react_4_P), backgroundColor: '#10b981' }]
+                  datasets: [{ label: 'Clientes', data: getTopRanking(currentDimData, 'react_4_P').map(d => d.react_4_P), backgroundColor: '#10b981', borderRadius: 6 }]
                 }}
                 options={getHorizontalBarOptions('#10b981','')}
               />
@@ -405,7 +406,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
               <Bar 
                 data={{
                   labels: getTopRanking(currentDimData, 'total_billing').map(d => d.valor),
-                  datasets: [{ label: 'USD', data: getTopRanking(currentDimData, 'total_billing').map(d => d.total_billing), backgroundColor: '#059669' }]
+                  datasets: [{ label: 'USD', data: getTopRanking(currentDimData, 'total_billing').map(d => d.total_billing), backgroundColor: '#059669', borderRadius: 6 }]
                 }}
                 options={getHorizontalBarOptions('#10b981',' $')}
               />
