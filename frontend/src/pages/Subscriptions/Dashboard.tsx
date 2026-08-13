@@ -5,7 +5,7 @@ import { MetricCard } from '@/components/UI/MetricCard';
 import { ChartCard } from '@/components/UI/ChartCard';
 import { formatPeriodoLabel, getChurnColor, getCrecimientoColor, PALETTE } from '@/utils/formatters';
 import { centerTextPlugin } from '@/components/Charts/plugins';
-import { baseLineOptions, horizontalBarOptions, getDoughnutOptions } from '@/components/Charts/chartOptions';
+import { baseLineOptions, horizontalBarOptions, getDoughnutOptions, handleHover } from '@/components/Charts/chartOptions';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import {
@@ -99,7 +99,6 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
   const churnEmpresaPct = latest.churn_bruto_pct || 1;
   const totalActivosInicioEmpresa = latest.activos_inicio || 1;
 
-// 1. Agrupar y promediar los datos históricos de cada zona
 const zonasChurnElasticidad = useMemo(() => {
   const zonasMap: Record<
     string,
@@ -111,7 +110,6 @@ const zonasChurnElasticidad = useMemo(() => {
     }
   > = {};
 
-  // Iterar sobre la lista aplanada de todos los períodos
   (dimensiones.zona || []).forEach((z) => {
     const nombreZona = z.valor;
     if (!zonasMap[nombreZona]) {
@@ -129,13 +127,12 @@ const zonasChurnElasticidad = useMemo(() => {
     zonasMap[nombreZona].conteo += 1;
   });
 
-  // 2. Mapear cada zona consolidada con sus promedios
   return Object.entries(zonasMap)
     .map(([zona, datos]) => {
       const cantidad = datos.conteo || 1;
-      const churnZonaPct = datos.sumaChurnPct / cantidad; // Churn promedio de la zona
-      const activosInicioZona = datos.sumaActivosInicio / cantidad; // Activos promedio
-      const bajasZona = datos.sumaBajas / cantidad; // Bajas promedio
+      const churnZonaPct = datos.sumaChurnPct / cantidad; 
+      const activosInicioZona = datos.sumaActivosInicio / cantidad; 
+      const bajasZona = datos.sumaBajas / cantidad; 
 
       const multiplicadorRiesgo = churnEmpresaPct > 0 ? churnZonaPct / churnEmpresaPct : 0;
       const aporteRiesgoPonderadoPct = (multiplicadorRiesgo * (activosInicioZona / totalActivosInicioEmpresa)) * 100;
@@ -156,16 +153,6 @@ const zonasChurnElasticidad = useMemo(() => {
     .filter((z) => z.shareBajasPct < 1.0)
     .reduce((acc, z) => acc + z.shareBajasPct, 0);
 
-  const churnDoughnutLabels = [
-    ...zonasChurnMayores.map((z) => z.zona),
-    ...(zonasChurnMenoresSum > 0 ? ['Otras Zonas (<1.0%)'] : []),
-  ];
-
-  const churnDoughnutData = [
-    ...zonasChurnMayores.map((z) => Number(z.shareBajasPct.toFixed(2))),
-    ...(zonasChurnMenoresSum > 0 ? [Number(zonasChurnMenoresSum.toFixed(2))] : []),
-  ];
-
   const [hoveredCrecimientoZone, setHoveredCrecimientoZone] = useState<{ name: string; crecPct: number } | null>(null);
 
   const zonasCrecimientoElasticidad = useMemo(() => {
@@ -179,7 +166,6 @@ const zonasChurnElasticidad = useMemo(() => {
     }
   > = {};
 
-  // 1. Agrupar la lista aplanada de todos los períodos
   (dimensiones.zona || []).forEach((z) => {
     const nombreZona = z.valor;
     if (!zonasMap[nombreZona]) {
@@ -197,19 +183,16 @@ const zonasChurnElasticidad = useMemo(() => {
     zonasMap[nombreZona].conteo += 1;
   });
 
-  // 2. Calcular total global de nuevos clientes para ponderar la cuota/aporte
   const totalNuevosGlobal = Object.values(zonasMap).reduce(
     (acc, datos) => acc + datos.sumaNuevos,
     0
   );
 
-  // 3. Mapear cada zona con su Promedio y Share
   return Object.entries(zonasMap)
     .map(([zona, datos]) => {
       const cantidad = datos.conteo || 1;
-      const avgCrecimiento = datos.sumaCrecimientoPct / cantidad; // Crecimiento Promedio %
+      const avgCrecimiento = datos.sumaCrecimientoPct / cantidad;
       
-      // Peso o Aporte de la zona al crecimiento global basado en nuevos clientes
       const shareCrecimientoPct = totalNuevosGlobal > 0 
         ? (datos.sumaNuevos / totalNuevosGlobal) * 100 
         : 0;
@@ -223,91 +206,12 @@ const zonasChurnElasticidad = useMemo(() => {
     .sort((a, b) => b.shareCrecimientoPct - a.shareCrecimientoPct);
   }, [dimensiones.zona]);
 
-  // 4. Filtrar zonas mayores a 1.0% de aporte y agrupar las menores
   const zonasCrecMayores = zonasCrecimientoElasticidad.filter((z) => z.shareCrecimientoPct >= 1.0);
   const zonasCrecMenoresSum = zonasCrecimientoElasticidad
     .filter((z) => z.shareCrecimientoPct < 1.0)
     .reduce((acc, z) => acc + z.shareCrecimientoPct, 0);
 
-  const crecimientoDoughnutLabels = [
-    ...zonasCrecMayores.map((z) => z.zona),
-    ...(zonasCrecMenoresSum > 0 ? ['Otras Zonas (<1.0%)'] : []),
-  ];
-
-  const crecimientoDoughnutData = [
-    ...zonasCrecMayores.map((z) => Number(z.shareCrecimientoPct.toFixed(2))),
-    ...(zonasCrecMenoresSum > 0 ? [Number(zonasCrecMenoresSum.toFixed(2))] : []),
-  ];
-
-//! ---------- Opciones Especializadas ----------
-  //? Opciones para dona de churn por zona
-  const doughnutOptionsChurn = getDoughnutOptions(
-    {
-      title: hoveredChurnZone ? `Churn promedio ${hoveredChurnZone.name}` : 'Churn Bruto Prom.',
-      value: hoveredChurnZone ? `${hoveredChurnZone.churnPct.toFixed(2)}%` : `${avgChurnBrutoNum.toFixed(2)}%`,
-      color: '#ff2a5f',
-    },
-    (event: any, elements: any[]) => {
-      if (elements && elements.length > 0) {
-        const index = elements[0].index;
-        const labelName = churnDoughnutLabels[index];
-        const zoneObj = zonasChurnElasticidad.find((z) => z.zona === labelName);
-        
-        const newZone = zoneObj 
-          ? { name: zoneObj.zona, churnPct: zoneObj.churnZonaPct } 
-          : { name: labelName, churnPct: 0 };
-
-        setHoveredChurnZone((prev) => {
-          if (prev?.name === newZone.name) return prev;
-          return newZone;
-        });
-      } else {
-        setHoveredChurnZone((prev) => (prev !== null ? null : null));
-      }
-    }
-  );
-
-  const doughnutOptionsCrecimiento = getDoughnutOptions(
-  {
-    title: hoveredCrecimientoZone ? `Crec. promedio ${hoveredCrecimientoZone.name}` : 'Crec. Prom. Global',
-    value: hoveredCrecimientoZone 
-      ? `${hoveredCrecimientoZone.crecPct > 0 ? '+' : ''}${hoveredCrecimientoZone.crecPct.toFixed(2)}%` 
-      : `${avgCrecimientoNum > 0 ? '+' : ''}${avgCrecimientoNum.toFixed(2)}%`,
-    color: '#00ff88',
-  },
-  (event: any, elements: any[]) => {
-    if (elements && elements.length > 0) {
-      const index = elements[0].index;
-      const labelName = crecimientoDoughnutLabels[index];
-      const zoneObj = zonasCrecimientoElasticidad.find((z) => z.zona === labelName);
-      
-      const newZone = zoneObj 
-        ? { name: zoneObj.zona, crecPct: zoneObj.avgCrecimiento } 
-        : { name: labelName, crecPct: 0 };
-
-      setHoveredCrecimientoZone((prev) => {
-        if (prev?.name === newZone.name) return prev;
-        return newZone;
-      });
-    } else {
-      setHoveredCrecimientoZone((prev) => (prev !== null ? null : null));
-    }
-  });
-
 //! ---------- Definicion de Data Sets para graficos ----------
-  //? DataSet para grafico de Crecimiento Promedio de zonas
-  const zonasCrecimientoDoughnut = {
-    labels: crecimientoDoughnutLabels,
-    datasets: [
-      {
-        data: crecimientoDoughnutData,
-        backgroundColor: PALETTE.slice(0, crecimientoDoughnutLabels.length),
-        borderWidth: 2,
-        borderColor: '#0f1a36',
-      },
-    ],
-  };
-
   //? DataSet para grafico de Churn Rate Neto y Bruto
   const churnChartData = {
     labels: labelsFormatted,
@@ -435,11 +339,85 @@ const zonasChurnElasticidad = useMemo(() => {
   };
 
   //? DataSet para grafico de Churn por Zona
-  const zonasChurnDoughnut = {
-    labels: churnDoughnutLabels,
-    datasets: [{ data: churnDoughnutData, backgroundColor: PALETTE.slice(0, churnDoughnutLabels.length), borderWidth: 2, borderColor: '#0f1a36' }],
-  };
+  const churnDonutData = useMemo(() => {
+    const labels = [
+      ...zonasChurnMayores.map((z) => z.zona),
+      ...(zonasChurnMenoresSum > 0 ? ['Otras Zonas (<1.0%)'] : []),
+    ];
 
+    const dataValues = [
+      ...zonasChurnMayores.map((z) => Number(z.shareBajasPct.toFixed(2))),
+      ...(zonasChurnMenoresSum > 0 ? [Number(zonasChurnMenoresSum.toFixed(2))] : []),
+    ];
+
+    return {
+      labels,
+      datasets: [{
+        data: dataValues,
+        backgroundColor: PALETTE.slice(0, labels.length),
+        borderWidth: 2,
+        borderColor: '#0f1a36',
+      }],
+      // Guardamos la relación para el hover:
+      _raw: [
+        ...zonasChurnElasticidad.map(z => ({ label: z.zona, original: z.churnZonaPct })),
+        { label: 'Otras Zonas (<1.0%)', original: 0 } // Fallback para el grupo agrupado
+      ]
+    };
+  }, [zonasChurnMayores, zonasChurnMenoresSum, zonasChurnElasticidad]);
+
+  //? DataSet para grafico de Crecimiento Promedio de zonas
+  const crecimientoDonutData = useMemo(() => {
+    const labels = [
+      ...zonasCrecMayores.map((z) => z.zona),
+      ...(zonasCrecMenoresSum > 0 ? ['Otras Zonas (<1.0%)'] : []),
+    ];
+
+    const dataValues = [
+      ...zonasCrecMayores.map((z) => Number(z.shareCrecimientoPct.toFixed(2))),
+      ...(zonasCrecMenoresSum > 0 ? [Number(zonasCrecMenoresSum.toFixed(2))] : []),
+    ];
+
+    return {
+      labels,
+      datasets: [{
+        data: dataValues,
+        backgroundColor: PALETTE.slice(0, labels.length),
+        borderWidth: 2,
+        borderColor: '#0f1a36',
+      }],
+      _raw: [
+        ...zonasCrecimientoElasticidad.map(z => ({ label: z.zona, original: z.avgCrecimiento })),
+        { label: 'Otras Zonas (<1.0%)', original: 0 }
+      ]
+    };
+  }, [zonasCrecMayores, zonasCrecMenoresSum, zonasCrecimientoElasticidad]);
+
+
+//! ---------- Opciones Especializadas ----------
+  //? Opciones para dona de churn por zona
+  const churnDonutOptions = useMemo(() => getDoughnutOptions(
+    {
+      title: hoveredChurnZone ? `Churn ${hoveredChurnZone.name}` : 'Churn Bruto Prom.',
+      value: hoveredChurnZone ? hoveredChurnZone.val : `${avgChurnBrutoNum.toFixed(2)}%`,
+      color: '#ff2a5f',
+    },
+    handleHover(setHoveredChurnZone, churnDonutData)
+  ), [hoveredChurnZone, avgChurnBrutoNum, churnDonutData]);
+
+
+  //? Opciones para dona de crecimiento por zona
+  const crecimientoDonutOptions = useMemo(() => getDoughnutOptions(
+    {
+      title: hoveredCrecimientoZone ? `Crec. ${hoveredCrecimientoZone.name}` : 'Crec. Prom. Global',
+      value: hoveredCrecimientoZone 
+        ? hoveredCrecimientoZone.val 
+        : `${avgCrecimientoNum > 0 ? '+' : ''}${avgCrecimientoNum.toFixed(2)}%`,
+      color: '#00ff88',
+    },
+    handleHover(setHoveredCrecimientoZone, crecimientoDonutData)
+  ), [hoveredCrecimientoZone, avgCrecimientoNum, crecimientoDonutData]);
+  
 //! ---------- Renderizado de Componentes ----------
   return (
     <AppLayout title="Subscriptions Analytics">
@@ -486,11 +464,11 @@ const zonasChurnElasticidad = useMemo(() => {
       {/* FILA DE GRÁFICOS 3: DONAS PONDERADAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <ChartCard title="Concentración % de Bajas por Zona" subtitle="Pasa el cursor para ver el Churn % de esa Zona">
-          <Doughnut data={zonasChurnDoughnut} options={doughnutOptionsChurn} plugins={[centerTextPlugin, ChartDataLabels]} />
+          <Doughnut data={churnDonutData} options={churnDonutOptions} plugins={[centerTextPlugin, ChartDataLabels]} />
         </ChartCard>
 
         <ChartCard title="Concentración % de Ventas por Zona" subtitle="Pasa el cursor para ver el Crecimiento % de esa Zona">
-          <Doughnut data={zonasCrecimientoDoughnut} options={doughnutOptionsCrecimiento} plugins={[centerTextPlugin, ChartDataLabels]} />
+          <Doughnut data={crecimientoDonutData} options={crecimientoDonutOptions} plugins={[centerTextPlugin, ChartDataLabels]} />
         </ChartCard>
       </div>
     </AppLayout>

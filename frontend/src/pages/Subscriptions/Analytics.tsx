@@ -6,10 +6,9 @@ import { ChartCard } from '@/components/UI/ChartCard';
 import { formatPeriodoLabel, PALETTE } from '@/utils/formatters';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { centerTextPlugin } from '@/components/Charts/plugins';
-import { horizontalBarOptions, getHorizontalBarOptions, getDoughnutOptions } from '@/components/Charts/chartOptions';
+import { getHorizontalBarOptions, getDoughnutOptions, handleHover } from '@/components/Charts/chartOptions';
 import { TrendingDown, TrendingUp, RefreshCw, DollarSign, Calendar, Target } from 'lucide-react';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
-import { color } from 'chart.js/helpers';
 
 interface DimensionVal {
   valor: string;
@@ -45,7 +44,7 @@ interface Props {
 }
 
 export default function SubscriptionsAnalytics({ periodos = [], dimensiones = [] }: Props) {
-  // --- ESTADO ---
+//! ---------- Estados ----------
   const [selectedPeriod, setSelectedPeriod] = useState(periodos[0]?.periodo_reporte || '');
   const [selectedDim, setSelectedDim] = useState<string>('zona');
 
@@ -61,7 +60,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
 
   const dimLabels: Record<string, string> = { zona: 'Zona', sucursal: 'Sucursal', municipio: 'Municipio', campanna: 'Campaña', producto: 'Producto' };
 
-  // ----------- logica de rankings -----------
+//! ----------- logica de rankings -----------
   const getTopRanking = (data: DimensionVal[], key: keyof DimensionVal) => {
     const sorted = [...data].sort((a, b) => (Number(b[key]) || 0) - (Number(a[key]) || 0));
     return data.length > 15 ? sorted.slice(0, 10) : sorted;
@@ -73,7 +72,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
     return [...sorted.slice(0, 5), ...sorted.slice(-5)];
   };
 
-  // --- GENERADOR DE DATA Y HOVER PARA DONAS DE "APORTE" ---
+//! ---------- Generador de datos y calculo de peso ----------
   const getDonutData = (key: keyof DimensionVal, isPct = false, prefix = '') => {
     const totalActivosEmpresa = globalData.activos_inicio || 1;
     const valGlobal = Number(globalData[key]) || 1;
@@ -81,7 +80,6 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
     const items = currentDimData.map(d => {
       const valDim = Number(d[key]) || 0;
       const activosDim = d.activos_inicio || 1;
-      // Lógica de Dashboard: Elasticidad/Peso ponderado por tamaño de la zona
       const weight = (valDim / valGlobal) * (activosDim / totalActivosEmpresa) * 100;
       return { label: d.valor, weight, original: valDim };
     }).sort((a, b) => b.weight - a.weight);
@@ -96,30 +94,11 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
             backgroundColor: PALETTE,
             borderWidth: 2, borderColor: '#0f1a36'
         }],
-        _raw: items // Guardamos para el hover
+        _raw: items
     };
   };
 
-  const handleHover = (setter: React.Dispatch<React.SetStateAction<any>>, data: any, suffix = '%') => 
-    (event: any, elements: any[]) => {
-      if (elements.length > 0) {
-        const idx = elements[0].index;
-        const label = data.labels[idx];
-        const match = data._raw.find((r: any) => r.label === label);
-        
-        const newVal = { 
-          name: label, 
-          val: match ? `${match.original.toFixed(2)}${suffix}` : 'N/A' 
-        };
-
-        // SOLO actualizamos si el nombre cambió para evitar el bucle infinito
-        setter((prev: any) => (prev?.name === newVal.name ? prev : newVal));
-      } else {
-        // SOLO actualizamos a null si no era null antes
-        setter((prev: any) => (prev === null ? null : null));
-      }
-  };
-
+  //! ---------- Renderizado de elementos ----------
   return (
     <AppLayout title="Subscriptions Advanced Analytics">
       <SubHeader activeTab="analytics" />
@@ -275,11 +254,9 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <ChartCard title="Concentración de Clientes Nuevos">
               {(() => {
-                // 1. Calculamos el total local de la dimensión para el umbral y el porcentaje
                 const totalNuevosDim = currentDimData.reduce((acc, d) => acc + (d.nuevos || 0), 0);
-                const threshold = totalNuevosDim * 0.025; // Umbral del 2.5%
+                const threshold = totalNuevosDim * 0.025;
 
-                // 2. Filtrar mayores al umbral y agrupar menores en "Otros"
                 const majors = currentDimData
                   .filter(d => (d.nuevos || 0) > threshold)
                   .sort((a, b) => (b.nuevos || 0) - (a.nuevos || 0));
@@ -309,7 +286,6 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
                   _raw: rawForHover
                 };
 
-                // 3. Obtenemos las opciones base y SOBREESCRIBIMOS el formatter de datalabels
                 const options = {
                   ...getDoughnutOptions(
                     { 
@@ -324,15 +300,14 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
                       title: '',
                       value: '',
                       color: ''
-                    }, () => {}).plugins, // mantenemos los otros plugins
+                    }, () => {}).plugins,
                     datalabels: {
                       display: true,
                       color: '#fff',
                       font: { weight: 'bold', size: 10 },
                       formatter: (value: number) => {
-                        // CÁLCULO REAL DEL %: (Valor del pedazo / Suma de todos los pedazos) * 100
                         const percentage = (value / totalNuevosDim) * 100;
-                        return percentage > 1 ? percentage.toFixed(1) + '%' : ''; // Solo mostrar si es > 1% para no saturar
+                        return percentage > 1 ? percentage.toFixed(1) + '%' : '';
                       }
                     },
                     tooltip: { enabled: false }
@@ -348,13 +323,13 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
                 );
               })()}
             </ChartCard>
-            <ChartCard title="Ranking Adiciones Brutas (Top/Bottom 5)">
+            <ChartCard title="Ranking Adiciones Brutas">
               <Bar 
                 data={{
-                  labels: getTopBottom(currentDimData, 'adiciones_brutas').map(d => d.valor),
+                  labels: getTopRanking(currentDimData, 'adiciones_brutas').map(d => d.valor),
                   datasets: [{ 
                     label: 'Cant.', 
-                    data: getTopBottom(currentDimData, 'adiciones_brutas').map(d => d.adiciones_brutas),
+                    data: getTopRanking(currentDimData, 'adiciones_brutas').map(d => d.adiciones_brutas),
                     backgroundColor: (ctx:any) => ctx.raw > 0 ? '#10b981' : '#f43f5e'
                   }]
                 }}
@@ -382,27 +357,27 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
                     return <Doughnut data={data} options={getDoughnutOptions({ title: hWinback ? `Winback ${hWinback.name}` : 'Winback Prom.', value: hWinback ? hWinback.val : `${(globalData.tasa_winback_pct || 0).toFixed(2)}%`, color: '#10b981' }, handleHover(setHWinback, data))} plugins={[centerTextPlugin, ChartDataLabels]} />
                 })()}
             </ChartCard>
-            <ChartCard title="Ranking Tasa de Aporte Reactivación (Top/Bottom 5)">
+            <ChartCard title="Ranking Tasa de Aporte Reactivación">
               <Bar 
                 data={{
-                  labels: getTopBottom(currentDimData, 'tasa_aporte_react_pct').map(d => d.valor),
-                  datasets: [{ label: '%', data: getTopBottom(currentDimData, 'tasa_aporte_react_pct').map(d => d.tasa_aporte_react_pct), backgroundColor: '#3b82f6' }]
+                  labels: getTopRanking(currentDimData, 'tasa_aporte_react_pct').map(d => d.valor),
+                  datasets: [{ label: '%', data: getTopRanking(currentDimData, 'tasa_aporte_react_pct').map(d => d.tasa_aporte_react_pct), backgroundColor: '#3b82f6' }]
                 }}
                 options={getHorizontalBarOptions('#3b82f6',' %')}
               />
             </ChartCard>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-            <ChartCard title="Ranking Índice de Reemplazo (Top/Bottom 5)">
+            <ChartCard title="Ranking Índice de Reemplazo">
               <Bar 
                 data={{
-                  labels: getTopBottom(currentDimData, 'indice_reemplazo_react_pct').map(d => d.valor),
-                  datasets: [{ label: '%', data: getTopBottom(currentDimData, 'indice_reemplazo_react_pct').map(d => d.indice_reemplazo_react_pct), backgroundColor: '#8b5cf6' }]
+                  labels: getTopRanking(currentDimData, 'indice_reemplazo_react_pct').map(d => d.valor),
+                  datasets: [{ label: '%', data: getTopRanking(currentDimData, 'indice_reemplazo_react_pct').map(d => d.indice_reemplazo_react_pct), backgroundColor: '#8b5cf6' }]
                 }}
                 options={getHorizontalBarOptions('#8b5cf6',' %')}
               />
             </ChartCard>
-             <ChartCard title="Recuperados de Suspensión (Absolutos)">
+            <ChartCard title="Recuperados de Suspensión (Absolutos)">
               <Bar 
                 data={{
                   labels: getTopRanking(currentDimData, 'react_4_P').map(d => d.valor),

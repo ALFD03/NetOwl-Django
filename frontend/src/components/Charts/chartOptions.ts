@@ -1,5 +1,3 @@
-import { col } from "framer-motion/client";
-
 export const baseLineOptions: any = {
   responsive: true,
   maintainAspectRatio: false,
@@ -96,7 +94,7 @@ export const getHorizontalBarOptions = (customDatalabelsColor?: string, customDa
 });
 
 export const getDoughnutOptions = (
-  centerText: { title: string; value: string; color: string },
+  centerText: { title: string; value: number; color: string },
   onHover?: (event: any, elements: any[]) => void
 ): any => ({
   responsive: true,
@@ -125,3 +123,23 @@ export const getDoughnutOptions = (
     tooltip: { enabled: false }, // Desactivamos tooltips porque la info está en el centro
   },
 });
+
+export const handleHover = (setter: React.Dispatch<React.SetStateAction<any>>, data: any, suffix = '%') => 
+    (event: any, elements: any[]) => {
+      if (elements.length > 0) {
+        const idx = elements[0].index;
+        const label = data.labels[idx];
+        const match = data._raw.find((r: any) => r.label === label);
+        
+        const newVal = { 
+          name: label, 
+          val: match ? `${match.original.toFixed(2)}${suffix}` : 'N/A' 
+        };
+
+        // SOLO actualizamos si el nombre cambió para evitar el bucle infinito
+        setter((prev: any) => (prev?.name === newVal.name ? prev : newVal));
+      } else {
+        // SOLO actualizamos a null si no era null antes
+        setter((prev: any) => (prev === null ? null : null));
+      }
+  };
