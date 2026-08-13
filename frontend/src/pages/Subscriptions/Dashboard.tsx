@@ -63,6 +63,7 @@ interface ZonaData {
   valor: string;
   bajas: number;
   nuevos: number;
+  activos_inicio: number;
   activos_final: number;
   churn_bruto_pct: number;
   crecimiento: number;
@@ -73,18 +74,16 @@ interface Props {
   dimensiones?: Record<string, ZonaData[]>;
 }
 
+//! ---------- Calcular Promedio globales de KPIs ----------
 export default function SubscriptionsDashboard({ periodos = [], dimensiones = {} }: Props) {
   const [hoveredChurnZone, setHoveredChurnZone] = useState<{ name: string; churnPct: number } | null>(null);
-  const [hoveredCrecimientoZone, setHoveredCrecimientoZone] = useState<{ name: string; crecimientoPct: number } | null>(null);
 
   const latest = periodos[0] || { arpu: 0, bajas: 1, nuevos_mes: 1, activos_final: 1 };
   const totalPeriodos = periodos.length;
-
-  // MEMOIZACIÓN PARA OPTIMIZAR INVERSIÓN DE ARRAY DE PERIODOS
+  
   const reversedPeriodos = useMemo(() => [...periodos].reverse(), [periodos]);
   const labelsFormatted = useMemo(() => reversedPeriodos.map((p) => formatPeriodoLabel(p.periodo_reporte)), [reversedPeriodos]);
 
-  // CÁLCULO DE PROMEDIOS GLOBALES
   const avgChurnNetoNum = totalPeriodos > 0 ? periodos.reduce((acc, p) => acc + (p.churn_neto_pct || 0), 0) / totalPeriodos : 0;
   const avgChurnBrutoNum = totalPeriodos > 0 ? periodos.reduce((acc, p) => acc + (p.churn_bruto_pct || 0), 0) / totalPeriodos : 0;
   const avgCrecimientoNum = totalPeriodos > 0
@@ -96,53 +95,155 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
   const avgSuspensiones = totalPeriodos > 0 ? periodos.reduce((acc, p) => acc + (p.porcentaje_suspensiones || 0), 0) / totalPeriodos : 0;
   const avgWinback = totalPeriodos > 0 ? periodos.reduce((acc, p) => acc + (p.tasa_winback_pct || 0), 0) / totalPeriodos : 0;
 
-  // CÁLCULO PARTICIPACIÓN ZONAS
-  const totalBajasEmpresa = latest.bajas || 1;
-  const totalNuevosEmpresa = latest.nuevos_mes || 1;
-  const zonasList = dimensiones.zona || dimensiones.zona_sucursal || [];
+//! ---------- Calcular Peso de zonas en Donas ----------
+  const churnEmpresaPct = latest.churn_bruto_pct || 1;
+  const totalActivosInicioEmpresa = latest.activos_inicio || 1;
 
-  const zonasChurnShare = zonasList.map((z) => {
-    const bajasZona = Number(z.bajas || 0);
-    const churnBrutoZonaPct = Number(z.churn_bruto_pct || 0);
-    const shareBajasPct = (bajasZona / totalBajasEmpresa) * 100;
-    return { zona: z.valor, bajas: bajasZona, churnBrutoZonaPct, shareBajasPct };
-  }).sort((a, b) => b.shareBajasPct - a.shareBajasPct);
+// 1. Agrupar y promediar los datos históricos de cada zona
+const zonasChurnElasticidad = useMemo(() => {
+  const zonasMap: Record<
+    string,
+    {
+      sumaChurnPct: number;
+      sumaActivosInicio: number;
+      sumaBajas: number;
+      conteo: number;
+    }
+  > = {};
 
-  const zonasChurnMayores = zonasChurnShare.filter((z) => z.shareBajasPct >= 2.5);
-  const zonasChurnMenoresSum = zonasChurnShare.filter((z) => z.shareBajasPct < 2.5).reduce((acc, z) => acc + z.shareBajasPct, 0);
+  // Iterar sobre la lista aplanada de todos los períodos
+  (dimensiones.zona || []).forEach((z) => {
+    const nombreZona = z.valor;
+    if (!zonasMap[nombreZona]) {
+      zonasMap[nombreZona] = {
+        sumaChurnPct: 0,
+        sumaActivosInicio: 0,
+        sumaBajas: 0,
+        conteo: 0,
+      };
+    }
+
+    zonasMap[nombreZona].sumaChurnPct += Number(z.churn_bruto_pct || 0);
+    zonasMap[nombreZona].sumaActivosInicio += Number(z.activos_inicio || 0);
+    zonasMap[nombreZona].sumaBajas += Number(z.bajas || 0);
+    zonasMap[nombreZona].conteo += 1;
+  });
+
+  // 2. Mapear cada zona consolidada con sus promedios
+  return Object.entries(zonasMap)
+    .map(([zona, datos]) => {
+      const cantidad = datos.conteo || 1;
+      const churnZonaPct = datos.sumaChurnPct / cantidad; // Churn promedio de la zona
+      const activosInicioZona = datos.sumaActivosInicio / cantidad; // Activos promedio
+      const bajasZona = datos.sumaBajas / cantidad; // Bajas promedio
+
+      const multiplicadorRiesgo = churnEmpresaPct > 0 ? churnZonaPct / churnEmpresaPct : 0;
+      const aporteRiesgoPonderadoPct = (multiplicadorRiesgo * (activosInicioZona / totalActivosInicioEmpresa)) * 100;
+
+      return {
+        zona,
+        bajas: bajasZona,
+        churnZonaPct,
+        multiplicadorRiesgo,
+        shareBajasPct: aporteRiesgoPonderadoPct,
+      };
+    })
+    .sort((a, b) => b.shareBajasPct - a.shareBajasPct);
+  }, [dimensiones.zona, churnEmpresaPct, totalActivosInicioEmpresa]);
+
+  const zonasChurnMayores = zonasChurnElasticidad.filter((z) => z.shareBajasPct >= 1.0);
+  const zonasChurnMenoresSum = zonasChurnElasticidad
+    .filter((z) => z.shareBajasPct < 1.0)
+    .reduce((acc, z) => acc + z.shareBajasPct, 0);
 
   const churnDoughnutLabels = [
     ...zonasChurnMayores.map((z) => z.zona),
-    ...(zonasChurnMenoresSum > 0 ? ['Otras Zonas (<2.5%)'] : []),
+    ...(zonasChurnMenoresSum > 0 ? ['Otras Zonas (<1.0%)'] : []),
   ];
+
   const churnDoughnutData = [
     ...zonasChurnMayores.map((z) => Number(z.shareBajasPct.toFixed(2))),
     ...(zonasChurnMenoresSum > 0 ? [Number(zonasChurnMenoresSum.toFixed(2))] : []),
   ];
 
-  const zonasCrecimientoShare = zonasList.map((z) => {
-    const nuevosZona = Number(z.nuevos || 0);
-    const crecimientoZonaPct = Number(z.crecimiento || 0);
-    const shareNuevosPct = (nuevosZona / totalNuevosEmpresa) * 100;
-    return { zona: z.valor, nuevos: nuevosZona, crecimientoZonaPct, shareNuevosPct };
-  }).sort((a, b) => b.shareNuevosPct - a.shareNuevosPct);
+  const [hoveredCrecimientoZone, setHoveredCrecimientoZone] = useState<{ name: string; crecPct: number } | null>(null);
 
-  const zonasCrecimientoMayores = zonasCrecimientoShare.filter((z) => z.shareNuevosPct >= 2.5);
-  const zonasCrecimientoMenoresSum = zonasCrecimientoShare.filter((z) => z.shareNuevosPct < 2.5).reduce((acc, z) => acc + z.shareNuevosPct, 0);
+  const zonasCrecimientoElasticidad = useMemo(() => {
+  const zonasMap: Record<
+    string,
+    {
+      sumaCrecimientoPct: number;
+      sumaActivosInicio: number;
+      sumaNuevos: number;
+      conteo: number;
+    }
+  > = {};
+
+  // 1. Agrupar la lista aplanada de todos los períodos
+  (dimensiones.zona || []).forEach((z) => {
+    const nombreZona = z.valor;
+    if (!zonasMap[nombreZona]) {
+      zonasMap[nombreZona] = {
+        sumaCrecimientoPct: 0,
+        sumaActivosInicio: 0,
+        sumaNuevos: 0,
+        conteo: 0,
+      };
+    }
+
+    zonasMap[nombreZona].sumaCrecimientoPct += Number(z.crecimiento || 0);
+    zonasMap[nombreZona].sumaActivosInicio += Number(z.activos_inicio || 0);
+    zonasMap[nombreZona].sumaNuevos += Number(z.nuevos || 0);
+    zonasMap[nombreZona].conteo += 1;
+  });
+
+  // 2. Calcular total global de nuevos clientes para ponderar la cuota/aporte
+  const totalNuevosGlobal = Object.values(zonasMap).reduce(
+    (acc, datos) => acc + datos.sumaNuevos,
+    0
+  );
+
+  // 3. Mapear cada zona con su Promedio y Share
+  return Object.entries(zonasMap)
+    .map(([zona, datos]) => {
+      const cantidad = datos.conteo || 1;
+      const avgCrecimiento = datos.sumaCrecimientoPct / cantidad; // Crecimiento Promedio %
+      
+      // Peso o Aporte de la zona al crecimiento global basado en nuevos clientes
+      const shareCrecimientoPct = totalNuevosGlobal > 0 
+        ? (datos.sumaNuevos / totalNuevosGlobal) * 100 
+        : 0;
+
+      return {
+        zona,
+        avgCrecimiento,
+        shareCrecimientoPct,
+      };
+    })
+    .sort((a, b) => b.shareCrecimientoPct - a.shareCrecimientoPct);
+  }, [dimensiones.zona]);
+
+  // 4. Filtrar zonas mayores a 1.0% de aporte y agrupar las menores
+  const zonasCrecMayores = zonasCrecimientoElasticidad.filter((z) => z.shareCrecimientoPct >= 1.0);
+  const zonasCrecMenoresSum = zonasCrecimientoElasticidad
+    .filter((z) => z.shareCrecimientoPct < 1.0)
+    .reduce((acc, z) => acc + z.shareCrecimientoPct, 0);
 
   const crecimientoDoughnutLabels = [
-    ...zonasCrecimientoMayores.map((z) => z.zona),
-    ...(zonasCrecimientoMenoresSum > 0 ? ['Otras Zonas (<2.5%)'] : []),
-  ];
-  const crecimientoDoughnutData = [
-    ...zonasCrecimientoMayores.map((z) => Number(z.shareNuevosPct.toFixed(2))),
-    ...(zonasCrecimientoMenoresSum > 0 ? [Number(zonasCrecimientoMenoresSum.toFixed(2))] : []),
+    ...zonasCrecMayores.map((z) => z.zona),
+    ...(zonasCrecMenoresSum > 0 ? ['Otras Zonas (<1.0%)'] : []),
   ];
 
-  // DONAS OPCIONS
+  const crecimientoDoughnutData = [
+    ...zonasCrecMayores.map((z) => Number(z.shareCrecimientoPct.toFixed(2))),
+    ...(zonasCrecMenoresSum > 0 ? [Number(zonasCrecMenoresSum.toFixed(2))] : []),
+  ];
+
+//! ---------- Opciones Especializadas ----------
+  //? Opciones para dona de churn por zona
   const doughnutOptionsChurn = getDoughnutOptions(
     {
-      title: hoveredChurnZone ? `Churn ${hoveredChurnZone.name}` : 'Churn Bruto Prom.',
+      title: hoveredChurnZone ? `Churn promedio ${hoveredChurnZone.name}` : 'Churn Bruto Prom.',
       value: hoveredChurnZone ? `${hoveredChurnZone.churnPct.toFixed(2)}%` : `${avgChurnBrutoNum.toFixed(2)}%`,
       color: '#ff2a5f',
     },
@@ -150,8 +251,8 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
       if (elements && elements.length > 0) {
         const index = elements[0].index;
         const labelName = churnDoughnutLabels[index];
-        const zoneObj = zonasChurnShare.find((z) => z.zona === labelName);
-        setHoveredChurnZone(zoneObj ? { name: zoneObj.zona, churnPct: zoneObj.churnBrutoZonaPct } : { name: labelName, churnPct: 0 });
+        const zoneObj = zonasChurnElasticidad.find((z) => z.zona === labelName);
+        setHoveredChurnZone(zoneObj ? { name: zoneObj.zona, churnPct: zoneObj.churnZonaPct } : { name: labelName, churnPct: 0 });
       } else {
         setHoveredChurnZone(null);
       }
@@ -159,32 +260,52 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
   );
 
   const doughnutOptionsCrecimiento = getDoughnutOptions(
-    {
-      title: hoveredCrecimientoZone ? `Crec. ${hoveredCrecimientoZone.name}` : 'Crecimiento Prom.',
-      value: hoveredCrecimientoZone ? `${hoveredCrecimientoZone.crecimientoPct > 0 ? '+' : ''}${hoveredCrecimientoZone.crecimientoPct.toFixed(2)}%` : `${avgCrecimientoNum.toFixed(2)}%`,
-      color: '#00ff88',
-    },
-    (event: any, elements: any[]) => {
-      if (elements && elements.length > 0) {
-        const index = elements[0].index;
-        const labelName = crecimientoDoughnutLabels[index];
-        const zoneObj = zonasCrecimientoShare.find((z) => z.zona === labelName);
-        setHoveredCrecimientoZone(zoneObj ? { name: zoneObj.zona, crecimientoPct: zoneObj.crecimientoZonaPct } : { name: labelName, crecimientoPct: 0 });
-      } else {
-        setHoveredCrecimientoZone(null);
-      }
+  {
+    title: hoveredCrecimientoZone ? `Crec. promedio ${hoveredCrecimientoZone.name}` : 'Crec. Prom. Global',
+    value: hoveredCrecimientoZone 
+      ? `${hoveredCrecimientoZone.crecPct > 0 ? '+' : ''}${hoveredCrecimientoZone.crecPct.toFixed(2)}%` 
+      : `${avgCrecimientoNum > 0 ? '+' : ''}${avgCrecimientoNum.toFixed(2)}%`,
+    color: '#00ff88',
+  },
+  (event: any, elements: any[]) => {
+    if (elements && elements.length > 0) {
+      const index = elements[0].index;
+      const labelName = crecimientoDoughnutLabels[index];
+      const zoneObj = zonasCrecimientoElasticidad.find((z) => z.zona === labelName);
+      setHoveredCrecimientoZone(
+        zoneObj 
+          ? { name: zoneObj.zona, crecPct: zoneObj.avgCrecimiento } 
+          : { name: labelName, crecPct: 0 }
+      );
+    } else {
+      setHoveredCrecimientoZone(null);
     }
-  );
+  });
 
-  // DATASETS
-  const churnChartData = {
-    labels: labelsFormatted,
+//! ---------- Definicion de Data Sets para graficos ----------
+  //? DataSet para grafico de Crecimiento Promedio de zonas
+  const zonasCrecimientoDoughnut = {
+    labels: crecimientoDoughnutLabels,
     datasets: [
-      { type: 'line' as const, label: 'Churn Neto %', data: reversedPeriodos.map((p) => p.churn_neto_pct.toFixed(2)), borderColor: '#00ff88', borderWidth: 3, fill: false, tension: 0.35 },
-      { type: 'line' as const, label: 'Churn Bruto %', data: reversedPeriodos.map((p) => p.churn_bruto_pct.toFixed(2)), borderColor: '#ff2a5f', borderDash: [5, 5], borderWidth: 2.5, fill: false, tension: 0.35 },
+      {
+        data: crecimientoDoughnutData,
+        backgroundColor: PALETTE.slice(0, crecimientoDoughnutLabels.length),
+        borderWidth: 2,
+        borderColor: '#0f1a36',
+      },
     ],
   };
 
+  //? DataSet para grafico de Churn Rate Neto y Bruto
+  const churnChartData = {
+    labels: labelsFormatted,
+    datasets: [
+      { type: 'line' as const, label: 'Churn Neto %', data: reversedPeriodos.map((p) => Number(p.churn_neto_pct.toFixed(2))), borderColor: '#00ff88', borderWidth: 3, fill: false, tension: 0.35 },
+      { type: 'line' as const, label: 'Churn Bruto %', data: reversedPeriodos.map((p) => Number(p.churn_bruto_pct.toFixed(2))), borderColor: '#ff2a5f', borderDash: [5, 5], borderWidth: 2.5, fill: false, tension: 0.35 },
+    ],
+  };
+
+  //? DataSet para grafico de evolución de crecimiento
   const crecimientoChartData = {
     labels: labelsFormatted,
     datasets: [
@@ -192,10 +313,8 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
         type: 'bar' as const,
         label: 'Churn Bruto',
         stack: 'loss',
-        data: reversedPeriodos.map((p) => -p.churn_bruto_pct.toFixed(2)),
+        data: reversedPeriodos.map((p) => Number(-p.churn_bruto_pct.toFixed(2))),
         backgroundColor: 'rgba(255, 42, 95, 0.85)',
-        // borderColor: '#ff2a5f',
-        // borderWidth: 1.5,
         borderRadius: 6,
         datalabels: {
           display: true,
@@ -219,8 +338,6 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
           return Number((crec * tasaAporte).toFixed(2));
         }),
         backgroundColor: 'rgba(37, 99, 235, 0.85)',
-        // borderColor: '#3b82f6',
-        // borderWidth: 1.5,
         borderRadius: 6,
         datalabels: { display: false },
       },
@@ -235,8 +352,6 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
           return Number((crec * (1 - tasaAporte)).toFixed(2));
         }),
         backgroundColor: 'rgba(0, 255, 136, 0.85)',
-        // borderColor: '#00ff88',
-        // borderWidth: 1.5,
         borderRadius: 6,
         datalabels: {
           display: true,
@@ -257,16 +372,15 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
     ],
   };
 
+  //? DataSet para grafico de Aporte de Reactivaciones y Cobertura de Bajas
   const aporteReemplazoData = {
     labels: labelsFormatted,
     datasets: [
       {
         type: 'bar' as const,
         label: 'Tasa Aporte Reactivación %',
-        data: reversedPeriodos.map((p) => p.tasa_aporte_react_pct.toFixed(2) || 0),
+        data: reversedPeriodos.map((p) => Number(p.tasa_aporte_react_pct.toFixed(2)) || 0),
         backgroundColor: 'rgba(37, 99, 235, 0.85)',
-        // borderColor: '#3b82f6',
-        // borderWidth: 1.5,
         borderRadius: 6,
         datalabels: {
           display: true,
@@ -282,10 +396,8 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
       {
         type: 'bar' as const,
         label: 'Índice Reemplazo %',
-        data: reversedPeriodos.map((p) => p.indice_reemplazo_react_pct.toFixed(2) || 0),
+        data: reversedPeriodos.map((p) => Number(p.indice_reemplazo_react_pct.toFixed(2)) || 0),
         backgroundColor: 'rgba(0, 255, 136, 0.85)',
-        // borderColor: '#00ff88',
-        // borderWidth: 1.5,
         borderRadius: 6,
         datalabels: {
           display: true,
@@ -301,24 +413,22 @@ export default function SubscriptionsDashboard({ periodos = [], dimensiones = {}
     ],
   };
 
+  //? DataSet para grafico de Suspensiones y Recuperaciones
   const suspensionWinbackData = {
     labels: labelsFormatted,
     datasets: [
-      { label: 'Suspensiones', data: reversedPeriodos.map((p) => p.corte_impagado || 0), borderColor: '#ff2a5f', backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
-      { label: 'Recuperaciones', data: reversedPeriodos.map((p) => p.react_4_P || 0), borderColor: '#00ff88', backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
+      { label: 'Suspensiones', data: reversedPeriodos.map((p) => Number(p.corte_impagado) || 0), borderColor: '#ff2a5f', backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
+      { label: 'Recuperaciones', data: reversedPeriodos.map((p) => Number(p.react_4_P) || 0), borderColor: '#00ff88', backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
     ],
   };
 
+  //? DataSet para grafico de Churn por Zona
   const zonasChurnDoughnut = {
     labels: churnDoughnutLabels,
     datasets: [{ data: churnDoughnutData, backgroundColor: PALETTE.slice(0, churnDoughnutLabels.length), borderWidth: 2, borderColor: '#0f1a36' }],
   };
 
-  const zonasCrecimientoDoughnut = {
-    labels: crecimientoDoughnutLabels,
-    datasets: [{ data: crecimientoDoughnutData, backgroundColor: PALETTE.slice(0, crecimientoDoughnutLabels.length), borderWidth: 2, borderColor: '#0f1a36' }],
-  };
-
+//! ---------- Renderizado de Componentes ----------
   return (
     <AppLayout title="Subscriptions Analytics">
       <SubHeader activeTab="dashboard" />

@@ -101,11 +101,20 @@ def cleanup_tempfile(tmp_path):
 @permission_required('can_view_subscriptions')
 def dashboard(request):
     periodos_data = get_cierre_churn()
-    dims_data = get_dimensiones() # <--- Trae la lista ordenada DESC de dimensiones
+    dims_data = get_dimensiones()
     
+    # Extraer y aplanar todas las zonas de todos los períodos
+    todas_las_zonas = []
+    if dims_data:
+        for periodo in dims_data:
+            zonas = periodo.get("dimensiones", {}).get("zona", [])
+            todas_las_zonas.extend(zonas)
+            
     return render_inertia(request, "Subscriptions/Dashboard", {
         "periodos": periodos_data,
-        "dimensiones": dims_data[0]["dimensiones"] if dims_data else {},
+        "dimensiones": {
+            "zona": todas_las_zonas # React recibirá los 7 objetos por zona
+        },
         "section": "dashboard"
     })
 
