@@ -1,77 +1,241 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { SubHeader } from '@/components/Navigation/SubHeader';
-import { Building2 } from 'lucide-react';
+import { router } from '@inertiajs/react';
+import { formatPeriodoLabel } from '@/utils/formatters';
+import { 
+  Building2, TrendingUp, RefreshCw, Calendar, ChevronDown, Search, Filter
+} from 'lucide-react';
 
 interface Props {
   reportData: any;
 }
 
+const f2 = (val: any) => Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const f0 = (val: any) => Math.floor(Number(val || 0)).toLocaleString('en-US');
+
 export default function SalesReport({ reportData = {} }: Props) {
   const sites = reportData.data || [];
+  const periods = reportData.periods || [];
+  const currentPeriod = reportData.period || '';
+
+  // --- ESTADOS DE FILTRO LOCAL ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState('ALL');
+
+  // --- OBTENER LISTA ÚNICA DE SUCURSALES PARA EL SELECT ---
+  const branchList = useMemo(() => {
+    const branches = new Set<string>();
+    sites.forEach((site: any) => {
+      site.technologies?.forEach((tech: any) => {
+        tech.nodes?.forEach((node: any) => {
+          if (node.sucursal) branches.add(node.sucursal);
+        });
+      });
+    });
+    return Array.from(branches).sort();
+  }, [sites]);
+
+  // --- LÓGICA DE FILTRADO PROFUNDO ACTUALIZADA ---
+  const filteredData = useMemo(() => {
+    return sites.map((site: any) => {
+      // 1. ¿El término de búsqueda coincide con el nombre del Site (Sede)?
+      const siteMatchesSearch = site.site.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const filteredTechs = site.technologies?.map((tech: any) => {
+        const filteredNodes = tech.nodes?.filter((node: any) => {
+          // 2. ¿El término de búsqueda coincide con el nombre de la Zona?
+          const nodeMatchesSearch = node.zona_sucursal.toLowerCase().includes(searchTerm.toLowerCase());
+          
+          // Coincidencia de Sucursal (Filtro dropdown)
+          const matchesBranch = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
+
+          // LÓGICA: Mostrar nodo si (El Site coincide OR El Nodo coincide) Y (La sucursal coincide)
+          return (siteMatchesSearch || nodeMatchesSearch) && matchesBranch;
+        });
+
+        if (filteredNodes && filteredNodes.length > 0) {
+          return { ...tech, nodes: filteredNodes };
+        }
+        return null;
+      }).filter(Boolean);
+
+      if (filteredTechs && filteredTechs.length > 0) {
+        return { ...site, technologies: filteredTechs };
+      }
+      return null;
+    }).filter(Boolean);
+  }, [sites, searchTerm, selectedBranch]);
+
+  const calculateComercialMetrics = (inicio: number, final: number) => {
+    const cierreEsperado = inicio * 1.06;
+    const objetivo = inicio * 0.06;
+    const faltante = cierreEsperado - final;
+    const tasaCumplimiento = (final / cierreEsperado) * 100;
+    return { cierreEsperado, objetivo, faltante, tasaCumplimiento };
+  };
+
+  const handlePeriodChange = (period: string) => {
+    router.get('/subscriptions/sales-report/', { period }, { preserveState: true });
+  };
 
   return (
     <AppLayout title="Reporte Regional de Ventas">
       <SubHeader activeTab="sales" />
 
-      <div className="space-y-6">
-        {sites.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 bg-surface-secondary border border-slate-800 rounded-xl">
-            No hay datos de ventas disponibles para el periodo seleccionado.
+      {/* --- BARRA DE FILTROS --- */}
+      <div className="mb-8 flex flex-wrap items-center gap-4">
+        
+        {/* 1. Selector de Periodo */}
+        <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
+            <Calendar className="w-4 h-4 text-brand" />
+            <span className="text-[10px] uppercase font-black tracking-wider">Mes</span>
+          </div>
+          <div className="relative group">
+            <select 
+              value={currentPeriod}
+              onChange={(e) => handlePeriodChange(e.target.value)}
+              className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none transition-all hover:bg-white/5"
+            >
+              {periods.map((p: string) => <option key={p} value={p} className="bg-[#0f1a36]">{formatPeriodoLabel(p)}</option>)}
+            </select>
+            <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500" />
+          </div>
+        </div>
+
+        {/* 2. Selector de Sucursal */}
+        <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
+            <Filter className="w-4 h-4 text-emerald-500" />
+            <span className="text-[10px] uppercase font-black tracking-wider">Sucursal</span>
+          </div>
+          <div className="relative group">
+            <select 
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none transition-all hover:bg-white/5 min-w-[140px]"
+            >
+              <option value="ALL" className="bg-[#0f1a36]">Todas</option>
+              {branchList.map(b => <option key={b} value={b} className="bg-[#0f1a36]">{b}</option>)}
+            </select>
+            <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500" />
+          </div>
+        </div>
+
+        {/* 3. Buscador de Zona */}
+        <div className="flex-1 min-w-[300px] flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden group">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400 group-focus-within:text-brand transition-colors">
+            <Search className="w-4 h-4" />
+          </div>
+          <input 
+            type="text"
+            placeholder="Buscar por Sede Regional o nombre de Zona..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="bg-transparent w-full px-4 py-2.5 text-xs font-bold text-white outline-none placeholder:text-slate-600"
+          />
+          {searchTerm && (
+            <button 
+                onClick={() => setSearchTerm('')}
+                className="px-4 text-slate-500 hover:text-white transition-colors"
+            >
+                <span className="text-[10px] font-black uppercase">Limpiar</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* --- CONTENIDO --- */}
+      <div className="space-y-10">
+        {filteredData.length === 0 ? (
+          <div className="p-20 text-center text-slate-500 bg-surface-secondary border border-dashed border-slate-800 rounded-3xl">
+            <Search className="w-12 h-12 mx-auto mb-4 opacity-10" />
+            <h3 className="text-lg font-bold text-slate-400">No se encontraron resultados</h3>
+            <p className="text-sm text-slate-500 mt-1">Prueba ajustando los filtros o el término de búsqueda</p>
           </div>
         ) : (
-          sites.map((siteGroup: any) => (
-            <div
-              key={siteGroup.site}
-              className="bg-surface-secondary border border-slate-800 border-l-4 border-l-brand rounded-xl overflow-hidden shadow-xl p-5"
-            >
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-800">
-                <Building2 className="w-5 h-5 text-brand" />
-                <h3 className="text-base font-bold text-white">{siteGroup.site}</h3>
-                <span className="ml-auto text-xs bg-brand/20 text-brand px-2.5 py-1 rounded-full font-semibold">
-                  {siteGroup.totals?.activos_final || 0} Activos
-                </span>
+          filteredData.map((siteGroup: any) => (
+            <div key={siteGroup.site} className="bg-surface-secondary border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+              
+              <div className="bg-slate-800/40 p-6 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-brand/10 rounded-2xl border border-brand/20 shadow-lg shadow-brand/5">
+                    <Building2 className="w-6 h-6 text-brand" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-white tracking-tight">{siteGroup.site}</h3>
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">Sede Regional</p>
+                  </div>
+                </div>
               </div>
 
-              {/* Tecnologías dentro del Site */}
-              <div className="space-y-4">
-                {siteGroup.technologies?.map((tech: any) => (
-                  <div key={tech.technology} className="bg-surface-tertiary rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3 text-xs font-bold text-slate-300">
-                      <span>Tecnología: {tech.technology}</span>
-                      <span className="text-emerald-400">
-                        Crecimiento: {tech.totals?.crecimiento || 0}%
-                      </span>
-                    </div>
+              <div className="p-6 space-y-12">
+                {siteGroup.technologies?.map((tech: any) => {
+                  const m = calculateComercialMetrics(tech.totals?.activos_inicio, tech.totals?.activos_final);
 
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs text-slate-300">
-                        <thead className="text-slate-400 uppercase border-b border-slate-700">
-                          <tr>
-                            <th className="pb-2">Nodo / Zona</th>
-                            <th className="pb-2 text-right">Inicio</th>
-                            <th className="pb-2 text-right">Cierre</th>
-                            <th className="pb-2 text-right">Nuevos</th>
-                            <th className="pb-2 text-right">Bajas</th>
-                            <th className="pb-2 text-right">Churn Neto %</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/50">
-                          {tech.nodes?.map((node: any, idx: number) => (
-                            <tr key={idx} className="hover:bg-surface-hover/50">
-                              <td className="py-2 font-medium text-white">{node.zona_sucursal}</td>
-                              <td className="py-2 text-right">{node.activos_inicio}</td>
-                              <td className="py-2 text-right font-bold text-white">{node.activos_final}</td>
-                              <td className="py-2 text-right text-emerald-400">+{node.nuevos}</td>
-                              <td className="py-2 text-right text-rose-400">-{node.bajas}</td>
-                              <td className="py-2 text-right font-semibold text-brand">{node.churn_neto_pct}%</td>
+                  return (
+                    <div key={tech.technology} className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
+                        <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Tecnología</span><span className="text-sm font-black text-brand">{tech.technology}</span></div>
+                        <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(tech.totals?.activos_inicio)}</span></div>
+                        <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Objetivo (6%)</span><span className="text-sm font-black text-white">+{f0(m.objetivo)}</span></div>
+                        <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Cierre Esperado</span><span className="text-sm font-black text-white">{f0(m.cierreEsperado)}</span></div>
+                        <div className="flex flex-col border-l border-slate-800/50 pl-4">
+                          <span className="text-[9px] font-black text-slate-500 uppercase">Cumplimiento</span>
+                          <span className={`text-sm font-black ${m.tasaCumplimiento >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{f2(m.tasaCumplimiento)}%</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-black text-slate-500 uppercase">Crecimiento</span>
+                          <span className={`text-sm font-black ${tech.totals?.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(tech.totals?.crecimiento)}%</span>
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-separate border-spacing-0">
+                          <thead>
+                            <tr className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
+                              <th className="pb-3 pl-2">Nodo / Zona</th>
+                              <th className="pb-3 text-right">Inicio</th>
+                              <th className="pb-3 text-right text-emerald-500"><TrendingUp className="w-3 h-3 inline mr-1"/>Inst.</th>
+                              <th className="pb-3 text-right text-blue-400"><RefreshCw className="w-3 h-3 inline mr-1"/>React.</th>
+                              <th className="pb-3 text-right">C. Neto %</th>
+                              <th className="pb-3 text-right">Crec %</th>
+                              <th className="pb-3 text-right text-amber-500 font-bold">Faltante</th>
+                              <th className="pb-3 text-right">Cumpl %</th>
+                              <th className="pb-3 text-right pr-2">Cierre</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="text-xs font-bold divide-y divide-slate-800/50">
+                            {tech.nodes?.map((node: any, idx: number) => {
+                              const nm = calculateComercialMetrics(node.activos_inicio, node.activos_final);
+                              return (
+                                <tr key={idx} className="group hover:bg-white/5 transition-colors">
+                                  <td className="py-3 pl-2 text-white font-black">{node.zona_sucursal}</td>
+                                  <td className="py-3 text-right text-slate-400">{f0(node.activos_inicio)}</td>
+                                  <td className="py-3 text-right text-emerald-400">+{f0(node.nuevos)}</td>
+                                  <td className="py-3 text-right text-blue-400">{f0(node.reactivaciones)}</td>
+                                  <td className="py-3 text-right text-rose-500/70">{f2(node.churn_neto_pct)}%</td>
+                                  <td className={`py-3 text-right ${node.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(node.crecimiento)}%</td>
+                                  <td className="py-3 text-right text-amber-500/80 font-black">{f0(nm.faltante)}</td>
+                                  <td className="py-3 text-right">
+                                    <div className="flex flex-col items-end">
+                                      <span className={nm.tasaCumplimiento >= 100 ? 'text-emerald-400 font-black' : 'text-amber-400 font-black'}>{f2(nm.tasaCumplimiento)}%</span>
+                                      <div className="w-12 h-1 bg-slate-800 mt-1 rounded-full overflow-hidden">
+                                        <div className={`h-full ${nm.tasaCumplimiento >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(nm.tasaCumplimiento, 100)}%` }} />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 text-right pr-2 text-white font-black">{f0(node.activos_final)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))
