@@ -23,8 +23,8 @@ export default function BusinessUnits({ buData = {} }: Props) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('ALL');
 
-  // --- LÓGICA DE METAS (6%) ---
-  const calculateComercialMetrics = (inicio: number, final: number) => {
+  // Ayudante Metas 6%
+  const calcComercial = (inicio: number, final: number) => {
     const cierreEsperado = inicio * 1.06;
     const objetivo = inicio * 0.06;
     const faltante = cierreEsperado - final;
@@ -32,18 +32,13 @@ export default function BusinessUnits({ buData = {} }: Props) {
     return { cierreEsperado, objetivo, faltante, tasaCumplimiento };
   };
 
-  // --- LISTA DE SUCURSALES ÚNICAS ---
   const branchList = useMemo(() => {
     const branches = new Set<string>();
-    groups.forEach((group: any) => {
-      group.nodes?.forEach((node: any) => {
-        if (node.sucursal) branches.add(node.sucursal);
-      });
-    });
+    groups.forEach((g: any) => g.nodes?.forEach((n: any) => { if (n.sucursal) branches.add(n.sucursal); }));
     return Array.from(branches).sort();
   }, [groups]);
 
-  // --- FILTRADO PROFUNDO (COORDINADOR + ZONA) ---
+  // --- FILTRADO Y RE-CÁLCULO DINÁMICO POR COORDINADOR ---
   const filteredData = useMemo(() => {
     return groups.map((group: any) => {
       const coordMatches = group.coordinador.toLowerCase().includes(searchTerm.toLowerCase());
@@ -55,7 +50,16 @@ export default function BusinessUnits({ buData = {} }: Props) {
       });
 
       if (filteredNodes && filteredNodes.length > 0) {
-        return { ...group, nodes: filteredNodes };
+        // SUMATORIA DINÁMICA DE LOS NODOS QUE QUEDAN TRAS EL FILTRO
+        const sumIni = filteredNodes.reduce((acc: number, n: any) => acc + n.activos_inicio, 0);
+        const sumFin = filteredNodes.reduce((acc: number, n: any) => acc + n.activos_final, 0);
+        const dynCrec = sumIni > 0 ? ((sumFin - sumIni) / sumIni) * 100 : 0;
+
+        return { 
+            ...group, 
+            nodes: filteredNodes, 
+            dynamic: { activos_inicio: sumIni, activos_final: sumFin, crecimiento: dynCrec } 
+        };
       }
       return null;
     }).filter(Boolean);
@@ -66,141 +70,74 @@ export default function BusinessUnits({ buData = {} }: Props) {
   };
 
   return (
-    <AppLayout title="Business Units (Control de Coordinadores)">
+    <AppLayout title="Business Units">
       <SubHeader activeTab="business_units" />
 
-      {/* 1. BARRA DE FILTROS ESTILO SALES REPORT */}
+      {/* --- FILTROS --- */}
       <div className="mb-8 flex flex-wrap items-center gap-4">
-        
-        {/* Selector de Mes */}
         <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Calendar className="w-4 h-4 text-brand" />
-            <span className="text-[10px] uppercase font-black tracking-wider">Mes</span>
+            <span className="text-[10px] font-black uppercase tracking-wider">Mes</span>
           </div>
-          <div className="relative group">
-            <select 
-              value={currentPeriod}
-              onChange={(e) => handlePeriodChange(e.target.value)}
-              className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none transition-all hover:bg-white/5"
-            >
-              {periods.map((p: string) => <option key={p} value={p} className="bg-[#0f1a36]">{formatPeriodoLabel(p)}</option>)}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500" />
-          </div>
+          <select value={currentPeriod} onChange={(e) => handlePeriodChange(e.target.value)} className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white outline-none hover:bg-white/5">
+            {periods.map((p: string) => <option key={p} value={p} className="bg-[#0f1a36]">{formatPeriodoLabel(p)}</option>)}
+          </select>
         </div>
 
-        {/* Selector de Sucursal */}
         <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Filter className="w-4 h-4 text-emerald-500" />
-            <span className="text-[10px] uppercase font-black tracking-wider">Sucursal</span>
+            <span className="text-[10px] font-black uppercase tracking-wider">Sucursal</span>
           </div>
-          <div className="relative group">
-            <select 
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none transition-all hover:bg-white/5 min-w-[140px]"
-            >
-              <option value="ALL" className="bg-[#0f1a36]">Todas</option>
-              {branchList.map(b => <option key={b} value={b} className="bg-[#0f1a36]">{b}</option>)}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500" />
-          </div>
+          <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white outline-none hover:bg-white/5 min-w-[140px]">
+            <option value="ALL" className="bg-[#0f1a36]">Todas</option>
+            {branchList.map(b => <option key={b} value={b} className="bg-[#0f1a36]">{b}</option>)}
+          </select>
         </div>
 
-        {/* Buscador de Coordinador / Zona */}
         <div className="flex-1 min-w-[300px] flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden group">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400 group-focus-within:text-brand transition-colors">
             <Search className="w-4 h-4" />
           </div>
-          <input 
-            type="text"
-            placeholder="Buscar por nombre de Coordinador o Zona..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-transparent w-full px-4 py-2.5 text-xs font-bold text-white outline-none placeholder:text-slate-600"
-          />
+          <input type="text" placeholder="Buscar Coordinador o Zona..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-transparent w-full px-4 py-2.5 text-xs font-bold text-white outline-none" />
         </div>
       </div>
 
-      {/* 2. RESUMEN GLOBAL FTTH (TARJETA DESTACADA) */}
-      {!searchTerm && selectedBranch === 'ALL' && ftthSummary.activos_final && (
-        <div className="mb-10 bg-gradient-to-br from-[#0f172a] to-[#0f1a36] border border-emerald-500/20 rounded-3xl p-6 shadow-2xl flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
-                    <Target className="w-8 h-8 text-emerald-400" />
-                </div>
-                <div>
-                    <h3 className="text-lg font-black text-white">Consolidado Nacional FTTH</h3>
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Meta de Crecimiento Global: 6%</p>
-                </div>
-            </div>
-            <div className="flex gap-8">
-                <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-500 uppercase">Cierre FTTH</p>
-                    <p className="text-2xl font-black text-white">{f0(ftthSummary.activos_final)}</p>
-                </div>
-                <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-500 uppercase">Crecimiento</p>
-                    <p className={`text-2xl font-black ${ftthSummary.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {f2(ftthSummary.crecimiento)}%
-                    </p>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* 3. LISTADO DE BUSINESS UNITS POR COORDINADOR */}
+      {/* --- LISTADO --- */}
       <div className="space-y-12">
-        {filteredData.length === 0 ? (
-          <div className="p-20 text-center text-slate-500 bg-surface-secondary border border-dashed border-slate-800 rounded-3xl">
-            <Search className="w-12 h-12 mx-auto mb-4 opacity-10" />
-            <h3 className="text-lg font-bold text-slate-400">No se encontraron Business Units</h3>
-          </div>
-        ) : (
-          filteredData.map((group: any) => {
-            const m = calculateComercialMetrics(group.totals?.activos_inicio, group.totals?.activos_final);
-            
-            return (
-              <div key={group.coordinador} className="bg-surface-secondary border border-slate-800 rounded-3xl overflow-hidden shadow-2xl transition-all hover:border-slate-700">
-                
-                {/* HEADER DEL COORDINADOR */}
-                <div className="bg-slate-800/40 p-6 border-b border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-3 rounded-2xl border shadow-lg shadow-brand/5 ${group.is_rf ? 'bg-amber-500/10 border-amber-500/20' : 'bg-brand/10 border-brand/20'}`}>
-                      <UserCheck className={`w-6 h-6 ${group.is_rf ? 'text-amber-400' : 'text-brand'}`} />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-white tracking-tight">{group.coordinador}</h3>
-                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">Responsable de Unidad</p>
-                    </div>
+        {filteredData.map((group: any) => {
+          const d = group.dynamic;
+          const m = calcComercial(d.activos_inicio, d.activos_final);
+          
+          return (
+            <div key={group.coordinador} className="bg-surface-secondary border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+              <div className="bg-slate-800/40 p-6 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-2xl border shadow-lg ${group.is_rf ? 'bg-amber-500/10 border-amber-500/20' : 'bg-brand/10 border-brand/20'}`}>
+                    <UserCheck className={`w-6 h-6 ${group.is_rf ? 'text-amber-400' : 'text-brand'}`} />
                   </div>
-                  <div className="text-right">
-                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Base de Cierre</p>
-                      <p className="text-2xl font-black text-white">{f0(group.totals?.activos_final)}</p>
+                  <h3 className="text-xl font-black text-white tracking-tight">{group.coordinador}</h3>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
+                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Estado</span><span className="text-sm font-black text-brand">Activo</span></div>
+                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(d.activos_inicio)}</span></div>
+                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Objetivo (6%)</span><span className="text-sm font-black text-white">+{f0(m.objetivo)}</span></div>
+                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Cierre Esperado</span><span className="text-sm font-black text-white">{f0(m.cierreEsperado)}</span></div>
+                  <div className="flex flex-col border-l border-slate-800/50 pl-4">
+                    <span className="text-[9px] font-black text-slate-500 uppercase">Cumplimiento</span>
+                    <span className={`text-sm font-black ${m.tasaCumplimiento >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{f2(m.tasaCumplimiento)}%</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-slate-500 uppercase">Crecimiento</span>
+                    <span className={`text-sm font-black ${d.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(d.crecimiento)}%</span>
                   </div>
                 </div>
 
-                <div className="p-6 space-y-6">
-                  {/* BARRA DE METAS DEL COORDINADOR */}
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
-                    <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Estado</span><span className="text-sm font-black text-brand">Activo</span></div>
-                    <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(group.totals?.activos_inicio)}</span></div>
-                    <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Objetivo (6%)</span><span className="text-sm font-black text-white">+{f0(m.objetivo)}</span></div>
-                    <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Cierre Esperado</span><span className="text-sm font-black text-white">{f0(m.cierreEsperado)}</span></div>
-                    <div className="flex flex-col border-l border-slate-800/50 pl-4">
-                      <span className="text-[9px] font-black text-slate-500 uppercase">Cumplimiento</span>
-                      <span className={`text-sm font-black ${m.tasaCumplimiento >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{f2(m.tasaCumplimiento)}%</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[9px] font-black text-slate-500 uppercase">Crecimiento</span>
-                      <span className={`text-sm font-black ${group.totals?.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(group.totals?.crecimiento)}%</span>
-                    </div>
-                  </div>
-
-                  {/* TABLA DE NODOS ASIGNADOS */}
-                  <div className="overflow-x-auto">
+                <div className="overflow-x-auto">
                     <table className="w-full text-left border-separate border-spacing-0">
                       <thead>
                         <tr className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
@@ -217,7 +154,7 @@ export default function BusinessUnits({ buData = {} }: Props) {
                       </thead>
                       <tbody className="text-xs font-bold divide-y divide-slate-800/50">
                         {group.nodes?.map((node: any, idx: number) => {
-                          const nm = calculateComercialMetrics(node.activos_inicio, node.activos_final);
+                          const nm = calcComercial(node.activos_inicio, node.activos_final);
                           return (
                             <tr key={idx} className="group hover:bg-white/5 transition-colors">
                               <td className="py-3 pl-2 text-white font-black">{node.zona_sucursal}</td>
@@ -242,11 +179,10 @@ export default function BusinessUnits({ buData = {} }: Props) {
                       </tbody>
                     </table>
                   </div>
-                </div>
               </div>
-            );
-          })
-        )}
+            </div>
+          );
+        })}
       </div>
     </AppLayout>
   );

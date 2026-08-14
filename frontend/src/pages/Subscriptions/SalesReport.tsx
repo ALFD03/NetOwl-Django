@@ -4,13 +4,14 @@ import { SubHeader } from '@/components/Navigation/SubHeader';
 import { router } from '@inertiajs/react';
 import { formatPeriodoLabel } from '@/utils/formatters';
 import { 
-  Building2, TrendingUp, RefreshCw, Calendar, ChevronDown, Search, Filter
+  Building2, TrendingUp, RefreshCw, Calendar, ChevronDown, Search, Filter, Info, Activity
 } from 'lucide-react';
 
 interface Props {
   reportData: any;
 }
 
+// --- HELPERS DE FORMATEO ---
 const f2 = (val: any) => Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const f0 = (val: any) => Math.floor(Number(val || 0)).toLocaleString('en-US');
 
@@ -19,11 +20,10 @@ export default function SalesReport({ reportData = {} }: Props) {
   const periods = reportData.periods || [];
   const currentPeriod = reportData.period || '';
 
-  // --- ESTADOS DE FILTRO LOCAL ---
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('ALL');
 
-  // --- OBTENER LISTA ÚNICA DE SUCURSALES PARA EL SELECT ---
+  // --- OBTENER LISTA ÚNICA DE SUCURSALES ---
   const branchList = useMemo(() => {
     const branches = new Set<string>();
     sites.forEach((site: any) => {
@@ -36,26 +36,38 @@ export default function SalesReport({ reportData = {} }: Props) {
     return Array.from(branches).sort();
   }, [sites]);
 
-  // --- LÓGICA DE FILTRADO PROFUNDO ACTUALIZADA ---
+  // --- LÓGICA DE FILTRADO Y RE-CÁLCULO DINÁMICO DE TOTALES ---
   const filteredData = useMemo(() => {
     return sites.map((site: any) => {
-      // 1. ¿El término de búsqueda coincide con el nombre del Site (Sede)?
+      // Coincidencia con nombre del Site
       const siteMatchesSearch = site.site.toLowerCase().includes(searchTerm.toLowerCase());
 
       const filteredTechs = site.technologies?.map((tech: any) => {
         const filteredNodes = tech.nodes?.filter((node: any) => {
-          // 2. ¿El término de búsqueda coincide con el nombre de la Zona?
           const nodeMatchesSearch = node.zona_sucursal.toLowerCase().includes(searchTerm.toLowerCase());
-          
-          // Coincidencia de Sucursal (Filtro dropdown)
-          const matchesBranch = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
-
-          // LÓGICA: Mostrar nodo si (El Site coincide OR El Nodo coincide) Y (La sucursal coincide)
-          return (siteMatchesSearch || nodeMatchesSearch) && matchesBranch;
+          const branchMatches = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
+          return (siteMatchesSearch || nodeMatchesSearch) && branchMatches;
         });
 
         if (filteredNodes && filteredNodes.length > 0) {
-          return { ...tech, nodes: filteredNodes };
+          // RE-CALCULAR TOTALES DE LA TECNOLOGÍA SEGÚN LOS NODOS VISIBLES
+          const sumIni = filteredNodes.reduce((acc: number, n: any) => acc + n.activos_inicio, 0);
+          const sumFin = filteredNodes.reduce((acc: number, n: any) => acc + n.activos_final, 0);
+          const sumNuevos = filteredNodes.reduce((acc: number, n: any) => acc + n.nuevos, 0);
+          const sumReact = filteredNodes.reduce((acc: number, n: any) => acc + n.reactivaciones, 0);
+          const dynamicCrecimiento = sumIni > 0 ? ((sumFin - sumIni) / sumIni) * 100 : 0;
+
+          return { 
+            ...tech, 
+            nodes: filteredNodes, 
+            dynamic: { 
+              activos_inicio: sumIni, 
+              activos_final: sumFin, 
+              nuevos: sumNuevos,
+              reactivaciones: sumReact,
+              crecimiento: dynamicCrecimiento 
+            } 
+          };
         }
         return null;
       }).filter(Boolean);
@@ -67,7 +79,8 @@ export default function SalesReport({ reportData = {} }: Props) {
     }).filter(Boolean);
   }, [sites, searchTerm, selectedBranch]);
 
-  const calculateComercialMetrics = (inicio: number, final: number) => {
+  // Ayudante de cálculos comerciales (Meta 6%)
+  const calcComercial = (inicio: number, final: number) => {
     const cierreEsperado = inicio * 1.06;
     const objetivo = inicio * 0.06;
     const faltante = cierreEsperado - final;
@@ -85,64 +98,32 @@ export default function SalesReport({ reportData = {} }: Props) {
 
       {/* --- BARRA DE FILTROS --- */}
       <div className="mb-8 flex flex-wrap items-center gap-4">
-        
-        {/* 1. Selector de Periodo */}
         <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Calendar className="w-4 h-4 text-brand" />
             <span className="text-[10px] uppercase font-black tracking-wider">Mes</span>
           </div>
-          <div className="relative group">
-            <select 
-              value={currentPeriod}
-              onChange={(e) => handlePeriodChange(e.target.value)}
-              className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none transition-all hover:bg-white/5"
-            >
-              {periods.map((p: string) => <option key={p} value={p} className="bg-[#0f1a36]">{formatPeriodoLabel(p)}</option>)}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500" />
-          </div>
+          <select value={currentPeriod} onChange={(e) => handlePeriodChange(e.target.value)} className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none hover:bg-white/5">
+            {periods.map((p: string) => <option key={p} value={p} className="bg-[#0f1a36]">{formatPeriodoLabel(p)}</option>)}
+          </select>
         </div>
 
-        {/* 2. Selector de Sucursal */}
         <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Filter className="w-4 h-4 text-emerald-500" />
             <span className="text-[10px] uppercase font-black tracking-wider">Sucursal</span>
           </div>
-          <div className="relative group">
-            <select 
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none transition-all hover:bg-white/5 min-w-[140px]"
-            >
-              <option value="ALL" className="bg-[#0f1a36]">Todas</option>
-              {branchList.map(b => <option key={b} value={b} className="bg-[#0f1a36]">{b}</option>)}
-            </select>
-            <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500" />
-          </div>
+          <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none hover:bg-white/5 min-w-[140px]">
+            <option value="ALL" className="bg-[#0f1a36]">Todas</option>
+            {branchList.map(b => <option key={b} value={b} className="bg-[#0f1a36]">{b}</option>)}
+          </select>
         </div>
 
-        {/* 3. Buscador de Zona */}
         <div className="flex-1 min-w-[300px] flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden group">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400 group-focus-within:text-brand transition-colors">
             <Search className="w-4 h-4" />
           </div>
-          <input 
-            type="text"
-            placeholder="Buscar por Sede Regional o nombre de Zona..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-transparent w-full px-4 py-2.5 text-xs font-bold text-white outline-none placeholder:text-slate-600"
-          />
-          {searchTerm && (
-            <button 
-                onClick={() => setSearchTerm('')}
-                className="px-4 text-slate-500 hover:text-white transition-colors"
-            >
-                <span className="text-[10px] font-black uppercase">Limpiar</span>
-            </button>
-          )}
+          <input type="text" placeholder="Buscar por Sede o nombre de Zona..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-transparent w-full px-4 py-2.5 text-xs font-bold text-white outline-none" />
         </div>
       </div>
 
@@ -151,34 +132,29 @@ export default function SalesReport({ reportData = {} }: Props) {
         {filteredData.length === 0 ? (
           <div className="p-20 text-center text-slate-500 bg-surface-secondary border border-dashed border-slate-800 rounded-3xl">
             <Search className="w-12 h-12 mx-auto mb-4 opacity-10" />
-            <h3 className="text-lg font-bold text-slate-400">No se encontraron resultados</h3>
-            <p className="text-sm text-slate-500 mt-1">Prueba ajustando los filtros o el término de búsqueda</p>
+            <h3 className="text-lg font-bold text-slate-400">No hay datos para mostrar</h3>
           </div>
         ) : (
           filteredData.map((siteGroup: any) => (
             <div key={siteGroup.site} className="bg-surface-secondary border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-              
               <div className="bg-slate-800/40 p-6 border-b border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-brand/10 rounded-2xl border border-brand/20 shadow-lg shadow-brand/5">
-                    <Building2 className="w-6 h-6 text-brand" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black text-white tracking-tight">{siteGroup.site}</h3>
-                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">Sede Regional</p>
-                  </div>
+                  <div className="p-3 bg-brand/10 rounded-2xl border border-brand/20 shadow-lg shadow-brand/5"><Building2 className="w-6 h-6 text-brand" /></div>
+                  <h3 className="text-xl font-black text-white tracking-tight">{siteGroup.site}</h3>
                 </div>
               </div>
 
               <div className="p-6 space-y-12">
                 {siteGroup.technologies?.map((tech: any) => {
-                  const m = calculateComercialMetrics(tech.totals?.activos_inicio, tech.totals?.activos_final);
+                  const d = tech.dynamic; // TOTALES RECALCULADOS EN CLIENTE
+                  const m = calcComercial(d.activos_inicio, d.activos_final);
 
                   return (
                     <div key={tech.technology} className="space-y-4">
+                      {/* FRANJA DE TECNOLOGÍA REACTIVA */}
                       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
                         <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Tecnología</span><span className="text-sm font-black text-brand">{tech.technology}</span></div>
-                        <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(tech.totals?.activos_inicio)}</span></div>
+                        <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(d.activos_inicio)}</span></div>
                         <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Objetivo (6%)</span><span className="text-sm font-black text-white">+{f0(m.objetivo)}</span></div>
                         <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Cierre Esperado</span><span className="text-sm font-black text-white">{f0(m.cierreEsperado)}</span></div>
                         <div className="flex flex-col border-l border-slate-800/50 pl-4">
@@ -187,7 +163,7 @@ export default function SalesReport({ reportData = {} }: Props) {
                         </div>
                         <div className="flex flex-col">
                           <span className="text-[9px] font-black text-slate-500 uppercase">Crecimiento</span>
-                          <span className={`text-sm font-black ${tech.totals?.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(tech.totals?.crecimiento)}%</span>
+                          <span className={`text-sm font-black ${d.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(d.crecimiento)}%</span>
                         </div>
                       </div>
 
@@ -208,7 +184,7 @@ export default function SalesReport({ reportData = {} }: Props) {
                           </thead>
                           <tbody className="text-xs font-bold divide-y divide-slate-800/50">
                             {tech.nodes?.map((node: any, idx: number) => {
-                              const nm = calculateComercialMetrics(node.activos_inicio, node.activos_final);
+                              const nm = calcComercial(node.activos_inicio, node.activos_final);
                               return (
                                 <tr key={idx} className="group hover:bg-white/5 transition-colors">
                                   <td className="py-3 pl-2 text-white font-black">{node.zona_sucursal}</td>
