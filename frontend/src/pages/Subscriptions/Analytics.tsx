@@ -290,7 +290,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
                   ...getDoughnutOptions(
                     { 
                       title: hNuevos ? hNuevos.name : 'Total Nuevos', 
-                      value: hNuevos ? hNuevos.val : (globalData.nuevos_mes || 0), 
+                      value: hNuevos ? hNuevos.val : String(globalData.nuevos_mes || 0), 
                       color: '#00ff88' 
                     }, 
                     handleHover(setHNuevos, data, '')

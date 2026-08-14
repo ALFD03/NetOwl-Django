@@ -94,7 +94,7 @@ export const getHorizontalBarOptions = (customDatalabelsColor?: string, customDa
 });
 
 export const getDoughnutOptions = (
-  centerText: { title: string; value: number; color: string },
+  centerText: { title: string; value: string | number; color: string }, // Cambiado a string | number
   onHover?: (event: any, elements: any[]) => void
 ): any => ({
   responsive: true,

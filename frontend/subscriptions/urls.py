@@ -16,6 +16,7 @@ urlpatterns = [
     path("lifetime/", views.lifetime, name="lifetime"),
     path("sales-report/", views.sales_report, name="sales_report"),
     path("eta-report/", views.eta_report, name="eta_report"),
+    path("eta-report/config/", views.eta_config_view, name="eta_config"),
     path("business-units/", views.business_units, name="business_units"),
 
     path("api/dashboard-data/", views.api_dashboard_data, name="api_dashboard_data"),

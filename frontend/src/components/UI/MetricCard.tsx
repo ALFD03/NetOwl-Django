@@ -6,7 +6,7 @@ interface MetricCardProps {
   value: string | number;
   subValue?: string;
   trend?: 'up' | 'down' | 'neutral';
-  color?: 'blue' | 'green' | 'red' | 'yellow';
+  color?: 'blue' | 'green' | 'red' | 'yellow' | 'slate'; // Agregado 'slate'
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({
@@ -20,6 +20,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
     green: 'border-emerald-500/30 hover:border-emerald-500',
     red: 'border-rose-500/30 hover:border-rose-500',
     yellow: 'border-amber-500/30 hover:border-amber-500',
+    slate: 'border-slate-500/30 hover:border-slate-500', // Agregado slate
   };
 
   const textColors = {
@@ -27,6 +28,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
     green: 'text-emerald-400',
     red: 'text-rose-400',
     yellow: 'text-amber-400',
+    slate: 'text-slate-400', // Agregado slate
   };
 
   return (

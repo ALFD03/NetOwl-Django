@@ -76,7 +76,7 @@ interface Props {
 
 //! ---------- Calcular Promedio globales de KPIs ----------
 export default function SubscriptionsDashboard({ periodos = [], dimensiones = {} }: Props) {
-  const [hoveredChurnZone, setHoveredChurnZone] = useState<{ name: string; churnPct: number } | null>(null);
+  const [hoveredChurnZone, setHoveredChurnZone] = useState<{ name: string; val: string } | null>(null);
 
   const latest = periodos[0] || { arpu: 0, bajas: 1, nuevos_mes: 1, activos_final: 1 };
   const totalPeriodos = periodos.length;
@@ -153,7 +153,7 @@ const zonasChurnElasticidad = useMemo(() => {
     .filter((z) => z.shareBajasPct < 1.0)
     .reduce((acc, z) => acc + z.shareBajasPct, 0);
 
-  const [hoveredCrecimientoZone, setHoveredCrecimientoZone] = useState<{ name: string; crecPct: number } | null>(null);
+  const [hoveredCrecimientoZone, setHoveredCrecimientoZone] = useState<{ name: string; val: string } | null>(null);
 
   const zonasCrecimientoElasticidad = useMemo(() => {
   const zonasMap: Record<

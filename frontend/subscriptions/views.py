@@ -190,12 +190,40 @@ def business_units(request):
 @login_required
 @permission_required('can_view_eta')
 def eta_report(request):
-    periodo = request.GET.get("period")
-    manager = ETAReportManager(DBConnector())
-    data = manager.calculate_eta_report(periodo or "2026-01")
+    available = get_periodos()
+    periodos_disponibles = sorted(list(set([p[:7] for p in available])), reverse=True)
+    
+    periodo_req = request.GET.get("period")
+    if not periodo_req and periodos_disponibles:
+        periodo_req = periodos_disponibles[0]
+    elif not periodo_req:
+        periodo_req = "2024-01"
+
+    db = DBConnector()
+    manager = ETAReportManager(db)
+    
+    # EJECUCIÓN INMEDIATA
+    data = manager.calculate_eta_report(periodo_req)
+    
+    # Aseguramos que los metadatos viajen en el primer render
+    data["periods"] = periodos_disponibles
+    data["periodo"] = periodo_req
+    
     return render_inertia(request, "Subscriptions/EtaReport", {
         "etaData": data,
         "section": "eta_report"
+    })
+
+@login_required
+@permission_required('can_manage_eta')
+def eta_config_view(request):
+    db = DBConnector()
+    manager = ETAReportManager(db)
+    
+    return render_inertia(request, "Subscriptions/EtaManagement", {
+        "individualConfigs": manager.get_configured_individual_subs(),
+        "planesConfigs": db.read_table("analyzer_eta_config_planes").to_dict('records'),
+        "discoveredPlans": manager.get_discovered_unmapped_plans() # <-- NUEVO
     })
 
 # --- APIS DE LECTURA DE DATOS ---
@@ -309,19 +337,25 @@ def api_sales_report(request):
 @login_required
 @permission_required('can_view_eta')
 def api_eta_report_data(request):
+    """API para recargar datos sin refrescar la página"""
     periodo = request.GET.get("period")
-    if not periodo or len(periodo) != 7:
-        periodos_activos = get_periodos()
-        if not periodos_activos:
-            return JsonResponse({"status": "empty", "message": "No hay periodos calculados."})
-        periodo = periodos_activos[0][:7]
-
     force = request.GET.get("force", "false").lower() == "true"
+    
+    available = get_periodos()
+    periodos_disponibles = sorted(list(set([p[:7] for p in available])), reverse=True)
+
+    if not periodo and periodos_disponibles:
+        periodo = periodos_disponibles[0]
+    
+    if not periodo:
+        return JsonResponse({"status": "empty", "message": "No hay periodos calculados."})
+
     db = DBConnector()
     manager = ETAReportManager(db)
     try:
         report_data = manager.calculate_eta_report(periodo, force_recalc=force)
-        report_data["periods"] = [p[:7] for p in get_periodos()]
+        # Asegurar que la API también devuelva la lista actualizada
+        report_data["periods"] = periodos_disponibles
         report_data["individual_configs"] = manager.get_configured_individual_subs()
         return JsonResponse(report_data)
     except Exception as e:
