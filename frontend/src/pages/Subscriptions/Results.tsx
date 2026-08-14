@@ -101,33 +101,35 @@ export default function SubscriptionsResults({ periodos = [] }: { periodos: Cier
   const dimColumns: Column<DimensionRow>[] = [
     { 
       header: 'Etiqueta', 
-      accessor: (r) => <span className="font-bold text-white sticky left-0 bg-[#0f1a36] z-10 pr-4 min-w-[160px] block">{r.valor}</span> 
+      accessor: (r) => <span className="font-bold text-white sticky left-0 bg-[#0f1a36] z-10 pr-4 min-w-[160px] block">{r.valor}</span>,
+      sortKey: 'valor' 
     },
-    { header: 'Base Ini', accessor: (r) => f0(r.activos_inicio), align: 'right' },
-    { header: 'Base Fin', accessor: (r) => f0(r.activos_final), align: 'right' },
-    { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{f0(r.nuevos)}</span>, align: 'right' },
-    { header: 'Adic. Net', accessor: (r) => f0(r.adiciones_netas), align: 'right' },
-    { header: 'Adic. Bru', accessor: (r) => f0(r.adiciones_brutas), align: 'right' },
-    { header: 'Crec %', accessor: (r) => <span className="text-emerald-400">{f2(r.crecimiento)}%</span>, align: 'right' },
-    { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{f0(r.bajas)}</span>, align: 'right' },
-    { header: 'C. Neto %', accessor: (r) => <span className="text-rose-400 font-bold">{f2(r.churn_neto_pct)}%</span>, align: 'right' },
-    { header: 'C. Bruto %', accessor: (r) => <span className="text-rose-400">{f2(r.churn_bruto_pct)}%</span>, align: 'right' },
-    { header: 'Corte Imp', accessor: (r) => f0(r.corte_impagado), align: 'right' },
-    { header: 'Susp %', accessor: (r) => `${f2(r.porcentaje_suspensiones)}%`, align: 'right' },
-    { header: 'Inactivos', accessor: (r) => f0(r.total_inactivos), align: 'right' },
-    { header: 'React Tot', accessor: (r) => f0(r.reactivaciones), align: 'right' },
-    { header: 'React Val', accessor: (r) => f0(r.react_val), align: 'right' },
-    { header: 'W. Churn', accessor: (r) => f0(r.react_6_churn), align: 'right' },
-    { header: 'W. 30d', accessor: (r) => f0(r.react_8_30days), align: 'right' },
-    { header: 'W. Pausa', accessor: (r) => f0(r.react_4_paused), align: 'right' },
-    { header: 'R. 4P', accessor: (r) => f0(r.react_4_P), align: 'right' },
-    { header: 'R. 4H', accessor: (r) => f0(r.react_4_H), align: 'right' },
-    { header: 'Winback %', accessor: (r) => <span className="text-blue-400">{f2(r.tasa_winback_pct)}%</span>, align: 'right' },
-    { header: 'Aporte R%', accessor: (r) => `${f2(r.tasa_aporte_react_pct)}%`, align: 'right' },
-    { header: 'Reempl %', accessor: (r) => `${f2(r.indice_reemplazo_react_pct)}%`, align: 'right' },
-    { header: 'ARPU', accessor: (r) => <span className="text-amber-400">${f2(r.arpu)}</span>, align: 'right' },
-    { header: 'Billing', accessor: (r) => <span className="text-blue-400">${f2(r.total_billing)}</span>, align: 'right' },
+    { header: 'Base Ini', accessor: (r) => f0(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
+    { header: 'Base Fin', accessor: (r) => f0(r.activos_final), align: 'right', sortKey: 'activos_final' },
+    { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{f0(r.nuevos)}</span>, align: 'right', sortKey: 'nuevos' },
+    { header: 'Adic. Net', accessor: (r) => <span className="text-emerald-500">{f0(r.adiciones_netas)}</span>, align: 'right', sortKey: 'adiciones_netas' },
+    { header: 'Adic. Bru', accessor: (r) => <span className="text-emerald-500">{f0(r.adiciones_brutas)}</span>, align: 'right', sortKey: 'adiciones_brutas' },
+    { header: 'Crec %', accessor: (r) => <span className="text-emerald-400">{f2(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
+    { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{f0(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
+    { header: 'C. Neto %', accessor: (r) => <span className="text-rose-400 font-bold">{f2(r.churn_neto_pct)}%</span>, align: 'right', sortKey: 'churn_neto_pct' },
+    { header: 'C. Bruto %', accessor: (r) => <span className="text-rose-400">{f2(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
+    { header: 'Corte Imp', accessor: (r) => f0(r.corte_impagado), align: 'right', sortKey: 'corte_impagado' },
+    { header: 'Susp %', accessor: (r) => `${f2(r.porcentaje_suspensiones)}%`, align: 'right', sortKey: 'porcentaje_suspensiones' },
+    { header: 'Inactivos', accessor: (r) => f0(r.total_inactivos), align: 'right', sortKey: 'total_inactivos' },
+    { header: 'React Tot', accessor: (r) => f0(r.reactivaciones), align: 'right', sortKey: 'reactivaciones' },
+    { header: 'React Val', accessor: (r) => f0(r.react_val), align: 'right', sortKey: 'react_val' },
+    { header: 'W. Churn', accessor: (r) => f0(r.react_6_churn), align: 'right', sortKey: 'react_6_churn' },
+    { header: 'W. 30d', accessor: (r) => f0(r.react_8_30days), align: 'right', sortKey: 'react_8_30days' },
+    { header: 'W. Pausa', accessor: (r) => f0(r.react_4_paused), align: 'right', sortKey: 'react_4_paused' },
+    { header: 'R. 4P', accessor: (r) => f0(r.react_4_P), align: 'right', sortKey: 'react_4_P' },
+    { header: 'R. 4H', accessor: (r) => f0(r.react_4_H), align: 'right', sortKey: 'react_4_H' },
+    { header: 'Winback %', accessor: (r) => <span className="text-blue-400">{f2(r.tasa_winback_pct)}%</span>, align: 'right', sortKey: 'tasa_winback_pct' },
+    { header: 'Aporte R%', accessor: (r) => `${f2(r.tasa_aporte_react_pct)}%`, align: 'right', sortKey: 'tasa_aporte_react_pct' },
+    { header: 'Reempl %', accessor: (r) => `${f2(r.indice_reemplazo_react_pct)}%`, align: 'right', sortKey: 'indice_reemplazo_react_pct' },
+    { header: 'ARPU', accessor: (r) => <span className="text-amber-400">${f2(r.arpu)}</span>, align: 'right', sortKey: 'arpu' },
+    { header: 'Billing', accessor: (r) => <span className="text-blue-400">${f2(r.total_billing)}</span>, align: 'right', sortKey: 'total_billing' },
   ];
+
 
   return (
     <AppLayout title="Subscriptions Results">
@@ -245,12 +247,13 @@ export default function SubscriptionsResults({ periodos = [] }: { periodos: Cier
               </div>
 
               {/* Contenedor de la tabla con scroll horizontal optimizado */}
-              <div className="bg-[#0f1a36] rounded-xl border border-slate-800 overflow-hidden shadow-2xl">
+              <div className="bg-[#0f1a36] rounded-xl border border-slate-800 overflow-hidden shadow-2xl h-[500px]">
                 <DataTable
                     columns={dimColumns}
                     data={details?.dimensions[activeTab] || []}
                     isLoading={loading}
-                    emptyMessage="No hay datos disponibles para esta dimensión."
+                    searchable={true} // <--- HABILITAMOS BUSCADOR
+                    searchPlaceholder={`Buscar en ${dimLabels[activeTab].label}...`}
                 />
               </div>
             </section>
