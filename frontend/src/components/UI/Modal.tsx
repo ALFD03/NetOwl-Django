@@ -7,7 +7,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'wide'; // Agregamos 'wide'
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -15,7 +15,7 @@ export const Modal: React.FC<ModalProps> = ({
   onClose,
   title,
   children,
-  size = 'md',
+  size = 'xl',
 }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -36,6 +36,7 @@ export const Modal: React.FC<ModalProps> = ({
     md: 'max-w-lg',
     lg: 'max-w-2xl',
     xl: 'max-w-4xl',
+    wide: 'max-w-[80vw]', // <--- Ocupa el 80% del ancho de pantalla
   };
 
   return (
@@ -57,10 +58,10 @@ export const Modal: React.FC<ModalProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: 'spring', duration: 0.3 }}
-            className={`relative w-full ${sizes[size]} bg-surface-secondary border border-slate-800 rounded-xl shadow-2xl overflow-hidden z-10`}
+            className={`relative w-full ${sizes[size]} bg-surface-secondary border border-slate-800 rounded-xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]`}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 flex-shrink-0">
               <h3 className="text-lg font-bold text-white tracking-tight">{title}</h3>
               <button
                 onClick={onClose}
@@ -71,7 +72,9 @@ export const Modal: React.FC<ModalProps> = ({
             </div>
 
             {/* Body */}
-            <div className="p-6 max-h-[80vh] overflow-y-auto">{children}</div>
+            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+                {children}
+            </div>
           </motion.div>
         </div>
       )}

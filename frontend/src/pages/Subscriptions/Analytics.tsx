@@ -140,7 +140,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
             <button
                 key={key}
                 onClick={() => setSelectedDim(key)}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
                     selectedDim === key 
                     ? 'bg-brand text-white shadow-md shadow-brand/20' 
                     : 'text-slate-400 hover:text-white hover:bg-white/5'
