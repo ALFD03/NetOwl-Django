@@ -148,8 +148,19 @@ def results(request, periodo=None):
 @login_required
 @permission_required('can_view_subs_lifetime')
 def lifetime(request):
-    results_data = get_lifecycle_results()
-    dims_data = get_lifetime_dimensiones()
+    try:
+        results_data = get_lifecycle_results()
+        dims_data = get_lifetime_dimensiones()
+        
+        # Garantía absoluta de que no son None
+        if results_data is None: results_data = {}
+        if dims_data is None: dims_data = {}
+        
+    except Exception as e:
+        logger.error(f"Error cargando Lifetime view: {e}")
+        results_data = {}
+        dims_data = {}
+
     return render_inertia(request, "Subscriptions/Lifetime", {
         "lifecycle": results_data,
         "dimensiones": dims_data,

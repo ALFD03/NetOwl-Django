@@ -9,6 +9,17 @@ from ...database import DBConnector
 
 logger = logging.getLogger(__name__)
 
+
+def _clean_value(val: Any) -> Any:
+    """Convierte tipos de Pandas/NumPy a tipos nativos de Python y elimina NaNs."""
+    if pd.isna(val) or (isinstance(val, float) and (math.isnan(val) or math.isinf(val))):
+        return None
+    if isinstance(val, (pd.Timestamp, pd.DatetimeIndex)):
+        return str(val)
+    if hasattr(val, 'item'): # Tipos de NumPy (int64, float64)
+        return val.item()
+    return val
+
 def get_lifecycle_results(db=None) -> Dict[str, Any]:
     if db is None:
         db = DBConnector()
@@ -16,32 +27,30 @@ def get_lifecycle_results(db=None) -> Dict[str, Any]:
         df = db.read_table(TableNames.LIFETIME_METRICAS)
         if df.empty:
             return {}
-        row = df.iloc[-1]
+        
+        # Tomar la última fila y convertir a diccionario nativo
+        row_raw = df.iloc[-1].to_dict()
         result = {}
-        for col in df.columns:
+
+        for col, val in row_raw.items():
             if col in ("curva_activo_json", "curva_reactivacion_json"):
                 key = col.replace("_json", "")
-                result[key] = json.loads(row.get(col) or "[]")
+                try:
+                    result[key] = json.loads(val) if val else []
+                except:
+                    result[key] = []
             elif col == "ciclos_por_suscriptor":
-                result[col] = json.loads(row.get(col) or "{}")
+                try:
+                    result[col] = json.loads(val) if val else {}
+                except:
+                    result[col] = {}
             elif col in ("periodo_reporte", "metodo_calculo"):
                 continue
             else:
-                val = row.get(col)
-                if val is not None:
-                    try:
-                        f = float(val)
-                        if math.isnan(f):
-                            result[col] = None
-                        else:
-                            result[col] = int(f) if "." not in str(val) else f
-                    except (ValueError, TypeError):
-                        result[col] = val
-                else:
-                    result[col] = None
+                result[col] = _clean_value(val)
         return result
     except Exception:
-        logger.exception("Error getting lifecycle results")
+        logger.exception("Error en query de lifecycle results")
         return {}
 
 def _safe_int(v):
@@ -64,33 +73,28 @@ def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, An
             return {}
         if dim:
             df = df[df["dimension"] == dim]
-        result: Dict[str, Any] = {}
+            
+        result = {}
         for _, row in df.iterrows():
             d = str(row.get("dimension", ""))
             v = str(row.get("valor", ""))
             if d not in result:
                 result[d] = {}
-            curva_act = json.loads(row.get("curva_activo_json") or "[]")
-            curva_react = json.loads(row.get("curva_reactivacion_json") or "[]")
+                
             result[d][v] = {
-                "mediana_activo": _safe_float(row.get("mediana_activo")),
-                "p25_activo": _safe_float(row.get("p25_activo")),
-                "p75_activo": _safe_float(row.get("p75_activo")),
-                "curva_activo": curva_act,
-                "n_total_activo": _safe_int(row.get("n_total_activo")),
-                "n_evento_activo": _safe_int(row.get("n_evento_activo")),
-                "promedio_reactivacion": _safe_float(row.get("promedio_reactivacion")),
-                "mediana_reactivacion": _safe_float(row.get("mediana_reactivacion")),
-                "p25_reactivacion": _safe_float(row.get("p25_reactivacion")),
-                "p75_reactivacion": _safe_float(row.get("p75_reactivacion")),
-                "n_total_reactivacion": _safe_int(row.get("n_total_reactivacion")),
-                "n_evento_reactivacion": _safe_int(row.get("n_evento_reactivacion")),
-                "n_censurado_reactivacion": _safe_int(row.get("n_censurado_reactivacion")),
-                "curva_reactivacion": curva_react,
+                "mediana_activo": _clean_value(row.get("mediana_activo")),
+                "p25_activo": _clean_value(row.get("p25_activo")),
+                "p75_activo": _clean_value(row.get("p75_activo")),
+                "n_total_activo": int(row.get("n_total_activo") or 0),
+                "n_evento_activo": int(row.get("n_evento_activo") or 0),
+                "promedio_reactivacion": _clean_value(row.get("promedio_reactivacion")),
+                "mediana_reactivacion": _clean_value(row.get("mediana_reactivacion")),
+                "curva_activo": json.loads(row.get("curva_activo_json") or "[]"),
+                "curva_reactivacion": json.loads(row.get("curva_reactivacion_json") or "[]"),
             }
         return result
     except Exception:
-        logger.exception("Error getting lifetime dimensiones")
+        logger.exception("Error en query de dimensiones lifetime")
         return {}
 
 def _safe_float(val):
