@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     "frontend.config",
     "frontend.imports",
     "frontend.support",
+    "inertia",
 ]
 
 # --- Middleware ---
@@ -94,10 +95,15 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
     "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
     "frontend.netowl_web.middleware.RateLimitMiddleware",
+    "inertia.middleware.InertiaMiddleware",
+    "frontend.netowl_web.middleware.InertiaShareMiddleware", 
 ]
 
 # módulo raíz de las URLs
 ROOT_URLCONF = "frontend.netowl_web.urls"
+
+INERTIA_LAYOUT = "app.html"
+INTERNAL_IPS = ["127.0.0.1", "localhost", "::1", "10.3.0.41", "owl.netcomplusve.com"]
 
 # --- Configuración de plantillas ---
 TEMPLATES = [
@@ -150,7 +156,7 @@ STORAGES = {
     },
     # Almacenamiento para archivos estáticos (usa WhiteNoise con compresión y manifest)
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
 

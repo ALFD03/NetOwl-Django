@@ -1,3 +1,4 @@
+// vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
@@ -12,7 +13,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../staticfiles/dist',
+    // ✅ Compilar dentro de frontend/static/dist para que collectstatic lo encuentre
+    outDir: './static/dist',
     emptyOutDir: true,
     manifest: true,
     rollupOptions: {
