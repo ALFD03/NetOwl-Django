@@ -23,10 +23,18 @@ def normalize_col(col: str) -> str:
 
 
 def iter_odoo_chunks(csv_path: str, chunksize: int = 50000) -> Iterator[pd.DataFrame]:
-    return pd.read_csv(csv_path, sep=",", chunksize=chunksize, dtype=str, keep_default_na=False, encoding="utf-8")
+    return pd.read_csv(
+        csv_path, 
+        sep=",", 
+        chunksize=chunksize, 
+        dtype=str, 
+        keep_default_na=False, 
+        encoding="utf-8-sig",
+        low_memory=False
+    )
 
 
-def parse_odoo_chunk(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> Tuple[pd.DataFrame, pd.DataFrame, str | None]:
     df = df.rename(columns=CSV_COLUMN_MAP)
     df.columns = [normalize_col(c) for c in df.columns]
     
@@ -34,16 +42,32 @@ def parse_odoo_chunk(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     mask_new_client &= df["id"].str.lower() != "nan"
     mask_new_client &= df["id"].str.lower() != "none"
     
-    df["client_id"] = df["id"].where(mask_new_client).ffill()
-    df["client_id"] = df["client_id"].astype(str).str.strip()
+    # 1. Crear serie de client_id con el id donde exista nuevo cliente
+    client_id_series = df["id"].where(mask_new_client)
     
+    # 2. Si la primera fila del chunk no tiene ID, arrastrar el último ID del chunk anterior
+    if prev_client_id and len(client_id_series) > 0 and not mask_new_client.iloc[0]:
+        client_id_series.iloc[0] = prev_client_id
+        
+    # 3. Forward fill a lo largo de todo el chunk
+    df["client_id"] = client_id_series.ffill().astype(str).str.strip()
+    
+    # Guardar el último client_id válido de este bloque para el siguiente
+    last_valid_id = df["client_id"].iloc[-1] if not df.empty and df["client_id"].iloc[-1] not in ("", "nan", "None") else prev_client_id
+    
+    # Extraer clientes únicos
     df_clients = df[mask_new_client].copy()
     available_client_fields = [c for c in CLIENT_FIELDS if c in df_clients.columns]
     df_clients = df_clients[available_client_fields].drop_duplicates(subset=["id"])
     
+    # Extraer logs válidos vinculados a un cliente existente
     mask_has_log = df["entradas_de_tiempo_iniciativa_id"].astype(str).str.strip() != ""
     mask_has_log &= df["entradas_de_tiempo_iniciativa_id"].str.lower() != "nan"
     mask_has_log &= df["entradas_de_tiempo_iniciativa_id"].str.lower() != "none"
+    mask_has_log &= df["client_id"] != ""
+    mask_has_log &= df["client_id"].str.lower() != "nan"
+    mask_has_log &= df["client_id"].str.lower() != "none"
+    
     df_logs = df[mask_has_log].copy()
     
     log_cols_needed = [
@@ -90,9 +114,10 @@ def parse_odoo_chunk(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     for col in df_clients.select_dtypes(include=["object"]).columns:
         df_clients[col] = df_clients[col].replace("", None)
     for col in df_logs.select_dtypes(include=["object"]).columns:
-        df_logs[col] = df_logs[col].replace("", None)
+        if col != "client_id":
+            df_logs[col] = df_logs[col].replace("", None)
     
-    return df_clients, df_logs
+    return df_clients, df_logs, last_valid_id
 
 
 def import_crm_csv(csv_path: str) -> Tuple[int, int]:
@@ -107,16 +132,22 @@ def import_crm_csv(csv_path: str) -> Tuple[int, int]:
     
     _create_tables_if_not_exist(db)
     
+    # Mantener el ID del cliente entre bloques contiguos
+    last_client_id = None
+    
     for chunk in iter_odoo_chunks(csv_path):
-        df_clients, df_logs = parse_odoo_chunk(chunk)
+        df_clients, df_logs, last_client_id = parse_odoo_chunk(chunk, prev_client_id=last_client_id)
         
         if not df_clients.empty:
             db.copy_dataframe(df_clients, TableNames.CRM_CLIENTS)
             total_clients += len(df_clients)
         
         if not df_logs.empty:
-            db.copy_dataframe(df_logs, TableNames.CRM_LOGS)
-            total_logs += len(df_logs)
+            # Blindaje estricto: eliminar cualquier log sin client_id válido
+            df_logs = df_logs[df_logs["client_id"].notna() & (df_logs["client_id"].astype(str).str.strip() != "")]
+            if not df_logs.empty:
+                db.copy_dataframe(df_logs, TableNames.CRM_LOGS)
+                total_logs += len(df_logs)
     
     return total_clients, total_logs
 
@@ -204,22 +235,18 @@ def _create_tables_if_not_exist(db: DBConnector):
                 cur.execute(stmt)
         conn.commit()
 
+
 def map_stage_canonically(stage_value: Any) -> str:
-    """
-    Normaliza y traduce nombres de etapas de Odoo a claves de forma adaptativa.
-    Soporta cambios de texto en Odoo siempre que se mantenga el número o palabras clave.
-    """
+    """Normaliza y traduce nombres de etapas de Odoo a claves canónicas."""
     if pd.isna(stage_value) or not stage_value:
         return "desconocido"
         
     val_str = str(stage_value).strip()
     
-    # Capa 1: Coincidencia rápida exacta contra el mapa estático
     from .crm_config import ETAPA_MAP
     if val_str in ETAPA_MAP:
         return ETAPA_MAP[val_str]
         
-    # Capa 2: Extracción por prefijo numérico (ej: "5. GPI" o "5- GPI" o "5 GPI" -> 5)
     import re
     num_match = re.match(r"^(\d+)", val_str)
     if num_match:
@@ -239,7 +266,6 @@ def map_stage_canonically(stage_value: Any) -> str:
         if num in num_map:
             return num_map[num]
             
-    # Capa 3: Coincidencia por heurística de palabras clave (si Odoo no usa números de etapa)
     from ..utils import normalize_text
     norm = normalize_text(val_str)
     

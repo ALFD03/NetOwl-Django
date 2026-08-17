@@ -1,7 +1,6 @@
 from __future__ import annotations
 import json
 import pathlib
-
 import numpy as np
 import pandas as pd
 from psycopg2 import sql
@@ -75,7 +74,14 @@ def _first_matching_plan(values):
 
 
 def import_subscriptions_csv(csv_path: str) -> int:
-    df_local = pd.read_csv(csv_path)
+    # ✅ Lectura segura con dtype=str, encoding utf-8-sig y low_memory=False
+    df_local = pd.read_csv(
+        csv_path, 
+        dtype=str, 
+        keep_default_na=False, 
+        low_memory=False, 
+        encoding="utf-8-sig"
+    )
     df_local.rename(columns=SUBSCRIPTIONS_COLUMN_MAPPING, inplace=True)
 
     if not df_local.empty:
@@ -94,8 +100,6 @@ def import_subscriptions_csv(csv_path: str) -> int:
     ]
 
     df_local = df_local.apply(_clean_empty_strings)
-    # if "producto_nombre" in df_local.columns:
-    #     df_local["producto"] = df_local["producto_nombre"].fillna(df_local["producto"])
 
     df_local[SUBSCRIPTIONS_METADATA_COLS] = (
         df_local.groupby("orden_producto")[SUBSCRIPTIONS_METADATA_COLS]
@@ -159,7 +163,14 @@ def import_subscriptions_csv(csv_path: str) -> int:
 
 
 def import_logs_csv(csv_path: str) -> int:
-    df_logs = pd.read_csv(csv_path)
+    # ✅ Lectura segura para logs también
+    df_logs = pd.read_csv(
+        csv_path, 
+        dtype=str, 
+        keep_default_na=False, 
+        low_memory=False, 
+        encoding="utf-8-sig"
+    )
     df_logs.rename(columns=LOGS_COLUMN_MAPPING, inplace=True)
 
     missing_cols = [
@@ -167,8 +178,7 @@ def import_logs_csv(csv_path: str) -> int:
     ]
     if missing_cols:
         raise ValueError(
-            f"El CSV no contiene las columnas"
-            f" requeridas: {missing_cols}"
+            f"El CSV no contiene las columnas requeridas: {missing_cols}"
         )
 
     df_logs = df_logs.apply(_clean_empty_strings)

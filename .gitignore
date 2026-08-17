@@ -9,3 +9,5 @@ docker-compose.yml
 COMMITS.md
 logs.log
 nginx.conf
+node_modules/
+logs/

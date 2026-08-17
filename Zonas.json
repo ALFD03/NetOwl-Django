@@ -113,7 +113,7 @@
             "Site": "Puerto Cabello",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "Germán Cerruti "
+            "Coordinador" : "German Cerruti "
         },
         {
             "name": "Laboratorio ING" ,
@@ -185,7 +185,7 @@
             "Site": "Moron",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "Germán Cerruti 2"
+            "Coordinador" : "German Cerruti 2"
         },
         {
             "name": "Piedra Pintada" ,
@@ -199,7 +199,7 @@
             "Site": "Puerto Cabello",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "Germán Cerruti"
+            "Coordinador" : "German Cerruti"
         },
         {
             "name": "Rancho Grande" ,
@@ -224,7 +224,7 @@
             "Site": "San Joaquin",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "José Jiménez"
+            "Coordinador" : "Jose Jimenez"
         },
         {
             "name": "San Mateo" ,
@@ -296,7 +296,7 @@
             "Site": "San Joaquin",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "José Jiménez"
+            "Coordinador" : "Jose Jimenez"
         }
     ]
 }

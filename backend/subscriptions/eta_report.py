@@ -12,8 +12,33 @@ PLANES_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Planes.js
 ZONAS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Zonas.json"
 
 # Mapeos semánticos para el reporte reguladora
-TECH_MAP = {"RF": "Inalámbrico", "FTTH": "Alámbrico", "GPON": "Alámbrico"}
-PERSONA_MAP = {"nat": "Persona Natural", "pyme": "Persona Jurídica"}
+TECH_MAP = {
+    "RF": "Inalámbrico",
+    "FTTH": "Alámbrico",
+    "GPON": "Alámbrico",
+    "INALAMBRICO": "Inalámbrico",
+    "ALAMBRICO": "Alámbrico",
+    "FIBRA": "Alámbrico",
+    "RADIO": "Inalámbrico"
+}
+
+PERSONA_MAP = {
+    "nat": "Persona Natural", 
+    "pyme": "Persona Jurídica",
+    "jur": "Persona Jurídica",
+    "natural": "Persona Natural",
+    "juridica": "Persona Jurídica"
+}
+
+def normalize_tech(val: str) -> str:
+    if not val: return "Alámbrico"
+    val_clean = str(val).strip().upper()
+    return TECH_MAP.get(val_clean, "Alámbrico")
+
+def normalize_persona(val: str) -> str:
+    if not val: return "Persona Natural"
+    val_clean = str(val).strip().lower()
+    return PERSONA_MAP.get(val_clean, "Persona Natural")
 
 class ETAReportManager:
     def __init__(self, db: DBConnector):
@@ -105,7 +130,11 @@ class ETAReportManager:
             conn.commit()
 
     def save_sub_individual_config(self, orden: str, config: Dict[str, Any]) -> None:
-        """Guarda la parametrización individual de una suscripción corporativa."""
+        """Guarda o actualiza la parametrización individual de una suscripción."""
+        orden_clean = str(orden).strip()
+        if not orden_clean:
+            return
+
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -114,6 +143,8 @@ class ETAReportManager:
                     (orden, cliente, producto, reportar, tecnologia, tipo_persona, tiene_tv, datas_mbps, es_transporte, es_dedicado, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (orden) DO UPDATE SET
+                        cliente = EXCLUDED.cliente,
+                        producto = EXCLUDED.producto,
                         reportar = EXCLUDED.reportar,
                         tecnologia = EXCLUDED.tecnologia,
                         tipo_persona = EXCLUDED.tipo_persona,
@@ -124,14 +155,20 @@ class ETAReportManager:
                         updated_at = NOW()
                     """,
                     [
-                        orden, config.get("cliente", ""), config.get("producto", ""),
-                        config.get("reportar", True), config.get("tecnologia"),
-                        config.get("tipo_persona"), config.get("tiene_tv", False),
-                        config.get("datas_mbps", 0), config.get("es_transporte", False),
-                        config.get("es_dedicado", False)
+                        orden_clean, 
+                        str(config.get("cliente", "")).strip(), 
+                        str(config.get("producto", "")).strip(),
+                        bool(config.get("reportar", True)), 
+                        str(config.get("tecnologia", "FTTH")).strip(),
+                        str(config.get("tipo_persona", "pyme")).strip(), 
+                        bool(config.get("tiene_tv", False)),
+                        float(config.get("datas_mbps", 0.0)), 
+                        bool(config.get("es_transporte", False)),
+                        bool(config.get("es_dedicado", False))
                     ]
                 )
             conn.commit()
+
 
     def _load_mappings(self) -> Tuple[Dict[str, Dict], Dict[str, str], Dict[str, Dict]]:
         """Retorna planes globales, zonas mapeadas y configuraciones individuales de clientes."""
@@ -163,7 +200,6 @@ class ETAReportManager:
                         "es_dedicado": name == "Internet Dedicado"
                     }
 
-        # Cargar mapeos de planes globales de DB
         df_custom_planes = self.db.read_table("analyzer_eta_config_planes")
         if not df_custom_planes.empty:
             for _, row in df_custom_planes.iterrows():
@@ -177,7 +213,6 @@ class ETAReportManager:
                     "es_dedicado": row["plan_name"] == "Internet Dedicado"
                 }
 
-        # Cargar configuraciones individuales (Suscripciones Corporativas)
         individual_map = {}
         df_custom_subs = self.db.read_table("analyzer_eta_config_subs_individual")
         if not df_custom_subs.empty:
@@ -195,8 +230,9 @@ class ETAReportManager:
         return planes_map, zonas_map, individual_map
 
     def calculate_eta_report(self, periodo: str, force_recalc: bool = False) -> Dict[str, Any]:
-        # FUENTE DE VERDAD ABSOLUTA: Consultar el estado de bloqueo directamente desde la columna DB
+        """Calcula el reporte completo generando las 10 matrices requeridas."""
         is_locked = self.get_lock_status(periodo)
+        individual_configs = self.get_configured_individual_subs()
 
         if is_locked and not force_recalc:
             df_saved = self.db.query(
@@ -207,188 +243,342 @@ class ETAReportManager:
                 data = df_saved.iloc[0]["reporte_data"]
                 res_dict = json.loads(data) if isinstance(data, str) else data
                 res_dict["esta_bloqueado"] = True
+                res_dict["individual_configs"] = individual_configs
                 return res_dict
 
+        # 1. Cierre de Activos Únicos del mes (58,839 suscriptores)
         df_activos = self.db.query(
-            f"SELECT distinct orden FROM {DB_SCHEMA}.{TableNames.ANALYZER_ACTIVOS_CIERRE} WHERE periodo_reporte LIKE %s",
+            f"""
+            SELECT DISTINCT orden 
+            FROM {DB_SCHEMA}.{TableNames.ANALYZER_ACTIVOS_CIERRE} 
+            WHERE periodo_reporte LIKE %s
+            """,
             params=[f"{periodo}%"]
         )
         if df_activos.empty:
-            return {"status": "empty", "message": f"No hay cierre de activos calculado para el mes {periodo}"}
+            return {"status": "empty", "message": f"No hay cierre para {periodo}", "individual_configs": individual_configs}
 
+        # Asegurar unicidad absoluta en activos
+        df_activos = df_activos.drop_duplicates(subset=["orden"])
+
+        # 2. Cargar metadata consolidada por orden (1 sola fila por contrato)
         df_subs = self.db.query(
-            f"SELECT distinct orden_producto, producto, cliente, zona FROM {DB_SCHEMA}.{TableNames.SUBSCRIPTIONS}"
+            f"""
+            SELECT orden_producto, producto, cliente, zona, sucursal 
+            FROM {DB_SCHEMA}.{TableNames.SUBSCRIPTIONS}
+            WHERE orden_producto IS NOT NULL AND orden_producto != ''
+            """
         )
-        df_subs = df_subs.drop_duplicates(subset=["orden_producto"])
+        # ✅ DEDUPLICAR METADATA POR ORDEN (Evita duplicar líneas de equipos/routers)
+        df_subs = df_subs.drop_duplicates(subset=["orden_producto"], keep="first")
+        
+        # Cruce exacto 1 a 1
+        df_base = df_activos.merge(df_subs, left_on="orden", right_on="orden_producto", how="left")
 
-        df_base = df_activos.merge(df_subs, left_on="orden", right_on="orden_producto", how="inner")
+        # 3. Respaldo histórico en subscriptions-b para los que no tengan producto en la tabla actual
+        missing_mask = df_base["producto"].isna()
+        missing_orders = df_base.loc[missing_mask, "orden"].tolist()
+        
+        if missing_orders:
+            df_hist = self.db.read_table_filtered(
+                TableNames.SUBSCRIPTIONS_B,
+                filter_column="orden_producto",
+                filter_values=missing_orders,
+                columns=["orden_producto", "producto", "cliente", "zona", "sucursal"]
+            )
+            if not df_hist.empty:
+                df_hist = df_hist.drop_duplicates(subset=["orden_producto"], keep="first").set_index("orden_producto")
+                for idx, r in df_base[missing_mask].iterrows():
+                    ord_id = r["orden"]
+                    if ord_id in df_hist.index:
+                        df_base.at[idx, "producto"] = df_hist.loc[ord_id, "producto"]
+                        df_base.at[idx, "cliente"] = df_hist.loc[ord_id, "cliente"]
+                        df_base.at[idx, "zona"] = df_hist.loc[ord_id, "zona"]
+                        df_base.at[idx, "sucursal"] = df_hist.loc[ord_id, "sucursal"]
 
+        # ✅ GARANTÍA TOTAL: 1 sola fila por cada suscriptor activo
+        df_base = df_base.drop_duplicates(subset=["orden"], keep="first")
+
+        # 4. Mapeos
         planes_map, zonas_map, individual_map = self._load_mappings()
-
-        unmapped_plans = []
-        unmapped_subs = []
-
-        for _, row in df_base.iterrows():
-            ord_id = str(row["orden"])
-            prod_name = str(row["producto"]).strip()
-            cli_name = str(row["cliente"]).strip()
-
-            if prod_name in ("Internet Dedicado", "Transporte de Datos"):
-                if ord_id not in individual_map:
-                    unmapped_subs.append({
-                        "orden": ord_id,
-                        "cliente": cli_name,
-                        "producto": prod_name
-                    })
-            else:
-                if prod_name not in planes_map:
-                    unmapped_plans.append(prod_name)
-
-        if unmapped_plans or unmapped_subs:
-            return {
-                "status": "unmapped_elements",
-                "message": "Se requiere parametrización de elementos antes de generar el reporte.",
-                "unmapped_plans": list(set(unmapped_plans)),
-                "unmapped_subs": unmapped_subs
-            }
-
+        unmapped_plans, unmapped_subs = [], []
         rows_processed = []
+
         for _, row in df_base.iterrows():
-            ord_id = str(row["orden"])
-            prod_name = str(row["producto"]).strip()
-            zona_name = str(row["zona"]).strip()
-            estado = zonas_map.get(zona_name.lower(), "Desconocido")
+            ord_id = str(row["orden"]).strip()
+
+            raw_prod = row.get("producto")
+            if pd.isna(raw_prod) or str(raw_prod).strip().lower() in ("nan", "none", "null", "<na>", ""):
+                prod_name = None
+            else:
+                prod_name = str(raw_prod).strip()
+
+            raw_cli = row.get("cliente")
+            cli_name = str(raw_cli).strip() if pd.notna(raw_cli) and str(raw_cli).strip().lower() not in ("nan", "none", "null") else "Cliente Histórico"
+
+            raw_zona = row.get("zona")
+            zona_name = str(raw_zona).strip() if pd.notna(raw_zona) and str(raw_zona).strip().lower() not in ("nan", "none", "null") else "Sin Zona"
+            estado = zonas_map.get(zona_name.lower(), "Otros / Desconocido")
 
             if ord_id in individual_map:
                 cfg = individual_map[ord_id]
-            else:
+            elif prod_name in planes_map and prod_name not in ["Transporte de Datos", "Internet Dedicado"]:
                 cfg = planes_map[prod_name]
-
-            if not cfg["reportar"]:
+            elif not prod_name:
+                unmapped_subs.append({
+                    "orden": ord_id,
+                    "cliente": cli_name,
+                    "producto": "Suscripción histórica sin producto"
+                })
                 continue
+            elif any(word in prod_name.lower() for word in ["dedicado", "transporte", "l2"]):
+                unmapped_subs.append({
+                    "orden": ord_id,
+                    "cliente": cli_name,
+                    "producto": prod_name
+                })
+                continue
+            else:
+                unmapped_plans.append(prod_name)
+                continue
+
+            if not cfg.get("reportar", True):
+                continue
+
+            tech_str = normalize_tech(cfg.get("tecnologia"))
+            pers_str = normalize_persona(cfg.get("tipo_persona"))
 
             rows_processed.append({
                 "orden": ord_id,
                 "estado": estado,
-                "tecnologia": TECH_MAP.get(cfg["tecnologia"], cfg["tecnologia"]),
-                "tipo_persona": PERSONA_MAP.get(cfg["tipo_persona"], cfg["tipo_persona"]),
-                "tiene_tv": cfg["tiene_tv"],
-                "datas_mbps": cfg["datas_mbps"],
-                "es_transporte": cfg["es_transporte"],
-                "es_dedicado": cfg["es_dedicado"]
+                "tecnologia": tech_str,
+                "tipo_persona": pers_str,
+                "tiene_tv": bool(cfg.get("tiene_tv", False)),
+                "datas_mbps": float(cfg.get("datas_mbps", 0.0)),
+                "es_transporte": bool(cfg.get("es_transporte", False))
             })
 
-        df_rep = pd.DataFrame(rows_processed)
+        clean_unmapped_plans = [p for p in set(unmapped_plans) if p and p.lower() != 'nan']
+
+        if clean_unmapped_plans or unmapped_subs:
+            return {
+                "status": "unmapped_elements",
+                "unmapped_plans": clean_unmapped_plans,
+                "unmapped_subs": unmapped_subs,
+                "individual_configs": individual_configs,
+                "periodo": periodo
+            }
+
+        # 5. Cálculo de matrices con base limpia 1 a 1
+        df_rep = pd.DataFrame(rows_processed).drop_duplicates(subset=["orden"], keep="first")
         if df_rep.empty:
-            return {"status": "empty", "message": "No se encontraron registros reportables para este mes."}
+            return {"status": "empty", "message": "No hay datos reportables", "individual_configs": individual_configs}
 
         df_transporte = df_rep[df_rep["es_transporte"] == True].copy()
         df_main = df_rep[df_rep["es_transporte"] == False].copy()
-
-        transporte_metrics = {
-            "total": int(len(df_transporte)),
-            "por_estado": df_transporte.groupby("estado").size().to_dict() if not df_transporte.empty else {},
-            "por_persona": df_transporte.groupby("tipo_persona").size().to_dict() if not df_transporte.empty else {},
-            "por_tecnologia": df_transporte.groupby("tecnologia").size().to_dict() if not df_transporte.empty else {}
-        }
-
-        df_tv = df_main[df_main["tiene_tv"] == True].copy()
-        tv_metrics = {
-            "total": int(len(df_tv)),
-            "por_estado": {k: int(v) for k, v in df_tv.groupby("estado").size().to_dict().items()},
-            "por_persona": {k: int(v) for k, v in df_tv.groupby("tipo_persona").size().to_dict().items()},
-            "por_estado_persona": {
-                f"{k[0]} - {k[1]}": int(v) for k, v in df_tv.groupby(["estado", "tipo_persona"]).size().to_dict().items()
-            }
-        }
-
         df_net = df_main[df_main["tecnologia"].isin(["Inalámbrico", "Alámbrico"])].copy()
-        net_metrics = {
-            "total": int(len(df_net)),
-            "por_tecnologia": {k: int(v) for k, v in df_net.groupby("tecnologia").size().to_dict().items()},
-            "por_persona": {k: int(v) for k, v in df_net.groupby("tipo_persona").size().to_dict().items()},
-            "por_tecnologia_persona": {
-                f"{k[0]} - {k[1]}": int(v) for k, v in df_net.groupby(["tecnologia", "tipo_persona"]).size().to_dict().items()
-            },
-            "por_estado": {k: int(v) for k, v in df_net.groupby("estado").size().to_dict().items()},
-            "por_estado_tecnologia": {
-                f"{k[0]} - {k[1]}": int(v) for k, v in df_net.groupby(["estado", "tecnologia"]).size().to_dict().items()
-            },
-            "por_estado_persona": {
-                f"{k[0]} - {k[1]}": int(v) for k, v in df_net.groupby(["estado", "tipo_persona"]).size().to_dict().items()
-            },
-            "por_estado_tecnologia_persona": {
-                f"{k[0]} - {k[1]} - {k[2]}": int(v) for k, v in df_net.groupby(["estado", "tecnologia", "tipo_persona"]).size().to_dict().items()
-            }
-        }
-
-        bins = [0.0, 2.0, 10.0, 30.0, 100.0, 1000.0, np.inf]
-        labels = [
-            "Desde 256 Kbps a menos de 2 Mbps",
-            "Desde 2 Mbps a menos de 10 Mbps",
-            "Desde 10 Mbps a menos de 30 Mbps",
-            "Desde 30 Mbps a menos de 100 Mbps",
-            "Desde 100 Mbps a menos de 1 Gbps",
-            "Desde 1 Gbps en adelante"
-        ]
-        df_net["rango_velocidad"] = pd.cut(df_net["datas_mbps"], bins=bins, labels=labels, right=False)
-        speed_grouped = df_net.groupby(["rango_velocidad", "tecnologia"], observed=False).size().unstack(fill_value=0)
-
-        speed_metrics = {}
-        for r_name in labels:
-            speed_metrics[r_name] = {}
-            for tech in ["Inalámbrico", "Alámbrico"]:
-                speed_metrics[r_name][tech] = int(speed_grouped.at[r_name, tech]) if tech in speed_grouped.columns else 0
-            speed_metrics[r_name]["total"] = sum(speed_metrics[r_name].values())
+        df_tv = df_main[df_main["tiene_tv"] == True].copy()
 
         reporte_final = {
             "status": "success",
             "periodo": periodo,
             "esta_bloqueado": is_locked,
-            "tv_metrics": tv_metrics,
-            "net_metrics": net_metrics,
-            "speed_metrics": speed_metrics,
-            "transporte_metrics": transporte_metrics,
-            "total_muestreado": int(len(df_main))
+            "total_muestreado": int(len(df_rep)),
+            "individual_configs": individual_configs,
+            "transporte_metrics": int(len(df_transporte)),
+            
+            # --- MATRICES DE INTERNET ---
+            "net_metrics": {
+                "total": int(len(df_net)),
+                "por_tecnologia": df_net.groupby("tecnologia").size().to_dict(),
+                "por_persona": df_net.groupby("tipo_persona").size().to_dict(),
+                "por_estado": df_net.groupby("estado").size().to_dict(),
+                "por_tecnologia_persona": {f"{k[0]} | {k[1]}": int(v) for k, v in df_net.groupby(["tecnologia", "tipo_persona"]).size().to_dict().items()},
+                "por_estado_tecnologia": {f"{k[0]} | {k[1]}": int(v) for k, v in df_net.groupby(["estado", "tecnologia"]).size().to_dict().items()},
+                "por_estado_persona": {f"{k[0]} | {k[1]}": int(v) for k, v in df_net.groupby(["estado", "tipo_persona"]).size().to_dict().items()},
+                "por_estado_tecnologia_persona": {f"{k[0]} | {k[1]} | {k[2]}": int(v) for k, v in df_net.groupby(["estado", "tecnologia", "tipo_persona"]).size().to_dict().items()}
+            },
+            
+            # --- MATRICES DE TV ---
+            "tv_metrics": {
+                "total": int(len(df_tv)),
+                "por_estado": df_tv.groupby("estado").size().to_dict(),
+                "por_persona": df_tv.groupby("tipo_persona").size().to_dict(),
+                "por_estado_persona": {f"{k[0]} | {k[1]}": int(v) for k, v in df_tv.groupby(["estado", "tipo_persona"]).size().to_dict().items()}
+            }
         }
 
+        # 6. Penetración de velocidades
+        bins = [0.0, 2.0, 10.0, 30.0, 100.0, 1000.0, np.inf]
+        labels = [
+            "De 256 Kbps a < 2 Mbps", "De 2 Mbps a < 10 Mbps", "De 10 Mbps a < 30 Mbps",
+            "De 30 Mbps a < 100 Mbps", "De 100 Mbps a < 1 Gbps", "De 1 Gbps en adelante"
+        ]
+        df_net["rango_velocidad"] = pd.cut(df_net["datas_mbps"], bins=bins, labels=labels, right=False)
+        speed_grouped = df_net.groupby(["rango_velocidad", "tecnologia"], observed=False).size().unstack(fill_value=0)
+        
+        speed_res = {}
+        for r in labels:
+            speed_res[r] = {
+                "Alámbrico": int(speed_grouped.at[r, "Alámbrico"]) if "Alámbrico" in speed_grouped.columns else 0,
+                "Inalámbrico": int(speed_grouped.at[r, "Inalámbrico"]) if "Inalámbrico" in speed_grouped.columns else 0,
+                "total": int(speed_grouped.loc[r].sum())
+            }
+        reporte_final["speed_metrics"] = speed_res
+
+        # 7. Persistencia
         if not is_locked:
             with self.db.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
                         f"""
-                        INSERT INTO {DB_SCHEMA}.analyzer_eta_reporte_mensual (periodo_reporte, reporte_data, fecha_calculo)
-                        VALUES (%s, %s, NOW())
-                        ON CONFLICT (periodo_reporte) DO UPDATE SET 
-                            reporte_data = EXCLUDED.reporte_data,
-                            fecha_calculo = NOW()
+                        INSERT INTO {DB_SCHEMA}.analyzer_eta_reporte_mensual (periodo_reporte, reporte_data, fecha_calculo) 
+                        VALUES (%s, %s, NOW()) 
+                        ON CONFLICT (periodo_reporte) DO UPDATE SET reporte_data = EXCLUDED.reporte_data, fecha_calculo = NOW()
                         """,
                         [periodo, json.dumps(reporte_final)]
                     )
                 conn.commit()
 
         return reporte_final
+    
+    def get_discovered_unmapped_plans(self) -> List[str]:
+        """Busca productos en la tabla de suscripciones que no tienen configuración ETA."""
+        planes_config, _, _ = self._load_mappings()
+        
+        # Buscamos todos los productos únicos que tenemos en la base de datos de suscripciones
+        df_products = self.db.query(f"SELECT DISTINCT producto FROM {DB_SCHEMA}.{TableNames.SUBSCRIPTIONS} WHERE producto IS NOT NULL AND producto != ''")
+        all_products = df_products["producto"].tolist()
+        
+        # Filtramos: aquellos que no son corporativos (porque esos se gestionan por orden)
+        # y que no están en el mapeo de planes ya clasificados
+        discovered = []
+        for p in all_products:
+            p_clean = p.strip()
+            is_special = any(word in p_clean.lower() for word in ["dedicado", "transporte", "l2"])
+            if not is_special and p_clean not in planes_config:
+                discovered.append(p_clean)
+        
+        return sorted(discovered)
 
     def get_configured_individual_subs(self) -> List[Dict[str, Any]]:
-        """Retorna las suscripciones individuales parametrizadas con tipados seguros para JSON."""
+        """Retorna las suscripciones individuales parametrizadas sanitizadas."""
         df = self.db.read_table("analyzer_eta_config_subs_individual")
         if df.empty:
             return []
         
         records = []
         for _, row in df.iterrows():
+            raw_cli = row.get("cliente")
+            cli_name = str(raw_cli).strip() if pd.notna(raw_cli) and str(raw_cli).strip().lower() not in ("nan", "none", "null") else ""
+            
+            raw_prod = row.get("producto")
+            prod_name = str(raw_prod).strip() if pd.notna(raw_prod) and str(raw_prod).strip().lower() not in ("nan", "none", "null") else ""
+
+            raw_tec = row.get("tecnologia")
+            tec_name = str(raw_tec).strip() if pd.notna(raw_tec) and str(raw_tec).strip().lower() not in ("nan", "none", "null") else "FTTH"
+
+            raw_pers = row.get("tipo_persona")
+            pers_name = str(raw_pers).strip() if pd.notna(raw_pers) and str(raw_pers).strip().lower() not in ("nan", "none", "null") else "pyme"
+
+            try:
+                mbps = float(row.get("datas_mbps")) if pd.notna(row.get("datas_mbps")) else 0.0
+                if pd.isna(mbps): mbps = 0.0
+            except (ValueError, TypeError):
+                mbps = 0.0
+
             records.append({
                 "orden": str(row["orden"]),
-                "cliente": str(row["cliente"]) if pd.notna(row["cliente"]) else "",
-                "producto": str(row["producto"]) if pd.notna(row["producto"]) else "",
-                "reportar": bool(row["reportar"]),
-                "tecnologia": str(row["tecnologia"]) if pd.notna(row["tecnologia"]) else "",
-                "tipo_persona": str(row["tipo_persona"]) if pd.notna(row["tipo_persona"]) else "",
-                "tiene_tv": bool(row["tiene_tv"]),
-                "datas_mbps": float(row["datas_mbps"]) if pd.notna(row["datas_mbps"]) else 0.0,
-                "es_transporte": bool(row["es_transporte"]),
-                "es_dedicado": bool(row["es_dedicado"]),
-                "updated_at": str(row["updated_at"]) if pd.notna(row["updated_at"]) else None
+                "cliente": cli_name,
+                "producto": prod_name,
+                "reportar": bool(row.get("reportar", True)),
+                "tecnologia": tec_name,
+                "tipo_persona": pers_name,
+                "tiene_tv": bool(row.get("tiene_tv", False)),
+                "datas_mbps": mbps,
+                "es_transporte": bool(row.get("es_transporte", False)),
+                "es_dedicado": bool(row.get("es_dedicado", False)),
+                "updated_at": str(row["updated_at"]) if pd.notna(row.get("updated_at")) else None
             })
         return records
-# --- END OF FILE backend/subscriptions/eta_report.py ---
+    
+    def get_discovered_unmapped_subs(self) -> List[Dict[str, Any]]:
+        """Detecta solo las órdenes que realmente requieren configuración individual."""
+        planes_map, _, individual_map = self._load_mappings()
+        
+        df_subs = self.db.query(f"""
+            SELECT DISTINCT orden_producto as orden, cliente, producto, sucursal, zona
+            FROM {DB_SCHEMA}.{TableNames.SUBSCRIPTIONS}
+            WHERE orden_producto IS NOT NULL AND orden_producto != ''
+        """)
+        if df_subs.empty:
+            return []
+
+        pending_subs = []
+        for _, row in df_subs.iterrows():
+            ord_id = str(row["orden"]).strip()
+            
+            raw_prod = row.get("producto")
+            prod_name = str(raw_prod).strip() if pd.notna(raw_prod) and str(raw_prod).strip().lower() not in ("nan", "none", "null") else ""
+            
+            # ✅ REGLA: Si ya está en planes_map (como 'Pyme FTTH 100 Mbps'), NO es un pendiente individual
+            if prod_name in planes_map and prod_name not in ["Transporte de Datos", "Internet Dedicado"]:
+                continue
+
+            # ✅ Solo marcar como individual si ya está guardado, o si es Dedicado/Transporte o no tiene producto
+            is_dedicated = any(w in prod_name.lower() for w in ["dedicado", "transporte", "l2"]) or not prod_name
+            
+            if is_dedicated and ord_id not in individual_map:
+                raw_cli = row.get("cliente")
+                cli_name = str(raw_cli).strip() if pd.notna(raw_cli) and str(raw_cli).strip().lower() not in ("nan", "none", "null") else "Sin Nombre"
+                
+                raw_suc = row.get("sucursal")
+                suc_name = str(raw_suc).strip() if pd.notna(raw_suc) and str(raw_suc).strip().lower() not in ("nan", "none", "null") else ""
+                
+                raw_zona = row.get("zona")
+                zona_name = str(raw_zona).strip() if pd.notna(raw_zona) and str(raw_zona).strip().lower() not in ("nan", "none", "null") else ""
+
+                pending_subs.append({
+                    "orden": ord_id,
+                    "cliente": cli_name,
+                    "producto": prod_name or "Sin producto (Histórico)",
+                    "sucursal": suc_name,
+                    "zona": zona_name
+                })
+        return pending_subs
+    
+    def get_all_known_plans(self) -> List[Dict[str, Any]]:
+        """Retorna la lista consolidada de todos los planes registrados (JSON + BD)."""
+        planes_map, _, _ = self._load_mappings()
+        result = []
+        for name, cfg in sorted(planes_map.items()):
+            result.append({
+                "name": name,
+                "tecnologia": cfg.get("tecnologia", "FTTH"),
+                "tipo_persona": cfg.get("tipo_persona", "nat"),
+                "datas_mbps": cfg.get("datas_mbps", 0),
+                "tiene_tv": cfg.get("tiene_tv", False),
+                "es_transporte": cfg.get("es_transporte", False),
+                "es_dedicado": cfg.get("es_dedicado", False)
+            })
+        return result
+    
+    def delete_plan_custom_config(self, plan_name: str) -> None:
+        """Elimina la configuración personalizada de un plan masivo."""
+        with self.db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"DELETE FROM {DB_SCHEMA}.analyzer_eta_config_planes WHERE plan_name = %s",
+                    [plan_name]
+                )
+            conn.commit()
+
+    def delete_sub_individual_config(self, orden: str) -> None:
+        """Elimina la configuración individual de una orden."""
+        with self.db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"DELETE FROM {DB_SCHEMA}.analyzer_eta_config_subs_individual WHERE orden = %s",
+                    [orden]
+                )
+            conn.commit()

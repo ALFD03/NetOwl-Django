@@ -1,3 +1,5 @@
+# NetOwl-Django/backend/support/loader.py
+
 from __future__ import annotations
 import pandas as pd
 import numpy as np
@@ -15,7 +17,7 @@ def import_support_csv(csv_path: str) -> int:
     df = df.rename(columns=SUPPORT_CSV_COLUMN_MAP)
     
     if "ticket_sequence" not in df.columns:
-        raise ValueError("El archivo CSV no contiene la columna 'Secuencia de Ticket'.")
+        raise ValueError("El archivo CSV no contiene la columna 'Secuencia ID del ticket'.")
         
     df["ticket_sequence"] = df["ticket_sequence"].astype(str).str.strip()
     df = df[df["ticket_sequence"] != ""].copy()
@@ -29,6 +31,11 @@ def import_support_csv(csv_path: str) -> int:
         df["ultima_actualizacion_etapa"] = pd.to_datetime(df["ultima_actualizacion_etapa"], errors="coerce")
     else:
         df["ultima_actualizacion_etapa"] = df["creado_el"]
+
+    if "primera_fecha_asignada" in df.columns:
+        df["primera_fecha_asignada"] = pd.to_datetime(df["primera_fecha_asignada"], errors="coerce")
+    else:
+        df["primera_fecha_asignada"] = pd.NaT
 
     if "duracion_total_horas" in df.columns:
         df["duracion_total_horas"] = pd.to_numeric(df["duracion_total_horas"], errors="coerce").fillna(0.0)
@@ -48,7 +55,7 @@ def import_support_csv(csv_path: str) -> int:
     cols_to_keep = [
         "ticket_sequence", "cliente", "etapa", "grupo_trabajo", "sucursal",
         "zona", "municipio", "tipo_solicitud", "razon_falla", "solucion_falla",
-        "creado_el", "ultima_actualizacion_etapa", "duracion_total_horas"
+        "creado_el", "ultima_actualizacion_etapa", "primera_fecha_asignada", "duracion_total_horas"
     ]
     df = df[cols_to_keep]
 
@@ -79,9 +86,11 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             solucion_falla TEXT,
             creado_el TIMESTAMP,
             ultima_actualizacion_etapa TIMESTAMP,
+            primera_fecha_asignada TIMESTAMP,
             duracion_total_horas NUMERIC DEFAULT 0
         );
         """,
+        f"ALTER TABLE {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS} ADD COLUMN IF NOT EXISTS primera_fecha_asignada TIMESTAMP;",
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} (
             id BIGSERIAL PRIMARY KEY,
@@ -104,8 +113,6 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
-        f"ALTER TABLE {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS tickets_cancelados INT DEFAULT 0;",
-        f"ALTER TABLE {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS pct_cancelados NUMERIC DEFAULT 0;",
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} (
             id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -129,7 +136,6 @@ def _create_support_tables_if_not_exist(db: DBConnector):
         """,
         f"CREATE INDEX IF NOT EXISTS idx_support_cierre_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}(periodo_reporte);",
         f"CREATE INDEX IF NOT EXISTS idx_support_dim_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(periodo_reporte);",
-        f"CREATE INDEX IF NOT EXISTS idx_support_dim_jerarquia ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(dimension, grupo_trabajo, tipo_solicitud);",
     ]
     with db.get_connection() as conn:
         with conn.cursor() as cur:
