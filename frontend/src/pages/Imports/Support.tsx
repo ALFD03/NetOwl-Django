@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/Layout/AppLayout';
 import { ImportsHeader } from '@/components/Navigation/ImportsHeader';
 import { FileUploadZone } from '@/components/UI/FileUploadZone';
 import { Button } from '@/components/UI/Button';
+import { MonthPicker } from '@/components/UI/MonthPicker';
 import { Play, Terminal } from 'lucide-react';
 import axios from 'axios';
 
@@ -119,11 +120,10 @@ export default function ImportSupport() {
           <h3 className="text-sm font-bold text-white">Ejecutar Análisis Technical Support</h3>
 
           <div className="flex items-center gap-3">
-            <input
-              type="month"
+            <MonthPicker
               value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="bg-surface-tertiary border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white"
+              onChange={setSelectedPeriod}
+              placeholder="Mes de soporte..."
             />
             <Button
               onClick={handleRunAnalysis}
