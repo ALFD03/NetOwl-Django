@@ -35,13 +35,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copiar paquetes de Python
 COPY --from=python-builder /usr/local /usr/local
 
-# Copiar bundle JS/CSS compilado de Vite
-COPY --from=frontend-builder --chown=app:app /app/staticfiles/dist ./staticfiles/dist
-
-# Copiar código fuente
+# 1. Copiar código fuente primero
 COPY --chown=app:app . .
 
-RUN mkdir -p /app/logs /app/staticfiles && chown -R app:app /app/logs /app/staticfiles
+# 2. Inyectar el bundle JS/CSS compilado por Vite
+COPY --from=frontend-builder --chown=app:app /app/staticfiles/dist ./staticfiles/dist
+
+# Asegurar carpetas de logs, estáticos y permisos de ejecución del entrypoint
+RUN mkdir -p /app/logs /app/staticfiles && \
+    chmod +x /app/entrypoint.sh && \
+    chown -R app:app /app/logs /app/staticfiles /app/entrypoint.sh
 
 USER app
 EXPOSE 8000

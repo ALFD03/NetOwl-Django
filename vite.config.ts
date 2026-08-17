@@ -17,6 +17,11 @@ export default defineConfig({
     manifest: true,
     rollupOptions: {
       input: './frontend/src/main.tsx',
+      output: {
+        entryFileNames: 'assets/main.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/main.[ext]',
+      },
     },
   },
   server: {
