@@ -65,7 +65,7 @@ export default function EtaManagement({
     try {
       await axios.post('/subscriptions/api/eta-report/save-sub-config/', editingSub);
       setEditingSub(null);
-      router.reload({ preserveScroll: true });
+      router.reload(); // ✅ CORREGIDO
     } catch (err: any) {
       alert(err?.response?.data?.message || 'Error guardando la configuración');
     } finally {
@@ -80,7 +80,7 @@ export default function EtaManagement({
     try {
       await axios.post('/subscriptions/api/eta-report/save-plan-config/', editingPlan);
       setEditingPlan(null);
-      router.reload({ preserveScroll: true });
+      router.reload(); // ✅ CORREGIDO
     } catch (err: any) {
       alert(err?.response?.data?.message || 'Error actualizando el plan');
     } finally {
@@ -102,7 +102,7 @@ export default function EtaManagement({
         es_transporte: false,
         es_dedicado: false
       });
-      router.reload({ preserveScroll: true });
+      router.reload(); // ✅ CORREGIDO
     } catch (err) {
       alert('Error al descartar la suscripción');
     }
@@ -118,7 +118,7 @@ export default function EtaManagement({
         await axios.post('/subscriptions/api/eta-report/delete-plan-config/', { plan_name: deletingItem.id });
       }
       setDeletingItem(null);
-      router.reload({ preserveScroll: true });
+      router.reload(); // ✅ CORREGIDO
     } catch (err) {
       alert('Error al eliminar el registro');
     }
@@ -732,20 +732,20 @@ export default function EtaManagement({
         {deletingItem && (
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs">
-              <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+              <ShieldAlert className="w-5 h-5 flex-shrink-0" />
               <span>¿Estás seguro de que deseas eliminar <strong>{deletingItem.id}</strong> del maestro?</span>
             </div>
             <p className="text-xs text-slate-400">Esta acción no se puede deshacer y la orden o plan volverá al estado no clasificado.</p>
             <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
               <button 
                 onClick={() => setDeletingItem(null)}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold"
               >
                 Cancelar
               </button>
               <button 
                 onClick={handleConfirmDelete}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg shadow-rose-600/20"
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black uppercase shadow-lg shadow-rose-600/20"
               >
                 Sí, Eliminar
               </button>
