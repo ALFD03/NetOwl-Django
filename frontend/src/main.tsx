@@ -12,11 +12,12 @@ axios.defaults.xsrfHeaderName = 'X-CSRFToken';
 createInertiaApp({
   resolve: (name) => {
     const pages = import.meta.glob('./pages/**/*.tsx', { eager: true });
-    const page = pages[`./pages/${name}.tsx`];
+    const page = pages[`./pages/${name}.tsx`] as any;
     if (!page) {
       throw new Error(`Página Inertia no encontrada: ${name}`);
     }
-    return page;
+    // ✅ RETORNAR page.default O page
+    return page.default || page;
   },
   setup({ el, App, props }) {
     createRoot(el).render(

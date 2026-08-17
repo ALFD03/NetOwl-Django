@@ -6,6 +6,8 @@ import os
 import tempfile
 from contextlib import redirect_stdout, redirect_stderr
 from inertia import render as render_inertia
+import math
+
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,18 @@ def cleanup_tempfile(tmp_path):
             os.unlink(tmp_path)
         except OSError:
             pass
+        
+def _clean_json_props(obj):
+    """Limpia recursivamente cualquier float('nan') de las estructuras enviadas a Inertia."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _clean_json_props(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_clean_json_props(v) for v in obj]
+    return obj
 
 # --- VISTAS HTML PROTEGIDAS POR PERMISO GRANULAR ---
 
@@ -220,11 +234,49 @@ def eta_config_view(request):
     db = DBConnector()
     manager = ETAReportManager(db)
     
-    return render_inertia(request, "Subscriptions/EtaManagement", {
-        "individualConfigs": manager.get_configured_individual_subs(),
-        "planesConfigs": db.read_table("analyzer_eta_config_planes").to_dict('records'),
-        "discoveredPlans": manager.get_discovered_unmapped_plans() # <-- NUEVO
-    })
+    available = get_periodos()
+    periodos_disponibles = sorted(list(set([p[:7] for p in available])), reverse=True)
+    
+    periodo_req = request.GET.get("period")
+    if not periodo_req and periodos_disponibles:
+        periodo_req = periodos_disponibles[0]
+
+    unmapped_plans = []
+    unmapped_subs = []
+
+    if periodo_req:
+        report_data = manager.calculate_eta_report(periodo_req, force_recalc=True)
+        if report_data.get("status") == "unmapped_elements":
+            unmapped_plans = report_data.get("unmapped_plans", [])
+            unmapped_subs = report_data.get("unmapped_subs", [])
+
+    if not unmapped_plans:
+        unmapped_plans = manager.get_discovered_unmapped_plans()
+    if not unmapped_subs:
+        unmapped_subs = manager.get_discovered_unmapped_subs()
+
+    df_planes = db.read_table("analyzer_eta_config_planes")
+    planes_records = []
+    if not df_planes.empty:
+        df_planes = df_planes.replace({float('nan'): None})
+        if "updated_at" in df_planes.columns:
+            df_planes["updated_at"] = df_planes["updated_at"].astype(str)
+        planes_records = df_planes.to_dict('records')
+
+    # ✅ Blindaje de todos los props con _clean_json_props
+    props = {
+        "individualConfigs": manager.get_configured_individual_subs() or [],
+        "planesConfigs": planes_records,
+        "discoveredPlans": unmapped_plans or [],
+        "discoveredSubs": unmapped_subs or [],
+        "allKnownPlans": manager.get_all_known_plans() or [],
+        "currentPeriod": periodo_req or "",
+        "periods": periodos_disponibles,
+        "section": "eta_config"
+    }
+
+    return render_inertia(request, "Subscriptions/EtaManagement", _clean_json_props(props))
+
 
 # --- APIS DE LECTURA DE DATOS ---
 
@@ -527,3 +579,38 @@ def api_eta_report_save_sub_config(request):
 def api_business_units_report(request):
     periodo = request.GET.get("period")
     return JsonResponse(get_business_units_data(periodo))
+
+@login_required
+@permission_required('can_manage_eta')
+@require_POST
+def api_eta_report_delete_plan_config(request):
+    try:
+        data = json.loads(request.body)
+        plan_name = data.get("plan_name")
+        if not plan_name:
+            return JsonResponse({"status": "error", "message": "Nombre de plan requerido"}, status=400)
+        
+        db = DBConnector()
+        manager = ETAReportManager(db)
+        manager.delete_plan_custom_config(plan_name)
+        return JsonResponse({"status": "success", "message": f"Plan '{plan_name}' eliminado."})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+@login_required
+@permission_required('can_manage_eta')
+@require_POST
+def api_eta_report_delete_sub_config(request):
+    try:
+        data = json.loads(request.body)
+        orden = data.get("orden")
+        if not orden:
+            return JsonResponse({"status": "error", "message": "ID de orden requerido"}, status=400)
+        
+        db = DBConnector()
+        manager = ETAReportManager(db)
+        manager.delete_sub_individual_config(orden)
+        return JsonResponse({"status": "success", "message": f"Suscripción '{orden}' eliminada."})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)

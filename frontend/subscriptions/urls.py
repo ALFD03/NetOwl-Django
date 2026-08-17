@@ -36,5 +36,7 @@ urlpatterns = [
     path("api/eta-report/save-plan-config/", views.api_eta_report_save_plan_config, name="api_eta_report_save_plan_config"),
     path("api/eta-report/save-sub-config/", views.api_eta_report_save_sub_config, name="api_eta_report_save_sub_config"),
     path("api/business-units/", views.api_business_units_report, name="api_business_units_report"),
+    path("api/eta-report/delete-plan-config/", views.api_eta_report_delete_plan_config, name="api_eta_report_delete_plan_config"),
+    path("api/eta-report/delete-sub-config/", views.api_eta_report_delete_sub_config, name="api_eta_report_delete_sub_config"),
 
 ]
