@@ -58,12 +58,25 @@ export default function BusinessUnits({ buData = {} }: Props) {
       if (filteredNodes && filteredNodes.length > 0) {
         const sumIni = filteredNodes.reduce((acc: number, n: any) => acc + n.activos_inicio, 0);
         const sumFin = filteredNodes.reduce((acc: number, n: any) => acc + n.activos_final, 0);
+        const nuevos = filteredNodes.reduce((acc: number, n: any) => acc + (n.nuevos || 0), 0);
+        const react = filteredNodes.reduce((acc: number, n: any) => acc + (n.reactivaciones || 0), 0);
+        const bajas = filteredNodes.reduce((acc: number, n: any) => acc + (n.bajas || 0), 0);
         const dynCrec = sumIni > 0 ? ((sumFin - sumIni) / sumIni) * 100 : 0;
+        const churn_rate = sumIni > 0 ? (bajas / sumIni) * 100 : 0;
 
-        return { 
-          ...group, 
-          nodes: filteredNodes, 
-          dynamic: { activos_inicio: sumIni, activos_final: sumFin, crecimiento: dynCrec } 
+        return {
+          ...group,
+          nodes: filteredNodes,
+          dynamic: {
+            activos_inicio: sumIni,
+            activos_final: sumFin,
+            crecimiento: dynCrec,
+            nuevos,
+            reactivaciones: react,
+            bajas,
+            churn_rate,
+            total_nodos: filteredNodes.length
+          }
         };
       }
       return null;
@@ -239,8 +252,6 @@ export default function BusinessUnits({ buData = {} }: Props) {
               <p className={` text-xl font-black ${dynamicFtthSummary.tasaCumplimiento >= 100 ? 'text-green-600' :dynamicFtthSummary.tasaCumplimiento >= 80 ? 'text-amber-400' : 'text-red-700'} mt-1 `}>{f0(dynamicFtthSummary.faltante)}</p>
             </div>
 
-            
-
             <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
               <span className="text-[10px] font-black text-red-700 uppercase">Churn Rate</span>
               <p className="text-xl font-black text-red-700 mt-1">-{f2(dynamicFtthSummary.churn_rate)} %</p>
@@ -289,7 +300,7 @@ export default function BusinessUnits({ buData = {} }: Props) {
               </div>
 
               <div className="p-6 space-y-6">
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
+                <div className="grid grid-cols-2 md:grid-cols-7 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
                   <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Estado</span><span className="text-sm font-black text-brand">Activo</span></div>
                   <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(d.activos_inicio)}</span></div>
                   <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Objetivo (6%)</span><span className="text-sm font-black text-white">+{f0(m.objetivo)}</span></div>
@@ -300,7 +311,11 @@ export default function BusinessUnits({ buData = {} }: Props) {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[9px] font-black text-slate-500 uppercase">Crecimiento</span>
-                    <span className={`text-sm font-black ${d.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(d.crecimiento)}%</span>
+                    <span className={`text-sm font-black ${d.crecimiento >= 6 ? 'text-emerald-400' : 'text-red-600'}`}>{f2(d.crecimiento)}%</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-slate-500 uppercase">Churn Rate</span>
+                    <span className={`text-sm font-black ${d.churn_rate <= 3 ? 'text-green-600' : d.churn_rate <= 4 ? 'text-amber-400' : 'text-red-600'}`}>{f2(d.churn_rate)}%</span>
                   </div>
                 </div>
 
@@ -312,7 +327,8 @@ export default function BusinessUnits({ buData = {} }: Props) {
                         <th className="pb-3 text-right">Inicio</th>
                         <th className="pb-3 text-right text-emerald-500"><TrendingUp className="w-3 h-3 inline mr-1"/>Inst.</th>
                         <th className="pb-3 text-right text-blue-400"><RefreshCw className="w-3 h-3 inline mr-1"/>React.</th>
-                        <th className="pb-3 text-right">C. Neto %</th>
+                        <th className="pb-3 text-right">Bajas</th>
+                        <th className="pb-3 text-right">Churn %</th>
                         <th className="pb-3 text-right">Crec %</th>
                         <th className="pb-3 text-right text-amber-500 font-bold">Faltante</th>
                         <th className="pb-3 text-right">Cumpl %</th>
@@ -335,7 +351,8 @@ export default function BusinessUnits({ buData = {} }: Props) {
                             <td className="py-3 text-right text-slate-400">{f0(node.activos_inicio)}</td>
                             <td className="py-3 text-right text-emerald-400">+{f0(node.nuevos)}</td>
                             <td className="py-3 text-right text-blue-400">{f0(node.reactivaciones)}</td>
-                            <td className="py-3 text-right text-rose-500/70">{f2(node.churn_neto_pct)}%</td>
+                            <td className="py-3 text-right text-red-600">{f0(node.bajas)}</td>
+                            <td className="py-3 text-right text-red-600">{f2(node.churn_bruto_pct)}%</td>
                             <td className={`py-3 text-right ${node.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(node.crecimiento)}%</td>
                             <td className="py-3 text-right text-amber-500/80 font-black">{f0(nm.faltante)}</td>
                             <td className="py-3 text-right">

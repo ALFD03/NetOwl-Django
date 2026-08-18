@@ -60,6 +60,8 @@ export default function SalesReport({ reportData = {} }: Props) {
           const sumNuevos = filteredNodes.reduce((acc: number, n: any) => acc + n.nuevos, 0);
           const sumReact = filteredNodes.reduce((acc: number, n: any) => acc + n.reactivaciones, 0);
           const dynamicCrecimiento = sumIni > 0 ? ((sumFin - sumIni) / sumIni) * 100 : 0;
+          const bajas = filteredNodes.reduce((acc: number, n: any) => acc + n.bajas, 0);
+          const churn_rate = (bajas/sumIni) * 100
 
           return { 
             ...tech, 
@@ -69,6 +71,7 @@ export default function SalesReport({ reportData = {} }: Props) {
               activos_final: sumFin, 
               nuevos: sumNuevos,
               reactivaciones: sumReact,
+              churn_rate,
               crecimiento: dynamicCrecimiento 
             } 
           };
@@ -88,6 +91,7 @@ export default function SalesReport({ reportData = {} }: Props) {
     const objetivo = inicio * 0.06;
     const faltante = cierreEsperado - final;
     const tasaCumplimiento = cierreEsperado > 0 ? (final / cierreEsperado) * 100 : 0;
+
     return { cierreEsperado, objetivo, faltante, tasaCumplimiento };
   };
 
@@ -172,7 +176,7 @@ export default function SalesReport({ reportData = {} }: Props) {
 
                   return (
                     <div key={tech.technology} className="space-y-4">
-                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
+                      <div className="grid grid-cols-2 md:grid-cols-7 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
                         <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Tecnología</span><span className="text-sm font-black text-brand">{tech.technology}</span></div>
                         <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(d.activos_inicio)}</span></div>
                         <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Objetivo (6%)</span><span className="text-sm font-black text-white">+{f0(m.objetivo)}</span></div>
@@ -185,6 +189,10 @@ export default function SalesReport({ reportData = {} }: Props) {
                           <span className="text-[9px] font-black text-slate-500 uppercase">Crecimiento</span>
                           <span className={`text-sm font-black ${d.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(d.crecimiento)}%</span>
                         </div>
+                        <div className="flex flex-col">
+                          <span className="text-[9px] font-black text-slate-500 uppercase">Churn Rate</span>
+                          <span className={`text-sm font-black ${d.churn_rate <= 3 ? 'text-green-600' : d.churn_rate <= 4 ? 'text-amber-400' : 'text-red-600'}`}>{f2(d.churn_rate)}%</span>
+                        </div>
                       </div>
 
                       <div className="overflow-x-auto">
@@ -195,7 +203,8 @@ export default function SalesReport({ reportData = {} }: Props) {
                               <th className="pb-3 text-right">Inicio</th>
                               <th className="pb-3 text-right text-emerald-500"><TrendingUp className="w-3 h-3 inline mr-1"/>Inst.</th>
                               <th className="pb-3 text-right text-blue-400"><RefreshCw className="w-3 h-3 inline mr-1"/>React.</th>
-                              <th className="pb-3 text-right">C. Neto %</th>
+                              <th className="pb-3 text-right">Bajas %</th>
+                              <th className="pb-3 text-right">Churn %</th>
                               <th className="pb-3 text-right">Crec %</th>
                               <th className="pb-3 text-right text-amber-500 font-bold">Faltante</th>
                               <th className="pb-3 text-right">Cumpl %</th>
@@ -211,7 +220,8 @@ export default function SalesReport({ reportData = {} }: Props) {
                                   <td className="py-3 text-right text-slate-400">{f0(node.activos_inicio)}</td>
                                   <td className="py-3 text-right text-emerald-400">+{f0(node.nuevos)}</td>
                                   <td className="py-3 text-right text-blue-400">{f0(node.reactivaciones)}</td>
-                                  <td className="py-3 text-right text-rose-500/70">{f2(node.churn_neto_pct)}%</td>
+                                  <td className="py-3 text-right text-red-600">{f0(node.bajas)}</td>
+                                  <td className="py-3 text-right text-rose-600">{f2(node.churn_bruto_pct)}%</td>
                                   <td className={`py-3 text-right ${node.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(node.crecimiento)}%</td>
                                   <td className="py-3 text-right text-amber-500/80 font-black">{f0(nm.faltante)}</td>
                                   <td className="py-3 text-right">
