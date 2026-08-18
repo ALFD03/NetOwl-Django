@@ -4,14 +4,13 @@ import { SubHeader } from '@/components/Navigation/SubHeader';
 import { router } from '@inertiajs/react';
 import { formatPeriodoLabel } from '@/utils/formatters';
 import { 
-  Building2, TrendingUp, RefreshCw, Calendar, ChevronDown, Search, Filter, Info, Activity
+  Building2, TrendingUp, RefreshCw, Calendar, Search, Filter, Wifi
 } from 'lucide-react';
 
 interface Props {
   reportData: any;
 }
 
-// --- HELPERS DE FORMATEO ---
 const f2 = (val: any) => Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const f0 = (val: any) => Math.floor(Number(val || 0)).toLocaleString('en-US');
 
@@ -22,8 +21,8 @@ export default function SalesReport({ reportData = {} }: Props) {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('ALL');
+  const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF' | 'GPON'>('ALL');
 
-  // --- OBTENER LISTA ÚNICA DE SUCURSALES ---
   const branchList = useMemo(() => {
     const branches = new Set<string>();
     sites.forEach((site: any) => {
@@ -36,13 +35,19 @@ export default function SalesReport({ reportData = {} }: Props) {
     return Array.from(branches).sort();
   }, [sites]);
 
-  // --- LÓGICA DE FILTRADO Y RE-CÁLCULO DINÁMICO DE TOTALES ---
+  // --- LÓGICA DE FILTRADO Y RE-CÁLCULO DINÁMICO ---
   const filteredData = useMemo(() => {
     return sites.map((site: any) => {
-      // Coincidencia con nombre del Site
       const siteMatchesSearch = site.site.toLowerCase().includes(searchTerm.toLowerCase());
 
       const filteredTechs = site.technologies?.map((tech: any) => {
+        // Filtrar por tecnología si no es ALL
+        if (selectedTech !== 'ALL') {
+          const techNormalized = tech.technology?.toUpperCase();
+          if (selectedTech === 'FTTH' && !['FTTH', 'GPON'].includes(techNormalized)) return null;
+          if (selectedTech === 'RF' && techNormalized !== 'RF') return null;
+        }
+
         const filteredNodes = tech.nodes?.filter((node: any) => {
           const nodeMatchesSearch = node.zona_sucursal.toLowerCase().includes(searchTerm.toLowerCase());
           const branchMatches = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
@@ -50,7 +55,6 @@ export default function SalesReport({ reportData = {} }: Props) {
         });
 
         if (filteredNodes && filteredNodes.length > 0) {
-          // RE-CALCULAR TOTALES DE LA TECNOLOGÍA SEGÚN LOS NODOS VISIBLES
           const sumIni = filteredNodes.reduce((acc: number, n: any) => acc + n.activos_inicio, 0);
           const sumFin = filteredNodes.reduce((acc: number, n: any) => acc + n.activos_final, 0);
           const sumNuevos = filteredNodes.reduce((acc: number, n: any) => acc + n.nuevos, 0);
@@ -77,14 +81,13 @@ export default function SalesReport({ reportData = {} }: Props) {
       }
       return null;
     }).filter(Boolean);
-  }, [sites, searchTerm, selectedBranch]);
+  }, [sites, searchTerm, selectedBranch, selectedTech]);
 
-  // Ayudante de cálculos comerciales (Meta 6%)
   const calcComercial = (inicio: number, final: number) => {
     const cierreEsperado = inicio * 1.06;
     const objetivo = inicio * 0.06;
     const faltante = cierreEsperado - final;
-    const tasaCumplimiento = (final / cierreEsperado) * 100;
+    const tasaCumplimiento = cierreEsperado > 0 ? (final / cierreEsperado) * 100 : 0;
     return { cierreEsperado, objetivo, faltante, tasaCumplimiento };
   };
 
@@ -98,6 +101,7 @@ export default function SalesReport({ reportData = {} }: Props) {
 
       {/* --- BARRA DE FILTROS --- */}
       <div className="mb-8 flex flex-wrap items-center gap-4">
+        {/* Mes */}
         <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Calendar className="w-4 h-4 text-brand" />
@@ -108,6 +112,20 @@ export default function SalesReport({ reportData = {} }: Props) {
           </select>
         </div>
 
+        {/* Tipo de Servicio */}
+        <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
+            <Wifi className="w-4 h-4 text-brand" />
+            <span className="text-[10px] uppercase font-black tracking-wider">Servicio</span>
+          </div>
+          <select value={selectedTech} onChange={(e) => setSelectedTech(e.target.value as any)} className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none hover:bg-white/5 min-w-[130px]">
+            <option value="ALL" className="bg-[#0f1a36]">Todos</option>
+            <option value="FTTH" className="bg-[#0f1a36]">FTTH (Fibra)</option>
+            <option value="RF" className="bg-[#0f1a36]">RF (Radio)</option>
+          </select>
+        </div>
+
+        {/* Sucursal */}
         <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Filter className="w-4 h-4 text-emerald-500" />
@@ -119,11 +137,12 @@ export default function SalesReport({ reportData = {} }: Props) {
           </select>
         </div>
 
-        <div className="flex-1 min-w-[300px] flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden group">
+        {/* Buscador */}
+        <div className="flex-1 min-w-[280px] flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden group">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400 group-focus-within:text-brand transition-colors">
             <Search className="w-4 h-4" />
           </div>
-          <input type="text" placeholder="Buscar por Sede o nombre de Zona..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-transparent w-full px-4 py-2.5 text-xs font-bold text-white outline-none" />
+          <input type="text" placeholder="Buscar por Sede o Zona..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-transparent w-full px-4 py-2.5 text-xs font-bold text-white outline-none" />
         </div>
       </div>
 
@@ -132,26 +151,27 @@ export default function SalesReport({ reportData = {} }: Props) {
         {filteredData.length === 0 ? (
           <div className="p-20 text-center text-slate-500 bg-surface-secondary border border-dashed border-slate-800 rounded-3xl">
             <Search className="w-12 h-12 mx-auto mb-4 opacity-10" />
-            <h3 className="text-lg font-bold text-slate-400">No hay datos para mostrar</h3>
+            <h3 className="text-lg font-bold text-slate-400">No hay datos que coincidan con los filtros</h3>
           </div>
         ) : (
           filteredData.map((siteGroup: any) => (
             <div key={siteGroup.site} className="bg-surface-secondary border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
               <div className="bg-slate-800/40 p-6 border-b border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-brand/10 rounded-2xl border border-brand/20 shadow-lg shadow-brand/5"><Building2 className="w-6 h-6 text-brand" /></div>
+                  <div className="p-3 bg-brand/10 rounded-2xl border border-brand/20 shadow-lg shadow-brand/5">
+                    <Building2 className="w-6 h-6 text-brand" />
+                  </div>
                   <h3 className="text-xl font-black text-white tracking-tight">{siteGroup.site}</h3>
                 </div>
               </div>
 
               <div className="p-6 space-y-12">
                 {siteGroup.technologies?.map((tech: any) => {
-                  const d = tech.dynamic; // TOTALES RECALCULADOS EN CLIENTE
+                  const d = tech.dynamic;
                   const m = calcComercial(d.activos_inicio, d.activos_final);
 
                   return (
                     <div key={tech.technology} className="space-y-4">
-                      {/* FRANJA DE TECNOLOGÍA REACTIVA */}
                       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
                         <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Tecnología</span><span className="text-sm font-black text-brand">{tech.technology}</span></div>
                         <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(d.activos_inicio)}</span></div>

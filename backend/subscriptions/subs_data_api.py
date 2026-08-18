@@ -334,11 +334,11 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
             if coordinador and str(coordinador).strip():
                 zone_coord_map[z_name] = str(coordinador).strip()
 
-            # Mapeo por Tecnología
+            # Mapeo por Tecnología (Soporta FTTH y GPON)
             z_type = str(z.get("Type", "")).strip().upper()
             if z_type == "RF":
                 rf_zones_set.add(z_name)
-            elif z_type == "FTTH":
+            elif z_type in ("FTTH", "GPON"): # 👈 1. MEJORA: Acepta FTTH y GPON
                 ftth_zones_set.add(z_name)
 
         df = db.query(f"""
@@ -364,11 +364,13 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
             sucursal_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
             
             z_key = zona_name.lower()
+            z_type = "RF" if z_key in rf_zones_set else "FTTH"
 
             node_data = {
                 "zona_sucursal": val_str,
                 "zona": zona_name,
                 "sucursal": sucursal_name,
+                "type": z_type,  # 👈 2. AÑADIDO: Tipo de servicio (FTTH o RF)
                 "activos_inicio": int(row.get("activos_inicio") or 0),
                 "activos_final": int(row.get("activos_final") or 0),
                 "nuevos": int(row.get("nuevos") or 0),
