@@ -1,17 +1,20 @@
-from .tiempo import compute_tiempo_instalacion, compute_tiempo_por_etapa
-from .efectividad import compute_efectividad
-from .probabilidad import compute_probabilidad_etapa8, compute_probabilidad_perdido
-from .rescate import compute_rescate_perdidos
-from .core import _compute_totals, compute_and_save_all_global, _clean_nan
+from .tiempo import (
+    _compute_stats_distribution,
+    compute_tiempos_instalacion_y_perdida,
+    compute_tiempo_por_etapa,
+)
+from .efectividad import compute_efectividad, get_e8_client_attribution_mapping
+from .probabilidad import compute_distribucion_perdidos, compute_distribucion_etapa8
+from .core import _clean_nan, compute_crm_metrics_for_period
 
 __all__ = [
-    "compute_tiempo_instalacion",
+    "_compute_stats_distribution",
+    "compute_tiempos_instalacion_y_perdida",
     "compute_tiempo_por_etapa",
     "compute_efectividad",
-    "compute_probabilidad_etapa8",
-    "compute_probabilidad_perdido",
-    "compute_rescate_perdidos",
-    "_compute_totals",
-    "compute_and_save_all_global",
+    "get_e8_client_attribution_mapping",
+    "compute_distribucion_perdidos",
+    "compute_distribucion_etapa8",
     "_clean_nan",
+    "compute_crm_metrics_for_period",
 ]

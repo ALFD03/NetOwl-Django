@@ -1,4 +1,3 @@
-# frontend/imports/views.py
 import json
 import io
 import logging
@@ -32,7 +31,6 @@ TEMPLATE_PREFIX = "imports/"
 
 
 def register_import_log(user, module, file_name='N/A', rows=0, status='success', message='', details=''):
-    """Guarda persistentemente la acción realizada en la base de datos."""
     try:
         ImportActionLog.objects.create(
             user=user if user.is_authenticated else None,
@@ -110,7 +108,7 @@ def api_history_list(request):
     return JsonResponse({"history": data})
 
 
-# --- ACCIONES Y PROCESAMIENTO CON REGISTRO AUTOMÁTICO DE HISTORIAL ---
+# --- ACCIONES Y PROCESAMIENTO CON REGISTRO DE HISTORIAL ---
 
 @login_required
 @ratelimit(key='ip', rate='5/m', block=True)
@@ -163,7 +161,6 @@ def api_import_logs(request):
 @ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
 def api_import_crm(request):
-    """Importa el CSV de Odoo CRM sin ejecutar el análisis automático."""
     file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
     tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_CRM_HEADERS)
     if error:
@@ -172,7 +169,6 @@ def api_import_crm(request):
     try:
         rows_clients, rows_logs = import_crm_csv(tmp_path)
         msg = f"CRM: Importados {rows_clients} clientes y {rows_logs} logs exitosamente."
-        # Registra la carga del archivo únicamente
         register_import_log(request.user, 'crm', file_name, rows_clients, 'success', msg, f"Clientes: {rows_clients} | Logs: {rows_logs}")
         return JsonResponse({"status": "success", "message": msg})
     except Exception as e:
@@ -188,19 +184,28 @@ def api_import_crm(request):
 @ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_run_crm_analysis(request):
-    """Ejecuta el análisis manual de CRM y guarda el evento + traza en el historial."""
+    try:
+        data = json.loads(request.body)
+        mes = data.get("month")
+    except Exception:
+        return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
+
+    # Validación estricta obligatoria
+    if not mes or len(mes) != 7:
+        return JsonResponse({"status": "error", "message": "Periodo inválido. Seleccione un mes con formato YYYY-MM."}, status=400)
+
     out = io.StringIO()
     with redirect_stdout(out), redirect_stderr(out):
         try:
-            run_crm_analysis()
+            run_crm_analysis(mes)
         except Exception as e:
-            err_text = f"Error durante el cálculo de métricas CRM: {str(e)}"
-            register_import_log(request.user, 'crm_analysis', 'Análisis Global', 0, 'error', err_text, out.getvalue())
+            err_text = f"Error durante el cálculo de métricas CRM para {mes}: {str(e)}"
+            register_import_log(request.user, 'crm_analysis', f"Periodo {mes}", 0, 'error', err_text, out.getvalue())
             return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
 
-    msg = "Análisis completo de CRM Analytics ejecutado y guardado correctamente."
-    register_import_log(request.user, 'crm_analysis', 'Análisis Global', 0, 'success', msg, out.getvalue())
-    return JsonResponse({"status": "success", "message": msg, "log_output": out.getvalue()})
+    msg = f"Análisis de CRM completado exitosamente para el periodo {mes}."
+    register_import_log(request.user, 'crm_analysis', f"Periodo {mes}", 0, 'success', msg, out.getvalue())
+    return JsonResponse({"status": "success", "message": msg, "periodo_label": mes, "log_output": out.getvalue()})
 
 
 @login_required
@@ -208,7 +213,6 @@ def api_run_crm_analysis(request):
 @permission_required('can_run_calculations')
 @require_POST
 def api_run_analysis(request):
-    """Ejecuta el cálculo de Churn para el mes seleccionado y registra la acción en el historial."""
     try:
         data = json.loads(request.body)
         mes = data.get("month")
@@ -261,17 +265,20 @@ def api_import_support(request):
     finally:
         cleanup_tempfile(tmp_path)
 
+
 @login_required
 @permission_required('can_run_calculations')
 @ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_run_support_analysis(request):
-    periodo = None
     try:
         data = json.loads(request.body)
         periodo = data.get("month")
     except Exception:
-        pass
+        return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
+
+    if not periodo or len(periodo) != 7:
+        return JsonResponse({"status": "error", "message": "Periodo inválido (YYYY-MM)."}, status=400)
 
     out = io.StringIO()
     with redirect_stdout(out), redirect_stderr(out):
@@ -279,9 +286,9 @@ def api_run_support_analysis(request):
             run_support_analysis(periodo)
         except Exception as e:
             err_text = f"Error durante el cálculo de métricas Support: {str(e)}"
-            register_import_log(request.user, 'support_analysis', 'Análisis Global', 0, 'error', err_text, out.getvalue())
+            register_import_log(request.user, 'support_analysis', f"Periodo {periodo}", 0, 'error', err_text, out.getvalue())
             return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
 
-    msg = f"Análisis de Technical Support completado ({periodo or 'Histórico completo'})."
-    register_import_log(request.user, 'support_analysis', f"Periodo {periodo or 'Global'}", 0, 'success', msg, out.getvalue())
-    return JsonResponse({"status": "success", "message": msg, "log_output": out.getvalue()})
+    msg = f"Análisis de Technical Support completado para {periodo}."
+    register_import_log(request.user, 'support_analysis', f"Periodo {periodo}", 0, 'success', msg, out.getvalue())
+    return JsonResponse({"status": "success", "message": msg, "periodo_label": periodo, "log_output": out.getvalue()})

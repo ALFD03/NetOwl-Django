@@ -1,4 +1,5 @@
 from __future__ import annotations
+import unicodedata
 import pandas as pd
 import numpy as np
 from typing import Iterator, Tuple
@@ -6,8 +7,8 @@ from ..database import DBConnector
 from ..conf_config import DB_SCHEMA, TableNames
 from .crm_config import CSV_COLUMN_MAP, CLIENT_FIELDS, LOG_FIELDS, ETAPA_MAP, GANADO_STATES
 
+
 def normalize_col(col: str) -> str:
-    import unicodedata
     text = str(col).strip()
     text = (
         unicodedata.normalize("NFD", text)
@@ -34,6 +35,52 @@ def iter_odoo_chunks(csv_path: str, chunksize: int = 50000) -> Iterator[pd.DataF
     )
 
 
+def map_stage_canonically(stage_value: any) -> str:
+    """Normaliza y traduce nombres de etapas de Odoo a claves canónicas."""
+    if pd.isna(stage_value) or not stage_value:
+        return "desconocido"
+        
+    val_str = str(stage_value).strip()
+    if val_str in ETAPA_MAP:
+        return ETAPA_MAP[val_str]
+        
+    import re
+    num_match = re.match(r"^(\d+)", val_str)
+    if num_match:
+        num = int(num_match.group(1))
+        num_map = {
+            1: "etapa_1_contacto",
+            2: "etapa_2_recepcion",
+            3: "etapa_3_factibilidad",
+            4: "etapa_4_adecuaciones",
+            5: "etapa_5_gpi",
+            6: "etapa_6_contratistas",
+            7: "etapa_7_instalados",
+            8: "etapa_8_devueltos",
+            9: "etapa_9_disponibles",
+            10: "etapa_10_proyectos",
+        }
+        if num in num_map:
+            return num_map[num]
+            
+    from ..utils import normalize_text
+    norm = normalize_text(val_str)
+    
+    if "contacto" in norm: return "etapa_1_contacto"
+    if "recepcion" in norm: return "etapa_2_recepcion"
+    if "factibilidad" in norm or "evaluacion" in norm: return "etapa_3_factibilidad"
+    if "adecuacion" in norm or "red optica" in norm: return "etapa_4_adecuaciones"
+    if "gpi" in norm or "planificacion" in norm: return "etapa_5_gpi"
+    if "contratista" in norm: return "etapa_6_contratistas"
+    if "instalado" in norm: return "etapa_7_instalados"
+    if "devuelto" in norm: return "etapa_8_devueltos"
+    if "disponible" in norm or "otra fecha" in norm: return "etapa_9_disponibles"
+    if "proyecto" in norm: return "etapa_10_proyectos"
+    if "perdido" in norm: return "perdido"
+    
+    return "desconocido"
+
+
 def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> Tuple[pd.DataFrame, pd.DataFrame, str | None]:
     df = df.rename(columns=CSV_COLUMN_MAP)
     df.columns = [normalize_col(c) for c in df.columns]
@@ -42,17 +89,12 @@ def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> Tup
     mask_new_client &= df["id"].str.lower() != "nan"
     mask_new_client &= df["id"].str.lower() != "none"
     
-    # 1. Crear serie de client_id con el id donde exista nuevo cliente
+    # 1. Forward fill del client_id
     client_id_series = df["id"].where(mask_new_client)
-    
-    # 2. Si la primera fila del chunk no tiene ID, arrastrar el último ID del chunk anterior
     if prev_client_id and len(client_id_series) > 0 and not mask_new_client.iloc[0]:
         client_id_series.iloc[0] = prev_client_id
         
-    # 3. Forward fill a lo largo de todo el chunk
     df["client_id"] = client_id_series.ffill().astype(str).str.strip()
-    
-    # Guardar el último client_id válido de este bloque para el siguiente
     last_valid_id = df["client_id"].iloc[-1] if not df.empty and df["client_id"].iloc[-1] not in ("", "nan", "None") else prev_client_id
     
     # Extraer clientes únicos
@@ -60,7 +102,7 @@ def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> Tup
     available_client_fields = [c for c in CLIENT_FIELDS if c in df_clients.columns]
     df_clients = df_clients[available_client_fields].drop_duplicates(subset=["id"])
     
-    # Extraer logs válidos vinculados a un cliente existente
+    # Extraer logs válidos
     mask_has_log = df["entradas_de_tiempo_iniciativa_id"].astype(str).str.strip() != ""
     mask_has_log &= df["entradas_de_tiempo_iniciativa_id"].str.lower() != "nan"
     mask_has_log &= df["entradas_de_tiempo_iniciativa_id"].str.lower() != "none"
@@ -125,14 +167,13 @@ def import_crm_csv(csv_path: str) -> Tuple[int, int]:
     total_clients = 0
     total_logs = 0
     
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.CRM_CLIENTS}, {DB_SCHEMA}.{TableNames.CRM_LOGS} CASCADE")
-        conn.commit()
-    
     _create_tables_if_not_exist(db)
     
-    # Mantener el ID del cliente entre bloques contiguos
+    with db.get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"TRUNCATE TABLE {DB_SCHEMA}.{TableNames.CRM_CLIENTS}, {DB_SCHEMA}.{TableNames.CRM_LOGS} CASCADE")
+        conn.commit()
+    
     last_client_id = None
     
     for chunk in iter_odoo_chunks(csv_path):
@@ -143,7 +184,6 @@ def import_crm_csv(csv_path: str) -> Tuple[int, int]:
             total_clients += len(df_clients)
         
         if not df_logs.empty:
-            # Blindaje estricto: eliminar cualquier log sin client_id válido
             df_logs = df_logs[df_logs["client_id"].notna() & (df_logs["client_id"].astype(str).str.strip() != "")]
             if not df_logs.empty:
                 db.copy_dataframe(df_logs, TableNames.CRM_LOGS)
@@ -178,7 +218,7 @@ def _create_tables_if_not_exist(db: DBConnector):
             duracion_total_horas NUMERIC,
             created_at TIMESTAMP DEFAULT NOW(),
             updated_at TIMESTAMP DEFAULT NOW()
-        )
+        );
         """,
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_LOGS} (
@@ -190,43 +230,77 @@ def _create_tables_if_not_exist(db: DBConnector):
             duracion_horas NUMERIC,
             created_at_log TIMESTAMP,
             created_at TIMESTAMP DEFAULT NOW()
-        )
+        );
+        """,
+        f"""
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} (
+            id BIGSERIAL PRIMARY KEY,
+            periodo_reporte VARCHAR(7) NOT NULL UNIQUE,
+            total_oportunidades INT DEFAULT 0,
+            ganados INT DEFAULT 0,
+            perdidos INT DEFAULT 0,
+            pendientes INT DEFAULT 0,
+            pct_instalacion NUMERIC DEFAULT 0,
+            pct_perdida NUMERIC DEFAULT 0,
+            pct_pendientes NUMERIC DEFAULT 0,
+            count_devueltos_e8 INT DEFAULT 0,
+            pct_devueltos_e8 NUMERIC DEFAULT 0,
+            
+            -- Tiempos de Instalación (Ganados)
+            horas_promedio_inst NUMERIC DEFAULT 0,
+            horas_mediana_inst NUMERIC DEFAULT 0,
+            horas_p25_inst NUMERIC DEFAULT 0,
+            horas_p75_inst NUMERIC DEFAULT 0,
+            horas_min_inst NUMERIC DEFAULT 0,
+            horas_max_inst NUMERIC DEFAULT 0,
+            horas_std_inst NUMERIC DEFAULT 0,
+            pct_excede_prom_inst NUMERIC DEFAULT 0,
+            pct_excede_med_inst NUMERIC DEFAULT 0,
+            
+            -- Tiempos de Pérdida (Perdidos)
+            horas_promedio_perd NUMERIC DEFAULT 0,
+            horas_mediana_perd NUMERIC DEFAULT 0,
+            horas_p25_perd NUMERIC DEFAULT 0,
+            horas_p75_perd NUMERIC DEFAULT 0,
+            horas_min_perd NUMERIC DEFAULT 0,
+            horas_max_perd NUMERIC DEFAULT 0,
+            horas_std_perd NUMERIC DEFAULT 0,
+            pct_excede_prom_perd NUMERIC DEFAULT 0,
+            pct_excede_med_perd NUMERIC DEFAULT 0,
+            
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
         """,
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} (
             id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-            totals JSONB,
-            tiempo_instalacion JSONB,
+            resumen_global JSONB,
             tiempo_por_etapa JSONB,
             efectividad JSONB,
-            etapa8 JSONB,
-            perdido JSONB,
-            rescate JSONB
-        )
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
         """,
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO} (
             id BIGSERIAL PRIMARY KEY,
+            periodo_reporte VARCHAR(7) NOT NULL,
             dimension TEXT NOT NULL,
             valor TEXT NOT NULL,
-            totals JSONB,
-            tiempo_instalacion JSONB,
-            tiempo_por_etapa JSONB,
+            metricas JSONB,
             efectividad JSONB,
-            etapa8 JSONB,
-            perdido JSONB,
-            rescate JSONB
-        )
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
         """,
-        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_client ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(client_id)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_created ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(created_at_log)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_nueva_etapa ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(nueva_etapa)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_etapas ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(etapa_anterior, nueva_etapa)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_etapa ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(etapa_actual)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_ganado ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(ganado)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_creado ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(creado_el)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_dims ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(cliente_municipio, campana, sucursal, vendedor, equipo_ventas)",
-        f"CREATE INDEX IF NOT EXISTS idx_crm_dimension ON {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO}(dimension)",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_client ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(client_id);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_created ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(created_at_log);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_nueva_etapa ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(nueva_etapa);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_logs_etapas ON {DB_SCHEMA}.{TableNames.CRM_LOGS}(etapa_anterior, nueva_etapa);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_etapa ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(etapa_actual);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_ganado ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(ganado);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_creado ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(creado_el);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_clients_dims ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(campana, sucursal, vendedor);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_cierre_periodo ON {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO}(periodo_reporte);",
+        f"CREATE INDEX IF NOT EXISTS idx_crm_dim_periodo ON {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO}(periodo_reporte, dimension);",
     ]
     
     with db.get_connection() as conn:
@@ -234,51 +308,3 @@ def _create_tables_if_not_exist(db: DBConnector):
             for stmt in statements:
                 cur.execute(stmt)
         conn.commit()
-
-
-def map_stage_canonically(stage_value: Any) -> str:
-    """Normaliza y traduce nombres de etapas de Odoo a claves canónicas."""
-    if pd.isna(stage_value) or not stage_value:
-        return "desconocido"
-        
-    val_str = str(stage_value).strip()
-    
-    from .crm_config import ETAPA_MAP
-    if val_str in ETAPA_MAP:
-        return ETAPA_MAP[val_str]
-        
-    import re
-    num_match = re.match(r"^(\d+)", val_str)
-    if num_match:
-        num = int(num_match.group(1))
-        num_map = {
-            1: "etapa_1_contacto",
-            2: "etapa_2_recepcion",
-            3: "etapa_3_factibilidad",
-            4: "etapa_4_adecuaciones",
-            5: "etapa_5_gpi",
-            6: "etapa_6_contratistas",
-            7: "etapa_7_instalados",
-            8: "etapa_8_devueltos",
-            9: "etapa_9_disponibles",
-            10: "etapa_10_proyectos",
-        }
-        if num in num_map:
-            return num_map[num]
-            
-    from ..utils import normalize_text
-    norm = normalize_text(val_str)
-    
-    if "contacto" in norm: return "etapa_1_contacto"
-    if "recepcion" in norm: return "etapa_2_recepcion"
-    if "factibilidad" in norm or "evaluacion" in norm: return "etapa_3_factibilidad"
-    if "adecuacion" in norm or "red optica" in norm: return "etapa_4_adecuaciones"
-    if "gpi" in norm or "planificacion" in norm: return "etapa_5_gpi"
-    if "contratista" in norm: return "etapa_6_contratistas"
-    if "instalado" in norm: return "etapa_7_instalados"
-    if "devuelto" in norm: return "etapa_8_devueltos"
-    if "disponible" in norm or "otra fecha" in norm: return "etapa_9_disponibles"
-    if "proyecto" in norm: return "etapa_10_proyectos"
-    if "perdido" in norm: return "perdido"
-    
-    return "desconocido"

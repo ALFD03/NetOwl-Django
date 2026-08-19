@@ -21,15 +21,11 @@ ETAPA_ORDER = [
     "etapa_10_proyectos", "perdido"
 ]
 
-DIMENSIONES = ["municipio", "campana", "sucursal", "vendedor", "equipo_ventas"]
+DIMENSIONES = ["campana", "sucursal", "vendedor"]
 
 PROB_DIM_E8 = ["devolver_oportunidad"]
 PROB_DIM_PERDIDOS_RESCATE = ["motivo_perdida"]
 
-DIMENSION_COL_MAP = {"municipio": "cliente_municipio"}
-
-def dim_col(dim: str) -> str:
-    return DIMENSION_COL_MAP.get(dim, dim)
 
 EFECTIVIDAD_REGLAS = {
     "etapa_3_factibilidad": {
@@ -165,7 +161,8 @@ GANADO_STATES = {"perdido", "ganado", "pendiente"}
 METRICAS = [
     "tiempo_por_etapa",
     "tiempo_instalacion",
+    "tiempo_perdida",
     "efectividad",
-    "probabilidad_etapa8_perdidos",
-    "rescate_perdidos",
+    "probabilidad_etapa8",
+    "probabilidad_perdido",
 ]
