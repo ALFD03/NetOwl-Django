@@ -2,10 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { SubHeader } from '@/components/Navigation/SubHeader';
 import { Modal } from '@/components/UI/Modal';
+import { NeonContainer } from '@/components/UI/NeonContainer';
 import { router } from '@inertiajs/react';
 import { 
   Plus, Settings2, ShieldAlert, CheckCircle2, 
-  Wifi, Zap, Network, Edit3, Trash2, EyeOff, ShieldCheck, AlertTriangle, Loader2
+  Wifi, Zap, Network, Edit3, Trash2, EyeOff, ShieldCheck, Layers, Loader2
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -35,12 +36,10 @@ export default function EtaManagement({
     return 'individual';
   });
   
-  // MODALES
   const [editingSub, setEditingSub] = useState<any>(null);
   const [editingPlan, setEditingPlan] = useState<any>(null);
   const [deletingItem, setDeletingItem] = useState<{ type: 'sub' | 'plan'; id: string } | null>(null);
 
-  // ABRIR EDICIÓN DE SUSCRIPCIÓN CON VALORES PREVIOS CORRECTOS
   const handleOpenEditSub = (c: any) => {
     const isKnown = allKnownPlans.some((p: any) => p.name === c.producto);
     setIsCustomProduct(!isKnown && !!c.producto);
@@ -58,14 +57,13 @@ export default function EtaManagement({
     });
   };
 
-  // GUARDAR SUSCRIPCIÓN
   const handleUpdateSub = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
       await axios.post('/subscriptions/api/eta-report/save-sub-config/', editingSub);
       setEditingSub(null);
-      router.reload(); // ✅ CORREGIDO
+      router.reload();
     } catch (err: any) {
       alert(err?.response?.data?.message || 'Error guardando la configuración');
     } finally {
@@ -73,14 +71,13 @@ export default function EtaManagement({
     }
   };
 
-  // GUARDAR PLAN
   const handleUpdatePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
       await axios.post('/subscriptions/api/eta-report/save-plan-config/', editingPlan);
       setEditingPlan(null);
-      router.reload(); // ✅ CORREGIDO
+      router.reload();
     } catch (err: any) {
       alert(err?.response?.data?.message || 'Error actualizando el plan');
     } finally {
@@ -88,7 +85,6 @@ export default function EtaManagement({
     }
   };
 
-  // ACCIÓN RÁPIDA: NO DECLARAR CON 1 CLIC
   const handleQuickIgnoreSub = async (sub: any) => {
     try {
       await axios.post('/subscriptions/api/eta-report/save-sub-config/', {
@@ -102,13 +98,12 @@ export default function EtaManagement({
         es_transporte: false,
         es_dedicado: false
       });
-      router.reload(); // ✅ CORREGIDO
+      router.reload();
     } catch (err) {
       alert('Error al descartar la suscripción');
     }
   };
 
-  // EJECUTAR ELIMINACIÓN
   const handleConfirmDelete = async () => {
     if (!deletingItem) return;
     try {
@@ -118,13 +113,12 @@ export default function EtaManagement({
         await axios.post('/subscriptions/api/eta-report/delete-plan-config/', { plan_name: deletingItem.id });
       }
       setDeletingItem(null);
-      router.reload(); // ✅ CORREGIDO
+      router.reload();
     } catch (err) {
       alert('Error al eliminar el registro');
     }
   };
 
-  // SELECCIONAR PLAN PREDEFINIDO
   const handleSelectPredefinedPlan = (planName: string) => {
     if (planName === '__CUSTOM__') {
       setIsCustomProduct(true);
@@ -165,11 +159,11 @@ export default function EtaManagement({
 
       {/* SELECTOR DE PESTAÑAS */}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap gap-1 bg-surface-secondary p-1 rounded-2xl border border-slate-800 shadow-xl">
+        <div className="flex flex-wrap gap-1 bg-surface-secondary p-1.5 rounded-2xl border border-slate-800 shadow-xl">
           <button 
             onClick={() => setActiveTab('discovered_plans')} 
-            className={`relative px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-              activeView === 'discovered_plans' ? 'bg-amber-500 text-[#0b1326] shadow-lg' : 'text-slate-500 hover:text-white'
+            className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
+              activeView === 'discovered_plans' ? 'bg-amber-500 text-[#0b1326] shadow-lg font-black' : 'text-slate-400 hover:text-white'
             }`}
           >
             Planes por Clasificar
@@ -182,8 +176,8 @@ export default function EtaManagement({
 
           <button 
             onClick={() => setActiveTab('discovered_subs')} 
-            className={`relative px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-              activeView === 'discovered_subs' ? 'bg-amber-500 text-[#0b1326] shadow-lg' : 'text-slate-500 hover:text-white'
+            className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
+              activeView === 'discovered_subs' ? 'bg-amber-500 text-[#0b1326] shadow-lg font-black' : 'text-slate-400 hover:text-white'
             }`}
           >
             Corporativos Pendientes
@@ -197,7 +191,7 @@ export default function EtaManagement({
           <button 
             onClick={() => setActiveTab('individual')} 
             className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-              activeView === 'individual' ? 'bg-brand text-white shadow-lg' : 'text-slate-500 hover:text-white'
+              activeView === 'individual' ? 'bg-brand text-white shadow-lg' : 'text-slate-400 hover:text-white'
             }`}
           >
             Suscripciones Guardadas ({individualConfigs.length})
@@ -206,7 +200,7 @@ export default function EtaManagement({
           <button 
             onClick={() => setActiveTab('global')} 
             className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${
-              activeView === 'global' ? 'bg-brand text-white shadow-lg' : 'text-slate-500 hover:text-white'
+              activeView === 'global' ? 'bg-brand text-white shadow-lg' : 'text-slate-400 hover:text-white'
             }`}
           >
             Planes Masivos ({planesConfigs.length})
@@ -222,18 +216,23 @@ export default function EtaManagement({
               reportar: true, tiene_tv: false, es_transporte: false, es_dedicado: false 
             });
           }} 
-          className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg"
+          className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-900/30"
         >
           <Plus className="w-4 h-4" /> Nuevo Registro Manual
         </button>
       </div>
 
-      {/* CONTENIDO DE TABLAS */}
-      <div className="bg-surface-secondary border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
-        
+      {/* CONTENIDO CON NEONCONTAINER */}
+      <div>
         {/* 1. PLANES MASIVOS PENDIENTES */}
         {activeView === 'discovered_plans' && (
-          <div>
+          <NeonContainer
+            theme="yellow"
+            title="Planes Detectados sin Clasificación Regulatoria"
+            subtitle="Asigna tecnología y tipo de persona para incluirlos en el reporte ETA"
+            icon={<ShieldAlert className="w-5 h-5" />}
+            noPadding={true}
+          >
             {discoveredPlans.length === 0 ? (
               <div className="p-20 text-center flex flex-col items-center">
                 <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
@@ -241,7 +240,7 @@ export default function EtaManagement({
               </div>
             ) : (
               <table className="w-full text-left text-xs">
-                <thead className="bg-amber-500/10 text-amber-500 font-black uppercase">
+                <thead className="bg-amber-500/10 text-amber-400 font-black uppercase border-b border-slate-800">
                   <tr><th className="p-5">Plan Detectado</th><th className="p-5 text-right">Acción</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800">
@@ -266,12 +265,18 @@ export default function EtaManagement({
                 </tbody>
               </table>
             )}
-          </div>
+          </NeonContainer>
         )}
 
         {/* 2. CORPORATIVOS DETECTADOS PENDIENTES */}
         {activeView === 'discovered_subs' && (
-          <div>
+          <NeonContainer
+            theme="yellow"
+            title="Suscripciones Especializadas Pendientes"
+            subtitle="Configura individualmente los enlaces dedicados y transporte de datos"
+            icon={<ShieldAlert className="w-5 h-5" />}
+            noPadding={true}
+          >
             {discoveredSubs.length === 0 ? (
               <div className="p-20 text-center flex flex-col items-center">
                 <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
@@ -279,7 +284,7 @@ export default function EtaManagement({
               </div>
             ) : (
               <table className="w-full text-left text-xs">
-                <thead className="bg-amber-500/10 text-amber-500 font-black uppercase">
+                <thead className="bg-amber-500/10 text-amber-400 font-black uppercase border-b border-slate-800">
                   <tr>
                     <th className="p-5">Orden ID</th>
                     <th className="p-5">Cliente</th>
@@ -297,7 +302,6 @@ export default function EtaManagement({
                         <button 
                           onClick={() => handleQuickIgnoreSub(sub)}
                           className="bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/30 px-4 py-2 rounded-xl font-black uppercase text-[10px] transition-all"
-                          title="Excluir del cálculo del regulador"
                         >
                           No Declarar
                         </button>
@@ -324,106 +328,119 @@ export default function EtaManagement({
                 </tbody>
               </table>
             )}
-          </div>
+          </NeonContainer>
         )}
 
         {/* 3. SUSCRIPCIONES INDIVIDUALES GUARDADAS */}
         {activeView === 'individual' && (
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-800/60 text-slate-400 font-black uppercase">
-              <tr>
-                <th className="p-5">Información del Cliente</th>
-                <th className="p-5">Servicio / Configuración</th>
-                <th className="p-5 text-center">Estado Declaración</th>
-                <th className="p-5 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {filteredSubs.map((c: any) => (
-                <tr key={c.orden} className="hover:bg-white/5 transition-all">
-                  <td className="p-5">
-                    <p className="font-black text-white text-sm">{c.cliente || 'Sin Nombre'}</p>
-                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">ID: {c.orden}</p>
-                  </td>
-                  <td className="p-5">
-                    <p className="text-slate-300 font-bold">{c.producto}</p>
-                    <p className="text-[10px] text-slate-500 uppercase mt-1">
-                      {c.datas_mbps} Mbps | {c.tecnologia} | {c.tipo_persona === 'pyme' ? 'Jurídica' : 'Natural'}
-                    </p>
-                  </td>
-                  <td className="p-5 text-center">
-                    {c.reportar ? (
-                      <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3" /> Declarado
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
-                        <EyeOff className="w-3 h-3" /> No Declarado (Excluido)
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-5 text-right space-x-2">
-                    <button 
-                      onClick={() => handleOpenEditSub(c)}
-                      className="p-2.5 bg-slate-800 hover:bg-brand hover:text-white rounded-xl text-slate-400 transition-colors"
-                      title="Editar configuración"
-                    >
-                      <Settings2 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => setDeletingItem({ type: 'sub', id: c.orden })}
-                      className="p-2.5 bg-slate-800 hover:bg-rose-600 hover:text-white rounded-xl text-slate-400 transition-colors"
-                      title="Eliminar del maestro"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
+          <NeonContainer
+            theme="blue"
+            title="Maestro de Suscripciones Parametrizadas"
+            subtitle="Reglas individuales guardadas en base de datos"
+            icon={<Zap className="w-5 h-5" />}
+            noPadding={true}
+          >
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-900/80 text-slate-400 font-black uppercase border-b border-slate-800">
+                <tr>
+                  <th className="p-5">Información del Cliente</th>
+                  <th className="p-5">Servicio / Configuración</th>
+                  <th className="p-5 text-center">Estado Declaración</th>
+                  <th className="p-5 text-right">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {filteredSubs.map((c: any) => (
+                  <tr key={c.orden} className="hover:bg-white/5 transition-all">
+                    <td className="p-5">
+                      <p className="font-black text-white text-sm">{c.cliente || 'Sin Nombre'}</p>
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">ID: {c.orden}</p>
+                    </td>
+                    <td className="p-5">
+                      <p className="text-slate-300 font-bold">{c.producto}</p>
+                      <p className="text-[10px] text-slate-500 uppercase mt-1">
+                        {c.datas_mbps} Mbps | {c.tecnologia} | {c.tipo_persona === 'pyme' ? 'Jurídica' : 'Natural'}
+                      </p>
+                    </td>
+                    <td className="p-5 text-center">
+                      {c.reportar ? (
+                        <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3" /> Declarado
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                          <EyeOff className="w-3 h-3" /> No Declarado (Excluido)
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-5 text-right space-x-2">
+                      <button 
+                        onClick={() => handleOpenEditSub(c)}
+                        className="p-2.5 bg-slate-800 hover:bg-brand hover:text-white rounded-xl text-slate-400 transition-colors"
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => setDeletingItem({ type: 'sub', id: c.orden })}
+                        className="p-2.5 bg-slate-800 hover:bg-rose-600 hover:text-white rounded-xl text-slate-400 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </NeonContainer>
         )}
 
         {/* 4. PLANES MASIVOS GUARDADOS */}
         {activeView === 'global' && (
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-800/60 text-slate-400 font-black uppercase">
-              <tr>
-                <th className="p-5">Nombre del Plan</th>
-                <th className="p-5">Clasificación Regulador</th>
-                <th className="p-5 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800">
-              {planesConfigs.map((p: any) => (
-                <tr key={p.plan_name} className="hover:bg-white/5 transition-all">
-                  <td className="p-5 font-black text-white text-sm">{p.plan_name}</td>
-                  <td className="p-5">
-                    <div className="flex gap-2">
-                      <span className="bg-[#0b1326] px-3 py-1 rounded-lg border border-slate-800 text-[10px] font-black text-slate-400">{p.tecnologia}</span>
-                      <span className="bg-[#0b1326] px-3 py-1 rounded-lg border border-slate-800 text-[10px] font-black text-emerald-500">{p.tipo_persona}</span>
-                      <span className="bg-[#0b1326] px-3 py-1 rounded-lg border border-slate-800 text-[10px] font-black text-amber-500">{p.datas_mbps} Mbps</span>
-                    </div>
-                  </td>
-                  <td className="p-5 text-right space-x-2">
-                    <button 
-                      onClick={() => setEditingPlan({ ...p })} 
-                      className="p-2.5 bg-slate-800 hover:bg-brand hover:text-white rounded-xl text-slate-400 transition-colors"
-                    >
-                      <Settings2 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => setDeletingItem({ type: 'plan', id: p.plan_name })}
-                      className="p-2.5 bg-slate-800 hover:bg-rose-600 hover:text-white rounded-xl text-slate-400 transition-colors"
-                      title="Eliminar plan personalizado"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
+          <NeonContainer
+            theme="slate"
+            title="Planes Masivos Configurados"
+            subtitle="Reglas aplicadas globalmente para todos los clientes que contratan estos planes"
+            icon={<Layers className="w-5 h-5" />}
+            noPadding={true}
+          >
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-900/80 text-slate-400 font-black uppercase border-b border-slate-800">
+                <tr>
+                  <th className="p-5">Nombre del Plan</th>
+                  <th className="p-5">Clasificación Regulador</th>
+                  <th className="p-5 text-right">Acciones</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {planesConfigs.map((p: any) => (
+                  <tr key={p.plan_name} className="hover:bg-white/5 transition-all">
+                    <td className="p-5 font-black text-white text-sm">{p.plan_name}</td>
+                    <td className="p-5">
+                      <div className="flex gap-2">
+                        <span className="bg-[#0b1326] px-3 py-1 rounded-xl border border-slate-800 text-[10px] font-black text-slate-400">{p.tecnologia}</span>
+                        <span className="bg-[#0b1326] px-3 py-1 rounded-xl border border-slate-800 text-[10px] font-black text-emerald-400">{p.tipo_persona}</span>
+                        <span className="bg-[#0b1326] px-3 py-1 rounded-xl border border-slate-800 text-[10px] font-black text-amber-400">{p.datas_mbps} Mbps</span>
+                      </div>
+                    </td>
+                    <td className="p-5 text-right space-x-2">
+                      <button 
+                        onClick={() => setEditingPlan({ ...p })} 
+                        className="p-2.5 bg-slate-800 hover:bg-brand hover:text-white rounded-xl text-slate-400 transition-colors"
+                      >
+                        <Settings2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => setDeletingItem({ type: 'plan', id: p.plan_name })}
+                        className="p-2.5 bg-slate-800 hover:bg-rose-600 hover:text-white rounded-xl text-slate-400 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </NeonContainer>
         )}
       </div>
 
@@ -431,12 +448,10 @@ export default function EtaManagement({
       <Modal isOpen={!!editingSub} onClose={() => setEditingSub(null)} title="Parametrización de Suscripción Especializada" size="lg">
         {editingSub && (
           <form onSubmit={handleUpdateSub} className="space-y-6">
-            
-            {/* TOGGLE DECLARAR VS EXCLUIR */}
             <div className="p-4 rounded-2xl border border-slate-800 bg-surface-tertiary/30 flex items-center justify-between">
               <div>
                 <h6 className="text-xs font-bold text-white">Estado en el Reporte ETA</h6>
-                <p className="text-[10px] text-slate-400">Si seleccionas "No Declarar", se resolverá la alerta y el cliente no sumará en las matrices.</p>
+                <p className="text-[10px] text-slate-400">Al seleccionar "No Declarar", se resolverá la alerta y el cliente no sumará en las matrices.</p>
               </div>
               <button
                 type="button"
@@ -452,14 +467,11 @@ export default function EtaManagement({
               </button>
             </div>
 
-            {/* SELECCIÓN DE TIPO DE SERVICIO ESTILO CARDS */}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
                 Tipo de Servicio para el Regulador
               </label>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                
-                {/* Internet Estándar */}
                 <div 
                   onClick={() => setEditingSub({ ...editingSub, es_transporte: false, es_dedicado: false })}
                   className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
@@ -478,7 +490,6 @@ export default function EtaManagement({
                   </div>
                 </div>
 
-                {/* Internet Dedicado */}
                 <div 
                   onClick={() => setEditingSub({ ...editingSub, es_transporte: false, es_dedicado: true })}
                   className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
@@ -497,7 +508,6 @@ export default function EtaManagement({
                   </div>
                 </div>
 
-                {/* Transporte de Datos */}
                 <div 
                   onClick={() => setEditingSub({ ...editingSub, es_transporte: true, es_dedicado: false })}
                   className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
@@ -515,11 +525,9 @@ export default function EtaManagement({
                     <p className="text-[9px] text-slate-400 mt-1 leading-tight">Circuito L2. Se separa del universo de Internet.</p>
                   </div>
                 </div>
-
               </div>
             </div>
 
-            {/* CAMPOS DE DETALLE */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-800">
               <div className="space-y-4">
                 <div className="space-y-1">
@@ -582,7 +590,6 @@ export default function EtaManagement({
                 </div>
               </div>
 
-              {/* CLASIFICACIÓN TÉCNICA */}
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
@@ -727,7 +734,7 @@ export default function EtaManagement({
         )}
       </Modal>
 
-      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+      {/* MODAL DE CONFIRMACIÓN */}
       <Modal isOpen={!!deletingItem} onClose={() => setDeletingItem(null)} title="Confirmar Eliminación" size="sm">
         {deletingItem && (
           <div className="space-y-4">
@@ -753,7 +760,6 @@ export default function EtaManagement({
           </div>
         )}
       </Modal>
-
     </AppLayout>
   );
 }

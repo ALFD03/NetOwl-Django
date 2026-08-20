@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { SubHeader } from '@/components/Navigation/SubHeader';
+import { NeonContainer } from '@/components/UI/NeonContainer';
+import { MetricCard } from '@/components/UI/MetricCard'
 import { router } from '@inertiajs/react';
 import { formatPeriodoLabel } from '@/utils/formatters';
 import { 
   UserCheck, TrendingUp, RefreshCw, Calendar, Search, Filter, 
-  Wifi, Radio, Target, Layers
+  Wifi, Radio, Layers, User, Wrench, Repeat, Target, TrendingDown, Users, UserRoundCheck, Ellipsis, Percent, CircleArrowUp, CircleCheckBig
 } from 'lucide-react';
 
 interface Props {
@@ -17,7 +19,6 @@ const f0 = (val: any) => Math.floor(Number(val || 0)).toLocaleString('en-US');
 
 export default function BusinessUnits({ buData = {} }: Props) {
   const groups = buData.data || [];
-  const ftthSummaryRaw = buData.ftth_summary || {};
   const periods = buData.periods || [];
   const currentPeriod = buData.period || '';
 
@@ -25,12 +26,11 @@ export default function BusinessUnits({ buData = {} }: Props) {
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
 
-  // Ayudante Metas 6%
   const calcComercial = (inicio: number, final: number) => {
     const cierreEsperado = inicio * 1.06;
     const objetivo = inicio * 0.06;
     const faltante = cierreEsperado - final;
-    const tasaCumplimiento = cierreEsperado > 0 ? (final / cierreEsperado) * 100 : 0;
+    const tasaCumplimiento = objetivo > 0 ? 100 - ((faltante / objetivo) * 100) : 0;
     return { cierreEsperado, objetivo, faltante, tasaCumplimiento };
   };
 
@@ -40,10 +40,8 @@ export default function BusinessUnits({ buData = {} }: Props) {
     return Array.from(branches).sort();
   }, [groups]);
 
-  // --- FILTRADO Y RE-CÁLCULO DINÁMICO POR COORDINADOR Y TECNOLOGÍA ---
   const filteredData = useMemo(() => {
     return groups.map((group: any) => {
-      // Si el grupo es consolidado de RF y se filtró solo FTTH, ocultarlo
       if (group.is_rf && selectedTech === 'FTTH') return null;
 
       const coordMatches = group.coordinador.toLowerCase().includes(searchTerm.toLowerCase());
@@ -83,7 +81,6 @@ export default function BusinessUnits({ buData = {} }: Props) {
     }).filter(Boolean);
   }, [groups, searchTerm, selectedBranch, selectedTech]);
 
-  // Recálculo del Consolidado FTTH según filtros activos
   const dynamicFtthSummary = useMemo(() => {
     const ftthNodes: any[] = [];
     groups.forEach((g: any) => {
@@ -107,8 +104,8 @@ export default function BusinessUnits({ buData = {} }: Props) {
     const bajas = ftthNodes.reduce((acc, n) => acc + n.bajas, 0);
     const crec = actIni > 0 ? ((actFin - actIni) / actIni) * 100 : 0;
     const com = calcComercial(actIni, actFin);
-    const churn_rate = (bajas/actIni)*100
-    const adiciones_brutas = (nuevos + react) - bajas
+    const churn_rate = actIni > 0 ? (bajas / actIni) * 100 : 0;
+    const adiciones_brutas = (nuevos + react) - bajas;
 
     return {
       activos_inicio: actIni,
@@ -132,10 +129,9 @@ export default function BusinessUnits({ buData = {} }: Props) {
     <AppLayout title="Business Units">
       <SubHeader activeTab="business_units" />
 
-      {/* --- BARRA DE FILTROS --- */}
+      {/* FILTROS */}
       <div className="mb-8 flex flex-wrap items-center gap-4">
-        {/* Filtro Mes */}
-        <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
+        <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Calendar className="w-4 h-4 text-brand" />
             <span className="text-[10px] font-black uppercase tracking-wider">Mes</span>
@@ -145,8 +141,7 @@ export default function BusinessUnits({ buData = {} }: Props) {
           </select>
         </div>
 
-        {/* Filtro Tipo de Servicio / Tecnología */}
-        <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
+        <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Wifi className="w-4 h-4 text-brand" />
             <span className="text-[10px] font-black uppercase tracking-wider">Servicio</span>
@@ -158,8 +153,7 @@ export default function BusinessUnits({ buData = {} }: Props) {
           </select>
         </div>
 
-        {/* Filtro Sucursal */}
-        <div className="flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
+        <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
             <Filter className="w-4 h-4 text-emerald-500" />
             <span className="text-[10px] font-black uppercase tracking-wider">Sucursal</span>
@@ -170,8 +164,7 @@ export default function BusinessUnits({ buData = {} }: Props) {
           </select>
         </div>
 
-        {/* Buscador */}
-        <div className="flex-1 min-w-[280px] flex items-center shadow-2xl rounded-xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden group">
+        <div className="flex-1 min-w-[280px] flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden group">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400 group-focus-within:text-brand transition-colors">
             <Search className="w-4 h-4" />
           </div>
@@ -179,23 +172,15 @@ export default function BusinessUnits({ buData = {} }: Props) {
         </div>
       </div>
 
-      {/* --- CUADRO CONSOLIDADO GLOBAL FTTH --- */}
+      {/* CONSOLIDADO GENERAL FTTH */}
       {selectedTech !== 'RF' && dynamicFtthSummary.total_nodos > 0 && (
-        <div className="mb-10 bg-gradient-to-br from-[#0f1a36] to-[#080d1a] border border-brand/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800/80">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-brand/20 border border-brand/40 rounded-2xl shadow-lg shadow-brand/10">
-                <Layers className="w-6 h-6 text-brand" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Consolidado General FTTH</h3>
-                <p className="text-xs text-slate-400 font-medium">
-                  Rendimiento global de todos los nodos de Fibra Óptica ({dynamicFtthSummary.total_nodos} nodos)
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
+        <div className="mb-10">
+          <NeonContainer
+            theme="cyan"
+            title="Consolidado General FTTH"
+            subtitle={`Rendimiento global de todos los nodos de Fibra Óptica (${dynamicFtthSummary.total_nodos} nodos)`}
+            icon={<Layers className="w-5 h-5" />}
+            headerAction={
               <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border ${
                 dynamicFtthSummary.tasaCumplimiento >= 100 
                   ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' 
@@ -203,119 +188,136 @@ export default function BusinessUnits({ buData = {} }: Props) {
               }`}>
                 {dynamicFtthSummary.tasaCumplimiento >= 100 ? 'Meta Cumplida' : 'En Progreso'}
               </span>
-            </div>
-          </div>
+            }
+          >
+            
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-3.5">
+              <MetricCard
+                label="Activos Incio"
+                value={`${f0(dynamicFtthSummary.activos_inicio)}`}
+                color="slate"
+                icon={<User/>}
+              />
 
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase">Activos Inicio</span>
-              <p className="text-xl font-black text-white mt-1">{f0(dynamicFtthSummary.activos_inicio)}</p>
-            </div>
+              <MetricCard
+                label="instalaciones"
+                value={`+ ${f0(dynamicFtthSummary.nuevos)}`}
+                color="green"
+                icon={<Wrench className="text-emerald-400"/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className="text-[10px] font-black text-green-600 uppercase">Instalaciones</span>
-              <p className="text-xl font-black text-green-600 mt-1">+{f0(dynamicFtthSummary.nuevos)}</p>
-            </div>
+              <MetricCard
+                label="reactivaciones"
+                value={`+ ${f0(dynamicFtthSummary.reactivaciones)}`}
+                color="blue"
+                icon={<Repeat className="text-sky-400"/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className="text-[10px] font-black text-blue-600 uppercase">Reactivaciones</span>
-              <p className="text-xl font-black text-blue-600 mt-1">+{f0(dynamicFtthSummary.reactivaciones)}</p>
-            </div>
+              <MetricCard
+                label="ingresos reales"
+                value={`+ ${f0(dynamicFtthSummary.adiciones_brutas)}`}
+                color="purple"
+                icon={<TrendingUp className="text-purple-400"/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className={`text-[10px] font-black ${dynamicFtthSummary.crecimiento >= 6 ? 'text-green-600' : dynamicFtthSummary.crecimiento >= 2 ? 'text-amber-500': 'text-red-700'} uppercase`}>ingresos Reales</span>
-              <p className={`text-xl font-black ${dynamicFtthSummary.crecimiento >= 5.5 ? 'text-green-600' : dynamicFtthSummary.crecimiento >= 0 ? 'text-amber-500': 'text-red-700'} mt-1`}>{f0(dynamicFtthSummary.adiciones_brutas)}</p>
-            </div>
+              <MetricCard
+                label="objetivo"
+                value={`${f0(dynamicFtthSummary.objetivo)}`}
+                color="green"
+                icon={<Target className="text-emerald-400"/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className="text-[10px] font-black text-green-600 uppercase">Objetivo</span>
-              <p className="text-xl font-black text-green-600 mt-1">+{f0(dynamicFtthSummary.objetivo)}</p>
-            </div>
+              <MetricCard
+                label="bajas"
+                value={`- ${f0(dynamicFtthSummary.bajas)}`}
+                color="red"
+                icon={<TrendingDown className="text-rose-400"/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className="text-[10px] font-black text-red-700 uppercase">Bajas</span>
-              <p className="text-xl font-black text-red-700 mt-1">-{f0(dynamicFtthSummary.bajas)}</p>
-            </div>
+              <MetricCard
+                label="activos cierre"
+                value={`${f0(dynamicFtthSummary.activos_final)}`}
+                color="slate"
+                icon={<Users/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className={`text-[10px] font-black ${dynamicFtthSummary.tasaCumplimiento >= 100 ? 'text-green-600' :dynamicFtthSummary.tasaCumplimiento >= 80 ? 'text-amber-400' : 'text-red-700'} uppercase`}>Activos Cierre</span>
-              <p className={` text-xl font-black ${dynamicFtthSummary.tasaCumplimiento >= 100 ? 'text-green-600' :dynamicFtthSummary.tasaCumplimiento >= 80 ? 'text-amber-400' : 'text-red-700'} mt-1`}>{f0(dynamicFtthSummary.activos_final)}</p>
-            </div>
+              <MetricCard
+                label="cierre esperado"
+                value={`${f0(dynamicFtthSummary.cierreEsperado)}`}
+                color="slate"
+                icon={<UserRoundCheck/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className="text-[10px] font-black text-slate-400 uppercase">Cierre Esperado</span>
-              <p className="text-xl font-black text-white mt-1">{f0(dynamicFtthSummary.cierreEsperado)}</p>
-            </div>
+              <MetricCard
+                label="faltante"
+                value={`${f0(dynamicFtthSummary.faltante)}`}
+                color="yellow"
+                icon={<Ellipsis className="text-amber-400"/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className={` text-[10px] font-black ${dynamicFtthSummary.tasaCumplimiento >= 100 ? 'text-green-600' :dynamicFtthSummary.tasaCumplimiento >= 80 ? 'text-amber-400' : 'text-red-700'} uppercase `}>Faltante</span>
-              <p className={` text-xl font-black ${dynamicFtthSummary.tasaCumplimiento >= 100 ? 'text-green-600' :dynamicFtthSummary.tasaCumplimiento >= 80 ? 'text-amber-400' : 'text-red-700'} mt-1 `}>{f0(dynamicFtthSummary.faltante)}</p>
-            </div>
+              <MetricCard
+                label="churn rate"
+                value={`${f2(dynamicFtthSummary.churn_rate)} %`}
+                color="red"
+                icon={<Percent className="text-rose-400"/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className="text-[10px] font-black text-red-700 uppercase">Churn Rate</span>
-              <p className="text-xl font-black text-red-700 mt-1">-{f2(dynamicFtthSummary.churn_rate)} %</p>
-            </div>
+              <MetricCard
+                label="crecimiento"
+                value={`${f2(dynamicFtthSummary.crecimiento)} %`}
+                color="green"
+                icon={<CircleArrowUp className="text-emerald-400"/>}
+              />
 
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className={` text-[10px] font-black ${dynamicFtthSummary.crecimiento >= 5.5 ? 'text-green-600' : dynamicFtthSummary.crecimiento >= 0 ? 'text-amber-400' : 'text-red-700'} uppercase `}>Crecimiento %</span>
-              <p className={`text-xl font-black mt-1 ${dynamicFtthSummary.crecimiento >= 5.5 ? 'text-green-600' : dynamicFtthSummary.crecimiento >= 0 ? 'text-amber-400' : 'text-red-700'}`}>
-                {f2(dynamicFtthSummary.crecimiento)}%
-              </p>
+              <MetricCard
+                label="Tasa de cumplimiento"
+                value={`${f2(dynamicFtthSummary.tasaCumplimiento)} %`}
+                color={
+                  dynamicFtthSummary.tasaCumplimiento >= 100
+                    ? 'green'
+                    : dynamicFtthSummary.tasaCumplimiento >= 80
+                      ? 'yellow'
+                      : 'red'
+                }
+                icon={<CircleCheckBig className={`${dynamicFtthSummary.tasaCumplimiento >= 100 ? 'text-emerald-400' : dynamicFtthSummary.tasaCumplimiento >= 80 ? 'text-amber-400' : 'text-rose-400'}`}/>}
+              />
             </div>
-
-            <div className="p-4 bg-surface-tertiary/40 border border-slate-800 rounded-2xl flex flex-col justify-between">
-              <span className="text-[10px] font-black text-amber-400 uppercase">Cumplimiento (6%)</span>
-              <div>
-                <p className={`text-xl font-black ${dynamicFtthSummary.tasaCumplimiento >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {f2(dynamicFtthSummary.tasaCumplimiento)}%
-                </p>
-                <div className="w-full h-1.5 bg-slate-800 mt-1.5 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full ${dynamicFtthSummary.tasaCumplimiento >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} 
-                    style={{ width: `${Math.min(dynamicFtthSummary.tasaCumplimiento, 100)}%` }} 
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          </NeonContainer>
         </div>
       )}
 
-      {/* --- LISTADO POR COORDINADOR --- */}
-      <div className="space-y-12">
+      {/* LISTADO POR COORDINADOR */}
+      <div className="space-y-10">
         {filteredData.map((group: any) => {
           const d = group.dynamic;
           const m = calcComercial(d.activos_inicio, d.activos_final);
+          const isRf = group.is_rf;
           
           return (
-            <div key={group.coordinador} className="bg-surface-secondary border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
-              <div className="bg-slate-800/40 p-6 border-b border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-2xl border shadow-lg ${group.is_rf ? 'bg-amber-500/10 border-amber-500/20' : 'bg-brand/10 border-brand/20'}`}>
-                    {group.is_rf ? <Radio className="w-6 h-6 text-amber-400" /> : <UserCheck className="w-6 h-6 text-brand" />}
-                  </div>
-                  <h3 className="text-xl font-black text-white tracking-tight">{group.coordinador}</h3>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-6">
+            <NeonContainer
+              key={group.coordinador}
+              theme={isRf ? 'yellow' : 'blue'}
+              title={group.coordinador}
+              subtitle={`Gestión de Nodos y Crecimiento Comercial (${d.total_nodos} zonas)`}
+              icon={isRf ? <Radio className="w-5 h-5" /> : <UserCheck className="w-5 h-5" />}
+            >
+              <div className="space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-7 gap-3 bg-[#0b1326] p-4 rounded-2xl border border-slate-800/50 shadow-inner">
                   <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Estado</span><span className="text-sm font-black text-brand">Activo</span></div>
-                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white">{f0(d.activos_inicio)}</span></div>
-                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Objetivo (6%)</span><span className="text-sm font-black text-white">+{f0(m.objetivo)}</span></div>
-                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Cierre Esperado</span><span className="text-sm font-black text-white">{f0(m.cierreEsperado)}</span></div>
+                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Base Inicio</span><span className="text-sm font-black text-white font-mono">{f0(d.activos_inicio)}</span></div>
+                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Objetivo (6%)</span><span className="text-sm font-black text-white font-mono">+{f0(m.objetivo)}</span></div>
+                  <div className="flex flex-col"><span className="text-[9px] font-black text-slate-500 uppercase">Cierre Esperado</span><span className="text-sm font-black text-white font-mono">{f0(m.cierreEsperado)}</span></div>
                   <div className="flex flex-col border-l border-slate-800/50 pl-4">
                     <span className="text-[9px] font-black text-slate-500 uppercase">Cumplimiento</span>
-                    <span className={`text-sm font-black ${m.tasaCumplimiento >= 100 ? 'text-emerald-400' : 'text-amber-400'}`}>{f2(m.tasaCumplimiento)}%</span>
+                    <span className={`text-sm font-black font-mono ${m.tasaCumplimiento >= 100 ? 'text-emerald-400' : m.tasaCumplimiento >= 80 ? 'text-amber-400' : 'text-rose-400'}`}>{f2(m.tasaCumplimiento)}%</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[9px] font-black text-slate-500 uppercase">Crecimiento</span>
-                    <span className={`text-sm font-black ${d.crecimiento >= 6 ? 'text-emerald-400' : 'text-red-600'}`}>{f2(d.crecimiento)}%</span>
+                    <span className={`text-sm font-black font-mono ${d.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(d.crecimiento)}%</span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[9px] font-black text-slate-500 uppercase">Churn Rate</span>
-                    <span className={`text-sm font-black ${d.churn_rate <= 3 ? 'text-green-600' : d.churn_rate <= 4 ? 'text-amber-400' : 'text-red-600'}`}>{f2(d.churn_rate)}%</span>
+                    <span className={`text-sm font-black font-mono ${d.churn_rate <= 3 ? 'text-emerald-400' : d.churn_rate <= 4 ? 'text-amber-400' : 'text-rose-400'}`}>{f2(d.churn_rate)}%</span>
                   </div>
                 </div>
 
@@ -348,22 +350,22 @@ export default function BusinessUnits({ buData = {} }: Props) {
                               )}
                               <span>{node.zona_sucursal}</span>
                             </td>
-                            <td className="py-3 text-right text-slate-400">{f0(node.activos_inicio)}</td>
-                            <td className="py-3 text-right text-emerald-400">+{f0(node.nuevos)}</td>
-                            <td className="py-3 text-right text-blue-400">{f0(node.reactivaciones)}</td>
-                            <td className="py-3 text-right text-red-600">{f0(node.bajas)}</td>
-                            <td className="py-3 text-right text-red-600">{f2(node.churn_bruto_pct)}%</td>
-                            <td className={`py-3 text-right ${node.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(node.crecimiento)}%</td>
-                            <td className="py-3 text-right text-amber-500/80 font-black">{f0(nm.faltante)}</td>
+                            <td className="py-3 text-right text-slate-400 font-mono">{f0(node.activos_inicio)}</td>
+                            <td className="py-3 text-right text-emerald-400 font-mono">+{f0(node.nuevos)}</td>
+                            <td className="py-3 text-right text-blue-400 font-mono">{f0(node.reactivaciones)}</td>
+                            <td className="py-3 text-right text-rose-500 font-mono">-{f0(node.bajas)}</td>
+                            <td className="py-3 text-right text-rose-500 font-mono">{f2(node.churn_bruto_pct)}%</td>
+                            <td className={`py-3 text-right font-mono ${node.crecimiento >= 6 ? 'text-emerald-400' : 'text-rose-400'}`}>{f2(node.crecimiento)}%</td>
+                            <td className="py-3 text-right text-amber-500/80 font-black font-mono">{f0(nm.faltante)}</td>
                             <td className="py-3 text-right">
                               <div className="flex flex-col items-end">
-                                <span className={nm.tasaCumplimiento >= 100 ? 'text-emerald-400 font-black' : 'text-amber-400 font-black'}>{f2(nm.tasaCumplimiento)}%</span>
+                                <span className={`font-mono ${nm.tasaCumplimiento >= 100 ? 'text-emerald-400 font-black' : nm.tasaCumplimiento >= 80 ? 'text-amber-400 font-black' : 'text-rose-400 font-black'}`}>{f2(nm.tasaCumplimiento)}%</span>
                                 <div className="w-12 h-1 bg-slate-800 mt-1 rounded-full overflow-hidden">
-                                  <div className={`h-full ${nm.tasaCumplimiento >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(nm.tasaCumplimiento, 100)}%` }} />
+                                  <div className={`h-full ${nm.tasaCumplimiento >= 100 ? 'bg-emerald-400' : nm.tasaCumplimiento >= 80 ? 'bg-amber-400' :  'bg-rose-400'}`} style={{ width: `${Math.min(nm.tasaCumplimiento, 100)}%` }} />
                                 </div>
                               </div>
                             </td>
-                            <td className="py-3 text-right pr-2 text-white font-black">{f0(node.activos_final)}</td>
+                            <td className="py-3 text-right pr-2 text-white font-black font-mono">{f0(node.activos_final)}</td>
                           </tr>
                         );
                       })}
@@ -371,7 +373,7 @@ export default function BusinessUnits({ buData = {} }: Props) {
                   </table>
                 </div>
               </div>
-            </div>
+            </NeonContainer>
           );
         })}
       </div>

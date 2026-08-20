@@ -5,6 +5,42 @@ import { ThemeProvider } from './context/ThemeContext';
 import axios from 'axios';
 import './styles/global.css';
 
+// REGISTRO GLOBAL OBLIGATORIO DE CHART.JS v4
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  RadialLinearScale,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  BarController,
+  LineController,
+  DoughnutController,
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  RadialLinearScale,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  BarController,
+  LineController,
+  DoughnutController
+);
+
 // Configuración de CSRF para Django y Axios
 axios.defaults.xsrfCookieName = 'csrftoken';
 axios.defaults.xsrfHeaderName = 'X-CSRFToken';
@@ -34,7 +70,7 @@ if (!initialPage) {
 }
 
 createInertiaApp({
-  page: initialPage, // 👈 LE PASAMOS EL OBJETO INICIAL PARSEADO DIRECTAMENTE A INERTIA
+  page: initialPage,
   resolve: (name) => {
     const pages = import.meta.glob('./pages/**/*.tsx', { eager: true });
     const page = pages[`./pages/${name}.tsx`] as any;
