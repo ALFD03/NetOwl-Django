@@ -8,6 +8,7 @@ import {
   UserPlus, ShieldAlert, Lock, User as UserIcon
 } from 'lucide-react';
 import axios from 'axios';
+import { ToggleGroup, SearchInput } from '@/components/UI';
 
 interface UserData {
   id: number;
@@ -180,36 +181,19 @@ export default function ConfigManagement({ users = [], groups = [], roles = [] }
       {/* BARRA SUPERIOR DE CONTROL */}
       <div className="bg-surface-secondary border border-slate-800 rounded-3xl p-4 mb-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div className="flex gap-2 bg-[#0b1326] p-1.5 rounded-2xl border border-slate-800">
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-              activeTab === 'users' ? 'bg-brand text-white shadow-lg shadow-brand/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Usuarios ({users.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('groups')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-              activeTab === 'groups' ? 'bg-brand text-white shadow-lg shadow-brand/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            <span>Grupos ({groups.length})</span>
-          </button>
+          <ToggleGroup
+            options={[
+              { key: 'users', label: `Usuarios (${users.length})`, icon: Users },
+              { key: 'groups', label: `Grupos (${groups.length})`, icon: Shield },
+            ]}
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as 'users' | 'groups')}
+          />
         </div>
 
         <div className="flex items-center gap-3">
           {activeTab === 'users' && (
-            <input
-              type="text"
-              placeholder="Buscar usuario..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="bg-[#0b1326] border border-slate-700/60 rounded-2xl px-4 py-2.5 text-xs text-white outline-none focus:border-brand"
-            />
+            <SearchInput value={search} placeholder="Buscar usuario..." onChange={setSearch} />
           )}
 
           {activeTab === 'users' ? (

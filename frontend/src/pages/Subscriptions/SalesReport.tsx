@@ -7,13 +7,14 @@ import { formatPeriodoLabel } from '@/utils/formatters';
 import { 
   Building2, TrendingUp, RefreshCw, Calendar, Search, Filter, Wifi
 } from 'lucide-react';
+import { SearchInput, PeriodSelector } from '@/components/UI';
+import { formatInteger as f0, formatTwoDecimals as f2 } from '@/components/UI/formatters';
 
 interface Props {
   reportData: any;
 }
 
-const f2 = (val: any) => Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const f0 = (val: any) => Math.floor(Number(val || 0)).toLocaleString('en-US');
+ 
 
 export default function SalesReport({ reportData = {} }: Props) {
   const sites = reportData.data || [];
@@ -103,15 +104,13 @@ export default function SalesReport({ reportData = {} }: Props) {
 
       {/* FILTROS */}
       <div className="mb-8 flex flex-wrap items-center gap-4">
-        <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
-            <Calendar className="w-4 h-4 text-brand" />
-            <span className="text-[10px] uppercase font-black tracking-wider">Mes</span>
-          </div>
-          <select value={currentPeriod} onChange={(e) => handlePeriodChange(e.target.value)} className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none hover:bg-white/5">
-            {periods.map((p: string) => <option key={p} value={p} className="bg-[#0f1a36]">{formatPeriodoLabel(p)}</option>)}
-          </select>
-        </div>
+        <PeriodSelector
+          label="Mes"
+          icon={<Calendar className="w-4 h-4 text-brand" />}
+          value={currentPeriod}
+          options={periods}
+          onChange={(v: string) => handlePeriodChange(v)}
+        />
 
         <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
@@ -140,7 +139,7 @@ export default function SalesReport({ reportData = {} }: Props) {
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400 group-focus-within:text-brand transition-colors">
             <Search className="w-4 h-4" />
           </div>
-          <input type="text" placeholder="Buscar por Sede o Zona..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-transparent w-full px-4 py-2.5 text-xs font-bold text-white outline-none" />
+          <SearchInput value={searchTerm} placeholder="Buscar por Sede o Zona..." onChange={setSearchTerm} className="w-full bg-transparent px-0" />
         </div>
       </div>
 

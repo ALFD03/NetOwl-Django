@@ -5,6 +5,7 @@ import { NeonContainer } from '@/components/UI/NeonContainer';
 import { MetricCard } from '@/components/UI/MetricCard';
 import { ChartCard } from '@/components/UI/ChartCard';
 import { DataTable, Column } from '@/components/UI/DataTable';
+import { MiniExceedRing, EquidistantTimeline } from '@/components/UI';
 import { router } from '@inertiajs/react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { 
@@ -13,6 +14,7 @@ import {
   Activity, Layers, PieChart, BarChart3, Table as TableIcon
 } from 'lucide-react';
 import { formatPeriodoLabel, PALETTE } from '@/utils/formatters';
+import { ToggleGroup } from '@/components/UI';
 import { centerTextPlugin } from '@/components/Charts/plugins';
 import { handleHover } from '@/components/Charts/chartOptions';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
@@ -321,94 +323,7 @@ export default function CrmAnalytics({
     return { barMotivosPerdida, barMotivosE8 };
   }, [dimensionsData]);
 
-  // --- 5. MINI DONUT SVG PARA CABECERA ---
-  const MiniExceedRing = ({ label, pct, color }: { label: string; pct: number; color: string }) => {
-    const radius = 10;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (Math.min(100, Math.max(0, pct)) / 100) * circumference;
-
-    return (
-      <div className="flex items-center gap-2.5 bg-[#0b1326] border border-slate-800 px-3 py-1.5 rounded-2xl shadow-inner">
-        <div className="w-6 h-6 relative flex items-center justify-center flex-shrink-0">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r={radius} className="stroke-slate-800" strokeWidth="2.5" fill="transparent" />
-            <circle
-              cx="12"
-              cy="12"
-              r={radius}
-              stroke={color}
-              strokeWidth="2.5"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              fill="transparent"
-            />
-          </svg>
-        </div>
-        <div>
-          <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none">{label}</span>
-          <span className="text-xs font-black font-mono mt-0.5 block leading-none" style={{ color }}>{pct}%</span>
-        </div>
-      </div>
-    );
-  };
-
-  // --- 6. TIMELINE EQUIDISTANTE CON NEONCONTAINER ---
-  const EquidistantTimeline = ({
-    title,
-    icon,
-    theme = 'green',
-    min,
-    p25,
-    mediana,
-    promedio,
-    p75,
-    max,
-    std,
-    pctExcedeProm,
-    pctExcedeMed,
-  }: any) => {
-    const isGreen = theme === 'green';
-
-    const nodes = [
-      { key: 'min', label: 'Min', val: min, textCol: 'text-slate-400', dotBg: 'bg-slate-500' },
-      { key: 'p25', label: 'P25', val: p25, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
-      { key: 'std_min', label: '-1σ', val: Number(Math.max(0, promedio - std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
-      { key: 'med', label: 'Mediana', val: mediana, textCol: 'text-amber-400', dotBg: 'bg-amber-400 ring-4 ring-amber-400/20' },
-      { key: 'prom', label: 'Promedio', val: promedio, textCol: isGreen ? 'text-emerald-400' : 'text-rose-400', dotBg: isGreen ? 'bg-emerald-400 ring-4 ring-emerald-400/20' : 'bg-rose-400 ring-4 ring-rose-400/20' },
-      { key: 'std_plus', label: '+1σ', val: Number((promedio + std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
-      { key: 'p75', label: 'P75', val: p75, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
-      { key: 'max', label: 'Max', val: max, textCol: 'text-slate-400', dotBg: 'bg-slate-500' },
-    ];
-
-    return (
-      <NeonContainer
-        theme={theme}
-        title={title}
-        subtitle={`Desviación Estándar (σ): ${std} h`}
-        icon={icon}
-        headerAction={
-          <div className="flex items-center gap-2">
-            <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color="#38bdf8" />
-            <MiniExceedRing label="Excede Med" pct={pctExcedeMed} color="#f59e0b" />
-          </div>
-        }
-      >
-        <div className="py-4 px-2">
-          <div className="relative flex items-center justify-between">
-            <div className="absolute left-3 right-3 h-1.5 bg-slate-800 rounded-full z-0" />
-            {nodes.map((node) => (
-              <div key={node.key} className="relative z-10 flex flex-col items-center">
-                <span className={`text-[10px] font-black uppercase tracking-tight mb-2 ${node.textCol}`}>{node.label}</span>
-                <div className={`w-3.5 h-3.5 rounded-full border-2 border-[#0b1326] transition-transform hover:scale-125 ${node.dotBg}`} />
-                <span className="text-xs font-black text-white font-mono mt-2">{node.val}<span className="text-[9px] text-slate-500 font-normal ml-0.5">h</span></span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </NeonContainer>
-    );
-  };
+  // MiniExceedRing and EquidistantTimeline are provided by shared UI components
 
   // --- 7. COLUMNAS DE LA TABLA MAESTRA ---
   const tableColumns: Column<any>[] = [
@@ -473,24 +388,7 @@ export default function CrmAnalytics({
         </div>
 
         <div className="flex gap-2 bg-[#0f1a36] p-1.5 rounded-2xl border border-slate-800">
-          {dimOptions.map((opt) => {
-            const Icon = opt.icon;
-            const isActive = selectedDimension === opt.key;
-            return (
-              <button
-                key={opt.key}
-                onClick={() => handleDimChange(opt.key)}
-                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                  isActive
-                    ? 'bg-brand text-white shadow-lg shadow-brand/30 scale-105'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{opt.label}</span>
-              </button>
-            );
-          })}
+          <ToggleGroup options={dimOptions} activeKey={selectedDimension} onChange={handleDimChange} />
         </div>
       </div>
 

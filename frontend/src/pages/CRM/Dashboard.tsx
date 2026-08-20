@@ -1,14 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { CrmHeader } from '@/components/Navigation/CrmHeader';
-import { NeonContainer } from '@/components/UI/NeonContainer';
-import { MetricCard } from '@/components/UI/MetricCard';
-import { Modal } from '@/components/UI/Modal';
+import { NeonContainer, MetricCard, Modal } from '@/components/UI';
+import { MiniExceedRing, SparklineCard, MetricHealthCard, EquidistantTimeline } from '@/components/UI';
 import { Line, Doughnut } from 'react-chartjs-2';
 import { 
   CheckCircle2, XCircle, Users, Activity, 
   Clock, AlertTriangle, Layers, TrendingUp, TrendingDown,
-  Maximize2
+  Maximize2, BarChart2, Zap
 } from 'lucide-react';
 import { formatPeriodoLabel } from '@/utils/formatters';
 
@@ -28,6 +27,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
     unitLabel: string;
     color: string;
     bgColor: string;
+    theme: 'green' | 'red' | 'blue' | 'yellow';
   } | null>(null);
 
   // 1. PROMEDIO DE PROMEDIOS SIMPLE
@@ -92,239 +92,9 @@ export default function CrmDashboard({ metrics = {} }: Props) {
     };
   }, [historico]);
 
-  // Mini SVG Ring
-  const MiniExceedRing = ({ label, pct, color }: { label: string; pct: number; color: string }) => {
-    const radius = 10;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (Math.min(100, Math.max(0, pct)) / 100) * circumference;
+  
 
-    return (
-      <div className="flex items-center gap-2.5 bg-[#0b1326] border border-slate-800 px-3 py-1.5 rounded-2xl shadow-inner">
-        <div className="w-6 h-6 relative flex items-center justify-center flex-shrink-0">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r={radius} className="stroke-slate-800" strokeWidth="2.5" fill="transparent" />
-            <circle
-              cx="12"
-              cy="12"
-              r={radius}
-              stroke={color}
-              strokeWidth="2.5"
-              strokeDasharray={circumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              fill="transparent"
-            />
-          </svg>
-        </div>
-        <div>
-          <span className="text-[9px] font-bold text-slate-400 uppercase block leading-none">{label}</span>
-          <span className="text-xs font-black font-mono mt-0.5 block leading-none" style={{ color }}>{pct}%</span>
-        </div>
-      </div>
-    );
-  };
-
-  // Timeline Equidistante
-  const EquidistantTimeline = ({
-    title,
-    icon,
-    theme = 'green',
-    min,
-    p25,
-    mediana,
-    promedio,
-    p75,
-    max,
-    std,
-    pctExcedeProm,
-    pctExcedeMed,
-  }: any) => {
-    const isGreen = theme === 'green';
-
-    const nodes = [
-      { key: 'min', label: 'Min', val: min, textCol: 'text-slate-400', dotBg: 'bg-slate-500' },
-      { key: 'p25', label: 'P25', val: p25, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
-      { key: 'std_min', label: '-1σ', val: Number(Math.max(0, promedio - std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
-      { key: 'med', label: 'Mediana', val: mediana, textCol: 'text-amber-400', dotBg: 'bg-amber-400 ring-4 ring-amber-400/20' },
-      { key: 'prom', label: 'Promedio', val: promedio, textCol: isGreen ? 'text-emerald-400' : 'text-rose-400', dotBg: isGreen ? 'bg-emerald-400 ring-4 ring-emerald-400/20' : 'bg-rose-400 ring-4 ring-rose-400/20' },
-      { key: 'std_plus', label: '+1σ', val: Number((promedio + std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
-      { key: 'p75', label: 'P75', val: p75, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
-      { key: 'max', label: 'Max', val: max, textCol: 'text-slate-400', dotBg: 'bg-slate-500' },
-    ];
-
-    return (
-      <NeonContainer
-        theme={theme}
-        title={title}
-        subtitle={`Desviación Estándar (σ): ${std} h`}
-        icon={icon}
-        headerAction={
-          <div className="flex items-center gap-2">
-            <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color="#38bdf8" />
-            <MiniExceedRing label="Excede Med" pct={pctExcedeMed} color="#f59e0b" />
-          </div>
-        }
-      >
-        <div className="py-4 px-2">
-          <div className="relative flex items-center justify-between">
-            <div className="absolute left-3 right-3 h-1.5 bg-slate-800 rounded-full z-0" />
-            {nodes.map((node) => (
-              <div key={node.key} className="relative z-10 flex flex-col items-center">
-                <span className={`text-[10px] font-black uppercase tracking-tight mb-2 ${node.textCol}`}>{node.label}</span>
-                <div className={`w-3.5 h-3.5 rounded-full border-2 border-[#0b1326] transition-transform hover:scale-125 ${node.dotBg}`} />
-                <span className="text-xs font-black text-white font-mono mt-2">{node.val}<span className="text-[9px] text-slate-500 font-normal ml-0.5">h</span></span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </NeonContainer>
-    );
-  };
-
-  // Sparkline Card
-  const SparklineCard = ({ title, currentVal, rateKey, countKey, unitLabel, color, bgColor }: any) => {
-    const labels = historico.map((h: any) => formatPeriodoLabel(h.periodo_reporte));
-    const values = historico.map((h: any) => Number(h[rateKey]) || 0);
-
-    const firstVal = values[0] || 0;
-    const lastVal = values[values.length - 1] || 0;
-    const diff = Number((lastVal - firstVal).toFixed(1));
-    const isUp = diff >= 0;
-
-    const chartData = {
-      labels,
-      datasets: [
-        {
-          data: values,
-          borderColor: color,
-          backgroundColor: bgColor,
-          fill: true,
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: color,
-          tension: 0.4,
-        },
-      ],
-    };
-
-    const chartOptions: any = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        datalabels: { display: false },
-        tooltip: {
-          backgroundColor: '#0b1326',
-          titleColor: '#fff',
-          bodyColor: color,
-          borderColor: '#334155',
-          borderWidth: 1,
-          padding: 8,
-          cornerRadius: 8,
-          callbacks: { label: (ctx: any) => ` ${title}: ${ctx.raw}%` },
-        },
-      },
-      scales: {
-        x: { display: false },
-        y: { display: false, min: 0, max: Math.max(...values, 10) * 1.15 },
-      },
-    };
-
-    return (
-      <div 
-        onClick={() => setSelectedTrend({ title, rateKey, countKey, unitLabel, color, bgColor })}
-        className="bg-[#0b1326] border border-slate-800 rounded-3xl p-4 flex flex-col justify-between shadow-inner group hover:border-brand/60 hover:bg-white/[0.02] cursor-pointer transition-all relative overflow-hidden"
-      >
-        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Maximize2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand" />
-        </div>
-
-        <div className="flex items-center justify-between mb-1 pr-4">
-          <span className="text-xs font-black text-white uppercase tracking-wider truncate">
-            {title}
-          </span>
-          <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full flex items-center gap-1 ${
-            isUp ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
-          }`}>
-            {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {diff > 0 ? `+${diff}%` : `${diff}%`}
-          </span>
-        </div>
-
-        <div className="my-1">
-          <span className="text-3xl font-black tracking-tight" style={{ color }}>
-            {currentVal}%
-          </span>
-          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block -mt-0.5">
-            Promedio Global (Click para totales)
-          </span>
-        </div>
-
-        <div className="h-14 w-full mt-2">
-          <Line data={chartData} options={chartOptions} />
-        </div>
-      </div>
-    );
-  };
-
-  // Health Card
-  const MetricHealthCard = ({ etapaName, pct, exitosos, fallidos, total }: any) => {
-    const isGood = pct >= 80;
-    const isMid = pct >= 60 && pct < 80;
-    const pulseColor = isGood ? 'bg-emerald-400' : isMid ? 'bg-amber-400' : 'bg-rose-400';
-    const textColor = isGood ? 'text-emerald-400' : isMid ? 'text-amber-400' : 'text-rose-400';
-
-    const pctExito = total > 0 ? Math.round((exitosos / total) * 100) : 0;
-    const pctFallo = total > 0 ? Math.round((fallidos / total) * 100) : 0;
-
-    return (
-      <div className="bg-[#0b1326] border border-slate-800 rounded-3xl p-4 flex flex-col justify-between shadow-inner relative overflow-hidden group hover:border-slate-700 transition-all">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-black text-white uppercase tracking-wider truncate" title={etapaName}>
-            {etapaName.replace('etapa_', '').replace('_', ' ')}
-          </span>
-          <span className="relative flex h-2.5 w-2.5">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${pulseColor}`} />
-            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${pulseColor}`} />
-          </span>
-        </div>
-
-        <div className="my-1">
-          <div className={`text-3xl font-black tracking-tight ${textColor}`}>
-            {pct}%
-          </div>
-          <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block -mt-0.5">
-            Tasa de Conversión
-          </span>
-        </div>
-
-        <div className="space-y-2 pt-2.5 border-t border-slate-800/80">
-          <div>
-            <div className="flex justify-between text-[9px] font-bold text-slate-400 mb-1">
-              <span>Exitosos ({exitosos})</span>
-              <span className="text-emerald-400">{pctExito}%</span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pctExito}%` }} />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex justify-between text-[9px] font-bold text-slate-400 mb-1">
-              <span>Caídas ({fallidos})</span>
-              <span className="text-rose-400">{pctFallo}%</span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-rose-500 rounded-full" style={{ width: `${pctFallo}%` }} />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Modal Data
+  // 6. DATOS DEL MODAL (GRAFICA TOTALES ABSOLUTOS)
   const modalChartData = useMemo(() => {
     if (!selectedTrend) return null;
 
@@ -338,7 +108,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
           label: `Total ${selectedTrend.unitLabel}`,
           data: counts,
           borderColor: selectedTrend.color,
-          backgroundColor: selectedTrend.bgColor.replace('0.1', '0.2'),
+          backgroundColor: selectedTrend.bgColor.replace('0.1', '0.25'),
           fill: true,
           borderWidth: 3,
           pointRadius: 5,
@@ -367,7 +137,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
         padding: 12,
         cornerRadius: 12,
         callbacks: { 
-          label: (ctx: any) => ` ${ctx.dataset.label}: ${ctx.raw.toLocaleString()} oportunidades` 
+          label: (ctx: any) => ` ${ctx.dataset.label}: ${ctx.raw.toLocaleString()} casos` 
         },
       },
     },
@@ -471,7 +241,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
         <NeonContainer
           theme="blue"
           title="Matriz de Tendencias por Periodo"
-          subtitle="Click en cualquier tarjeta para ver totales"
+          subtitle="Click en cualquier tarjeta para ver el gráfico de volumen"
           icon={<Activity className="w-5 h-5" />}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 flex-1 items-stretch">
@@ -483,6 +253,9 @@ export default function CrmDashboard({ metrics = {} }: Props) {
               unitLabel="Ganados / Instalados"
               color="#10b981"
               bgColor="rgba(16, 185, 129, 0.1)"
+              theme="green"
+              historico={historico}
+              onSelect={(p) => setSelectedTrend({ title: p.title, rateKey: p.rateKey, countKey: p.countKey, unitLabel: p.unitLabel, color: p.color, bgColor: p.bgColor, theme: p.theme })}
             />
 
             <SparklineCard
@@ -493,6 +266,9 @@ export default function CrmDashboard({ metrics = {} }: Props) {
               unitLabel="Oportunidades Perdidas"
               color="#f43f5e"
               bgColor="rgba(244, 63, 94, 0.1)"
+              theme="red"
+              historico={historico}
+              onSelect={(p) => setSelectedTrend({ title: p.title, rateKey: p.rateKey, countKey: p.countKey, unitLabel: p.unitLabel, color: p.color, bgColor: p.bgColor, theme: p.theme })}
             />
 
             <SparklineCard
@@ -503,6 +279,9 @@ export default function CrmDashboard({ metrics = {} }: Props) {
               unitLabel="Oportunidades en Curso"
               color="#38bdf8"
               bgColor="rgba(56, 189, 248, 0.1)"
+              theme="blue"
+              historico={historico}
+              onSelect={(p) => setSelectedTrend({ title: p.title, rateKey: p.rateKey, countKey: p.countKey, unitLabel: p.unitLabel, color: p.color, bgColor: p.bgColor, theme: p.theme })}
             />
 
             <SparklineCard
@@ -513,6 +292,9 @@ export default function CrmDashboard({ metrics = {} }: Props) {
               unitLabel="Devueltos a Etapa 8"
               color="#f59e0b"
               bgColor="rgba(245, 158, 11, 0.1)"
+              theme="yellow"
+              historico={historico}
+              onSelect={(p) => setSelectedTrend({ title: p.title, rateKey: p.rateKey, countKey: p.countKey, unitLabel: p.unitLabel, color: p.color, bgColor: p.bgColor, theme: p.theme })}
             />
           </div>
         </NeonContainer>
@@ -540,25 +322,30 @@ export default function CrmDashboard({ metrics = {} }: Props) {
 
       </div>
 
-      {/* MODAL DETALLADO CON TOTALES REALES */}
+      {/* MODAL DETALLADO ACTUALIZADO CON TEMA NEON */}
       <Modal
         isOpen={!!selectedTrend}
         onClose={() => setSelectedTrend(null)}
-        title={`Historial de Volumen: Total de ${selectedTrend?.unitLabel || ''}`}
+        title={`Evolución Histórica: ${selectedTrend?.title || ''}`}
+        subtitle={`Volumen mensual de ${selectedTrend?.unitLabel || ''}`}
+        theme={selectedTrend?.theme || 'blue'}
+        icon={<BarChart2 className="w-5 h-5 text-brand" />}
         size="xl"
       >
         {selectedTrend && modalChartData && (
           <div className="space-y-6">
+            {/* Gráfico Ampliado dentro de contenedor estilizado */}
             <div className="bg-[#0b1326] p-6 rounded-3xl border border-slate-800 shadow-inner">
-              <div className="h-72">
+              <div className="h-72 w-full">
                 <Line data={modalChartData} options={modalChartOptions} />
               </div>
             </div>
 
+            {/* Tabla Detallada */}
             <div className="bg-[#0b1326] border border-slate-800 rounded-3xl overflow-hidden shadow-inner">
               <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Desglose Absoluto y Porcentual
+                  Desglose Numérico por Periodo
                 </span>
                 <span className="text-xs font-bold text-brand font-mono">
                   {historico.length} periodos evaluados
@@ -566,12 +353,12 @@ export default function CrmDashboard({ metrics = {} }: Props) {
               </div>
               <div className="max-h-60 overflow-y-auto custom-scrollbar">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-800/50 text-slate-400 uppercase font-black sticky top-0 backdrop-blur-sm">
+                  <thead className="bg-slate-900/80 text-slate-400 uppercase font-black sticky top-0 backdrop-blur-sm border-b border-slate-800">
                     <tr>
-                      <th className="p-3.5">Periodo</th>
-                      <th className="p-3.5 text-right">Total Creados</th>
-                      <th className="p-3.5 text-right">Total {selectedTrend.unitLabel}</th>
-                      <th className="p-3.5 text-right">Tasa del Periodo (%)</th>
+                      <th className="p-4">Periodo</th>
+                      <th className="p-4 text-right">Total Oportunidades</th>
+                      <th className="p-4 text-right">{selectedTrend.unitLabel}</th>
+                      <th className="p-4 text-right">Tasa del Periodo (%)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
@@ -580,16 +367,16 @@ export default function CrmDashboard({ metrics = {} }: Props) {
                       const rateVal = Number(h[selectedTrend.rateKey]) || 0;
                       return (
                         <tr key={idx} className="hover:bg-white/5 transition-colors">
-                          <td className="p-3.5 font-bold text-white">
+                          <td className="p-4 font-bold text-white">
                             {formatPeriodoLabel(h.periodo_reporte)}
                           </td>
-                          <td className="p-3.5 text-right text-slate-400 font-mono">
+                          <td className="p-4 text-right text-slate-400 font-mono">
                             {h.total_oportunidades?.toLocaleString() || 0}
                           </td>
-                          <td className="p-3.5 text-right font-black font-mono text-white">
+                          <td className="p-4 text-right font-black font-mono text-white">
                             {countVal.toLocaleString()}
                           </td>
-                          <td className="p-3.5 text-right font-black font-mono" style={{ color: selectedTrend.color }}>
+                          <td className="p-4 text-right font-black font-mono" style={{ color: selectedTrend.color }}>
                             {rateVal}%
                           </td>
                         </tr>

@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { PALETTE } from '@/utils/formatters';
 import axios from 'axios';
+import { ToggleGroup } from '@/components/UI';
+import { formatInteger as f0 } from '@/components/UI/formatters';
 
 export default function SubscriptionsLifetime({ lifecycle, dimensiones }: any) {
   const [loading, setLoading] = useState(false);
@@ -19,10 +21,7 @@ export default function SubscriptionsLifetime({ lifecycle, dimensiones }: any) {
   const data = useMemo(() => lifecycle || {}, [lifecycle]);
   const dims = useMemo(() => dimensiones || {}, [dimensiones]);
   
-  const f0 = (v: any) => {
-    const n = Number(v);
-    return isNaN(n) ? "0" : Math.floor(n).toLocaleString('en-US');
-  };
+  
 
   const dimLabels: any = {
     sucursal: { label: 'Sucursales', icon: Building2 },
@@ -162,17 +161,11 @@ export default function SubscriptionsLifetime({ lifecycle, dimensiones }: any) {
           icon={<Activity className="w-5 h-5" />}
           headerAction={
             <div className="flex gap-1 bg-[#0b1326] p-1 rounded-2xl border border-slate-800">
-              {Object.entries(dimLabels).map(([k, v]: any) => (
-                <button 
-                  key={k} 
-                  onClick={() => setActiveTab(k)} 
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all ${
-                    activeTab === k ? 'bg-brand text-white shadow-lg' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <v.icon className="w-3 h-3" /> {v.label}
-                </button>
-              ))}
+              <ToggleGroup
+                options={Object.entries(dimLabels).map(([k, v]: any) => ({ key: k, label: v.label, icon: v.icon }))}
+                activeKey={activeTab}
+                onChange={setActiveTab}
+              />
             </div>
           }
           noPadding={true}

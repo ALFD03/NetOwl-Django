@@ -4,11 +4,13 @@ import { SubHeader } from '@/components/Navigation/SubHeader';
 import { DataTable, Column } from '@/components/UI/DataTable';
 import { Modal } from '@/components/UI/Modal';
 import { NeonContainer } from '@/components/UI/NeonContainer';
+import { CompactMetric } from '@/components/UI';
 import axios from 'axios';
 import { 
   LayoutGrid, MapPin, Building2, Package, Star, 
   TrendingUp, TrendingDown, RefreshCw, Zap, Table as TableIcon, Info, Activity
 } from 'lucide-react';
+import { ToggleGroup } from '@/components/UI';
 
 interface CierreResult {
   periodo_reporte: string;
@@ -43,24 +45,9 @@ interface DimensionRow extends Omit<CierreResult, 'periodo_reporte' | 'nuevos_me
   nuevos: number;
 }
 
-const f2 = (val: any) => Number(val || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const f0 = (val: any) => Math.floor(Number(val || 0)).toLocaleString('en-US');
+import { formatInteger as f0, formatTwoDecimals as f2 } from '@/components/UI/formatters';
 
-const CompactMetric = ({ label, value, color = 'blue' }: any) => {
-  const colors: any = {
-    blue: 'text-sky-400 bg-sky-950/40 border-sky-500/30',
-    green: 'text-emerald-400 bg-emerald-950/40 border-emerald-500/30',
-    red: 'text-rose-400 bg-rose-950/40 border-rose-500/30',
-    yellow: 'text-amber-400 bg-amber-950/40 border-amber-500/30',
-    slate: 'text-slate-300 bg-slate-900/60 border-slate-700/50',
-  };
-  return (
-    <div className={`p-2.5 rounded-2xl border ${colors[color]} flex flex-col justify-between`}>
-      <p className="text-[9px] uppercase font-black opacity-80 mb-1 leading-none">{label}</p>
-      <p className="text-sm font-black tracking-tight leading-none font-mono">{value}</p>
-    </div>
-  );
-};
+// `CompactMetric` moved to shared UI components
 
 export default function SubscriptionsResults({ periodos = [] }: { periodos: CierreResult[] }) {
   const [selectedRow, setSelectedRow] = useState<CierreResult | null>(null);
@@ -232,17 +219,11 @@ export default function SubscriptionsResults({ periodos = [] }: { periodos: Cier
                   <h4 className="text-[11px] uppercase font-black text-slate-400 tracking-widest">Desglose Dimensional</h4>
                 </div>
                 <div className="flex gap-1 bg-surface-tertiary p-1 rounded-xl border border-slate-800">
-                  {Object.entries(dimLabels).map(([key, item]: [string, any]) => (
-                    <button
-                      key={key}
-                      onClick={() => setActiveTab(key)}
-                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${
-                        activeTab === key ? 'bg-brand text-white shadow-lg' : 'text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      <item.icon className="w-3.5 h-3.5" /> {item.label}
-                    </button>
-                  ))}
+                  <ToggleGroup
+                    options={Object.entries(dimLabels).map(([k, v]: any) => ({ key: k, label: v.label, icon: v.icon }))}
+                    activeKey={activeTab}
+                    onChange={setActiveTab}
+                  />
                 </div>
               </div>
 

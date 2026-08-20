@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/Layout/AppLayout';
 import { SubHeader } from '@/components/Navigation/SubHeader';
 import { MetricCard } from '@/components/UI/MetricCard';
 import { NeonContainer } from '@/components/UI/NeonContainer';
+import { StatGroup } from '@/components/UI';
 import { Link } from '@inertiajs/react';
 import { formatPeriodoLabel } from '@/utils/formatters';
 import { 
@@ -10,17 +11,14 @@ import {
   Gauge, Loader2, Database, MapPin, Users, Activity, Zap, Building2, 
   Settings, ChevronRight, LayoutGrid, Info
 } from 'lucide-react';
+import { PeriodSelector } from '@/components/UI';
 import axios from 'axios';
 
 interface Props {
   etaData: any;
 }
 
-const f0 = (val: any) => {
-  const num = Number(val);
-  if (isNaN(num)) return "0";
-  return Math.floor(num).toLocaleString('en-US');
-};
+import { formatInteger as f0 } from '@/components/UI/formatters';
 
 export default function EtaReport({ etaData: initialData }: Props) {
   const [data, setData] = useState<any>(initialData || {});
@@ -61,32 +59,7 @@ export default function EtaReport({ etaData: initialData }: Props) {
     }
   };
 
-  // Componente interno para matrices de desglose con estilo Neon
-  const RenderStatGroup = ({ title, icon: Icon, stats, theme = "blue" }: any) => (
-    <NeonContainer
-      theme={theme}
-      title={title}
-      icon={<Icon className="w-4 h-4" />}
-      className="h-full"
-    >
-      <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-        {Object.entries(stats || {}).length > 0 ? (
-          Object.entries(stats).map(([label, val]: any) => (
-            <div key={label} className="flex justify-between items-center py-2 border-b border-slate-800/60 last:border-0">
-              <span className="text-[10px] font-bold text-slate-400 uppercase truncate pr-4" title={label}>
-                {label}
-              </span>
-              <span className="text-xs font-black text-white font-mono">
-                {f0(val)}
-              </span>
-            </div>
-          ))
-        ) : (
-          <div className="text-[10px] text-slate-600 italic py-6 text-center">Sin registros</div>
-        )}
-      </div>
-    </NeonContainer>
-  );
+  // `StatGroup` extraído a componentes compartidos
 
   return (
     <AppLayout title="Reporte Regulatorio ETA">
@@ -95,24 +68,13 @@ export default function EtaReport({ etaData: initialData }: Props) {
       {/* 1. BARRA DE CONTROL SUPERIOR */}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div className="flex gap-4 items-center">
-          <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-[#0f1a36] overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
-              <Calendar className="w-4 h-4 text-brand" />
-              <span className="text-[10px] uppercase font-black tracking-wider">Mes Reporte</span>
-            </div>
-            <div className="relative group">
-              <select 
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white cursor-pointer outline-none hover:bg-white/5"
-              >
-                {data.periods?.map((p: string) => (
-                  <option key={p} value={p} className="bg-[#0f1a36]">{formatPeriodoLabel(p)}</option>
-                ))}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500" />
-            </div>
-          </div>
+          <PeriodSelector
+            label="Mes Reporte"
+            icon={<Calendar className="w-4 h-4 text-brand" />}
+            value={selectedPeriod}
+            options={data.periods || []}
+            onChange={(v) => setSelectedPeriod(v)}
+          />
 
           <Link 
             href={`/subscriptions/eta-report/config/?period=${selectedPeriod}`} 
@@ -185,17 +147,17 @@ export default function EtaReport({ etaData: initialData }: Props) {
             
             {/* Desgloses Simples */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <RenderStatGroup title="1. Por Tecnología" icon={Activity} stats={data.net_metrics?.por_tecnologia} theme="blue" />
-              <RenderStatGroup title="2. Por Tipo Persona" icon={Users} stats={data.net_metrics?.por_persona} theme="blue" />
-              <RenderStatGroup title="3. Por Estado" icon={MapPin} stats={data.net_metrics?.por_estado} theme="blue" />
-              <RenderStatGroup title="4. Tecnología | Persona" icon={Zap} stats={data.net_metrics?.por_tecnologia_persona} theme="blue" />
+              <StatGroup title="1. Por Tecnología" icon={<Activity className="w-4 h-4" />} stats={data.net_metrics?.por_tecnologia} theme="blue" />
+              <StatGroup title="2. Por Tipo Persona" icon={<Users className="w-4 h-4" />} stats={data.net_metrics?.por_persona} theme="blue" />
+              <StatGroup title="3. Por Estado" icon={<MapPin className="w-4 h-4" />} stats={data.net_metrics?.por_estado} theme="blue" />
+              <StatGroup title="4. Tecnología | Persona" icon={<Zap className="w-4 h-4" />} stats={data.net_metrics?.por_tecnologia_persona} theme="blue" />
             </div>
 
             {/* Desgloses Complejos */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <RenderStatGroup title="5. Estado | Tecnología" icon={LayoutGrid} stats={data.net_metrics?.por_estado_tecnologia} theme="cyan" />
-              <RenderStatGroup title="6. Estado | Persona" icon={Building2} stats={data.net_metrics?.por_estado_persona} theme="cyan" />
-              <RenderStatGroup title="7. Matriz: Estado | Tec | Persona" icon={Database} stats={data.net_metrics?.por_estado_tecnologia_persona} theme="cyan" />
+                <StatGroup title="5. Estado | Tecnología" icon={<LayoutGrid className="w-4 h-4" />} stats={data.net_metrics?.por_estado_tecnologia} theme="cyan" />
+                <StatGroup title="6. Estado | Persona" icon={<Building2 className="w-4 h-4" />} stats={data.net_metrics?.por_estado_persona} theme="cyan" />
+                <StatGroup title="7. Matriz: Estado | Tec | Persona" icon={<Database className="w-4 h-4" />} stats={data.net_metrics?.por_estado_tecnologia_persona} theme="cyan" />
             </div>
           </section>
 
@@ -208,10 +170,10 @@ export default function EtaReport({ etaData: initialData }: Props) {
                 <h2 className="text-xl font-black text-white uppercase tracking-tight">Servicio de TV</h2>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <RenderStatGroup title="1. Por Estado" icon={MapPin} stats={data.tv_metrics?.por_estado} theme="green" />
-                <RenderStatGroup title="2. Por Tipo Persona" icon={Users} stats={data.tv_metrics?.por_persona} theme="green" />
+                <StatGroup title="1. Por Estado" icon={<MapPin className="w-4 h-4" />} stats={data.tv_metrics?.por_estado} theme="green" />
+                <StatGroup title="2. Por Tipo Persona" icon={<Users className="w-4 h-4" />} stats={data.tv_metrics?.por_persona} theme="green" />
               </div>
-              <RenderStatGroup title="3. Estado | Persona" icon={LayoutGrid} stats={data.tv_metrics?.por_estado_persona} theme="green" />
+              <StatGroup title="3. Estado | Persona" icon={<LayoutGrid className="w-4 h-4" />} stats={data.tv_metrics?.por_estado_persona} theme="green" />
             </section>
 
             {/* Penetración de Velocidades */}
