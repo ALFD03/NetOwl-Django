@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/Layout/AppLayout';
 import { CrmHeader } from '@/components/Navigation/CrmHeader';
+import { NeonContainer } from '@/components/UI/NeonContainer';
+import { MetricCard } from '@/components/UI/MetricCard';
 import { Modal } from '@/components/UI/Modal';
 import { Line, Doughnut } from 'react-chartjs-2';
 import { 
@@ -19,7 +21,6 @@ export default function CrmDashboard({ metrics = {} }: Props) {
   const historico = useMemo(() => metrics.historico_tendencias || [], [metrics]);
   const efectividad = useMemo(() => metrics.efectividad || [], [metrics]);
 
-  // Estado para el modal de detalle de tendencia
   const [selectedTrend, setSelectedTrend] = useState<{
     title: string;
     rateKey: string;
@@ -91,7 +92,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
     };
   }, [historico]);
 
-  // 2. MINI DONUT PARA CABECERA DE TIEMPOS (SVG NATIVO 100% LIMPIO)
+  // Mini SVG Ring
   const MiniExceedRing = ({ label, pct, color }: { label: string; pct: number; color: string }) => {
     const radius = 10;
     const circumference = 2 * Math.PI * radius;
@@ -101,14 +102,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
       <div className="flex items-center gap-2.5 bg-[#0b1326] border border-slate-800 px-3 py-1.5 rounded-2xl shadow-inner">
         <div className="w-6 h-6 relative flex items-center justify-center flex-shrink-0">
           <svg className="w-full h-full -rotate-90" viewBox="0 0 24 24">
-            <circle
-              cx="12"
-              cy="12"
-              r={radius}
-              className="stroke-slate-800"
-              strokeWidth="2.5"
-              fill="transparent"
-            />
+            <circle cx="12" cy="12" r={radius} className="stroke-slate-800" strokeWidth="2.5" fill="transparent" />
             <circle
               cx="12"
               cy="12"
@@ -119,7 +113,6 @@ export default function CrmDashboard({ metrics = {} }: Props) {
               strokeDashoffset={strokeDashoffset}
               strokeLinecap="round"
               fill="transparent"
-              className="transition-all duration-500 ease-out"
             />
           </svg>
         </div>
@@ -131,11 +124,11 @@ export default function CrmDashboard({ metrics = {} }: Props) {
     );
   };
 
-  // 3. TIMELINE CON DISTRIBUCIÓN 100% EQUIDISTANTE
+  // Timeline Equidistante
   const EquidistantTimeline = ({
     title,
-    icon: Icon,
-    colorTheme = 'emerald',
+    icon,
+    theme = 'green',
     min,
     p25,
     mediana,
@@ -146,11 +139,12 @@ export default function CrmDashboard({ metrics = {} }: Props) {
     pctExcedeProm,
     pctExcedeMed,
   }: any) => {
-    const isGreen = colorTheme === 'emerald';
+    const isGreen = theme === 'green';
 
     const nodes = [
       { key: 'min', label: 'Min', val: min, textCol: 'text-slate-400', dotBg: 'bg-slate-500' },
       { key: 'p25', label: 'P25', val: p25, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
+      { key: 'std_min', label: '-1σ', val: Number(Math.max(0, promedio - std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
       { key: 'med', label: 'Mediana', val: mediana, textCol: 'text-amber-400', dotBg: 'bg-amber-400 ring-4 ring-amber-400/20' },
       { key: 'prom', label: 'Promedio', val: promedio, textCol: isGreen ? 'text-emerald-400' : 'text-rose-400', dotBg: isGreen ? 'bg-emerald-400 ring-4 ring-emerald-400/20' : 'bg-rose-400 ring-4 ring-rose-400/20' },
       { key: 'std_plus', label: '+1σ', val: Number((promedio + std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
@@ -159,50 +153,35 @@ export default function CrmDashboard({ metrics = {} }: Props) {
     ];
 
     return (
-      <div className="bg-surface-secondary border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between relative overflow-hidden">
-        <div className={`absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl opacity-10 pointer-events-none ${isGreen ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className={`p-2.5 rounded-2xl border ${isGreen ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-400'}`}>
-              <Icon className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-sm font-black text-white uppercase tracking-tight">{title}</h4>
-              <p className="text-[11px] text-purple-400 font-bold mt-0.5">
-                Desviación Estándar (σ): <span className="font-mono text-white">{std} h</span>
-              </p>
-            </div>
-          </div>
-
+      <NeonContainer
+        theme={theme}
+        title={title}
+        subtitle={`Desviación Estándar (σ): ${std} h`}
+        icon={icon}
+        headerAction={
           <div className="flex items-center gap-2">
             <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color="#38bdf8" />
             <MiniExceedRing label="Excede Med" pct={pctExcedeMed} color="#f59e0b" />
           </div>
-        </div>
-
-        <div className="py-8 px-2">
+        }
+      >
+        <div className="py-4 px-2">
           <div className="relative flex items-center justify-between">
             <div className="absolute left-3 right-3 h-1.5 bg-slate-800 rounded-full z-0" />
-
             {nodes.map((node) => (
               <div key={node.key} className="relative z-10 flex flex-col items-center">
-                <span className={`text-[10px] font-black uppercase tracking-tight mb-2 ${node.textCol}`}>
-                  {node.label}
-                </span>
+                <span className={`text-[10px] font-black uppercase tracking-tight mb-2 ${node.textCol}`}>{node.label}</span>
                 <div className={`w-3.5 h-3.5 rounded-full border-2 border-[#0b1326] transition-transform hover:scale-125 ${node.dotBg}`} />
-                <span className="text-xs font-black text-white font-mono mt-2">
-                  {node.val}<span className="text-[9px] text-slate-500 font-normal ml-0.5">h</span>
-                </span>
+                <span className="text-xs font-black text-white font-mono mt-2">{node.val}<span className="text-[9px] text-slate-500 font-normal ml-0.5">h</span></span>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      </NeonContainer>
     );
   };
 
-  // 4. SPARKLINE CARD CON CLICK PARA ABRIR MODAL
+  // Sparkline Card
   const SparklineCard = ({ title, currentVal, rateKey, countKey, unitLabel, color, bgColor }: any) => {
     const labels = historico.map((h: any) => formatPeriodoLabel(h.periodo_reporte));
     const values = historico.map((h: any) => Number(h[rateKey]) || 0);
@@ -278,7 +257,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
             {currentVal}%
           </span>
           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block -mt-0.5">
-            Promedio Global
+            Promedio Global (Click para totales)
           </span>
         </div>
 
@@ -289,7 +268,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
     );
   };
 
-  // 5. METRIC HEALTH CARDS PARA EFECTIVIDAD
+  // Health Card
   const MetricHealthCard = ({ etapaName, pct, exitosos, fallidos, total }: any) => {
     const isGood = pct >= 80;
     const isMid = pct >= 60 && pct < 80;
@@ -316,7 +295,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
             {pct}%
           </div>
           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block -mt-0.5">
-            Tasa de Efectividad
+            Tasa de Conversión
           </span>
         </div>
 
@@ -345,7 +324,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
     );
   };
 
-  // 6. DATOS DEL GRÁFICO AMPLIADO EN MODAL (GRAFICA EL TOTAL ABSOLUTO)
+  // Modal Data
   const modalChartData = useMemo(() => {
     if (!selectedTrend) return null;
 
@@ -400,11 +379,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
       y: {
         min: 0,
         grid: { color: 'rgba(51, 65, 85, 0.25)' },
-        ticks: { 
-          color: '#94a3b8', 
-          font: { size: 11 }, 
-          callback: (v: any) => v.toLocaleString() 
-        },
+        ticks: { color: '#94a3b8', font: { size: 11 }, callback: (v: any) => v.toLocaleString() },
       },
     },
   };
@@ -415,75 +390,53 @@ export default function CrmDashboard({ metrics = {} }: Props) {
 
       {/* 1. FILA DE 5 CARDS VIBRANTES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        
-        {/* Card Total Oportunidades */}
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 border border-slate-600/50 shadow-xl shadow-slate-950/40 transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-[10px] font-black uppercase tracking-wider">Total Oportunidades</span>
-            <Users className="w-4 h-4 text-slate-300" />
-          </div>
-          <div className="text-3xl font-black text-white tracking-tight">
-            {statsGlobales.total_oportunidades.toLocaleString()}
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 mt-1">Promedio mensual</p>
-        </div>
+        <MetricCard
+          label="Total Oportunidades"
+          value={statsGlobales.total_oportunidades.toLocaleString()}
+          color="slate"
+          subValue="Promedio mensual"
+          icon={<Users className="w-4 h-4 text-slate-300" />}
+        />
 
-        {/* Card Tasa de Instalados */}
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-emerald-950/40 via-surface-secondary to-[#0b1326] border border-emerald-500/40 shadow-xl shadow-emerald-950/30 transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between text-emerald-400 mb-2">
-            <span className="text-[10px] font-black uppercase tracking-wider">Tasa Instalados</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-3xl font-black text-emerald-400 tracking-tight">
-            {statsGlobales.pct_instalacion}%
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 mt-1">Ganados / Creados</p>
-        </div>
+        <MetricCard
+          label="Tasa Instalados"
+          value={`${statsGlobales.pct_instalacion}%`}
+          color="green"
+          subValue="Ganados / Creados"
+          icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+        />
 
-        {/* Card Tasa de Pérdida */}
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-rose-950/40 via-surface-secondary to-[#0b1326] border border-rose-500/40 shadow-xl shadow-rose-950/30 transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between text-rose-400 mb-2">
-            <span className="text-[10px] font-black uppercase tracking-wider">Tasa Pérdida</span>
-            <XCircle className="w-4 h-4 text-rose-400" />
-          </div>
-          <div className="text-3xl font-black text-rose-400 tracking-tight">
-            {statsGlobales.pct_perdida}%
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 mt-1">Perdidos / Creados</p>
-        </div>
+        <MetricCard
+          label="Tasa Pérdida"
+          value={`${statsGlobales.pct_perdida}%`}
+          color="red"
+          subValue="Perdidos / Creados"
+          icon={<XCircle className="w-4 h-4 text-rose-400" />}
+        />
 
-        {/* Card Tasa de Pendientes */}
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-sky-950/40 via-surface-secondary to-[#0b1326] border border-sky-500/40 shadow-xl shadow-sky-950/30 transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between text-sky-400 mb-2">
-            <span className="text-[10px] font-black uppercase tracking-wider">Tasa Pendiente</span>
-            <Clock className="w-4 h-4 text-sky-400" />
-          </div>
-          <div className="text-3xl font-black text-sky-400 tracking-tight">
-            {statsGlobales.pct_pendientes}%
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 mt-1">Clientes sin Atender</p>
-        </div>
+        <MetricCard
+          label="Tasa Pendiente"
+          value={`${statsGlobales.pct_pendientes}%`}
+          color="blue"
+          subValue="Pipeline activo"
+          icon={<Clock className="w-4 h-4 text-sky-400" />}
+        />
 
-        {/* Card Tasa Prospectos Devueltos */}
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-amber-950/40 via-surface-secondary to-[#0b1326] border border-amber-500/40 shadow-xl shadow-amber-950/30 transition-transform hover:-translate-y-1">
-          <div className="flex items-center justify-between text-amber-400 mb-2">
-            <span className="text-[10px] font-black uppercase tracking-wider">Devueltos E8</span>
-            <AlertTriangle className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-3xl font-black text-amber-400 tracking-tight">
-            {statsGlobales.pct_devueltos_e8}%
-          </div>
-          <p className="text-[10px] font-bold text-slate-400 mt-1">Entradas a Etapa 8</p>
-        </div>
-
+        <MetricCard
+          label="Devueltos E8"
+          value={`${statsGlobales.pct_devueltos_e8}%`}
+          color="yellow"
+          subValue="Entradas a Etapa 8"
+          icon={<AlertTriangle className="w-4 h-4 text-amber-400" />}
+        />
       </div>
 
-      {/* 2. FILA DE TIMELINES EQUIDISTANTES */}
+      {/* 2. FILA DE TIMELINES CON NEONCONTAINER */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <EquidistantTimeline
           title="Distribución Tiempo de Instalación"
-          icon={CheckCircle2}
-          colorTheme="emerald"
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          theme="green"
           min={statsGlobales.horas_min_inst}
           p25={statsGlobales.horas_p25_inst}
           mediana={statsGlobales.horas_mediana_inst}
@@ -497,8 +450,8 @@ export default function CrmDashboard({ metrics = {} }: Props) {
 
         <EquidistantTimeline
           title="Distribución Tiempo para Pérdida"
-          icon={XCircle}
-          colorTheme="rose"
+          icon={<XCircle className="w-5 h-5" />}
+          theme="red"
           min={statsGlobales.horas_min_perd}
           p25={statsGlobales.horas_p25_perd}
           mediana={statsGlobales.horas_mediana_perd}
@@ -511,18 +464,16 @@ export default function CrmDashboard({ metrics = {} }: Props) {
         />
       </div>
 
-      {/* 3. FILA SIMÉTRICA 2X2: MATRIZ DE TENDENCIAS VS HEALTH CARDS */}
+      {/* 3. FILA SIMÉTRICA 2X2 CON NEONCONTAINER */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* LADO IZQUIERDO: MATRIZ 2X2 DE MICRO-TENDENCIAS INTERACTIVAS */}
-        <div className="bg-surface-secondary border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-            <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-              <Activity className="w-4 h-4 text-brand" /> Matriz de Tendencias por Periodo
-            </h3>
-            <span className="text-[10px] text-slate-400 font-bold">Click para ver totales</span>
-          </div>
-
+        {/* LADO IZQUIERDO: MATRIZ DE TENDENCIAS EN NEONCONTAINER AZUL */}
+        <NeonContainer
+          theme="blue"
+          title="Matriz de Tendencias por Periodo"
+          subtitle="Click en cualquier tarjeta para ver totales"
+          icon={<Activity className="w-5 h-5" />}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 flex-1 items-stretch">
             <SparklineCard
               title="Tasa Instalación"
@@ -564,16 +515,15 @@ export default function CrmDashboard({ metrics = {} }: Props) {
               bgColor="rgba(245, 158, 11, 0.1)"
             />
           </div>
-        </div>
+        </NeonContainer>
 
-        {/* LADO DERECHO: MATRIZ 2X2 DE METRIC HEALTH CARDS */}
-        <div className="bg-surface-secondary border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
-            <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-2">
-              <Layers className="w-4 h-4 text-emerald-400" /> Efectividad por Etapa
-            </h3>
-          </div>
-
+        {/* LADO DERECHO: HEALTH CARDS EN NEONCONTAINER VERDE */}
+        <NeonContainer
+          theme="green"
+          title="Efectividad por Etapa (Health Cards)"
+          subtitle="Rendimiento del Embudo"
+          icon={<Layers className="w-5 h-5" />}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 flex-1 items-stretch">
             {efectividad.map((ef: any) => (
               <MetricHealthCard
@@ -586,7 +536,7 @@ export default function CrmDashboard({ metrics = {} }: Props) {
               />
             ))}
           </div>
-        </div>
+        </NeonContainer>
 
       </div>
 
@@ -599,14 +549,12 @@ export default function CrmDashboard({ metrics = {} }: Props) {
       >
         {selectedTrend && modalChartData && (
           <div className="space-y-6">
-            {/* Gráfico Ampliado de Totales Absolutos */}
             <div className="bg-[#0b1326] p-6 rounded-3xl border border-slate-800 shadow-inner">
               <div className="h-72">
                 <Line data={modalChartData} options={modalChartOptions} />
               </div>
             </div>
 
-            {/* Tabla de Totales y Porcentajes por Periodo */}
             <div className="bg-[#0b1326] border border-slate-800 rounded-3xl overflow-hidden shadow-inner">
               <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
