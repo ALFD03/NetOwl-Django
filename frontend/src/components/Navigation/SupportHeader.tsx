@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
+import type { AppPageProps } from '@/types/inertia';
 import { Headset, Gauge, BarChart3, Table } from 'lucide-react';
 
 interface SupportHeaderProps {
@@ -7,14 +8,15 @@ interface SupportHeaderProps {
 }
 
 export const SupportHeader: React.FC<SupportHeaderProps> = ({ activeTab }) => {
-  const { props } = usePage();
-  const user = (props as any).auth?.user;
-  const profile = user?.profile || {};
+  const { props } = usePage<AppPageProps>();
+
+  const { user } = props.auth;
+  const { profile } = user;
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', href: '/support/dashboard/', icon: Gauge, perm: true },
-    { id: 'analytics', label: 'Analytics', href: '/support/analytics/', icon: BarChart3, perm: profile.can_view_support_analytics ?? true },
-    { id: 'results', label: 'Results', href: '/support/results/', icon: Table, perm: profile.can_view_support_results ?? true },
+    { id: 'analytics', label: 'Analytics', href: '/support/analytics/', icon: BarChart3, perm: profile.can_view_support_analytics },
+    { id: 'results', label: 'Results', href: '/support/results/', icon: Table, perm: profile.can_view_support_results },
   ];
 
   return (
@@ -25,7 +27,7 @@ export const SupportHeader: React.FC<SupportHeaderProps> = ({ activeTab }) => {
       </div>
 
       <nav className="flex flex-wrap items-center gap-1.5">
-        {tabs.filter(t => t.perm || user?.is_superuser).map((tab) => {
+        {tabs.filter(t => t.perm || user.is_superuser).map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
+import type { AppPageProps } from '@/types/inertia';
 import { 
   Gauge, 
   BarChart3, 
@@ -15,18 +16,19 @@ interface SubHeaderProps {
 }
 
 export const SubHeader: React.FC<SubHeaderProps> = ({ activeTab }) => {
-  const { props } = usePage();
-  const user = (props as any).auth?.user;
-  const profile = user?.profile || {};
+  const { props } = usePage<AppPageProps>();
+
+  const { user } = props.auth;
+  const { profile } = user;
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', href: '/subscriptions/dashboard/', icon: Gauge, perm: true },
-    { id: 'analytics', label: 'Analytics', href: '/subscriptions/analytics/', icon: BarChart3, perm: profile.can_view_subs_analytics ?? true },
-    { id: 'results', label: 'Results', href: '/subscriptions/results/', icon: Table, perm: profile.can_view_subs_results ?? true },
-    { id: 'lifetime', label: 'Life Time Cycle', href: '/subscriptions/lifetime/', icon: TrendingUp, perm: profile.can_view_subs_lifetime ?? true },
-    { id: 'sales', label: 'Sales Report', href: '/subscriptions/sales-report/', icon: FileSpreadsheet, perm: profile.can_view_subs_sales ?? true },
-    { id: 'business_units', label: 'Business Units', href: '/subscriptions/business-units/', icon: UserCheck, perm: profile.can_view_subs_sales ?? true },
-    { id: 'eta', label: 'ETA Report', href: '/subscriptions/eta-report/', icon: Lock, perm: profile.can_view_eta ?? true },
+    { id: 'analytics', label: 'Analytics', href: '/subscriptions/analytics/', icon: BarChart3, perm: profile.can_view_subs_analytics },
+    { id: 'results', label: 'Results', href: '/subscriptions/results/', icon: Table, perm: profile.can_view_subs_results },
+    { id: 'lifetime', label: 'Life Time Cycle', href: '/subscriptions/lifetime/', icon: TrendingUp, perm: profile.can_view_subs_lifetime },
+    { id: 'sales', label: 'Sales Report', href: '/subscriptions/sales-report/', icon: FileSpreadsheet, perm: profile.can_view_subs_sales },
+    { id: 'business_units', label: 'Business Units', href: '/subscriptions/business-units/', icon: UserCheck, perm: profile.can_view_subs_sales },
+    { id: 'eta', label: 'ETA Report', href: '/subscriptions/eta-report/', icon: Lock, perm: profile.can_view_eta },
   ];
 
   return (
@@ -37,7 +39,7 @@ export const SubHeader: React.FC<SubHeaderProps> = ({ activeTab }) => {
       </div>
 
       <nav className="flex flex-wrap items-center gap-1.5">
-        {tabs.filter(t => t.perm || user?.is_superuser).map((tab) => {
+        {tabs.filter(t => t.perm || user.is_superuser).map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (

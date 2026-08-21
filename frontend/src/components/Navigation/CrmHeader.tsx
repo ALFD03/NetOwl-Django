@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
+import type { AppPageProps } from '@/types/inertia';
 import { Users, Gauge, BarChart3, Table } from 'lucide-react';
 
 interface CrmHeaderProps {
@@ -7,14 +8,15 @@ interface CrmHeaderProps {
 }
 
 export const CrmHeader: React.FC<CrmHeaderProps> = ({ activeTab }) => {
-  const { props } = usePage();
-  const user = (props as any).auth?.user;
-  const profile = user?.profile || {};
+  const { props } = usePage<AppPageProps>();
+
+  const { user } = props.auth;
+  const { profile } = user;
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', href: '/crm/dashboard/', icon: Gauge, perm: true },
-    { id: 'analytics', label: 'Analytics', href: '/crm/analytics/', icon: BarChart3, perm: profile.can_view_crm_analytics ?? true },
-    { id: 'results', label: 'Results', href: '/crm/results/', icon: Table, perm: profile.can_view_crm_results ?? true },
+    { id: 'analytics', label: 'Analytics', href: '/crm/analytics/', icon: BarChart3, perm: profile.can_view_crm_analytics },
+    { id: 'results', label: 'Results', href: '/crm/results/', icon: Table, perm: profile.can_view_crm_results },
   ];
 
   return (
@@ -25,7 +27,7 @@ export const CrmHeader: React.FC<CrmHeaderProps> = ({ activeTab }) => {
       </div>
 
       <nav className="flex flex-wrap items-center gap-1.5">
-        {tabs.filter(t => t.perm || user?.is_superuser).map((tab) => {
+        {tabs.filter(t => t.perm || user.is_superuser).map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (

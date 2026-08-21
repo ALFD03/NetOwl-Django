@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
+import type { AppPageProps } from '@/types/inertia';
 import { motion } from 'framer-motion';
 import { 
   Layers, 
@@ -19,19 +20,20 @@ interface Props {
 }
 
 export const AppLayout: React.FC<Props> = ({ children, title }) => {
-  const { url, props } = usePage();
+  const { url, props } = usePage<AppPageProps>();
+
   const { theme, toggleTheme } = useTheme();
-  const user = (props as any).auth?.user;
-  const profile = user?.profile || {};
+  const { user } = props.auth;
+  const { profile } = user;
 
   const navigation = [
-    { name: 'Subscriptions', href: '/subscriptions/dashboard/', icon: Layers, active: url.startsWith('/subscriptions'), perm: profile.can_view_subscriptions ?? true },
-    { name: 'CRM Analytics', href: '/crm/dashboard/', icon: Users, active: url.startsWith('/crm'), perm: profile.can_view_crm ?? true },
-    { name: 'Technical Support', href: '/support/dashboard/', icon: Headset, active: url.startsWith('/support'), perm: profile.can_view_support ?? true },
-    { name: 'Imports', href: '/imports/subscriptions/', icon: CloudDownload, active: url.startsWith('/imports'), perm: profile.can_view_imports ?? true },
+    { name: 'Subscriptions', href: '/subscriptions/dashboard/', icon: Layers, active: url.startsWith('/subscriptions'), perm: profile.can_view_subscriptions},
+    { name: 'CRM Analytics', href: '/crm/dashboard/', icon: Users, active: url.startsWith('/crm'), perm: profile.can_view_crm },
+    { name: 'Technical Support', href: '/support/dashboard/', icon: Headset, active: url.startsWith('/support'), perm: profile.can_view_support },
+    { name: 'Imports', href: '/imports/subscriptions/', icon: CloudDownload, active: url.startsWith('/imports'), perm: profile.can_view_imports },
   ];
 
-  const canManageUsers = profile.can_manage_users || user?.is_superuser;
+  const canManageUsers = profile.can_manage_users || user.is_superuser
 
   return (
     <div className="flex min-h-screen bg-surface-primary text-slate-100">
