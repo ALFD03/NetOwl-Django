@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "report:anys": "node ./scripts/report-anys.js",
     "preview": "vite preview"
   },
   "dependencies": {
