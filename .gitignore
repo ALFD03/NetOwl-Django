@@ -15,7 +15,10 @@ logs/
 .codex/
 .cursor/
 .github/
+.claude/
 *.zip
 .claudeignore
 CLAUDE.md
 frontend/static/
+static/
+frontend/static/dist/

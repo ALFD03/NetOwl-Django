@@ -3,12 +3,23 @@ import { CHART_PALETTE } from '@/shared/constants/theme';
 import type { DimensionVal, Periodo } from '@/shared/types/domain';
 import type { ChartData } from 'chart.js';
 
-export type MetricWeightMode = 'simple' | 'weighted';
+export type MetricWeightMode = 'simple' | 'weighted' | 'ranking';
+
+/** Default number of entries kept by `ranking` mode. */
+export const RANKING_LIMIT = 10;
 
 export interface AnalyticsDistributionItem {
+  /** Dimension name, e.g. the zone or branch. */
   label: string;
+  /** The metric as reported, in its own unit. */
   value: number;
+  /** Share of the global figure, as a percentage. Always 0 in `ranking` mode. */
   weight: number;
+  /**
+   * The number actually drawn on the chart: `weight` for the share-based modes,
+   * `value` for `ranking`. Builders read this so they never need to know the mode.
+   */
+  plotted: number;
 }
 
 export interface AnalyticsMetricConfig {
@@ -16,6 +27,8 @@ export interface AnalyticsMetricConfig {
   globalKey: keyof Periodo;
   mode: MetricWeightMode;
   unit?: '%' | '$' | 'number';
+  /** `ranking` mode only: how many entries to keep. Defaults to `RANKING_LIMIT`. */
+  limit?: number;
 }
 
 /**
@@ -56,6 +69,7 @@ export function getSimpleMetricDistribution(
       label: dimension.valor,
       value: toNumber(dimension[key]),
       weight: 0,
+      plotted: 0,
     }));
   }
 
@@ -63,10 +77,13 @@ export function getSimpleMetricDistribution(
     .map((dimension) => {
       const value = toNumber(dimension[key]);
 
+      const weight = (value / globalValue) * 100;
+
       return {
         label: dimension.valor,
         value,
-        weight: (value / globalValue) * 100,
+        weight,
+        plotted: weight,
       };
     })
     .sort((a, b) => b.weight - a.weight);
@@ -110,16 +127,52 @@ export function getWeightedMetricDistribution(
       label: item.label,
       value: item.value,
       weight: 0,
+      plotted: 0,
     }));
   }
 
   return weightedValues
-    .map((item) => ({
-      label: item.label,
-      value: item.value,
-      weight: (item.weightedValue / totalWeightedValue) * 100,
-    }))
+    .map((item) => {
+      const weight = (item.weightedValue / totalWeightedValue) * 100;
+
+      return {
+        label: item.label,
+        value: item.value,
+        weight,
+        plotted: weight,
+      };
+    })
     .sort((a, b) => b.weight - a.weight);
+}
+
+/**
+ * Ranking:
+ *
+ * No calcula ningún peso. Muestra el valor tal cual viene,
+ * ordenado de mayor a menor, y conserva únicamente las
+ * primeras `limit` dimensiones.
+ *
+ * Se utiliza cuando interesa comparar magnitudes reales entre
+ * dimensiones, no su participación dentro del total global.
+ */
+export function getRankingDistribution(
+  dimensions: DimensionVal[],
+  key: keyof DimensionVal,
+  limit: number = RANKING_LIMIT,
+): AnalyticsDistributionItem[] {
+  return dimensions
+    .map((dimension) => {
+      const value = toNumber(dimension[key]);
+
+      return {
+        label: dimension.valor,
+        value,
+        weight: 0,
+        plotted: value,
+      };
+    })
+    .sort((a, b) => b.value - a.value)
+    .slice(0, limit);
 }
 
 /**
@@ -131,6 +184,14 @@ export function getMetricDistribution(
   globalData: Periodo,
   config: AnalyticsMetricConfig,
 ): AnalyticsDistributionItem[] {
+  if (config.mode === 'ranking') {
+    return getRankingDistribution(
+      dimensions,
+      config.dimensionKey,
+      config.limit,
+    );
+  }
+
   if (config.mode === 'weighted') {
     return getWeightedMetricDistribution(
       dimensions,
@@ -145,11 +206,7 @@ export function getMetricDistribution(
   );
 }
 
-export interface ChartDistributionItem {
-  label: string;
-  value: number;
-  weight: number;
-}
+export type ChartDistributionItem = AnalyticsDistributionItem;
 
 export function groupMinorItems(
   items: AnalyticsDistributionItem[],
@@ -181,6 +238,7 @@ export function groupMinorItems(
         0,
       ),
       weight: othersWeight,
+      plotted: othersWeight,
     },
   ];
 }
@@ -196,57 +254,50 @@ export function getChartDistribution(
     metric,
   );
 
+  // Ranking carries no weights, so the "Otros < 1%" bucket has nothing to group
+  // by — and the list is already capped at `limit`.
+  if (metric.mode === 'ranking') {
+    return distribution;
+  }
+
   return groupMinorItems(distribution);
+}
+
+type WithRaw<T> = T & { _raw: Array<{ label: string; original: number }> };
+
+/**
+ * Shared shape for both chart kinds: they differed only in the `ChartData`
+ * generic. `plotted` is what gets drawn; `_raw` keeps the unformatted value
+ * around for the hover readout.
+ */
+function toDistributionChartData(items: AnalyticsDistributionItem[]) {
+  return {
+    labels: items.map((item) => item.label),
+
+    datasets: [
+      {
+        data: items.map((item) => Number(item.plotted.toFixed(2))),
+        backgroundColor: CHART_PALETTE,
+        borderWidth: 2,
+        borderColor: SURFACE.secondary,
+      },
+    ],
+
+    _raw: items.map((item) => ({
+      label: item.label,
+      original: item.value,
+    })),
+  };
 }
 
 export function toBarChartData(
   items: AnalyticsDistributionItem[],
-): ChartData<'bar'> & {
-  _raw: Array<{ label: string; original: number }>;
-} {
-  return {
-    labels: items.map((item) => item.label),
-
-    datasets: [
-      {
-        data: items.map((item) =>
-          Number(item.weight.toFixed(2)),
-        ),
-        backgroundColor: CHART_PALETTE,
-        borderWidth: 2,
-        borderColor: SURFACE.secondary,
-      },
-    ],
-
-    _raw: items.map((item) => ({
-      label: item.label,
-      original: item.value,
-    })),
-  };
+): WithRaw<ChartData<'bar'>> {
+  return toDistributionChartData(items);
 }
 
 export function toDoughnutChartData(
   items: AnalyticsDistributionItem[],
-): ChartData<'doughnut'> & {
-  _raw: Array<{ label: string; original: number }>;
-} {
-  return {
-    labels: items.map((item) => item.label),
-
-    datasets: [
-      {
-        data: items.map((item) =>
-          Number(item.weight.toFixed(2)),
-        ),
-        backgroundColor: CHART_PALETTE,
-        borderWidth: 2,
-        borderColor: SURFACE.secondary,
-      },
-    ],
-
-    _raw: items.map((item) => ({
-      label: item.label,
-      original: item.value,
-    })),
-  };
+): WithRaw<ChartData<'doughnut'>> {
+  return toDistributionChartData(items);
 }

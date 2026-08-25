@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { useSubscriptionsAnalyticsData } from '@/features/subscriptions/hooks/useSubscriptionsAnalyticsData';
-import { AnalyticsCharts, AnalyticsFilters, AnalyticsMetrics, type DimensionKey } from '@/features/subscriptions/components/analytics';
+import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, type DimensionKey } from '@/features/subscriptions/components/analytics';
 import type { DimensionGroup, Periodo } from '@/shared/types/domain';
 
 interface Props {
@@ -39,6 +39,14 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
         currentDimensionData={currentDimensionData}
         selectedDimension={selectedDim}
       />
+
+      <div className="mt-12">
+        <AnalyticsDimensionTable
+          rows={currentDimensionData}
+          dimension={selectedDim}
+          period={selectedPeriod}
+        />
+      </div>
     </AppLayout>
   );
 }

@@ -33,14 +33,14 @@ export function useSubscriptionDashboard({ periodos, dimensiones = {} }: Subscri
     const total = [...grouped.values()].reduce((sum, v) => sum + v.nuevos, 0);
     return [...grouped.entries()].map(([zona, v]) => ({ zona, growth: v.growth / Math.max(v.count, 1), share: total ? (v.nuevos / total) * 100 : 0 })).sort((a,b) => b.share-a.share);
   }, [dimensiones.zona]);
-  const churnMajor = churnValues.filter((z) => z.share >= 1);
-  const churnOther = churnValues.filter((z) => z.share < 1).reduce((sum,z) => sum + z.share, 0);
-  const growthMajor = growthValues.filter((z) => z.share >= 1);
-  const growthOther = growthValues.filter((z) => z.share < 1).reduce((sum,z) => sum + z.share, 0);
-  const churnDonutData = useMemo(() => { const labels = [...churnMajor.map(z=>z.zona), ...(churnOther > 0 ? ['Otras Zonas (<1.0%)'] : [])]; const values = [...churnMajor.map(z=>Number(z.share.toFixed(2))), ...(churnOther > 0 ? [Number(churnOther.toFixed(2))] : [])]; return buildZoneDonut(labels, values, [...churnRaw, {label:'Otras Zonas (<1.0%)', original:0}]); }, [churnMajor, churnOther, churnRaw]);
-  const growthDonutData = useMemo(() => { const labels = [...growthMajor.map(z=>z.zona), ...(growthOther > 0 ? ['Otras Zonas (<1.0%)'] : [])]; const values = [...growthMajor.map(z=>Number(z.share.toFixed(2))), ...(growthOther > 0 ? [Number(growthOther.toFixed(2))] : [])]; return buildZoneDonut(labels, values, [...growthRaw, {label:'Otras Zonas (<1.0%)', original:0}]); }, [growthMajor, growthOther, growthRaw]);
-  const churnDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredChurnZone ? `Churn ${hoveredChurnZone.name}` : 'Churn Bruto Prom.', value: hoveredChurnZone?.val ?? `${avgChurnBruto.toFixed(2)}%`, color: '#ff2a5f' }, handleHover(setHoveredChurnZone, churnDonutData)), [hoveredChurnZone, avgChurnBruto, churnDonutData]);
-  const growthDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredCrecimientoZone ? `Crec. ${hoveredCrecimientoZone.name}` : 'Crec. Prom. Global', value: hoveredCrecimientoZone?.val ?? `${avgCrecimiento > 0 ? '+' : ''}${avgCrecimiento.toFixed(2)}%`, color: '#00ff88' }, handleHover(setHoveredCrecimientoZone, growthDonutData)), [hoveredCrecimientoZone, avgCrecimiento, growthDonutData]);
+  const churnMajor = churnValues.filter((z) => z.share >= 2.5);
+  const churnOther = churnValues.filter((z) => z.share < 2.5).reduce((sum,z) => sum + z.share, 0);
+  const growthMajor = growthValues.filter((z) => z.share >= 2.5);
+  const growthOther = growthValues.filter((z) => z.share < 2.5).reduce((sum,z) => sum + z.share, 0);
+  const churnDonutData = useMemo(() => { const labels = [...churnMajor.map(z=>z.zona), ...(churnOther > 0 ? ['Otras Zonas (<2.5%)'] : [])]; const values = [...churnMajor.map(z=>Number(z.share.toFixed(2))), ...(churnOther > 0 ? [Number(churnOther.toFixed(2))] : [])]; return buildZoneDonut(labels, values, [...churnRaw, {label:'Otras Zonas (<2.5%)', original:0}]); }, [churnMajor, churnOther, churnRaw]);
+  const growthDonutData = useMemo(() => { const labels = [...growthMajor.map(z=>z.zona), ...(growthOther > 0 ? ['Otras Zonas (<2.5%)'] : [])]; const values = [...growthMajor.map(z=>Number(z.share.toFixed(2))), ...(growthOther > 0 ? [Number(growthOther.toFixed(2))] : [])]; return buildZoneDonut(labels, values, [...growthRaw, {label:'Otras Zonas (<2.5%)', original:0}]); }, [growthMajor, growthOther, growthRaw]);
+  const churnDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredChurnZone ? `Churn ${hoveredChurnZone.name}` : 'Churn Bruto Prom.', value: hoveredChurnZone?.val ?? `${avgChurnBruto.toFixed(2)}%`, color: '#ff2a5f' }, handleHover(setHoveredChurnZone, churnDonutData), { valueSuffix: '%' }), [hoveredChurnZone, avgChurnBruto, churnDonutData]);
+  const growthDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredCrecimientoZone ? `Crec. ${hoveredCrecimientoZone.name}` : 'Crec. Prom. Global', value: hoveredCrecimientoZone?.val ?? `${avgCrecimiento > 0 ? '+' : ''}${avgCrecimiento.toFixed(2)}%`, color: '#00ff88' }, handleHover(setHoveredCrecimientoZone, growthDonutData), { valueSuffix: '%' }), [hoveredCrecimientoZone, avgCrecimiento, growthDonutData]);
 
   const aporteReemplazoData = { labels, datasets: [
     { label: 'Tasa Aporte Reactivación %', data: reversed.map((p) => Number(p.tasa_aporte_react_pct.toFixed(2)) || 0), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6 },

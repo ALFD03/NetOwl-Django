@@ -111,12 +111,20 @@ function AnalyticsChartItem({
     [currentDimensionData, globalData, config],
   );
 
+  /** Unit of the metric itself — used for the hover readout, which shows the raw value. */
   const suffix =
     config.unit === '%'
       ? '%'
       : config.unit === '$'
         ? '$'
         : '';
+
+  /**
+   * Unit of what is actually plotted. `ranking` draws the raw value, so it takes
+   * the metric's own unit; the share-based modes draw a percentage of the total
+   * regardless of what the underlying metric is measured in.
+   */
+  const plottedSuffix = config.mode === 'ranking' ? suffix : '%';
 
   const barData = useMemo(
     () => toBarChartData(distribution),
@@ -132,9 +140,9 @@ function AnalyticsChartItem({
     () =>
       getHorizontalBarOptions(
         undefined,
-        suffix,
+        plottedSuffix,
       ),
-    [suffix],
+    [plottedSuffix],
   );
 
   const doughnutOptions = useMemo(
@@ -150,8 +158,9 @@ function AnalyticsChartItem({
           doughnutData,
           suffix,
         ),
+        { valueSuffix: plottedSuffix },
       ),
-    [doughnutData, hovered, suffix, title],
+    [doughnutData, hovered, plottedSuffix, suffix, title],
   );
 
   return (

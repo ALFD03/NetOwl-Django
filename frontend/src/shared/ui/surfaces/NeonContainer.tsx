@@ -65,7 +65,7 @@ export const NeonContainer: FC<NeonContainerProps> = ({
   const currentTheme = themeStyles[theme] || themeStyles.slate;
 
   return (
-    <div className={`rounded-3xl border shadow-2xl flex flex-col justify-between overflow-hidden relative ${currentTheme.card} ${className}`}>
+    <div className={`h-full rounded-3xl border shadow-2xl flex flex-col justify-between overflow-hidden relative ${currentTheme.card} ${className}`}>
       {(title || headerAction) && (
         <div className="p-6 border-b border-slate-800/80 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">

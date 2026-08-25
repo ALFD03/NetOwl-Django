@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Activity, CheckCircle2, Clock3, TrendingDown, TrendingUp, XCircle } from 'lucide-react';
 
-import { BarChart, LineChart } from '@/shared/charts';
+import { BarChart, LineChart, baseLineOptions, horizontalBarOptions } from '@/shared/charts';
 import { EmptyState, MetricCard, NeonContainer, ProgressBar, StatTile } from '@/shared/ui';
 import { formatInteger, formatPercentage } from '@/shared/utils/formatters';
 import type { useCrmDashboard } from '../hooks/useCrmDashboard';
@@ -92,7 +92,7 @@ export function CrmAnalyticsView({ data }: CrmAnalyticsViewProps) {
           className="xl:col-span-2"
         >
           {hasTrends ? (
-            <LineChart data={trendChart} className={`${CHART_HEIGHT} w-full`} />
+            <LineChart data={trendChart} options={baseLineOptions} className={`${CHART_HEIGHT} w-full`} />
           ) : (
             <EmptyState title="No hay datos históricos disponibles." className={CHART_HEIGHT} />
           )}
@@ -105,7 +105,7 @@ export function CrmAnalyticsView({ data }: CrmAnalyticsViewProps) {
           theme="green"
         >
           {hasHealth ? (
-            <BarChart data={stageChart} className={`${CHART_HEIGHT} w-full`} />
+            <BarChart data={stageChart} options={horizontalBarOptions} className={`${CHART_HEIGHT} w-full`} />
           ) : (
             <EmptyState title="No hay datos de efectividad." className={CHART_HEIGHT} />
           )}

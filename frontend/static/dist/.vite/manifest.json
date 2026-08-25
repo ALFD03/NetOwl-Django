@@ -1,8 +1,8 @@
 {
-  "src/main.tsx": {
+  "src/app/main.tsx": {
     "file": "assets/main.js",
     "name": "main",
-    "src": "src/main.tsx",
+    "src": "src/app/main.tsx",
     "isEntry": true,
     "css": [
       "assets/main.css"

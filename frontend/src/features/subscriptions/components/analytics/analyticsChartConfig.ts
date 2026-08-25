@@ -4,21 +4,21 @@ export const ANALYTICS_METRICS = {
   churnNeto: {
     dimensionKey: 'churn_neto_pct',
     globalKey: 'churn_neto_pct',
-    mode: 'weighted',
+    mode: 'ranking',
     unit: '%',
   },
 
   churnBruto: {
     dimensionKey: 'churn_bruto_pct',
     globalKey: 'churn_bruto_pct',
-    mode: 'weighted',
+    mode: 'ranking',
     unit: '%',
   },
 
   suspensiones: {
     dimensionKey: 'porcentaje_suspensiones',
     globalKey: 'porcentaje_suspensiones',
-    mode: 'weighted',
+    mode: 'ranking',
     unit: '%',
   },
 
@@ -32,7 +32,7 @@ export const ANALYTICS_METRICS = {
   adicionesBrutas: {
     dimensionKey: 'adiciones_brutas',
     globalKey: 'adiciones_brutas',
-    mode: 'simple',
+    mode: 'ranking',
     unit: 'number',
   },
 
@@ -60,14 +60,14 @@ export const ANALYTICS_METRICS = {
   indiceReemplazo: {
     dimensionKey: 'indice_reemplazo_react_pct',
     globalKey: 'indice_reemplazo_react_pct',
-    mode: 'weighted',
+    mode: 'ranking',
     unit: '%',
   },
 
   recuperaciones: {
     dimensionKey: 'react_4_P',
     globalKey: 'react_4_P',
-    mode: 'simple',
+    mode: 'ranking',
     unit: 'number',
   },
 
@@ -81,7 +81,7 @@ export const ANALYTICS_METRICS = {
   billing: {
     dimensionKey: 'total_billing',
     globalKey: 'total_billing',
-    mode: 'simple',
+    mode: 'ranking',
     unit: '$',
   },
 } satisfies Record<string, AnalyticsMetricConfig>;
