@@ -29,6 +29,8 @@ export interface CrmHistoricoRow {
   horas_std_perd?: number;
   pct_excede_prom_perd?: number;
   pct_excede_med_perd?: number;
+  /** Per-stage effectiveness of the period, stored as JSONB on the cierre row. */
+  efectividad?: CrmEfectividadRow[];
 }
 
 /**
@@ -100,4 +102,50 @@ export interface CrmHealthCard {
   successPct: number;
   failCount: number;
   failPct: number;
+}
+
+/**
+ * Metric block stored per dimension value. It is the same computation as a
+ * monthly cierre row, run over the slice of opportunities belonging to one
+ * branch / campaign / seller — so it carries the same measures, minus the
+ * period itself.
+ */
+export type CrmMetricas = Omit<CrmHistoricoRow, 'periodo_reporte'>;
+
+/** A row of `crm_dimensiones_historico`, as the analytics endpoint sends it. */
+export interface CrmDimensionRow {
+  periodo_reporte: string;
+  dimension: string;
+  valor: string;
+  metricas: CrmMetricas;
+  efectividad: CrmEfectividadRow[];
+}
+
+/**
+ * One dimension value with its metrics hoisted to the top level — the shape the
+ * charts and the detail table read, so neither has to reach through `metricas`.
+ */
+export type CrmDimensionValue = CrmMetricas & {
+  valor: string;
+  efectividad: CrmEfectividadRow[];
+};
+
+export interface CrmAnalyticsProps {
+  /** Every dimension of the selected period; the dimension filter is client-side. */
+  dimensionsData?: CrmDimensionRow[];
+  /** The cierre row of the selected period: global denominators and header stats. */
+  globalData?: CrmHistoricoRow;
+  periods?: string[];
+  selectedPeriod?: string;
+}
+
+/** A single "who leads this measure" readout in the ranking section. */
+export interface CrmRankingEntry {
+  id: string;
+  label: string;
+  /** Winning dimension value, or `—` when the period has no data. */
+  valor: string;
+  value: string;
+  caption: string;
+  color: MetricColor;
 }

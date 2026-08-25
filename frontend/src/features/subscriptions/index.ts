@@ -10,4 +10,5 @@ export { EtaReportView } from './components/eta/EtaReportView';
 export { EtaReportToolbar } from './components/eta/EtaReportToolbar';
 export { EtaManagementView } from './components/etamanagement/EtaView';
 export * from './lib/commercial';
+export * from './lib/analyticsDistribution';
 export type * from './types';

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 from datetime import datetime
 from typing import Any, Optional
 from typing import Iterable
@@ -93,3 +94,18 @@ def validate_csv_structure(file_path: str, required_headers: Iterable[str], deli
             return True, None
     except Exception as e:
         return False, f"No es un archivo CSV válido: {str(e)}"
+
+
+def clean_json_props(obj: Any) -> Any:
+    """Reemplaza NaN/Inf por 0.0 en cualquier estructura destinada a JSON.
+
+    `json.dumps` los emite como `NaN`/`Infinity`, que `JSON.parse` rechaza: el
+    payload de Inertia llega roto y la página se renderiza vacía.
+    """
+    if isinstance(obj, float):
+        return 0.0 if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: clean_json_props(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [clean_json_props(v) for v in obj]
+    return obj

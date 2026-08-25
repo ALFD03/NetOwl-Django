@@ -1,6 +1,17 @@
 export type NumericValue = number | string | null | undefined;
 
-const toNumber = (value: NumericValue): number => Number(value ?? 0) || 0;
+/**
+ * Safe numeric coercion for anything arriving from the API, where a measure may
+ * be a number, a numeric string, or missing entirely.
+ *
+ * Non-finite results collapse to 0 — `Infinity` reaching a chart scale or a
+ * `toLocaleString` is never what the caller wants.
+ */
+export const toNumber = (value: NumericValue): number => {
+  const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 export const formatInteger = (value: NumericValue): string =>
   Math.floor(toNumber(value)).toLocaleString('en-US');

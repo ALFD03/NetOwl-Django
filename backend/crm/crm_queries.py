@@ -53,7 +53,15 @@ def get_crm_cierre_historico(periodos: Optional[List[str]] = None) -> List[Dict[
 
         if df.empty:
             return []
-        return df.to_dict(orient="records")
+
+        rows = df.to_dict(orient="records")
+
+        # `efectividad` viaja como JSONB: una fila por etapa del periodo. Se
+        # normaliza a lista aquí para que la vista no reciba a veces texto.
+        for row in rows:
+            row["efectividad"] = _parse_jsonb(row.get("efectividad")) or []
+
+        return rows
     except Exception:
         logger.exception("Error al consultar cierre histórico de CRM")
         return []
@@ -76,7 +84,12 @@ def get_crm_metric_totals(periodo: Optional[str] = None) -> Dict[str, Any]:
             SELECT * FROM {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO}
             ORDER BY periodo_reporte ASC
         """)
-        historico = df_hist.to_dict(orient="records") if not df_hist.empty else []
+        # La efectividad por periodo se sirve desde la vista de analytics; aquí
+        # sólo abultaría el payload con un JSON por periodo que nadie lee.
+        if not df_hist.empty:
+            historico = df_hist.drop(columns=["efectividad"], errors="ignore").to_dict(orient="records")
+        else:
+            historico = []
 
         return {
             "resumen_global": resumen_global,

@@ -22,7 +22,7 @@ from backend.crm import (
     get_crm_metric_totals,
     get_crm_dimensiones,
 )
-from backend.utils import validate_csv_structure
+from backend.utils import validate_csv_structure, clean_json_props
 
 TEMPLATE_PREFIX = "crm/"
 
@@ -111,19 +111,25 @@ def dashboard(request):
 @permission_required('can_view_crm_analytics')
 def analytics(request):
     periodo = request.GET.get("period")
-    dimension = request.GET.get("dimension", "sucursal")
     periodos = get_crm_periodos()
-    
-    target_period = periodo or (periodos[0] if periodos else None)
-    dimensions_data = get_crm_dimensiones(periodos=[target_period] if target_period else None, dimension=dimension)
 
-    return render_inertia(request, "CRM/Analytics", {
+    target_period = periodo or (periodos[0] if periodos else None)
+
+    # Se envían TODAS las dimensiones del periodo: el selector de dimensión es
+    # client-side, así que cambiarlo no debe costar una vuelta al servidor.
+    dimensions_data = get_crm_dimensiones(periodos=[target_period] if target_period else None)
+
+    # Fila de cierre del periodo: es el denominador global que usan los pesos
+    # simples y la fuente de las tarjetas y timelines de la cabecera.
+    cierre = get_crm_cierre_historico([target_period]) if target_period else []
+
+    return render_inertia(request, "CRM/Analytics", clean_json_props({
         "dimensionsData": dimensions_data,
+        "globalData": cierre[0] if cierre else {},
         "periods": periodos,
         "selectedPeriod": target_period or "",
-        "selectedDimension": dimension,
         "section": "analytics"
-    })
+    }))
 
 
 @login_required

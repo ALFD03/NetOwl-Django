@@ -1,6 +1,12 @@
 export { CrmDashboardView } from './components/CrmDashboardView';
 export { CrmAnalyticsView } from './components/CrmAnalyticsView';
+export { CrmAnalyticsFilters } from './components/analytics/CrmAnalyticsFilters';
+export { CrmAnalyticsCharts } from './components/analytics/CrmAnalyticsCharts';
+export { CrmAnalyticsTable } from './components/analytics/CrmAnalyticsTable';
+export { CRM_ANALYTICS_COLUMNS } from './components/analytics/crmAnalyticsColumns';
 export { CrmResultsView } from './components/CrmResultsView';
 export { CrmPeriodDetail } from './components/CrmPeriodDetail';
 export { useCrmDashboard } from './hooks/useCrmDashboard';
+export { useCrmAnalytics } from './hooks/useCrmAnalytics';
+export * from './lib/crmAnalyticsDistribution';
 export type * from './types';

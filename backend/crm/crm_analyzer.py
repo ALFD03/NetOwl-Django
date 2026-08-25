@@ -6,6 +6,7 @@ from ..database import DBConnector
 from ..conf_config import DB_SCHEMA, TableNames
 from .metrics.core import compute_crm_metrics_for_period
 from .crm_dimensions import save_crm_dimensiones_periodo
+from .crm_loader import ensure_crm_schema
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,10 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     horas_promedio_perd, horas_mediana_perd, horas_p25_perd, horas_p75_perd,
                     horas_min_perd, horas_max_perd, horas_std_perd,
                     pct_excede_prom_perd, pct_excede_med_perd,
+                    efectividad,
                     updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (periodo_reporte) DO UPDATE SET
                     total_oportunidades = EXCLUDED.total_oportunidades,
                     ganados = EXCLUDED.ganados,
@@ -56,6 +58,7 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     horas_std_perd = EXCLUDED.horas_std_perd,
                     pct_excede_prom_perd = EXCLUDED.pct_excede_prom_perd,
                     pct_excede_med_perd = EXCLUDED.pct_excede_med_perd,
+                    efectividad = EXCLUDED.efectividad,
                     updated_at = NOW()
                 """,
                 [
@@ -68,6 +71,7 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     m["horas_promedio_perd"], m["horas_mediana_perd"], m["horas_p25_perd"], m["horas_p75_perd"],
                     m["horas_min_perd"], m["horas_max_perd"], m["horas_std_perd"],
                     m["pct_excede_prom_perd"], m["pct_excede_med_perd"],
+                    json.dumps(m.get("efectividad", [])),
                 ]
             )
         conn.commit()
@@ -93,6 +97,10 @@ def _save_global_crm_metrics(db: DBConnector, resumen_global: dict, tiempo_por_e
 
 def run_crm_analysis(periodo_str: str | None = None) -> dict:
     db = DBConnector()
+
+    # El cierre guarda ahora la efectividad por etapa del periodo; en una base
+    # anterior a ese cambio la columna todavía no existe.
+    ensure_crm_schema(db)
     
     # 1. Cargar tablas base
     df_clients = db.read_table(TableNames.CRM_CLIENTS)

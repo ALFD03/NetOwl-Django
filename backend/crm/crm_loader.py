@@ -192,6 +192,11 @@ def import_crm_csv(csv_path: str) -> Tuple[int, int]:
     return total_clients, total_logs
 
 
+def ensure_crm_schema(db: DBConnector):
+    """Crea o pone al día el esquema de CRM. Idempotente y barata de repetir."""
+    _create_tables_if_not_exist(db)
+
+
 def _create_tables_if_not_exist(db: DBConnector):
     statements = [
         f"""
@@ -267,7 +272,11 @@ def _create_tables_if_not_exist(db: DBConnector):
             horas_std_perd NUMERIC DEFAULT 0,
             pct_excede_prom_perd NUMERIC DEFAULT 0,
             pct_excede_med_perd NUMERIC DEFAULT 0,
-            
+
+            -- Efectividad por etapa del periodo. Se calcula siempre, pero sólo
+            -- cabe como JSON: es una fila por etapa, no un escalar.
+            efectividad JSONB,
+
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
@@ -301,6 +310,10 @@ def _create_tables_if_not_exist(db: DBConnector):
         f"CREATE INDEX IF NOT EXISTS idx_crm_clients_dims ON {DB_SCHEMA}.{TableNames.CRM_CLIENTS}(campana, sucursal, vendedor);",
         f"CREATE INDEX IF NOT EXISTS idx_crm_cierre_periodo ON {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO}(periodo_reporte);",
         f"CREATE INDEX IF NOT EXISTS idx_crm_dim_periodo ON {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO}(periodo_reporte, dimension);",
+
+        # Migración en caliente para esquemas creados antes de que la efectividad
+        # por periodo se persistiera.
+        f"ALTER TABLE {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS efectividad JSONB;",
     ]
     
     with db.get_connection() as conn:

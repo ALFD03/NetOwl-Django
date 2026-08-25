@@ -1,4 +1,4 @@
-import type { AnalyticsMetricConfig } from './analyticsChartData';
+import type { AnalyticsMetricConfig } from '../../lib/analyticsDistribution';
 
 export const ANALYTICS_METRICS = {
   churnNeto: {

@@ -12,7 +12,7 @@ import {
   getChartDistribution,
   toBarChartData,
   toDoughnutChartData,
-} from './analyticsChartData';
+} from '../../lib/analyticsDistribution';
 import { ANALYTICS_METRICS } from './analyticsChartConfig';
 import { ANALYTICS_CHART_SECTIONS } from './analyticsChartSections';
 import { AnalyticsSection } from './AnalyticsSection';
@@ -127,8 +127,11 @@ function AnalyticsChartItem({
   const plottedSuffix = config.mode === 'ranking' ? suffix : '%';
 
   const barData = useMemo(
-    () => toBarChartData(distribution),
-    [distribution],
+    // The chart title names the series in the bar legend. Several titles already
+    // carry their unit ("Ranking Facturación Total ($)"), so appending the suffix
+    // here would print it twice.
+    () => toBarChartData(distribution, title),
+    [distribution, title],
   );
 
   const doughnutData = useMemo(
