@@ -7,12 +7,14 @@ interface Props {
   title: string;
   icon?: React.ReactNode;
   theme?: NeonTheme;
-  min: number;
+  /** Omit when the source only stores quartiles — the node is then dropped. */
+  min?: number;
   p25: number;
   mediana: number;
   promedio: number;
   p75: number;
-  max: number;
+  /** Omit when the source only stores quartiles — the node is then dropped. */
+  max?: number;
   std: number;
   pctExcedeProm: number;
   pctExcedeMed: number;
@@ -35,13 +37,13 @@ export function EquidistantTimeline({
   const isGreen = theme === 'green';
 
   const nodes = [
-    { key: 'min', label: 'Min', val: min, textCol: 'text-slate-400', dotBg: 'bg-slate-500' },
+    ...(min != null ? [{ key: 'min', label: 'Min', val: min, textCol: 'text-slate-400', dotBg: 'bg-slate-500' }] : []),
     { key: 'p25', label: 'P25', val: p25, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
     { key: 'med', label: 'Mediana', val: mediana, textCol: 'text-amber-400', dotBg: 'bg-amber-400 ring-4 ring-amber-400/20' },
     { key: 'prom', label: 'Promedio', val: promedio, textCol: isGreen ? 'text-emerald-400' : 'text-rose-400', dotBg: isGreen ? 'bg-emerald-400 ring-4 ring-emerald-400/20' : 'bg-rose-400 ring-4 ring-rose-400/20' },
     { key: 'std_plus', label: '+1σ', val: Number((promedio + std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
     { key: 'p75', label: 'P75', val: p75, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
-    { key: 'max', label: 'Max', val: max, textCol: 'text-slate-400', dotBg: 'bg-slate-500' },
+    ...(max != null ? [{ key: 'max', label: 'Max', val: max, textCol: 'text-slate-400', dotBg: 'bg-slate-500' }] : []),
   ];
 
   return (
@@ -57,8 +59,8 @@ export function EquidistantTimeline({
         </div>
       )}
     >
-      <div className="py-4 px-2">
-        <div className="relative flex items-center justify-between">
+      <div className="py-4 px-2 h-full">
+        <div className="relative flex items-center justify-between h-full">
           <div className="absolute left-3 right-3 h-1.5 bg-slate-800 rounded-full z-0" />
           {nodes.map((node) => (
             <div key={node.key} className="relative z-10 flex flex-col items-center">

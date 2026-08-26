@@ -22,11 +22,19 @@ export type { MetricWeightMode } from '@/shared/utils/distribution';
 export type AnalyticsDistributionItem = DistributionItem;
 export type ChartDistributionItem = DistributionItem;
 
+/**
+ * Which way is "good" for a metric. Drives the accent of the readouts built on
+ * it: growth is green, loss is red.
+ */
+export type MetricDirection = 'growth' | 'loss';
+
 export interface AnalyticsMetricConfig extends RankingOptions {
   dimensionKey: keyof DimensionVal;
   globalKey: keyof Periodo;
   mode: MetricWeightMode;
   unit?: '%' | '$' | 'number';
+  /** Defaults to `growth` where unset. */
+  direction?: MetricDirection;
 }
 
 /**

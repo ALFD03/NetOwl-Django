@@ -1,22 +1,51 @@
 import { SURFACE } from '@/shared/constants/theme';
 import 'chartjs-plugin-datalabels';
 import type { ActiveElement, ChartEvent, ChartOptions } from 'chart.js';
+import type { Context as DatalabelContext } from 'chartjs-plugin-datalabels';
 import type React from 'react';
 import type { CenterTextConfig } from './plugins';
 
+/** Used when a dataset carries no colour of its own to borrow. */
+export const DATALABEL_FALLBACK_COLOR = '#ffffff';
+
 /**
- * Value labels are white so they read against the dark surface, but white alone
- * disappears on the lighter palette entries (`#ffb703`, `#00ff88`) and on a bar's
- * own fill. The dark stroke + shadow is what keeps them legible everywhere.
+ * Shared value-label typography. The colour is left out on purpose: `BarChart`
+ * and `LineChart` tint each label with the colour of the bar or line it belongs
+ * to, so a reader can tell at a glance which number goes with which series.
+ * The dark stroke is what keeps a light-palette entry (`#ffb703`, `#00ff88`)
+ * legible once the text is no longer plain white.
  */
 export const DATALABEL_TEXT = {
-  color: '#ffffff',
   font: { weight: 'bold', size: 15 },
   textStrokeColor: '#000000',
   textStrokeWidth: 2,
-  // textShadowBlur: 4,
-  // textShadowColor: 'rgba(2, 6, 23, 0.9)',
 } as const;
+
+/** Where a dataset keeps the colour a label should copy. */
+type SeriesColorKey = 'backgroundColor' | 'borderColor';
+
+/**
+ * Resolves a value label's colour from the element it annotates.
+ *
+ * Sources are tried in order — a bar reads its `backgroundColor` first, a line
+ * its `borderColor` — because each chart type paints its identity in a
+ * different property. A per-point array is indexed by `dataIndex`, so a
+ * palette-coloured bar chart gets one colour per bar rather than one per series.
+ */
+export function seriesDatalabelColor(...sources: SeriesColorKey[]) {
+  return (context: DatalabelContext): string => {
+    for (const source of sources) {
+      const declared = (context.dataset as unknown as Record<string, unknown>)[source];
+      const resolved = Array.isArray(declared)
+        ? declared[context.dataIndex % declared.length]
+        : declared;
+
+      if (typeof resolved === 'string') return resolved;
+    }
+
+    return DATALABEL_FALLBACK_COLOR;
+  };
+}
 
 export type DoughnutHoverValue = { name: string; val: string };
 export type HoverableChartData = {

@@ -6,12 +6,14 @@ import {
   getHorizontalBarOptions,
   handleHover,
 } from '@/shared/charts';
+import { METRIC_COLOR } from '@/shared/constants/theme';
 import { NeonContainer, type NeonTheme } from '@/shared/ui';
 import type { DimensionVal, Periodo } from '@/shared/types/domain';
 import {
   getChartDistribution,
   toBarChartData,
   toDoughnutChartData,
+  type MetricDirection,
 } from '../../lib/analyticsDistribution';
 import { ANALYTICS_METRICS } from './analyticsChartConfig';
 import { ANALYTICS_CHART_SECTIONS } from './analyticsChartSections';
@@ -27,6 +29,17 @@ type HoverState = {
   name: string;
   val: string;
 };
+
+/**
+ * Accent for the doughnut's centre readout: green when the metric measures
+ * growth, red when it measures loss. A negative reading flips a growth metric to
+ * red — negative growth is a loss whatever the metric nominally counts.
+ */
+function getCenterTextColor(direction: MetricDirection = 'growth', value?: string): string {
+  const isNegative = value?.trim().startsWith('-') ?? false;
+
+  return direction === 'loss' || isNegative ? METRIC_COLOR.red : METRIC_COLOR.green;
+}
 
 const DIMENSION_LABELS: Record<string, string> = {
   zona: 'Zona',
@@ -114,9 +127,9 @@ function AnalyticsChartItem({
   /** Unit of the metric itself — used for the hover readout, which shows the raw value. */
   const suffix =
     config.unit === '%'
-      ? '%'
+      ? ' %'
       : config.unit === '$'
-        ? '$'
+        ? ' $'
         : '';
 
   /**
@@ -124,7 +137,7 @@ function AnalyticsChartItem({
    * the metric's own unit; the share-based modes draw a percentage of the total
    * regardless of what the underlying metric is measured in.
    */
-  const plottedSuffix = config.mode === 'ranking' ? suffix : '%';
+  const plottedSuffix = config.mode === 'ranking' ? suffix : ' %';
 
   const barData = useMemo(
     // The chart title names the series in the bar legend. Several titles already
@@ -154,7 +167,7 @@ function AnalyticsChartItem({
         {
           title: hovered?.name ?? title,
           value: hovered?.val ?? '',
-          color: '#ffffff',
+          color: getCenterTextColor(config.direction, hovered?.val),
         },
         handleHover(
           setHovered,
@@ -163,7 +176,7 @@ function AnalyticsChartItem({
         ),
         { valueSuffix: plottedSuffix },
       ),
-    [doughnutData, hovered, plottedSuffix, suffix, title],
+    [config.direction, doughnutData, hovered, plottedSuffix, suffix, title],
   );
 
   return (

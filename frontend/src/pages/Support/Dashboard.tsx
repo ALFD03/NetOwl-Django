@@ -1,13 +1,15 @@
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
-import { SupportDashboardView } from '@/features/support/components/SupportDashboardView';
+import { SupportDashboardView, useSupportDashboard } from '@/features/support';
 import type { SupportDashboardProps } from '@/features/support/types';
 
-export default function SupportDashboard({ metrics = {} }: SupportDashboardProps) {
+export default function SupportDashboard(props: SupportDashboardProps) {
+  const data = useSupportDashboard(props);
+
   return (
     <AppLayout title="Technical Support Dashboard">
       <ModuleHeader module="support" activeTab="dashboard" />
-      <SupportDashboardView summary={metrics.resumen_global ?? {}} />
+      <SupportDashboardView data={data} />
     </AppLayout>
   );
 }

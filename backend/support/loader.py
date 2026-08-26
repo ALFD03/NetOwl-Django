@@ -6,7 +6,7 @@ import numpy as np
 import logging
 from backend.database import DBConnector
 from backend.conf_config import DB_SCHEMA, TableNames
-from backend.support.config import SUPPORT_CSV_COLUMN_MAP
+from backend.support.config import SUPPORT_CSV_COLUMN_MAP, SUPPORT_CIERRE_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -104,8 +104,10 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             pct_rezagados NUMERIC DEFAULT 0,
             tiempo_medio_cierre_horas NUMERIC DEFAULT 0,
             tiempo_mediana_cierre_horas NUMERIC DEFAULT 0,
+            tiempo_min_cierre_horas NUMERIC DEFAULT 0,
             tiempo_p25_cierre_horas NUMERIC DEFAULT 0,
             tiempo_p75_cierre_horas NUMERIC DEFAULT 0,
+            tiempo_max_cierre_horas NUMERIC DEFAULT 0,
             tiempo_std_cierre_horas NUMERIC DEFAULT 0,
             pct_excede_promedio_cierre NUMERIC DEFAULT 0,
             pct_excede_mediana_cierre NUMERIC DEFAULT 0,
@@ -134,6 +136,14 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
+        # Instalaciones anteriores a la separación de tiempos (asignación vs.
+        # creación) y a los estadísticos de primera respuesta no tienen estas
+        # columnas; se añaden aquí en lugar de exigir recrear la tabla.
+        *[
+            f"ALTER TABLE {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} "
+            f"ADD COLUMN IF NOT EXISTS {col} NUMERIC DEFAULT 0;"
+            for col in SUPPORT_CIERRE_COLUMNS
+        ],
         f"CREATE INDEX IF NOT EXISTS idx_support_cierre_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}(periodo_reporte);",
         f"CREATE INDEX IF NOT EXISTS idx_support_dim_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(periodo_reporte);",
     ]

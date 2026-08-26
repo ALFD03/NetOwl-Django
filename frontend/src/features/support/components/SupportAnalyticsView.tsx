@@ -1,20 +1,24 @@
 import { Layers } from 'lucide-react';
 
-import { EmptyState, NeonContainer, StatTile } from '@/shared/ui';
-import { formatInteger } from '@/shared/utils/formatters';
-import type { SupportGroup } from '../types';
+import { EmptyState } from '@/shared/ui';
+import type { useSupportAnalytics } from '../hooks/useSupportAnalytics';
+import { SupportBreakdownPanel } from './analytics/SupportBreakdownPanel';
+import { SupportGroupOverview } from './analytics/SupportGroupOverview';
+import { SupportIncidenceTable } from './analytics/SupportIncidenceTable';
 
-interface SupportAnalyticsViewProps {
-  groups: Record<string, SupportGroup>;
+interface Props {
+  data: ReturnType<typeof useSupportAnalytics>;
 }
 
-export function SupportAnalyticsView({ groups }: SupportAnalyticsViewProps) {
-  const entries = Object.entries(groups);
+/** Presentation only — every number arrives resolved from `useSupportAnalytics`. */
+export function SupportAnalyticsView({ data }: Props) {
+  const { activeGroupName, hasGroups, stats, razones, soluciones, tipos, sucursales, zonas } = data;
 
-  if (entries.length === 0) {
+  if (!hasGroups) {
     return (
       <EmptyState
         title="No hay datos de análisis disponibles para el periodo."
+        description="Ejecuta el análisis del mes desde Resultados para poblar las dimensiones de soporte."
         icon={<Layers />}
         bordered
       />
@@ -23,36 +27,16 @@ export function SupportAnalyticsView({ groups }: SupportAnalyticsViewProps) {
 
   return (
     <div className="space-y-6">
-      {entries.map(([groupName, group]) => (
-        <NeonContainer
-          key={groupName}
-          theme="slate"
-          title={groupName}
-          icon={<Layers className="h-5 w-5" />}
-          headerAction={
-            <span className="rounded-full bg-brand/20 px-3 py-1 text-xs font-semibold text-brand">
-              {formatInteger(group.total_tickets_grupo)} Tickets
-            </span>
-          }
-        >
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Razones de Falla Principales
-          </h4>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {group.razones_falla?.map((reason, idx) => (
-              <StatTile
-                key={idx}
-                label={reason.nombre}
-                value={formatInteger(reason.metricas?.total_tickets)}
-                tone="brand"
-                variant="boxed"
-                mono
-                className="p-3"
-              />
-            ))}
-          </div>
-        </NeonContainer>
-      ))}
+      <SupportGroupOverview groupName={activeGroupName} stats={stats} />
+
+      <SupportBreakdownPanel
+        razones={razones}
+        soluciones={soluciones}
+        tipos={tipos}
+        sucursales={sucursales}
+      />
+
+      <SupportIncidenceTable rows={zonas} />
     </div>
   );
 }

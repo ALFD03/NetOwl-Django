@@ -34,6 +34,7 @@ def analytics(request):
     return render_inertia(request, "Support/Analytics", {
         "analyticsData": analytics_data,
         "periods": periodos,
+        "selectedPeriod": periodo or (periodos[0] if periodos else ""),
         "section": "analytics"
     })
 

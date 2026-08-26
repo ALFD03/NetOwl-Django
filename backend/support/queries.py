@@ -102,34 +102,128 @@ def get_support_metric_totals(periodo: str | None = None) -> dict:
         logger.exception("Error al consultar métricas globales de soporte")
         return {"resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": []}
 
+def _load_zone_info() -> dict:
+    """Mapa zona → {site, type} desde `Zonas.json`, indexado en minúsculas."""
+    zone_info = {}
+    if not ZONAS_PATH.exists():
+        logger.warning("No se encontró Zonas.json: la incidencia por zona no podrá mapear sites.")
+        return zone_info
+
+    with open(ZONAS_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    for z in data.get("zonas", []):
+        zone_info[z["name"].strip().lower()] = {
+            "site": z.get("Site", "Valencia").strip(),
+            "type": z.get("Type", "RF").strip(),
+        }
+    return zone_info
+
+
+def _get_activos_por_zona(db: DBConnector, periodo: str | None) -> dict[str, int]:
+    """
+    Suscriptores activos por zona al cierre del periodo, según el módulo de
+    suscripciones (`analyzer_churn_dimensiones`, dimensión `zona_sucursal`).
+
+    Se toma de ahí y no de un COUNT sobre la tabla de suscripciones porque esa
+    cuenta es la de hoy: comparar los tickets de un mes antiguo contra la base
+    actual convierte el crecimiento de clientes en una caída de la incidencia.
+    Si el periodo pedido aún no está calculado en suscripciones, se usa el más
+    reciente disponible.
+    """
+    df_periodos = db.query(f"""
+        SELECT DISTINCT periodo_reporte
+        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+        WHERE dimension = 'zona_sucursal'
+        ORDER BY periodo_reporte DESC
+    """)
+    if df_periodos.empty:
+        return {}
+
+    disponibles = df_periodos["periodo_reporte"].astype(str).tolist()
+    target = periodo if periodo in disponibles else disponibles[0]
+
+    df = db.query(f"""
+        SELECT valor, activos_final
+        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+        WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
+    """, params=[target])
+
+    activos: dict[str, int] = {}
+    for _, row in df.iterrows():
+        # `valor` viene como "<zona> - <sucursal>"; la misma zona puede aparecer
+        # en varias sucursales, así que se acumulan.
+        zona = str(row["valor"]).split(" - ")[0].strip().lower()
+        activos[zona] = activos.get(zona, 0) + int(row.get("activos_final") or 0)
+
+    return activos
+
+
+def _get_incidencia_por_zona(db: DBConnector, periodo: str | None, zone_info: dict) -> list[dict]:
+    """
+    Tasa de incidencia por zona: (tickets de la zona / activos de la zona) * 100.
+
+    Los tickets se cuentan completos, sin filtrar por grupo de trabajo: la
+    incidencia describe a los clientes de la zona, no el reparto interno del
+    trabajo, así que el numerador tiene que abarcar todos los grupos.
+    """
+    where_t = ""
+    params_t: list = []
+    if periodo:
+        where_t = "WHERE TO_CHAR(creado_el, 'YYYY-MM') = %s"
+        params_t = [periodo]
+
+    df = db.query(f"""
+        SELECT
+            zona,
+            COUNT(*)::int AS total_tickets,
+            COUNT(*) FILTER (WHERE LOWER(TRIM(etapa)) = 'resuelto')::int AS tickets_resueltos,
+            AVG(EXTRACT(EPOCH FROM (ultima_actualizacion_etapa - primera_fecha_asignada)) / 3600.0)
+                FILTER (
+                    WHERE LOWER(TRIM(etapa)) = 'resuelto'
+                      AND primera_fecha_asignada IS NOT NULL
+                      AND ultima_actualizacion_etapa > primera_fecha_asignada
+                ) AS mttr_horas
+        FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
+        {where_t}
+        GROUP BY zona
+    """, params=params_t)
+
+    if df.empty:
+        return []
+
+    activos_map = _get_activos_por_zona(db, periodo)
+
+    filas = []
+    for _, row in df.iterrows():
+        zona = str(row["zona"]).strip()
+        clave = zona.lower()
+        meta = zone_info.get(clave, {"site": "Otros / Desconocido", "type": "RF"})
+        activos = activos_map.get(clave, 0)
+        tickets = int(row["total_tickets"])
+        mttr = row["mttr_horas"]
+
+        filas.append({
+            "zona": zona,
+            "site": meta["site"],
+            "tecnologia": meta["type"],
+            "total_tickets": tickets,
+            "total_suscriptores": activos,
+            # Sin población conocida no hay denominador: se deja en 0 y el front
+            # lo distingue de una zona realmente sana por `total_suscriptores`.
+            "tasa_incidencia_pct": round((tickets / activos) * 100, 2) if activos > 0 else 0.0,
+            "mttr_promedio": round(float(mttr), 2) if pd.notna(mttr) else 0.0,
+        })
+
+    filas.sort(key=lambda x: x["tasa_incidencia_pct"], reverse=True)
+    return filas
+
+
 def get_support_analytics_structured(periodo: str | None = None) -> dict:
     """Estructura Analytics calculando la Tasa de Incidencia por Cliente (%) por Site."""
     db = DBConnector()
     try:
-        zone_info = {}
-        if ZONAS_PATH.exists():
-            with open(ZONAS_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                for z in data.get("zonas", []):
-                    zone_info[z["name"].strip().lower()] = {
-                        "site": z.get("Site", "Valencia").strip(),
-                        "type": z.get("Type", "RF").strip()
-                    }
-
-        # 1. Consultar base de suscriptores para sacar la población real de clientes por zona
-        df_subs_cnt = db.query(f"""
-            SELECT zona, COUNT(*)::int AS total_suscriptores
-            FROM {DB_SCHEMA}.{TableNames.SUBSCRIPTIONS}
-            GROUP BY zona
-        """)
-        
-        site_subs_map = {}
-        if not df_subs_cnt.empty:
-            for _, srow in df_subs_cnt.iterrows():
-                z_name = str(srow["zona"]).strip().lower()
-                z_meta = zone_info.get(z_name, {"site": "Otros / Desconocido"})
-                s_name = z_meta["site"]
-                site_subs_map[s_name] = site_subs_map.get(s_name, 0) + int(srow["total_suscriptores"])
+        zone_info = _load_zone_info()
 
         where_p = ""
         params_p = []
@@ -183,8 +277,7 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
                     "tipos_solicitud": [],
                     "razones_falla": [],
                     "soluciones_falla": [],
-                    "sucursales": [],
-                    "sites_summary": []
+                    "sucursales": []
                 }
 
             if dim == "grupo_trabajo":
@@ -196,23 +289,6 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
                 grupos_dict[g]["razones_falla"].append({"nombre": val, "metricas": m})
             elif dim == "sucursal" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
                 grupos_dict[g]["sucursales"].append({"nombre": val, "metricas": m})
-            elif dim == "zona" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
-                val_zs = val
-                parts = val_zs.split(" - ")
-                z_name = parts[0].strip() if len(parts) > 0 else val_zs
-                z_meta = zone_info.get(z_name.lower(), {"site": "Otros / Desconocido", "type": "RF"})
-                site_name = z_meta["site"]
-
-                sites_map = grupos_dict[g].setdefault("_sites_temp", {})
-                if site_name not in sites_map:
-                    sites_map[site_name] = {"site": site_name, "total_tickets": 0, "tickets_resueltos": 0, "suma_mttr": 0.0, "count_mttr": 0}
-
-                s_obj = sites_map[site_name]
-                s_obj["total_tickets"] += m.get("total_tickets", 0)
-                s_obj["tickets_resueltos"] += m.get("tickets_resueltos", 0)
-                s_obj["suma_mttr"] += (m.get("tiempo_medio_cierre_horas", 0) * m.get("tickets_resueltos", 0))
-                s_obj["count_mttr"] += m.get("tickets_resueltos", 0)
-
         # Cargar soluciones técnicas
         if not df_soluciones.empty:
             for _, srow in df_soluciones.iterrows():
@@ -227,41 +303,19 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
                         "pct": pct
                     })
 
-        # Estructurar la Tasa de Incidencia por Cliente (%) por Site
         for g, data_g in grupos_dict.items():
             tot_g = data_g["total_tickets_grupo"] or 1
-            
             for r in data_g["razones_falla"]:
                 cant = r["metricas"].get("total_tickets", 0)
                 r["metricas"]["pct_del_grupo"] = round((cant / tot_g) * 100, 2)
 
-            sites_temp = data_g.pop("_sites_temp", {})
-            sites_summary = []
-
-            for s_name, s_data in sites_temp.items():
-                tot_tkts = s_data["total_tickets"]
-                pop_subs = site_subs_map.get(s_name, 0)
-                
-                # TASA DE INCIDENCIA REAL: (Tickets del Site / Suscriptores del Site) * 100
-                tasa_incidencia = round((tot_tkts / pop_subs) * 100, 2) if pop_subs > 0 else 0.0
-                mttr_avg = round(s_data["suma_mttr"] / s_data["count_mttr"], 2) if s_data["count_mttr"] > 0 else 0.0
-
-                sites_summary.append({
-                    "site": s_name,
-                    "total_tickets": tot_tkts,
-                    "total_suscriptores": pop_subs,
-                    "tasa_incidencia_pct": tasa_incidencia,
-                    "mttr_promedio": mttr_avg
-                })
-
-            # Ordenar los Sites de mayor a menor Tasa de Incidencia (%) para destacar los Sites con más fallas por cliente
-            sites_summary.sort(key=lambda x: x["tasa_incidencia_pct"], reverse=True)
-            data_g["sites_summary"] = sites_summary
-
-        return {"grupos": grupos_dict}
+        return {
+            "grupos": grupos_dict,
+            "incidencia_zonas": _get_incidencia_por_zona(db, params_t[0] if params_t else None, zone_info),
+        }
     except Exception:
         logger.exception("Error estructurando Analytics de Soporte")
-        return {"grupos": {}}
+        return {"grupos": {}, "incidencia_zonas": []}
 
 def get_support_dimension_metrics(periodos: list[str] | None = None) -> list[dict]:
     db = DBConnector()

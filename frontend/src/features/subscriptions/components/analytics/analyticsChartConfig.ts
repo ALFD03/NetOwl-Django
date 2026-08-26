@@ -6,6 +6,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'churn_neto_pct',
     mode: 'ranking',
     unit: '%',
+    direction: 'loss',
   },
 
   churnBruto: {
@@ -13,6 +14,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'churn_bruto_pct',
     mode: 'ranking',
     unit: '%',
+    direction: 'loss',
   },
 
   suspensiones: {
@@ -20,6 +22,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'porcentaje_suspensiones',
     mode: 'ranking',
     unit: '%',
+    direction: 'loss',
   },
 
   nuevos: {
@@ -27,6 +30,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'nuevos_mes',
     mode: 'simple',
     unit: 'number',
+    direction: 'growth',
   },
 
   adicionesBrutas: {
@@ -34,6 +38,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'adiciones_brutas',
     mode: 'ranking',
     unit: 'number',
+    direction: 'growth',
   },
 
   crecimiento: {
@@ -41,6 +46,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'crecimiento',
     mode: 'weighted',
     unit: '%',
+    direction: 'growth',
   },
 
   winback: {
@@ -48,6 +54,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'tasa_winback_pct',
     mode: 'weighted',
     unit: '%',
+    direction: 'growth',
   },
 
   aporteReactivacion: {
@@ -55,6 +62,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'tasa_aporte_react_pct',
     mode: 'weighted',
     unit: '%',
+    direction: 'growth',
   },
 
   indiceReemplazo: {
@@ -62,6 +70,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'indice_reemplazo_react_pct',
     mode: 'ranking',
     unit: '%',
+    direction: 'growth',
   },
 
   recuperaciones: {
@@ -69,6 +78,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'react_4_P',
     mode: 'ranking',
     unit: 'number',
+    direction: 'growth',
   },
 
   arpu: {
@@ -76,6 +86,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'arpu',
     mode: 'weighted',
     unit: '$',
+    direction: 'growth',
   },
 
   billing: {
@@ -83,6 +94,7 @@ export const ANALYTICS_METRICS = {
     globalKey: 'total_billing',
     mode: 'ranking',
     unit: '$',
+    direction: 'growth',
   },
 } satisfies Record<string, AnalyticsMetricConfig>;
 

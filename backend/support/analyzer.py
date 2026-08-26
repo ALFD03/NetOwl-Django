@@ -6,7 +6,7 @@ import logging
 import pandas as pd
 from backend.database import DBConnector
 from backend.conf_config import DB_SCHEMA, TableNames
-from backend.support.config import RESOLVED_STAGES, CANCELED_STAGES
+from backend.support.config import RESOLVED_STAGES, CANCELED_STAGES, SUPPORT_CIERRE_COLUMNS
 from backend.support.metrics import compute_metrics_for_period
 
 logger = logging.getLogger(__name__)
@@ -30,45 +30,22 @@ def _save_global_support_metrics(db: DBConnector, global_m: dict, grupos_m: dict
 
 
 def _save_support_cierre_historico_global(db: DBConnector, periodo: str, global_m: dict):
-    m = global_m
+    columns = ["periodo_reporte"] + SUPPORT_CIERRE_COLUMNS
+    updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in SUPPORT_CIERRE_COLUMNS)
+    values = [periodo] + [global_m.get(c, 0) for c in SUPPORT_CIERRE_COLUMNS]
+
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
                 INSERT INTO {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
-                (periodo_reporte, total_tickets, tickets_resueltos, tickets_cancelados, tickets_rezagados,
-                 pct_resueltos, pct_cancelados, pct_rezagados,
-                 tiempo_medio_cierre_horas, tiempo_mediana_cierre_horas,
-                 tiempo_p25_cierre_horas, tiempo_p75_cierre_horas, tiempo_std_cierre_horas,
-                 pct_excede_promedio_cierre, pct_excede_mediana_cierre,
-                 tiempo_promedio_primera_respuesta_horas, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                ({", ".join(columns)}, updated_at)
+                VALUES ({", ".join(["%s"] * len(columns))}, NOW())
                 ON CONFLICT (periodo_reporte) DO UPDATE SET
-                    total_tickets = EXCLUDED.total_tickets,
-                    tickets_resueltos = EXCLUDED.tickets_resueltos,
-                    tickets_cancelados = EXCLUDED.tickets_cancelados,
-                    tickets_rezagados = EXCLUDED.tickets_rezagados,
-                    pct_resueltos = EXCLUDED.pct_resueltos,
-                    pct_cancelados = EXCLUDED.pct_cancelados,
-                    pct_rezagados = EXCLUDED.pct_rezagados,
-                    tiempo_medio_cierre_horas = EXCLUDED.tiempo_medio_cierre_horas,
-                    tiempo_mediana_cierre_horas = EXCLUDED.tiempo_mediana_cierre_horas,
-                    tiempo_p25_cierre_horas = EXCLUDED.tiempo_p25_cierre_horas,
-                    tiempo_p75_cierre_horas = EXCLUDED.tiempo_p75_cierre_horas,
-                    tiempo_std_cierre_horas = EXCLUDED.tiempo_std_cierre_horas,
-                    pct_excede_promedio_cierre = EXCLUDED.pct_excede_promedio_cierre,
-                    pct_excede_mediana_cierre = EXCLUDED.pct_excede_mediana_cierre,
-                    tiempo_promedio_primera_respuesta_horas = EXCLUDED.tiempo_promedio_primera_respuesta_horas,
+                    {updates},
                     updated_at = NOW()
                 """,
-                [
-                    periodo, m["total_tickets"], m["tickets_resueltos"], m["tickets_cancelados"], m["tickets_rezagados"],
-                    m["pct_resueltos"], m["pct_cancelados"], m["pct_rezagados"],
-                    m["tiempo_medio_cierre_horas"], m["tiempo_mediana_cierre_horas"],
-                    m["tiempo_p25_cierre_horas"], m["tiempo_p75_cierre_horas"], m["tiempo_std_cierre_horas"],
-                    m["pct_excede_promedio_cierre"], m["pct_excede_mediana_cierre"],
-                    m["tiempo_promedio_primera_respuesta_horas"]
-                ]
+                values
             )
         conn.commit()
 
@@ -165,6 +142,51 @@ def _save_support_dimensiones_periodo(
         conn.commit()
 
 
+# Medidas de tiempo y su columna de muestra: promediar un periodo sin ninguna
+# duración medible metería un 0 en la media, que es justo el sesgo que se
+# corrigió a nivel de ticket. Los periodos con muestra 0 se excluyen.
+_TIME_MEASURES = {
+    "cierre": "muestra_cierre",
+    "cierre_total": "muestra_cierre_total",
+    "primera_respuesta": "muestra_primera_respuesta",
+}
+
+_VOLUME_FIELDS = ["total_tickets", "tickets_resueltos", "tickets_cancelados", "tickets_rezagados"]
+_RATE_FIELDS = ["pct_resueltos", "pct_cancelados", "pct_rezagados"]
+
+
+def _mean_of(df: pd.DataFrame, field: str, mask_field: str | None = None) -> float:
+    """Media de `field`, restringida a las filas con muestra si se indica una."""
+    if field not in df.columns:
+        return 0.0
+
+    serie = pd.to_numeric(df[field], errors="coerce")
+    if mask_field and mask_field in df.columns:
+        serie = serie[pd.to_numeric(df[mask_field], errors="coerce").fillna(0) > 0]
+
+    serie = serie.dropna()
+    return round(float(serie.mean()), 2) if not serie.empty else 0.0
+
+
+def _average_periods(df: pd.DataFrame, volumen_como_promedio_mensual: bool) -> dict:
+    """Promedia todos los periodos analizados en un único resumen acumulado."""
+    sufijo = "_promedio_mensual" if volumen_como_promedio_mensual else ""
+    avg = {f"{field}{sufijo}": _mean_of(df, field) for field in _VOLUME_FIELDS}
+    avg.update({field: _mean_of(df, field) for field in _RATE_FIELDS})
+
+    for medida, muestra in _TIME_MEASURES.items():
+        for stat in ("medio", "mediana", "min", "p25", "p75", "max", "std"):
+            key = f"tiempo_{stat}_{medida}_horas"
+            avg[key] = _mean_of(df, key, muestra)
+        for stat in ("promedio", "mediana"):
+            key = f"pct_excede_{stat}_{medida}"
+            avg[key] = _mean_of(df, key, muestra)
+        avg[muestra] = _mean_of(df, muestra)
+
+    avg["tiempo_promedio_primera_respuesta_horas"] = avg["tiempo_medio_primera_respuesta_horas"]
+    return avg
+
+
 def run_support_analysis(periodo_str: str | None = None) -> dict:
     db = DBConnector()
     df_all = db.read_table(TableNames.SUPPORT_TICKETS)
@@ -188,30 +210,37 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
     if periodo_str and len(periodo_str) == 7:
         periodos_target = [periodo_str]
     else:
+        # Solo periodos de creación: la cohorte de un mes son sus tickets creados,
+        # así que un mes sin altas no tiene nada que reportar.
         p_creados = df_all.dropna(subset=["periodo_creacion"])["periodo_creacion"].unique().tolist()
-        p_cierres = df_all.dropna(subset=["periodo_cierre"])["periodo_cierre"].unique().tolist()
-        periodos_target = sorted(list(set(p_creados + p_cierres)), reverse=True)
+        periodos_target = sorted(set(p_creados), reverse=True)
 
     print(f"\n📊 PROCESANDO SOPORTE TÉCNICO PARA {len(periodos_target)} PERIODO(S)...")
 
     all_summaries = {}
 
     for p in periodos_target:
+        # Las cuatro particiones son cohorte de creación: todo lo que se mide en
+        # el mes P nació en el mes P. Así resueltos + cancelados + rezagados
+        # suman exactamente los creados y los porcentajes reparten el 100%.
+        mask_creados = df_all["periodo_creacion"] == p
+        mask_cerrado_en_p = df_all["periodo_cierre"] == p
+
         # 1. Creados en el mes P
-        df_creados = df_all[df_all["periodo_creacion"] == p].copy()
+        mask_resueltos = mask_creados & df_all["es_resuelto"] & mask_cerrado_en_p
+        mask_cancelados = mask_creados & df_all["es_cancelado"] & mask_cerrado_en_p
 
-        # 2. Resueltos en el mes P (por fecha de última actualización)
-        df_resueltos = df_all[(df_all["periodo_cierre"] == p) & (df_all["es_resuelto"] == True)].copy()
+        # 3. Rezagados: creados en P cuya fecha de cierre NO cae en P — porque
+        #    cerraron más tarde o porque siguen abiertos. Ya no arrastran los
+        #    tickets de meses anteriores, que antes se recontaban en cada periodo.
+        mask_rezagados = mask_creados & ~mask_resueltos & ~mask_cancelados
 
-        # 3. Cancelados en el mes P (por fecha de última actualización)
-        df_cancelados = df_all[(df_all["periodo_cierre"] == p) & (df_all["es_cancelado"] == True)].copy()
+        df_creados = df_all[mask_creados].copy()
+        df_resueltos = df_all[mask_resueltos].copy()
+        df_cancelados = df_all[mask_cancelados].copy()
+        df_rezagados = df_all[mask_rezagados].copy()
 
-        # 4. Rezagados en el mes P: Creados en P o antes, pero que en el mes P NO estaban cerrados aún
-        mask_creado_antes_o_en_p = df_all["periodo_creacion"] <= p
-        mask_cerrado_despues_o_abierto = (df_all["periodo_cierre"] > p) | (df_all["periodo_cierre"].isna()) | (~df_all["es_resuelto"] & ~df_all["es_cancelado"])
-        df_rezagados = df_all[mask_creado_antes_o_en_p & mask_cerrado_despues_o_abierto].copy()
-
-        if df_creados.empty and df_resueltos.empty and df_cancelados.empty and df_rezagados.empty:
+        if df_creados.empty:
             continue
 
         global_m = compute_metrics_for_period(df_creados, df_resueltos, df_cancelados, df_rezagados)
@@ -240,20 +269,7 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
     # Promedio acumulado
     if all_summaries:
         df_sum = pd.DataFrame([s["global"] for s in all_summaries.values()])
-        resumen_global_avg = {
-            "total_tickets_promedio_mensual": round(float(df_sum["total_tickets"].mean()), 2),
-            "tickets_resueltos_promedio_mensual": round(float(df_sum["tickets_resueltos"].mean()), 2),
-            "tickets_cancelados_promedio_mensual": round(float(df_sum["tickets_cancelados"].mean()), 2),
-            "tickets_rezagados_promedio_mensual": round(float(df_sum["tickets_rezagados"].mean()), 2),
-            "pct_resueltos": round(float(df_sum["pct_resueltos"].mean()), 2),
-            "pct_cancelados": round(float(df_sum["pct_cancelados"].mean()), 2),
-            "pct_rezagados": round(float(df_sum["pct_rezagados"].mean()), 2),
-            "tiempo_medio_cierre_horas": round(float(df_sum["tiempo_medio_cierre_horas"].mean()), 2),
-            "tiempo_mediana_cierre_horas": round(float(df_sum["tiempo_mediana_cierre_horas"].mean()), 2),
-            "tiempo_promedio_primera_respuesta_horas": round(float(df_sum["tiempo_promedio_primera_respuesta_horas"].mean()), 2),
-            "pct_excede_promedio_cierre": round(float(df_sum["pct_excede_promedio_cierre"].fillna(0).mean()), 2),
-            "pct_excede_mediana_cierre": round(float(df_sum["pct_excede_mediana_cierre"].fillna(0).mean()), 2),
-        }
+        resumen_global_avg = _average_periods(df_sum, volumen_como_promedio_mensual=True)
 
         grupo_records = []
         for p, summary in all_summaries.items():
@@ -266,20 +282,7 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
         if grupo_records:
             df_g = pd.DataFrame(grupo_records)
             for g_name, df_g_sub in df_g.groupby("grupo_trabajo"):
-                por_grupo_avg[g_name] = {
-                    "total_tickets": round(float(df_g_sub["total_tickets"].mean()), 2),
-                    "tickets_resueltos": round(float(df_g_sub["tickets_resueltos"].mean()), 2),
-                    "tickets_cancelados": round(float(df_g_sub["tickets_cancelados"].mean()), 2),
-                    "tickets_rezagados": round(float(df_g_sub["tickets_rezagados"].mean()), 2),
-                    "pct_resueltos": round(float(df_g_sub["pct_resueltos"].mean()), 2),
-                    "pct_cancelados": round(float(df_g_sub["pct_cancelados"].mean()), 2),
-                    "pct_rezagados": round(float(df_g_sub["pct_rezagados"].mean()), 2),
-                    "tiempo_medio_cierre_horas": round(float(df_g_sub["tiempo_medio_cierre_horas"].mean()), 2),
-                    "tiempo_mediana_cierre_horas": round(float(df_g_sub["tiempo_mediana_cierre_horas"].mean()), 2),
-                    "tiempo_promedio_primera_respuesta_horas": round(float(df_g_sub["tiempo_promedio_primera_respuesta_horas"].mean()), 2),
-                    "pct_excede_promedio_cierre": round(float(df_g_sub["pct_excede_promedio_cierre"].fillna(0).mean()), 2),
-                    "pct_excede_mediana_cierre": round(float(df_g_sub["pct_excede_mediana_cierre"].fillna(0).mean()), 2),
-                }
+                por_grupo_avg[g_name] = _average_periods(df_g_sub, volumen_como_promedio_mensual=False)
 
         _save_global_support_metrics(db, resumen_global_avg, por_grupo_avg)
 

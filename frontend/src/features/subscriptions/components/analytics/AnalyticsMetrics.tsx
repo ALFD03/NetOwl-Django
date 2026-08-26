@@ -29,13 +29,13 @@ export function AnalyticsMetrics({ data }: Props) {
         <MetricCard label="Reactivaciones" value={data.reactivaciones || 0} color="blue" />
         <MetricCard label="Recuperaciones" value={data.react_4_P || 0} color="green" />
         <MetricCard label="React. Ingreso" value={data.react_val || 0} color="blue" subValue="Peso en crecimiento" />
-        <MetricCard label="Winback" value={`${(data.tasa_winback_pct || 0).toFixed(2)}%`} color="green" />
-        <MetricCard label="Indice Reemplazo" value={`${(data.indice_reemplazo_react_pct || 0).toFixed(2)}%`} color="yellow" />
+        <MetricCard label="Winback" value={`${(data.tasa_winback_pct || 0).toFixed(2)} %`} color="green" />
+        <MetricCard label="Indice Reemplazo" value={`${(data.indice_reemplazo_react_pct || 0).toFixed(2)} %`} color="yellow" />
       </MetricGroup>
 
       <MetricGroup title="Grupo Financiero" icon={<DollarSign className="w-4 h-4" />} tone="text-amber-400" columns="md:grid-cols-2">
-        <MetricCard label="ARPU" value={`$${data.arpu || 0}`} color="yellow" />
-        <MetricCard label="Total Billing" value={`$${(data.total_billing || 0).toLocaleString()}`} color="green" />
+        <MetricCard label="ARPU" value={`$ ${data.arpu || 0}`} color="yellow" />
+        <MetricCard label="Total Billing" value={`$ ${(data.total_billing || 0).toLocaleString()}`} color="green" />
       </MetricGroup>
     </div>
   );
