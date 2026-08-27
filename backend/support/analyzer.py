@@ -6,8 +6,13 @@ import logging
 import pandas as pd
 from backend.database import DBConnector
 from backend.conf_config import DB_SCHEMA, TableNames
-from backend.support.config import RESOLVED_STAGES, CANCELED_STAGES, SUPPORT_CIERRE_COLUMNS
-from backend.support.metrics import compute_metrics_for_period
+from backend.support.config import (
+    RESOLVED_STAGES,
+    CANCELED_STAGES,
+    SUPPORT_CIERRE_COLUMNS,
+    SUPPORT_TIME_MEASURES,
+)
+from backend.support.metrics import PeriodCohort, compute_metrics_for_period
 
 logger = logging.getLogger(__name__)
 
@@ -50,79 +55,34 @@ def _save_support_cierre_historico_global(db: DBConnector, periodo: str, global_
         conn.commit()
 
 
-def _save_support_dimensiones_periodo(
-    db: DBConnector, periodo: str,
-    df_creados: pd.DataFrame, df_resueltos: pd.DataFrame,
-    df_cancelados: pd.DataFrame, df_rezagados: pd.DataFrame
-):
+def _save_support_dimensiones_periodo(db: DBConnector, periodo: str, cohorte: PeriodCohort):
     """Guarda las dimensiones jerárquicas multinivel respetando la clasificación del periodo."""
     rows_to_insert = []
 
-    todos_grupos = set(df_creados["grupo_trabajo"].unique()).union(
-        set(df_resueltos["grupo_trabajo"].unique())
-    ).union(set(df_cancelados["grupo_trabajo"].unique())).union(set(df_rezagados["grupo_trabajo"].unique()))
-    
-    for grupo in todos_grupos:
-        df_cr_g = df_creados[df_creados["grupo_trabajo"] == grupo] if not df_creados.empty else pd.DataFrame()
-        df_re_g = df_resueltos[df_resueltos["grupo_trabajo"] == grupo] if not df_resueltos.empty else pd.DataFrame()
-        df_can_g = df_cancelados[df_cancelados["grupo_trabajo"] == grupo] if not df_cancelados.empty else pd.DataFrame()
-        df_rez_g = df_rezagados[df_rezagados["grupo_trabajo"] == grupo] if not df_rezagados.empty else pd.DataFrame()
-        
+    def fila(dimension: str, grupo, tipo, razon, valor, sub: PeriodCohort):
+        rows_to_insert.append((
+            periodo, dimension, str(grupo), str(tipo), str(razon), str(valor),
+            json.dumps(compute_metrics_for_period(sub)),
+        ))
+
+    for grupo, c_g in cohorte.desglosar("grupo_trabajo"):
         # 1. Nivel Grupo de Trabajo Global
-        m_g = compute_metrics_for_period(df_cr_g, df_re_g, df_can_g, df_rez_g)
-        rows_to_insert.append((periodo, "grupo_trabajo", str(grupo), "Todas", "Todas", str(grupo), json.dumps(m_g)))
+        fila("grupo_trabajo", grupo, "Todas", "Todas", grupo, c_g)
 
         # 2. Nivel Sucursal a nivel de Grupo
-        sucs_cr = set(df_cr_g["sucursal"].unique()) if (not df_cr_g.empty and "sucursal" in df_cr_g.columns) else set()
-        sucs_re = set(df_re_g["sucursal"].unique()) if (not df_re_g.empty and "sucursal" in df_re_g.columns) else set()
-        sucs_can = set(df_can_g["sucursal"].unique()) if (not df_can_g.empty and "sucursal" in df_can_g.columns) else set()
-        sucs_rez = set(df_rez_g["sucursal"].unique()) if (not df_rez_g.empty and "sucursal" in df_rez_g.columns) else set()
-
-        for suc in sucs_cr.union(sucs_re).union(sucs_can).union(sucs_rez):
-            df_cr_s = df_cr_g[df_cr_g["sucursal"] == suc] if not df_cr_g.empty else pd.DataFrame()
-            df_re_s = df_re_g[df_re_g["sucursal"] == suc] if not df_re_g.empty else pd.DataFrame()
-            df_can_s = df_can_g[df_can_g["sucursal"] == suc] if not df_can_g.empty else pd.DataFrame()
-            df_rez_s = df_rez_g[df_rez_g["sucursal"] == suc] if not df_rez_g.empty else pd.DataFrame()
-
-            m_s = compute_metrics_for_period(df_cr_s, df_re_s, df_can_s, df_rez_s)
-            rows_to_insert.append((periodo, "sucursal", str(grupo), "Todas", "Todas", str(suc), json.dumps(m_s)))
+        for suc, c_s in c_g.desglosar("sucursal"):
+            fila("sucursal", grupo, "Todas", "Todas", suc, c_s)
 
         # 3. Nivel Zona - Sucursal a nivel de Grupo
-        zs_cr = set(df_cr_g["zona_sucursal"].unique()) if (not df_cr_g.empty and "zona_sucursal" in df_cr_g.columns) else set()
-        zs_re = set(df_re_g["zona_sucursal"].unique()) if (not df_re_g.empty and "zona_sucursal" in df_re_g.columns) else set()
-        zs_can = set(df_can_g["zona_sucursal"].unique()) if (not df_can_g.empty and "zona_sucursal" in df_can_g.columns) else set()
-        zs_rez = set(df_rez_g["zona_sucursal"].unique()) if (not df_rez_g.empty and "zona_sucursal" in df_rez_g.columns) else set()
-
-        for zs in zs_cr.union(zs_re).union(zs_can).union(zs_rez):
-            df_cr_zs = df_cr_g[df_cr_g["zona_sucursal"] == zs] if not df_cr_g.empty else pd.DataFrame()
-            df_re_zs = df_re_g[df_re_g["zona_sucursal"] == zs] if not df_re_g.empty else pd.DataFrame()
-            df_can_zs = df_can_g[df_can_g["zona_sucursal"] == zs] if not df_can_g.empty else pd.DataFrame()
-            df_rez_zs = df_rez_g[df_rez_g["zona_sucursal"] == zs] if not df_rez_g.empty else pd.DataFrame()
-
-            m_zs = compute_metrics_for_period(df_cr_zs, df_re_zs, df_can_zs, df_rez_zs)
-            rows_to_insert.append((periodo, "zona", str(grupo), "Todas", "Todas", str(zs), json.dumps(m_zs)))
+        for zs, c_zs in c_g.desglosar("zona_sucursal"):
+            fila("zona", grupo, "Todas", "Todas", zs, c_zs)
 
         # 4. Nivel Tipos de Solicitud y Razones de Falla
-        tipos = set(df_cr_g["tipo_solicitud"].unique()).union(set(df_re_g["tipo_solicitud"].unique())).union(set(df_can_g["tipo_solicitud"].unique())).union(set(df_rez_g["tipo_solicitud"].unique())) if not df_cr_g.empty or not df_re_g.empty else set()
-        
-        for tipo in tipos:
-            df_cr_gt = df_cr_g[df_cr_g["tipo_solicitud"] == tipo] if not df_cr_g.empty else pd.DataFrame()
-            df_re_gt = df_re_g[df_re_g["tipo_solicitud"] == tipo] if not df_re_g.empty else pd.DataFrame()
-            df_can_gt = df_can_g[df_can_g["tipo_solicitud"] == tipo] if not df_can_g.empty else pd.DataFrame()
-            df_rez_gt = df_rez_g[df_rez_g["tipo_solicitud"] == tipo] if not df_rez_g.empty else pd.DataFrame()
+        for tipo, c_gt in c_g.desglosar("tipo_solicitud"):
+            fila("tipo_solicitud", grupo, tipo, "Todas", tipo, c_gt)
 
-            m_gt = compute_metrics_for_period(df_cr_gt, df_re_gt, df_can_gt, df_rez_gt)
-            rows_to_insert.append((periodo, "tipo_solicitud", str(grupo), str(tipo), "Todas", str(tipo), json.dumps(m_gt)))
-
-            razones = set(df_cr_gt["razon_falla"].unique()).union(set(df_re_gt["razon_falla"].unique())).union(set(df_can_gt["razon_falla"].unique())).union(set(df_rez_gt["razon_falla"].unique())) if not df_cr_gt.empty or not df_re_gt.empty else set()
-            for razon in razones:
-                df_cr_gtr = df_cr_gt[df_cr_gt["razon_falla"] == razon] if not df_cr_gt.empty else pd.DataFrame()
-                df_re_gtr = df_re_gt[df_re_gt["razon_falla"] == razon] if not df_re_gt.empty else pd.DataFrame()
-                df_can_gtr = df_can_gt[df_can_gt["razon_falla"] == razon] if not df_can_gt.empty else pd.DataFrame()
-                df_rez_gtr = df_rez_gt[df_rez_gt["razon_falla"] == razon] if not df_rez_gt.empty else pd.DataFrame()
-
-                m_gtr = compute_metrics_for_period(df_cr_gtr, df_re_gtr, df_can_gtr, df_rez_gtr)
-                rows_to_insert.append((periodo, "razon_falla", str(grupo), str(tipo), str(razon), str(razon), json.dumps(m_gtr)))
+            for razon, c_gtr in c_gt.desglosar("razon_falla"):
+                fila("razon_falla", grupo, tipo, razon, razon, c_gtr)
 
     with db.get_connection() as conn:
         with conn.cursor() as cur:
@@ -145,11 +105,7 @@ def _save_support_dimensiones_periodo(
 # Medidas de tiempo y su columna de muestra: promediar un periodo sin ninguna
 # duración medible metería un 0 en la media, que es justo el sesgo que se
 # corrigió a nivel de ticket. Los periodos con muestra 0 se excluyen.
-_TIME_MEASURES = {
-    "cierre": "muestra_cierre",
-    "cierre_total": "muestra_cierre_total",
-    "primera_respuesta": "muestra_primera_respuesta",
-}
+_TIME_MEASURES = {medida: f"muestra_{medida}" for medida in SUPPORT_TIME_MEASURES}
 
 _VOLUME_FIELDS = ["total_tickets", "tickets_resueltos", "tickets_cancelados", "tickets_rezagados"]
 _RATE_FIELDS = ["pct_resueltos", "pct_cancelados", "pct_rezagados"]
@@ -220,46 +176,47 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
     all_summaries = {}
 
     for p in periodos_target:
-        # Las cuatro particiones son cohorte de creación: todo lo que se mide en
-        # el mes P nació en el mes P. Así resueltos + cancelados + rezagados
-        # suman exactamente los creados y los porcentajes reparten el 100%.
+        # Todo lo que se mide en el mes P nació en el mes P: la cohorte es de
+        # creación, no de cierre. Sobre ella se hacen dos particiones distintas
+        # porque las tasas y los tiempos no responden a la misma pregunta.
         mask_creados = df_all["periodo_creacion"] == p
         mask_cerrado_en_p = df_all["periodo_cierre"] == p
 
-        # 1. Creados en el mes P
+        # A. TASAS — exigen que el cierre caiga dentro del periodo. Resueltos +
+        #    cancelados + rezagados suman exactamente los creados, así que los
+        #    tres porcentajes reparten el 100%. Un ticket de julio cerrado en
+        #    agosto es un rezagado de julio: en julio no se cerró.
         mask_resueltos = mask_creados & df_all["es_resuelto"] & mask_cerrado_en_p
         mask_cancelados = mask_creados & df_all["es_cancelado"] & mask_cerrado_en_p
-
-        # 3. Rezagados: creados en P cuya fecha de cierre NO cae en P — porque
-        #    cerraron más tarde o porque siguen abiertos. Ya no arrastran los
-        #    tickets de meses anteriores, que antes se recontaban en cada periodo.
         mask_rezagados = mask_creados & ~mask_resueltos & ~mask_cancelados
 
-        df_creados = df_all[mask_creados].copy()
-        df_resueltos = df_all[mask_resueltos].copy()
-        df_cancelados = df_all[mask_cancelados].copy()
-        df_rezagados = df_all[mask_rezagados].copy()
+        # B. TIEMPOS — sin filtro por mes de cierre. Ese mismo ticket sí aporta
+        #    sus horas al MTTR, porque el tiempo que tardó es real. Filtrarlo
+        #    dejaba fuera justo a los más lentos y hundía la media.
+        mask_resueltos_tiempo = mask_creados & df_all["es_resuelto"]
+        mask_cerrados_tiempo = mask_creados & (df_all["es_resuelto"] | df_all["es_cancelado"])
 
-        if df_creados.empty:
+        cohorte = PeriodCohort(
+            creados=df_all[mask_creados].copy(),
+            resueltos=df_all[mask_resueltos].copy(),
+            cancelados=df_all[mask_cancelados].copy(),
+            rezagados=df_all[mask_rezagados].copy(),
+            resueltos_tiempo=df_all[mask_resueltos_tiempo].copy(),
+            cerrados_tiempo=df_all[mask_cerrados_tiempo].copy(),
+        )
+
+        if cohorte.creados.empty:
             continue
 
-        global_m = compute_metrics_for_period(df_creados, df_resueltos, df_cancelados, df_rezagados)
-        
-        grupos_m = {}
-        todos_grupos = set(df_creados["grupo_trabajo"].unique()).union(
-            set(df_resueltos["grupo_trabajo"].unique())
-        ).union(set(df_cancelados["grupo_trabajo"].unique())).union(set(df_rezagados["grupo_trabajo"].unique()))
-        
-        for grupo in todos_grupos:
-            df_cr_g = df_creados[df_creados["grupo_trabajo"] == grupo] if not df_creados.empty else pd.DataFrame()
-            df_re_g = df_resueltos[df_resueltos["grupo_trabajo"] == grupo] if not df_resueltos.empty else pd.DataFrame()
-            df_can_g = df_cancelados[df_cancelados["grupo_trabajo"] == grupo] if not df_cancelados.empty else pd.DataFrame()
-            df_rez_g = df_rezagados[df_rezagados["grupo_trabajo"] == grupo] if not df_rezagados.empty else pd.DataFrame()
+        global_m = compute_metrics_for_period(cohorte)
 
-            grupos_m[str(grupo)] = compute_metrics_for_period(df_cr_g, df_re_g, df_can_g, df_rez_g)
+        grupos_m = {
+            str(grupo): compute_metrics_for_period(sub)
+            for grupo, sub in cohorte.desglosar("grupo_trabajo")
+        }
 
         _save_support_cierre_historico_global(db, p, global_m)
-        _save_support_dimensiones_periodo(db, p, df_creados, df_resueltos, df_cancelados, df_rezagados)
+        _save_support_dimensiones_periodo(db, p, cohorte)
 
         all_summaries[p] = {
             "global": global_m,

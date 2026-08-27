@@ -38,14 +38,20 @@ const EMPTY_STATS: SupportGroupStats = {
   cierre: EMPTY_DISTRIBUTION,
   cierreTotal: EMPTY_DISTRIBUTION,
   primeraRespuesta: EMPTY_DISTRIBUTION,
+  cierreGlobal: EMPTY_DISTRIBUTION,
+  cierreTotalGlobal: EMPTY_DISTRIBUTION,
+  primeraRespuestaGlobal: EMPTY_DISTRIBUTION,
   sharePct: 0,
 };
 
-/** The three measures the analyzer emits, keyed by their column suffix. */
+/** The six measures the analyzer emits, keyed by their column suffix. */
 const MEASURES = {
   cierre: 'cierre',
   cierreTotal: 'cierre_total',
   primeraRespuesta: 'primera_respuesta',
+  cierreGlobal: 'cierre_global',
+  cierreTotalGlobal: 'cierre_total_global',
+  primeraRespuestaGlobal: 'primera_respuesta_global',
 } as const;
 
 function share(part: number, whole: number): number {
@@ -106,6 +112,9 @@ function statsFor(group: SupportGroup, periodTotal: number): SupportGroupStats {
     cierre: distribution(m, MEASURES.cierre),
     cierreTotal: distribution(m, MEASURES.cierreTotal),
     primeraRespuesta: distribution(m, MEASURES.primeraRespuesta),
+    cierreGlobal: distribution(m, MEASURES.cierreGlobal),
+    cierreTotalGlobal: distribution(m, MEASURES.cierreTotalGlobal),
+    primeraRespuestaGlobal: distribution(m, MEASURES.primeraRespuestaGlobal),
     sharePct: share(totalTickets, periodTotal),
   };
 }

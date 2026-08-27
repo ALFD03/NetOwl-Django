@@ -73,6 +73,7 @@ function TimingPanel({
  */
 export function SupportGroupOverview({ groupName, stats }: Props) {
   const { cierre, cierreTotal, primeraRespuesta } = stats;
+  const { cierreGlobal, cierreTotalGlobal, primeraRespuestaGlobal } = stats;
 
   // La espera en cola es exactamente lo que separa a los dos relojes de cierre.
   const espera = Number((cierreTotal.promedio - cierre.promedio).toFixed(2));
@@ -145,6 +146,29 @@ export function SupportGroupOverview({ groupName, stats }: Props) {
         />
       </div>
 
+      {/*
+        Las mismas medidas sobre la población ampliada. Un ticket cancelado
+        también hizo esperar al cliente, así que sus horas cuentan aquí aunque
+        no se resolviera; la diferencia con los paneles de arriba es el coste de
+        lo que se acabó descartando.
+      */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <TimingPanel
+          title="Cierre desde la Asignación · Global"
+          subtitle="Cierre − primera asignación · resueltos + cancelados"
+          theme="blue"
+          icon={<Clock className="h-5 w-5" />}
+          dist={cierreGlobal}
+        />
+        <TimingPanel
+          title="Cierre desde la Creación · Global"
+          subtitle="Cierre − creación · resueltos + cancelados"
+          theme="purple"
+          icon={<Hourglass className="h-5 w-5" />}
+          dist={cierreTotalGlobal}
+        />
+      </div>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <TimingPanel
           title="Primera Respuesta"
@@ -153,6 +177,16 @@ export function SupportGroupOverview({ groupName, stats }: Props) {
           icon={<Timer className="h-5 w-5" />}
           dist={primeraRespuesta}
         />
+        <TimingPanel
+          title="Primera Respuesta · Global"
+          subtitle="Primera asignación − creación · resueltos + cancelados"
+          theme="green"
+          icon={<Timer className="h-5 w-5" />}
+          dist={primeraRespuestaGlobal}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
         <NeonContainer
           theme="slate"

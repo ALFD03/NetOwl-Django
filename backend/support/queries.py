@@ -178,11 +178,15 @@ def _get_incidencia_por_zona(db: DBConnector, periodo: str | None, zone_info: di
             zona,
             COUNT(*)::int AS total_tickets,
             COUNT(*) FILTER (WHERE LOWER(TRIM(etapa)) = 'resuelto')::int AS tickets_resueltos,
+            -- Mismo criterio que la medida `cierre` de metrics.py: resueltos,
+            -- desde la primera asignación y con al menos un minuto medible.
+            -- Antes bastaba con que la diferencia fuera positiva, así que esta
+            -- consulta y el dashboard daban dos MTTR distintos del mismo dato.
             AVG(EXTRACT(EPOCH FROM (ultima_actualizacion_etapa - primera_fecha_asignada)) / 3600.0)
                 FILTER (
                     WHERE LOWER(TRIM(etapa)) = 'resuelto'
                       AND primera_fecha_asignada IS NOT NULL
-                      AND ultima_actualizacion_etapa > primera_fecha_asignada
+                      AND ultima_actualizacion_etapa >= primera_fecha_asignada + INTERVAL '1 minute'
                 ) AS mttr_horas
         FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
         {where_t}

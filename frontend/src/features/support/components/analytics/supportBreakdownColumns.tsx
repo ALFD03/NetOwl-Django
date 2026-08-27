@@ -39,6 +39,18 @@ export const SUPPORT_BREAKDOWN_COLUMNS: Column<SupportBreakdownRow>[] = [
   { header: '1ª Resp. (h)', accessor: (r) => hrs(r.tiempo_medio_primera_respuesta_horas), align: 'right', sortKey: 'tiempo_medio_primera_respuesta_horas' },
   { header: '1ª Resp. Med (h)', accessor: (r) => hrs(r.tiempo_mediana_primera_respuesta_horas), align: 'right', sortKey: 'tiempo_mediana_primera_respuesta_horas' },
   { header: 'Muestra 1ª Resp.', accessor: (r) => <span className="text-slate-500">{int(r.muestra_primera_respuesta)}</span>, align: 'right', sortKey: 'muestra_primera_respuesta' },
+
+  // Variantes globales: los mismos relojes contando también los cancelados.
+  { header: 'Asig.→Cierre Glob. (h)', accessor: (r) => hrs(r.tiempo_medio_cierre_global_horas), align: 'right', sortKey: 'tiempo_medio_cierre_global_horas' },
+  { header: 'Asig. Glob. Med (h)', accessor: (r) => hrs(r.tiempo_mediana_cierre_global_horas), align: 'right', sortKey: 'tiempo_mediana_cierre_global_horas' },
+  { header: 'Muestra Asig. Glob.', accessor: (r) => <span className="text-slate-500">{int(r.muestra_cierre_global)}</span>, align: 'right', sortKey: 'muestra_cierre_global' },
+
+  { header: 'Creac.→Cierre Glob. (h)', accessor: (r) => hrs(r.tiempo_medio_cierre_total_global_horas), align: 'right', sortKey: 'tiempo_medio_cierre_total_global_horas' },
+  { header: 'Creac. Glob. Med (h)', accessor: (r) => hrs(r.tiempo_mediana_cierre_total_global_horas), align: 'right', sortKey: 'tiempo_mediana_cierre_total_global_horas' },
+  { header: 'Muestra Creac. Glob.', accessor: (r) => <span className="text-slate-500">{int(r.muestra_cierre_total_global)}</span>, align: 'right', sortKey: 'muestra_cierre_total_global' },
+
+  { header: '1ª Resp. Glob. (h)', accessor: (r) => hrs(r.tiempo_medio_primera_respuesta_global_horas), align: 'right', sortKey: 'tiempo_medio_primera_respuesta_global_horas' },
+  { header: 'Muestra 1ª Resp. Glob.', accessor: (r) => <span className="text-slate-500">{int(r.muestra_primera_respuesta_global)}</span>, align: 'right', sortKey: 'muestra_primera_respuesta_global' },
 ];
 
 /**

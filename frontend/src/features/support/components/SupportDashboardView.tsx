@@ -17,6 +17,7 @@ import {
   METRIC_CHART,
 } from '@/shared/ui';
 import { formatInteger, formatPeriodoLabel } from '@/shared/utils';
+import type { SupportTimeMeasure } from '../types';
 import type { useSupportDashboard } from '../hooks/useSupportDashboard';
 
 /**
@@ -28,6 +29,28 @@ function mttrGapLabel(deltaHoras: number): string {
   const faster = deltaHoras < 0;
   return `${Math.abs(deltaHoras)} h ${faster ? 'más rápido' : 'más lento'} que el promedio global`;
 }
+
+/**
+ * The six time variants, in the order the dashboard shows them: the whole
+ * process first, the technician's slice second, and within each pair success
+ * before global. `muestra` rides along in the caption because the variants do
+ * not measure the same number of tickets — the ones built on Odoo's
+ * `duracion_total_horas` cover the entire cohort, the ones measured from the
+ * first assignment cannot cover what was never assigned.
+ */
+const TIME_CARDS: Array<{
+  label: string;
+  medida: SupportTimeMeasure;
+  caption: string;
+  color: 'blue' | 'purple';
+}> = [
+  { label: 'MTTR — Éxito Total', medida: 'cierre_total', caption: 'Creación → cierre · resueltos', color: 'blue' },
+  { label: 'MTTR — Éxito', medida: 'cierre', caption: 'Asignación → cierre · resueltos', color: 'blue' },
+  { label: '1ª Respuesta — Éxito', medida: 'primera_respuesta', caption: 'Creación → asignación · resueltos', color: 'blue' },
+  { label: 'MTTR — Global Total', medida: 'cierre_total_global', caption: 'Creación → cierre · + cancelados', color: 'purple' },
+  { label: 'MTTR — Global', medida: 'cierre_global', caption: 'Asignación → cierre · + cancelados', color: 'purple' },
+  { label: '1ª Respuesta — Global', medida: 'primera_respuesta_global', caption: 'Creación → asignación · + cancelados', color: 'purple' },
+];
 
 interface SupportDashboardViewProps {
   data: ReturnType<typeof useSupportDashboard>;
@@ -54,14 +77,28 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
         <MetricCard label="Tickets / Mes" value={formatInteger(stats.total_tickets)} color="slate" subValue="Promedio de todos los periodos" icon={<Users className="w-4 h-4 text-slate-300" />} />
         <MetricCard label="% Resueltos" value={`${stats.pct_resueltos}%`} color="green" subValue="Promedio de cierre exitoso" icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />} />
         <MetricCard label="% Cancelados" value={`${stats.pct_cancelados}%`} subValue="Promedio de cierre fallido" color="red" icon={<XCircle className="w-4 h-4 text-rose-400" />} />
-        <MetricCard label="% Rezagados" value={`${stats.pct_rezagados}%`} color="yellow" subValue="Promedio de tickes no cerrados" icon={<AlertTriangle className="w-4 h-4 text-amber-400" />} />
-        <MetricCard label="Tiempo Medio (MTTR)" value={`${stats.tiempo_medio_cierre_horas} h`} color="blue" subValue="Promedio de tiempo para cerrar un ticket" icon={<Clock className="w-4 h-4 text-sky-400" />} />
-        <MetricCard label="Tiempo Mediano (MTTR)" value={`${stats.tiempo_mediana_cierre_horas} h`} color="blue" subValue="50% de los tickets cierra" icon={<Clock className="w-4 h-4 text-sky-400" />} />
-        <MetricCard label="1ª Respuesta" value={`${stats.tiempo_promedio_primera_respuesta_horas} h`} color="purple" subValue="Creación → asignación" icon={<Timer className="w-4 h-4 text-purple-400" />} />
+        <MetricCard label="% Rezagados" value={`${stats.pct_rezagados}%`} color="yellow" subValue="Promedio de tickets no cerrados" icon={<AlertTriangle className="w-4 h-4 text-amber-400" />} />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+        {TIME_CARDS.map(({ label, medida, caption, color }) => (
+          <MetricCard
+            key={medida}
+            label={label}
+            value={`${stats[`tiempo_medio_${medida}_horas`]} h`}
+            color={color}
+            subValue={`${caption} · ${formatInteger(stats[`muestra_${medida}`])} medidos`}
+            icon={
+              medida.startsWith('primera_respuesta')
+                ? <Timer className={`w-4 h-4 ${color === 'blue' ? 'text-sky-400' : 'text-purple-400'}`} />
+                : <Clock className={`w-4 h-4 ${color === 'blue' ? 'text-sky-400' : 'text-purple-400'}`} />
+            }
+          />
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">

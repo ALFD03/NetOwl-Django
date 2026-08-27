@@ -4,17 +4,43 @@ import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 import { SURFACE } from '@/shared/constants/theme';
 import { METRIC_CHART, type MetricColor } from '@/shared/ui';
 import { formatPeriodoLabel, toNumber } from '@/shared/utils';
-import type {
-  SupportDashboardProps,
-  SupportGlobalStats,
-  SupportGlobalSummary,
-  SupportGroupCard,
-  SupportGroupSummary,
-  SupportHistoricoRow,
-  SupportTrendCard,
+import {
+  SUPPORT_TIME_MEASURES,
+  type SupportDashboardProps,
+  type SupportGlobalStats,
+  type SupportGlobalSummary,
+  type SupportGroupCard,
+  type SupportGroupSummary,
+  type SupportHistoricoRow,
+  type SupportTimeStats,
+  type SupportTrendCard,
 } from '@/features/support/types';
 
+/** The ten scalar keys the backend stores for one measure. */
+function timeStatKeys(medida: string): Array<keyof SupportTimeStats> {
+  return [
+    `tiempo_medio_${medida}_horas`,
+    `tiempo_mediana_${medida}_horas`,
+    `tiempo_min_${medida}_horas`,
+    `tiempo_p25_${medida}_horas`,
+    `tiempo_p75_${medida}_horas`,
+    `tiempo_max_${medida}_horas`,
+    `tiempo_std_${medida}_horas`,
+    `pct_excede_promedio_${medida}`,
+    `pct_excede_mediana_${medida}`,
+    `muestra_${medida}`,
+  ] as Array<keyof SupportTimeStats>;
+}
+
+const TIME_STAT_KEYS: Array<keyof SupportTimeStats> = SUPPORT_TIME_MEASURES.flatMap(timeStatKeys);
+
+/** Sixty zeroed time columns — too many to spell out one by one. */
+function emptyTimeStats(): SupportTimeStats {
+  return Object.fromEntries(TIME_STAT_KEYS.map((key) => [key, 0])) as SupportTimeStats;
+}
+
 const EMPTY_STATS: SupportGlobalStats = {
+  ...emptyTimeStats(),
   total_tickets: 0,
   tickets_resueltos: 0,
   tickets_cancelados: 0,
@@ -22,15 +48,6 @@ const EMPTY_STATS: SupportGlobalStats = {
   pct_resueltos: 0,
   pct_cancelados: 0,
   pct_rezagados: 0,
-  tiempo_medio_cierre_horas: 0,
-  tiempo_mediana_cierre_horas: 0,
-  tiempo_p25_cierre_horas: 0,
-  tiempo_p75_cierre_horas: 0,
-  tiempo_std_cierre_horas: 0,
-  tiempo_min_cierre_horas: 0,
-  tiempo_max_cierre_horas: 0,
-  pct_excede_promedio_cierre: 0,
-  pct_excede_mediana_cierre: 0,
   tiempo_promedio_primera_respuesta_horas: 0,
 };
 
@@ -42,12 +59,17 @@ function averageField(rows: SupportHistoricoRow[], key: keyof SupportHistoricoRo
 
 /**
  * Fallback for the case where `historico_tendencias` is empty but the analyzer
- * already persisted its own cross-period average. The quartile fields have no
- * counterpart in `resumen_global`, so they stay at zero.
+ * already persisted its own cross-period average, which now carries every time
+ * column, quartiles included.
  */
 function statsFromSummary(summary: SupportGlobalSummary): SupportGlobalStats {
+  const times = Object.fromEntries(
+    TIME_STAT_KEYS.map((key) => [key, toNumber(summary[key])]),
+  ) as SupportTimeStats;
+
   return {
     ...EMPTY_STATS,
+    ...times,
     total_tickets: Math.round(toNumber(summary.total_tickets_promedio_mensual)),
     tickets_resueltos: Math.round(toNumber(summary.tickets_resueltos_promedio_mensual)),
     tickets_cancelados: Math.round(toNumber(summary.tickets_cancelados_promedio_mensual)),
@@ -55,10 +77,6 @@ function statsFromSummary(summary: SupportGlobalSummary): SupportGlobalStats {
     pct_resueltos: toNumber(summary.pct_resueltos),
     pct_cancelados: toNumber(summary.pct_cancelados),
     pct_rezagados: toNumber(summary.pct_rezagados),
-    tiempo_medio_cierre_horas: toNumber(summary.tiempo_medio_cierre_horas),
-    tiempo_mediana_cierre_horas: toNumber(summary.tiempo_mediana_cierre_horas),
-    pct_excede_promedio_cierre: toNumber(summary.pct_excede_promedio_cierre),
-    pct_excede_mediana_cierre: toNumber(summary.pct_excede_mediana_cierre),
     tiempo_promedio_primera_respuesta_horas: toNumber(summary.tiempo_promedio_primera_respuesta_horas),
   };
 }
@@ -94,7 +112,15 @@ const TREND_DEFS: Array<{
   { id: 'resueltos', title: 'Tasa Resolución', statKey: 'pct_resueltos', rateKey: 'pct_resueltos', countKey: 'tickets_resueltos', unitLabel: 'Tickets Resueltos', unit: 'tickets', color: 'green' },
   { id: 'cancelados', title: 'Tasa Cancelación', statKey: 'pct_cancelados', rateKey: 'pct_cancelados', countKey: 'tickets_cancelados', unitLabel: 'Tickets Cancelados', unit: 'tickets', color: 'red' },
   { id: 'rezagados', title: 'Tasa Rezago', statKey: 'pct_rezagados', rateKey: 'pct_rezagados', countKey: 'tickets_rezagados', unitLabel: 'Tickets Rezagados', unit: 'tickets', color: 'yellow' },
-  { id: 'mttr', title: 'Tiempo Medio de Cierre', statKey: 'tiempo_medio_cierre_horas', rateKey: 'tiempo_medio_cierre_horas', countKey: 'tiempo_medio_cierre_horas', unitLabel: 'Horas hasta el Cierre', unit: 'horas', color: 'blue' },
+  // El color codifica la población, no la fórmula: azul = solo resueltos,
+  // morado = resueltos + cancelados. `MetricColor` solo tiene seis tokens y las
+  // tres tarjetas de tasa ya usan verde, rojo y amarillo.
+  { id: 'mttr_total', title: 'MTTR — Éxito Total', statKey: 'tiempo_medio_cierre_total_horas', rateKey: 'tiempo_medio_cierre_total_horas', countKey: 'tiempo_medio_cierre_total_horas', unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'blue' },
+  { id: 'mttr', title: 'MTTR — Éxito', statKey: 'tiempo_medio_cierre_horas', rateKey: 'tiempo_medio_cierre_horas', countKey: 'tiempo_medio_cierre_horas', unitLabel: 'Horas Asignación → Cierre', unit: 'horas', color: 'blue' },
+  { id: 'mttr_total_global', title: 'MTTR — Global Total', statKey: 'tiempo_medio_cierre_total_global_horas', rateKey: 'tiempo_medio_cierre_total_global_horas', countKey: 'tiempo_medio_cierre_total_global_horas', unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'purple' },
+  { id: 'mttr_global', title: 'MTTR — Global', statKey: 'tiempo_medio_cierre_global_horas', rateKey: 'tiempo_medio_cierre_global_horas', countKey: 'tiempo_medio_cierre_global_horas', unitLabel: 'Horas Asignación → Cierre', unit: 'horas', color: 'purple' },
+  { id: 'respuesta', title: '1ª Respuesta — Éxito', statKey: 'tiempo_medio_primera_respuesta_horas', rateKey: 'tiempo_medio_primera_respuesta_horas', countKey: 'tiempo_medio_primera_respuesta_horas', unitLabel: 'Horas Creación → Asignación', unit: 'horas', color: 'slate' },
+  { id: 'respuesta_global', title: '1ª Respuesta — Global', statKey: 'tiempo_medio_primera_respuesta_global_horas', rateKey: 'tiempo_medio_primera_respuesta_global_horas', countKey: 'tiempo_medio_primera_respuesta_global_horas', unitLabel: 'Horas Creación → Asignación', unit: 'horas', color: 'slate' },
 ];
 
 export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
@@ -106,7 +132,12 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
   const stats = useMemo<SupportGlobalStats>(() => {
     if (historico.length === 0) return statsFromSummary(summary);
 
+    const times = Object.fromEntries(
+      TIME_STAT_KEYS.map((key) => [key, averageField(historico, key)]),
+    ) as SupportTimeStats;
+
     return {
+      ...times,
       total_tickets: Math.round(averageField(historico, 'total_tickets', 0)),
       tickets_resueltos: Math.round(averageField(historico, 'tickets_resueltos', 0)),
       tickets_cancelados: Math.round(averageField(historico, 'tickets_cancelados', 0)),
@@ -114,15 +145,6 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
       pct_resueltos: averageField(historico, 'pct_resueltos'),
       pct_cancelados: averageField(historico, 'pct_cancelados'),
       pct_rezagados: averageField(historico, 'pct_rezagados'),
-      tiempo_medio_cierre_horas: averageField(historico, 'tiempo_medio_cierre_horas'),
-      tiempo_mediana_cierre_horas: averageField(historico, 'tiempo_mediana_cierre_horas'),
-      tiempo_min_cierre_horas: averageField(historico, 'tiempo_min_cierre_horas'),
-      tiempo_max_cierre_horas: averageField(historico, 'tiempo_max_cierre_horas'),
-      tiempo_p25_cierre_horas: averageField(historico, 'tiempo_p25_cierre_horas'),
-      tiempo_p75_cierre_horas: averageField(historico, 'tiempo_p75_cierre_horas'),
-      tiempo_std_cierre_horas: averageField(historico, 'tiempo_std_cierre_horas'),
-      pct_excede_promedio_cierre: averageField(historico, 'pct_excede_promedio_cierre'),
-      pct_excede_mediana_cierre: averageField(historico, 'pct_excede_mediana_cierre'),
       tiempo_promedio_primera_respuesta_horas: averageField(historico, 'tiempo_promedio_primera_respuesta_horas'),
     };
   }, [historico, summary]);
