@@ -174,12 +174,13 @@ def api_cierre_historico(request):
 
 
 @login_required
-@permission_required('can_view_crm_analytics')
+@permission_required('can_view_crm_analytics', 'can_view_crm_results')
 def api_dimension_metrics(request):
     periodo = request.GET.get("period")
     dimension = request.GET.get("dimension")
     target_period = [periodo] if periodo else None
-    return JsonResponse({"dimensiones": get_crm_dimensiones(periodos=target_period, dimension=dimension)})
+    dimensiones = get_crm_dimensiones(periodos=target_period, dimension=dimension)
+    return JsonResponse({"dimensiones": clean_json_props(dimensiones)})
 
 
 @login_required
