@@ -4,6 +4,7 @@ import { Activity, Table as TableIcon } from 'lucide-react';
 import { DataTable, Modal, NeonContainer, type Column } from '@/shared/ui';
 import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
 import { CrmPeriodDetail } from './CrmPeriodDetail';
+import { CrmPeriodDimensions } from './CrmPeriodDimensions';
 import type { CrmCierre } from '../types';
 
 interface CrmResultsViewProps {
@@ -41,7 +42,7 @@ export function CrmResultsView({ historico }: CrmResultsViewProps) {
       <NeonContainer
         theme="slate"
         title="Historial de Cierres y Cohortes Mensuales de CRM"
-        subtitle="Haz clic en cualquier periodo para inspeccionar el resumen ejecutivo y los SLAs"
+        subtitle="Haz clic en cualquier periodo para inspeccionar el embudo, los SLAs y el desglose por dimensión"
         icon={<TableIcon className="h-5 w-5" />}
         noPadding
       >
@@ -60,12 +61,17 @@ export function CrmResultsView({ historico }: CrmResultsViewProps) {
         isOpen={Boolean(selectedRow)}
         onClose={() => setSelectedRow(null)}
         title={`Auditoría de Periodo: ${selectedRow ? formatPeriodoLabel(selectedRow.periodo_reporte) : ''}`}
-        subtitle="Resumen de conversión, caídas y análisis de distribución de tiempos"
+        subtitle="Conversión del embudo, efectividad por etapa, tiempos y desglose dimensional"
         theme="blue"
         icon={<Activity className="h-5 w-5 text-brand" />}
         size="wide"
       >
-        {selectedRow && <CrmPeriodDetail row={selectedRow} />}
+        {selectedRow && (
+          <div className="space-y-6">
+            <CrmPeriodDetail row={selectedRow} />
+            <CrmPeriodDimensions period={selectedRow.periodo_reporte} />
+          </div>
+        )}
       </Modal>
     </>
   );

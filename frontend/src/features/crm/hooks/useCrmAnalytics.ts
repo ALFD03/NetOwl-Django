@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { toNumber } from '@/shared/utils/formatters';
-import type { MetricColor } from '@/shared/ui';
+import { buildHealthCards } from '../lib/crmEfectividad';
+import { selectCrmDimension } from '../lib/crmDimensions';
 import type {
   CrmAnalyticsProps,
-  CrmDimensionRow,
   CrmDimensionValue,
   CrmEfectividadRow,
   CrmHealthCard,
@@ -12,25 +12,6 @@ import type {
 } from '../types';
 
 const EMPTY_GLOBAL: CrmHistoricoRow = {};
-
-function healthColor(pct: number): MetricColor {
-  if (pct >= 80) return 'green';
-  if (pct >= 60) return 'yellow';
-  return 'red';
-}
-
-function formatEtapaLabel(etapa: string): string {
-  return etapa.replace('etapa_', '').replace(/_/g, ' ');
-}
-
-/** Hoists `metricas` to the top level so charts and the table read one flat row. */
-function flatten(row: CrmDimensionRow): CrmDimensionValue {
-  return {
-    ...(row.metricas ?? {}),
-    valor: row.valor,
-    efectividad: row.efectividad ?? row.metricas?.efectividad ?? [],
-  };
-}
 
 /**
  * Picks the dimension value that leads `key`.
@@ -63,7 +44,7 @@ export function useCrmAnalytics(
   selectedDimension: string,
 ) {
   const rows = useMemo<CrmDimensionValue[]>(
-    () => dimensionsData.filter((row) => row.dimension === selectedDimension).map(flatten),
+    () => selectCrmDimension(dimensionsData, selectedDimension),
     [dimensionsData, selectedDimension],
   );
 
@@ -78,24 +59,7 @@ export function useCrmAnalytics(
    * be counted in.
    */
   const healthCards = useMemo<CrmHealthCard[]>(
-    () =>
-      (globalData.efectividad ?? []).map((stage: CrmEfectividadRow) => {
-        const total = toNumber(stage.total_salidas);
-        const successCount = toNumber(stage.exitosos);
-        const failCount = toNumber(stage.fallidos);
-        const pct = toNumber(stage.efectividad_pct);
-
-        return {
-          id: String(stage.etapa ?? ''),
-          label: formatEtapaLabel(String(stage.etapa ?? '')),
-          pct,
-          color: healthColor(pct),
-          successCount,
-          successPct: total > 0 ? Math.round((successCount / total) * 100) : 0,
-          failCount,
-          failPct: total > 0 ? Math.round((failCount / total) * 100) : 0,
-        };
-      }),
+    () => buildHealthCards(globalData.efectividad),
     [globalData],
   );
 

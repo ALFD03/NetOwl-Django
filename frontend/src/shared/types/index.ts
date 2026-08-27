@@ -5,6 +5,7 @@
  * re-exported here — shared code may not depend on a feature.
  */
 export * from './auth';
+export * from './crm';
 export * from './domain';
 export * from './inertia';
 export * from './navigation';

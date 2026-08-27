@@ -2,6 +2,7 @@ import { SURFACE } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 import { METRIC_CHART, type MetricColor } from '@/shared/ui';
+import { buildHealthCards } from '@/features/crm/lib/crmEfectividad';
 import { formatPeriodoLabel } from '@/shared/utils';
 import type {
   CrmDashboardProps,
@@ -41,16 +42,6 @@ function averageField(rows: CrmHistoricoRow[], key: keyof CrmHistoricoRow, digit
   if (rows.length === 0) return 0;
   const sum = rows.reduce((acc, row) => acc + (Number(row[key]) || 0), 0);
   return Number((sum / rows.length).toFixed(digits));
-}
-
-function healthColor(pct: number): MetricColor {
-  if (pct >= 80) return 'green';
-  if (pct >= 60) return 'yellow';
-  return 'red';
-}
-
-function formatEtapaLabel(etapa: string): string {
-  return etapa.replace('etapa_', '').replace('_', ' ');
 }
 
 const TREND_DEFS: Array<{
@@ -121,22 +112,7 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
     countKey: def.countKey,
   })), [historico, labels, stats]);
 
-  const healthCards = useMemo<CrmHealthCard[]>(() => efectividad.map((row) => {
-    const total = Number(row.total_salidas) || 0;
-    const successCount = Number(row.exitosos) || 0;
-    const failCount = Number(row.fallidos) || 0;
-    const pct = Number(row.efectividad_pct) || 0;
-    return {
-      id: String(row.etapa ?? ''),
-      label: formatEtapaLabel(String(row.etapa ?? '')),
-      pct,
-      color: healthColor(pct),
-      successCount,
-      successPct: total > 0 ? Math.round((successCount / total) * 100) : 0,
-      failCount,
-      failPct: total > 0 ? Math.round((failCount / total) * 100) : 0,
-    };
-  }), [efectividad]);
+  const healthCards = useMemo<CrmHealthCard[]>(() => buildHealthCards(efectividad), [efectividad]);
 
   const modalChartData = useMemo<ChartData<'line'> | null>(() => {
     if (!selectedTrend) return null;
