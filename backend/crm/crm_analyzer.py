@@ -4,6 +4,7 @@ import logging
 import pandas as pd
 from ..database import DBConnector
 from ..conf_config import DB_SCHEMA, TableNames
+from .crm_config import ETAPA8_KEY
 from .metrics.core import compute_crm_metrics_for_period
 from .crm_dimensions import save_crm_dimensiones_periodo
 from .crm_loader import ensure_crm_schema
@@ -116,11 +117,13 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
     
     if not df_logs.empty and "created_at_log" in df_logs.columns:
         df_logs["periodo_log"] = pd.to_datetime(df_logs["created_at_log"], errors="coerce").dt.strftime("%Y-%m")
-        # Unir metadatos de cliente a los logs para que las reglas de efectividad tengan acceso a estado y motivos
+        # El motivo de devolución vive en la oportunidad y las reglas de
+        # efectividad lo leen desde el log. Se renombra la clave del cliente
+        # porque ambas tablas tienen `id` y el merge renombraría el del log a
+        # `id_x`, dejando sin desempate el orden de los movimientos.
         df_logs = df_logs.merge(
-            df_clients[["id", "devolver_oportunidad", "ganado", "campana", "sucursal", "vendedor"]],
-            left_on="client_id",
-            right_on="id",
+            df_clients[["id", "devolver_oportunidad"]].rename(columns={"id": "client_id"}),
+            on="client_id",
             how="left"
         )
     else:
@@ -164,19 +167,34 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
 
         # E. Logs del periodo
         df_logs_p = df_logs[df_logs["periodo_log"] == p].copy() if not df_logs.empty else pd.DataFrame()
-        df_logs_e8_p = df_logs_p[df_logs_p["nueva_etapa"] == "etapa_8_devueltos"].copy() if not df_logs_p.empty else pd.DataFrame()
+        df_logs_e8_p = df_logs_p[df_logs_p["nueva_etapa"] == ETAPA8_KEY].copy() if not df_logs_p.empty else pd.DataFrame()
+
+        # Historial completo de los clientes que se movieron en el periodo: la
+        # efectividad necesita saber cómo terminaron, aunque cierren más tarde.
+        if not df_logs_p.empty:
+            df_hist_p = df_logs[df_logs["client_id"].isin(set(df_logs_p["client_id"]))].copy()
+        else:
+            df_hist_p = pd.DataFrame()
+
+        # E2. Pérdidas cerradas en el periodo. A diferencia de `df_perdidos`,
+        # aquí no se exige que la oportunidad se haya creado en el mismo mes:
+        # la efectividad cobra el fallo en el mes en que la oportunidad murió,
+        # y el 43% de las pérdidas cierra en un mes distinto al de creación.
+        df_perdidas_cierre = df_clients[
+            (df_clients["ganado"] == "perdido") & (df_clients["periodo_cierre"] == p)
+        ].copy()
 
         # F. Cálculo de métricas
         m = compute_crm_metrics_for_period(
             df_creados, df_ganados, df_perdidos, df_pendientes,
-            df_logs_e8_p, df_logs_p, df_clients
+            df_logs_e8_p, df_logs_p, df_clients, df_hist_p, df_perdidas_cierre
         )
 
         # G. Guardar en Base de Datos
         _save_crm_cierre_historico(db, p, m)
         save_crm_dimensiones_periodo(
             db, p, df_creados, df_ganados, df_perdidos, df_pendientes,
-            df_logs_e8_p, df_logs_p, df_clients
+            df_logs_e8_p, df_logs_p, df_clients, df_hist_p, df_perdidas_cierre
         )
 
         all_summaries[p] = m
@@ -206,6 +224,7 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
             "horas_mediana_perd": round(float(df_sum["horas_mediana_perd"].mean()), 2),
             "pct_excede_prom_perd": round(float(df_sum["pct_excede_prom_perd"].mean()), 2),
             "pct_excede_med_perd": round(float(df_sum["pct_excede_med_perd"].mean()), 2),
+
         }
 
         # Último conjunto de efectividad y tiempos por etapa

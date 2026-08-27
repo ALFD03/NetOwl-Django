@@ -20,6 +20,8 @@ def save_crm_dimensiones_periodo(
     df_logs_e8: pd.DataFrame,
     df_logs_all: pd.DataFrame,
     df_clients: pd.DataFrame,
+    df_logs_hist: pd.DataFrame | None = None,
+    df_perdidas_cierre: pd.DataFrame | None = None,
 ):
     rows_to_insert = []
 
@@ -50,11 +52,20 @@ def save_crm_dimensiones_periodo(
             
             e8_d = df_logs_e8[df_logs_e8["client_id"].astype(str).isin(valid_cids)] if not df_logs_e8.empty else pd.DataFrame()
             lg_d = df_logs_all[df_logs_all["client_id"].astype(str).isin(valid_cids)] if not df_logs_all.empty else pd.DataFrame()
+            # El historial se recorta a los mismos clientes: la efectividad lo
+            # usa para resolver salidas que cierran en un periodo posterior.
+            if df_logs_hist is not None and not df_logs_hist.empty:
+                hs_d = df_logs_hist[df_logs_hist["client_id"].astype(str).isin(valid_cids)]
+            else:
+                hs_d = pd.DataFrame()
 
             if cr_d.empty and ga_d.empty and pe_d.empty and pn_d.empty:
                 continue
 
-            m_dim = compute_crm_metrics_for_period(cr_d, ga_d, pe_d, pn_d, e8_d, lg_d, cl_d)
+            # Las pérdidas del mes se recortan a la misma rebanada dimensional.
+            pc_d = _filter_dim(df_perdidas_cierre) if df_perdidas_cierre is not None else pd.DataFrame()
+
+            m_dim = compute_crm_metrics_for_period(cr_d, ga_d, pe_d, pn_d, e8_d, lg_d, cl_d, hs_d, pc_d)
             ef_dim = m_dim.get("efectividad", [])
 
             rows_to_insert.append((

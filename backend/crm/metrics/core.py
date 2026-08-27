@@ -28,7 +28,19 @@ def compute_crm_metrics_for_period(
     df_logs_e8: pd.DataFrame,
     df_logs_all: pd.DataFrame,
     df_clients: pd.DataFrame,
+    df_logs_hist: pd.DataFrame | None = None,
+    df_perdidas_cierre: pd.DataFrame | None = None,
 ) -> Dict[str, Any]:
+    """Métricas de un periodo.
+
+    `df_logs_all` son los movimientos del periodo y `df_logs_hist` los mismos
+    clientes con todo su historial, necesario para saber cómo terminaron las
+    salidas que se resuelven en un periodo posterior.
+
+    `df_perdidas_cierre` son las oportunidades perdidas con cierre en el
+    periodo. La pérdida no existe en el log —sólo como estado del cliente— así
+    que la efectividad la recibe aparte para poder atribuirla.
+    """
     total_oportunidades = len(df_creados)
     total_ganados = len(df_ganados)
     total_perdidos = len(df_perdidos)
@@ -54,7 +66,7 @@ def compute_crm_metrics_for_period(
     tiempo_por_etapa = compute_tiempo_por_etapa(df_logs_all)
 
     # Efectividad
-    efectividad = compute_efectividad(df_logs_all)
+    efectividad = compute_efectividad(df_logs_all, df_logs_hist, df_clients, df_perdidas_cierre)
 
     # Distribuciones
     dist_perdidos = compute_distribucion_perdidos(df_perdidos)
