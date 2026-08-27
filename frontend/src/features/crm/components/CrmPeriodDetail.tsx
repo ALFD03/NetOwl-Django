@@ -42,7 +42,6 @@ interface SlaSection {
     max: CrmNumericKey;
     std: CrmNumericKey;
     excedeProm: CrmNumericKey;
-    excedeMed: CrmNumericKey;
   };
 }
 
@@ -62,7 +61,6 @@ const SLA_SECTIONS: SlaSection[] = [
       max: 'horas_max_inst',
       std: 'horas_std_inst',
       excedeProm: 'pct_excede_prom_inst',
-      excedeMed: 'pct_excede_med_inst',
     },
   },
   {
@@ -80,7 +78,6 @@ const SLA_SECTIONS: SlaSection[] = [
       max: 'horas_max_perd',
       std: 'horas_std_perd',
       excedeProm: 'pct_excede_prom_perd',
-      excedeMed: 'pct_excede_med_perd',
     },
   },
 ];
@@ -156,18 +153,11 @@ export function CrmPeriodDetail({ row }: CrmPeriodDetailProps) {
                 <p className="text-[9px] font-black uppercase tracking-wider text-slate-500">
                   {subtitle} · casos fuera del estándar
                 </p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <MiniExceedRing
-                    label="Excede Promedio"
-                    pct={row[keys.excedeProm]}
-                    color={METRIC_COLOR[tone]}
-                  />
-                  <MiniExceedRing
-                    label="Excede Mediana"
-                    pct={row[keys.excedeMed]}
-                    color={METRIC_COLOR.yellow}
-                  />
-                </div>
+                <MiniExceedRing
+                  label="Excede Promedio"
+                  pct={row[keys.excedeProm]}
+                  color={METRIC_COLOR[tone]}
+                />
               </div>
             </MetricGroup>
           ))}

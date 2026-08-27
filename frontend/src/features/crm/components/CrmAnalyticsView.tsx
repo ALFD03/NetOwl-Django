@@ -57,7 +57,6 @@ export function CrmAnalyticsView({
           max={num('horas_max_inst')}
           std={num('horas_std_inst')}
           pctExcedeProm={num('pct_excede_prom_inst')}
-          pctExcedeMed={num('pct_excede_med_inst')}
         />
         <EquidistantTimeline
           title="Distribución Tiempo para Pérdida"
@@ -71,7 +70,6 @@ export function CrmAnalyticsView({
           max={num('horas_max_perd')}
           std={num('horas_std_perd')}
           pctExcedeProm={num('pct_excede_prom_perd')}
-          pctExcedeMed={num('pct_excede_med_perd')}
         />
       </div>
 

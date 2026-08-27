@@ -27,14 +27,13 @@ function timeStatKeys(medida: string): Array<keyof SupportTimeStats> {
     `tiempo_max_${medida}_horas`,
     `tiempo_std_${medida}_horas`,
     `pct_excede_promedio_${medida}`,
-    `pct_excede_mediana_${medida}`,
     `muestra_${medida}`,
   ] as Array<keyof SupportTimeStats>;
 }
 
 const TIME_STAT_KEYS: Array<keyof SupportTimeStats> = SUPPORT_TIME_MEASURES.flatMap(timeStatKeys);
 
-/** Sixty zeroed time columns — too many to spell out one by one. */
+/** Fifty-four zeroed time columns — too many to spell out one by one. */
 function emptyTimeStats(): SupportTimeStats {
   return Object.fromEntries(TIME_STAT_KEYS.map((key) => [key, 0])) as SupportTimeStats;
 }
@@ -194,7 +193,6 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
           mttrDelta: Number((mttr - stats.tiempo_medio_cierre_horas).toFixed(2)),
           primeraRespuesta: toNumber(g.tiempo_promedio_primera_respuesta_horas),
           pctExcedeProm: toNumber(g.pct_excede_promedio_cierre),
-          pctExcedeMed: toNumber(g.pct_excede_mediana_cierre),
         };
       })
       .sort((a, b) => b.totalTickets - a.totalTickets);

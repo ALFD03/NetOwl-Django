@@ -260,7 +260,6 @@ def _create_tables_if_not_exist(db: DBConnector):
             horas_max_inst NUMERIC DEFAULT 0,
             horas_std_inst NUMERIC DEFAULT 0,
             pct_excede_prom_inst NUMERIC DEFAULT 0,
-            pct_excede_med_inst NUMERIC DEFAULT 0,
             
             -- Tiempos de Pérdida (Perdidos)
             horas_promedio_perd NUMERIC DEFAULT 0,
@@ -271,7 +270,6 @@ def _create_tables_if_not_exist(db: DBConnector):
             horas_max_perd NUMERIC DEFAULT 0,
             horas_std_perd NUMERIC DEFAULT 0,
             pct_excede_prom_perd NUMERIC DEFAULT 0,
-            pct_excede_med_perd NUMERIC DEFAULT 0,
 
             -- Efectividad por etapa del periodo. Se calcula siempre, pero sólo
             -- cabe como JSON: es una fila por etapa, no un escalar.

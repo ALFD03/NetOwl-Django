@@ -92,7 +92,6 @@ def compute_crm_metrics_for_period(
         "horas_max_inst": stats_inst["max"],
         "horas_std_inst": stats_inst["std"],
         "pct_excede_prom_inst": stats_inst["pct_excede_promedio"],
-        "pct_excede_med_inst": stats_inst["pct_excede_mediana"],
 
         # Tiempos de Pérdida
         "horas_promedio_perd": stats_perd["promedio"],
@@ -103,7 +102,6 @@ def compute_crm_metrics_for_period(
         "horas_max_perd": stats_perd["max"],
         "horas_std_perd": stats_perd["std"],
         "pct_excede_prom_perd": stats_perd["pct_excede_promedio"],
-        "pct_excede_med_perd": stats_perd["pct_excede_mediana"],
 
         # Detalles
         "tiempo_por_etapa": tiempo_por_etapa,

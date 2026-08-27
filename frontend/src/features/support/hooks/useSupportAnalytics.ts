@@ -23,7 +23,6 @@ const EMPTY_DISTRIBUTION: SupportTimeDistribution = {
   max: 0,
   std: 0,
   pctExcedeProm: 0,
-  pctExcedeMed: 0,
   muestra: 0,
 };
 
@@ -71,7 +70,6 @@ function distribution(m: SupportDimensionMetrics, medida: string): SupportTimeDi
     max: num(`tiempo_max_${medida}_horas`),
     std: num(`tiempo_std_${medida}_horas`),
     pctExcedeProm: num(`pct_excede_promedio_${medida}`),
-    pctExcedeMed: num(`pct_excede_mediana_${medida}`),
     muestra: num(`muestra_${medida}`),
   };
 }

@@ -39,7 +39,6 @@ export interface CrmGlobalStats {
   horas_max_inst: number;
   horas_std_inst: number;
   pct_excede_prom_inst: number;
-  pct_excede_med_inst: number;
   horas_promedio_perd: number;
   horas_mediana_perd: number;
   horas_p25_perd: number;
@@ -48,7 +47,6 @@ export interface CrmGlobalStats {
   horas_max_perd: number;
   horas_std_perd: number;
   pct_excede_prom_perd: number;
-  pct_excede_med_perd: number;
 }
 
 export interface CrmTrendCard {

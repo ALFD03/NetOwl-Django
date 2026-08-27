@@ -28,13 +28,13 @@ export const SUPPORT_TIME_MEASURES = [
 export type SupportTimeMeasure = (typeof SUPPORT_TIME_MEASURES)[number];
 
 /**
- * The ten scalar columns `_prefixed()` emits per measure. Spelling them out
- * once as a template literal keeps the sixty columns the backend stores from
+ * The nine scalar columns `_prefixed()` emits per measure. Spelling them out
+ * once as a template literal keeps the fifty-four columns the backend stores from
  * having to be re-typed by hand in every interface below.
  */
 type SupportTimeStatKey<M extends string> =
   | `tiempo_${'medio' | 'mediana' | 'min' | 'p25' | 'p75' | 'max' | 'std'}_${M}_horas`
-  | `pct_excede_${'promedio' | 'mediana'}_${M}`
+  | `pct_excede_promedio_${M}`
   | `muestra_${M}`;
 
 /** Every time column, optional — what the backend may or may not have stored. */
@@ -141,7 +141,6 @@ export interface SupportGroupCard {
   mttrDelta: number;
   primeraRespuesta: number;
   pctExcedeProm: number;
-  pctExcedeMed: number;
 }
 
 /**
@@ -237,7 +236,6 @@ export interface SupportTimeDistribution {
   max: number;
   std: number;
   pctExcedeProm: number;
-  pctExcedeMed: number;
   /** Tickets that could actually be measured; 0 means the panel has no data. */
   muestra: number;
 }

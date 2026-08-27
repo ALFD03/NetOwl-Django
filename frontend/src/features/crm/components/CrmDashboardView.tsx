@@ -56,7 +56,6 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
           max={stats.horas_max_inst}
           std={stats.horas_std_inst}
           pctExcedeProm={stats.pct_excede_prom_inst}
-          pctExcedeMed={stats.pct_excede_med_inst}
         />
         <EquidistantTimeline
           title="Distribución Tiempo para Pérdida"
@@ -70,7 +69,6 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
           max={stats.horas_max_perd}
           std={stats.horas_std_perd}
           pctExcedeProm={stats.pct_excede_prom_perd}
-          pctExcedeMed={stats.pct_excede_med_perd}
         />
       </div>
 

@@ -20,7 +20,6 @@ def _compute_stats_distribution(series: pd.Series) -> Dict[str, float]:
             "max": 0.0,
             "std": 0.0,
             "pct_excede_promedio": 0.0,
-            "pct_excede_mediana": 0.0,
         }
 
     promedio = float(s.mean())
@@ -32,7 +31,6 @@ def _compute_stats_distribution(series: pd.Series) -> Dict[str, float]:
     std_val = float(s.std(ddof=0)) if n > 1 else 0.0
 
     pct_excede_prom = round(float((s > promedio).sum() / n) * 100, 2)
-    pct_excede_med = round(float((s > mediana).sum() / n) * 100, 2)
 
     return {
         "promedio": round(promedio, 2),
@@ -43,7 +41,6 @@ def _compute_stats_distribution(series: pd.Series) -> Dict[str, float]:
         "max": round(max_val, 2),
         "std": round(std_val, 2),
         "pct_excede_promedio": pct_excede_prom,
-        "pct_excede_mediana": pct_excede_med,
     }
 
 
@@ -95,7 +92,6 @@ def compute_tiempo_por_etapa(df_logs: pd.DataFrame) -> List[Dict[str, Any]]:
             "tiempo_max_horas": stats["max"],
             "tiempo_std_horas": stats["std"],
             "pct_excede_promedio": stats["pct_excede_promedio"],
-            "pct_excede_mediana": stats["pct_excede_mediana"],
         })
 
     records.sort(key=lambda r: etapa_order_map.get(r["etapa"], 999))

@@ -110,7 +110,6 @@ def _create_support_tables_if_not_exist(db: DBConnector):
             tiempo_max_cierre_horas NUMERIC DEFAULT 0,
             tiempo_std_cierre_horas NUMERIC DEFAULT 0,
             pct_excede_promedio_cierre NUMERIC DEFAULT 0,
-            pct_excede_mediana_cierre NUMERIC DEFAULT 0,
             tiempo_promedio_primera_respuesta_horas NUMERIC DEFAULT 0,
             updated_at TIMESTAMP DEFAULT NOW()
         );

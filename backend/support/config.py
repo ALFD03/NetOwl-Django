@@ -69,13 +69,13 @@ SUPPORT_TIME_MEASURES = [
 
 
 def _time_columns(medida: str) -> list[str]:
-    """Las once columnas escalares que `_prefixed` emite para una medida."""
+    """Las nueve columnas escalares que `_prefixed` emite para una medida."""
     return [
         f"tiempo_medio_{medida}_horas", f"tiempo_mediana_{medida}_horas",
         f"tiempo_min_{medida}_horas", f"tiempo_p25_{medida}_horas",
         f"tiempo_p75_{medida}_horas", f"tiempo_max_{medida}_horas",
         f"tiempo_std_{medida}_horas", f"pct_excede_promedio_{medida}",
-        f"pct_excede_mediana_{medida}", f"muestra_{medida}",
+        f"muestra_{medida}",
     ]
 
 

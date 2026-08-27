@@ -62,7 +62,6 @@ function TimingPanel({
       max={dist.max}
       std={dist.std}
       pctExcedeProm={dist.pctExcedeProm}
-      pctExcedeMed={dist.pctExcedeMed}
     />
   );
 }

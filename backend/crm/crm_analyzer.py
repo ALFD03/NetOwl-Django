@@ -23,14 +23,14 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     count_devueltos_e8, pct_devueltos_e8,
                     horas_promedio_inst, horas_mediana_inst, horas_p25_inst, horas_p75_inst,
                     horas_min_inst, horas_max_inst, horas_std_inst,
-                    pct_excede_prom_inst, pct_excede_med_inst,
+                    pct_excede_prom_inst,
                     horas_promedio_perd, horas_mediana_perd, horas_p25_perd, horas_p75_perd,
                     horas_min_perd, horas_max_perd, horas_std_perd,
-                    pct_excede_prom_perd, pct_excede_med_perd,
+                    pct_excede_prom_perd,
                     efectividad,
                     updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (periodo_reporte) DO UPDATE SET
                     total_oportunidades = EXCLUDED.total_oportunidades,
                     ganados = EXCLUDED.ganados,
@@ -49,7 +49,6 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     horas_max_inst = EXCLUDED.horas_max_inst,
                     horas_std_inst = EXCLUDED.horas_std_inst,
                     pct_excede_prom_inst = EXCLUDED.pct_excede_prom_inst,
-                    pct_excede_med_inst = EXCLUDED.pct_excede_med_inst,
                     horas_promedio_perd = EXCLUDED.horas_promedio_perd,
                     horas_mediana_perd = EXCLUDED.horas_mediana_perd,
                     horas_p25_perd = EXCLUDED.horas_p25_perd,
@@ -58,7 +57,6 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     horas_max_perd = EXCLUDED.horas_max_perd,
                     horas_std_perd = EXCLUDED.horas_std_perd,
                     pct_excede_prom_perd = EXCLUDED.pct_excede_prom_perd,
-                    pct_excede_med_perd = EXCLUDED.pct_excede_med_perd,
                     efectividad = EXCLUDED.efectividad,
                     updated_at = NOW()
                 """,
@@ -68,10 +66,10 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     m["count_devueltos_e8"], m["pct_devueltos_e8"],
                     m["horas_promedio_inst"], m["horas_mediana_inst"], m["horas_p25_inst"], m["horas_p75_inst"],
                     m["horas_min_inst"], m["horas_max_inst"], m["horas_std_inst"],
-                    m["pct_excede_prom_inst"], m["pct_excede_med_inst"],
+                    m["pct_excede_prom_inst"],
                     m["horas_promedio_perd"], m["horas_mediana_perd"], m["horas_p25_perd"], m["horas_p75_perd"],
                     m["horas_min_perd"], m["horas_max_perd"], m["horas_std_perd"],
-                    m["pct_excede_prom_perd"], m["pct_excede_med_perd"],
+                    m["pct_excede_prom_perd"],
                     json.dumps(m.get("efectividad", [])),
                 ]
             )
@@ -217,13 +215,11 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
             "horas_promedio_inst": round(float(df_sum["horas_promedio_inst"].mean()), 2),
             "horas_mediana_inst": round(float(df_sum["horas_mediana_inst"].mean()), 2),
             "pct_excede_prom_inst": round(float(df_sum["pct_excede_prom_inst"].mean()), 2),
-            "pct_excede_med_inst": round(float(df_sum["pct_excede_med_inst"].mean()), 2),
 
             # Tiempos Pérdida
             "horas_promedio_perd": round(float(df_sum["horas_promedio_perd"].mean()), 2),
             "horas_mediana_perd": round(float(df_sum["horas_mediana_perd"].mean()), 2),
             "pct_excede_prom_perd": round(float(df_sum["pct_excede_prom_perd"].mean()), 2),
-            "pct_excede_med_perd": round(float(df_sum["pct_excede_med_perd"].mean()), 2),
 
         }
 

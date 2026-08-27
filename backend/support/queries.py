@@ -90,7 +90,6 @@ def get_support_metric_totals(periodo: str | None = None) -> dict:
                 "tiempo_mediana_cierre_horas": round(float(df_h["tiempo_mediana_cierre_horas"].fillna(0).mean()), 2),
                 "tiempo_promedio_primera_respuesta_horas": round(float(df_h["tiempo_promedio_primera_respuesta_horas"].fillna(0).mean()), 2),
                 "pct_excede_promedio_cierre": round(float(df_h["pct_excede_promedio_cierre"].fillna(0).mean()), 2),
-                "pct_excede_mediana_cierre": round(float(df_h["pct_excede_mediana_cierre"].fillna(0).mean()), 2),
             }
 
         return {

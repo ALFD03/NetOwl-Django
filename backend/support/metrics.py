@@ -38,7 +38,7 @@ def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
     if n == 0:
         return {
             "promedio": 0.0, "mediana": 0.0, "min": 0.0, "p25": 0.0, "p75": 0.0, "max": 0.0,
-            "std": 0.0, "pct_excede_promedio": 0.0, "pct_excede_mediana": 0.0, "muestra": 0,
+            "std": 0.0, "pct_excede_promedio": 0.0, "muestra": 0,
         }
 
     promedio = float(s.mean())
@@ -54,7 +54,6 @@ def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
         "max": round(float(s.max()), 2),
         "std": round(std_val, 2),
         "pct_excede_promedio": round(float((s > promedio).sum() / n) * 100, 2),
-        "pct_excede_mediana": round(float((s > mediana).sum() / n) * 100, 2),
         "muestra": n,
     }
 
@@ -88,7 +87,6 @@ def _prefixed(stats: Dict[str, float], medida: str) -> Dict[str, Any]:
         f"tiempo_max_{medida}_horas": stats["max"],
         f"tiempo_std_{medida}_horas": stats["std"],
         f"pct_excede_promedio_{medida}": stats["pct_excede_promedio"],
-        f"pct_excede_mediana_{medida}": stats["pct_excede_mediana"],
         f"muestra_{medida}": stats["muestra"],
     }
 

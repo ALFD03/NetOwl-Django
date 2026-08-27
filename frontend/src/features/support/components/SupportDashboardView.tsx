@@ -114,7 +114,6 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
           max={stats.tiempo_max_cierre_horas}
           std={stats.tiempo_std_cierre_horas}
           pctExcedeProm={stats.pct_excede_promedio_cierre}
-          pctExcedeMed={stats.pct_excede_mediana_cierre}
         />
 
         <NeonContainer
@@ -196,7 +195,6 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
                   icon={<Clock className="w-4 h-4 text-sky-400" />}
                 >
                   <ProgressBar label="Excede el promedio" percent={card.pctExcedeProm} valueLabel={`${card.pctExcedeProm}%`} color="blue" />
-                  <ProgressBar label="Excede la mediana" percent={card.pctExcedeMed} valueLabel={`${card.pctExcedeMed}%`} color="yellow" />
                 </MetricCard>
               </Fragment>
             ))}

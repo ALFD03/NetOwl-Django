@@ -26,7 +26,6 @@ const EMPTY_STATS: CrmGlobalStats = {
   horas_max_inst: 0,
   horas_std_inst: 0,
   pct_excede_prom_inst: 0,
-  pct_excede_med_inst: 0,
   horas_promedio_perd: 0,
   horas_mediana_perd: 0,
   horas_p25_perd: 0,
@@ -35,7 +34,6 @@ const EMPTY_STATS: CrmGlobalStats = {
   horas_max_perd: 0,
   horas_std_perd: 0,
   pct_excede_prom_perd: 0,
-  pct_excede_med_perd: 0,
 };
 
 function averageField(rows: CrmHistoricoRow[], key: keyof CrmHistoricoRow, digits = 2): number {
@@ -82,7 +80,6 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
       horas_max_inst: averageField(historico, 'horas_max_inst'),
       horas_std_inst: averageField(historico, 'horas_std_inst'),
       pct_excede_prom_inst: averageField(historico, 'pct_excede_prom_inst'),
-      pct_excede_med_inst: averageField(historico, 'pct_excede_med_inst'),
       horas_promedio_perd: averageField(historico, 'horas_promedio_perd'),
       horas_mediana_perd: averageField(historico, 'horas_mediana_perd'),
       horas_p25_perd: averageField(historico, 'horas_p25_perd'),
@@ -91,7 +88,6 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
       horas_max_perd: averageField(historico, 'horas_max_perd'),
       horas_std_perd: averageField(historico, 'horas_std_perd'),
       pct_excede_prom_perd: averageField(historico, 'pct_excede_prom_perd'),
-      pct_excede_med_perd: averageField(historico, 'pct_excede_med_perd'),
     };
   }, [historico]);
 

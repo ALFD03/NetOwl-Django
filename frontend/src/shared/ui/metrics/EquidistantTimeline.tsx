@@ -17,7 +17,6 @@ interface Props {
   max?: number;
   std: number;
   pctExcedeProm: number;
-  pctExcedeMed: number;
 }
 
 export function EquidistantTimeline({
@@ -32,7 +31,6 @@ export function EquidistantTimeline({
   max,
   std,
   pctExcedeProm,
-  pctExcedeMed,
 }: Props) {
   const isGreen = theme === 'green';
 
@@ -53,10 +51,7 @@ export function EquidistantTimeline({
       subtitle={`Desviación Estándar (σ): ${std} h`}
       icon={icon}
       headerAction={(
-        <div className="flex items-center gap-2">
-          <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color="#38bdf8" />
-          <MiniExceedRing label="Excede Med" pct={pctExcedeMed} color="#f59e0b" />
-        </div>
+        <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color="#38bdf8" />
       )}
     >
       <div className="py-4 px-2 h-full">
