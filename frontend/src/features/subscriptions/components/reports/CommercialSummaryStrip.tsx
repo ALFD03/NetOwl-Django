@@ -35,8 +35,8 @@ export function CommercialSummaryStrip({
   const metrics = calcComercial(activosInicio, activosFinal, { clamp: clampCompletion });
 
   const completionColor =
-    metrics.tasaCumplimiento >= 100 ? 'green' : metrics.tasaCumplimiento >= 80 ? 'yellow' : 'red';
-  const growthColor = crecimiento >= GROWTH_TARGET_PCT ? 'green' : 'red';
+    metrics.tasaCumplimiento >= 100 ? 'green' : metrics.tasaCumplimiento >= 60 ? 'yellow' : 'red';
+  const growthColor = crecimiento >= 4 ? 'green' : crecimiento >= 0 ? 'yellow' : 'red';
   const churnColor = churnRate <= 3 ? 'green' : churnRate <= 4 ? 'yellow' : 'red';
 
   return (

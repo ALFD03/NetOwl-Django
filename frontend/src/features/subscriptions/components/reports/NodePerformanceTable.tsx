@@ -82,7 +82,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
                 <td className={num('text-blue-400')}>{formatInteger(node.reactivaciones)}</td>
                 <td className={num('text-rose-500')}>-{formatInteger(node.bajas)}</td>
                 <td className={num('text-rose-500')}>{formatTwoDecimals(node.churn_bruto_pct)}%</td>
-                <td className={num(growth >= GROWTH_TARGET_PCT ? 'text-emerald-400' : 'text-rose-400')}>
+                <td className={num(growth >= 4 ? 'text-emerald-400' : growth >= 0 ? 'text-amber-400' : 'text-rose-400')}>
                   {formatTwoDecimals(node.crecimiento)}%
                 </td>
                 <td className={num('font-black text-amber-500/80')}>{formatInteger(metrics.faltante)}</td>

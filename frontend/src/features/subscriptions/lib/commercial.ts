@@ -88,13 +88,13 @@ export function aggregateNodes<T extends CommercialNode>(nodes: T[]) {
 /** Tailwind text colour for a completion rate, shared by both reports. */
 export function completionTone(tasaCumplimiento: number): string {
   if (tasaCumplimiento >= 100) return 'text-emerald-400';
-  if (tasaCumplimiento >= 80) return 'text-amber-400';
+  if (tasaCumplimiento >= 60) return 'text-amber-400';
   return 'text-rose-400';
 }
 
 /** Tailwind background for the completion progress bar. */
 export function completionBar(tasaCumplimiento: number): string {
   if (tasaCumplimiento >= 100) return 'bg-emerald-400';
-  if (tasaCumplimiento >= 80) return 'bg-amber-400';
+  if (tasaCumplimiento >= 60) return 'bg-amber-400';
   return 'bg-rose-400';
 }
