@@ -1,6 +1,6 @@
 from .tiempo import (
     _compute_stats_distribution,
-    compute_tiempos_instalacion_y_perdida,
+    compute_tiempos_cierre,
     compute_tiempo_por_etapa,
 )
 from .efectividad import compute_efectividad, atribuir_perdidas
@@ -9,7 +9,7 @@ from .core import _clean_nan, compute_crm_metrics_for_period
 
 __all__ = [
     "_compute_stats_distribution",
-    "compute_tiempos_instalacion_y_perdida",
+    "compute_tiempos_cierre",
     "compute_tiempo_por_etapa",
     "compute_efectividad",
     "atribuir_perdidas",

@@ -3,7 +3,7 @@ import math
 import pandas as pd
 from typing import Any, Dict
 
-from .tiempo import compute_tiempos_instalacion_y_perdida, compute_tiempo_por_etapa
+from .tiempo import compute_tiempos_cierre, compute_tiempo_por_etapa
 from .efectividad import compute_efectividad
 from .probabilidad import compute_distribucion_perdidos, compute_distribucion_etapa8
 
@@ -58,9 +58,10 @@ def compute_crm_metrics_for_period(
         count_e8 = 0
 
     # Tiempos estadísticos
-    tiempos = compute_tiempos_instalacion_y_perdida(df_ganados, df_perdidos)
+    tiempos = compute_tiempos_cierre(df_ganados, df_perdidos)
     stats_inst = tiempos["instalacion"]
     stats_perd = tiempos["perdida"]
+    stats_cierre = tiempos["cierre"]
 
     # Tiempo por etapa
     tiempo_por_etapa = compute_tiempo_por_etapa(df_logs_all)
@@ -102,6 +103,16 @@ def compute_crm_metrics_for_period(
         "horas_max_perd": stats_perd["max"],
         "horas_std_perd": stats_perd["std"],
         "pct_excede_prom_perd": stats_perd["pct_excede_promedio"],
+
+        # Tiempo de Cierre (ganados + perdidos)
+        "horas_promedio_cierre": stats_cierre["promedio"],
+        "horas_mediana_cierre": stats_cierre["mediana"],
+        "horas_p25_cierre": stats_cierre["p25"],
+        "horas_p75_cierre": stats_cierre["p75"],
+        "horas_min_cierre": stats_cierre["min"],
+        "horas_max_cierre": stats_cierre["max"],
+        "horas_std_cierre": stats_cierre["std"],
+        "pct_excede_prom_cierre": stats_cierre["pct_excede_promedio"],
 
         # Detalles
         "tiempo_por_etapa": tiempo_por_etapa,

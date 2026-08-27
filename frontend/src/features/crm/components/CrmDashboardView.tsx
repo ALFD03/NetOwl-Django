@@ -1,6 +1,6 @@
 import {
   CheckCircle2, XCircle, Users, Activity,
-  Clock, AlertTriangle, Layers, BarChart2,
+  Clock, AlertTriangle, Layers, BarChart2, Timer,
 } from 'lucide-react';
 import {
   EquidistantTimeline,
@@ -70,6 +70,22 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
           std={stats.horas_std_perd}
           pctExcedeProm={stats.pct_excede_prom_perd}
         />
+        <div className="lg:col-span-2">
+          <EquidistantTimeline
+            title="Distribución Tiempo de Cierre"
+            subtitle="Instalados + perdidos"
+            icon={<Timer className="w-5 h-5" />}
+            theme="purple"
+            min={stats.horas_min_cierre}
+            p25={stats.horas_p25_cierre}
+            mediana={stats.horas_mediana_cierre}
+            promedio={stats.horas_promedio_cierre}
+            p75={stats.horas_p75_cierre}
+            max={stats.horas_max_cierre}
+            std={stats.horas_std_cierre}
+            pctExcedeProm={stats.pct_excede_prom_cierre}
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

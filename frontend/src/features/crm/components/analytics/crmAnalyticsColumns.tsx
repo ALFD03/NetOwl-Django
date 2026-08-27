@@ -8,7 +8,7 @@ const hrs = formatOneDecimal;
 
 /**
  * Every measure carried by a dimension row, in the order the analysis produces
- * them: volume, outcome rates, install times, loss times.
+ * them: volume, outcome rates, install times, loss times, closure times.
  *
  * This is the raw read of the period — no weighting, no ranking, no `Otros`
  * bucket — so it is the table to check a chart against.
@@ -38,4 +38,9 @@ export const CRM_ANALYTICS_COLUMNS: Column<CrmDimensionValue>[] = [
   { header: 'Pérd. Med (h)', accessor: (r) => hrs(r.horas_mediana_perd), align: 'right', sortKey: 'horas_mediana_perd' },
   { header: 'Pérd. P75 (h)', accessor: (r) => hrs(r.horas_p75_perd), align: 'right', sortKey: 'horas_p75_perd' },
   { header: 'Pérd. Máx (h)', accessor: (r) => hrs(r.horas_max_perd), align: 'right', sortKey: 'horas_max_perd' },
+
+  { header: 'Cierre Prom (h)', accessor: (r) => hrs(r.horas_promedio_cierre), align: 'right', sortKey: 'horas_promedio_cierre' },
+  { header: 'Cierre Med (h)', accessor: (r) => hrs(r.horas_mediana_cierre), align: 'right', sortKey: 'horas_mediana_cierre' },
+  { header: 'Cierre P75 (h)', accessor: (r) => hrs(r.horas_p75_cierre), align: 'right', sortKey: 'horas_p75_cierre' },
+  { header: 'Cierre Máx (h)', accessor: (r) => hrs(r.horas_max_cierre), align: 'right', sortKey: 'horas_max_cierre' },
 ];

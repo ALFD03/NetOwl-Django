@@ -5,6 +5,8 @@ import type { NeonTheme } from '../theme/types';
 
 interface Props {
   title: string;
+  /** Prepended to the standard-deviation line; omit for the σ line alone. */
+  subtitle?: string;
   icon?: React.ReactNode;
   theme?: NeonTheme;
   /** Omit when the source only stores quartiles — the node is then dropped. */
@@ -19,8 +21,23 @@ interface Props {
   pctExcedeProm: number;
 }
 
+/**
+ * Accent for the mean node, per theme. An explicit map rather than a green/red
+ * binary so a neutral theme does not borrow the colour that reads as "loss".
+ */
+const PROMEDIO_ACCENT: Record<NeonTheme, { text: string; dot: string }> = {
+  green: { text: 'text-emerald-400', dot: 'bg-emerald-400 ring-4 ring-emerald-400/20' },
+  red: { text: 'text-rose-400', dot: 'bg-rose-400 ring-4 ring-rose-400/20' },
+  blue: { text: 'text-blue-400', dot: 'bg-blue-400 ring-4 ring-blue-400/20' },
+  yellow: { text: 'text-amber-400', dot: 'bg-amber-400 ring-4 ring-amber-400/20' },
+  purple: { text: 'text-purple-400', dot: 'bg-purple-400 ring-4 ring-purple-400/20' },
+  cyan: { text: 'text-cyan-400', dot: 'bg-cyan-400 ring-4 ring-cyan-400/20' },
+  slate: { text: 'text-slate-300', dot: 'bg-slate-300 ring-4 ring-slate-300/20' },
+};
+
 export function EquidistantTimeline({
   title,
+  subtitle,
   icon,
   theme = 'green',
   min,
@@ -32,13 +49,13 @@ export function EquidistantTimeline({
   std,
   pctExcedeProm,
 }: Props) {
-  const isGreen = theme === 'green';
+  const promedioAccent = PROMEDIO_ACCENT[theme];
 
   const nodes = [
     ...(min != null ? [{ key: 'min', label: 'Min', val: min, textCol: 'text-slate-400', dotBg: 'bg-slate-500' }] : []),
     { key: 'p25', label: 'P25', val: p25, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
     { key: 'med', label: 'Mediana', val: mediana, textCol: 'text-amber-400', dotBg: 'bg-amber-400 ring-4 ring-amber-400/20' },
-    { key: 'prom', label: 'Promedio', val: promedio, textCol: isGreen ? 'text-emerald-400' : 'text-rose-400', dotBg: isGreen ? 'bg-emerald-400 ring-4 ring-emerald-400/20' : 'bg-rose-400 ring-4 ring-rose-400/20' },
+    { key: 'prom', label: 'Promedio', val: promedio, textCol: promedioAccent.text, dotBg: promedioAccent.dot },
     { key: 'std_plus', label: '+1σ', val: Number((promedio + std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
     { key: 'p75', label: 'P75', val: p75, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
     ...(max != null ? [{ key: 'max', label: 'Max', val: max, textCol: 'text-slate-400', dotBg: 'bg-slate-500' }] : []),
@@ -48,7 +65,7 @@ export function EquidistantTimeline({
     <NeonContainer
       theme={theme}
       title={title}
-      subtitle={`Desviación Estándar (σ): ${std} h`}
+      subtitle={subtitle ? `${subtitle} · σ ${std} h` : `Desviación Estándar (σ): ${std} h`}
       icon={icon}
       headerAction={(
         <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color="#38bdf8" />

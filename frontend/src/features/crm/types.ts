@@ -47,6 +47,14 @@ export interface CrmGlobalStats {
   horas_max_perd: number;
   horas_std_perd: number;
   pct_excede_prom_perd: number;
+  horas_promedio_cierre: number;
+  horas_mediana_cierre: number;
+  horas_p25_cierre: number;
+  horas_p75_cierre: number;
+  horas_min_cierre: number;
+  horas_max_cierre: number;
+  horas_std_cierre: number;
+  pct_excede_prom_cierre: number;
 }
 
 export interface CrmTrendCard {

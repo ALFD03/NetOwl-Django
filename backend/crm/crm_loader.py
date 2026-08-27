@@ -271,6 +271,16 @@ def _create_tables_if_not_exist(db: DBConnector):
             horas_std_perd NUMERIC DEFAULT 0,
             pct_excede_prom_perd NUMERIC DEFAULT 0,
 
+            -- Tiempo de Cierre (ganados + perdidos)
+            horas_promedio_cierre NUMERIC DEFAULT 0,
+            horas_mediana_cierre NUMERIC DEFAULT 0,
+            horas_p25_cierre NUMERIC DEFAULT 0,
+            horas_p75_cierre NUMERIC DEFAULT 0,
+            horas_min_cierre NUMERIC DEFAULT 0,
+            horas_max_cierre NUMERIC DEFAULT 0,
+            horas_std_cierre NUMERIC DEFAULT 0,
+            pct_excede_prom_cierre NUMERIC DEFAULT 0,
+
             -- Efectividad por etapa del periodo. Se calcula siempre, pero sólo
             -- cabe como JSON: es una fila por etapa, no un escalar.
             efectividad JSONB,
@@ -312,6 +322,17 @@ def _create_tables_if_not_exist(db: DBConnector):
         # Migración en caliente para esquemas creados antes de que la efectividad
         # por periodo se persistiera.
         f"ALTER TABLE {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS efectividad JSONB;",
+
+        # Migración en caliente para el tiempo de cierre combinado, añadido
+        # después de que existieran los tiempos de instalación y pérdida.
+        *[
+            f"ALTER TABLE {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS {col} NUMERIC DEFAULT 0;"
+            for col in (
+                "horas_promedio_cierre", "horas_mediana_cierre", "horas_p25_cierre",
+                "horas_p75_cierre", "horas_min_cierre", "horas_max_cierre",
+                "horas_std_cierre", "pct_excede_prom_cierre",
+            )
+        ],
     ]
     
     with db.get_connection() as conn:

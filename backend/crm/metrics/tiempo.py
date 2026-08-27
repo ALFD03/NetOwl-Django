@@ -44,16 +44,32 @@ def _compute_stats_distribution(series: pd.Series) -> Dict[str, float]:
     }
 
 
-def compute_tiempos_instalacion_y_perdida(
+def _duracion_total(df: pd.DataFrame) -> pd.Series:
+    """La columna de duración del DataFrame, o una serie vacía si no la trae."""
+    if df.empty or "duracion_total_horas" not in df.columns:
+        return pd.Series(dtype=float)
+    return df["duracion_total_horas"]
+
+
+def compute_tiempos_cierre(
     df_ganados: pd.DataFrame, 
     df_perdidos: pd.DataFrame
 ) -> Dict[str, Dict[str, float]]:
-    dur_ganados = df_ganados["duracion_total_horas"] if not df_ganados.empty and "duracion_total_horas" in df_ganados.columns else pd.Series(dtype=float)
-    dur_perdidos = df_perdidos["duracion_total_horas"] if not df_perdidos.empty and "duracion_total_horas" in df_perdidos.columns else pd.Series(dtype=float)
+    """Las tres distribuciones de duración de una cohorte.
+
+    `cierre` es el universo cerrado —ganados y perdidos juntos—, no el promedio
+    de las otras dos: una cohorte con muchas más pérdidas que instalaciones pesa
+    hacia la pérdida, que es justo lo que hace comparable el dato entre periodos.
+    Los pendientes quedan fuera: todavía no tienen duración de cierre.
+    """
+    dur_ganados = _duracion_total(df_ganados)
+    dur_perdidos = _duracion_total(df_perdidos)
+    dur_cierre = pd.concat([dur_ganados, dur_perdidos], ignore_index=True)
 
     return {
         "instalacion": _compute_stats_distribution(dur_ganados),
         "perdida": _compute_stats_distribution(dur_perdidos),
+        "cierre": _compute_stats_distribution(dur_cierre),
     }
 
 

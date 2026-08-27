@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Clock, Layers, TrendingDown, Zap } from 'lucide-react';
+import { Clock, Layers, Timer, TrendingDown, Zap } from 'lucide-react';
 
 import { METRIC_COLOR } from '@/shared/constants/theme';
 import {
@@ -26,9 +26,11 @@ type CrmNumericKey = {
   [K in keyof CrmCierre]: CrmCierre[K] extends number ? K : never;
 }[keyof CrmCierre];
 
-/** One of the two time distributions of a cohort: installation or loss. */
+/** One of the three time distributions of a cohort: installation, loss, or both. */
 interface SlaSection {
   id: string;
+  /** Spans the full grid row — for the aggregate that summarises the pair. */
+  wide?: boolean;
   title: string;
   subtitle: string;
   tone: MetricColor;
@@ -78,6 +80,24 @@ const SLA_SECTIONS: SlaSection[] = [
       max: 'horas_max_perd',
       std: 'horas_std_perd',
       excedeProm: 'pct_excede_prom_perd',
+    },
+  },
+  {
+    id: 'cierre',
+    wide: true,
+    title: 'SLA Cierre (Horas)',
+    subtitle: 'Ingreso → cierre (instalados + perdidos)',
+    tone: 'yellow',
+    icon: <Timer className="h-3.5 w-3.5" />,
+    keys: {
+      promedio: 'horas_promedio_cierre',
+      mediana: 'horas_mediana_cierre',
+      p25: 'horas_p25_cierre',
+      p75: 'horas_p75_cierre',
+      min: 'horas_min_cierre',
+      max: 'horas_max_cierre',
+      std: 'horas_std_cierre',
+      excedeProm: 'pct_excede_prom_cierre',
     },
   },
 ];
@@ -136,8 +156,9 @@ export function CrmPeriodDetail({ row }: CrmPeriodDetailProps) {
           accent="blue"
         />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {SLA_SECTIONS.map(({ id, title, subtitle, tone, icon, keys }) => (
-            <MetricGroup key={id} title={title} tone={tone} icon={icon} columns={3}>
+          {SLA_SECTIONS.map(({ id, wide, title, subtitle, tone, icon, keys }) => (
+            <div key={id} className={wide ? 'md:col-span-2' : undefined}>
+            <MetricGroup title={title} tone={tone} icon={icon} columns={3}>
               <CompactMetric label="Promedio (μ)" value={`${formatOneDecimal(row[keys.promedio])} h`} color={tone} />
               <CompactMetric label="Mediana (P50)" value={`${formatOneDecimal(row[keys.mediana])} h`} color="yellow" />
               <CompactMetric label="Desv. Std (σ)" value={`${formatOneDecimal(row[keys.std])} h`} color="purple" />
@@ -160,6 +181,7 @@ export function CrmPeriodDetail({ row }: CrmPeriodDetailProps) {
                 />
               </div>
             </MetricGroup>
+            </div>
           ))}
         </div>
       </section>

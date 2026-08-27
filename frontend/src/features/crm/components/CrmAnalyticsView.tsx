@@ -1,5 +1,5 @@
 import {
-  AlertTriangle, Award, CheckCircle2, Clock, Layers, Trophy, Users, XCircle,
+  AlertTriangle, Award, CheckCircle2, Clock, Layers, Timer, Trophy, Users, XCircle,
 } from 'lucide-react';
 
 import {
@@ -71,6 +71,22 @@ export function CrmAnalyticsView({
           std={num('horas_std_perd')}
           pctExcedeProm={num('pct_excede_prom_perd')}
         />
+        <div className="lg:col-span-2">
+          <EquidistantTimeline
+            title="Distribución Tiempo de Cierre"
+            subtitle="Instalados + perdidos"
+            icon={<Timer className="h-5 w-5" />}
+            theme="purple"
+            min={num('horas_min_cierre')}
+            p25={num('horas_p25_cierre')}
+            mediana={num('horas_mediana_cierre')}
+            promedio={num('horas_promedio_cierre')}
+            p75={num('horas_p75_cierre')}
+            max={num('horas_max_cierre')}
+            std={num('horas_std_cierre')}
+            pctExcedeProm={num('pct_excede_prom_cierre')}
+          />
+        </div>
       </div>
 
       <NeonContainer
