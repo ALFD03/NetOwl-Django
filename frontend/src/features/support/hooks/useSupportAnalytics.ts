@@ -1,133 +1,60 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import { toNumber } from '@/shared/utils/formatters';
-import type {
-  SupportAnalyticsProps,
-  SupportBreakdownRow,
-  SupportDimensionEntry,
-  SupportDimensionMetrics,
-  SupportGroup,
-  SupportGroupOption,
-  SupportGroupStats,
-  SupportSolutionRow,
-  SupportTimeDistribution,
-  SupportZoneRow,
+import { getApiErrorMessage } from '@/shared/lib/api';
+import { toNumber } from '@/shared/utils';
+import { fetchSupportBreakdown } from '../lib/supportApi';
+import { emptyStats, flattenEntries, resolveStats, share } from '../lib/supportMetrics';
+import {
+  SUPPORT_DESGLOSES,
+  type SupportAnalyticsProps,
+  type SupportDesglose,
+  type SupportDimension,
+  type SupportDimensionRow,
+  type SupportGroupOption,
+  type SupportStats,
+  type SupportZoneRow,
 } from '../types';
 
-const EMPTY_DISTRIBUTION: SupportTimeDistribution = {
-  promedio: 0,
-  mediana: 0,
-  min: 0,
-  p25: 0,
-  p75: 0,
-  max: 0,
-  std: 0,
-  pctExcedeProm: 0,
-  muestra: 0,
+/** The drill-down of one dimension value, fetched on demand. */
+export interface SupportBreakdownState {
+  /** Which value is open; `null` closes the panel. */
+  valor: string | null;
+  loading: boolean;
+  error: string;
+  stats: SupportStats;
+  desgloses: Record<SupportDesglose, SupportDimensionRow[]>;
+}
+
+const EMPTY_DESGLOSES: Record<SupportDesglose, SupportDimensionRow[]> = {
+  tipo_solicitud: [],
+  razon_falla: [],
+  solucion_falla: [],
 };
 
-const EMPTY_STATS: SupportGroupStats = {
-  totalTickets: 0,
-  resueltos: 0,
-  cancelados: 0,
-  rezagados: 0,
-  pctResueltos: 0,
-  pctCancelados: 0,
-  pctRezagados: 0,
-  cierre: EMPTY_DISTRIBUTION,
-  cierreTotal: EMPTY_DISTRIBUTION,
-  primeraRespuesta: EMPTY_DISTRIBUTION,
-  cierreGlobal: EMPTY_DISTRIBUTION,
-  cierreTotalGlobal: EMPTY_DISTRIBUTION,
-  primeraRespuestaGlobal: EMPTY_DISTRIBUTION,
-  sharePct: 0,
+const CLOSED_BREAKDOWN: SupportBreakdownState = {
+  valor: null,
+  loading: false,
+  error: '',
+  stats: emptyStats(),
+  desgloses: EMPTY_DESGLOSES,
 };
 
-/** The six measures the analyzer emits, keyed by their column suffix. */
-const MEASURES = {
-  cierre: 'cierre',
-  cierreTotal: 'cierre_total',
-  primeraRespuesta: 'primera_respuesta',
-  cierreGlobal: 'cierre_global',
-  cierreTotalGlobal: 'cierre_total_global',
-  primeraRespuestaGlobal: 'primera_respuesta_global',
-} as const;
-
-function share(part: number, whole: number): number {
-  return whole > 0 ? Number(((part / whole) * 100).toFixed(2)) : 0;
-}
-
-/** Reads one `_compute_stats_for_series` block out of its flat column names. */
-function distribution(m: SupportDimensionMetrics, medida: string): SupportTimeDistribution {
-  const num = (key: string) => toNumber((m as Record<string, number | undefined>)[key]);
-
-  return {
-    promedio: num(`tiempo_medio_${medida}_horas`),
-    mediana: num(`tiempo_mediana_${medida}_horas`),
-    min: num(`tiempo_min_${medida}_horas`),
-    p25: num(`tiempo_p25_${medida}_horas`),
-    p75: num(`tiempo_p75_${medida}_horas`),
-    max: num(`tiempo_max_${medida}_horas`),
-    std: num(`tiempo_std_${medida}_horas`),
-    pctExcedeProm: num(`pct_excede_promedio_${medida}`),
-    muestra: num(`muestra_${medida}`),
-  };
-}
-
 /**
- * Hoists `metricas` to the top level and restates each value's weight against
- * the group total, since only `razones_falla` arrives with `pct_del_grupo`.
- */
-function flatten(entries: SupportDimensionEntry[], groupTotal: number): SupportBreakdownRow[] {
-  return entries
-    .map((entry) => {
-      const metricas = entry.metricas ?? {};
-      const total = toNumber(metricas.total_tickets);
-
-      return {
-        ...metricas,
-        nombre: entry.nombre,
-        pctDelGrupo: metricas.pct_del_grupo != null
-          ? toNumber(metricas.pct_del_grupo)
-          : share(total, groupTotal),
-      };
-    })
-    .sort((a, b) => toNumber(b.total_tickets) - toNumber(a.total_tickets));
-}
-
-function statsFor(group: SupportGroup, periodTotal: number): SupportGroupStats {
-  const m = group.metricas_grupo ?? {};
-  const totalTickets = toNumber(group.total_tickets_grupo) || toNumber(m.total_tickets);
-
-  return {
-    totalTickets,
-    resueltos: toNumber(m.tickets_resueltos),
-    cancelados: toNumber(m.tickets_cancelados),
-    rezagados: toNumber(m.tickets_rezagados),
-    pctResueltos: toNumber(m.pct_resueltos),
-    pctCancelados: toNumber(m.pct_cancelados),
-    pctRezagados: toNumber(m.pct_rezagados),
-    cierre: distribution(m, MEASURES.cierre),
-    cierreTotal: distribution(m, MEASURES.cierreTotal),
-    primeraRespuesta: distribution(m, MEASURES.primeraRespuesta),
-    cierreGlobal: distribution(m, MEASURES.cierreGlobal),
-    cierreTotalGlobal: distribution(m, MEASURES.cierreTotalGlobal),
-    primeraRespuestaGlobal: distribution(m, MEASURES.primeraRespuestaGlobal),
-    sharePct: share(totalTickets, periodTotal),
-  };
-}
-
-/**
- * Resolves one work group into everything the drill-down renders, plus the
- * period's zone incidence — which is deliberately not group-scoped.
+ * Everything the period view renders for one work group and one dimension.
  *
  * `selectedGroup` is a hint, not a guarantee: changing the period swaps the
  * whole payload, and the previously selected group may not exist in the new
  * one — so the first group by volume is always the fallback.
  */
-export function useSupportAnalytics(props: SupportAnalyticsProps, selectedGroup: string) {
-  const grupos = props.analyticsData?.grupos ?? {};
-  const incidencia = props.analyticsData?.incidencia_zonas ?? [];
+export function useSupportAnalytics(
+  props: SupportAnalyticsProps,
+  selectedGroup: string,
+  selectedDimension: SupportDimension,
+) {
+  const grupos = useMemo(() => props.analyticsData?.grupos ?? {}, [props.analyticsData]);
+  const incidencia = useMemo(() => props.analyticsData?.incidencia_zonas ?? [], [props.analyticsData]);
+
+  const periodo = props.selectedPeriod ?? props.analyticsData?.periodo ?? '';
 
   const groupOptions = useMemo<SupportGroupOption[]>(
     () =>
@@ -135,7 +62,7 @@ export function useSupportAnalytics(props: SupportAnalyticsProps, selectedGroup:
         .map(([key, group]) => ({
           key,
           label: key,
-          totalTickets: toNumber(group.total_tickets_grupo),
+          totalTickets: toNumber(group.metricas?.total_tickets),
         }))
         .sort((a, b) => b.totalTickets - a.totalTickets),
     [grupos],
@@ -149,36 +76,25 @@ export function useSupportAnalytics(props: SupportAnalyticsProps, selectedGroup:
     [groupOptions],
   );
 
-  const stats = useMemo<SupportGroupStats>(
-    () => (activeGroup ? statsFor(activeGroup, periodTotal) : EMPTY_STATS),
-    [activeGroup, periodTotal],
+  const stats = useMemo(() => resolveStats(activeGroup?.metricas), [activeGroup]);
+  const sharePct = share(stats.total_tickets, periodTotal);
+
+  /** The values of the selected first-level axis, ranked by volume. */
+  const dimensionRows = useMemo(
+    () => flattenEntries(activeGroup?.[selectedDimension], stats.total_tickets),
+    [activeGroup, selectedDimension, stats.total_tickets],
   );
 
-  const razones = useMemo(
-    () => flatten(activeGroup?.razones_falla ?? [], stats.totalTickets),
-    [activeGroup, stats.totalTickets],
-  );
-
-  const tipos = useMemo(
-    () => flatten(activeGroup?.tipos_solicitud ?? [], stats.totalTickets),
-    [activeGroup, stats.totalTickets],
-  );
-
-  const sucursales = useMemo(
-    () => flatten(activeGroup?.sucursales ?? [], stats.totalTickets),
-    [activeGroup, stats.totalTickets],
-  );
-
-  const soluciones = useMemo<SupportSolutionRow[]>(
+  /** The three breakdowns at group level, before drilling into any value. */
+  const desgloseRows = useMemo(
     () =>
-      (activeGroup?.soluciones_falla ?? [])
-        .map((entry) => ({
-          nombre: entry.nombre,
-          total: toNumber(entry.total),
-          pct: toNumber(entry.pct),
-        }))
-        .sort((a, b) => b.total - a.total),
-    [activeGroup],
+      Object.fromEntries(
+        SUPPORT_DESGLOSES.map((key) => [
+          key,
+          flattenEntries(activeGroup?.[key], stats.total_tickets),
+        ]),
+      ) as Record<SupportDesglose, SupportDimensionRow[]>,
+    [activeGroup, stats.total_tickets],
   );
 
   const zonas = useMemo<SupportZoneRow[]>(
@@ -194,21 +110,68 @@ export function useSupportAnalytics(props: SupportAnalyticsProps, selectedGroup:
           totalSuscriptores,
           tasaIncidencia: toNumber(entry.tasa_incidencia_pct),
           mttrPromedio: toNumber(entry.mttr_promedio),
+          pctResueltos: toNumber(entry.pct_resueltos),
           sinPoblacion: totalSuscriptores <= 0,
         };
       }),
     [incidencia],
   );
 
+  const [breakdown, setBreakdown] = useState<SupportBreakdownState>(CLOSED_BREAKDOWN);
+
+  const closeBreakdown = useCallback(() => setBreakdown(CLOSED_BREAKDOWN), []);
+
+  const openBreakdown = useCallback(
+    async (valor: string) => {
+      if (!periodo) return;
+
+      setBreakdown({ ...CLOSED_BREAKDOWN, valor, loading: true });
+
+      try {
+        const data = await fetchSupportBreakdown({
+          period: periodo,
+          dimension: selectedDimension,
+          valor,
+          grupo: activeGroupName,
+        });
+
+        const resolved = resolveStats(data.metricas);
+
+        setBreakdown({
+          valor,
+          loading: false,
+          error: '',
+          stats: resolved,
+          desgloses: Object.fromEntries(
+            SUPPORT_DESGLOSES.map((key) => [
+              key,
+              flattenEntries(data.desgloses?.[key], resolved.total_tickets),
+            ]),
+          ) as Record<SupportDesglose, SupportDimensionRow[]>,
+        });
+      } catch (error) {
+        setBreakdown({
+          ...CLOSED_BREAKDOWN,
+          valor,
+          error: getApiErrorMessage(error, 'No se pudo calcular el desglose del valor seleccionado.'),
+        });
+      }
+    },
+    [periodo, selectedDimension, activeGroupName],
+  );
+
   return {
+    periodo,
     groupOptions,
     activeGroupName,
     hasGroups: groupOptions.length > 0,
     stats,
-    razones,
-    tipos,
-    sucursales,
-    soluciones,
+    sharePct,
+    dimensionRows,
+    desgloseRows,
     zonas,
+    breakdown,
+    openBreakdown,
+    closeBreakdown,
   };
 }

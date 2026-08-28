@@ -25,7 +25,16 @@ export default function ImportSupport() {
             'Cliente',
             'Etapa',
             'Equipo de soporte al cliente',
+            'Asignado a',
+            'Suscripción/Sucursal',
+            'Zona',
+            'Tipo',
+            'Razón de la falla',
+            'Solución de la falla',
             'Creado el',
+            'Primera fecha asignada',
+            'Última actualización de la etapa',
+            'Duración total (horas)',
           ]}
         />
       </div>

@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock, Hourglass, Layers, PieChart, Timer, Users, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Hourglass, Layers, Timer, Users, XCircle } from 'lucide-react';
 
 import {
   EmptyState,
@@ -9,40 +9,54 @@ import {
   StatTile,
   type NeonTheme,
 } from '@/shared/ui';
-import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils/formatters';
-import type { SupportGroupStats, SupportTimeDistribution } from '../../types';
+import { formatInteger, formatTwoDecimals } from '@/shared/utils';
+import {
+  ASIGNACION,
+  CIERRE_TOTAL,
+  GESTION,
+  TIME_MEASURE_META,
+  distribution,
+} from '../../lib/supportMetrics';
+import {
+  SUPPORT_TIME_MEASURES,
+  type SupportStats,
+  type SupportTimeDistribution,
+  type SupportTimeMeasure,
+} from '../../types';
 
 interface Props {
   groupName: string;
-  stats: SupportGroupStats;
+  stats: SupportStats;
+  sharePct: number;
 }
 
 /**
  * A distribution panel that refuses to draw on an empty sample.
  *
- * Unmeasurable durations are now dropped rather than counted as zero, so a
- * measure can legitimately have no data at all — drawing the timeline anyway
- * would show a row of zeros that reads like a real, very fast distribution.
+ * Unmeasurable durations are dropped rather than counted as zero, so a measure
+ * can legitimately have no data at all — drawing the timeline anyway would show
+ * a row of zeros that reads like a real, very fast distribution.
  */
 function TimingPanel({
-  title,
-  subtitle,
+  medida,
   theme,
   icon,
   dist,
 }: {
-  title: string;
-  subtitle: string;
+  medida: SupportTimeMeasure;
   theme: NeonTheme;
   icon: JSX.Element;
   dist: SupportTimeDistribution;
 }) {
+  const { label, caption } = TIME_MEASURE_META[medida];
+  const subtitle = `${caption} · ${formatInteger(dist.muestra)} medidos`;
+
   if (dist.muestra === 0) {
     return (
-      <NeonContainer theme="slate" title={title} subtitle={subtitle} icon={icon}>
+      <NeonContainer theme="slate" title={label} subtitle={subtitle} icon={icon}>
         <EmptyState
           title="Ningún ticket del grupo tiene las dos fechas necesarias."
-          description="La duración solo se calcula cuando ambas marcas de tiempo existen y son coherentes."
+          description="La duración sólo se calcula cuando ambas marcas de tiempo existen y son coherentes."
           icon={icon}
         />
       </NeonContainer>
@@ -51,7 +65,8 @@ function TimingPanel({
 
   return (
     <EquidistantTimeline
-      title={title}
+      title={label}
+      subtitle={subtitle}
       icon={icon}
       theme={theme}
       min={dist.min}
@@ -66,156 +81,76 @@ function TimingPanel({
   );
 }
 
+const MEASURE_ICONS = {
+  blue: <Clock className="h-4 w-4 text-sky-400" />,
+  purple: <Timer className="h-4 w-4 text-purple-400" />,
+  slate: <Hourglass className="h-4 w-4 text-slate-300" />,
+};
+
 /**
- * The selected group at a glance: outcome rates, the two closure clocks and the
- * volume split that the breakdowns below are shares of.
+ * The selected group at a glance.
+ *
+ * Only the three headline clocks get a full distribution panel — one per
+ * formula. The resolved / cancelled variants stay as means in the card row
+ * above: seven timelines on one screen is a wall, and the split only matters
+ * once the headline figure has raised a question.
  */
-export function SupportGroupOverview({ groupName, stats }: Props) {
-  const { cierre, cierreTotal, primeraRespuesta } = stats;
-  const { cierreGlobal, cierreTotalGlobal, primeraRespuestaGlobal } = stats;
-
-  // La espera en cola es exactamente lo que separa a los dos relojes de cierre.
-  const espera = Number((cierreTotal.promedio - cierre.promedio).toFixed(2));
-  const share = (value: number) =>
-    stats.totalTickets > 0 ? Math.round((value / stats.totalTickets) * 100) : 0;
-
+export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <MetricCard
-          label="Tickets del Grupo"
-          value={formatInteger(stats.totalTickets)}
-          caption={`${formatTwoDecimals(stats.sharePct)}% del periodo`}
-          color="slate"
-          icon={<Users className="h-4 w-4 text-slate-300" />}
-        />
-        <MetricCard
-          label="Resueltos"
-          value={`${formatTwoDecimals(stats.pctResueltos)}%`}
-          caption={`${formatInteger(stats.resueltos)} tickets`}
-          color="green"
-          icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />}
-        />
-        <MetricCard
-          label="Cancelados"
-          value={`${formatTwoDecimals(stats.pctCancelados)}%`}
-          caption={`${formatInteger(stats.cancelados)} tickets`}
-          color="red"
-          icon={<XCircle className="h-4 w-4 text-rose-400" />}
-        />
-        <MetricCard
-          label="Rezagados"
-          value={`${formatTwoDecimals(stats.pctRezagados)}%`}
-          caption={`${formatInteger(stats.rezagados)} tickets`}
-          color="yellow"
-          icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
-        />
-        <MetricCard
-          label="Cierre desde Asignación"
-          value={`${formatOneDecimal(cierre.promedio)} h`}
-          caption={`Mediana ${formatOneDecimal(cierre.mediana)} h · ${formatInteger(cierre.muestra)} medidos`}
-          subValue="Gestión del técnico"
-          color="blue"
-          icon={<Clock className="h-4 w-4 text-sky-400" />}
-        />
-        <MetricCard
-          label="Cierre desde Creación"
-          value={`${formatOneDecimal(cierreTotal.promedio)} h`}
-          caption={`Mediana ${formatOneDecimal(cierreTotal.mediana)} h · ${formatInteger(cierreTotal.muestra)} medidos`}
-          subValue={`${formatOneDecimal(espera)} h de espera en cola`}
-          color="purple"
-          icon={<Hourglass className="h-4 w-4 text-purple-400" />}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <MetricCard label="Tickets del Grupo" value={formatInteger(stats.total_tickets)} caption={`${formatTwoDecimals(sharePct)}% del periodo`} color="slate" icon={<Users className="h-4 w-4 text-slate-300" />} />
+        <MetricCard label="Creados" value={formatInteger(stats.tickets_creados)} caption="entraron en el mes" color="slate" icon={<Users className="h-4 w-4 text-slate-300" />} />
+        <MetricCard label="Cerrados" value={formatInteger(stats.tickets_cerrados)} caption="se despacharon en el mes" color="blue" icon={<Layers className="h-4 w-4 text-sky-400" />} />
+        <MetricCard label="% Resueltos" value={`${stats.pct_resueltos}%`} caption={`${formatInteger(stats.tickets_resueltos)} de los cerrados`} color="green" icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />} />
+        <MetricCard label="% Rezagados" value={`${stats.pct_rezagados}%`} caption={`${formatInteger(stats.tickets_rezagados)} de los creados`} color="yellow" icon={<AlertTriangle className="h-4 w-4 text-amber-400" />} />
+      </div>
+
+      <NeonContainer
+        theme="slate"
+        title={`Composición de ${groupName}`}
+        subtitle="Los cuatro sumandos se leen sobre los cerrados del mes y suman el 100 %"
+        icon={<Layers className="h-5 w-5" />}
+      >
+        <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard label="Resueltos del mes" subValue={formatInteger(stats.tickets_resueltos_periodo)} value={`${formatTwoDecimals(stats.pct_resueltos_periodo)}%`} color="green" />
+          <MetricCard label="Resueltos arrastre" subValue={formatInteger(stats.tickets_resueltos_arrastre)} value={`${formatTwoDecimals(stats.pct_resueltos_arrastre)}%`} color="purple" />
+          <MetricCard label="Cancelados del mes" subValue={formatInteger(stats.tickets_cancelados_periodo)} value={`${formatTwoDecimals(stats.pct_cancelados_periodo)}%`} color="red" />
+          <MetricCard label="Cancelados arrastre" subValue={formatInteger(stats.tickets_cancelados_arrastre)} value={`${formatTwoDecimals(stats.pct_cancelados_arrastre)}%`} color="yellow" />
+        </div>
+
+        <div className="space-y-3">
+          <ProgressBar label="Resueltos del mes" percent={stats.pct_resueltos_periodo} valueLabel={`${formatTwoDecimals(stats.pct_resueltos_periodo)}%`} color="green" />
+          <ProgressBar label="Resueltos de meses anteriores" percent={stats.pct_resueltos_arrastre} valueLabel={`${formatTwoDecimals(stats.pct_resueltos_arrastre)}%`} color="purple" />
+          <ProgressBar label="Cancelados del mes" percent={stats.pct_cancelados_periodo} valueLabel={`${formatTwoDecimals(stats.pct_cancelados_periodo)}%`} color="red" />
+          <ProgressBar label="Cancelados de meses anteriores" percent={stats.pct_cancelados_arrastre} valueLabel={`${formatTwoDecimals(stats.pct_cancelados_arrastre)}%`} color="yellow" />
+        </div>
+      </NeonContainer>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        {SUPPORT_TIME_MEASURES.map((medida) => {
+          const meta = TIME_MEASURE_META[medida];
+
+          return (
+            <MetricCard
+              key={medida}
+              label={meta.label}
+              value={`${stats[`tiempo_medio_${medida}_horas`]} h`}
+              color={meta.color}
+              subValue={`${formatInteger(stats[`muestra_${medida}`])} medidos`}
+              icon={MEASURE_ICONS[meta.color]}
+            />
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <TimingPanel
-          title="Cierre desde la Asignación"
-          subtitle="Cierre − primera asignación"
-          theme="blue"
-          icon={<Clock className="h-5 w-5" />}
-          dist={cierre}
-        />
-        <TimingPanel
-          title="Cierre desde la Creación"
-          subtitle="Cierre − creación · proceso completo"
-          theme="purple"
-          icon={<Hourglass className="h-5 w-5" />}
-          dist={cierreTotal}
-        />
+        <TimingPanel medida={CIERRE_TOTAL} theme="blue" icon={<Clock className="h-5 w-5" />} dist={distribution(stats, CIERRE_TOTAL)} />
+        <TimingPanel medida={GESTION} theme="purple" icon={<Timer className="h-5 w-5" />} dist={distribution(stats, GESTION)} />
       </div>
 
-      {/*
-        Las mismas medidas sobre la población ampliada. Un ticket cancelado
-        también hizo esperar al cliente, así que sus horas cuentan aquí aunque
-        no se resolviera; la diferencia con los paneles de arriba es el coste de
-        lo que se acabó descartando.
-      */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <TimingPanel
-          title="Cierre desde la Asignación · Global"
-          subtitle="Cierre − primera asignación · resueltos + cancelados"
-          theme="blue"
-          icon={<Clock className="h-5 w-5" />}
-          dist={cierreGlobal}
-        />
-        <TimingPanel
-          title="Cierre desde la Creación · Global"
-          subtitle="Cierre − creación · resueltos + cancelados"
-          theme="purple"
-          icon={<Hourglass className="h-5 w-5" />}
-          dist={cierreTotalGlobal}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <TimingPanel
-          title="Primera Respuesta"
-          subtitle="Primera asignación − creación · solo tickets asignados"
-          theme="green"
-          icon={<Timer className="h-5 w-5" />}
-          dist={primeraRespuesta}
-        />
-        <TimingPanel
-          title="Primera Respuesta · Global"
-          subtitle="Primera asignación − creación · resueltos + cancelados"
-          theme="green"
-          icon={<Timer className="h-5 w-5" />}
-          dist={primeraRespuestaGlobal}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
-        <NeonContainer
-          theme="slate"
-          title="Composición del Volumen"
-          subtitle={`${groupName} · cohorte de tickets creados en el periodo`}
-          icon={<PieChart className="h-5 w-5" />}
-          headerAction={
-            <span className="flex items-center gap-1.5 rounded-full bg-brand/20 px-3 py-1 text-xs font-semibold text-brand">
-              <Layers className="h-3.5 w-3.5" />
-              {formatInteger(stats.totalTickets)} creados
-            </span>
-          }
-        >
-          <div className="grid grid-cols-3 gap-3">
-            <StatTile label="Resueltos" value={formatInteger(stats.resueltos)} tone="green" variant="boxed" mono />
-            <StatTile label="Cancelados" value={formatInteger(stats.cancelados)} tone="red" variant="boxed" mono />
-            <StatTile label="Rezagados" value={formatInteger(stats.rezagados)} tone="yellow" variant="boxed" mono />
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <ProgressBar label="Resueltos en el mes" percent={share(stats.resueltos)} valueLabel={`${share(stats.resueltos)}%`} color="green" />
-            <ProgressBar label="Cancelados en el mes" percent={share(stats.cancelados)} valueLabel={`${share(stats.cancelados)}%`} color="red" />
-            <ProgressBar label="Cerrados fuera del mes o abiertos" percent={share(stats.rezagados)} valueLabel={`${share(stats.rezagados)}%`} color="yellow" />
-          </div>
-
-          <p className="mt-4 text-[10px] leading-relaxed text-slate-500">
-            Las tres categorías reparten exactamente los tickets creados en el periodo, así que
-            los porcentajes suman 100%.
-          </p>
-        </NeonContainer>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-1">
+        <TimingPanel medida={ASIGNACION} theme="slate" icon={<Hourglass className="h-5 w-5" />} dist={distribution(stats, ASIGNACION)} />
       </div>
     </>
   );

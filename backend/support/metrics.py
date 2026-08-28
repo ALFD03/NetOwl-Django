@@ -1,20 +1,37 @@
-# NetOwl-Django/backend/support/metrics.py
+# backend/support/metrics.py
+"""
+El bloque de métricas de una cohorte: siete medidas de tiempo y tres tasas.
+
+Todo el módulo es una función pura de un `PeriodCohort` ya clasificado, así que
+el mismo código sirve para el total del periodo, para un grupo de trabajo, para
+una zona y para el desglose que `queries` calcula al vuelo.
+"""
 
 from __future__ import annotations
+
 import math
+from typing import Any, Dict
+
 import pandas as pd
-from dataclasses import dataclass
-from typing import Any, Dict, Iterator, Tuple
 
-from backend.support.config import MIN_DURACION_HORAS
+from backend.support.cohorts import PeriodCohort
+from backend.support.config import (
+    MIN_DURACION_HORAS,
+    TIME_MEASURE_SPECS,
+    TIME_STATS,
+)
 
-def _clean_nan(obj: Any) -> Any:
+
+def clean_nan(obj: Any) -> Any:
+    """NaN/Inf a 0 y tipos de numpy a tipos de Python, para poder serializar."""
     if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
         return 0.0
-    elif isinstance(obj, dict):
-        return {k: _clean_nan(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_clean_nan(v) for v in obj]
+    if isinstance(obj, dict):
+        return {k: clean_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [clean_nan(v) for v in obj]
+    if type(obj).__module__ == "numpy":
+        return obj.item() if hasattr(obj, "item") else obj
     return obj
 
 
@@ -22,11 +39,11 @@ def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
     """
     Estadísticos de una serie de duraciones en horas.
 
-    Solo entran duraciones de al menos `MIN_DURACION_HORAS` (1 minuto). Por
+    Sólo entran duraciones de al menos `MIN_DURACION_HORAS` (1 minuto). Por
     debajo de ese umbral no hay un tiempo de servicio que medir: son acciones
     masivas de Odoo que asignan y cierran en el mismo segundo, o fechas
-    ausentes. Contarlas hundía el promedio y la mediana e inflaba el % que
-    excede el promedio.
+    ausentes. Contarlas hunde el promedio y la mediana e infla el % que excede
+    el promedio.
 
     `muestra` expone cuántos tickets sí se pudieron medir, para poder juzgar la
     cobertura del cálculo desde la interfaz.
@@ -36,23 +53,18 @@ def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
     n = len(s)
 
     if n == 0:
-        return {
-            "promedio": 0.0, "mediana": 0.0, "min": 0.0, "p25": 0.0, "p75": 0.0, "max": 0.0,
-            "std": 0.0, "pct_excede_promedio": 0.0, "muestra": 0,
-        }
+        return {stat: 0.0 for stat in TIME_STATS} | {"pct_excede_promedio": 0.0, "muestra": 0}
 
     promedio = float(s.mean())
-    mediana = float(s.median())
-    std_val = float(s.std(ddof=0)) if n > 1 else 0.0
 
     return {
-        "promedio": round(promedio, 2),
-        "mediana": round(mediana, 2),
+        "medio": round(promedio, 2),
+        "mediana": round(float(s.median()), 2),
         "min": round(float(s.min()), 2),
         "p25": round(float(s.quantile(0.25)), 2),
         "p75": round(float(s.quantile(0.75)), 2),
         "max": round(float(s.max()), 2),
-        "std": round(std_val, 2),
+        "std": round(float(s.std(ddof=0)) if n > 1 else 0.0, 2),
         "pct_excede_promedio": round(float((s > promedio).sum() / n) * 100, 2),
         "muestra": n,
     }
@@ -76,82 +88,12 @@ def _hours_between(df: pd.DataFrame, col_inicio: str, col_fin: str) -> pd.Series
     return (t_fin - t_inicio).dt.total_seconds() / 3600.0
 
 
-def _prefixed(stats: Dict[str, float], medida: str) -> Dict[str, Any]:
-    """Aplana un bloque de estadísticos a las claves planas que guarda la BD."""
-    return {
-        f"tiempo_medio_{medida}_horas": stats["promedio"],
-        f"tiempo_mediana_{medida}_horas": stats["mediana"],
-        f"tiempo_min_{medida}_horas": stats["min"],
-        f"tiempo_p25_{medida}_horas": stats["p25"],
-        f"tiempo_p75_{medida}_horas": stats["p75"],
-        f"tiempo_max_{medida}_horas": stats["max"],
-        f"tiempo_std_{medida}_horas": stats["std"],
-        f"pct_excede_promedio_{medida}": stats["pct_excede_promedio"],
-        f"muestra_{medida}": stats["muestra"],
-    }
-
-
-@dataclass(frozen=True)
-class PeriodCohort:
-    """
-    Las dos particiones de la cohorte de un periodo, agrupadas para poder
-    filtrarlas a la vez.
-
-    Las dimensiones jerárquicas (grupo → sucursal → zona → tipo → razón) van
-    recortando la cohorte nivel a nivel, y todas las particiones tienen que
-    recortarse igual. `filter` lo hace de una sola pasada, en vez de repetir el
-    mismo `df[df[col] == v]` una vez por dataframe y por nivel.
-    """
-
-    # Partición de TASAS: exige que el cierre caiga dentro del periodo.
-    # Las tres últimas suman exactamente `creados`.
-    creados: pd.DataFrame
-    resueltos: pd.DataFrame
-    cancelados: pd.DataFrame
-    rezagados: pd.DataFrame
-
-    # Partición de TIEMPOS: sin filtro por mes de cierre.
-    resueltos_tiempo: pd.DataFrame
-    cerrados_tiempo: pd.DataFrame
-
-    def _frames(self) -> Tuple[pd.DataFrame, ...]:
-        return (self.creados, self.resueltos, self.cancelados, self.rezagados,
-                self.resueltos_tiempo, self.cerrados_tiempo)
-
-    def filter(self, columna: str, valor: Any) -> "PeriodCohort":
-        """La misma cohorte restringida a las filas con `columna == valor`."""
-        def sub(df: pd.DataFrame) -> pd.DataFrame:
-            if df.empty or columna not in df.columns:
-                return df.iloc[0:0]
-            return df[df[columna] == valor]
-
-        return PeriodCohort(*(sub(df) for df in self._frames()))
-
-    def valores(self, columna: str) -> set:
-        """
-        Valores presentes en la columna a lo largo de toda la cohorte.
-
-        Se unen las cuatro particiones de tasas porque juntas son `creados`; las
-        de tiempos son subconjuntos suyos y no aportan valores nuevos.
-        """
-        vistos: set = set()
-        for df in (self.creados, self.resueltos, self.cancelados, self.rezagados):
-            if not df.empty and columna in df.columns:
-                vistos.update(df[columna].unique())
-        return vistos
-
-    def desglosar(self, columna: str) -> Iterator[Tuple[Any, "PeriodCohort"]]:
-        """Itera (valor, sub-cohorte) por cada valor distinto de la columna."""
-        for valor in self.valores(columna):
-            yield valor, self.filter(columna, valor)
-
-
 def _duracion_total(df: pd.DataFrame) -> pd.Series:
     """
-    Duración total en horas tal y como la reporta Odoo (creación → cierre).
+    Duración creación → cierre tal y como la reporta Odoo.
 
-    Se lee el campo en vez de restar las dos fechas porque coincide al 100% con
-    el cálculo y no pierde muestra: la resta deja fuera los tickets sin fecha de
+    Se lee el campo en vez de restar las dos fechas porque coincide con el
+    cálculo y no pierde muestra: la resta deja fuera los tickets sin fecha de
     asignación, este campo los conserva.
     """
     if df.empty or "duracion_total_horas" not in df.columns:
@@ -159,97 +101,93 @@ def _duracion_total(df: pd.DataFrame) -> pd.Series:
     return pd.to_numeric(df["duracion_total_horas"], errors="coerce")
 
 
-def _con_asignacion(df: pd.DataFrame) -> pd.DataFrame:
-    """Tickets que llegaron a tener una primera asignación."""
-    if df.empty or "primera_fecha_asignada" not in df.columns:
-        return df
-    return df[pd.to_datetime(df["primera_fecha_asignada"], errors="coerce").notna()]
+def _serie_de_formula(df: pd.DataFrame, formula: str) -> pd.Series:
+    if formula == "duracion_total":
+        return _duracion_total(df)
+    if formula == "asignado_a_cierre":
+        return _hours_between(df, "primera_fecha_asignada", "ultima_actualizacion_etapa")
+    if formula == "creado_a_asignacion":
+        return _hours_between(df, "creado_el", "primera_fecha_asignada")
+    raise ValueError(f"Fórmula de tiempo desconocida: {formula!r}")
+
+
+def _prefixed(stats: Dict[str, float], medida: str) -> Dict[str, Any]:
+    """Aplana un bloque de estadísticos a las claves planas que guarda la BD."""
+    plano = {f"tiempo_{stat}_{medida}_horas": stats[stat] for stat in TIME_STATS}
+    plano[f"pct_excede_promedio_{medida}"] = stats["pct_excede_promedio"]
+    plano[f"muestra_{medida}"] = stats["muestra"]
+    return plano
+
+
+def _pct(parte: int, total: int) -> float:
+    return round((parte / total) * 100, 2) if total > 0 else 0.0
 
 
 def compute_metrics_for_period(cohorte: PeriodCohort) -> Dict[str, Any]:
     """
-    Métricas de un periodo sobre la cohorte de tickets *creados* en él.
+    El bloque completo de una cohorte: volúmenes, tasas y las siete medidas.
 
-    Hay dos particiones de la misma cohorte porque las tasas y los tiempos no
-    responden a la misma pregunta:
+    Cada cifra trae fijado su denominador, y son dos distintos:
 
-      * **Tasas** — `resueltos` / `cancelados` / `rezagados` exigen que
-        el cierre caiga dentro del periodo. Suman exactamente `creados`, así
-        que los tres porcentajes reparten el 100%. Un ticket de julio cerrado en
-        agosto cuenta como rezagado de julio, que es lo correcto: en julio no se
-        cerró.
-
-      * **Tiempos** — `resueltos_tiempo` y `cerrados_tiempo` NO filtran por
-        mes de cierre. Ese mismo ticket sí aporta sus horas al MTTR, porque el
-        tiempo que tardó es real. Filtrarlo dejaba fuera justo a los más lentos
-        y hundía artificialmente la media.
-
-    Sobre ellos se miden seis variantes, cruce de dos fórmulas y dos poblaciones:
-
-                        │ Resueltos              │ Resueltos + Cancelados
-        ────────────────┼────────────────────────┼────────────────────────
-        asignación →    │ `cierre`               │ `cierre_global`
-        creación →      │ `cierre_total`         │ `cierre_total_global`
-        1ª respuesta    │ `primera_respuesta`    │ `primera_respuesta_global`
+      * resolución y cancelación se leen sobre lo CERRADO en el mes —es la
+        mezcla de desenlaces del trabajo despachado—, y cada una se abre en el
+        que además nació en el mes y el que venía arrastrado. Los dos sumandos
+        comparten denominador, así que cierran exactamente con el total.
+      * el rezago se lee sobre lo CREADO en el mes: de la demanda que entró,
+        cuánta no se cerró dentro del propio mes.
     """
-    df_resueltos_tiempo = cohorte.resueltos_tiempo
-    df_cerrados_tiempo = cohorte.cerrados_tiempo
+    df = cohorte.df
+    total = len(df)
 
-    total_creados = len(cohorte.creados)
-    total_resueltos = len(cohorte.resueltos)
-    total_cancelados = len(cohorte.cancelados)
-    total_rezagados = len(cohorte.rezagados)
+    if total == 0:
+        conteos = dict.fromkeys(
+            ["creados", "cerrados", "resueltos", "resueltos_periodo", "resueltos_arrastre",
+             "cancelados", "cancelados_periodo", "cancelados_arrastre", "rezagados"], 0
+        )
+    else:
+        nacido = df["nacido_en_periodo"]
+        cerrado = df["cerrado_en_periodo"]
+        resuelto = cerrado & df["es_resuelto"]
+        cancelado = cerrado & df["es_cancelado"]
 
-    universo = total_creados if total_creados > 0 else 1
+        conteos = {
+            "creados": int(nacido.sum()),
+            "cerrados": int(cerrado.sum()),
+            "resueltos": int(resuelto.sum()),
+            "resueltos_periodo": int((resuelto & nacido).sum()),
+            "resueltos_arrastre": int((resuelto & ~nacido).sum()),
+            "cancelados": int(cancelado.sum()),
+            "cancelados_periodo": int((cancelado & nacido).sum()),
+            "cancelados_arrastre": int((cancelado & ~nacido).sum()),
+            "rezagados": int((nacido & df["es_rezagado"]).sum()),
+        }
+
+    cerrados = conteos["cerrados"]
+    creados = conteos["creados"]
 
     metrics: Dict[str, Any] = {
-        "total_tickets": total_creados,
-        "tickets_resueltos": total_resueltos,
-        "tickets_cancelados": total_cancelados,
-        "tickets_rezagados": total_rezagados,
-        "pct_resueltos": round((total_resueltos / universo) * 100, 2),
-        "pct_cancelados": round((total_cancelados / universo) * 100, 2),
-        "pct_rezagados": round((total_rezagados / universo) * 100, 2),
+        "total_tickets": total,
+        "tickets_creados": creados,
+        "tickets_cerrados": cerrados,
+        "tickets_resueltos": conteos["resueltos"],
+        "tickets_resueltos_periodo": conteos["resueltos_periodo"],
+        "tickets_resueltos_arrastre": conteos["resueltos_arrastre"],
+        "tickets_cancelados": conteos["cancelados"],
+        "tickets_cancelados_periodo": conteos["cancelados_periodo"],
+        "tickets_cancelados_arrastre": conteos["cancelados_arrastre"],
+        "tickets_rezagados": conteos["rezagados"],
+
+        "pct_resueltos": _pct(conteos["resueltos"], cerrados),
+        "pct_resueltos_periodo": _pct(conteos["resueltos_periodo"], cerrados),
+        "pct_resueltos_arrastre": _pct(conteos["resueltos_arrastre"], cerrados),
+        "pct_cancelados": _pct(conteos["cancelados"], cerrados),
+        "pct_cancelados_periodo": _pct(conteos["cancelados_periodo"], cerrados),
+        "pct_cancelados_arrastre": _pct(conteos["cancelados_arrastre"], cerrados),
+        "pct_rezagados": _pct(conteos["rezagados"], creados),
     }
 
-    # Cierre desde la primera asignación: mide solo la gestión del técnico,
-    # sin la espera en cola. Deja fuera lo que nunca se asignó.
-    for medida, poblacion in (
-        ("cierre", df_resueltos_tiempo),
-        ("cierre_global", df_cerrados_tiempo),
-    ):
-        metrics.update(_prefixed(
-            _compute_stats_for_series(
-                _hours_between(poblacion, "primera_fecha_asignada", "ultima_actualizacion_etapa")
-            ),
-            medida,
-        ))
+    for medida, formula, poblacion in TIME_MEASURE_SPECS:
+        serie = _serie_de_formula(cohorte.poblacion(poblacion), formula)
+        metrics.update(_prefixed(_compute_stats_for_series(serie), medida))
 
-    # Cierre desde la creación: el proceso completo, cola incluida. La
-    # diferencia con la medida anterior es la espera antes de asignar.
-    for medida, poblacion in (
-        ("cierre_total", df_resueltos_tiempo),
-        ("cierre_total_global", df_cerrados_tiempo),
-    ):
-        metrics.update(_prefixed(_compute_stats_for_series(_duracion_total(poblacion)), medida))
-
-    # Primera respuesta = primera asignación − creación, sobre los tickets que
-    # llegaron a asignarse. Sin la antigua sustitución por
-    # `ultima_actualizacion_etapa`, que convertía el cierre de un ticket nunca
-    # asignado en una "respuesta" de cientos de horas.
-    for medida, poblacion in (
-        ("primera_respuesta", df_resueltos_tiempo),
-        ("primera_respuesta_global", df_cerrados_tiempo),
-    ):
-        metrics.update(_prefixed(
-            _compute_stats_for_series(
-                _hours_between(_con_asignacion(poblacion), "creado_el", "primera_fecha_asignada")
-            ),
-            medida,
-        ))
-
-    # Alias heredado: el dashboard y `support_cierre_historico` ya guardaban la
-    # primera respuesta bajo este nombre cuando solo existía el promedio.
-    metrics["tiempo_promedio_primera_respuesta_horas"] = metrics["tiempo_medio_primera_respuesta_horas"]
-
-    return _clean_nan(metrics)
+    return clean_nan(metrics)

@@ -1,8 +1,7 @@
 import { apiClient } from './client';
-
-export interface SupportAnalysisRequest { month: string | null; }
 import type { ApiMessageResponse } from './types';
 
+export interface SupportAnalysisRequest { month: string | null; }
 export type SupportAnalysisResponse = ApiMessageResponse;
 
 export const supportApi = {

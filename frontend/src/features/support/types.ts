@@ -4,33 +4,33 @@ export interface SupportAnalysisRequest { month: string | null; }
 export interface SupportAnalysisResponse { message: string; log_output?: string; }
 
 /**
- * The six time measures, mirroring `SUPPORT_TIME_MEASURES` in
- * `backend/support/config.py`. They cross two formulas with two populations:
+ * The seven time measures, mirroring `TIME_MEASURE_SPECS` in
+ * `backend/support/config.py`.
  *
- * |                | Resueltos                  | Resueltos + Cancelados            |
- * | -------------- | -------------------------- | --------------------------------- |
- * | from assigning | `cierre`                   | `cierre_global`                   |
- * | from creation  | `cierre_total`             | `cierre_total_global`             |
- * | first response | `primera_respuesta`        | `primera_respuesta_global`        |
- *
- * `cierre*` measures the technician's handling only; `cierre_total*` is Odoo's
- * own `duracion_total_horas`, the whole process including the queue wait.
+ * There is no population selector: each measure carries the only population it
+ * makes sense over. The two closure clocks are measured on what CLOSED in the
+ * period — `cierre_creado_*` is Odoo's own `duracion_total_horas`, the whole
+ * process with the queue included, and `cierre_asignado_*` only the
+ * technician's handling. `asignacion` is measured on what was RAISED in the
+ * period and requires no outcome: the wait already happened even on a ticket
+ * that is still open.
  */
 export const SUPPORT_TIME_MEASURES = [
-  'cierre',
-  'cierre_total',
-  'cierre_global',
-  'cierre_total_global',
-  'primera_respuesta',
-  'primera_respuesta_global',
+  'cierre_creado_resuelto',
+  'cierre_creado_cancelado',
+  'cierre_creado_cerrados',
+  'cierre_asignado_resuelto',
+  'cierre_asignado_cancelado',
+  'cierre_asignado_cerrados',
+  'asignacion',
 ] as const;
 
 export type SupportTimeMeasure = (typeof SUPPORT_TIME_MEASURES)[number];
 
 /**
  * The nine scalar columns `_prefixed()` emits per measure. Spelling them out
- * once as a template literal keeps the fifty-four columns the backend stores from
- * having to be re-typed by hand in every interface below.
+ * once as a template literal keeps the sixty-three columns the backend stores
+ * from having to be re-typed by hand in every interface below.
  */
 type SupportTimeStatKey<M extends string> =
   | `tiempo_${'medio' | 'mediana' | 'min' | 'p25' | 'p75' | 'max' | 'std'}_${M}_horas`
@@ -40,72 +40,84 @@ type SupportTimeStatKey<M extends string> =
 /** Every time column, optional — what the backend may or may not have stored. */
 export type SupportTimeMetrics = { [K in SupportTimeStatKey<SupportTimeMeasure>]?: number };
 
-/** Every time column, resolved to a number — what the dashboard renders. */
+/** Every time column, resolved to a number — what the views render. */
 export type SupportTimeStats = { [K in SupportTimeStatKey<SupportTimeMeasure>]: number };
 
 /**
- * Headline ticket metrics averaged across every analysed period.
+ * Volumes and rates, mirroring `SUPPORT_VOLUME_FIELDS` / `SUPPORT_RATE_FIELDS`.
  *
- * Mirrors `resumen_global_avg` in `backend/support/analyzer.py`, which is the
- * mean of each field over all closed periods.
+ * Two denominators, each fixed to the rate that needs it:
+ *
+ * - `pct_resueltos` and `pct_cancelados` are read over `tickets_cerrados` — the
+ *   outcome mix of the work despatched this month. Each splits into the part
+ *   that was also raised this month (`_periodo`) and the part carried over from
+ *   earlier ones (`_arrastre`); both share the denominator, so the two addends
+ *   close exactly on the total.
+ * - `pct_rezagados` is read over `tickets_creados`: of the demand that came in,
+ *   how much did not close inside its own month.
  */
-export interface SupportGlobalSummary extends SupportTimeMetrics {
-  total_tickets_promedio_mensual?: number;
-  tickets_resueltos_promedio_mensual?: number;
-  tickets_cancelados_promedio_mensual?: number;
-  tickets_rezagados_promedio_mensual?: number;
+export interface SupportRateMetrics {
+  /** The period's cohort: raised in it or closed in it. Used for weighting. */
+  total_tickets?: number;
+  tickets_creados?: number;
+  tickets_cerrados?: number;
+  tickets_resueltos?: number;
+  tickets_resueltos_periodo?: number;
+  tickets_resueltos_arrastre?: number;
+  tickets_cancelados?: number;
+  tickets_cancelados_periodo?: number;
+  tickets_cancelados_arrastre?: number;
+  tickets_rezagados?: number;
+
   pct_resueltos?: number;
+  pct_resueltos_periodo?: number;
+  pct_resueltos_arrastre?: number;
   pct_cancelados?: number;
+  pct_cancelados_periodo?: number;
+  pct_cancelados_arrastre?: number;
   pct_rezagados?: number;
-  tiempo_promedio_primera_respuesta_horas?: number;
 }
 
-/** One closed monthly period, as stored in `support_cierre_historico`. */
-export interface SupportHistoricoRow extends SupportTimeMetrics {
-  periodo_reporte?: string;
-  total_tickets?: number;
-  tickets_resueltos?: number;
-  tickets_cancelados?: number;
-  tickets_rezagados?: number;
-  pct_resueltos?: number;
-  pct_cancelados?: number;
-  pct_rezagados?: number;
-  tiempo_promedio_primera_respuesta_horas?: number;
+/** One `compute_metrics_for_period` block, as the backend serialises it. */
+export interface SupportMetrics extends SupportTimeMetrics, SupportRateMetrics {
+  /** Only on cross-period averages: how many periods went into the mean. */
+  periodos_evaluados?: number;
 }
 
-/** Same metrics as a period row, averaged across periods for one work group. */
-export interface SupportGroupSummary extends SupportTimeMetrics {
-  total_tickets?: number;
-  tickets_resueltos?: number;
-  tickets_cancelados?: number;
-  tickets_rezagados?: number;
-  pct_resueltos?: number;
-  pct_cancelados?: number;
-  pct_rezagados?: number;
-  tiempo_promedio_primera_respuesta_horas?: number;
+/** The same block with every optional resolved, ready to render. */
+export type SupportStats = SupportTimeStats & Required<SupportRateMetrics>;
+
+/** One period of `support_cierre_historico`, flattened by the query layer. */
+export interface SupportHistoricoRow extends SupportMetrics {
+  periodo_reporte: string;
 }
+
+/** A distribution of hours, resolved from one `_compute_stats_for_series` block. */
+export interface SupportTimeDistribution {
+  promedio: number;
+  mediana: number;
+  min: number;
+  p25: number;
+  p75: number;
+  max: number;
+  std: number;
+  pctExcedeProm: number;
+  /** Tickets that could actually be measured; 0 means there is nothing to draw. */
+  muestra: number;
+}
+
+// --- Dashboard --------------------------------------------------------------
 
 export interface SupportDashboardProps {
   metrics?: {
-    resumen_global?: SupportGlobalSummary;
-    por_grupo_trabajo?: Record<string, SupportGroupSummary>;
+    periodos_evaluados?: number;
+    resumen_global?: SupportMetrics;
+    por_grupo_trabajo?: Record<string, SupportMetrics>;
     historico_tendencias?: SupportHistoricoRow[];
   };
 }
 
-/** Every headline number the dashboard renders, averaged over all periods. */
-export interface SupportGlobalStats extends SupportTimeStats {
-  total_tickets: number;
-  tickets_resueltos: number;
-  tickets_cancelados: number;
-  tickets_rezagados: number;
-  pct_resueltos: number;
-  pct_cancelados: number;
-  pct_rezagados: number;
-  tiempo_promedio_primera_respuesta_horas: number;
-}
-
-/** A clickable sparkline: the global average plus its per-period series. */
+/** A clickable sparkline: the cross-period average plus its per-period series. */
 export interface SupportTrendCard {
   id: string;
   title: string;
@@ -114,7 +126,7 @@ export interface SupportTrendCard {
   labels: string[];
   values: number[];
   unitLabel: string;
-  /** Percentage series shown on the card. */
+  /** Series shown on the card. */
   rateKey: keyof SupportHistoricoRow;
   /** Absolute-volume series shown in the drill-down modal. */
   countKey: keyof SupportHistoricoRow;
@@ -132,56 +144,38 @@ export interface SupportGroupCard {
   pctResueltos: number;
   pctCancelados: number;
   pctRezagados: number;
-  /** Mean hours to closure for the group, averaged across periods. */
+  /** Mean hours from creation to closure, over resolved and cancelled alike. */
   mttr: number;
   mttrMediana: number;
   /** Green when the group closes faster than the global mean, red when slower. */
   mttrColor: MetricColor;
   /** Signed gap against the global MTTR, in hours. */
   mttrDelta: number;
-  primeraRespuesta: number;
+  /** Mean hours spent queued before the first assignment. */
+  espera: number;
   pctExcedeProm: number;
 }
 
-/**
- * Every measure a dimension row carries.
- *
- * Mirrors `compute_metrics_for_period` in `backend/support/metrics.py`. Closure
- * time appears twice over the same resolved tickets: `cierre` runs from the
- * first assignment (the technician's handling) and `cierre_total` from creation
- * (the whole process). The gap between them is the queue wait.
- *
- * Each `muestra_*` is how many tickets could actually be measured — durations
- * that cannot be computed are dropped, not counted as zero, so a small sample
- * against a large `total_tickets` means the time figures are thin.
- */
-export interface SupportDimensionMetrics extends SupportTimeMetrics {
-  total_tickets?: number;
-  tickets_resueltos?: number;
-  tickets_cancelados?: number;
-  tickets_rezagados?: number;
-  pct_resueltos?: number;
-  pct_cancelados?: number;
-  pct_rezagados?: number;
+// --- Analytics --------------------------------------------------------------
 
-  tiempo_promedio_primera_respuesta_horas?: number;
+/** The three first-level axes inside a work group. */
+export const SUPPORT_DIMENSIONS = ['zona', 'sucursal', 'asignado_a'] as const;
+export type SupportDimension = (typeof SUPPORT_DIMENSIONS)[number];
 
-  /** Only set on `razones_falla`: the reason's share of the group's tickets. */
-  pct_del_grupo?: number;
-}
+/** The three ways a dimension value is broken down. */
+export const SUPPORT_DESGLOSES = ['tipo_solicitud', 'razon_falla', 'solucion_falla'] as const;
+export type SupportDesglose = (typeof SUPPORT_DESGLOSES)[number];
 
-/** One value of a breakdown dimension — a failure reason, request type, branch. */
+/** One value of any axis — a zone, a technician, a failure reason. */
 export interface SupportDimensionEntry {
   nombre: string;
-  metricas?: SupportDimensionMetrics;
+  metricas?: SupportMetrics;
 }
 
-/** Technical solutions are counted straight off the ticket table, not analysed. */
-export interface SupportSolutionEntry {
-  nombre: string;
-  total?: number;
-  pct?: number;
-}
+/** One work group with its own block and every axis already grouped. */
+export type SupportGroup = { metricas?: SupportMetrics } & Partial<
+  Record<SupportDimension | SupportDesglose, SupportDimensionEntry[]>
+>;
 
 /**
  * Ticket load of a zone against its active subscribers.
@@ -197,22 +191,14 @@ export interface SupportZoneEntry {
   total_suscriptores?: number;
   tasa_incidencia_pct?: number;
   mttr_promedio?: number;
-}
-
-/** One work group with the six collections `get_support_analytics_structured` builds. */
-export interface SupportGroup {
-  total_tickets_grupo?: number;
-  metricas_grupo?: SupportDimensionMetrics;
-  tipos_solicitud?: SupportDimensionEntry[];
-  razones_falla?: SupportDimensionEntry[];
-  soluciones_falla?: SupportSolutionEntry[];
-  sucursales?: SupportDimensionEntry[];
+  pct_resueltos?: number;
 }
 
 export interface SupportAnalyticsProps {
   analyticsData?: {
+    periodo?: string;
     grupos?: Record<string, SupportGroup>;
-    /** Period-wide, not per group — see `SupportZoneEntry`. */
+    /** Period-wide, not group-scoped — see `SupportZoneEntry`. */
     incidencia_zonas?: SupportZoneEntry[];
   };
   periods?: string[];
@@ -226,55 +212,11 @@ export interface SupportGroupOption {
   totalTickets: number;
 }
 
-/** A distribution of hours, resolved from one `_compute_stats_for_series` block. */
-export interface SupportTimeDistribution {
-  promedio: number;
-  mediana: number;
-  min: number;
-  p25: number;
-  p75: number;
-  max: number;
-  std: number;
-  pctExcedeProm: number;
-  /** Tickets that could actually be measured; 0 means the panel has no data. */
-  muestra: number;
-}
-
-/** The selected group's headline numbers, with every optional resolved. */
-export interface SupportGroupStats {
-  totalTickets: number;
-  resueltos: number;
-  cancelados: number;
-  rezagados: number;
-  pctResueltos: number;
-  pctCancelados: number;
-  pctRezagados: number;
-  /** Closure measured from the first assignment — the technician's handling. */
-  cierre: SupportTimeDistribution;
-  /** Closure measured from creation — the whole process, queue included. */
-  cierreTotal: SupportTimeDistribution;
-  /** Creation → first assignment. */
-  primeraRespuesta: SupportTimeDistribution;
-  /** The same three, widened to count cancelled tickets as well as resolved. */
-  cierreGlobal: SupportTimeDistribution;
-  cierreTotalGlobal: SupportTimeDistribution;
-  primeraRespuestaGlobal: SupportTimeDistribution;
-  /** The group's share of every ticket in the period, across all groups. */
-  sharePct: number;
-}
-
-/** A breakdown value flattened so charts and tables read a single level. */
-export interface SupportBreakdownRow extends SupportDimensionMetrics {
+/** A dimension or breakdown value flattened so tables read a single level. */
+export interface SupportDimensionRow extends SupportMetrics {
   nombre: string;
-  /** Share of the group's ticket volume, recomputed for every dimension. */
-  pctDelGrupo: number;
-}
-
-/** A counted technical solution, with its share of the group. */
-export interface SupportSolutionRow {
-  nombre: string;
-  total: number;
-  pct: number;
+  /** Share of the parent's ticket volume. */
+  pctDelPadre: number;
 }
 
 /** A zone ranked by how many tickets each 100 of its active subscribers raise. */
@@ -286,25 +228,23 @@ export interface SupportZoneRow {
   totalSuscriptores: number;
   tasaIncidencia: number;
   mttrPromedio: number;
+  pctResueltos: number;
   /** No active subscribers on record — the incidence rate is not computable. */
   sinPoblacion: boolean;
 }
 
-/** Which breakdown the panel is showing. */
-export type SupportBreakdownKey = 'razones' | 'soluciones' | 'tipos' | 'sucursales';
-
-/** One closed monthly period on the Support results table. */
-export interface SupportCierre extends SupportTimeMetrics {
-  periodo_reporte: string;
-  total_tickets: number;
-  tickets_resueltos: number;
-  pct_resueltos: number;
-  pct_cancelados: number;
-  pct_rezagados: number;
-  tiempo_medio_cierre_horas: number;
-  tiempo_mediana_cierre_horas: number;
+/** What `GET /support/api/breakdown/` returns for one dimension value. */
+export interface SupportBreakdownResponse {
+  periodo?: string;
+  grupo_trabajo?: string;
+  dimension?: string;
+  valor?: string;
+  metricas?: SupportMetrics;
+  desgloses?: Partial<Record<SupportDesglose, SupportDimensionEntry[]>>;
 }
 
+// --- Results ----------------------------------------------------------------
+
 export interface SupportResultsProps {
-  historico?: SupportCierre[];
+  historico?: SupportHistoricoRow[];
 }

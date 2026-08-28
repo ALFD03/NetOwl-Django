@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import {
   Activity, AlertTriangle, BarChart2, CheckCircle2,
-  Clock, Layers, Timer, Users, XCircle,
+  Clock, Hourglass, Layers, Timer, Users, XCircle,
 } from 'lucide-react';
 
 import { LineChart } from '@/shared/charts';
@@ -16,8 +16,9 @@ import {
   StatTile,
   METRIC_CHART,
 } from '@/shared/ui';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils';
-import type { SupportTimeMeasure } from '../types';
+import { formatInteger, formatOneDecimal, formatPeriodoLabel, formatTwoDecimals } from '@/shared/utils';
+import { ASIGNACION, CIERRE_TOTAL, TIME_MEASURE_META, distribution } from '../lib/supportMetrics';
+import { SUPPORT_TIME_MEASURES } from '../types';
 import type { useSupportDashboard } from '../hooks/useSupportDashboard';
 
 /**
@@ -30,27 +31,11 @@ function mttrGapLabel(deltaHoras: number): string {
   return `${Math.abs(deltaHoras)} h ${faster ? 'más rápido' : 'más lento'} que el promedio global`;
 }
 
-/**
- * The six time variants, in the order the dashboard shows them: the whole
- * process first, the technician's slice second, and within each pair success
- * before global. `muestra` rides along in the caption because the variants do
- * not measure the same number of tickets — the ones built on Odoo's
- * `duracion_total_horas` cover the entire cohort, the ones measured from the
- * first assignment cannot cover what was never assigned.
- */
-const TIME_CARDS: Array<{
-  label: string;
-  medida: SupportTimeMeasure;
-  caption: string;
-  color: 'blue' | 'purple';
-}> = [
-  { label: 'MTTR — Éxito Total', medida: 'cierre_total', caption: 'Creación → cierre · resueltos', color: 'blue' },
-  { label: 'MTTR — Éxito', medida: 'cierre', caption: 'Asignación → cierre · resueltos', color: 'blue' },
-  { label: '1ª Respuesta — Éxito', medida: 'primera_respuesta', caption: 'Creación → asignación · resueltos', color: 'blue' },
-  { label: 'MTTR — Global Total', medida: 'cierre_total_global', caption: 'Creación → cierre · + cancelados', color: 'purple' },
-  { label: 'MTTR — Global', medida: 'cierre_global', caption: 'Asignación → cierre · + cancelados', color: 'purple' },
-  { label: '1ª Respuesta — Global', medida: 'primera_respuesta_global', caption: 'Creación → asignación · + cancelados', color: 'purple' },
-];
+const MEASURE_ICONS = {
+  blue: <Clock className="h-4 w-4 text-sky-400" />,
+  purple: <Timer className="h-4 w-4 text-purple-400" />,
+  slate: <Hourglass className="h-4 w-4 text-slate-300" />,
+};
 
 interface SupportDashboardViewProps {
   data: ReturnType<typeof useSupportDashboard>;
@@ -58,6 +43,7 @@ interface SupportDashboardViewProps {
 
 export function SupportDashboardView({ data }: SupportDashboardViewProps) {
   const {
+    periodosEvaluados,
     historico,
     stats,
     trendCards,
@@ -69,85 +55,108 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
   } = data;
 
   const chartColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : undefined;
-  const periodsLabel = `${historico.length} periodos evaluados`;
+  const periodsLabel = `${periodosEvaluados} periodos evaluados`;
 
-  /** Volume shares are read against the closed universe, matching the backend. */
-  const universo = stats.tickets_resueltos + stats.tickets_cancelados + stats.tickets_rezagados;
-  const share = (value: number) => (universo > 0 ? Math.round((value / universo) * 100) : 0);
+  const cierreTotal = distribution(stats, CIERRE_TOTAL);
+  const asignacion = distribution(stats, ASIGNACION);
 
   return (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
-        <MetricCard label="Tickets / Mes" value={formatInteger(stats.total_tickets)} color="slate" subValue="Promedio de todos los periodos" icon={<Users className="w-4 h-4 text-slate-300" />} />
-        <MetricCard label="% Resueltos" value={`${stats.pct_resueltos}%`} color="green" subValue="Promedio de cierre exitoso" icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />} />
-        <MetricCard label="% Cancelados" value={`${stats.pct_cancelados}%`} subValue="Promedio de cierre fallido" color="red" icon={<XCircle className="w-4 h-4 text-rose-400" />} />
-        <MetricCard label="% Rezagados" value={`${stats.pct_rezagados}%`} color="yellow" subValue="Promedio de tickets no cerrados" icon={<AlertTriangle className="w-4 h-4 text-amber-400" />} />
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        <MetricCard label="Creados / Mes" value={formatInteger(stats.tickets_creados)} color="slate" subValue="Demanda que entró en el mes" icon={<Users className="h-4 w-4 text-slate-300" />} />
+        <MetricCard label="Cerrados / Mes" value={formatInteger(stats.tickets_cerrados)} color="blue" subValue="Trabajo despachado en el mes" icon={<Layers className="h-4 w-4 text-sky-400" />} />
+        <MetricCard label="% Resueltos" value={`${stats.pct_resueltos}%`} color="green" subValue="Sobre los cerrados del mes" icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />} />
+        <MetricCard label="% Cancelados" value={`${stats.pct_cancelados}%`} color="red" subValue="Sobre los cerrados del mes" icon={<XCircle className="h-4 w-4 text-rose-400" />} />
+        <MetricCard label="% Rezagados" value={`${stats.pct_rezagados}%`} color="yellow" subValue="Creados que no cerraron en su mes" icon={<AlertTriangle className="h-4 w-4 text-amber-400" />} />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
-        {TIME_CARDS.map(({ label, medida, caption, color }) => (
-          <MetricCard
-            key={medida}
-            label={label}
-            value={`${stats[`tiempo_medio_${medida}_horas`]} h`}
-            color={color}
-            subValue={`${caption} · ${formatInteger(stats[`muestra_${medida}`])} medidos`}
-            icon={
-              medida.startsWith('primera_respuesta')
-                ? <Timer className={`w-4 h-4 ${color === 'blue' ? 'text-sky-400' : 'text-purple-400'}`} />
-                : <Clock className={`w-4 h-4 ${color === 'blue' ? 'text-sky-400' : 'text-purple-400'}`} />
-            }
-          />
-        ))}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        {SUPPORT_TIME_MEASURES.map((medida) => {
+          const meta = TIME_MEASURE_META[medida];
+
+          return (
+            <MetricCard
+              key={medida}
+              label={meta.label}
+              value={`${stats[`tiempo_medio_${medida}_horas`]} h`}
+              color={meta.color}
+              subValue={`${meta.caption} · ${formatInteger(stats[`muestra_${medida}`])} medidos`}
+              icon={MEASURE_ICONS[meta.color]}
+            />
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <div className="mb-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
         <EquidistantTimeline
-          title="Distribución Tiempo de Cierre"
-          icon={<Clock className="w-5 h-5" />}
+          title="Distribución Cierre Total"
+          subtitle={`Creación → cierre · ${formatInteger(cierreTotal.muestra)} tickets medidos`}
+          icon={<Clock className="h-5 w-5" />}
           theme="blue"
-          p25={stats.tiempo_p25_cierre_horas}
-          min={stats.tiempo_min_cierre_horas}
-          mediana={stats.tiempo_mediana_cierre_horas}
-          promedio={stats.tiempo_medio_cierre_horas}
-          p75={stats.tiempo_p75_cierre_horas}
-          max={stats.tiempo_max_cierre_horas}
-          std={stats.tiempo_std_cierre_horas}
-          pctExcedeProm={stats.pct_excede_promedio_cierre}
+          min={cierreTotal.min}
+          p25={cierreTotal.p25}
+          mediana={cierreTotal.mediana}
+          promedio={cierreTotal.promedio}
+          p75={cierreTotal.p75}
+          max={cierreTotal.max}
+          std={cierreTotal.std}
+          pctExcedeProm={cierreTotal.pctExcedeProm}
         />
 
-        <NeonContainer
+        <EquidistantTimeline
+          title="Distribución Asignación"
+          subtitle={`Creación → asignación · ${formatInteger(asignacion.muestra)} tickets medidos`}
+          icon={<Hourglass className="h-5 w-5" />}
           theme="slate"
-          title="Composición del Volumen Mensual"
-          subtitle="Reparto promedio del universo cerrado"
-          icon={<Layers className="w-5 h-5" />}
+          min={asignacion.min}
+          p25={asignacion.p25}
+          mediana={asignacion.mediana}
+          promedio={asignacion.promedio}
+          p75={asignacion.p75}
+          max={asignacion.max}
+          std={asignacion.std}
+          pctExcedeProm={asignacion.pctExcedeProm}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-1">
+            <NeonContainer
+          theme="slate"
+          title="Origen de los Cierres"
+          subtitle="De lo cerrado en el mes, cuánto nació en él y cuánto venía arrastrado"
+          icon={<Layers className="h-5 w-5" />}
           headerAction={
             <span className="rounded-full bg-brand/20 px-3 py-1 text-xs font-semibold text-brand">
               {periodsLabel}
             </span>
           }
         >
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            <StatTile label="Resueltos" value={formatInteger(stats.tickets_resueltos)} caption="por mes" tone="green" variant="boxed" mono />
-            <StatTile label="Cancelados" value={formatInteger(stats.tickets_cancelados)} caption="por mes" tone="red" variant="boxed" mono />
-            <StatTile label="Rezagados" value={formatInteger(stats.tickets_rezagados)} caption="por mes" tone="yellow" variant="boxed" mono />
+          <div className="mb-5 grid grid-cols-2 gap-3">
+            <StatTile label="Resueltos del mes" value={`${formatTwoDecimals(stats.pct_resueltos_periodo)}%`} caption={`${formatInteger(stats.tickets_resueltos_periodo)} tickets`} tone="green" variant="boxed" mono />
+            <StatTile label="Resueltos arrastre" value={`${formatTwoDecimals(stats.pct_resueltos_arrastre)}%`} caption={`${formatInteger(stats.tickets_resueltos_arrastre)} tickets`} tone="purple" variant="boxed" mono />
+            <StatTile label="Cancelados del mes" value={`${formatTwoDecimals(stats.pct_cancelados_periodo)}%`} caption={`${formatInteger(stats.tickets_cancelados_periodo)} tickets`} tone="red" variant="boxed" mono />
+            <StatTile label="Cancelados arrastre" value={`${formatTwoDecimals(stats.pct_cancelados_arrastre)}%`} caption={`${formatInteger(stats.tickets_cancelados_arrastre)} tickets`} tone="purple" variant="boxed" mono />
           </div>
+
+          {/* Los cuatro sumandos comparten denominador —los cerrados del mes—,
+              así que las barras se leen unas contra otras y suman 100 %. */}
           <div className="space-y-3">
-            <ProgressBar label="Resueltos" percent={share(stats.tickets_resueltos)} valueLabel={`${share(stats.tickets_resueltos)}%`} color="green" />
-            <ProgressBar label="Cancelados" percent={share(stats.tickets_cancelados)} valueLabel={`${share(stats.tickets_cancelados)}%`} color="red" />
-            <ProgressBar label="Rezagados" percent={share(stats.tickets_rezagados)} valueLabel={`${share(stats.tickets_rezagados)}%`} color="yellow" />
+            <ProgressBar label="Resueltos del mes" percent={stats.pct_resueltos_periodo} valueLabel={`${formatTwoDecimals(stats.pct_resueltos_periodo)}%`} color="green" />
+            <ProgressBar label="Resueltos de meses anteriores" percent={stats.pct_resueltos_arrastre} valueLabel={`${formatTwoDecimals(stats.pct_resueltos_arrastre)}%`} color="purple" />
+            <ProgressBar label="Cancelados del mes" percent={stats.pct_cancelados_periodo} valueLabel={`${formatTwoDecimals(stats.pct_cancelados_periodo)}%`} color="red" />
+            <ProgressBar label="Cancelados de meses anteriores" percent={stats.pct_cancelados_arrastre} valueLabel={`${formatTwoDecimals(stats.pct_cancelados_arrastre)}%`} color="yellow" />
           </div>
         </NeonContainer>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <NeonContainer
           theme="blue"
           title="Matriz de Tendencias por Periodo"
           subtitle="Click en cualquier tarjeta para ver el histórico completo"
-          icon={<Activity className="w-5 h-5" />}
+          icon={<Activity className="h-5 w-5" />}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 flex-1 items-center h-full">
+          <div className="grid h-full flex-1 grid-cols-1 items-center gap-3.5 sm:grid-cols-2">
             {trendCards.map((card) => (
               <SparklineCard
                 key={card.id}
@@ -166,39 +175,39 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
           theme="green"
           title="Rendimiento por Grupo de Trabajo"
           subtitle="Promedio de todos los periodos, ordenado por volumen"
-          icon={<Users className="w-5 h-5" />}
+          icon={<Users className="h-5 w-5" />}
         >
           {groupCards.length === 0 ? (
             <EmptyState title="Sin métricas por grupo de trabajo." icon={<Users />} />
           ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 flex-1 items-stretch">
-            {groupCards.map((card) => (
-              <Fragment key={card.id}>
-                <MetricCard
-                  label={card.label}
-                  value={`${card.pctResueltos}%`}
-                  caption={`${formatInteger(card.totalTickets)} tickets/mes · ${card.sharePct}% del total`}
-                  color={card.color}
-                  indicator
-                >
-                  <ProgressBar label="Resueltos" percent={card.pctResueltos} valueLabel={`${card.pctResueltos}%`} color="green" />
-                  <ProgressBar label="Cancelados" percent={card.pctCancelados} valueLabel={`${card.pctCancelados}%`} color="red" />
-                  <ProgressBar label="Rezagados" percent={card.pctRezagados} valueLabel={`${card.pctRezagados}%`} color="yellow" />
-                </MetricCard>
+            <div className="place-items-w-full h-full center grid flex-1 grid-cols-1 items-stretch gap-3.5 sm:grid-cols-2">
+              {groupCards.map((card) => (
+                <Fragment key={card.id}>
+                  <MetricCard
+                    label={card.label}
+                    value={`${card.pctResueltos}%`}
+                    caption={`${formatInteger(card.totalTickets)} tickets/mes · ${card.sharePct}% del total`}
+                    color={card.color}
+                    indicator
+                  >
+                    <ProgressBar label="Resueltos" percent={card.pctResueltos} valueLabel={`${card.pctResueltos}%`} color="green" />
+                    <ProgressBar label="Cancelados" percent={card.pctCancelados} valueLabel={`${card.pctCancelados}%`} color="red" />
+                    <ProgressBar label="Rezagados" percent={card.pctRezagados} valueLabel={`${card.pctRezagados}%`} color="yellow" />
+                  </MetricCard>
 
-                <MetricCard
-                  label={`${card.label} · MTTR`}
-                  value={`${card.mttr} h`}
-                  caption={`Mediana ${card.mttrMediana} h · 1ª respuesta ${card.primeraRespuesta} h`}
-                  subValue={mttrGapLabel(card.mttrDelta)}
-                  color={card.mttrColor}
-                  icon={<Clock className="w-4 h-4 text-sky-400" />}
-                >
-                  <ProgressBar label="Excede el promedio" percent={card.pctExcedeProm} valueLabel={`${card.pctExcedeProm}%`} color="blue" />
-                </MetricCard>
-              </Fragment>
-            ))}
-          </div>
+                  <MetricCard
+                    label={`${card.label} · Cierre Total`}
+                    value={`${card.mttr} h`}
+                    caption={`Mediana ${card.mttrMediana} h · asignación ${formatOneDecimal(card.espera)} h`}
+                    subValue={mttrGapLabel(card.mttrDelta)}
+                    color={card.mttrColor}
+                    icon={<Clock className="h-4 w-4 text-sky-400" />}
+                  >
+                    <ProgressBar label="Excede el promedio" percent={card.pctExcedeProm} valueLabel={`${card.pctExcedeProm}%`} color="blue" />
+                  </MetricCard>
+                </Fragment>
+              ))}
+            </div>
           )}
         </NeonContainer>
       </div>
@@ -209,28 +218,29 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
         title={`Evolución Histórica: ${selectedTrend?.title || ''}`}
         subtitle={selectedTrend?.unitLabel}
         theme={selectedTrend?.color || 'blue'}
-        icon={<BarChart2 className="w-5 h-5 text-brand" />}
+        icon={<BarChart2 className="h-5 w-5 text-brand" />}
         size="xl"
       >
         {selectedTrend && modalChartData && (
           <div className="space-y-6">
-            <div className="bg-surface-primary p-6 rounded-3xl border border-slate-800 shadow-inner">
+            <div className="rounded-3xl border border-slate-800 bg-surface-primary p-6 shadow-inner">
               <LineChart data={modalChartData} options={modalChartOptions} />
             </div>
 
-            <div className="bg-surface-primary border border-slate-800 rounded-3xl overflow-hidden shadow-inner">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+            <div className="overflow-hidden rounded-3xl border border-slate-800 bg-surface-primary shadow-inner">
+              <div className="flex items-center justify-between border-b border-slate-800 p-4">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
                   Desglose Numérico por Periodo
                 </span>
-                <span className="text-xs font-bold text-brand font-mono">{periodsLabel}</span>
+                <span className="font-mono text-xs font-bold text-brand">{periodsLabel}</span>
               </div>
-              <div className="max-h-60 overflow-y-auto custom-scrollbar">
+              <div className="custom-scrollbar max-h-60 overflow-y-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900/80 text-slate-400 uppercase font-black sticky top-0 backdrop-blur-sm border-b border-slate-800">
+                  <thead className="sticky top-0 border-b border-slate-800 bg-slate-900/80 font-black uppercase text-slate-400 backdrop-blur-sm">
                     <tr>
                       <th className="p-4">Periodo</th>
-                      <th className="p-4 text-right">Total Tickets</th>
+                      <th className="p-4 text-right">Creados</th>
+                      <th className="p-4 text-right">Cerrados</th>
                       <th className="p-4 text-right">{selectedTrend.unitLabel}</th>
                       <th className="p-4 text-right">
                         {selectedTrend.unit === 'horas' ? 'Horas del Periodo' : 'Tasa del Periodo (%)'}
@@ -238,15 +248,17 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
-                    {historico.map((row, idx) => {
+                    {historico.map((row) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
+
                       return (
-                        <tr key={idx} className="hover:bg-white/5 transition-colors">
+                        <tr key={row.periodo_reporte} className="transition-colors hover:bg-white/5">
                           <td className="p-4 font-bold text-white">{formatPeriodoLabel(String(row.periodo_reporte))}</td>
-                          <td className="p-4 text-right text-slate-400 font-mono">{formatInteger(row.total_tickets)}</td>
-                          <td className="p-4 text-right font-black font-mono text-white">{countVal.toLocaleString()}</td>
-                          <td className="p-4 text-right font-black font-mono" style={{ color: chartColor }}>
+                          <td className="p-4 text-right font-mono text-slate-400">{formatInteger(row.tickets_creados)}</td>
+                          <td className="p-4 text-right font-mono text-slate-400">{formatInteger(row.tickets_cerrados)}</td>
+                          <td className="p-4 text-right font-mono font-black text-white">{countVal.toLocaleString()}</td>
+                          <td className="p-4 text-right font-mono font-black" style={{ color: chartColor }}>
                             {selectedTrend.unit === 'horas' ? `${rateVal} h` : `${rateVal}%`}
                           </td>
                         </tr>

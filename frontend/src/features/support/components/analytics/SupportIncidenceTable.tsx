@@ -2,7 +2,7 @@ import { Radio } from 'lucide-react';
 
 import { DataTable, EmptyState, NeonContainer } from '@/shared/ui';
 import type { SupportZoneRow } from '../../types';
-import { SUPPORT_ZONE_COLUMNS } from './supportBreakdownColumns';
+import { SUPPORT_ZONE_COLUMNS } from './supportColumns';
 
 interface Props {
   rows: SupportZoneRow[];

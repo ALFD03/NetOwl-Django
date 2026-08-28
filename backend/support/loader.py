@@ -1,151 +1,134 @@
-# NetOwl-Django/backend/support/loader.py
+# backend/support/loader.py
 
 from __future__ import annotations
-import pandas as pd
-import numpy as np
+
 import logging
-from backend.database import DBConnector
+
+import pandas as pd
+
 from backend.conf_config import DB_SCHEMA, TableNames
-from backend.support.config import SUPPORT_CSV_COLUMN_MAP, SUPPORT_CIERRE_COLUMNS
+from backend.database import DBConnector
+from backend.support.config import (
+    SUPPORT_CSV_COLUMN_MAP,
+    SUPPORT_TEXT_COLUMNS,
+    SUPPORT_TICKET_COLUMNS,
+)
 
 logger = logging.getLogger(__name__)
 
+_DATE_COLUMNS = ["creado_el", "primera_fecha_asignada", "ultima_actualizacion_etapa"]
+
+
 def import_support_csv(csv_path: str) -> int:
+    """Carga el export de Odoo, reemplazando por completo `support_tickets`."""
     db = DBConnector()
     df = pd.read_csv(csv_path, dtype=str, keep_default_na=False, encoding="utf-8")
-    
     df = df.rename(columns=SUPPORT_CSV_COLUMN_MAP)
-    
+
     if "ticket_sequence" not in df.columns:
         raise ValueError("El archivo CSV no contiene la columna 'Secuencia ID del ticket'.")
-        
+
     df["ticket_sequence"] = df["ticket_sequence"].astype(str).str.strip()
     df = df[df["ticket_sequence"] != ""].copy()
-    
-    if "creado_el" in df.columns:
-        df["creado_el"] = pd.to_datetime(df["creado_el"], errors="coerce")
-    else:
-        df["creado_el"] = pd.NaT
 
-    if "ultima_actualizacion_etapa" in df.columns:
-        df["ultima_actualizacion_etapa"] = pd.to_datetime(df["ultima_actualizacion_etapa"], errors="coerce")
-    else:
-        df["ultima_actualizacion_etapa"] = df["creado_el"]
+    for col in _DATE_COLUMNS:
+        df[col] = pd.to_datetime(df[col], errors="coerce") if col in df.columns else pd.NaT
 
-    if "primera_fecha_asignada" in df.columns:
-        df["primera_fecha_asignada"] = pd.to_datetime(df["primera_fecha_asignada"], errors="coerce")
-    else:
-        df["primera_fecha_asignada"] = pd.NaT
+    # La duración de Odoo se conserva como NULL cuando no viene: es la fuente de
+    # la medida creación → cierre, y un 0 ahí sería un cierre instantáneo falso.
+    df["duracion_total_horas"] = (
+        pd.to_numeric(df["duracion_total_horas"], errors="coerce")
+        if "duracion_total_horas" in df.columns
+        else pd.Series([None] * len(df), dtype="float64")
+    )
 
-    if "duracion_total_horas" in df.columns:
-        df["duracion_total_horas"] = pd.to_numeric(df["duracion_total_horas"], errors="coerce").fillna(0.0)
-    else:
-        df["duracion_total_horas"] = 0.0
-    
-    text_cols = [
-        "cliente", "etapa", "grupo_trabajo", "sucursal",
-        "zona", "municipio", "tipo_solicitud", "razon_falla", "solucion_falla"
-    ]
-    for col in text_cols:
+    # Las columnas de texto son claves de agrupación: un vacío tiene que
+    # colapsar a un único valor visible, o la misma zona o el mismo técnico se
+    # partirían en varias filas del reporte.
+    for col in SUPPORT_TEXT_COLUMNS:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().replace(["", "nan", "None", "<NA>"], "Sin Especificar")
+            df[col] = (
+                df[col].astype(str).str.strip()
+                .replace(["", "nan", "None", "<NA>", "False"], "Sin Especificar")
+            )
         else:
             df[col] = "Sin Especificar"
 
-    cols_to_keep = [
-        "ticket_sequence", "cliente", "etapa", "grupo_trabajo", "sucursal",
-        "zona", "municipio", "tipo_solicitud", "razon_falla", "solucion_falla",
-        "creado_el", "ultima_actualizacion_etapa", "primera_fecha_asignada", "duracion_total_horas"
-    ]
-    df = df[cols_to_keep]
+    df = df[SUPPORT_TICKET_COLUMNS]
 
-    _create_support_tables_if_not_exist(db)
-    
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(f"TRUNCATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}")
-        conn.commit()
-        
+    recreate_support_schema(db)
     db.copy_dataframe(df, TableNames.SUPPORT_TICKETS)
     return len(df)
 
-def _create_support_tables_if_not_exist(db: DBConnector):
+
+def recreate_support_schema(db: DBConnector) -> None:
+    """
+    Rehace el esquema de soporte desde cero.
+
+    Se hace DROP en lugar de ALTER porque el módulo cambió de forma: los tickets
+    ganaron `asignado_a` y perdieron `municipio`, y las tablas de resultados
+    pasaron de decenas de columnas escalares a un JSONB por periodo. Migrar
+    entre esas dos formas no tiene sentido — los datos hay que recalcularlos de
+    todos modos, y `import_support_csv` los repuebla enteros.
+    """
     statements = [
+        f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS};",
+        f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO};",
+        f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO};",
+        f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES};",
         f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS} (
+        CREATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS} (
             id BIGSERIAL PRIMARY KEY,
             ticket_sequence TEXT NOT NULL,
             cliente TEXT,
             etapa TEXT,
             grupo_trabajo TEXT,
+            asignado_a TEXT,
             sucursal TEXT,
             zona TEXT,
-            municipio TEXT,
             tipo_solicitud TEXT,
             razon_falla TEXT,
             solucion_falla TEXT,
             creado_el TIMESTAMP,
-            ultima_actualizacion_etapa TIMESTAMP,
             primera_fecha_asignada TIMESTAMP,
-            duracion_total_horas NUMERIC DEFAULT 0
+            ultima_actualizacion_etapa TIMESTAMP,
+            duracion_total_horas NUMERIC
         );
         """,
-        f"ALTER TABLE {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS} ADD COLUMN IF NOT EXISTS primera_fecha_asignada TIMESTAMP;",
         f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} (
+        CREATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} (
             id BIGSERIAL PRIMARY KEY,
-            periodo_reporte VARCHAR(7) NOT NULL UNIQUE,
-            total_tickets INT DEFAULT 0,
-            tickets_resueltos INT DEFAULT 0,
-            tickets_cancelados INT DEFAULT 0,
-            tickets_rezagados INT DEFAULT 0,
-            pct_resueltos NUMERIC DEFAULT 0,
-            pct_cancelados NUMERIC DEFAULT 0,
-            pct_rezagados NUMERIC DEFAULT 0,
-            tiempo_medio_cierre_horas NUMERIC DEFAULT 0,
-            tiempo_mediana_cierre_horas NUMERIC DEFAULT 0,
-            tiempo_min_cierre_horas NUMERIC DEFAULT 0,
-            tiempo_p25_cierre_horas NUMERIC DEFAULT 0,
-            tiempo_p75_cierre_horas NUMERIC DEFAULT 0,
-            tiempo_max_cierre_horas NUMERIC DEFAULT 0,
-            tiempo_std_cierre_horas NUMERIC DEFAULT 0,
-            pct_excede_promedio_cierre NUMERIC DEFAULT 0,
-            tiempo_promedio_primera_respuesta_horas NUMERIC DEFAULT 0,
+            periodo_reporte VARCHAR(7) NOT NULL,
+            metricas JSONB NOT NULL,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE (periodo_reporte)
+        );
+        """,
+        f"""
+        CREATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO} (
+            id BIGSERIAL PRIMARY KEY,
+            periodo_reporte VARCHAR(7) NOT NULL,
+            grupo_trabajo TEXT NOT NULL,
+            dimension TEXT NOT NULL,
+            valor TEXT NOT NULL,
+            metricas JSONB NOT NULL,
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
         f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} (
+        CREATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} (
             id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
             resumen_global JSONB,
             por_grupo_trabajo JSONB,
+            periodos_evaluados INT DEFAULT 0,
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
-        f"""
-        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO} (
-            id BIGSERIAL PRIMARY KEY,
-            periodo_reporte VARCHAR(7) NOT NULL,
-            dimension TEXT NOT NULL,
-            grupo_trabajo TEXT NOT NULL DEFAULT 'Todos',
-            tipo_solicitud TEXT NOT NULL DEFAULT 'Todas',
-            razon_falla TEXT NOT NULL DEFAULT 'Todas',
-            valor TEXT NOT NULL,
-            metricas JSONB,
-            updated_at TIMESTAMP DEFAULT NOW()
-        );
-        """,
-        # Instalaciones anteriores a la separación de tiempos (asignación vs.
-        # creación) y a los estadísticos de primera respuesta no tienen estas
-        # columnas; se añaden aquí en lugar de exigir recrear la tabla.
-        *[
-            f"ALTER TABLE {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} "
-            f"ADD COLUMN IF NOT EXISTS {col} NUMERIC DEFAULT 0;"
-            for col in SUPPORT_CIERRE_COLUMNS
-        ],
-        f"CREATE INDEX IF NOT EXISTS idx_support_cierre_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}(periodo_reporte);",
-        f"CREATE INDEX IF NOT EXISTS idx_support_dim_periodo ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(periodo_reporte);",
+        f"CREATE INDEX idx_support_tickets_creado ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(creado_el);",
+        f"CREATE INDEX idx_support_tickets_cierre ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(ultima_actualizacion_etapa);",
+        f"CREATE INDEX idx_support_dim_lookup ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(periodo_reporte, dimension);",
     ]
+
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             for stmt in statements:

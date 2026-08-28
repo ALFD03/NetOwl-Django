@@ -1,22 +1,32 @@
-# NetOwl-Django/backend/support/queries.py
+# backend/support/queries.py
 
 from __future__ import annotations
+
 import json
 import logging
 import pathlib
 from typing import Any
+
 import pandas as pd
-from backend.database import DBConnector
+
 from backend.conf_config import DB_SCHEMA, TableNames
+from backend.database import DBConnector
+from backend.support.cohorts import PeriodCohort, build_cohort, classify_tickets
+from backend.support.config import (
+    DIM_GRUPO,
+    SUPPORT_DESGLOSES,
+    SUPPORT_DIMENSION_COLUMNS,
+    SUPPORT_DIMENSIONES,
+)
+from backend.support.metrics import compute_metrics_for_period
 
 logger = logging.getLogger(__name__)
 
 ZONAS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Zonas.json"
 
+
 def _parse_jsonb(val: Any) -> Any:
-    if val is None:
-        return None
-    if isinstance(val, (dict, list)):
+    if isinstance(val, (dict, list)) or val is None:
         return val
     if isinstance(val, str):
         try:
@@ -25,85 +35,202 @@ def _parse_jsonb(val: Any) -> Any:
             return val
     return val
 
+
+# --- Lecturas de tablas ya calculadas ---------------------------------------
+
 def get_support_periodos() -> list[str]:
     db = DBConnector()
     try:
-        df = db.query(f"SELECT DISTINCT periodo_reporte FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} ORDER BY periodo_reporte DESC")
-        if df.empty:
-            return []
-        return df["periodo_reporte"].tolist()
+        df = db.query(f"""
+            SELECT DISTINCT periodo_reporte
+            FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
+            ORDER BY periodo_reporte DESC
+        """)
+        return df["periodo_reporte"].tolist() if not df.empty else []
     except Exception:
         logger.exception("Error al consultar periodos de soporte")
         return []
 
+
 def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict]:
+    """
+    El histórico de cierres, con las métricas del JSONB ya aplanadas.
+
+    Se aplanan aquí y no en el front porque las tablas y las sparklines leen los
+    escalares por nombre; el JSONB es un detalle de almacenamiento.
+    """
     db = DBConnector()
     try:
-        where_clause = ""
-        params = []
+        where = ["1=1"]
+        params: list[Any] = []
+
         if periodos:
-            placeholders = ", ".join(["%s"] * len(periodos))
-            where_clause = f"WHERE periodo_reporte IN ({placeholders})"
-            params = periodos
+            where.append(f"periodo_reporte IN ({', '.join(['%s'] * len(periodos))})")
+            params.extend(periodos)
 
         df = db.query(f"""
-            SELECT * FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
-            {where_clause}
-            ORDER BY periodo_reporte DESC
+            SELECT periodo_reporte, metricas
+            FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
+            WHERE {" AND ".join(where)}
+            ORDER BY periodo_reporte ASC
         """, params=params)
 
         if df.empty:
             return []
-        return df.to_dict(orient="records")
+
+        return [
+            {
+                "periodo_reporte": row["periodo_reporte"],
+                **(_parse_jsonb(row["metricas"]) or {}),
+            }
+            for _, row in df.iterrows()
+        ]
     except Exception:
         logger.exception("Error al consultar cierre histórico de soporte")
         return []
 
-def get_support_metric_totals(periodo: str | None = None) -> dict:
+
+def get_support_metric_totals() -> dict:
+    """El dashboard de empresa: promedio de todos los periodos, más su serie."""
     db = DBConnector()
     try:
-        df_mg = db.query(f"SELECT resumen_global, por_grupo_trabajo FROM {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} WHERE id = 1")
-        
-        resumen_global = {}
-        por_grupo = {}
-        if not df_mg.empty:
-            resumen_global = _parse_jsonb(df_mg.iloc[0]["resumen_global"]) or {}
-            por_grupo = _parse_jsonb(df_mg.iloc[0]["por_grupo_trabajo"]) or {}
-
-        df_hist = db.query(f"""
-            SELECT * FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
-            ORDER BY periodo_reporte ASC
+        df = db.query(f"""
+            SELECT resumen_global, por_grupo_trabajo, periodos_evaluados
+            FROM {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES}
+            WHERE id = 1
         """)
-        historico = df_hist.to_dict(orient="records") if not df_hist.empty else []
 
-        if not resumen_global and historico:
-            df_h = pd.DataFrame(historico)
-            resumen_global = {
-                "total_tickets_promedio_mensual": round(float(df_h["total_tickets"].mean()), 2),
-                "tickets_resueltos_promedio_mensual": round(float(df_h["tickets_resueltos"].mean()), 2),
-                "tickets_cancelados_promedio_mensual": round(float(df_h["tickets_cancelados"].fillna(0).mean()), 2),
-                "tickets_rezagados_promedio_mensual": round(float(df_h["tickets_rezagados"].fillna(0).mean()), 2),
-                "pct_resueltos": round(float(df_h["pct_resueltos"].mean()), 2),
-                "pct_cancelados": round(float(df_h["pct_cancelados"].fillna(0).mean()), 2),
-                "pct_rezagados": round(float(df_h["pct_rezagados"].fillna(0).mean()), 2),
-                "tiempo_medio_cierre_horas": round(float(df_h["tiempo_medio_cierre_horas"].mean()), 2),
-                "tiempo_mediana_cierre_horas": round(float(df_h["tiempo_mediana_cierre_horas"].fillna(0).mean()), 2),
-                "tiempo_promedio_primera_respuesta_horas": round(float(df_h["tiempo_promedio_primera_respuesta_horas"].fillna(0).mean()), 2),
-                "pct_excede_promedio_cierre": round(float(df_h["pct_excede_promedio_cierre"].fillna(0).mean()), 2),
-            }
+        resumen: dict = {}
+        por_grupo: dict = {}
+        periodos_evaluados = 0
+
+        if not df.empty:
+            fila = df.iloc[0]
+            resumen = _parse_jsonb(fila["resumen_global"]) or {}
+            por_grupo = _parse_jsonb(fila["por_grupo_trabajo"]) or {}
+            periodos_evaluados = int(fila["periodos_evaluados"] or 0)
 
         return {
-            "resumen_global": resumen_global,
+            "periodos_evaluados": periodos_evaluados,
+            "resumen_global": resumen,
             "por_grupo_trabajo": por_grupo,
-            "historico_tendencias": historico
+            "historico_tendencias": get_support_cierre_historico(),
         }
     except Exception:
         logger.exception("Error al consultar métricas globales de soporte")
-        return {"resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": []}
+        return {
+            "periodos_evaluados": 0,
+            "resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": [],
+        }
+
+
+def get_support_dimension_metrics(
+    periodo: str, grupo: str | None = None, dimension: str | None = None,
+) -> list[dict]:
+    """Las filas dimensionales persistidas de un periodo."""
+    db = DBConnector()
+    try:
+        where = ["periodo_reporte = %s"]
+        params: list[Any] = [periodo]
+
+        if grupo:
+            where.append("grupo_trabajo = %s")
+            params.append(grupo)
+        if dimension:
+            where.append("dimension = %s")
+            params.append(dimension)
+
+        df = db.query(f"""
+            SELECT grupo_trabajo, dimension, valor, metricas
+            FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
+            WHERE {" AND ".join(where)}
+            ORDER BY grupo_trabajo ASC, dimension ASC, valor ASC
+        """, params=params)
+
+        if df.empty:
+            return []
+
+        return [
+            {
+                "grupo_trabajo": row["grupo_trabajo"],
+                "dimension": row["dimension"],
+                "valor": row["valor"],
+                "metricas": _parse_jsonb(row["metricas"]) or {},
+            }
+            for _, row in df.iterrows()
+        ]
+    except Exception:
+        logger.exception("Error al consultar métricas dimensionales de soporte")
+        return []
+
+
+# --- Cálculo al vuelo -------------------------------------------------------
+
+def _load_period_cohort(db: DBConnector, periodo: str) -> PeriodCohort:
+    """
+    La cohorte de un periodo, reconstruida desde los tickets.
+
+    Se leen sólo los tickets que nacieron o cerraron en el mes —del orden de
+    veinte mil filas— y se clasifican con las mismas reglas del analizador, así
+    que lo que sale de aquí es idéntico a lo que se persistió.
+    """
+    df = db.query(f"""
+        SELECT * FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
+        WHERE TO_CHAR(creado_el, 'YYYY-MM') = %s
+           OR TO_CHAR(ultima_actualizacion_etapa, 'YYYY-MM') = %s
+    """, params=[periodo, periodo])
+
+    if df.empty:
+        return PeriodCohort(periodo, df)
+
+    return build_cohort(classify_tickets(df), periodo)
+
+
+def get_support_breakdown(
+    periodo: str, dimension: str, valor: str, grupo: str | None = None,
+) -> dict:
+    """
+    El desglose de un valor dimensional por tipo, razón y solución.
+
+    Este cruce no está persistido a propósito: el producto cartesiano de zonas,
+    sucursales y técnicos contra las ~160 razones y soluciones son decenas de
+    miles de filas JSONB por periodo, para algo que sólo se mira de una en una.
+    Recalcularlo sobre los tickets del mes cuesta milisegundos.
+    """
+    if dimension not in SUPPORT_DIMENSION_COLUMNS:
+        return {"metricas": {}, "desgloses": {}}
+
+    db = DBConnector()
+    try:
+        cohorte = _load_period_cohort(db, periodo)
+        if grupo:
+            cohorte = cohorte.filter(DIM_GRUPO, grupo)
+        cohorte = cohorte.filter(dimension, valor)
+
+        return {
+            "periodo": periodo,
+            "grupo_trabajo": grupo or "",
+            "dimension": dimension,
+            "valor": valor,
+            "metricas": compute_metrics_for_period(cohorte),
+            "desgloses": {
+                desglose: [
+                    {"nombre": nombre, "metricas": compute_metrics_for_period(sub)}
+                    for nombre, sub in cohorte.desglosar(desglose)
+                ]
+                for desglose in SUPPORT_DESGLOSES
+            },
+        }
+    except Exception:
+        logger.exception("Error al calcular el desglose dimensional de soporte")
+        return {"metricas": {}, "desgloses": {}}
+
+
+# --- Incidencia por zona ----------------------------------------------------
 
 def _load_zone_info() -> dict:
     """Mapa zona → {site, type} desde `Zonas.json`, indexado en minúsculas."""
-    zone_info = {}
+    zone_info: dict[str, dict] = {}
     if not ZONAS_PATH.exists():
         logger.warning("No se encontró Zonas.json: la incidencia por zona no podrá mapear sites.")
         return zone_info
@@ -158,7 +285,7 @@ def _get_activos_por_zona(db: DBConnector, periodo: str | None) -> dict[str, int
     return activos
 
 
-def _get_incidencia_por_zona(db: DBConnector, periodo: str | None, zone_info: dict) -> list[dict]:
+def get_incidencia_por_zona(db: DBConnector, cohorte: PeriodCohort) -> list[dict]:
     """
     Tasa de incidencia por zona: (tickets de la zona / activos de la zona) * 100.
 
@@ -166,45 +293,19 @@ def _get_incidencia_por_zona(db: DBConnector, periodo: str | None, zone_info: di
     incidencia describe a los clientes de la zona, no el reparto interno del
     trabajo, así que el numerador tiene que abarcar todos los grupos.
     """
-    where_t = ""
-    params_t: list = []
-    if periodo:
-        where_t = "WHERE TO_CHAR(creado_el, 'YYYY-MM') = %s"
-        params_t = [periodo]
-
-    df = db.query(f"""
-        SELECT
-            zona,
-            COUNT(*)::int AS total_tickets,
-            COUNT(*) FILTER (WHERE LOWER(TRIM(etapa)) = 'resuelto')::int AS tickets_resueltos,
-            -- Mismo criterio que la medida `cierre` de metrics.py: resueltos,
-            -- desde la primera asignación y con al menos un minuto medible.
-            -- Antes bastaba con que la diferencia fuera positiva, así que esta
-            -- consulta y el dashboard daban dos MTTR distintos del mismo dato.
-            AVG(EXTRACT(EPOCH FROM (ultima_actualizacion_etapa - primera_fecha_asignada)) / 3600.0)
-                FILTER (
-                    WHERE LOWER(TRIM(etapa)) = 'resuelto'
-                      AND primera_fecha_asignada IS NOT NULL
-                      AND ultima_actualizacion_etapa >= primera_fecha_asignada + INTERVAL '1 minute'
-                ) AS mttr_horas
-        FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
-        {where_t}
-        GROUP BY zona
-    """, params=params_t)
-
-    if df.empty:
+    if cohorte.empty:
         return []
 
-    activos_map = _get_activos_por_zona(db, periodo)
+    zone_info = _load_zone_info()
+    activos_map = _get_activos_por_zona(db, cohorte.periodo)
 
     filas = []
-    for _, row in df.iterrows():
-        zona = str(row["zona"]).strip()
-        clave = zona.lower()
+    for zona, sub in cohorte.desglosar("zona"):
+        metricas = compute_metrics_for_period(sub)
+        clave = zona.strip().lower()
         meta = zone_info.get(clave, {"site": "Otros / Desconocido", "type": "RF"})
         activos = activos_map.get(clave, 0)
-        tickets = int(row["total_tickets"])
-        mttr = row["mttr_horas"]
+        tickets = metricas["total_tickets"]
 
         filas.append({
             "zona": zona,
@@ -215,176 +316,100 @@ def _get_incidencia_por_zona(db: DBConnector, periodo: str | None, zone_info: di
             # Sin población conocida no hay denominador: se deja en 0 y el front
             # lo distingue de una zona realmente sana por `total_suscriptores`.
             "tasa_incidencia_pct": round((tickets / activos) * 100, 2) if activos > 0 else 0.0,
-            "mttr_promedio": round(float(mttr), 2) if pd.notna(mttr) else 0.0,
+            "mttr_promedio": metricas["tiempo_medio_cierre_creado_cerrados_horas"],
+            "pct_resueltos": metricas["pct_resueltos"],
         })
 
     filas.sort(key=lambda x: x["tasa_incidencia_pct"], reverse=True)
     return filas
 
 
+# --- Payload de la vista Analytics ------------------------------------------
+
 def get_support_analytics_structured(periodo: str | None = None) -> dict:
-    """Estructura Analytics calculando la Tasa de Incidencia por Cliente (%) por Site."""
+    """
+    Todo lo que la vista de periodo necesita en una sola carga.
+
+    Las dimensiones llegan enteras —los tres ejes y los tres desgloses de cada
+    grupo— porque el selector de dimensión es client-side: cambiarlo no debe
+    costar una vuelta al servidor. Sólo el drill-down de un valor concreto pide
+    datos nuevos, a `get_support_breakdown`.
+    """
+    periodos = get_support_periodos()
+    if not periodos:
+        return {"periodo": "", "grupos": {}, "incidencia_zonas": []}
+
+    periodo = periodo if periodo in periodos else periodos[0]
+
     db = DBConnector()
     try:
-        zone_info = _load_zone_info()
+        filas = get_support_dimension_metrics(periodo)
 
-        where_p = ""
-        params_p = []
-        where_t = ""
-        params_t = []
-        if periodo and periodo != "ALL":
-            where_p = "WHERE periodo_reporte = %s"
-            params_p = [periodo]
-            where_t = "WHERE TO_CHAR(creado_el, 'YYYY-MM') = %s"
-            params_t = [periodo]
-        else:
-            periodos = get_support_periodos()
-            if periodos:
-                where_p = "WHERE periodo_reporte = %s"
-                params_p = [periodos[0]]
-                where_t = "WHERE TO_CHAR(creado_el, 'YYYY-MM') = %s"
-                params_t = [periodos[0]]
+        grupos: dict[str, dict] = {}
+        for fila in filas:
+            grupo = grupos.setdefault(fila["grupo_trabajo"], {
+                "metricas": {},
+                **{dim: [] for dim in (*SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES)},
+            })
 
-        df_dims = db.query(f"""
-            SELECT periodo_reporte, dimension, grupo_trabajo, tipo_solicitud, razon_falla, valor, metricas
-            FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
-            {where_p}
-        """, params=params_p)
+            if fila["dimension"] == DIM_GRUPO:
+                grupo["metricas"] = fila["metricas"]
+            elif fila["dimension"] in grupo:
+                grupo[fila["dimension"]].append({
+                    "nombre": fila["valor"],
+                    "metricas": fila["metricas"],
+                })
 
-        df_soluciones = db.query(f"""
-            SELECT grupo_trabajo, solucion_falla, COUNT(*)::int AS total
-            FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
-            {where_t}
-              AND solucion_falla IS NOT NULL AND solucion_falla != '' AND solucion_falla != 'Sin Especificar'
-            GROUP BY grupo_trabajo, solucion_falla
-            ORDER BY total DESC
-        """, params=params_t)
-
-        if df_dims.empty:
-            return {"grupos": {}}
-
-        grupos_dict = {}
-
-        for _, row in df_dims.iterrows():
-            g = row["grupo_trabajo"]
-            dim = row["dimension"]
-            t_sol = row["tipo_solicitud"]
-            r_fal = row["razon_falla"]
-            val = row["valor"]
-            m = _parse_jsonb(row["metricas"]) or {}
-
-            if g not in grupos_dict:
-                grupos_dict[g] = {
-                    "total_tickets_grupo": 0,
-                    "metricas_grupo": {},
-                    "tipos_solicitud": [],
-                    "razones_falla": [],
-                    "soluciones_falla": [],
-                    "sucursales": []
-                }
-
-            if dim == "grupo_trabajo":
-                grupos_dict[g]["total_tickets_grupo"] = m.get("total_tickets", 0)
-                grupos_dict[g]["metricas_grupo"] = m
-            elif dim == "tipo_solicitud" and t_sol != "Todas" and r_fal == "Todas":
-                grupos_dict[g]["tipos_solicitud"].append({"nombre": val, "metricas": m})
-            elif dim == "razon_falla" and r_fal != "Todas":
-                grupos_dict[g]["razones_falla"].append({"nombre": val, "metricas": m})
-            elif dim == "sucursal" and val != "Todas" and t_sol == "Todas" and r_fal == "Todas":
-                grupos_dict[g]["sucursales"].append({"nombre": val, "metricas": m})
-        # Cargar soluciones técnicas
-        if not df_soluciones.empty:
-            for _, srow in df_soluciones.iterrows():
-                g = srow["grupo_trabajo"]
-                if g in grupos_dict:
-                    tot_g = grupos_dict[g]["total_tickets_grupo"] or 1
-                    cant = int(srow["total"])
-                    pct = round((cant / tot_g) * 100, 2)
-                    grupos_dict[g]["soluciones_falla"].append({
-                        "nombre": srow["solucion_falla"],
-                        "total": cant,
-                        "pct": pct
-                    })
-
-        for g, data_g in grupos_dict.items():
-            tot_g = data_g["total_tickets_grupo"] or 1
-            for r in data_g["razones_falla"]:
-                cant = r["metricas"].get("total_tickets", 0)
-                r["metricas"]["pct_del_grupo"] = round((cant / tot_g) * 100, 2)
+        cohorte = _load_period_cohort(db, periodo)
 
         return {
-            "grupos": grupos_dict,
-            "incidencia_zonas": _get_incidencia_por_zona(db, params_t[0] if params_t else None, zone_info),
+            "periodo": periodo,
+            "grupos": grupos,
+            "incidencia_zonas": get_incidencia_por_zona(db, cohorte),
         }
     except Exception:
         logger.exception("Error estructurando Analytics de Soporte")
-        return {"grupos": {}, "incidencia_zonas": []}
+        return {"periodo": periodo, "grupos": {}, "incidencia_zonas": []}
 
-def get_support_dimension_metrics(periodos: list[str] | None = None) -> list[dict]:
+
+# --- Listado de tickets -----------------------------------------------------
+
+def get_support_tickets_list(
+    limit: int = 500, grupo: str | None = None, periodo: str | None = None
+) -> list[dict]:
     db = DBConnector()
     try:
-        where_clause = ""
-        params = []
-        if periodos:
-            placeholders = ", ".join(["%s"] * len(periodos))
-            where_clause = f"WHERE periodo_reporte IN ({placeholders})"
-            params = periodos
+        where = ["1=1"]
+        params: list[Any] = []
 
-        df = db.query(f"""
-            SELECT periodo_reporte, dimension, grupo_trabajo, tipo_solicitud, razon_falla, valor, metricas
-            FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
-            {where_clause}
-            ORDER BY periodo_reporte DESC, grupo_trabajo ASC
-        """, params=params)
-
-        if df.empty:
-            return []
-
-        result = []
-        for _, row in df.iterrows():
-            result.append({
-                "periodo": row["periodo_reporte"],
-                "dimension": row["dimension"],
-                "grupo_trabajo": row["grupo_trabajo"],
-                "tipo_solicitud": row["tipo_solicitud"],
-                "razon_falla": row["razon_falla"],
-                "valor": row["valor"],
-                "metricas": _parse_jsonb(row["metricas"]) or {}
-            })
-        return result
-    except Exception:
-        logger.exception("Error al consultar métricas dimensionales de soporte")
-        return []
-
-def get_support_tickets_list(limit: int = 500, grupo: str | None = None, periodo: str | None = None) -> list[dict]:
-    db = DBConnector()
-    try:
-        where_clause = "WHERE 1=1"
-        params = []
         if grupo:
-            where_clause += " AND grupo_trabajo = %s"
+            where.append("grupo_trabajo = %s")
             params.append(grupo)
         if periodo and len(periodo) == 7:
-            where_clause += " AND TO_CHAR(creado_el, 'YYYY-MM') = %s"
+            where.append("TO_CHAR(creado_el, 'YYYY-MM') = %s")
             params.append(periodo)
-        
+
         df = db.query(f"""
-            SELECT ticket_sequence, cliente, etapa, grupo_trabajo, sucursal, zona, municipio,
-                   tipo_solicitud, razon_falla, solucion_falla, creado_el,
-                   ultima_actualizacion_etapa, duracion_total_horas
+            SELECT ticket_sequence, cliente, etapa, grupo_trabajo, asignado_a,
+                   sucursal, zona, tipo_solicitud, razon_falla, solucion_falla,
+                   creado_el, primera_fecha_asignada, ultima_actualizacion_etapa,
+                   duracion_total_horas
             FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
-            {where_clause}
+            WHERE {" AND ".join(where)}
             ORDER BY creado_el DESC
-            LIMIT {limit}
-        """, params=params)
-        
+            LIMIT %s
+        """, params=[*params, int(limit)])
+
         if df.empty:
             return []
-            
-        df["creado_el"] = df["creado_el"].astype(str)
-        df["ultima_actualizacion_etapa"] = df["ultima_actualizacion_etapa"].astype(str)
-        df["duracion_total_horas"] = df["duracion_total_horas"].astype(float).round(2)
-        return df.to_dict(orient="records")
+
+        for col in ("creado_el", "primera_fecha_asignada", "ultima_actualizacion_etapa"):
+            df[col] = df[col].astype(str)
+        df["duracion_total_horas"] = pd.to_numeric(
+            df["duracion_total_horas"], errors="coerce"
+        ).round(2)
+
+        return df.where(pd.notna(df), None).to_dict(orient="records")
     except Exception:
         logger.exception("Error al consultar lista de tickets de soporte")
         return []

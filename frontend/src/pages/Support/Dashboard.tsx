@@ -9,6 +9,7 @@ export default function SupportDashboard(props: SupportDashboardProps) {
   return (
     <AppLayout title="Technical Support Dashboard">
       <ModuleHeader module="support" activeTab="dashboard" />
+
       <SupportDashboardView data={data} />
     </AppLayout>
   );
