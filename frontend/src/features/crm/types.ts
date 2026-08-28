@@ -13,6 +13,10 @@ export type {
   CrmEfectividadRow,
   CrmHistoricoRow,
   CrmMetricas,
+  CrmTiempoEtapaCombinado,
+  CrmTiempoEtapaDesenlace,
+  CrmTiempoEtapaPermanencia,
+  CrmTiempoEtapaRow,
 } from '@/shared/types/crm';
 
 import type { CrmDimensionRow, CrmEfectividadRow, CrmHistoricoRow } from '@/shared/types/crm';

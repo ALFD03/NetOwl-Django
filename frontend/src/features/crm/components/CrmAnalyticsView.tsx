@@ -13,6 +13,7 @@ import { formatInteger, formatTwoDecimals, toNumber } from '@/shared/utils/forma
 import type { CrmDimensionValue, CrmHealthCard, CrmHistoricoRow, CrmRankingEntry } from '../types';
 import { CrmAnalyticsCharts } from './analytics/CrmAnalyticsCharts';
 import { CrmAnalyticsTable } from './analytics/CrmAnalyticsTable';
+import { CrmStageTimeSection } from './analytics/CrmStageTimeSection';
 
 interface CrmAnalyticsViewProps {
   globalData: CrmHistoricoRow;
@@ -118,6 +119,12 @@ export function CrmAnalyticsView({
           />
         )}
       </NeonContainer>
+
+      <CrmStageTimeSection
+        globalData={globalData}
+        rows={rows}
+        selectedDimension={selectedDimension}
+      />
 
       <NeonContainer
         theme="yellow"

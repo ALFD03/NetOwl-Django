@@ -23,6 +23,54 @@ ETAPA_ORDER = [
 
 DIMENSIONES = ["campana", "sucursal", "vendedor"]
 
+# --- Tiempo por etapa -------------------------------------------------------
+# El embudo lineal: las etapas por las que una oportunidad progresa hasta
+# instalar. Las etapas 8, 9 y 10 van después en `ETAPA_ORDER` pero no son un
+# avance, así que el sentido de un movimiento se decide contra esta lista y no
+# contra el orden completo.
+ETAPA_FLUJO = [
+    "etapa_1_contacto", "etapa_2_recepcion", "etapa_3_factibilidad",
+    "etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas",
+    "etapa_7_instalados",
+]
+
+# Etapas que no son cola de trabajo: nadie "espera" en ellas, así que su
+# duración de salida no mide gestión. La 7 es el final del embudo y `perdido`
+# es un estado terminal.
+ETAPAS_SIN_ESPERA = ["etapa_7_instalados", "perdido"]
+
+# Las etapas que manda la venta. El reporte de tiempos las destaca y el resto
+# quedan como contexto.
+ETAPAS_CLAVE_VENTAS = [
+    "etapa_1_contacto", "etapa_2_recepcion", "etapa_3_factibilidad",
+    "etapa_5_gpi", "etapa_8_devueltos",
+]
+
+# El promedio crudo de horas en etapa lo domina la cola: una oportunidad
+# olvidada seis meses en la etapa 1 pesa lo mismo que cien gestionadas en un
+# día. El promedio ajustado recorta la muestra a este percentil (winsorización:
+# el caso extremo no se descarta, se cuenta como si valiera el corte) para que
+# el número represente la gestión típica sin perder los casos del conteo.
+TIEMPO_ETAPA_WINSOR_P = 0.95
+
+# Un movimiento por debajo de este umbral es administrativo —una corrección de
+# etapa, una carga masiva—, no tiempo de gestión. Se cuenta igual en el promedio
+# (es tiempo real que la oportunidad pasó ahí), pero se reporta su peso aparte
+# para poder leer el promedio con esa reserva.
+TIEMPO_ETAPA_UMBRAL_INSTANTANEO_H = 0.5
+
+# Duración mínima para que un movimiento sea una estancia y no un artefacto.
+# Un salto de duración exactamente 0 no es una etapa que se recorrió rápido:
+# son dos escrituras del mismo instante —el alta que cae en la etapa 1 y la
+# rutina que la empuja a la 2, una corrección deshecha— y meterlo en el promedio
+# sólo añade ceros al numerador mientras infla el divisor. A partir de un minuto
+# de diferencia sí hubo una estancia, por corta que sea, y cuenta entera.
+TIEMPO_ETAPA_MIN_DURACION_H = 1 / 60
+
+# Muestra mínima para que el tiempo de una etapa (o de una rebanada dimensional)
+# se considere legible. Por debajo se sirve igual, marcado como poco fiable.
+TIEMPO_ETAPA_MIN_MUESTRA = 10
+
 PROB_DIM_E8 = ["devolver_oportunidad"]
 PROB_DIM_PERDIDOS_RESCATE = ["motivo_perdida"]
 

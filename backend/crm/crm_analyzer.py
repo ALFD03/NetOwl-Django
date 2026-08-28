@@ -6,6 +6,7 @@ from ..database import DBConnector
 from ..conf_config import DB_SCHEMA, TableNames
 from .crm_config import ETAPA8_KEY
 from .metrics.core import compute_crm_metrics_for_period
+from .metrics.tiempo import compute_permanencias_en_etapa
 from .crm_dimensions import save_crm_dimensiones_periodo
 from .crm_loader import ensure_crm_schema
 
@@ -30,10 +31,10 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     horas_promedio_cierre, horas_mediana_cierre, horas_p25_cierre, horas_p75_cierre,
                     horas_min_cierre, horas_max_cierre, horas_std_cierre,
                     pct_excede_prom_cierre,
-                    efectividad,
+                    efectividad, tiempo_por_etapa,
                     updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (periodo_reporte) DO UPDATE SET
                     total_oportunidades = EXCLUDED.total_oportunidades,
                     ganados = EXCLUDED.ganados,
@@ -69,6 +70,7 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     horas_std_cierre = EXCLUDED.horas_std_cierre,
                     pct_excede_prom_cierre = EXCLUDED.pct_excede_prom_cierre,
                     efectividad = EXCLUDED.efectividad,
+                    tiempo_por_etapa = EXCLUDED.tiempo_por_etapa,
                     updated_at = NOW()
                 """,
                 [
@@ -85,6 +87,7 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
                     m["horas_min_cierre"], m["horas_max_cierre"], m["horas_std_cierre"],
                     m["pct_excede_prom_cierre"],
                     json.dumps(m.get("efectividad", [])),
+                    json.dumps(m.get("tiempo_por_etapa", [])),
                 ]
             )
         conn.commit()
@@ -108,6 +111,18 @@ def _save_global_crm_metrics(db: DBConnector, resumen_global: dict, tiempo_por_e
         conn.commit()
 
 
+def _normalizar_id(serie: pd.Series) -> pd.Series:
+    """El id de una oportunidad como texto comparable.
+
+    El CSV lo trae a veces como número, y pandas lo lee como float: `4213` se
+    convierte en `"4213.0"` y deja de cuadrar con el `id` de la oportunidad.
+    """
+    txt = serie.astype(str).str.strip()
+    # Sólo el caso del entero leído como float: un id alfanumérico que acabe en
+    # `.0` de verdad no se toca.
+    return txt.str.replace(r"^(\d+)\.0$", r"\1", regex=True)
+
+
 def run_crm_analysis(periodo_str: str | None = None) -> dict:
     db = DBConnector()
 
@@ -123,23 +138,69 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
         print("⚠️ No hay oportunidades de CRM para analizar.")
         return {"status": "empty", "message": "No hay datos cargados."}
 
+    # Una oportunidad repetida en la tabla ensancharía todos los cruces con los
+    # logs y contaría cada movimiento tantas veces como copias tenga.
+    n_antes = len(df_clients)
+    df_clients = df_clients.drop_duplicates(subset=["id"], keep="last")
+    if len(df_clients) != n_antes:
+        logger.warning(
+            "CRM: %d oportunidades duplicadas por `id` descartadas de %d.",
+            n_antes - len(df_clients), n_antes,
+        )
+
     # 2. Asignar periodos en formato YYYY-MM
     df_clients["periodo_creacion"] = pd.to_datetime(df_clients["creado_el"], errors="coerce").dt.strftime("%Y-%m")
     df_clients["periodo_cierre"] = pd.to_datetime(df_clients["fecha_cierre"], errors="coerce").dt.strftime("%Y-%m")
     
     if not df_logs.empty and "created_at_log" in df_logs.columns:
         df_logs["periodo_log"] = pd.to_datetime(df_logs["created_at_log"], errors="coerce").dt.strftime("%Y-%m")
+
+        # `Iniciativa/ID` (`entrada_id`) ES el id de la oportunidad a la que
+        # pertenece el movimiento: es el campo con el que se verifica de quién
+        # es cada log. `client_id` no viene en la fila del log —el cargador lo
+        # arrastra hacia abajo desde la fila padre del CSV de Odoo
+        # (`crm_loader.py`)—, así que sólo queda de respaldo por si alguna
+        # iniciativa no resuelve a una oportunidad cargada.
+        ids_oportunidad = set(df_clients["id"].astype(str).str.strip())
+        if "entrada_id" in df_logs.columns:
+            declarada = _normalizar_id(df_logs["entrada_id"])
+        else:
+            declarada = pd.Series("", index=df_logs.index)
+
+        resuelve = declarada.isin(ids_oportunidad)
+        df_logs["oportunidad_id"] = declarada.where(
+            resuelve, _normalizar_id(df_logs["client_id"])
+        )
+
+        n_sin_resolver = int((~resuelve).sum())
+        if n_sin_resolver:
+            logger.warning(
+                "CRM: %d de %d logs traen una Iniciativa/ID que no corresponde a "
+                "ninguna oportunidad cargada; se atribuyen por el id arrastrado "
+                "del CSV. Si el número es alto, revisa el formato del campo.",
+                n_sin_resolver, len(df_logs),
+            )
+
         # El motivo de devolución vive en la oportunidad y las reglas de
-        # efectividad lo leen desde el log. Se renombra la clave del cliente
-        # porque ambas tablas tienen `id` y el merge renombraría el del log a
-        # `id_x`, dejando sin desempate el orden de los movimientos.
+        # efectividad lo leen desde el log. Se renombra la clave porque ambas
+        # tablas tienen `id` y el merge renombraría el del log a `id_x`,
+        # dejando sin desempate el orden de los movimientos.
         df_logs = df_logs.merge(
-            df_clients[["id", "devolver_oportunidad"]].rename(columns={"id": "client_id"}),
-            on="client_id",
+            df_clients[["id", "devolver_oportunidad"]].rename(columns={"id": "oportunidad_id"}),
+            on="oportunidad_id",
             how="left"
         )
     else:
         df_logs["periodo_log"] = pd.Series(dtype=str)
+        df_logs["oportunidad_id"] = pd.Series(dtype=str)
+
+    # 2b. Estancias que todavía no han producido una salida. Se calculan una
+    # sola vez sobre toda la base —necesitan el historial completo para saber
+    # cuándo entró cada oportunidad a su etapa actual— y luego se reparten por
+    # periodo. `ahora` se fija aquí para que todos los periodos de una misma
+    # ejecución se midan contra el mismo reloj.
+    ahora = pd.Timestamp.now()
+    df_permanencias = compute_permanencias_en_etapa(df_clients, df_logs, ahora)
 
     # 3. Determinar periodos objetivos
     if periodo_str and len(periodo_str) == 7:
@@ -196,17 +257,26 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
             (df_clients["ganado"] == "perdido") & (df_clients["periodo_cierre"] == p)
         ].copy()
 
+        # E3. Estancias cuya entrada a la etapa cae en el periodo. Es la cara
+        # oculta de los movimientos de P: lo que entró y todavía no ha salido.
+        if not df_permanencias.empty:
+            df_perm_p = df_permanencias[df_permanencias["periodo_entrada"] == p].copy()
+        else:
+            df_perm_p = pd.DataFrame()
+
         # F. Cálculo de métricas
         m = compute_crm_metrics_for_period(
             df_creados, df_ganados, df_perdidos, df_pendientes,
-            df_logs_e8_p, df_logs_p, df_clients, df_hist_p, df_perdidas_cierre
+            df_logs_e8_p, df_logs_p, df_clients, df_hist_p, df_perdidas_cierre,
+            df_perm_p, ahora
         )
 
         # G. Guardar en Base de Datos
         _save_crm_cierre_historico(db, p, m)
         save_crm_dimensiones_periodo(
             db, p, df_creados, df_ganados, df_perdidos, df_pendientes,
-            df_logs_e8_p, df_logs_p, df_clients, df_hist_p, df_perdidas_cierre
+            df_logs_e8_p, df_logs_p, df_clients, df_hist_p, df_perdidas_cierre,
+            df_perm_p, ahora
         )
 
         all_summaries[p] = m

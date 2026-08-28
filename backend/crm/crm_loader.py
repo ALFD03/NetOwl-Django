@@ -285,6 +285,11 @@ def _create_tables_if_not_exist(db: DBConnector):
             -- cabe como JSON: es una fila por etapa, no un escalar.
             efectividad JSONB,
 
+            -- Tiempo de permanencia por etapa del periodo. Misma forma que la
+            -- efectividad: una fila por etapa, con su distribución y su
+            -- desglose por desenlace.
+            tiempo_por_etapa JSONB,
+
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
@@ -322,6 +327,10 @@ def _create_tables_if_not_exist(db: DBConnector):
         # Migración en caliente para esquemas creados antes de que la efectividad
         # por periodo se persistiera.
         f"ALTER TABLE {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS efectividad JSONB;",
+
+        # Migración en caliente para el tiempo por etapa del periodo, que antes
+        # sólo se guardaba —y sólo el del último mes— en métricas globales.
+        f"ALTER TABLE {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS tiempo_por_etapa JSONB;",
 
         # Migración en caliente para el tiempo de cierre combinado, añadido
         # después de que existieran los tiempos de instalación y pérdida.

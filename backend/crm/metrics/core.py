@@ -30,6 +30,8 @@ def compute_crm_metrics_for_period(
     df_clients: pd.DataFrame,
     df_logs_hist: pd.DataFrame | None = None,
     df_perdidas_cierre: pd.DataFrame | None = None,
+    df_permanencias: pd.DataFrame | None = None,
+    ahora: pd.Timestamp | None = None,
 ) -> Dict[str, Any]:
     """Métricas de un periodo.
 
@@ -40,6 +42,10 @@ def compute_crm_metrics_for_period(
     `df_perdidas_cierre` son las oportunidades perdidas con cierre en el
     periodo. La pérdida no existe en el log —sólo como estado del cliente— así
     que la efectividad la recibe aparte para poder atribuirla.
+
+    `df_permanencias` son las estancias que todavía no han producido una salida,
+    medidas contra la fecha de cierre o contra `ahora`. Sin ellas el tiempo por
+    etapa sólo ve lo que ya salió, que es el sesgo que las hace necesarias.
     """
     total_oportunidades = len(df_creados)
     total_ganados = len(df_ganados)
@@ -64,7 +70,7 @@ def compute_crm_metrics_for_period(
     stats_cierre = tiempos["cierre"]
 
     # Tiempo por etapa
-    tiempo_por_etapa = compute_tiempo_por_etapa(df_logs_all)
+    tiempo_por_etapa = compute_tiempo_por_etapa(df_logs_all, df_permanencias, ahora)
 
     # Efectividad
     efectividad = compute_efectividad(df_logs_all, df_logs_hist, df_clients, df_perdidas_cierre)
