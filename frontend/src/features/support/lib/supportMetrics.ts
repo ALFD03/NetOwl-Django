@@ -110,7 +110,7 @@ export function flattenEntries(
 export interface TimeMeasureMeta {
   label: string;
   caption: string;
-  color: Extract<MetricColor, 'blue' | 'purple' | 'slate'>;
+  color: Extract<MetricColor, 'blue' | 'purple' | 'slate' | 'red' | 'green'>;
 }
 
 /**
@@ -125,12 +125,12 @@ export interface TimeMeasureMeta {
  * fixed per measure instead of being a control the reader has to operate.
  */
 export const TIME_MEASURE_META: Record<SupportTimeMeasure, TimeMeasureMeta> = {
-  cierre_creado_resuelto: { label: 'Cierre total · Resueltos', caption: 'Creación → cierre · cerrados en el mes', color: 'blue' },
-  cierre_creado_cancelado: { label: 'Cierre total · Cancelados', caption: 'Creación → cierre · cerrados en el mes', color: 'blue' },
+  cierre_creado_resuelto: { label: 'Cierre total · Resueltos', caption: 'Creación → cierre · cerrados en el mes', color: 'green' },
+  cierre_creado_cancelado: { label: 'Cierre total · Cancelados', caption: 'Creación → cierre · cerrados en el mes', color: 'red' },
   cierre_creado_cerrados: { label: 'Cierre total · Todos', caption: 'Creación → cierre · cerrados en el mes', color: 'blue' },
 
-  cierre_asignado_resuelto: { label: 'Gestión · Resueltos', caption: 'Asignación → cierre · cerrados en el mes', color: 'purple' },
-  cierre_asignado_cancelado: { label: 'Gestión · Cancelados', caption: 'Asignación → cierre · cerrados en el mes', color: 'purple' },
+  cierre_asignado_resuelto: { label: 'Gestión · Resueltos', caption: 'Asignación → cierre · cerrados en el mes', color: 'green' },
+  cierre_asignado_cancelado: { label: 'Gestión · Cancelados', caption: 'Asignación → cierre · cerrados en el mes', color: 'red' },
   cierre_asignado_cerrados: { label: 'Gestión · Todos', caption: 'Asignación → cierre · cerrados en el mes', color: 'purple' },
 
   asignacion: { label: 'Tiempo de Asignación', caption: 'Creación → asignación · creados en el mes', color: 'slate' },
