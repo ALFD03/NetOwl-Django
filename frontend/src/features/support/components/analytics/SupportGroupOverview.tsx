@@ -113,8 +113,8 @@ export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
         icon={<Layers className="h-5 w-5" />}
       >
         <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <MetricCard label="Resueltos del mes" subValue={formatInteger(stats.tickets_resueltos_periodo)} value={`${formatTwoDecimals(stats.pct_resueltos_periodo)}%`} color="green" />
-          <MetricCard label="Resueltos arrastre" subValue={formatInteger(stats.tickets_resueltos_arrastre)} value={`${formatTwoDecimals(stats.pct_resueltos_arrastre)}%`} color="purple" />
+          <MetricCard label="Resueltos del mes" subValue={`${formatInteger(stats.tickets_resueltos_periodo)} Tickets Cerrados en Etapa Resuelto`} value={`${formatTwoDecimals(stats.pct_resueltos_periodo)}%`} color="green" />
+          <MetricCard label="Resueltos arrastre" subValue={`${formatInteger(stats.tickets_resueltos_arrastre)} Tickets Cerrados en Etapa Cancelados`} value={`${formatTwoDecimals(stats.pct_resueltos_arrastre)}%`} color="purple" />
           <MetricCard label="Cancelados del mes" subValue={formatInteger(stats.tickets_cancelados_periodo)} value={`${formatTwoDecimals(stats.pct_cancelados_periodo)}%`} color="red" />
           <MetricCard label="Cancelados arrastre" subValue={formatInteger(stats.tickets_cancelados_arrastre)} value={`${formatTwoDecimals(stats.pct_cancelados_arrastre)}%`} color="yellow" />
         </div>
