@@ -1,18 +1,41 @@
 from __future__ import annotations
 import pandas as pd
-from ...conf_config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, VALID_REACT_ORIGINS
+from ...conf_config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, FREE_STATE, VALID_REACT_ORIGINS
 
 
-def get_active_at(df_clean_logs, target_date, strictly_before=False):
+def last_log_per_orden(df_logs):
+    """
+    Ultimo log de cada suscripcion.
+
+    Se toma la ultima fila y no `idxmax`, porque varios logs pueden compartir
+    el mismo segundo (un cambio de plan deja "Plan change", "Suspension TV" y
+    el sintetico de plan gratuito a la vez) e `idxmax` devuelve la primera del
+    empate. El frame ya viene ordenado por ["orden", "f_dt"], con los
+    sinteticos detras de los logs reales de ese mismo instante.
+    """
+    if df_logs.empty:
+        return df_logs
+    return df_logs.groupby("orden", sort=False).tail(1)
+
+
+def get_state_at(df_clean_logs, target_date, estado, strictly_before=False):
+    """Suscripciones cuyo último log hasta la fecha las deja en `estado`."""
     if strictly_before:
         filt = df_clean_logs[df_clean_logs["f_dt"] < target_date]
     else:
         filt = df_clean_logs[df_clean_logs["f_dt"] <= target_date]
     if filt.empty:
         return pd.DataFrame(columns=["orden"])
-    idx = filt.groupby("orden")["f_dt"].idxmax()
-    last_logs = filt.loc[idx]
-    return last_logs[last_logs["estado"] == ACTIVE_STATE].copy()
+    last_logs = last_log_per_orden(filt)
+    return last_logs[last_logs["estado"] == estado].copy()
+
+
+def get_active_at(df_clean_logs, target_date, strictly_before=False):
+    return get_state_at(df_clean_logs, target_date, ACTIVE_STATE, strictly_before)
+
+
+def get_free_at(df_clean_logs, target_date, strictly_before=False):
+    return get_state_at(df_clean_logs, target_date, FREE_STATE, strictly_before)
 
 
 def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin):

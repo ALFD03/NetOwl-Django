@@ -27,12 +27,17 @@ SUBSCRIPTIONS_COLUMN_MAPPING = {
     "Cliente/Phone 1": "phone",
     "Cliente/Phone 2": "phone2",
     "Vendedor": "vendedor",
+    # false/0 = suscripcion archivada (cliente en plan gratuito).
+    "Activo": "activo",
+    "activo": "activo",
+    "Active": "activo",
 }
 
 SUBSCRIPTIONS_METADATA_COLS = [
     "cliente", "ci", "sucursal", "zona", "municipio",
     "tipo", "estado", "campanna", "fecha_factura", "fecha_inicio",
-    "tarifa", "total", "producto", "telefono", "phone", "phone2", "vendedor"
+    "tarifa", "total", "producto", "telefono", "phone", "phone2", "vendedor",
+    "activo",
 ]
 
 LOGS_COLUMN_MAPPING = {
@@ -101,12 +106,15 @@ def import_subscriptions_csv(csv_path: str) -> int:
 
     df_local = df_local.apply(_clean_empty_strings)
 
-    df_local[SUBSCRIPTIONS_METADATA_COLS] = (
-        df_local.groupby("orden_producto")[SUBSCRIPTIONS_METADATA_COLS]
+    # `activo` solo existe en los exports nuevos: se trabaja con lo que venga.
+    meta_cols = [c for c in SUBSCRIPTIONS_METADATA_COLS if c in df_local.columns]
+
+    df_local[meta_cols] = (
+        df_local.groupby("orden_producto")[meta_cols]
         .ffill()
     )
 
-    agg_rules = {col: "first" for col in SUBSCRIPTIONS_METADATA_COLS}
+    agg_rules = {col: "first" for col in meta_cols}
     if "producto" in df_local.columns:
         agg_rules["producto"] = _first_matching_plan
 
@@ -149,6 +157,18 @@ def import_subscriptions_csv(csv_path: str) -> int:
                         fields=sql.SQL(", ").join(cols_def),
                     )
                 )
+                # El export puede traer columnas nuevas (p. ej. `activo`) sobre
+                # una tabla ya creada: se agregan antes de copiar.
+                for col in d_frame.columns:
+                    cur.execute(
+                        sql.SQL(
+                            "ALTER TABLE {schema_table}"
+                            " ADD COLUMN IF NOT EXISTS {c} text"
+                        ).format(
+                            schema_table=sql.Identifier(DB_SCHEMA, t_name),
+                            c=sql.Identifier(col),
+                        )
+                    )
                 cur.execute(
                     sql.SQL("TRUNCATE TABLE {schema_table}").format(
                         schema_table=sql.Identifier(DB_SCHEMA, t_name)

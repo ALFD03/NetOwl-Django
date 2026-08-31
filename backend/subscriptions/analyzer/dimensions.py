@@ -7,7 +7,8 @@ from ...conf_config import TableNames
 def aggregate_dimensions(
     db, periodo, act_ini, act_fin, nuevos, df_bajas,
     df_inactivos, df_react_all, df_corte_impagado,
-    df_react_not_in_ini=None, df_subs_full=None
+    df_react_not_in_ini=None, df_subs_full=None,
+    df_free_fin=None, df_free_periodo=None, df_free_retorno=None
 ):
     periodo_label = periodo.label()
     DIMS = ["zona", "sucursal", "municipio", "campanna", "producto", "zona_sucursal"]
@@ -95,18 +96,24 @@ def aggregate_dimensions(
         
         d_react_not_in_ini = cnt(df_react_not_in_ini) if df_react_not_in_ini is not None and not df_react_not_in_ini.empty else {}
 
+        # Clientes gratuitos (archivados): no suman a activos ni a bajas.
+        d_free = cnt(df_free_fin)
+        d_free_periodo = cnt(df_free_periodo)
+        d_free_retorno = cnt(df_free_retorno)
+
         valores = sorted(set(
             list(d_act_ini.keys()) + list(d_act_fin.keys()) + list(d_nuevos.keys()) +
             list(d_bajas.keys()) + list(d_inact.keys()) + list(d_react.keys()) +
             list(d_corte.keys()) + list(d_react_6.keys()) + list(d_react_8.keys()) +
-            list(d_react_4_P.keys()) + list(d_react_4_H.keys()) + list(d_react_sin.keys())
+            list(d_react_4_P.keys()) + list(d_react_4_H.keys()) + list(d_react_sin.keys()) +
+            list(d_free.keys())
         ))
 
         for val in valores:
             a_ini = d_act_ini.get(val, 0)
             a_fin = d_act_fin.get(val, 0)
             nv = d_nuevos.get(val, 0)
-            bn = a_ini - (a_fin - nv)
+            bn = a_ini - (a_fin - nv - d_free_retorno.get(val, 0)) - d_free_periodo.get(val, 0)
             bb = bn + d_react_not_in_ini.get(val, 0)
             inac = d_inact.get(val, 0)
             reac = d_react.get(val, 0)
@@ -145,6 +152,9 @@ def aggregate_dimensions(
                 "porcentaje_suspensiones": round((d_corte.get(val, 0) / a_ini) * 100, 4) if a_ini > 0 else 0.0,
                 "total_billing": billing_val,
                 "arpu": round(billing_val / a_fin, 2) if a_fin > 0 else 0.0,
+                "clientes_gratuitos": d_free.get(val, 0),
+                "gratuitos_nuevos": d_free_periodo.get(val, 0),
+                "gratuitos_retornados": d_free_retorno.get(val, 0),
             })
 
     df_result = pd.DataFrame(all_rows)

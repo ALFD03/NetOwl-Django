@@ -37,6 +37,9 @@ export interface DimensionVal {
   indice_reemplazo_react_pct?: number;
   arpu?: number;
   total_billing?: number;
+  clientes_gratuitos?: number;
+  gratuitos_nuevos?: number;
+  gratuitos_retornados?: number;
 }
 
 export interface DimensionGroup {
@@ -65,6 +68,9 @@ export interface Periodo {
   react_4_P?: number;
   porcentaje_suspensiones?: number;
   tasa_aporte_react_pct?: number;
+  clientes_gratuitos?: number;
+  gratuitos_nuevos?: number;
+  gratuitos_retornados?: number;
 }
 
 export interface MetricsHistoricItem {

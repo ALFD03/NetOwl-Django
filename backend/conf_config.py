@@ -20,6 +20,11 @@ INACTIVE_STATES = {"4_paused", "6_churn", "8_30days"}
 VALID_REACT_ORIGINS = {"4_paused", "6_churn", "8_30days"}
 CORTE_IMPAGADO_EVENT = "corte automatico por factura impaga"
 
+# Clientes migrados a un servicio gratuito: no son activos ni bajas.
+FREE_STATE = "9_free"
+ARCHIVED_EVENT = "suscripcion archivada"
+UNARCHIVED_EVENT = "suscripcion desarchivada"
+
 EXCLUDED_STATE = "0_other"
 
 SUBS_STATE_TO_LOG_MAP = {
@@ -44,6 +49,7 @@ class TableNames:
     ANALYZER_CORTE_IMPAGADO = "analyzer_corte_impagado"
     ANALYZER_CIERRE_HISTORICO = "analyzer_cierre_historico"
     ANALYZER_INACTIVOS_DETALLADOS = "analyzer_inactivos_detallados"
+    ANALYZER_CLIENTES_GRATUITOS = "analyzer_clientes_gratuitos"
     ANALYZER_CHURN_DIMENSIONES = "analyzer_churn_dimensiones"
     LIFETIME_PERIODOS = "lifetime_periodos"
     LIFETIME_METRICAS = "lifetime_metricas"
@@ -52,6 +58,7 @@ class TableNames:
     SUBSCRIPTIONS_B = "subscriptions-b"
     SUBSCRIPTIONS_LOGS = "subscriptions-logs"
     SUBSCRIPTIONS_LOGS_V15 = "subscriptions-logs-v15"
+    SUBSCRIPTIONS_FREE = "subscriptions_gratis"
     SUPPORT_TICKETS = "support_tickets"
     SUPPORT_METRICAS_GLOBALES = "support_metricas_globales"
     SUPPORT_DIMENSIONES_HISTORICO = "support_dimensiones_historico"

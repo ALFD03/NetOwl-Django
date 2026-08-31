@@ -19,6 +19,7 @@ async function run(path: string, request: RunAnalysisRequest): Promise<ImportRes
 export const importsApi = {
   importSubscriptions: (file: File) => upload('/imports/api/import-subscriptions/', file),
   importLogs: (file: File) => upload('/imports/api/import-logs/', file),
+  importGratis: (file: File) => upload('/imports/api/import-gratis/', file),
   importCrm: (file: File) => upload('/imports/api/import-crm/', file),
   importSupport: (file: File) => upload('/imports/api/import-support/', file),
   runSubscriptionsAnalysis: (month: string | null) => run('/imports/api/run-analysis/', { month }),

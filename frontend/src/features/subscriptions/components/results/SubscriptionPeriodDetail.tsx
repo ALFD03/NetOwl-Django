@@ -32,6 +32,7 @@ export function SubscriptionPeriodDetail({ row }: SubscriptionPeriodDetailProps)
         <CompactMetric label="Corte Impago" value={int(row.corte_impagado)} color="red" />
         <CompactMetric label="Suspensiones %" value={pct(row.porcentaje_suspensiones)} color="red" />
         <CompactMetric label="Total Inactivos" value={int(row.total_inactivos)} color="slate" />
+        <CompactMetric label="Gratuitos" value={int(row.clientes_gratuitos)} color="purple" />
       </MetricGroup>
 
       <MetricGroup title="Recuperación (Winback)" tone="blue" icon={<RefreshCw className="h-3.5 w-3.5" />} columns={3}>

@@ -30,6 +30,7 @@ export const DIMENSION_COLUMNS: Column<SubscriptionResultDimensionRow>[] = [
   { header: 'C. Bruto %', accessor: (r) => <span className="text-rose-400">{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
   { header: 'Corte Imp', accessor: (r) => int(r.corte_impagado), align: 'right', sortKey: 'corte_impagado' },
   { header: 'Susp %', accessor: (r) => `${dec(r.porcentaje_suspensiones)}%`, align: 'right', sortKey: 'porcentaje_suspensiones' },
+  { header: 'Gratuitos', accessor: (r) => <span className="text-purple-400">{int(r.clientes_gratuitos)}</span>, align: 'right', sortKey: 'clientes_gratuitos' },
   { header: 'Inactivos', accessor: (r) => int(r.total_inactivos), align: 'right', sortKey: 'total_inactivos' },
   { header: 'React Tot', accessor: (r) => int(r.reactivaciones), align: 'right', sortKey: 'reactivaciones' },
   { header: 'React Val', accessor: (r) => int(r.react_val), align: 'right', sortKey: 'react_val' },

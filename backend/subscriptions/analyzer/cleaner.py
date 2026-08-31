@@ -11,6 +11,27 @@ def _normalize_string_series(series: pd.Series) -> pd.Series:
     mapping = {val: normalize_text(val) for val in unique_vals}
     return series.map(mapping)
 
+FREE_META_COLS = ["orden", "fecha_gratuito"]
+
+
+def build_free_meta(df_free_raw):
+    """
+    Fechas semilla de paso a plan gratuito: (orden, fecha_gratuito).
+
+    Solo se usan para las suscripciones archivadas que no traen el log real
+    (ver `backend.subscriptions.free_plans`).
+    """
+    if df_free_raw is None or df_free_raw.empty:
+        return pd.DataFrame(columns=FREE_META_COLS)
+    df = df_free_raw.copy()
+    df.columns = df.columns.str.lower()
+    df = df.rename(columns={"orden_producto": "orden"})
+    df["orden"] = df["orden"].astype(str).str.strip()
+    df["fecha_gratuito"] = pd.to_datetime(df["fecha_gratuito"], errors="coerce")
+    df = df.dropna(subset=["fecha_gratuito"]).drop_duplicates(subset=["orden"])
+    return df[FREE_META_COLS]
+
+
 def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
     df = df_subs_raw.copy()
     df.columns = df.columns.str.lower()
@@ -19,6 +40,14 @@ def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
     df["orden"] = df["orden"].astype(str).str.strip()
     df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0.0)
     df["f_ini_dt"] = pd.to_datetime(df["f_ini"], errors="coerce")
+
+    # `activo` viene del export: false/0 = suscripcion archivada.
+    if "activo" in df.columns:
+        df["archivado"] = ~df["activo"].astype(str).str.strip().str.lower().isin(
+            ["true", "t", "1", "si", "sí", "yes", "verdadero"]
+        )
+    else:
+        df["archivado"] = False
 
     if "estado" in df.columns:
         # Aplicamos la normalización rápida por mapeo de únicos

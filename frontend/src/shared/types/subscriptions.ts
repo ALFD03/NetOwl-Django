@@ -24,6 +24,9 @@ export interface SubscriptionResultDimensionRow {
   indice_reemplazo_react_pct: number;
   adiciones_netas: number;
   adiciones_brutas: number;
+  clientes_gratuitos: number;
+  gratuitos_nuevos: number;
+  gratuitos_retornados: number;
 }
 
 export interface SubscriptionResultsResponse {

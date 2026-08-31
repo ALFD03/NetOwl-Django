@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { DollarSign, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import { DollarSign, Gift, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import { MetricCard } from '@/shared/ui';
 import type { Periodo } from '@/shared/types/domain';
 
@@ -25,12 +25,19 @@ export function AnalyticsMetrics({ data }: Props) {
         <MetricCard label="Crecimiento" value={`${(data.crecimiento || 0).toFixed(2)} %`} color="green" />
       </MetricGroup>
 
-      <MetricGroup title="Grupo Retención" icon={<RefreshCw className="w-4 h-4" />} tone="text-blue-400" columns='md:grid-cols-2 lg:grid-cols-5'>
+      <MetricGroup title="Grupo Retención" icon={<RefreshCw className="w-4 h-4" />} tone="text-blue-400" columns='md:grid-cols-2 lg:grid-cols-3'>
         <MetricCard label="Reactivaciones" value={data.reactivaciones || 0} color="blue" />
         <MetricCard label="Recuperaciones" value={data.react_4_P || 0} color="green" />
         <MetricCard label="React. Ingreso" value={data.react_val || 0} color="blue" subValue="Peso en crecimiento" />
         <MetricCard label="Winback" value={`${(data.tasa_winback_pct || 0).toFixed(2)} %`} color="green" />
         <MetricCard label="Indice Reemplazo" value={`${(data.indice_reemplazo_react_pct || 0).toFixed(2)} %`} color="yellow" />
+        <MetricCard
+          label="Clientes Gratuitos"
+          value={data.clientes_gratuitos || 0}
+          color="purple"
+          subValue={`${data.gratuitos_nuevos || 0} archivados en el periodo`}
+          icon={<Gift className="w-4 h-4 text-purple-400" />}
+        />
       </MetricGroup>
 
       <MetricGroup title="Grupo Financiero" icon={<DollarSign className="w-4 h-4" />} tone="text-amber-400" columns="md:grid-cols-2">
