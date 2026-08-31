@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import {
   Activity, AlertTriangle, BarChart2, CheckCircle2,
-  Clock, Hourglass, Layers, Timer, Users, XCircle,
+  Clock, Hourglass, Layers, Users, XCircle,
 } from 'lucide-react';
 
 import { LineChart } from '@/shared/charts';
@@ -18,6 +18,7 @@ import {
 } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatPeriodoLabel, formatTwoDecimals } from '@/shared/utils';
 import { ASIGNACION, CIERRE_TOTAL, TIME_MEASURE_META, distribution } from '../lib/supportMetrics';
+import { MEASURE_ICONS } from '../lib/measureIcons';
 import { SUPPORT_TIME_MEASURES } from '../types';
 import type { useSupportDashboard } from '../hooks/useSupportDashboard';
 
@@ -31,11 +32,6 @@ function mttrGapLabel(deltaHoras: number): string {
   return `${Math.abs(deltaHoras)} h ${faster ? 'más rápido' : 'más lento'} que el promedio global`;
 }
 
-const MEASURE_ICONS = {
-  blue: <Clock className="h-4 w-4 text-sky-400" />,
-  purple: <Timer className="h-4 w-4 text-purple-400" />,
-  slate: <Hourglass className="h-4 w-4 text-slate-300" />,
-};
 
 interface SupportDashboardViewProps {
   data: ReturnType<typeof useSupportDashboard>;
