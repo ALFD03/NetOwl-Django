@@ -12,6 +12,7 @@ import { completionTone } from '../../lib/commercial';
 import type {
   BusinessUnitGroup, BusinessUnitNode, FtthSummary,
 } from '../../hooks/useBusinessUnitsData';
+import { sumaHorasEtapa } from '@/features/crm';
 
 interface BusinessUnitsViewProps {
   groups: BusinessUnitGroup[];
@@ -37,6 +38,8 @@ function TechnologyBadge({ node }: { node: BusinessUnitNode }) {
 
 function FtthConsolidated({ summary }: { summary: FtthSummary }) {
   const met = summary.tasaCumplimiento >= 100;
+  let ventasCumplimiento = (summary.nuevos / summary.objetivo) * 100
+  let cierreCumplimiento = (summary.activos_final / summary.cierreEsperado) * 100
 
   return (
     <div className="mb-10">
@@ -58,7 +61,7 @@ function FtthConsolidated({ summary }: { summary: FtthSummary }) {
           </span>
         }
       >
-        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-7">
           <MetricCard label="Activos Inicio" value={formatInteger(summary.activos_inicio)} color="slate" icon={<User />} />
           <MetricCard label="Instalaciones" value={`+ ${formatInteger(summary.nuevos)}`} color="green" icon={<Wrench className="text-emerald-400" />} />
           <MetricCard label="Reactivaciones" value={`+ ${formatInteger(summary.reactivaciones)}`} color="blue" icon={<Repeat className="text-sky-400" />} />
@@ -71,10 +74,22 @@ function FtthConsolidated({ summary }: { summary: FtthSummary }) {
           <MetricCard label="Churn Rate" value={`${formatTwoDecimals(summary.churn_rate)} %`} color="red" icon={<Percent className="text-rose-400" />} />
           <MetricCard label="Crecimiento" value={`${formatTwoDecimals(summary.crecimiento)} %`} color="green" icon={<CircleArrowUp className="text-emerald-400" />} />
           <MetricCard
-            label="Tasa de Cumplimiento"
+            label="Cumplimiento de Ingreso"
             value={`${formatTwoDecimals(summary.tasaCumplimiento)} %`}
-            color={summary.tasaCumplimiento >= 100 ? 'green' : summary.tasaCumplimiento >= 80 ? 'yellow' : 'red'}
+            color={summary.tasaCumplimiento >= 100 ? 'green' : summary.tasaCumplimiento >= 60 ? 'yellow' : 'red'}
             icon={<CircleCheckBig className={completionTone(summary.tasaCumplimiento)} />}
+          />
+          <MetricCard
+            label="Cumplimiento de Ventas"
+            value={`${formatTwoDecimals(ventasCumplimiento)} %`}
+            color={ventasCumplimiento >= 100 ? 'green' : ventasCumplimiento >= 60 ? 'yellow' : 'red'}
+            icon={<CircleCheckBig className={completionTone(ventasCumplimiento)} />}
+          />
+          <MetricCard
+            label="Cumplimiento de Cierre"
+            value={`${formatTwoDecimals(cierreCumplimiento)} %`}
+            color={cierreCumplimiento >= 100 ? 'green' : cierreCumplimiento >= 60 ? 'yellow' : 'red'}
+            icon={<CircleCheckBig className={completionTone(cierreCumplimiento)} />}
           />
         </div>
       </NeonContainer>
