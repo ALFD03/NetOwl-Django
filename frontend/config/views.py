@@ -12,6 +12,33 @@ from .decorators import permission_required
 from .models import Profile, PermissionGroup
 from inertia import render as render_inertia
 
+# Campos booleanos de permisos compartidos por Profile y PermissionGroup.
+PERMISSION_FIELDS = [
+    'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
+    'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
+    'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
+    'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
+    'can_import_data', 'can_run_calculations', 'can_run_lifetime',
+    'can_manage_eta', 'can_manage_users'
+]
+
+
+def apply_permissions(target, data):
+    """Aplica los permisos del payload sobre un Profile o PermissionGroup.
+
+    El cliente React los envia anidados en la clave "permissions"; se admiten
+    tambien en la raiz del payload por compatibilidad con llamadas antiguas.
+    """
+    nested = data.get("permissions") or {}
+    if not isinstance(nested, dict):
+        nested = {}
+    for field in PERMISSION_FIELDS:
+        if field in nested:
+            setattr(target, field, bool(nested[field]))
+        elif field in data:
+            setattr(target, field, bool(data[field]))
+
+
 @ensure_csrf_cookie
 def login_view(request):
     if request.user.is_authenticated:
@@ -192,16 +219,7 @@ def api_create_user(request):
                 profile.group = None
         else:
             profile.group = None
-            for f in [
-                'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
-                'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
-                'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
-                'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
-                'can_import_data', 'can_run_calculations', 'can_run_lifetime',
-                'can_manage_eta', 'can_manage_users'
-            ]:
-                if f in data:
-                    setattr(profile, f, bool(data[f]))
+            apply_permissions(profile, data)
 
         profile.save()
         return JsonResponse({"status": "success", "message": f"Usuario '{usr}' creado con éxito."})
@@ -242,16 +260,7 @@ def api_update_user_permissions(request):
         else:
             profile.group = None
             # Guardar permisos individuales explícitos
-            for f in [
-                'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
-                'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
-                'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
-                'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
-                'can_import_data', 'can_run_calculations', 'can_run_lifetime',
-                'can_manage_eta', 'can_manage_users'
-            ]:
-                if f in data:
-                    setattr(profile, f, bool(data[f]))
+            apply_permissions(profile, data)
 
         profile.save()
         return JsonResponse({"status": "success", "message": f"Permisos de '{user.username}' actualizados."})
@@ -281,16 +290,7 @@ def api_save_permission_group(request):
         else:
             group = PermissionGroup(name=name, description=description)
 
-        for f in [
-            'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
-            'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
-            'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
-            'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
-            'can_import_data', 'can_run_calculations', 'can_run_lifetime',
-            'can_manage_eta', 'can_manage_users'
-        ]:
-            if f in data:
-                setattr(group, f, bool(data[f]))
+        apply_permissions(group, data)
 
         group.save()
 
