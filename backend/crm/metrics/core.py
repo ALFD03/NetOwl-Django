@@ -1,136 +1,130 @@
 from __future__ import annotations
-import json
 import math
-from datetime import datetime
+import pandas as pd
 from typing import Any, Dict
 
-from ...database import DBConnector
-from ...conf_config import DB_SCHEMA, TableNames
-from ..crm_config import DIMENSIONES, dim_col
-
-
-def _build_where_filtros(filtros: Dict[str, Any] | None) -> tuple[str, list]:
-    clauses = []
-    params = []
-    if filtros:
-        for dim in DIMENSIONES:
-            if filtros.get(dim):
-                clauses.append(f"c.{dim_col(dim)} = %s")
-                params.append(filtros[dim])
-    where_sql = " AND ".join(clauses) if clauses else "1=1"
-    return where_sql, params
-
-
-def _build_fecha_fin_sql(fecha_fin: datetime | None, alias: str = "c") -> tuple[str, list]:
-    if fecha_fin is None:
-        return "", []
-    return f"AND {alias}.created_at_log <= %s", [fecha_fin]
+from .tiempo import compute_tiempos_cierre, compute_tiempo_por_etapa
+from .efectividad import compute_efectividad
+from .probabilidad import compute_distribucion_perdidos, compute_distribucion_etapa8
 
 
 def _clean_nan(obj: Any) -> Any:
-    if isinstance(obj, dict):
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return 0.0
+    elif isinstance(obj, dict):
         return {k: _clean_nan(v) for k, v in obj.items()}
     elif isinstance(obj, list):
         return [_clean_nan(v) for v in obj]
-    elif isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
-        return None
     elif type(obj).__module__ == 'numpy':
         return obj.item() if hasattr(obj, 'item') else obj
     return obj
 
 
-def _compute_totals(db: DBConnector, fecha_fin: datetime | None = None, filtros: dict | None = None) -> dict:
-    where_dim, params_dim = _build_where_filtros(filtros)
-    fecha_sql = ""
-    fecha_params: list = []
-    if fecha_fin:
-        fecha_sql = "AND c.creado_el <= %s"
-        fecha_params = [fecha_fin]
-    params = params_dim + fecha_params
+def compute_crm_metrics_for_period(
+    df_creados: pd.DataFrame,
+    df_ganados: pd.DataFrame,
+    df_perdidos: pd.DataFrame,
+    df_pendientes: pd.DataFrame,
+    df_logs_e8: pd.DataFrame,
+    df_logs_all: pd.DataFrame,
+    df_clients: pd.DataFrame,
+    df_logs_hist: pd.DataFrame | None = None,
+    df_perdidas_cierre: pd.DataFrame | None = None,
+    df_permanencias: pd.DataFrame | None = None,
+    ahora: pd.Timestamp | None = None,
+) -> Dict[str, Any]:
+    """Métricas de un periodo.
 
-    q = f"""
-        SELECT
-            COUNT(*)::int AS total_clientes,
-            COUNT(*) FILTER (WHERE c.ganado = 'ganado')::int AS ganados,
-            COUNT(*) FILTER (WHERE c.ganado = 'perdido')::int AS perdidos,
-            COUNT(*) FILTER (WHERE c.etapa_actual = 'etapa_8_devueltos')::int AS etapa_8_count,
-            COUNT(*) FILTER (WHERE c.etapa_actual = 'etapa_7_instalados')::int AS etapa_7_count
-        FROM {DB_SCHEMA}.{TableNames.CRM_CLIENTS} c
-        WHERE {where_dim}
-          {fecha_sql}
+    `df_logs_all` son los movimientos del periodo y `df_logs_hist` los mismos
+    clientes con todo su historial, necesario para saber cómo terminaron las
+    salidas que se resuelven en un periodo posterior.
+
+    `df_perdidas_cierre` son las oportunidades perdidas con cierre en el
+    periodo. La pérdida no existe en el log —sólo como estado del cliente— así
+    que la efectividad la recibe aparte para poder atribuirla.
+
+    `df_permanencias` son las estancias que todavía no han producido una salida,
+    medidas contra la fecha de cierre o contra `ahora`. Sin ellas el tiempo por
+    etapa sólo ve lo que ya salió, que es el sesgo que las hace necesarias.
     """
-    df = db.query(q, params=params)
-    return df.to_dict("records")[0] if not df.empty else {}
+    total_oportunidades = len(df_creados)
+    total_ganados = len(df_ganados)
+    total_perdidos = len(df_perdidos)
+    total_pendientes = len(df_pendientes)
 
+    # Tasas Principales
+    if total_oportunidades > 0:
+        pct_instalacion = round((total_ganados / total_oportunidades) * 100, 2)
+        pct_perdida = round((total_perdidos / total_oportunidades) * 100, 2)
+        pct_pendientes = round((total_pendientes / total_oportunidades) * 100, 2)
+        count_e8 = len(df_logs_e8)
+        pct_devueltos_e8 = round((count_e8 / total_oportunidades) * 100, 2)
+    else:
+        pct_instalacion = pct_perdida = pct_pendientes = pct_devueltos_e8 = 0.0
+        count_e8 = 0
 
-def compute_and_save_all_global(
-    db: DBConnector,
-    fecha_fin: datetime | None = None,
-) -> dict:
-    from .tiempo import compute_tiempo_instalacion, compute_tiempo_por_etapa
-    from .efectividad import compute_efectividad
-    from .probabilidad import compute_probabilidad_etapa8, compute_probabilidad_perdido
-    from .rescate import compute_rescate_perdidos
+    # Tiempos estadísticos
+    tiempos = compute_tiempos_cierre(df_ganados, df_perdidos)
+    stats_inst = tiempos["instalacion"]
+    stats_perd = tiempos["perdida"]
+    stats_cierre = tiempos["cierre"]
 
-    results: dict = {}
+    # Tiempo por etapa
+    tiempo_por_etapa = compute_tiempo_por_etapa(df_logs_all, df_permanencias, ahora)
 
-    totals = _compute_totals(db, fecha_fin)
-    results["totals"] = totals
+    # Efectividad
+    efectividad = compute_efectividad(df_logs_all, df_logs_hist, df_clients, df_perdidas_cierre)
 
-    ti = compute_tiempo_instalacion(db, fecha_fin)
-    results["tiempo_instalacion"] = ti
+    # Distribuciones
+    dist_perdidos = compute_distribucion_perdidos(df_perdidos)
+    dist_e8 = compute_distribucion_etapa8(df_logs_e8, df_clients)
 
-    tpe = compute_tiempo_por_etapa(db, fecha_fin)
-    results["tiempo_por_etapa"] = {r["etapa"]: r for r in tpe}
+    metrics = {
+        "total_oportunidades": total_oportunidades,
+        "ganados": total_ganados,
+        "perdidos": total_perdidos,
+        "pendientes": total_pendientes,
+        "pct_instalacion": pct_instalacion,
+        "pct_perdida": pct_perdida,
+        "pct_pendientes": pct_pendientes,
+        "count_devueltos_e8": count_e8,
+        "pct_devueltos_e8": pct_devueltos_e8,
 
-    ef = compute_efectividad(db, fecha_fin)
-    results["efectividad"] = ef
+        # Tiempos de Instalación
+        "horas_promedio_inst": stats_inst["promedio"],
+        "horas_mediana_inst": stats_inst["mediana"],
+        "horas_p25_inst": stats_inst["p25"],
+        "horas_p75_inst": stats_inst["p75"],
+        "horas_min_inst": stats_inst["min"],
+        "horas_max_inst": stats_inst["max"],
+        "horas_std_inst": stats_inst["std"],
+        "pct_excede_prom_inst": stats_inst["pct_excede_promedio"],
 
-    prob_e8 = compute_probabilidad_etapa8(db, fecha_fin)
-    results["etapa8"] = prob_e8
+        # Tiempos de Pérdida
+        "horas_promedio_perd": stats_perd["promedio"],
+        "horas_mediana_perd": stats_perd["mediana"],
+        "horas_p25_perd": stats_perd["p25"],
+        "horas_p75_perd": stats_perd["p75"],
+        "horas_min_perd": stats_perd["min"],
+        "horas_max_perd": stats_perd["max"],
+        "horas_std_perd": stats_perd["std"],
+        "pct_excede_prom_perd": stats_perd["pct_excede_promedio"],
 
-    prob_perd = compute_probabilidad_perdido(db, fecha_fin)
-    results["perdido"] = prob_perd
+        # Tiempo de Cierre (ganados + perdidos)
+        "horas_promedio_cierre": stats_cierre["promedio"],
+        "horas_mediana_cierre": stats_cierre["mediana"],
+        "horas_p25_cierre": stats_cierre["p25"],
+        "horas_p75_cierre": stats_cierre["p75"],
+        "horas_min_cierre": stats_cierre["min"],
+        "horas_max_cierre": stats_cierre["max"],
+        "horas_std_cierre": stats_cierre["std"],
+        "pct_excede_prom_cierre": stats_cierre["pct_excede_promedio"],
 
-    resc = compute_rescate_perdidos(db, fecha_fin)
-    results["rescate"] = resc
-
-    _upsert_globales(db, results)
-    return results
-
-
-def _upsert_globales(db: DBConnector, results: dict):
-    row = {}
-    col_map = {
-        "totals": "totals",
-        "tiempo_instalacion": "tiempo_instalacion",
-        "tiempo_por_etapa": "tiempo_por_etapa",
-        "efectividad": "efectividad",
-        "etapa8": "etapa8",
-        "perdido": "perdido",
-        "rescate": "rescate",
+        # Detalles
+        "tiempo_por_etapa": tiempo_por_etapa,
+        "efectividad": efectividad,
+        "distribucion_perdidos": dist_perdidos,
+        "distribucion_e8": dist_e8,
     }
-    for key, col in col_map.items():
-        row[col] = json.dumps(_clean_nan(results.get(key, {})), default=str)
 
-    cols = ", ".join(row.keys())
-    placeholders = ", ".join(f"%s" for _ in row)
-
-    values = []
-    for v in row.values():
-        if v is None:
-            values.append(None)
-        else:
-            values.append(v)
-
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                INSERT INTO {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} (id, {cols})
-                VALUES (1, {placeholders})
-                ON CONFLICT (id) DO UPDATE SET {', '.join(f'{k} = EXCLUDED.{k}' for k in row)}
-                """,
-                values
-            )
-        conn.commit()
+    return _clean_nan(metrics)

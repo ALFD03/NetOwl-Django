@@ -1,53 +1,38 @@
-import React from 'react';
-import { AppLayout } from '@/components/Layout/AppLayout';
-import { SupportHeader } from '@/components/Navigation/SupportHeader';
+import { useState } from 'react';
+import { router } from '@inertiajs/react';
 
-interface Props {
-  analyticsData: any;
-  periods: string[];
-}
+import { AppLayout } from '@/shared/layout/AppLayout';
+import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
+import { SupportAnalyticsFilters, SupportAnalyticsView, useSupportAnalytics } from '@/features/support';
+import type { SupportAnalyticsProps, SupportDimension } from '@/features/support/types';
 
-export default function SupportAnalytics({ analyticsData = {} }: Props) {
-  const grupos = analyticsData.grupos || {};
+export default function SupportAnalytics(props: SupportAnalyticsProps) {
+  const { periods = [], selectedPeriod = '' } = props;
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [dimension, setDimension] = useState<SupportDimension>('zona');
+
+  const data = useSupportAnalytics(props, selectedGroup, dimension);
+
+  /** The period is the only server-side filter; group and dimension are local. */
+  const reload = (period: string) =>
+    router.get('/support/analytics/', { period }, { preserveState: true });
 
   return (
-    <AppLayout title="Análisis Jerárquico de Soporte Técnico">
-      <SupportHeader activeTab="analytics" />
+    <AppLayout title="Análisis de Soporte Técnico por Periodo">
+      <ModuleHeader module="support" activeTab="analytics" />
 
-      <div className="space-y-6">
-        {Object.keys(grupos).length === 0 ? (
-          <div className="p-8 text-center text-slate-500 bg-surface-secondary border border-slate-800 rounded-xl">
-            No hay datos de análisis disponibles para el periodo.
-          </div>
-        ) : (
-          Object.entries(grupos).map(([grupoName, grupoObj]: [string, any]) => (
-            <div
-              key={grupoName}
-              className="bg-surface-secondary border border-slate-800 rounded-xl p-6 shadow-xl"
-            >
-              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-                <h3 className="text-base font-bold text-white">{grupoName}</h3>
-                <span className="text-xs bg-brand/20 text-brand px-3 py-1 rounded-full font-semibold">
-                  {grupoObj.total_tickets_grupo || 0} Tickets
-                </span>
-              </div>
+      <SupportAnalyticsFilters
+        periods={periods}
+        selectedPeriod={selectedPeriod || data.periodo}
+        onPeriodChange={reload}
+        groups={data.groupOptions}
+        selectedGroup={data.activeGroupName}
+        onGroupChange={setSelectedGroup}
+        selectedDimension={dimension}
+        onDimensionChange={setDimension}
+      />
 
-              {/* Razones de Falla */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Razones de Falla Principales</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {grupoObj.razones_falla?.map((rf: any, idx: number) => (
-                    <div key={idx} className="p-3 bg-surface-tertiary rounded-lg flex items-center justify-between text-xs">
-                      <span className="font-medium text-slate-300 truncate">{rf.nombre}</span>
-                      <span className="font-bold text-brand ml-2">{rf.metricas?.total_tickets || 0}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      <SupportAnalyticsView data={data} dimension={dimension} />
     </AppLayout>
   );
 }

@@ -1,120 +1,193 @@
-# NetOwl-Django/backend/support/metrics.py
+# backend/support/metrics.py
+"""
+El bloque de métricas de una cohorte: siete medidas de tiempo y tres tasas.
+
+Todo el módulo es una función pura de un `PeriodCohort` ya clasificado, así que
+el mismo código sirve para el total del periodo, para un grupo de trabajo, para
+una zona y para el desglose que `queries` calcula al vuelo.
+"""
 
 from __future__ import annotations
+
 import math
-import pandas as pd
 from typing import Any, Dict
 
-def _clean_nan(obj: Any) -> Any:
+import pandas as pd
+
+from backend.support.cohorts import PeriodCohort
+from backend.support.config import (
+    MIN_DURACION_HORAS,
+    TIME_MEASURE_SPECS,
+    TIME_STATS,
+)
+
+
+def clean_nan(obj: Any) -> Any:
+    """NaN/Inf a 0 y tipos de numpy a tipos de Python, para poder serializar."""
     if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
         return 0.0
-    elif isinstance(obj, dict):
-        return {k: _clean_nan(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_clean_nan(v) for v in obj]
+    if isinstance(obj, dict):
+        return {k: clean_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [clean_nan(v) for v in obj]
+    if type(obj).__module__ == "numpy":
+        return obj.item() if hasattr(obj, "item") else obj
     return obj
 
 
 def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
-    s = series.dropna()
-    s = s[s >= 0]
+    """
+    Estadísticos de una serie de duraciones en horas.
+
+    Sólo entran duraciones de al menos `MIN_DURACION_HORAS` (1 minuto). Por
+    debajo de ese umbral no hay un tiempo de servicio que medir: son acciones
+    masivas de Odoo que asignan y cierran en el mismo segundo, o fechas
+    ausentes. Contarlas hunde el promedio y la mediana e infla el % que excede
+    el promedio.
+
+    `muestra` expone cuántos tickets sí se pudieron medir, para poder juzgar la
+    cobertura del cálculo desde la interfaz.
+    """
+    s = pd.to_numeric(series, errors="coerce").dropna()
+    s = s[s >= MIN_DURACION_HORAS]
     n = len(s)
-    
+
     if n == 0:
-        return {
-            "promedio": 0.0, "mediana": 0.0, "p25": 0.0, "p75": 0.0,
-            "std": 0.0, "pct_excede_promedio": 0.0, "pct_excede_mediana": 0.0,
-        }
+        return {stat: 0.0 for stat in TIME_STATS} | {"pct_excede_promedio": 0.0, "muestra": 0}
 
     promedio = float(s.mean())
-    mediana = float(s.median())
-    p25 = float(s.quantile(0.25))
-    p75 = float(s.quantile(0.75))
-    std_val = float(s.std(ddof=0)) if n > 1 else 0.0
-
-    pct_excede_prom = round(float((s > promedio).sum() / n) * 100, 2)
-    pct_excede_med = round(float((s > mediana).sum() / n) * 100, 2)
 
     return {
-        "promedio": round(promedio, 2),
-        "mediana": round(mediana, 2),
-        "p25": round(p25, 2),
-        "p75": round(p75, 2),
-        "std": round(std_val, 2),
-        "pct_excede_promedio": pct_excede_prom,
-        "pct_excede_mediana": pct_excede_med,
+        "medio": round(promedio, 2),
+        "mediana": round(float(s.median()), 2),
+        "min": round(float(s.min()), 2),
+        "p25": round(float(s.quantile(0.25)), 2),
+        "p75": round(float(s.quantile(0.75)), 2),
+        "max": round(float(s.max()), 2),
+        "std": round(float(s.std(ddof=0)) if n > 1 else 0.0, 2),
+        "pct_excede_promedio": round(float((s > promedio).sum() / n) * 100, 2),
+        "muestra": n,
     }
 
 
-def compute_metrics_for_period(
-    df_creados: pd.DataFrame,
-    df_resueltos: pd.DataFrame,
-    df_cancelados: pd.DataFrame,
-    df_rezagados: pd.DataFrame
-) -> Dict[str, Any]:
-    """Calcula métricas usando la primera fecha de asignada para cierre y respuesta."""
-    total_creados = len(df_creados)
-    total_resueltos = len(df_resueltos)
-    total_cancelados = len(df_cancelados)
-    total_rezagados = len(df_rezagados)
+def _hours_between(df: pd.DataFrame, col_inicio: str, col_fin: str) -> pd.Series:
+    """
+    Diferencia en horas entre dos columnas de fecha, sin rellenos.
 
-    total_universo = total_resueltos + total_cancelados + total_rezagados
-    if total_universo == 0:
-        total_universo = max(1, total_creados)
+    Los tickets a los que les falta cualquiera de las dos fechas quedan como NaN
+    y `_compute_stats_for_series` los descarta. Nunca se sustituyen por 0 ni se
+    recortan a 0: una duración negativa es un error de captura, no un cierre
+    instantáneo, y también se descarta.
+    """
+    if df.empty or col_inicio not in df.columns or col_fin not in df.columns:
+        return pd.Series(dtype=float)
 
-    pct_resueltos = round((total_resueltos / total_universo) * 100, 2)
-    pct_cancelados = round((total_cancelados / total_universo) * 100, 2)
-    pct_rezagados = round((total_rezagados / total_universo) * 100, 2)
+    t_inicio = pd.to_datetime(df[col_inicio], errors="coerce")
+    t_fin = pd.to_datetime(df[col_fin], errors="coerce")
 
-    # 1. TIEMPO DE CIERRE (MTTR): (ultima_actualizacion_etapa con Resuelto - primera_fecha_asignada) / resueltos
-    duraciones_cierre_series = pd.Series(dtype=float)
-    if not df_resueltos.empty:
-        t_cierre = pd.to_datetime(df_resueltos["ultima_actualizacion_etapa"], errors="coerce")
-        t_asig = pd.to_datetime(df_resueltos.get("primera_fecha_asignada"), errors="coerce")
-        t_crea = pd.to_datetime(df_resueltos["creado_el"], errors="coerce")
+    return (t_fin - t_inicio).dt.total_seconds() / 3600.0
 
-        # Usar primera_fecha_asignada; si falta, respalda con creado_el
-        t_inicio_cierre = t_asig.fillna(t_crea)
-        dur_hrs = (t_cierre - t_inicio_cierre).dt.total_seconds() / 3600.0
 
-        if "duracion_total_horas" in df_resueltos.columns:
-            dur_fallback = pd.to_numeric(df_resueltos["duracion_total_horas"], errors="coerce").fillna(0.0)
-            dur_hrs = dur_hrs.where(dur_hrs > 0, dur_fallback)
+def _duracion_total(df: pd.DataFrame) -> pd.Series:
+    """
+    Duración creación → cierre tal y como la reporta Odoo.
 
-        duraciones_cierre_series = dur_hrs.clip(lower=0)
+    Se lee el campo en vez de restar las dos fechas porque coincide con el
+    cálculo y no pierde muestra: la resta deja fuera los tickets sin fecha de
+    asignación, este campo los conserva.
+    """
+    if df.empty or "duracion_total_horas" not in df.columns:
+        return pd.Series(dtype=float)
+    return pd.to_numeric(df["duracion_total_horas"], errors="coerce")
 
-    stats_cierre = _compute_stats_for_series(duraciones_cierre_series)
 
-    # 2. TIEMPO DE PRIMERA RESPUESTA: (primera_fecha_asignada - creado_el) / total_tickets
-    if total_creados > 0 and "creado_el" in df_creados.columns:
-        t_creado = pd.to_datetime(df_creados["creado_el"], errors="coerce")
-        t_asig_cr = pd.to_datetime(df_creados.get("primera_fecha_asignada"), errors="coerce")
-        t_act_cr = pd.to_datetime(df_creados["ultima_actualizacion_etapa"], errors="coerce")
+def _serie_de_formula(df: pd.DataFrame, formula: str) -> pd.Series:
+    if formula == "duracion_total":
+        return _duracion_total(df)
+    if formula == "asignado_a_cierre":
+        return _hours_between(df, "primera_fecha_asignada", "ultima_actualizacion_etapa")
+    if formula == "creado_a_asignacion":
+        return _hours_between(df, "creado_el", "primera_fecha_asignada")
+    raise ValueError(f"Fórmula de tiempo desconocida: {formula!r}")
 
-        # Usar primera_fecha_asignada; si no hay fecha de asignación, usar ultima_actualizacion
-        t_resp = t_asig_cr.fillna(t_act_cr)
-        tiempo_resp_series = (t_resp - t_creado).dt.total_seconds() / 3600.0
-        tiempo_promedio_respuesta = round(float(tiempo_resp_series.clip(lower=0).fillna(0.0).mean()), 2)
+
+def _prefixed(stats: Dict[str, float], medida: str) -> Dict[str, Any]:
+    """Aplana un bloque de estadísticos a las claves planas que guarda la BD."""
+    plano = {f"tiempo_{stat}_{medida}_horas": stats[stat] for stat in TIME_STATS}
+    plano[f"pct_excede_promedio_{medida}"] = stats["pct_excede_promedio"]
+    plano[f"muestra_{medida}"] = stats["muestra"]
+    return plano
+
+
+def _pct(parte: int, total: int) -> float:
+    return round((parte / total) * 100, 2) if total > 0 else 0.0
+
+
+def compute_metrics_for_period(cohorte: PeriodCohort) -> Dict[str, Any]:
+    """
+    El bloque completo de una cohorte: volúmenes, tasas y las siete medidas.
+
+    Cada cifra trae fijado su denominador, y son dos distintos:
+
+      * resolución y cancelación se leen sobre lo CERRADO en el mes —es la
+        mezcla de desenlaces del trabajo despachado—, y cada una se abre en el
+        que además nació en el mes y el que venía arrastrado. Los dos sumandos
+        comparten denominador, así que cierran exactamente con el total.
+      * el rezago se lee sobre lo CREADO en el mes: de la demanda que entró,
+        cuánta no se cerró dentro del propio mes.
+    """
+    df = cohorte.df
+    total = len(df)
+
+    if total == 0:
+        conteos = dict.fromkeys(
+            ["creados", "cerrados", "resueltos", "resueltos_periodo", "resueltos_arrastre",
+             "cancelados", "cancelados_periodo", "cancelados_arrastre", "rezagados"], 0
+        )
     else:
-        tiempo_promedio_respuesta = 0.0
+        nacido = df["nacido_en_periodo"]
+        cerrado = df["cerrado_en_periodo"]
+        resuelto = cerrado & df["es_resuelto"]
+        cancelado = cerrado & df["es_cancelado"]
 
-    metrics = {
-        "total_tickets": total_creados,
-        "tickets_resueltos": total_resueltos,
-        "tickets_cancelados": total_cancelados,
-        "tickets_rezagados": total_rezagados,
-        "pct_resueltos": pct_resueltos,
-        "pct_cancelados": pct_cancelados,
-        "pct_rezagados": pct_rezagados,
-        "tiempo_promedio_primera_respuesta_horas": tiempo_promedio_respuesta,
+        conteos = {
+            "creados": int(nacido.sum()),
+            "cerrados": int(cerrado.sum()),
+            "resueltos": int(resuelto.sum()),
+            "resueltos_periodo": int((resuelto & nacido).sum()),
+            "resueltos_arrastre": int((resuelto & ~nacido).sum()),
+            "cancelados": int(cancelado.sum()),
+            "cancelados_periodo": int((cancelado & nacido).sum()),
+            "cancelados_arrastre": int((cancelado & ~nacido).sum()),
+            "rezagados": int((nacido & df["es_rezagado"]).sum()),
+        }
 
-        "tiempo_medio_cierre_horas": stats_cierre["promedio"],
-        "tiempo_mediana_cierre_horas": stats_cierre["mediana"],
-        "tiempo_p25_cierre_horas": stats_cierre["p25"],
-        "tiempo_p75_cierre_horas": stats_cierre["p75"],
-        "tiempo_std_cierre_horas": stats_cierre["std"],
-        "pct_excede_promedio_cierre": stats_cierre["pct_excede_promedio"],
-        "pct_excede_mediana_cierre": stats_cierre["pct_excede_mediana"],
+    cerrados = conteos["cerrados"]
+    creados = conteos["creados"]
+
+    metrics: Dict[str, Any] = {
+        "total_tickets": total,
+        "tickets_creados": creados,
+        "tickets_cerrados": cerrados,
+        "tickets_resueltos": conteos["resueltos"],
+        "tickets_resueltos_periodo": conteos["resueltos_periodo"],
+        "tickets_resueltos_arrastre": conteos["resueltos_arrastre"],
+        "tickets_cancelados": conteos["cancelados"],
+        "tickets_cancelados_periodo": conteos["cancelados_periodo"],
+        "tickets_cancelados_arrastre": conteos["cancelados_arrastre"],
+        "tickets_rezagados": conteos["rezagados"],
+
+        "pct_resueltos": _pct(conteos["resueltos"], cerrados),
+        "pct_resueltos_periodo": _pct(conteos["resueltos_periodo"], cerrados),
+        "pct_resueltos_arrastre": _pct(conteos["resueltos_arrastre"], cerrados),
+        "pct_cancelados": _pct(conteos["cancelados"], cerrados),
+        "pct_cancelados_periodo": _pct(conteos["cancelados_periodo"], cerrados),
+        "pct_cancelados_arrastre": _pct(conteos["cancelados_arrastre"], cerrados),
+        "pct_rezagados": _pct(conteos["rezagados"], creados),
     }
-    
-    return _clean_nan(metrics)
+
+    for medida, formula, poblacion in TIME_MEASURE_SPECS:
+        serie = _serie_de_formula(cohorte.poblacion(poblacion), formula)
+        metrics.update(_prefixed(_compute_stats_for_series(serie), medida))
+
+    return clean_nan(metrics)

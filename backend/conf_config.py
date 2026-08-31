@@ -7,9 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# El esquema no es un secreto y cambia según el entorno (prod / pruebas),
-# por eso vive en el .env junto a VAULT_PATH y no dentro del secreto.
-DB_SCHEMA = os.getenv("DB_SCHEMA", "public")
+DB_SCHEMA = os.getenv("DB_SCHEMA")
 
 DATE_FORMATS = [
     "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d",
@@ -37,6 +35,7 @@ SUBS_STATE_TO_LOG_MAP = {
 class TableNames:
     CRM_CLIENTS = "crm_clients"
     CRM_LOGS = "crm_logs"
+    CRM_CIERRE_HISTORICO = "crm_cierre_historico"
     CRM_METRICAS_GLOBALES = "crm_metricas_globales"
     CRM_DIMENSIONES_HISTORICO = "crm_dimensiones_historico"
     ANALYZER_ACTIVOS_CIERRE = "analyzer_activos_cierre"

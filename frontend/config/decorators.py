@@ -10,10 +10,14 @@ def is_ajax_or_api(request):
         '/api/' in request.path
     )
 
-def permission_required(perm_name):
+def permission_required(*perm_names):
     """
     Exige que el usuario esté autenticado y posea el permiso requerido
     evaluado a través de su perfil o su Grupo de Permisos asignado.
+
+    Admite varios permisos: basta con uno para pasar. Se usa en endpoints que
+    alimentan a más de una página, p. ej. las dimensiones del CRM, que consultan
+    tanto Analytics como el modal de Results.
     """
     def decorator(view_func):
         @wraps(view_func)
@@ -28,14 +32,14 @@ def permission_required(perm_name):
                 return view_func(request, *args, **kwargs)
 
             profile = getattr(request.user, 'profile', None)
-            if profile and profile.has_permission(perm_name):
+            if profile and any(profile.has_permission(perm) for perm in perm_names):
                 return view_func(request, *args, **kwargs)
             
             # Acceso denegado
             if is_ajax_or_api(request):
                 return JsonResponse({
                     "status": "error", 
-                    "message": f"Acceso denegado. Se requiere el privilegio: {perm_name}."
+                    "message": f"Acceso denegado. Se requiere el privilegio: {' o '.join(perm_names)}."
                 }, status=403)
             return redirect('subscriptions:dashboard')
         return _wrapped_view

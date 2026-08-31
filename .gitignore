@@ -11,3 +11,12 @@ logs.log
 nginx.conf
 node_modules/
 logs/
+.agents/
+.codex/
+.cursor/
+.github/
+.claude/
+*.zip
+.claudeignore
+CLAUDE.md
+frontend/static/dist/
