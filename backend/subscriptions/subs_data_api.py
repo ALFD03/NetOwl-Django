@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional
 import json
 import pathlib
+from functools import lru_cache
 from ..conf_config import DB_SCHEMA, TableNames
 from ..database import DBConnector
 
@@ -152,6 +153,62 @@ def get_analytics_data(
 
 ZONAS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Zonas.json"
 
+
+@lru_cache(maxsize=1)
+def load_zonas() -> Dict[str, Any]:
+    """Zonas.json cacheado en memoria (antes se leia de disco en cada request)."""
+    with open(ZONAS_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def get_zonas_config() -> Dict[str, Any]:
+    """Mapa de zonas para que el cliente agrupe los reportes sin ir al servidor.
+
+    Es la misma fuente (`Zonas.json`) que usan `get_sales_report_data` y
+    `get_business_units_data`; se envia en los props para que cambiar de dia en
+    la barra de corte sea una reagrupacion en memoria y no un round-trip.
+    `siteOrder` viaja aparte para no duplicar el orden en TypeScript.
+    """
+    if not ZONAS_PATH.exists():
+        return {"zonas": [], "siteOrder": CUSTOM_SITE_ORDER}
+    zonas = [
+        {
+            "name": str(z.get("name", "")).strip(),
+            "site": str(z.get("Site", "Valencia")).strip(),
+            "type": str(z.get("Type", "GPON")).strip(),
+            "coordinador": str(z.get("Coordinador") or "").strip(),
+        }
+        for z in load_zonas().get("zonas", [])
+        if str(z.get("name", "")).strip()
+    ]
+    return {"zonas": zonas, "siteOrder": CUSTOM_SITE_ORDER}
+
+
+def _dimension_df(db: DBConnector, target_period: str, dia: Optional[int]):
+    """Filas de la dimension zona_sucursal, del cierre del mes o de un dia.
+
+    Con `dia` la fuente es la fila precalculada de analyzer_day_metrics: una
+    sola lectura, sin recalcular nada del pipeline.
+    """
+    import pandas as pd
+
+    if dia:
+        from .day_metrics import get_day_metrics
+
+        mes = target_period[:7]
+        payload = get_day_metrics(mes).get("dias", {}).get(str(dia))
+        if not payload:
+            return pd.DataFrame()
+        return pd.DataFrame(payload.get("dimensiones", []))
+
+    return db.query(f"""
+        SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
+               churn_neto_pct, churn_bruto_pct, react_val,
+               adiciones_netas, adiciones_brutas, corte_impagado
+        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+        WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
+    """, params=[target_period])
+
 def calculate_aggregation_totals(nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Suma los valores absolutos de un conjunto de nodos y recalcula
@@ -187,7 +244,10 @@ def calculate_aggregation_totals(nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
         "corte_impagado": corte,
     }
 
-def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, Any]:
+def get_sales_report_data(
+    periodo_reporte: Optional[str] = None,
+    dia: Optional[int] = None,
+) -> Dict[str, Any]:
     """
     Agrupa las métricas del periodo por Site regional -> Type (Tecnología) -> Nodos,
     calculando subtotales para cada tecnología y totales generales para cada Site.
@@ -203,8 +263,7 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
         if not ZONAS_PATH.exists():
             return {"status": "error", "message": "No se encontró el archivo Zonas.json en la raíz"}
             
-        with open(ZONAS_PATH, "r", encoding="utf-8") as f:
-            zonas_data = json.load(f)
+        zonas_data = load_zonas()
         
         # Mapeamos zonas a su respectivo Site y Type (Tecnología)
         zone_info = {}
@@ -215,16 +274,15 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
                 "type": z.get("Type", "GPON").strip()  # "GPON" como fallback por defecto
             }
         
-        df = db.query(f"""
-            SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
-                   churn_neto_pct, churn_bruto_pct, react_val,
-                   adiciones_netas, adiciones_brutas, corte_impagado
-            FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
-            WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
-        """, params=[target_period])
+        df = _dimension_df(db, target_period, dia)
         
         if df.empty:
-            return {"status": "empty", "period": target_period, "periods": available_periods}
+            return {
+                "status": "empty",
+                "period": target_period,
+                "periods": available_periods,
+                "dia": dia,
+            }
             
         # Agrupación en estructura anidada en memoria
         # Estructura: site_groups[site][tech_type] = List[nodos]
@@ -297,6 +355,7 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
             "status": "success",
             "period": target_period,
             "periods": available_periods,
+            "dia": dia,
             "data": final_data_list
         }
     except Exception as e:
@@ -304,7 +363,10 @@ def get_sales_report_data(periodo_reporte: Optional[str] = None) -> Dict[str, An
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
     
-def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, Any]:
+def get_business_units_data(
+    periodo_reporte: Optional[str] = None,
+    dia: Optional[int] = None,
+) -> Dict[str, Any]:
     """
     Genera el reporte de Business Units:
     1. Incluye un resumen consolidado en tarjeta al inicio para TODOS los nodos FTTH.
@@ -322,8 +384,7 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
         if not ZONAS_PATH.exists():
             return {"status": "error", "message": "No se encontró el archivo Zonas.json en la raíz"}
             
-        with open(ZONAS_PATH, "r", encoding="utf-8") as f:
-            zonas_data = json.load(f)
+        zonas_data = load_zonas()
         
         # 1. Indexar zonas por Coordinador, RF y FTTH
         zone_coord_map = {}
@@ -347,16 +408,15 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
             elif z_type in ("FTTH", "GPON"): # 👈 1. MEJORA: Acepta FTTH y GPON
                 ftth_zones_set.add(z_name)
 
-        df = db.query(f"""
-            SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
-                   churn_neto_pct, churn_bruto_pct, react_val,
-                   adiciones_netas, adiciones_brutas, corte_impagado
-            FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
-            WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
-        """, params=[target_period])
+        df = _dimension_df(db, target_period, dia)
         
         if df.empty:
-            return {"status": "empty", "period": target_period, "periods": available_periods}
+            return {
+                "status": "empty",
+                "period": target_period,
+                "periods": available_periods,
+                "dia": dia,
+            }
             
         # 2. Agrupadores
         coord_groups: Dict[str, List[Dict[str, Any]]] = {}
@@ -438,6 +498,7 @@ def get_business_units_data(periodo_reporte: Optional[str] = None) -> Dict[str, 
             "status": "success",
             "period": target_period,
             "periods": available_periods,
+            "dia": dia,
             "ftth_summary": ftth_summary,
             "data": final_data_list
         }

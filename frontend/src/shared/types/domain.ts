@@ -42,6 +42,20 @@ export interface DimensionVal {
   gratuitos_retornados?: number;
 }
 
+/** Metricas de un dia: globales del mes hasta ese corte + desglose por nodo. */
+export interface DayPayload {
+  global: Periodo;
+  dimensiones: DimensionVal[];
+}
+
+/** Fila de analyzer_day_metrics: un mes completo, indexado por dia. */
+export interface DayMetrics {
+  periodo_reporte: string;
+  periodo_mes: string;
+  activos_inicio: number;
+  dias: Record<string, DayPayload>;
+}
+
 export interface DimensionGroup {
   periodo_reporte: string;
   dimensiones: Record<string, DimensionVal[]>;

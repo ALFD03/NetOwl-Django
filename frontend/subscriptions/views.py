@@ -27,7 +27,8 @@ from backend.subscriptions import (
     get_cierre_churn, get_dimensiones, get_periodos,
     get_dashboard_data, get_analytics_data,
     import_logs_csv, import_subscriptions_csv, get_sales_report_data,
-    ETAReportManager,get_business_units_data,
+    ETAReportManager, get_business_units_data, get_zonas_config,
+    get_day_metrics,
 )
 from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
@@ -138,9 +139,16 @@ def analytics(request):
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     data = get_analytics_data(periodos)
+    # El mes completo viaja en los props: seleccionar un dia en la barra es
+    # una lectura de cliente, no un recalculo.
+    mes = (request.GET.get("period") or "")[:7]
+    if not mes:
+        lista = data.get("periodos", [])
+        mes = (lista[0].get("periodo_reporte", "")[:7] if lista else "")
     return render_inertia(request, "Subscriptions/Analytics", {
         "periodos": data.get("periodos", []),
         "dimensiones": data.get("dimensiones", []),
+        "dayMetrics": get_day_metrics(mes),
         "section": "analytics"
     })
 
@@ -185,9 +193,15 @@ def lifetime(request):
 @permission_required('can_view_subs_sales')
 def sales_report(request):
     periodo = request.GET.get("period")
-    data = get_sales_report_data(periodo)
+    try:
+        dia = int(request.GET.get("dia") or 0) or None
+    except ValueError:
+        dia = None
+    data = get_sales_report_data(periodo, dia)
     return render_inertia(request, "Subscriptions/SalesReport", {
         "reportData": data,
+        "dayMetrics": get_day_metrics((data.get("period") or "")[:7]),
+        "zonasConfig": get_zonas_config(),
         "section": "sales_report"
     })
 
@@ -195,9 +209,15 @@ def sales_report(request):
 @permission_required('can_view_subs_sales')
 def business_units(request):
     periodo = request.GET.get("period")
-    data = get_business_units_data(periodo)
+    try:
+        dia = int(request.GET.get("dia") or 0) or None
+    except ValueError:
+        dia = None
+    data = get_business_units_data(periodo, dia)
     return render_inertia(request, "Subscriptions/BusinessUnits", {
         "buData": data,
+        "dayMetrics": get_day_metrics((data.get("period") or "")[:7]),
+        "zonasConfig": get_zonas_config(),
         "section": "business_units"
     })
 
@@ -384,7 +404,8 @@ def api_survival_data(request):
 @permission_required('can_view_subs_sales')
 def api_sales_report(request):
     periodo = request.GET.get("period")
-    return JsonResponse(get_sales_report_data(periodo))
+    dia = request.GET.get("dia")
+    return JsonResponse(get_sales_report_data(periodo, int(dia) if dia else None))
 
 @login_required
 @permission_required('can_view_eta')
@@ -578,7 +599,8 @@ def api_eta_report_save_sub_config(request):
 @permission_required('can_view_subs_sales')
 def api_business_units_report(request):
     periodo = request.GET.get("period")
-    return JsonResponse(get_business_units_data(periodo))
+    dia = request.GET.get("dia")
+    return JsonResponse(get_business_units_data(periodo, int(dia) if dia else None))
 
 @login_required
 @permission_required('can_manage_eta')

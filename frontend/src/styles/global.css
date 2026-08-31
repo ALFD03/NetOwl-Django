@@ -35,3 +35,37 @@
   background-color: #1e293b;
   border-radius: 3px;
 }
+/* Slider de fecha de corte (DayProgressBar).
+   La pista la dibuja el componente; aqui solo se estiliza el manejador nativo
+   para conservar el arrastre y la navegacion con teclado que da <input range>. */
+.day-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+.day-slider::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.day-slider::-moz-range-track {
+  background: transparent;
+}
+.day-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  @apply h-4 w-4 cursor-grab rounded-full border-2 border-white bg-brand shadow-md shadow-brand/40;
+}
+.day-slider::-moz-range-thumb {
+  box-sizing: border-box;
+  @apply h-4 w-4 cursor-grab rounded-full border-2 border-white bg-brand shadow-md shadow-brand/40;
+}
+.day-slider:active::-webkit-slider-thumb {
+  @apply cursor-grabbing;
+}
+.day-slider:active::-moz-range-thumb {
+  @apply cursor-grabbing;
+}
+.day-slider:focus-visible::-webkit-slider-thumb {
+  @apply ring-2 ring-brand-light ring-offset-2 ring-offset-surface-secondary;
+}
+.day-slider:focus-visible::-moz-range-thumb {
+  @apply ring-2 ring-brand-light ring-offset-2 ring-offset-surface-secondary;
+}
