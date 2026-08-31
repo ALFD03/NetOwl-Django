@@ -38,11 +38,31 @@ def get_free_at(df_clean_logs, target_date, strictly_before=False):
     return get_state_at(df_clean_logs, target_date, FREE_STATE, strictly_before)
 
 
-def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin):
-    df = df_clean_logs.copy()
-    mask_react_text = df["log_norm"].str.contains("reactivacion", na=False)
-    mask_react_state = df["estado_origen"].isin(VALID_REACT_ORIGINS) & (df["estado"] == ACTIVE_STATE)
-    df_react = df[mask_react_text | mask_react_state]
+def react_candidates(df_clean_logs):
+    """Logs que podrian ser reactivacion, sin filtrar por fecha.
+
+    El `str.contains` recorre todo el log y no depende del periodo, asi que se
+    calcula una sola vez y se reutiliza en cada corte diario.
+    """
+    mask_react_text = df_clean_logs["log_norm"].str.contains("reactivacion", na=False)
+    mask_react_state = (
+        df_clean_logs["estado_origen"].isin(VALID_REACT_ORIGINS)
+        & (df_clean_logs["estado"] == ACTIVE_STATE)
+    )
+    return df_clean_logs[mask_react_text | mask_react_state].copy()
+
+
+def corte_candidates(df_clean_logs):
+    """Logs de corte por impago, sin filtrar por fecha (igual que arriba)."""
+    df_corte = df_clean_logs[
+        df_clean_logs["log_norm"].str.contains(CORTE_IMPAGADO_EVENT, na=False)
+    ].copy()
+    df_corte = df_corte.assign(f_min=df_corte["f_dt"].dt.floor("min"))
+    return df_corte.drop_duplicates(subset=["orden", "f_min"])
+
+
+def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin, candidates=None):
+    df_react = react_candidates(df_clean_logs) if candidates is None else candidates
     df_react = df_react[
         (df_react["f_dt"] >= periodo.fecha_inicio)
         & (df_react["f_dt"] <= periodo.fecha_final)
@@ -71,12 +91,8 @@ def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin):
     return df_react
 
 
-def get_corte_impagado(df_clean_logs, periodo):
-    df = df_clean_logs.copy()
-    mask_corte = df["log_norm"].str.contains(CORTE_IMPAGADO_EVENT, na=False)
-    df_corte = df[mask_corte]
-    df_corte = df_corte.assign(f_min=df_corte["f_dt"].dt.floor("min"))
-    df_corte = df_corte.drop_duplicates(subset=["orden", "f_min"])
+def get_corte_impagado(df_clean_logs, periodo, candidates=None):
+    df_corte = corte_candidates(df_clean_logs) if candidates is None else candidates
     df_corte = df_corte[
         (df_corte["f_dt"] >= periodo.fecha_inicio)
         & (df_corte["f_dt"] <= periodo.fecha_final)

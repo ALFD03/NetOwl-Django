@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Set
+from typing import Any, Dict, Set
 
 import pandas as pd
 
@@ -33,38 +33,87 @@ class MetricsAnalyzer:
         self.df_clean_logs, self._ordens_con_activity = rules.apply_log_rules(
             self.df_clean_logs, self.df_subs_full, self.df_free_meta
         )
+        self._prepare_caches()
+
+    def _prepare_caches(self):
+        """Precalcula lo que no depende del periodo.
+
+        Los filtros por texto sobre el log completo y la preparacion del frame
+        de dimensiones son identicos para cualquier corte: calcularlos una vez
+        evita repetirlos en cada uno de los dias del mes.
+        """
+        self._react_cand = metrics_calc.react_candidates(self.df_clean_logs)
+        self._corte_cand = metrics_calc.corte_candidates(self.df_clean_logs)
+        self._dim_prepared = dimensions.prepare_subs_dims(
+            self.db, self.df_subs_full
+        )
+        # Los cortes de un mes comparten fecha_inicio, asi que act_ini y
+        # free_ini se calculan una sola vez para los 31 dias.
+        self._state_cache: Dict[Any, Any] = {}
+        self._inactivos_cache = None
+
+    def _state_at(self, target_date, estado_getter, strictly_before: bool):
+        cached = getattr(self, "_state_cache", None)
+        # Solo se cachea el estado al inicio del periodo (strictly_before), que
+        # es identico en todos los cortes del mes. El estado al cierre cambia
+        # cada dia y no se reutiliza: guardarlo solo gastaria memoria.
+        if cached is None or not strictly_before:
+            return estado_getter(self.df_clean_logs, target_date, strictly_before)
+        key = (estado_getter.__name__, target_date)
+        if key not in cached:
+            cached[key] = estado_getter(self.df_clean_logs, target_date, True)
+        return cached[key]
+
+    def _inactivos_al_inicio(self, fecha_inicio):
+        """Ultimo estado conocido antes del periodo: constante para todo el mes."""
+        cache = getattr(self, "_inactivos_cache", None)
+        if cache is not None and cache[0] == fecha_inicio:
+            return cache[1]
+        last_logs = self.df_clean_logs[self.df_clean_logs["f_dt"] < fecha_inicio]
+        df_ultimo_estado = metrics_calc.last_log_per_orden(last_logs)
+        df_inactivos = df_ultimo_estado[
+            df_ultimo_estado["estado"].isin(INACTIVE_STATES)
+        ].copy()
+        self._inactivos_cache = (fecha_inicio, df_inactivos)
+        return df_inactivos
 
     def get_active_at(self, target_date, strictly_before: bool = False):
-        return metrics_calc.get_active_at(
-            self.df_clean_logs, target_date, strictly_before
+        return self._state_at(
+            target_date, metrics_calc.get_active_at, strictly_before
         )
 
     def get_free_at(self, target_date, strictly_before: bool = False):
-        return metrics_calc.get_free_at(
-            self.df_clean_logs, target_date, strictly_before
+        return self._state_at(
+            target_date, metrics_calc.get_free_at, strictly_before
         )
 
     def get_reactivations(self, act_fin):
         return metrics_calc.get_reactivations(
-            self.df_clean_logs, self.df_subs_full, self.periodo, act_fin
+            self.df_clean_logs, self.df_subs_full, self.periodo, act_fin,
+            candidates=getattr(self, "_react_cand", None),
         )
 
     def get_corte_impagado(self):
         return metrics_calc.get_corte_impagado(
-            self.df_clean_logs, self.periodo
+            self.df_clean_logs, self.periodo,
+            candidates=getattr(self, "_corte_cand", None),
         )
 
-    def run(self):
-        self.load_data()
-        self.build_clean_data()
-        self._apply_log_rules()
-        periodo_label = self.periodo.label()
+    def _compute(self, periodo: Periodo) -> Dict[str, Any]:
+        """Calcula todas las metricas de un corte SIN escribir en la base.
 
-        act_ini = self.get_active_at(self.periodo.fecha_inicio, strictly_before=True)
-        act_fin = self.get_active_at(self.periodo.fecha_final, strictly_before=False)
+        Separar el calculo de la persistencia permite recorrer los 31 dias de
+        un mes reutilizando una unica carga de datos.
+        """
+        # get_reactivations/get_corte_impagado leen self.periodo internamente.
+        self.periodo = periodo
+        periodo_label = periodo.label()
+
+        act_ini = self.get_active_at(periodo.fecha_inicio, strictly_before=True)
+        act_fin = self.get_active_at(periodo.fecha_final, strictly_before=False)
         nuevos = self.df_subs_full[
-            (self.df_subs_full["f_ini_dt"] >= self.periodo.fecha_inicio)
-            & (self.df_subs_full["f_ini_dt"] <= self.periodo.fecha_final)
+            (self.df_subs_full["f_ini_dt"] >= periodo.fecha_inicio)
+            & (self.df_subs_full["f_ini_dt"] <= periodo.fecha_final)
             & self.df_subs_full["orden"].isin(self._ordens_con_activity)
         ].copy()
 
@@ -73,8 +122,8 @@ class MetricsAnalyzer:
         set_nue: Set[str] = set(nuevos["orden"])
 
         # Clientes archivados: siguen en servicio gratuito, no son activos ni bajas.
-        free_ini = self.get_free_at(self.periodo.fecha_inicio, strictly_before=True)
-        free_fin = self.get_free_at(self.periodo.fecha_final, strictly_before=False)
+        free_ini = self.get_free_at(periodo.fecha_inicio, strictly_before=True)
+        free_fin = self.get_free_at(periodo.fecha_final, strictly_before=False)
         set_free_ini: Set[str] = set(free_ini["orden"]) if not free_ini.empty else set()
         set_free_fin: Set[str] = set(free_fin["orden"]) if not free_fin.empty else set()
         # Salidas hacia el servicio gratuito: no son bajas.
@@ -86,13 +135,7 @@ class MetricsAnalyzer:
         n_free_retorno = len(set_free_retorno)
         df_free_retorno = pd.DataFrame({"orden": sorted(set_free_retorno)})
 
-        last_logs = self.df_clean_logs[
-            self.df_clean_logs["f_dt"] < self.periodo.fecha_inicio
-        ]
-        df_ultimo_estado = metrics_calc.last_log_per_orden(last_logs)
-        df_inactivos = df_ultimo_estado[
-            df_ultimo_estado["estado"].isin(INACTIVE_STATES)
-        ].copy()
+        df_inactivos = self._inactivos_al_inicio(periodo.fecha_inicio)
         total_inactivos = len(df_inactivos)
 
         billing_map = self.df_subs_full.set_index("orden")["total"]
@@ -148,17 +191,6 @@ class MetricsAnalyzer:
         n_react_not_in_ini = len(df_react_not_in_ini)
         bajas_brutas = bajas_netas + n_react_not_in_ini
 
-        self.db.save_historico(act_fin[["orden", "f_dt", "estado"]], TableNames.ANALYZER_ACTIVOS_CIERRE, periodo_label)
-        self.db.save_historico(df_react_all, TableNames.ANALYZER_REACTIVACIONES, periodo_label)
-        self.db.save_historico(df_bajas[["orden", "f_ini_dt", "estado"]], TableNames.ANALYZER_BAJAS_DETALLADAS, periodo_label)
-        self.db.save_historico(df_corte_impagado, TableNames.ANALYZER_CORTE_IMPAGADO, periodo_label)
-        if not free_fin.empty:
-            self.db.save_historico(
-                free_fin[["orden", "f_dt", "estado"]].rename(columns={"f_dt": "fecha_archivado"}),
-                TableNames.ANALYZER_CLIENTES_GRATUITOS,
-                periodo_label,
-            )
-
         summary = {
             "periodo": periodo_label,
             "activos_inicio": len(act_ini),
@@ -189,6 +221,80 @@ class MetricsAnalyzer:
             "gratuitos_nuevos": n_free_periodo,
             "gratuitos_retornados": n_free_retorno,
         }
+
+        return {
+            "periodo_label": periodo_label,
+            "summary": summary,
+            "act_ini": act_ini,
+            "act_fin": act_fin,
+            "nuevos": nuevos,
+            "set_nue": set_nue,
+            "df_bajas": df_bajas,
+            "df_inactivos": df_inactivos,
+            "df_react_all": df_react_all,
+            "df_corte_impagado": df_corte_impagado,
+            "df_react_not_in_ini": df_react_not_in_ini,
+            "free_fin": free_fin,
+            "df_free_periodo": df_free_periodo,
+            "df_free_retorno": df_free_retorno,
+            "bajas_netas": bajas_netas,
+            "bajas_brutas": bajas_brutas,
+            "set_corte_impagado": set_corte_impagado,
+            "set_free_fin": set_free_fin,
+            "n_free_retorno": n_free_retorno,
+            "total_inactivos": total_inactivos,
+            "n_react_6_churn": n_react_6_churn,
+            "n_react_8_30days": n_react_8_30days,
+            "n_react_4_P": n_react_4_P,
+            "n_react_4_H": n_react_4_H,
+            "n_react_unicas": n_react_unicas,
+        }
+
+    def run(self):
+        self.load_data()
+        self.build_clean_data()
+        self._apply_log_rules()
+        return self.persist(self._compute(self.periodo))
+
+    def persist(self, c: Dict[str, Any]):
+        """Escribe en la base el resultado de `_compute` (comportamiento historico)."""
+        periodo_label = c["periodo_label"]
+        summary = c["summary"]
+        act_ini = c["act_ini"]
+        act_fin = c["act_fin"]
+        nuevos = c["nuevos"]
+        set_nue = c["set_nue"]
+        df_bajas = c["df_bajas"]
+        df_inactivos = c["df_inactivos"]
+        df_react_all = c["df_react_all"]
+        df_corte_impagado = c["df_corte_impagado"]
+        df_react_not_in_ini = c["df_react_not_in_ini"]
+        free_fin = c["free_fin"]
+        df_free_periodo = c["df_free_periodo"]
+        df_free_retorno = c["df_free_retorno"]
+        bajas_netas = c["bajas_netas"]
+        bajas_brutas = c["bajas_brutas"]
+        set_corte_impagado = c["set_corte_impagado"]
+        set_free_fin = c["set_free_fin"]
+        n_free_retorno = c["n_free_retorno"]
+        total_inactivos = c["total_inactivos"]
+        n_react_6_churn = c["n_react_6_churn"]
+        n_react_8_30days = c["n_react_8_30days"]
+        n_react_4_P = c["n_react_4_P"]
+        n_react_4_H = c["n_react_4_H"]
+        n_react_unicas = c["n_react_unicas"]
+
+        self.db.save_historico(act_fin[["orden", "f_dt", "estado"]], TableNames.ANALYZER_ACTIVOS_CIERRE, periodo_label)
+        self.db.save_historico(df_react_all, TableNames.ANALYZER_REACTIVACIONES, periodo_label)
+        self.db.save_historico(df_bajas[["orden", "f_ini_dt", "estado"]], TableNames.ANALYZER_BAJAS_DETALLADAS, periodo_label)
+        self.db.save_historico(df_corte_impagado, TableNames.ANALYZER_CORTE_IMPAGADO, periodo_label)
+        if not free_fin.empty:
+            self.db.save_historico(
+                free_fin[["orden", "f_dt", "estado"]].rename(columns={"f_dt": "fecha_archivado"}),
+                TableNames.ANALYZER_CLIENTES_GRATUITOS,
+                periodo_label,
+            )
+
         self.db.save_historico(pd.DataFrame([summary]), TableNames.ANALYZER_CIERRE_HISTORICO, periodo_label)
 
         if not df_inactivos.empty:
@@ -215,6 +321,7 @@ class MetricsAnalyzer:
             df_free_fin=free_fin,
             df_free_periodo=df_free_periodo,
             df_free_retorno=df_free_retorno,
+            prepared=getattr(self, "_dim_prepared", None),
         )
 
     def aggregate_dimensions(

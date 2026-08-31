@@ -51,6 +51,7 @@ class TableNames:
     ANALYZER_INACTIVOS_DETALLADOS = "analyzer_inactivos_detallados"
     ANALYZER_CLIENTES_GRATUITOS = "analyzer_clientes_gratuitos"
     ANALYZER_CHURN_DIMENSIONES = "analyzer_churn_dimensiones"
+    ANALYZER_DAY_METRICS = "analyzer_day_metrics"
     LIFETIME_PERIODOS = "lifetime_periodos"
     LIFETIME_METRICAS = "lifetime_metricas"
     LIFETIME_DIMENSIONES = "lifetime_dimensiones"
