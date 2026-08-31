@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AlertOctagon, Layers, Loader2, Wrench } from 'lucide-react';
 
-import { DataTable, EmptyState, Modal, StatTile, StatusMessage, ToggleGroup } from '@/shared/ui';
+import { DataTable, EmptyState, MetricCard, Modal, StatTile, StatusMessage, ToggleGroup } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils';
 import { SUPPORT_DESGLOSE_LABELS, SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';
 import { SUPPORT_DESGLOSES, type SupportDesglose, type SupportDimension } from '../../types';
@@ -54,12 +54,12 @@ export function SupportBreakdownModal({ dimension, breakdown, onClose }: Props) 
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-            <StatTile label="Creados" value={formatInteger(stats.tickets_creados)} tone="white" variant="boxed" mono />
-            <StatTile label="Cerrados" value={formatInteger(stats.tickets_cerrados)} tone="blue" variant="boxed" mono />
-            <StatTile label="% Resueltos" value={`${formatTwoDecimals(stats.pct_resueltos)}%`} caption="de los cerrados" tone="green" variant="boxed" mono />
-            <StatTile label="% Rezagados" value={`${formatTwoDecimals(stats.pct_rezagados)}%`} caption="de los creados" tone="yellow" variant="boxed" mono />
-            <StatTile label="Cierre Total" value={`${formatOneDecimal(stats.tiempo_medio_cierre_creado_cerrados_horas)} h`} caption="creación → cierre" tone="blue" variant="boxed" mono />
-            <StatTile label="Asignación" value={`${formatOneDecimal(stats.tiempo_medio_asignacion_horas)} h`} caption="creación → asignación" tone="slate" variant="boxed" mono />
+            <MetricCard label="Creados" value={formatInteger(stats.tickets_creados)} color="slate" />
+            <MetricCard label="Cerrados" value={formatInteger(stats.tickets_cerrados)} color="purple" />
+            <MetricCard label="% Resueltos" value={`${formatTwoDecimals(stats.pct_resueltos)}%`} caption="de los cerrados" color="green" />
+            <MetricCard label="% Rezagados" value={`${formatTwoDecimals(stats.pct_rezagados)}%`} caption="de los creados" color="yellow" />
+            <MetricCard label="Cierre Total" value={`${formatOneDecimal(stats.tiempo_medio_cierre_creado_cerrados_horas)} h`} caption="creación → cierre" color="blue" />
+            <MetricCard label="Asignación" value={`${formatOneDecimal(stats.tiempo_medio_asignacion_horas)} h`} caption="creación → asignación" color="slate" />
           </div>
 
           <ToggleGroup
