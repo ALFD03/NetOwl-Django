@@ -80,14 +80,14 @@ export function DayProgressBar({
 
   return (
     <NeonContainer
-      className={`w-full rounded-2xl border border-slate-700/50 bg-surface-secondary px-5 pb-4 pt-3 shadow-2xl ${className}`}
-      theme="green"
+      // className={`w-full rounded-2xl border border-slate-700/50 bg-surface-secondary px-5 pb-4 pt-3 shadow-2xl ${className}`}
+      theme="blue"
     >
       <div className="flex items-baseline justify-between gap-4">
-        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+        <span className="text-[14px] font-black uppercase tracking-wider text-slate-400">
           {label}
         </span>
-        <span className="text-[10px] font-semibold tabular-nums text-slate-500">
+        <span className="text-[14px] font-semibold tabular-nums text-slate-500">
           {availableDays.length} de {daysInMonth} dias
         </span>
       </div>
@@ -95,7 +95,7 @@ export function DayProgressBar({
       {/* Etiqueta flotante sobre el manejador. */}
       <div className="relative mt-3 h-6">
         <span
-          className="absolute -translate-x-1/2 whitespace-nowrap rounded-lg bg-brand px-2 py-1 text-[11px] font-bold text-white shadow-md shadow-brand/30 transition-[left]"
+          className="absolute -translate-x-1/2 -translate-y-2 whitespace-nowrap rounded-lg bg-brand px-2 py-1 text-[11px] font-bold text-white shadow-md shadow-brand/30 transition-[left]"
           style={{ left: posOf(selectedDay) }}
         >
           {fechaLegible}
@@ -119,7 +119,7 @@ export function DayProgressBar({
           <span
             key={day}
             aria-hidden
-            className="absolute h-2.5 w-px -translate-x-1/2 bg-slate-600"
+            className="absolute h-2.5 w-px -translate-x-1/2 bg-purple-600"
             style={{ left: posOf(day) }}
           />
         ))}
@@ -142,7 +142,7 @@ export function DayProgressBar({
         {ticks.map((day) => (
           <span
             key={day}
-            className="absolute -translate-x-1/2 text-[10px] font-semibold tabular-nums text-slate-500"
+            className="absolute -translate-x-1/2 text-[14px] font-semibold tabular-nums text-blue-500"
             style={{ left: posOf(day) }}
           >
             {day}

@@ -1,5 +1,5 @@
 import { StickyLabel, type Column } from '@/shared/ui';
-import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
+import { formatInteger, formatPeriodoLabel, formatTwoDecimals } from '@/shared/utils/formatters';
 import type { SubscriptionCierre, SubscriptionResultDimensionRow } from '../../types';
 
 const int = formatInteger;
@@ -7,7 +7,7 @@ const dec = formatTwoDecimals;
 
 /** Top-level period history. */
 export const PERIOD_COLUMNS: Column<SubscriptionCierre>[] = [
-  { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{r.periodo_reporte}</span>, sortKey: 'periodo_reporte' },
+  { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodoLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
   { header: 'Inicio', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
   { header: 'Final', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
   { header: 'Instalaciones', accessor: (r) => <span className="font-semibold text-emerald-400">+{int(r.nuevos_mes)}</span>, align: 'right', sortKey: 'nuevos_mes' },
