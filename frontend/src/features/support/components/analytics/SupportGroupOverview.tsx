@@ -17,6 +17,7 @@ import {
   TIME_MEASURE_META,
   distribution,
 } from '../../lib/supportMetrics';
+import { MEASURE_ICONS } from '../../lib/measureIcons';
 import {
   SUPPORT_TIME_MEASURES,
   type SupportStats,
@@ -81,11 +82,6 @@ function TimingPanel({
   );
 }
 
-const MEASURE_ICONS = {
-  blue: <Clock className="h-4 w-4 text-sky-400" />,
-  purple: <Timer className="h-4 w-4 text-purple-400" />,
-  slate: <Hourglass className="h-4 w-4 text-slate-300" />,
-};
 
 /**
  * The selected group at a glance.
