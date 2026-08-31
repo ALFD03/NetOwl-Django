@@ -2,17 +2,24 @@ import { useState } from 'react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
-import { importsApi } from '@/shared/lib/api/imports';
+import { importsApi, type ImportResponse } from '@/shared/lib/api/imports';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
 
-type SubscriptionImportType = 'subscriptions' | 'logs';
+type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis';
 
 const IMPORT_TYPES: { value: SubscriptionImportType; label: string }[] = [
   { value: 'subscriptions', label: 'Suscripciones / Clientes' },
   { value: 'logs', label: 'Logs / Transiciones' },
+  { value: 'gratis', label: 'Planes Gratuitos' },
 ];
+
+const UPLOADERS: Record<SubscriptionImportType, (file: File) => Promise<ImportResponse>> = {
+  subscriptions: (file) => importsApi.importSubscriptions(file),
+  logs: (file) => importsApi.importLogs(file),
+  gratis: (file) => importsApi.importGratis(file),
+};
 
 export default function ImportSubscriptions() {
   const [importType, setImportType] = useState<SubscriptionImportType>('subscriptions');
@@ -26,9 +33,7 @@ export default function ImportSubscriptions() {
           title="Cargar Archivo CSV Subscriptions"
           submitLabel="Iniciar Carga"
           errorMessage="Error al procesar la importación."
-          onUpload={(file) => importType === 'subscriptions'
-            ? importsApi.importSubscriptions(file)
-            : importsApi.importLogs(file)}
+          onUpload={(file) => UPLOADERS[importType](file)}
         >
           <div className="flex gap-3">
             {IMPORT_TYPES.map((option) => (
@@ -57,6 +62,7 @@ export default function ImportSubscriptions() {
             <>Separador de campos: <strong>Comas (,)</strong></>,
             <><strong>Suscripciones:</strong> Debe contener orden, cliente, producto, fecha de inicio, tarifa, total.</>,
             <><strong>Logs:</strong> Debe contener orden, fecha de cambio, nota y estado interno.</>,
+            <><strong>Planes Gratuitos:</strong> Export con tarifa, próxima fecha de factura y mensajes del chatter; detecta desde cuándo cada suscripción es gratuita.</>,
           ]}
           note="Tras cargar ambos archivos, selecciona el mes correspondiente y ejecuta el análisis en la sección inferior."
         />

@@ -242,7 +242,16 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
                 {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
               </select>
             </div>
-            <PermissionEditor permissions={userToEdit.permissions} onChange={(permissions) => setUserToEdit({ ...userToEdit, permissions })} />
+            {userToEdit.group_id ? (
+              <p className="text-xs text-amber-400">
+                Este usuario pertenece a un grupo: sus permisos se heredan del grupo y no se editan aqui. Selecciona <strong>Sin grupo</strong> para asignar permisos individuales.
+              </p>
+            ) : null}
+            <PermissionEditor
+              permissions={userToEdit.permissions}
+              onChange={(permissions) => setUserToEdit({ ...userToEdit, permissions })}
+              disabled={Boolean(userToEdit.group_id)}
+            />
             <div className="flex justify-end"><button type="submit" disabled={saving} className="bg-emerald-600 px-5 py-2.5 rounded-xl text-white font-bold">{saving ? 'Guardando...' : 'Guardar Cambios'}</button></div>
           </form>
         )}

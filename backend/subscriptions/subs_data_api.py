@@ -67,6 +67,9 @@ def get_cierre_churn(
                 "indice_reemplazo_react_pct": float(row.get("indice_reemplazo_react_pct") or 0),
                 "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
                 "adiciones_netas": int(row.get("adiciones_netas") or 0),
+                "clientes_gratuitos": int(row.get("clientes_gratuitos") or 0),
+                "gratuitos_nuevos": int(row.get("gratuitos_nuevos") or 0),
+                "gratuitos_retornados": int(row.get("gratuitos_retornados") or 0),
             })
         return sorted(result, key=lambda x: x["periodo_reporte"], reverse=True)
     except Exception:
@@ -115,6 +118,9 @@ def get_dimensiones(
                 "react_6_churn": int(row.get("react_6_churn") or 0),
                 "react_8_30days": int(row.get("react_8_30days") or 0),
                 "react_4_paused": int(row.get("react_4_paused") or 0),
+                "clientes_gratuitos": int(row.get("clientes_gratuitos") or 0),
+                "gratuitos_nuevos": int(row.get("gratuitos_nuevos") or 0),
+                "gratuitos_retornados": int(row.get("gratuitos_retornados") or 0),
             })
         return sorted(pd_dict.values(), key=lambda x: x["periodo_reporte"], reverse=True)
     except Exception:

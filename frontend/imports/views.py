@@ -16,7 +16,10 @@ from frontend.subscriptions.views import (
     REQUIRED_SUBS_HEADERS, REQUIRED_LOGS_HEADERS
 )
 from frontend.crm.views import REQUIRED_CRM_HEADERS
-from backend.subscriptions import import_subscriptions_csv, import_logs_csv, MetricsAnalyzer
+from backend.subscriptions import (
+    import_subscriptions_csv, import_logs_csv, import_gratis_csv, MetricsAnalyzer,
+)
+from backend.subscriptions.free_plans import REQUIRED_GRATIS_HEADERS
 from backend.crm import import_crm_csv, run_crm_analysis
 from backend.database import DBConnector
 from backend.models import Periodo
@@ -128,6 +131,30 @@ def api_import_subscriptions(request):
     except Exception as e:
         err_msg = str(e)
         register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', f"Fallo al importar: {err_msg}", err_msg)
+        return JsonResponse({"status": "error", "message": err_msg}, status=500)
+    finally:
+        cleanup_tempfile(tmp_path)
+
+
+@login_required
+@ratelimit(key='ip', rate='5/m', block=True)
+@permission_required('can_import_data')
+@require_POST
+def api_import_gratis(request):
+    """Importa el export de planes gratuitos y detecta desde cuando lo son."""
+    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
+    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_GRATIS_HEADERS)
+    if error:
+        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', 'Error en la estructura del archivo de planes gratuitos.')
+        return error
+    try:
+        rows = import_gratis_csv(tmp_path)
+        msg = f"Planes gratuitos: {rows} suscripciones importadas y fechadas."
+        register_import_log(request.user, 'subs_subscriptions', file_name, rows, 'success', msg, f"Deteccion de inicio de plan gratuito sobre {rows} suscripciones.")
+        return JsonResponse({"status": "success", "message": msg})
+    except Exception as e:
+        err_msg = str(e)
+        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', f"Fallo al importar planes gratuitos: {err_msg}", err_msg)
         return JsonResponse({"status": "error", "message": err_msg}, status=500)
     finally:
         cleanup_tempfile(tmp_path)

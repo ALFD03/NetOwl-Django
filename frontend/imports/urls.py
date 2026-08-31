@@ -14,6 +14,7 @@ urlpatterns = [
     # APIs protegidas
     path("api/import-subscriptions/", views.api_import_subscriptions, name="api_import_subscriptions"),
     path("api/import-logs/", views.api_import_logs, name="api_import_logs"),
+    path("api/import-gratis/", views.api_import_gratis, name="api_import_gratis"),
     path("api/import-crm/", views.api_import_crm, name="api_import_crm"),
     path("api/run-analysis/", views.api_run_analysis, name="api_run_analysis"),
     path("api/run-crm-analysis/", views.api_run_crm_analysis, name="api_run_crm_analysis"), # <-- AGREGADO

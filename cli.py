@@ -1,7 +1,9 @@
 import argparse
 from backend.database import DBConnector
 from backend.models import Periodo
-from backend.subscriptions import MetricsAnalyzer, import_subscriptions_csv, import_logs_csv
+from backend.subscriptions import (
+    MetricsAnalyzer, import_subscriptions_csv, import_logs_csv, import_gratis_csv,
+)
 from backend.subscriptions.lifetime import run_lifecycle_analysis
 from backend.crm import run_crm_analysis, import_crm_csv
 from backend.support import import_support_csv, run_support_analysis
@@ -13,6 +15,10 @@ def cmd_import_subs(args):
 def cmd_import_logs(args):
     count = import_logs_csv(args.csv_path)
     print(f"Importados {count} logs")
+
+def cmd_import_gratis(args):
+    count = import_gratis_csv(args.csv_path)
+    print(f"Importadas {count} suscripciones con plan gratuito")
 
 def cmd_analyze(args):
     db = DBConnector()
@@ -84,6 +90,10 @@ def main():
     p_logs = p_import_sub.add_parser("logs")
     p_logs.add_argument("csv_path")
     p_logs.set_defaults(func=cmd_import_logs)
+
+    p_gratis = p_import_sub.add_parser("gratis")
+    p_gratis.add_argument("csv_path")
+    p_gratis.set_defaults(func=cmd_import_gratis)
 
     p_crm = p_import_sub.add_parser("crm")
     p_crm.add_argument("csv_path")
