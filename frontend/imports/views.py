@@ -18,6 +18,7 @@ from frontend.subscriptions.views import (
 from frontend.crm.views import REQUIRED_CRM_HEADERS
 from backend.subscriptions import (
     import_subscriptions_csv, import_logs_csv, import_gratis_csv, MetricsAnalyzer,
+    build_day_metrics,
 )
 from backend.subscriptions.free_plans import REQUIRED_GRATIS_HEADERS
 from backend.crm import import_crm_csv, run_crm_analysis
@@ -253,18 +254,28 @@ def api_run_analysis(request):
         periodo = Periodo.build(f"{mes}-01")
         periodo_label = periodo.label()
         out = io.StringIO()
+        dias = 0
         with redirect_stdout(out), redirect_stderr(out):
             try:
-                analyzer = MetricsAnalyzer(DBConnector(), periodo)
+                db = DBConnector()
+                analyzer = MetricsAnalyzer(db, periodo)
                 analyzer.run()
+                # Mismo analyzer: los datos ya estan cargados, asi que el cierre
+                # del mes y las metricas de cada dia salen de una sola lectura.
+                dias = build_day_metrics(mes, db=db, analyzer=analyzer)["dias_calculados"]
             except Exception as e:
                 err_txt = f"Fallo en ejecucion de analisis para {periodo_label}: {str(e)}"
                 register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", 0, 'error', err_txt, out.getvalue())
                 return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
 
-        msg = f"Análisis de Churn completado para el periodo {periodo_label}."
-        register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", 0, 'success', msg, out.getvalue())
-        return JsonResponse({"status": "success", "periodo_label": periodo_label, "log_output": out.getvalue()})
+        msg = f"Análisis de Churn completado para el periodo {periodo_label} ({dias} días calculados)."
+        register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", dias, 'success', msg, out.getvalue())
+        return JsonResponse({
+            "status": "success",
+            "periodo_label": periodo_label,
+            "dias_calculados": dias,
+            "log_output": out.getvalue(),
+        })
     except Exception as e:
         register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", 0, 'error', str(e))
         return JsonResponse({"status": "error", "message": str(e)}, status=500)

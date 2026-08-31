@@ -64,13 +64,13 @@ export default function ImportSubscriptions() {
             <><strong>Logs:</strong> Debe contener orden, fecha de cambio, nota y estado interno.</>,
             <><strong>Planes Gratuitos:</strong> Export con tarifa, próxima fecha de factura y mensajes del chatter; detecta desde cuándo cada suscripción es gratuita.</>,
           ]}
-          note="Tras cargar ambos archivos, selecciona el mes correspondiente y ejecuta el análisis en la sección inferior."
+          note="Tras cargar ambos archivos, selecciona el mes correspondiente y ejecuta el análisis en la sección inferior. El análisis calcula también las métricas de cada día del mes."
         />
       </div>
 
       <AnalysisRunnerCard
         title="Ejecutar Análisis Mensual de Subscriptions (Churn)"
-        description="Calcula la base inicial, final, nuevos, reactivaciones y matrices dimensionales del mes."
+        description="Calcula la base inicial, final, nuevos, reactivaciones y matrices dimensionales del mes, y el corte acumulado de cada día para la barra de días."
         runLabel="Iniciar Análisis Churn"
         consoleTitle="Consola de Ejecución MetricsAnalyzer"
         monthPlaceholder="Elegir mes de análisis..."
@@ -79,7 +79,8 @@ export default function ImportSubscriptions() {
         pendingLog={(month) => `Iniciando motor de análisis de Churn para el periodo ${month}...`}
         onRun={(month) => importsApi.runSubscriptionsAnalysis(month)}
         successMessage={(result, month) =>
-          `Análisis de Churn completado exitosamente para ${result.periodo_label || month}.`}
+          `Análisis de Churn completado exitosamente para ${result.periodo_label || month}` +
+          (result.dias_calculados ? ` (${result.dias_calculados} días calculados).` : '.')}
         errorMessage="Error al ejecutar el análisis de Churn."
       />
     </AppLayout>
