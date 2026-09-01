@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+import re
+import unicodedata
 
 import pandas as pd
 
 from backend.conf_config import DB_SCHEMA, TableNames
 from backend.database import DBConnector
 from backend.support.config import (
+    SUPPORT_CSV_COLUMN_ALIASES,
     SUPPORT_CSV_COLUMN_MAP,
+    SUPPORT_LOADER_REQUIRED_COLUMNS,
     SUPPORT_TEXT_COLUMNS,
     SUPPORT_TICKET_COLUMNS,
 )
@@ -19,14 +23,73 @@ logger = logging.getLogger(__name__)
 _DATE_COLUMNS = ["creado_el", "primera_fecha_asignada", "ultima_actualizacion_etapa"]
 
 
+def _normalize_header(name: str) -> str:
+    """Clave de comparación de una cabecera: sin BOM, sin acentos, sin caja."""
+    base = unicodedata.normalize("NFKD", str(name).replace("\ufeff", ""))
+    base = "".join(c for c in base if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", base).strip().lower()
+
+
+def _resolve_columns(columnas) -> dict[str, str]:
+    """
+    Mapa cabecera del CSV → columna de la BD, tolerante a cómo la escribe Odoo.
+
+    `rename` con el mapa literal exige coincidencia exacta, y Odoo no la da
+    siempre: cambia la caja y los acentos, traduce el género del campo, y al
+    exportar un campo relacional le añade el sub-campo detrás de una barra
+    ("Asignado a/Nombre para mostrar"). Cada fallo era silencioso —la columna
+    quedaba fuera del DataFrame y el relleno de `SUPPORT_TEXT_COLUMNS` la
+    dejaba entera en "Sin Especificar"—, así que aquí se compara por clave
+    normalizada y sólo después, si nada coincide, se prueba el prefijo.
+    """
+    por_clave = {_normalize_header(k): v for k, v in SUPPORT_CSV_COLUMN_MAP.items()}
+    por_clave.update(SUPPORT_CSV_COLUMN_ALIASES)
+
+    resuelto: dict[str, str] = {}
+    destinos: set[str] = set()
+
+    for col in columnas:
+        clave = _normalize_header(col)
+        destino = por_clave.get(clave)
+
+        # El prefijo se prueba sólo si la cabecera completa no coincidió, para
+        # no partir los nombres que ya llevan barra ("Suscripción/Sucursal").
+        if destino is None and "/" in clave:
+            destino = por_clave.get(clave.rsplit("/", 1)[0].strip())
+
+        # Dos cabeceras pueden resolver al mismo destino (el campo relacional
+        # exportado dos veces). Gana la primera: renombrar ambas dejaría dos
+        # columnas con el mismo nombre y `df[SUPPORT_TICKET_COLUMNS]` devolvería
+        # un DataFrame donde se espera una Serie.
+        if destino is not None and destino not in destinos:
+            resuelto[col] = destino
+            destinos.add(destino)
+
+    return resuelto
+
+
 def import_support_csv(csv_path: str) -> int:
     """Carga el export de Odoo, reemplazando por completo `support_tickets`."""
     db = DBConnector()
-    df = pd.read_csv(csv_path, dtype=str, keep_default_na=False, encoding="utf-8")
-    df = df.rename(columns=SUPPORT_CSV_COLUMN_MAP)
+    # utf-8-sig y no utf-8: es lo que ya usa el validador de estructura, y sin
+    # él el BOM de Excel se queda pegado a la primera cabecera.
+    df = pd.read_csv(csv_path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
 
-    if "ticket_sequence" not in df.columns:
-        raise ValueError("El archivo CSV no contiene la columna 'Secuencia ID del ticket'.")
+    cabeceras = [str(c) for c in df.columns]
+    df = df.rename(columns=_resolve_columns(cabeceras))
+
+    # Se listan las cabeceras encontradas porque el fallo típico no es que la
+    # columna no exista, sino que Odoo la nombró de otra forma: verlas es lo
+    # que permite añadir el alias que falte.
+    faltantes = [
+        etiqueta for col, etiqueta in SUPPORT_LOADER_REQUIRED_COLUMNS.items()
+        if col not in df.columns
+    ]
+    if faltantes:
+        raise ValueError(
+            f"El archivo CSV no contiene la(s) columna(s): {', '.join(faltantes)}. "
+            f"Cabeceras encontradas: {', '.join(cabeceras)}."
+        )
 
     df["ticket_sequence"] = df["ticket_sequence"].astype(str).str.strip()
     df = df[df["ticket_sequence"] != ""].copy()

@@ -21,6 +21,30 @@ SUPPORT_CSV_COLUMN_MAP = {
     "Duración total (horas)": "duracion_total_horas",
 }
 
+# Variantes con las que Odoo escribe la misma columna según la versión y cómo
+# esté traducido el campo en la instancia. Importa sobre todo `Asignado a`: al
+# no coincidir con el mapa literal la columna se perdía en silencio, y
+# `SUPPORT_TEXT_COLUMNS` la rellenaba entera con "Sin Especificar", colapsando
+# la dimensión del técnico en una única fila sin que nada fallara.
+SUPPORT_CSV_COLUMN_ALIASES = {
+    "asignada a": "asignado_a",
+    "asignado": "asignado_a",
+    "asignada": "asignado_a",
+    "responsable": "asignado_a",
+    "tecnico asignado": "asignado_a",
+    "usuario asignado": "asignado_a",
+}
+
+# Columnas que el loader exige DESPUÉS de resolver el mapa y los alias. Van
+# aquí y no en `REQUIRED_SUPPORT_HEADERS` —que valida el CSV crudo, antes de
+# normalizar— para poder aceptar cualquiera de las variantes de arriba y aun
+# así fallar de forma visible cuando no viene ninguna. El valor es la etiqueta
+# canónica, que es la que se le nombra al usuario en el mensaje de error.
+SUPPORT_LOADER_REQUIRED_COLUMNS = {
+    "ticket_sequence": "Secuencia ID del ticket",
+    "asignado_a": "Asignado a",
+}
+
 # Cabeceras mínimas obligatorias para validar la estructura del CSV. Sin estas
 # cinco no hay ni cohorte ni desenlace que medir.
 REQUIRED_SUPPORT_HEADERS = {
