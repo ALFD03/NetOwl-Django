@@ -2,7 +2,7 @@ import { Link } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 
 import { usePermissions } from '@/shared/hooks/usePermissions';
-import { APP_NAVIGATION } from '@/shared/constants/navigation';
+import { APP_NAVIGATION, firstVisibleTabHref } from '@/shared/constants/navigation';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import { UserMenu } from './UserMenu';
 
@@ -15,7 +15,14 @@ export function Sidebar({ url, username }: SidebarProps) {
   const { can } = usePermissions();
   const canManageUsers = can(PERMISSIONS.MANAGE_USERS);
 
-  const visibleNavigation = APP_NAVIGATION.filter((item) => can(item.permission));
+  // Cada entrada apunta a la primera pestana que el usuario si puede abrir.
+  // Si no puede abrir ninguna, el modulo se oculta en vez de mostrar un enlace
+  // que lo expulsaria de vuelta a su pagina de inicio.
+  const visibleNavigation = APP_NAVIGATION.flatMap((item) => {
+    if (!can(item.permission)) return [];
+    const href = firstVisibleTabHref(item.module, can);
+    return href ? [{ ...item, href }] : [];
+  });
 
   return (
     <aside className="w-64 bg-surface-secondary border-r border-slate-800 flex flex-col justify-between p-4 sticky top-0 h-screen z-30">

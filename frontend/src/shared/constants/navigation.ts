@@ -4,34 +4,35 @@ import {
 } from 'lucide-react';
 
 import { PERMISSIONS } from './permissions';
+import type { Permission } from '@/shared/types/auth';
 import type { AppNavigationItem, ModuleNavigation } from '@/shared/types/navigation';
 
 /** Top-level modules shown in the sidebar. */
 export const APP_NAVIGATION: AppNavigationItem[] = [
   {
     name: 'Subscriptions',
-    href: '/subscriptions/dashboard/',
+    module: 'subscriptions',
     icon: Layers,
     pathPrefix: '/subscriptions',
     permission: PERMISSIONS.VIEW_SUBSCRIPTIONS,
   },
   {
     name: 'CRM Analytics',
-    href: '/crm/dashboard/',
+    module: 'crm',
     icon: Users,
     pathPrefix: '/crm',
     permission: PERMISSIONS.VIEW_CRM,
   },
   {
     name: 'Technical Support',
-    href: '/support/dashboard/',
+    module: 'support',
     icon: Headset,
     pathPrefix: '/support',
     permission: PERMISSIONS.VIEW_SUPPORT,
   },
   {
     name: 'Imports',
-    href: '/imports/subscriptions/',
+    module: 'imports',
     icon: CloudDownload,
     pathPrefix: '/imports',
     permission: PERMISSIONS.VIEW_IMPORTS,
@@ -80,10 +81,10 @@ export const MODULE_NAVIGATION = {
     title: 'Módulo de Importaciones',
     icon: CloudDownload,
     tabs: [
-      { id: 'subscriptions', label: 'Subscriptions', href: '/imports/subscriptions/', icon: Layers, permission: PERMISSIONS.IMPORT_DATA },
-      { id: 'crm', label: 'CRM Analytics', href: '/imports/crm/', icon: Users, permission: PERMISSIONS.IMPORT_DATA },
-      { id: 'support', label: 'Technical Support', href: '/imports/support/', icon: Headset, permission: PERMISSIONS.IMPORT_DATA },
-      { id: 'history', label: 'Historial de Acciones', href: '/imports/history/', icon: Clock },
+      { id: 'subscriptions', label: 'Subscriptions', href: '/imports/subscriptions/', icon: Layers, permission: PERMISSIONS.VIEW_IMPORTS_SUBS },
+      { id: 'crm', label: 'CRM Analytics', href: '/imports/crm/', icon: Users, permission: PERMISSIONS.VIEW_IMPORTS_CRM },
+      { id: 'support', label: 'Technical Support', href: '/imports/support/', icon: Headset, permission: PERMISSIONS.VIEW_IMPORTS_SUPPORT },
+      { id: 'history', label: 'Historial de Acciones', href: '/imports/history/', icon: Clock, permission: PERMISSIONS.VIEW_IMPORT_HISTORY },
     ],
   },
 } satisfies Record<string, ModuleNavigation>;
@@ -93,3 +94,19 @@ export type ModuleKey = keyof typeof MODULE_NAVIGATION;
 /** Valid `activeTab` values for a module, so pages cannot pass a stale id. */
 export type ModuleTabId<M extends ModuleKey> =
   (typeof MODULE_NAVIGATION)[M]['tabs'][number]['id'];
+
+/**
+ * First tab of `module` that `can` allows, or `null` when none is reachable.
+ *
+ * The sidebar uses this instead of a hardcoded href: pointing "Imports" at
+ * `/imports/subscriptions/` locked out users who only hold one of the other
+ * import tabs, since the landing tab denied them and bounced them out of the
+ * module. `/imports/` on the server does the same resolution for direct hits.
+ */
+export function firstVisibleTabHref(
+  module: ModuleKey,
+  can: (permission: Permission) => boolean,
+): string | null {
+  const tab = MODULE_NAVIGATION[module].tabs.find((t) => !t.permission || can(t.permission));
+  return tab?.href ?? null;
+}

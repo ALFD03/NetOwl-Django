@@ -5,7 +5,7 @@ from . import views
 app_name = "imports"
 
 urlpatterns = [
-    path("", views.subscriptions_import_view, name="index"),
+    path("", views.imports_index_view, name="index"),
     path("subscriptions/", views.subscriptions_import_view, name="subscriptions"),
     path("crm/", views.crm_import_view, name="crm"),
     path("history/", views.history_view, name="history"),

@@ -3,14 +3,14 @@ import io
 import logging
 from contextlib import redirect_stdout, redirect_stderr
 
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from inertia import render as render_inertia
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
-from frontend.config.decorators import permission_required
+from frontend.config.decorators import deny, permission_required, permissions_all_required
 from frontend.subscriptions.views import (
     handle_csv_upload, cleanup_tempfile,
     REQUIRED_SUBS_HEADERS, REQUIRED_LOGS_HEADERS
@@ -50,23 +50,49 @@ def register_import_log(user, module, file_name='N/A', rows=0, status='success',
         logger.exception("Error al registrar acción en historial: %s", str(e))
 
 
+# Pestanas del modulo en el orden en que aparecen en la cabecera, con el permiso
+# que exige cada una. La usa `imports_index_view` para elegir destino.
+IMPORT_TABS = [
+    ('imports:subscriptions', 'can_view_imports_subs'),
+    ('imports:crm', 'can_view_imports_crm'),
+    ('imports:support', 'can_view_imports_support'),
+    ('imports:history', 'can_view_import_history'),
+]
+
+
 @login_required
 @permission_required('can_view_imports')
+def imports_index_view(request):
+    """Portada del modulo: lleva a la primera pestana que el usuario si pueda ver.
+
+    Antes `/imports/` era un alias de la pestana de Subscriptions, asi que un
+    usuario con acceso a una sola pestana distinta entraba, se le negaba y se le
+    expulsaba del modulo sin poder llegar nunca a la suya.
+    """
+    profile = getattr(request.user, 'profile', None)
+    for route_name, perm in IMPORT_TABS:
+        if request.user.is_superuser or (profile and profile.has_permission(perm)):
+            return redirect(route_name)
+    return deny(request, "Acceso denegado. No tienes ninguna pestaña de Importaciones asignada.")
+
+
+@login_required
+@permissions_all_required('can_view_imports', 'can_view_imports_subs')
 def subscriptions_import_view(request):
     return render_inertia(request, "Imports/Subscriptions", {"section": "subscriptions"})
 
 @login_required
-@permission_required('can_view_imports')
+@permissions_all_required('can_view_imports', 'can_view_imports_crm')
 def crm_import_view(request):
     return render_inertia(request, "Imports/Crm", {"section": "crm"})
 
 @login_required
-@permission_required('can_view_imports')
+@permissions_all_required('can_view_imports', 'can_view_imports_support')
 def support_import_view(request):
     return render_inertia(request, "Imports/Support", {"section": "support"})
 
 @login_required
-@permission_required('can_view_imports')
+@permissions_all_required('can_view_imports', 'can_view_import_history')
 def history_view(request):
     logs = ImportActionLog.objects.all()[:200]
     history_data = []
@@ -91,7 +117,7 @@ def history_view(request):
 
 
 @login_required
-@permission_required('can_view_imports')
+@permissions_all_required('can_view_imports', 'can_view_import_history')
 def api_history_list(request):
     logs = ImportActionLog.objects.all()[:200]
     data = []
@@ -116,7 +142,7 @@ def api_history_list(request):
 
 @login_required
 @ratelimit(key='ip', rate='5/m', block=True)
-@permission_required('can_import_data')
+@permission_required('can_import_subs', 'can_import_data')
 @require_POST
 def api_import_subscriptions(request):
     file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
@@ -139,7 +165,7 @@ def api_import_subscriptions(request):
 
 @login_required
 @ratelimit(key='ip', rate='5/m', block=True)
-@permission_required('can_import_data')
+@permission_required('can_import_subs', 'can_import_data')
 @require_POST
 def api_import_gratis(request):
     """Importa el export de planes gratuitos y detecta desde cuando lo son."""
@@ -163,7 +189,7 @@ def api_import_gratis(request):
 
 @login_required
 @ratelimit(key='ip', rate='5/m', block=True)
-@permission_required('can_import_data')
+@permission_required('can_import_subs', 'can_import_data')
 @require_POST
 def api_import_logs(request):
     file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
@@ -185,7 +211,7 @@ def api_import_logs(request):
 
 
 @login_required
-@permission_required('can_import_data')
+@permission_required('can_import_crm', 'can_import_data')
 @ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
 def api_import_crm(request):
@@ -208,7 +234,7 @@ def api_import_crm(request):
 
 
 @login_required
-@permission_required('can_run_calculations')
+@permission_required('can_run_crm_analysis', 'can_run_calculations')
 @ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_run_crm_analysis(request):
@@ -238,7 +264,7 @@ def api_run_crm_analysis(request):
 
 @login_required
 @ratelimit(key='ip', rate='2/m', block=True)
-@permission_required('can_run_calculations')
+@permission_required('can_run_subs_analysis', 'can_run_calculations')
 @require_POST
 def api_run_analysis(request):
     try:
@@ -283,7 +309,7 @@ def api_run_analysis(request):
 
 @login_required
 @ratelimit(key='ip', rate='5/m', block=True)
-@permission_required('can_import_data')
+@permission_required('can_import_support', 'can_import_data')
 @require_POST
 def api_import_support(request):
     file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
@@ -305,7 +331,7 @@ def api_import_support(request):
 
 
 @login_required
-@permission_required('can_run_calculations')
+@permission_required('can_run_support_analysis', 'can_run_calculations')
 @ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_run_support_analysis(request):

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { configApi } from '@/shared/lib/api/config';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
-import { PERMISSION_GROUPS } from '@/shared/constants/permissions';
+import { DEFAULT_GROUP_PERMISSIONS } from '@/shared/constants/permissions';
 import { ToggleGroup, SearchInput } from '@/shared/ui';
 import { UsersTable } from '@/features/config/components/management/UsersTable';
 import { GroupsGrid } from '@/features/config/components/management/GroupsGrid';
@@ -161,12 +161,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
               onClick={() => setGroupToEdit({
                 name: '',
                 description: '',
-                permissions: {
-                  can_view_subscriptions: true,
-                  can_view_crm: true,
-                  can_view_support: true,
-                  can_view_imports: true,
-                }
+                permissions: { ...DEFAULT_GROUP_PERMISSIONS }
               })}
               className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30"
             >
