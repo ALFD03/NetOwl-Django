@@ -45,7 +45,7 @@ export function SupportAnalyticsView({ data, dimension }: Props) {
         onSelect={openBreakdown}
       />
 
-      <SupportIncidenceTable rows={zonas} />
+      <SupportIncidenceTable rows={zonas} groupName={activeGroupName} />
 
       <SupportBreakdownModal
         dimension={dimension}

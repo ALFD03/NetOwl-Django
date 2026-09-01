@@ -52,7 +52,6 @@ export function useSupportAnalytics(
   selectedDimension: SupportDimension,
 ) {
   const grupos = useMemo(() => props.analyticsData?.grupos ?? {}, [props.analyticsData]);
-  const incidencia = useMemo(() => props.analyticsData?.incidencia_zonas ?? [], [props.analyticsData]);
 
   const periodo = props.selectedPeriod ?? props.analyticsData?.periodo ?? '';
 
@@ -97,9 +96,15 @@ export function useSupportAnalytics(
     [activeGroup, stats.total_tickets],
   );
 
+  /**
+   * Zone incidence of the active group.
+   *
+   * Keyed by group server-side so switching teams costs no round-trip, and
+   * read with the same `activeGroupName` fallback as the rest of the view.
+   */
   const zonas = useMemo<SupportZoneRow[]>(
     () =>
-      incidencia.map((entry) => {
+      (props.analyticsData?.incidencia_zonas?.[activeGroupName] ?? []).map((entry) => {
         const totalSuscriptores = toNumber(entry.total_suscriptores);
 
         return {
@@ -114,7 +119,7 @@ export function useSupportAnalytics(
           sinPoblacion: totalSuscriptores <= 0,
         };
       }),
-    [incidencia],
+    [props.analyticsData, activeGroupName],
   );
 
   const [breakdown, setBreakdown] = useState<SupportBreakdownState>(CLOSED_BREAKDOWN);

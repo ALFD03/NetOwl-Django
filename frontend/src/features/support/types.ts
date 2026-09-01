@@ -178,10 +178,12 @@ export type SupportGroup = { metricas?: SupportMetrics } & Partial<
 >;
 
 /**
- * Ticket load of a zone against its active subscribers.
+ * Ticket load of a zone against its active subscribers, for one work group.
  *
- * Counted across every work group, because incidence describes the zone's
- * customers rather than how the work was shared out internally.
+ * The numerator is scoped to the group; `total_suscriptores` is not, because
+ * subscribers are never split by support group — so a row reads "this group's
+ * tickets per 100 customers of the zone", and the groups' rates add up to the
+ * zone's total rate.
  */
 export interface SupportZoneEntry {
   zona: string;
@@ -198,8 +200,8 @@ export interface SupportAnalyticsProps {
   analyticsData?: {
     periodo?: string;
     grupos?: Record<string, SupportGroup>;
-    /** Period-wide, not group-scoped — see `SupportZoneEntry`. */
-    incidencia_zonas?: SupportZoneEntry[];
+    /** Keyed by work group; the selector picks one client-side. */
+    incidencia_zonas?: Record<string, SupportZoneEntry[]>;
   };
   periods?: string[];
   selectedPeriod?: string;
