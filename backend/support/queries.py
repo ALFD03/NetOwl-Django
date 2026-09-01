@@ -285,20 +285,10 @@ def _get_activos_por_zona(db: DBConnector, periodo: str | None) -> dict[str, int
     return activos
 
 
-def get_incidencia_por_zona(db: DBConnector, cohorte: PeriodCohort) -> list[dict]:
-    """
-    Tasa de incidencia por zona: (tickets de la zona / activos de la zona) * 100.
-
-    Los tickets se cuentan completos, sin filtrar por grupo de trabajo: la
-    incidencia describe a los clientes de la zona, no el reparto interno del
-    trabajo, así que el numerador tiene que abarcar todos los grupos.
-    """
-    if cohorte.empty:
-        return []
-
-    zone_info = _load_zone_info()
-    activos_map = _get_activos_por_zona(db, cohorte.periodo)
-
+def _filas_incidencia(
+    cohorte: PeriodCohort, zone_info: dict, activos_map: dict[str, int]
+) -> list[dict]:
+    """Las filas de zona de una cohorte ya recortada al grupo de trabajo."""
     filas = []
     for zona, sub in cohorte.desglosar("zona"):
         metricas = compute_metrics_for_period(sub)
@@ -324,6 +314,37 @@ def get_incidencia_por_zona(db: DBConnector, cohorte: PeriodCohort) -> list[dict
     return filas
 
 
+def get_incidencia_por_zona(
+    db: DBConnector, cohorte: PeriodCohort
+) -> dict[str, list[dict]]:
+    """
+    Incidencia por zona de cada grupo de trabajo: (tickets del grupo en la zona
+    / activos de la zona) * 100.
+
+    El numerador se recorta al grupo y el denominador NO: no existe un reparto
+    de suscriptores por grupo de soporte —`analyzer_churn_dimensiones` sólo
+    conoce `zona_sucursal`—, así que la población de referencia es siempre la
+    base completa de la zona. La lectura de cada fila es, por tanto, "tickets
+    de este grupo por cada 100 clientes de la zona", y las tasas de los grupos
+    suman la tasa total de la zona.
+
+    Se devuelven todos los grupos en un mapa, y no sólo el seleccionado, porque
+    el selector de grupo es client-side, igual que el de dimensión: cambiarlo
+    no debe costar una vuelta al servidor. `Zonas.json` y los activos se leen
+    una sola vez y se comparten entre grupos.
+    """
+    if cohorte.empty:
+        return {}
+
+    zone_info = _load_zone_info()
+    activos_map = _get_activos_por_zona(db, cohorte.periodo)
+
+    return {
+        grupo: _filas_incidencia(sub, zone_info, activos_map)
+        for grupo, sub in cohorte.desglosar(DIM_GRUPO)
+    }
+
+
 # --- Payload de la vista Analytics ------------------------------------------
 
 def get_support_analytics_structured(periodo: str | None = None) -> dict:
@@ -337,7 +358,7 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
     """
     periodos = get_support_periodos()
     if not periodos:
-        return {"periodo": "", "grupos": {}, "incidencia_zonas": []}
+        return {"periodo": "", "grupos": {}, "incidencia_zonas": {}}
 
     periodo = periodo if periodo in periodos else periodos[0]
 
@@ -369,7 +390,7 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
         }
     except Exception:
         logger.exception("Error estructurando Analytics de Soporte")
-        return {"periodo": periodo, "grupos": {}, "incidencia_zonas": []}
+        return {"periodo": periodo, "grupos": {}, "incidencia_zonas": {}}
 
 
 # --- Listado de tickets -----------------------------------------------------
