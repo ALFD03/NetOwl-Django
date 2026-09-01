@@ -30,19 +30,23 @@ export default function EtaReport({ etaData }: EtaReportProps) {
   };
 
   return (
-    <AppLayout title="Reporte Regulatorio ETA">
-      <ModuleHeader module="subscriptions" activeTab="eta" />
-
-      <EtaReportToolbar
-        period={selectedPeriod}
-        periods={data.periods ?? []}
-        onPeriodChange={setSelectedPeriod}
-        showLockToggle={data.status === 'success'}
-        isLocked={Boolean(data.esta_bloqueado)}
-        isSaving={saving}
-        onToggleLock={toggleLock}
-      />
-
+    <AppLayout
+      title="Reporte Regulatorio ETA"
+      toolbar={
+        <>
+          <ModuleHeader module="subscriptions" activeTab="eta" />
+          <EtaReportToolbar
+            period={selectedPeriod}
+            periods={data.periods ?? []}
+            onPeriodChange={setSelectedPeriod}
+            showLockToggle={data.status === 'success'}
+            isLocked={Boolean(data.esta_bloqueado)}
+            isSaving={saving}
+            onToggleLock={toggleLock}
+          />
+        </>
+      }
+    >
       <EtaReportView
         data={data}
         loading={loading}

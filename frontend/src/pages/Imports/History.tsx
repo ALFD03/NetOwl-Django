@@ -9,8 +9,7 @@ interface ImportHistoryProps {
 
 export default function ImportHistory({ history = [] }: ImportHistoryProps) {
   return (
-    <AppLayout title="Historial de Importaciones y Cálculos">
-      <ModuleHeader module="imports" activeTab="history" />
+    <AppLayout title="Historial de Importaciones y Cálculos" toolbar={<ModuleHeader module="imports" activeTab="history" />}>
       <ImportHistoryView history={history} />
     </AppLayout>
   );

@@ -25,7 +25,7 @@ export function Sidebar({ url, username }: SidebarProps) {
   });
 
   return (
-    <aside className="w-64 bg-surface-secondary border-r border-slate-800 flex flex-col justify-between p-4 sticky top-0 h-screen z-30">
+    <aside className="w-64 shrink-0 bg-surface-secondary border-r border-slate-800 flex flex-col justify-between p-4 h-screen overflow-y-auto z-30">
       <div>
         <div className="flex items-center justify-center px-2 py-3 mb-6 border-b border-slate-800">
           <Link href="/" className="flex items-center justify-center">

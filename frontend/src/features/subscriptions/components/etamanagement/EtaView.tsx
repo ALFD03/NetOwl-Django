@@ -60,35 +60,39 @@ export function EtaManagementView({
   };
 
   return (
-    <AppLayout title="Gestión Maestro de Planes ETA">
-      <ModuleHeader module="subscriptions" activeTab="eta" />
+    <AppLayout
+      title="Gestión Maestro de Planes ETA"
+      toolbar={
+        <>
+          <ModuleHeader module="subscriptions" activeTab="eta" />
+          <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap gap-1 bg-surface-secondary p-1.5 rounded-2xl border border-slate-800 shadow-xl">
+              {[
+                ['discovered_plans', 'Planes por Clasificar', discoveredPlans.length],
+                ['discovered_subs', 'Corporativos Pendientes', discoveredSubs.length],
+                ['individual', 'Suscripciones Guardadas', individualConfigs.length],
+                ['global', 'Planes Masivos', planesConfigs.length],
+              ].map(([view, label, count]) => (
+                <button
+                  key={String(view)}
+                  onClick={() => setActiveTab(view as typeof activeView)}
+                  className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeView === view ? 'bg-brand text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                  {label} <span className="ml-1 text-[9px] opacity-70">{String(count)}</span>
+                </button>
+              ))}
+            </div>
 
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap gap-1 bg-surface-secondary p-1.5 rounded-2xl border border-slate-800 shadow-xl">
-          {[
-            ['discovered_plans', 'Planes por Clasificar', discoveredPlans.length],
-            ['discovered_subs', 'Corporativos Pendientes', discoveredSubs.length],
-            ['individual', 'Suscripciones Guardadas', individualConfigs.length],
-            ['global', 'Planes Masivos', planesConfigs.length],
-          ].map(([view, label, count]) => (
             <button
-              key={String(view)}
-              onClick={() => setActiveTab(view as typeof activeView)}
-              className={`px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeView === view ? 'bg-brand text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              onClick={activeView === 'global' ? createPlan : createSub}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg"
             >
-              {label} <span className="ml-1 text-[9px] opacity-70">{String(count)}</span>
+              <Plus className="w-4 h-4" /> {activeView === 'global' ? 'Nuevo Plan' : 'Nuevo Registro'}
             </button>
-          ))}
-        </div>
-
-        <button
-          onClick={activeView === 'global' ? createPlan : createSub}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg"
-        >
-          <Plus className="w-4 h-4" /> {activeView === 'global' ? 'Nuevo Plan' : 'Nuevo Registro'}
-        </button>
-      </div>
-
+          </div>
+        </>
+      }
+    >
       {activeView === 'discovered_plans' && (
         <NeonContainer title="Planes detectados" subtitle="Productos encontrados en los datos que todavía no tienen clasificación" icon={<ShieldAlert className="w-5 h-5" />} theme="yellow">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">

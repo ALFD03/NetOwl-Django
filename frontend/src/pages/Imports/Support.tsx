@@ -14,9 +14,7 @@ export default function ImportSupport() {
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.support);
 
   return (
-    <AppLayout title="Importar Technical Support">
-      <ModuleHeader module="imports" activeTab="support" />
-
+    <AppLayout title="Importar Technical Support" toolbar={<ModuleHeader module="imports" activeTab="support" />}>
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {canUpload && (
           <CsvUploadCard

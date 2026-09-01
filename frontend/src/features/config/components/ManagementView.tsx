@@ -122,56 +122,58 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
   }, [users, search]);
 
   return (
-    <AppLayout title="Configuración de Permisos y Usuarios">
-      
-      {/* BARRA SUPERIOR DE CONTROL */}
-      <div className="bg-surface-secondary border border-slate-800 rounded-3xl p-4 mb-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
-        <div className="flex gap-2 bg-surface-primary p-1.5 rounded-2xl border border-slate-800">
-          <ToggleGroup
-            options={[
-              { key: 'users', label: `Usuarios (${users.length})`, icon: Users },
-              { key: 'groups', label: `Grupos (${groups.length})`, icon: Shield },
-            ]}
-            activeKey={activeTab}
-            onChange={(k) => setActiveTab(k as 'users' | 'groups')}
-          />
+    <AppLayout
+      title="Configuración de Permisos y Usuarios"
+      toolbar={
+        // Barra superior de control: pestanas, busqueda y alta de usuarios/grupos.
+        <div className="bg-surface-secondary border border-slate-800 rounded-3xl p-4 mb-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
+          <div className="flex gap-2 bg-surface-primary p-1.5 rounded-2xl border border-slate-800">
+            <ToggleGroup
+              options={[
+                { key: 'users', label: `Usuarios (${users.length})`, icon: Users },
+                { key: 'groups', label: `Grupos (${groups.length})`, icon: Shield },
+              ]}
+              activeKey={activeTab}
+              onChange={(k) => setActiveTab(k as 'users' | 'groups')}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            {activeTab === 'users' && (
+              <SearchInput value={search} placeholder="Buscar usuario..." onChange={setSearch} />
+            )}
+
+            {activeTab === 'users' ? (
+              <button
+                onClick={() => setUserToCreate({
+                  username: '',
+                  password: '',
+                  role: 'viewer',
+                  group_id: groups[0]?.id || '',
+                  permissions: {}
+                })}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Nuevo Usuario</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setGroupToEdit({
+                  name: '',
+                  description: '',
+                  permissions: { ...DEFAULT_GROUP_PERMISSIONS }
+                })}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nuevo Grupo</span>
+              </button>
+            )}
+          </div>
         </div>
-
-        <div className="flex items-center gap-3">
-          {activeTab === 'users' && (
-            <SearchInput value={search} placeholder="Buscar usuario..." onChange={setSearch} />
-          )}
-
-          {activeTab === 'users' ? (
-            <button
-              onClick={() => setUserToCreate({
-                username: '',
-                password: '',
-                role: 'viewer',
-                group_id: groups[0]?.id || '',
-                permissions: {}
-              })}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Nuevo Usuario</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setGroupToEdit({
-                name: '',
-                description: '',
-                permissions: { ...DEFAULT_GROUP_PERMISSIONS }
-              })}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Nuevo Grupo</span>
-            </button>
-          )}
-        </div>
-      </div>
-
+      }
+    >
       {activeTab === 'users' && (
         <UsersTable
           users={filteredUsers}

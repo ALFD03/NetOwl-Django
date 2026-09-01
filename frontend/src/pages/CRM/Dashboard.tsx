@@ -7,8 +7,7 @@ export default function CrmDashboard(props: CrmDashboardProps) {
   const data = useCrmDashboard(props);
 
   return (
-    <AppLayout title="CRM Analytics Dashboard">
-      <ModuleHeader module="crm" activeTab="dashboard" />
+    <AppLayout title="CRM Analytics Dashboard" toolbar={<ModuleHeader module="crm" activeTab="dashboard" />}>
       <CrmDashboardView data={data} />
     </AppLayout>
   );

@@ -29,12 +29,17 @@ export function Modal({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    // El scroll de la app vive en <main data-app-scroll>, no en el body:
+    // hay que congelar ese contenedor para que el fondo no se mueva.
+    const scroller = document.querySelector<HTMLElement>('[data-app-scroll]');
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      if (scroller) scroller.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.body.style.overflow = 'auto';
+      if (scroller) scroller.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
