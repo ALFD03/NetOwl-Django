@@ -18,7 +18,6 @@ Sistema web para el cálculo de Churn Rate, métricas de reactivación, ARPU, ti
 
 ```
 NetOwl-Django/
-├── cli.py                             # Entrypoint CLI (import + analyze)
 ├── manage.py                          # Entrypoint Django
 ├── requirements.txt                   # Dependencias Python
 ├── Dockerfile                         # Imagen Docker multi‑stage, usuario no‑root

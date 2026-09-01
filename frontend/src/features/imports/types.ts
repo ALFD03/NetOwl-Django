@@ -4,6 +4,8 @@ export interface ImportOperationResult {
   message: string;
   log_output?: string;
   periodo_label?: string;
+  /** Dias calculados por el runner de metricas diarias. */
+  dias_calculados?: number;
 }
 
 /** One row in the import/calculation audit log. */

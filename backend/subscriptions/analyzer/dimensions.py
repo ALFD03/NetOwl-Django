@@ -4,16 +4,15 @@ import pandas as pd
 from ...conf_config import TableNames
 
 
-def aggregate_dimensions(
-    db, periodo, act_ini, act_fin, nuevos, df_bajas,
-    df_inactivos, df_react_all, df_corte_impagado,
-    df_react_not_in_ini=None, df_subs_full=None,
-    df_free_fin=None, df_free_periodo=None, df_free_retorno=None
-):
-    periodo_label = periodo.label()
-    DIMS = ["zona", "sucursal", "municipio", "campanna", "producto", "zona_sucursal"]
+DIMS = ["zona", "sucursal", "municipio", "campanna", "producto", "zona_sucursal"]
 
-    # Comprobamos si df_subs_full tiene todas las dimensiones requeridas
+
+def prepare_subs_dims(db, df_subs_full=None):
+    """Normaliza el frame de suscripciones para el mapeo de dimensiones.
+
+    No depende del periodo, asi que se calcula una vez y se reutiliza en todos
+    los cortes diarios en lugar de rehacerlo 31 veces.
+    """
     has_dims = df_subs_full is not None and all(d in df_subs_full.columns for d in DIMS[:-1])
 
     if has_dims:
@@ -26,7 +25,7 @@ def aggregate_dimensions(
         df_subs = db.read_table(TableNames.SUBSCRIPTIONS)
         df_subs.columns = df_subs.columns.str.lower()
         df_subs_dedup = df_subs.drop_duplicates(subset=["orden_producto"])
-        
+
     df_subs_dedup["zona"] = df_subs_dedup["zona"].fillna("Sin Zona").astype(str).str.strip()
     df_subs_dedup["sucursal"] = df_subs_dedup["sucursal"].fillna("Sin Sucursal").astype(str).str.strip()
     df_subs_dedup["zona_sucursal"] = df_subs_dedup["zona"] + " - " + df_subs_dedup["sucursal"]
@@ -34,6 +33,22 @@ def aggregate_dimensions(
     # Normalizamos el índice de la tabla de suscripciones para búsquedas O(1)
     df_subs_dedup["orden_producto"] = df_subs_dedup["orden_producto"].astype(str).str.strip()
     df_subs_dedup.set_index("orden_producto", inplace=True)
+    return df_subs_dedup
+
+
+def aggregate_dimensions(
+    db, periodo, act_ini, act_fin, nuevos, df_bajas,
+    df_inactivos, df_react_all, df_corte_impagado,
+    df_react_not_in_ini=None, df_subs_full=None,
+    df_free_fin=None, df_free_periodo=None, df_free_retorno=None,
+    persist: bool = True, prepared=None, dims=None,
+):
+    periodo_label = periodo.label()
+    dims_pedidas = dims or DIMS
+
+    df_subs_dedup = (
+        prepare_subs_dims(db, df_subs_full) if prepared is None else prepared
+    )
 
     react_by_origin = {
         o: (
@@ -47,7 +62,7 @@ def aggregate_dimensions(
     all_rows: List[Dict] = []
     ini_ordens = set(act_ini["orden"].astype(str).str.strip().to_numpy()) if not act_ini.empty else set()
 
-    for dim in DIMS:
+    for dim in dims_pedidas:
         dim_col = dim.lower()
         if dim_col not in df_subs_dedup.columns:
             continue
@@ -64,6 +79,19 @@ def aggregate_dimensions(
             return s_mapped.value_counts().to_dict()
 
         billing_global = pd.to_numeric(df_subs_dedup["total"], errors="coerce").fillna(0.0)
+
+        # Facturacion agregada por valor de dimension en una sola pasada.
+        # Antes se remapeaba act_fin completo dentro del bucle de valores, lo
+        # que lo hacia O(valores x ordenes) y dominaba el tiempo del calculo.
+        if act_fin.empty:
+            billing_by_val = {}
+        else:
+            ordens_fin = act_fin["orden"].astype(str).str.strip()
+            vals_fin = ordens_fin.map(map_dict).fillna(default).to_numpy()
+            montos = billing_global.reindex(ordens_fin).fillna(0.0).to_numpy()
+            billing_by_val = (
+                pd.Series(montos).groupby(vals_fin).sum().round(2).to_dict()
+            )
 
         d_act_ini = cnt(act_ini)
         d_act_fin = cnt(act_fin)
@@ -119,11 +147,7 @@ def aggregate_dimensions(
             reac = d_react.get(val, 0)
             react_val = d_react_6.get(val, 0) + d_react_8.get(val, 0) + d_react_4_H.get(val, 0) + d_react_sin.get(val, 0)
 
-            billing_val = 0.0
-            if a_fin > 0 and not act_fin.empty:
-                ordens_fin_series = act_fin["orden"].astype(str).str.strip()
-                matching_ords = ordens_fin_series[ordens_fin_series.map(map_dict).fillna(default) == val]
-                billing_val = round(billing_global.reindex(matching_ords).dropna().sum(), 2)
+            billing_val = billing_by_val.get(val, 0.0) if a_fin > 0 else 0.0
 
             all_rows.append({
                 "dimension": dim,
@@ -158,10 +182,14 @@ def aggregate_dimensions(
             })
 
     df_result = pd.DataFrame(all_rows)
+    if not persist:
+        # Usado por el calculo diario: devuelve las filas sin escribir en la base.
+        return all_rows
     db.save_historico(df_result, TableNames.ANALYZER_CHURN_DIMENSIONES, periodo_label)
 
-    dims_ok = [d for d in DIMS if d.lower() in df_subs_dedup.columns]
+    dims_ok = [d for d in dims_pedidas if d.lower() in df_subs_dedup.columns]
     print(
         f"\nDIMENSIONES | {len(dims_ok)} calculadas: {', '.join(dims_ok)}"
         f" | {len(all_rows)} filas guardadas en {TableNames.ANALYZER_CHURN_DIMENSIONES}"
     )
+    return all_rows

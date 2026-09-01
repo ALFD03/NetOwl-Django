@@ -1,5 +1,6 @@
 from __future__ import annotations
 import io
+import json
 import re
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
@@ -9,7 +10,7 @@ import psycopg2
 from psycopg2 import pool, sql
 from psycopg2.extras import execute_values
 
-from .conf_config import DB_SCHEMA
+from .conf_config import DB_SCHEMA, TableNames
 from .vault import get_config
 
 
@@ -33,6 +34,14 @@ class DBConnector:
         conn = self.pool.getconn()
         try:
             yield conn
+        except Exception:
+            # Sin rollback la conexion vuelve al pool con la transaccion
+            # abortada y envenena las consultas siguientes.
+            try:
+                conn.rollback()
+            except psycopg2.Error:
+                pass
+            raise
         finally:
             self.pool.putconn(conn)
 
@@ -219,6 +228,90 @@ class DBConnector:
                             for row in df.itertuples(index=False, name=None)
                         ],
                     )
+            conn.commit()
+
+    def save_day_metrics(
+        self,
+        periodo_reporte: str,
+        activos_inicio: int,
+        dias: Dict[str, Any],
+    ):
+        """Guarda una fila por mes en analyzer_day_metrics.
+
+        Columnas: periodo_reporte, activos_inicio y dia1..dia31 (JSON en texto).
+        Los dias no incluidos en `dias` conservan su valor previo, de modo que
+        recalcular solo los dias nuevos del mes en curso no borra los anteriores.
+        """
+        table_name = TableNames.ANALYZER_DAY_METRICS
+        day_cols = [f"dia{d}" for d in range(1, 32)]
+
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                col_defs = [
+                    sql.SQL("{} text").format(sql.Identifier(c))
+                    for c in ["periodo_reporte", "activos_inicio"] + day_cols
+                ]
+                cur.execute(
+                    sql.SQL(
+                        "CREATE TABLE IF NOT EXISTS {schema}.{table} ({fields})"
+                    ).format(
+                        schema=sql.Identifier(DB_SCHEMA),
+                        table=sql.Identifier(table_name),
+                        fields=sql.SQL(", ").join(col_defs),
+                    )
+                )
+                for col in ["activos_inicio"] + day_cols:
+                    cur.execute(
+                        sql.SQL(
+                            "ALTER TABLE {schema}.{table}"
+                            " ADD COLUMN IF NOT EXISTS {c} text"
+                        ).format(
+                            schema=sql.Identifier(DB_SCHEMA),
+                            table=sql.Identifier(table_name),
+                            c=sql.Identifier(col),
+                        )
+                    )
+                cur.execute(
+                    sql.SQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS"
+                        " ix_day_metrics_periodo ON {schema}.{table}"
+                        " (periodo_reporte)"
+                    ).format(
+                        schema=sql.Identifier(DB_SCHEMA),
+                        table=sql.Identifier(table_name),
+                    )
+                )
+
+                columnas = ["periodo_reporte", "activos_inicio"] + sorted(
+                    dias.keys(), key=lambda c: int(c[3:])
+                )
+                valores: List[Any] = [periodo_reporte, str(activos_inicio)]
+                valores.extend(
+                    json.dumps(dias[c], ensure_ascii=False, separators=(",", ":"))
+                    for c in columnas[2:]
+                )
+
+                actualizables = [c for c in columnas if c != "periodo_reporte"]
+                cur.execute(
+                    sql.SQL(
+                        "INSERT INTO {schema}.{table} ({fields}) VALUES ({ph})"
+                        " ON CONFLICT (periodo_reporte) DO UPDATE SET {sets}"
+                    ).format(
+                        schema=sql.Identifier(DB_SCHEMA),
+                        table=sql.Identifier(table_name),
+                        fields=sql.SQL(", ").join(
+                            sql.Identifier(c) for c in columnas
+                        ),
+                        ph=sql.SQL(", ").join(sql.Placeholder() * len(columnas)),
+                        sets=sql.SQL(", ").join(
+                            sql.SQL("{c} = EXCLUDED.{c}").format(
+                                c=sql.Identifier(c)
+                            )
+                            for c in actualizables
+                        ),
+                    ),
+                    valores,
+                )
             conn.commit()
 
     def copy_dataframe(self, df: pd.DataFrame, table_name: str):
