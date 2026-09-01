@@ -8,10 +8,10 @@ export interface UsePermissionsReturn {
   can: (permission: Permission) => boolean;
 
   /** Returns true when the current user has at least one requested permission. */
-  canAny: (permissions: Permission[]) => boolean;
+  canAny: (permissions: readonly Permission[]) => boolean;
 
   /** Returns true when the current user has every requested permission. */
-  canAll: (permissions: Permission[]) => boolean;
+  canAll: (permissions: readonly Permission[]) => boolean;
 
   /** True when the current authenticated user is a Django superuser. */
   isSuperuser: boolean;
@@ -35,11 +35,11 @@ export function usePermissions(): UsePermissionsReturn {
     return isSuperuser || user.profile[permission];
   };
 
-  const canAny = (permissions: Permission[]): boolean => {
+  const canAny = (permissions: readonly Permission[]): boolean => {
     return permissions.some(can);
   };
 
-  const canAll = (permissions: Permission[]): boolean => {
+  const canAll = (permissions: readonly Permission[]): boolean => {
     return permissions.every(can);
   };
 

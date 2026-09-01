@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { Permission } from './auth';
+import type { ModuleKey } from '@/shared/constants/navigation';
 
 export interface NavigationTab {
   id: string;
@@ -17,8 +18,13 @@ export interface ModuleNavigation {
 
 export interface AppNavigationItem {
   name: string;
-  href: string;
   icon: LucideIcon;
   pathPrefix: string;
   permission: Permission;
+  /**
+   * Module whose tabs this entry opens. The destination is resolved to the
+   * first tab the user can actually see, so a user who holds the module
+   * permission but not the permission of its first tab still gets in.
+   */
+  module: ModuleKey;
 }

@@ -1,22 +1,31 @@
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
+import { usePermissions } from '@/shared/hooks/usePermissions';
+import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
 import { importsApi } from '@/shared/lib/api/imports';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
 
 export default function ImportCrm() {
+  const { canAny } = usePermissions();
+
+  const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.crm);
+  const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.crm);
+
   return (
     <AppLayout title="Importar CRM Analytics">
       <ModuleHeader module="imports" activeTab="crm" />
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <CsvUploadCard
-          title="Cargar Exportación CSV Odoo CRM"
-          submitLabel="Iniciar Carga CRM"
-          errorMessage="Error al importar datos de CRM."
-          onUpload={importsApi.importCrm}
-        />
+        {canUpload && (
+          <CsvUploadCard
+            title="Cargar Exportación CSV Odoo CRM"
+            submitLabel="Iniciar Carga CRM"
+            errorMessage="Error al importar datos de CRM."
+            onUpload={importsApi.importCrm}
+          />
+        )}
 
         <RequirementsCard
           title="Especificaciones Odoo CRM"
@@ -29,19 +38,21 @@ export default function ImportCrm() {
         />
       </div>
 
-      <AnalysisRunnerCard
-        title="Ejecutar Análisis Mensual de CRM"
-        description="Calcula la cohorte del mes: ganados, perdidos, pendientes, devueltos E8 y SLAs."
-        runLabel="Iniciar Cálculo CRM"
-        consoleTitle="Consola de Ejecución CRM"
-        monthPlaceholder="Elegir mes de análisis..."
-        requireMonth
-        pendingLog={(month) => `Iniciando motor de análisis CRM para el periodo ${month}...`}
-        onRun={(month) => importsApi.runCrmAnalysis(month ?? '')}
-        successMessage={(result, month) =>
-          `Análisis de CRM completado exitosamente para ${result.periodo_label || month}.`}
-        errorMessage="Error al ejecutar el análisis CRM."
-      />
+      {canRunAnalysis && (
+        <AnalysisRunnerCard
+          title="Ejecutar Análisis Mensual de CRM"
+          description="Calcula la cohorte del mes: ganados, perdidos, pendientes, devueltos E8 y SLAs."
+          runLabel="Iniciar Cálculo CRM"
+          consoleTitle="Consola de Ejecución CRM"
+          monthPlaceholder="Elegir mes de análisis..."
+          requireMonth
+          pendingLog={(month) => `Iniciando motor de análisis CRM para el periodo ${month}...`}
+          onRun={(month) => importsApi.runCrmAnalysis(month ?? '')}
+          successMessage={(result, month) =>
+            `Análisis de CRM completado exitosamente para ${result.periodo_label || month}.`}
+          errorMessage="Error al ejecutar el análisis CRM."
+        />
+      )}
     </AppLayout>
   );
 }

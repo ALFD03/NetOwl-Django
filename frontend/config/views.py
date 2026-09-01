@@ -8,19 +8,20 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie
-from .decorators import permission_required
-from .models import Profile, PermissionGroup
+from .decorators import permission_required, resolve_landing_url
+from .models import PERMISSION_FIELDS, Profile, PermissionGroup, default_permissions
 from inertia import render as render_inertia
 
-# Campos booleanos de permisos compartidos por Profile y PermissionGroup.
-PERMISSION_FIELDS = [
-    'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
-    'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
-    'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
-    'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
-    'can_import_data', 'can_run_calculations', 'can_run_lifetime',
-    'can_manage_eta', 'can_manage_users'
-]
+
+def serialize_permissions(target):
+    """Matriz de permisos de un Profile/PermissionGroup lista para React.
+
+    Cuando la cuenta no tiene perfil se devuelven los valores por defecto del
+    modelo, para que la UI no invente permisos que el backend no concede.
+    """
+    if target is None:
+        return {field: Profile._meta.get_field(field).default for field in PERMISSION_FIELDS}
+    return {field: getattr(target, field) for field in PERMISSION_FIELDS}
 
 
 def apply_permissions(target, data):
@@ -42,7 +43,7 @@ def apply_permissions(target, data):
 @ensure_csrf_cookie
 def login_view(request):
     if request.user.is_authenticated:
-        return redirect('subscriptions:dashboard')
+        return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
     
     error_message = None
     if request.method == "POST":
@@ -61,7 +62,7 @@ def login_view(request):
         user = authenticate(request, username=usr, password=pas)
         if user is not None:
             login(request, user)
-            return redirect('subscriptions:dashboard')
+            return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
         else:
             error_message = "Credenciales incorrectas. Por favor intente de nuevo."
             
@@ -92,24 +93,9 @@ def setup_view(request):
             user = User.objects.create_superuser(username=usr, password=pas)
             profile = user.profile
             profile.role = 'admin'
-            profile.can_view_subscriptions = True
-            profile.can_view_crm = True
-            profile.can_view_imports = True
-            profile.can_view_support = True
-            profile.can_view_subs_analytics = True
-            profile.can_view_subs_results = True
-            profile.can_view_subs_lifetime = True
-            profile.can_view_subs_sales = True
-            profile.can_view_eta = True
-            profile.can_view_crm_analytics = True
-            profile.can_view_crm_results = True
-            profile.can_view_support_analytics = True
-            profile.can_view_support_results = True
-            profile.can_import_data = True
-            profile.can_run_calculations = True
-            profile.can_run_lifetime = True
-            profile.can_manage_eta = True
-            profile.can_manage_users = True
+            # El primer administrador recibe la matriz completa.
+            for field, value in default_permissions(full_access=True).items():
+                setattr(profile, field, value)
             profile.save()
             return redirect('config:login')
             
@@ -132,26 +118,7 @@ def user_management_view(request):
             "role_display": prof.get_role_display() if prof else 'Visualizador',
             "group_id": prof.group_id if prof else None,
             "group_name": prof.group.name if (prof and prof.group) else None,
-            "permissions": {
-                "can_view_subscriptions": prof.can_view_subscriptions if prof else True,
-                "can_view_crm": prof.can_view_crm if prof else True,
-                "can_view_imports": prof.can_view_imports if prof else True,
-                "can_view_support": prof.can_view_support if prof else True,
-                "can_view_subs_analytics": prof.can_view_subs_analytics if prof else True,
-                "can_view_subs_results": prof.can_view_subs_results if prof else True,
-                "can_view_subs_lifetime": prof.can_view_subs_lifetime if prof else True,
-                "can_view_subs_sales": prof.can_view_subs_sales if prof else True,
-                "can_view_eta": prof.can_view_eta if prof else True,
-                "can_view_crm_analytics": prof.can_view_crm_analytics if prof else True,
-                "can_view_crm_results": prof.can_view_crm_results if prof else True,
-                "can_view_support_analytics": prof.can_view_support_analytics if prof else True,
-                "can_view_support_results": prof.can_view_support_results if prof else True,
-                "can_import_data": prof.can_import_data if prof else False,
-                "can_run_calculations": prof.can_run_calculations if prof else False,
-                "can_run_lifetime": prof.can_run_lifetime if prof else False,
-                "can_manage_eta": prof.can_manage_eta if prof else False,
-                "can_manage_users": prof.can_manage_users if prof else False,
-            }
+            "permissions": serialize_permissions(prof),
         })
 
     groups_data = []
@@ -161,26 +128,7 @@ def user_management_view(request):
             "name": g.name,
             "description": g.description,
             "members_count": g.members.count(),
-            "permissions": {
-                "can_view_subscriptions": g.can_view_subscriptions,
-                "can_view_crm": g.can_view_crm,
-                "can_view_imports": g.can_view_imports,
-                "can_view_support": g.can_view_support,
-                "can_view_subs_analytics": g.can_view_subs_analytics,
-                "can_view_subs_results": g.can_view_subs_results,
-                "can_view_subs_lifetime": g.can_view_subs_lifetime,
-                "can_view_subs_sales": g.can_view_subs_sales,
-                "can_view_eta": g.can_view_eta,
-                "can_view_crm_analytics": g.can_view_crm_analytics,
-                "can_view_crm_results": g.can_view_crm_results,
-                "can_view_support_analytics": g.can_view_support_analytics,
-                "can_view_support_results": g.can_view_support_results,
-                "can_import_data": g.can_import_data,
-                "can_run_calculations": g.can_run_calculations,
-                "can_run_lifetime": g.can_run_lifetime,
-                "can_manage_eta": g.can_manage_eta,
-                "can_manage_users": g.can_manage_users,
-            }
+            "permissions": serialize_permissions(g),
         })
 
     return render_inertia(request, "Config/Management", {
