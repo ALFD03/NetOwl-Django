@@ -70,6 +70,11 @@ def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
     }
 
 
+def _nan_series(df: pd.DataFrame) -> pd.Series:
+    """Serie de NaN con el índice del DataFrame, para poder alinearla con él."""
+    return pd.Series(float("nan"), index=df.index, dtype=float)
+
+
 def _hours_between(df: pd.DataFrame, col_inicio: str, col_fin: str) -> pd.Series:
     """
     Diferencia en horas entre dos columnas de fecha, sin rellenos.
@@ -78,9 +83,12 @@ def _hours_between(df: pd.DataFrame, col_inicio: str, col_fin: str) -> pd.Series
     y `_compute_stats_for_series` los descarta. Nunca se sustituyen por 0 ni se
     recortan a 0: una duración negativa es un error de captura, no un cierre
     instantáneo, y también se descarta.
+
+    El resultado conserva el índice de `df` incluso cuando falta una columna,
+    porque `_tramos_validos` cruza los dos tramos fila a fila.
     """
-    if df.empty or col_inicio not in df.columns or col_fin not in df.columns:
-        return pd.Series(dtype=float)
+    if col_inicio not in df.columns or col_fin not in df.columns:
+        return _nan_series(df)
 
     t_inicio = pd.to_datetime(df[col_inicio], errors="coerce")
     t_fin = pd.to_datetime(df[col_fin], errors="coerce")
@@ -92,23 +100,56 @@ def _duracion_total(df: pd.DataFrame) -> pd.Series:
     """
     Duración creación → cierre tal y como la reporta Odoo.
 
-    Se lee el campo en vez de restar las dos fechas porque coincide con el
-    cálculo y no pierde muestra: la resta deja fuera los tickets sin fecha de
-    asignación, este campo los conserva.
+    Se lee el campo en vez de restar las dos fechas porque es el dato que Odoo
+    da por bueno para el ciclo completo, cola incluida. Quién entra en la
+    medida no lo decide este campo sino `_tramos_validos`, que exige el minuto
+    en cada uno de los dos tramos.
     """
-    if df.empty or "duracion_total_horas" not in df.columns:
-        return pd.Series(dtype=float)
+    if "duracion_total_horas" not in df.columns:
+        return _nan_series(df)
     return pd.to_numeric(df["duracion_total_horas"], errors="coerce")
 
 
+def _tramos_validos(espera: pd.Series, gestion: pd.Series) -> pd.Series:
+    """
+    Qué tickets tienen un ciclo de cierre medible, tramo a tramo.
+
+    Un cierre sólo cuenta si sus DOS tramos duraron al menos
+    `MIN_DURACION_HORAS` (1 minuto): la espera creación → primera asignación y
+    la gestión asignación → cierre. Un total de dos minutos, por tanto, es el
+    mínimo con el que un ticket entra en las medidas de cierre.
+
+    Mirar sólo el total no bastaba: un ticket que se asigna y se cierra en el
+    mismo segundo —el rastro de una acción masiva de Odoo— pasaba el filtro con
+    tal de llevar horas en cola, y metía en la media un tiempo de gestión que
+    nunca ocurrió. La comparación con NaN es False, así que al ticket sin fecha
+    de asignación se le descarta el cierre por el mismo camino.
+    """
+    return (espera >= MIN_DURACION_HORAS) & (gestion >= MIN_DURACION_HORAS)
+
+
 def _serie_de_formula(df: pd.DataFrame, formula: str) -> pd.Series:
-    if formula == "duracion_total":
-        return _duracion_total(df)
-    if formula == "asignado_a_cierre":
-        return _hours_between(df, "primera_fecha_asignada", "ultima_actualizacion_etapa")
+    if df.empty:
+        return pd.Series(dtype=float)
+
+    espera = _hours_between(df, "creado_el", "primera_fecha_asignada")
+
+    # La asignación es un tramo único: su propio umbral en
+    # `_compute_stats_for_series` ya es la regla del minuto, y no depende del
+    # cierre —un ticket abierto sigue teniendo espera que medir—.
     if formula == "creado_a_asignacion":
-        return _hours_between(df, "creado_el", "primera_fecha_asignada")
-    raise ValueError(f"Fórmula de tiempo desconocida: {formula!r}")
+        return espera
+
+    gestion = _hours_between(df, "primera_fecha_asignada", "ultima_actualizacion_etapa")
+
+    if formula == "duracion_total":
+        serie = _duracion_total(df)
+    elif formula == "asignado_a_cierre":
+        serie = gestion
+    else:
+        raise ValueError(f"Fórmula de tiempo desconocida: {formula!r}")
+
+    return serie.where(_tramos_validos(espera, gestion))
 
 
 def _prefixed(stats: Dict[str, float], medida: str) -> Dict[str, Any]:

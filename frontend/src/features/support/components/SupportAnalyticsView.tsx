@@ -16,7 +16,7 @@ interface Props {
 /** Presentation only — every number arrives resolved from `useSupportAnalytics`. */
 export function SupportAnalyticsView({ data, dimension }: Props) {
   const {
-    activeGroupName, hasGroups, stats, sharePct,
+    periodo, activeGroupName, hasGroups, stats, sharePct,
     dimensionRows, zonas, breakdown, openBreakdown, closeBreakdown,
   } = data;
 
@@ -42,6 +42,8 @@ export function SupportAnalyticsView({ data, dimension }: Props) {
       <SupportDimensionPanel
         dimension={dimension}
         rows={dimensionRows}
+        groupName={activeGroupName}
+        periodo={periodo}
         onSelect={openBreakdown}
       />
 
@@ -50,6 +52,8 @@ export function SupportAnalyticsView({ data, dimension }: Props) {
       <SupportBreakdownModal
         dimension={dimension}
         breakdown={breakdown}
+        groupName={activeGroupName}
+        periodo={periodo}
         onClose={closeBreakdown}
       />
     </div>
