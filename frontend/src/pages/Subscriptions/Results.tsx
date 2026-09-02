@@ -9,8 +9,7 @@ interface SubscriptionsResultsProps {
 
 export default function SubscriptionsResults({ periodos = [] }: SubscriptionsResultsProps) {
   return (
-    <AppLayout title="Subscriptions Results">
-      <ModuleHeader module="subscriptions" activeTab="results" />
+    <AppLayout title="Subscriptions Results" toolbar={<ModuleHeader module="subscriptions" activeTab="results" />}>
       <SubscriptionResultsView periodos={periodos} />
     </AppLayout>
   );

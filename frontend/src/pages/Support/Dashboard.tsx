@@ -7,9 +7,7 @@ export default function SupportDashboard(props: SupportDashboardProps) {
   const data = useSupportDashboard(props);
 
   return (
-    <AppLayout title="Technical Support Dashboard">
-      <ModuleHeader module="support" activeTab="dashboard" />
-
+    <AppLayout title="Technical Support Dashboard" toolbar={<ModuleHeader module="support" activeTab="dashboard" />}>
       <SupportDashboardView data={data} />
     </AppLayout>
   );

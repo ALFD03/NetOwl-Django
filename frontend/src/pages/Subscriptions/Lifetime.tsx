@@ -10,8 +10,7 @@ interface SubscriptionsLifetimeProps {
 
 export default function SubscriptionsLifetime({ lifecycle, dimensiones }: SubscriptionsLifetimeProps) {
   return (
-    <AppLayout title="Life Time Cycle (Supervivencia)">
-      <ModuleHeader module="subscriptions" activeTab="lifetime" />
+    <AppLayout title="Life Time Cycle (Supervivencia)" toolbar={<ModuleHeader module="subscriptions" activeTab="lifetime" />}>
       <LifetimeView lifecycle={lifecycle} dimensiones={dimensiones} />
     </AppLayout>
   );

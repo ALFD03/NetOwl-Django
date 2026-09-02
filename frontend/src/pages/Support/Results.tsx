@@ -5,9 +5,7 @@ import type { SupportResultsProps } from '@/features/support/types';
 
 export default function SupportResults({ historico = [] }: SupportResultsProps) {
   return (
-    <AppLayout title="Historial de Cierres de Soporte Técnico">
-      <ModuleHeader module="support" activeTab="results" />
-
+    <AppLayout title="Historial de Cierres de Soporte Técnico" toolbar={<ModuleHeader module="support" activeTab="results" />}>
       <SupportResultsView historico={historico} />
     </AppLayout>
   );

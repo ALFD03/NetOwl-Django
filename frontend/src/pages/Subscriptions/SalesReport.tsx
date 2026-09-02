@@ -50,35 +50,38 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
   };
 
   return (
-    <AppLayout title="Reporte Regional de Ventas">
-      <ModuleHeader module="subscriptions" activeTab="sales" />
-
-      <SubscriptionReportFilters
-        period={currentPeriod}
-        periods={reportData.periods ?? []}
-        onPeriodChange={changePeriod}
-        selectedTech={selectedTech}
-        onTechChange={setSelectedTech}
-        selectedBranch={selectedBranch}
-        branches={branchList}
-        onBranchChange={setSelectedBranch}
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        searchPlaceholder="Buscar por Sede o Zona..."
-      />
-
-      {availableDays.length > 0 && (
-        <div className="mb-8">
-          <DayProgressBar
-            availableDays={availableDays}
-            periodoMes={dayMetrics?.periodo_mes}
-            daysInMonth={totalDays}
-            selectedDay={effectiveDay}
-            onSelect={setSelectedDay}
+    <AppLayout
+      title="Reporte Regional de Ventas"
+      toolbar={
+        <>
+          <ModuleHeader module="subscriptions" activeTab="sales" />
+          <SubscriptionReportFilters
+            period={currentPeriod}
+            periods={reportData.periods ?? []}
+            onPeriodChange={changePeriod}
+            selectedTech={selectedTech}
+            onTechChange={setSelectedTech}
+            selectedBranch={selectedBranch}
+            branches={branchList}
+            onBranchChange={setSelectedBranch}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Buscar por Sede o Zona..."
           />
-        </div>
-      )}
-
+          {availableDays.length > 0 && (
+            <div className="mb-8">
+              <DayProgressBar
+                availableDays={availableDays}
+                periodoMes={dayMetrics?.periodo_mes}
+                daysInMonth={totalDays}
+                selectedDay={effectiveDay}
+                onSelect={setSelectedDay}
+              />
+            </div>
+          )}
+        </>
+      }
+    >
       <SalesReportView sites={filteredData} period={currentPeriod} />
     </AppLayout>
   );

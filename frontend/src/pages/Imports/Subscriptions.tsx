@@ -31,9 +31,7 @@ export default function ImportSubscriptions() {
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.subs);
 
   return (
-    <AppLayout title="Importar Subscriptions">
-      <ModuleHeader module="imports" activeTab="subscriptions" />
-
+    <AppLayout title="Importar Subscriptions" toolbar={<ModuleHeader module="imports" activeTab="subscriptions" />}>
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {canUpload && (
           <CsvUploadCard

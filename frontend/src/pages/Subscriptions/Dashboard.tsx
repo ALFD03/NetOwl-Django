@@ -9,8 +9,7 @@ export default function SubscriptionsDashboard(props: SubscriptionDashboardProps
   const data = useSubscriptionDashboard(props);
 
   return (
-    <AppLayout title="Subscriptions Analytics">
-      <ModuleHeader module="subscriptions" activeTab="dashboard" />
+    <AppLayout title="Subscriptions Analytics" toolbar={<ModuleHeader module="subscriptions" activeTab="dashboard" />}>
       <DashboardMetrics data={data} />
       <DashboardCharts data={data} />
     </AppLayout>

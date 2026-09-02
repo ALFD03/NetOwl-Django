@@ -9,8 +9,7 @@ interface CrmResultsProps {
 
 export default function CrmResults({ historico = [] }: CrmResultsProps) {
   return (
-    <AppLayout title="Historial de Cierres CRM">
-      <ModuleHeader module="crm" activeTab="results" />
+    <AppLayout title="Historial de Cierres CRM" toolbar={<ModuleHeader module="crm" activeTab="results" />}>
       <CrmResultsView historico={historico} />
     </AppLayout>
   );

@@ -14,9 +14,7 @@ export default function ImportCrm() {
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.crm);
 
   return (
-    <AppLayout title="Importar CRM Analytics">
-      <ModuleHeader module="imports" activeTab="crm" />
-
+    <AppLayout title="Importar CRM Analytics" toolbar={<ModuleHeader module="imports" activeTab="crm" />}>
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {canUpload && (
           <CsvUploadCard

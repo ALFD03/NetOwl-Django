@@ -14,17 +14,21 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
   const { rows, globalData, healthCards, rankingCards } = useCrmAnalytics(props, selectedDimension);
 
   return (
-    <AppLayout title="CRM Analytics">
-      <ModuleHeader module="crm" activeTab="analytics" />
-
-      <CrmAnalyticsFilters
-        periods={periods}
-        selectedPeriod={selectedPeriod}
-        onPeriodChange={(period) => router.get('/crm/analytics/', { period }, { preserveState: true })}
-        selectedDimension={selectedDimension}
-        onDimensionChange={setSelectedDimension}
-      />
-
+    <AppLayout
+      title="CRM Analytics"
+      toolbar={
+        <>
+          <ModuleHeader module="crm" activeTab="analytics" />
+          <CrmAnalyticsFilters
+            periods={periods}
+            selectedPeriod={selectedPeriod}
+            onPeriodChange={(period) => router.get('/crm/analytics/', { period }, { preserveState: true })}
+            selectedDimension={selectedDimension}
+            onDimensionChange={setSelectedDimension}
+          />
+        </>
+      }
+    >
       <CrmAnalyticsView
         globalData={globalData}
         rows={rows}

@@ -46,29 +46,32 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   };
 
   return (
-    <AppLayout title="Subscriptions Advanced Analytics">
-      <ModuleHeader module="subscriptions" activeTab="analytics" />
-
-      <AnalyticsFilters
-        periods={periodos.map((period) => period.periodo_reporte)}
-        selectedPeriod={selectedPeriod}
-        onPeriodChange={handlePeriodChange}
-        selectedDimension={selectedDim}
-        onDimensionChange={setSelectedDim}
-      />
-
-      {availableDays.length > 0 && (
-        <div className="mb-8">
-          <DayProgressBar
-            availableDays={availableDays}
-            periodoMes={dayMetrics?.periodo_mes}
-            daysInMonth={totalDays}
-            selectedDay={effectiveDay}
-            onSelect={setSelectedDay}
+    <AppLayout
+      title="Subscriptions Advanced Analytics"
+      toolbar={
+        <>
+          <ModuleHeader module="subscriptions" activeTab="analytics" />
+          <AnalyticsFilters
+            periods={periodos.map((period) => period.periodo_reporte)}
+            selectedPeriod={selectedPeriod}
+            onPeriodChange={handlePeriodChange}
+            selectedDimension={selectedDim}
+            onDimensionChange={setSelectedDim}
           />
-        </div>
-      )}
-
+          {availableDays.length > 0 && (
+            <div className="mb-8">
+              <DayProgressBar
+                availableDays={availableDays}
+                periodoMes={dayMetrics?.periodo_mes}
+                daysInMonth={totalDays}
+                selectedDay={effectiveDay}
+                onSelect={setSelectedDay}
+              />
+            </div>
+          )}
+        </>
+      }
+    >
       <AnalyticsMetrics data={globalData} />
       <AnalyticsCharts
         globalData={globalData}

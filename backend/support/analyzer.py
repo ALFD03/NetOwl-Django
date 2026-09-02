@@ -19,6 +19,7 @@ from backend.support.config import (
     TIME_STATS,
 )
 from backend.support.dimensions import build_dimension_rows, save_support_dimensiones_periodo
+from backend.support.loader import ensure_support_schema
 from backend.support.metrics import compute_metrics_for_period
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
     analizar un mes suelto no debe borrar el histórico del dashboard de empresa.
     """
     db = DBConnector()
+    ensure_support_schema(db)
     df_all = db.read_table(TableNames.SUPPORT_TICKETS)
 
     if df_all.empty:

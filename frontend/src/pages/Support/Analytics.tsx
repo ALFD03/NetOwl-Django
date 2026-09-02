@@ -18,20 +18,24 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
     router.get('/support/analytics/', { period }, { preserveState: true });
 
   return (
-    <AppLayout title="Análisis de Soporte Técnico por Periodo">
-      <ModuleHeader module="support" activeTab="analytics" />
-
-      <SupportAnalyticsFilters
-        periods={periods}
-        selectedPeriod={selectedPeriod || data.periodo}
-        onPeriodChange={reload}
-        groups={data.groupOptions}
-        selectedGroup={data.activeGroupName}
-        onGroupChange={setSelectedGroup}
-        selectedDimension={dimension}
-        onDimensionChange={setDimension}
-      />
-
+    <AppLayout
+      title="Análisis de Soporte Técnico por Periodo"
+      toolbar={
+        <>
+          <ModuleHeader module="support" activeTab="analytics" />
+          <SupportAnalyticsFilters
+            periods={periods}
+            selectedPeriod={selectedPeriod || data.periodo}
+            onPeriodChange={reload}
+            groups={data.groupOptions}
+            selectedGroup={data.activeGroupName}
+            onGroupChange={setSelectedGroup}
+            selectedDimension={dimension}
+            onDimensionChange={setDimension}
+          />
+        </>
+      }
+    >
       <SupportAnalyticsView data={data} dimension={dimension} />
     </AppLayout>
   );

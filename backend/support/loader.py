@@ -69,7 +69,7 @@ def _resolve_columns(columnas) -> dict[str, str]:
 
 
 def import_support_csv(csv_path: str) -> int:
-    """Carga el export de Odoo, reemplazando por completo `support_tickets`."""
+    """Carga el export de Odoo, reemplazando `support_tickets` y sólo esa tabla."""
     db = DBConnector()
     # utf-8-sig y no utf-8: es lo que ya usa el validador de estructura, y sin
     # él el BOM de Excel se queda pegado a la primera cabecera.
@@ -119,26 +119,29 @@ def import_support_csv(csv_path: str) -> int:
 
     df = df[SUPPORT_TICKET_COLUMNS]
 
-    recreate_support_schema(db)
+    reset_support_tickets(db)
+    # Las tablas de resultados no se tocan, pero se garantiza que existan: en una
+    # instalación nueva la importación es lo primero que corre y el dashboard
+    # puede consultarlas antes de que haya un análisis.
+    ensure_support_schema(db)
     db.copy_dataframe(df, TableNames.SUPPORT_TICKETS)
     return len(df)
 
 
-def recreate_support_schema(db: DBConnector) -> None:
+def reset_support_tickets(db: DBConnector) -> None:
     """
-    Rehace el esquema de soporte desde cero.
+    Deja `support_tickets` vacía y con la forma actual, sin tocar lo calculado.
 
-    Se hace DROP en lugar de ALTER porque el módulo cambió de forma: los tickets
-    ganaron `asignado_a` y perdieron `municipio`, y las tablas de resultados
-    pasaron de decenas de columnas escalares a un JSONB por periodo. Migrar
-    entre esas dos formas no tiene sentido — los datos hay que recalcularlos de
-    todos modos, y `import_support_csv` los repuebla enteros.
+    Sólo los tickets se rehacen desde cero: el CSV de Odoo es un export completo
+    y su esquema ha cambiado de forma (ganaron `asignado_a`, perdieron
+    `municipio`), así que DROP + CREATE es más barato que migrar. Las tablas de
+    resultados —cierre, dimensiones y métricas globales— NO se tocan aquí:
+    guardan los periodos ya evaluados y `run_support_analysis` las reescribe
+    periodo a periodo. Borrarlas en cada importación vaciaba el histórico
+    completo aunque después sólo se recalculara un mes.
     """
     statements = [
         f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS};",
-        f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO};",
-        f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO};",
-        f"DROP TABLE IF EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES};",
         f"""
         CREATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS} (
             id BIGSERIAL PRIMARY KEY,
@@ -158,8 +161,27 @@ def recreate_support_schema(db: DBConnector) -> None:
             duracion_total_horas NUMERIC
         );
         """,
+        f"CREATE INDEX idx_support_tickets_creado ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(creado_el);",
+        f"CREATE INDEX idx_support_tickets_cierre ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(ultima_actualizacion_etapa);",
+    ]
+
+    with db.get_connection() as conn:
+        with conn.cursor() as cur:
+            for stmt in statements:
+                cur.execute(stmt)
+        conn.commit()
+
+
+def ensure_support_schema(db: DBConnector) -> None:
+    """
+    Crea las tablas de resultados si faltan, sin borrar las que ya existen.
+
+    Es idempotente a propósito: se llama antes de cada análisis para que una
+    instalación nueva funcione, y en una con datos no debe perder nada.
+    """
+    statements = [
         f"""
-        CREATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} (
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO} (
             id BIGSERIAL PRIMARY KEY,
             periodo_reporte VARCHAR(7) NOT NULL,
             metricas JSONB NOT NULL,
@@ -168,7 +190,7 @@ def recreate_support_schema(db: DBConnector) -> None:
         );
         """,
         f"""
-        CREATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO} (
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO} (
             id BIGSERIAL PRIMARY KEY,
             periodo_reporte VARCHAR(7) NOT NULL,
             grupo_trabajo TEXT NOT NULL,
@@ -179,7 +201,7 @@ def recreate_support_schema(db: DBConnector) -> None:
         );
         """,
         f"""
-        CREATE TABLE {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} (
+        CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES} (
             id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
             resumen_global JSONB,
             por_grupo_trabajo JSONB,
@@ -187,9 +209,8 @@ def recreate_support_schema(db: DBConnector) -> None:
             updated_at TIMESTAMP DEFAULT NOW()
         );
         """,
-        f"CREATE INDEX idx_support_tickets_creado ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(creado_el);",
-        f"CREATE INDEX idx_support_tickets_cierre ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(ultima_actualizacion_etapa);",
-        f"CREATE INDEX idx_support_dim_lookup ON {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(periodo_reporte, dimension);",
+        f"CREATE INDEX IF NOT EXISTS idx_support_dim_lookup ON "
+        f"{DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}(periodo_reporte, dimension);",
     ]
 
     with db.get_connection() as conn:
