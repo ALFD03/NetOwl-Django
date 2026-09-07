@@ -64,10 +64,23 @@ def _get_plan_set():
     return _PLAN_SET
 
 
-def _clean_empty_strings(x):
-    if isinstance(x, str) and x.strip() == "":
-        return np.nan
-    return x
+def _blank_to_nan(df: pd.DataFrame) -> pd.DataFrame:
+    """Convierte en NaN las celdas vacias o de solo espacios.
+
+    Se recorre columna por columna a proposito: `DataFrame.apply` entrega
+    Series completas y no celdas, asi que la version anterior (un `isinstance`
+    sobre el valor) nunca convertia nada. Sin esto el `ffill` por orden no
+    rellena, el `dropna` no descarta las lineas sin referencia y `groupby.first`
+    se queda con la cadena vacia en lugar del primer valor real.
+    """
+    out = df.copy()
+    for col in out.columns:
+        if out[col].dtype != object:
+            continue
+        vacias = out[col].notna() & (out[col].astype(str).str.strip() == "")
+        if vacias.any():
+            out.loc[vacias, col] = np.nan
+    return out
 
 
 def _first_matching_plan(values):
@@ -104,7 +117,10 @@ def import_subscriptions_csv(csv_path: str) -> int:
         [c for c in df_local.columns if c in expected_cols]
     ]
 
-    df_local = df_local.apply(_clean_empty_strings)
+    df_local = _blank_to_nan(df_local)
+    # Lineas del export sin referencia de orden: no pertenecen a ninguna
+    # suscripcion y agrupadas formarian una fila fantasma con orden vacia.
+    df_local = df_local.dropna(subset=["orden_producto"])
 
     # `activo` solo existe en los exports nuevos: se trabaja con lo que venga.
     meta_cols = [c for c in SUBSCRIPTIONS_METADATA_COLS if c in df_local.columns]
@@ -201,7 +217,7 @@ def import_logs_csv(csv_path: str) -> int:
             f"El CSV no contiene las columnas requeridas: {missing_cols}"
         )
 
-    df_logs = df_logs.apply(_clean_empty_strings)
+    df_logs = _blank_to_nan(df_logs)
     for col in df_logs.columns:
         df_logs[col] = (
             df_logs[col]
