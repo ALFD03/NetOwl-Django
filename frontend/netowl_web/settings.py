@@ -13,7 +13,10 @@ Dependencias:
     - backend.vault (configuración desde Vault)
 """
 
+import os
+import re
 from pathlib import Path
+
 from backend.vault import get_config
 
 # Configuración sensible (Django + base de datos) obtenida de Vault
@@ -62,6 +65,18 @@ CSRF_TRUSTED_ORIGINS = config.django.CSRF_TRUSTED_ORIGINS
 
 # Limite de tiempo se sesiones 
 SESSION_COOKIE_AGE = 8*60*60
+
+# --- Aislamiento de cookies por entorno ---
+# Desarrollo y produccion comparten host (las cookies ignoran el puerto) y
+# comparten la tabla django_session del esquema public. Con los nombres de
+# cookie por defecto ("sessionid" / "csrftoken") iniciar sesion en un entorno
+# sobreescribe las cookies del otro: el otro entorno aparece deslogueado y su
+# pagina ya cargada queda con un token CSRF viejo -> 403 al hacer POST.
+# Sufijar el nombre de la cookie con el esquema (DB_SCHEMA, unico por entorno)
+# le da a cada entorno su propio par de cookies en el navegador.
+COOKIE_ENV_SUFFIX = re.sub(r"[^A-Za-z0-9_-]", "_", os.getenv("DB_SCHEMA", "public"))
+SESSION_COOKIE_NAME = f"netowl_sessionid_{COOKIE_ENV_SUFFIX}"
+CSRF_COOKIE_NAME = f"netowl_csrftoken_{COOKIE_ENV_SUFFIX}"
 
 # --- Límites de subida ---
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
@@ -119,6 +134,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "frontend.netowl_web.context_processors.csrf_cookie_name",
             ],
         },
     },

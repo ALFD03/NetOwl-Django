@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { AlertOctagon, Layers, Loader2, Wrench } from 'lucide-react';
 
-import { DataTable, EmptyState, MetricCard, Modal, StatTile, StatusMessage, ToggleGroup } from '@/shared/ui';
+import { DataTable, EmptyState, ExcelExportButton, MetricCard, Modal, StatTile, StatusMessage, ToggleGroup } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils';
+import { SUPPORT_DIMENSION_EXCEL_COLUMNS, supportExportFileName } from '../../lib/supportExport';
 import { SUPPORT_DESGLOSE_LABELS, SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';
 import { SUPPORT_DESGLOSES, type SupportDesglose, type SupportDimension } from '../../types';
 import type { SupportBreakdownState } from '../../hooks/useSupportAnalytics';
@@ -17,6 +18,9 @@ const TAB_ICONS: Record<SupportDesglose, JSX.Element> = {
 interface Props {
   dimension: SupportDimension;
   breakdown: SupportBreakdownState;
+  /** Sólo para nombrar el archivo exportado. */
+  groupName: string;
+  periodo: string;
   onClose: () => void;
 }
 
@@ -28,7 +32,7 @@ interface Props {
  * solutions is far too large to persist or to ship up front, and it is only
  * ever read one cell at a time.
  */
-export function SupportBreakdownModal({ dimension, breakdown, onClose }: Props) {
+export function SupportBreakdownModal({ dimension, breakdown, groupName, periodo, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<SupportDesglose>('razon_falla');
 
   const { valor, loading, error, stats, desgloses } = breakdown;
@@ -62,16 +66,32 @@ export function SupportBreakdownModal({ dimension, breakdown, onClose }: Props) 
             <MetricCard label="Asignación" value={`${formatOneDecimal(stats.tiempo_medio_asignacion_horas)} h`} caption="creación → asignación" color="slate" />
           </div>
 
-          <ToggleGroup
-            className="flex-wrap"
-            options={SUPPORT_DESGLOSES.map((key) => ({
-              key,
-              label: SUPPORT_DESGLOSE_LABELS[key],
-              icon: TAB_ICONS[key],
-            }))}
-            activeKey={activeTab}
-            onChange={(key) => setActiveTab(key as SupportDesglose)}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <ToggleGroup
+              className="flex-wrap"
+              options={SUPPORT_DESGLOSES.map((key) => ({
+                key,
+                label: SUPPORT_DESGLOSE_LABELS[key],
+                icon: TAB_ICONS[key],
+              }))}
+              activeKey={activeTab}
+              onChange={(key) => setActiveTab(key as SupportDesglose)}
+            />
+
+            {/* Se exporta la pestaña abierta, no las tres: es el cuadro que se
+                está leyendo, y las otras dos son otro corte del mismo valor. */}
+            <ExcelExportButton
+              rows={rows}
+              columns={SUPPORT_DIMENSION_EXCEL_COLUMNS}
+              fileName={supportExportFileName([
+                SUPPORT_DESGLOSE_LABELS[activeTab],
+                valor ?? '',
+                groupName,
+                periodo,
+              ])}
+              sheetName={SUPPORT_DESGLOSE_LABELS[activeTab]}
+            />
+          </div>
 
           {rows.length === 0 ? (
             <EmptyState

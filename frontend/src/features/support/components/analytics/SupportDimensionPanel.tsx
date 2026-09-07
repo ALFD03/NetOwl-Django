@@ -1,7 +1,8 @@
 import { MapPin, MousePointerClick } from 'lucide-react';
 
-import { DataTable, EmptyState, MetricCard, NeonContainer, StatTile } from '@/shared/ui';
+import { DataTable, EmptyState, ExcelExportButton, MetricCard, NeonContainer, StatTile } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils';
+import { SUPPORT_DIMENSION_EXCEL_COLUMNS, supportExportFileName } from '../../lib/supportExport';
 import { SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';
 import type { SupportDimension, SupportDimensionRow } from '../../types';
 import { SUPPORT_DIMENSION_COLUMNS } from './supportColumns';
@@ -9,6 +10,9 @@ import { SUPPORT_DIMENSION_COLUMNS } from './supportColumns';
 interface Props {
   dimension: SupportDimension;
   rows: SupportDimensionRow[];
+  /** Sólo para nombrar el archivo exportado. */
+  groupName: string;
+  periodo: string;
   onSelect: (valor: string) => void;
 }
 
@@ -18,7 +22,7 @@ interface Props {
  * Clicking a row opens its tipo / razón / solución breakdown, which the backend
  * computes on request rather than storing — see `fetchSupportBreakdown`.
  */
-export function SupportDimensionPanel({ dimension, rows, onSelect }: Props) {
+export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onSelect }: Props) {
   const label = SUPPORT_DIMENSION_LABELS[dimension];
   const top = rows.slice(0, 4);
 
@@ -29,10 +33,18 @@ export function SupportDimensionPanel({ dimension, rows, onSelect }: Props) {
       subtitle={`${rows.length} valores · click en una fila para ver su tipo, razón y solución`}
       icon={<MapPin className="h-5 w-5" />}
       headerAction={
-        <span className="flex items-center gap-2 rounded-full bg-brand/20 px-3 py-1 text-xs font-semibold text-brand">
-          <MousePointerClick className="h-3.5 w-3.5" />
-          Drill-down
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-2 rounded-full bg-brand/20 px-3 py-1 text-xs font-semibold text-brand">
+            <MousePointerClick className="h-3.5 w-3.5" />
+            Drill-down
+          </span>
+          <ExcelExportButton
+            rows={rows}
+            columns={SUPPORT_DIMENSION_EXCEL_COLUMNS}
+            fileName={supportExportFileName([label, groupName, periodo])}
+            sheetName={label}
+          />
+        </div>
       }
     >
       {rows.length === 0 ? (

@@ -82,6 +82,15 @@ CANCELED_STAGES = {
 # diferencia entre dos marcas de tiempo no es un tiempo de servicio real sino el
 # rastro de una acción masiva de Odoo, que asigna y cierra en el mismo segundo.
 # Contarlas hunde el promedio y la mediana e infla el % que excede el promedio.
+#
+# El umbral se exige TRAMO A TRAMO, no sobre el total (`metrics._tramos_validos`):
+#   · asignación → 1 minuto entre creación y primera asignación.
+#   · cierre     → 1 minuto entre creación y primera asignación Y otro minuto
+#                  entre primera asignación y última actualización de la etapa;
+#                  dos minutos en total como mínimo.
+# Un ticket sin fecha de asignación, por tanto, ya no entra en las medidas de
+# cierre aunque Odoo le reporte una `duracion_total_horas`: sin ese punto medio
+# no hay forma de distinguir el ciclo real del cierre masivo.
 MIN_DURACION_HORAS = 0.016
 
 
@@ -110,8 +119,9 @@ POB_CREADOS = "creados_periodo"
 #
 #   cierre_creado_*   — creación → cierre. Es `duracion_total_horas` de Odoo:
 #                       el proceso completo, cola incluida. Se lee el campo en
-#                       vez de restar las fechas porque no pierde muestra (los
-#                       tickets sin fecha de asignación también lo traen).
+#                       vez de restar las fechas porque es su cifra oficial del
+#                       ciclo, pero sólo entra si los dos tramos pasan el
+#                       minuto (ver `MIN_DURACION_HORAS`).
 #   cierre_asignado_* — primera asignación → cierre. Sólo la gestión del
 #                       técnico, sin la espera en cola.
 #   asignacion        — creación → primera asignación, sobre lo creado en el
