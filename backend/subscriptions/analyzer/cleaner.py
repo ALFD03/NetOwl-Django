@@ -4,6 +4,40 @@ from ...conf_config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
 # OPTIMIZACIÓN Y REUTILIZACIÓN: Importamos la función de utilidades compartida del sistema
 from ...utils import normalize_text
 
+# Odoo exporta el booleano `Activo` como "True" / cadena vacia: el False nunca
+# viaja escrito. Se listan los dos lados de forma explicita para que un valor
+# desconocido se detecte en vez de caer en silencio del lado de archivado.
+ACTIVO_TRUE_TOKENS = frozenset(
+    {"true", "t", "1", "1.0", "si", "sí", "yes", "y", "verdadero", "v"}
+)
+ACTIVO_FALSE_TOKENS = frozenset(
+    {"false", "f", "0", "0.0", "no", "n", "falso", "", "none", "nan", "<na>", "null"}
+)
+
+
+def parse_archivado(series: pd.Series) -> pd.Series:
+    """Marca de archivado (plan gratuito) a partir de la columna `activo`.
+
+    Un valor fuera de los dos vocabularios conocidos NO se asume archivado: eso
+    sacaria clientes de pago de la base activa sin dejar rastro. Se avisa por
+    consola (el log del calculo lo recoge) y se trata como activo.
+    """
+    limpio = series.astype(str).str.strip().str.lower()
+    es_true = limpio.isin(ACTIVO_TRUE_TOKENS)
+    es_false = limpio.isin(ACTIVO_FALSE_TOKENS)
+
+    desconocidos = limpio[~es_true & ~es_false]
+    if not desconocidos.empty:
+        muestra = sorted(desconocidos.unique())[:5]
+        print(
+            f"AVISO: la columna 'activo' trae {len(desconocidos)} valores no"
+            f" reconocidos {muestra}; se cuentan como activos."
+            " Revisa el formato del export antes de fiarte de los gratuitos."
+        )
+
+    return es_false
+
+
 def _normalize_string_series(series: pd.Series) -> pd.Series:
     """Normaliza una serie de texto mapeando solo los valores únicos para máxima velocidad."""
     unique_vals = series.dropna().unique()
@@ -41,11 +75,9 @@ def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
     df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0.0)
     df["f_ini_dt"] = pd.to_datetime(df["f_ini"], errors="coerce")
 
-    # `activo` viene del export: false/0 = suscripcion archivada.
+    # `activo` viene del export: false/vacio = suscripcion archivada.
     if "activo" in df.columns:
-        df["archivado"] = ~df["activo"].astype(str).str.strip().str.lower().isin(
-            ["true", "t", "1", "si", "sí", "yes", "verdadero"]
-        )
+        df["archivado"] = parse_archivado(df["activo"])
     else:
         df["archivado"] = False
 
