@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
+  <!-- El nombre de la cookie CSRF varia por entorno; el cliente lo lee de aqui -->
+  <meta name="csrf-cookie-name" content="{{ csrf_cookie_name }}">
   <title>NetOwl Analytics</title>
   {% load static %}
   <link rel="icon" href="{% static 'img/favicon_dark.png' %}">
