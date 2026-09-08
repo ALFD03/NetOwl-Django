@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
@@ -25,24 +25,46 @@ export function Modal({
   size = 'xl',
   theme = 'slate',
 }: ModalProps) {
+  // `onClose` llega como lambda en linea desde todos los consumidores, asi que
+  // cambia de identidad en cada render. Si estuviera en las dependencias del
+  // efecto, el efecto se volveria a montar continuamente. Se guarda en una ref
+  // para poder depender solo de `isOpen`.
+  const onCloseRef = useRef(onClose);
   useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  useEffect(() => {
+    // Un modal cerrado no debe tocar los estilos globales. Antes la limpieza
+    // corria igualmente, asi que en una pantalla con varios modales montados
+    // (Configuracion tiene cinco) los cerrados le quitaban el bloqueo de
+    // scroll al que si estaba abierto, en cada render. Ese vaiven de
+    // `overflow` reajusta la barra de scroll, y un desplegable nativo abierto
+    // -el `<select>` de grupo, el de periodo- se cierra solo cuando eso pasa.
+    if (!isOpen) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') onCloseRef.current();
     };
+
     // El scroll de la app vive en <main data-app-scroll>, no en el body:
     // hay que congelar ese contenedor para que el fondo no se mueva.
     const scroller = document.querySelector<HTMLElement>('[data-app-scroll]');
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      if (scroller) scroller.style.overflow = 'hidden';
-      window.addEventListener('keydown', handleKeyDown);
-    }
+    const bodyPrevio = document.body.style.overflow;
+    const scrollerPrevio = scroller?.style.overflow ?? '';
+
+    document.body.style.overflow = 'hidden';
+    if (scroller) scroller.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
-      document.body.style.overflow = 'auto';
-      if (scroller) scroller.style.overflow = '';
+      // Se restaura lo que hubiera, en vez de asumir 'auto': si hay un modal
+      // encima del otro, el de abajo debe seguir bloqueando.
+      document.body.style.overflow = bodyPrevio;
+      if (scroller) scroller.style.overflow = scrollerPrevio;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const sizes = {
     sm: 'max-w-md',

@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 
 interface MonthPickerProps {
@@ -33,6 +34,24 @@ export function MonthPicker({
 }: MonthPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // El panel se dibuja en un portal sobre el <body>, no dentro del componente.
+  // Posicionado en `absolute` quedaba recortado: la barra de herramientas de
+  // AppLayout es un contenedor con `overflow-y-auto`, y las tarjetas
+  // (NeonContainer) tienen `overflow-hidden`. Un `z-index` alto no salva eso,
+  // porque el recorte lo hace el ancestro, no el apilamiento.
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const recolocar = useCallback(() => {
+    const trigger = containerRef.current;
+    if (!trigger) return;
+    const r = trigger.getBoundingClientRect();
+    const ANCHO = 288; // w-72
+    // Si no cabe a la derecha, se alinea por el borde derecho del disparador.
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - ANCHO - 8));
+    setCoords({ top: r.bottom + 8, left });
+  }, []);
 
   // Extraer año y mes actual del valor recibido o fecha actual
   const initialYear = value ? parseInt(value.split('-')[0], 10) : new Date().getFullYear();
@@ -44,16 +63,32 @@ export function MonthPicker({
     }
   }, [value]);
 
-  // Cerrar al hacer clic fuera
+  // Cerrar al hacer clic fuera. El panel ya no es descendiente del contenedor
+  // (vive en el portal), asi que hay que comprobar los dos.
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setIsOpen(false);
     };
+
+    // Si la pagina se desplaza o cambia de tamano, el panel tiene que seguir
+    // al boton: al estar en el <body> no se mueve solo. `true` en la captura
+    // para enterarse tambien del scroll de los contenedores internos.
+    const seguir = () => recolocar();
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    window.addEventListener('scroll', seguir, true);
+    window.addEventListener('resize', seguir);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', seguir, true);
+      window.removeEventListener('resize', seguir);
+    };
+  }, [isOpen, recolocar]);
 
   const handleSelectMonth = (monthNum: string) => {
     onChange(`${displayYear}-${monthNum}`);
@@ -86,7 +121,11 @@ export function MonthPicker({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={() => {
+          if (disabled) return;
+          if (!isOpen) recolocar();
+          setIsOpen((abierto) => !abierto);
+        }}
         className={`flex items-center gap-2.5 px-4 py-2 bg-surface-secondary border rounded-xl text-xs font-bold transition-all shadow-md ${
           isOpen
             ? 'border-brand ring-2 ring-brand/20 text-white'
@@ -99,9 +138,13 @@ export function MonthPicker({
         </span>
       </button>
 
-      {/* MODAL DESPLEGABLE PERSONALIZADO DARK */}
-      {isOpen && (
-        <div className="absolute left-0 mt-2 z-50 w-72 bg-surface-secondary border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+      {/* PANEL DESPLEGABLE, EN UN PORTAL PARA QUE NADIE LO RECORTE */}
+      {isOpen && coords && createPortal(
+        <div
+          ref={panelRef}
+          style={{ top: coords.top, left: coords.left }}
+          className="fixed z-[100] w-72 bg-surface-secondary border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl"
+        >
           
           {/* HEADER CON SELECTOR DE AÑO */}
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
@@ -173,7 +216,8 @@ export function MonthPicker({
             </button>
           </div>
 
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
