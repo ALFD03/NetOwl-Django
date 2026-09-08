@@ -6,7 +6,11 @@ class ImportActionLog(models.Model):
     MODULE_CHOICES = [
         ('subs_subscriptions', 'Subscriptions - Suscripciones'),
         ('subs_logs', 'Subscriptions - Logs'),
+        ('subs_analysis', 'Subscriptions - Calculo de metricas'),
         ('crm', 'CRM Analytics - Odoo Export'),
+        ('crm_analysis', 'CRM Analytics - Calculo de metricas'),
+        ('support', 'Support - Tickets'),
+        ('support_analysis', 'Support - Calculo de metricas'),
     ]
     
     STATUS_CHOICES = [

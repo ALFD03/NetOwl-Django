@@ -45,9 +45,6 @@ class DBConnector:
         finally:
             self.pool.putconn(conn)
 
-    def connect(self):
-        return psycopg2.connect(**self.conn_params)
-
     def read_table(
         self, table_name: str, columns: Optional[List[str]] = None
     ) -> pd.DataFrame:

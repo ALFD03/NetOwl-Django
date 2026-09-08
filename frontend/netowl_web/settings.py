@@ -118,7 +118,15 @@ MIDDLEWARE = [
 ROOT_URLCONF = "frontend.netowl_web.urls"
 
 INERTIA_LAYOUT = "app.html"
-INTERNAL_IPS = ["127.0.0.1", "localhost", "::1", "10.3.0.41", "owl.netcomplusve.com"]
+
+# Servir los assets desde el dev-server de Vite en vez del bundle compilado.
+# Es una decision de flujo de trabajo, no de seguridad: por eso tiene su propia
+# variable y no cuelga de DEBUG (ver context_processors.vite_dev_server).
+USE_VITE_DEV_SERVER = os.getenv("VITE_DEV_SERVER", "").lower() in {"1", "true", "yes"} or DEBUG
+# Django compara INTERNAL_IPS contra REMOTE_ADDR, asi que solo admite direcciones
+# IP: los hostnames que habia aqui nunca llegaron a coincidir. Esta lista decide
+# la variable `debug` de las plantillas (ver frontend/templates/app.html).
+INTERNAL_IPS = ["127.0.0.1", "::1", "10.3.0.41"]
 
 # --- Configuración de plantillas ---
 TEMPLATES = [
@@ -135,6 +143,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "frontend.netowl_web.context_processors.csrf_cookie_name",
+                "frontend.netowl_web.context_processors.vite_dev_server",
             ],
         },
     },
@@ -203,6 +212,23 @@ LOGGING = {
             "formatter": "verbose",
             "delay": True,
         },
+        # Los `logger.exception(...)` de las vistas y del backend no tenian
+        # handler propio: sin esto acababan en el logger raiz, que en gunicorn
+        # se descarta silenciosamente.
+        "app_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs" / "app.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "verbose",
+            "delay": True,
+        },
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
     },
     "formatters": {
         "verbose": {
@@ -213,6 +239,17 @@ LOGGING = {
     "loggers": {
         "django.request": {
             "handlers": ["request_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # Codigo propio: las apps de `frontend` y el paquete de analitica.
+        "frontend": {
+            "handlers": ["app_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "backend": {
+            "handlers": ["app_file", "console"],
             "level": "INFO",
             "propagate": False,
         },

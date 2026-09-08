@@ -1,7 +1,6 @@
 from __future__ import annotations
 import unicodedata
 import pandas as pd
-import numpy as np
 from typing import Iterator, Tuple
 from ..database import DBConnector
 from ..conf_config import DB_SCHEMA, TableNames

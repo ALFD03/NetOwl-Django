@@ -11,7 +11,7 @@
   <link rel="icon" href="{% static 'img/favicon_dark.png' %}">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
-  {% if debug %}
+  {% if vite_dev_server %}
     <script type="module">
       import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
       RefreshRuntime.injectIntoGlobalHook(window)

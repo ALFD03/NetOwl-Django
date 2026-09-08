@@ -323,16 +323,3 @@ class MetricsAnalyzer:
             df_free_retorno=df_free_retorno,
             prepared=getattr(self, "_dim_prepared", None),
         )
-
-    def aggregate_dimensions(
-        self,
-        act_ini, act_fin, nuevos, df_bajas,
-        df_inactivos, df_react_all, df_corte_impagado,
-        df_react_not_in_ini=None,
-    ):
-        dimensions.aggregate_dimensions(
-            self.db, self.periodo,
-            act_ini, act_fin, nuevos, df_bajas,
-            df_inactivos, df_react_all, df_corte_impagado,
-            df_react_not_in_ini=df_react_not_in_ini,
-        )

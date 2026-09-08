@@ -71,9 +71,6 @@ TIEMPO_ETAPA_MIN_DURACION_H = 1 / 60
 # se considere legible. Por debajo se sirve igual, marcado como poco fiable.
 TIEMPO_ETAPA_MIN_MUESTRA = 10
 
-PROB_DIM_E8 = ["devolver_oportunidad"]
-PROB_DIM_PERDIDOS_RESCATE = ["motivo_perdida"]
-
 
 # Reglas de efectividad por etapa.
 #
@@ -311,12 +308,3 @@ CLIENT_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if not k.startswith("Entra
 LOG_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if k.startswith("Entradas de Tiempo")]
 
 GANADO_STATES = {"perdido", "ganado", "pendiente"}
-
-METRICAS = [
-    "tiempo_por_etapa",
-    "tiempo_instalacion",
-    "tiempo_perdida",
-    "efectividad",
-    "probabilidad_etapa8",
-    "probabilidad_perdido",
-]

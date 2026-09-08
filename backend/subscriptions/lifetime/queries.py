@@ -53,17 +53,6 @@ def get_lifecycle_results(db=None) -> Dict[str, Any]:
         logger.exception("Error en query de lifecycle results")
         return {}
 
-def _safe_int(v):
-    if v is None:
-        return 0
-    try:
-        return int(v)
-    except (ValueError, TypeError):
-        try:
-            return int(float(v))
-        except (ValueError, TypeError):
-            return 0
-
 def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, Any]:
     if db is None:
         db = DBConnector()
@@ -96,11 +85,3 @@ def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, An
     except Exception:
         logger.exception("Error en query de dimensiones lifetime")
         return {}
-
-def _safe_float(val):
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { NeonContainer } from '..';
+import { NeonContainer } from '../surfaces/NeonContainer';
 
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'] as const;
 
