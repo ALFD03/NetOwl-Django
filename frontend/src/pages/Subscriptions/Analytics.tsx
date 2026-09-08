@@ -27,11 +27,11 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
     selectedDay,
   );
 
-  // Con un dia elegido mandan sus metricas globales; si no, el cierre del mes.
-  // La tabla por dimension sigue siendo la del cierre: el payload diario solo
-  // guarda el desglose zona_sucursal que consumen Ventas y Unidades de Negocio.
+  // Con un dia elegido mandan sus metricas globales y su desglose por
+  // dimension; si no (o si el dia se calculo antes de guardar `dims`), se cae
+  // al cierre del mes.
   const globalData = dayData?.global ?? monthData;
-  const currentDimensionData = monthDimensionData;
+  const currentDimensionData = dayData?.dims?.[selectedDim] ?? monthDimensionData;
 
   // El mes se elige en cliente, pero la barra de dias vive en los props:
   // se recarga solo esa prop al cambiar de periodo.
