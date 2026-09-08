@@ -1,0 +1,185 @@
+from __future__ import annotations
+import csv
+import io
+import json
+import math
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from datetime import datetime
+from typing import Any, Iterable, Optional
+
+import pandas as pd
+
+from .config import DATE_FORMATS
+
+
+def parse_date(value: Any) -> Optional[datetime]:
+    if pd.isna(value):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    for fmt in DATE_FORMATS:
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+    return pd.to_datetime(text, errors="coerce")
+
+def normalize_text(value: Any) -> str:
+    """
+    Normaliza texto para búsquedas y comparaciones seguras:
+    Remueve acentos, tildes, caracteres especiales, y colapsa espacios.
+    """
+    if pd.isna(value) or value is None:
+        return ""
+    import unicodedata
+    import re
+    
+    # 1. Minúsculas y limpieza de extremos
+    text = str(value).strip().lower()
+    
+    # 2. Quitar acentos/tildes de forma nativa
+    text = (
+        unicodedata.normalize("NFD", text)
+        .encode("ascii", "ignore")
+        .decode("utf-8")
+    )
+    
+    # 3. Remover caracteres especiales y de puntuación
+    text = re.sub(r"[^a-z0-9\s]", "", text)
+    
+    # 4. Unificar espacios múltiples a espacio simple
+    text = re.sub(r"\s+", " ", text).strip()
+    
+    return text
+
+def validate_csv_structure(file_path: str, required_headers: Iterable[str], delimiter: str = ",") -> tuple[bool, str | None]:
+    """
+    Verifica rápidamente si un archivo CSV tiene las columnas obligatorias.
+    Retorna (True, None) si es válido, o (False, "mensaje de error") si falla.
+    """
+    try:
+        # Abrimos con utf-8-sig para omitir automáticamente el BOM de Excel
+        with open(file_path, "r", encoding="utf-8-sig", errors="ignore") as f:
+            # Leer solo los primeros 2048 bytes para analizar el formato sin cargar todo a memoria
+            sample = f.read(2048)
+            f.seek(0)
+            
+            if not sample.strip():
+                return False, "El archivo está vacío."
+            
+            # Detectar el delimitador automáticamente (soporta comas y punto y coma)
+            try:
+                dialect = csv.Sniffer().sniff(sample)
+                actual_delimiter = dialect.delimiter
+            except Exception:
+                actual_delimiter = delimiter
+                
+            reader = csv.reader(f, delimiter=actual_delimiter)
+            headers = next(reader, None)
+            
+            if not headers:
+                return False, "No se pudieron leer las cabeceras del archivo."
+            
+            # Normalizar cabeceras para una comparación segura (minúsculas y sin espacios)
+            normalized_headers = {h.strip().lower() for h in headers if h}
+            normalized_required = {r.strip().lower() for r in required_headers}
+            
+            missing = normalized_required - normalized_headers
+            if missing:
+                missing_original = [r for r in required_headers if r.strip().lower() in missing]
+                return False, f"Estructura inválida. Columnas faltantes: {', '.join(missing_original)}"
+            
+            return True, None
+    except Exception as e:
+        return False, f"No es un archivo CSV válido: {str(e)}"
+
+
+def _clean_json(obj: Any, nan_value: Any) -> Any:
+    """Implementacion compartida de la limpieza previa a serializar a JSON.
+
+    Ademas de los NaN/Inf normaliza los tipos que arrastra pandas (escalares de
+    numpy y Timestamps), que `json.dumps` no sabe serializar. Antes esto estaba
+    reimplementado cuatro veces, cada copia cubriendo un subconjunto distinto.
+    """
+    if isinstance(obj, dict):
+        return {k: _clean_json(v, nan_value) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_clean_json(v, nan_value) for v in obj]
+    # Antes que nada los escalares de numpy: np.float64 hereda de float, asi
+    # que si se comprobara `isinstance(obj, float)` primero saldria de aqui sin
+    # convertirse a tipo nativo y `json.dumps` acabaria reventando con el.
+    if type(obj).__module__ == "numpy" and hasattr(obj, "item"):
+        obj = obj.item()
+    if isinstance(obj, float):
+        return nan_value if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, pd.Timestamp):
+        # ISO 8601, que es exactamente lo que emitia DjangoJSONEncoder cuando
+        # estos Timestamps le llegaban sin limpiar. Con `str()` saldria con un
+        # espacio en vez de la "T" y cambiaria el formato en el cliente.
+        return obj.isoformat()
+    if isinstance(obj, pd.DatetimeIndex):
+        return [t.isoformat() for t in obj]
+    return obj
+
+
+def clean_json_props(obj: Any) -> Any:
+    """Reemplaza NaN/Inf por 0.0 en cualquier estructura destinada a JSON.
+
+    `json.dumps` los emite como `NaN`/`Infinity`, que `JSON.parse` rechaza: el
+    payload de Inertia llega roto y la página se renderiza vacía.
+    """
+    return _clean_json(obj, 0.0)
+
+
+def clean_json_nullable(obj: Any) -> Any:
+    """Como `clean_json_props`, pero deja los NaN como `null` en vez de 0.
+
+    Para las metricas donde 0 no es "sin dato" sino un valor con significado
+    propio: la mediana de una curva de supervivencia que no se puede calcular
+    debe llegar al grafico como null, porque un 0 se leeria como que todos los
+    suscriptores se dieron de baja de inmediato.
+    """
+    if obj is not None and not isinstance(obj, (dict, list, tuple, str)):
+        try:
+            if pd.isna(obj):
+                return None
+        except (TypeError, ValueError):
+            pass
+    return _clean_json(obj, None)
+
+
+def parse_jsonb(val: Any) -> Any:
+    """Decodifica una columna JSONB que psycopg2 puede entregar ya parseada.
+
+    Segun el driver y el tipo declarado de la columna, un JSONB llega como
+    dict/list o como la cadena sin parsear. Lo que no sea JSON valido se
+    devuelve tal cual, que es lo que hacian las dos copias que habia de esto.
+    """
+    if val is None or isinstance(val, (dict, list)):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return val
+    return val
+
+
+@contextmanager
+def capture_console():
+    """Captura lo que el analisis imprime, para devolverlo como log al cliente.
+
+    Los analizadores narran su progreso por stdout y las vistas lo reenvian al
+    navegador como "salida de consola". Las cuatro apps repetian el mismo par
+    de `redirect_stdout`/`redirect_stderr` sobre un StringIO.
+
+    Uso::
+
+        with capture_console() as salida:
+            analyzer.run()
+        return JsonResponse({"log_output": salida.getvalue()})
+    """
+    buffer = io.StringIO()
+    with redirect_stdout(buffer), redirect_stderr(buffer):
+        yield buffer

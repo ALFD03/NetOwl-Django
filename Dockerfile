@@ -5,11 +5,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY frontend/ ./frontend
+COPY web/ ./web
 COPY tsconfig.json vite.config.ts tailwind.config.js postcss.config.js ./
 RUN npm run build
 
-# --- Etapa 2: Compilación de Backend (Python) ---
+# --- Etapa 2: Dependencias de Python ---
 FROM python:3.11-slim AS python-builder
 WORKDIR /app
 
@@ -39,8 +39,8 @@ COPY --from=python-builder /usr/local /usr/local
 # 1. Copiar código fuente
 COPY --chown=app:app . .
 
-# 2. Inyectar el bundle JS/CSS compilado en frontend/static/dist
-COPY --from=frontend-builder --chown=app:app /app/frontend/static/dist ./frontend/static/dist
+# 2. Inyectar el bundle JS/CSS compilado en web/static/dist
+COPY --from=frontend-builder --chown=app:app /app/web/static/dist ./web/static/dist
 
 # Asegurar carpetas de logs, estáticos y .gunicorn con permisos de app
 RUN mkdir -p /app/logs /app/staticfiles /app/.gunicorn && \
@@ -50,7 +50,7 @@ RUN mkdir -p /app/logs /app/staticfiles /app/.gunicorn && \
 USER app
 EXPOSE 8000
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["gunicorn", "frontend.netowl_web.wsgi:application", \
+CMD ["gunicorn", "netowl_web.wsgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "5", \
      "--timeout", "300", \
