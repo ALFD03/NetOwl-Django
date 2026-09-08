@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { Modal } from '@/shared/ui';
+import { Modal, SelectMenu } from '@/shared/ui';
 import { router } from '@inertiajs/react';
 import { 
   Users, Shield, Plus, UserPlus
@@ -230,13 +230,26 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
           <form onSubmit={handleUpdateUser} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <input className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={userToEdit.username} disabled />
-              <select className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={userToEdit.role} onChange={(e) => setUserToEdit({ ...userToEdit, role: e.target.value })}>
-                {roles.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <select className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={String(userToEdit.group_id ?? '')} onChange={(e) => setUserToEdit({ ...userToEdit, group_id: e.target.value })}>
-                <option value="">Sin grupo</option>
-                {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-              </select>
+              {/* Menus propios y no `<select>`: dentro del modal, que framer-motion
+                  anima con `scale`, el menu nativo salia desplazado y se cerraba
+                  solo en cuanto algo reajustaba el layout. */}
+              <SelectMenu
+                aria-label="Rol en el sistema"
+                value={userToEdit.role}
+                options={roles.map(([value, label]) => ({ value, label }))}
+                onChange={(role) => setUserToEdit({ ...userToEdit, role })}
+                className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-surface-deep px-3 py-2 text-left text-white"
+              />
+              <SelectMenu
+                aria-label="Grupo de permisos"
+                value={String(userToEdit.group_id ?? '')}
+                options={[
+                  { value: '', label: 'Sin grupo' },
+                  ...groups.map((group) => ({ value: String(group.id), label: group.name })),
+                ]}
+                onChange={(group_id) => setUserToEdit({ ...userToEdit, group_id })}
+                className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-surface-deep px-3 py-2 text-left text-white"
+              />
             </div>
             {userToEdit.group_id ? (
               <p className="text-xs text-amber-400">

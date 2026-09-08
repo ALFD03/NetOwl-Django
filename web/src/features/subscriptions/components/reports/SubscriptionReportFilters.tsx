@@ -1,5 +1,5 @@
 import { Calendar, Filter, Search, Wifi } from 'lucide-react';
-import { PeriodSelector, SearchInput } from '@/shared/ui';
+import { PeriodSelector, SearchInput, SelectMenu } from '@/shared/ui';
 
 type Technology = 'ALL' | 'FTTH' | 'RF';
 
@@ -45,11 +45,18 @@ export function SubscriptionReportFilters({
           <Wifi className="w-4 h-4 text-brand" />
           <span className="text-[10px] font-black uppercase tracking-wider">Servicio</span>
         </div>
-        <select value={selectedTech} onChange={(event) => onTechChange(event.target.value as Technology)} className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white outline-none hover:bg-white/5 cursor-pointer min-w-[130px]">
-          <option value="ALL" className="bg-surface-secondary">Todos</option>
-          <option value="FTTH" className="bg-surface-secondary">FTTH (Fibra)</option>
-          <option value="RF" className="bg-surface-secondary">RF (Radio)</option>
-        </select>
+        <SelectMenu
+          aria-label="Servicio"
+          value={selectedTech}
+          options={[
+            { value: 'ALL', label: 'Todos' },
+            { value: 'FTTH', label: 'FTTH (Fibra)' },
+            { value: 'RF', label: 'RF (Radio)' },
+          ]}
+          onChange={(v) => onTechChange(v as Technology)}
+          panelWidth={180}
+          className="flex min-w-[130px] cursor-pointer items-center justify-between gap-2 py-2.5 pl-4 pr-3 text-xs font-bold text-white outline-none hover:bg-white/5"
+        />
       </div>
 
       <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-surface-secondary overflow-hidden">
@@ -57,10 +64,17 @@ export function SubscriptionReportFilters({
           <Filter className="w-4 h-4 text-emerald-500" />
           <span className="text-[10px] font-black uppercase tracking-wider">Sucursal</span>
         </div>
-        <select value={selectedBranch} onChange={(event) => onBranchChange(event.target.value)} className="appearance-none bg-transparent pl-4 pr-10 py-2.5 text-xs font-bold text-white outline-none hover:bg-white/5 min-w-[140px] cursor-pointer">
-          <option value="ALL" className="bg-surface-secondary">Todas</option>
-          {branches.map((branch) => <option key={branch} value={branch} className="bg-surface-secondary">{branch}</option>)}
-        </select>
+        <SelectMenu
+          aria-label="Sucursal"
+          value={selectedBranch}
+          options={[
+            { value: 'ALL', label: 'Todas' },
+            ...branches.map((branch) => ({ value: branch, label: branch })),
+          ]}
+          onChange={onBranchChange}
+          panelWidth={200}
+          className="flex min-w-[140px] cursor-pointer items-center justify-between gap-2 py-2.5 pl-4 pr-3 text-xs font-bold text-white outline-none hover:bg-white/5"
+        />
       </div>
 
       <div className="flex-1 min-w-[280px] flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-surface-secondary overflow-hidden group">

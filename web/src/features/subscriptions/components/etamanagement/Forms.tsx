@@ -11,6 +11,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { FormEvent } from 'react';
+import { SelectMenu } from '@/shared/ui';
 import { inputClass, labelClass } from './EtaView';
 
 
@@ -263,33 +264,21 @@ export function SubscriptionForm({
             </div>
 
             {!custom ? (
-              <select
+              <SelectMenu
+                aria-label="Plan"
                 className={modalInputClass}
                 value={value.producto ?? ''}
-                onChange={(event) =>
-                  onPlanChange(event.target.value)
-                }>
-                <option value="">
-                  -- Selecciona un plan de Planes.json --
-                </option>
-
-                {plans.map((plan) => {
-                  const planName =
-                    plan.name ?? plan.plan_name;
-
-                  return (
-                    <option
-                      key={planName}
-                      value={planName}>
-                      {planName}
-                    </option>
-                  );
-                })}
-
-                <option value="__CUSTOM__">
-                  ➕ Otro / Escribir producto personalizado...
-                </option>
-              </select>
+                placeholder="-- Selecciona un plan de Planes.json --"
+                options={[
+                  { value: '', label: '-- Selecciona un plan de Planes.json --' },
+                  ...plans.map((plan) => {
+                    const planName = String(plan.name ?? plan.plan_name);
+                    return { value: planName, label: planName };
+                  }),
+                  { value: '__CUSTOM__', label: '➕ Otro / Escribir producto personalizado...' },
+                ]}
+                onChange={onPlanChange}
+              />
             ) : (
               <div className="flex gap-2">
                 <input
@@ -325,23 +314,16 @@ export function SubscriptionForm({
                 Tecnología
               </label>
 
-              <select
+              <SelectMenu
+                aria-label="Tecnología"
                 className={modalInputClass}
                 value={value.tecnologia ?? 'FTTH'}
-                onChange={(event) =>
-                  onChange({
-                    tecnologia: event.target.value,
-                  })
-                }
-              >
-                <option value="FTTH">
-                  Alámbrico
-                </option>
-
-                <option value="RF">
-                  Inalámbrico
-                </option>
-              </select>
+                options={[
+                  { value: 'FTTH', label: 'Alámbrico' },
+                  { value: 'RF', label: 'Inalámbrico' },
+                ]}
+                onChange={(tecnologia) => onChange({ tecnologia })}
+              />
             </div>
 
             <div className="space-y-1">
@@ -349,23 +331,16 @@ export function SubscriptionForm({
                 Tipo Persona
               </label>
 
-              <select
+              <SelectMenu
+                aria-label="Tipo de persona"
                 className={modalInputClass}
                 value={value.tipo_persona ?? 'pyme'}
-                onChange={(event) =>
-                  onChange({
-                    tipo_persona: event.target.value,
-                  })
-                }
-              >
-                <option value="pyme">
-                  Jurídica
-                </option>
-
-                <option value="nat">
-                  Natural
-                </option>
-              </select>
+                options={[
+                  { value: 'pyme', label: 'Jurídica' },
+                  { value: 'nat', label: 'Natural' },
+                ]}
+                onChange={(tipo_persona) => onChange({ tipo_persona })}
+              />
             </div>
           </div>
 
@@ -471,15 +446,23 @@ export function PlanForm({
         </div>
         <div>
           <label className={labelClass}>Tecnología</label>
-          <select className={inputClass} value={value.tecnologia ?? 'FTTH'} onChange={(e) => onChange({ tecnologia: e.target.value })}>
-            {['FTTH', 'HFC', 'ADSL', 'Dedicado', 'Transporte'].map((item) => <option key={item}>{item}</option>)}
-          </select>
+          <SelectMenu
+            aria-label="Tecnología"
+            className={inputClass}
+            value={value.tecnologia ?? 'FTTH'}
+            options={['FTTH', 'HFC', 'ADSL', 'Dedicado', 'Transporte'].map((item) => ({ value: item, label: item }))}
+            onChange={(tecnologia) => onChange({ tecnologia })}
+          />
         </div>
         <div>
           <label className={labelClass}>Tipo de persona</label>
-          <select className={inputClass} value={value.tipo_persona ?? 'pyme'} onChange={(e) => onChange({ tipo_persona: e.target.value })}>
-            {['nat', 'pyme', 'corporativo'].map((item) => <option key={item}>{item}</option>)}
-          </select>
+          <SelectMenu
+            aria-label="Tipo de persona"
+            className={inputClass}
+            value={value.tipo_persona ?? 'pyme'}
+            options={['nat', 'pyme', 'corporativo'].map((item) => ({ value: item, label: item }))}
+            onChange={(tipo_persona) => onChange({ tipo_persona })}
+          />
         </div>
         <div>
           <label className={labelClass}>Mbps</label>
