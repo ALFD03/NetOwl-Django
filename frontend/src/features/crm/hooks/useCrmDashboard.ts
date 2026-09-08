@@ -62,7 +62,7 @@ const TREND_DEFS: Array<{
   { id: 'instalacion', title: 'Tasa Instalación', valueKey: 'pct_instalacion', rateKey: 'pct_instalacion', countKey: 'ganados', unitLabel: 'Ganados / Instalados', color: 'green' },
   { id: 'perdida', title: 'Tasa Pérdida', valueKey: 'pct_perdida', rateKey: 'pct_perdida', countKey: 'perdidos', unitLabel: 'Oportunidades Perdidas', color: 'red' },
   { id: 'pendientes', title: 'Tasa Pendientes', valueKey: 'pct_pendientes', rateKey: 'pct_pendientes', countKey: 'pendientes', unitLabel: 'Oportunidades en Curso', color: 'blue' },
-  { id: 'devueltos', title: 'Prospectos Devueltos (E8)', valueKey: 'pct_devueltos_e8', rateKey: 'pct_devueltos_e8', countKey: 'count_devueltos_e8', unitLabel: 'Devueltos a Etapa 8', color: 'yellow' },
+  { id: 'devueltos', title: 'Prospectos Devueltos (E8)', valueKey: 'pct_devueltos_e8', rateKey: 'pct_devueltos_e8', countKey: 'count_devueltos_e8', unitLabel: 'Transiciones a Etapa 8', color: 'yellow' },
 ];
 
 export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {

@@ -55,7 +55,7 @@
             "Site": "Valencia",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "Ledwyn Nuñez"
+            "Coordinador" : "Nestor Villegas"
         },
         {
             "name": "El Limon" ,
@@ -126,7 +126,7 @@
             "Site": "Los Guayos",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador": "Vacante"
+            "Coordinador": "Katiuska Añez"
         },
         {
             "name": "Los Parques" ,
@@ -166,7 +166,7 @@
             "Site": "Los Guayos",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador": "Vacante"
+            "Coordinador": "Katiuska Añez"
         },
         {
             "name": "Parral" ,
@@ -224,7 +224,7 @@
             "Site": "San Joaquin",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "Jose Jimenez"
+            "Coordinador" : "Edison Calma"
         },
         {
             "name": "San Mateo" ,
@@ -245,7 +245,7 @@
             "Site": "Libertador",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "Ledwyn Nuñez"
+            "Coordinador" : "Nestor Villegas"
         },
         {
             "name": "Torre Ejecutiva" ,
@@ -296,7 +296,7 @@
             "Site": "San Joaquin",
             "Type": "FTTH",
             "Estado": "Carabobo",
-            "Coordinador" : "Jose Jimenez"
+            "Coordinador" : "Edison Calma"
         }
     ]
 }

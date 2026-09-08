@@ -42,7 +42,7 @@ export function CrmAnalyticsView({
         <MetricCard label="Tasa Instalados" value={pct('pct_instalacion')} color="green" subValue="Ganados / Creados" icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />} />
         <MetricCard label="Tasa Pérdida" value={pct('pct_perdida')} color="red" subValue="Perdidos / Creados" icon={<XCircle className="h-4 w-4 text-rose-400" />} />
         <MetricCard label="Tasa Pendiente" value={pct('pct_pendientes')} color="blue" subValue="Pipeline activo" icon={<Clock className="h-4 w-4 text-sky-400" />} />
-        <MetricCard label="Devueltos E8" value={pct('pct_devueltos_e8')} color="yellow" subValue="Entradas a Etapa 8" icon={<AlertTriangle className="h-4 w-4 text-amber-400" />} />
+        <MetricCard label="Devueltos E8" value={pct('pct_devueltos_e8')} color="yellow" subValue="Riesgo mensual de devolución" icon={<AlertTriangle className="h-4 w-4 text-amber-400" />} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

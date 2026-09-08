@@ -13,82 +13,63 @@ from .crm_loader import ensure_crm_schema
 logger = logging.getLogger(__name__)
 
 
+# Columnas escalares de `crm_cierre_historico`, en el mismo orden en que se
+# insertan. La lista se derivaba a mano en tres sitios —columnas, marcadores y
+# valores— y cada métrica nueva obligaba a cuadrar los tres; aquí se declara una
+# vez y el SQL se construye a partir de ella. El nombre de la columna es la
+# clave de la métrica.
+_COLUMNAS_CIERRE = (
+    "total_oportunidades", "ganados", "perdidos", "pendientes",
+    "pct_instalacion", "pct_perdida", "pct_pendientes",
+
+    # Devoluciones a la etapa 8. `count`/`pct` son el riesgo depurado
+    # —transiciones del mes sobre lo que estuvo vivo, sin motivos de excepción—
+    # y las demás columnas son el desglose que lo explica.
+    "count_devueltos_e8", "pct_devueltos_e8",
+    "count_devueltos_e8_bruto", "pct_devueltos_e8_bruto",
+    "e8_devueltos_excepcion", "e8_devueltos_con_motivo",
+    "e8_devueltos_sin_motivo", "e8_devueltos_estimados",
+    "e8_clientes_devueltos", "e8_reincidentes", "total_en_riesgo",
+
+    "horas_promedio_inst", "horas_mediana_inst", "horas_p25_inst", "horas_p75_inst",
+    "horas_min_inst", "horas_max_inst", "horas_std_inst", "pct_excede_prom_inst",
+    "horas_promedio_perd", "horas_mediana_perd", "horas_p25_perd", "horas_p75_perd",
+    "horas_min_perd", "horas_max_perd", "horas_std_perd", "pct_excede_prom_perd",
+    "horas_promedio_cierre", "horas_mediana_cierre", "horas_p25_cierre", "horas_p75_cierre",
+    "horas_min_cierre", "horas_max_cierre", "horas_std_cierre", "pct_excede_prom_cierre",
+)
+
+# Columnas JSONB: una fila por etapa, no caben como escalar.
+_COLUMNAS_CIERRE_JSON = ("efectividad", "tiempo_por_etapa")
+
+
 def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
+    columnas = ("periodo_reporte", *_COLUMNAS_CIERRE, *_COLUMNAS_CIERRE_JSON)
+    marcadores = ", ".join(["%s"] * len(columnas))
+    updates = ",\n                    ".join(
+        f"{c} = EXCLUDED.{c}" for c in columnas if c != "periodo_reporte"
+    )
+    valores = [
+        periodo,
+        # `m[c]`, no `.get`: una métrica que se declare aquí y no se calcule
+        # debe reventar, no escribir un NULL silencioso en el histórico.
+        *[m[c] for c in _COLUMNAS_CIERRE],
+        *[json.dumps(m.get(c, [])) for c in _COLUMNAS_CIERRE_JSON],
+    ]
+
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
                 INSERT INTO {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} (
-                    periodo_reporte, total_oportunidades, ganados, perdidos, pendientes,
-                    pct_instalacion, pct_perdida, pct_pendientes,
-                    count_devueltos_e8, pct_devueltos_e8,
-                    horas_promedio_inst, horas_mediana_inst, horas_p25_inst, horas_p75_inst,
-                    horas_min_inst, horas_max_inst, horas_std_inst,
-                    pct_excede_prom_inst,
-                    horas_promedio_perd, horas_mediana_perd, horas_p25_perd, horas_p75_perd,
-                    horas_min_perd, horas_max_perd, horas_std_perd,
-                    pct_excede_prom_perd,
-                    horas_promedio_cierre, horas_mediana_cierre, horas_p25_cierre, horas_p75_cierre,
-                    horas_min_cierre, horas_max_cierre, horas_std_cierre,
-                    pct_excede_prom_cierre,
-                    efectividad, tiempo_por_etapa,
-                    updated_at
+                    {", ".join(columnas)}, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                VALUES ({marcadores}, NOW())
                 ON CONFLICT (periodo_reporte) DO UPDATE SET
-                    total_oportunidades = EXCLUDED.total_oportunidades,
-                    ganados = EXCLUDED.ganados,
-                    perdidos = EXCLUDED.perdidos,
-                    pendientes = EXCLUDED.pendientes,
-                    pct_instalacion = EXCLUDED.pct_instalacion,
-                    pct_perdida = EXCLUDED.pct_perdida,
-                    pct_pendientes = EXCLUDED.pct_pendientes,
-                    count_devueltos_e8 = EXCLUDED.count_devueltos_e8,
-                    pct_devueltos_e8 = EXCLUDED.pct_devueltos_e8,
-                    horas_promedio_inst = EXCLUDED.horas_promedio_inst,
-                    horas_mediana_inst = EXCLUDED.horas_mediana_inst,
-                    horas_p25_inst = EXCLUDED.horas_p25_inst,
-                    horas_p75_inst = EXCLUDED.horas_p75_inst,
-                    horas_min_inst = EXCLUDED.horas_min_inst,
-                    horas_max_inst = EXCLUDED.horas_max_inst,
-                    horas_std_inst = EXCLUDED.horas_std_inst,
-                    pct_excede_prom_inst = EXCLUDED.pct_excede_prom_inst,
-                    horas_promedio_perd = EXCLUDED.horas_promedio_perd,
-                    horas_mediana_perd = EXCLUDED.horas_mediana_perd,
-                    horas_p25_perd = EXCLUDED.horas_p25_perd,
-                    horas_p75_perd = EXCLUDED.horas_p75_perd,
-                    horas_min_perd = EXCLUDED.horas_min_perd,
-                    horas_max_perd = EXCLUDED.horas_max_perd,
-                    horas_std_perd = EXCLUDED.horas_std_perd,
-                    pct_excede_prom_perd = EXCLUDED.pct_excede_prom_perd,
-                    horas_promedio_cierre = EXCLUDED.horas_promedio_cierre,
-                    horas_mediana_cierre = EXCLUDED.horas_mediana_cierre,
-                    horas_p25_cierre = EXCLUDED.horas_p25_cierre,
-                    horas_p75_cierre = EXCLUDED.horas_p75_cierre,
-                    horas_min_cierre = EXCLUDED.horas_min_cierre,
-                    horas_max_cierre = EXCLUDED.horas_max_cierre,
-                    horas_std_cierre = EXCLUDED.horas_std_cierre,
-                    pct_excede_prom_cierre = EXCLUDED.pct_excede_prom_cierre,
-                    efectividad = EXCLUDED.efectividad,
-                    tiempo_por_etapa = EXCLUDED.tiempo_por_etapa,
+                    {updates},
                     updated_at = NOW()
                 """,
-                [
-                    periodo, m["total_oportunidades"], m["ganados"], m["perdidos"], m["pendientes"],
-                    m["pct_instalacion"], m["pct_perdida"], m["pct_pendientes"],
-                    m["count_devueltos_e8"], m["pct_devueltos_e8"],
-                    m["horas_promedio_inst"], m["horas_mediana_inst"], m["horas_p25_inst"], m["horas_p75_inst"],
-                    m["horas_min_inst"], m["horas_max_inst"], m["horas_std_inst"],
-                    m["pct_excede_prom_inst"],
-                    m["horas_promedio_perd"], m["horas_mediana_perd"], m["horas_p25_perd"], m["horas_p75_perd"],
-                    m["horas_min_perd"], m["horas_max_perd"], m["horas_std_perd"],
-                    m["pct_excede_prom_perd"],
-                    m["horas_promedio_cierre"], m["horas_mediana_cierre"], m["horas_p25_cierre"], m["horas_p75_cierre"],
-                    m["horas_min_cierre"], m["horas_max_cierre"], m["horas_std_cierre"],
-                    m["pct_excede_prom_cierre"],
-                    json.dumps(m.get("efectividad", [])),
-                    json.dumps(m.get("tiempo_por_etapa", [])),
-                ]
+                valores,
             )
         conn.commit()
 
@@ -121,6 +102,31 @@ def _normalizar_id(serie: pd.Series) -> pd.Series:
     # Sólo el caso del entero leído como float: un id alfanumérico que acabe en
     # `.0` de verdad no se toca.
     return txt.str.replace(r"^(\d+)\.0$", r"\1", regex=True)
+
+
+def _oportunidades_en_riesgo(df_clients: pd.DataFrame, periodo: str) -> pd.DataFrame:
+    """Oportunidades con vida en el periodo.
+
+    Vivas = creadas en el periodo o antes, y todavía sin cerrar cuando empezó.
+    Los periodos son `YYYY-MM`, así que la comparación de textos ya es
+    cronológica y no hace falta volver a las fechas.
+
+    Una oportunidad sin `periodo_cierre` sigue abierta y cuenta en todos los
+    meses desde que se creó; una cerrada cuenta hasta el mes de su cierre
+    incluido, porque ese mes todavía se trabajó. De ahí sale la propiedad que
+    hace útil esta métrica: como `creado_el` y `fecha_cierre` son hechos ya
+    escritos, el denominador de un mes cerrado no vuelve a moverse.
+    """
+    if df_clients.empty or "periodo_creacion" not in df_clients.columns:
+        return pd.DataFrame(columns=df_clients.columns)
+
+    nacio = df_clients["periodo_creacion"].notna() & (df_clients["periodo_creacion"] <= periodo)
+    cierre = df_clients.get("periodo_cierre")
+    if cierre is None:
+        sigue_viva = pd.Series(True, index=df_clients.index)
+    else:
+        sigue_viva = cierre.isna() | (cierre >= periodo)
+    return df_clients[nacio & sigue_viva].copy()
 
 
 def run_crm_analysis(periodo_str: str | None = None) -> dict:
@@ -240,7 +246,19 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
 
         # E. Logs del periodo
         df_logs_p = df_logs[df_logs["periodo_log"] == p].copy() if not df_logs.empty else pd.DataFrame()
-        df_logs_e8_p = df_logs_p[df_logs_p["nueva_etapa"] == ETAPA8_KEY].copy() if not df_logs_p.empty else pd.DataFrame()
+
+        df_logs_e8_p = (
+            df_logs_p[df_logs_p["nueva_etapa"] == ETAPA8_KEY].copy()
+            if not df_logs_p.empty else pd.DataFrame()
+        )
+
+        # E1. Población en riesgo: todo lo que tuvo vida en P, no sólo lo que se
+        # creó en P. Es el denominador del riesgo de devolución, y arrastra a las
+        # oportunidades abiertas de meses anteriores, que son la mayor parte de
+        # lo que el embudo gestiona cualquier mes dado. El de `df_creados` es una
+        # cohorte: mezclado con el numerador del mes daba tasas que podían pasar
+        # del 100%.
+        df_en_riesgo = _oportunidades_en_riesgo(df_clients, p)
 
         # Historial completo de los clientes que se movieron en el periodo: la
         # efectividad necesita saber cómo terminaron, aunque cierren más tarde.
@@ -268,7 +286,7 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
         m = compute_crm_metrics_for_period(
             df_creados, df_ganados, df_perdidos, df_pendientes,
             df_logs_e8_p, df_logs_p, df_clients, df_hist_p, df_perdidas_cierre,
-            df_perm_p, ahora
+            df_perm_p, ahora, df_en_riesgo
         )
 
         # G. Guardar en Base de Datos
@@ -276,7 +294,7 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
         save_crm_dimensiones_periodo(
             db, p, df_creados, df_ganados, df_perdidos, df_pendientes,
             df_logs_e8_p, df_logs_p, df_clients, df_hist_p, df_perdidas_cierre,
-            df_perm_p, ahora
+            df_perm_p, ahora, df_en_riesgo
         )
 
         all_summaries[p] = m
@@ -284,6 +302,7 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
     # 4. Calcular promedio acumulado global
     if all_summaries:
         df_sum = pd.DataFrame(list(all_summaries.values()))
+
         resumen_global_avg = {
             "total_oportunidades_promedio": round(float(df_sum["total_oportunidades"].mean()), 2),
             "ganados_promedio": round(float(df_sum["ganados"].mean()), 2),
@@ -294,6 +313,7 @@ def run_crm_analysis(periodo_str: str | None = None) -> dict:
             "pct_pendientes_promedio": round(float(df_sum["pct_pendientes"].mean()), 2),
             "count_devueltos_e8_promedio": round(float(df_sum["count_devueltos_e8"].mean()), 2),
             "pct_devueltos_e8_promedio": round(float(df_sum["pct_devueltos_e8"].mean()), 2),
+            "pct_devueltos_e8_bruto_promedio": round(float(df_sum["pct_devueltos_e8_bruto"].mean()), 2),
 
             # Tiempos Instalación
             "horas_promedio_inst": round(float(df_sum["horas_promedio_inst"].mean()), 2),

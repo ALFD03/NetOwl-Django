@@ -6,8 +6,10 @@ Una fila por mes con la forma:
 
 `activos_inicio` es la base activa con la que abre el mes (identica para todos
 los dias). Cada columna `diaN` es un JSON con el corte acumulado del mes hasta
-ese dia: metricas globales mas el desglose por `zona_sucursal` que consumen los
-reportes de ventas y unidades de negocio.
+ese dia: metricas globales, el desglose por `zona_sucursal` que consumen los
+reportes de ventas y unidades de negocio, y el resto de dimensiones del selector
+de Analytics (bajo la clave `dims`) para que su tabla y sus graficos sigan al
+dia elegido.
 
 El objetivo es que una sola lectura de fila entregue el mes completo, de modo
 que seleccionar un dia en la barra de progreso sea puramente de cliente y no
@@ -34,6 +36,12 @@ DAY_COLUMNS = [f"dia{d}" for d in range(1, 32)]
 # Dimension que necesitan SalesReport y BusinessUnits para agrupar por sede.
 DIMENSION_DIARIA = "zona_sucursal"
 
+# Dimensiones del selector de Analytics: se guardan por dia para que la tabla
+# y los graficos por dimension cambien junto con la barra de dias.
+DIMENSIONES_ANALYTICS = ["zona", "sucursal", "municipio", "campanna", "producto"]
+
+DIMENSIONES_DIARIAS = [DIMENSION_DIARIA, *DIMENSIONES_ANALYTICS]
+
 # Cada cuantos dias se vuelca el progreso a la base.
 FLUSH_CADA_N_DIAS = 5
 
@@ -49,17 +57,26 @@ def periodo_label_mes(year_month: str) -> str:
 
 
 def _payload_dia(c: Dict[str, Any], dim_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Arma el JSON de un dia: metricas globales + desglose por zona_sucursal."""
+    """Arma el JSON de un dia: metricas globales + desgloses por dimension.
+
+    `dimensiones` se mantiene como lista plana de `zona_sucursal` (la forma que
+    ya leen SalesReport y BusinessUnits) y `dims` agrupa las dimensiones del
+    selector de Analytics por nombre.
+    """
     summary = dict(c["summary"])
     summary.pop("periodo", None)
-    return {
-        "global": summary,
-        "dimensiones": [
-            {k: v for k, v in row.items() if k != "dimension"}
-            for row in dim_rows
-            if row.get("dimension") == DIMENSION_DIARIA
-        ],
-    }
+
+    plana: List[Dict[str, Any]] = []
+    por_dim: Dict[str, List[Dict[str, Any]]] = {d: [] for d in DIMENSIONES_ANALYTICS}
+    for row in dim_rows:
+        dim = row.get("dimension")
+        limpia = {k: v for k, v in row.items() if k != "dimension"}
+        if dim == DIMENSION_DIARIA:
+            plana.append(limpia)
+        elif dim in por_dim:
+            por_dim[dim].append(limpia)
+
+    return {"global": summary, "dimensiones": plana, "dims": por_dim}
 
 
 def build_day_metrics(
@@ -113,9 +130,8 @@ def build_day_metrics(
             df_free_periodo=c["df_free_periodo"],
             df_free_retorno=c["df_free_retorno"],
             persist=False,
-            # Solo la dimension que consumen los reportes, y sobre el frame ya
-            # preparado: evita rehacer 5 dimensiones que se descartarian.
-            dims=[DIMENSION_DIARIA],
+            # Sobre el frame ya preparado: evita rehacer el mapeo 31 veces.
+            dims=DIMENSIONES_DIARIAS,
             prepared=analyzer._dim_prepared,
         )
         activos_inicio = c["summary"]["activos_inicio"]

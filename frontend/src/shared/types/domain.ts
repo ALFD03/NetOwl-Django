@@ -45,7 +45,13 @@ export interface DimensionVal {
 /** Metricas de un dia: globales del mes hasta ese corte + desglose por nodo. */
 export interface DayPayload {
   global: Periodo;
+  /** Desglose plano por `zona_sucursal` (Ventas y Unidades de Negocio). */
   dimensiones: DimensionVal[];
+  /**
+   * Desgloses del selector de Analytics agrupados por dimension.
+   * Opcional: los dias calculados antes de guardarlos no lo traen.
+   */
+  dims?: Record<string, DimensionVal[]>;
 }
 
 /** Fila de analyzer_day_metrics: un mes completo, indexado por dia. */
