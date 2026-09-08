@@ -19,5 +19,5 @@ logs/
 *.zip
 .claudeignore
 CLAUDE.md
-frontend/static/dist/
+web/static/dist/
 graphify-out/

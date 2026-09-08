@@ -1,0 +1,5 @@
+# Herramientas de desarrollo. No van en la imagen de produccion.
+#   ruff check .        lint
+#   ruff format .       formateo (ver nota en pyproject.toml)
+-r requirements.txt
+ruff>=0.16.0

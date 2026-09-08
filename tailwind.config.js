@@ -4,14 +4,14 @@ import { readFileSync } from 'node:fs';
 // `@/shared/constants/theme`. Never hardcode these hex values in components:
 // use the Tailwind class (`bg-surface-primary`) or import the token (chart canvases).
 const tokens = JSON.parse(
-  readFileSync(new URL('./frontend/src/shared/constants/design-tokens.json', import.meta.url), 'utf8')
+  readFileSync(new URL('./web/src/shared/constants/design-tokens.json', import.meta.url), 'utf8')
 );
 
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    './frontend/templates/**/*.html',
-    './frontend/src/**/*.{js,ts,jsx,tsx}',
+    './web/templates/**/*.html',
+    './web/src/**/*.{js,ts,jsx,tsx}',
   ],
   darkMode: 'class',
   theme: {
