@@ -1,3 +1,4 @@
+import { METRIC_COLOR } from '@/shared/constants/theme';
 import React from 'react';
 import { NeonContainer } from '../surfaces/NeonContainer';
 import { MiniExceedRing } from './MiniExceedRing';
@@ -68,7 +69,7 @@ export function EquidistantTimeline({
       subtitle={subtitle ? `${subtitle} · σ ${std} h` : `Desviación Estándar (σ): ${std} h`}
       icon={icon}
       headerAction={(
-        <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color="#38bdf8" />
+        <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color={METRIC_COLOR.blue} />
       )}
     >
       <div className="py-4 px-2 h-full">

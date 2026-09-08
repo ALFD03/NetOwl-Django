@@ -1,6 +1,6 @@
 import { MapPin, MousePointerClick } from 'lucide-react';
 
-import { DataTable, EmptyState, ExcelExportButton, MetricCard, NeonContainer, StatTile } from '@/shared/ui';
+import { DataTable, EmptyState, ExcelExportButton, MetricCard, NeonContainer } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils';
 import { SUPPORT_DIMENSION_EXCEL_COLUMNS, supportExportFileName } from '../../lib/supportExport';
 import { SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';

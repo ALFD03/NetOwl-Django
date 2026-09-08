@@ -1,3 +1,4 @@
+import { formatTwoDecimals } from '@/shared/utils/formatters/number';
 import type { ReactNode } from 'react';
 import { DollarSign, Gift, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import { MetricCard } from '@/shared/ui';
@@ -42,7 +43,7 @@ export function AnalyticsMetrics({ data }: Props) {
 
       <MetricGroup title="Grupo Financiero" icon={<DollarSign className="w-4 h-4" />} tone="text-amber-400" columns="md:grid-cols-2">
         <MetricCard label="ARPU" value={`$ ${data.arpu || 0}`} color="yellow" />
-        <MetricCard label="Total Billing" value={`$ ${(data.total_billing || 0).toLocaleString()}`} color="green" />
+        <MetricCard label="Total Billing" value={`$ ${formatTwoDecimals(data.total_billing)}`} color="green" />
       </MetricGroup>
     </div>
   );

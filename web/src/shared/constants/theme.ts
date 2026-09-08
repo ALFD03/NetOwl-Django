@@ -16,4 +16,14 @@ export const METRIC_COLOR = tokens.metric;
 /** Ordered palette for multi-series charts. Index with `% CHART_PALETTE.length`. */
 export const CHART_PALETTE = tokens.chartPalette;
 
+/**
+ * Chart chrome: axes, gridlines, tooltips and value labels.
+ *
+ * These are not series colours — they are the frame the data is drawn on.
+ * They live in the token file because chart.js needs raw colour strings and
+ * cannot use a Tailwind class, which is exactly how they ended up hardcoded
+ * across eight files.
+ */
+export const CHART_CHROME = tokens.chart;
+
 export type MetricColorToken = keyof typeof METRIC_COLOR;

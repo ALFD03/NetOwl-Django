@@ -15,7 +15,6 @@ export interface CommercialSummaryStripProps {
   clampCompletion?: boolean;
 }
 
-const GROWTH_TARGET_PCT = 6;
 
 /**
  * The seven headline figures that open every commercial report section.

@@ -1,3 +1,4 @@
+import { CHART_PALETTE } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import { formatPeriodoLabel } from '@/shared/utils';
 import { getDoughnutOptions, handleHover, type DoughnutHoverValue } from '@/shared/charts';
@@ -39,16 +40,16 @@ export function useSubscriptionDashboard({ periodos, dimensiones = {} }: Subscri
   const growthOther = growthValues.filter((z) => z.share < 2.5).reduce((sum,z) => sum + z.share, 0);
   const churnDonutData = useMemo(() => { const labels = [...churnMajor.map(z=>z.zona), ...(churnOther > 0 ? ['Otras Zonas (<2.5%)'] : [])]; const values = [...churnMajor.map(z=>Number(z.share.toFixed(2))), ...(churnOther > 0 ? [Number(churnOther.toFixed(2))] : [])]; return buildZoneDonut(labels, values, [...churnRaw, {label:'Otras Zonas (<2.5%)', original:0}]); }, [churnMajor, churnOther, churnRaw]);
   const growthDonutData = useMemo(() => { const labels = [...growthMajor.map(z=>z.zona), ...(growthOther > 0 ? ['Otras Zonas (<2.5%)'] : [])]; const values = [...growthMajor.map(z=>Number(z.share.toFixed(2))), ...(growthOther > 0 ? [Number(growthOther.toFixed(2))] : [])]; return buildZoneDonut(labels, values, [...growthRaw, {label:'Otras Zonas (<2.5%)', original:0}]); }, [growthMajor, growthOther, growthRaw]);
-  const churnDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredChurnZone ? `Churn ${hoveredChurnZone.name}` : 'Churn Bruto Prom.', value: hoveredChurnZone?.val ?? `${avgChurnBruto.toFixed(2)}%`, color: '#ff2a5f' }, handleHover(setHoveredChurnZone, churnDonutData), { valueSuffix: ' %' }), [hoveredChurnZone, avgChurnBruto, churnDonutData]);
-  const growthDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredCrecimientoZone ? `Crec. ${hoveredCrecimientoZone.name}` : 'Crec. Prom. Global', value: hoveredCrecimientoZone?.val ?? `${avgCrecimiento > 0 ? '+' : ''}${avgCrecimiento.toFixed(2)}%`, color: '#00ff88' }, handleHover(setHoveredCrecimientoZone, growthDonutData), { valueSuffix: ' %' }), [hoveredCrecimientoZone, avgCrecimiento, growthDonutData]);
+  const churnDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredChurnZone ? `Churn ${hoveredChurnZone.name}` : 'Churn Bruto Prom.', value: hoveredChurnZone?.val ?? `${avgChurnBruto.toFixed(2)}%`, color: CHART_PALETTE[0] }, handleHover(setHoveredChurnZone, churnDonutData), { valueSuffix: ' %' }), [hoveredChurnZone, avgChurnBruto, churnDonutData]);
+  const growthDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredCrecimientoZone ? `Crec. ${hoveredCrecimientoZone.name}` : 'Crec. Prom. Global', value: hoveredCrecimientoZone?.val ?? `${avgCrecimiento > 0 ? '+' : ''}${avgCrecimiento.toFixed(2)}%`, color: CHART_PALETTE[4] }, handleHover(setHoveredCrecimientoZone, growthDonutData), { valueSuffix: ' %' }), [hoveredCrecimientoZone, avgCrecimiento, growthDonutData]);
 
   const aporteReemplazoData = { labels, datasets: [
     { label: 'Tasa Aporte Reactivación %', data: reversed.map((p) => Number(p.tasa_aporte_react_pct.toFixed(2)) || 0), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6 },
     { label: 'Índice Reemplazo %', data: reversed.map((p) => Number(p.indice_reemplazo_react_pct.toFixed(2)) || 0), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6 },
   ] };
   const suspensionWinbackData = { labels, datasets: [
-    { label: 'Suspensiones', data: reversed.map((p) => Number(p.corte_impagado) || 0), borderColor: '#ff2a5f', backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
-    { label: 'Recuperaciones', data: reversed.map((p) => Number(p.react_4_P) || 0), borderColor: '#00ff88', backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
+    { label: 'Suspensiones', data: reversed.map((p) => Number(p.corte_impagado) || 0), borderColor: CHART_PALETTE[0], backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
+    { label: 'Recuperaciones', data: reversed.map((p) => Number(p.react_4_P) || 0), borderColor: CHART_PALETTE[4], backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
   ] };
   return { latest, avgChurnNeto, avgChurnBruto, avgCrecimiento, avgTasaAporte, avgIndiceReemplazo, avgSuspensiones, avgWinback, labels, reversed, churnChartData: buildChurnData(reversed, labels), growthChartData: buildGrowthData(reversed, labels), aporteReemplazoData, suspensionWinbackData, churnDonutData, growthDonutData, churnDonutOptions, growthDonutOptions };
 }

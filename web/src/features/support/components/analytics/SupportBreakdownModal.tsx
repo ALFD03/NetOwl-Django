@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AlertOctagon, Layers, Loader2, Wrench } from 'lucide-react';
 
-import { DataTable, EmptyState, ExcelExportButton, MetricCard, Modal, StatTile, StatusMessage, ToggleGroup } from '@/shared/ui';
+import { DataTable, EmptyState, ExcelExportButton, MetricCard, Modal, StatusMessage, ToggleGroup } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils';
 import { SUPPORT_DIMENSION_EXCEL_COLUMNS, supportExportFileName } from '../../lib/supportExport';
 import { SUPPORT_DESGLOSE_LABELS, SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';

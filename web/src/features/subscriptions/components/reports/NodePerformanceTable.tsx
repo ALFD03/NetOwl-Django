@@ -7,7 +7,6 @@ import {
   calcComercial,
   completionBar,
   completionTone,
-  GROWTH_TARGET_RATE,
   type CommercialNode,
 } from '../../lib/commercial';
 
@@ -23,7 +22,6 @@ export interface NodePerformanceTableProps<T extends CommercialNode> {
   clampCompletion?: boolean;
 }
 
-const GROWTH_TARGET_PCT = GROWTH_TARGET_RATE * 100;
 
 /**
  * Per-node commercial performance table.

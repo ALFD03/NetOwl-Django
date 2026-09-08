@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { NeonContainer } from '@/shared/ui';
 import { Modal } from '@/shared/ui';
 import { router } from '@inertiajs/react';
 import { 
@@ -15,7 +14,7 @@ import { GroupsGrid } from '@/features/config/components/management/GroupsGrid';
 import { PermissionEditor } from '@/features/config/components/management/PermissionEditor';
 
 import type {
-  ConfigManagementProps, EditableGroup, EditableUser, GroupData, NewUserForm, PasswordForm, UserData,
+  ConfigManagementProps, EditableGroup, EditableUser, NewUserForm, PasswordForm, UserData,
 } from '@/features/config/types';
 
 export function ManagementView({ users = [], groups = [], roles = [] }: ConfigManagementProps) {
@@ -198,7 +197,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
             <div className="space-y-1">
               <label className="block text-xs text-slate-400">Usuario</label>
               <input
-                className="w-full px-3 py-2 rounded-md bg-[#071122] border border-slate-800 text-white"
+                className="w-full px-3 py-2 rounded-md bg-surface-deep border border-slate-800 text-white"
                 value={userToCreate.username}
                 onChange={(e) => setUserToCreate({ ...userToCreate, username: e.target.value })}
               />
@@ -208,7 +207,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
               <label className="block text-xs text-slate-400">Contraseña</label>
               <input
                 type="password"
-                className="w-full px-3 py-2 rounded-md bg-[#071122] border border-slate-800 text-white"
+                className="w-full px-3 py-2 rounded-md bg-surface-deep border border-slate-800 text-white"
                 value={userToCreate.password}
                 onChange={(e) => setUserToCreate({ ...userToCreate, password: e.target.value })}
               />
@@ -230,11 +229,11 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
         {userToEdit && (
           <form onSubmit={handleUpdateUser} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <input className="px-3 py-2 rounded-xl bg-[#071122] border border-slate-800 text-white" value={userToEdit.username} disabled />
-              <select className="px-3 py-2 rounded-xl bg-[#071122] border border-slate-800 text-white" value={userToEdit.role} onChange={(e) => setUserToEdit({ ...userToEdit, role: e.target.value })}>
+              <input className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={userToEdit.username} disabled />
+              <select className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={userToEdit.role} onChange={(e) => setUserToEdit({ ...userToEdit, role: e.target.value })}>
                 {roles.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
-              <select className="px-3 py-2 rounded-xl bg-[#071122] border border-slate-800 text-white" value={String(userToEdit.group_id ?? '')} onChange={(e) => setUserToEdit({ ...userToEdit, group_id: e.target.value })}>
+              <select className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={String(userToEdit.group_id ?? '')} onChange={(e) => setUserToEdit({ ...userToEdit, group_id: e.target.value })}>
                 <option value="">Sin grupo</option>
                 {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
               </select>
@@ -258,7 +257,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
         {userToChangePass && (
           <form onSubmit={handleChangePassword} className="space-y-4">
             <p className="text-xs text-slate-400">Actualizando contraseña de <strong className="text-white">{userToChangePass.username}</strong>.</p>
-            <input type="password" autoComplete="new-password" required className="w-full px-3 py-2 rounded-xl bg-[#071122] border border-slate-800 text-white" value={userToChangePass.password} onChange={(e) => setUserToChangePass({ ...userToChangePass, password: e.target.value })} placeholder="Nueva contraseña" />
+            <input type="password" autoComplete="new-password" required className="w-full px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={userToChangePass.password} onChange={(e) => setUserToChangePass({ ...userToChangePass, password: e.target.value })} placeholder="Nueva contraseña" />
             <div className="flex justify-end"><button type="submit" disabled={saving} className="bg-amber-500 px-5 py-2.5 rounded-xl text-surface-primary font-bold">{saving ? 'Actualizando...' : 'Cambiar Contraseña'}</button></div>
           </form>
         )}
@@ -268,8 +267,8 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
         {groupToEdit && (
           <form onSubmit={handleSaveGroup} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input required className="px-3 py-2 rounded-xl bg-[#071122] border border-slate-800 text-white" value={groupToEdit.name} onChange={(e) => setGroupToEdit({ ...groupToEdit, name: e.target.value })} placeholder="Nombre del grupo" />
-              <input className="px-3 py-2 rounded-xl bg-[#071122] border border-slate-800 text-white" value={groupToEdit.description} onChange={(e) => setGroupToEdit({ ...groupToEdit, description: e.target.value })} placeholder="Descripción" />
+              <input required className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={groupToEdit.name} onChange={(e) => setGroupToEdit({ ...groupToEdit, name: e.target.value })} placeholder="Nombre del grupo" />
+              <input className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={groupToEdit.description} onChange={(e) => setGroupToEdit({ ...groupToEdit, description: e.target.value })} placeholder="Descripción" />
             </div>
             <PermissionEditor permissions={groupToEdit.permissions} onChange={(permissions) => setGroupToEdit({ ...groupToEdit, permissions })} />
             <div className="flex justify-end"><button type="submit" disabled={saving} className="bg-emerald-600 px-5 py-2.5 rounded-xl text-white font-bold">{saving ? 'Guardando...' : 'Guardar Grupo'}</button></div>

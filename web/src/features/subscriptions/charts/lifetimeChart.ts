@@ -1,6 +1,6 @@
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 
-import { CHART_PALETTE } from '@/shared/constants/theme';
+import { CHART_CHROME, CHART_PALETTE } from '@/shared/constants/theme';
 import type { CurvaPoint, LifetimeData, LifetimeDimensionInfo } from '../types';
 
 /** Minimum sample size before a dimension value is worth plotting. */
@@ -30,7 +30,7 @@ export function buildSurvivalChartData(
       {
         label: 'Promedio Empresa',
         data: toPercent(data.curva_activo),
-        borderColor: '#ffffff',
+        borderColor: CHART_CHROME.textStrong,
         borderWidth: 4,
         pointRadius: 0,
         fill: false,
@@ -60,13 +60,13 @@ export const survivalChartOptions: ChartOptions<'line'> = {
     legend: {
       display: true,
       position: 'bottom',
-      labels: { color: '#94a3b8', boxWidth: 10, font: { size: 9 }, padding: 15 },
+      labels: { color: CHART_CHROME.textAxis, boxWidth: 10, font: { size: 9 }, padding: 15 },
     },
     datalabels: { display: false },
     tooltip: {
-      backgroundColor: '#0f172a',
-      titleColor: '#fff',
-      bodyColor: '#cbd5e1',
+      backgroundColor: CHART_CHROME.surfaceDeep,
+      titleColor: CHART_CHROME.textStrong,
+      bodyColor: CHART_CHROME.textMuted,
       padding: 12,
       cornerRadius: 8,
       callbacks: {
@@ -76,12 +76,12 @@ export const survivalChartOptions: ChartOptions<'line'> = {
     },
   },
   scales: {
-    x: { grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 12 } },
+    x: { grid: { display: false }, ticks: { color: CHART_PALETTE[10], maxTicksLimit: 12 } },
     y: {
       min: 0,
       max: 100,
       grid: { color: 'rgba(255,255,255,0.05)' },
-      ticks: { color: '#64748b', callback: (value: string | number) => `${value}%` },
+      ticks: { color: CHART_PALETTE[10], callback: (value: string | number) => `${value}%` },
     },
   },
 };

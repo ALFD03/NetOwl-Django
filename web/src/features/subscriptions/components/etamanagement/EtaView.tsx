@@ -9,7 +9,6 @@ import {
 import { useEtaManagement } from '@/features/subscriptions/hooks/useEtaManagement';
 import type {
   SubscriptionEtaManagementProps,
-  EtaDiscoveredSubscription,
 } from '@/features/subscriptions/types';
 import { PlanForm, SubscriptionForm } from './Forms';
 

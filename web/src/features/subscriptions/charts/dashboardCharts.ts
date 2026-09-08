@@ -5,8 +5,8 @@ import { CHART_PALETTE } from '@/shared/constants/theme';
 
 export function buildChurnData(periodos: PeriodoData[], labels: string[]): ChartData<'line'> {
   return { labels, datasets: [
-    { label: 'Churn Neto %', data: periodos.map((p) => Number(p.churn_neto_pct.toFixed(2))), borderColor: '#00ff88', borderWidth: 3, fill: false, tension: 0.35 },
-    { label: 'Churn Bruto %', data: periodos.map((p) => Number(p.churn_bruto_pct.toFixed(2))), borderColor: '#ff2a5f', borderDash: [5, 5], borderWidth: 2.5, fill: false, tension: 0.35 },
+    { label: 'Churn Neto %', data: periodos.map((p) => Number(p.churn_neto_pct.toFixed(2))), borderColor: CHART_PALETTE[4], borderWidth: 3, fill: false, tension: 0.35 },
+    { label: 'Churn Bruto %', data: periodos.map((p) => Number(p.churn_bruto_pct.toFixed(2))), borderColor: CHART_PALETTE[0], borderDash: [5, 5], borderWidth: 2.5, fill: false, tension: 0.35 },
   ] };
 }
 

@@ -5,7 +5,6 @@ import { selectCrmDimension } from '../lib/crmDimensions';
 import type {
   CrmAnalyticsProps,
   CrmDimensionValue,
-  CrmEfectividadRow,
   CrmHealthCard,
   CrmHistoricoRow,
   CrmRankingEntry,

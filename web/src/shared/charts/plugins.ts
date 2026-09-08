@@ -1,3 +1,4 @@
+import { CHART_CHROME } from '@/shared/constants/theme';
 import type { ArcElement, Chart, Plugin } from 'chart.js';
 
 export interface CenterTextConfig {
@@ -13,8 +14,8 @@ type CenterTextChart = Chart<'doughnut'> & {
   options: Chart<'doughnut'>['options'] & { customCenterText?: CenterTextConfig };
 };
 
-const TITLE_COLOR = '#ffffff';
-const VALUE_COLOR = '#ffffff';
+const TITLE_COLOR = CHART_CHROME.textStrong;
+const VALUE_COLOR = CHART_CHROME.textStrong;
 
 /** Largest font size (px) at which `text` still fits inside `maxWidth`. */
 function fitFontSize(

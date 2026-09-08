@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock, Hourglass, Layers, Timer, Users, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Hourglass, Layers, Timer, Users } from 'lucide-react';
 
 import {
   EmptyState,
@@ -6,7 +6,6 @@ import {
   MetricCard,
   NeonContainer,
   ProgressBar,
-  StatTile,
   type NeonTheme,
 } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils';

@@ -40,7 +40,6 @@ export function DayProgressBar({
   onSelect,
   periodoMes,
   label = 'Fecha de corte',
-  className = '',
 }: Props) {
   const available = useMemo(() => new Set(availableDays), [availableDays]);
   const mes = useMemo(() => parseMes(periodoMes), [periodoMes]);
@@ -79,10 +78,7 @@ export function DayProgressBar({
       : `Dia ${selectedDay}`;
 
   return (
-    <NeonContainer
-      // className={`w-full rounded-2xl border border-slate-700/50 bg-surface-secondary px-5 pb-4 pt-3 shadow-2xl ${className}`}
-      theme="blue"
-    >
+    <NeonContainer theme="blue">
       <div className="flex items-baseline justify-between gap-4">
         <span className="text-[14px] font-black uppercase tracking-wider text-slate-400">
           {label}

@@ -1,9 +1,9 @@
-import { SURFACE } from '@/shared/constants/theme';
+import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 import { METRIC_CHART, type MetricColor } from '@/shared/ui';
 import { buildHealthCards } from '@/features/crm/lib/crmEfectividad';
-import { formatPeriodoLabel } from '@/shared/utils';
+import { formatInteger, formatPeriodoLabel } from '@/shared/utils';
 import type {
   CrmDashboardProps,
   CrmGlobalStats,
@@ -149,7 +149,7 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
   }, [selectedTrend, historico, labels]);
 
   const modalChartOptions: ChartOptions<'line'> = useMemo(() => {
-    const lineColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : '#fff';
+    const lineColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : CHART_CHROME.textStrong;
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -158,26 +158,26 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
         datalabels: { display: false },
         tooltip: {
           backgroundColor: SURFACE.primary,
-          titleColor: '#fff',
+          titleColor: CHART_CHROME.textStrong,
           bodyColor: lineColor,
-          borderColor: '#334155',
+          borderColor: CHART_CHROME.border,
           borderWidth: 1,
           padding: 12,
           cornerRadius: 12,
           callbacks: {
-            label: (ctx: TooltipItem<'line'>) => ` ${String(ctx.dataset.label)}: ${Number(ctx.raw).toLocaleString()} casos`,
+            label: (ctx: TooltipItem<'line'>) => ` ${String(ctx.dataset.label)}: ${formatInteger(ctx.raw as number)} casos`,
           },
         },
       },
       scales: {
         x: {
-          grid: { color: 'rgba(51, 65, 85, 0.25)' },
-          ticks: { color: '#94a3b8', font: { size: 11, weight: 'bold' } },
+          grid: { color: CHART_CHROME.gridSoft },
+          ticks: { color: CHART_CHROME.textAxis, font: { size: 11, weight: 'bold' } },
         },
         y: {
           min: 0,
-          grid: { color: 'rgba(51, 65, 85, 0.25)' },
-          ticks: { color: '#94a3b8', font: { size: 11 }, callback: (v: number | string) => Number(v).toLocaleString() },
+          grid: { color: CHART_CHROME.gridSoft },
+          ticks: { color: CHART_CHROME.textAxis, font: { size: 11 }, callback: (v: number | string) => formatInteger(v as number) },
         },
       },
     };

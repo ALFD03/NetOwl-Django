@@ -1,3 +1,4 @@
+import { READONLY_TABLE, READONLY_TABLE_HEAD } from '@/shared/ui/data/tableClasses';
 import { Key, Settings2, ShieldCheck, Trash2 } from 'lucide-react';
 import { NeonContainer } from '@/shared/ui';
 import type { UserData } from '@/features/config/types';
@@ -12,8 +13,8 @@ interface Props {
 export function UsersTable({ users, onEdit, onChangePassword, onDelete }: Props) {
   return (
     <NeonContainer theme="slate" title="Directorio de Cuentas de Acceso" subtitle="Administración de roles y grupos de privilegios" icon={<ShieldCheck className="w-5 h-5" />} noPadding={true}>
-      <table className="w-full text-left text-xs">
-        <thead className="bg-slate-900/80 text-slate-400 font-black uppercase border-b border-slate-800">
+      <table className={READONLY_TABLE}>
+        <thead className={READONLY_TABLE_HEAD}>
           <tr><th className="p-5">Usuario</th><th className="p-5">Rol en Sistema</th><th className="p-5">Grupo Asignado</th><th className="p-5 text-right">Acciones</th></tr>
         </thead>
         <tbody className="divide-y divide-slate-800">

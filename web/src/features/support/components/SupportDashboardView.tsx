@@ -1,3 +1,4 @@
+import { READONLY_TABLE, READONLY_TABLE_BODY, READONLY_TABLE_HEAD_STICKY } from '@/shared/ui/data/tableClasses';
 import { Fragment } from 'react';
 import {
   Activity, AlertTriangle, BarChart2, CheckCircle2,
@@ -231,8 +232,8 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
                 <span className="font-mono text-xs font-bold text-brand">{periodsLabel}</span>
               </div>
               <div className="custom-scrollbar max-h-60 overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 border-b border-slate-800 bg-slate-900/80 font-black uppercase text-slate-400 backdrop-blur-sm">
+                <table className={READONLY_TABLE}>
+                  <thead className={READONLY_TABLE_HEAD_STICKY}>
                     <tr>
                       <th className="p-4">Periodo</th>
                       <th className="p-4 text-right">Creados</th>
@@ -243,7 +244,7 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60">
+                  <tbody className={READONLY_TABLE_BODY}>
                     {historico.map((row) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
@@ -253,7 +254,7 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
                           <td className="p-4 font-bold text-white">{formatPeriodoLabel(String(row.periodo_reporte))}</td>
                           <td className="p-4 text-right font-mono text-slate-400">{formatInteger(row.tickets_creados)}</td>
                           <td className="p-4 text-right font-mono text-slate-400">{formatInteger(row.tickets_cerrados)}</td>
-                          <td className="p-4 text-right font-mono font-black text-white">{countVal.toLocaleString()}</td>
+                          <td className="p-4 text-right font-mono font-black text-white">{formatInteger(countVal)}</td>
                           <td className="p-4 text-right font-mono font-black" style={{ color: chartColor }}>
                             {selectedTrend.unit === 'horas' ? `${rateVal} h` : `${rateVal}%`}
                           </td>

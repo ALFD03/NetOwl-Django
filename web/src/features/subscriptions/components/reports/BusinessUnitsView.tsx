@@ -12,7 +12,6 @@ import { completionTone } from '../../lib/commercial';
 import type {
   BusinessUnitGroup, BusinessUnitNode, FtthSummary,
 } from '../../hooks/useBusinessUnitsData';
-import { sumaHorasEtapa } from '@/features/crm';
 
 interface BusinessUnitsViewProps {
   groups: BusinessUnitGroup[];

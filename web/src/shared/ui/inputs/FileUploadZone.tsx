@@ -5,13 +5,11 @@ import { Button } from '../primitives/Button';
 interface FileUploadZoneProps {
   onFileSelect: (file: File | null) => void;
   accept?: string;
-  isUploading?: boolean;
 }
 
 export function FileUploadZone({
   onFileSelect,
   accept = '.csv',
-  isUploading = false,
 }: FileUploadZoneProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);

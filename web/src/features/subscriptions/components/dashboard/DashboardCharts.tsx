@@ -1,7 +1,7 @@
 import { Activity, BarChart3, PieChart } from 'lucide-react';
 import { NeonContainer } from '@/shared/ui';
 import type { useSubscriptionDashboard } from '@/features/subscriptions/hooks/useSubscriptionDashboard';
-import { BarChart, DoughnutChart, LineChart, centerTextPlugin, baseLineOptions, horizontalBarOptions, ChartDataLabels, defaultPlugins } from '@/shared/charts';
+import { BarChart, DoughnutChart, LineChart, baseLineOptions, horizontalBarOptions, defaultPlugins } from '@/shared/charts';
 
 interface DashboardChartsProps { data: ReturnType<typeof useSubscriptionDashboard> }
 export function DashboardCharts({ data }: DashboardChartsProps) {

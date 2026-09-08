@@ -1,3 +1,4 @@
+import { READONLY_TABLE, READONLY_TABLE_BODY, READONLY_TABLE_HEAD_STICKY } from '@/shared/ui/data/tableClasses';
 import {
   CheckCircle2, XCircle, Users, Activity,
   Clock, AlertTriangle, Layers, BarChart2, Timer,
@@ -12,7 +13,7 @@ import {
   METRIC_CHART,
 } from '@/shared/ui';
 import { LineChart } from '@/shared/charts';
-import { formatPeriodoLabel } from '@/shared/utils';
+import { formatInteger, formatPeriodoLabel } from '@/shared/utils';
 import type { useCrmDashboard } from '../hooks/useCrmDashboard';
 
 interface CrmDashboardViewProps {
@@ -36,7 +37,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <MetricCard label="Total Oportunidades" value={stats.total_oportunidades.toLocaleString()} color="slate" subValue="Promedio mensual" icon={<Users className="w-4 h-4 text-slate-300" />} />
+        <MetricCard label="Total Oportunidades" value={formatInteger(stats.total_oportunidades)} color="slate" subValue="Promedio mensual" icon={<Users className="w-4 h-4 text-slate-300" />} />
         <MetricCard label="Tasa Instalados" value={`${stats.pct_instalacion}%`} color="green" subValue="Ganados / Creados" icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />} />
         <MetricCard label="Tasa Pérdida" value={`${stats.pct_perdida}%`} color="red" subValue="Perdidos / Creados" icon={<XCircle className="w-4 h-4 text-rose-400" />} />
         <MetricCard label="Tasa Pendiente" value={`${stats.pct_pendientes}%`} color="blue" subValue="Pipeline activo" icon={<Clock className="w-4 h-4 text-sky-400" />} />
@@ -159,8 +160,8 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                 </span>
               </div>
               <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900/80 text-slate-400 uppercase font-black sticky top-0 backdrop-blur-sm border-b border-slate-800">
+                <table className={READONLY_TABLE}>
+                  <thead className={READONLY_TABLE_HEAD_STICKY}>
                     <tr>
                       <th className="p-4">Periodo</th>
                       <th className="p-4 text-right">Total Oportunidades</th>
@@ -168,15 +169,15 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                       <th className="p-4 text-right">Tasa del Periodo (%)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/60">
+                  <tbody className={READONLY_TABLE_BODY}>
                     {historico.map((row, idx) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
                       return (
                         <tr key={idx} className="hover:bg-white/5 transition-colors">
                           <td className="p-4 font-bold text-white">{formatPeriodoLabel(String(row.periodo_reporte))}</td>
-                          <td className="p-4 text-right text-slate-400 font-mono">{row.total_oportunidades?.toLocaleString() || 0}</td>
-                          <td className="p-4 text-right font-black font-mono text-white">{countVal.toLocaleString()}</td>
+                          <td className="p-4 text-right text-slate-400 font-mono">{formatInteger(row.total_oportunidades)}</td>
+                          <td className="p-4 text-right font-black font-mono text-white">{formatInteger(countVal)}</td>
                           <td className="p-4 text-right font-black font-mono" style={{ color: chartColor }}>{rateVal}%</td>
                         </tr>
                       );

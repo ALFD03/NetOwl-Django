@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 
-import { SURFACE } from '@/shared/constants/theme';
+import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import { METRIC_CHART, type MetricColor } from '@/shared/ui';
-import { formatPeriodoLabel, toNumber } from '@/shared/utils';
+import { formatInteger, formatPeriodoLabel, toNumber } from '@/shared/utils';
 import {
   ASIGNACION,
   CIERRE_TOTAL,
@@ -165,7 +165,7 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
   }, [selectedTrend, historico, labels]);
 
   const modalChartOptions: ChartOptions<'line'> = useMemo(() => {
-    const lineColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : '#fff';
+    const lineColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : CHART_CHROME.textStrong;
     const suffix = selectedTrend?.unit === 'horas' ? 'h' : 'tickets';
 
     return {
@@ -176,27 +176,27 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
         datalabels: { display: false },
         tooltip: {
           backgroundColor: SURFACE.primary,
-          titleColor: '#fff',
+          titleColor: CHART_CHROME.textStrong,
           bodyColor: lineColor,
-          borderColor: '#334155',
+          borderColor: CHART_CHROME.border,
           borderWidth: 1,
           padding: 12,
           cornerRadius: 12,
           callbacks: {
             label: (ctx: TooltipItem<'line'>) =>
-              ` ${String(ctx.dataset.label)}: ${Number(ctx.raw).toLocaleString()} ${suffix}`,
+              ` ${String(ctx.dataset.label)}: ${formatInteger(ctx.raw as number)} ${suffix}`,
           },
         },
       },
       scales: {
         x: {
-          grid: { color: 'rgba(51, 65, 85, 0.25)' },
-          ticks: { color: '#94a3b8', font: { size: 11, weight: 'bold' } },
+          grid: { color: CHART_CHROME.gridSoft },
+          ticks: { color: CHART_CHROME.textAxis, font: { size: 11, weight: 'bold' } },
         },
         y: {
           min: 0,
-          grid: { color: 'rgba(51, 65, 85, 0.25)' },
-          ticks: { color: '#94a3b8', font: { size: 11 }, callback: (v: number | string) => Number(v).toLocaleString() },
+          grid: { color: CHART_CHROME.gridSoft },
+          ticks: { color: CHART_CHROME.textAxis, font: { size: 11 }, callback: (v: number | string) => formatInteger(v as number) },
         },
       },
     };

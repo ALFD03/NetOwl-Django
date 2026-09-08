@@ -1,4 +1,5 @@
-import { SURFACE } from '@/shared/constants/theme';
+import { formatInteger } from '@/shared/utils/formatters/number';
+import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import 'chartjs-plugin-datalabels';
 import type { ActiveElement, ChartEvent, ChartOptions } from 'chart.js';
 import type { Context as DatalabelContext } from 'chartjs-plugin-datalabels';
@@ -6,7 +7,7 @@ import type React from 'react';
 import type { CenterTextConfig } from './plugins';
 
 /** Used when a dataset carries no colour of its own to borrow. */
-export const DATALABEL_FALLBACK_COLOR = '#ffffff';
+export const DATALABEL_FALLBACK_COLOR = CHART_CHROME.textStrong;
 
 /**
  * Shared value-label typography. The colour is left out on purpose: `BarChart`
@@ -17,7 +18,7 @@ export const DATALABEL_FALLBACK_COLOR = '#ffffff';
  */
 export const DATALABEL_TEXT = {
   font: { weight: 'bold', size: 15 },
-  textStrokeColor: '#000000',
+  textStrokeColor: CHART_CHROME.labelStroke,
   textStrokeWidth: 2,
 } as const;
 
@@ -66,15 +67,15 @@ export const baseLineOptions: ChartOptions<'line'> = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { display: true, position: 'top', align: 'end', labels: { color: '#cbd5e1', font: { size: 11 } } },
+    legend: { display: true, position: 'top', align: 'end', labels: { color: CHART_CHROME.textMuted, font: { size: 11 } } },
     // 'auto' lets the plugin drop labels that would collide, so a dense series
     // thins itself out instead of turning into a smear of overlapping numbers.
-    datalabels: { ...DATALABEL_TEXT, display: 'auto', clip: false, anchor: 'end', align: 'top', offset: 4, formatter: (value: number) => value.toLocaleString() },
-    tooltip: { enabled: true, backgroundColor: SURFACE.secondary, titleColor: '#ffffff', bodyColor: '#cbd5e1', borderColor: '#334155', borderWidth: 1, padding: 10, cornerRadius: 8 },
+    datalabels: { ...DATALABEL_TEXT, display: 'auto', clip: false, anchor: 'end', align: 'top', offset: 4, formatter: (value: number) => formatInteger(value) },
+    tooltip: { enabled: true, backgroundColor: SURFACE.secondary, titleColor: CHART_CHROME.textStrong, bodyColor: CHART_CHROME.textMuted, borderColor: CHART_CHROME.border, borderWidth: 1, padding: 10, cornerRadius: 8 },
   },
   scales: {
-    x: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } }, grace: '20%' },
-    y: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } }, grace: '20%' },
+    x: { grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } }, grace: '20%' },
+    y: { grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } }, grace: '20%' },
   },
 };
 
@@ -88,7 +89,7 @@ export function getLineOptions(suffix = '', customOptions?: ChartOptions<'line'>
       ...customOptions?.plugins,
       datalabels: {
         ...baseLineOptions.plugins?.datalabels,
-        ...(suffix ? { formatter: (value: number) => `${value.toLocaleString()}${suffix}` } : {}),
+        ...(suffix ? { formatter: (value: number) => `${formatInteger(value)}${suffix}` } : {}),
         ...customOptions?.plugins?.datalabels,
       },
     },
@@ -99,13 +100,13 @@ export const horizontalBarOptions: ChartOptions<'bar'> = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { display: true, position: 'top', align: 'end', labels: { color: '#cbd5e1', font: { size: 11 }, usePointStyle: true, pointStyle: 'circle', padding: 15 } },
-    datalabels: { ...DATALABEL_TEXT, display: 'auto', clip: false, anchor: 'end', align: 'top', offset: 5, formatter: (value: number) => value.toLocaleString() },
-    tooltip: { enabled: true, backgroundColor: SURFACE.secondary, titleColor: '#ffffff', bodyColor: '#cbd5e1', borderColor: '#334155', borderWidth: 1, padding: 10, cornerRadius: 8 },
+    legend: { display: true, position: 'top', align: 'end', labels: { color: CHART_CHROME.textMuted, font: { size: 11 }, usePointStyle: true, pointStyle: 'circle', padding: 15 } },
+    datalabels: { ...DATALABEL_TEXT, display: 'auto', clip: false, anchor: 'end', align: 'top', offset: 5, formatter: (value: number) => formatInteger(value) },
+    tooltip: { enabled: true, backgroundColor: SURFACE.secondary, titleColor: CHART_CHROME.textStrong, bodyColor: CHART_CHROME.textMuted, borderColor: CHART_CHROME.border, borderWidth: 1, padding: 10, cornerRadius: 8 },
   },
   scales: {
-    x: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } }, grace: '20%' },
-    y: { grid: { color: 'rgba(30, 41, 59, 0.4)' }, ticks: { color: '#94a3b8', font: { size: 10 } }, grace: '20%' },
+    x: { grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } }, grace: '20%' },
+    y: { grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } }, grace: '20%' },
   },
 };
 
@@ -123,7 +124,7 @@ export function getHorizontalBarOptions(
       datalabels: {
         ...horizontalBarOptions.plugins?.datalabels,
         ...(datalabelColor ? { color: datalabelColor } : {}),
-        ...(suffix ? { formatter: (value: number) => `${value.toLocaleString()}${suffix}` } : {}),
+        ...(suffix ? { formatter: (value: number) => `${formatInteger(value)}${suffix}` } : {}),
         ...customOptions?.plugins?.datalabels,
       },
     },
@@ -153,18 +154,18 @@ export function getDoughnutOptions(
     customCenterText: centerText,
     onHover,
     plugins: {
-      legend: { display: true, position: 'right', labels: { color: '#ffffff', font: { size: 10 }, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
+      legend: { display: true, position: 'right', labels: { color: CHART_CHROME.textStrong, font: { size: 10 }, padding: 12, usePointStyle: true, pointStyle: 'circle' } },
       tooltip: { enabled: false },
       datalabels: {
         display: (context) => {
           const value = context.dataset.data[context.dataIndex];
           return typeof value === 'number' && Math.abs(value) >= minLabelValue;
         },
-        color: '#ffffff',
+        color: CHART_CHROME.textStrong,
         font: { weight: 'bold', size: 15, },
-        textStrokeColor: '#00000',
+        textStrokeColor: CHART_CHROME.labelStroke,
         textStrokeWidth: 2,
-        formatter: (value: number) => `${value.toLocaleString()}${valueSuffix}`,
+        formatter: (value: number) => `${formatInteger(value)}${valueSuffix}`,
       },
     },
   };

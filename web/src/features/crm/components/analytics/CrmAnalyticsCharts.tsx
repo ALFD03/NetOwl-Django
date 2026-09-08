@@ -1,3 +1,4 @@
+import { CHART_CHROME } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import {
   BarChart,
@@ -97,7 +98,7 @@ function CrmChartItem({ title, metric, type, theme, globalData, rows }: CrmChart
   const doughnutOptions = useMemo(
     () =>
       getDoughnutOptions(
-        { title: hovered?.name ?? title, value: hovered?.val ?? '', color: '#ffffff' },
+        { title: hovered?.name ?? title, value: hovered?.val ?? '', color: CHART_CHROME.textStrong },
         handleHover(setHovered, doughnutData, suffix),
         { valueSuffix: plottedSuffix },
       ),
