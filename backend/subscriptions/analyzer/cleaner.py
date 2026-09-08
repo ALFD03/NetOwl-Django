@@ -1,18 +1,13 @@
 from __future__ import annotations
 import pandas as pd
-from ...conf_config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
+from ...conf_config import (
+    ACTIVO_FALSE_TOKENS,
+    ACTIVO_TRUE_TOKENS,
+    EXCLUDED_STATE,
+    SUBS_STATE_TO_LOG_MAP,
+)
 # OPTIMIZACIÓN Y REUTILIZACIÓN: Importamos la función de utilidades compartida del sistema
 from ...utils import normalize_text
-
-# Odoo exporta el booleano `Activo` como "True" / cadena vacia: el False nunca
-# viaja escrito. Se listan los dos lados de forma explicita para que un valor
-# desconocido se detecte en vez de caer en silencio del lado de archivado.
-ACTIVO_TRUE_TOKENS = frozenset(
-    {"true", "t", "1", "1.0", "si", "sí", "yes", "y", "verdadero", "v"}
-)
-ACTIVO_FALSE_TOKENS = frozenset(
-    {"false", "f", "0", "0.0", "no", "n", "falso", "", "none", "nan", "<na>", "null"}
-)
 
 
 def parse_archivado(series: pd.Series) -> pd.Series:

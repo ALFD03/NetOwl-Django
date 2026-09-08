@@ -36,29 +36,11 @@ from psycopg2 import sql
 
 from ..conf_config import DB_SCHEMA, TableNames
 from ..database import DBConnector
+from .config import SUBS_COLUMN_MAPPING
 
 # --- Columnas del export -----------------------------------------------------
 
-SUBS_COLUMNS = {
-    "Líneas de la orden/Referencia de la orden": "orden_producto",
-    "Líneas de la orden/Producto/Nombre": "producto",
-    "Líneas de la orden/Cliente": "cliente",
-    "Líneas de la orden/Cliente/CI/RIF": "ci",
-    "Sucursal": "sucursal",
-    "Zona": "zona",
-    "Líneas de la orden/Cliente/Municipio": "municipio",
-    "Tipo de Servicio": "tipo",
-    "Estado de la Suscripción": "estado",
-    "Campaña": "campanna",
-    "Próxima Fecha de Factura": "fecha_factura",
-    "Fecha de inicio": "fecha_inicio",
-    "Tarifa": "tarifa",
-    "Subtotal": "total",
-    "Teléfono": "telefono",
-    "Cliente/Phone 1": "phone",
-    "Cliente/Phone 2": "phone2",
-    "Vendedor": "vendedor",
-}
+SUBS_COLUMNS = SUBS_COLUMN_MAPPING
 
 LOG_COLUMNS = {
     "Logs de Cambios/Fecha de Cambio": "fecha_log",

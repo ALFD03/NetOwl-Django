@@ -6,7 +6,6 @@ import os
 import tempfile
 from contextlib import redirect_stdout, redirect_stderr
 from inertia import render as render_inertia
-import math
 
 
 logger = logging.getLogger(__name__)
@@ -33,7 +32,7 @@ from backend.subscriptions import (
 from backend.subscriptions.lifetime import (
     run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
 )
-from backend.utils import validate_csv_structure
+from backend.utils import clean_json_props, validate_csv_structure
 
 TEMPLATE_PREFIX = "subscriptions/"
 
@@ -98,18 +97,6 @@ def cleanup_tempfile(tmp_path):
         except OSError:
             pass
         
-def _clean_json_props(obj):
-    """Limpia recursivamente cualquier float('nan') de las estructuras enviadas a Inertia."""
-    if isinstance(obj, float):
-        if math.isnan(obj) or math.isinf(obj):
-            return 0.0
-        return obj
-    elif isinstance(obj, dict):
-        return {k: _clean_json_props(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_clean_json_props(v) for v in obj]
-    return obj
-
 # --- VISTAS HTML PROTEGIDAS POR PERMISO GRANULAR ---
 
 @login_required
@@ -283,7 +270,7 @@ def eta_config_view(request):
             df_planes["updated_at"] = df_planes["updated_at"].astype(str)
         planes_records = df_planes.to_dict('records')
 
-    # ✅ Blindaje de todos los props con _clean_json_props
+    # Blindaje de todos los props con clean_json_props
     props = {
         "individualConfigs": manager.get_configured_individual_subs() or [],
         "planesConfigs": planes_records,
@@ -295,7 +282,7 @@ def eta_config_view(request):
         "section": "eta_config"
     }
 
-    return render_inertia(request, "Subscriptions/EtaManagement", _clean_json_props(props))
+    return render_inertia(request, "Subscriptions/EtaManagement", clean_json_props(props))
 
 
 # --- APIS DE LECTURA DE DATOS ---

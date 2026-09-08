@@ -1,44 +1,31 @@
 # --- START OF FILE backend/subscriptions/eta_report.py ---
 from __future__ import annotations
 import json
-import pathlib
 import pandas as pd
 import numpy as np
 from typing import Any, Dict, List, Tuple, Optional
 from ..database import DBConnector
 from ..conf_config import DB_SCHEMA, TableNames
-
-PLANES_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Planes.json"
-ZONAS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Zonas.json"
-
-# Mapeos semánticos para el reporte reguladora
-TECH_MAP = {
-    "RF": "Inalámbrico",
-    "FTTH": "Alámbrico",
-    "GPON": "Alámbrico",
-    "INALAMBRICO": "Inalámbrico",
-    "ALAMBRICO": "Alámbrico",
-    "FIBRA": "Alámbrico",
-    "RADIO": "Inalámbrico"
-}
-
-PERSONA_MAP = {
-    "nat": "Persona Natural", 
-    "pyme": "Persona Jurídica",
-    "jur": "Persona Jurídica",
-    "natural": "Persona Natural",
-    "juridica": "Persona Jurídica"
-}
+from ..fixtures import planes, zonas
+from .config import (
+    PERSONA_DEFAULT,
+    PERSONA_MAP,
+    PLANES_NO_RESIDENCIALES,
+    PLAN_DEDICADO,
+    PLAN_TRANSPORTE,
+    TECH_DEFAULT,
+    TECH_MAP,
+)
 
 def normalize_tech(val: str) -> str:
-    if not val: return "Alámbrico"
+    if not val: return TECH_DEFAULT
     val_clean = str(val).strip().upper()
-    return TECH_MAP.get(val_clean, "Alámbrico")
+    return TECH_MAP.get(val_clean, TECH_DEFAULT)
 
 def normalize_persona(val: str) -> str:
-    if not val: return "Persona Natural"
+    if not val: return PERSONA_DEFAULT
     val_clean = str(val).strip().lower()
-    return PERSONA_MAP.get(val_clean, "Persona Natural")
+    return PERSONA_MAP.get(val_clean, PERSONA_DEFAULT)
 
 class ETAReportManager:
     def __init__(self, db: DBConnector):
@@ -49,7 +36,7 @@ class ETAReportManager:
         """Crea las tablas de persistencia para configuraciones globales e individuales."""
         statements = [
             f"""
-            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.analyzer_eta_config_planes (
+            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_PLANES} (
                 plan_name TEXT PRIMARY KEY,
                 reportar BOOLEAN DEFAULT TRUE,
                 tecnologia TEXT,
@@ -60,7 +47,7 @@ class ETAReportManager:
             )
             """,
             f"""
-            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.analyzer_eta_config_subs_individual (
+            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} (
                 orden TEXT PRIMARY KEY,
                 cliente TEXT,
                 producto TEXT,
@@ -75,7 +62,7 @@ class ETAReportManager:
             )
             """,
             f"""
-            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.analyzer_eta_reporte_mensual (
+            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} (
                 periodo_reporte TEXT PRIMARY KEY,
                 reporte_data JSONB,
                 esta_bloqueado BOOLEAN DEFAULT FALSE,
@@ -91,7 +78,7 @@ class ETAReportManager:
 
     def get_lock_status(self, periodo: str) -> bool:
         df = self.db.query(
-            f"SELECT esta_bloqueado FROM {DB_SCHEMA}.analyzer_eta_reporte_mensual WHERE periodo_reporte = %s",
+            f"SELECT esta_bloqueado FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} WHERE periodo_reporte = %s",
             params=[periodo]
         )
         return not df.empty and bool(df.iloc[0]["esta_bloqueado"])
@@ -101,7 +88,7 @@ class ETAReportManager:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    INSERT INTO {DB_SCHEMA}.analyzer_eta_reporte_mensual (periodo_reporte, esta_bloqueado)
+                    INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} (periodo_reporte, esta_bloqueado)
                     VALUES (%s, %s)
                     ON CONFLICT (periodo_reporte) DO UPDATE SET esta_bloqueado = EXCLUDED.esta_bloqueado
                     """,
@@ -114,7 +101,7 @@ class ETAReportManager:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    INSERT INTO {DB_SCHEMA}.analyzer_eta_config_planes 
+                    INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_PLANES} 
                     (plan_name, reportar, tecnologia, tipo_persona, tiene_tv, datas_mbps, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (plan_name) DO UPDATE SET
@@ -139,7 +126,7 @@ class ETAReportManager:
             with conn.cursor() as cur:
                 cur.execute(
                     f"""
-                    INSERT INTO {DB_SCHEMA}.analyzer_eta_config_subs_individual 
+                    INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} 
                     (orden, cliente, producto, reportar, tecnologia, tipo_persona, tiene_tv, datas_mbps, es_transporte, es_dedicado, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                     ON CONFLICT (orden) DO UPDATE SET
@@ -172,35 +159,30 @@ class ETAReportManager:
 
     def _load_mappings(self) -> Tuple[Dict[str, Dict], Dict[str, str], Dict[str, Dict]]:
         """Retorna planes globales, zonas mapeadas y configuraciones individuales de clientes."""
-        zonas_map = {}
-        if ZONAS_PATH.exists():
-            with open(ZONAS_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                for z in data.get("zonas", []):
-                    zonas_map[z["name"].strip().lower()] = z.get("Estado", "Desconocido").strip()
+        zonas_map = {
+            z["name"].strip().lower(): z.get("Estado", "Desconocido").strip()
+            for z in zonas()
+        }
 
         planes_map = {}
-        if PLANES_PATH.exists():
-            with open(PLANES_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                for p in data.get("planes", []):
-                    name = p["name"].strip()
-                    try:
-                        datas_mbps = float(p.get("datas") or "0")
-                    except ValueError:
-                        datas_mbps = 0.0
+        for p in planes():
+            name = p["name"].strip()
+            try:
+                datas_mbps = float(p.get("datas") or "0")
+            except ValueError:
+                datas_mbps = 0.0
 
-                    planes_map[name] = {
-                        "reportar": True,
-                        "tecnologia": p.get("type", "RF").strip(),
-                        "tipo_persona": p.get("people", "nat").strip().lower(),
-                        "tiene_tv": str(p.get("TV")).strip().lower() == "true",
-                        "datas_mbps": datas_mbps,
-                        "es_transporte": name == "Transporte de Datos",
-                        "es_dedicado": name == "Internet Dedicado"
-                    }
+            planes_map[name] = {
+                "reportar": True,
+                "tecnologia": p.get("type", "RF").strip(),
+                "tipo_persona": p.get("people", "nat").strip().lower(),
+                "tiene_tv": str(p.get("TV")).strip().lower() == "true",
+                "datas_mbps": datas_mbps,
+                "es_transporte": name == PLAN_TRANSPORTE,
+                "es_dedicado": name == PLAN_DEDICADO,
+            }
 
-        df_custom_planes = self.db.read_table("analyzer_eta_config_planes")
+        df_custom_planes = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_PLANES)
         if not df_custom_planes.empty:
             for _, row in df_custom_planes.iterrows():
                 planes_map[row["plan_name"]] = {
@@ -209,12 +191,12 @@ class ETAReportManager:
                     "tipo_persona": str(row["tipo_persona"]),
                     "tiene_tv": bool(row["tiene_tv"]),
                     "datas_mbps": float(row["datas_mbps"]),
-                    "es_transporte": row["plan_name"] == "Transporte de Datos",
-                    "es_dedicado": row["plan_name"] == "Internet Dedicado"
+                    "es_transporte": row["plan_name"] == PLAN_TRANSPORTE,
+                    "es_dedicado": row["plan_name"] == PLAN_DEDICADO,
                 }
 
         individual_map = {}
-        df_custom_subs = self.db.read_table("analyzer_eta_config_subs_individual")
+        df_custom_subs = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_SUBS)
         if not df_custom_subs.empty:
             for _, row in df_custom_subs.iterrows():
                 individual_map[str(row["orden"])] = {
@@ -236,7 +218,7 @@ class ETAReportManager:
 
         if is_locked and not force_recalc:
             df_saved = self.db.query(
-                f"SELECT reporte_data FROM {DB_SCHEMA}.analyzer_eta_reporte_mensual WHERE periodo_reporte = %s",
+                f"SELECT reporte_data FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} WHERE periodo_reporte = %s",
                 params=[periodo]
             )
             if not df_saved.empty and df_saved.iloc[0]["reporte_data"]:
@@ -322,7 +304,7 @@ class ETAReportManager:
 
             if ord_id in individual_map:
                 cfg = individual_map[ord_id]
-            elif prod_name in planes_map and prod_name not in ["Transporte de Datos", "Internet Dedicado"]:
+            elif prod_name in planes_map and prod_name not in PLANES_NO_RESIDENCIALES:
                 cfg = planes_map[prod_name]
             elif not prod_name:
                 unmapped_subs.append({
@@ -432,7 +414,7 @@ class ETAReportManager:
                 with conn.cursor() as cur:
                     cur.execute(
                         f"""
-                        INSERT INTO {DB_SCHEMA}.analyzer_eta_reporte_mensual (periodo_reporte, reporte_data, fecha_calculo) 
+                        INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} (periodo_reporte, reporte_data, fecha_calculo) 
                         VALUES (%s, %s, NOW()) 
                         ON CONFLICT (periodo_reporte) DO UPDATE SET reporte_data = EXCLUDED.reporte_data, fecha_calculo = NOW()
                         """,
@@ -463,7 +445,7 @@ class ETAReportManager:
 
     def get_configured_individual_subs(self) -> List[Dict[str, Any]]:
         """Retorna las suscripciones individuales parametrizadas sanitizadas."""
-        df = self.db.read_table("analyzer_eta_config_subs_individual")
+        df = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_SUBS)
         if df.empty:
             return []
         
@@ -522,7 +504,7 @@ class ETAReportManager:
             prod_name = str(raw_prod).strip() if pd.notna(raw_prod) and str(raw_prod).strip().lower() not in ("nan", "none", "null") else ""
             
             # ✅ REGLA: Si ya está en planes_map (como 'Pyme FTTH 100 Mbps'), NO es un pendiente individual
-            if prod_name in planes_map and prod_name not in ["Transporte de Datos", "Internet Dedicado"]:
+            if prod_name in planes_map and prod_name not in PLANES_NO_RESIDENCIALES:
                 continue
 
             # ✅ Solo marcar como individual si ya está guardado, o si es Dedicado/Transporte o no tiene producto
@@ -568,7 +550,7 @@ class ETAReportManager:
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    f"DELETE FROM {DB_SCHEMA}.analyzer_eta_config_planes WHERE plan_name = %s",
+                    f"DELETE FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_PLANES} WHERE plan_name = %s",
                     [plan_name]
                 )
             conn.commit()
@@ -578,7 +560,7 @@ class ETAReportManager:
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    f"DELETE FROM {DB_SCHEMA}.analyzer_eta_config_subs_individual WHERE orden = %s",
+                    f"DELETE FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} WHERE orden = %s",
                     [orden]
                 )
             conn.commit()

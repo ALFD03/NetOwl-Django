@@ -1,26 +1,13 @@
 from __future__ import annotations
-import json
 import logging
 from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from ..conf_config import DB_SCHEMA, TableNames
 from ..database import DBConnector
+from ..utils import parse_jsonb
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_jsonb(val: Any) -> Any:
-    if val is None:
-        return None
-    if isinstance(val, (dict, list)):
-        return val
-    if isinstance(val, str):
-        try:
-            return json.loads(val)
-        except (json.JSONDecodeError, TypeError):
-            return val
-    return val
 
 
 def get_crm_periodos() -> List[str]:
@@ -59,8 +46,8 @@ def get_crm_cierre_historico(periodos: Optional[List[str]] = None) -> List[Dict[
         # `efectividad` viaja como JSONB: una fila por etapa del periodo. Se
         # normaliza a lista aquí para que la vista no reciba a veces texto.
         for row in rows:
-            row["efectividad"] = _parse_jsonb(row.get("efectividad")) or []
-            row["tiempo_por_etapa"] = _parse_jsonb(row.get("tiempo_por_etapa")) or []
+            row["efectividad"] = parse_jsonb(row.get("efectividad")) or []
+            row["tiempo_por_etapa"] = parse_jsonb(row.get("tiempo_por_etapa")) or []
 
         return rows
     except Exception:
@@ -77,9 +64,9 @@ def get_crm_metric_totals(periodo: Optional[str] = None) -> Dict[str, Any]:
         tiempo_por_etapa = []
         efectividad = []
         if not df_mg.empty:
-            resumen_global = _parse_jsonb(df_mg.iloc[0]["resumen_global"]) or {}
-            tiempo_por_etapa = _parse_jsonb(df_mg.iloc[0]["tiempo_por_etapa"]) or []
-            efectividad = _parse_jsonb(df_mg.iloc[0]["efectividad"]) or []
+            resumen_global = parse_jsonb(df_mg.iloc[0]["resumen_global"]) or {}
+            tiempo_por_etapa = parse_jsonb(df_mg.iloc[0]["tiempo_por_etapa"]) or []
+            efectividad = parse_jsonb(df_mg.iloc[0]["efectividad"]) or []
 
         df_hist = db.query(f"""
             SELECT * FROM {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO}
@@ -140,8 +127,8 @@ def get_crm_dimensiones(
                 "periodo_reporte": row["periodo_reporte"],
                 "dimension": row["dimension"],
                 "valor": row["valor"],
-                "metricas": _parse_jsonb(row["metricas"]) or {},
-                "efectividad": _parse_jsonb(row["efectividad"]) or [],
+                "metricas": parse_jsonb(row["metricas"]) or {},
+                "efectividad": parse_jsonb(row["efectividad"]) or [],
             })
         return result
     except Exception:

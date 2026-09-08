@@ -1,12 +1,11 @@
 from __future__ import annotations
 import logging
 import pandas as pd
-from ...conf_config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP, TableNames
+from ...conf_config import DIMS, EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP, TableNames
 from ...database import DBConnector
 
 logger = logging.getLogger(__name__)
 
-DIMS = ["zona", "sucursal", "municipio", "campanna", "producto", "zona_sucursal"]
 
 def _normalize_estado(series: pd.Series) -> pd.Series:
     return series.astype(str).str.strip().str.lower()

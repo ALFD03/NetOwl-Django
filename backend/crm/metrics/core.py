@@ -1,7 +1,9 @@
 from __future__ import annotations
-import math
-import pandas as pd
 from typing import Any, Dict
+
+import pandas as pd
+
+from ...utils import clean_json_props
 
 from .tiempo import compute_tiempos_cierre, compute_tiempo_por_etapa
 from .efectividad import compute_efectividad
@@ -10,18 +12,6 @@ from .probabilidad import (
     compute_distribucion_etapa8,
     compute_probabilidad_etapa8,
 )
-
-
-def _clean_nan(obj: Any) -> Any:
-    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
-        return 0.0
-    elif isinstance(obj, dict):
-        return {k: _clean_nan(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [_clean_nan(v) for v in obj]
-    elif type(obj).__module__ == 'numpy':
-        return obj.item() if hasattr(obj, 'item') else obj
-    return obj
 
 
 def compute_crm_metrics_for_period(
@@ -139,4 +129,4 @@ def compute_crm_metrics_for_period(
         "distribucion_e8": dist_e8,
     }
 
-    return _clean_nan(metrics)
+    return clean_json_props(metrics)

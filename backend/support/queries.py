@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import pathlib
 from typing import Any
 
 import pandas as pd
 
 from backend.conf_config import DB_SCHEMA, TableNames
 from backend.database import DBConnector
+from backend.fixtures import zonas_por_nombre
+from backend.utils import parse_jsonb
 from backend.support.cohorts import PeriodCohort, build_cohort, classify_tickets
 from backend.support.config import (
     DIM_GRUPO,
@@ -21,20 +21,6 @@ from backend.support.config import (
 from backend.support.metrics import compute_metrics_for_period
 
 logger = logging.getLogger(__name__)
-
-ZONAS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Zonas.json"
-
-
-def _parse_jsonb(val: Any) -> Any:
-    if isinstance(val, (dict, list)) or val is None:
-        return val
-    if isinstance(val, str):
-        try:
-            return json.loads(val)
-        except (json.JSONDecodeError, TypeError):
-            return val
-    return val
-
 
 # --- Lecturas de tablas ya calculadas ---------------------------------------
 
@@ -81,7 +67,7 @@ def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict
         return [
             {
                 "periodo_reporte": row["periodo_reporte"],
-                **(_parse_jsonb(row["metricas"]) or {}),
+                **(parse_jsonb(row["metricas"]) or {}),
             }
             for _, row in df.iterrows()
         ]
@@ -106,8 +92,8 @@ def get_support_metric_totals() -> dict:
 
         if not df.empty:
             fila = df.iloc[0]
-            resumen = _parse_jsonb(fila["resumen_global"]) or {}
-            por_grupo = _parse_jsonb(fila["por_grupo_trabajo"]) or {}
+            resumen = parse_jsonb(fila["resumen_global"]) or {}
+            por_grupo = parse_jsonb(fila["por_grupo_trabajo"]) or {}
             periodos_evaluados = int(fila["periodos_evaluados"] or 0)
 
         return {
@@ -155,7 +141,7 @@ def get_support_dimension_metrics(
                 "grupo_trabajo": row["grupo_trabajo"],
                 "dimension": row["dimension"],
                 "valor": row["valor"],
-                "metricas": _parse_jsonb(row["metricas"]) or {},
+                "metricas": parse_jsonb(row["metricas"]) or {},
             }
             for _, row in df.iterrows()
         ]
@@ -231,15 +217,8 @@ def get_support_breakdown(
 def _load_zone_info() -> dict:
     """Mapa zona → {site, type} desde `Zonas.json`, indexado en minúsculas."""
     zone_info: dict[str, dict] = {}
-    if not ZONAS_PATH.exists():
-        logger.warning("No se encontró Zonas.json: la incidencia por zona no podrá mapear sites.")
-        return zone_info
-
-    with open(ZONAS_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    for z in data.get("zonas", []):
-        zone_info[z["name"].strip().lower()] = {
+    for nombre, z in zonas_por_nombre().items():
+        zone_info[nombre] = {
             "site": z.get("Site", "Valencia").strip(),
             "type": z.get("Type", "RF").strip(),
         }

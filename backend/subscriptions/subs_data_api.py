@@ -1,30 +1,13 @@
 from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
-import json
-import pathlib
-from functools import lru_cache
 from ..conf_config import DB_SCHEMA, TableNames
 from ..database import DBConnector
+from ..fixtures import load_zonas, zonas_disponibles
+from .config import CUSTOM_SITE_ORDER
 
 logger = logging.getLogger(__name__)
 
-
-CUSTOM_SITE_ORDER = [
-    "Valencia",
-    "Naguanagua",
-    "Los Guayos",
-    "Libertador",
-    "San Joaquin",
-    "Guacara",
-    "Puerto Cabello",
-    "Moron",
-    "Maracay",
-    "Turmero",
-    "Cagua",
-    "La Victoria",
-    "San Diego",
-]
 
 def get_site_sort_index(site_name: str) -> int:
     try:
@@ -151,14 +134,6 @@ def get_analytics_data(
         "dimensiones": get_dimensiones(periodos),
     }
 
-ZONAS_PATH = pathlib.Path(__file__).resolve().parent.parent.parent / "Zonas.json"
-
-
-@lru_cache(maxsize=1)
-def load_zonas() -> Dict[str, Any]:
-    """Zonas.json cacheado en memoria (antes se leia de disco en cada request)."""
-    with open(ZONAS_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 def get_zonas_config() -> Dict[str, Any]:
@@ -169,7 +144,7 @@ def get_zonas_config() -> Dict[str, Any]:
     la barra de corte sea una reagrupacion en memoria y no un round-trip.
     `siteOrder` viaja aparte para no duplicar el orden en TypeScript.
     """
-    if not ZONAS_PATH.exists():
+    if not zonas_disponibles():
         return {"zonas": [], "siteOrder": CUSTOM_SITE_ORDER}
     zonas = [
         {
@@ -260,7 +235,7 @@ def get_sales_report_data(
         
         target_period = periodo_reporte or available_periods[0]
         
-        if not ZONAS_PATH.exists():
+        if not zonas_disponibles():
             return {"status": "error", "message": "No se encontró el archivo Zonas.json en la raíz"}
             
         zonas_data = load_zonas()
@@ -381,7 +356,7 @@ def get_business_units_data(
         
         target_period = periodo_reporte or available_periods[0]
         
-        if not ZONAS_PATH.exists():
+        if not zonas_disponibles():
             return {"status": "error", "message": "No se encontró el archivo Zonas.json en la raíz"}
             
         zonas_data = load_zonas()

@@ -1,37 +1,14 @@
 from __future__ import annotations
-import json
-import pathlib
 import numpy as np
 import pandas as pd
 from psycopg2 import sql
 
 from ..conf_config import DB_SCHEMA, TableNames
 from ..database import DBConnector
+from ..fixtures import plan_names
+from .config import SUBS_ACTIVO_ALIASES, SUBS_COLUMN_MAPPING
 
-SUBSCRIPTIONS_COLUMN_MAPPING = {
-    "Líneas de la orden/Referencia de la orden": "orden_producto",
-    "Líneas de la orden/Producto/Nombre": "producto",
-    "Líneas de la orden/Cliente": "cliente",
-    "Líneas de la orden/Cliente/CI/RIF": "ci",
-    "Sucursal": "sucursal",
-    "Zona": "zona",
-    "Líneas de la orden/Cliente/Municipio": "municipio",
-    "Tipo de Servicio": "tipo",
-    "Estado de la Suscripción": "estado",
-    "Campaña": "campanna",
-    "Próxima Fecha de Factura": "fecha_factura",
-    "Fecha de inicio": "fecha_inicio",
-    "Tarifa": "tarifa",
-    "Subtotal": "total",
-    "Teléfono": "telefono",
-    "Cliente/Phone 1": "phone",
-    "Cliente/Phone 2": "phone2",
-    "Vendedor": "vendedor",
-    # false/0 = suscripcion archivada (cliente en plan gratuito).
-    "Activo": "activo",
-    "activo": "activo",
-    "Active": "activo",
-}
+SUBSCRIPTIONS_COLUMN_MAPPING = {**SUBS_COLUMN_MAPPING, **SUBS_ACTIVO_ALIASES}
 
 SUBSCRIPTIONS_METADATA_COLS = [
     "cliente", "ci", "sucursal", "zona", "municipio",
@@ -48,21 +25,6 @@ LOGS_COLUMN_MAPPING = {
 }
 
 LOGS_REQUIRED_COLS = ["orden", "fecha_log", "log", "estado"]
-
-PLANES_PATH = (
-    pathlib.Path(__file__).resolve().parent.parent.parent / "Planes.json"
-)
-_PLAN_SET = None
-
-
-def _get_plan_set():
-    global _PLAN_SET
-    if _PLAN_SET is None:
-        with open(PLANES_PATH, "r", encoding="utf-8") as f:
-            planes_data = json.load(f)
-        _PLAN_SET = {p["name"] for p in planes_data["planes"]}
-    return _PLAN_SET
-
 
 def _blank_to_nan(df: pd.DataFrame) -> pd.DataFrame:
     """Convierte en NaN las celdas vacias o de solo espacios.
@@ -84,7 +46,7 @@ def _blank_to_nan(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _first_matching_plan(values):
-    plan_set = _get_plan_set()
+    plan_set = plan_names()
     for v in values.dropna().unique():
         if v in plan_set:
             return v

@@ -1,10 +1,9 @@
 from __future__ import annotations
 from typing import Dict, List
 import pandas as pd
-from ...conf_config import TableNames
+from ...conf_config import DIMS, TableNames
 
 
-DIMS = ["zona", "sucursal", "municipio", "campanna", "producto", "zona_sucursal"]
 
 
 def prepare_subs_dims(db, df_subs_full=None):

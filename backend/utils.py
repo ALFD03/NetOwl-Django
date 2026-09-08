@@ -1,5 +1,6 @@
 from __future__ import annotations
 import csv
+import json
 import math
 from datetime import datetime
 from typing import Any, Iterable, Optional
@@ -92,16 +93,72 @@ def validate_csv_structure(file_path: str, required_headers: Iterable[str], deli
         return False, f"No es un archivo CSV válido: {str(e)}"
 
 
+def _clean_json(obj: Any, nan_value: Any) -> Any:
+    """Implementacion compartida de la limpieza previa a serializar a JSON.
+
+    Ademas de los NaN/Inf normaliza los tipos que arrastra pandas (escalares de
+    numpy y Timestamps), que `json.dumps` no sabe serializar. Antes esto estaba
+    reimplementado cuatro veces, cada copia cubriendo un subconjunto distinto.
+    """
+    if isinstance(obj, dict):
+        return {k: _clean_json(v, nan_value) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_clean_json(v, nan_value) for v in obj]
+    # Antes que nada los escalares de numpy: np.float64 hereda de float, asi
+    # que si se comprobara `isinstance(obj, float)` primero saldria de aqui sin
+    # convertirse a tipo nativo y `json.dumps` acabaria reventando con el.
+    if type(obj).__module__ == "numpy" and hasattr(obj, "item"):
+        obj = obj.item()
+    if isinstance(obj, float):
+        return nan_value if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, pd.Timestamp):
+        # ISO 8601, que es exactamente lo que emitia DjangoJSONEncoder cuando
+        # estos Timestamps le llegaban sin limpiar. Con `str()` saldria con un
+        # espacio en vez de la "T" y cambiaria el formato en el cliente.
+        return obj.isoformat()
+    if isinstance(obj, pd.DatetimeIndex):
+        return [t.isoformat() for t in obj]
+    return obj
+
+
 def clean_json_props(obj: Any) -> Any:
     """Reemplaza NaN/Inf por 0.0 en cualquier estructura destinada a JSON.
 
     `json.dumps` los emite como `NaN`/`Infinity`, que `JSON.parse` rechaza: el
     payload de Inertia llega roto y la página se renderiza vacía.
     """
-    if isinstance(obj, float):
-        return 0.0 if (math.isnan(obj) or math.isinf(obj)) else obj
-    if isinstance(obj, dict):
-        return {k: clean_json_props(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [clean_json_props(v) for v in obj]
-    return obj
+    return _clean_json(obj, 0.0)
+
+
+def clean_json_nullable(obj: Any) -> Any:
+    """Como `clean_json_props`, pero deja los NaN como `null` en vez de 0.
+
+    Para las metricas donde 0 no es "sin dato" sino un valor con significado
+    propio: la mediana de una curva de supervivencia que no se puede calcular
+    debe llegar al grafico como null, porque un 0 se leeria como que todos los
+    suscriptores se dieron de baja de inmediato.
+    """
+    if obj is not None and not isinstance(obj, (dict, list, tuple, str)):
+        try:
+            if pd.isna(obj):
+                return None
+        except (TypeError, ValueError):
+            pass
+    return _clean_json(obj, None)
+
+
+def parse_jsonb(val: Any) -> Any:
+    """Decodifica una columna JSONB que psycopg2 puede entregar ya parseada.
+
+    Segun el driver y el tipo declarado de la columna, un JSONB llega como
+    dict/list o como la cadena sin parsear. Lo que no sea JSON valido se
+    devuelve tal cual, que es lo que hacian las dos copias que habia de esto.
+    """
+    if val is None or isinstance(val, (dict, list)):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            return val
+    return val

@@ -3,7 +3,7 @@ import unicodedata
 import pandas as pd
 from typing import Iterator, Tuple
 from ..database import DBConnector
-from ..conf_config import DB_SCHEMA, TableNames
+from ..conf_config import ACTIVO_FALSE_TOKENS, ACTIVO_TRUE_TOKENS, DB_SCHEMA, TableNames
 from .crm_config import CSV_COLUMN_MAP, CLIENT_FIELDS, LOG_FIELDS, ETAPA_MAP, GANADO_STATES
 
 
@@ -140,10 +140,15 @@ def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> Tup
     df_clients["duracion_total_horas"] = pd.to_numeric(df_clients["duracion_total_horas"], errors="coerce")
     
     if "activo" in df_clients.columns:
-        df_clients["activo"] = df_clients["activo"].astype(str).str.lower().map({
-            "true": True, "false": False, "1": True, "0": False,
-            "si": True, "no": False, "yes": True, "no": False
-        })
+        # Mismo export de Odoo que el loader de suscripciones, asi que mismo
+        # vocabulario (antes este mapa era mas pobre: no reconocia "sí",
+        # "verdadero" ni "t"/"f", y trataba la cadena vacia como desconocida
+        # cuando en Odoo es justamente como se escribe el False). Lo que no
+        # este en ninguno de los dos vocabularios sigue quedando como nulo.
+        limpio = df_clients["activo"].astype(str).str.strip().str.lower()
+        df_clients["activo"] = pd.Series(pd.NA, index=limpio.index, dtype="boolean")
+        df_clients.loc[limpio.isin(ACTIVO_TRUE_TOKENS), "activo"] = True
+        df_clients.loc[limpio.isin(ACTIVO_FALSE_TOKENS), "activo"] = False
         
     if "ganado" in df_clients.columns:
         df_clients["ganado"] = df_clients["ganado"].astype(str).str.strip().str.lower()

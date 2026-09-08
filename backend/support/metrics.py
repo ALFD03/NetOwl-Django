@@ -9,30 +9,17 @@ una zona y para el desglose que `queries` calcula al vuelo.
 
 from __future__ import annotations
 
-import math
 from typing import Any, Dict
 
 import pandas as pd
 
+from backend.utils import clean_json_props
 from backend.support.cohorts import PeriodCohort
 from backend.support.config import (
     MIN_DURACION_HORAS,
     TIME_MEASURE_SPECS,
     TIME_STATS,
 )
-
-
-def clean_nan(obj: Any) -> Any:
-    """NaN/Inf a 0 y tipos de numpy a tipos de Python, para poder serializar."""
-    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
-        return 0.0
-    if isinstance(obj, dict):
-        return {k: clean_nan(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [clean_nan(v) for v in obj]
-    if type(obj).__module__ == "numpy":
-        return obj.item() if hasattr(obj, "item") else obj
-    return obj
 
 
 def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
@@ -231,4 +218,4 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> Dict[str, Any]:
         serie = _serie_de_formula(cohorte.poblacion(poblacion), formula)
         metrics.update(_prefixed(_compute_stats_for_series(serie), medida))
 
-    return clean_nan(metrics)
+    return clean_json_props(metrics)
