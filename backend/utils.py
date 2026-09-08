@@ -1,7 +1,9 @@
 from __future__ import annotations
 import csv
+import io
 import json
 import math
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime
 from typing import Any, Iterable, Optional
 
@@ -162,3 +164,22 @@ def parse_jsonb(val: Any) -> Any:
         except (json.JSONDecodeError, TypeError):
             return val
     return val
+
+
+@contextmanager
+def capture_console():
+    """Captura lo que el analisis imprime, para devolverlo como log al cliente.
+
+    Los analizadores narran su progreso por stdout y las vistas lo reenvian al
+    navegador como "salida de consola". Las cuatro apps repetian el mismo par
+    de `redirect_stdout`/`redirect_stderr` sobre un StringIO.
+
+    Uso::
+
+        with capture_console() as salida:
+            analyzer.run()
+        return JsonResponse({"log_output": salida.getvalue()})
+    """
+    buffer = io.StringIO()
+    with redirect_stdout(buffer), redirect_stderr(buffer):
+        yield buffer

@@ -91,3 +91,33 @@ SUBS_ACTIVO_ALIASES = {
     "activo": "activo",
     "Active": "activo",
 }
+
+
+# --- Cabeceras minimas que debe traer cada CSV -------------------------------
+# Se validan contra el fichero crudo, antes de renombrar nada. Vivian en el
+# modulo de vistas, desde donde `frontend/imports` las importaba cruzando de
+# una app a otra; support y planes gratuitos ya las tenian aqui, en el backend.
+
+REQUIRED_SUBS_HEADERS = {
+    "Líneas de la orden/Referencia de la orden": "orden_producto",
+    "Líneas de la orden/Producto/Nombre": "producto",
+    "Líneas de la orden/Cliente": "cliente",
+    "Líneas de la orden/Cliente/CI/RIF": "ci",
+    "Sucursal": "sucursal",
+    "Zona": "zona",
+    "Líneas de la orden/Cliente/Municipio": "municipio",
+    "Tipo de Servicio": "tipo",
+    "Estado de la Suscripción": "estado",
+    "Campaña": "campanna",
+    "Próxima Fecha de Factura": "fecha_factura",
+    "Fecha de inicio": "fecha_inicio",
+    "Tarifa": "tarifa",
+    "Subtotal": "total",
+}
+
+REQUIRED_LOGS_HEADERS = {
+    "Logs de Cambios/Suscripción": "orden",
+    "Logs de Cambios/Fecha de Cambio": "fecha_log",
+    "Logs de Cambios/Nota": "log",
+    "Logs de Cambios/Estado Interno de Suscripción": "estado",
+}

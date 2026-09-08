@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Tuple, Optional
 from ..database import DBConnector
 from ..conf_config import DB_SCHEMA, TableNames
 from ..fixtures import planes, zonas
+from .subs_data_api import get_periodos
 from .config import (
     PERSONA_DEFAULT,
     PERSONA_MAP,
@@ -564,3 +565,53 @@ class ETAReportManager:
                     [orden]
                 )
             conn.commit()
+    def get_configured_plans(self) -> List[Dict[str, Any]]:
+        """Parametrizacion global de planes, lista para serializar.
+
+        Los NaN pasan a None y la fecha a texto: la vista hacia esta limpieza
+        con pandas por su cuenta, ademas de nombrar la tabla con un literal.
+        """
+        df = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_PLANES)
+        if df.empty:
+            return []
+        df = df.replace({float("nan"): None})
+        if "updated_at" in df.columns:
+            df["updated_at"] = df["updated_at"].astype(str)
+        return df.to_dict("records")
+
+    def get_config_page_data(self, periodo: Optional[str] = None) -> Dict[str, Any]:
+        """Todo lo que necesita la pagina de parametrizacion del reporte ETA.
+
+        Calcular el reporte es lo que descubre los planes y suscripciones sin
+        mapear; si ese calculo no reporta ninguno se cae a la deteccion directa
+        contra la tabla de suscripciones. La vista encadenaba estas cinco
+        llamadas y ese "si no hay, busca de la otra forma" a mano.
+        """
+        periodos_disponibles = sorted(
+            {p[:7] for p in get_periodos()}, reverse=True
+        )
+        if not periodo and periodos_disponibles:
+            periodo = periodos_disponibles[0]
+
+        unmapped_plans: List[Any] = []
+        unmapped_subs: List[Any] = []
+        if periodo:
+            report_data = self.calculate_eta_report(periodo, force_recalc=True)
+            if report_data.get("status") == "unmapped_elements":
+                unmapped_plans = report_data.get("unmapped_plans", [])
+                unmapped_subs = report_data.get("unmapped_subs", [])
+
+        if not unmapped_plans:
+            unmapped_plans = self.get_discovered_unmapped_plans()
+        if not unmapped_subs:
+            unmapped_subs = self.get_discovered_unmapped_subs()
+
+        return {
+            "individualConfigs": self.get_configured_individual_subs() or [],
+            "planesConfigs": self.get_configured_plans(),
+            "discoveredPlans": unmapped_plans or [],
+            "discoveredSubs": unmapped_subs or [],
+            "allKnownPlans": self.get_all_known_plans() or [],
+            "currentPeriod": periodo or "",
+            "periods": periodos_disponibles,
+        }

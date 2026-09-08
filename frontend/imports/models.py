@@ -35,3 +35,24 @@ class ImportActionLog(models.Model):
 
     def __str__(self):
         return f"{self.created_at.strftime('%Y-%m-%d %H:%M')} | {self.username} | {self.get_module_display()} ({self.status})"
+
+    def to_dict(self):
+        """Forma en la que el historial viaja al cliente.
+
+        La vista Inertia y el endpoint JSON servian este mismo diccionario de
+        diez claves, cada uno con su copia; cualquier campo nuevo habia que
+        acordarse de anadirlo en los dos sitios.
+        """
+        return {
+            "id": self.id,
+            "timestamp": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "username": self.username,
+            "module": self.module,
+            "module_display": self.get_module_display(),
+            "file_name": self.file_name,
+            "rows_processed": self.rows_processed,
+            "status": self.status,
+            "status_display": self.get_status_display(),
+            "message": self.message,
+            "details": self.details,
+        }

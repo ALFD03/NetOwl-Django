@@ -74,3 +74,89 @@ def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, An
     except Exception:
         logger.exception("Error en query de dimensiones lifetime")
         return {}
+
+
+# La UI nombra una dimension "campana" pero en la base la columna es
+# "campanna"; el resto coincide. El mapa existe para no filtrar hacia la base
+# un valor arbitrario venido de la query string.
+DIMENSION_ALIASES = {
+    "zona": "zona",
+    "sucursal": "sucursal",
+    "municipio": "municipio",
+    "campana": "campanna",
+    "producto": "producto",
+    "zona_sucursal": "zona_sucursal",
+}
+
+
+def get_survival_curves_by_dimension(dim: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """Curvas de supervivencia agrupadas por valor de una dimension.
+
+    Aplana el resultado de `get_lifetime_dimensiones` a la forma que consume el
+    grafico: `{"activo": {valor: curva}, "reactivacion": {valor: curva}}`.
+    Los valores sin curva no se incluyen. Una dimension desconocida devuelve la
+    estructura vacia en vez de fallar.
+    """
+    vacio: Dict[str, Dict[str, Any]] = {"activo": {}, "reactivacion": {}}
+    db_dim = DIMENSION_ALIASES.get(dim or "")
+    if not db_dim:
+        return vacio
+
+    try:
+        dim_data = get_lifetime_dimensiones(db_dim)
+    except Exception:
+        logger.exception("Error leyendo las curvas de la dimension %s", dim)
+        return vacio
+
+    curvas = {"activo": {}, "reactivacion": {}}
+    for valores in dim_data.values():
+        for valor, info in valores.items():
+            if info.get("curva_activo"):
+                curvas["activo"][valor] = info["curva_activo"]
+            if info.get("curva_reactivacion"):
+                curvas["reactivacion"][valor] = info["curva_reactivacion"]
+    return curvas
+
+
+def get_survival_report(dim: Optional[str] = None) -> Dict[str, Any]:
+    """Payload completo de la pagina de supervivencia.
+
+    Reune la curva global, sus estadisticos y, si se pide, el desglose por
+    dimension. La tasa de censura y el tiempo maximo se calculan aqui y no en
+    la vista: son parte de la metrica, no del transporte HTTP.
+    """
+    lc = get_lifecycle_results()
+    if not lc:
+        return {
+            "periodo": "global",
+            "curva_activo": [],
+            "curva_reactivacion": [],
+            "stats": {},
+            "curvas_dimension": {"activo": {}, "reactivacion": {}},
+        }
+
+    curva_activo = lc.get("curva_activo", []) or []
+    total = lc.get("n_total_activo", 0)
+    n_censurado = lc.get("n_censurado_activo", 0)
+
+    return {
+        "periodo": "global",
+        "curva_activo": curva_activo,
+        "curva_reactivacion": lc.get("curva_reactivacion", []),
+        "stats": {
+            "mediana_activo": lc.get("mediana_activo"),
+            "promedio_activo": lc.get("promedio_activo"),
+            "p25_activo": lc.get("p25_activo"),
+            "p75_activo": lc.get("p75_activo"),
+            "mediana_reactivacion": lc.get("mediana_reactivacion"),
+            "p25_reactivacion": lc.get("p25_reactivacion"),
+            "p75_reactivacion": lc.get("p75_reactivacion"),
+            "promedio_reactivacion": lc.get("promedio_reactivacion"),
+            "total_suscriptores": total,
+            "total_eventos": lc.get("n_evento_activo", 0),
+            "n_censurado_activo": n_censurado,
+            "tasa_censura": round(n_censurado / total, 4) if total and total > 0 else None,
+            "tiempo_maximo": max((p["tiempo"] for p in curva_activo), default=None),
+        },
+        "curvas_dimension": get_survival_curves_by_dimension(dim),
+    }

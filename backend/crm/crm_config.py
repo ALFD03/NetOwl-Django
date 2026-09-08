@@ -308,3 +308,35 @@ CLIENT_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if not k.startswith("Entra
 LOG_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if k.startswith("Entradas de Tiempo")]
 
 GANADO_STATES = {"perdido", "ganado", "pendiente"}
+
+
+# --- Cabeceras minimas del export de Odoo ------------------------------------
+# Se validan contra el CSV crudo, antes de renombrar nada. Estaban en el modulo
+# de vistas, desde donde `frontend/imports` las importaba cruzando de app a app.
+
+REQUIRED_CRM_HEADERS = {
+    "ID": "id",
+    "Oportunidad": "oportunidad",
+    "Cliente": "cliente",
+    "Cliente/Municipio": "cliente_municipio",
+    "Campaña": "campana",
+    "Sucursal": "sucursal",
+    "Vendedor": "vendedor",
+    "Medio": "medio",
+    "Medio/Supervisor": "medio_supervisor",
+    "Equipo de ventas": "equipo_ventas",
+    "Etapa": "etapa",
+    "Motivo de pérdida": "motivo_perdida",
+    "Devolver oportunidad": "devolver_oportunidad",
+    "Ganado": "ganado",
+    "Activo": "activo",
+    "Creado el": "creado_el",
+    "Fecha de cierre": "fecha_cierre",
+    "Última actualización de la etapa": "ultima_actualizacion",
+    "Duración Total (horas)": "duracion_total_horas",
+    "Entradas de Tiempo/Iniciativa/ID": "entradas_de_tiempo_iniciativa_id",
+    "Entradas de Tiempo/Duración (horas)": "entradas_de_tiempo_duracion_horas",
+    "Entradas de Tiempo/Creado el": "entradas_de_tiempo_creado_el",
+    "Entradas de Tiempo/Etapa Anterior": "entradas_de_tiempo_etapa_anterior",
+    "Entradas de Tiempo/Nueva Etapa": "entradas_de_tiempo_nueva_etapa",
+}

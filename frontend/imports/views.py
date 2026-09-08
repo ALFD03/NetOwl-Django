@@ -1,7 +1,5 @@
 import json
-import io
 import logging
-from contextlib import redirect_stdout, redirect_stderr
 
 from django.shortcuts import redirect, render
 from inertia import render as render_inertia
@@ -11,22 +9,21 @@ from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
 from frontend.config.decorators import deny, permission_required, permissions_all_required
-from frontend.subscriptions.views import (
-    handle_csv_upload, cleanup_tempfile,
-    REQUIRED_SUBS_HEADERS, REQUIRED_LOGS_HEADERS
-)
-from frontend.crm.views import REQUIRED_CRM_HEADERS
+from frontend.config.uploads import cleanup_tempfile, handle_csv_upload
 from backend.subscriptions import (
     import_subscriptions_csv, import_logs_csv, import_gratis_csv, MetricsAnalyzer,
     build_day_metrics,
 )
+from backend.subscriptions.config import REQUIRED_LOGS_HEADERS, REQUIRED_SUBS_HEADERS
 from backend.subscriptions.free_plans import REQUIRED_GRATIS_HEADERS
 from backend.crm import import_crm_csv, run_crm_analysis
+from backend.crm.crm_config import REQUIRED_CRM_HEADERS
 from backend.database import DBConnector
 from backend.models import Periodo
-from .models import ImportActionLog
 from backend.support import import_support_csv, run_support_analysis
 from backend.support.config import REQUIRED_SUPPORT_HEADERS
+from backend.utils import capture_console
+from .models import ImportActionLog
 
 
 logger = logging.getLogger(__name__)
@@ -94,22 +91,7 @@ def support_import_view(request):
 @login_required
 @permissions_all_required('can_view_imports', 'can_view_import_history')
 def history_view(request):
-    logs = ImportActionLog.objects.all()[:200]
-    history_data = []
-    for l in logs:
-        history_data.append({
-            "id": l.id,
-            "timestamp": l.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "username": l.username,
-            "module": l.module,
-            "module_display": l.get_module_display(),
-            "file_name": l.file_name,
-            "rows_processed": l.rows_processed,
-            "status": l.status,
-            "status_display": l.get_status_display(),
-            "message": l.message,
-            "details": l.details,
-        })
+    history_data = [log.to_dict() for log in ImportActionLog.objects.all()[:200]]
     return render_inertia(request, "Imports/History", {
         "history": history_data,
         "section": "history"
@@ -119,22 +101,7 @@ def history_view(request):
 @login_required
 @permissions_all_required('can_view_imports', 'can_view_import_history')
 def api_history_list(request):
-    logs = ImportActionLog.objects.all()[:200]
-    data = []
-    for l in logs:
-        data.append({
-            "id": l.id,
-            "timestamp": l.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-            "username": l.username,
-            "module": l.module,
-            "module_display": l.get_module_display(),
-            "file_name": l.file_name,
-            "rows_processed": l.rows_processed,
-            "status": l.status,
-            "status_display": l.get_status_display(),
-            "message": l.message,
-            "details": l.details,
-        })
+    data = [log.to_dict() for log in ImportActionLog.objects.all()[:200]]
     return JsonResponse({"history": data})
 
 
@@ -248,8 +215,7 @@ def api_run_crm_analysis(request):
     if not mes or len(mes) != 7:
         return JsonResponse({"status": "error", "message": "Periodo inválido. Seleccione un mes con formato YYYY-MM."}, status=400)
 
-    out = io.StringIO()
-    with redirect_stdout(out), redirect_stderr(out):
+    with capture_console() as out:
         try:
             run_crm_analysis(mes)
         except Exception as e:
@@ -279,9 +245,8 @@ def api_run_analysis(request):
     try:
         periodo = Periodo.build(f"{mes}-01")
         periodo_label = periodo.label()
-        out = io.StringIO()
         dias = 0
-        with redirect_stdout(out), redirect_stderr(out):
+        with capture_console() as out:
             try:
                 db = DBConnector()
                 analyzer = MetricsAnalyzer(db, periodo)
@@ -344,8 +309,7 @@ def api_run_support_analysis(request):
     if not periodo or len(periodo) != 7:
         return JsonResponse({"status": "error", "message": "Periodo inválido (YYYY-MM)."}, status=400)
 
-    out = io.StringIO()
-    with redirect_stdout(out), redirect_stderr(out):
+    with capture_console() as out:
         try:
             run_support_analysis(periodo)
         except Exception as e:
