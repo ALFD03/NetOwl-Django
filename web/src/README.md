@@ -90,7 +90,12 @@ for both `tailwind.config.js` and the TypeScript side:
 - In markup, use the generated class: `bg-surface-primary`, `text-brand`.
 - On a canvas or an inline `style` (Chart.js, SVG), import the token:
   `import { SURFACE, METRIC_COLOR } from '@/shared/constants/theme'`.
-- Never write a raw hex in a component.
+- Chart chrome — axes, gridlines, tooltips, the stroke behind value labels —
+  comes from `CHART_CHROME`. These are not series colours; they are the frame
+  the data is drawn on, and they used to be hardcoded across eight files
+  precisely because they had nowhere else to live.
+- Never write a raw hex in a component. `npm run lint` will not catch this one,
+  but a grep for `#` under `src/` should come back empty outside the token file.
 
 Tailwind cannot see interpolated class names, so any dynamic class must come from a
 written-out lookup map (see `COLUMNS` in `SummaryStrip`), never a template string.

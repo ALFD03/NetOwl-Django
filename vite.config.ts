@@ -29,6 +29,10 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    // La plantilla (web/templates/app.html) apunta a localhost:5173 fijo, asi
+    // que si el puerto esta ocupado no sirve de nada arrancar en otro: los
+    // assets darian 404 sin decir por que. Mejor fallar aqui y en voz alta.
+    strictPort: true,
     cors: true,
   },
 });
