@@ -1,17 +1,18 @@
 from __future__ import annotations
-from typing import Any, Dict
+
+from typing import Any
 
 import pandas as pd
 
 from core.utils import clean_json_props
 
-from .tiempo import compute_tiempos_cierre, compute_tiempo_por_etapa
 from .efectividad import compute_efectividad
 from .probabilidad import (
-    compute_distribucion_perdidos,
     compute_distribucion_etapa8,
+    compute_distribucion_perdidos,
     compute_probabilidad_etapa8,
 )
+from .tiempo import compute_tiempo_por_etapa, compute_tiempos_cierre
 
 
 def compute_crm_metrics_for_period(
@@ -27,7 +28,7 @@ def compute_crm_metrics_for_period(
     df_permanencias: pd.DataFrame | None = None,
     ahora: pd.Timestamp | None = None,
     df_en_riesgo: pd.DataFrame | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Métricas de un periodo.
 
     `df_logs_all` son los movimientos del periodo y `df_logs_hist` los mismos

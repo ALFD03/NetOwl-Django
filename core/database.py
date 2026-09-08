@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 import io
 import json
 import re
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pandas as pd
 import psycopg2
@@ -18,7 +19,7 @@ class DBConnector:
 
     def __init__(self):
         db = get_config().db
-        self.conn_params: Dict[str, Any] = {
+        self.conn_params: dict[str, Any] = {
             "host": db.DB_HOST,
             "database": db.DB_NAME,
             "user": db.DB_USER,
@@ -27,7 +28,7 @@ class DBConnector:
             "sslmode": db.DB_SSLMODE,
         }
         self.pool = pool.SimpleConnectionPool(1, 10, **self.conn_params)
-        self._schema_cache: Dict[str, set] = {}
+        self._schema_cache: dict[str, set] = {}
 
     @contextmanager
     def get_connection(self):
@@ -46,7 +47,7 @@ class DBConnector:
             self.pool.putconn(conn)
 
     def read_table(
-        self, table_name: str, columns: Optional[List[str]] = None
+        self, table_name: str, columns: list[str] | None = None
     ) -> pd.DataFrame:
         cols_sql = (
             sql.SQL("*")
@@ -67,8 +68,8 @@ class DBConnector:
         self,
         table_name: str,
         filter_column: str,
-        filter_values: Optional[List[str]] = None,
-        columns: Optional[List[str]] = None,
+        filter_values: list[str] | None = None,
+        columns: list[str] | None = None,
     ) -> pd.DataFrame:
         cols_sql = (
             sql.SQL("*")
@@ -82,7 +83,7 @@ class DBConnector:
             schema=sql.Identifier(DB_SCHEMA),
             table=sql.Identifier(table_name),
         )
-        params: List[Any] = []
+        params: list[Any] = []
         if filter_values:
             placeholders = sql.SQL(", ").join(sql.Placeholder() for _ in filter_values)
             query = sql.SQL(
@@ -99,7 +100,7 @@ class DBConnector:
             return pd.read_sql(query.as_string(conn), conn, params=params)
 
     def query(
-        self, sql_query: str, params: Optional[List[Any]] = None
+        self, sql_query: str, params: list[Any] | None = None
     ) -> pd.DataFrame:
         with self.get_connection() as conn:
             return pd.read_sql(sql_query, conn, params=params)
@@ -109,7 +110,7 @@ class DBConnector:
         df: pd.DataFrame,
         table_name: str,
         periodo: str,
-        metodo: Optional[str] = None,
+        metodo: str | None = None,
     ):
         if df.empty:
             return
@@ -172,7 +173,7 @@ class DBConnector:
                     "DELETE FROM {schema}.{table}"
                     " WHERE periodo_reporte = %s"
                 )
-                params: List[Any] = [periodo]
+                params: list[Any] = [periodo]
                 if metodo:
                     delete_q += " AND metodo_calculo = %s"
                     params.append(metodo)
@@ -231,7 +232,7 @@ class DBConnector:
         self,
         periodo_reporte: str,
         activos_inicio: int,
-        dias: Dict[str, Any],
+        dias: dict[str, Any],
     ):
         """Guarda una fila por mes en analyzer_day_metrics.
 
@@ -282,7 +283,7 @@ class DBConnector:
                 columnas = ["periodo_reporte", "activos_inicio"] + sorted(
                     dias.keys(), key=lambda c: int(c[3:])
                 )
-                valores: List[Any] = [periodo_reporte, str(activos_inicio)]
+                valores: list[Any] = [periodo_reporte, str(activos_inicio)]
                 valores.extend(
                     json.dumps(dias[c], ensure_ascii=False, separators=(",", ":"))
                     for c in columnas[2:]

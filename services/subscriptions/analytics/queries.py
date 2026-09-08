@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import load_zonas, zonas_disponibles
+
 from .config import CUSTOM_SITE_ORDER
 
 logger = logging.getLogger(__name__)
@@ -16,14 +19,14 @@ def get_site_sort_index(site_name: str) -> int:
         return len(CUSTOM_SITE_ORDER)  # Los no listados van al final
 
 def get_cierre_churn(
-    periodos: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    periodos: list[str] | None = None,
+) -> list[dict[str, Any]]:
     db = DBConnector()
     try:
         df = db.read_table_filtered(TableNames.ANALYZER_CIERRE_HISTORICO, "periodo_reporte", periodos)
         if df.empty:
             return []
-        result: List[Dict[str, Any]] = []
+        result: list[dict[str, Any]] = []
         for _, row in df.iterrows():
             result.append({
                 "periodo_reporte": str(row.get("periodo_reporte", "")),
@@ -61,15 +64,15 @@ def get_cierre_churn(
         return []
 
 def get_dimensiones(
-    periodos: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    periodos: list[str] | None = None,
+) -> list[dict[str, Any]]:
     db = DBConnector()
     try:
         df = db.read_table_filtered(TableNames.ANALYZER_CHURN_DIMENSIONES, "periodo_reporte", periodos)
         if df.empty:
             return []
 
-        pd_dict: Dict[str, Dict] = {}
+        pd_dict: dict[str, dict] = {}
         for _, row in df.iterrows():
             p = str(row.get("periodo_reporte", ""))
             if p not in pd_dict:
@@ -111,7 +114,7 @@ def get_dimensiones(
         logger.exception("Error getting churn dimensiones")
         return []
 
-def get_periodos() -> List[str]:
+def get_periodos() -> list[str]:
     db = DBConnector()
     try:
         df = db.read_table(TableNames.ANALYZER_CIERRE_HISTORICO)
@@ -122,13 +125,13 @@ def get_periodos() -> List[str]:
         logger.exception("Error getting periodos list")
         return []
 
-def get_dashboard_data() -> Dict[str, Any]:
+def get_dashboard_data() -> dict[str, Any]:
     return {"periodos": get_cierre_churn()}
 
 
 def get_analytics_data(
-    periodos: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    periodos: list[str] | None = None,
+) -> dict[str, Any]:
     return {
         "periodos": get_cierre_churn(periodos),
         "dimensiones": get_dimensiones(periodos),
@@ -136,7 +139,7 @@ def get_analytics_data(
 
 
 
-def get_zonas_config() -> Dict[str, Any]:
+def get_zonas_config() -> dict[str, Any]:
     """Mapa de zonas para que el cliente agrupe los reportes sin ir al servidor.
 
     Es la misma fuente (`Zonas.json`) que usan `get_sales_report_data` y
@@ -159,7 +162,7 @@ def get_zonas_config() -> Dict[str, Any]:
     return {"zonas": zonas, "siteOrder": CUSTOM_SITE_ORDER}
 
 
-def _dimension_df(db: DBConnector, target_period: str, dia: Optional[int]):
+def _dimension_df(db: DBConnector, target_period: str, dia: int | None):
     """Filas de la dimension zona_sucursal, del cierre del mes o de un dia.
 
     Con `dia` la fuente es la fila precalculada de analyzer_day_metrics: una
@@ -184,7 +187,7 @@ def _dimension_df(db: DBConnector, target_period: str, dia: Optional[int]):
         WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
     """, params=[target_period])
 
-def calculate_aggregation_totals(nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
+def calculate_aggregation_totals(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Suma los valores absolutos de un conjunto de nodos y recalcula
     los indicadores porcentuales para evitar el error de promediar promedios.
@@ -220,9 +223,9 @@ def calculate_aggregation_totals(nodes: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 def get_sales_report_data(
-    periodo_reporte: Optional[str] = None,
-    dia: Optional[int] = None,
-) -> Dict[str, Any]:
+    periodo_reporte: str | None = None,
+    dia: int | None = None,
+) -> dict[str, Any]:
     """
     Agrupa las métricas del periodo por Site regional -> Type (Tecnología) -> Nodos,
     calculando subtotales para cada tecnología y totales generales para cada Site.
@@ -261,7 +264,7 @@ def get_sales_report_data(
             
         # Agrupación en estructura anidada en memoria
         # Estructura: site_groups[site][tech_type] = List[nodos]
-        site_groups: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+        site_groups: dict[str, dict[str, list[dict[str, Any]]]] = {}
         
         for _, row in df.iterrows():
             val_str = str(row["valor"])
@@ -339,9 +342,9 @@ def get_sales_report_data(
         return {"status": "error", "message": str(e)}
     
 def get_business_units_data(
-    periodo_reporte: Optional[str] = None,
-    dia: Optional[int] = None,
-) -> Dict[str, Any]:
+    periodo_reporte: str | None = None,
+    dia: int | None = None,
+) -> dict[str, Any]:
     """
     Genera el reporte de Business Units:
     1. Incluye un resumen consolidado en tarjeta al inicio para TODOS los nodos FTTH.
@@ -394,9 +397,9 @@ def get_business_units_data(
             }
             
         # 2. Agrupadores
-        coord_groups: Dict[str, List[Dict[str, Any]]] = {}
-        rf_nodes: List[Dict[str, Any]] = []
-        ftth_nodes: List[Dict[str, Any]] = []
+        coord_groups: dict[str, list[dict[str, Any]]] = {}
+        rf_nodes: list[dict[str, Any]] = []
+        ftth_nodes: list[dict[str, Any]] = []
 
         for _, row in df.iterrows():
             val_str = str(row["valor"])

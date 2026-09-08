@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 import pandas as pd
+
 from core.config import (
     ACTIVO_FALSE_TOKENS,
     ACTIVO_TRUE_TOKENS,
     EXCLUDED_STATE,
     SUBS_STATE_TO_LOG_MAP,
 )
+
 # OPTIMIZACIÓN Y REUTILIZACIÓN: Importamos la función de utilidades compartida del sistema
 from core.utils import normalize_text
 

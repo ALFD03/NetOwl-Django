@@ -9,7 +9,7 @@ una zona y para el desglose que `queries` calcula al vuelo.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 
@@ -22,7 +22,7 @@ from services.support.analytics.config import (
 )
 
 
-def _compute_stats_for_series(series: pd.Series) -> Dict[str, float]:
+def _compute_stats_for_series(series: pd.Series) -> dict[str, float]:
     """
     Estadísticos de una serie de duraciones en horas.
 
@@ -139,7 +139,7 @@ def _serie_de_formula(df: pd.DataFrame, formula: str) -> pd.Series:
     return serie.where(_tramos_validos(espera, gestion))
 
 
-def _prefixed(stats: Dict[str, float], medida: str) -> Dict[str, Any]:
+def _prefixed(stats: dict[str, float], medida: str) -> dict[str, Any]:
     """Aplana un bloque de estadísticos a las claves planas que guarda la BD."""
     plano = {f"tiempo_{stat}_{medida}_horas": stats[stat] for stat in TIME_STATS}
     plano[f"pct_excede_promedio_{medida}"] = stats["pct_excede_promedio"]
@@ -151,7 +151,7 @@ def _pct(parte: int, total: int) -> float:
     return round((parte / total) * 100, 2) if total > 0 else 0.0
 
 
-def compute_metrics_for_period(cohorte: PeriodCohort) -> Dict[str, Any]:
+def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
     """
     El bloque completo de una cohorte: volúmenes, tasas y las siete medidas.
 
@@ -193,7 +193,7 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> Dict[str, Any]:
     cerrados = conteos["cerrados"]
     creados = conteos["creados"]
 
-    metrics: Dict[str, Any] = {
+    metrics: dict[str, Any] = {
         "total_tickets": total,
         "tickets_creados": creados,
         "tickets_cerrados": cerrados,

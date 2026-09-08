@@ -28,7 +28,6 @@ Los metodos 1 y 2 fechan el cambio; 3 y 4 son cotas superiores (fue gratuita
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -36,6 +35,7 @@ from psycopg2 import sql
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
+
 from .config import SUBS_COLUMN_MAPPING
 
 # --- Columnas del export -----------------------------------------------------
@@ -207,7 +207,7 @@ def detect_free_start(
     df_subs: pd.DataFrame,
     df_logs: pd.DataFrame,
     df_msgs: pd.DataFrame,
-    corte: Optional[pd.Timestamp] = None,
+    corte: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """
     Devuelve `df_subs` con `fecha_gratuito`, `metodo`, `confianza`,

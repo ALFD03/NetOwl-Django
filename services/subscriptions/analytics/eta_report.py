@@ -1,22 +1,27 @@
 # --- START OF FILE backend/subscriptions/eta_report.py ---
 from __future__ import annotations
+
 import json
-import pandas as pd
+from typing import Any
+
 import numpy as np
-from typing import Any, Dict, List, Tuple, Optional
-from core.database import DBConnector
+import pandas as pd
+
 from core.config import DB_SCHEMA, TableNames
+from core.database import DBConnector
 from core.fixtures import planes, zonas
-from .queries import get_periodos
+
 from .config import (
     PERSONA_DEFAULT,
     PERSONA_MAP,
-    PLANES_NO_RESIDENCIALES,
     PLAN_DEDICADO,
     PLAN_TRANSPORTE,
+    PLANES_NO_RESIDENCIALES,
     TECH_DEFAULT,
     TECH_MAP,
 )
+from .queries import get_periodos
+
 
 def normalize_tech(val: str) -> str:
     if not val: return TECH_DEFAULT
@@ -97,7 +102,7 @@ class ETAReportManager:
                 )
             conn.commit()
 
-    def save_plan_custom_config(self, plan_name: str, config: Dict[str, Any]) -> None:
+    def save_plan_custom_config(self, plan_name: str, config: dict[str, Any]) -> None:
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -117,7 +122,7 @@ class ETAReportManager:
                 )
             conn.commit()
 
-    def save_sub_individual_config(self, orden: str, config: Dict[str, Any]) -> None:
+    def save_sub_individual_config(self, orden: str, config: dict[str, Any]) -> None:
         """Guarda o actualiza la parametrización individual de una suscripción."""
         orden_clean = str(orden).strip()
         if not orden_clean:
@@ -158,7 +163,7 @@ class ETAReportManager:
             conn.commit()
 
 
-    def _load_mappings(self) -> Tuple[Dict[str, Dict], Dict[str, str], Dict[str, Dict]]:
+    def _load_mappings(self) -> tuple[dict[str, dict], dict[str, str], dict[str, dict]]:
         """Retorna planes globales, zonas mapeadas y configuraciones individuales de clientes."""
         zonas_map = {
             z["name"].strip().lower(): z.get("Estado", "Desconocido").strip()
@@ -212,7 +217,7 @@ class ETAReportManager:
 
         return planes_map, zonas_map, individual_map
 
-    def calculate_eta_report(self, periodo: str, force_recalc: bool = False) -> Dict[str, Any]:
+    def calculate_eta_report(self, periodo: str, force_recalc: bool = False) -> dict[str, Any]:
         """Calcula el reporte completo generando las 10 matrices requeridas."""
         is_locked = self.get_lock_status(periodo)
         individual_configs = self.get_configured_individual_subs()
@@ -357,10 +362,14 @@ class ETAReportManager:
         if df_rep.empty:
             return {"status": "empty", "message": "No hay datos reportables", "individual_configs": individual_configs}
 
-        df_transporte = df_rep[df_rep["es_transporte"] == True].copy()
-        df_main = df_rep[df_rep["es_transporte"] == False].copy()
+        # `== True` no es redundante aqui: sobre una Series de pandas es una
+        # comparacion elemento a elemento que devuelve la mascara booleana.
+        # Escribirlo como prueba de verdad daria el valor de verdad de la
+        # Series entera, que pandas rechaza.
+        df_transporte = df_rep[df_rep["es_transporte"] == True].copy()  # noqa: E712
+        df_main = df_rep[df_rep["es_transporte"] == False].copy()  # noqa: E712
         df_net = df_main[df_main["tecnologia"].isin(["Inalámbrico", "Alámbrico"])].copy()
-        df_tv = df_main[df_main["tiene_tv"] == True].copy()
+        df_tv = df_main[df_main["tiene_tv"] == True].copy()  # noqa: E712
 
         reporte_final = {
             "status": "success",
@@ -425,7 +434,7 @@ class ETAReportManager:
 
         return reporte_final
     
-    def get_discovered_unmapped_plans(self) -> List[str]:
+    def get_discovered_unmapped_plans(self) -> list[str]:
         """Busca productos en la tabla de suscripciones que no tienen configuración ETA."""
         planes_config, _, _ = self._load_mappings()
         
@@ -444,7 +453,7 @@ class ETAReportManager:
         
         return sorted(discovered)
 
-    def get_configured_individual_subs(self) -> List[Dict[str, Any]]:
+    def get_configured_individual_subs(self) -> list[dict[str, Any]]:
         """Retorna las suscripciones individuales parametrizadas sanitizadas."""
         df = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_SUBS)
         if df.empty:
@@ -485,7 +494,7 @@ class ETAReportManager:
             })
         return records
     
-    def get_discovered_unmapped_subs(self) -> List[Dict[str, Any]]:
+    def get_discovered_unmapped_subs(self) -> list[dict[str, Any]]:
         """Detecta solo las órdenes que realmente requieren configuración individual."""
         planes_map, _, individual_map = self._load_mappings()
         
@@ -530,7 +539,7 @@ class ETAReportManager:
                 })
         return pending_subs
     
-    def get_all_known_plans(self) -> List[Dict[str, Any]]:
+    def get_all_known_plans(self) -> list[dict[str, Any]]:
         """Retorna la lista consolidada de todos los planes registrados (JSON + BD)."""
         planes_map, _, _ = self._load_mappings()
         result = []
@@ -565,7 +574,7 @@ class ETAReportManager:
                     [orden]
                 )
             conn.commit()
-    def get_configured_plans(self) -> List[Dict[str, Any]]:
+    def get_configured_plans(self) -> list[dict[str, Any]]:
         """Parametrizacion global de planes, lista para serializar.
 
         Los NaN pasan a None y la fecha a texto: la vista hacia esta limpieza
@@ -579,7 +588,7 @@ class ETAReportManager:
             df["updated_at"] = df["updated_at"].astype(str)
         return df.to_dict("records")
 
-    def get_config_page_data(self, periodo: Optional[str] = None) -> Dict[str, Any]:
+    def get_config_page_data(self, periodo: str | None = None) -> dict[str, Any]:
         """Todo lo que necesita la pagina de parametrizacion del reporte ETA.
 
         Calcular el reporte es lo que descubre los planes y suscripciones sin
@@ -593,8 +602,8 @@ class ETAReportManager:
         if not periodo and periodos_disponibles:
             periodo = periodos_disponibles[0]
 
-        unmapped_plans: List[Any] = []
-        unmapped_subs: List[Any] = []
+        unmapped_plans: list[Any] = []
+        unmapped_subs: list[Any] = []
         if periodo:
             report_data = self.calculate_eta_report(periodo, force_recalc=True)
             if report_data.get("status") == "unmapped_elements":

@@ -1,11 +1,13 @@
 from __future__ import annotations
-from typing import Any, Dict, Set
+
+from typing import Any
 
 import pandas as pd
 
 from core.config import INACTIVE_STATES, TableNames
 from core.database import DBConnector
 from core.models import Periodo
+
 from . import cleaner, dimensions, loader, metrics_calc, rules
 
 
@@ -49,7 +51,7 @@ class MetricsAnalyzer:
         )
         # Los cortes de un mes comparten fecha_inicio, asi que act_ini y
         # free_ini se calculan una sola vez para los 31 dias.
-        self._state_cache: Dict[Any, Any] = {}
+        self._state_cache: dict[Any, Any] = {}
         self._inactivos_cache = None
 
     def _state_at(self, target_date, estado_getter, strictly_before: bool):
@@ -99,7 +101,7 @@ class MetricsAnalyzer:
             candidates=getattr(self, "_corte_cand", None),
         )
 
-    def _compute(self, periodo: Periodo) -> Dict[str, Any]:
+    def _compute(self, periodo: Periodo) -> dict[str, Any]:
         """Calcula todas las metricas de un corte SIN escribir en la base.
 
         Separar el calculo de la persistencia permite recorrer los 31 dias de
@@ -117,15 +119,15 @@ class MetricsAnalyzer:
             & self.df_subs_full["orden"].isin(self._ordens_con_activity)
         ].copy()
 
-        set_ini: Set[str] = set(act_ini["orden"])
-        set_fin: Set[str] = set(act_fin["orden"])
-        set_nue: Set[str] = set(nuevos["orden"])
+        set_ini: set[str] = set(act_ini["orden"])
+        set_fin: set[str] = set(act_fin["orden"])
+        set_nue: set[str] = set(nuevos["orden"])
 
         # Clientes archivados: siguen en servicio gratuito, no son activos ni bajas.
         free_ini = self.get_free_at(periodo.fecha_inicio, strictly_before=True)
         free_fin = self.get_free_at(periodo.fecha_final, strictly_before=False)
-        set_free_ini: Set[str] = set(free_ini["orden"]) if not free_ini.empty else set()
-        set_free_fin: Set[str] = set(free_fin["orden"]) if not free_fin.empty else set()
+        set_free_ini: set[str] = set(free_ini["orden"]) if not free_ini.empty else set()
+        set_free_fin: set[str] = set(free_fin["orden"]) if not free_fin.empty else set()
         # Salidas hacia el servicio gratuito: no son bajas.
         set_free_periodo = (set_ini | set_nue) & set_free_fin
         n_free_periodo = len(set_free_periodo)
@@ -256,7 +258,7 @@ class MetricsAnalyzer:
         self._apply_log_rules()
         return self.persist(self._compute(self.periodo))
 
-    def persist(self, c: Dict[str, Any]):
+    def persist(self, c: dict[str, Any]):
         """Escribe en la base el resultado de `_compute` (comportamiento historico)."""
         periodo_label = c["periodo_label"]
         summary = c["summary"]

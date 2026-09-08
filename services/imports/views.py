@@ -1,30 +1,33 @@
 import json
 import logging
 
-from django.shortcuts import redirect, render
-from inertia import render as render_inertia
-from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
+from inertia import render as render_inertia
 
+from core.database import DBConnector
+from core.models import Periodo
+from core.utils import capture_console
 from services.config.decorators import deny, permission_required, permissions_all_required
 from services.config.uploads import cleanup_tempfile, handle_csv_upload
+from services.crm.analytics import import_crm_csv, run_crm_analysis
+from services.crm.analytics.config import REQUIRED_CRM_HEADERS
 from services.subscriptions.analytics import (
-    import_subscriptions_csv, import_logs_csv, import_gratis_csv, MetricsAnalyzer,
+    MetricsAnalyzer,
     build_day_metrics,
+    import_gratis_csv,
+    import_logs_csv,
+    import_subscriptions_csv,
 )
 from services.subscriptions.analytics.config import REQUIRED_LOGS_HEADERS, REQUIRED_SUBS_HEADERS
 from services.subscriptions.analytics.free_plans import REQUIRED_GRATIS_HEADERS
-from services.crm.analytics import import_crm_csv, run_crm_analysis
-from services.crm.analytics.config import REQUIRED_CRM_HEADERS
-from core.database import DBConnector
-from core.models import Periodo
 from services.support.analytics import import_support_csv, run_support_analysis
 from services.support.analytics.config import REQUIRED_SUPPORT_HEADERS
-from core.utils import capture_console
-from .models import ImportActionLog
 
+from .models import ImportActionLog
 
 logger = logging.getLogger(__name__)
 

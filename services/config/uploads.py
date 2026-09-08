@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-from typing import Optional, Tuple
 
 from django.conf import settings
 from django.http import JsonResponse
@@ -21,7 +20,7 @@ from django.http import JsonResponse
 from core.utils import validate_csv_structure
 
 
-def cleanup_tempfile(tmp_path: Optional[str]) -> None:
+def cleanup_tempfile(tmp_path: str | None) -> None:
     """Borra el temporal, ignorando que ya no exista."""
     if tmp_path:
         try:
@@ -30,7 +29,7 @@ def cleanup_tempfile(tmp_path: Optional[str]) -> None:
             pass
 
 
-def handle_csv_upload(request, required_headers=None) -> Tuple[Optional[str], Optional[JsonResponse]]:
+def handle_csv_upload(request, required_headers=None) -> tuple[str | None, JsonResponse | None]:
     """Vuelca el CSV subido a un temporal y valida su estructura.
 
     Devuelve `(ruta, None)` si todo fue bien, o `(None, respuesta_de_error)`

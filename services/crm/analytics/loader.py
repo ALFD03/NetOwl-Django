@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 import unicodedata
+from collections.abc import Iterator
+
 import pandas as pd
-from typing import Iterator, Tuple
-from core.database import DBConnector
+
 from core.config import ACTIVO_FALSE_TOKENS, ACTIVO_TRUE_TOKENS, DB_SCHEMA, TableNames
-from .config import CSV_COLUMN_MAP, CLIENT_FIELDS, LOG_FIELDS, ETAPA_MAP, GANADO_STATES
+from core.database import DBConnector
+
+from .config import CLIENT_FIELDS, CSV_COLUMN_MAP, ETAPA_MAP, GANADO_STATES
 
 
 def normalize_col(col: str) -> str:
@@ -80,7 +84,7 @@ def map_stage_canonically(stage_value: any) -> str:
     return "desconocido"
 
 
-def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> Tuple[pd.DataFrame, pd.DataFrame, str | None]:
+def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame, str | None]:
     df = df.rename(columns=CSV_COLUMN_MAP)
     df.columns = [normalize_col(c) for c in df.columns]
     
@@ -166,7 +170,7 @@ def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> Tup
     return df_clients, df_logs, last_valid_id
 
 
-def import_crm_csv(csv_path: str) -> Tuple[int, int]:
+def import_crm_csv(csv_path: str) -> tuple[int, int]:
     db = DBConnector()
     total_clients = 0
     total_logs = 0

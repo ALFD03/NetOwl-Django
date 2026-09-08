@@ -4,20 +4,18 @@ Los endpoints de importacion y de lanzamiento de analisis viven en la app
 `imports`, que es su unica duena.
 """
 
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from inertia import render as render_inertia
 
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
-from services.config.decorators import permission_required
-
-from services.crm.analytics import (
-    get_crm_periodos,
-    get_crm_cierre_historico,
-    get_crm_metric_totals,
-    get_crm_dimensiones,
-)
 from core.utils import clean_json_props
-
+from services.config.decorators import permission_required
+from services.crm.analytics import (
+    get_crm_cierre_historico,
+    get_crm_dimensiones,
+    get_crm_metric_totals,
+    get_crm_periodos,
+)
 
 # --- VISTAS INERTIA PROTEGIDAS ---
 

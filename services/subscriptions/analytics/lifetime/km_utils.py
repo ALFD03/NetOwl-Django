@@ -1,14 +1,17 @@
 from __future__ import annotations
-from typing import Any, Dict, List
+
+from typing import Any
+
 import pandas as pd
 from lifelines import KaplanMeierFitter
+
 
 def compute_km(
     durations: pd.Series,
     events: pd.Series,
     label: str = "",
     calculate_ci: bool = True,  # <-- Nuevo parámetro para evitar cálculos pesados de Greenwood
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if events.sum() == 0 or len(durations) < 2:
         return {
             "mediana": None, "p25": None, "p75": None,
@@ -26,7 +29,7 @@ def compute_km(
     # Solo calculamos intervalos de confianza de Greenwood si es requerido (ej. global)
     ci = kmf.confidence_interval_survival_function_ if calculate_ci else None
 
-    curve: List[Dict[str, Any]] = []
+    curve: list[dict[str, Any]] = []
     for t, row in sf.iterrows():
         t_int = int(t)
         s = float(row.iloc[0])

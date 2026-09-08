@@ -21,11 +21,12 @@ import calendar
 import json
 import logging
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.models import Periodo
+
 from .analyzer import MetricsAnalyzer
 from .analyzer import dimensions as dim_mod
 
@@ -56,7 +57,7 @@ def periodo_label_mes(year_month: str) -> str:
     return Periodo.build(f"{year_month}-01").label()
 
 
-def _payload_dia(c: Dict[str, Any], dim_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _payload_dia(c: dict[str, Any], dim_rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Arma el JSON de un dia: metricas globales + desgloses por dimension.
 
     `dimensiones` se mantiene como lista plana de `zona_sucursal` (la forma que
@@ -66,8 +67,8 @@ def _payload_dia(c: Dict[str, Any], dim_rows: List[Dict[str, Any]]) -> Dict[str,
     summary = dict(c["summary"])
     summary.pop("periodo", None)
 
-    plana: List[Dict[str, Any]] = []
-    por_dim: Dict[str, List[Dict[str, Any]]] = {d: [] for d in DIMENSIONES_ANALYTICS}
+    plana: list[dict[str, Any]] = []
+    por_dim: dict[str, list[dict[str, Any]]] = {d: [] for d in DIMENSIONES_ANALYTICS}
     for row in dim_rows:
         dim = row.get("dimension")
         limpia = {k: v for k, v in row.items() if k != "dimension"}
@@ -81,10 +82,10 @@ def _payload_dia(c: Dict[str, Any], dim_rows: List[Dict[str, Any]]) -> Dict[str,
 
 def build_day_metrics(
     year_month: str,
-    db: Optional[DBConnector] = None,
-    hasta_dia: Optional[int] = None,
-    analyzer: Optional[MetricsAnalyzer] = None,
-) -> Dict[str, Any]:
+    db: DBConnector | None = None,
+    hasta_dia: int | None = None,
+    analyzer: MetricsAnalyzer | None = None,
+) -> dict[str, Any]:
     """Calcula y guarda las metricas de cada dia del mes.
 
     Recorre los dias reutilizando una unica carga de datos: el coste dominante
@@ -111,7 +112,7 @@ def build_day_metrics(
         analyzer.build_clean_data()
         analyzer._apply_log_rules()
 
-    pendientes: Dict[str, Any] = {}
+    pendientes: dict[str, Any] = {}
     activos_inicio = 0
     label = periodo_label_mes(year_month)
 
@@ -168,7 +169,7 @@ def _tabla_existe(db: DBConnector) -> bool:
         return False
 
 
-def get_day_metrics(year_month: str) -> Dict[str, Any]:
+def get_day_metrics(year_month: str) -> dict[str, Any]:
     """Devuelve el mes completo: {activos_inicio, dias: {1: {...}, ...}}."""
     if not year_month:
         return {}
@@ -191,7 +192,7 @@ def get_day_metrics(year_month: str) -> Dict[str, Any]:
         return {}
 
     row = df.iloc[0]
-    dias: Dict[str, Any] = {}
+    dias: dict[str, Any] = {}
     for idx, col in enumerate(DAY_COLUMNS, start=1):
         raw = row.get(col)
         if raw in (None, "", "None"):
@@ -209,7 +210,7 @@ def get_day_metrics(year_month: str) -> Dict[str, Any]:
     }
 
 
-def get_periodos_con_dias() -> List[str]:
+def get_periodos_con_dias() -> list[str]:
     """Meses (YYYY-MM) que ya tienen metricas diarias calculadas."""
     db = DBConnector()
     if not _tabla_existe(db):

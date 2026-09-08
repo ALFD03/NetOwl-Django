@@ -1,16 +1,18 @@
 # NetOwl-Django/frontend/config/views.py
 
 import json
-from django.shortcuts import render, redirect
+
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.shortcuts import redirect
 from django.views.decorators.csrf import ensure_csrf_cookie
-from .decorators import permission_required, resolve_landing_url
-from .models import PERMISSION_FIELDS, Profile, PermissionGroup, default_permissions
+from django.views.decorators.http import require_POST
 from inertia import render as render_inertia
+
+from .decorators import permission_required, resolve_landing_url
+from .models import PERMISSION_FIELDS, PermissionGroup, Profile, default_permissions
 
 
 def serialize_permissions(target):

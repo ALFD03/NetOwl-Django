@@ -1,8 +1,9 @@
 # --- START OF FILE NetOwl-Django/frontend/config/decorators.py ---
+from functools import wraps
+
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
-from functools import wraps
 
 # Paginas de aterrizaje ordenadas por prioridad: (nombre de ruta, permisos que
 # exige la vista). Cuando se le niega el acceso a un usuario, se le envia a la

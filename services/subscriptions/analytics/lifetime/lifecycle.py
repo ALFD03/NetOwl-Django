@@ -1,7 +1,11 @@
 from __future__ import annotations
-from typing import Any, Dict, List
+
+from typing import Any
+
 import pandas as pd
+
 from core.config import ACTIVE_STATE, INACTIVE_STATES
+
 from .km_utils import compute_km
 
 RELEVANT_STATES = {ACTIVE_STATE} | INACTIVE_STATES
@@ -28,11 +32,11 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
     fdays_arr = relevant["f_days"].to_numpy()
 
     # Agrupamos en estructura nativa
-    grouped_events: Dict[str, List[tuple[str, float]]] = {}
+    grouped_events: dict[str, list[tuple[str, float]]] = {}
     for i in range(len(orden_arr)):
         grouped_events.setdefault(orden_arr[i], []).append((estado_arr[i], fdays_arr[i]))
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     for orden, events in grouped_events.items():
         f_ini = f_ini_map.get(orden)
@@ -111,8 +115,8 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
     df_res.drop(columns=["f_inicio_days", "f_fin_days"], inplace=True)
     return df_res
 
-def compute_metrics(periods: pd.DataFrame) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
+def compute_metrics(periods: pd.DataFrame) -> dict[str, Any]:
+    result: dict[str, Any] = {}
 
     first_active = (
         periods[periods["tipo"] == "activo"]

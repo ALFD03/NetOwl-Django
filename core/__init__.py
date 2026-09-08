@@ -7,9 +7,14 @@ siempre en el otro sentido.
 """
 
 from .config import (
-    DB_SCHEMA, DATE_FORMATS, ACTIVE_STATE, EXCLUDED_STATE,
-    VALID_REACT_ORIGINS, CORTE_IMPAGADO_EVENT,
-    SUBS_STATE_TO_LOG_MAP, TableNames,
+    ACTIVE_STATE,
+    CORTE_IMPAGADO_EVENT,
+    DATE_FORMATS,
+    DB_SCHEMA,
+    EXCLUDED_STATE,
+    SUBS_STATE_TO_LOG_MAP,
+    VALID_REACT_ORIGINS,
+    TableNames,
 )
 from .database import DBConnector
 from .models import Periodo

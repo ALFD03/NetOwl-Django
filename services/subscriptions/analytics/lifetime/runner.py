@@ -1,13 +1,19 @@
 from __future__ import annotations
+
 import json
-from typing import Any, Dict
+from typing import Any
+
 import pandas as pd
+
 from core.config import TableNames
 from core.database import DBConnector
-from . import lifecycle, dimensions as dim_module
-from .loader import load_data, build_clean_logs
 
-def run_lifecycle_analysis(db=None) -> Dict[str, Any]:
+from . import dimensions as dim_module
+from . import lifecycle
+from .loader import build_clean_logs, load_data
+
+
+def run_lifecycle_analysis(db=None) -> dict[str, Any]:
     if db is None:
         db = DBConnector()
     subs, l1, l2 = load_data(db)
@@ -21,7 +27,7 @@ def run_lifecycle_analysis(db=None) -> Dict[str, Any]:
             periods_out[col] = periods_out[col].astype(str)
         db.save_historico(periods_out, TableNames.LIFETIME_PERIODOS, "global", "lifetime")
 
-    metrics_flat: Dict[str, Any] = {}
+    metrics_flat: dict[str, Any] = {}
     for k, v in metrics.items():
         if k in ("curva_activo", "curva_reactivacion"):
             continue
@@ -38,7 +44,7 @@ def run_lifecycle_analysis(db=None) -> Dict[str, Any]:
     if not dim_df.empty:
         db.save_historico(dim_df, TableNames.LIFETIME_DIMENSIONES, "global", "lifetime")
 
-    print(f"\nLIFECYCLE ANALYSIS COMPLETE")
+    print("\nLIFECYCLE ANALYSIS COMPLETE")
     print(f"  Suscriptores analizados: {metrics.get('suscriptores_totales', 0)}")
     print(f"  Nunca inactivos: {metrics.get('suscriptores_nunca_inactivos', 0)}")
     print(f"  Periodos activo registrados: {len(periods[periods['tipo']=='activo']) if not periods.empty else 0}")

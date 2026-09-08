@@ -37,8 +37,8 @@ function TechnologyBadge({ node }: { node: BusinessUnitNode }) {
 
 function FtthConsolidated({ summary }: { summary: FtthSummary }) {
   const met = summary.tasaCumplimiento >= 100;
-  let ventasCumplimiento = (summary.nuevos / summary.objetivo) * 100
-  let cierreCumplimiento = (summary.activos_final / summary.cierreEsperado) * 100
+  const ventasCumplimiento = (summary.nuevos / summary.objetivo) * 100
+  const cierreCumplimiento = (summary.activos_final / summary.cierreEsperado) * 100
 
   return (
     <div className="mb-10">

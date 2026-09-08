@@ -1,9 +1,8 @@
 from __future__ import annotations
-from typing import Dict, List
+
 import pandas as pd
+
 from core.config import DIMS, TableNames
-
-
 
 
 def prepare_subs_dims(db, df_subs_full=None):
@@ -58,7 +57,7 @@ def aggregate_dimensions(
         for o in ["6_churn", "8_30days", "4_paused"]
     }
 
-    all_rows: List[Dict] = []
+    all_rows: list[dict] = []
     ini_ordens = set(act_ini["orden"].astype(str).str.strip().to_numpy()) if not act_ini.empty else set()
 
     for dim in dims_pedidas:

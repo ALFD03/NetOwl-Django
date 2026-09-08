@@ -6,26 +6,30 @@ lanzamiento de analisis, en la app `imports`, que es su unica duena.
 
 import logging
 
-from inertia import render as render_inertia
-
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
-from django.contrib.auth.decorators import login_required
-from services.config.decorators import permission_required
+from inertia import render as render_inertia
 
+from services.config.decorators import permission_required
 from services.subscriptions.analytics import (
-    get_cierre_churn, get_dimensiones, get_periodos,
-    get_dashboard_data, get_analytics_data,
-    get_sales_report_data,
-    get_business_units_data, get_zonas_config,
+    get_analytics_data,
+    get_business_units_data,
+    get_cierre_churn,
+    get_dashboard_data,
     get_day_metrics,
+    get_dimensiones,
+    get_periodos,
+    get_sales_report_data,
+    get_zonas_config,
 )
 from services.subscriptions.analytics.lifetime import (
-    run_lifecycle_analysis, get_lifecycle_results, get_lifetime_dimensiones,
+    get_lifecycle_results,
+    get_lifetime_dimensiones,
+    run_lifecycle_analysis,
 )
 from services.subscriptions.analytics.lifetime.queries import get_survival_report
-from core.utils import clean_json_props
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,13 @@
 from __future__ import annotations
+
+from typing import Any
+
 import pandas as pd
-from typing import Any, Dict, List
+
 from ..config import (
+    ETAPA8_KEY,
     ETAPA_FLUJO,
     ETAPA_ORDER,
-    ETAPA8_KEY,
     ETAPAS_CLAVE_VENTAS,
     ETAPAS_SIN_ESPERA,
     TIEMPO_ETAPA_MIN_DURACION_H,
@@ -14,7 +17,7 @@ from ..config import (
 )
 
 
-def _compute_stats_distribution(series: pd.Series) -> Dict[str, float]:
+def _compute_stats_distribution(series: pd.Series) -> dict[str, float]:
     s = series.dropna()
     s = s[s >= 0]
     n = len(s)
@@ -63,7 +66,7 @@ def _duracion_total(df: pd.DataFrame) -> pd.Series:
 def compute_tiempos_cierre(
     df_ganados: pd.DataFrame,
     df_perdidos: pd.DataFrame
-) -> Dict[str, Dict[str, float]]:
+) -> dict[str, dict[str, float]]:
     """Las tres distribuciones de duración de una cohorte.
 
     `cierre` es el universo cerrado —ganados y perdidos juntos—, no el promedio
@@ -125,7 +128,7 @@ def _clasificar_movimiento(origen: str, destino: Any) -> str:
     return "avance" if i_destino > i_origen else "retorno"
 
 
-def _stats_desenlace(group: pd.DataFrame, sentido: str, total: int) -> Dict[str, float]:
+def _stats_desenlace(group: pd.DataFrame, sentido: str, total: int) -> dict[str, float]:
     """Promedio, mediana y peso de un desenlace dentro de una etapa."""
     sub = group.loc[group["sentido"] == sentido, "duracion_horas"]
     n = len(sub)
@@ -237,7 +240,7 @@ def compute_permanencias_en_etapa(
     return out[out["horas"].notna() & (out["horas"] >= 0)].reset_index(drop=True)
 
 
-def _stats_permanencia(sub: pd.DataFrame) -> Dict[str, Any]:
+def _stats_permanencia(sub: pd.DataFrame) -> dict[str, Any]:
     """Las estancias sin salida de una etapa, abiertas y cerradas por separado."""
     n = len(sub)
     if n == 0:
@@ -276,7 +279,7 @@ def _stats_combinado(
     salidas: pd.Series,
     permanencias: pd.Series,
     corte_iso: str | None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Salidas y estancias en curso juntas: la cifra sin sesgo de supervivencia.
 
     Es la respuesta a "cuánto tarda esta etapa" que no deja fuera lo lento por
@@ -344,7 +347,7 @@ def compute_tiempo_por_etapa(
     df_logs: pd.DataFrame,
     df_permanencias: pd.DataFrame | None = None,
     ahora: pd.Timestamp | None = None,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Cuánto tarda una oportunidad en salir de cada etapa.
 
     La cifra principal es la media simple de las salidas de la etapa: la suma de
@@ -389,7 +392,7 @@ def compute_tiempo_por_etapa(
     etapas_medibles = [e for e in ETAPA_ORDER if e not in ETAPAS_SIN_ESPERA]
 
     df_valid = pd.DataFrame()
-    n_nulos_por_etapa: Dict[str, int] = {}
+    n_nulos_por_etapa: dict[str, int] = {}
     if not df_logs.empty and "duracion_horas" in df_logs.columns:
         df = _deduplicar_movimientos(df_logs)
 

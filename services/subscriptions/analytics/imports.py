@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 from psycopg2 import sql
@@ -6,6 +7,7 @@ from psycopg2 import sql
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import plan_names
+
 from .config import SUBS_ACTIVO_ALIASES, SUBS_COLUMN_MAPPING
 
 SUBSCRIPTIONS_COLUMN_MAPPING = {**SUBS_COLUMN_MAPPING, **SUBS_ACTIVO_ALIASES}

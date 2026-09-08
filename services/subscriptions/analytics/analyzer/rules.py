@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import Set
+
 import pandas as pd
+
 from core.config import (
     ACTIVE_STATE,
     ARCHIVED_EVENT,
@@ -10,7 +11,6 @@ from core.config import (
     INACTIVE_STATES,
     UNARCHIVED_EVENT,
 )
-
 
 SYNTH_COLS = ["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]
 
@@ -23,7 +23,7 @@ def _flag_archivado(df_subs_full: pd.DataFrame) -> pd.Series:
 
 
 def build_free_synth_logs(
-    df_free_meta: pd.DataFrame, df_subs_full: pd.DataFrame, ordenes_con_log_archivada: Set[str]
+    df_free_meta: pd.DataFrame, df_subs_full: pd.DataFrame, ordenes_con_log_archivada: set[str]
 ) -> pd.DataFrame:
     """
     Log sintetico de paso a plan gratuito para las suscripciones archivadas que
@@ -100,7 +100,7 @@ def apply_archived_overlay(df_logs: pd.DataFrame) -> pd.DataFrame:
     return df_logs
 
 
-def _ordenes_siempre_gratis(df_subs_full: pd.DataFrame, df_free_meta) -> Set[str]:
+def _ordenes_siempre_gratis(df_subs_full: pd.DataFrame, df_free_meta) -> set[str]:
     """
     Archivadas que nunca llegaron a ser clientes de pago: no deben nacer como
     activas ni contarse como altas del mes en que se dieron de alta.

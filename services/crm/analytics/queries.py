@@ -1,7 +1,7 @@
 from __future__ import annotations
+
 import logging
-from typing import Any, Dict, List, Optional
-import pandas as pd
+from typing import Any
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
@@ -10,7 +10,7 @@ from core.utils import parse_jsonb
 logger = logging.getLogger(__name__)
 
 
-def get_crm_periodos() -> List[str]:
+def get_crm_periodos() -> list[str]:
     db = DBConnector()
     try:
         df = db.query(f"SELECT DISTINCT periodo_reporte FROM {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ORDER BY periodo_reporte DESC")
@@ -22,7 +22,7 @@ def get_crm_periodos() -> List[str]:
         return []
 
 
-def get_crm_cierre_historico(periodos: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+def get_crm_cierre_historico(periodos: list[str] | None = None) -> list[dict[str, Any]]:
     db = DBConnector()
     try:
         where_clause = ""
@@ -55,7 +55,7 @@ def get_crm_cierre_historico(periodos: Optional[List[str]] = None) -> List[Dict[
         return []
 
 
-def get_crm_metric_totals(periodo: Optional[str] = None) -> Dict[str, Any]:
+def get_crm_metric_totals(periodo: str | None = None) -> dict[str, Any]:
     db = DBConnector()
     try:
         df_mg = db.query(f"SELECT resumen_global, tiempo_por_etapa, efectividad FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
@@ -94,9 +94,9 @@ def get_crm_metric_totals(periodo: Optional[str] = None) -> Dict[str, Any]:
 
 
 def get_crm_dimensiones(
-    periodos: Optional[List[str]] = None,
-    dimension: Optional[str] = None
-) -> List[Dict[str, Any]]:
+    periodos: list[str] | None = None,
+    dimension: str | None = None
+) -> list[dict[str, Any]]:
     db = DBConnector()
     try:
         clauses = []

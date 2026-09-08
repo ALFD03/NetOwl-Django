@@ -1,8 +1,8 @@
 from __future__ import annotations
+
 import calendar
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from .utils import parse_date
 
@@ -14,7 +14,7 @@ class Periodo:
     fecha_final: datetime
 
     @classmethod
-    def build(cls, ini_text: str, fin_text: Optional[str] = None) -> "Periodo":
+    def build(cls, ini_text: str, fin_text: str | None = None) -> Periodo:
         inicio = parse_date(ini_text)
         if inicio is None:
             raise ValueError(f"Fecha inicio inválida: {ini_text}")

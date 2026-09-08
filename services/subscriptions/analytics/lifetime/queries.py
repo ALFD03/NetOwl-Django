@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import json
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
+
 from core.config import TableNames
 from core.database import DBConnector
 from core.utils import clean_json_nullable
@@ -9,7 +11,7 @@ from core.utils import clean_json_nullable
 logger = logging.getLogger(__name__)
 
 
-def get_lifecycle_results(db=None) -> Dict[str, Any]:
+def get_lifecycle_results(db=None) -> dict[str, Any]:
     if db is None:
         db = DBConnector()
     try:
@@ -26,12 +28,12 @@ def get_lifecycle_results(db=None) -> Dict[str, Any]:
                 key = col.replace("_json", "")
                 try:
                     result[key] = json.loads(val) if val else []
-                except:
+                except (json.JSONDecodeError, TypeError):
                     result[key] = []
             elif col == "ciclos_por_suscriptor":
                 try:
                     result[col] = json.loads(val) if val else {}
-                except:
+                except (json.JSONDecodeError, TypeError):
                     result[col] = {}
             elif col in ("periodo_reporte", "metodo_calculo"):
                 continue
@@ -42,7 +44,7 @@ def get_lifecycle_results(db=None) -> Dict[str, Any]:
         logger.exception("Error en query de lifecycle results")
         return {}
 
-def get_lifetime_dimensiones(dim: Optional[str] = None, db=None) -> Dict[str, Any]:
+def get_lifetime_dimensiones(dim: str | None = None, db=None) -> dict[str, Any]:
     if db is None:
         db = DBConnector()
     try:
@@ -89,7 +91,7 @@ DIMENSION_ALIASES = {
 }
 
 
-def get_survival_curves_by_dimension(dim: Optional[str]) -> Dict[str, Dict[str, Any]]:
+def get_survival_curves_by_dimension(dim: str | None) -> dict[str, dict[str, Any]]:
     """Curvas de supervivencia agrupadas por valor de una dimension.
 
     Aplana el resultado de `get_lifetime_dimensiones` a la forma que consume el
@@ -97,7 +99,7 @@ def get_survival_curves_by_dimension(dim: Optional[str]) -> Dict[str, Dict[str, 
     Los valores sin curva no se incluyen. Una dimension desconocida devuelve la
     estructura vacia en vez de fallar.
     """
-    vacio: Dict[str, Dict[str, Any]] = {"activo": {}, "reactivacion": {}}
+    vacio: dict[str, dict[str, Any]] = {"activo": {}, "reactivacion": {}}
     db_dim = DIMENSION_ALIASES.get(dim or "")
     if not db_dim:
         return vacio
@@ -118,7 +120,7 @@ def get_survival_curves_by_dimension(dim: Optional[str]) -> Dict[str, Dict[str, 
     return curvas
 
 
-def get_survival_report(dim: Optional[str] = None) -> Dict[str, Any]:
+def get_survival_report(dim: str | None = None) -> dict[str, Any]:
     """Payload completo de la pagina de supervivencia.
 
     Reune la curva global, sus estadisticos y, si se pide, el desglose por

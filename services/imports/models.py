@@ -1,6 +1,8 @@
-from django.db import models
 from django.contrib.auth.models import User
-from core.config import DB_SCHEMA 
+from django.db import models
+
+from core.config import DB_SCHEMA
+
 
 class ImportActionLog(models.Model):
     MODULE_CHOICES = [

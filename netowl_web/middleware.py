@@ -4,6 +4,7 @@ from django_ratelimit.exceptions import Ratelimited
 
 from services.config.models import PERMISSION_FIELDS
 
+
 class RateLimitMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

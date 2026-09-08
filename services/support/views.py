@@ -4,6 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from inertia import render as render_inertia
 
+from core.utils import clean_json_props
+from services.config.decorators import permission_required
 from services.support.analytics.queries import (
     get_support_analytics_structured,
     get_support_breakdown,
@@ -12,9 +14,6 @@ from services.support.analytics.queries import (
     get_support_periodos,
     get_support_tickets_list,
 )
-from core.utils import clean_json_props
-from services.config.decorators import permission_required
-
 
 # --- VISTAS INERTIA PROTEGIDAS ---
 

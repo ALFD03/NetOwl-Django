@@ -392,7 +392,7 @@ export function SubscriptionForm({
           <div className="flex items-center gap-2 pt-2">
             <button
               type="button"
-              onClick={() => onChange({tiene_tv : !Boolean(value.tiene_tv)})}
+              onClick={() => onChange({tiene_tv : !value.tiene_tv})}
               className={[
                 'w-full p-4 rounded-2xl border cursor-pointer transition-all',
                 'flex flex-col justify-between text-left',

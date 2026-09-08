@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
 
@@ -18,7 +18,10 @@ from services.support.analytics.config import (
     SUPPORT_VOLUME_FIELDS,
     TIME_STATS,
 )
-from services.support.analytics.dimensions import build_dimension_rows, save_support_dimensiones_periodo
+from services.support.analytics.dimensions import (
+    build_dimension_rows,
+    save_support_dimensiones_periodo,
+)
 from services.support.analytics.loader import ensure_support_schema
 from services.support.analytics.metrics import compute_metrics_for_period
 
@@ -82,7 +85,7 @@ def _mean_of(df: pd.DataFrame, field: str, mask_field: str | None = None) -> flo
     return round(float(serie.mean()), 2) if not serie.empty else 0.0
 
 
-def average_blocks(bloques: List[dict]) -> Dict[str, Any]:
+def average_blocks(bloques: list[dict]) -> dict[str, Any]:
     """
     Promedia varios bloques de periodo en uno solo.
 
@@ -94,7 +97,7 @@ def average_blocks(bloques: List[dict]) -> Dict[str, Any]:
         return {}
 
     df = pd.DataFrame(bloques)
-    avg: Dict[str, Any] = {field: _mean_of(df, field) for field in SUPPORT_VOLUME_FIELDS}
+    avg: dict[str, Any] = {field: _mean_of(df, field) for field in SUPPORT_VOLUME_FIELDS}
     avg.update({field: _mean_of(df, field) for field in SUPPORT_RATE_FIELDS})
 
     for medida, muestra in _TIME_MASKS.items():

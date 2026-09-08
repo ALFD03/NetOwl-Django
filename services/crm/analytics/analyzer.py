@@ -1,14 +1,18 @@
 from __future__ import annotations
+
 import json
 import logging
+
 import pandas as pd
-from core.database import DBConnector
+
 from core.config import DB_SCHEMA, TableNames
+from core.database import DBConnector
+
 from .config import ETAPA8_KEY
-from .metrics.core import compute_crm_metrics_for_period
-from .metrics.tiempo import compute_permanencias_en_etapa
 from .dimensions import save_crm_dimensiones_periodo
 from .loader import ensure_crm_schema
+from .metrics.core import compute_crm_metrics_for_period
+from .metrics.tiempo import compute_permanencias_en_etapa
 
 logger = logging.getLogger(__name__)
 

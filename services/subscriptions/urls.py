@@ -1,5 +1,6 @@
 """Enrutamiento URL para el modulo Subscriptions."""
 from django.urls import path
+
 from services.subscriptions import views, views_eta
 
 app_name = "subscriptions"

@@ -1,15 +1,19 @@
 from __future__ import annotations
+
 import json
-from typing import Any, Dict, List
+from typing import Any
+
 import pandas as pd
+
 from .km_utils import compute_km
 from .loader import DIMS
+
 
 def compute_dimension_metrics(subs: pd.DataFrame, periods: pd.DataFrame) -> pd.DataFrame:
     if periods.empty:
         return pd.DataFrame()
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     subs_dedup = subs.drop_duplicates(subset=["orden"]).copy()
 
     subs_dedup["zona"] = subs_dedup["zona"].fillna("Sin Zona").astype(str).str.strip()

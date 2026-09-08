@@ -47,11 +47,12 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 import pandas as pd
 
 from core.utils import normalize_text
+
 from ..config import (
     E8_IMPUTACION_MIN_MUESTRA,
     EFECTIVIDAD_REGLAS,
@@ -83,7 +84,7 @@ _COLUMNAS_CICLO = ("client_id", "forward_to", "desenlace", "culpable")
 _SIN_REGLA = object()
 
 
-def _fila_vacia(fila: str) -> Dict[str, Any]:
+def _fila_vacia(fila: str) -> dict[str, Any]:
     """Fila neutra: la etapa no registró ciclos ni pérdidas en el periodo."""
     return {
         "etapa": fila,
@@ -114,8 +115,8 @@ def _fila_vacia(fila: str) -> Dict[str, Any]:
 
 def _preparar_historial(
     df_periodo: pd.DataFrame,
-    df_historial: Optional[pd.DataFrame],
-) -> Optional[pd.DataFrame]:
+    df_historial: pd.DataFrame | None,
+) -> pd.DataFrame | None:
     """Ordena el historial y marca en `_en_periodo` las filas del periodo.
 
     `df_historial` debe traer las mismas oportunidades que `df_periodo` con
@@ -166,7 +167,7 @@ def _preparar_historial(
 
 def _clasificar_ciclos(
     hist: pd.DataFrame,
-    regla: Dict[str, Any],
+    regla: dict[str, Any],
     fila_devolucion: pd.Series,
 ) -> pd.DataFrame:
     """Un ciclo por cada salida hacia adelante ocurrida en el periodo.
@@ -203,19 +204,19 @@ def _clasificar_ciclos(
 
 # --- Motivos ----------------------------------------------------------------
 
-def _tabla_motivos(reglas: List[Dict[str, Any]], clave_fila: str) -> Dict[str, str]:
+def _tabla_motivos(reglas: list[dict[str, Any]], clave_fila: str) -> dict[str, str]:
     """Aplana un catálogo de motivos a `motivo normalizado -> fila`."""
-    tabla: Dict[str, str] = {}
+    tabla: dict[str, str] = {}
     for regla in reglas:
         for motivo in regla["motivos"]:
             tabla.setdefault(normalize_text(motivo), regla[clave_fila])
     return tabla
 
 
-def _reglas_devolucion() -> Tuple[List[str], Dict[str, Dict[str, Any]]]:
+def _reglas_devolucion() -> tuple[list[str], dict[str, dict[str, Any]]]:
     """Orden de prioridad y motivos aceptados por cada etapa."""
-    orden: List[str] = []
-    por_etapa: Dict[str, Dict[str, Any]] = defaultdict(dict)
+    orden: list[str] = []
+    por_etapa: dict[str, dict[str, Any]] = defaultdict(dict)
     for regla in ETAPA8_ATRIBUCION:
         etapa = regla["etapa"]
         if etapa not in orden:
@@ -225,7 +226,7 @@ def _reglas_devolucion() -> Tuple[List[str], Dict[str, Dict[str, Any]]]:
     return orden, por_etapa
 
 
-def _atribuible(etapa: str, motivo: str, destino: Any, reglas: Dict[str, Dict[str, Any]]) -> bool:
+def _atribuible(etapa: str, motivo: str, destino: Any, reglas: dict[str, dict[str, Any]]) -> bool:
     """¿La etapa responde por esta devolución?"""
     requerido = reglas.get(etapa, {}).get(motivo, _SIN_REGLA)
     if requerido is _SIN_REGLA:
@@ -239,7 +240,7 @@ def _atribuible(etapa: str, motivo: str, destino: Any, reglas: Dict[str, Dict[st
 
 # --- Atribución de pérdidas -------------------------------------------------
 
-def atribuir_perdidas(df_perdidas: Optional[pd.DataFrame]) -> Dict[str, Optional[str]]:
+def atribuir_perdidas(df_perdidas: pd.DataFrame | None) -> dict[str, str | None]:
     """Decide qué fila paga cada oportunidad perdida.
 
     Devuelve `client_id -> fila` (o `None` cuando la pérdida no es imputable).
@@ -258,10 +259,10 @@ def atribuir_perdidas(df_perdidas: Optional[pd.DataFrame]) -> Dict[str, Optional
     col_perdida = "motivo_perdida" if "motivo_perdida" in columnas else None
     col_devolucion = "devolver_oportunidad" if "devolver_oportunidad" in columnas else None
 
-    atribucion: Dict[str, Optional[str]] = {}
+    atribucion: dict[str, str | None] = {}
     for row in df_perdidas.itertuples(index=False):
-        cid = str(getattr(row, "id"))
-        etapa = getattr(row, "etapa_actual")
+        cid = str(row.id)
+        etapa = row.etapa_actual
 
         if etapa not in PERDIDA_POR_MOTIVO_ETAPAS:
             atribucion[cid] = PERDIDA_ATRIBUCION_POR_ETAPA.get(etapa, ETAPA8_ATRIBUCION_FALLBACK)
@@ -287,19 +288,19 @@ def atribuir_perdidas(df_perdidas: Optional[pd.DataFrame]) -> Dict[str, Optional
 
 # --- Atribución de devoluciones --------------------------------------------
 
-def _destinos_de_avance(hist: pd.DataFrame) -> Dict[Tuple[str, str], str]:
+def _destinos_de_avance(hist: pd.DataFrame) -> dict[tuple[str, str], str]:
     """`(cliente, etapa) -> primer destino al que la etapa lo mandó`.
 
     Es lo que comparan las reglas de ETAPA8_ATRIBUCION: un motivo técnico sólo
     es culpa de factibilidad si fue factibilidad quien mandó al cliente adelante.
     """
-    destinos: Dict[Tuple[str, str], str] = {}
+    destinos: dict[tuple[str, str], str] = {}
     for cid, etapa, destino in zip(hist["client_id"], hist["etapa_anterior"], hist["nueva_etapa"]):
         destinos.setdefault((str(cid), etapa), destino)
     return destinos
 
 
-def atribuir_devoluciones(hist: pd.DataFrame, etapa_actual: Dict[str, str]) -> pd.Series:
+def atribuir_devoluciones(hist: pd.DataFrame, etapa_actual: dict[str, str]) -> pd.Series:
     """Fila responsable de cada devolución a la etapa 8, alineada con `hist`.
 
     Sólo las devoluciones cuya oportunidad sigue en la etapa 8 traen motivo
@@ -343,30 +344,30 @@ def atribuir_devoluciones(hist: pd.DataFrame, etapa_actual: Dict[str, str]) -> p
 
 # --- Cálculo principal ------------------------------------------------------
 
-def _columna_cliente(df: Optional[pd.DataFrame], col: str) -> Dict[str, str]:
+def _columna_cliente(df: pd.DataFrame | None, col: str) -> dict[str, str]:
     if df is None or df.empty or col not in df.columns or "id" not in df.columns:
         return {}
     return {str(cid): str(v) for cid, v in zip(df["id"], df[col])}
 
 
-def _solo_perdidos(df_clientes: Optional[pd.DataFrame]) -> pd.DataFrame:
+def _solo_perdidos(df_clientes: pd.DataFrame | None) -> pd.DataFrame:
     """Oportunidades hoy perdidas, con lo necesario para atribuirlas."""
     if df_clientes is None or df_clientes.empty or "ganado" not in df_clientes.columns:
         return pd.DataFrame()
     return df_clientes[df_clientes["ganado"] == "perdido"]
 
 
-def _destinos_penalizados(origenes: List[str]) -> Set[str]:
+def _destinos_penalizados(origenes: list[str]) -> set[str]:
     """Destinos cuyo retorno penaliza a la etapa que envió al cliente."""
     return {r["forward_to"] for r in RETORNO_ATRIBUCION if r["etapa"] in origenes}
 
 
 def compute_efectividad(
     df_periodo: pd.DataFrame,
-    df_historial: Optional[pd.DataFrame] = None,
-    df_clientes: Optional[pd.DataFrame] = None,
-    df_perdidas: Optional[pd.DataFrame] = None,
-) -> List[Dict[str, Any]]:
+    df_historial: pd.DataFrame | None = None,
+    df_clientes: pd.DataFrame | None = None,
+    df_perdidas: pd.DataFrame | None = None,
+) -> list[dict[str, Any]]:
     """Efectividad de cada fila de `EFECTIVIDAD_REGLAS` para un periodo.
 
     Argumentos:
@@ -378,7 +379,7 @@ def compute_efectividad(
 
     Devuelve siempre una fila por etapa, aunque no haya habido movimiento.
     """
-    perdidas_por_fila: Dict[str, Set[str]] = defaultdict(set)
+    perdidas_por_fila: dict[str, set[str]] = defaultdict(set)
     for cid, fila in atribuir_perdidas(df_perdidas).items():
         if fila is not None:
             perdidas_por_fila[fila].add(cid)
@@ -403,8 +404,8 @@ def compute_efectividad(
     perdidas_totales = atribuir_perdidas(_solo_perdidos(df_clientes))
     fila_devolucion = atribuir_devoluciones(hist, etapa_actual)
 
-    resultados: List[Dict[str, Any]] = []
-    sin_motivo_por_fila: Dict[str, int] = {}
+    resultados: list[dict[str, Any]] = []
+    sin_motivo_por_fila: dict[str, int] = {}
     for fila, regla in EFECTIVIDAD_REGLAS.items():
         r = _fila_vacia(fila)
         ciclos = _clasificar_ciclos(hist, regla, fila_devolucion)

@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pandas as pd
+
 from core.config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, FREE_STATE, VALID_REACT_ORIGINS
 
 

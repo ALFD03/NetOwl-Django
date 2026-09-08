@@ -17,7 +17,7 @@ import json
 import logging
 import pathlib
 from functools import lru_cache
-from typing import Any, Dict, FrozenSet, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +28,12 @@ PLANES_PATH = DATA_DIR / "Planes.json"
 ZONAS_PATH = DATA_DIR / "Zonas.json"
 
 
-def _read_json(path: pathlib.Path) -> Dict[str, Any]:
+def _read_json(path: pathlib.Path) -> dict[str, Any]:
     if not path.exists():
         logger.warning("No se encontro %s: se continua con datos vacios.", path.name)
         return {}
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         logger.exception("No se pudo leer %s: se continua con datos vacios.", path.name)
@@ -49,35 +49,35 @@ def zonas_disponibles() -> bool:
 
 
 @lru_cache(maxsize=1)
-def load_planes() -> Dict[str, Any]:
+def load_planes() -> dict[str, Any]:
     """Contenido crudo de `Planes.json` (`{"planes": [...]}`)."""
     return _read_json(PLANES_PATH)
 
 
 @lru_cache(maxsize=1)
-def load_zonas() -> Dict[str, Any]:
+def load_zonas() -> dict[str, Any]:
     """Contenido crudo de `Zonas.json` (`{"zonas": [...]}`)."""
     return _read_json(ZONAS_PATH)
 
 
 @lru_cache(maxsize=1)
-def planes() -> List[Dict[str, Any]]:
+def planes() -> list[dict[str, Any]]:
     return load_planes().get("planes", [])
 
 
 @lru_cache(maxsize=1)
-def zonas() -> List[Dict[str, Any]]:
+def zonas() -> list[dict[str, Any]]:
     return load_zonas().get("zonas", [])
 
 
 @lru_cache(maxsize=1)
-def plan_names() -> FrozenSet[str]:
+def plan_names() -> frozenset[str]:
     """Nombres de plan canonicos, para decidir si una linea de orden es un plan."""
     return frozenset(p["name"] for p in planes() if p.get("name"))
 
 
 @lru_cache(maxsize=1)
-def zonas_por_nombre() -> Dict[str, Dict[str, Any]]:
+def zonas_por_nombre() -> dict[str, dict[str, Any]]:
     """Zonas indexadas por nombre en minusculas.
 
     Las tres lecturas de `Zonas.json` que habia normalizaban la clave igual

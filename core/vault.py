@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import List
 
 import hvac
 from dotenv import load_dotenv
@@ -55,10 +54,10 @@ class DjangoModel(BaseModel):
     SECRET_KEY: str = Field(alias="DJANGO_SECRET_KEY")
     DEBUG: bool = Field(alias="DJANGO_DEBUG", default=False)
     SECURE_SSL: bool = Field(alias="DJANGO_SECURE_SSL", default=False)
-    ALLOWED_HOSTS: List[str]
+    ALLOWED_HOSTS: list[str]
     # Orígenes de confianza para CSRF. Ojo: aquí cada valor lleva esquema
     # (https://ejemplo.com), a diferencia de ALLOWED_HOSTS.
-    CSRF_TRUSTED_ORIGINS: List[str]
+    CSRF_TRUSTED_ORIGINS: list[str]
 
     @field_validator("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIGINS", mode="before")
     @classmethod

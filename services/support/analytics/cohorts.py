@@ -14,8 +14,9 @@ creado, siempre, porque es la única lectura que tiene sentido para cada uno.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any, Iterator, Tuple
+from typing import Any
 
 import pandas as pd
 
@@ -77,7 +78,7 @@ class PeriodCohort:
     periodo: str
     df: pd.DataFrame
 
-    def filter(self, columna: str, valor: Any) -> "PeriodCohort":
+    def filter(self, columna: str, valor: Any) -> PeriodCohort:
         """La misma cohorte restringida a las filas con `columna == valor`."""
         if self.df.empty or columna not in self.df.columns:
             return PeriodCohort(self.periodo, self.df.iloc[0:0])
@@ -89,7 +90,7 @@ class PeriodCohort:
             return []
         return sorted(str(v) for v in self.df[columna].dropna().unique())
 
-    def desglosar(self, columna: str) -> Iterator[Tuple[str, "PeriodCohort"]]:
+    def desglosar(self, columna: str) -> Iterator[tuple[str, PeriodCohort]]:
         """Itera (valor, sub-cohorte) por cada valor distinto de la columna."""
         for valor in self.valores(columna):
             yield valor, self.filter(columna, valor)

@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 import concurrent.futures
+
 from core.config import DB_SCHEMA, TableNames
+
 from ..free_plans import load_free_subs
 
 ACTIVE_FLAG_COL = "activo"

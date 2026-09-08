@@ -1,18 +1,20 @@
 from __future__ import annotations
+
 import csv
 import io
 import json
 import math
+from collections.abc import Iterable
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime
-from typing import Any, Iterable, Optional
+from typing import Any
 
 import pandas as pd
 
 from .config import DATE_FORMATS
 
 
-def parse_date(value: Any) -> Optional[datetime]:
+def parse_date(value: Any) -> datetime | None:
     if pd.isna(value):
         return None
     text = str(value).strip()
@@ -32,8 +34,8 @@ def normalize_text(value: Any) -> str:
     """
     if pd.isna(value) or value is None:
         return ""
-    import unicodedata
     import re
+    import unicodedata
     
     # 1. Minúsculas y limpieza de extremos
     text = str(value).strip().lower()
@@ -60,7 +62,7 @@ def validate_csv_structure(file_path: str, required_headers: Iterable[str], deli
     """
     try:
         # Abrimos con utf-8-sig para omitir automáticamente el BOM de Excel
-        with open(file_path, "r", encoding="utf-8-sig", errors="ignore") as f:
+        with open(file_path, encoding="utf-8-sig", errors="ignore") as f:
             # Leer solo los primeros 2048 bytes para analizar el formato sin cargar todo a memoria
             sample = f.read(2048)
             f.seek(0)

@@ -1,9 +1,13 @@
 from __future__ import annotations
+
 import json
 import logging
+
 import pandas as pd
-from core.database import DBConnector
+
 from core.config import DB_SCHEMA, TableNames
+from core.database import DBConnector
+
 from .config import DIMENSIONES
 from .metrics.core import compute_crm_metrics_for_period
 

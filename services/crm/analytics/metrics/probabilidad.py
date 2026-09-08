@@ -51,11 +51,12 @@ Invariantes del resultado:
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import pandas as pd
 
 from core.utils import normalize_text
+
 from ..config import (
     E8_IMPUTACION_MIN_MUESTRA,
     ETAPA8_EXCEPTION_MOTIVOS,
@@ -85,7 +86,7 @@ def _serie_normalizada(serie: pd.Series) -> pd.Series:
     return txt.replace(_VACIOS, _SIN_ESPECIFICAR)
 
 
-def compute_distribucion_perdidos(df_perdidos: pd.DataFrame) -> List[Dict[str, Any]]:
+def compute_distribucion_perdidos(df_perdidos: pd.DataFrame) -> list[dict[str, Any]]:
     if df_perdidos.empty or "motivo_perdida" not in df_perdidos.columns:
         return []
 
@@ -109,7 +110,7 @@ def compute_distribucion_perdidos(df_perdidos: pd.DataFrame) -> List[Dict[str, A
 def compute_distribucion_etapa8(
     df_logs_e8: pd.DataFrame,
     df_clients: pd.DataFrame
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Motivos de las oportunidades que se devolvieron en el periodo.
 
     `excepcion` marca los motivos que la probabilidad excluye por ser ajenos a
@@ -149,7 +150,7 @@ def compute_distribucion_etapa8(
 
 # --- Riesgo de devolución ---------------------------------------------------
 
-def _resultado_vacio(total: int) -> Dict[str, Any]:
+def _resultado_vacio(total: int) -> dict[str, Any]:
     """Periodo sin devoluciones: el riesgo es 0, no un hueco."""
     return {
         "total_en_riesgo": total,
@@ -167,9 +168,9 @@ def _resultado_vacio(total: int) -> Dict[str, Any]:
 
 
 def _tasas_de_gestion(
-    con_motivo: Dict[str, int],
-    de_gestion: Dict[str, int],
-) -> Tuple[Dict[str, float], float]:
+    con_motivo: dict[str, int],
+    de_gestion: dict[str, int],
+) -> tuple[dict[str, float], float]:
     """Tasa de devoluciones que sí son de gestión, por etapa de origen.
 
     Devuelve el mapa por origen y la tasa global de respaldo. Sin ninguna
@@ -190,7 +191,7 @@ def _tasas_de_gestion(
     return tasas, tasa_global
 
 
-def _mapas_de_cliente(df_clients: pd.DataFrame) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def _mapas_de_cliente(df_clients: pd.DataFrame) -> tuple[dict[str, Any], dict[str, Any]]:
     """`etapa_actual` y `devolver_oportunidad` por id, como texto comparable."""
     if df_clients is None or df_clients.empty or "id" not in df_clients.columns:
         return {}, {}
@@ -210,7 +211,7 @@ def compute_probabilidad_etapa8(
     df_en_riesgo: pd.DataFrame,
     df_logs_e8: pd.DataFrame,
     df_clients: pd.DataFrame,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Riesgo de caer a la etapa 8 durante el periodo.
 
     Argumentos:
@@ -245,9 +246,9 @@ def compute_probabilidad_etapa8(
     etapa_actual, motivo_por_cliente = _mapas_de_cliente(df_clients)
 
     excepciones = _motivos_excepcion()
-    con_motivo: Dict[str, int] = defaultdict(int)
-    de_gestion: Dict[str, int] = defaultdict(int)
-    sin_motivo: Dict[str, int] = defaultdict(int)
+    con_motivo: dict[str, int] = defaultdict(int)
+    de_gestion: dict[str, int] = defaultdict(int)
+    sin_motivo: dict[str, int] = defaultdict(int)
 
     origenes = (
         sub["etapa_anterior"] if "etapa_anterior" in sub.columns

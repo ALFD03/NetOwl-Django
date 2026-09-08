@@ -1,6 +1,6 @@
 """Enrutamiento principal público del proyecto netowl_web."""
-from django.urls import include, path
 from django.shortcuts import redirect
+from django.urls import include, path
 
 from services.config.decorators import resolve_landing_url
 

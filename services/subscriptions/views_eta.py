@@ -10,16 +10,15 @@ no cambian: `urls.py` sigue exponiendo los mismos nombres.
 import json
 import logging
 
-from inertia import render as render_inertia
-
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from django.contrib.auth.decorators import login_required
-from services.config.decorators import permission_required
+from inertia import render as render_inertia
 
 from core.database import DBConnector
-from services.subscriptions.analytics import ETAReportManager, get_periodos
 from core.utils import clean_json_props
+from services.config.decorators import permission_required
+from services.subscriptions.analytics import ETAReportManager, get_periodos
 
 logger = logging.getLogger(__name__)
 
