@@ -342,6 +342,24 @@ def _create_tables_if_not_exist(db: DBConnector):
                 "horas_std_cierre", "pct_excede_prom_cierre",
             )
         ],
+
+        # Migración en caliente para el desglose del riesgo de devolución a la
+        # etapa 8. Antes sólo se guardaba el conteo crudo de movimientos, sin la
+        # población contra la que se mide ni de qué se compone: cuántas
+        # devoluciones se excluyeron por motivo ajeno a la gestión, cuántas se
+        # imputaron sin motivo legible y cuántas oportunidades distintas hay
+        # detrás de las transiciones.
+        *[
+            f"ALTER TABLE {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ADD COLUMN IF NOT EXISTS {col} INT DEFAULT 0;"
+            for col in (
+                "total_en_riesgo", "count_devueltos_e8_bruto",
+                "e8_devueltos_excepcion", "e8_devueltos_con_motivo",
+                "e8_devueltos_sin_motivo", "e8_devueltos_estimados",
+                "e8_clientes_devueltos", "e8_reincidentes",
+            )
+        ],
+        f"ALTER TABLE {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} "
+        f"ADD COLUMN IF NOT EXISTS pct_devueltos_e8_bruto NUMERIC DEFAULT 0;",
     ]
     
     with db.get_connection() as conn:

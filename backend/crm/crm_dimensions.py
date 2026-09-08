@@ -24,6 +24,7 @@ def save_crm_dimensiones_periodo(
     df_perdidas_cierre: pd.DataFrame | None = None,
     df_permanencias: pd.DataFrame | None = None,
     ahora: pd.Timestamp | None = None,
+    df_en_riesgo: pd.DataFrame | None = None,
 ):
     rows_to_insert = []
 
@@ -81,8 +82,13 @@ def save_crm_dimensiones_periodo(
             # Las pérdidas del mes se recortan a la misma rebanada dimensional.
             pc_d = _filter_dim(df_perdidas_cierre) if df_perdidas_cierre is not None else pd.DataFrame()
 
+            # La población en riesgo también: el riesgo de devolución de una
+            # sucursal se mide contra lo que esa sucursal tenía vivo, no contra
+            # la base entera.
+            rg_d = _filter_dim(df_en_riesgo) if df_en_riesgo is not None else None
+
             m_dim = compute_crm_metrics_for_period(
-                cr_d, ga_d, pe_d, pn_d, e8_d, lg_d, cl_d, hs_d, pc_d, pm_d, ahora
+                cr_d, ga_d, pe_d, pn_d, e8_d, lg_d, cl_d, hs_d, pc_d, pm_d, ahora, rg_d
             )
             ef_dim = m_dim.get("efectividad", [])
 

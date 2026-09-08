@@ -5,7 +5,11 @@ from typing import Any, Dict
 
 from .tiempo import compute_tiempos_cierre, compute_tiempo_por_etapa
 from .efectividad import compute_efectividad
-from .probabilidad import compute_distribucion_perdidos, compute_distribucion_etapa8
+from .probabilidad import (
+    compute_distribucion_perdidos,
+    compute_distribucion_etapa8,
+    compute_probabilidad_etapa8,
+)
 
 
 def _clean_nan(obj: Any) -> Any:
@@ -32,6 +36,7 @@ def compute_crm_metrics_for_period(
     df_perdidas_cierre: pd.DataFrame | None = None,
     df_permanencias: pd.DataFrame | None = None,
     ahora: pd.Timestamp | None = None,
+    df_en_riesgo: pd.DataFrame | None = None,
 ) -> Dict[str, Any]:
     """Métricas de un periodo.
 
@@ -46,6 +51,12 @@ def compute_crm_metrics_for_period(
     `df_permanencias` son las estancias que todavía no han producido una salida,
     medidas contra la fecha de cierre o contra `ahora`. Sin ellas el tiempo por
     etapa sólo ve lo que ya salió, que es el sesgo que las hace necesarias.
+
+    `df_en_riesgo` son las oportunidades con vida en el periodo: las creadas en
+    él más las arrastradas de meses anteriores que seguían abiertas. Es el
+    denominador del riesgo de devolución, que no es una tasa de cohorte sino de
+    lo que el embudo tenía entre manos ese mes. Sin él se cae a `df_creados`,
+    que es la cohorte y da otra cosa.
     """
     total_oportunidades = len(df_creados)
     total_ganados = len(df_ganados)
@@ -57,11 +68,13 @@ def compute_crm_metrics_for_period(
         pct_instalacion = round((total_ganados / total_oportunidades) * 100, 2)
         pct_perdida = round((total_perdidos / total_oportunidades) * 100, 2)
         pct_pendientes = round((total_pendientes / total_oportunidades) * 100, 2)
-        count_e8 = len(df_logs_e8)
-        pct_devueltos_e8 = round((count_e8 / total_oportunidades) * 100, 2)
     else:
-        pct_instalacion = pct_perdida = pct_pendientes = pct_devueltos_e8 = 0.0
-        count_e8 = 0
+        pct_instalacion = pct_perdida = pct_pendientes = 0.0
+
+    # Riesgo de caer a la etapa 8 en el periodo: transiciones del mes sobre todo
+    # lo que estuvo vivo, sin los motivos ajenos a la gestión.
+    poblacion = df_en_riesgo if df_en_riesgo is not None else df_creados
+    prob_e8 = compute_probabilidad_etapa8(poblacion, df_logs_e8, df_clients)
 
     # Tiempos estadísticos
     tiempos = compute_tiempos_cierre(df_ganados, df_perdidos)
@@ -87,8 +100,7 @@ def compute_crm_metrics_for_period(
         "pct_instalacion": pct_instalacion,
         "pct_perdida": pct_perdida,
         "pct_pendientes": pct_pendientes,
-        "count_devueltos_e8": count_e8,
-        "pct_devueltos_e8": pct_devueltos_e8,
+        **prob_e8,
 
         # Tiempos de Instalación
         "horas_promedio_inst": stats_inst["promedio"],

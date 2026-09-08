@@ -17,6 +17,25 @@ export interface CrmHistoricoRow {
   pct_perdida?: number;
   pct_pendientes?: number;
   pct_devueltos_e8?: number;
+  /**
+   * Desglose del riesgo de devolución. `pct_devueltos_e8` son las transiciones
+   * a la etapa 8 del mes sobre `total_en_riesgo` —todo lo que tuvo vida en el
+   * periodo, creado en él o arrastrado de meses anteriores—, ya sin los motivos
+   * ajenos a la gestión; `*_bruto` es lo mismo sin depurar, y la diferencia
+   * entre ambos es `e8_devueltos_excepcion`. `e8_devueltos_estimados` es la
+   * parte imputada a las devoluciones cuyo motivo ya no es legible:
+   * estimación, no dato.
+   */
+  total_en_riesgo?: number;
+  count_devueltos_e8_bruto?: number;
+  pct_devueltos_e8_bruto?: number;
+  e8_devueltos_excepcion?: number;
+  e8_devueltos_con_motivo?: number;
+  e8_devueltos_sin_motivo?: number;
+  e8_devueltos_estimados?: number;
+  /** Oportunidades distintas detrás de las transiciones, y cuántas repitieron. */
+  e8_clientes_devueltos?: number;
+  e8_reincidentes?: number;
   horas_promedio_inst?: number;
   horas_mediana_inst?: number;
   horas_p25_inst?: number;

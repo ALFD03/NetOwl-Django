@@ -5,7 +5,11 @@ from .tiempo import (
     compute_permanencias_en_etapa,
 )
 from .efectividad import compute_efectividad, atribuir_perdidas
-from .probabilidad import compute_distribucion_perdidos, compute_distribucion_etapa8
+from .probabilidad import (
+    compute_distribucion_perdidos,
+    compute_distribucion_etapa8,
+    compute_probabilidad_etapa8,
+)
 from .core import _clean_nan, compute_crm_metrics_for_period
 
 __all__ = [
@@ -17,6 +21,7 @@ __all__ = [
     "atribuir_perdidas",
     "compute_distribucion_perdidos",
     "compute_distribucion_etapa8",
+    "compute_probabilidad_etapa8",
     "_clean_nan",
     "compute_crm_metrics_for_period",
 ]

@@ -104,8 +104,17 @@ const SLA_SECTIONS: SlaSection[] = [
 
 /** Body of the Results modal: the executive summary for one closed cohort. */
 export function CrmPeriodDetail({ row }: CrmPeriodDetailProps) {
-  const leakage = formatOneDecimal(toNumber(row.pct_perdida) + toNumber(row.pct_devueltos_e8));
   const totalClosed = toNumber(row.ganados) + toNumber(row.perdidos);
+  // Las devoluciones no comparten denominador con el resto de la tira: ganados,
+  // perdidos y pendientes son la cohorte de creación y la etapa 8 es el riesgo
+  // del mes sobre todo lo que estuvo vivo. Por eso su caption dice contra qué se
+  // mide, y por eso ya no se suma con la pérdida en un único "fuga": serían dos
+  // porcentajes de bases distintas.
+  const e8Excepciones = toNumber(row.e8_devueltos_excepcion);
+  const e8Caption = `${row.pct_devueltos_e8}% de ${formatInteger(row.total_en_riesgo)} vivas`;
+  const e8BrutoCaption = e8Excepciones > 0
+    ? `${formatInteger(e8Excepciones)} ajenas excluidas`
+    : 'Sin motivos ajenos';
   const healthCards = buildHealthCards(row.efectividad);
 
   const summary: SummaryStripItem[] = [
@@ -113,8 +122,8 @@ export function CrmPeriodDetail({ row }: CrmPeriodDetailProps) {
     { id: 'ganados', label: 'Ganados', value: `+${formatInteger(row.ganados)}`, caption: `${row.pct_instalacion}% instalación`, tone: 'green' },
     { id: 'perdidos', label: 'Perdidos', value: `-${formatInteger(row.perdidos)}`, caption: `${row.pct_perdida}% pérdida`, tone: 'red' },
     { id: 'pendientes', label: 'Pendientes', value: formatInteger(row.pendientes), caption: `${row.pct_pendientes}% en curso`, tone: 'blue' },
-    { id: 'devueltos', label: 'Devueltos E8', value: formatInteger(row.count_devueltos_e8), caption: `${row.pct_devueltos_e8}% devueltos`, tone: 'yellow' },
-    { id: 'fuga', label: 'Fuga / Caída', value: `${leakage}%`, caption: 'Pérdida + devueltos', tone: 'red' },
+    { id: 'devueltos', label: 'Devueltos E8', value: formatInteger(row.count_devueltos_e8), caption: e8Caption, tone: 'yellow' },
+    { id: 'devueltos_bruto', label: 'Devueltos E8 (bruto)', value: formatInteger(row.count_devueltos_e8_bruto), caption: e8BrutoCaption, tone: 'red' },
     { id: 'cierres', label: 'Cierres Totales', value: formatInteger(totalClosed), caption: 'Ganados + perdidos', tone: 'slate' },
   ];
 

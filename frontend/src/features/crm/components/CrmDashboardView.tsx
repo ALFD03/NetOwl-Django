@@ -40,7 +40,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
         <MetricCard label="Tasa Instalados" value={`${stats.pct_instalacion}%`} color="green" subValue="Ganados / Creados" icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />} />
         <MetricCard label="Tasa Pérdida" value={`${stats.pct_perdida}%`} color="red" subValue="Perdidos / Creados" icon={<XCircle className="w-4 h-4 text-rose-400" />} />
         <MetricCard label="Tasa Pendiente" value={`${stats.pct_pendientes}%`} color="blue" subValue="Pipeline activo" icon={<Clock className="w-4 h-4 text-sky-400" />} />
-        <MetricCard label="Devueltos E8" value={`${stats.pct_devueltos_e8}%`} color="yellow" subValue="Entradas a Etapa 8" icon={<AlertTriangle className="w-4 h-4 text-amber-400" />} />
+        <MetricCard label="Devueltos E8" value={`${stats.pct_devueltos_e8}%`} color="yellow" subValue="Riesgo mensual de devolución" icon={<AlertTriangle className="w-4 h-4 text-amber-400" />} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
