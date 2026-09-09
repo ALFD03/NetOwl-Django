@@ -20,6 +20,7 @@ from __future__ import annotations
 import calendar
 import json
 import logging
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -85,6 +86,7 @@ def build_day_metrics(
     db: DBConnector | None = None,
     hasta_dia: int | None = None,
     analyzer: MetricsAnalyzer | None = None,
+    progreso: Callable[[int, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """Calcula y guarda las metricas de cada dia del mes.
 
@@ -94,6 +96,10 @@ def build_day_metrics(
     `analyzer` permite reaprovechar uno que ya tenga los datos cargados (el del
     analisis mensual), de modo que un solo boton haga una sola lectura para el
     cierre del mes y para los 31 dias.
+
+    `progreso(hechos, total, etiqueta)` se llama al cerrar cada dia. Lo usa la
+    tarea de Celery para alimentar la barra de la interfaz: el recorrido de los
+    dias es la parte larga y es la unica con pasos contables.
     """
     db = db or DBConnector()
     anio, mes, ultimo_dia = _mes_bounds(year_month)
@@ -138,6 +144,8 @@ def build_day_metrics(
         activos_inicio = c["summary"]["activos_inicio"]
         pendientes[f"dia{dia}"] = _payload_dia(c, dim_rows)
         print(f"  dia {dia:02d}/{tope} OK")
+        if progreso is not None:
+            progreso(dia, tope, f"Dia {dia} de {tope}")
 
         # Volcado parcial: el upsert solo toca los dias enviados, asi que si la
         # ejecucion se corta el trabajo ya hecho queda guardado.

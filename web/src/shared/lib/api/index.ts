@@ -4,4 +4,5 @@ export * from './crm';
 export * from './subscriptions';
 export * from './support';
 export * from './imports';
+export * from './jobs';
 export * from './config';

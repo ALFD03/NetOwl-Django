@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from core.config import INACTIVE_STATES, TableNames
+from core.config import ACTIVE_STATE, FREE_STATE, INACTIVE_STATES, TableNames
 from core.database import DBConnector
 from core.models import Periodo
 
@@ -49,21 +49,33 @@ class MetricsAnalyzer:
         self._dim_prepared = dimensions.prepare_subs_dims(
             self.db, self.df_subs_full
         )
+        # Recorrido acumulativo del log: responde "estado a la fecha X" sin
+        # volver a filtrar y reagrupar el historico en cada corte. Es de donde
+        # sale la mayor parte de la mejora de tiempo del analisis mensual.
+        self._estados = metrics_calc.EstadoAcumulado(self.df_clean_logs)
         # Los cortes de un mes comparten fecha_inicio, asi que act_ini y
         # free_ini se calculan una sola vez para los 31 dias.
         self._state_cache: dict[Any, Any] = {}
         self._inactivos_cache = None
 
-    def _state_at(self, target_date, estado_getter, strictly_before: bool):
+    def _state_at(self, target_date, estado: str, strictly_before: bool):
+        acumulado = getattr(self, "_estados", None)
+        if acumulado is None:
+            # Sin _prepare_caches (uso suelto del analyzer): la definicion de
+            # referencia da el mismo resultado, solo que mas despacio.
+            return metrics_calc.get_state_at(
+                self.df_clean_logs, target_date, estado, strictly_before
+            )
+
         cached = getattr(self, "_state_cache", None)
         # Solo se cachea el estado al inicio del periodo (strictly_before), que
         # es identico en todos los cortes del mes. El estado al cierre cambia
         # cada dia y no se reutiliza: guardarlo solo gastaria memoria.
         if cached is None or not strictly_before:
-            return estado_getter(self.df_clean_logs, target_date, strictly_before)
-        key = (estado_getter.__name__, target_date)
+            return acumulado.en_estado(target_date, estado, strictly_before)
+        key = (estado, target_date)
         if key not in cached:
-            cached[key] = estado_getter(self.df_clean_logs, target_date, True)
+            cached[key] = acumulado.en_estado(target_date, estado, True)
         return cached[key]
 
     def _inactivos_al_inicio(self, fecha_inicio):
@@ -71,8 +83,12 @@ class MetricsAnalyzer:
         cache = getattr(self, "_inactivos_cache", None)
         if cache is not None and cache[0] == fecha_inicio:
             return cache[1]
-        last_logs = self.df_clean_logs[self.df_clean_logs["f_dt"] < fecha_inicio]
-        df_ultimo_estado = metrics_calc.last_log_per_orden(last_logs)
+        acumulado = getattr(self, "_estados", None)
+        if acumulado is None:
+            last_logs = self.df_clean_logs[self.df_clean_logs["f_dt"] < fecha_inicio]
+            df_ultimo_estado = metrics_calc.last_log_per_orden(last_logs)
+        else:
+            df_ultimo_estado = acumulado.ultimos(fecha_inicio, strictly_before=True)
         df_inactivos = df_ultimo_estado[
             df_ultimo_estado["estado"].isin(INACTIVE_STATES)
         ].copy()
@@ -80,14 +96,10 @@ class MetricsAnalyzer:
         return df_inactivos
 
     def get_active_at(self, target_date, strictly_before: bool = False):
-        return self._state_at(
-            target_date, metrics_calc.get_active_at, strictly_before
-        )
+        return self._state_at(target_date, ACTIVE_STATE, strictly_before)
 
     def get_free_at(self, target_date, strictly_before: bool = False):
-        return self._state_at(
-            target_date, metrics_calc.get_free_at, strictly_before
-        )
+        return self._state_at(target_date, FREE_STATE, strictly_before)
 
     def get_reactivations(self, act_fin):
         return metrics_calc.get_reactivations(

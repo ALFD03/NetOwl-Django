@@ -169,7 +169,7 @@ def parse_jsonb(val: Any) -> Any:
 
 
 @contextmanager
-def capture_console():
+def capture_console(buffer=None):
     """Captura lo que el analisis imprime, para devolverlo como log al cliente.
 
     Los analizadores narran su progreso por stdout y las vistas lo reenvian al
@@ -181,7 +181,11 @@ def capture_console():
         with capture_console() as salida:
             analyzer.run()
         return JsonResponse({"log_output": salida.getvalue()})
+
+    `buffer` permite pasar un StringIO propio. Lo usan las tareas de Celery con
+    `services.imports.jobs.ConsolaJob`, que ademas de acumular va volcando el
+    log a la fila del job para que la interfaz lo lea mientras corre.
     """
-    buffer = io.StringIO()
+    buffer = io.StringIO() if buffer is None else buffer
     with redirect_stdout(buffer), redirect_stderr(buffer):
         yield buffer

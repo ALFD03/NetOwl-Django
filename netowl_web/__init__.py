@@ -12,3 +12,9 @@ Dependencias esperadas:
     - Variables de entorno definidas en archivo .env (o variables del sistema)
     - PostgreSQL accesible con las credenciales configuradas
 """
+
+# La app de Celery debe existir en cuanto se importa el proyecto: es lo que
+# hace que el decorador `@shared_task` de services/*/tasks.py quede registrado.
+from netowl_web.celery import app as celery_app  # noqa: E402
+
+__all__ = ("celery_app",)

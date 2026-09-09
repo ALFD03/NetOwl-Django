@@ -48,6 +48,7 @@ export default function ImportSupport() {
 
       {canRunAnalysis && (
         <AnalysisRunnerCard
+          jobModule="support_analysis"
           title="Ejecutar Análisis Technical Support"
           runLabel="Iniciar Cálculo"
           consoleTitle="Consola de Ejecución Technical Support"

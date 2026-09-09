@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { usePage } from '@inertiajs/react';
 
 import type { AuthenticatedPageProps } from '@/shared/types/inertia';
+import { AnalysisQueueAlert } from './AnalysisQueueAlert';
 import { Sidebar } from './Sidebar';
 
 interface Props {
@@ -49,6 +50,11 @@ export function AppLayout({ children, title, toolbar }: Props) {
           {children}
         </motion.div>
       </main>
+
+      {/* Los analisis corren en el worker y sobreviven al cambio de pagina:
+          este aviso los sigue desde cualquier pantalla. No pinta nada cuando
+          no hay ninguno. */}
+      <AnalysisQueueAlert />
     </div>
   );
 }

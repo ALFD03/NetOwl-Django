@@ -66,7 +66,10 @@ CSRF_TRUSTED_ORIGINS = config.django.CSRF_TRUSTED_ORIGINS
 # Limite de tiempo se sesiones 
 SESSION_COOKIE_AGE = 8*60*60
 
-# --- Aislamiento de cookies por entorno ---
+# --- Aislamiento por entorno ---
+# `ENV_SUFFIX` identifica el entorno a partir del esquema de Postgres, que es
+# lo unico que ya los distingue. Lo usan las cookies (abajo) y el nombre de la
+# cola de Celery (ver la seccion de tareas asincronas).
 # Desarrollo y produccion comparten host (las cookies ignoran el puerto) y
 # comparten la tabla django_session del esquema public. Con los nombres de
 # cookie por defecto ("sessionid" / "csrftoken") iniciar sesion en un entorno
@@ -74,9 +77,9 @@ SESSION_COOKIE_AGE = 8*60*60
 # pagina ya cargada queda con un token CSRF viejo -> 403 al hacer POST.
 # Sufijar el nombre de la cookie con el esquema (DB_SCHEMA, unico por entorno)
 # le da a cada entorno su propio par de cookies en el navegador.
-COOKIE_ENV_SUFFIX = re.sub(r"[^A-Za-z0-9_-]", "_", os.getenv("DB_SCHEMA", "public"))
-SESSION_COOKIE_NAME = f"netowl_sessionid_{COOKIE_ENV_SUFFIX}"
-CSRF_COOKIE_NAME = f"netowl_csrftoken_{COOKIE_ENV_SUFFIX}"
+ENV_SUFFIX = re.sub(r"[^A-Za-z0-9_-]", "_", os.getenv("DB_SCHEMA", "public"))
+SESSION_COOKIE_NAME = f"netowl_sessionid_{ENV_SUFFIX}"
+CSRF_COOKIE_NAME = f"netowl_csrftoken_{ENV_SUFFIX}"
 
 # --- Límites de subida ---
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
@@ -193,6 +196,48 @@ LANGUAGE_CODE = "es"               # Idioma español
 TIME_ZONE = "America/Caracas"      # Zona horaria de Caracas (UTC-4)
 USE_I18N = True                    # Activar internacionalización
 USE_TZ = True                      # Usar zona horaria consciente (UTC en BD)
+
+# --- Cola de tareas asincronas (Celery + Redis) ---
+# La URL de Redis no es un secreto y cambia por entorno, asi que vive en el
+# .env junto a DB_SCHEMA y no en Vault (ver core/vault.py).
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+CELERY_BROKER_URL = REDIS_URL
+# El estado de cada ejecucion se guarda en services.imports.models.AnalysisJob,
+# que es lo que lee la interfaz: un backend de resultados solo duplicaria eso.
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_TRACK_STARTED = True
+# La cola lleva el sufijo del entorno, por el mismo motivo que las cookies de
+# sesion: desarrollo y produccion comparten Redis igual que comparten host, y un
+# worker solo puede consumir lo que encolo una app apuntando a su mismo
+# DB_SCHEMA. Asi un .env mal copiado no hace que el worker de desarrollo recoja
+# un analisis de produccion y lo escriba en el esquema equivocado.
+#
+# El worker se arranca sin `--queues`: toma este valor, que ya sabe cual es su
+# entorno. Pasarlo a mano seria una segunda copia de la verdad.
+CELERY_TASK_DEFAULT_QUEUE = f"analisis_{ENV_SUFFIX}"
+CELERY_TIMEZONE = TIME_ZONE
+
+# El mensaje se confirma al terminar, no al recibirlo: si el contenedor del
+# worker se reinicia en mitad de un analisis, la tarea se vuelve a encolar.
+CELERY_TASK_ACKS_LATE = True
+# Sin esto un worker con varios procesos se reserva tareas que no puede empezar
+# y quedan invisibles para el resto.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# Un analisis mensual completo (cierre + 31 dias) no deberia pasar de una hora.
+# El limite blando lanza SoftTimeLimitExceeded, que la tarea captura para dejar
+# el job marcado como error en vez de morir en silencio.
+CELERY_TASK_SOFT_TIME_LIMIT = 55 * 60
+CELERY_TASK_TIME_LIMIT = 60 * 60
+# Redis reentrega el mensaje si nadie lo confirma antes de este plazo: tiene que
+# ser mayor que el limite duro o una tarea larga se ejecutaria dos veces.
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 2 * 60 * 60}
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# Cuanto tiempo sin dar senales de vida hace que un job "en curso" se considere
+# muerto (worker reiniciado a la fuerza) y deje de bloquear nuevas ejecuciones.
+ANALYSIS_JOB_STALE_SECONDS = 15 * 60
+
 
 # --- Campos auto-generados ---
 # Tipo de campo por defecto para claves primarias auto-generadas

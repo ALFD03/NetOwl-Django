@@ -22,4 +22,9 @@ urlpatterns = [
     path("api/history/", views.api_history_list, name="api_history"),
     path("api/import-support/", views.api_import_support, name="api_import_support"),
     path("api/run-support-analysis/", views.api_run_support_analysis, name="api_run_support_analysis"),
+
+    # Seguimiento de los analisis, que corren en el worker de Celery.
+    path("api/jobs/queue/", views.api_jobs_queue, name="api_jobs_queue"),
+    path("api/jobs/active/", views.api_job_active, name="api_job_active"),
+    path("api/jobs/<uuid:job_id>/", views.api_job_detail, name="api_job_detail"),
 ]

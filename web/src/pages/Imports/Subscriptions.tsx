@@ -76,6 +76,7 @@ export default function ImportSubscriptions() {
 
       {canRunAnalysis && (
         <AnalysisRunnerCard
+          jobModule="subs_analysis"
           title="Ejecutar Análisis Mensual de Subscriptions (Churn)"
           description="Calcula la base inicial, final, nuevos, reactivaciones y matrices dimensionales del mes, y el corte acumulado de cada día para la barra de días."
           runLabel="Iniciar Análisis Churn"
