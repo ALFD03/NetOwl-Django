@@ -90,14 +90,27 @@ comparten host.
 
 ```bash
 cp .env.example .env    # y rellenar las variables VAULT_*
-make dev                # Django en :8000, Vite en :5173 y el worker, juntos
+make dev                # Django en :8000, Vite en :5173, el tunel a Redis y el worker
 ```
 
 `make dev` llama a `scripts/dev.sh`, que levanta los procesos en paralelo con los
-logs etiquetados y los apaga juntos con Ctrl-C. El worker de Celery solo arranca
-si hay un Redis respondiendo en `REDIS_URL`: sin el se puede desarrollar todo
-salvo lanzar un analisis, que se quedaria encolado. Para levantarlo suelto,
-`make worker`. Exporta
+logs etiquetados y los apaga juntos con Ctrl-C.
+
+Redis no corre en local: vive en la MV de produccion, asi que desarrollo llega a
+el por un tunel SSH. Pon el host en `.env`:
+
+```ini
+REDIS_SSH_HOST=usuario@mv     # o un alias de ~/.ssh/config
+```
+
+y `dev.sh` abre el tunel al arrancar -el puerto local lo saca de `REDIS_URL`- y
+lo cierra al salir. Si ya hay algo contestando en `REDIS_URL` no abre nada, para
+no chocar con un tunel que quedara abierto de antes. Sin `REDIS_SSH_HOST` sigue
+valiendo abrirlo a mano con `ssh -N -L 6379:localhost:6379 usuario@mv`.
+
+El worker de Celery solo arranca si hay un Redis respondiendo: sin el se puede
+desarrollar todo salvo lanzar un analisis, que se quedaria encolado. Para
+levantarlo suelto, `make worker`. Exporta
 `VITE_DEV_SERVER=1`, que es lo que hace que la plantilla cargue los assets del
 dev-server en vez del bundle compilado.
 
@@ -162,6 +175,13 @@ dos ultimos usan la misma imagen y solo cambian el comando de arranque.
   importaciones, como antes.
 - Un aviso flotante sigue la cola desde cualquier pantalla: que se esta
   calculando, por donde va y cuantos esperan turno. No aparece si no hay nada.
+- Los analisis se encadenan: se pueden lanzar varios seguidos sin esperar a que
+  termine el anterior. El worker calcula varios a la vez
+  (`WORKER_CONCURRENCY`, 2 por defecto) y el resto espera turno en la cola. Lo
+  unico que se rechaza es pedir dos veces el mismo periodo del mismo modulo, que
+  no calcularia nada nuevo; en ese caso la interfaz se engancha al que ya estaba.
+  Dos analisis del mismo modulo nunca corren a la vez aunque se suba la
+  concurrencia: comparten tabla y los pone en fila un cerrojo en Redis.
 - El analisis mensual recorre el historico de logs una sola vez para los 31
   dias del mes, no una vez por dia. El detalle esta en `EstadoAcumulado`
   (`analytics/analyzer/metrics_calc.py`), junto a la version de referencia

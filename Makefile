@@ -8,11 +8,11 @@ PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo pytho
 help:  ## Muestra esta ayuda
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-dev:  ## Levanta Django (:8000), Vite (:5173) y el worker de Celery, juntos
+dev:  ## Levanta Django (:8000), Vite (:5173), el tunel SSH a Redis y el worker
 	@./scripts/dev.sh
 
 worker:  ## Ejecuta el worker de Celery (analisis de churn, CRM, soporte y ciclo de vida)
-	$(PYTHON) -m celery -A netowl_web worker --loglevel=info --concurrency=1
+	$(PYTHON) -m celery -A netowl_web worker --loglevel=info
 
 build:  ## Compila el bundle de produccion en web/static/dist
 	npm run build

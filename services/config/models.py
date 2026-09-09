@@ -1,7 +1,10 @@
 from django.contrib.auth.models import User
+from django.contrib.sessions.base_session import AbstractBaseSession
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+from core.config import DB_SCHEMA
 
 # --- CATALOGO UNICO DE PERMISOS ---
 # Profile y PermissionGroup comparten exactamente la misma matriz. Declararla
@@ -160,3 +163,38 @@ def save_user_profile(sender, instance, **kwargs):
             **default_permissions(full_access=is_first),
         )
     instance.profile.save()
+
+
+# --- Sesiones aisladas por entorno ---
+# Usuarios, perfiles y permisos son compartidos a proposito: la misma cuenta
+# tiene que servir en desarrollo y en produccion. Las sesiones no: las dos
+# aplicaciones apuntan a la misma base de datos, y con una unica
+# `public.django_session` entrar en un entorno cerraba la sesion del otro.
+#
+# Por eso la tabla de sesiones —y solo ella— se cualifica con DB_SCHEMA, igual
+# que hace services/imports/models.py con las suyas.
+#
+# `managed = False` es deliberado. La tabla es distinta en cada esquema, pero
+# `django_migrations` vive en `public` y la comparten todos los entornos: una
+# migracion que la creara se registraria como aplicada al ejecutarla en el
+# primer entorno y el segundo se quedaria sin tabla, fallando en el primer
+# login. La crea `manage.py preparar_sesiones`, que es idempotente y se ejecuta
+# en cada arranque (ver entrypoint.sh y scripts/dev.sh).
+class SesionEntorno(AbstractBaseSession):
+    # AbstractBaseSession marca expire_date con db_index, y el nombre que Django
+    # autogenera es un hash del nombre de la tabla: seria distinto en cada
+    # esquema y `makemigrations --check` reportaria cambios pendientes para
+    # siempre. Mismo motivo por el que AnalysisJob nombra su indice a mano.
+    expire_date = models.DateTimeField(db_index=False)
+
+    class Meta:
+        managed = False
+        db_table = f'"{DB_SCHEMA}"."django_session"' if DB_SCHEMA else 'django_session'
+        verbose_name = 'sesion'
+        verbose_name_plural = 'sesiones'
+
+    @classmethod
+    def get_session_store_class(cls):
+        from services.config.sessions import SessionStore
+
+        return SessionStore

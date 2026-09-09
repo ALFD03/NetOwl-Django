@@ -11,4 +11,9 @@ if [ "${SKIP_COLLECTSTATIC:-0}" != "1" ]; then
     python manage.py collectstatic --noinput
 fi
 
+# La tabla de sesiones vive en el esquema del entorno y no puede crearla una
+# migracion, porque django_migrations es compartida (ver el comando). Es
+# idempotente: en un esquema ya preparado no hace nada.
+python manage.py preparar_sesiones
+
 exec "$@"
