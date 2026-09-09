@@ -11,3 +11,5 @@ pydantic>=2.7.0
 lifelines>=0.28.0
 django-ratelimit>=4.0.0
 inertia-django>=0.6.0
+celery>=5.4.0
+redis>=5.0.0

@@ -38,6 +38,7 @@ export default function ImportCrm() {
 
       {canRunAnalysis && (
         <AnalysisRunnerCard
+          jobModule="crm_analysis"
           title="Ejecutar Análisis Mensual de CRM"
           description="Calcula la cohorte del mes: ganados, perdidos, pendientes, devueltos E8 y SLAs."
           runLabel="Iniciar Cálculo CRM"

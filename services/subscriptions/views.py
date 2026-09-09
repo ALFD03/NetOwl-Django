@@ -13,6 +13,7 @@ from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
 from services.config.decorators import permission_required
+from services.imports.jobs import lanzar_analisis
 from services.subscriptions.analytics import (
     get_analytics_data,
     get_business_units_data,
@@ -27,7 +28,6 @@ from services.subscriptions.analytics import (
 from services.subscriptions.analytics.lifetime import (
     get_lifecycle_results,
     get_lifetime_dimensiones,
-    run_lifecycle_analysis,
 )
 from services.subscriptions.analytics.lifetime.queries import get_survival_report
 
@@ -200,12 +200,13 @@ def api_sales_report(request):
 @permission_required('can_run_lifetime') # <-- CONTROL ESPECÍFICO DE EJECUCIÓN DE LIFETIME
 @require_POST
 def api_lifecycle_run(request):
-    try:
-        metrics = run_lifecycle_analysis()
-        return JsonResponse({"status": "success", "message": "Análisis de ciclo de vida completado", **metrics})
-    except Exception as e:
-        logger.exception("Error en lifecycle run")
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    """Encola el analisis de supervivencia; el worker lo ejecuta.
+
+    Recorre todo el historico de suscripciones con `lifelines`, asi que sufria
+    el mismo timeout que el analisis mensual. Se sigue con los endpoints de
+    `imports` (`/imports/api/jobs/<id>/`), que son comunes a todos los modulos.
+    """
+    return lanzar_analisis(request, 'subs_lifetime', requiere_periodo=False)
 
 @login_required
 @permission_required('can_view_subs_lifetime')

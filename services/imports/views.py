@@ -1,4 +1,3 @@
-import json
 import logging
 
 from django.contrib.auth.decorators import login_required
@@ -8,46 +7,27 @@ from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
-from core.database import DBConnector
-from core.models import Periodo
-from core.utils import capture_console
 from services.config.decorators import deny, permission_required, permissions_all_required
 from services.config.uploads import cleanup_tempfile, handle_csv_upload
-from services.crm.analytics import import_crm_csv, run_crm_analysis
+from services.crm.analytics import import_crm_csv
 from services.crm.analytics.config import REQUIRED_CRM_HEADERS
 from services.subscriptions.analytics import (
-    MetricsAnalyzer,
-    build_day_metrics,
     import_gratis_csv,
     import_logs_csv,
     import_subscriptions_csv,
 )
 from services.subscriptions.analytics.config import REQUIRED_LOGS_HEADERS, REQUIRED_SUBS_HEADERS
 from services.subscriptions.analytics.free_plans import REQUIRED_GRATIS_HEADERS
-from services.support.analytics import import_support_csv, run_support_analysis
+from services.support.analytics import import_support_csv
 from services.support.analytics.config import REQUIRED_SUPPORT_HEADERS
 
-from .models import ImportActionLog
+from .history import register_import_log
+from .jobs import job_en_curso, jobs_abiertos, lanzar_analisis
+from .models import AnalysisJob, ImportActionLog
 
 logger = logging.getLogger(__name__)
 
 TEMPLATE_PREFIX = "imports/"
-
-
-def register_import_log(user, module, file_name='N/A', rows=0, status='success', message='', details=''):
-    try:
-        ImportActionLog.objects.create(
-            user=user if user.is_authenticated else None,
-            username=user.username if user.is_authenticated else 'Sistema',
-            module=module,
-            file_name=file_name or 'N/A',
-            rows_processed=rows,
-            status=status,
-            message=message,
-            details=details
-        )
-    except Exception as e:
-        logger.exception("Error al registrar acción en historial: %s", str(e))
 
 
 # Pestanas del modulo en el orden en que aparecen en la cabecera, con el permiso
@@ -204,78 +184,6 @@ def api_import_crm(request):
 
 
 @login_required
-@permission_required('can_run_crm_analysis', 'can_run_calculations')
-@ratelimit(key='ip', rate='2/m', block=True)
-@require_POST
-def api_run_crm_analysis(request):
-    try:
-        data = json.loads(request.body)
-        mes = data.get("month")
-    except Exception:
-        return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
-
-    # Validación estricta obligatoria
-    if not mes or len(mes) != 7:
-        return JsonResponse({"status": "error", "message": "Periodo inválido. Seleccione un mes con formato YYYY-MM."}, status=400)
-
-    with capture_console() as out:
-        try:
-            run_crm_analysis(mes)
-        except Exception as e:
-            err_text = f"Error durante el cálculo de métricas CRM para {mes}: {str(e)}"
-            register_import_log(request.user, 'crm_analysis', f"Periodo {mes}", 0, 'error', err_text, out.getvalue())
-            return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
-
-    msg = f"Análisis de CRM completado exitosamente para el periodo {mes}."
-    register_import_log(request.user, 'crm_analysis', f"Periodo {mes}", 0, 'success', msg, out.getvalue())
-    return JsonResponse({"status": "success", "message": msg, "periodo_label": mes, "log_output": out.getvalue()})
-
-
-@login_required
-@ratelimit(key='ip', rate='2/m', block=True)
-@permission_required('can_run_subs_analysis', 'can_run_calculations')
-@require_POST
-def api_run_analysis(request):
-    try:
-        data = json.loads(request.body)
-        mes = data.get("month")
-    except Exception:
-        return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
-        
-    if not mes or len(mes) != 7:
-        return JsonResponse({"status": "error", "message": "Periodo inválido (YYYY-MM)"}, status=400)
-        
-    try:
-        periodo = Periodo.build(f"{mes}-01")
-        periodo_label = periodo.label()
-        dias = 0
-        with capture_console() as out:
-            try:
-                db = DBConnector()
-                analyzer = MetricsAnalyzer(db, periodo)
-                analyzer.run()
-                # Mismo analyzer: los datos ya estan cargados, asi que el cierre
-                # del mes y las metricas de cada dia salen de una sola lectura.
-                dias = build_day_metrics(mes, db=db, analyzer=analyzer)["dias_calculados"]
-            except Exception as e:
-                err_txt = f"Fallo en ejecucion de analisis para {periodo_label}: {str(e)}"
-                register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", 0, 'error', err_txt, out.getvalue())
-                return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
-
-        msg = f"Análisis de Churn completado para el periodo {periodo_label} ({dias} días calculados)."
-        register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", dias, 'success', msg, out.getvalue())
-        return JsonResponse({
-            "status": "success",
-            "periodo_label": periodo_label,
-            "dias_calculados": dias,
-            "log_output": out.getvalue(),
-        })
-    except Exception as e:
-        register_import_log(request.user, 'subs_analysis', f"Periodo {mes}", 0, 'error', str(e))
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
-    
-
-@login_required
 @ratelimit(key='ip', rate='5/m', block=True)
 @permission_required('can_import_support', 'can_import_data')
 @require_POST
@@ -298,28 +206,91 @@ def api_import_support(request):
         cleanup_tempfile(tmp_path)
 
 
+# --- LANZAMIENTO Y SEGUIMIENTO DE ANALISIS ---
+#
+# Los analisis no se ejecutan aqui: tardan minutos y morian contra el timeout
+# del proxy (504) o contra el de gunicorn, dejando el periodo a medio escribir.
+# La vista crea un AnalysisJob, lo encola en Redis y devuelve 202 con su id; el
+# worker lo ejecuta y va escribiendo log y progreso en esa fila, que el cliente
+# sondea con `api_job_detail`.
+
+def _job_visible(request, job):
+    """Quien lanzo el analisis, quien puede ver el historial, y los superusuarios."""
+    if request.user.is_superuser or job.user_id == request.user.id:
+        return True
+    profile = getattr(request.user, 'profile', None)
+    return bool(profile and profile.has_permission('can_view_import_history'))
+
+
 @login_required
-@permission_required('can_run_support_analysis', 'can_run_calculations')
 @ratelimit(key='ip', rate='2/m', block=True)
+@permission_required('can_run_subs_analysis', 'can_run_calculations')
+@require_POST
+def api_run_analysis(request):
+    return lanzar_analisis(request, 'subs_analysis')
+
+
+@login_required
+@ratelimit(key='ip', rate='2/m', block=True)
+@permission_required('can_run_crm_analysis', 'can_run_calculations')
+@require_POST
+def api_run_crm_analysis(request):
+    return lanzar_analisis(request, 'crm_analysis')
+
+
+@login_required
+@ratelimit(key='ip', rate='2/m', block=True)
+@permission_required('can_run_support_analysis', 'can_run_calculations')
 @require_POST
 def api_run_support_analysis(request):
-    try:
-        data = json.loads(request.body)
-        periodo = data.get("month")
-    except Exception:
-        return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
+    return lanzar_analisis(request, 'support_analysis')
 
-    if not periodo or len(periodo) != 7:
-        return JsonResponse({"status": "error", "message": "Periodo inválido (YYYY-MM)."}, status=400)
 
-    with capture_console() as out:
-        try:
-            run_support_analysis(periodo)
-        except Exception as e:
-            err_text = f"Error durante el cálculo de métricas Support: {str(e)}"
-            register_import_log(request.user, 'support_analysis', f"Periodo {periodo}", 0, 'error', err_text, out.getvalue())
-            return JsonResponse({"status": "error", "message": str(e), "log_output": out.getvalue()}, status=500)
+@login_required
+def api_job_detail(request, job_id):
+    """Estado vivo de una ejecucion. Lo sondea la consola de la interfaz.
 
-    msg = f"Análisis de Technical Support completado para {periodo}."
-    register_import_log(request.user, 'support_analysis', f"Periodo {periodo}", 0, 'success', msg, out.getvalue())
-    return JsonResponse({"status": "success", "message": msg, "periodo_label": periodo, "log_output": out.getvalue()})
+    Sin `@ratelimit` a proposito: el sondeo es cada pocos segundos durante todo
+    el analisis y el limite de las acciones de calculo (2/m) lo cortaria.
+    """
+    job = AnalysisJob.objects.filter(pk=job_id).first()
+    if job is None or not _job_visible(request, job):
+        return JsonResponse(
+            {"status": "error", "message": "Ejecución no encontrada."}, status=404
+        )
+    return JsonResponse(job.to_dict())
+
+
+@login_required
+def api_jobs_queue(request):
+    """Todo lo que hay en la cola ahora mismo, para el aviso flotante.
+
+    Devuelve tanto lo que se esta calculando como lo que espera turno. Es un
+    endpoint de sondeo continuo desde cualquier pagina, asi que va sin
+    `@ratelimit` y sin permisos de modulo: solo enseña los trabajos que el
+    usuario ya podria ver de todas formas (los suyos, o todos si puede abrir el
+    historial de importaciones).
+    """
+    visibles = [job for job in jobs_abiertos() if _job_visible(request, job)]
+    return JsonResponse({
+        "jobs": [job.to_dict() for job in visibles],
+        "en_ejecucion": sum(1 for j in visibles if j.status == AnalysisJob.EN_CURSO),
+        "en_cola": sum(1 for j in visibles if j.status == AnalysisJob.PENDIENTE),
+    })
+
+
+@login_required
+def api_job_active(request):
+    """Ejecucion abierta de un modulo, para reengancharse tras recargar.
+
+    Un analisis dura minutos: si el usuario recarga o vuelve mas tarde, la
+    pagina necesita reencontrar el job en vez de dar la ejecucion por perdida.
+    """
+    module = request.GET.get("module") or ''
+    if module not in dict(ImportActionLog.MODULE_CHOICES):
+        return JsonResponse({"status": "error", "message": "Módulo inválido."}, status=400)
+
+    job = job_en_curso(module)
+    if job is None or not _job_visible(request, job):
+        return JsonResponse({"job": None})
+    return JsonResponse({"job": job.to_dict()})

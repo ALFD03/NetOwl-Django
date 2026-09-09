@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { startAndFollow, type AnalysisJob } from './jobs';
 import type { SubscriptionResultsResponse } from '@/shared/types/subscriptions';
 
 export interface EtaReportResponse {
@@ -52,6 +53,12 @@ export const subscriptionsApi = {
   deleteEtaPlanConfig: async (request: DeleteEtaPlanRequest) =>
     (await apiClient.post('/subscriptions/api/eta-report/delete-plan-config/', request)).data,
 
-  runLifetime: async () =>
-    (await apiClient.post('/subscriptions/api/lifecycle/run/')).data,
+  /**
+   * Runs the survival analysis in the Celery worker and waits for it.
+   *
+   * It walks the whole subscription history with `lifelines`, so it hit the
+   * same request timeout as the monthly analysis and now goes through a job.
+   */
+  runLifetime: async (onProgress?: (job: AnalysisJob) => void) =>
+    startAndFollow('/subscriptions/api/lifecycle/run/', {}, onProgress),
 };

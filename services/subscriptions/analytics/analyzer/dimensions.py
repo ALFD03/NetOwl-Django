@@ -5,6 +5,40 @@ import pandas as pd
 from core.config import DIMS, TableNames
 
 
+class DimsPreparadas:
+    """Frame de suscripciones normalizado, con sus mapas de dimension.
+
+    `aggregate_dimensions` necesita, por cada dimension, un diccionario
+    orden -> valor y la facturacion como numero. Nada de eso depende del
+    periodo, pero se reconstruia dentro del bucle: seis dimensiones por cada
+    uno de los 31 dias son 186 recorridos de la tabla de suscripciones entera
+    para obtener siempre lo mismo. Aqui se construyen la primera vez que se
+    piden y se reutilizan durante toda la ejecucion.
+    """
+
+    def __init__(self, frame: pd.DataFrame):
+        self.frame = frame
+        self._mapas: dict[tuple[str, str], dict] = {}
+        self._billing = None
+
+    def mapa(self, dim_col: str, default: str) -> dict:
+        # El default forma parte de la clave: hoy todas las dimensiones llegan
+        # en minusculas y coincide siempre, pero atarlo al nombre evita que una
+        # dimension futura con otra grafia reciba el relleno de otra.
+        clave = (dim_col, default)
+        if clave not in self._mapas:
+            self._mapas[clave] = self.frame[dim_col].fillna(default).to_dict()
+        return self._mapas[clave]
+
+    @property
+    def billing(self) -> pd.Series:
+        if self._billing is None:
+            self._billing = pd.to_numeric(
+                self.frame["total"], errors="coerce"
+            ).fillna(0.0)
+        return self._billing
+
+
 def prepare_subs_dims(db, df_subs_full=None):
     """Normaliza el frame de suscripciones para el mapeo de dimensiones.
 
@@ -31,7 +65,7 @@ def prepare_subs_dims(db, df_subs_full=None):
     # Normalizamos el índice de la tabla de suscripciones para búsquedas O(1)
     df_subs_dedup["orden_producto"] = df_subs_dedup["orden_producto"].astype(str).str.strip()
     df_subs_dedup.set_index("orden_producto", inplace=True)
-    return df_subs_dedup
+    return DimsPreparadas(df_subs_dedup)
 
 
 def aggregate_dimensions(
@@ -44,9 +78,10 @@ def aggregate_dimensions(
     periodo_label = periodo.label()
     dims_pedidas = dims or DIMS
 
-    df_subs_dedup = (
+    preparadas = (
         prepare_subs_dims(db, df_subs_full) if prepared is None else prepared
     )
+    df_subs_dedup = preparadas.frame
 
     react_by_origin = {
         o: (
@@ -66,8 +101,9 @@ def aggregate_dimensions(
             continue
 
         default = f"Sin {dim}"
-        # Mapeo de dimensión rápido usando el índice mapeado en memoria
-        map_dict = df_subs_dedup[dim_col].fillna(default).to_dict()
+        # Mapeo de dimensión rápido usando el índice mapeado en memoria.
+        # Se construye una sola vez por dimension y ejecucion (ver DimsPreparadas).
+        map_dict = preparadas.mapa(dim_col, default)
 
         def cnt(df_ords):
             if df_ords is None or (hasattr(df_ords, "empty") and df_ords.empty):
@@ -76,7 +112,7 @@ def aggregate_dimensions(
             s_mapped = df_ords["orden"].astype(str).str.strip().map(map_dict).fillna(default)
             return s_mapped.value_counts().to_dict()
 
-        billing_global = pd.to_numeric(df_subs_dedup["total"], errors="coerce").fillna(0.0)
+        billing_global = preparadas.billing
 
         # Facturacion agregada por valor de dimension en una sola pasada.
         # Antes se remapeaba act_fin completo dentro del bucle de valores, lo
