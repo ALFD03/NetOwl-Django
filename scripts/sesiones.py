@@ -3,10 +3,12 @@
 
 `django_session` solo guarda `session_key`, `session_data` y `expire_date`: no
 hay ninguna columna que diga de que entorno es una fila, y ya no hace falta.
-Cada entorno tiene su propia tabla dentro de su esquema, porque `search_path`
-apunta a DB_SCHEMA (ver DATABASES en netowl_web/settings.py). Antes las
-compartian todas en `public`, y por eso entrar en un entorno cerraba la sesion
-del otro.
+Cada entorno escribe en la tabla de su propio esquema (ver `SesionEntorno` en
+services/config/models.py). Antes compartian `public.django_session`, y por eso
+entrar en un entorno cerraba la sesion del otro.
+
+Usuarios y permisos si son compartidos, a proposito: eso vive en `public` y la
+misma cuenta vale en los dos entornos.
 
 Lo que si se puede ver es el contenido: `session_data` esta firmado y
 serializado, y al decodificarlo aparece `_auth_user_id`. Este script lo hace
@@ -49,8 +51,9 @@ django.setup()
 
 from django.conf import settings  # noqa: E402
 from django.contrib.auth import get_user_model  # noqa: E402
-from django.contrib.sessions.models import Session  # noqa: E402
 from django.utils import timezone  # noqa: E402
+
+from services.config.models import SesionEntorno as Session  # noqa: E402
 
 FOTO = Path("/tmp/netowl_sesiones.json")
 
@@ -132,11 +135,13 @@ def vigilar(clave: str) -> None:
 
 def main() -> None:
     print(f"Entorno            : DB_SCHEMA={os.getenv('DB_SCHEMA', 'public')}")
+    print(f"Tabla de sesiones  : {Session._meta.db_table}")
     print(f"Cookie de sesion   : {settings.SESSION_COOKIE_NAME}")
     print(f"Cookie CSRF        : {settings.CSRF_COOKIE_NAME}")
     print(
         "\nSolo salen las sesiones de este entorno: cada esquema tiene su\n"
-        "propia django_session.\n"
+        "propia django_session. Los usuarios, en cambio, son los mismos en\n"
+        "todos los entornos (viven en public).\n"
     )
 
     User = get_user_model()

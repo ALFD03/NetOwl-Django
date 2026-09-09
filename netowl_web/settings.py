@@ -81,6 +81,20 @@ ENV_SUFFIX = re.sub(r"[^A-Za-z0-9_-]", "_", os.getenv("DB_SCHEMA", "public"))
 SESSION_COOKIE_NAME = f"netowl_sessionid_{ENV_SUFFIX}"
 CSRF_COOKIE_NAME = f"netowl_csrftoken_{ENV_SUFFIX}"
 
+# Las sesiones tampoco pueden compartirse, y renombrar la cookie no basta: los
+# entornos apuntan a la misma base de datos, y con una unica
+# `public.django_session` entrar en uno cerraba la sesion del otro borrando su
+# fila. Este backend es el de base de datos de Django escribiendo en la tabla
+# del esquema del entorno (ver services/config/sessions.py).
+#
+# Usuarios, perfiles y permisos siguen compartidos en `public` a proposito: la
+# misma cuenta tiene que valer en los dos entornos. Lo unico que se separa es
+# la sesion.
+#
+# La tabla no la crea una migracion sino `manage.py preparar_sesiones`; el
+# porque esta en ese comando.
+SESSION_ENGINE = "services.config.sessions"
+
 # --- Límites de subida ---
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
@@ -164,24 +178,6 @@ DATABASES = {
         "PORT": str(config.db.DB_PORT),     # Puerto (por defecto 5432)
         "OPTIONS": {
             "sslmode": config.db.DB_SSLMODE,  # Modo SSL de la conexión
-            # El ORM resuelve sus tablas dentro del esquema del entorno, no en
-            # `public`. Antes solo el SQL crudo de core/database.py y el
-            # `db_table` de services/imports/models.py estaban cualificados con
-            # DB_SCHEMA; todo lo demas —auth_user, config_profile,
-            # django_session, django_content_type— caia en `public` y lo
-            # compartian todos los entornos contra la misma base de datos. Eso
-            # hacia que entrar en desarrollo cerrase la sesion de produccion:
-            # las dos escribian en la misma fila de django_session.
-            #
-            # Sin `public` en la lista a proposito: si estuviera, Postgres
-            # encontraria alli las tablas que falten en el esquema del entorno
-            # y volveriamos a compartirlas sin que nada fallara a la vista.
-            # Preferimos el error ruidoso ("relation does not exist") que dice
-            # que a ese esquema le faltan migraciones.
-            #
-            # Al cambiar esto hay que preparar el esquema una vez por entorno:
-            # ver scripts/separar_esquema.sql y el README.
-            "options": f"-c search_path={ENV_SUFFIX}",
         },
     }
 }
