@@ -164,6 +164,24 @@ DATABASES = {
         "PORT": str(config.db.DB_PORT),     # Puerto (por defecto 5432)
         "OPTIONS": {
             "sslmode": config.db.DB_SSLMODE,  # Modo SSL de la conexión
+            # El ORM resuelve sus tablas dentro del esquema del entorno, no en
+            # `public`. Antes solo el SQL crudo de core/database.py y el
+            # `db_table` de services/imports/models.py estaban cualificados con
+            # DB_SCHEMA; todo lo demas —auth_user, config_profile,
+            # django_session, django_content_type— caia en `public` y lo
+            # compartian todos los entornos contra la misma base de datos. Eso
+            # hacia que entrar en desarrollo cerrase la sesion de produccion:
+            # las dos escribian en la misma fila de django_session.
+            #
+            # Sin `public` en la lista a proposito: si estuviera, Postgres
+            # encontraria alli las tablas que falten en el esquema del entorno
+            # y volveriamos a compartirlas sin que nada fallara a la vista.
+            # Preferimos el error ruidoso ("relation does not exist") que dice
+            # que a ese esquema le faltan migraciones.
+            #
+            # Al cambiar esto hay que preparar el esquema una vez por entorno:
+            # ver scripts/separar_esquema.sql y el README.
+            "options": f"-c search_path={ENV_SUFFIX}",
         },
     }
 }
