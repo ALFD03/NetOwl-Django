@@ -248,9 +248,25 @@ CELERY_TASK_TIME_LIMIT = 60 * 60
 CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 2 * 60 * 60}
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
+# Cuantos analisis puede calcular el worker a la vez. Se puede lanzar churn, CRM
+# y soporte en paralelo en vez de esperar a que termine el anterior; dos del
+# mismo modulo siguen yendo en fila (ver `bloqueo_modulo` en imports/jobs.py),
+# porque comparten tabla.
+#
+# Subirlo tiene un coste que no se ve en la interfaz: cada analisis carga en
+# memoria el historico completo de logs y abre sus propias conexiones contra
+# Postgres, que tiene `max_connections=100`. 2 es un termino medio prudente;
+# medir la RAM del contenedor antes de subirlo.
+CELERY_WORKER_CONCURRENCY = int(os.getenv("WORKER_CONCURRENCY", "2"))
+
 # Cuanto tiempo sin dar senales de vida hace que un job "en curso" se considere
 # muerto (worker reiniciado a la fuerza) y deje de bloquear nuevas ejecuciones.
 ANALYSIS_JOB_STALE_SECONDS = 15 * 60
+
+# Caducidad del turno de escritura de un modulo. Mayor que el limite duro de la
+# tarea: si caducase antes, otro analisis del mismo modulo entraria mientras el
+# primero sigue escribiendo. Solo actua si el worker muere sin soltarlo.
+ANALYSIS_LOCK_TIMEOUT = 2 * 60 * 60
 
 
 # --- Campos auto-generados ---

@@ -7,11 +7,13 @@ Todo lo que las dos partes necesitan saber vive en este modulo.
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import logging
 import time
 
+from django.conf import settings
 from django.db import close_old_connections
 from django.http import JsonResponse
 from django.utils import timezone
@@ -37,6 +39,63 @@ def job_en_curso(module: str) -> AnalysisJob | None:
     return None
 
 
+def job_duplicado(module: str, periodo: str) -> AnalysisJob | None:
+    """Ejecucion abierta que escribiria exactamente lo mismo que la pedida.
+
+    Lo que no se puede permitir no es que haya varios analisis a la vez, sino
+    que dos escriban el mismo periodo del mismo modulo: los dos borran y
+    reescriben esas filas, y el resultado depende de quien termine ultimo. Dos
+    meses distintos, o dos modulos distintos, no se estorban y pueden encolarse.
+
+    El ciclo de vida no tiene periodo, asi que su duplicado es simplemente otro
+    ciclo de vida abierto.
+    """
+    abiertos = AnalysisJob.objects.filter(
+        module=module, periodo=periodo or '', status__in=AnalysisJob.ESTADOS_ABIERTOS
+    )
+    for job in abiertos:
+        if not job.esta_muerto:
+            return job
+    return None
+
+
+@contextlib.contextmanager
+def bloqueo_modulo(module: str):
+    """Toma el turno de escritura de un modulo, o cede si ya lo tiene otro.
+
+    Con el worker en paralelo pueden coincidir dos analisis, y dos analisis del
+    mismo modulo comparten tabla: ademas de reescribir filas, `save_historico`
+    crea y altera la tabla sobre la marcha, y dos DDL simultaneas sobre la misma
+    tabla acaban en bloqueo mutuo. Este cerrojo deja que corran a la vez modulos
+    distintos -que es lo que se queria- y pone en fila los del mismo modulo.
+
+    El cerrojo vive en Redis con caducidad: si el worker muere a la fuerza se
+    suelta solo, en vez de dejar el modulo bloqueado para siempre. Lleva el
+    sufijo del entorno, asi que desarrollo y produccion no comparten turno
+    aunque compartan el Redis.
+
+    Cede el control con `None` cuando no lo consigue; no espera.
+    """
+    import redis
+
+    cliente = redis.Redis.from_url(settings.REDIS_URL)
+    cerrojo = cliente.lock(
+        f"netowl:analisis:{settings.ENV_SUFFIX}:{module}",
+        timeout=settings.ANALYSIS_LOCK_TIMEOUT,
+        blocking=False,
+    )
+    if not cerrojo.acquire(blocking=False):
+        yield None
+        return
+    try:
+        yield cerrojo
+    finally:
+        # `LockNotOwnedError` si el analisis duro mas que la caducidad: el
+        # cerrojo ya es de otro y soltarlo seria quitarselo.
+        with contextlib.suppress(Exception):
+            cerrojo.release()
+
+
 def jobs_abiertos() -> list[AnalysisJob]:
     """Todas las ejecuciones vivas, en el orden en que entraron a la cola.
 
@@ -44,8 +103,7 @@ def jobs_abiertos() -> list[AnalysisJob]:
     modulo, pero el usuario quiere ver de un vistazo todo lo que hay corriendo
     y esperando, sea de churn, CRM o soporte.
 
-    En ejecucion primero y luego las que esperan turno, que es como avanzaran:
-    el worker corre con `--concurrency=1`, asi que solo una se calcula a la vez.
+    En ejecucion primero y luego las que esperan turno, que es como avanzaran.
     """
     abiertos = AnalysisJob.objects.filter(
         status__in=AnalysisJob.ESTADOS_ABIERTOS
@@ -180,19 +238,21 @@ def lanzar_analisis(request, module, requiere_periodo=True):
                 {"status": "error", "message": "Periodo inválido (YYYY-MM)"}, status=400
             )
 
-    # Dos analisis del mismo modulo a la vez se pisarian las tablas: ambos
-    # borran y reescriben el periodo. En vez de rechazar sin mas, se devuelve el
-    # job vivo para que el cliente se enganche a el.
-    en_curso = job_en_curso(module)
-    if en_curso is not None:
+    # Solo se rechaza el duplicado exacto: pedir otra vez el mismo periodo del
+    # mismo modulo que ya esta encolado o corriendo no calcularia nada nuevo, y
+    # las dos ejecuciones se pisarian las mismas filas. Cualquier otra
+    # combinacion se encola y espera turno.
+    duplicado = job_duplicado(module, periodo)
+    if duplicado is not None:
+        en_curso = duplicado.status == AnalysisJob.EN_CURSO
         return JsonResponse({
             "status": "running",
             "message": (
-                f"Ya hay un análisis en ejecución para este módulo"
-                f"{f' (periodo {en_curso.periodo})' if en_curso.periodo else ''}."
+                f"Este análisis{f' del periodo {duplicado.periodo}' if duplicado.periodo else ''}"
+                f"{' ya se está ejecutando' if en_curso else ' ya está en la cola'}."
                 " Se muestra su progreso."
             ),
-            "job": en_curso.to_dict(),
+            "job": duplicado.to_dict(),
         }, status=409)
 
     # Import diferido: `tasks` importa este modulo para su consola y su

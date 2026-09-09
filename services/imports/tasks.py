@@ -11,6 +11,11 @@ log y progreso en esa fila, que es lo que sondea la interfaz.
 
 Todas las tareas comparten el mismo esqueleto (`ejecutar_analisis`) y solo se
 diferencian en la funcion de calculo, registrada en `RUNNERS`.
+
+El worker corre varias a la vez (`CELERY_WORKER_CONCURRENCY`), pero nunca dos
+del mismo modulo: eso lo garantiza `bloqueo_modulo`, porque los analisis de un
+mismo modulo comparten tabla. Asi se puede lanzar churn, CRM y soporte a la vez
+y encolar de paso tres meses de churn, que iran uno detras de otro.
 """
 
 from __future__ import annotations
@@ -27,10 +32,13 @@ from core.models import Periodo
 from core.utils import capture_console
 
 from .history import register_import_log
-from .jobs import ConsolaJob, marcar_fin, marcar_inicio
+from .jobs import ConsolaJob, bloqueo_modulo, marcar_fin, marcar_inicio
 from .models import AnalysisJob
 
 logger = logging.getLogger(__name__)
+
+# Cada cuanto vuelve a intentarlo un analisis que encontro su modulo ocupado.
+ESPERA_TURNO_SEGUNDOS = 20
 
 
 # --- Analisis concretos ---------------------------------------------------
@@ -100,12 +108,16 @@ RUNNERS: dict[str, Callable[[AnalysisJob, ConsolaJob], tuple[str, dict]]] = {
 
 # --- Esqueleto comun ------------------------------------------------------
 
-@shared_task(bind=True, name="imports.ejecutar_analisis")
+@shared_task(bind=True, name="imports.ejecutar_analisis", max_retries=None)
 def ejecutar_analisis(self, job_id: str) -> None:
     """Ejecuta el analisis del job indicado y deja el desenlace en su fila.
 
     No propaga la excepcion: el error interesa en el job (lo lee la interfaz) y
     en el historial de importaciones, no como traza de Celery que nadie mira.
+
+    Si otro analisis del mismo modulo tiene el turno, la tarea se reencola en
+    vez de esperar ocupando un hueco del worker: mientras tanto el job se queda
+    en `pending` y la interfaz lo enseña, correctamente, como que espera turno.
     """
     close_old_connections()
     try:
@@ -120,7 +132,17 @@ def ejecutar_analisis(self, job_id: str) -> None:
         logger.warning("Job %s ya cerrado (%s); se ignora la reentrega", job_id, job.status)
         return
 
-    marcar_inicio(job, getattr(self.request, 'id', ''))
+    with bloqueo_modulo(job.module) as turno:
+        if turno is None:
+            # `countdown` y no espera activa: el hueco del worker queda libre
+            # para un analisis de otro modulo, que es justo lo que se busca.
+            raise self.retry(countdown=ESPERA_TURNO_SEGUNDOS)
+        _ejecutar_con_turno(self, job)
+
+
+def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
+    """Cuerpo del analisis, ya con el turno del modulo tomado."""
+    marcar_inicio(job, getattr(tarea.request, 'id', ''))
     consola = ConsolaJob(job)
     runner = RUNNERS[job.module]
     etiqueta = f"Periodo {job.periodo}" if job.periodo else "Global"
@@ -137,7 +159,7 @@ def ejecutar_analisis(self, job_id: str) -> None:
         register_import_log(job.user, job.module, etiqueta, 0, 'error', texto, job.log)
         return
     except Exception as e:  # noqa: BLE001 - el desenlace se reporta, no se propaga
-        logger.exception("Fallo en el analisis %s (%s)", job.module, job_id)
+        logger.exception("Fallo en el analisis %s (%s)", job.module, job.id)
         texto = f"Fallo en la ejecución del análisis: {e}"
         marcar_fin(job, consola, AnalysisJob.ERROR, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'error', texto, job.log)

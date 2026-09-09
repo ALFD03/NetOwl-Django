@@ -63,6 +63,9 @@ export function AnalysisRunnerCard({
   // Estado vivo del job: lo que llega en cada sondeo mientras el worker calcula.
   const [job, setJob] = useState<AnalysisJob | null>(null);
   const [isAttached, setIsAttached] = useState(false);
+  // Solo mientras se encola, no mientras se calcula: el boton vuelve a estar
+  // disponible en cuanto el analisis tiene su sitio en la cola.
+  const [enviando, setEnviando] = useState(false);
 
   const analysis = useAsyncAction(onRun, {
     successMessage: (result) => successMessage(result, selectedMonth),
@@ -78,7 +81,16 @@ export function AnalysisRunnerCard({
     }
     setValidation(null);
     setJob(null);
-    await analysis.run(selectedMonth || null, setJob);
+    setEnviando(true);
+    try {
+      // El primer sondeo con el job ya creado es la senal de que esta encolado.
+      await analysis.run(selectedMonth || null, (vivo) => {
+        setEnviando(false);
+        setJob(vivo);
+      });
+    } finally {
+      setEnviando(false);
+    }
   };
 
   // Reenganche: si al abrir la pagina ya hay un analisis de este modulo en
@@ -111,6 +123,11 @@ export function AnalysisRunnerCard({
     void attach();
   }, [attach]);
 
+  // `isPending` sigue gobernando el log y la barra -lo que hay que mirar
+  // mientras calcula- pero ya no bloquea el boton: se pueden encolar varios
+  // analisis seguidos y el worker los va tomando. Repetir el mismo periodo no
+  // duplica nada: el servidor responde 409 y el cliente se engancha al que ya
+  // estaba, en vez de lanzar otro.
   const isPending = analysis.isPending || isAttached;
   const progress = job?.progress;
   const hasProgress = isPending && !!progress && progress.total > 1;
@@ -126,8 +143,8 @@ export function AnalysisRunnerCard({
           <MonthPicker value={selectedMonth} onChange={setSelectedMonth} placeholder={monthPlaceholder} />
           <Button
             onClick={handleRun}
-            isLoading={isPending}
-            disabled={isPending || (requireMonth && !selectedMonth)}
+            isLoading={enviando}
+            disabled={enviando || (requireMonth && !selectedMonth)}
             icon={<Play className="h-4 w-4 fill-current" />}
           >
             {runLabel}
