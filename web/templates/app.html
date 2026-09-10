@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <!-- El nombre de la cookie CSRF varia por entorno; el cliente lo lee de aqui -->
+  <meta name="csrf-cookie-name" content="{{ csrf_cookie_name }}">
+  <title>NetOwl Analytics</title>
+  {% load static %}
+  <link rel="icon" href="{% static 'img/favicon_dark.png' %}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  {% if vite_dev_server %}
+    <script type="module">
+      import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
+      RefreshRuntime.injectIntoGlobalHook(window)
+      window.$RefreshReg$ = () => {}
+      window.$RefreshSig$ = () => (type) => type
+      window.__vite_plugin_react_preamble_installed__ = true
+    </script>
+    <script type="module" src="http://localhost:5173/static/@vite/client"></script>
+    <script type="module" src="http://localhost:5173/static/src/app/main.tsx"></script>
+  {% else %}
+    <link rel="stylesheet" href="{% static 'dist/assets/main.css' %}">
+    <script type="module" src="{% static 'dist/assets/main.js' %}"></script>
+  {% endif %}
+</head>
+<body class="bg-[#0b1326] text-[#E6EEF6] font-sans antialiased min-h-screen">
+  {% block inertia %}
+    <div id="app" data-page="{{ page }}"></div>
+  {% endblock inertia %}
+</body>
+</html>

@@ -1,0 +1,46 @@
+# Configuracion de herramientas de Python. El proyecto no se empaqueta: esto
+# existe solo para que ruff tenga donde vivir.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"   # la version del contenedor (ver Dockerfile)
+extend-exclude = [".venv", "node_modules", "graphify-out", "staticfiles", "web"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes: nombres sin definir, imports sin usar
+    "I",    # isort: orden de los imports
+    "UP",   # pyupgrade: sintaxis vieja para la version objetivo
+    "B",    # flake8-bugbear: fallos silenciosos frecuentes
+]
+ignore = [
+    "E501",  # el largo de linea lo arregla el formateador, no el linter
+    "B008",  # llamadas en argumentos por defecto: Django las usa a proposito
+
+    # `if cond: return x` en una linea. El codigo lo usa para tablas de
+    # despacho alineadas (ver services/crm/analytics/loader.py), donde partir
+    # cada rama en dos lineas se lee peor. Es una cuestion de formato: si algun
+    # dia se adopta `ruff format`, sera el quien decida.
+    "E701",
+
+    # Closure que usa la variable del bucle. Los siete casos definen un filtro
+    # local y lo llaman en la misma iteracion, asi que no hay captura diferida;
+    # ruff no puede demostrarlo y avisa igual. Revisados uno a uno.
+    "B023",
+
+    # `zip()` sin `strict=`. Ponerlo en True cambia el comportamiento (pasa a
+    # lanzar si las longitudes no coinciden) y en False solo anade ruido:
+    # cada sitio necesita una decision propia sobre que significa un desajuste.
+    "B905",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "services", "netowl_web"]
+
+[tool.ruff.lint.per-file-ignores]
+# Los __init__ reexportan a proposito para dar una fachada al paquete.
+"**/__init__.py" = ["F401"]
+
+[tool.ruff.format]
+quote-style = "preserve"   # el codigo mezcla comillas; no es una pelea que valga la pena

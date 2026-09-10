@@ -1,8 +1,18 @@
-# --- Etapa 1: Compilación ---
-FROM python:3.11-slim AS builder
+# --- Etapa 1: Compilación de Frontend (React + TypeScript + Vite) ---
+FROM node:20-alpine AS frontend-builder
 WORKDIR /app
 
-# Instalar dependencias del sistema necesarias para compilar psycopg2
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY web/ ./web
+COPY tsconfig.json vite.config.ts tailwind.config.js postcss.config.js ./
+RUN npm run build
+
+# --- Etapa 2: Dependencias de Python ---
+FROM python:3.11-slim AS python-builder
+WORKDIR /app
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -10,34 +20,37 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Instalar dependencias a nivel de sistema para la etapa de compilación
 RUN pip install --no-cache-dir -r requirements.txt
 
-
-# --- Etapa 2: Ejecución de Producción ---
+# --- Etapa 3: Contenedor Final de Ejecución ---
 FROM python:3.11-slim AS runner
 WORKDIR /app
+ENV HOME=/app
 
-# Instalar únicamente la librería de tiempo de ejecución para Postgres
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/* \
     && addgroup --system --gid 1001 app \
-    && adduser --system --uid 1001 --gid 1001 app
+    && adduser --system --uid 1001 --gid 1001 --home /app app
 
-# Copiar todas las librerías de Python compiladas a nivel de sistema
-COPY --from=builder /usr/local /usr/local
+# Copiar paquetes de Python
+COPY --from=python-builder /usr/local /usr/local
 
-# Copiar el código fuente con los permisos para el usuario app
+# 1. Copiar código fuente
 COPY --chown=app:app . .
-# collectstatic se ejecuta en entrypoint.sh (runtime), no aquí: settings.py
-# lee los secretos de Vault al importarse y Vault no está disponible en build.
-RUN mkdir -p /app/logs /app/staticfiles && chown app:app /app/logs /app/staticfiles
+
+# 2. Inyectar el bundle JS/CSS compilado en web/static/dist
+COPY --from=frontend-builder --chown=app:app /app/web/static/dist ./web/static/dist
+
+# Asegurar carpetas de logs, estáticos y .gunicorn con permisos de app
+RUN mkdir -p /app/logs /app/staticfiles /app/.gunicorn && \
+    chmod +x /app/entrypoint.sh && \
+    chown -R app:app /app
 
 USER app
 EXPOSE 8000
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["gunicorn", "frontend.netowl_web.wsgi:application", \
+CMD ["gunicorn", "netowl_web.wsgi:application", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "5", \
      "--timeout", "300", \

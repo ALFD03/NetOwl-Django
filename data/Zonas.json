@@ -1,0 +1,302 @@
+{
+    "zonas": [
+        {
+            "name": "Balbina" ,
+            "Site": "Maracay",
+            "Type": "RF",
+            "Estado": "Aragua"
+        },
+        {
+            "name": "Bermudez" ,
+            "Site": "Maracay",
+            "Type": "RF",
+            "Estado": "Aragua"
+        },
+        {
+            "name": "Cagua" ,
+            "Site": "Cagua",
+            "Type": "FTTH",
+            "Estado": "Aragua",
+            "Coordinador" : "Jose Paez 2"
+        },
+        {
+            "name": "Caribe" ,
+            "Site": "Maracay",
+            "Type": "FTTH",
+            "Estado": "Aragua",
+            "Coordinador" : "Jose Paez"
+        },
+        {
+            "name": "Castillito" ,
+            "Site": "San Diego",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Colina" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Copey" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Copey Arriba" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Dayco" ,
+            "Site": "Valencia",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Nestor Villegas"
+        },
+        {
+            "name": "El Limon" ,
+            "Site": "Maracay",
+            "Type": "RF",
+            "Estado": "Aragua"
+        },
+        {
+            "name": "Flor Amarillo" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Fundacion Mendoza" ,
+            "Site": "Valencia",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Alvaro Maldonado"
+        },
+        {
+            "name": "Guacara" ,
+            "Site": "Guacara",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Pedro Rios"
+        },
+        {
+            "name": "Isla Larga" ,
+            "Site": "Puerto Cabello",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "La Castellana" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "La Esmeralda" ,
+            "Site": "San Diego",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "La Morita" ,
+            "Site": "Maracay",
+            "Type": "FTTH",
+            "Estado": "Aragua",
+            "Coordinador" : "Jose Paez"
+        },
+        {
+            "name": "La Sorpresa" ,
+            "Site": "Puerto Cabello",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "German Cerruti "
+        },
+        {
+            "name": "Laboratorio ING" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Los Guayos" ,
+            "Site": "Los Guayos",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador": "Katiuska Añez"
+        },
+        {
+            "name": "Los Parques" ,
+            "Site": "Valencia",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Jhonny Bolívar"
+        },
+        {
+            "name": "Mango Shopping" ,
+            "Site": "Naguanagua",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Robert Mendoza"
+        },
+        {
+            "name": "Mirador" ,
+            "Site": "Naguanagua",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Ninguno" ,
+            "Site": "Valencia",
+            "Type": "FTTH",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Palma Center" ,
+            "Site": "La Victoria",
+            "Type": "FTTH",
+            "Estado": "Aragua",
+            "Coordinador" : "Nicola Pretrovich"
+        },
+        {
+            "name": "Paraparal" ,
+            "Site": "Los Guayos",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador": "Katiuska Añez"
+        },
+        {
+            "name": "Parral" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Paseo Las Industrias" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Paseo Moron",
+            "Site": "Moron",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "German Cerruti 2"
+        },
+        {
+            "name": "Piedra Pintada" ,
+            "Site": "Guacara",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Pedro Rios"
+        },
+        {
+            "name": "Plaza" ,
+            "Site": "Puerto Cabello",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "German Cerruti"
+        },
+        {
+            "name": "Rancho Grande" ,
+            "Site": "Puerto Cabello",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "San Andres" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "San Jacinto" ,
+            "Site": "Maracay",
+            "Type": "RF",
+            "Estado": "Aragua"
+        },
+        {
+            "name": "San Joaquin" ,
+            "Site": "San Joaquin",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Edison Calma"
+        },
+        {
+            "name": "San Mateo" ,
+            "Site": "Cagua",
+            "Type": "FTTH",
+            "Estado": "Aragua",
+            "Coordinador" : "Jose Paez 2"
+        },
+        {
+            "name": "Shangri-La" ,
+            "Site": "Valencia",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Alvaro Maldonado"
+        },
+        {
+            "name": "Tocuyito" ,
+            "Site": "Libertador",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Nestor Villegas"
+        },
+        {
+            "name": "Torre Ejecutiva" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Torre Movilnet" ,
+            "Site": "Valencia",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Robert Mendoza"
+        },
+        {
+            "name": "Valle Lindo" ,
+            "Site": "Turmero",
+            "Type": "FTTH",
+            "Estado": "Aragua",
+            "Coordinador" : "Jose Paez"
+        },
+        {
+            "name": "Venaragua" ,
+            "Site": "Maracay",
+            "Type": "RF",
+            "Estado": "Aragua"
+        },
+        {
+            "name": "Vista Hermosa" ,
+            "Site": "La Victoria",
+            "Type": "RF",
+            "Estado": "Aragua"
+        },
+        {
+            "name": "Vistamar" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Xian" ,
+            "Site": "Valencia",
+            "Type": "RF",
+            "Estado": "Carabobo"
+        },
+        {
+            "name": "Mariara" ,
+            "Site": "San Joaquin",
+            "Type": "FTTH",
+            "Estado": "Carabobo",
+            "Coordinador" : "Edison Calma"
+        }
+    ]
+}

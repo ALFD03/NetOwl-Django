@@ -1,0 +1,45 @@
+{
+  "surface": {
+    "primary": "#0b1326",
+    "secondary": "#0f1a36",
+    "tertiary": "#12214a",
+    "hover": "#15285d",
+    "deep": "#071122"
+  },
+  "brand": {
+    "DEFAULT": "#2563eb",
+    "hover": "#1d4ed8",
+    "light": "#3b82f6"
+  },
+  "metric": {
+    "slate": "#94a3b8",
+    "green": "#10b981",
+    "red": "#f43f5e",
+    "blue": "#38bdf8",
+    "yellow": "#f59e0b",
+    "purple": "#a855f7"
+  },
+  "chartPalette": [
+    "#ff2a5f",
+    "#ffb703",
+    "#3b82f6",
+    "#a855f7",
+    "#00ff88",
+    "#ec4899",
+    "#14b8a6",
+    "#f97316",
+    "#8b5cf6",
+    "#06b6d4",
+    "#64748b"
+  ],
+  "chart": {
+    "textStrong": "#ffffff",
+    "textMuted": "#cbd5e1",
+    "textAxis": "#94a3b8",
+    "border": "#334155",
+    "labelStroke": "#000000",
+    "grid": "rgba(30, 41, 59, 0.4)",
+    "gridSoft": "rgba(51, 65, 85, 0.25)",
+    "surfaceDeep": "#0f172a"
+  }
+}
