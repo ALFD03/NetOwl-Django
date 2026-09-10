@@ -82,7 +82,7 @@ export const NeonContainer: FC<NeonContainerProps> = ({
           {headerAction && <div>{headerAction}</div>}
         </div>
       )}
-      <div className={noPadding ? '' : 'p-6 flex-1'}>
+      <div className={noPadding ? 'flex-1' : 'p-6 flex-1'}>
         {children}
       </div>
     </div>
