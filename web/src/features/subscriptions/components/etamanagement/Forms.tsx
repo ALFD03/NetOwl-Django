@@ -450,7 +450,7 @@ export function PlanForm({
             aria-label="Tecnología"
             className={inputClass}
             value={value.tecnologia ?? 'FTTH'}
-            options={['FTTH', 'HFC', 'ADSL', 'Dedicado', 'Transporte'].map((item) => ({ value: item, label: item }))}
+            options={['FTTH', 'RF', 'Dedicado', 'Transporte'].map((item) => ({ value: item, label: item }))}
             onChange={(tecnologia) => onChange({ tecnologia })}
           />
         </div>
@@ -459,8 +459,8 @@ export function PlanForm({
           <SelectMenu
             aria-label="Tipo de persona"
             className={inputClass}
-            value={value.tipo_persona ?? 'pyme'}
-            options={['nat', 'pyme', 'corporativo'].map((item) => ({ value: item, label: item }))}
+            value={value.tipo_persona ?? 'PYME'}
+            options={['Natural', 'PYME'].map((item) => ({ value: item, label: item }))}
             onChange={(tipo_persona) => onChange({ tipo_persona })}
           />
         </div>

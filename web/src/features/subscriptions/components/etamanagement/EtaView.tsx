@@ -50,7 +50,7 @@ export function EtaManagementView({
       plan_name: '',
       name: '',
       tecnologia: 'FTTH',
-      tipo_persona: 'pyme',
+      tipo_persona: 'PYME',
       datas_mbps: 100,
       tiene_tv: false,
       es_transporte: false,
