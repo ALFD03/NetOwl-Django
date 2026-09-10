@@ -138,6 +138,8 @@ function AnalyticsChartItem({
    * regardless of what the underlying metric is measured in.
    */
   const plottedSuffix = config.mode === 'ranking' ? suffix : ' %';
+  
+  const round = config.round;
 
   const barData = useMemo(
     // The chart title names the series in the bar legend. Several titles already
@@ -157,8 +159,9 @@ function AnalyticsChartItem({
       getHorizontalBarOptions(
         undefined,
         plottedSuffix,
+        round
       ),
-    [plottedSuffix],
+    [plottedSuffix, round],
   );
 
   const doughnutOptions = useMemo(

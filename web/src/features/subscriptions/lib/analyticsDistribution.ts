@@ -35,6 +35,7 @@ export interface AnalyticsMetricConfig extends RankingOptions {
   unit?: '%' | '$' | 'number';
   /** Defaults to `growth` where unset. */
   direction?: MetricDirection;
+  round?: number;
 }
 
 /**

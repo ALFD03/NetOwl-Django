@@ -1,4 +1,4 @@
-import { formatInteger } from '@/shared/utils/formatters/number';
+import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils/formatters/number';
 import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import 'chartjs-plugin-datalabels';
 import type { ActiveElement, ChartEvent, ChartOptions } from 'chart.js';
@@ -48,6 +48,18 @@ export function seriesDatalabelColor(...sources: SeriesColorKey[]) {
   };
 }
 
+/**
+ * Separa las etiquetas de las series que corren juntas: la serie par se rotula
+ * por debajo de su punto y la impar por encima, de modo que dos lineas cercanas
+ * mandan sus numeros en direcciones opuestas en vez de amontonarlos en el mismo
+ * hueco (que es lo que hacia que `display: 'auto'` los descartara). Con una sola
+ * serie no hay con quien chocar, asi que se queda arriba.
+ */
+export function alternatingLabelAlign(context: DatalabelContext): 'top' | 'bottom' {
+  if (context.chart.data.datasets.length < 2) return 'top';
+  return context.datasetIndex % 2 === 0 ? 'bottom' : 'top';
+}
+
 export type DoughnutHoverValue = { name: string; val: string };
 export type HoverableChartData = {
   labels?: unknown[];
@@ -66,21 +78,34 @@ export interface DoughnutOptionsConfig {
 export const baseLineOptions: ChartOptions<'line'> = {
   responsive: true,
   maintainAspectRatio: false,
+  // El hueco de las etiquetas se reserva aqui, no con `grace`: en el eje X
+  // (categorico) `grace` se ignora, y por eso el primer y el ultimo valor
+  // salian cortados contra el borde. `layout.padding` aparta el area de dibujo
+  // del canvas y funciona con cualquier tipo de escala.
   plugins: {
     legend: { display: true, position: 'top', align: 'end', labels: { color: CHART_CHROME.textMuted, font: { size: 11 } } },
-    // 'auto' lets the plugin drop labels that would collide, so a dense series
-    // thins itself out instead of turning into a smear of overlapping numbers.
-    datalabels: { ...DATALABEL_TEXT, display: 'auto', clip: false, anchor: 'end', align: 'top', offset: 4, formatter: (value: number) => formatInteger(value) },
+    // Nada de `clamp`: en el punto del borde no puede sacar la etiqueta fuera del
+    // area, asi que la desplazaba en horizontal y la dejaba encima del propio
+    // punto. El hueco del borde lo da `layout.padding` y `clip: false` deja que
+    // la etiqueta se dibuje en el.
+    datalabels: { ...DATALABEL_TEXT, display: 'auto', clip: false, clamp: false, anchor: 'end', align: alternatingLabelAlign, offset: 10, formatter: (value: number) => formatInteger(value), textAlign: 'center' },
     tooltip: { enabled: true, backgroundColor: SURFACE.secondary, titleColor: CHART_CHROME.textStrong, bodyColor: CHART_CHROME.textMuted, borderColor: CHART_CHROME.border, borderWidth: 1, padding: 10, cornerRadius: 8 },
   },
   scales: {
-    x: { grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } }, grace: '20%' },
+    // `offset: true` mete media categoria de margen en los dos extremos, de modo
+    // que el primer punto deja de estar pegado al eje Y y su etiqueta ya no se
+    // dibuja encima de los numeros del eje. `layout.padding` no sirve para esto:
+    // ese hueco queda por fuera del eje, no entre el eje y el primer punto.
+    // `autoSkip: false` para que no desaparezcan meses del eje: si no caben,
+    // se inclinan hasta 45 grados en vez de que Chart.js borre uno de cada N.
+    x: { offset: true, grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 }, autoSkip: false, maxRotation: 45, minRotation: 0, autoSkipPadding: 1 } },
     y: { grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } }, grace: '20%' },
   },
+  
 };
 
 /** Line counterpart of `getHorizontalBarOptions`; `suffix` is appended to each point label. */
-export function getLineOptions(suffix = '', customOptions?: ChartOptions<'line'>): ChartOptions<'line'> {
+export function getLineOptions(suffix = '', rounded?: number, customOptions?: ChartOptions<'line'>): ChartOptions<'line'> {
   return {
     ...baseLineOptions,
     ...customOptions,
@@ -89,7 +114,8 @@ export function getLineOptions(suffix = '', customOptions?: ChartOptions<'line'>
       ...customOptions?.plugins,
       datalabels: {
         ...baseLineOptions.plugins?.datalabels,
-        ...(suffix ? { formatter: (value: number) => `${formatInteger(value)}${suffix}` } : {}),
+        ...(rounded == 0 ? { formatter: (value: number) => `${formatInteger(value)}${suffix}` } : rounded == 1 ? { formatter: (value: number) => `${formatOneDecimal(value)}${suffix}` } : rounded == 2 ? { formatter: (value: number) => `${formatTwoDecimals(value)}${suffix}` } :{}),
+        // ...(suffix ? { formatter: (value: number) => `${formatInteger(value)}${suffix}` } : {}),
         ...customOptions?.plugins?.datalabels,
       },
     },
@@ -99,13 +125,23 @@ export function getLineOptions(suffix = '', customOptions?: ChartOptions<'line'>
 export const horizontalBarOptions: ChartOptions<'bar'> = {
   responsive: true,
   maintainAspectRatio: false,
+  // El hueco de las etiquetas se reserva aqui, no con `grace`: en el eje X
+  // (categorico) `grace` se ignora, y por eso el primer y el ultimo valor
+  // salian cortados contra el borde. `layout.padding` aparta el area de dibujo
+  // del canvas y funciona con cualquier tipo de escala.
   plugins: {
     legend: { display: true, position: 'top', align: 'end', labels: { color: CHART_CHROME.textMuted, font: { size: 11 }, usePointStyle: true, pointStyle: 'circle', padding: 15 } },
-    datalabels: { ...DATALABEL_TEXT, display: 'auto', clip: false, anchor: 'end', align: 'top', offset: 5, formatter: (value: number) => formatInteger(value) },
+    datalabels: { ...DATALABEL_TEXT, display: 'auto', clip: false, clamp: false, anchor: 'end', align: 'top', offset: 8, formatter: (value: number) => formatInteger(value) },
     tooltip: { enabled: true, backgroundColor: SURFACE.secondary, titleColor: CHART_CHROME.textStrong, bodyColor: CHART_CHROME.textMuted, borderColor: CHART_CHROME.border, borderWidth: 1, padding: 10, cornerRadius: 8 },
   },
   scales: {
-    x: { grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } }, grace: '20%' },
+    // `offset: true` mete media categoria de margen en los dos extremos, de modo
+    // que el primer punto deja de estar pegado al eje Y y su etiqueta ya no se
+    // dibuja encima de los numeros del eje. `layout.padding` no sirve para esto:
+    // ese hueco queda por fuera del eje, no entre el eje y el primer punto.
+    // `autoSkip: false` para que no desaparezcan meses del eje: si no caben,
+    // se inclinan hasta 45 grados en vez de que Chart.js borre uno de cada N.
+    x: { offset: true, grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 }, autoSkip: false, maxRotation: 45, minRotation: 0, autoSkipPadding: 4 } },
     y: { grid: { color: CHART_CHROME.grid }, ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } }, grace: '20%' },
   },
 };
@@ -113,6 +149,7 @@ export const horizontalBarOptions: ChartOptions<'bar'> = {
 export function getHorizontalBarOptions(
   datalabelColor?: string,
   suffix = '',
+  rounded?: number,
   customOptions?: ChartOptions<'bar'>,
 ): ChartOptions<'bar'> {
   return {
@@ -124,7 +161,8 @@ export function getHorizontalBarOptions(
       datalabels: {
         ...horizontalBarOptions.plugins?.datalabels,
         ...(datalabelColor ? { color: datalabelColor } : {}),
-        ...(suffix ? { formatter: (value: number) => `${formatInteger(value)}${suffix}` } : {}),
+        ...(rounded == 0 ? { formatter: (value: number) => `${formatInteger(value)}${suffix}` } : rounded == 1 ? { formatter: (value: number) => `${formatOneDecimal(value)}${suffix}` } : rounded == 2 ? { formatter: (value: number) => `${formatTwoDecimals(value)}${suffix}` } :{}),
+        // ...(suffix ? { formatter: (value: number) => `${formatInteger(value)}${suffix}` } : {}),
         ...customOptions?.plugins?.datalabels,
       },
     },
