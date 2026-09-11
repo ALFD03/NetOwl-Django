@@ -79,7 +79,7 @@ def map_stage_canonically(stage_value: any) -> str:
         if num in num_map:
             return num_map[num]
             
-    from ..utils import normalize_text
+    from core.utils import normalize_text
     norm = normalize_text(val_str)
     
     if "contacto" in norm: return "etapa_1_contacto"

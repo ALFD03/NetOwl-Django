@@ -118,10 +118,6 @@ La solución son tres piezas:
 el `schema_editor` desde el modelo, así que añadir un campo no obliga a tocar el
 comando. Ambos se ejecutan en cada arranque (`entrypoint.sh` y `scripts/dev.sh`).
 
-`scripts/sesiones.py` se menciona en `CLAUDE.md` como utilidad para listar las
-sesiones vivas del entorno; **ese fichero no existe en el árbol actual** (ver
-[13](13-discrepancias-y-hallazgos.md)).
-
 ### Migraciones
 
 Tres apps tienen modelos y por tanto `migrations/`:
@@ -219,8 +215,9 @@ Tres manejadores, todos con rotación de 10 MB × 5 ficheros:
 | Logger | Fichero | Nota |
 |---|---|---|
 | `django.request` | `logs/requests.log` | |
-| `frontend`, `backend` | `logs/app.log` + consola | Existen porque los `logger.exception(...)` del código propio no tenían manejador: acababan en el logger raíz, que gunicorn descarta en silencio |
+| `services`, `core` | `logs/app.log` + consola | Los `logger.exception(...)` del código propio, que si no acabarían en el logger raíz —sin manejador— y gunicorn descartaría en silencio |
 
-> Los módulos usan `logging.getLogger(__name__)`, cuyos nombres empiezan por
-> `services.` o `core.`, no por `frontend`/`backend`. En la práctica esos
-> registros llegan al logger raíz; ver [13](13-discrepancias-y-hallazgos.md).
+> Los dos nombres no son decorativos: los veinte módulos que crean un logger lo
+> hacen con `logging.getLogger(__name__)`, así que el nombre resultante empieza
+> por `services.` o por `core.` y cae bajo uno de los dos. Un logger con
+> cualquier otro nombre no captaría nada.

@@ -317,13 +317,19 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
-        # Codigo propio: las apps de `frontend` y el paquete de analitica.
-        "frontend": {
+        # Codigo propio. Los nombres tienen que ser los de los paquetes reales:
+        # los veinte modulos que crean un logger lo hacen con
+        # `logging.getLogger(__name__)`, asi que sus nombres empiezan por
+        # `services.` o por `core.`. Los dos loggers que habia antes aqui
+        # —`frontend` y `backend`— no correspondian a ningun paquete, de modo
+        # que no captaban nada: todo propagaba al logger raiz, que no tiene
+        # handler, y `logs/app.log` se quedaba vacio.
+        "services": {
             "handlers": ["app_file", "console"],
             "level": "INFO",
             "propagate": False,
         },
-        "backend": {
+        "core": {
             "handlers": ["app_file", "console"],
             "level": "INFO",
             "propagate": False,

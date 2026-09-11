@@ -11,7 +11,7 @@ repositorio:
 |---|---|
 | `README.md` (raíz) | Puesta en marcha, stack y despliegue. Es la puerta de entrada. |
 | `web/src/README.md` | Reglas de arquitectura de la capa React (capas, kit de UI, tokens). |
-| `CLAUDE.md` | Notas de diseño y decisiones históricas para asistentes de IA. ⚠️ Ver [13-discrepancias-y-hallazgos.md](13-discrepancias-y-hallazgos.md): hoy describe funcionalidades que no están en el código. |
+| `CLAUDE.md` | Notas de diseño y el porqué de cada decisión, para asistentes de IA. |
 
 ## Índice
 
@@ -29,8 +29,7 @@ repositorio:
 | 10 | [Modelo de datos](10-modelo-de-datos.md) | Todas las tablas: las del ORM y las que se crean dinámicamente, con quién las escribe y quién las lee. |
 | 11 | [Referencia de endpoints](11-api-endpoints.md) | Todas las URLs con su permiso, su límite de peticiones y su respuesta. |
 | 12 | [Operación](12-operacion.md) | `make`, `dev.sh`, Docker, comandos de gestión, logs y diagnóstico de fallos. |
-| 13 | [Discrepancias y hallazgos](13-discrepancias-y-hallazgos.md) | Dónde la documentación previa no coincide con el código, y los defectos detectados al documentarlo. |
-| 14 | [Glosario](14-glosario.md) | Vocabulario de negocio: churn neto/bruto, reactivación, cohorte, ETA, winsorización… |
+| 13 | [Glosario](13-glosario.md) | Vocabulario de negocio: churn neto/bruto, reactivación, cohorte, ETA, winsorización… |
 
 ## Convenciones
 

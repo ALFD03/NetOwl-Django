@@ -52,7 +52,7 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 | `subscriptions` | `import_subscriptions_csv` | **Una fila por orden**, consolidada. `TRUNCATE` + `COPY` en cada carga |
 | `subscriptions-b` | `import_subscriptions_csv` | El detalle línea a línea del mismo export. También se trunca |
 | `subscriptions-logs` | `import_logs_csv` | `orden`, `fecha_log`, `log`, `estado` |
-| `subscriptions-logs-v15` | **nadie** | Formato antiguo de logs (`orden`, `tipo`, `categoria`, `fecha`). Se **lee** en el análisis mensual y en el de ciclo de vida, pero ninguna ruta de la aplicación la escribe: es un remanente cargado por fuera (ver [13](13-discrepancias-y-hallazgos.md)) |
+| `subscriptions-logs-v15` | **nadie, a propósito** | Formato antiguo de logs (`orden`, `tipo`, `categoria`, `fecha`). Se **lee** en el análisis mensual y en el de ciclo de vida; se carga por fuera de la aplicación, una sola vez, porque es un histórico cerrado que ya no crece. El análisis mensual la exige —sin ella sus cifras históricas estarían incompletas— y el de ciclo de vida la envuelve en `try/except` |
 | `subscriptions_gratis` | `import_gratis_csv` | Desde cuándo es gratuita cada suscripción y con qué evidencia. `DROP` + `CREATE` + `COPY` |
 | `crm_clients` | `import_crm_csv` | Una fila por oportunidad. `TRUNCATE` |
 | `crm_logs` | `import_crm_csv` | Un movimiento entre etapas por fila. `TRUNCATE` |

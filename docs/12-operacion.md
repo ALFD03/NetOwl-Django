@@ -138,7 +138,7 @@ Los dos últimos usan la misma imagen y solo cambian el comando.
 | Fichero | Qué lleva |
 |---|---|
 | `logs/requests.log` | `django.request` |
-| `logs/app.log` | Los loggers `frontend` y `backend`, también a consola |
+| `logs/app.log` | Los loggers `services` y `core` —todo el código propio—, también a consola |
 
 Rotación de 10 MB × 5 ficheros, `delay=True` (el fichero no se crea hasta el
 primer mensaje). El log de un análisis concreto no está aquí sino en la columna

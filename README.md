@@ -66,10 +66,6 @@ del codigo: arquitectura, configuracion, `core/`, cada servicio, frontend,
 modelo de datos, referencia de endpoints, operacion y glosario. El indice es
 [`docs/README.md`](docs/README.md).
 
-Merece una lectura aparte [`docs/13-discrepancias-y-hallazgos.md`](docs/13-discrepancias-y-hallazgos.md):
-recoge donde la documentacion previa (sobre todo `CLAUDE.md`) describe cosas que
-hoy no estan en el codigo, y los defectos detectados al documentarlo.
-
 ## Configuracion
 
 **La aplicacion no arranca sin Vault.** `netowl_web/settings.py` lee la

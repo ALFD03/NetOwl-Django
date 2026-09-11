@@ -1,4 +1,4 @@
-# 14 · Glosario
+# 13 · Glosario
 
 Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 
