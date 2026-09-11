@@ -1,3 +1,5 @@
+/** Business Units: los nodos de cada coordinador y el bloque de radiofrecuencia. */
+
 import {
   CircleArrowUp, CircleCheckBig, Ellipsis, Layers, Percent, Radio, Repeat,
   Target, TrendingDown, TrendingUp, User, UserCheck, UserRoundCheck, Users, Wrench,

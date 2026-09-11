@@ -1,3 +1,5 @@
+/** Botón del kit, con sus variantes y tamaños. */
+
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 

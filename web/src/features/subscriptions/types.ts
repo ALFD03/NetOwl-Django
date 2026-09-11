@@ -1,3 +1,10 @@
+/**
+ * Tipos propios del feature de suscripciones.
+ *
+ * Los de los props y las respuestas viven en `shared/types/subscriptions` y se
+ * reexportan desde aquí, para que el feature siga siendo el único import.
+ */
+
 import type { SubscriptionResultDimensionRow } from '@/shared/types/subscriptions';
 
 export * from '@/shared/types/subscriptions';

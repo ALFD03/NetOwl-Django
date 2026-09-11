@@ -1,3 +1,5 @@
+/** La pantalla de usuarios, grupos y permisos. */
+
 import React, { useState, useMemo } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { Modal, SelectMenu } from '@/shared/ui';

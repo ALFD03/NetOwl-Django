@@ -1,3 +1,5 @@
+/** Las columnas de las tablas de resultados y de sus dimensiones. */
+
 import { StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatPeriodoLabel, formatTwoDecimals } from '@/shared/utils/formatters';
 import type { SubscriptionCierre, SubscriptionResultDimensionRow } from '../../types';

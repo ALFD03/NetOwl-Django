@@ -1,3 +1,5 @@
+/** Las tarjetas de los grupos de permisos. */
+
 import { Settings2, ShieldCheck, Trash2 } from 'lucide-react';
 import { NeonContainer } from '@/shared/ui';
 import type { GroupData } from '@/features/config/types';

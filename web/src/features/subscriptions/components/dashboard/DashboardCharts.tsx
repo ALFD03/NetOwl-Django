@@ -1,3 +1,5 @@
+/** Los gráficos de la portada: evolución del churn, crecimiento y reparto por zona. */
+
 import { Activity, BarChart3, PieChart } from 'lucide-react';
 import { NeonContainer } from '@/shared/ui';
 import type { useSubscriptionDashboard } from '@/features/subscriptions/hooks/useSubscriptionDashboard';

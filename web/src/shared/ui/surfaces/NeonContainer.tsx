@@ -1,3 +1,9 @@
+/**
+ * Contenedor con acento de color, cabecera y acción opcional.
+ *
+ * Es la superficie de las tarjetas de dashboard; el color sale de los tokens.
+ */
+
 import type { ReactNode, FC } from 'react';
 import type { NeonTheme } from '../theme/types';
 

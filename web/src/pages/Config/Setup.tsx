@@ -1,3 +1,5 @@
+/** Página Inertia `Config/Setup` (`/auth/setup/`): alta del primer administrador. */
+
 import { useState, type FormEvent } from 'react';
 import { useForm } from '@inertiajs/react';
 import { Lock, ShieldCheck, User } from 'lucide-react';

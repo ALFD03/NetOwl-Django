@@ -1,3 +1,10 @@
+/**
+ * El armazón de toda página: sidebar, barra fija superior y contenido.
+ *
+ * Monta también el aviso flotante de la cola de análisis, que por eso sigue
+ * visible al cambiar de pantalla.
+ */
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { usePage } from '@inertiajs/react';

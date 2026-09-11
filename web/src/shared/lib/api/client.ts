@@ -1,3 +1,5 @@
+/** La instancia de axios de los endpoints `api/`, ya preparada para el CSRF. */
+
 import axios from 'axios';
 
 import { applyCsrf } from '../http/csrf';

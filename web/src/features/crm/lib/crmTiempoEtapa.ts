@@ -1,3 +1,11 @@
+/**
+ * Lectura del tiempo por etapa: tarjetas, medianas y filas dimensionales.
+ *
+ * El backend publica por etapa el promedio crudo, uno ajustado (winsorizado), el
+ * desglose por desenlace y las estancias que aún no han salido; aquí se elige
+ * qué se enseña y cómo se etiqueta.
+ */
+
 import type { MetricColor } from '@/shared/ui';
 import { crmEtapaLabel } from '@/shared/constants/labels';
 import { toNumber } from '@/shared/utils/formatters';

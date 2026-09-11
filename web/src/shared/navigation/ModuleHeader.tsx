@@ -1,3 +1,9 @@
+/**
+ * La barra de pestañas de un módulo, leída de `MODULE_NAVIGATION`.
+ *
+ * Oculta las pestañas para las que el usuario no tiene permiso.
+ */
+
 import { Link } from '@inertiajs/react';
 
 import { cn } from '@/shared/lib/cn';

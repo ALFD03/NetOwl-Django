@@ -1,3 +1,5 @@
+/** Analytics de CRM: filtros, gráficos, tabla y tiempos por etapa. */
+
 import {
   AlertTriangle, Award, CheckCircle2, Clock, Layers, Timer, Trophy, Users, XCircle,
 } from 'lucide-react';

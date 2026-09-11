@@ -1,3 +1,5 @@
+/** Tema claro/oscuro: pone la clase en `<html>` y lo recuerda en `localStorage`. */
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';

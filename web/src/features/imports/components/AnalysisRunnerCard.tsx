@@ -1,3 +1,10 @@
+/**
+ * Tarjeta de ejecución de un análisis: mes, progreso y consola en vivo.
+ *
+ * El análisis corre en el worker, así que esta tarjeta sondea la fila del job; si
+ * se recarga la página se reengancha al que siga abierto.
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play } from 'lucide-react';
 

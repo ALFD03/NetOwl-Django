@@ -1,3 +1,5 @@
+/** El detalle de un cierre de CRM: volúmenes, tasas, tiempos y efectividad. */
+
 import type { ReactNode } from 'react';
 import { Clock, Layers, Timer, TrendingDown, Zap } from 'lucide-react';
 

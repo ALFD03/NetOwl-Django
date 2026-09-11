@@ -1,3 +1,11 @@
+/**
+ * Página Inertia `Subscriptions/Dashboard`, que renderiza `subscriptions.views.dashboard` (`/subscriptions/`).
+ *
+ * Las páginas son un contrato con Django: la vista nombra el componente por su
+ * ruta bajo `pages/`, así que **renombrar o mover este fichero rompe la vista en
+ * tiempo de ejecución**, sin error de compilación.
+ */
+
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { DashboardMetrics } from '@/features/subscriptions/components/dashboard/DashboardMetrics';

@@ -1,3 +1,5 @@
+/** Tipos de la pantalla de usuarios, grupos y permisos. */
+
 export interface UserData {
   id: number;
   username: string;

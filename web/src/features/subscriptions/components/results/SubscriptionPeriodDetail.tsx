@@ -1,3 +1,5 @@
+/** El detalle de un cierre: todas sus cifras, agrupadas. */
+
 import { RefreshCw, TrendingDown, TrendingUp, Zap } from 'lucide-react';
 
 import { CompactMetric, MetricGroup } from '@/shared/ui';

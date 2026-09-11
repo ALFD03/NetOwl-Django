@@ -1,3 +1,5 @@
+/** Plugins propios de Chart.js, empezando por el texto central del *doughnut*. */
+
 import { CHART_CHROME } from '@/shared/constants/theme';
 import type { ArcElement, Chart, Plugin } from 'chart.js';
 

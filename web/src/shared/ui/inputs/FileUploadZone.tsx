@@ -1,3 +1,5 @@
+/** Zona de selección de fichero, con arrastrar y soltar. */
+
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileCheck, X } from 'lucide-react';
 import { Button } from '../primitives/Button';

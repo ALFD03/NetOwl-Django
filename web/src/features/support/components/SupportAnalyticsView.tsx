@@ -1,3 +1,5 @@
+/** Analytics de soporte: grupos, dimensiones, incidencia y drill-down. */
+
 import { Layers } from 'lucide-react';
 
 import { EmptyState } from '@/shared/ui';

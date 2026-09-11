@@ -1,3 +1,5 @@
+/** Tabla de cierres por periodo, con detalle al pulsar una fila. */
+
 import { useState } from 'react';
 import { Activity, Table as TableIcon } from 'lucide-react';
 

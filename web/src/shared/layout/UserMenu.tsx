@@ -1,3 +1,5 @@
+/** Pie del sidebar: acceso a configuración, usuario de la sesión y salida. */
+
 import { LogOut, ShieldCheck } from 'lucide-react';
 import { Link } from '@inertiajs/react';
 

@@ -1,3 +1,5 @@
+/** La tabla de la dimensión seleccionada. */
+
 import { Table as TableIcon } from 'lucide-react';
 
 import { DataTable, NeonContainer } from '@/shared/ui';

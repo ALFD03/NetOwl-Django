@@ -1,3 +1,5 @@
+/** Las tarjetas de KPI del periodo, agrupadas por familia. */
+
 import { formatTwoDecimals } from '@/shared/utils/formatters/number';
 import type { ReactNode } from 'react';
 import { DollarSign, Gift, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
