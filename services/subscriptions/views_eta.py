@@ -1,10 +1,13 @@
 """Vistas del reporte ETA para la reguladora.
 
 Ocho de las veintisiete vistas del modulo de suscripciones eran de ETA, casi
-la mitad del archivo, y son un bloque cerrado: parametrizacion de planes y
-suscripciones individuales, calculo del reporte y bloqueo del periodo. Se
-separan aqui para que `views.py` vuelva a ser legible de un vistazo. Las rutas
-no cambian: `urls.py` sigue exponiendo los mismos nombres.
+la mitad del archivo, y son un bloque cerrado. Se separan aqui para que
+`views.py` vuelva a ser legible de un vistazo.
+
+Lo unico que ETA parametriza hoy son las **suscripciones individuales**: las
+excepciones por orden, que son genuinamente de cada contrato y no tienen
+equivalente en el catalogo. La clasificacion de un plan se edita en
+`/subscriptions/config/` (ver `views_catalogos.py`), que es la unica fuente.
 """
 
 import json
@@ -26,6 +29,7 @@ logger = logging.getLogger(__name__)
 @login_required
 @permission_required('can_view_eta')
 def eta_report(request):
+    """Calcula y muestra el reporte de la reguladora de un periodo."""
     available = get_periodos()
     periodos_disponibles = sorted(list(set([p[:7] for p in available])), reverse=True)
     
@@ -54,6 +58,7 @@ def eta_report(request):
 @login_required
 @permission_required('can_manage_eta')
 def eta_config_view(request):
+    """Pantalla de parametrizacion: excepciones individuales y pendientes."""
     manager = ETAReportManager(DBConnector())
     props = manager.get_config_page_data(request.GET.get("period"))
     props["section"] = "eta_config"
@@ -93,6 +98,11 @@ def api_eta_report_data(request):
 @permission_required('can_manage_eta')
 @require_POST
 def api_eta_report_lock(request):
+    """Bloquea o desbloquea un periodo.
+
+    Al bloquear se recalcula una ultima vez y se guarda: a partir de ahi el mes
+    queda congelado aunque los datos de origen cambien.
+    """
     try:
         data = json.loads(request.body)
         periodo = data.get("period")
@@ -111,33 +121,8 @@ def api_eta_report_lock(request):
 @login_required
 @permission_required('can_manage_eta')
 @require_POST
-def api_eta_report_save_plan_config(request):
-    try:
-        data = json.loads(request.body)
-        plan_name = data.get("plan_name")
-        config = {
-            "reportar": bool(data.get("reportar", True)),
-            "tecnologia": data.get("tecnologia"),
-            "tipo_persona": data.get("tipo_persona"),
-            "tiene_tv": bool(data.get("tiene_tv", False)),
-            "datas_mbps": float(data.get("datas_mbps", 0))
-        }
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=400)
-
-    db = DBConnector()
-    manager = ETAReportManager(db)
-    try:
-        manager.save_plan_custom_config(plan_name, config)
-        return JsonResponse({"status": "success"})
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
-
-@login_required
-@permission_required('can_manage_eta')
-@require_POST
 def api_eta_report_save_sub_config(request):
+    """Guarda la excepcion individual de una orden."""
     try:
         data = json.loads(request.body)
         orden = data.get("orden")
@@ -170,25 +155,8 @@ def api_eta_report_save_sub_config(request):
 @login_required
 @permission_required('can_manage_eta')
 @require_POST
-def api_eta_report_delete_plan_config(request):
-    try:
-        data = json.loads(request.body)
-        plan_name = data.get("plan_name")
-        if not plan_name:
-            return JsonResponse({"status": "error", "message": "Nombre de plan requerido"}, status=400)
-        
-        db = DBConnector()
-        manager = ETAReportManager(db)
-        manager.delete_plan_custom_config(plan_name)
-        return JsonResponse({"status": "success", "message": f"Plan '{plan_name}' eliminado."})
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
-
-@login_required
-@permission_required('can_manage_eta')
-@require_POST
 def api_eta_report_delete_sub_config(request):
+    """Borra la excepcion individual de una orden."""
     try:
         data = json.loads(request.body)
         orden = data.get("orden")
