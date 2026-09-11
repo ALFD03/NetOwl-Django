@@ -345,6 +345,7 @@ def atribuir_devoluciones(hist: pd.DataFrame, etapa_actual: dict[str, str]) -> p
 # --- Cálculo principal ------------------------------------------------------
 
 def _columna_cliente(df: pd.DataFrame | None, col: str) -> dict[str, str]:
+    """La columna con la que un frame se ata a su oportunidad."""
     if df is None or df.empty or col not in df.columns or "id" not in df.columns:
         return {}
     return {str(cid): str(v) for cid, v in zip(df["id"], df[col])}

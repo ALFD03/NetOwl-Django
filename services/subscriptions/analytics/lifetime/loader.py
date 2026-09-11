@@ -1,3 +1,9 @@
+"""Lectura de datos para el analisis de supervivencia.
+
+Es un cargador propio y no el del analisis mensual porque necesita otra cosa:
+el historico entero sin recortar por periodo, y sin los logs sinteticos.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -11,9 +17,15 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_estado(series: pd.Series) -> pd.Series:
+    """Texto de estado comparable: sin espacios y en minusculas."""
     return series.astype(str).str.strip().str.lower()
 
 def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Suscripciones y los dos formatos de log.
+
+    El formato antiguo (v15) va envuelto en un `try`: puede no existir en un
+    entorno que nunca lo cargo.
+    """
     if db is None:
         db = DBConnector()
     subs = db.read_table(TableNames.SUBSCRIPTIONS)
@@ -51,6 +63,7 @@ def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return subs, l1, l2
 
 def build_clean_logs(l1: pd.DataFrame, l2: pd.DataFrame) -> pd.DataFrame:
+    """Une los dos formatos de log y los deja ordenados por orden y fecha."""
     cols_base = ["orden", "fecha", "estado"]
     for df in [l1, l2]:
         for c in list(df.columns):

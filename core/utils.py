@@ -1,3 +1,10 @@
+"""Utilidades de datos compartidas por los tres dominios.
+
+Fechas, normalizacion de texto, validacion de CSV, limpieza previa a
+serializar a JSON y captura de la consola de un analisis. Nada de esto
+pertenece a un dominio concreto y todo estaba repetido en varios.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -15,6 +22,13 @@ from .config import DATE_FORMATS
 
 
 def parse_date(value: Any) -> datetime | None:
+    """Convierte a `datetime` probando los formatos conocidos en orden.
+
+    Los exports de Odoo mezclan formatos (`YYYY-MM-DD`, `DD/MM/YYYY`, con hora y
+    sin ella), asi que se recorre `DATE_FORMATS` y solo despues se cede a
+    `pd.to_datetime`, que es mas lento y mas permisivo. Devuelve `None` para
+    vacios y `NaT` para lo que nadie sabe leer.
+    """
     if pd.isna(value):
         return None
     text = str(value).strip()

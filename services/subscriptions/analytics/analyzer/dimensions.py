@@ -1,3 +1,11 @@
+"""Desglose de las metricas de churn por dimension.
+
+Seis ejes (`core.config.DIMS`) y, por cada valor de cada eje, la misma bateria
+de metricas que el resumen global. Lo caro no es el calculo sino el mapeo
+`orden -> valor`, que no depende del periodo: por eso vive cacheado en
+`DimsPreparadas` y se reutiliza en los 31 cortes de un mes.
+"""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -22,6 +30,7 @@ class DimsPreparadas:
         self._billing = None
 
     def mapa(self, dim_col: str, default: str) -> dict:
+        """El mapa `orden -> valor` de una dimension, construido una sola vez."""
         # El default forma parte de la clave: hoy todas las dimensiones llegan
         # en minusculas y coincide siempre, pero atarlo al nombre evita que una
         # dimension futura con otra grafia reciba el relleno de otra.
@@ -32,6 +41,7 @@ class DimsPreparadas:
 
     @property
     def billing(self) -> pd.Series:
+        """La facturacion de cada orden como numero, indexada por orden."""
         if self._billing is None:
             self._billing = pd.to_numeric(
                 self.frame["total"], errors="coerce"
@@ -75,6 +85,15 @@ def aggregate_dimensions(
     df_free_fin=None, df_free_periodo=None, df_free_retorno=None,
     persist: bool = True, prepared=None, dims=None,
 ):
+    """Las metricas de un corte, desglosadas por dimension y valor.
+
+    Devuelve una lista de filas -una por `(dimension, valor)`- con los mismos
+    indicadores del resumen global. Con `persist=False` no escribe en la base, que
+    es como lo usa el calculo diario.
+
+    `prepared` permite pasar un `DimsPreparadas` ya construido; `dims` limita que
+    ejes se calculan.
+    """
     periodo_label = periodo.label()
     dims_pedidas = dims or DIMS
 

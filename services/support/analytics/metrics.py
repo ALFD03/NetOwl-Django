@@ -116,6 +116,7 @@ def _tramos_validos(espera: pd.Series, gestion: pd.Series) -> pd.Series:
 
 
 def _serie_de_formula(df: pd.DataFrame, formula: str) -> pd.Series:
+    """La serie de horas de una medida, segun como este definida."""
     if df.empty:
         return pd.Series(dtype=float)
 
@@ -148,6 +149,7 @@ def _prefixed(stats: dict[str, float], medida: str) -> dict[str, Any]:
 
 
 def _pct(parte: int, total: int) -> float:
+    """Porcentaje redondeado, o 0.0 si el denominador es cero."""
     return round((parte / total) * 100, 2) if total > 0 else 0.0
 
 

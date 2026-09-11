@@ -1,3 +1,5 @@
+"""Rutas de autenticacion y administracion de usuarios, bajo `/auth/`."""
+
 # --- START OF FILE NetOwl-Django/frontend/config/urls.py ---
 from django.urls import path
 

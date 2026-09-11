@@ -1,3 +1,12 @@
+"""Lectura de lo calculado por soporte, mas lo que se calcula al vuelo.
+
+Dos cosas no estan persistidas a proposito y se recalculan aqui sobre los
+tickets del mes: el **cruce dimension x desglose** (el producto cartesiano son
+decenas de miles de filas JSONB por periodo para algo que se mira de una en
+una) y la **incidencia por zona**, que necesita cruzar con los activos que
+calculo el modulo de suscripciones.
+"""
+
 # backend/support/queries.py
 
 from __future__ import annotations
@@ -25,6 +34,7 @@ logger = logging.getLogger(__name__)
 # --- Lecturas de tablas ya calculadas ---------------------------------------
 
 def get_support_periodos() -> list[str]:
+    """Los periodos con cierre calculado, del mas reciente al mas antiguo."""
     db = DBConnector()
     try:
         df = db.query(f"""
@@ -215,7 +225,11 @@ def get_support_breakdown(
 # --- Incidencia por zona ----------------------------------------------------
 
 def _load_zone_info() -> dict:
-    """Mapa zona → {site, type} desde `Zonas.json`, indexado en minúsculas."""
+    """Mapa zona → {site, type} desde el catálogo, indexado en minúsculas.
+
+    La fuente es `core.fixtures`, no el antiguo `Zonas.json`: las zonas son hoy
+    una tabla que se mantiene desde `/subscriptions/config/`.
+    """
     zone_info: dict[str, dict] = {}
     for nombre, z in zonas_por_nombre().items():
         zone_info[nombre] = {
@@ -377,6 +391,7 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
 def get_support_tickets_list(
     limit: int = 500, grupo: str | None = None, periodo: str | None = None
 ) -> list[dict]:
+    """Listado crudo de tickets, opcionalmente de un grupo y un periodo."""
     db = DBConnector()
     try:
         where = ["1=1"]

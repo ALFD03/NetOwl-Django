@@ -1,3 +1,9 @@
+"""Vistas del modulo de soporte.
+
+Los endpoints de importacion y de lanzamiento de analisis viven en la app
+`imports`, que es su unica duena.
+"""
+
 # frontend/support/views.py
 
 from django.contrib.auth.decorators import login_required
@@ -20,6 +26,7 @@ from services.support.analytics.queries import (
 @login_required
 @permission_required('can_view_support')
 def dashboard(request):
+    """Portada: el promedio de todos los periodos evaluados."""
     return render_inertia(request, "Support/Dashboard", clean_json_props({
         "metrics": get_support_metric_totals(),
         "section": "dashboard",
@@ -29,6 +36,11 @@ def dashboard(request):
 @login_required
 @permission_required('can_view_support_analytics')
 def analytics(request):
+    """Analytics de un periodo: grupos, dimensiones e incidencia por zona.
+
+    Las dimensiones llegan enteras porque el selector es de cliente; solo el
+    drill-down de un valor concreto pide datos nuevos.
+    """
     periodos = get_support_periodos()
     analytics_data = get_support_analytics_structured(request.GET.get("period"))
 
@@ -43,6 +55,7 @@ def analytics(request):
 @login_required
 @permission_required('can_view_support_results')
 def results(request):
+    """Tabla de cierres por periodo."""
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
 
@@ -57,18 +70,21 @@ def results(request):
 @login_required
 @permission_required('can_view_support')
 def api_periods_list(request):
+    """Los periodos con cierre calculado."""
     return JsonResponse({"periods": get_support_periodos()})
 
 
 @login_required
 @permission_required('can_view_support')
 def api_global_metrics(request):
+    """El promedio de todos los periodos, en JSON."""
     return JsonResponse(clean_json_props(get_support_metric_totals()))
 
 
 @login_required
 @permission_required('can_view_support')
 def api_cierre_historico(request):
+    """Los cierres de los periodos pedidos."""
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     return JsonResponse({
@@ -79,6 +95,7 @@ def api_cierre_historico(request):
 @login_required
 @permission_required('can_view_support_analytics')
 def api_dimension_metrics(request):
+    """Todo el bloque estructurado de un periodo."""
     periodo = request.GET.get("period")
     if not periodo:
         return JsonResponse({"status": "error", "message": "Falta el periodo."}, status=400)
@@ -113,6 +130,7 @@ def api_breakdown(request):
 @login_required
 @permission_required('can_view_support_results')
 def api_tickets_list(request):
+    """Listado de tickets, con tope de 5.000."""
     return JsonResponse({"tickets": clean_json_props(get_support_tickets_list(
         limit=min(int(request.GET.get("limit", 500)), 5000),
         grupo=request.GET.get("grupo"),

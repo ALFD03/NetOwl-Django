@@ -1,3 +1,5 @@
+"""Analitica de soporte: importacion, calculo de cohortes y lectura."""
+
 # backend/support/__init__.py
 
 from .analyzer import run_support_analysis

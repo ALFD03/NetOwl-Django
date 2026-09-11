@@ -1,3 +1,9 @@
+"""Autenticacion y administracion de usuarios, grupos y permisos.
+
+Son las unicas vistas sin dominio de negocio: entrar, salir, crear la primera
+cuenta y mantener la matriz de permisos de las demas.
+"""
+
 # NetOwl-Django/frontend/config/views.py
 
 import json
@@ -44,6 +50,11 @@ def apply_permissions(target, data):
 
 @ensure_csrf_cookie
 def login_view(request):
+    """Formulario de entrada. Acepta tanto JSON (React) como formulario.
+
+    Si no existe ningun usuario redirige al alta inicial; si ya hay sesion, a la
+    primera pagina que esa cuenta pueda abrir.
+    """
     if request.user.is_authenticated:
         return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
     
@@ -74,10 +85,15 @@ def login_view(request):
     return render_inertia(request, "Config/Login", {"errorMessage": error_message})
 
 def logout_view(request):
+    """Cierra la sesion y vuelve al formulario de entrada."""
     logout(request)
     return redirect('config:login')
 
 def setup_view(request):
+    """Alta del primer administrador. Se cierra en cuanto existe un usuario.
+
+    La cuenta se crea como superusuario y recibe la matriz completa.
+    """
     if User.objects.count() > 0:
         return redirect('config:login')
         
@@ -106,6 +122,7 @@ def setup_view(request):
 @login_required
 @permission_required('can_manage_users')
 def user_management_view(request):
+    """Pantalla de administracion: usuarios, grupos y roles."""
     users = User.objects.all().select_related('profile', 'profile__group').order_by('username')
     groups = PermissionGroup.objects.all().order_by('name')
     
@@ -144,6 +161,10 @@ def user_management_view(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_create_user(request):
+    """Crea una cuenta.
+
+    Con `group_id` hereda la matriz del grupo; sin el, la que venga en el cuerpo.
+    """
     try:
         data = json.loads(request.body)
         usr = data.get("username", "").strip()
@@ -181,6 +202,12 @@ def api_create_user(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_update_user_permissions(request):
+    """Actualiza rol, grupo y permisos de una cuenta.
+
+    Una cuenta no puede modificar sus propios permisos salvo que sea
+    superusuario. Asignar un grupo descarta los permisos individuales; quitarlo
+    vuelve a aceptarlos del cuerpo.
+    """
     try:
         data = json.loads(request.body)
         uid = data.get("user_id")
@@ -224,6 +251,7 @@ def api_update_user_permissions(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_save_permission_group(request):
+    """Crea o actualiza un grupo y **resincroniza a todos sus miembros**."""
     try:
         data = json.loads(request.body)
         group_id = data.get("group_id")
@@ -256,6 +284,7 @@ def api_save_permission_group(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_delete_permission_group(request):
+    """Elimina un grupo. Sus miembros conservan la matriz que tenian copiada."""
     try:
         data = json.loads(request.body)
         group_id = data.get("group_id")
@@ -268,6 +297,7 @@ def api_delete_permission_group(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_assign_user_group(request):
+    """Vincula una cuenta a un grupo, o la desvincula con `group_id` vacio."""
     try:
         data = json.loads(request.body)
         uid = data.get("user_id")
@@ -294,6 +324,7 @@ def api_assign_user_group(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_update_user_role(request):
+    """Cambia el rol descriptivo de una cuenta, sin tocar sus permisos."""
     try:
         data = json.loads(request.body)
         uid = data.get("user_id")
@@ -312,6 +343,7 @@ def api_update_user_role(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_delete_user(request):
+    """Elimina una cuenta. **No se puede borrar la propia.**"""
     try:
         data = json.loads(request.body)
         uid = data.get("user_id")
@@ -328,6 +360,7 @@ def api_delete_user(request):
 @permission_required('can_manage_users')
 @require_POST
 def api_admin_change_password(request):
+    """Fija la contrasena de otra cuenta. Minimo ocho caracteres."""
     try:
         data = json.loads(request.body)
         uid = data.get("user_id")

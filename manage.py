@@ -5,6 +5,7 @@ import sys
 
 
 def main():
+    """Punto de entrada de los comandos de gestion de Django."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'netowl_web.settings')
     try:
         from django.core.management import execute_from_command_line

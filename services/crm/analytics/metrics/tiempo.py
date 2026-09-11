@@ -1,3 +1,12 @@
+"""Cuanto tarda el embudo: tiempos de cierre y permanencia por etapa.
+
+Dos preguntas distintas y una trampa entre ellas. El log solo registra
+**salidas**, asi que medir solo sobre el deja fuera exactamente los casos
+lentos: los que siguen ahi. Por eso, junto al tiempo de salida de cada etapa,
+se calcula aparte la estancia de lo que todavia no ha salido, y se publican las
+dos cosas sin mezclarlas.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -18,6 +27,11 @@ from ..config import (
 
 
 def _compute_stats_distribution(series: pd.Series) -> dict[str, float]:
+    """Promedio, mediana, percentiles y dispersion de una serie de horas.
+
+    Incluye `pct_excede_promedio`, que es lo que delata una distribucion con cola:
+    si muy pocos casos superan la media, la media la esta marcando la cola.
+    """
     s = series.dropna()
     s = s[s >= 0]
     n = len(s)

@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 @login_required
 @permission_required('can_view_subscriptions')
 def dashboard(request):
+    """Portada del modulo: los cierres de todos los periodos y las zonas."""
     periodos_data = get_cierre_churn()
     dims_data = get_dimensiones()
     
@@ -60,6 +61,11 @@ def dashboard(request):
 @login_required
 @permission_required('can_view_subs_analytics')
 def analytics(request):
+    """Analytics: cierres, dimensiones y el mes completo de metricas diarias.
+
+    El mes viaja entero en los props para que elegir un dia en la barra sea una
+    lectura de cliente y no un recalculo.
+    """
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     data = get_analytics_data(periodos)
@@ -79,6 +85,7 @@ def analytics(request):
 @login_required
 @permission_required('can_view_subs_results')
 def results(request, periodo=None):
+    """Tabla de resultados por periodo, con detalle opcional de uno concreto."""
     cierres = get_cierre_churn([periodo] if periodo else None)
     return render_inertia(request, "Subscriptions/Results", {
         "periodos": cierres,
@@ -89,6 +96,11 @@ def results(request, periodo=None):
 @login_required
 @permission_required('can_view_subs_lifetime')
 def lifetime(request):
+    """Curvas de supervivencia y su desglose por dimension.
+
+    Blinda los datos a `{}` si la lectura falla: la pagina debe abrir aunque el
+    analisis nunca se haya ejecutado.
+    """
     try:
         results_data = get_lifecycle_results()
         dims_data = get_lifetime_dimensiones()
@@ -111,6 +123,7 @@ def lifetime(request):
 @login_required
 @permission_required('can_view_subs_sales')
 def sales_report(request):
+    """Reporte de ventas: Site -> Tecnologia -> Nodos, con subtotales."""
     periodo = request.GET.get("period")
     try:
         dia = int(request.GET.get("dia") or 0) or None
@@ -127,6 +140,7 @@ def sales_report(request):
 @login_required
 @permission_required('can_view_subs_sales')
 def business_units(request):
+    """Reporte por coordinador, mas el resumen FTTH global y el bloque RF."""
     periodo = request.GET.get("period")
     try:
         dia = int(request.GET.get("dia") or 0) or None
@@ -148,11 +162,13 @@ def business_units(request):
 @login_required
 @permission_required('can_view_subscriptions')
 def api_dashboard_data(request):
+    """Los datos del dashboard en JSON."""
     return JsonResponse(get_dashboard_data())
 
 @login_required
 @permission_required('can_view_subs_analytics')
 def api_analytics_data(request):
+    """Cierres y dimensiones de los periodos pedidos."""
     periods_param = request.GET.get("periods")
     periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
     return JsonResponse(get_analytics_data(periodos))
@@ -160,16 +176,19 @@ def api_analytics_data(request):
 @login_required
 @permission_required('can_view_subscriptions')
 def api_periods_list(request):
+    """Los periodos con cierre calculado."""
     return JsonResponse({"periods": get_periodos()})
 
 @login_required
 @permission_required('can_view_subs_results')
 def api_results_list(request):
+    """Los cierres completos, para la tabla de resultados."""
     return JsonResponse({"periods": get_cierre_churn()})
 
 @login_required
 @permission_required('can_view_subs_results')
 def api_results_detail(request, periodo):
+    """El cierre y las dimensiones de un periodo concreto."""
     cierre = get_cierre_churn([periodo])
     dims = get_dimensiones([periodo])
     summary = cierre[0] if cierre else {}
@@ -183,11 +202,13 @@ def api_results_detail(request, periodo):
 @login_required
 @permission_required('can_view_subs_lifetime')
 def api_survival_data(request):
+    """El payload completo de la pagina de supervivencia."""
     return JsonResponse(get_survival_report(request.GET.get("dim")))
 
 @login_required
 @permission_required('can_view_subs_sales')
 def api_sales_report(request):
+    """El reporte de ventas de un periodo (y opcionalmente de un dia)."""
     periodo = request.GET.get("period")
     dia = request.GET.get("dia")
     return JsonResponse(get_sales_report_data(periodo, int(dia) if dia else None))
@@ -211,6 +232,7 @@ def api_lifecycle_run(request):
 @login_required
 @permission_required('can_view_subs_lifetime')
 def api_lifecycle_results(request):
+    """Los resultados del ultimo analisis de ciclo de vida."""
     data = get_lifecycle_results()
     if not data:
         return JsonResponse({"status": "empty", "message": "Ejecute el análisis de ciclo de vida primero"})
@@ -223,6 +245,7 @@ def api_lifecycle_results(request):
 @login_required
 @permission_required('can_view_subs_sales')
 def api_business_units_report(request):
+    """El reporte por unidades de negocio de un periodo (y de un dia)."""
     periodo = request.GET.get("period")
     dia = request.GET.get("dia")
     return JsonResponse(get_business_units_data(periodo, int(dia) if dia else None))

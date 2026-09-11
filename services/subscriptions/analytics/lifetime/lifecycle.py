@@ -1,3 +1,10 @@
+"""Los periodos de vida de cada suscripcion, y las metricas que salen de ellos.
+
+Una suscripcion no vive un solo tramo: se da de baja, vuelve, se pausa otra
+vez. Aqui el historico de logs se convierte en una lista de periodos -activos
+y cancelados- que es lo que el estimador de supervivencia sabe leer.
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -11,6 +18,18 @@ from .km_utils import compute_km
 RELEVANT_STATES = {ACTIVE_STATE} | INACTIVE_STATES
 
 def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFrame:
+    """Convierte el historico de logs en periodos de vida.
+
+    Emite dos tipos de fila:
+
+    * `activo` -desde el alta o la ultima reactivacion hasta caer inactiva-, con
+      `evento=1` si termino y `evento=0` si sigue viva (censurada);
+    * `cancelado` -desde que cae inactiva hasta que vuelve-, con `evento=1` si
+      volvio.
+
+    Las fechas se pasan a dias flotantes antes del bucle y se reconvierten al
+    final, de modo que el recorrido sea aritmetica pura.
+    """
     relevant = logs[logs["estado"].isin(RELEVANT_STATES)].copy()
     if relevant.empty:
         return pd.DataFrame(columns=["orden", "tipo", "f_inicio", "f_fin", "duracion", "evento", "periodo_idx"])
@@ -116,6 +135,12 @@ def build_lifecycle_periods(subs: pd.DataFrame, logs: pd.DataFrame) -> pd.DataFr
     return df_res
 
 def compute_metrics(periods: pd.DataFrame) -> dict[str, Any]:
+    """Las metricas globales de supervivencia.
+
+    La vida activa se mide sobre el **primer** periodo activo de cada suscriptor.
+    La reactivacion, sobre los periodos cancelados que volvieron y duraron al
+    menos quince dias, para no contar como reactivacion un rebote administrativo.
+    """
     result: dict[str, Any] = {}
 
     first_active = (
