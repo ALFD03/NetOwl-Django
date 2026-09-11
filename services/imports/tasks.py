@@ -27,6 +27,7 @@ from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from django.db import close_old_connections
 
+from core import fixtures
 from core.database import DBConnector
 from core.models import Periodo
 from core.utils import capture_console
@@ -48,7 +49,32 @@ ESPERA_TURNO_SEGUNDOS = 20
 # interfaz usa para componer el mensaje de exito.
 
 def _correr_subscriptions(job: AnalysisJob, consola: ConsolaJob):
-    from services.subscriptions.analytics import MetricsAnalyzer, build_day_metrics
+    """Analisis mensual de churn mas las metricas de cada dia del mes.
+
+    Comprueba el catalogo **antes** de calcular y reutiliza el mismo analyzer para
+    el cierre y para los dias, de modo que toda la ejecucion hace una sola lectura
+    de datos.
+    """
+    from services.subscriptions.analytics import (
+        MetricsAnalyzer,
+        build_day_metrics,
+        productos_fuera_de_catalogo,
+    )
+
+    # La importacion garantiza que toda orden entra con un plan catalogado,
+    # pero un plan se puede borrar despues, y los datos cargados antes de que
+    # esa comprobacion existiera pueden no tener ninguno. Se mira aqui arriba,
+    # antes de los minutos de calculo que darian una respuesta mala igualmente.
+    fuera = productos_fuera_de_catalogo()
+    if fuera:
+        detalle = ", ".join(f"{p['nombre']} ({p['ordenes']} órdenes)" for p in fuera[:10])
+        if len(fuera) > 10:
+            detalle += f" y {len(fuera) - 10} más"
+        raise RuntimeError(
+            f"{len(fuera)} producto(s) no están en el catálogo: {detalle}. "
+            "Regístralos en Subscriptions → Catálogos (o márcalos como ignorados) "
+            "y vuelve a lanzar el análisis."
+        )
 
     periodo = Periodo.build(f"{job.periodo}-01")
     periodo_label = periodo.label()
@@ -70,6 +96,7 @@ def _correr_subscriptions(job: AnalysisJob, consola: ConsolaJob):
 
 
 def _correr_crm(job: AnalysisJob, consola: ConsolaJob):
+    """Analisis del embudo de CRM para un mes."""
     from services.crm.analytics import run_crm_analysis
 
     run_crm_analysis(job.periodo)
@@ -78,6 +105,7 @@ def _correr_crm(job: AnalysisJob, consola: ConsolaJob):
 
 
 def _correr_support(job: AnalysisJob, consola: ConsolaJob):
+    """Analisis de las cohortes de soporte para un mes."""
     from services.support.analytics import run_support_analysis
 
     run_support_analysis(job.periodo)
@@ -86,6 +114,11 @@ def _correr_support(job: AnalysisJob, consola: ConsolaJob):
 
 
 def _correr_lifetime(job: AnalysisJob, consola: ConsolaJob):
+    """Analisis de supervivencia sobre todo el historico.
+
+    Del resultado solo se guardan los escalares: las curvas son series largas y se
+    leen despues con `get_lifecycle_results`.
+    """
     from services.subscriptions.analytics.lifetime import run_lifecycle_analysis
 
     metrics = run_lifecycle_analysis()
@@ -142,6 +175,10 @@ def ejecutar_analisis(self, job_id: str) -> None:
 
 def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
     """Cuerpo del analisis, ya con el turno del modulo tomado."""
+    # El catalogo se lee cacheado durante 60s. Olvidarlo al empezar garantiza
+    # que la ejecucion arranca con lo ultimo que se guardo y, sobre todo, que
+    # no cambia de catalogo a mitad de un calculo que dura minutos.
+    fixtures.reset_cache()
     marcar_inicio(job, getattr(tarea.request, 'id', ''))
     consola = ConsolaJob(job)
     runner = RUNNERS[job.module]
