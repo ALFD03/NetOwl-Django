@@ -1,3 +1,11 @@
+/**
+ * Los nombres de los permisos, **espejo manual** de `PERMISSION_FIELDS` en
+ * `services/config/models.py`.
+ *
+ * Nada comprueba que las dos listas estén en paso: al añadir un permiso en el
+ * backend hay que añadirlo también aquí.
+ */
+
 import type { Permission } from '@/shared/types/auth';
 
 export const PERMISSIONS = {
@@ -23,6 +31,7 @@ export const PERMISSIONS = {
   RUN_LIFETIME: 'can_run_lifetime',
   MANAGE_ETA: 'can_manage_eta',
   MANAGE_USERS: 'can_manage_users',
+  MANAGE_CATALOGOS: 'can_manage_catalogos',
   IMPORT_SUBS: 'can_import_subs',
   IMPORT_CRM: 'can_import_crm',
   IMPORT_SUPPORT: 'can_import_support',
@@ -122,6 +131,7 @@ export const PERMISSION_GROUPS = [
       { key: PERMISSIONS.RUN_CALCULATIONS, label: 'Ejecutar Cálculos y Motores (comodín global)' },
       { key: PERMISSIONS.RUN_LIFETIME, label: 'Ejecutar Motor Kaplan-Meier' },
       { key: PERMISSIONS.MANAGE_ETA, label: 'Administrar Maestro ETA' },
+      { key: PERMISSIONS.MANAGE_CATALOGOS, label: 'Administrar Catálogos (planes, zonas, sites…)' },
       { key: PERMISSIONS.MANAGE_USERS, label: 'Administrar Usuarios y Seguridad' },
     ],
   },

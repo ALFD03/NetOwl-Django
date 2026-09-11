@@ -1,3 +1,13 @@
+"""Constantes del dominio y catalogo de nombres de tabla.
+
+Lo que los tres analisis necesitan saber del negocio antes de calcular nada:
+que estados existe una suscripcion, que texto marca un corte por impago, como
+escribe Odoo un booleano y como se llama cada tabla de Postgres.
+
+Vive en `core` porque lo comparten los tres dominios; `TableNames` es la lista
+canonica de tablas y ningun modulo escribe un nombre a mano.
+"""
+
 from __future__ import annotations
 
 import os
@@ -28,6 +38,11 @@ UNARCHIVED_EVENT = "suscripcion desarchivada"
 
 EXCLUDED_STATE = "0_other"
 
+# Marca que Odoo deja como producto de una suscripcion dada de baja. No es
+# un plan: no esta en el catalogo, pero si cuenta como linea de producto
+# reconocida (ver `fixtures.nombres_reconocidos`).
+PLAN_CANCELADO = "Cancelado"
+
 SUBS_STATE_TO_LOG_MAP = {
     "en progreso": "3_progress",
     "cancelado": "6_churn",
@@ -39,6 +54,13 @@ SUBS_STATE_TO_LOG_MAP = {
 
 
 class TableNames:
+    """Los nombres de todas las tablas de Postgres, en un solo sitio.
+
+    Es la lista canonica: ningun modulo escribe un literal de nombre de tabla. Las
+    que empiezan por `analyzer_`, `crm_`, `support_` o `lifetime_` las crea la
+    propia analitica sobre la marcha (`DBConnector.save_historico`); las de
+    `subscriptions*` las escribe la importacion.
+    """
     CRM_CLIENTS = "crm_clients"
     CRM_LOGS = "crm_logs"
     CRM_CIERRE_HISTORICO = "crm_cierre_historico"
@@ -53,6 +75,10 @@ class TableNames:
     ANALYZER_CLIENTES_GRATUITOS = "analyzer_clientes_gratuitos"
     ANALYZER_CHURN_DIMENSIONES = "analyzer_churn_dimensiones"
     ANALYZER_DAY_METRICS = "analyzer_day_metrics"
+    # Obsoleta: guardaba una segunda copia, con prioridad, de la clasificacion
+    # de cada plan. Hoy un plan se clasifica solo en el catalogo
+    # (services/subscriptions/models.py). La tabla sigue existiendo, vacia y
+    # sin leer; el nombre se conserva para poder identificarla.
     ANALYZER_ETA_CONFIG_PLANES = "analyzer_eta_config_planes"
     ANALYZER_ETA_CONFIG_SUBS = "analyzer_eta_config_subs_individual"
     ANALYZER_ETA_REPORTE_MENSUAL = "analyzer_eta_reporte_mensual"

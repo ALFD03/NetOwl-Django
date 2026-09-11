@@ -1,3 +1,10 @@
+/**
+ * Tipos de los props y respuestas del módulo de suscripciones.
+ *
+ * Viven en `shared` y no en el feature porque `shared/lib/api` tipa con ellos sus
+ * respuestas y no puede depender de un feature; el feature los reexporta.
+ */
+
 export interface SubscriptionResultDimensionRow {
   valor: string;
   activos_inicio: number;
@@ -130,7 +137,6 @@ export interface EtaDiscoveredSubscription extends EtaSubscriptionConfig {
 
 export interface SubscriptionEtaManagementProps {
   individualConfigs?: EtaSubscriptionConfig[];
-  planesConfigs?: EtaPlanConfig[];
   discoveredPlans?: string[];
   discoveredSubs?: EtaDiscoveredSubscription[];
   allKnownPlans?: EtaPlanConfig[];
@@ -163,4 +169,91 @@ export interface LifetimeDimensionInfo {
   mediana_reactivacion?: number;
   curva_activo?: CurvaPoint[];
   [key: string]: unknown;
+}
+
+// --- Catálogos de referencia -------------------------------------------------
+// Planes, zonas, sites, estados y coordinadores. Antes eran `Planes.json` y
+// `Zonas.json`; hoy son tablas que se editan en `/subscriptions/config/`.
+
+export type CatalogoTipo =
+  | 'planes'
+  | 'zonas'
+  | 'sites'
+  | 'estados'
+  | 'coordinadores'
+  | 'ignorados';
+
+export interface CatalogoOption {
+  value: string;
+  label: string;
+}
+
+export interface CatalogoPlan {
+  id: number;
+  nombre: string;
+  /** Cuadro tarifario. Distingue dos filas con el mismo nombre de plan. */
+  tarifa: string;
+  tecnologia: string;
+  tipo_persona: string;
+  referencia: string;
+  tiene_tv: boolean;
+  datas_mbps: number;
+  precio: number;
+  /** Si el plan se declara a la reguladora en el reporte ETA. */
+  declarar_en_eta: boolean;
+}
+
+export interface CatalogoZona {
+  id: number;
+  nombre: string;
+  site_id: number;
+  site: string;
+  estado_id: number;
+  estado: string;
+  tecnologia: string;
+  coordinador_id: number | null;
+  coordinador: string;
+}
+
+export interface CatalogoSite {
+  id: number;
+  nombre: string;
+  /** Orden de presentación comercial; lo consumen Sales Report y ETA. */
+  orden: number;
+  zonas: number;
+}
+
+/** Estados y coordinadores: solo nombre y cuántas zonas dependen de ellos. */
+export interface CatalogoNombrado {
+  id: number;
+  nombre: string;
+  zonas: number;
+}
+
+export interface CatalogoProductoIgnorado {
+  id: number;
+  nombre: string;
+  nota: string;
+  creado_por: string;
+  creado_en: string;
+}
+
+/** Producto ya importado que hoy no está en el catálogo. */
+export interface ProductoPendiente {
+  nombre: string;
+  ordenes: number;
+}
+
+export interface SubscriptionCatalogosProps {
+  planes: CatalogoPlan[];
+  zonas: CatalogoZona[];
+  sites: CatalogoSite[];
+  estados: CatalogoNombrado[];
+  coordinadores: CatalogoNombrado[];
+  ignorados: CatalogoProductoIgnorado[];
+  pendientes: ProductoPendiente[];
+  tecnologias: CatalogoOption[];
+  tiposPersona: CatalogoOption[];
+  /** `?nuevo_plan=` — abre el formulario de plan ya relleno con ese nombre. */
+  nuevoPlan: string;
 }

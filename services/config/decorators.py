@@ -1,3 +1,12 @@
+"""Control de acceso de las vistas.
+
+Dos decoradores —uno que combina permisos con OR y otro con AND— y la
+respuesta que recibe quien no pasa: JSON 403 si pedia datos, o una
+redireccion a la primera pagina que si pueda abrir si estaba navegando. Esa
+lista de destinos es `LANDING_ROUTES`, y vive aqui y no en `models.py` porque
+es una decision de enrutado.
+"""
+
 # --- START OF FILE NetOwl-Django/frontend/config/decorators.py ---
 from functools import wraps
 
@@ -26,6 +35,7 @@ LANDING_ROUTES = [
     ('imports:crm', ('can_view_imports', 'can_view_imports_crm')),
     ('imports:support', ('can_view_imports', 'can_view_imports_support')),
     ('imports:history', ('can_view_imports', 'can_view_import_history')),
+    ('subscriptions:catalogos', ('can_manage_catalogos',)),
     ('config:user_management', ('can_manage_users',)),
 ]
 
@@ -136,8 +146,10 @@ def permissions_all_required(*perm_names):
 
 # --- DECORADORES DE COMPATIBILIDAD QUE DELEGAN A PERMISOS DINÁMICOS ---
 def admin_required(view_func):
+    """Compatibilidad: equivale a `permission_required('can_manage_users')`."""
     return permission_required('can_manage_users')(view_func)
 
 def analyst_or_admin_required(view_func):
+    """Compatibilidad: equivale a `permission_required('can_import_data')`."""
     return permission_required('can_import_data')(view_func)
 # --- END OF FILE NetOwl-Django/frontend/config/decorators.py ---
