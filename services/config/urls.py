@@ -1,4 +1,8 @@
-"""Rutas de autenticacion y administracion de usuarios, bajo `/auth/`."""
+"""Rutas de autenticacion y administracion de usuarios, bajo `/auth/`.
+
+No hay ruta de alta inicial: el primer administrador se crea con
+`manage.py crear_admin`, no por una vista publica (ver ese comando).
+"""
 
 # --- START OF FILE NetOwl-Django/frontend/config/urls.py ---
 from django.urls import path
@@ -10,7 +14,6 @@ app_name = "config"
 urlpatterns = [
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
-    path("setup/", views.setup_view, name="setup"),
     path("users/", views.user_management_view, name="user_management"),
     
     # APIS DE GESTIÓN DE USUARIOS Y PERMISOS INDIVIDUALES

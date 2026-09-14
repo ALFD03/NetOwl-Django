@@ -10,9 +10,11 @@ es una decision de enrutado.
 # --- START OF FILE NetOwl-Django/frontend/config/decorators.py ---
 from functools import wraps
 
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils.html import escape
 
 # Paginas de aterrizaje ordenadas por prioridad: (nombre de ruta, permisos que
 # exige la vista). Cuando se le niega el acceso a un usuario, se le envia a la
@@ -91,14 +93,25 @@ def deny(request, message):
 
     # El usuario no tiene ninguna pagina disponible: cortar aqui evita un bucle
     # de redirecciones entre vistas que tampoco puede ver.
+    # `escape`: hoy todos los llamantes pasan literales, pero esto es HTML
+    # crudo y basta con que alguien interpole un parametro de la peticion para
+    # convertirlo en un XSS reflejado.
     return HttpResponseForbidden(
-        f"<h1>Acceso denegado</h1><p>{message}</p>"
+        f"<h1>Acceso denegado</h1><p>{escape(message)}</p>"
         "<p>Tu cuenta no tiene ningún módulo asignado. Contacta al administrador.</p>"
     )
 
 
 def _authorize(perm_names, combine):
     """Fabrica de decoradores: `combine` es `any` (OR) o `all` (AND)."""
+    # `all([])` es True: un `@permissions_all_required()` sin argumentos
+    # autorizaria a cualquier usuario autenticado. Ningun punto de uso lo hace
+    # hoy; esto impide que el dia que ocurra pase desapercibido.
+    if not perm_names:
+        raise ImproperlyConfigured(
+            "Los decoradores de permisos exigen al menos un permiso."
+        )
+
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):

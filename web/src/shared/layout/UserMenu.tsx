@@ -1,7 +1,7 @@
 /** Pie del sidebar: acceso a configuración, usuario de la sesión y salida. */
 
 import { LogOut, ShieldCheck } from 'lucide-react';
-import { Link } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 
 interface UserMenuProps {
   username: string;
@@ -36,14 +36,18 @@ export function UserMenu({
         <p className="font-semibold text-white truncate">{username}</p>
       </div>
 
-      <a
-        href="/auth/logout/"
+      {/* POST y no enlace: por GET, cualquier `<img src="/auth/logout/">` en
+          una página ajena cerraba la sesión del visitante. El token CSRF lo
+          pone el interceptor de axios (shared/lib/http/csrf.ts). */}
+      <button
+        type="button"
+        onClick={() => router.post('/auth/logout/')}
         className="p-1.5 hover:bg-red-500/20 text-red-400 rounded-md transition-colors"
         title="Cerrar Sesión"
         aria-label="Cerrar Sesión"
       >
         <LogOut className="w-4 h-4" />
-      </a>
+      </button>
     </div>
   </div>
 );
