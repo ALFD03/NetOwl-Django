@@ -1,3 +1,5 @@
+/** Incidencia por zona: tickets del grupo por cada 100 clientes de la zona. */
+
 import { Radio } from 'lucide-react';
 
 import { DataTable, EmptyState, NeonContainer } from '@/shared/ui';

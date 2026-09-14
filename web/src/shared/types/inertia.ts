@@ -1,3 +1,5 @@
+/** Los props que Inertia comparte con todas las páginas (el usuario y su matriz). */
+
 import type { PageProps } from '@inertiajs/core';
 import type { AuthProps } from './auth';
 

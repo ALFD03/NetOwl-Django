@@ -1,3 +1,5 @@
+/** El drill-down de un valor: sus tipos, razones y soluciones. */
+
 import { useState } from 'react';
 import { AlertOctagon, Layers, Loader2, Wrench } from 'lucide-react';
 

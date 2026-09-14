@@ -68,6 +68,7 @@ _SIN_ESPECIFICAR = "Sin Especificar"
 
 
 def _motivos_excepcion() -> set[str]:
+    """Los motivos de devolucion ajenos a la gestion, normalizados."""
     return {normalize_text(m) for m in ETAPA8_EXCEPTION_MOTIVOS}
 
 
@@ -87,6 +88,7 @@ def _serie_normalizada(serie: pd.Series) -> pd.Series:
 
 
 def compute_distribucion_perdidos(df_perdidos: pd.DataFrame) -> list[dict[str, Any]]:
+    """Reparto de las oportunidades perdidas por motivo."""
     if df_perdidos.empty or "motivo_perdida" not in df_perdidos.columns:
         return []
 

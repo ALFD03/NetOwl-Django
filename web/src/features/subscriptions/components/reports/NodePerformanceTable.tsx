@@ -1,3 +1,5 @@
+/** La tabla de nodos de los dos reportes comerciales, con su KPI de cumplimiento. */
+
 import type { ReactNode } from 'react';
 import { RefreshCw, TrendingUp } from 'lucide-react';
 

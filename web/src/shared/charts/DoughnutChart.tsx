@@ -1,3 +1,5 @@
+/** Envoltorio de la gráfica de anillo de Chart.js. */
+
 import type { ChartData, ChartOptions, Plugin } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Doughnut } from 'react-chartjs-2';

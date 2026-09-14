@@ -1,6 +1,8 @@
+/** Endpoints del módulo de suscripciones: reporte ETA y catálogos. */
+
 import { apiClient } from './client';
 import { startAndFollow, type AnalysisJob } from './jobs';
-import type { SubscriptionResultsResponse } from '@/shared/types/subscriptions';
+import type { CatalogoTipo, SubscriptionResultsResponse } from '@/shared/types/subscriptions';
 
 export interface EtaReportResponse {
   status?: string;
@@ -23,13 +25,12 @@ export interface EtaSubConfigRequest {
   es_dedicado?: boolean;
 }
 
-export interface EtaPlanConfigRequest extends Record<string, unknown> {
-  plan_name?: string;
-  name?: string;
-}
-
 export interface DeleteEtaSubRequest { orden: string; }
-export interface DeleteEtaPlanRequest { plan_name: string; }
+
+/** Una fila de cualquier catálogo. Sin `id` es un alta. */
+export interface CatalogoPayload extends Record<string, unknown> {
+  id?: number | null;
+}
 
 export const subscriptionsApi = {
   getResultsDetails: async (period: string) =>
@@ -44,14 +45,20 @@ export const subscriptionsApi = {
   saveEtaSubConfig: async (request: EtaSubConfigRequest) =>
     (await apiClient.post('/subscriptions/api/eta-report/save-sub-config/', request)).data,
 
-  saveEtaPlanConfig: async (request: EtaPlanConfigRequest) =>
-    (await apiClient.post('/subscriptions/api/eta-report/save-plan-config/', request)).data,
-
   deleteEtaSubConfig: async (request: DeleteEtaSubRequest) =>
     (await apiClient.post('/subscriptions/api/eta-report/delete-sub-config/', request)).data,
 
-  deleteEtaPlanConfig: async (request: DeleteEtaPlanRequest) =>
-    (await apiClient.post('/subscriptions/api/eta-report/delete-plan-config/', request)).data,
+  /**
+   * Alta o edición de una fila de catálogo.
+   *
+   * Un solo endpoint para los seis catálogos: lo que cambia entre ellos son
+   * los campos del cuerpo, no la forma de la petición.
+   */
+  saveCatalogo: async (tipo: CatalogoTipo, payload: CatalogoPayload) =>
+    (await apiClient.post('/subscriptions/api/catalogos/guardar/', { tipo, ...payload })).data,
+
+  deleteCatalogo: async (tipo: CatalogoTipo, id: number) =>
+    (await apiClient.post('/subscriptions/api/catalogos/eliminar/', { tipo, id })).data,
 
   /**
    * Runs the survival analysis in the Celery worker and waits for it.

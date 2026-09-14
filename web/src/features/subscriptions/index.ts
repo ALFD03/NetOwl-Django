@@ -1,3 +1,5 @@
+/** Barril del feature de suscripciones: vistas, utilidades comerciales y tipos. */
+
 export { SubscriptionResultsView } from './components/results/SubscriptionResultsView';
 export { SubscriptionPeriodDetail } from './components/results/SubscriptionPeriodDetail';
 export { LifetimeView } from './components/lifetime/LifetimeView';
@@ -9,6 +11,7 @@ export { SubscriptionReportFilters } from './components/reports/SubscriptionRepo
 export { EtaReportView } from './components/eta/EtaReportView';
 export { EtaReportToolbar } from './components/eta/EtaReportToolbar';
 export { EtaManagementView } from './components/etamanagement/EtaView';
+export { CatalogosView } from './components/catalogos/CatalogosView';
 export * from './lib/commercial';
 export * from './lib/analyticsDistribution';
 export type * from './types';

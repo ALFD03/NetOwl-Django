@@ -1,3 +1,9 @@
+"""Lectura de las tablas que alimentan el analisis de churn.
+
+Las cuatro se leen en paralelo porque son independientes entre si y la lectura
+es el coste dominante de todo el analisis.
+"""
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -10,6 +16,7 @@ ACTIVE_FLAG_COL = "activo"
 
 
 def _table_columns(db, table_name):
+    """Las columnas que hoy tiene una tabla, segun `information_schema`."""
     df = db.query(
         "SELECT column_name FROM information_schema.columns"
         " WHERE table_schema = %s AND table_name = %s",
@@ -19,6 +26,11 @@ def _table_columns(db, table_name):
 
 
 def load_data(db):
+    """Suscripciones, los dos formatos de log y la base de planes gratuitos.
+
+    `activo` solo se pide si la tabla ya la tiene: es una columna que solo traen
+    los exports nuevos.
+    """
     print("Sincronizando con base de datos...")
     subs_cols = ["orden_producto", "fecha_inicio", "total", "estado"]
     # `activo` (false = suscripcion archivada) solo existe si el export ya lo trae.

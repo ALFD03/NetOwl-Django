@@ -1,3 +1,5 @@
+"""Punto de entrada WSGI. Es lo que sirve gunicorn en produccion."""
+
 import os
 
 from django.core.wsgi import get_wsgi_application

@@ -1,3 +1,9 @@
+/**
+ * Acceso centralizado a los permisos del usuario autenticado.
+ *
+ * Los componentes **nunca** leen `user.profile.can_*` directamente.
+ */
+
 import { usePage } from '@inertiajs/react';
 
 import type { Permission } from '@/shared/types/auth';

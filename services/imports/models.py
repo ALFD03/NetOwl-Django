@@ -1,3 +1,13 @@
+"""Las dos tablas del modulo de importaciones.
+
+`ImportActionLog` es el historial permanente que ve el usuario;
+`AnalysisJob`, el estado vivo de una ejecucion concreta. No se sustituyen: la
+primera dice que paso, la segunda que esta pasando.
+
+Ambas cualifican su `db_table` con `DB_SCHEMA`, asi que cada entorno tiene las
+suyas; las crea `manage.py preparar_imports` (ver ese comando).
+"""
+
 import uuid
 
 from django.conf import settings
@@ -9,6 +19,12 @@ from core.config import DB_SCHEMA
 
 
 class ImportActionLog(models.Model):
+    """Una linea del historial: una importacion o un calculo ya terminados.
+
+    Guarda el fichero, las filas procesadas, el desenlace y el log completo, y es
+    lo que alimenta la pantalla de historial.
+    """
+
     MODULE_CHOICES = [
         ('subs_subscriptions', 'Subscriptions - Suscripciones'),
         ('subs_logs', 'Subscriptions - Logs'),
@@ -133,6 +149,7 @@ class AnalysisJob(models.Model):
 
     @property
     def esta_abierto(self):
+        """Si la ejecucion sigue viva: encolada o calculando."""
         return self.status in self.ESTADOS_ABIERTOS
 
     @property

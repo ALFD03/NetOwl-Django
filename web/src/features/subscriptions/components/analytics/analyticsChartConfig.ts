@@ -1,3 +1,5 @@
+/** Las métricas seleccionables del gráfico y cómo se lee cada una. */
+
 import type { AnalyticsMetricConfig } from '../../lib/analyticsDistribution';
 
 export const ANALYTICS_METRICS = {

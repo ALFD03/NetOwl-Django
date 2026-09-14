@@ -1,3 +1,5 @@
+/** Las tarjetas de salud por etapa a partir del bloque de efectividad. */
+
 import type { MetricColor } from '@/shared/ui';
 import { toNumber } from '@/shared/utils';
 import type { CrmEfectividadRow, CrmHealthCard } from '../types';

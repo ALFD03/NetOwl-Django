@@ -1,3 +1,11 @@
+/**
+ * Los nombres de los permisos, **espejo manual** de `PERMISSION_FIELDS` en
+ * `services/config/models.py`.
+ *
+ * Nada comprueba que las dos listas estén en paso: al añadir un permiso en el
+ * backend hay que añadirlo también aquí.
+ */
+
 import type { Permission } from '@/shared/types/auth';
 
 export const PERMISSIONS = {
@@ -23,6 +31,7 @@ export const PERMISSIONS = {
   RUN_LIFETIME: 'can_run_lifetime',
   MANAGE_ETA: 'can_manage_eta',
   MANAGE_USERS: 'can_manage_users',
+  MANAGE_CATALOGOS: 'can_manage_catalogos',
   IMPORT_SUBS: 'can_import_subs',
   IMPORT_CRM: 'can_import_crm',
   IMPORT_SUPPORT: 'can_import_support',
@@ -31,35 +40,41 @@ export const PERMISSIONS = {
   RUN_SUPPORT_ANALYSIS: 'can_run_support_analysis',
 } as const satisfies Record<string, Permission>;
 
-/**
- * Permisos de lectura: espejo de `VIEW_PERMISSION_FIELDS` en
- * `frontend/config/models.py`. Se abren por defecto; el resto son acciones y
- * arrancan cerradas.
+/*
+ * Aqui habia un Set `VIEW_PERMISSIONS` con los diecisiete permisos de lectura,
+ * que existia solo para premarcarlos en el formulario de un grupo nuevo. Ya no
+ * se premarcan (ver abajo), asi que la division lectura/accion vive unicamente
+ * donde es normativa: `VIEW_PERMISSION_FIELDS` y `ACTION_PERMISSION_FIELDS` en
+ * services/config/models.py.
  */
-const VIEW_PERMISSIONS = new Set<Permission>([
-  PERMISSIONS.VIEW_SUBSCRIPTIONS,
-  PERMISSIONS.VIEW_CRM,
-  PERMISSIONS.VIEW_IMPORTS,
-  PERMISSIONS.VIEW_SUPPORT,
-  PERMISSIONS.VIEW_SUBS_ANALYTICS,
-  PERMISSIONS.VIEW_SUBS_RESULTS,
-  PERMISSIONS.VIEW_SUBS_LIFETIME,
-  PERMISSIONS.VIEW_SUBS_SALES,
-  PERMISSIONS.VIEW_ETA,
-  PERMISSIONS.VIEW_CRM_ANALYTICS,
-  PERMISSIONS.VIEW_CRM_RESULTS,
-  PERMISSIONS.VIEW_SUPPORT_ANALYTICS,
-  PERMISSIONS.VIEW_SUPPORT_RESULTS,
-  PERMISSIONS.VIEW_IMPORTS_SUBS,
-  PERMISSIONS.VIEW_IMPORTS_CRM,
-  PERMISSIONS.VIEW_IMPORTS_SUPPORT,
-  PERMISSIONS.VIEW_IMPORT_HISTORY,
-]);
 
-/** Matriz con la que se abre el formulario de un grupo nuevo. */
+/**
+ * Matriz con la que se abre el formulario de un grupo nuevo: todo cerrado.
+ *
+ * Antes venia con los permisos de lectura marcados, reflejando el `default=True`
+ * que tenian esos campos en el modelo. Ya no lo tienen (ver la migracion
+ * `config/0004_cerrar_permisos_de_lectura`): conceder lectura es un acto
+ * explicito, y dejar el formulario premarcado volveria a abrirla de hecho,
+ * porque el formulario envia la matriz entera tal y como se ve.
+ */
 export const DEFAULT_GROUP_PERMISSIONS = Object.fromEntries(
-  Object.values(PERMISSIONS).map((permission) => [permission, VIEW_PERMISSIONS.has(permission)]),
+  Object.values(PERMISSIONS).map((permission) => [permission, false]),
 ) as Record<Permission, boolean>;
+
+/**
+ * Matriz con la que se abre el formulario de "Nuevo Usuario": solo el modulo de
+ * suscripciones, que es el que abre su dashboard.
+ *
+ * Es el espejo de `PERMISOS_INICIALES` en services/config/models.py, y hay que
+ * mantener las dos listas de acuerdo (ver CLAUDE.md): el backend lo aplica a la
+ * cuenta que crea la senal `create_user_profile`, pero el formulario manda la
+ * matriz entera y `apply_permissions` escribe los campos ausentes como false,
+ * asi que si aqui no estuviera, la cuenta acabaria sin ningun modulo.
+ */
+export const DEFAULT_USER_PERMISSIONS = {
+  ...DEFAULT_GROUP_PERMISSIONS,
+  [PERMISSIONS.VIEW_SUBSCRIPTIONS]: true,
+} as Record<Permission, boolean>;
 
 export const PERMISSION_GROUPS = [
   {
@@ -122,6 +137,7 @@ export const PERMISSION_GROUPS = [
       { key: PERMISSIONS.RUN_CALCULATIONS, label: 'Ejecutar Cálculos y Motores (comodín global)' },
       { key: PERMISSIONS.RUN_LIFETIME, label: 'Ejecutar Motor Kaplan-Meier' },
       { key: PERMISSIONS.MANAGE_ETA, label: 'Administrar Maestro ETA' },
+      { key: PERMISSIONS.MANAGE_CATALOGOS, label: 'Administrar Catálogos (planes, zonas, sites…)' },
       { key: PERMISSIONS.MANAGE_USERS, label: 'Administrar Usuarios y Seguridad' },
     ],
   },

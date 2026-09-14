@@ -1,3 +1,5 @@
+/** Navegación principal: los módulos que el usuario puede abrir. */
+
 import { Link } from '@inertiajs/react';
 import { motion } from 'framer-motion';
 

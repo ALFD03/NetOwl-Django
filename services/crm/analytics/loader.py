@@ -1,3 +1,14 @@
+"""Importacion del export de CRM y esquema de sus tablas.
+
+El export de Odoo viene agrupado: una fila por oportunidad y, debajo, sus
+movimientos con la referencia en blanco. Aqui se desdobla en dos tablas -las
+oportunidades y sus movimientos- leyendo por trozos, porque el fichero no cabe
+comodamente en memoria.
+
+El DDL vive en este mismo modulo e incluye migraciones en caliente
+(`ADD COLUMN IF NOT EXISTS`) para las columnas que se fueron anadiendo.
+"""
+
 from __future__ import annotations
 
 import unicodedata
@@ -12,6 +23,7 @@ from .config import CLIENT_FIELDS, CSV_COLUMN_MAP, ETAPA_MAP, GANADO_STATES
 
 
 def normalize_col(col: str) -> str:
+    """Nombre de columna comparable: sin acentos, en minusculas y con guiones bajos."""
     text = str(col).strip()
     text = (
         unicodedata.normalize("NFD", text)
@@ -27,6 +39,7 @@ def normalize_col(col: str) -> str:
 
 
 def iter_odoo_chunks(csv_path: str, chunksize: int = 50000) -> Iterator[pd.DataFrame]:
+    """Recorre el CSV por trozos de 50.000 filas."""
     return pd.read_csv(
         csv_path, 
         sep=",", 
@@ -66,7 +79,7 @@ def map_stage_canonically(stage_value: any) -> str:
         if num in num_map:
             return num_map[num]
             
-    from ..utils import normalize_text
+    from core.utils import normalize_text
     norm = normalize_text(val_str)
     
     if "contacto" in norm: return "etapa_1_contacto"
@@ -85,6 +98,11 @@ def map_stage_canonically(stage_value: any) -> str:
 
 
 def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> tuple[pd.DataFrame, pd.DataFrame, str | None]:
+    """Parte un trozo del export en `(oportunidades, movimientos, ultimo_id)`.
+
+    La referencia de la oportunidad solo aparece en su primera fila, asi que se
+    arrastra hacia abajo; `prev_client_id` continua ese arrastre entre trozos.
+    """
     df = df.rename(columns=CSV_COLUMN_MAP)
     df.columns = [normalize_col(c) for c in df.columns]
     
@@ -171,6 +189,10 @@ def parse_odoo_chunk(df: pd.DataFrame, prev_client_id: str | None = None) -> tup
 
 
 def import_crm_csv(csv_path: str) -> tuple[int, int]:
+    """Reemplaza `crm_clients` y `crm_logs` con el contenido del export.
+
+    Devuelve `(oportunidades, movimientos)` cargados.
+    """
     db = DBConnector()
     total_clients = 0
     total_logs = 0
@@ -206,6 +228,7 @@ def ensure_crm_schema(db: DBConnector):
 
 
 def _create_tables_if_not_exist(db: DBConnector):
+    """Crea las cinco tablas del dominio, sus indices y las columnas anadidas despues."""
     statements = [
         f"""
         CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.CRM_CLIENTS} (

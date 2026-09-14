@@ -1,3 +1,5 @@
+/** Tipos transversales del dominio: periodos, dimensiones y métricas diarias. */
+
 export type ThemeColor = 'green' | 'red' | 'blue' | 'yellow' | 'slate' | 'brand' | 'emerald';
 
 export interface SelectedTrend {

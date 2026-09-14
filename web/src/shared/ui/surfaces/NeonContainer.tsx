@@ -1,3 +1,9 @@
+/**
+ * Contenedor con acento de color, cabecera y acción opcional.
+ *
+ * Es la superficie de las tarjetas de dashboard; el color sale de los tokens.
+ */
+
 import type { ReactNode, FC } from 'react';
 import type { NeonTheme } from '../theme/types';
 
@@ -82,7 +88,7 @@ export const NeonContainer: FC<NeonContainerProps> = ({
           {headerAction && <div>{headerAction}</div>}
         </div>
       )}
-      <div className={noPadding ? '' : 'p-6 flex-1'}>
+      <div className={noPadding ? 'flex-1' : 'p-6 flex-1'}>
         {children}
       </div>
     </div>

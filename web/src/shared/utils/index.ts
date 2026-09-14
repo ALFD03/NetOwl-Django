@@ -1,3 +1,5 @@
+/** Utilidades transversales: formateadores, distribuciones y colores de métrica. */
+
 export * from './formatters';
 
 

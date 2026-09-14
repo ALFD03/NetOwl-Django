@@ -1,3 +1,9 @@
+"""Rutas del modulo de importaciones, bajo `/imports/`.
+
+Incluye las pantallas, las cargas de CSV, el lanzamiento de analisis y los tres
+endpoints de seguimiento que sondea la interfaz.
+"""
+
 # frontend/imports/urls.py
 from django.urls import path
 

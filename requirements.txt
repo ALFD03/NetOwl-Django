@@ -1,15 +1,33 @@
 # ---- NetOwl - Dependencias ----
-django>=5.0.0
-gunicorn>=21.2.0
-whitenoise>=6.0.0
-pandas>=2.0.0
-numpy>=1.24.0
-psycopg2>=2.9.0
-python-dotenv>=1.0.0
-hvac>=2.3.0
-pydantic>=2.7.0
-lifelines>=0.28.0
-django-ratelimit>=4.0.0
-inertia-django>=0.6.0
-celery>=5.4.0
-redis>=5.0.0
+#
+# Versiones fijadas con `==`, no con `>=`. Con los rangos abiertos que habia
+# antes, cada reconstruccion de la imagen adoptaba en silencio lo ultimo que
+# hubiera publicado cada paquete —incluidos cambios de version mayor— y la
+# imagen que se desplegaba no era la que nadie habia probado.
+#
+# El caso concreto que lo destapo: el entorno de desarrollo corre Python 3.14 y
+# ahi `django>=5.0.0` resolvia a Django 6.1.1, mientras el contenedor
+# (python:3.11-slim, ver Dockerfile) resolvia a 5.2.x, porque Django 6 exige
+# Python >= 3.12. Se estaba desarrollando contra una version mayor distinta de
+# la que se desplegaba.
+#
+# Estas son las versiones que resuelve Python 3.11, es decir, las que el
+# contenedor ya venia instalando. Django 5.2 ademas es la linea LTS, que es la
+# que interesa en produccion por la ventana de parches de seguridad.
+#
+# Para subir una version: cambiela aqui, reconstruya y pase `make check`.
+
+django==5.2.17
+gunicorn==26.2.0
+whitenoise==6.12.0
+pandas==2.3.3
+numpy==2.4.6
+psycopg2==2.9.13
+python-dotenv==1.2.3
+hvac==2.4.0
+pydantic==2.13.5
+lifelines==0.30.3
+django-ratelimit==4.1.0
+inertia-django==2.0.0
+celery==5.6.3
+redis==8.1.0

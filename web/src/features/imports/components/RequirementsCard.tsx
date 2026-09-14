@@ -1,3 +1,5 @@
+/** Los requisitos del fichero que espera cada importación. */
+
 import { Activity } from 'lucide-react';
 import type { ReactNode } from 'react';
 

@@ -1,3 +1,18 @@
+"""Perfiles, permisos y la tabla de sesiones del entorno.
+
+Tres cosas, todas de infraestructura y ninguna de negocio:
+
+* el **catalogo unico de permisos** (`VIEW_PERMISSION_FIELDS` y
+  `ACTION_PERMISSION_FIELDS`), que recorren el middleware, la pantalla de
+  administracion y los decoradores en vez de repetir los nombres campo a campo;
+* `Profile` y `PermissionGroup`, que comparten esa matriz;
+* `SesionEntorno`, la tabla de sesiones cualificada por esquema.
+
+Usuarios, perfiles y permisos viven en `public` a proposito: la misma cuenta
+tiene que valer en desarrollo y en produccion. Lo unico que se separa por
+entorno es la sesion.
+"""
+
 from django.contrib.auth.models import User
 from django.contrib.sessions.base_session import AbstractBaseSession
 from django.db import models
@@ -12,7 +27,12 @@ from core.config import DB_SCHEMA
 # middleware, la vista de administracion y la sincronizacion de grupos la
 # recorren en lugar de repetir los nombres campo por campo.
 
-# Permisos de lectura: por defecto abiertos (True).
+# Permisos de lectura. **Por defecto cerrados**, igual que los de accion.
+# Nacian abiertos, asi que cualquier cuenta recien creada veia de inmediato
+# churn, CRM, soporte, importaciones y el reporte de la reguladora: todo el
+# negocio. Conceder es ahora un acto explicito. Las cuentas que ya existian
+# conservan lo que tenian: la migracion 0003 les fija los diecisiete campos a
+# True antes de que el nuevo valor por defecto pueda afectarlas.
 VIEW_PERMISSION_FIELDS = [
     'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
     'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
@@ -23,10 +43,10 @@ VIEW_PERMISSION_FIELDS = [
     'can_view_import_history',
 ]
 
-# Permisos de accion: por defecto cerrados (False).
+# Permisos de accion: por defecto cerrados (False), como los de lectura.
 ACTION_PERMISSION_FIELDS = [
     'can_import_data', 'can_run_calculations', 'can_run_lifetime',
-    'can_manage_eta', 'can_manage_users',
+    'can_manage_eta', 'can_manage_users', 'can_manage_catalogos',
     # Cargas de CSV, una por modulo de origen.
     'can_import_subs', 'can_import_crm', 'can_import_support',
     # Ejecucion de cada motor de analisis por separado.
@@ -34,6 +54,17 @@ ACTION_PERMISSION_FIELDS = [
 ]
 
 PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
+
+# Con lo que nace una cuenta nueva. Solo el modulo de suscripciones, que es
+# justo lo que abre su dashboard: `services/subscriptions/views.py:dashboard`
+# esta detras de `can_view_subscriptions` y no tiene permiso propio; las demas
+# paginas del modulo (analytics, results, lifetime, sales, ETA) si lo tienen y
+# quedan cerradas. Lo demas se concede a mano desde `/auth/users/`.
+#
+# `web/src/shared/constants/permissions.ts` repite esta lista: es el espejo que
+# abre el formulario de "Nuevo Usuario", y el formulario manda la matriz entera,
+# asi que las dos tienen que decir lo mismo (ver CLAUDE.md).
+PERMISOS_INICIALES = ['can_view_subscriptions']
 
 
 class PermissionMatrix(models.Model):
@@ -47,29 +78,29 @@ class PermissionMatrix(models.Model):
     """
 
     # --- Modulos principales (navegacion) ---
-    can_view_subscriptions = models.BooleanField(default=True)
-    can_view_crm = models.BooleanField(default=True)
-    can_view_imports = models.BooleanField(default=True)
-    can_view_support = models.BooleanField(default=True)
+    can_view_subscriptions = models.BooleanField(default=False)
+    can_view_crm = models.BooleanField(default=False)
+    can_view_imports = models.BooleanField(default=False)
+    can_view_support = models.BooleanField(default=False)
 
     # --- Paginas de metricas ---
-    can_view_subs_analytics = models.BooleanField(default=True)
-    can_view_subs_results = models.BooleanField(default=True)
-    can_view_subs_lifetime = models.BooleanField(default=True)
-    can_view_subs_sales = models.BooleanField(default=True)
-    can_view_eta = models.BooleanField(default=True)
+    can_view_subs_analytics = models.BooleanField(default=False)
+    can_view_subs_results = models.BooleanField(default=False)
+    can_view_subs_lifetime = models.BooleanField(default=False)
+    can_view_subs_sales = models.BooleanField(default=False)
+    can_view_eta = models.BooleanField(default=False)
 
-    can_view_crm_analytics = models.BooleanField(default=True)
-    can_view_crm_results = models.BooleanField(default=True)
+    can_view_crm_analytics = models.BooleanField(default=False)
+    can_view_crm_results = models.BooleanField(default=False)
 
-    can_view_support_analytics = models.BooleanField(default=True)
-    can_view_support_results = models.BooleanField(default=True)
+    can_view_support_analytics = models.BooleanField(default=False)
+    can_view_support_results = models.BooleanField(default=False)
 
     # --- Paginas del modulo de Importaciones ---
-    can_view_imports_subs = models.BooleanField(default=True)
-    can_view_imports_crm = models.BooleanField(default=True)
-    can_view_imports_support = models.BooleanField(default=True)
-    can_view_import_history = models.BooleanField(default=True)
+    can_view_imports_subs = models.BooleanField(default=False)
+    can_view_imports_crm = models.BooleanField(default=False)
+    can_view_imports_support = models.BooleanField(default=False)
+    can_view_import_history = models.BooleanField(default=False)
 
     # --- Acciones globales ---
     can_import_data = models.BooleanField(default=False)
@@ -77,6 +108,8 @@ class PermissionMatrix(models.Model):
     can_run_lifetime = models.BooleanField(default=False)
     can_manage_eta = models.BooleanField(default=False)
     can_manage_users = models.BooleanField(default=False)
+    # Catalogos de referencia (planes, zonas, sites, estados, coordinadores).
+    can_manage_catalogos = models.BooleanField(default=False)
 
     # --- Cargas de CSV por modulo ---
     can_import_subs = models.BooleanField(default=False)
@@ -93,11 +126,15 @@ class PermissionMatrix(models.Model):
 
 
 def default_permissions(full_access: bool = False) -> dict:
-    """Matriz inicial de una cuenta: lectura abierta y acciones segun el rol."""
-    return {
-        **{field: True for field in VIEW_PERMISSION_FIELDS},
-        **{field: full_access for field in ACTION_PERMISSION_FIELDS},
-    }
+    """Matriz inicial de una cuenta: `PERMISOS_INICIALES`, o todo con `full_access`.
+
+    Antes la lectura se concedia entera sin preguntar y solo las acciones
+    dependian del rol. Ahora una cuenta nueva nace con un unico modulo —el de
+    suscripciones— y el resto se concede a mano desde `/auth/users/`.
+    """
+    if full_access:
+        return {field: True for field in PERMISSION_FIELDS}
+    return {field: field in PERMISOS_INICIALES for field in PERMISSION_FIELDS}
 
 
 class PermissionGroup(PermissionMatrix):
@@ -113,6 +150,14 @@ class PermissionGroup(PermissionMatrix):
 
 
 class Profile(PermissionMatrix):
+    """La ficha de permisos de una cuenta.
+
+    `role` es solo descriptivo: quien decide el acceso es la matriz. Si el perfil
+    pertenece a un grupo, **toda comprobacion se delega en el grupo**; los campos
+    propios se conservan sincronizados para poder desvincularlo despues sin
+    perder la configuracion.
+    """
+
     ROLE_CHOICES = [
         ('admin', 'Administrador'),
         ('analyst', 'Analista'),
@@ -125,6 +170,11 @@ class Profile(PermissionMatrix):
     group = models.ForeignKey(PermissionGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
 
     def has_permission(self, perm_name: str) -> bool:
+        """Si esta cuenta tiene el permiso indicado.
+
+        Los superusuarios de Django pasan siempre; un perfil con grupo pregunta al
+        grupo y no a sus propios campos.
+        """
         if self.user.is_superuser:
             return True
         if self.group:
@@ -132,6 +182,7 @@ class Profile(PermissionMatrix):
         return getattr(self, perm_name, False)
 
     def sync_permissions_from_group(self):
+        """Copia al perfil la matriz de su grupo. Sin grupo no hace nada."""
         if self.group:
             for field in PERMISSION_FIELDS:
                 setattr(self, field, getattr(self.group, field, False))
@@ -144,6 +195,12 @@ class Profile(PermissionMatrix):
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
+    """Crea el perfil al dar de alta un usuario.
+
+    **El primero del sistema queda como administrador con la matriz completa**;
+    el resto nacen como visualizadores con `PERMISOS_INICIALES`: el modulo de
+    suscripciones y nada mas.
+    """
     if created:
         is_first = User.objects.count() == 1
         Profile.objects.create(
@@ -155,6 +212,11 @@ def create_user_profile(sender, instance, created, **kwargs):
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
+    """Garantiza el perfil y lo guarda junto al usuario.
+
+    Cubre las cuentas creadas antes de que existiera el perfil o por una via que
+    no disparo `create_user_profile`.
+    """
     if not hasattr(instance, 'profile'):
         is_first = User.objects.count() == 1
         Profile.objects.create(
@@ -185,6 +247,13 @@ class SesionEntorno(AbstractBaseSession):
     # autogenera es un hash del nombre de la tabla: seria distinto en cada
     # esquema y `makemigrations --check` reportaria cambios pendientes para
     # siempre. Mismo motivo por el que AnalysisJob nombra su indice a mano.
+    """La tabla de sesiones del esquema del entorno.
+
+    `managed = False` es deliberado: la crea `manage.py preparar_sesiones` y no
+    una migracion, porque `django_migrations` vive en `public` y la comparten
+    todos los entornos (el detalle esta en ese comando).
+    """
+
     expire_date = models.DateTimeField(db_index=False)
 
     class Meta:
@@ -195,6 +264,7 @@ class SesionEntorno(AbstractBaseSession):
 
     @classmethod
     def get_session_store_class(cls):
+        """El backend de sesiones que escribe en esta tabla."""
         from services.config.sessions import SessionStore
 
         return SessionStore

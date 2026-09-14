@@ -1,3 +1,5 @@
+/** Ejecuta una llamada a la API llevando su estado, su mensaje y su log. */
+
 import { useCallback, useState } from 'react';
 
 import { extractApiError } from '@/shared/lib/http/errors';

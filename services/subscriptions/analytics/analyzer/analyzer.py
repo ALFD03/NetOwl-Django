@@ -1,3 +1,11 @@
+"""`MetricsAnalyzer`: el analisis mensual de churn de punta a punta.
+
+Orquesta a los otros modulos del paquete (carga, limpieza, reglas, metricas y
+dimensiones) y separa a proposito el **calculo** de la **persistencia**: asi el
+mismo analyzer, con una sola lectura de datos, sirve para el cierre del mes y
+para el corte acumulado de cada uno de sus dias (ver `day_metrics`).
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -12,12 +20,24 @@ from . import cleaner, dimensions, loader, metrics_calc, rules
 
 
 class MetricsAnalyzer:
+    """Calcula las metricas de churn de un periodo sobre el historico de logs.
+
+    Uso normal:
+
+        analyzer = MetricsAnalyzer(db, periodo)
+        analyzer.run()
+
+    `run()` carga, limpia, aplica las reglas y persiste. Para recorrer varios
+    cortes reutilizando la misma carga se usan `_compute(periodo)` -que no
+    escribe- y `persist(...)` por separado.
+    """
 
     def __init__(self, db: DBConnector, periodo: Periodo):
         self.db = db
         self.periodo = periodo
 
     def load_data(self):
+        """Lee de la base las cuatro tablas que necesita el calculo."""
         (
             self.df_subs_raw,
             self.df_logs,
@@ -26,12 +46,14 @@ class MetricsAnalyzer:
         ) = loader.load_data(self.db)
 
     def build_clean_data(self):
+        """Normaliza las suscripciones y une los dos formatos de log."""
         self.df_free_meta = cleaner.build_free_meta(self.df_free_raw)
         self.df_subs_full, self.df_clean_logs = cleaner.build_clean_data(
             self.df_subs_raw, self.df_logs, self.df_logs_v15
         )
 
     def _apply_log_rules(self):
+        """Anade los logs sinteticos y precalcula lo que no depende del periodo."""
         self.df_clean_logs, self._ordens_con_activity = rules.apply_log_rules(
             self.df_clean_logs, self.df_subs_full, self.df_free_meta
         )
@@ -59,6 +81,13 @@ class MetricsAnalyzer:
         self._inactivos_cache = None
 
     def _state_at(self, target_date, estado: str, strictly_before: bool):
+        """Suscripciones en `estado` a una fecha, por el camino mas barato disponible.
+
+        Con las caches preparadas usa el recorrido acumulativo; sin ellas cae en la
+        definicion de referencia, que da el mismo resultado mas despacio. Solo se
+        cachea el estado al **inicio** del periodo, que es identico en los 31 cortes
+        del mes; el del cierre cambia cada dia y guardarlo solo gastaria memoria.
+        """
         acumulado = getattr(self, "_estados", None)
         if acumulado is None:
             # Sin _prepare_caches (uso suelto del analyzer): la definicion de
@@ -96,18 +125,22 @@ class MetricsAnalyzer:
         return df_inactivos
 
     def get_active_at(self, target_date, strictly_before: bool = False):
+        """Suscripciones activas a una fecha."""
         return self._state_at(target_date, ACTIVE_STATE, strictly_before)
 
     def get_free_at(self, target_date, strictly_before: bool = False):
+        """Suscripciones en servicio gratuito a una fecha."""
         return self._state_at(target_date, FREE_STATE, strictly_before)
 
     def get_reactivations(self, act_fin):
+        """Reactivaciones del periodo que siguen activas al cierre."""
         return metrics_calc.get_reactivations(
             self.df_clean_logs, self.df_subs_full, self.periodo, act_fin,
             candidates=getattr(self, "_react_cand", None),
         )
 
     def get_corte_impagado(self):
+        """Cortes por factura impaga ocurridos en el periodo."""
         return metrics_calc.get_corte_impagado(
             self.df_clean_logs, self.periodo,
             candidates=getattr(self, "_corte_cand", None),
@@ -265,6 +298,7 @@ class MetricsAnalyzer:
         }
 
     def run(self):
+        """El analisis completo de un periodo: carga, calcula y persiste."""
         self.load_data()
         self.build_clean_data()
         self._apply_log_rules()

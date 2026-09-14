@@ -1,3 +1,10 @@
+/**
+ * Agrega los nodos por coordinador, más el bloque de radiofrecuencia.
+ *
+ * Ojo: aquí `tasaCumplimiento` **no se recorta a 100**, a diferencia del Sales
+ * Report. Es una discrepancia intencionada (ver `lib/commercial.ts`).
+ */
+
 import { useMemo } from 'react';
 
 import {

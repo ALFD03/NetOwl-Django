@@ -1,5 +1,12 @@
+/**
+ * El registro de navegación: módulos del sidebar y pestañas de cada uno.
+ *
+ * Añadir un módulo es añadir una entrada aquí; no hay componentes de cabecera por
+ * módulo.
+ */
+
 import {
-  BarChart3, Clock, CloudDownload, FileSpreadsheet, Gauge, Headset,
+  BarChart3, BookMarked, Clock, CloudDownload, FileSpreadsheet, Gauge, Headset,
   Layers, Lock, Table, TrendingUp, UserCheck, Users,
 } from 'lucide-react';
 
@@ -57,6 +64,7 @@ export const MODULE_NAVIGATION = {
       { id: 'sales', label: 'Sales Report', href: '/subscriptions/sales-report/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_SUBS_SALES },
       { id: 'business_units', label: 'Business Units', href: '/subscriptions/business-units/', icon: UserCheck, permission: PERMISSIONS.VIEW_SUBS_SALES },
       { id: 'eta', label: 'ETA Report', href: '/subscriptions/eta-report/', icon: Lock, permission: PERMISSIONS.VIEW_ETA },
+      { id: 'catalogos', label: 'Catálogos', href: '/subscriptions/config/', icon: BookMarked, permission: PERMISSIONS.MANAGE_CATALOGOS },
     ],
   },
   crm: {

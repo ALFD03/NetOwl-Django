@@ -1,3 +1,5 @@
+/** Constructores de los gráficos del dashboard de suscripciones. */
+
 import { SURFACE } from '@/shared/constants/theme';
 import type { ChartData } from 'chart.js';
 import type { PeriodoData, ZonaData } from '@/features/subscriptions/types';

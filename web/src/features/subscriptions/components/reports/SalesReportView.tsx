@@ -1,3 +1,5 @@
+/** Sales Report: Site → Tecnología → Nodos, con subtotales por nivel. */
+
 import { Building2, Search } from 'lucide-react';
 
 import { EmptyState, NeonContainer } from '@/shared/ui';

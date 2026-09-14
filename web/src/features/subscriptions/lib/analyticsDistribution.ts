@@ -1,3 +1,5 @@
+/** Distribuciones de una dimensión para la página de Analytics. */
+
 import type { DimensionVal, Periodo } from '@/shared/types/domain';
 import { toNumber } from '@/shared/utils/formatters';
 import {

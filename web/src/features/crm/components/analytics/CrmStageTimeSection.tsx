@@ -1,3 +1,5 @@
+/** El tiempo por etapa: promedio crudo y ajustado, desenlaces y estancias en curso. */
+
 import type { ReactNode } from 'react';
 import { Gauge, Hourglass, Rabbit, Snail } from 'lucide-react';
 

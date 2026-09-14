@@ -1,7 +1,7 @@
 """Enrutamiento URL para el modulo Subscriptions."""
 from django.urls import path
 
-from services.subscriptions import views, views_eta
+from services.subscriptions import views, views_catalogos, views_eta
 
 app_name = "subscriptions"
 
@@ -15,6 +15,7 @@ urlpatterns = [
     path("sales-report/", views.sales_report, name="sales_report"),
     path("eta-report/", views_eta.eta_report, name="eta_report"),
     path("eta-report/config/", views_eta.eta_config_view, name="eta_config"),
+    path("config/", views_catalogos.catalogos_view, name="catalogos"),
     path("business-units/", views.business_units, name="business_units"),
 
     path("api/dashboard-data/", views.api_dashboard_data, name="api_dashboard_data"),
@@ -28,10 +29,11 @@ urlpatterns = [
     path("api/sales-report/", views.api_sales_report, name="api_sales_report"),
     path("api/eta-report/data/", views_eta.api_eta_report_data, name="api_eta_report_data"),
     path("api/eta-report/lock/", views_eta.api_eta_report_lock, name="api_eta_report_lock"),
-    path("api/eta-report/save-plan-config/", views_eta.api_eta_report_save_plan_config, name="api_eta_report_save_plan_config"),
     path("api/eta-report/save-sub-config/", views_eta.api_eta_report_save_sub_config, name="api_eta_report_save_sub_config"),
     path("api/business-units/", views.api_business_units_report, name="api_business_units_report"),
-    path("api/eta-report/delete-plan-config/", views_eta.api_eta_report_delete_plan_config, name="api_eta_report_delete_plan_config"),
     path("api/eta-report/delete-sub-config/", views_eta.api_eta_report_delete_sub_config, name="api_eta_report_delete_sub_config"),
+
+    path("api/catalogos/guardar/", views_catalogos.api_catalogo_guardar, name="api_catalogo_guardar"),
+    path("api/catalogos/eliminar/", views_catalogos.api_catalogo_eliminar, name="api_catalogo_eliminar"),
 
 ]

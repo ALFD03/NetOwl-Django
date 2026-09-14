@@ -1,3 +1,5 @@
+/** La llamada del drill-down de soporte, que se calcula al vuelo en el servidor. */
+
 import { apiClient } from '@/shared/lib/api';
 import type { SupportBreakdownResponse } from '../types';
 

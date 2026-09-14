@@ -1,3 +1,11 @@
+/**
+ * Lectura de los bloques de métricas de soporte y etiquetas de cada medida.
+ *
+ * Las tres medidas de tiempo miden cosas distintas —el ciclo completo, solo la
+ * gestión del técnico y la espera hasta la asignación— y es lo que distinguen
+ * `CIERRE_TOTAL`, `GESTION` y `ASIGNACION`.
+ */
+
 import type { MetricColor } from '@/shared/ui';
 import { toNumber } from '@/shared/utils';
 import {

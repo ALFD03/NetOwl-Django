@@ -1,3 +1,6 @@
+# Lo que NO entra en la imagen. `Dockerfile` hace `COPY . .`, asi que todo lo
+# que no este aqui acaba dentro: `logs/` llevaba las rutas reales de las
+# peticiones servidas en la maquina de desarrollo.
 __pycache__
 .git
 .gitignore
@@ -7,3 +10,24 @@ __pycache__
 .venv
 venv
 requirements-dev.txt
+
+# El bundle lo compila la etapa de frontend; el node_modules local puede ser de
+# otra plataforma y taparia el `npm ci` limpio de esa etapa.
+node_modules
+web/static/dist
+
+# El despliegue: el compose se lee desde fuera de la imagen, y deploy/ensayo
+# puede tener el secreto del ensayo con la configuracion de la base de datos.
+deploy
+
+# Salidas locales: registros, estaticos recolectados y el grafo de graphify.
+logs
+staticfiles
+graphify-out
+
+# Configuracion de herramientas del puesto de trabajo.
+.claude
+.codex
+.cursor
+.github
+.agents

@@ -1,3 +1,5 @@
+/** Filtros de los reportes comerciales: periodo, tecnología, sucursal y día. */
+
 import { Calendar, Filter, Search, Wifi } from 'lucide-react';
 import { PeriodSelector, SearchInput, SelectMenu } from '@/shared/ui';
 

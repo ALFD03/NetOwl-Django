@@ -1,8 +1,18 @@
+"""Lectura de lo calculado por soporte, mas lo que se calcula al vuelo.
+
+Dos cosas no estan persistidas a proposito y se recalculan aqui sobre los
+tickets del mes: el **cruce dimension x desglose** (el producto cartesiano son
+decenas de miles de filas JSONB por periodo para algo que se mira de una en
+una) y la **incidencia por zona**, que necesita cruzar con los activos que
+calculo el modulo de suscripciones.
+"""
+
 # backend/support/queries.py
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any
 
 import pandas as pd
@@ -10,6 +20,7 @@ import pandas as pd
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import zonas_por_nombre
+from core.models import Periodo
 from core.utils import parse_jsonb
 from services.support.analytics.cohorts import PeriodCohort, build_cohort, classify_tickets
 from services.support.analytics.config import (
@@ -25,6 +36,7 @@ logger = logging.getLogger(__name__)
 # --- Lecturas de tablas ya calculadas ---------------------------------------
 
 def get_support_periodos() -> list[str]:
+    """Los periodos con cierre calculado, del mas reciente al mas antiguo."""
     db = DBConnector()
     try:
         df = db.query(f"""
@@ -160,11 +172,21 @@ def _load_period_cohort(db: DBConnector, periodo: str) -> PeriodCohort:
     veinte mil filas— y se clasifican con las mismas reglas del analizador, así
     que lo que sale de aquí es idéntico a lo que se persistió.
     """
+    # Rango de fechas y no `TO_CHAR(columna, 'YYYY-MM') = %s`: envolver la
+    # columna en una funcion impide usar el indice, asi que cada clic de
+    # desglose costaba un barrido secuencial de la tabla entera. Los dos
+    # indices ya existen (ver loader.py). El rango es semiabierto —desde el dia
+    # 1 hasta el 1 del mes siguiente, excluido— que es exactamente el mismo
+    # conjunto de filas que devolvia la comparacion de texto.
+    desde = Periodo.build(f"{periodo}-01").fecha_inicio
+    # Primer instante del mes siguiente, sin dependencias extra.
+    hasta = datetime(desde.year + desde.month // 12, desde.month % 12 + 1, 1)
+
     df = db.query(f"""
         SELECT * FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
-        WHERE TO_CHAR(creado_el, 'YYYY-MM') = %s
-           OR TO_CHAR(ultima_actualizacion_etapa, 'YYYY-MM') = %s
-    """, params=[periodo, periodo])
+        WHERE (creado_el >= %s AND creado_el < %s)
+           OR (ultima_actualizacion_etapa >= %s AND ultima_actualizacion_etapa < %s)
+    """, params=[desde, hasta, desde, hasta])
 
     if df.empty:
         return PeriodCohort(periodo, df)
@@ -215,7 +237,11 @@ def get_support_breakdown(
 # --- Incidencia por zona ----------------------------------------------------
 
 def _load_zone_info() -> dict:
-    """Mapa zona → {site, type} desde `Zonas.json`, indexado en minúsculas."""
+    """Mapa zona → {site, type} desde el catálogo, indexado en minúsculas.
+
+    La fuente es `core.fixtures`, no el antiguo `Zonas.json`: las zonas son hoy
+    una tabla que se mantiene desde `/subscriptions/config/`.
+    """
     zone_info: dict[str, dict] = {}
     for nombre, z in zonas_por_nombre().items():
         zone_info[nombre] = {
@@ -377,6 +403,7 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
 def get_support_tickets_list(
     limit: int = 500, grupo: str | None = None, periodo: str | None = None
 ) -> list[dict]:
+    """Listado crudo de tickets, opcionalmente de un grupo y un periodo."""
     db = DBConnector()
     try:
         where = ["1=1"]

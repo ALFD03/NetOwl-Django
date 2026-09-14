@@ -1,3 +1,5 @@
+/** Mapas de color del kit y las uniones por las que van indexados. */
+
 export * from './types';
 export {
   METRIC_CARD_SURFACE, METRIC_TEXT, METRIC_LABEL,

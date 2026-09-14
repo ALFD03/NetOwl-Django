@@ -1,3 +1,5 @@
+/** Los gráficos por dimensión del periodo seleccionado. */
+
 import { useMemo, useState } from 'react';
 import {
   BarChart,

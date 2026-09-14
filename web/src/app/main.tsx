@@ -1,3 +1,11 @@
+/**
+ * Arranque de la aplicación React.
+ *
+ * Resuelve cada página Inertia con el glob de `../pages` usando la cadena que
+ * le pasó la vista Django, monta el proveedor de tema y prepara axios para el
+ * CSRF.
+ */
+
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { createInertiaApp } from '@inertiajs/react';

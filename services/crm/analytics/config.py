@@ -1,3 +1,19 @@
+"""Vocabulario del embudo de CRM y las reglas que lo interpretan.
+
+Tres bloques, y conviene no mezclarlos:
+
+* **las etapas**: como se llaman en Odoo, en que orden van y cuales forman el
+  embudo lineal (las 8, 9 y 10 vienen despues en el orden pero no son un
+  avance);
+* **la efectividad**: que salidas cuentan como que la etapa hizo su trabajo y
+  quien responde por cada fallo -retorno, devolucion o perdida-;
+* **los umbrales de tiempo**: que movimiento es una estancia real y cual es
+  solo una correccion administrativa.
+
+Todo son decisiones de negocio, no de codigo: cambiarlas cambia lo que el
+reporte dice de cada equipo.
+"""
+
 from __future__ import annotations
 
 ETAPA_MAP = {

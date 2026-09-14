@@ -1,3 +1,11 @@
+/**
+ * Cargas de CSV y lanzamiento de análisis.
+ *
+ * Lo que antes era un solo POST son hoy tres pasos —encolar, sondear y dar al
+ * resultado la forma de la respuesta antigua— para que quien llama siga leyendo
+ * las mismas claves.
+ */
+
 import { apiClient } from './client';
 import { startAndFollow, type AnalysisJob } from './jobs';
 

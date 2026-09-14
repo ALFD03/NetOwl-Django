@@ -1,3 +1,5 @@
+/** Endpoints del módulo de soporte. */
+
 import { apiClient } from './client';
 import type { ApiMessageResponse } from './types';
 

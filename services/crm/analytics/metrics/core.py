@@ -1,3 +1,10 @@
+"""Composicion del bloque de metricas de un periodo de CRM.
+
+Junta lo que calculan los tres modulos especializados -efectividad,
+probabilidad y tiempo- con los volumenes y las tasas basicas. Es una funcion
+pura: la misma sirve para el total del mes y para cada rebanada dimensional.
+"""
+
 from __future__ import annotations
 
 from typing import Any

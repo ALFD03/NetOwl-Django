@@ -18,6 +18,8 @@ from django.db import close_old_connections
 from django.http import JsonResponse
 from django.utils import timezone
 
+from core.utils import es_periodo
+
 from .models import AnalysisJob
 
 logger = logging.getLogger(__name__)
@@ -113,6 +115,11 @@ def jobs_abiertos() -> list[AnalysisJob]:
 
 
 def crear_job(user, module: str, periodo: str = '') -> AnalysisJob:
+    """Crea la fila de una ejecucion en estado `pending`.
+
+    El usuario se guarda con `SET_NULL`, asi que un job puede sobrevivir a la
+    cuenta que lo lanzo.
+    """
     return AnalysisJob.objects.create(
         module=module,
         periodo=periodo or '',
@@ -146,6 +153,7 @@ class ConsolaJob(io.StringIO):
         self._volcando = False
 
     def write(self, s):  # noqa: D102 - contrato de StringIO
+        """Acumula la salida y, cada `INTERVALO_VOLCADO`, la guarda en el job."""
         escrito = super().write(s)
         ahora = time.monotonic()
         if not self._volcando and ahora - self._ultimo_volcado >= self.INTERVALO_VOLCADO:
@@ -195,6 +203,7 @@ class ConsolaJob(io.StringIO):
 
 
 def marcar_inicio(job: AnalysisJob, task_id: str) -> None:
+    """Pasa el job a `running` y le anota el id de la tarea de Celery."""
     close_old_connections()
     job.status = AnalysisJob.EN_CURSO
     job.task_id = task_id or ''
@@ -209,6 +218,7 @@ def marcar_fin(
     message: str,
     result: dict | None = None,
 ) -> None:
+    """Cierra el job con su desenlace y fuerza el ultimo volcado del log."""
     job.status = status
     job.message = message
     job.result = result or {}
@@ -233,7 +243,11 @@ def lanzar_analisis(request, module, requiere_periodo=True):
         except Exception:
             return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
 
-        if not periodo or len(periodo) != 7:
+        # `len(periodo) != 7` dejaba pasar cualquier cadena de siete caracteres,
+        # que acababa escrita como `periodo_reporte` en las tablas de
+        # resultados y solo se descubria cuando `Periodo.build` reventaba a
+        # mitad del calculo, con el job ya encolado.
+        if not es_periodo(periodo):
             return JsonResponse(
                 {"status": "error", "message": "Periodo inválido (YYYY-MM)"}, status=400
             )

@@ -1,3 +1,11 @@
+/**
+ * Página Inertia `Subscriptions/BusinessUnits` (`/subscriptions/business-units/`).
+ *
+ * Agrupa por coordinador. Ojo: calcula `tasaCumplimiento` **sin recortar a 100**,
+ * a diferencia del Sales Report; es una discrepancia intencionada (ver
+ * `features/subscriptions/lib/commercial.ts`).
+ */
+
 import { useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
 

@@ -1,3 +1,5 @@
+/** La franja de cifras de cabecera de un grupo de nodos. */
+
 import { SummaryStrip } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import { calcComercial } from '../../lib/commercial';

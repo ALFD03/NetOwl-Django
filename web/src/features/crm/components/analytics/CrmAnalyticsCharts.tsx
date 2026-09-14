@@ -1,3 +1,5 @@
+/** Los gráficos de la distribución de la métrica elegida. */
+
 import { CHART_CHROME } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import {

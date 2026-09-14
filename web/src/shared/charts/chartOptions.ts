@@ -1,3 +1,5 @@
+/** Las opciones compartidas de los gráficos: ejes, leyendas, tooltips y etiquetas. */
+
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils/formatters/number';
 import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import 'chartjs-plugin-datalabels';

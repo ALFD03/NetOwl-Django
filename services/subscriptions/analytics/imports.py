@@ -1,4 +1,19 @@
+"""Importacion de los exports de suscripciones y de logs.
+
+El de suscripciones se guarda dos veces: `subscriptions-b` conserva el detalle
+linea a linea y `subscriptions` una fila por orden, ya consolidada. Las dos
+tablas se truncan en cada carga: **no son un historico**.
+
+Lo que hace especial a este importador es la comprobacion del catalogo. El
+export trae varias lineas por orden -el plan, el router, la instalacion- y solo
+una de ellas es el producto; si ninguna esta catalogada, antes la orden se
+guardaba sin producto y la perdida no se notaba hasta meses despues, en el
+reporte de la reguladora. Hoy la importacion se detiene antes de escribir nada.
+"""
+
 from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -6,7 +21,7 @@ from psycopg2 import sql
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
-from core.fixtures import plan_names
+from core.fixtures import nombres_reconocidos, plan_names, productos_ignorados
 
 from .config import SUBS_ACTIVO_ALIASES, SUBS_COLUMN_MAPPING
 
@@ -47,16 +62,139 @@ def _blank_to_nan(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+class CatalogoVacio(RuntimeError):
+    """No hay ni un plan registrado.
+
+    Se distingue de `ProductosSinCatalogo` a proposito: culpar al fichero de lo
+    que es un problema de configuracion mandaba a buscar en el sitio
+    equivocado. Un catalogo vacio no se arregla cambiando el export.
+    """
+
+
+class ProductosSinCatalogo(RuntimeError):
+    """El export trae ordenes cuyo producto no esta en el catalogo.
+
+    Lleva encima lo que necesita el cliente para resolverlo sin volver a subir
+    el fichero a ciegas: que productos son y cuantas ordenes arrastra cada uno.
+    """
+
+    def __init__(self, productos: list[dict[str, Any]], ordenes: int):
+        self.productos = productos
+        self.ordenes = ordenes
+        nombres = ", ".join(p["nombre"] for p in productos[:5])
+        if len(productos) > 5:
+            nombres += f" (+{len(productos) - 5} mas)"
+        super().__init__(
+            f"{len(productos)} producto(s) no estan en el catalogo y afectan a "
+            f"{ordenes} orden(es): {nombres}."
+        )
+
+
 def _first_matching_plan(values):
-    plan_set = plan_names()
+    """El primer valor de la columna que el catalogo reconozca como plan.
+
+    Es lo que elige el producto de una orden entre sus varias lineas.
+    """
+    plan_set = nombres_reconocidos()
     for v in values.dropna().unique():
         if v in plan_set:
             return v
     return None
 
 
+def _verificar_catalogo(df_local: pd.DataFrame) -> None:
+    """Aborta la importacion si alguna orden entra sin producto catalogado.
+
+    El export trae varias lineas por orden —el plan, el router, la instalacion—
+    y `_first_matching_plan` se queda con la primera que este en el catalogo.
+    Cuando no lo esta ninguna, la orden se guardaba sin producto y la perdida
+    no se notaba hasta meses despues, en el reporte de la reguladora.
+
+    Se comprueba **antes** del truncate: si esto levanta, no se escribio nada.
+
+    Una orden sin ninguna linea de producto no se reporta: no hay nombre que
+    registrar, asi que pasa igual que antes.
+    """
+    if not plan_names():
+        raise CatalogoVacio(
+            "El catalogo de planes esta vacio. Cargalo desde Subscriptions -> "
+            "Catalogos antes de importar."
+        )
+
+    columnas = {"orden_producto", "producto"}
+    if not columnas.issubset(df_local.columns):
+        return
+
+    lineas = df_local.loc[:, ["orden_producto", "producto"]].dropna(subset=["producto"])
+    if lineas.empty:
+        return
+
+    reconocidos = nombres_reconocidos()
+    con_plan = set(
+        lineas.loc[lineas["producto"].isin(reconocidos), "orden_producto"]
+    )
+    huerfanas = lineas[~lineas["orden_producto"].isin(con_plan)]
+
+    # Lo que alguien ya declaro que nunca sera un plan deja de contar como
+    # candidato: si no, cada router e instalacion bloquearia toda importacion.
+    candidatos = huerfanas[~huerfanas["producto"].isin(productos_ignorados())]
+    if candidatos.empty:
+        return
+
+    conteo = (
+        candidatos.groupby("producto")["orden_producto"]
+        .nunique()
+        .sort_values(ascending=False)
+    )
+    productos = [
+        {"nombre": str(nombre), "ordenes": int(n)} for nombre, n in conteo.items()
+    ]
+    raise ProductosSinCatalogo(
+        productos, int(candidatos["orden_producto"].nunique())
+    )
+
+
+def productos_fuera_de_catalogo() -> list[dict[str, Any]]:
+    """Productos ya importados que hoy no estan en el catalogo.
+
+    La importacion garantiza que toda orden entra con un plan catalogado, pero
+    un plan se puede borrar despues, y los datos cargados antes de que esa
+    comprobacion existiera pueden no tener ninguno. El analisis lo vuelve a
+    mirar antes de gastar minutos calculando una respuesta que ya seria mala.
+    """
+    db = DBConnector()
+    if not db.tabla_existe(TableNames.SUBSCRIPTIONS):
+        return []
+
+    df = db.query(
+        f"""
+        SELECT producto, COUNT(DISTINCT orden_producto) AS ordenes
+        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
+        WHERE producto IS NOT NULL AND producto <> ''
+        GROUP BY producto
+        """
+    )
+    if df.empty:
+        return []
+
+    conocidos = nombres_reconocidos() | productos_ignorados()
+    fuera = df[~df["producto"].isin(conocidos)]
+    return [
+        {"nombre": str(row["producto"]), "ordenes": int(row["ordenes"])}
+        for _, row in fuera.iterrows()
+    ]
+
+
 def import_subscriptions_csv(csv_path: str) -> int:
-    # ✅ Lectura segura con dtype=str, encoding utf-8-sig y low_memory=False
+    """Carga el export de suscripciones y devuelve cuantas ordenes quedaron.
+
+    Consolida las lineas por orden, **verifica el catalogo antes de tocar la base**
+    y reemplaza por completo `subscriptions-b` (detalle) y `subscriptions`
+    (consolidado).
+
+    Levanta `ProductosSinCatalogo` o `CatalogoVacio` sin haber escrito nada.
+    """
+    # Lectura segura: dtype=str, encoding utf-8-sig (BOM de Excel) y low_memory=False
     df_local = pd.read_csv(
         csv_path, 
         dtype=str, 
@@ -116,6 +254,10 @@ def import_subscriptions_csv(csv_path: str) -> int:
             .replace(["nan", "None", "<NA>"], None)
         )
 
+    # Antes de crear, truncar o copiar nada: si algo no esta catalogado, la
+    # importacion no llega a empezar y la tabla anterior sigue intacta.
+    _verificar_catalogo(df_local)
+
     db_tool = DBConnector()
 
     with db_tool.get_connection() as conn:
@@ -163,7 +305,11 @@ def import_subscriptions_csv(csv_path: str) -> int:
 
 
 def import_logs_csv(csv_path: str) -> int:
-    # ✅ Lectura segura para logs también
+    """Carga el export de logs y reemplaza `subscriptions-logs`.
+
+    Exige las cuatro columnas del formato (`orden`, `fecha_log`, `log`, `estado`).
+    """
+    # Misma lectura segura que el export de suscripciones.
     df_logs = pd.read_csv(
         csv_path, 
         dtype=str, 

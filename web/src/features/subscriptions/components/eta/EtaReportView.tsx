@@ -1,3 +1,5 @@
+/** Las matrices del reporte ETA, y el estado de «faltan elementos por clasificar». */
+
 import {
   Activity, Building2, Database, Gauge, LayoutGrid, MapPin, Tv, Users, Wifi, Zap,
 } from 'lucide-react';
@@ -103,12 +105,16 @@ export function EtaReportView({ data, loading, period, configLink }: EtaReportVi
             <StatGroup title="1. Por Estado" icon={<MapPin className="h-4 w-4" />} stats={data.tv_metrics?.por_estado} theme="green" />
             <StatGroup title="2. Por Tipo Persona" icon={<Users className="h-4 w-4" />} stats={data.tv_metrics?.por_persona} theme="green" />
           </div>
-          <StatGroup title="3. Estado | Persona" icon={<LayoutGrid className="h-4 w-4" />} stats={data.tv_metrics?.por_estado_persona} theme="green" />
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-1">
+            <StatGroup title="3. Estado | Persona" icon={<LayoutGrid className="h-4 w-4" />} stats={data.tv_metrics?.por_estado_persona} theme="green" />
+          </div>
         </section>
 
         <section className="space-y-6">
           <SectionHeading title="Penetración Velocidades" icon={<Gauge />} accent="yellow" />
-          <EtaSpeedTable speedMetrics={(data.speed_metrics ?? {}) as Record<string, Record<string, number>>} />
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-1">
+            <EtaSpeedTable speedMetrics={(data.speed_metrics ?? {}) as Record<string, Record<string, number>>} />
+          </div>
         </section>
       </div>
     </div>

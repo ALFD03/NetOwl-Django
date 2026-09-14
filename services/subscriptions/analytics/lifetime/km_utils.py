@@ -1,3 +1,5 @@
+"""Ajuste de la curva de supervivencia (Kaplan-Meier) con `lifelines`."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -12,6 +14,20 @@ def compute_km(
     label: str = "",
     calculate_ci: bool = True,  # <-- Nuevo parámetro para evitar cálculos pesados de Greenwood
 ) -> dict[str, Any]:
+    """Curva, medianas y conteos de una serie de duraciones.
+
+    `durations` son los dias vividos y `events` marca con 1 lo observado y con 0 lo
+    censurado -el periodo seguia abierto al terminar la observacion-.
+
+    Devuelve la curva punto a punto, la mediana y los percentiles 25 y 75 (los
+    tiempos en que la supervivencia cruza 0,75 y 0,25) y el reparto entre eventos
+    y censurados. Una muestra sin eventos, o de menos de dos casos, devuelve la
+    estructura vacia con las medianas a `None`: no es 0, es que no se puede
+    calcular.
+
+    `calculate_ci=False` salta los intervalos de confianza de Greenwood, que son la
+    mayor parte del coste y no se usan en los desgloses por dimension.
+    """
     if events.sum() == 0 or len(durations) < 2:
         return {
             "mediana": None, "p25": None, "p75": None,

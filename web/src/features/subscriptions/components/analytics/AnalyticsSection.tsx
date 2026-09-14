@@ -1,3 +1,5 @@
+/** Envoltura con título y acento de una sección de gráficos. */
+
 import type { ReactNode } from 'react';
 import type { NeonTheme } from '@/shared/ui';
 

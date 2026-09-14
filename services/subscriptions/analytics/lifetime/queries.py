@@ -1,3 +1,11 @@
+"""Lectura de los resultados del analisis de supervivencia.
+
+Las curvas viajan en la base como JSON dentro de una columna de texto, asi que
+aqui se deshacen y se les da la forma que consume el grafico. Los nulos se
+conservan como `null` y no como 0: una mediana que no se puede calcular no es
+"todos se dieron de baja de inmediato".
+"""
+
 from __future__ import annotations
 
 import json
@@ -12,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_lifecycle_results(db=None) -> dict[str, Any]:
+    """Las metricas globales del ultimo analisis, con las curvas ya parseadas."""
     if db is None:
         db = DBConnector()
     try:
@@ -45,6 +54,7 @@ def get_lifecycle_results(db=None) -> dict[str, Any]:
         return {}
 
 def get_lifetime_dimensiones(dim: str | None = None, db=None) -> dict[str, Any]:
+    """Las metricas por dimension, indexadas por dimension y valor."""
     if db is None:
         db = DBConnector()
     try:

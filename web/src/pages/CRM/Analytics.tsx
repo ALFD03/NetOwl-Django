@@ -1,3 +1,10 @@
+/**
+ * Página Inertia `CRM/Analytics` (`/crm/analytics/`).
+ *
+ * Recibe todas las dimensiones del periodo: el selector de dimensión es de
+ * cliente y no debe costar una vuelta al servidor.
+ */
+
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
 

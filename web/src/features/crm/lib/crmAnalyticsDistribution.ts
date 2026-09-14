@@ -1,3 +1,5 @@
+/** Las métricas seleccionables de Analytics y su distribución para el gráfico. */
+
 import { toNumber } from '@/shared/utils/formatters';
 import {
   getRankingDistribution,

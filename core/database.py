@@ -1,3 +1,14 @@
+"""Acceso a Postgres para la analitica: pool de conexiones y puente a pandas.
+
+Es la capa que usa todo `services/*/analytics/`; el ORM de Django se reserva
+para los modelos (usuarios, permisos, bitacora, trabajos y catalogos). La razon
+de tener dos capas es que las tablas de resultados cambian de forma con cada
+metrica nueva: `save_historico` las crea y las amplia sobre la marcha, con
+todas las columnas `text`, lo que con el ORM seria una migracion por columna.
+
+Todas las tablas se cualifican con `DB_SCHEMA`, que identifica el entorno.
+"""
+
 from __future__ import annotations
 
 import io
@@ -16,6 +27,12 @@ from .vault import get_config
 
 
 class DBConnector:
+    """Pool de conexiones a Postgres con las operaciones que usa la analitica.
+
+    Lectura a DataFrame, escritura masiva y creacion dinamica de tablas. Se
+    construye con las credenciales que devuelve Vault y mantiene entre 1 y 10
+    conexiones abiertas.
+    """
 
     def __init__(self):
         db = get_config().db
@@ -32,6 +49,12 @@ class DBConnector:
 
     @contextmanager
     def get_connection(self):
+        """Presta una conexion del pool y la devuelve al terminar.
+
+        Hace `rollback()` ante cualquier excepcion antes de devolverla: sin eso la
+        conexion vuelve al pool con la transaccion abortada y envenena todas las
+        consultas que la reciban despues.
+        """
         conn = self.pool.getconn()
         try:
             yield conn
@@ -49,6 +72,7 @@ class DBConnector:
     def read_table(
         self, table_name: str, columns: list[str] | None = None
     ) -> pd.DataFrame:
+        """Lee una tabla entera (o solo `columns`) a un DataFrame."""
         cols_sql = (
             sql.SQL("*")
             if columns is None
@@ -71,6 +95,10 @@ class DBConnector:
         filter_values: list[str] | None = None,
         columns: list[str] | None = None,
     ) -> pd.DataFrame:
+        """Como `read_table`, pero con `WHERE <filter_column> IN (...)`.
+
+        Sin `filter_values` se comporta exactamente como `read_table`.
+        """
         cols_sql = (
             sql.SQL("*")
             if columns is None
@@ -102,8 +130,28 @@ class DBConnector:
     def query(
         self, sql_query: str, params: list[Any] | None = None
     ) -> pd.DataFrame:
+        """Ejecuta SQL libre y devuelve el resultado como DataFrame."""
         with self.get_connection() as conn:
             return pd.read_sql(sql_query, conn, params=params)
+
+    def tabla_existe(self, table_name: str) -> bool:
+        """Si la tabla existe en el esquema del entorno.
+
+        Las tablas de analisis las crea `save_historico` sobre la marcha, asi
+        que un entorno donde nunca termino un analisis no las tiene. Consultar
+        una que no existe aborta la transaccion y sube como error 500; quien
+        pregunta antes puede tratarlo por lo que es: todavia no hay datos.
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema = %s AND table_name = %s
+                    """,
+                    (DB_SCHEMA, table_name),
+                )
+                return cur.fetchone() is not None
 
     def save_historico(
         self,
@@ -112,6 +160,21 @@ class DBConnector:
         periodo: str,
         metodo: str | None = None,
     ):
+        """Guarda el resultado de un calculo, reemplazando el del mismo periodo.
+
+        Es el escritor principal de la analitica y hace cuatro cosas:
+
+        1. Anade `periodo_reporte` (y `metodo_calculo` si se pasa `metodo`) y sanea
+           los nombres de columna a `[a-z0-9_]`.
+        2. Crea la tabla si no existe y agrega las columnas que falten, todas `text`:
+           asi una metrica nueva aparece sin necesidad de una migracion.
+        3. Borra las filas de ese mismo periodo, de modo que recalcular un mes
+           sustituya al calculo anterior en vez de duplicarlo.
+        4. Inserta con `COPY` por encima de 1000 filas y con `execute_values` por
+           debajo.
+
+        Un DataFrame vacio no escribe nada.
+        """
         if df.empty:
             return
         df = df.copy()
@@ -313,6 +376,10 @@ class DBConnector:
             conn.commit()
 
     def copy_dataframe(self, df: pd.DataFrame, table_name: str):
+        """Carga masiva con `COPY`, sin crear ni truncar nada.
+
+        La usan los importadores, que ya han preparado la tabla por su cuenta.
+        """
         output = io.StringIO()
         df.to_csv(
             output, sep="\t", header=False, index=False, na_rep="NULL"

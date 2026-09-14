@@ -1,3 +1,5 @@
+/** Columnas y nombre de fichero de la exportación a Excel de soporte. */
+
 import type { ExcelColumn } from '@/shared/lib/excel';
 import { toNumber } from '@/shared/utils';
 import type { SupportDimensionRow } from '../types';
