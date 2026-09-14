@@ -11,6 +11,7 @@ import csv
 import io
 import json
 import math
+import re
 from collections.abc import Iterable
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime
@@ -19,6 +20,65 @@ from typing import Any
 import pandas as pd
 
 from .config import DATE_FORMATS
+
+# Un periodo es siempre "YYYY-MM". Las vistas lo recibian sin validar: en
+# `imports/jobs.py` solo se comprobaba `len(...) == 7`, asi que cualquier
+# cadena de siete caracteres acababa escrita como `periodo_reporte` en las
+# tablas de resultados; y en el reporte ETA llegaba a un `LIKE %s` construido
+# como f"{periodo}%", donde `?period=%` hacia que el informe agregase todos los
+# periodos calculados de golpe en vez de un mes.
+RE_PERIODO = re.compile(r"\d{4}-(?:0[1-9]|1[0-2])")
+
+# Techo de la lista de periodos que admite una consulta. Las vistas la
+# construyen partiendo `?periods=` por comas sin ningun limite, y esa lista se
+# convierte en un `IN (...)` con un marcador por elemento: sin tope, una sola
+# peticion podia pedir cien mil.
+MAX_PERIODOS_POR_CONSULTA = 60
+
+
+def es_periodo(value: Any) -> bool:
+    """Si `value` tiene la forma "YYYY-MM" con un mes real."""
+    return isinstance(value, str) and RE_PERIODO.fullmatch(value.strip()) is not None
+
+
+def limpiar_periodos(crudo: str | None) -> list[str] | None:
+    """Convierte un `?periods=a,b,c` en una lista validada y acotada.
+
+    Devuelve None cuando no se pidio ninguno, que es lo que las consultas
+    interpretan como "todos". Descarta en silencio lo que no tenga forma de
+    periodo: el parametro lo escribe la interfaz, y un valor invalido es ruido,
+    no algo que el usuario pueda corregir.
+    """
+    if not crudo:
+        return None
+    periodos = [p.strip() for p in crudo.split(",") if es_periodo(p)]
+    if not periodos:
+        return None
+    return periodos[:MAX_PERIODOS_POR_CONSULTA]
+
+
+def entero_de_peticion(
+    request, clave: str, por_defecto: int | None = None,
+    minimo: int | None = None, maximo: int | None = None,
+) -> int | None:
+    """Lee un entero de la query string sin reventar si no lo es.
+
+    `int(request.GET.get(...))` a pelo devolvia un 500 ante `?dia=abc`, y un
+    `?limit=-1` llegaba hasta Postgres como `LIMIT -1`. Las vistas HTML ya lo
+    hacian bien; eran sus gemelas JSON las que no.
+    """
+    crudo = request.GET.get(clave)
+    if crudo in (None, ""):
+        return por_defecto
+    try:
+        valor = int(crudo)
+    except (TypeError, ValueError):
+        return por_defecto
+    if minimo is not None:
+        valor = max(valor, minimo)
+    if maximo is not None:
+        valor = min(valor, maximo)
+    return valor
 
 
 def parse_date(value: Any) -> datetime | None:

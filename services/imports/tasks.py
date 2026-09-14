@@ -195,9 +195,15 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
         marcar_fin(job, consola, AnalysisJob.ERROR, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'error', texto, job.log)
         return
-    except Exception as e:  # noqa: BLE001 - el desenlace se reporta, no se propaga
+    except Exception:  # noqa: BLE001 - el desenlace se reporta, no se propaga
         logger.exception("Fallo en el analisis %s (%s)", job.module, job.id)
-        texto = f"Fallo en la ejecución del análisis: {e}"
+        # El mensaje va a `job.message` y al historial, que se muestran en la
+        # interfaz: `str(e)` de psycopg2 nombra el esquema, la tabla y las
+        # columnas. El detalle queda en logs/app.log, que es donde toca.
+        texto = (
+            "Fallo en la ejecución del análisis."
+            " Consulte el registro de la aplicación para ver el detalle."
+        )
         marcar_fin(job, consola, AnalysisJob.ERROR, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'error', texto, job.log)
         return

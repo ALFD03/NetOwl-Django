@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from inertia import render as render_inertia
 
-from core.utils import clean_json_props
+from core.utils import clean_json_props, limpiar_periodos
 from services.config.decorators import permission_required
 from services.crm.analytics import (
     get_crm_cierre_historico,
@@ -68,8 +68,10 @@ def analytics(request):
 @permission_required('can_view_crm_results')
 def results(request):
     """Tabla de cierres por periodo."""
-    periods_param = request.GET.get("periods")
-    periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
+    # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
+    # por comas sin ningun tope y cada elemento se convierte en un marcador del
+    # `IN (...)`, asi que una sola peticion podia pedir cien mil.
+    periodos = limpiar_periodos(request.GET.get("periods"))
     historico = get_crm_cierre_historico(periodos)
     return render_inertia(request, "CRM/Results", {
         "historico": historico,
@@ -98,8 +100,10 @@ def api_global_metrics(request):
 @permission_required('can_view_crm_results')
 def api_cierre_historico(request):
     """Los cierres de los periodos pedidos."""
-    periods_param = request.GET.get("periods")
-    periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
+    # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
+    # por comas sin ningun tope y cada elemento se convierte en un marcador del
+    # `IN (...)`, asi que una sola peticion podia pedir cien mil.
+    periodos = limpiar_periodos(request.GET.get("periods"))
     return JsonResponse({"historico": get_crm_cierre_historico(periodos)})
 
 

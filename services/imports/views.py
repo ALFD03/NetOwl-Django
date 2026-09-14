@@ -43,6 +43,8 @@ logger = logging.getLogger(__name__)
 
 TEMPLATE_PREFIX = "imports/"
 
+ERROR_GENERICO = "Error interno del servidor. Consulte el registro de la aplicación."
+
 
 # Pestanas del modulo en el orden en que aparecen en la cabecera, con el permiso
 # que exige cada una. La usa `imports_index_view` para elegir destino.
@@ -108,10 +110,15 @@ def api_history_list(request):
 
 
 # --- ACCIONES Y PROCESAMIENTO CON REGISTRO DE HISTORIAL ---
+#
+# El orden de los decoradores importa: `@ratelimit` va **debajo** de
+# `@permission_required`, de modo que una peticion sin permiso se rechaza antes
+# de consumir cuota. Al reves, cualquier cuenta podia agotar el cubo de los
+# calculos (2/m) pidiendo algo que ni siquiera tiene permitido.
 
 @login_required
-@ratelimit(key='ip', rate='5/m', block=True)
 @permission_required('can_import_subs', 'can_import_data')
+@ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
 def api_import_subscriptions(request):
     """Importa el export de suscripciones.
@@ -148,17 +155,19 @@ def api_import_subscriptions(request):
         # configuracion, y confundirlos mandaba a revisar el export.
         register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', str(e), str(e))
         return JsonResponse({"status": "error", "message": str(e)}, status=409)
-    except Exception as e:
-        err_msg = str(e)
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', f"Fallo al importar: {err_msg}", err_msg)
-        return JsonResponse({"status": "error", "message": err_msg}, status=500)
+    except Exception:
+        # El detalle va al log del servidor, no al cliente: una excepcion de
+        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
+        logger.exception("Error al importar suscripciones")
+        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', "Fallo al importar.", ERROR_GENERICO)
+        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
     finally:
         cleanup_tempfile(tmp_path)
 
 
 @login_required
-@ratelimit(key='ip', rate='5/m', block=True)
 @permission_required('can_import_subs', 'can_import_data')
+@ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
 def api_import_gratis(request):
     """Importa el export de planes gratuitos y detecta desde cuando lo son."""
@@ -172,17 +181,19 @@ def api_import_gratis(request):
         msg = f"Planes gratuitos: {rows} suscripciones importadas y fechadas."
         register_import_log(request.user, 'subs_subscriptions', file_name, rows, 'success', msg, f"Deteccion de inicio de plan gratuito sobre {rows} suscripciones.")
         return JsonResponse({"status": "success", "message": msg})
-    except Exception as e:
-        err_msg = str(e)
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', f"Fallo al importar planes gratuitos: {err_msg}", err_msg)
-        return JsonResponse({"status": "error", "message": err_msg}, status=500)
+    except Exception:
+        # El detalle va al log del servidor, no al cliente: una excepcion de
+        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
+        logger.exception("Error al importar planes gratuitos")
+        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', "Fallo al importar planes gratuitos.", ERROR_GENERICO)
+        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
     finally:
         cleanup_tempfile(tmp_path)
 
 
 @login_required
-@ratelimit(key='ip', rate='5/m', block=True)
 @permission_required('can_import_subs', 'can_import_data')
+@ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
 def api_import_logs(request):
     """Importa el export de logs de suscripciones."""
@@ -196,10 +207,12 @@ def api_import_logs(request):
         msg = f"Logs de Suscripciones: {rows} filas importadas."
         register_import_log(request.user, 'subs_logs', file_name, rows, 'success', msg, f"Carga masiva de logs finalizada con {rows} filas.")
         return JsonResponse({"status": "success", "message": msg})
-    except Exception as e:
-        err_msg = str(e)
-        register_import_log(request.user, 'subs_logs', file_name, 0, 'error', f"Fallo en carga de logs: {err_msg}", err_msg)
-        return JsonResponse({"status": "error", "message": err_msg}, status=500)
+    except Exception:
+        # El detalle va al log del servidor, no al cliente: una excepcion de
+        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
+        logger.exception("Error al importar logs de suscripciones")
+        register_import_log(request.user, 'subs_logs', file_name, 0, 'error', "Fallo en carga de logs.", ERROR_GENERICO)
+        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
     finally:
         cleanup_tempfile(tmp_path)
 
@@ -220,17 +233,19 @@ def api_import_crm(request):
         msg = f"CRM: Importados {rows_clients} clientes y {rows_logs} logs exitosamente."
         register_import_log(request.user, 'crm', file_name, rows_clients, 'success', msg, f"Clientes: {rows_clients} | Logs: {rows_logs}")
         return JsonResponse({"status": "success", "message": msg})
-    except Exception as e:
-        err_msg = str(e)
-        register_import_log(request.user, 'crm', file_name, 0, 'error', f"Fallo en importación CRM: {err_msg}", err_msg)
-        return JsonResponse({"status": "error", "message": err_msg}, status=500)
+    except Exception:
+        # El detalle va al log del servidor, no al cliente: una excepcion de
+        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
+        logger.exception("Error al importar el export de CRM")
+        register_import_log(request.user, 'crm', file_name, 0, 'error', "Fallo en importación CRM.", ERROR_GENERICO)
+        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
     finally:
         cleanup_tempfile(tmp_path)
 
 
 @login_required
-@ratelimit(key='ip', rate='5/m', block=True)
 @permission_required('can_import_support', 'can_import_data')
+@ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
 def api_import_support(request):
     """Importa el export de tickets de soporte."""
@@ -244,10 +259,12 @@ def api_import_support(request):
         msg = f"Technical Support: {rows} tickets importados correctamente."
         register_import_log(request.user, 'support', file_name, rows, 'success', msg, f"Carga realizada exitosamente con {rows} registros.")
         return JsonResponse({"status": "success", "message": msg})
-    except Exception as e:
-        err_msg = str(e)
-        register_import_log(request.user, 'support', file_name, 0, 'error', f"Fallo al importar tickets: {err_msg}", err_msg)
-        return JsonResponse({"status": "error", "message": err_msg}, status=500)
+    except Exception:
+        # El detalle va al log del servidor, no al cliente: una excepcion de
+        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
+        logger.exception("Error al importar tickets de soporte")
+        register_import_log(request.user, 'support', file_name, 0, 'error', "Fallo al importar tickets.", ERROR_GENERICO)
+        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
     finally:
         cleanup_tempfile(tmp_path)
 
@@ -269,8 +286,8 @@ def _job_visible(request, job):
 
 
 @login_required
-@ratelimit(key='ip', rate='2/m', block=True)
 @permission_required('can_run_subs_analysis', 'can_run_calculations')
+@ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_run_analysis(request):
     """Encola el analisis mensual de churn de un mes."""
@@ -278,8 +295,8 @@ def api_run_analysis(request):
 
 
 @login_required
-@ratelimit(key='ip', rate='2/m', block=True)
 @permission_required('can_run_crm_analysis', 'can_run_calculations')
+@ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_run_crm_analysis(request):
     """Encola el analisis de CRM de un mes."""
@@ -287,8 +304,8 @@ def api_run_crm_analysis(request):
 
 
 @login_required
-@ratelimit(key='ip', rate='2/m', block=True)
 @permission_required('can_run_support_analysis', 'can_run_calculations')
+@ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_run_support_analysis(request):
     """Encola el analisis de soporte de un mes."""

@@ -18,6 +18,8 @@ from django.db import close_old_connections
 from django.http import JsonResponse
 from django.utils import timezone
 
+from core.utils import es_periodo
+
 from .models import AnalysisJob
 
 logger = logging.getLogger(__name__)
@@ -241,7 +243,11 @@ def lanzar_analisis(request, module, requiere_periodo=True):
         except Exception:
             return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
 
-        if not periodo or len(periodo) != 7:
+        # `len(periodo) != 7` dejaba pasar cualquier cadena de siete caracteres,
+        # que acababa escrita como `periodo_reporte` en las tablas de
+        # resultados y solo se descubria cuando `Periodo.build` reventaba a
+        # mitad del calculo, con el job ya encolado.
+        if not es_periodo(periodo):
             return JsonResponse(
                 {"status": "error", "message": "Periodo inválido (YYYY-MM)"}, status=400
             )

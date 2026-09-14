@@ -360,10 +360,17 @@ def get_sales_report_data(
             "dia": dia,
             "data": final_data_list
         }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"status": "error", "message": str(e)}
+    except Exception:
+        # `traceback.print_exc()` escribia a stdout, y dentro de la tarea de
+        # Celery stdout esta redirigido a `ConsolaJob`: la traza entera —rutas
+        # de fichero, nombres de funcion, fragmentos de SQL— acababa en
+        # `AnalysisJob.log` y de ahi al navegador. El detalle va al log del
+        # servidor y al cliente solo le llega que fallo.
+        logger.exception("Error al construir el reporte de suscripciones")
+        return {
+            "status": "error",
+            "message": "Error interno del servidor. Consulte el registro de la aplicación.",
+        }
     
 def get_business_units_data(
     periodo_reporte: str | None = None,
@@ -502,7 +509,14 @@ def get_business_units_data(
             "ftth_summary": ftth_summary,
             "data": final_data_list
         }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"status": "error", "message": str(e)}
+    except Exception:
+        # `traceback.print_exc()` escribia a stdout, y dentro de la tarea de
+        # Celery stdout esta redirigido a `ConsolaJob`: la traza entera —rutas
+        # de fichero, nombres de funcion, fragmentos de SQL— acababa en
+        # `AnalysisJob.log` y de ahi al navegador. El detalle va al log del
+        # servidor y al cliente solo le llega que fallo.
+        logger.exception("Error al construir el reporte de suscripciones")
+        return {
+            "status": "error",
+            "message": "Error interno del servidor. Consulte el registro de la aplicación.",
+        }

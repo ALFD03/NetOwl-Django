@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
+from core.utils import entero_de_peticion, limpiar_periodos
 from services.config.decorators import permission_required
 from services.imports.jobs import lanzar_analisis
 from services.subscriptions.analytics import (
@@ -66,8 +67,10 @@ def analytics(request):
     El mes viaja entero en los props para que elegir un dia en la barra sea una
     lectura de cliente y no un recalculo.
     """
-    periods_param = request.GET.get("periods")
-    periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
+    # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
+    # por comas sin ningun tope y cada elemento se convierte en un marcador del
+    # `IN (...)`, asi que una sola peticion podia pedir cien mil.
+    periodos = limpiar_periodos(request.GET.get("periods"))
     data = get_analytics_data(periodos)
     # El mes completo viaja en los props: seleccionar un dia en la barra es
     # una lectura de cliente, no un recalculo.
@@ -125,10 +128,7 @@ def lifetime(request):
 def sales_report(request):
     """Reporte de ventas: Site -> Tecnologia -> Nodos, con subtotales."""
     periodo = request.GET.get("period")
-    try:
-        dia = int(request.GET.get("dia") or 0) or None
-    except ValueError:
-        dia = None
+    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
     data = get_sales_report_data(periodo, dia)
     return render_inertia(request, "Subscriptions/SalesReport", {
         "reportData": data,
@@ -142,10 +142,7 @@ def sales_report(request):
 def business_units(request):
     """Reporte por coordinador, mas el resumen FTTH global y el bloque RF."""
     periodo = request.GET.get("period")
-    try:
-        dia = int(request.GET.get("dia") or 0) or None
-    except ValueError:
-        dia = None
+    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
     data = get_business_units_data(periodo, dia)
     return render_inertia(request, "Subscriptions/BusinessUnits", {
         "buData": data,
@@ -169,8 +166,10 @@ def api_dashboard_data(request):
 @permission_required('can_view_subs_analytics')
 def api_analytics_data(request):
     """Cierres y dimensiones de los periodos pedidos."""
-    periods_param = request.GET.get("periods")
-    periodos = [p.strip() for p in periods_param.split(",") if p.strip()] if periods_param else None
+    # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
+    # por comas sin ningun tope y cada elemento se convierte en un marcador del
+    # `IN (...)`, asi que una sola peticion podia pedir cien mil.
+    periodos = limpiar_periodos(request.GET.get("periods"))
     return JsonResponse(get_analytics_data(periodos))
 
 @login_required
@@ -210,15 +209,15 @@ def api_survival_data(request):
 def api_sales_report(request):
     """El reporte de ventas de un periodo (y opcionalmente de un dia)."""
     periodo = request.GET.get("period")
-    dia = request.GET.get("dia")
-    return JsonResponse(get_sales_report_data(periodo, int(dia) if dia else None))
+    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    return JsonResponse(get_sales_report_data(periodo, dia))
 
 
 # --- APIS DE ESCRITURA Y CÁLCULOS ESPECIALES ---
 
 @login_required
-@ratelimit(key='ip', rate='2/m', block=True)
 @permission_required('can_run_lifetime') # <-- CONTROL ESPECÍFICO DE EJECUCIÓN DE LIFETIME
+@ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_lifecycle_run(request):
     """Encola el analisis de supervivencia; el worker lo ejecuta.
@@ -247,8 +246,8 @@ def api_lifecycle_results(request):
 def api_business_units_report(request):
     """El reporte por unidades de negocio de un periodo (y de un dia)."""
     periodo = request.GET.get("period")
-    dia = request.GET.get("dia")
-    return JsonResponse(get_business_units_data(periodo, int(dia) if dia else None))
+    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    return JsonResponse(get_business_units_data(periodo, dia))
 
 
 
