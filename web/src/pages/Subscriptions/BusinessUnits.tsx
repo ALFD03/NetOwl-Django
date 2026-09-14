@@ -92,6 +92,8 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
         groups={filteredData}
         ftthSummary={dynamicFtthSummary}
         showFtthSummary={selectedTech !== 'RF'}
+        period={buData.period ?? ''}
+        diaSeleccionado={Boolean(dayData)}
       />
     </AppLayout>
   );

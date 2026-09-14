@@ -5,6 +5,8 @@ import { Activity, Table as TableIcon } from 'lucide-react';
 
 import { DataTable, Modal, NeonContainer, ToggleGroup } from '@/shared/ui';
 import { DIMENSION_CONFIG } from '@/shared/constants/labels';
+import { formatInteger } from '@/shared/utils/formatters';
+import { BajasExportButton } from '../reports/BajasExportButton';
 import { SubscriptionPeriodDetail } from './SubscriptionPeriodDetail';
 import { DIMENSION_COLUMNS, PERIOD_COLUMNS } from './subscriptionResultsColumns';
 import { useSubscriptionResults } from '../../hooks/useSubscriptionResults';
@@ -49,6 +51,17 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
       >
         {selectedRow && (
           <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">
+                {formatInteger(selectedRow.bajas)} bajas en el periodo
+              </p>
+              <BajasExportButton
+                period={selectedRow.periodo_reporte}
+                alcance="del periodo"
+                label="Exportar bajas del periodo"
+              />
+            </div>
+
             <SubscriptionPeriodDetail row={selectedRow} />
 
             <div className="rounded-3xl border border-slate-800 bg-surface-primary p-4 shadow-inner">

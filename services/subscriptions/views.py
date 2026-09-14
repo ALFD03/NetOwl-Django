@@ -17,6 +17,7 @@ from services.config.decorators import permission_required
 from services.imports.jobs import lanzar_analisis
 from services.subscriptions.analytics import (
     get_analytics_data,
+    get_bajas_detalle,
     get_business_units_data,
     get_cierre_churn,
     get_dashboard_data,
@@ -25,6 +26,7 @@ from services.subscriptions.analytics import (
     get_periodos,
     get_sales_report_data,
     get_zonas_config,
+    limpiar_nodos,
 )
 from services.subscriptions.analytics.lifetime import (
     get_lifecycle_results,
@@ -211,6 +213,26 @@ def api_sales_report(request):
     periodo = request.GET.get("period")
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
     return JsonResponse(get_sales_report_data(periodo, dia))
+
+@login_required
+@permission_required('can_view_subs_results', 'can_view_subs_sales')
+def api_bajas_detalle(request):
+    """Las bajas de un periodo con la ficha de cada cliente, para exportar.
+
+    `?nodo=` repetido acota a esos nodos `"Zona - Sucursal"`; sin el devuelve
+    las del periodo entero. Los manda el cliente porque los tres reportes
+    agrupan distinto -site, coordinador, nodo suelto- y cada uno ya sabe que
+    nodos tiene en pantalla.
+
+    El filtro es por nodo y no por zona: la misma zona puede estar repartida
+    entre dos sucursales y son dos filas distintas del reporte.
+
+    No admite `?dia=`: `analyzer_day_metrics` guarda agregados por dia, no las
+    ordenes que los componen, asi que el detalle es siempre el del cierre del mes.
+    """
+    nodos = limpiar_nodos(request.GET.getlist("nodo"))
+    return JsonResponse(get_bajas_detalle(request.GET.get("period"), nodos))
+
 
 
 # --- APIS DE ESCRITURA Y CÁLCULOS ESPECIALES ---

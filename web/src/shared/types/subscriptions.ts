@@ -43,6 +43,40 @@ export interface SubscriptionResultsResponse {
   dimensions: Record<string, SubscriptionResultDimensionRow[]>;
 }
 
+/**
+ * Una baja del periodo con la ficha de su cliente.
+ *
+ * La ficha es la que la suscripción tiene **hoy**, no la que tenía el mes en
+ * que se dio de baja: las tablas de origen se truncan en cada importación (el
+ * mismo aviso que el reporte ETA lleva en `services/subscriptions/analytics/
+ * bajas_detalle.py`).
+ */
+export interface BajaDetalle {
+  orden: string;
+  cliente: string;
+  cedula: string;
+  sucursal: string;
+  zona: string;
+  campanna: string;
+  producto: string;
+  tipo_servicio: string;
+  /** Número, para que la hoja lo pueda sumar; `null` cuando no hay dato. */
+  subtotal: number | null;
+  fecha_inicio: string;
+  estado_suscripcion: string;
+  phone1: string;
+  phone2: string;
+}
+
+export interface BajasDetalleResponse {
+  status?: 'success' | 'empty' | 'error';
+  period?: string;
+  periods?: string[];
+  total?: number;
+  message?: string;
+  bajas: BajaDetalle[];
+}
+
 export type EtaStats = Record<string, number>;
 
 export interface EtaMetrics {
