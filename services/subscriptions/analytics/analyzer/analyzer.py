@@ -226,8 +226,16 @@ class MetricsAnalyzer:
             set(df_corte_impagado["orden"]) if not df_corte_impagado.empty else set()
         )
 
-        sobrevivientes = set_fin - set_nue
-        bajas_idx = set_ini - sobrevivientes - set_free_fin
+        # Baja bruta: de los activos al inicio, quien no esta activo al final,
+        # sin contar a los que se fueron al plan gratuito.
+        #
+        # Antes se restaba `set_fin - set_nue` en vez de `set_fin`, y descontar
+        # los nuevos de los supervivientes cuela como baja a la orden que cae en
+        # los dos conjuntos: una que empieza el dia 1 del mes es "activa al
+        # inicio" y "nueva" a la vez, asi que salia de los supervivientes y se
+        # contaba como baja aun estando activa al cierre. En marzo de 2026 le
+        # pasaba a SUB101027 y SUB101028.
+        bajas_idx = set_ini - set_fin - set_free_fin
         df_bajas = self.df_subs_full[self.df_subs_full["orden"].isin(bajas_idx)].copy()
         bajas_netas = (
             len(act_ini)
@@ -236,7 +244,19 @@ class MetricsAnalyzer:
         )
         df_react_not_in_ini = df_react_all[~df_react_all["orden"].isin(set_ini)] if not df_react_all.empty else pd.DataFrame()
         n_react_not_in_ini = len(df_react_not_in_ini)
-        bajas_brutas = bajas_netas + n_react_not_in_ini
+        # La baja bruta es el detalle contado, no un balance de la base.
+        #
+        # Antes era `bajas_netas + n_react_not_in_ini`, y esa aritmetica no
+        # reproduce `bajas_idx`: `n_react_not_in_ini` cuenta reactivaciones del
+        # log, no supervivientes que no estuvieran al inicio, y las dos cifras
+        # no son la misma. La diferencia era pequena pero real -en el cierre de
+        # marzo, 1874 en pantalla contra 1869 ordenes en
+        # `analyzer_bajas_detalladas`- y dejaba el reporte sin cuadrar con el
+        # detalle que exporta `bajas_detalle.py`.
+        #
+        # `bajas_idx` es un set, asi que su tamano es exactamente el numero de
+        # ordenes que se guardan en el detalle.
+        bajas_brutas = len(bajas_idx)
 
         summary = {
             "periodo": periodo_label,
