@@ -146,7 +146,7 @@ export function AnalysisRunnerCard({
       title={title}
       description={description}
       actions={
-        <>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <MonthPicker value={selectedMonth} onChange={setSelectedMonth} placeholder={monthPlaceholder} />
           <Button
             onClick={handleRun}
@@ -156,7 +156,7 @@ export function AnalysisRunnerCard({
           >
             {runLabel}
           </Button>
-        </>
+        </div>
       }
     >
       <StatusMessage status={validation ?? analysis.status} className="mb-4" />

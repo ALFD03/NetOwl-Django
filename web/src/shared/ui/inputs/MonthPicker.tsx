@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Calendar, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 
@@ -41,16 +41,38 @@ export function MonthPicker({
   // AppLayout es un contenedor con `overflow-y-auto`, y las tarjetas
   // (NeonContainer) tienen `overflow-hidden`. Un `z-index` alto no salva eso,
   // porque el recorte lo hace el ancestro, no el apilamiento.
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; alto: number } | null>(null);
 
   const recolocar = useCallback(() => {
     const trigger = containerRef.current;
     if (!trigger) return;
     const r = trigger.getBoundingClientRect();
     const ANCHO = 288; // w-72
+    const MARGEN = 8;
+    // Alto real del panel cuando ya esta montado; en la primera pasada todavia
+    // no existe, asi que se estima y `useLayoutEffect` corrige tras medirlo.
+    const alto = panelRef.current?.offsetHeight ?? 340;
+
     // Si no cabe a la derecha, se alinea por el borde derecho del disparador.
-    const left = Math.max(8, Math.min(r.left, window.innerWidth - ANCHO - 8));
-    setCoords({ top: r.bottom + 8, left });
+    const left = Math.max(MARGEN, Math.min(r.left, window.innerWidth - ANCHO - MARGEN));
+
+    // El disparador vive al pie de la pagina y esta no crece: abrir siempre
+    // hacia abajo dejaba el panel cortado por el borde de la ventana. Se elige
+    // el lado con hueco, y si no hay ninguno se ajusta el alto con scroll
+    // propio en vez de desbordar.
+    const abajo = window.innerHeight - r.bottom - MARGEN;
+    const arriba = r.top - MARGEN;
+    let top: number;
+    let disponible: number;
+    if (alto <= abajo || abajo >= arriba) {
+      top = r.bottom + MARGEN;
+      disponible = abajo;
+    } else {
+      top = Math.max(MARGEN, r.top - MARGEN - alto);
+      disponible = arriba;
+    }
+
+    setCoords({ top, left, alto: disponible });
   }, []);
 
   // Extraer año y mes actual del valor recibido o fecha actual
@@ -90,6 +112,12 @@ export function MonthPicker({
     };
   }, [isOpen, recolocar]);
 
+  // Una vez montado el panel se vuelve a colocar con su alto medido: la
+  // primera colocacion se hace a ciegas porque el nodo aun no existe.
+  useLayoutEffect(() => {
+    if (isOpen) recolocar();
+  }, [isOpen, recolocar]);
+
   const handleSelectMonth = (monthNum: string) => {
     onChange(`${displayYear}-${monthNum}`);
     setIsOpen(false);
@@ -116,7 +144,7 @@ export function MonthPicker({
   const selectedYearNum = value ? parseInt(value.split('-')[0], 10) : null;
 
   return (
-    <div ref={containerRef} className={` ${className}`}>
+    <div ref={containerRef} className={`${className}`}>
       {/* BOTÓN DISPARADOR (SOLO LECTURA, NO SE PUEDE ESCRIBIR) */}
       <button
         type="button"
@@ -142,8 +170,8 @@ export function MonthPicker({
       {isOpen && coords && createPortal(
         <div
           ref={panelRef}
-          style={{ top: coords.top, left: coords.left }}
-          className="fixed z-[100] w-72 bg-surface-secondary border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl"
+          style={{ top: coords.top, left: coords.left, maxHeight: coords.alto }}
+          className="fixed z-[100] w-72 overflow-y-auto bg-surface-secondary border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl"
         >
           
           {/* HEADER CON SELECTOR DE AÑO */}
