@@ -116,7 +116,7 @@ export function MonthPicker({
   const selectedYearNum = value ? parseInt(value.split('-')[0], 10) : null;
 
   return (
-    <div ref={containerRef} className={`relative inline-block ${className}`}>
+    <div ref={containerRef} className={` ${className}`}>
       {/* BOTÓN DISPARADOR (SOLO LECTURA, NO SE PUEDE ESCRIBIR) */}
       <button
         type="button"
