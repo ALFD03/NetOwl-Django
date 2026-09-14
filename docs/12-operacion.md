@@ -101,14 +101,29 @@ docker run --env-file .env -p 8000:8000 netowl
 
 # El worker: la MISMA imagen, otro comando
 docker run --env-file .env -e SKIP_COLLECTSTATIC=1 netowl \
-  celery -A netowl_web worker --concurrency=1 --max-tasks-per-child=1
+  celery -A netowl_web worker
 ```
 
 `CMD` por defecto:
 
 ```
-gunicorn netowl_web.wsgi:application --bind 0.0.0.0:8000 --workers 5 --timeout 300 --access-logfile -
+gunicorn netowl_web.wsgi:application --bind 0.0.0.0:8000 --workers 5 \
+  --timeout 60 --forwarded-allow-ips "*" \
+  --max-requests 1000 --max-requests-jitter 100 --access-logfile -
 ```
+
+Las tres opciones que no son obvias:
+
+- **`--forwarded-allow-ips "*"`**: sin ella gunicorn solo acepta las cabeceras
+  `X-Forwarded-*` si vienen de `127.0.0.1`, y Nginx no es `127.0.0.1` en la red
+  del compose. Al descartarlas, `SECURE_PROXY_SSL_HEADER` deja de ver el
+  `https`, `SECURE_SSL_REDIRECT` redirige, Nginx vuelve a entrar por HTTP y el
+  navegador da vueltas. El `"*"` es correcto **solo porque el contenedor no se
+  publica**: el único que le habla es el proxy.
+- **`--timeout 60`**: los 300s de antes eran para los análisis síncronos, que ya
+  corren en Celery.
+- **`--max-requests`**: recicla los workers cada tantas peticiones; pandas y
+  numpy retienen memoria entre análisis y el proceso solo crecía.
 
 `entrypoint.sh`, en orden:
 
@@ -122,10 +137,107 @@ gunicorn netowl_web.wsgi:application --bind 0.0.0.0:8000 --workers 5 --timeout 3
 porque `settings.py` necesita Vault desde el momento en que se importa, y
 durante el build no hay red hacia él.
 
-El despliegue son **cuatro contenedores**: Postgres, Redis, la app y el worker.
-Los dos últimos usan la misma imagen y solo cambian el comando.
-`docker-compose.yml` y `nginx.conf` son específicos de cada despliegue y están en
-`.gitignore`, junto con `deploy/`.
+El despliegue son **cuatro contenedores**: Nginx, la app, el worker y Redis
+(Postgres y Vault son servicios externos). La app y el worker usan la misma
+imagen y solo cambian el comando.
+
+`deploy/` está en `.gitignore` entero, igual que `nginx.conf` y el `.env`: el
+despliegue es específico de cada máquina y vive fuera del repositorio. Lo que
+sigue describe el contenido que se espera encontrar allí.
+
+`deploy/docker-compose.yml` está escrito para el **ensayo local** (ver la
+sección siguiente). Para la MV son tres cambios, ninguno en el resto del
+archivo, y están anotados en su cabecera:
+
+1. Borrar los servicios `vault` y `preparar`, y sus `depends_on`.
+2. `VAULT_URL` al Vault corporativo y las credenciales del AppRole real —lo
+   natural es sustituir el bloque `environment:` de `web` y `worker` por
+   `env_file: - ../.env`, que es donde viven.
+3. Montar el certificado de verdad en lugar del volumen `certs`.
+
+`VAULT_URL` no está en el `.env` de producción, así que se inyecta por
+`environment:`, que gana a `env_file:` (y `load_dotenv()` no pisa lo que ya está
+en el entorno del proceso).
+
+## Ensayo de producción en la máquina local
+
+`make dev` no puede comprobar lo que más falla en un corte a producción: el
+proxy delante, la redirección a HTTPS, HSTS y las cookies con `Secure`. Para eso
+está `deploy/docker-compose.yml`, que levanta la pila entera —Nginx con TLS,
+gunicorn, el worker, Redis y **un HashiCorp Vault propio**— con la configuración
+de producción y acceso por `https://localhost`.
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+No hay ningún paso previo: el compose trae sus valores por defecto, genera el
+certificado y siembra su Vault. Para entrar también por la IP de la máquina —que
+no se puede averiguar desde dentro de un contenedor— hay que declararla:
+
+```bash
+ENSAYO_HOSTS=192.168.1.50 docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+El servicio `preparar` es quien hace posible el comando único. Corre una vez,
+antes que `web` y `nginx` (`depends_on: service_completed_successfully`), con la
+imagen de NetOwl porque ya trae `openssl` y `hvac`:
+
+1. Emite el certificado autofirmado, con `localhost`, `127.0.0.1` y
+   `ENSAYO_HOSTS` en el SAN.
+2. Lee el secreto **real** de Vault con las credenciales del `.env` del
+   repositorio y cambia solo tres claves: `SECURE_SSL` a `true`, y
+   `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` a esos mismos nombres. `SECRET_KEY`
+   y `DBCONFIG` se copian tal cual, que es lo que hace que la prueba valga.
+   (Si existe `deploy/ensayo/secreto.json`, se usa ése y no se lee ningún Vault
+   externo.)
+3. Lo escribe en el Vault local, en el **mismo** mount y la **misma** ruta, con
+   un AppRole de solo lectura sobre ese único secreto.
+
+> El secreto de producción escribe las claves con su nombre corto (`SECRET_KEY`,
+> `DEBUG`, `SECURE_SSL`) y no con el alias `DJANGO_*` que documenta
+> `.env.example`. `core/vault.py` acepta las dos formas (`populate_by_name`),
+> pero **no** conviene dejar las dos dentro del mismo secreto: el seeder pisa la
+> que ya está en lugar de añadir una segunda.
+
+El `role_id` y el `secret_id` del AppRole son valores fijos que lleva el propio
+compose. Es lo que evita el problema del huevo y la gallina —arrancar Vault,
+leer las credenciales que emite y solo entonces poder arrancar la aplicación— y
+no son un secreto: solo valen contra ese Vault en memoria, que muere con el
+contenedor.
+
+Lo único que no reproduce: el Vault del ensayo habla HTTP y guarda los secretos
+**en memoria**, así que reiniciar ese contenedor borra el secreto (un `up`
+normal lo vuelve a sembrar); y el certificado es autofirmado, de modo que el
+navegador avisa la primera vez y `curl` necesita `-k`.
+
+> `VAULT_DEV_ROOT_TOKEN_ID` tiene que ser un identificador de token válido:
+> letras, dígitos y guiones. Con un punto dentro, Vault arranca y muere con
+> `failed to create root token with ID "...": invalid request`.
+
+Primer arranque en un esquema nuevo:
+
+```bash
+docker compose -f deploy/docker-compose.yml exec web python manage.py cargar_catalogos
+docker compose -f deploy/docker-compose.yml exec web python manage.py crear_admin --usuario <nombre>
+```
+
+Lo que este montaje permite comprobar y `make dev` no:
+
+```bash
+curl -kI https://localhost/auth/login/   # Strict-Transport-Security, Set-Cookie con Secure
+curl -I  http://localhost/               # 301 a https, sin bucle
+```
+
+> **Ojo con `DB_SCHEMA`**: el ensayo habla con la base de datos real, así que el
+> esquema decide sobre qué datos escribe —una importación vacía y reescribe sus
+> tablas—. Por defecto es `netowl`; para apuntar a otro,
+> `DB_SCHEMA=ensayo docker compose -f deploy/docker-compose.yml up -d`.
+
+**Antes del corte de verdad**, lo que hay que cambiar en el Vault corporativo:
+`SECURE_SSL` a `true`, `DB_SSLMODE` a `require` (hoy está en `prefer`, y el
+seeder lo avisa por consola), y retirar `PERMITIR_HTTP_INSEGURO` del `.env` de
+la máquina (ver `.env.example`).
 
 > Si se arranca el worker desde la línea de comandos, **no se debe pasar
 > `--queues`**: el nombre de la cola sale de `CELERY_TASK_DEFAULT_QUEUE`, que ya
