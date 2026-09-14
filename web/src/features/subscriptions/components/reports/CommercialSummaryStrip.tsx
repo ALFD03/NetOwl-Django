@@ -12,6 +12,7 @@ export interface CommercialSummaryStripProps {
   activosFinal: number;
   crecimiento: number;
   churnRate: number;
+  bajas: number;
   mono?: boolean;
   /** Clamp completion to [0, 100]. See `calcComercial`. */
   clampCompletion?: boolean;
@@ -30,6 +31,7 @@ export function CommercialSummaryStrip({
   activosFinal,
   crecimiento,
   churnRate,
+  bajas,
   mono = false,
   clampCompletion = false,
 }: CommercialSummaryStripProps) {
@@ -42,13 +44,14 @@ export function CommercialSummaryStrip({
 
   return (
     <SummaryStrip
-      columns={7}
+      columns={8}
       mono={mono}
       items={[
         { id: 'lead', label: leadLabel, value: leadValue, tone: 'brand' },
         { id: 'inicio', label: 'Base Inicio', value: formatInteger(activosInicio) },
         { id: 'objetivo', label: 'Objetivo (6%)', value: `+${formatInteger(metrics.objetivo)}` },
         { id: 'esperado', label: 'Cierre Esperado', value: formatInteger(metrics.cierreEsperado) },
+        { id: 'bajas', label: 'Bajas', value: formatInteger(bajas), tone: 'red' },
         {
           id: 'cumplimiento',
           label: 'Cumplimiento',
