@@ -7,6 +7,9 @@ import type { SubscriptionCierre, SubscriptionResultDimensionRow } from '../../t
 const int = formatInteger;
 const dec = formatTwoDecimals;
 
+const meta_ingresos = (activos_inicio: number) => activos_inicio * 0.06;
+const meta_ventas = (activos_inicio: number) => activos_inicio * 0.06;
+const meta_cierre = (activos_inicio: number) => activos_inicio * 1.06;
 /** Top-level period history. */
 export const PERIOD_COLUMNS: Column<SubscriptionCierre>[] = [
   { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodoLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
@@ -16,6 +19,9 @@ export const PERIOD_COLUMNS: Column<SubscriptionCierre>[] = [
   { header: 'Bajas', accessor: (r) => <span className="font-semibold text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
   { header: 'Churn Rate', accessor: (r) => <span className="font-bold text-rose-400">{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
   { header: 'Crecimiento', accessor: (r) => <span className="font-bold text-emerald-400">{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
+  { header: 'Cumpli. Ingresos', accessor: (r) => <span className={`font-semibold ${Number(dec((r.adiciones_brutas/meta_ingresos(r.activos_inicio))*100)) >= 90 ? 'text-emerald-400' : Number(dec((r.adiciones_brutas/meta_ingresos(r.activos_inicio))*100)) >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>{dec((r.adiciones_brutas/meta_ingresos(r.activos_inicio))*100)} %</span>, align: 'right', sortKey: 'cumplimiento_ingresos' },
+  { header: 'Cumpli. Ventas', accessor: (r) => <span className={`font-semibold ${Number(dec((r.nuevos_mes/meta_ventas(r.activos_inicio))*100)) >= 90 ? 'text-emerald-400' : Number(dec((r.nuevos_mes/meta_ventas(r.activos_inicio))*100)) >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>{dec((r.nuevos_mes/meta_ventas(r.activos_inicio))*100)} %</span>, align: 'right', sortKey: 'cumplimiento_ventas' },
+  { header: 'Cumpli. Cierre', accessor: (r) => <span className={`font-semibold ${Number(dec((r.activos_final/meta_cierre(r.activos_inicio))*100)) >= 90 ? 'text-emerald-400' : Number(dec((r.activos_final/meta_cierre(r.activos_inicio))*100)) >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>{dec((r.activos_final/meta_cierre(r.activos_inicio))*100)} %</span>, align: 'right', sortKey: 'cumplimiento_cierre' },
 ];
 
 /** Full dimensional breakdown shown inside the period modal. */

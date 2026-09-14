@@ -34,6 +34,9 @@ export interface SubscriptionResultDimensionRow {
   clientes_gratuitos: number;
   gratuitos_nuevos: number;
   gratuitos_retornados: number;
+  cumplimiento_ingresos: number;
+  cumplimiento_ventas: number;
+  cumplimiento_cierre: number;
 }
 
 export interface SubscriptionResultsResponse {
