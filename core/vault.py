@@ -59,7 +59,12 @@ class DjangoModel(BaseModel):
 
     SECRET_KEY: str = Field(alias="DJANGO_SECRET_KEY")
     DEBUG: bool = Field(alias="DJANGO_DEBUG", default=False)
-    SECURE_SSL: bool = Field(alias="DJANGO_SECURE_SSL", default=False)
+    # Sin `default` a proposito, al contrario que DEBUG: de esta clave cuelgan
+    # la redireccion a HTTPS, HSTS y el flag Secure de las cookies de sesion y
+    # CSRF (ver netowl_web/settings.py). Con un default de False, olvidarla en
+    # el secreto de Vault degradaba la seguridad de produccion en silencio;
+    # ahora la aplicacion no arranca hasta que este declarada.
+    SECURE_SSL: bool = Field(alias="DJANGO_SECURE_SSL")
     ALLOWED_HOSTS: list[str]
     # Orígenes de confianza para CSRF. Ojo: aquí cada valor lleva esquema
     # (https://ejemplo.com), a diferencia de ALLOWED_HOSTS.
@@ -88,7 +93,11 @@ class DBConfigModel(BaseModel):
     DB_PASSWORD: str
     DB_HOST: str
     DB_PORT: int = 5432
-    DB_SSLMODE: str = "prefer"
+    # `require` y no `prefer`: `prefer` intenta TLS y acepta texto plano sin
+    # error si el servidor lo rechaza, asi que una regresion en la
+    # configuracion de Postgres pondria las credenciales y todos los datos de
+    # clientes en claro sin que nadie se entere.
+    DB_SSLMODE: str = "require"
 
 
 class VaultDataStructure(BaseModel):
