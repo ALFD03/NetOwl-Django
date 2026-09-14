@@ -27,7 +27,12 @@ from core.config import DB_SCHEMA
 # middleware, la vista de administracion y la sincronizacion de grupos la
 # recorren en lugar de repetir los nombres campo por campo.
 
-# Permisos de lectura: por defecto abiertos (True).
+# Permisos de lectura. **Por defecto cerrados**, igual que los de accion.
+# Nacian abiertos, asi que cualquier cuenta recien creada veia de inmediato
+# churn, CRM, soporte, importaciones y el reporte de la reguladora: todo el
+# negocio. Conceder es ahora un acto explicito. Las cuentas que ya existian
+# conservan lo que tenian: la migracion 0003 les fija los diecisiete campos a
+# True antes de que el nuevo valor por defecto pueda afectarlas.
 VIEW_PERMISSION_FIELDS = [
     'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
     'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
@@ -38,7 +43,7 @@ VIEW_PERMISSION_FIELDS = [
     'can_view_import_history',
 ]
 
-# Permisos de accion: por defecto cerrados (False).
+# Permisos de accion: por defecto cerrados (False), como los de lectura.
 ACTION_PERMISSION_FIELDS = [
     'can_import_data', 'can_run_calculations', 'can_run_lifetime',
     'can_manage_eta', 'can_manage_users', 'can_manage_catalogos',
@@ -49,6 +54,17 @@ ACTION_PERMISSION_FIELDS = [
 ]
 
 PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
+
+# Con lo que nace una cuenta nueva. Solo el modulo de suscripciones, que es
+# justo lo que abre su dashboard: `services/subscriptions/views.py:dashboard`
+# esta detras de `can_view_subscriptions` y no tiene permiso propio; las demas
+# paginas del modulo (analytics, results, lifetime, sales, ETA) si lo tienen y
+# quedan cerradas. Lo demas se concede a mano desde `/auth/users/`.
+#
+# `web/src/shared/constants/permissions.ts` repite esta lista: es el espejo que
+# abre el formulario de "Nuevo Usuario", y el formulario manda la matriz entera,
+# asi que las dos tienen que decir lo mismo (ver CLAUDE.md).
+PERMISOS_INICIALES = ['can_view_subscriptions']
 
 
 class PermissionMatrix(models.Model):
@@ -62,29 +78,29 @@ class PermissionMatrix(models.Model):
     """
 
     # --- Modulos principales (navegacion) ---
-    can_view_subscriptions = models.BooleanField(default=True)
-    can_view_crm = models.BooleanField(default=True)
-    can_view_imports = models.BooleanField(default=True)
-    can_view_support = models.BooleanField(default=True)
+    can_view_subscriptions = models.BooleanField(default=False)
+    can_view_crm = models.BooleanField(default=False)
+    can_view_imports = models.BooleanField(default=False)
+    can_view_support = models.BooleanField(default=False)
 
     # --- Paginas de metricas ---
-    can_view_subs_analytics = models.BooleanField(default=True)
-    can_view_subs_results = models.BooleanField(default=True)
-    can_view_subs_lifetime = models.BooleanField(default=True)
-    can_view_subs_sales = models.BooleanField(default=True)
-    can_view_eta = models.BooleanField(default=True)
+    can_view_subs_analytics = models.BooleanField(default=False)
+    can_view_subs_results = models.BooleanField(default=False)
+    can_view_subs_lifetime = models.BooleanField(default=False)
+    can_view_subs_sales = models.BooleanField(default=False)
+    can_view_eta = models.BooleanField(default=False)
 
-    can_view_crm_analytics = models.BooleanField(default=True)
-    can_view_crm_results = models.BooleanField(default=True)
+    can_view_crm_analytics = models.BooleanField(default=False)
+    can_view_crm_results = models.BooleanField(default=False)
 
-    can_view_support_analytics = models.BooleanField(default=True)
-    can_view_support_results = models.BooleanField(default=True)
+    can_view_support_analytics = models.BooleanField(default=False)
+    can_view_support_results = models.BooleanField(default=False)
 
     # --- Paginas del modulo de Importaciones ---
-    can_view_imports_subs = models.BooleanField(default=True)
-    can_view_imports_crm = models.BooleanField(default=True)
-    can_view_imports_support = models.BooleanField(default=True)
-    can_view_import_history = models.BooleanField(default=True)
+    can_view_imports_subs = models.BooleanField(default=False)
+    can_view_imports_crm = models.BooleanField(default=False)
+    can_view_imports_support = models.BooleanField(default=False)
+    can_view_import_history = models.BooleanField(default=False)
 
     # --- Acciones globales ---
     can_import_data = models.BooleanField(default=False)
@@ -110,11 +126,15 @@ class PermissionMatrix(models.Model):
 
 
 def default_permissions(full_access: bool = False) -> dict:
-    """Matriz inicial de una cuenta: lectura abierta y acciones segun el rol."""
-    return {
-        **{field: True for field in VIEW_PERMISSION_FIELDS},
-        **{field: full_access for field in ACTION_PERMISSION_FIELDS},
-    }
+    """Matriz inicial de una cuenta: `PERMISOS_INICIALES`, o todo con `full_access`.
+
+    Antes la lectura se concedia entera sin preguntar y solo las acciones
+    dependian del rol. Ahora una cuenta nueva nace con un unico modulo —el de
+    suscripciones— y el resto se concede a mano desde `/auth/users/`.
+    """
+    if full_access:
+        return {field: True for field in PERMISSION_FIELDS}
+    return {field: field in PERMISOS_INICIALES for field in PERMISSION_FIELDS}
 
 
 class PermissionGroup(PermissionMatrix):
@@ -178,8 +198,8 @@ def create_user_profile(sender, instance, created, **kwargs):
     """Crea el perfil al dar de alta un usuario.
 
     **El primero del sistema queda como administrador con la matriz completa**;
-    el resto nacen como visualizadores, con la lectura abierta y las acciones
-    cerradas.
+    el resto nacen como visualizadores con `PERMISOS_INICIALES`: el modulo de
+    suscripciones y nada mas.
     """
     if created:
         is_first = User.objects.count() == 1

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { configApi } from '@/shared/lib/api/config';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
-import { DEFAULT_GROUP_PERMISSIONS } from '@/shared/constants/permissions';
+import { DEFAULT_GROUP_PERMISSIONS, DEFAULT_USER_PERMISSIONS } from '@/shared/constants/permissions';
 import { ToggleGroup, SearchInput } from '@/shared/ui';
 import { UsersTable } from '@/features/config/components/management/UsersTable';
 import { GroupsGrid } from '@/features/config/components/management/GroupsGrid';
@@ -146,12 +146,16 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
 
             {activeTab === 'users' ? (
               <button
+                // Sin grupo y con la matriz minima. Antes preseleccionaba
+                // `groups[0]`, asi que toda cuenta nueva heredaba la matriz del
+                // primer grupo de la lista —el de administradores— sin que
+                // nadie lo eligiera.
                 onClick={() => setUserToCreate({
                   username: '',
                   password: '',
                   role: 'viewer',
-                  group_id: groups[0]?.id || '',
-                  permissions: {}
+                  group_id: '',
+                  permissions: { ...DEFAULT_USER_PERMISSIONS }
                 })}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30"
               >
