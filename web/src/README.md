@@ -76,8 +76,25 @@ Concretely, these already exist — do not re-inline them:
 | Server execution log | `ConsoleOutput` |
 | Labelled input with leading icon | `TextField` |
 | Segmented view switch | `ToggleGroup` |
-| Sortable/searchable table | `DataTable` |
+| Filter capsule (label cap + control) | `FilterField` |
+| Sortable/searchable/filterable table | `DataTable` |
 | Module tab bar | `ModuleHeader module="…"` |
+
+**Filters look the way they look in Sales Report and Business Units**, and that
+is not a convention but a component: `FilterField` is the capsule — a dark cap
+naming *what* is being filtered, and flush against it the control saying *by
+which value*. Put a `SelectMenu` inside with `FILTER_TRIGGER_CLASS`, a
+`SearchInput` with `grow`, or a field of your own. It used to be copied into
+`PeriodSelector` and three times into `SubscriptionReportFilters`, and every
+new copy reinterpreted it slightly worse.
+
+`DataTable` is the *only* table. Free-text search, click-to-sort and per-column
+filters live in it, so a screen that hand-rolls `<table>` markup silently loses
+all three — which is exactly what had happened to the ETA master screen. Mark a
+column `filterable` to get a dropdown whose options are derived from the data;
+add `filterValue` when the cell is rendered by a function and the raw field is
+not what the reader would pick from a list (a boolean shown as `Sí`/`—` filters
+as `Sí`/`No`, not `true`/`false`).
 
 Import from the barrel (`@/shared/ui`), not the file. Components are function
 declarations, never `React.FC`; only files under `pages/` use a default export.
