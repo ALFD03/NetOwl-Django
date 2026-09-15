@@ -27,6 +27,7 @@ urlpatterns = [
     path("api/lifecycle/run/", views.api_lifecycle_run, name="api_lifecycle_run"),
     path("api/lifecycle/results/", views.api_lifecycle_results, name="api_lifecycle_results"),
     path("api/sales-report/", views.api_sales_report, name="api_sales_report"),
+    path("api/bajas/detalle/", views.api_bajas_detalle, name="api_bajas_detalle"),
     path("api/eta-report/data/", views_eta.api_eta_report_data, name="api_eta_report_data"),
     path("api/eta-report/lock/", views_eta.api_eta_report_lock, name="api_eta_report_lock"),
     path("api/eta-report/save-sub-config/", views_eta.api_eta_report_save_sub_config, name="api_eta_report_save_sub_config"),

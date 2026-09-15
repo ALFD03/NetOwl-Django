@@ -2,7 +2,9 @@
 
 import { apiClient } from './client';
 import { startAndFollow, type AnalysisJob } from './jobs';
-import type { CatalogoTipo, SubscriptionResultsResponse } from '@/shared/types/subscriptions';
+import type {
+  BajasDetalleResponse, CatalogoTipo, SubscriptionResultsResponse,
+} from '@/shared/types/subscriptions';
 
 export interface EtaReportResponse {
   status?: string;
@@ -35,6 +37,25 @@ export interface CatalogoPayload extends Record<string, unknown> {
 export const subscriptionsApi = {
   getResultsDetails: async (period: string) =>
     (await apiClient.get<SubscriptionResultsResponse>(`/subscriptions/api/results/${period}/`)).data,
+
+  /**
+   * Las bajas de un periodo con la ficha de cada cliente.
+   *
+   * `nodos` (`"Zona - Sucursal"`) acota la exportación a un site, a un
+   * coordinador o a un nodo suelto: se mandan los que el grupo ya tiene en
+   * pantalla, porque cada reporte agrupa distinto y el backend no repite ese
+   * criterio. Va el par completo y no solo la zona, que puede estar repartida
+   * entre varias sucursales.
+   *
+   * No hay variante por día: `analyzer_day_metrics` guarda agregados, no las
+   * órdenes que los componen, así que el detalle es siempre el del cierre.
+   */
+  getBajasDetalle: async (period: string, nodos?: string[]) =>
+    (await apiClient.get<BajasDetalleResponse>('/subscriptions/api/bajas/detalle/', {
+      params: { period, nodo: nodos },
+      // Axios serializa un array como `nodo[]=x`; Django lee `nodo=x&nodo=y`.
+      paramsSerializer: { indexes: null },
+    })).data,
 
   getEtaReport: async (period: string, force = false) =>
     (await apiClient.get<EtaReportResponse>('/subscriptions/api/eta-report/data/', { params: { period, force } })).data,

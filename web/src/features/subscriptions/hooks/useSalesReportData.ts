@@ -19,8 +19,10 @@ export interface SalesReportTechnology {
     activos_final: number;
     nuevos: number;
     reactivaciones: number;
+    bajas: number;
     churn_rate: number;
     crecimiento: number;
+
   };
 }
 
@@ -80,6 +82,7 @@ export function useSalesReportData({
           activos_inicio: totals.activos_inicio,
           activos_final: totals.activos_final,
           nuevos: totals.nuevos,
+          bajas: totals.bajas,
           reactivaciones: totals.reactivaciones,
           churn_rate: totals.churn_rate,
           crecimiento: totals.crecimiento,

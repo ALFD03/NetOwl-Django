@@ -149,7 +149,13 @@ def aggregate_dimensions(
         d_act_ini = cnt(act_ini)
         d_act_fin = cnt(act_fin)
         d_nuevos = cnt(nuevos)
-        d_bajas = cnt(df_bajas)
+        # El detalle trae una fila por orden, pero se deduplica igual que el
+        # corte impagado: el conteo es de ordenes, no de filas.
+        d_bajas = cnt(
+            df_bajas.drop_duplicates(subset=["orden"])
+            if df_bajas is not None and not df_bajas.empty
+            else df_bajas
+        )
         d_inact = cnt(df_inactivos)
         d_react = cnt(df_react_all)
         d_corte = cnt(df_corte_impagado.drop_duplicates(subset=["orden"]))
@@ -195,7 +201,15 @@ def aggregate_dimensions(
             a_fin = d_act_fin.get(val, 0)
             nv = d_nuevos.get(val, 0)
             bn = a_ini - (a_fin - nv - d_free_retorno.get(val, 0)) - d_free_periodo.get(val, 0)
-            bb = bn + d_react_not_in_ini.get(val, 0)
+            # La baja bruta del nodo es el detalle contado, no un balance.
+            #
+            # Era `bn + d_react_not_in_ini`, y esa aritmetica no reproduce las
+            # ordenes de `analyzer_bajas_detalladas`: cuatro de los 52 nodos del
+            # cierre de septiembre se desviaban en +-1, asi que exportar las
+            # bajas de un nodo no daba el numero que la tabla mostraba al lado.
+            # `bn` se conserva tal cual porque la baja **neta** si es un balance:
+            # mide el saldo de la base, no quien se fue.
+            bb = d_bajas.get(val, 0)
             inac = d_inact.get(val, 0)
             reac = d_react.get(val, 0)
             react_val = d_react_6.get(val, 0) + d_react_8.get(val, 0) + d_react_4_H.get(val, 0) + d_react_sin.get(val, 0)

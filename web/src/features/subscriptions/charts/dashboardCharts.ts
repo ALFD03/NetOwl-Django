@@ -1,9 +1,11 @@
 /** Constructores de los gráficos del dashboard de suscripciones. */
 
-import { SURFACE } from '@/shared/constants/theme';
-import type { ChartData } from 'chart.js';
+import { CHART_CHROME, CHART_PALETTE, SURFACE } from '@/shared/constants/theme';
+import type { ChartData, ChartOptions } from 'chart.js';
 import type { PeriodoData, ZonaData } from '@/features/subscriptions/types';
-import { CHART_PALETTE } from '@/shared/constants/theme';
+import type { Context } from 'chartjs-plugin-datalabels';
+import { getHorizontalBarOptions, horizontalBarOptions } from '@/shared/charts';
+import { formatTwoDecimals } from '@/shared/utils/formatters/number';
 
 export function buildChurnData(periodos: PeriodoData[], labels: string[]): ChartData<'line'> {
   return { labels, datasets: [
@@ -12,14 +14,61 @@ export function buildChurnData(periodos: PeriodoData[], labels: string[]): Chart
   ] };
 }
 
+/**
+ * Análisis de crecimiento: una columna es el crecimiento neto del mes, repartido
+ * por dentro entre nuevos clientes y reactivaciones según lo que aporta cada uno
+ * — apiladas suman exactamente ese crecimiento. El churn bruto va en su propia
+ * columna, no apilado con ellas. La única cifra etiquetada es el total de la
+ * pila (el crecimiento); el reparto se lee por altura y en el tooltip.
+ */
 export function buildGrowthData(periodos: PeriodoData[], labels: string[]): ChartData<'bar'> {
-  const growth = periodos.map((p) => p.activos_inicio > 0 ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 : 0);
+  const crecimiento = periodos.map((p) => (p.activos_inicio > 0 ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 : 0));
+  /** Parte del crecimiento que aporta cada origen, proporcional a sus altas. */
+  const aporte = (i: number, origen: 'nuevos' | 'react') => {
+    const p = periodos[i];
+    const total = (p.nuevos_mes || 0) + (p.react_val || 0);
+    const cuota = total > 0 ? (p.react_val || 0) / total : 0;
+    return Number((crecimiento[i] * (origen === 'react' ? cuota : 1 - cuota)).toFixed(2));
+  };
+
   return { labels, datasets: [
-    { label: 'Churn Bruto', data: periodos.map((p) => Number(-p.churn_bruto_pct.toFixed(2))), backgroundColor: 'rgba(255, 42, 95, 0.85)', borderRadius: 6 },
-    { label: 'Reactivaciones', data: growth.map((value, i) => { const p = periodos[i]; const total = (p.nuevos_mes || 0) + (p.react_val || 0); return Number((value * (total > 0 ? p.react_val / total : 0)).toFixed(2)); }), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6 },
-    { label: 'Nuevos Clientes', data: growth.map((value, i) => { const p = periodos[i]; const total = (p.nuevos_mes || 0) + (p.react_val || 0); return Number((value * (total > 0 ? 1 - p.react_val / total : 1)).toFixed(2)); }), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6 },
+    { label: 'Nuevos Clientes', data: crecimiento.map((_, i) => aporte(i, 'nuevos')), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6, stack: 'crecimiento', datalabels: { display: false } },
+    // Última de la pila: es la que lleva la etiqueta con el total.
+    { label: 'Reactivaciones', data: crecimiento.map((_, i) => aporte(i, 'react')), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6, stack: 'crecimiento', datalabels: { ...TOTAL_PILA_LABEL, color: CHART_CHROME.textStrong } },
+    { label: 'Churn Bruto', data: periodos.map((p) => Number((-p.churn_bruto_pct).toFixed(2))), backgroundColor: 'rgba(255, 42, 95, 0.85)', borderRadius: 6, stack: 'churn' },
   ] };
 }
+
+/**
+ * Etiqueta el total de la pila en vez del valor del segmento: se pone en el
+ * último dataset de la pila y suma los de su mismo `stack`. `align` se calcula
+ * porque una pila negativa crece hacia abajo y la etiqueta arriba caería dentro
+ * de las barras.
+ */
+const TOTAL_PILA_LABEL = {
+  display: 'auto' as const,
+  anchor: 'end' as const,
+  offset: 8,
+  align: (ctx: Context) => (totalPila(ctx) < 0 ? 'bottom' : 'top') as 'bottom' | 'top',
+  formatter: (_valor: number, ctx: Context) => `${formatTwoDecimals(totalPila(ctx))} %`,
+};
+
+function totalPila(ctx: Context): number {
+  const { stack } = ctx.dataset as { stack?: string };
+  return ctx.chart.data.datasets.reduce((suma, ds) => {
+    if ((ds as { stack?: string }).stack !== stack) return suma;
+    return suma + Number(ds.data[ctx.dataIndex] ?? 0);
+  }, 0);
+}
+
+/** Escalas apiladas para `buildGrowthData`; el apilado se agrupa por `stack`. */
+export const growthChartOptions: ChartOptions<'bar'> = getHorizontalBarOptions(undefined, ' %', 2, {
+  scales: {
+    ...horizontalBarOptions.scales,
+    x: { ...horizontalBarOptions.scales?.x, stacked: true },
+    y: { ...horizontalBarOptions.scales?.y, stacked: true },
+  },
+});
 
 export function buildZoneDonut(labels: string[], values: number[], raw: Array<{ label: string; original: number }>): ChartData<'doughnut'> & { _raw: typeof raw } {
   return { labels, datasets: [{ data: values, backgroundColor: CHART_PALETTE.slice(0, labels.length), borderWidth: 2, borderColor: SURFACE.secondary }], _raw: raw };

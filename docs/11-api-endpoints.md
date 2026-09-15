@@ -79,6 +79,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/lifecycle/results/` | `can_view_subs_lifetime` | `{status, data, dimensiones}` o `status: "empty"` |
 | GET | `api/sales-report/?period=&dia=` | `can_view_subs_sales` | Site → Tecnología → Nodos |
 | GET | `api/business-units/?period=&dia=` | `can_view_subs_sales` | Coordinador → Nodos + resumen FTTH + bloque RF |
+| GET | `api/bajas/detalle/?period=&nodo=&nodo=` | `can_view_subs_results` **o** `can_view_subs_sales` | `{status, period, periods, total, bajas: [...]}`. `nodo` repetido (`"Zona - Sucursal"`, como la dimensión) acota a esos nodos (máx. 300); sin él, el periodo entero. Filtra por el par, no por la zona sola, que puede estar repartida entre varias sucursales. No admite `dia`: el detalle nominal solo existe por cierre mensual |
 
 ### Escritura
 

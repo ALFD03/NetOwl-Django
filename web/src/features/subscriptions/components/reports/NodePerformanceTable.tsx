@@ -22,6 +22,13 @@ export interface NodePerformanceTableProps<T extends CommercialNode> {
   mono?: boolean;
   /** Clamp completion to [0, 100]. See `calcComercial`. */
   clampCompletion?: boolean;
+  /**
+   * Acción al final de cada fila, p. ej. exportar las bajas de esa zona.
+   *
+   * La columna solo aparece cuando se pasa: la tabla la comparten los dos
+   * reportes y no todos sus usos tienen algo que poner ahí.
+   */
+  renderRowAction?: (node: T) => ReactNode;
 }
 
 
@@ -38,6 +45,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
   renderBadge,
   mono = false,
   clampCompletion = false,
+  renderRowAction,
 }: NodePerformanceTableProps<T>) {
   const num = (extra?: string) => cn('py-3 text-right', mono && 'font-mono', extra);
 
@@ -60,6 +68,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
             <th className="pb-3 text-right font-bold text-amber-500">Faltante</th>
             <th className="pb-3 text-right">Cumpl %</th>
             <th className="pb-3 pr-2 text-right">Cierre</th>
+            {renderRowAction && <th className="pb-3 pr-2 text-right"><span className="sr-only">Acciones</span></th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-800/50 text-xs font-bold">
@@ -102,6 +111,9 @@ export function NodePerformanceTable<T extends CommercialNode>({
                 <td className={cn('py-3 pr-2 text-right font-black text-white', mono && 'font-mono')}>
                   {formatInteger(node.activos_final)}
                 </td>
+                {renderRowAction && (
+                  <td className="py-3 pr-2 text-right">{renderRowAction(node)}</td>
+                )}
               </tr>
             );
           })}

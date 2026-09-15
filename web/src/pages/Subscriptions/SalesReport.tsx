@@ -89,7 +89,11 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
         </>
       }
     >
-      <SalesReportView sites={filteredData} period={currentPeriod} />
+      <SalesReportView
+        sites={filteredData}
+        period={currentPeriod}
+        diaSeleccionado={Boolean(dayData)}
+      />
     </AppLayout>
   );
 }
