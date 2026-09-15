@@ -1,3 +1,9 @@
+"""Middlewares propios del proyecto.
+
+Uno traduce el corte por exceso de peticiones a una respuesta que el cliente
+sabe leer; el otro publica en React el usuario y sus permisos.
+"""
+
 import inertia
 from django.http import JsonResponse
 from django_ratelimit.exceptions import Ratelimited
@@ -6,6 +12,12 @@ from services.config.models import PERMISSION_FIELDS
 
 
 class RateLimitMiddleware:
+    """Convierte el corte de `django_ratelimit` en un JSON 429 legible.
+
+    Sin el, un endpoint limitado devuelve la pagina de error de Django y el
+    cliente no tiene ningun mensaje que ensenar.
+    """
+
     def __init__(self, get_response):
         self.get_response = get_response
 
@@ -13,6 +25,7 @@ class RateLimitMiddleware:
         return self.get_response(request)
 
     def process_exception(self, request, exception):
+        """Responde 429 a `Ratelimited`; deja pasar cualquier otra excepcion."""
         if isinstance(exception, Ratelimited):
             return JsonResponse({
                 "status": "error",

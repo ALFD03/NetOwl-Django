@@ -1,3 +1,5 @@
+"""El analisis de soporte: la cohorte de cada periodo y el promedio global."""
+
 # backend/support/analyzer.py
 
 from __future__ import annotations
@@ -29,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def _save_cierre_historico(db: DBConnector, periodo: str, metricas: dict) -> None:
+    """Guarda (o actualiza) el bloque de metricas de un periodo, como JSONB."""
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -48,6 +51,7 @@ def _save_cierre_historico(db: DBConnector, periodo: str, metricas: dict) -> Non
 def _save_metricas_globales(
     db: DBConnector, resumen: dict, por_grupo: dict, periodos: int
 ) -> None:
+    """Guarda la fila unica del dashboard de empresa."""
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -74,6 +78,7 @@ _TIME_MASKS = {medida: f"muestra_{medida}" for medida in SUPPORT_TIME_MEASURES}
 
 
 def _mean_of(df: pd.DataFrame, field: str, mask_field: str | None = None) -> float:
+    """Promedio de una columna, opcionalmente ignorando los periodos sin muestra."""
     if field not in df.columns:
         return 0.0
 

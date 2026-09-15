@@ -1,3 +1,10 @@
+/**
+ * Los tokens de diseño para el lado TypeScript (canvas, SVG, estilos en línea).
+ *
+ * El mismo `design-tokens.json` lo lee `tailwind.config.js` para las clases.
+ * **Nunca se escribe un hex en un componente.**
+ */
+
 import tokens from './design-tokens.json';
 
 /**

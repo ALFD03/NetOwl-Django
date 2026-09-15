@@ -1,3 +1,5 @@
+/** Las filas dimensionales de un periodo, cargadas al abrir su detalle. */
+
 import { useMemo, useState } from 'react';
 import { Layers } from 'lucide-react';
 

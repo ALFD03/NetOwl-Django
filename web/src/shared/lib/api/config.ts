@@ -1,3 +1,5 @@
+/** Endpoints de administración de usuarios, grupos y permisos. */
+
 import { apiClient } from './client';
 import type { ApiMessageResponse } from './types';
 

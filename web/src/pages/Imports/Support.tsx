@@ -1,3 +1,5 @@
+/** Página Inertia `Imports/Support` (`/imports/support/`). */
+
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { usePermissions } from '@/shared/hooks/usePermissions';

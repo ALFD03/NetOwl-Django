@@ -1,13 +1,25 @@
+/**
+ * Página Inertia `Imports/Subscriptions` (`/imports/subscriptions/`).
+ *
+ * Carga los tres exports del dominio y lanza el análisis mensual. Intercepta el
+ * 409 de «producto sin catalogar» para enseñarlo como una decisión a tomar, no
+ * como un fallo: cuando ocurre no se escribió nada.
+ */
+
 import { useState } from 'react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { usePermissions } from '@/shared/hooks/usePermissions';
 import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
+import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { importsApi, type ImportResponse } from '@/shared/lib/api/imports';
+import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
+import { CatalogoBloqueoModal } from '@/features/imports/components/CatalogoBloqueoModal';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
+import { extractCatalogoBloqueo, type CatalogoBloqueo } from '@/features/imports/lib/catalogo';
 
 type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis';
 
@@ -25,10 +37,49 @@ const UPLOADERS: Record<SubscriptionImportType, (file: File) => Promise<ImportRe
 
 export default function ImportSubscriptions() {
   const [importType, setImportType] = useState<SubscriptionImportType>('subscriptions');
+  const [bloqueo, setBloqueo] = useState<CatalogoBloqueo | null>(null);
+  const [ignorando, setIgnorando] = useState<string | null>(null);
+  const [errorCatalogo, setErrorCatalogo] = useState<string | null>(null);
   const { canAny } = usePermissions();
 
   const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.subs);
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.subs);
+
+  /**
+   * Intercepta el 409 de "producto sin catalogar" y lo enseña como una
+   * decisión a tomar, no como un fallo. El error se vuelve a lanzar para que
+   * `CsvUploadCard` mantenga su propio mensaje de estado.
+   */
+  const subirArchivo = async (file: File) => {
+    try {
+      return await UPLOADERS[importType](file);
+    } catch (error) {
+      const encontrado = extractCatalogoBloqueo(error);
+      if (encontrado) {
+        setErrorCatalogo(null);
+        setBloqueo(encontrado);
+      }
+      throw error;
+    }
+  };
+
+  /** Saca un producto de la lista de bloqueo declarando que nunca será un plan. */
+  const ignorarProducto = async (nombre: string) => {
+    setIgnorando(nombre);
+    setErrorCatalogo(null);
+    try {
+      await subscriptionsApi.saveCatalogo('ignorados', { nombre, nota: '' });
+      setBloqueo((previo) =>
+        previo
+          ? { ...previo, productos: previo.productos.filter((p) => p.nombre !== nombre) }
+          : previo,
+      );
+    } catch (error: unknown) {
+      setErrorCatalogo(getApiErrorMessage(error, 'No se pudo ignorar el producto.'));
+    } finally {
+      setIgnorando(null);
+    }
+  };
 
   return (
     <AppLayout title="Importar Subscriptions" toolbar={<ModuleHeader module="imports" activeTab="subscriptions" />}>
@@ -38,7 +89,7 @@ export default function ImportSubscriptions() {
             title="Cargar Archivo CSV Subscriptions"
             submitLabel="Iniciar Carga"
             errorMessage="Error al procesar la importación."
-            onUpload={(file) => UPLOADERS[importType](file)}
+            onUpload={subirArchivo}
           >
             <div className="flex gap-3">
               {IMPORT_TYPES.map((option) => (
@@ -92,6 +143,14 @@ export default function ImportSubscriptions() {
           errorMessage="Error al ejecutar el análisis de Churn."
         />
       )}
+
+      <CatalogoBloqueoModal
+        bloqueo={bloqueo}
+        onClose={() => setBloqueo(null)}
+        onIgnore={ignorarProducto}
+        ignorando={ignorando}
+        error={errorCatalogo}
+      />
     </AppLayout>
   );
 }

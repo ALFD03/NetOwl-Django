@@ -1,3 +1,5 @@
+/** El icono de cada medida de tiempo. */
+
 import { CheckCircle2, Clock, Hourglass, Timer, XCircle } from 'lucide-react';
 
 import type { TimeMeasureMeta } from './supportMetrics';

@@ -1,3 +1,5 @@
+/** La tabla de una dimensión, con acceso al desglose de cada valor. */
+
 import { MapPin, MousePointerClick } from 'lucide-react';
 
 import { DataTable, EmptyState, ExcelExportButton, MetricCard, NeonContainer } from '@/shared/ui';

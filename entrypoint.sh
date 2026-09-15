@@ -16,4 +16,9 @@ fi
 # idempotente: en un esquema ya preparado no hace nada.
 python manage.py preparar_sesiones
 
+# Por lo mismo, las tablas ORM de imports (import_action_logs, analysis_jobs)
+# estan cualificadas con DB_SCHEMA y sus migraciones se anotan en la
+# django_migrations compartida. Tambien idempotente.
+python manage.py preparar_imports
+
 exec "$@"

@@ -1,3 +1,5 @@
+/** Página Inertia `Support/Analytics` (`/support/analytics/`). */
+
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
 

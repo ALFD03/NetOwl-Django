@@ -1,3 +1,5 @@
+/** Lista de pares etiqueta/valor dentro de un contenedor con acento. */
+
 import React from 'react';
 import { NeonContainer, NeonTheme } from '../surfaces/NeonContainer';
 

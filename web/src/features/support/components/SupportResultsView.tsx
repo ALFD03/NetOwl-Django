@@ -1,3 +1,5 @@
+/** Tabla de cierres de soporte. */
+
 import { Table as TableIcon } from 'lucide-react';
 
 import { DataTable, NeonContainer, type Column } from '@/shared/ui';

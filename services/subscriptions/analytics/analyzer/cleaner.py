@@ -1,3 +1,10 @@
+"""Normalizacion de las suscripciones y de los logs antes de calcular.
+
+Deja el historico en la forma de la que depende todo lo demas: un solo frame de
+logs, ordenado por `["orden", "f_dt"]`, con el estado traducido al vocabulario
+interno y el estado anterior de cada movimiento ya resuelto.
+"""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -65,6 +72,15 @@ def build_free_meta(df_free_raw):
 
 
 def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
+    """Devuelve `(suscripciones, logs)` listos para las reglas y las metricas.
+
+    Une los dos formatos de log -el actual y el de la v15, donde la categoria
+    *En progreso*/*Cerrado* se traduce a los estados internos-, traduce el estado
+    de la suscripcion y calcula `estado_origen` con un desplazamiento por orden.
+
+    **El frame de logs sale ordenado por `["orden", "f_dt"]`, y esa ordenacion es
+    una invariante**: de ella dependen `last_log_per_orden` y `EstadoAcumulado`.
+    """
     df = df_subs_raw.copy()
     df.columns = df.columns.str.lower()
     df = df.rename(columns={"orden_producto": "orden", "fecha_inicio": "f_ini"})

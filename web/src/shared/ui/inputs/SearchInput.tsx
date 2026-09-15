@@ -1,3 +1,5 @@
+/** Campo de búsqueda con su icono. */
+
 
 interface Props {
   value: string;

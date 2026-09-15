@@ -4,6 +4,8 @@ export const GROWTH_TARGET_RATE = 0.06;
 /** The node/zone shape both the Sales and Business Units reports render. */
 export interface CommercialNode {
   sucursal?: string;
+  /** Solo la zona, sin la sucursal: es la clave con la que se acota el export de bajas. */
+  zona?: string;
   zona_sucursal?: string;
   activos_inicio?: number;
   activos_final?: number;

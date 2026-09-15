@@ -16,8 +16,11 @@ from django.contrib.sessions.backends.db import SessionStore as DBStore
 
 
 class SessionStore(DBStore):
+    """El backend de base de datos de Django, escribiendo en `SesionEntorno`."""
+
     @classmethod
     def get_model_class(cls):
+        """El modelo de sesion del entorno, en vez del de `django.contrib.sessions`."""
         from services.config.models import SesionEntorno
 
         return SesionEntorno

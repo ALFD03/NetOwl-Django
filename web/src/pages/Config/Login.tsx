@@ -1,3 +1,5 @@
+/** Página Inertia `Config/Login` (`/auth/login/`). */
+
 import type { FormEvent } from 'react';
 import { useForm } from '@inertiajs/react';
 import { Lock, User } from 'lucide-react';

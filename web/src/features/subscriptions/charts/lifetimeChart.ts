@@ -1,3 +1,5 @@
+/** El gráfico de la curva de supervivencia y sus estadísticos derivados. */
+
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 
 import { CHART_CHROME, CHART_PALETTE } from '@/shared/constants/theme';

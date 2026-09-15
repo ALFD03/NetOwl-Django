@@ -1,3 +1,10 @@
+/**
+ * Página Inertia `Subscriptions/Analytics` (`/subscriptions/analytics/`).
+ *
+ * Recibe el mes completo de métricas diarias en los props, de modo que mover la
+ * barra de días es una reagrupación en cliente y no una vuelta al servidor.
+ */
+
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';

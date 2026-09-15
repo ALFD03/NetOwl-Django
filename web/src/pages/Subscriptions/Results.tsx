@@ -1,3 +1,5 @@
+/** Página Inertia `Subscriptions/Results` (`/subscriptions/results/`). */
+
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { SubscriptionResultsView } from '@/features/subscriptions/components/results/SubscriptionResultsView';

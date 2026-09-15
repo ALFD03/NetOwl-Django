@@ -29,7 +29,7 @@ lo que se pide despues de cargar la pagina.
 
 ```
 core/         Lo transversal, sin dominio: Vault, DBConnector, Periodo,
-              TableNames, utilidades de datos y lectura de fixtures.
+              TableNames, utilidades de datos y lectura del catalogo.
 
 services/     Un paquete por dominio de negocio. Cada uno tiene su analitica y
               su capa HTTP juntas:
@@ -44,7 +44,10 @@ web/          src/       React: pages/ -> features/ -> shared/
               static/    Imagenes y el bundle compilado (dist/, no versionado)
 
 netowl_web/   settings, urls, wsgi, middleware
-data/         Planes.json y Zonas.json (datos de referencia del negocio)
+data/         Planes.json y Zonas.json: semilla inicial de los catalogos.
+              Los catalogos vivos son tablas y se editan en
+              /subscriptions/config/; solo `manage.py cargar_catalogos`
+              sigue leyendo estos ficheros.
 scripts/      dev.sh
 ```
 
@@ -55,6 +58,13 @@ moverse entre servicios no obliga a reaprender nombres.
 
 Para el detalle de la parte React, lee **`web/src/README.md`**: es la
 documentacion viva de esa capa.
+
+## Documentacion
+
+En **`docs/`** esta la documentacion tecnica completa, un capitulo por apartado
+del codigo: arquitectura, configuracion, `core/`, cada servicio, frontend,
+modelo de datos, referencia de endpoints, operacion y glosario. El indice es
+[`docs/README.md`](docs/README.md).
 
 ## Configuracion
 

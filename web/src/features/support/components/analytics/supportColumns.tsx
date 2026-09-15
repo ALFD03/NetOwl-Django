@@ -1,3 +1,5 @@
+/** Las columnas de las tablas de dimensión y de zona. */
+
 import { StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils';
 import type { SupportDimensionRow, SupportZoneRow } from '../../types';

@@ -1,3 +1,5 @@
+/** Tipos del feature de CRM, más los de transporte que reexporta de `shared`. */
+
 import type { MetricColor } from '@/shared/ui';
 
 /**

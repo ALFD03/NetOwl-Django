@@ -1,3 +1,5 @@
+/** Versión compacta de la tarjeta de KPI, para rejillas densas. */
+
 import type { FC, ReactNode } from 'react';
 import type { MetricColor } from '../theme/types';
 import { METRIC_COMPACT } from '../theme/metricTheme';

@@ -1,3 +1,5 @@
+/** Estado del reporte ETA: recarga un periodo y permite forzar el recálculo. */
+
 import { useCallback, useEffect, useState } from 'react';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
 import type { SubscriptionEtaReportResponse } from '@/features/subscriptions/types';

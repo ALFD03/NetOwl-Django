@@ -1,3 +1,5 @@
+/** Las métricas seleccionables de Analytics y su distribución para el gráfico. */
+
 import { toNumber } from '@/shared/utils/formatters';
 import {
   getRankingDistribution,
@@ -23,6 +25,7 @@ export interface CrmMetricConfig extends RankingOptions {
   globalKey: NumericKeys<CrmHistoricoRow>;
   mode: MetricWeightMode;
   unit?: '%' | 'h' | 'number';
+  round?: number;
 }
 
 /**
@@ -39,6 +42,7 @@ export const CRM_ANALYTICS_METRICS = {
     globalKey: 'total_oportunidades',
     mode: 'simple',
     unit: 'number',
+    round: 0,
   },
 
   /** Share of the period's installs each dimension value closed. */
@@ -47,6 +51,7 @@ export const CRM_ANALYTICS_METRICS = {
     globalKey: 'ganados',
     mode: 'simple',
     unit: 'number',
+    round: 0,
   },
 
   /**
@@ -61,6 +66,7 @@ export const CRM_ANALYTICS_METRICS = {
     unit: 'h',
     order: 'asc',
     excludeZero: true,
+    round: 0,
   },
 } satisfies Record<string, CrmMetricConfig>;
 

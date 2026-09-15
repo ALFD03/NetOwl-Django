@@ -1,3 +1,10 @@
+"""El analisis de CRM: recorre los periodos y persiste sus metricas.
+
+Por cada mes construye las cuatro poblaciones (creadas, ganadas, perdidas y
+pendientes), la poblacion en riesgo y los movimientos, llama al calculo de
+metricas y guarda el resultado. Al final recalcula el promedio global.
+"""
+
 from __future__ import annotations
 
 import json
@@ -48,6 +55,12 @@ _COLUMNAS_CIERRE_JSON = ("efectividad", "tiempo_por_etapa")
 
 
 def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
+    """Guarda (o actualiza) la fila de cierre de un periodo.
+
+    Las columnas se derivan de `_COLUMNAS_CIERRE`, declarada una sola vez. Se
+    indexa con `m[c]` y no con `.get`: una metrica declarada y no calculada debe
+    reventar, no escribir un NULL silencioso en el historico.
+    """
     columnas = ("periodo_reporte", *_COLUMNAS_CIERRE, *_COLUMNAS_CIERRE_JSON)
     marcadores = ", ".join(["%s"] * len(columnas))
     updates = ",\n                    ".join(
@@ -79,6 +92,7 @@ def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
 
 
 def _save_global_crm_metrics(db: DBConnector, resumen_global: dict, tiempo_por_etapa: list, efectividad: list):
+    """Guarda la fila unica con el promedio de todos los periodos."""
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -134,6 +148,13 @@ def _oportunidades_en_riesgo(df_clients: pd.DataFrame, periodo: str) -> pd.DataF
 
 
 def run_crm_analysis(periodo_str: str | None = None) -> dict:
+    """Recalcula CRM: un periodo concreto, o todos los que tengan oportunidades.
+
+    Pasos principales: descartar oportunidades duplicadas, resolver a que
+    oportunidad pertenece cada movimiento, medir las estancias en curso una sola
+    vez contra un mismo reloj, y despues, por cada periodo, calcular y guardar el
+    cierre y su desglose dimensional.
+    """
     db = DBConnector()
 
     # El cierre guarda ahora la efectividad por etapa del periodo; en una base

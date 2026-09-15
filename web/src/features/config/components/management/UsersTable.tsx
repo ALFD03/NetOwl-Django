@@ -1,3 +1,5 @@
+/** La tabla de cuentas, con su rol y su grupo. */
+
 import { READONLY_TABLE, READONLY_TABLE_HEAD } from '@/shared/ui/data/tableClasses';
 import { Key, Settings2, ShieldCheck, Trash2 } from 'lucide-react';
 import { NeonContainer } from '@/shared/ui';

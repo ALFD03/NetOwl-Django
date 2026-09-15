@@ -1,3 +1,10 @@
+"""Lectura de lo ya calculado por el analisis de CRM.
+
+Las metricas se guardan como JSONB -una fila por etapa no cabe en un escalar-,
+asi que aqui se deshacen antes de servirlas: la vista no deberia recibir a
+veces texto y a veces lista.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -11,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_crm_periodos() -> list[str]:
+    """Los periodos con cierre calculado, del mas reciente al mas antiguo."""
     db = DBConnector()
     try:
         df = db.query(f"SELECT DISTINCT periodo_reporte FROM {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ORDER BY periodo_reporte DESC")
@@ -23,6 +31,7 @@ def get_crm_periodos() -> list[str]:
 
 
 def get_crm_cierre_historico(periodos: list[str] | None = None) -> list[dict[str, Any]]:
+    """Los cierres de los periodos pedidos, con el JSONB ya parseado."""
     db = DBConnector()
     try:
         where_clause = ""
@@ -56,6 +65,11 @@ def get_crm_cierre_historico(periodos: list[str] | None = None) -> list[dict[str
 
 
 def get_crm_metric_totals(periodo: str | None = None) -> dict[str, Any]:
+    """El dashboard: promedio global, tiempos, efectividad y la serie historica.
+
+    La serie se sirve sin los dos JSONB por periodo, que ahi nadie lee y solo
+    abultarian el payload.
+    """
     db = DBConnector()
     try:
         df_mg = db.query(f"SELECT resumen_global, tiempo_por_etapa, efectividad FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
@@ -97,6 +111,7 @@ def get_crm_dimensiones(
     periodos: list[str] | None = None,
     dimension: str | None = None
 ) -> list[dict[str, Any]]:
+    """Las filas dimensionales de los periodos pedidos, con su JSONB parseado."""
     db = DBConnector()
     try:
         clauses = []

@@ -1,3 +1,5 @@
+/** Punto que late: marca que algo está en curso. */
+
 import type { FC } from 'react';
 import type { MetricColor } from '../theme/types';
 import { METRIC_PULSE } from '../theme/metricTheme';

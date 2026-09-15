@@ -17,7 +17,7 @@ export function EtaSpeedTable({ speedMetrics }: EtaSpeedTableProps) {
       icon={<Gauge className="h-5 w-5" />}
       noPadding
     >
-      <div className="overflow-x-auto">
+      <div className="w-full overflow-x-auto">
         <table className="w-full border-collapse text-left text-[11px] font-black uppercase text-slate-300">
           <thead className="border-b border-slate-800 bg-slate-900/60 text-slate-400">
             <tr>

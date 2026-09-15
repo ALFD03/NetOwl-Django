@@ -1,3 +1,5 @@
+/** Tarjeta de KPI: título, valor, variación y color de métrica. */
+
 import type { FC, ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import {

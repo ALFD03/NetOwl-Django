@@ -1,10 +1,13 @@
 """Vistas del reporte ETA para la reguladora.
 
 Ocho de las veintisiete vistas del modulo de suscripciones eran de ETA, casi
-la mitad del archivo, y son un bloque cerrado: parametrizacion de planes y
-suscripciones individuales, calculo del reporte y bloqueo del periodo. Se
-separan aqui para que `views.py` vuelva a ser legible de un vistazo. Las rutas
-no cambian: `urls.py` sigue exponiendo los mismos nombres.
+la mitad del archivo, y son un bloque cerrado. Se separan aqui para que
+`views.py` vuelva a ser legible de un vistazo.
+
+Lo unico que ETA parametriza hoy son las **suscripciones individuales**: las
+excepciones por orden, que son genuinamente de cada contrato y no tienen
+equivalente en el catalogo. La clasificacion de un plan se edita en
+`/subscriptions/config/` (ver `views_catalogos.py`), que es la unica fuente.
 """
 
 import json
@@ -13,23 +16,41 @@ import logging
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
 from core.database import DBConnector
-from core.utils import clean_json_props
+from core.utils import clean_json_props, es_periodo
 from services.config.decorators import permission_required
 from services.subscriptions.analytics import ETAReportManager, get_periodos
 
 logger = logging.getLogger(__name__)
 
+ERROR_GENERICO = "Error interno del servidor. Consulte el registro de la aplicación."
+
+
+def error_interno(contexto: str) -> JsonResponse:
+    """Registra la excepcion y responde sin exponer el mensaje original.
+
+    `str(e)` de una excepcion de psycopg2 lleva dentro el esquema, la tabla y
+    las columnas implicadas; eso llegaba tal cual al navegador.
+    """
+    logger.exception(contexto)
+    return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
+
 
 @login_required
 @permission_required('can_view_eta')
 def eta_report(request):
+    """Calcula y muestra el reporte de la reguladora de un periodo."""
     available = get_periodos()
     periodos_disponibles = sorted(list(set([p[:7] for p in available])), reverse=True)
     
+    # Sin validar, `?period=%` llegaba al `LIKE %s` de `calculate_eta_report`
+    # (ver analytics/eta_report.py) y el informe agregaba todos los periodos.
     periodo_req = request.GET.get("period")
+    if periodo_req and not es_periodo(periodo_req):
+        periodo_req = None
     if not periodo_req and periodos_disponibles:
         periodo_req = periodos_disponibles[0]
     elif not periodo_req:
@@ -54,6 +75,7 @@ def eta_report(request):
 @login_required
 @permission_required('can_manage_eta')
 def eta_config_view(request):
+    """Pantalla de parametrizacion: excepciones individuales y pendientes."""
     manager = ETAReportManager(DBConnector())
     props = manager.get_config_page_data(request.GET.get("period"))
     props["section"] = "eta_config"
@@ -62,11 +84,35 @@ def eta_config_view(request):
 
 @login_required
 @permission_required('can_view_eta')
+@ratelimit(key='ip', rate='30/m', block=True)
 def api_eta_report_data(request):
-    """API para recargar datos sin refrescar la página"""
+    """API para recargar datos sin refrescar la página.
+
+    `?force=true` salta el reporte ya guardado y relanza el pipeline completo
+    —barrido de la tabla de cierres, de suscripciones y de `subscriptions-b`,
+    mas una decena de matrices de pandas—, asi que exige `can_manage_eta` y no
+    el permiso de lectura: recalcular no es leer. Sin esa distincion, cualquier
+    cuenta con acceso al reporte podia fijar la CPU con un bucle de GET.
+    """
     periodo = request.GET.get("period")
+    if periodo and not es_periodo(periodo):
+        return JsonResponse(
+            {"status": "error", "message": "Periodo inválido (se espera YYYY-MM)."},
+            status=400,
+        )
+
     force = request.GET.get("force", "false").lower() == "true"
-    
+    if force:
+        perfil = getattr(request.user, 'profile', None)
+        if not (request.user.is_superuser or (perfil and perfil.has_permission('can_manage_eta'))):
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "message": "Recalcular el reporte requiere el privilegio: can_manage_eta.",
+                },
+                status=403,
+            )
+
     available = get_periodos()
     periodos_disponibles = sorted(list(set([p[:7] for p in available])), reverse=True)
 
@@ -84,15 +130,21 @@ def api_eta_report_data(request):
         report_data["periods"] = periodos_disponibles
         report_data["individual_configs"] = manager.get_configured_individual_subs()
         return JsonResponse(report_data)
-    except Exception as e:
-        logger.exception("Error en cálculo de reporte ETA")
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    except Exception:
+        return error_interno("Error en cálculo de reporte ETA")
 
 
 @login_required
 @permission_required('can_manage_eta')
+@ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
 def api_eta_report_lock(request):
+    """Bloquea o desbloquea un periodo.
+
+    Al bloquear se recalcula una ultima vez y se guarda: a partir de ahi el mes
+    queda congelado aunque los datos de origen cambien. Ese recalculo es el
+    pipeline entero, de ahi el limite de peticiones.
+    """
     try:
         data = json.loads(request.body)
         periodo = data.get("period")
@@ -100,44 +152,29 @@ def api_eta_report_lock(request):
     except Exception:
         return JsonResponse({"status": "error", "message": "JSON invalido"}, status=400)
 
+    if not es_periodo(periodo):
+        return JsonResponse(
+            {"status": "error", "message": "Periodo inválido (se espera YYYY-MM)."},
+            status=400,
+        )
+
     db = DBConnector()
     manager = ETAReportManager(db)
-    manager.set_lock_status(periodo, lock)
-    if lock:
-        manager.calculate_eta_report(periodo, force_recalc=True)
+    try:
+        manager.set_lock_status(periodo, lock)
+        if lock:
+            manager.calculate_eta_report(periodo, force_recalc=True)
+    except Exception:
+        return error_interno("Error al bloquear el periodo del reporte ETA")
     return JsonResponse({"status": "success", "esta_bloqueado": lock, "message": f"Periodo {periodo} actualizado."})
 
 
 @login_required
 @permission_required('can_manage_eta')
-@require_POST
-def api_eta_report_save_plan_config(request):
-    try:
-        data = json.loads(request.body)
-        plan_name = data.get("plan_name")
-        config = {
-            "reportar": bool(data.get("reportar", True)),
-            "tecnologia": data.get("tecnologia"),
-            "tipo_persona": data.get("tipo_persona"),
-            "tiene_tv": bool(data.get("tiene_tv", False)),
-            "datas_mbps": float(data.get("datas_mbps", 0))
-        }
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=400)
-
-    db = DBConnector()
-    manager = ETAReportManager(db)
-    try:
-        manager.save_plan_custom_config(plan_name, config)
-        return JsonResponse({"status": "success"})
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
-
-@login_required
-@permission_required('can_manage_eta')
+@ratelimit(key='ip', rate='30/m', block=True)
 @require_POST
 def api_eta_report_save_sub_config(request):
+    """Guarda la excepcion individual de una orden."""
     try:
         data = json.loads(request.body)
         orden = data.get("orden")
@@ -152,8 +189,10 @@ def api_eta_report_save_sub_config(request):
             "es_transporte": bool(data.get("es_transporte", False)),
             "es_dedicado": bool(data.get("es_dedicado", False))
         }
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return JsonResponse(
+            {"status": "error", "message": "Cuerpo de la petición inválido."}, status=400
+        )
 
     if not orden:
         return JsonResponse({"status": "error", "message": "El campo orden es requerido"}, status=400)
@@ -163,32 +202,16 @@ def api_eta_report_save_sub_config(request):
     try:
         manager.save_sub_individual_config(orden, config)
         return JsonResponse({"status": "success", "message": f"Suscripción {orden} guardada."})
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    except Exception:
+        return error_interno("Error al guardar la excepción individual de ETA")
 
 
 @login_required
 @permission_required('can_manage_eta')
-@require_POST
-def api_eta_report_delete_plan_config(request):
-    try:
-        data = json.loads(request.body)
-        plan_name = data.get("plan_name")
-        if not plan_name:
-            return JsonResponse({"status": "error", "message": "Nombre de plan requerido"}, status=400)
-        
-        db = DBConnector()
-        manager = ETAReportManager(db)
-        manager.delete_plan_custom_config(plan_name)
-        return JsonResponse({"status": "success", "message": f"Plan '{plan_name}' eliminado."})
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
-
-@login_required
-@permission_required('can_manage_eta')
+@ratelimit(key='ip', rate='30/m', block=True)
 @require_POST
 def api_eta_report_delete_sub_config(request):
+    """Borra la excepcion individual de una orden."""
     try:
         data = json.loads(request.body)
         orden = data.get("orden")
@@ -199,5 +222,5 @@ def api_eta_report_delete_sub_config(request):
         manager = ETAReportManager(db)
         manager.delete_sub_individual_config(orden)
         return JsonResponse({"status": "success", "message": f"Suscripción '{orden}' eliminada."})
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    except Exception:
+        return error_interno("Error al eliminar la excepción individual de ETA")

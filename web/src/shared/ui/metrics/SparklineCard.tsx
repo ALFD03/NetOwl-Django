@@ -1,3 +1,5 @@
+/** Tarjeta de KPI con la serie del indicador dibujada debajo. */
+
 import type { FC, ReactNode } from 'react';
 import type { ChartData, ChartOptions } from 'chart.js';
 import { LineChart } from '@/shared/charts';

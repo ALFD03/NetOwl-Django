@@ -1,3 +1,5 @@
+/** Barra de progreso simple, con porcentaje opcional. */
+
 import type { FC } from 'react';
 import type { MetricColor } from '../theme/types';
 import { METRIC_BAR, METRIC_TEXT } from '../theme/metricTheme';

@@ -1,3 +1,15 @@
+"""Lectura de lo ya calculado por el analisis de suscripciones.
+
+Aqui no se calcula churn: se leen las tablas de resultados y se les da la forma
+que esperan las paginas. Las dos excepciones son los reportes comerciales
+(Sales Report y Business Units), que agrupan en memoria por site, tecnologia y
+coordinador usando el catalogo de zonas.
+
+Con el parametro `dia`, la fuente deja de ser el cierre del mes y pasa a ser la
+fila precalculada de `analyzer_day_metrics`: una sola lectura, sin recalcular
+nada.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -5,22 +17,30 @@ from typing import Any
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
-from core.fixtures import load_zonas, zonas_disponibles
-
-from .config import CUSTOM_SITE_ORDER
+from core.fixtures import orden_sites, zonas, zonas_disponibles
 
 logger = logging.getLogger(__name__)
 
 
 def get_site_sort_index(site_name: str) -> int:
+    """Posicion del site en el orden comercial del catalogo.
+
+    El orden ya no es una lista en el codigo sino la columna `Site.orden`; lo
+    que no este dado de alta se va al final, igual que antes.
+    """
+    orden = orden_sites()
     try:
-        return CUSTOM_SITE_ORDER.index(site_name)
+        return orden.index(site_name)
     except ValueError:
-        return len(CUSTOM_SITE_ORDER)  # Los no listados van al final
+        return len(orden)
 
 def get_cierre_churn(
     periodos: list[str] | None = None,
 ) -> list[dict[str, Any]]:
+    """Los cierres mensuales, del mas reciente al mas antiguo.
+
+    Convierte explicitamente cada columna porque en la base son todas `text`.
+    """
     db = DBConnector()
     try:
         df = db.read_table_filtered(TableNames.ANALYZER_CIERRE_HISTORICO, "periodo_reporte", periodos)
@@ -66,6 +86,7 @@ def get_cierre_churn(
 def get_dimensiones(
     periodos: list[str] | None = None,
 ) -> list[dict[str, Any]]:
+    """El desglose dimensional de cada periodo, agrupado por dimension."""
     db = DBConnector()
     try:
         df = db.read_table_filtered(TableNames.ANALYZER_CHURN_DIMENSIONES, "periodo_reporte", periodos)
@@ -115,6 +136,7 @@ def get_dimensiones(
         return []
 
 def get_periodos() -> list[str]:
+    """Las etiquetas de periodo que tienen cierre calculado."""
     db = DBConnector()
     try:
         df = db.read_table(TableNames.ANALYZER_CIERRE_HISTORICO)
@@ -126,12 +148,14 @@ def get_periodos() -> list[str]:
         return []
 
 def get_dashboard_data() -> dict[str, Any]:
+    """Lo que necesita el dashboard: los cierres de todos los periodos."""
     return {"periodos": get_cierre_churn()}
 
 
 def get_analytics_data(
     periodos: list[str] | None = None,
 ) -> dict[str, Any]:
+    """Cierres y dimensiones de los periodos pedidos, para la pagina de Analytics."""
     return {
         "periodos": get_cierre_churn(periodos),
         "dimensiones": get_dimensiones(periodos),
@@ -142,24 +166,24 @@ def get_analytics_data(
 def get_zonas_config() -> dict[str, Any]:
     """Mapa de zonas para que el cliente agrupe los reportes sin ir al servidor.
 
-    Es la misma fuente (`Zonas.json`) que usan `get_sales_report_data` y
+    Es la misma fuente (el catalogo) que usan `get_sales_report_data` y
     `get_business_units_data`; se envia en los props para que cambiar de dia en
     la barra de corte sea una reagrupacion en memoria y no un round-trip.
     `siteOrder` viaja aparte para no duplicar el orden en TypeScript.
     """
     if not zonas_disponibles():
-        return {"zonas": [], "siteOrder": CUSTOM_SITE_ORDER}
-    zonas = [
+        return {"zonas": [], "siteOrder": orden_sites()}
+    zonas_catalogo = [
         {
             "name": str(z.get("name", "")).strip(),
             "site": str(z.get("Site", "Valencia")).strip(),
-            "type": str(z.get("Type", "GPON")).strip(),
+            "type": str(z.get("Type", "FTTH")).strip(),
             "coordinador": str(z.get("Coordinador") or "").strip(),
         }
-        for z in load_zonas().get("zonas", [])
+        for z in zonas()
         if str(z.get("name", "")).strip()
     ]
-    return {"zonas": zonas, "siteOrder": CUSTOM_SITE_ORDER}
+    return {"zonas": zonas_catalogo, "siteOrder": orden_sites()}
 
 
 def _dimension_df(db: DBConnector, target_period: str, dia: int | None):
@@ -239,17 +263,15 @@ def get_sales_report_data(
         target_period = periodo_reporte or available_periods[0]
         
         if not zonas_disponibles():
-            return {"status": "error", "message": "No se encontró el archivo Zonas.json en la raíz"}
-            
-        zonas_data = load_zonas()
-        
+            return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Subscriptions → Catálogos."}
+
         # Mapeamos zonas a su respectivo Site y Type (Tecnología)
         zone_info = {}
-        for z in zonas_data["zonas"]:
+        for z in zonas():
             name = z["name"].strip().lower()
             zone_info[name] = {
                 "site": z.get("Site", "Valencia").strip(),
-                "type": z.get("Type", "GPON").strip()  # "GPON" como fallback por defecto
+                "type": z.get("Type", "FTTH").strip()  # el mismo valor por defecto que el catalogo
             }
         
         df = _dimension_df(db, target_period, dia)
@@ -272,7 +294,9 @@ def get_sales_report_data(
             zona_name = parts[0].strip() if len(parts) > 0 else val_str
             sucursal_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
             
-            z_data = zone_info.get(zona_name.lower(), {"site": "Otros / Desconocido", "type": "GPON"})
+            # Zona que no esta en el catalogo: se agrupa aparte, con la
+            # tecnologia por defecto del catalogo.
+            z_data = zone_info.get(zona_name.lower(), {"site": "Otros / Desconocido", "type": "FTTH"})
             site = z_data["site"]
             tech_type = z_data["type"]
             
@@ -336,10 +360,17 @@ def get_sales_report_data(
             "dia": dia,
             "data": final_data_list
         }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"status": "error", "message": str(e)}
+    except Exception:
+        # `traceback.print_exc()` escribia a stdout, y dentro de la tarea de
+        # Celery stdout esta redirigido a `ConsolaJob`: la traza entera —rutas
+        # de fichero, nombres de funcion, fragmentos de SQL— acababa en
+        # `AnalysisJob.log` y de ahi al navegador. El detalle va al log del
+        # servidor y al cliente solo le llega que fallo.
+        logger.exception("Error al construir el reporte de suscripciones")
+        return {
+            "status": "error",
+            "message": "Error interno del servidor. Consulte el registro de la aplicación.",
+        }
     
 def get_business_units_data(
     periodo_reporte: str | None = None,
@@ -360,16 +391,14 @@ def get_business_units_data(
         target_period = periodo_reporte or available_periods[0]
         
         if not zonas_disponibles():
-            return {"status": "error", "message": "No se encontró el archivo Zonas.json en la raíz"}
-            
-        zonas_data = load_zonas()
-        
+            return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Subscriptions → Catálogos."}
+
         # 1. Indexar zonas por Coordinador, RF y FTTH
         zone_coord_map = {}
         rf_zones_set = set()
         ftth_zones_set = set()
 
-        for z in zonas_data.get("zonas", []):
+        for z in zonas():
             z_name = z.get("name", "").strip().lower()
             if not z_name:
                 continue
@@ -379,11 +408,11 @@ def get_business_units_data(
             if coordinador and str(coordinador).strip():
                 zone_coord_map[z_name] = str(coordinador).strip()
 
-            # Mapeo por Tecnología (Soporta FTTH y GPON)
+            # Mapeo por Tecnología. El catálogo solo admite estas dos.
             z_type = str(z.get("Type", "")).strip().upper()
             if z_type == "RF":
                 rf_zones_set.add(z_name)
-            elif z_type in ("FTTH", "GPON"): # 👈 1. MEJORA: Acepta FTTH y GPON
+            elif z_type == "FTTH":
                 ftth_zones_set.add(z_name)
 
         df = _dimension_df(db, target_period, dia)
@@ -480,7 +509,14 @@ def get_business_units_data(
             "ftth_summary": ftth_summary,
             "data": final_data_list
         }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"status": "error", "message": str(e)}
+    except Exception:
+        # `traceback.print_exc()` escribia a stdout, y dentro de la tarea de
+        # Celery stdout esta redirigido a `ConsolaJob`: la traza entera —rutas
+        # de fichero, nombres de funcion, fragmentos de SQL— acababa en
+        # `AnalysisJob.log` y de ahi al navegador. El detalle va al log del
+        # servidor y al cliente solo le llega que fallo.
+        logger.exception("Error al construir el reporte de suscripciones")
+        return {
+            "status": "error",
+            "message": "Error interno del servidor. Consulte el registro de la aplicación.",
+        }

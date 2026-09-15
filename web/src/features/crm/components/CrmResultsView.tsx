@@ -1,3 +1,5 @@
+/** Tabla de cierres de CRM, con detalle al pulsar una fila. */
+
 import { useState } from 'react';
 import { Activity, Table as TableIcon } from 'lucide-react';
 

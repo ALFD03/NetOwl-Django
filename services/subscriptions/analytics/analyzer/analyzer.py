@@ -1,3 +1,11 @@
+"""`MetricsAnalyzer`: el analisis mensual de churn de punta a punta.
+
+Orquesta a los otros modulos del paquete (carga, limpieza, reglas, metricas y
+dimensiones) y separa a proposito el **calculo** de la **persistencia**: asi el
+mismo analyzer, con una sola lectura de datos, sirve para el cierre del mes y
+para el corte acumulado de cada uno de sus dias (ver `day_metrics`).
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -12,12 +20,24 @@ from . import cleaner, dimensions, loader, metrics_calc, rules
 
 
 class MetricsAnalyzer:
+    """Calcula las metricas de churn de un periodo sobre el historico de logs.
+
+    Uso normal:
+
+        analyzer = MetricsAnalyzer(db, periodo)
+        analyzer.run()
+
+    `run()` carga, limpia, aplica las reglas y persiste. Para recorrer varios
+    cortes reutilizando la misma carga se usan `_compute(periodo)` -que no
+    escribe- y `persist(...)` por separado.
+    """
 
     def __init__(self, db: DBConnector, periodo: Periodo):
         self.db = db
         self.periodo = periodo
 
     def load_data(self):
+        """Lee de la base las cuatro tablas que necesita el calculo."""
         (
             self.df_subs_raw,
             self.df_logs,
@@ -26,12 +46,14 @@ class MetricsAnalyzer:
         ) = loader.load_data(self.db)
 
     def build_clean_data(self):
+        """Normaliza las suscripciones y une los dos formatos de log."""
         self.df_free_meta = cleaner.build_free_meta(self.df_free_raw)
         self.df_subs_full, self.df_clean_logs = cleaner.build_clean_data(
             self.df_subs_raw, self.df_logs, self.df_logs_v15
         )
 
     def _apply_log_rules(self):
+        """Anade los logs sinteticos y precalcula lo que no depende del periodo."""
         self.df_clean_logs, self._ordens_con_activity = rules.apply_log_rules(
             self.df_clean_logs, self.df_subs_full, self.df_free_meta
         )
@@ -59,6 +81,13 @@ class MetricsAnalyzer:
         self._inactivos_cache = None
 
     def _state_at(self, target_date, estado: str, strictly_before: bool):
+        """Suscripciones en `estado` a una fecha, por el camino mas barato disponible.
+
+        Con las caches preparadas usa el recorrido acumulativo; sin ellas cae en la
+        definicion de referencia, que da el mismo resultado mas despacio. Solo se
+        cachea el estado al **inicio** del periodo, que es identico en los 31 cortes
+        del mes; el del cierre cambia cada dia y guardarlo solo gastaria memoria.
+        """
         acumulado = getattr(self, "_estados", None)
         if acumulado is None:
             # Sin _prepare_caches (uso suelto del analyzer): la definicion de
@@ -96,18 +125,22 @@ class MetricsAnalyzer:
         return df_inactivos
 
     def get_active_at(self, target_date, strictly_before: bool = False):
+        """Suscripciones activas a una fecha."""
         return self._state_at(target_date, ACTIVE_STATE, strictly_before)
 
     def get_free_at(self, target_date, strictly_before: bool = False):
+        """Suscripciones en servicio gratuito a una fecha."""
         return self._state_at(target_date, FREE_STATE, strictly_before)
 
     def get_reactivations(self, act_fin):
+        """Reactivaciones del periodo que siguen activas al cierre."""
         return metrics_calc.get_reactivations(
             self.df_clean_logs, self.df_subs_full, self.periodo, act_fin,
             candidates=getattr(self, "_react_cand", None),
         )
 
     def get_corte_impagado(self):
+        """Cortes por factura impaga ocurridos en el periodo."""
         return metrics_calc.get_corte_impagado(
             self.df_clean_logs, self.periodo,
             candidates=getattr(self, "_corte_cand", None),
@@ -193,8 +226,16 @@ class MetricsAnalyzer:
             set(df_corte_impagado["orden"]) if not df_corte_impagado.empty else set()
         )
 
-        sobrevivientes = set_fin - set_nue
-        bajas_idx = set_ini - sobrevivientes - set_free_fin
+        # Baja bruta: de los activos al inicio, quien no esta activo al final,
+        # sin contar a los que se fueron al plan gratuito.
+        #
+        # Antes se restaba `set_fin - set_nue` en vez de `set_fin`, y descontar
+        # los nuevos de los supervivientes cuela como baja a la orden que cae en
+        # los dos conjuntos: una que empieza el dia 1 del mes es "activa al
+        # inicio" y "nueva" a la vez, asi que salia de los supervivientes y se
+        # contaba como baja aun estando activa al cierre. En marzo de 2026 le
+        # pasaba a SUB101027 y SUB101028.
+        bajas_idx = set_ini - set_fin - set_free_fin
         df_bajas = self.df_subs_full[self.df_subs_full["orden"].isin(bajas_idx)].copy()
         bajas_netas = (
             len(act_ini)
@@ -203,7 +244,19 @@ class MetricsAnalyzer:
         )
         df_react_not_in_ini = df_react_all[~df_react_all["orden"].isin(set_ini)] if not df_react_all.empty else pd.DataFrame()
         n_react_not_in_ini = len(df_react_not_in_ini)
-        bajas_brutas = bajas_netas + n_react_not_in_ini
+        # La baja bruta es el detalle contado, no un balance de la base.
+        #
+        # Antes era `bajas_netas + n_react_not_in_ini`, y esa aritmetica no
+        # reproduce `bajas_idx`: `n_react_not_in_ini` cuenta reactivaciones del
+        # log, no supervivientes que no estuvieran al inicio, y las dos cifras
+        # no son la misma. La diferencia era pequena pero real -en el cierre de
+        # marzo, 1874 en pantalla contra 1869 ordenes en
+        # `analyzer_bajas_detalladas`- y dejaba el reporte sin cuadrar con el
+        # detalle que exporta `bajas_detalle.py`.
+        #
+        # `bajas_idx` es un set, asi que su tamano es exactamente el numero de
+        # ordenes que se guardan en el detalle.
+        bajas_brutas = len(bajas_idx)
 
         summary = {
             "periodo": periodo_label,
@@ -265,6 +318,7 @@ class MetricsAnalyzer:
         }
 
     def run(self):
+        """El analisis completo de un periodo: carga, calcula y persiste."""
         self.load_data()
         self.build_clean_data()
         self._apply_log_rules()

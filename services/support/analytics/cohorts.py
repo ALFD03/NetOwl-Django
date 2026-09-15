@@ -97,6 +97,7 @@ class PeriodCohort:
 
     @property
     def empty(self) -> bool:
+        """Si la cohorte no tiene ningun ticket."""
         return self.df.empty
 
     def poblacion(self, clave: str) -> pd.DataFrame:

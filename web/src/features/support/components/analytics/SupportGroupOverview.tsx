@@ -1,3 +1,5 @@
+/** El resumen de un grupo de trabajo: volúmenes, tasas y tiempos. */
+
 import { AlertTriangle, CheckCircle2, Clock, Hourglass, Layers, Timer, Users } from 'lucide-react';
 
 import {

@@ -1,3 +1,5 @@
+/** La tabla cruda de una dimensión: la lectura contra la que comprobar un gráfico. */
+
 import { Table as TableIcon } from 'lucide-react';
 
 import { DataTable, NeonContainer } from '@/shared/ui';

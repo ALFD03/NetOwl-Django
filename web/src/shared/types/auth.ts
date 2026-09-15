@@ -1,3 +1,5 @@
+/** Tipos del usuario autenticado y del catálogo de permisos. */
+
 export type Permission =
   | 'can_view_subscriptions'
   | 'can_view_crm'
@@ -21,6 +23,7 @@ export type Permission =
   | 'can_run_lifetime'
   | 'can_manage_eta'
   | 'can_manage_users'
+  | 'can_manage_catalogos'
   | 'can_import_subs'
   | 'can_import_crm'
   | 'can_import_support'
@@ -52,6 +55,7 @@ export interface UserProfile {
   can_run_lifetime: boolean;
   can_manage_eta: boolean;
   can_manage_users: boolean;
+  can_manage_catalogos: boolean;
   can_import_subs: boolean;
   can_import_crm: boolean;
   can_import_support: boolean;

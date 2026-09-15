@@ -1,3 +1,5 @@
+/** Filtros de Analytics de CRM: periodo, dimensión y métrica. */
+
 import { Calendar } from 'lucide-react';
 
 import { PeriodSelector, ToggleGroup } from '@/shared/ui';

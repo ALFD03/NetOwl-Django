@@ -11,6 +11,7 @@ en la app de infraestructura que todas las demas ya usan (`decorators.py`,
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 
@@ -18,6 +19,8 @@ from django.conf import settings
 from django.http import JsonResponse
 
 from core.utils import validate_csv_structure
+
+logger = logging.getLogger(__name__)
 
 
 def cleanup_tempfile(tmp_path: str | None) -> None:
@@ -40,7 +43,9 @@ def handle_csv_upload(request, required_headers=None) -> tuple[str | None, JsonR
         return None, JsonResponse({"status": "error", "message": "Archivo no enviado"}, status=400)
 
     csv_file = request.FILES["csv_file"]
-    if not csv_file.name.endswith(".csv"):
+    # `lower()`: la comprobacion era sensible a mayusculas y rechazaba un
+    # `Reporte.CSV` perfectamente valido.
+    if not csv_file.name.lower().endswith(".csv"):
         return None, JsonResponse(
             {"status": "error", "message": "Solo se permiten archivos con extensión .csv"},
             status=400,
@@ -64,11 +69,17 @@ def handle_csv_upload(request, required_headers=None) -> tuple[str | None, JsonR
             if not is_valid:
                 cleanup_tempfile(tmp_path)
                 return None, JsonResponse({"status": "error", "message": err_msg}, status=400)
-    except Exception as e:
+    except Exception:
         if tmp_path:
             cleanup_tempfile(tmp_path)
+        # El mensaje original puede llevar la ruta del temporal o un error del
+        # sistema de ficheros: va al log, no al cliente.
+        logger.exception("Error al recibir el CSV subido")
         return None, JsonResponse(
-            {"status": "error", "message": f"Error al procesar el archivo: {str(e)}"},
+            {
+                "status": "error",
+                "message": "No se pudo procesar el archivo. Consulte el registro de la aplicación.",
+            },
             status=500,
         )
 

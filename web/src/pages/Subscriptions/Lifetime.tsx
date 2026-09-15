@@ -1,3 +1,5 @@
+/** Página Inertia `Subscriptions/Lifetime` (`/subscriptions/lifetime/`): curvas de supervivencia. */
+
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { LifetimeView } from '@/features/subscriptions/components/lifetime/LifetimeView';

@@ -1,3 +1,5 @@
+/** Portada de soporte: el promedio de todos los periodos evaluados. */
+
 import { READONLY_TABLE, READONLY_TABLE_BODY, READONLY_TABLE_HEAD_STICKY } from '@/shared/ui/data/tableClasses';
 import { Fragment } from 'react';
 import {

@@ -1,3 +1,5 @@
+/** Barra del reporte ETA: periodo y bloqueo del mes. */
+
 import { Link } from '@inertiajs/react';
 import { Calendar, Loader2, Lock, Settings, Unlock } from 'lucide-react';
 

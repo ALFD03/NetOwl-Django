@@ -1,3 +1,5 @@
+/** Envoltorio de la gráfica de líneas de Chart.js. */
+
 import { useMemo } from 'react';
 import type { ChartData, ChartOptions, Plugin } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';

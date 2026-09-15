@@ -1,3 +1,10 @@
+/**
+ * Distribuciones y rankings de una dimensión, y su paso a datos de gráfico.
+ *
+ * Tres lecturas distintas —simple, ponderada y ranking— más el agrupado de los
+ * valores menores en «Otros», que es lo que evita gráficos de cien porciones.
+ */
+
 import { CHART_PALETTE, SURFACE } from '@/shared/constants/theme';
 import type { ChartData } from 'chart.js';
 import { toNumber, type NumericValue } from './formatters';

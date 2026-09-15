@@ -1,3 +1,5 @@
+/** Página Inertia `Support/Results` (`/support/results/`). */
+
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { SupportResultsView } from '@/features/support';

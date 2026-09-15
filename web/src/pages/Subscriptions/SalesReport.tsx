@@ -1,3 +1,10 @@
+/**
+ * Página Inertia `Subscriptions/SalesReport` (`/subscriptions/sales-report/`).
+ *
+ * Agrupa por Site → Tecnología → Nodos. El día seleccionado se reagrupa en
+ * cliente con `buildSalesSites`, sobre los props que ya llegaron.
+ */
+
 import { useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
 
@@ -82,7 +89,11 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
         </>
       }
     >
-      <SalesReportView sites={filteredData} period={currentPeriod} />
+      <SalesReportView
+        sites={filteredData}
+        period={currentPeriod}
+        diaSeleccionado={Boolean(dayData)}
+      />
     </AppLayout>
   );
 }

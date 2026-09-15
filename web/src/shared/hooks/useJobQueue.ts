@@ -1,3 +1,5 @@
+/** Sigue la cola de análisis desde cualquier página. */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { jobsApi, type AnalysisJob } from '@/shared/lib/api/jobs';

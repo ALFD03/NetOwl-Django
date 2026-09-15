@@ -1,3 +1,5 @@
+/** Barril del cliente de API: un módulo por dominio sobre `apiClient`. */
+
 export * from './client';
 export * from './types';
 export * from './crm';

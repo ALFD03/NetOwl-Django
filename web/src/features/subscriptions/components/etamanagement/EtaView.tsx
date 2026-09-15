@@ -1,32 +1,40 @@
+/** Pantalla de parametrización ETA: pendientes y excepciones por suscripción. */
+
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { Modal } from '@/shared/ui';
 import { NeonContainer } from '@/shared/ui';
 import {
-  Plus, Settings2, ShieldAlert, CheckCircle2, Wifi, Network,
-  Edit3, Trash2, EyeOff, Layers, Search
+  Plus, Settings2, ShieldAlert, CheckCircle2, Network,
+  Edit3, Trash2, EyeOff, Search
 } from 'lucide-react';
 import { useEtaManagement } from '@/features/subscriptions/hooks/useEtaManagement';
+import { inputClass } from '@/features/subscriptions/lib/formClasses';
 import type {
   SubscriptionEtaManagementProps,
 } from '@/features/subscriptions/types';
-import { PlanForm, SubscriptionForm } from './Forms';
+import { SubscriptionForm } from './Forms';
 
 type Props = SubscriptionEtaManagementProps;
 
-export const inputClass = 'w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/60';
-export const labelClass = 'mb-1.5 block text-[10px] font-black uppercase tracking-widest text-slate-500';
+/**
+ * Parametrización del reporte ETA.
+ *
+ * La pestaña de "planes masivos" ya no está: un plan se clasifica en el
+ * catálogo (`/subscriptions/config/`) y no había motivo para que ETA guardara
+ * una segunda clasificación que pisaba a aquella. Lo que queda aquí son las
+ * excepciones por orden, que sí son de cada contrato.
+ */
 export function EtaManagementView({
   individualConfigs = [],
-  planesConfigs = [],
   discoveredPlans = [],
   discoveredSubs = [],
   allKnownPlans = [],
 }: Props) {
   const {
     search, setSearch, isCustomProduct, setIsCustomProduct, isSaving, activeView, setActiveTab,
-    editingSub, setEditingSub, editingPlan, setEditingPlan, deletingItem, setDeletingItem, filteredSubs,
-    handleOpenEditSub, handleUpdateSub, handleUpdatePlan, handleQuickIgnoreSub, handleConfirmDelete, handleSelectPredefinedPlan,
+    editingSub, setEditingSub, deletingItem, setDeletingItem, filteredSubs,
+    handleOpenEditSub, handleUpdateSub, handleQuickIgnoreSub, handleConfirmDelete, handleSelectPredefinedPlan,
   } = useEtaManagement({ individualConfigs, allKnownPlans, discoveredPlans, discoveredSubs });
 
   const createSub = () => {
@@ -45,19 +53,6 @@ export function EtaManagementView({
     });
   };
 
-  const createPlan = () => {
-    setEditingPlan({
-      plan_name: '',
-      name: '',
-      tecnologia: 'FTTH',
-      tipo_persona: 'pyme',
-      datas_mbps: 100,
-      tiene_tv: false,
-      es_transporte: false,
-      es_dedicado: false,
-    });
-  };
-
   return (
     <AppLayout
       title="Gestión Maestro de Planes ETA"
@@ -70,7 +65,6 @@ export function EtaManagementView({
                 ['discovered_plans', 'Planes por Clasificar', discoveredPlans.length],
                 ['discovered_subs', 'Corporativos Pendientes', discoveredSubs.length],
                 ['individual', 'Suscripciones Guardadas', individualConfigs.length],
-                ['global', 'Planes Masivos', planesConfigs.length],
               ].map(([view, label, count]) => (
                 <button
                   key={String(view)}
@@ -83,22 +77,24 @@ export function EtaManagementView({
             </div>
 
             <button
-              onClick={activeView === 'global' ? createPlan : createSub}
+              onClick={createSub}
               className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-lg"
             >
-              <Plus className="w-4 h-4" /> {activeView === 'global' ? 'Nuevo Plan' : 'Nuevo Registro'}
+              <Plus className="w-4 h-4" /> Nuevo Registro
             </button>
           </div>
         </>
       }
     >
       {activeView === 'discovered_plans' && (
-        <NeonContainer title="Planes detectados" subtitle="Productos encontrados en los datos que todavía no tienen clasificación" icon={<ShieldAlert className="w-5 h-5" />} theme="yellow">
+        <NeonContainer title="Planes detectados" subtitle="Productos encontrados en los datos que todavía no están en el catálogo" icon={<ShieldAlert className="w-5 h-5" />} theme="yellow">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {discoveredPlans.map((plan) => (
               <div key={plan} className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4 flex items-center justify-between gap-3">
-                <div><div className="font-bold text-white">{plan}</div><div className="text-[10px] uppercase text-slate-500">Pendiente de clasificación</div></div>
-                <button onClick={() => { setEditingPlan({ plan_name: plan, name: plan, tecnologia: 'FTTH', tipo_persona: 'pyme', datas_mbps: 0 }); }} className="rounded-xl border border-amber-500/30 p-2 text-amber-400 hover:bg-amber-500/10" title="Clasificar"><Settings2 className="w-4 h-4" /></button>
+                <div><div className="font-bold text-white">{plan}</div><div className="text-[10px] uppercase text-slate-500">Sin registrar en el catálogo</div></div>
+                {/* Enlace y no formulario: el plan se da de alta en el catálogo,
+                    que es de donde ETA lee su clasificación. */}
+                <a href={`/subscriptions/config/?nuevo_plan=${encodeURIComponent(plan)}`} className="rounded-xl border border-amber-500/30 p-2 text-amber-400 hover:bg-amber-500/10" title="Crear en el catálogo"><Settings2 className="w-4 h-4" /></a>
               </div>
             ))}
             {discoveredPlans.length === 0 && <div className="col-span-full py-10 text-center text-slate-500">No hay planes pendientes.</div>}
@@ -152,25 +148,6 @@ export function EtaManagementView({
         </NeonContainer>
       )}
 
-      {activeView === 'global' && (
-        <NeonContainer title="Planes masivos" subtitle="Configuración reutilizable por producto" icon={<Layers className="w-5 h-5" />} theme="purple">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead><tr className="border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-500"><th className="p-3">Plan</th><th>Tecnología</th><th>Persona</th><th>Mbps</th><th>TV</th><th className="text-right p-3">Acciones</th></tr></thead>
-              <tbody>
-                {planesConfigs.map((plan) => (
-                  <tr key={plan.plan_name} className="border-b border-slate-900 hover:bg-slate-800/30">
-                    <td className="p-3 font-bold text-white">{plan.name || plan.plan_name}</td><td className="p-3 text-slate-300">{plan.tecnologia || '—'}</td><td className="p-3 text-slate-300">{plan.tipo_persona || '—'}</td><td className="p-3 text-slate-300">{plan.datas_mbps ?? 0}</td><td className="p-3">{plan.tiene_tv ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Wifi className="w-4 h-4 text-slate-600" />}</td>
-                    <td className="p-3 text-right space-x-2"><button onClick={() => setEditingPlan({ ...plan })} className="rounded-lg border border-sky-500/30 p-2 text-sky-400"><Edit3 className="w-4 h-4" /></button><button onClick={() => setDeletingItem({ type: 'plan', id: plan.plan_name })} className="rounded-lg border border-rose-500/30 p-2 text-rose-400"><Trash2 className="w-4 h-4" /></button></td>
-                  </tr>
-                ))}
-                {planesConfigs.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-500">No hay planes configurados.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </NeonContainer>
-      )}
-
       <Modal isOpen={Boolean(editingSub)} onClose={() => setEditingSub(null)} title="Configurar suscripción ETA" subtitle="Datos de clasificación y reporte" icon={<Settings2 className="w-5 h-5 text-amber-400" />} theme="yellow">
         {editingSub && (
           <SubscriptionForm
@@ -183,18 +160,6 @@ export function EtaManagementView({
             onChange={(patch) => setEditingSub({ ...editingSub, ...patch })}
             onSubmit={handleUpdateSub}
             onClose={() => setEditingSub(null)}
-          />
-        )}
-      </Modal>
-
-      <Modal isOpen={Boolean(editingPlan)} onClose={() => setEditingPlan(null)} title="Configurar plan ETA" subtitle="Clasificación reutilizable" icon={<Settings2 className="w-5 h-5 text-purple-400" />} theme="purple">
-        {editingPlan && (
-          <PlanForm
-            value={editingPlan}
-            saving={isSaving}
-            onChange={(patch) => setEditingPlan({ ...editingPlan, ...patch })}
-            onSubmit={handleUpdatePlan}
-            onClose={() => setEditingPlan(null)}
           />
         )}
       </Modal>

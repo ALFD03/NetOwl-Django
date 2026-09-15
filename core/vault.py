@@ -49,11 +49,22 @@ class VaultConfigError(RuntimeError):
 # --- Modelos de configuración ---
 
 class DjangoModel(BaseModel):
+    """Los ajustes de Django que viven en Vault.
+
+    `ALLOWED_HOSTS` va sin esquema y `CSRF_TRUSTED_ORIGINS` con el
+    (`https://ejemplo.com`); ambos admiten lista o cadena separada por comas.
+    """
+
     model_config = ConfigDict(populate_by_name=True)
 
     SECRET_KEY: str = Field(alias="DJANGO_SECRET_KEY")
     DEBUG: bool = Field(alias="DJANGO_DEBUG", default=False)
-    SECURE_SSL: bool = Field(alias="DJANGO_SECURE_SSL", default=False)
+    # Sin `default` a proposito, al contrario que DEBUG: de esta clave cuelgan
+    # la redireccion a HTTPS, HSTS y el flag Secure de las cookies de sesion y
+    # CSRF (ver netowl_web/settings.py). Con un default de False, olvidarla en
+    # el secreto de Vault degradaba la seguridad de produccion en silencio;
+    # ahora la aplicacion no arranca hasta que este declarada.
+    SECURE_SSL: bool = Field(alias="DJANGO_SECURE_SSL")
     ALLOWED_HOSTS: list[str]
     # Orígenes de confianza para CSRF. Ojo: aquí cada valor lleva esquema
     # (https://ejemplo.com), a diferencia de ALLOWED_HOSTS.
@@ -71,12 +82,22 @@ class DjangoModel(BaseModel):
 class DBConfigModel(BaseModel):
     # El esquema NO está aquí: vive en el .env (DB_SCHEMA), porque no es
     # un secreto y cambia según el entorno al que apunte el despliegue.
+    """Credenciales de Postgres.
+
+    El esquema no esta aqui: vive en el `.env` (`DB_SCHEMA`), porque no es un
+    secreto y cambia segun el entorno al que apunte el despliegue.
+    """
+
     DB_NAME: str
     DB_USER: str
     DB_PASSWORD: str
     DB_HOST: str
     DB_PORT: int = 5432
-    DB_SSLMODE: str = "prefer"
+    # `require` y no `prefer`: `prefer` intenta TLS y acepta texto plano sin
+    # error si el servidor lo rechaza, asi que una regresion en la
+    # configuracion de Postgres pondria las credenciales y todos los datos de
+    # clientes en claro sin que nadie se entere.
+    DB_SSLMODE: str = "require"
 
 
 class VaultDataStructure(BaseModel):
@@ -123,6 +144,12 @@ class VaultSettings:
         self.db = validated.DBCONFIG
 
     def _fetch_from_vault(self) -> dict:
+        """Lee el secreto, reintentando el ciclo completo si Vault lo rechaza.
+
+        Comprueba primero que esten las cinco variables de arranque. El reintento no
+        es decorativo: en un Vault en HA el token que emite un nodo puede tardar en
+        propagarse y la lectura inmediata lo rechaza con "invalid token".
+        """
         missing = [
             name
             for name, value in (
@@ -154,6 +181,12 @@ class VaultSettings:
                 time.sleep(self.ESPERA_ENTRE_INTENTOS * intento)
 
     def _login_y_leer(self) -> dict:
+        """Un intento: autenticar por AppRole y leer el secreto KV v2.
+
+        Cada fallo se envuelve en `VaultConfigError` diciendo en cual de los dos
+        pasos ocurrio, que es lo que distingue "credenciales malas" de "la ruta del
+        secreto no existe".
+        """
         try:
             client = hvac.Client(url=self._vault_url)
             client.auth.approle.login(
@@ -185,6 +218,11 @@ _config: VaultSettings | None = None
 
 
 def get_config() -> VaultSettings:
+    """La configuracion de Vault, leida una sola vez por proceso.
+
+    La llaman `netowl_web/settings.py` y `core/database.py` en el momento de
+    importarse, asi que sin acceso a Vault la aplicacion no arranca.
+    """
     global _config
     if _config is None:
         _config = VaultSettings()

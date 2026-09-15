@@ -1,3 +1,10 @@
+/**
+ * Agrega los nodos del Sales Report por tecnología y por site.
+ *
+ * Los totales se recalculan sobre los valores absolutos, no promediando
+ * porcentajes.
+ */
+
 import { useMemo } from 'react';
 
 import { aggregateNodes, type CommercialNode } from '../lib/commercial';
@@ -12,8 +19,10 @@ export interface SalesReportTechnology {
     activos_final: number;
     nuevos: number;
     reactivaciones: number;
+    bajas: number;
     churn_rate: number;
     crecimiento: number;
+
   };
 }
 
@@ -28,8 +37,6 @@ interface UseSalesReportDataParams {
   selectedBranch: string;
   selectedTech: 'ALL' | 'FTTH' | 'RF';
 }
-
-const FTTH_ALIASES = ['FTTH', 'GPON'];
 
 export function useSalesReportData({
   sites,
@@ -56,7 +63,7 @@ export function useSalesReportData({
 
     const technologies = site.technologies?.flatMap((tech) => {
       const normalizedTechnology = String(tech.technology || '').toUpperCase();
-      if (selectedTech === 'FTTH' && !FTTH_ALIASES.includes(normalizedTechnology)) return [];
+      if (selectedTech === 'FTTH' && normalizedTechnology !== 'FTTH') return [];
       if (selectedTech === 'RF' && normalizedTechnology !== 'RF') return [];
 
       const nodes = tech.nodes?.filter((node) => {
@@ -75,6 +82,7 @@ export function useSalesReportData({
           activos_inicio: totals.activos_inicio,
           activos_final: totals.activos_final,
           nuevos: totals.nuevos,
+          bajas: totals.bajas,
           reactivaciones: totals.reactivaciones,
           churn_rate: totals.churn_rate,
           crecimiento: totals.crecimiento,

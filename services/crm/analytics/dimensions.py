@@ -1,3 +1,5 @@
+"""El mismo bloque de metricas, recortado por campana, sucursal y vendedor."""
+
 from __future__ import annotations
 
 import json
@@ -30,6 +32,14 @@ def save_crm_dimensiones_periodo(
     ahora: pd.Timestamp | None = None,
     df_en_riesgo: pd.DataFrame | None = None,
 ):
+    """Calcula y guarda las metricas de cada valor dimensional del periodo.
+
+    Cada rebanada se calcula con la **misma** funcion que el total, asi que una
+    sucursal se mide exactamente igual que la empresa entera. Los movimientos se
+    recortan por la oportunidad a la que pertenecen, y la poblacion en riesgo
+    tambien: el riesgo de devolucion de una sucursal se mide contra lo que esa
+    sucursal tenia vivo, no contra la base entera.
+    """
     rows_to_insert = []
 
     for dim in DIMENSIONES:

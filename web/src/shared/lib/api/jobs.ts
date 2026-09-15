@@ -1,3 +1,11 @@
+/**
+ * Seguimiento de los análisis que ejecuta el worker de Celery.
+ *
+ * La petición que lanza un análisis vuelve al instante: el log y el progreso solo
+ * existen en la fila del job, y esto es lo que convierte esa fila en una promesa
+ * que las páginas pueden esperar.
+ */
+
 import { apiClient } from './client';
 import { JobFailedError } from '../http/errors';
 

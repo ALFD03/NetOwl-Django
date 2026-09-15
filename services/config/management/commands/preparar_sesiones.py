@@ -22,9 +22,12 @@ from services.config.models import SesionEntorno
 
 
 class Command(BaseCommand):
+    """Crea la tabla de sesiones del esquema actual si todavia no existe."""
+
     help = "Crea la tabla de sesiones del esquema del entorno si no existe."
 
     def handle(self, *args, **options):
+        """Crea el esquema y la tabla, con la misma forma que `django.contrib.sessions`."""
         esquema = DB_SCHEMA or "public"
         # `db_table` ya viene cualificado y entrecomillado por el modelo, asi
         # que sirve tal cual dentro del DDL.

@@ -88,10 +88,12 @@ FREE_TABLE_COLUMNS = [
 
 
 def _is_free_tariff(value: object) -> bool:
+    """Si el nombre de la tarifa la declara gratuita."""
     return FREE_TARIFF_TOKEN in str(value or "").lower()
 
 
 def _strip_html(series: pd.Series) -> pd.Series:
+    """Quita las etiquetas HTML del cuerpo de un mensaje del chatter."""
     return (
         series.str.replace(r"<[^>]+>", " ", regex=True)
         .str.replace(r"\s+", " ", regex=True)
@@ -120,6 +122,7 @@ def parse_gratis_csv(csv_path: str):
 
 
 def _consolidate_subs(raw: pd.DataFrame) -> pd.DataFrame:
+    """Una fila por suscripcion, priorizando la linea de tarifa gratuita."""
     cols = {k: v for k, v in SUBS_COLUMNS.items() if k in raw.columns}
     df = raw[["orden"] + list(cols)].rename(columns=cols)
     df = df.replace("", np.nan)
@@ -134,6 +137,7 @@ def _consolidate_subs(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def _extract_logs(raw: pd.DataFrame) -> pd.DataFrame:
+    """Los logs de cambio del export, con la fecha ya convertida."""
     cols = {k: v for k, v in LOG_COLUMNS.items() if k in raw.columns}
     if not cols:
         return pd.DataFrame(columns=["orden", "fecha_log", "log", "estado_log"])
@@ -144,6 +148,7 @@ def _extract_logs(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def _extract_msgs(raw: pd.DataFrame) -> pd.DataFrame:
+    """Los mensajes del chatter, con el cuerpo en texto plano."""
     cols = {k: v for k, v in MSG_COLUMNS.items() if k in raw.columns}
     if not cols:
         return pd.DataFrame(columns=["orden", "fecha_msg", "asunto", "cuerpo"])
@@ -195,6 +200,11 @@ def _eventos_estado(df_logs: pd.DataFrame, df_msgs: pd.DataFrame) -> pd.DataFram
 
 
 def _primer_intento_cero(df_msgs: pd.DataFrame) -> pd.Series:
+    """Primera factura por importe cero de cada suscripcion.
+
+    Es una cota superior: en esa fecha la suscripcion ya era gratuita, aunque
+    pudiera serlo desde antes.
+    """
     if df_msgs.empty:
         return pd.Series(dtype="datetime64[ns]")
     cero = df_msgs[df_msgs["texto"].str.contains(ZERO_INVOICE_RE, na=False)]

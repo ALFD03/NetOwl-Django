@@ -1,3 +1,10 @@
+/**
+ * Los juegos de clases de cada color de métrica, derivados de los tokens.
+ *
+ * Están escritos uno a uno y no interpolados porque Tailwind no ve los nombres de
+ * clase construidos en tiempo de ejecución.
+ */
+
 import { METRIC_COLOR } from '@/shared/constants/theme';
 import { withAlpha } from '@/shared/lib/color';
 import type { MetricColor } from './types';

@@ -1,3 +1,16 @@
+"""El estado de una suscripcion a una fecha, y los eventos del periodo.
+
+Dos formas de responder la misma pregunta:
+
+* `get_state_at` es la **definicion de referencia**: filtra el historico entero
+  y reagrupa por orden. Correcta y facil de leer, pero cara.
+* `EstadoAcumulado` da el mismo resultado recorriendo el log **una sola vez**,
+  que es lo que hace viable calcular los 31 cortes de un mes.
+
+Aqui viven tambien las dos definiciones de evento del periodo: que cuenta como
+reactivacion y que como corte por impago.
+"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -39,10 +52,12 @@ def get_state_at(df_clean_logs, target_date, estado, strictly_before=False):
 
 
 def get_active_at(df_clean_logs, target_date, strictly_before=False):
+    """Suscripciones activas a una fecha (definicion de referencia)."""
     return get_state_at(df_clean_logs, target_date, ACTIVE_STATE, strictly_before)
 
 
 def get_free_at(df_clean_logs, target_date, strictly_before=False):
+    """Suscripciones en servicio gratuito a una fecha (definicion de referencia)."""
     return get_state_at(df_clean_logs, target_date, FREE_STATE, strictly_before)
 
 
@@ -85,6 +100,7 @@ class EstadoAcumulado:
         self._reiniciar()
 
     def _reiniciar(self) -> None:
+        """Vuelve al principio del recorrido, olvidando lo acumulado."""
         self._cursor = 0
         self._ultima_fila = np.full(self._n_ordenes, -1, dtype=np.int64)
 
@@ -107,6 +123,7 @@ class EstadoAcumulado:
         self._cursor = corte
 
     def _filas_vigentes(self, target_date, strictly_before: bool) -> np.ndarray:
+        """Indices del ultimo log de cada suscripcion hasta la fecha indicada."""
         # side='left' cuenta las filas estrictamente anteriores; 'right', las
         # que llegan hasta la fecha incluida.
         corte = int(np.searchsorted(
@@ -156,6 +173,13 @@ def corte_candidates(df_clean_logs):
 
 
 def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin, candidates=None):
+    """Reactivaciones del periodo, una por suscripcion.
+
+    Cuenta como reactivacion volver a activo desde un estado inactivo, o un log
+    cuyo texto la nombra. Se descartan las altas del propio periodo -un alta no es
+    una reactivacion- y las que no siguen activas al cierre. Cuando hay varias, se
+    queda con la de origen mas grave: baja, luego suspension, luego pausa.
+    """
     df_react = react_candidates(df_clean_logs) if candidates is None else candidates
     df_react = df_react[
         (df_react["f_dt"] >= periodo.fecha_inicio)
@@ -186,6 +210,7 @@ def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin, candidates=
 
 
 def get_corte_impagado(df_clean_logs, periodo, candidates=None):
+    """Cortes por factura impaga ocurridos dentro del periodo."""
     df_corte = corte_candidates(df_clean_logs) if candidates is None else candidates
     df_corte = df_corte[
         (df_corte["f_dt"] >= periodo.fecha_inicio)

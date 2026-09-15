@@ -1,3 +1,19 @@
+"""Vocabulario del modulo de soporte: columnas, poblaciones, medidas y tasas.
+
+Cuatro decisiones de negocio viven aqui y merecen leerse antes de tocar nada:
+
+* **las etapas terminales**, que definen que es un ticket cerrado;
+* **las poblaciones**: no hay universo seleccionable, cada metrica trae fijada
+  la suya -los tiempos de cierre se miden sobre lo cerrado en el mes y el de
+  asignacion sobre lo creado-;
+* **el umbral de un minuto** (`MIN_DURACION_HORAS`), que separa un tiempo de
+  servicio real del rastro de una accion masiva de Odoo;
+* **las dimensiones**, todas colgando del grupo de trabajo.
+
+El mapa de columnas admite alias porque Odoo no nombra siempre igual la misma
+cabecera, y cada fallo de ese tipo era silencioso.
+"""
+
 # backend/support/config.py
 from __future__ import annotations
 

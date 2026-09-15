@@ -49,6 +49,7 @@ FLUSH_CADA_N_DIAS = 5
 
 
 def _mes_bounds(year_month: str) -> tuple[int, int, int]:
+    """Ano, mes y ultimo dia de un `YYYY-MM`."""
     anio, mes = int(year_month[:4]), int(year_month[5:7])
     return anio, mes, calendar.monthrange(anio, mes)[1]
 

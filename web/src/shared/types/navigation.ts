@@ -1,3 +1,5 @@
+/** Tipos del registro de navegación. */
+
 import type { LucideIcon } from 'lucide-react';
 import type { Permission } from './auth';
 import type { ModuleKey } from '@/shared/constants/navigation';

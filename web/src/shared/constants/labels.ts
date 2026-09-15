@@ -1,3 +1,5 @@
+/** Etiquetas legibles de dimensiones y etapas, para no repetirlas en cada vista. */
+
 import { Building2, LayoutGrid, MapPin, Package, Star, type LucideIcon } from 'lucide-react';
 
 export const DIMENSION_LABELS = {

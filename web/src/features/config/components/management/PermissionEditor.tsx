@@ -1,3 +1,5 @@
+/** El editor de la matriz de permisos de una cuenta o de un grupo. */
+
 import { PERMISSION_GROUPS } from '@/shared/constants/permissions';
 
 interface Props {

@@ -2,6 +2,10 @@
 
 React + TypeScript + Inertia, served by Django. Tailwind for styling, Chart.js for charts.
 
+> El inventario de esta capa —paginas, features, kit compartido y como llega el
+> dato— esta en `docs/09-frontend.md`. Este documento sigue siendo el normativo:
+> las reglas de capas, el catalogo de UI y los tokens se deciden aqui.
+
 ## Layout
 
 ```
@@ -117,6 +121,25 @@ hand-rolling `isLoading` / `message` / `consoleLog` state triples.
 The import pages compose it through `CsvUploadCard` and `AnalysisRunnerCard`
 (`features/imports/components/`), so a new import screen supplies only the endpoint
 and the copy.
+
+## The reference catalogues
+
+`pages/Subscriptions/Catalogos.tsx` edits the plan / zone / site / state /
+coordinator tables that used to be `data/Planes.json` and `data/Zonas.json`. It
+sits behind `can_manage_catalogos` and is the only place a plan is classified —
+the ETA screen no longer keeps a second, overriding copy of that classification,
+only its per-subscription exceptions.
+
+Its first tab is not a catalogue but what is *missing*: products already
+imported that no plan recognises. That list is what blocks an import or an
+analysis, and each row offers the two answers the server cannot tell apart —
+register it as a plan, or mark it as a product that never will be one.
+
+The same pair of answers appears in `CatalogoBloqueoModal`
+(`features/imports/`), which opens when an upload comes back 409. Nothing was
+written when it does: the check runs before the truncate, so the previous data
+is intact and the file can be re-uploaded once the decisions are made.
+
 
 ## Careful: the two reports disagree on completion
 

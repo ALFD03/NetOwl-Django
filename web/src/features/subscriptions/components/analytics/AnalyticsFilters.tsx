@@ -1,3 +1,5 @@
+/** Filtros de Analytics: periodo y dimensión. Ambos se resuelven en cliente. */
+
 import { Calendar } from 'lucide-react';
 import { DIMENSION_LABELS } from '@/shared/constants/labels';
 import { PeriodSelector } from '@/shared/ui';

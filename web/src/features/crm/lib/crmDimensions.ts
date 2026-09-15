@@ -1,3 +1,5 @@
+/** Selecciona las filas de una dimensión dentro de la respuesta del periodo. */
+
 import type { CrmDimensionRow, CrmDimensionValue } from '../types';
 
 /** Hoists `metricas` to the top level so charts and tables read one flat row. */

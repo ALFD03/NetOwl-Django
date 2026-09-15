@@ -1,3 +1,10 @@
+/**
+ * Aviso flotante de lo que el worker está calculando y lo que espera turno.
+ *
+ * Vive en `shared/layout` y no en `features/imports` porque lo monta `AppLayout`,
+ * y `shared` no puede importar de un feature. No pinta nada si la cola está vacía.
+ */
+
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Loader2, X } from 'lucide-react';

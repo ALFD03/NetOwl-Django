@@ -1,3 +1,5 @@
+"""Rutas del modulo de CRM, bajo `/crm/`."""
+
 from django.urls import path
 
 from services.crm import views

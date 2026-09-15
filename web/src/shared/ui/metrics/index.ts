@@ -1,3 +1,5 @@
+/** Lecturas de KPI: tarjetas, baldosas, sparklines y líneas de tiempo. */
+
 export { MetricCard } from './MetricCard';
 export { CompactMetric } from './CompactMetric';
 export { SparklineCard } from './SparklineCard';

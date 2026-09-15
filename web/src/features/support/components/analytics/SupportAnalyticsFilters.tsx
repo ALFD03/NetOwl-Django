@@ -1,3 +1,5 @@
+/** Filtros de Analytics de soporte: periodo, grupo de trabajo y dimensión. */
+
 import { Calendar } from 'lucide-react';
 
 import { PeriodSelector, ToggleGroup } from '@/shared/ui';

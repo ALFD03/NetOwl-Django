@@ -1,9 +1,17 @@
+/**
+ * Reagrupa en cliente el corte de un día para los dos reportes comerciales.
+ *
+ * Es lo que permite que mover la barra de días no dispare ninguna petición: el
+ * mes entero ya viajó en los props, y aquí se vuelve a agrupar por site,
+ * tecnología y coordinador usando el catálogo de zonas.
+ */
+
 import type { DimensionVal } from '@/shared/types/domain';
 
 import type { SalesReportSite, SalesReportNode } from '../hooks/useSalesReportData';
 import type { BusinessUnitGroup, BusinessUnitNode } from '../hooks/useBusinessUnitsData';
 
-/** Una zona de `Zonas.json`, tal y como la envia `get_zonas_config()`. */
+/** Una zona del catalogo, tal y como la envia `get_zonas_config()`. */
 export interface ZonaConfig {
   name: string;
   site: string;
@@ -18,7 +26,7 @@ export interface ZonasConfig {
 }
 
 const SITE_DESCONOCIDO = 'Otros / Desconocido';
-const TIPO_POR_DEFECTO = 'GPON';
+const TIPO_POR_DEFECTO = 'FTTH';
 const GRUPO_RF = 'NODOS RADIOFRECUENCIA (RF)';
 
 /**

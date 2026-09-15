@@ -1,3 +1,5 @@
+"""Rutas del modulo de soporte, bajo `/support/`."""
+
 # frontend/support/urls.py
 from django.urls import path
 

@@ -1,3 +1,5 @@
+/** Barril de los gráficos: los tres envoltorios, sus opciones y sus plugins. */
+
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import type { Plugin } from 'chart.js';
 import { centerTextPlugin } from './plugins';

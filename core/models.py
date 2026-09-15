@@ -1,3 +1,9 @@
+"""El `Periodo`: el mes (o el corte dentro de el) del que habla un analisis.
+
+Es la unica pieza de dominio compartida por los tres modulos, por eso vive en
+`core` y no en ninguno de ellos.
+"""
+
 from __future__ import annotations
 
 import calendar
@@ -9,12 +15,24 @@ from .utils import parse_date
 
 @dataclass
 class Periodo:
+    """Un intervalo cerrado de fechas, normalmente un mes natural.
+
+    `label()` es la clave con la que se guarda y se lee casi todo:
+    `periodo_reporte` en las tablas de resultados es exactamente esa cadena.
+    """
 
     fecha_inicio: datetime
     fecha_final: datetime
 
     @classmethod
     def build(cls, ini_text: str, fin_text: str | None = None) -> Periodo:
+        """Construye un periodo a partir de texto.
+
+        Sin `fin_text` devuelve el mes completo de `ini_text` (del dia 1 a las
+        00:00:00 al ultimo dia a las 23:59:59). Con el, un corte arbitrario; si la
+        fecha final llega sin hora se le pone el final del dia, para que el corte
+        incluya lo ocurrido ese mismo dia.
+        """
         inicio = parse_date(ini_text)
         if inicio is None:
             raise ValueError(f"Fecha inicio inválida: {ini_text}")
@@ -32,6 +50,11 @@ class Periodo:
         )
 
     def label(self) -> str:
+        """Etiqueta del periodo, `"YYYY-MM-DD al YYYY-MM-DD"`.
+
+        Es la clave `periodo_reporte` de las tablas de resultados: cambiarla
+        invalidaria la lectura de todo lo ya calculado.
+        """
         return (
             f"{self.fecha_inicio.strftime('%Y-%m-%d')}"
             f" al {self.fecha_final.strftime('%Y-%m-%d')}"

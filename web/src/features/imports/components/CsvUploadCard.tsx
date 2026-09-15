@@ -1,3 +1,5 @@
+/** Tarjeta de carga de un CSV, con su estado y su mensaje de resultado. */
+
 import { useState, type FormEvent, type ReactNode } from 'react';
 
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';

@@ -1,3 +1,5 @@
+/** Barril del feature de soporte: vistas, hooks y lectura de métricas. */
+
 export { SupportDashboardView } from './components/SupportDashboardView';
 export { SupportAnalyticsView } from './components/SupportAnalyticsView';
 export { SupportResultsView } from './components/SupportResultsView';

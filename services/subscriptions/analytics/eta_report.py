@@ -1,3 +1,20 @@
+"""El reporte mensual que se declara a la reguladora (ETA).
+
+Se calcula sobre **los activos al cierre de un mes** y produce las matrices que
+pide la reguladora: internet por tecnologia, tipo de persona y estado, con
+todos sus cruces; television; transporte de datos; y la penetracion por rango
+de velocidad.
+
+La clasificacion de cada suscripcion se resuelve con esta prioridad:
+**excepcion individual -> plan del catalogo**. Lo que no resuelva sale como
+`unmapped_elements` para que alguien lo decida.
+
+El catalogo es la unica fuente de la clasificacion de un plan. Antes habia una
+segunda, `analyzer_eta_config_planes`, que pisaba a la primera: el mismo plan
+podia estar clasificado de dos formas y ganaba la que nadie miraba. Esa capa ya
+no existe.
+"""
+
 # --- START OF FILE backend/subscriptions/eta_report.py ---
 from __future__ import annotations
 
@@ -7,7 +24,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from core.config import DB_SCHEMA, TableNames
+from core.config import DB_SCHEMA, PLAN_CANCELADO, TableNames
 from core.database import DBConnector
 from core.fixtures import planes, zonas
 
@@ -24,34 +41,36 @@ from .queries import get_periodos
 
 
 def normalize_tech(val: str) -> str:
+    """Colapsa la tecnologia comercial a alambrico/inalambrico."""
     if not val: return TECH_DEFAULT
     val_clean = str(val).strip().upper()
     return TECH_MAP.get(val_clean, TECH_DEFAULT)
 
 def normalize_persona(val: str) -> str:
+    """Colapsa el tipo de titular a persona natural/juridica."""
     if not val: return PERSONA_DEFAULT
     val_clean = str(val).strip().lower()
     return PERSONA_MAP.get(val_clean, PERSONA_DEFAULT)
 
 class ETAReportManager:
+    """Calcula, guarda y parametriza el reporte de la reguladora.
+
+    Un periodo se puede **bloquear**: a partir de ahi se sirve el JSON guardado en
+    vez de recalcular, para que un mes ya declarado no cambie porque los datos de
+    origen se hayan movido.
+    """
+
     def __init__(self, db: DBConnector):
         self.db = db
         self._ensure_tables_exist()
 
     def _ensure_tables_exist(self):
         """Crea las tablas de persistencia para configuraciones globales e individuales."""
+        # `analyzer_eta_config_planes` ya no aparece aqui: guardaba una segunda
+        # copia —con prioridad— de la clasificacion de cada plan, y un plan se
+        # clasifica en un solo sitio, el catalogo. La tabla sigue en la base de
+        # datos, vacia y sin leer.
         statements = [
-            f"""
-            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_PLANES} (
-                plan_name TEXT PRIMARY KEY,
-                reportar BOOLEAN DEFAULT TRUE,
-                tecnologia TEXT,
-                tipo_persona TEXT,
-                tiene_tv BOOLEAN DEFAULT FALSE,
-                datas_mbps NUMERIC DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-            """,
             f"""
             CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} (
                 orden TEXT PRIMARY KEY,
@@ -83,6 +102,7 @@ class ETAReportManager:
             conn.commit()
 
     def get_lock_status(self, periodo: str) -> bool:
+        """Si el periodo esta bloqueado (congelado)."""
         df = self.db.query(
             f"SELECT esta_bloqueado FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} WHERE periodo_reporte = %s",
             params=[periodo]
@@ -90,6 +110,7 @@ class ETAReportManager:
         return not df.empty and bool(df.iloc[0]["esta_bloqueado"])
 
     def set_lock_status(self, periodo: str, lock: bool) -> None:
+        """Bloquea o desbloquea un periodo."""
         with self.db.get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -99,26 +120,6 @@ class ETAReportManager:
                     ON CONFLICT (periodo_reporte) DO UPDATE SET esta_bloqueado = EXCLUDED.esta_bloqueado
                     """,
                     [periodo, lock]
-                )
-            conn.commit()
-
-    def save_plan_custom_config(self, plan_name: str, config: dict[str, Any]) -> None:
-        with self.db.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_PLANES} 
-                    (plan_name, reportar, tecnologia, tipo_persona, tiene_tv, datas_mbps, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (plan_name) DO UPDATE SET
-                        reportar = EXCLUDED.reportar,
-                        tecnologia = EXCLUDED.tecnologia,
-                        tipo_persona = EXCLUDED.tipo_persona,
-                        tiene_tv = EXCLUDED.tiene_tv,
-                        datas_mbps = EXCLUDED.datas_mbps,
-                        updated_at = NOW()
-                    """,
-                    [plan_name, config["reportar"], config["tecnologia"], config["tipo_persona"], config["tiene_tv"], config["datas_mbps"]]
                 )
             conn.commit()
 
@@ -164,13 +165,20 @@ class ETAReportManager:
 
 
     def _load_mappings(self) -> tuple[dict[str, dict], dict[str, str], dict[str, dict]]:
-        """Retorna planes globales, zonas mapeadas y configuraciones individuales de clientes."""
+        """Planes del catalogo, zonas mapeadas y configuraciones individuales.
+
+        El catalogo es la unica fuente de la clasificacion de un plan. Antes
+        habia una segunda, `analyzer_eta_config_planes`, que pisaba a la
+        primera: el mismo plan podia estar clasificado de dos formas y ganaba
+        la que nadie miraba. Lo que el catalogo no tenia —si el plan se declara
+        o no a la reguladora— es hoy `Plan.declarar_en_eta`.
+        """
         zonas_map = {
             z["name"].strip().lower(): z.get("Estado", "Desconocido").strip()
             for z in zonas()
         }
 
-        planes_map = {}
+        planes_map: dict[str, dict] = {}
         for p in planes():
             name = p["name"].strip()
             try:
@@ -179,7 +187,7 @@ class ETAReportManager:
                 datas_mbps = 0.0
 
             planes_map[name] = {
-                "reportar": True,
+                "reportar": bool(p.get("declarar_en_eta", True)),
                 "tecnologia": p.get("type", "RF").strip(),
                 "tipo_persona": p.get("people", "nat").strip().lower(),
                 "tiene_tv": str(p.get("TV")).strip().lower() == "true",
@@ -188,18 +196,20 @@ class ETAReportManager:
                 "es_dedicado": name == PLAN_DEDICADO,
             }
 
-        df_custom_planes = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_PLANES)
-        if not df_custom_planes.empty:
-            for _, row in df_custom_planes.iterrows():
-                planes_map[row["plan_name"]] = {
-                    "reportar": bool(row["reportar"]),
-                    "tecnologia": str(row["tecnologia"]),
-                    "tipo_persona": str(row["tipo_persona"]),
-                    "tiene_tv": bool(row["tiene_tv"]),
-                    "datas_mbps": float(row["datas_mbps"]),
-                    "es_transporte": row["plan_name"] == PLAN_TRANSPORTE,
-                    "es_dedicado": row["plan_name"] == PLAN_DEDICADO,
-                }
+        # `Cancelado` no es un plan y por eso no esta en el catalogo, pero lo
+        # llevan miles de suscripciones que siguen apareciendo en un cierre.
+        # Dejarlo fuera del mapa las convertiria en planes sin clasificar y
+        # bloquearia el reporte entero, asi que entra con la misma
+        # clasificacion vacia que tenia en el JSON.
+        planes_map.setdefault(PLAN_CANCELADO, {
+            "reportar": True,
+            "tecnologia": "",
+            "tipo_persona": "",
+            "tiene_tv": False,
+            "datas_mbps": 0.0,
+            "es_transporte": False,
+            "es_dedicado": False,
+        })
 
         individual_map = {}
         df_custom_subs = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_SUBS)
@@ -235,6 +245,16 @@ class ETAReportManager:
                 return res_dict
 
         # 1. Cierre de Activos Únicos del mes (58,839 suscriptores)
+        # La tabla de cierres la crea el analisis mensual la primera vez que
+        # termina: en un entorno recien estrenado no existe todavia, y eso no
+        # es un fallo sino la misma respuesta que un cierre vacio.
+        if not self.db.tabla_existe(TableNames.ANALYZER_ACTIVOS_CIERRE):
+            return {
+                "status": "empty",
+                "message": f"No hay cierre para {periodo}",
+                "individual_configs": individual_configs,
+            }
+
         df_activos = self.db.query(
             f"""
             SELECT DISTINCT orden 
@@ -540,7 +560,7 @@ class ETAReportManager:
         return pending_subs
     
     def get_all_known_plans(self) -> list[dict[str, Any]]:
-        """Retorna la lista consolidada de todos los planes registrados (JSON + BD)."""
+        """Planes del catalogo, para el desplegable de la ficha individual."""
         planes_map, _, _ = self._load_mappings()
         result = []
         for name, cfg in sorted(planes_map.items()):
@@ -555,16 +575,6 @@ class ETAReportManager:
             })
         return result
     
-    def delete_plan_custom_config(self, plan_name: str) -> None:
-        """Elimina la configuración personalizada de un plan masivo."""
-        with self.db.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"DELETE FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_PLANES} WHERE plan_name = %s",
-                    [plan_name]
-                )
-            conn.commit()
-
     def delete_sub_individual_config(self, orden: str) -> None:
         """Elimina la configuración individual de una orden."""
         with self.db.get_connection() as conn:
@@ -574,20 +584,6 @@ class ETAReportManager:
                     [orden]
                 )
             conn.commit()
-    def get_configured_plans(self) -> list[dict[str, Any]]:
-        """Parametrizacion global de planes, lista para serializar.
-
-        Los NaN pasan a None y la fecha a texto: la vista hacia esta limpieza
-        con pandas por su cuenta, ademas de nombrar la tabla con un literal.
-        """
-        df = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_PLANES)
-        if df.empty:
-            return []
-        df = df.replace({float("nan"): None})
-        if "updated_at" in df.columns:
-            df["updated_at"] = df["updated_at"].astype(str)
-        return df.to_dict("records")
-
     def get_config_page_data(self, periodo: str | None = None) -> dict[str, Any]:
         """Todo lo que necesita la pagina de parametrizacion del reporte ETA.
 
@@ -617,7 +613,6 @@ class ETAReportManager:
 
         return {
             "individualConfigs": self.get_configured_individual_subs() or [],
-            "planesConfigs": self.get_configured_plans(),
             "discoveredPlans": unmapped_plans or [],
             "discoveredSubs": unmapped_subs or [],
             "allKnownPlans": self.get_all_known_plans() or [],

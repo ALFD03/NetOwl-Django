@@ -1,3 +1,10 @@
+/**
+ * Estado y series del dashboard de suscripciones.
+ *
+ * Calcula las medias de todos los periodos y arma los datos de los tres gráficos
+ * de la portada.
+ */
+
 import { CHART_PALETTE } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import { formatPeriodoLabel } from '@/shared/utils';

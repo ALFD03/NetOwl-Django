@@ -1,3 +1,5 @@
+/** Endpoints del módulo de CRM. */
+
 import { apiClient } from './client';
 import type { CrmDimensionsResponse } from '@/shared/types/crm';
 import type { ApiMessageResponse } from './types';

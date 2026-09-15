@@ -1,3 +1,5 @@
+/** Tipos del feature de soporte: medidas de tiempo, tasas y bloques de métricas. */
+
 import type { MetricColor } from '@/shared/ui';
 
 export interface SupportAnalysisRequest { month: string | null; }

@@ -1,3 +1,5 @@
+/** Estado y series del dashboard de CRM: tarjetas, tendencias y salud por etapa. */
+
 import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';

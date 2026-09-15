@@ -1,3 +1,11 @@
+"""Desglose de las metricas de churn por dimension.
+
+Seis ejes (`core.config.DIMS`) y, por cada valor de cada eje, la misma bateria
+de metricas que el resumen global. Lo caro no es el calculo sino el mapeo
+`orden -> valor`, que no depende del periodo: por eso vive cacheado en
+`DimsPreparadas` y se reutiliza en los 31 cortes de un mes.
+"""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -22,6 +30,7 @@ class DimsPreparadas:
         self._billing = None
 
     def mapa(self, dim_col: str, default: str) -> dict:
+        """El mapa `orden -> valor` de una dimension, construido una sola vez."""
         # El default forma parte de la clave: hoy todas las dimensiones llegan
         # en minusculas y coincide siempre, pero atarlo al nombre evita que una
         # dimension futura con otra grafia reciba el relleno de otra.
@@ -32,6 +41,7 @@ class DimsPreparadas:
 
     @property
     def billing(self) -> pd.Series:
+        """La facturacion de cada orden como numero, indexada por orden."""
         if self._billing is None:
             self._billing = pd.to_numeric(
                 self.frame["total"], errors="coerce"
@@ -75,6 +85,15 @@ def aggregate_dimensions(
     df_free_fin=None, df_free_periodo=None, df_free_retorno=None,
     persist: bool = True, prepared=None, dims=None,
 ):
+    """Las metricas de un corte, desglosadas por dimension y valor.
+
+    Devuelve una lista de filas -una por `(dimension, valor)`- con los mismos
+    indicadores del resumen global. Con `persist=False` no escribe en la base, que
+    es como lo usa el calculo diario.
+
+    `prepared` permite pasar un `DimsPreparadas` ya construido; `dims` limita que
+    ejes se calculan.
+    """
     periodo_label = periodo.label()
     dims_pedidas = dims or DIMS
 
@@ -130,7 +149,13 @@ def aggregate_dimensions(
         d_act_ini = cnt(act_ini)
         d_act_fin = cnt(act_fin)
         d_nuevos = cnt(nuevos)
-        d_bajas = cnt(df_bajas)
+        # El detalle trae una fila por orden, pero se deduplica igual que el
+        # corte impagado: el conteo es de ordenes, no de filas.
+        d_bajas = cnt(
+            df_bajas.drop_duplicates(subset=["orden"])
+            if df_bajas is not None and not df_bajas.empty
+            else df_bajas
+        )
         d_inact = cnt(df_inactivos)
         d_react = cnt(df_react_all)
         d_corte = cnt(df_corte_impagado.drop_duplicates(subset=["orden"]))
@@ -176,7 +201,15 @@ def aggregate_dimensions(
             a_fin = d_act_fin.get(val, 0)
             nv = d_nuevos.get(val, 0)
             bn = a_ini - (a_fin - nv - d_free_retorno.get(val, 0)) - d_free_periodo.get(val, 0)
-            bb = bn + d_react_not_in_ini.get(val, 0)
+            # La baja bruta del nodo es el detalle contado, no un balance.
+            #
+            # Era `bn + d_react_not_in_ini`, y esa aritmetica no reproduce las
+            # ordenes de `analyzer_bajas_detalladas`: cuatro de los 52 nodos del
+            # cierre de septiembre se desviaban en +-1, asi que exportar las
+            # bajas de un nodo no daba el numero que la tabla mostraba al lado.
+            # `bn` se conserva tal cual porque la baja **neta** si es un balance:
+            # mide el saldo de la base, no quien se fue.
+            bb = d_bajas.get(val, 0)
             inac = d_inact.get(val, 0)
             reac = d_react.get(val, 0)
             react_val = d_react_6.get(val, 0) + d_react_8.get(val, 0) + d_react_4_H.get(val, 0) + d_react_sin.get(val, 0)

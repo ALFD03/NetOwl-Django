@@ -1,3 +1,5 @@
+/** La composición de secciones y gráficos de la página. */
+
 import type { NeonTheme } from '@/shared/ui';
 import { ANALYTICS_METRICS } from './analyticsChartConfig';
 

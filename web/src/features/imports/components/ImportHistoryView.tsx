@@ -1,3 +1,5 @@
+/** La tabla del historial de importaciones y cálculos. */
+
 import { useState } from 'react';
 import { Clock, Terminal } from 'lucide-react';
 

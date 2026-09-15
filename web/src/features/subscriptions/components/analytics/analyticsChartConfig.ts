@@ -1,3 +1,5 @@
+/** Las métricas seleccionables del gráfico y cómo se lee cada una. */
+
 import type { AnalyticsMetricConfig } from '../../lib/analyticsDistribution';
 
 export const ANALYTICS_METRICS = {
@@ -7,6 +9,7 @@ export const ANALYTICS_METRICS = {
     mode: 'ranking',
     unit: '%',
     direction: 'loss',
+    round: 2,
   },
 
   churnBruto: {
@@ -15,6 +18,7 @@ export const ANALYTICS_METRICS = {
     mode: 'ranking',
     unit: '%',
     direction: 'loss',
+    round: 2,
   },
 
   suspensiones: {
@@ -23,6 +27,7 @@ export const ANALYTICS_METRICS = {
     mode: 'ranking',
     unit: '%',
     direction: 'loss',
+    round: 2,
   },
 
   nuevos: {
@@ -31,6 +36,7 @@ export const ANALYTICS_METRICS = {
     mode: 'simple',
     unit: 'number',
     direction: 'growth',
+    round: 0,
   },
 
   adicionesBrutas: {
@@ -39,6 +45,7 @@ export const ANALYTICS_METRICS = {
     mode: 'ranking',
     unit: 'number',
     direction: 'growth',
+    round: 0,
   },
 
   crecimiento: {
@@ -47,6 +54,7 @@ export const ANALYTICS_METRICS = {
     mode: 'weighted',
     unit: '%',
     direction: 'growth',
+    round: 2,
   },
 
   winback: {
@@ -55,6 +63,7 @@ export const ANALYTICS_METRICS = {
     mode: 'weighted',
     unit: '%',
     direction: 'growth',
+    round: 2,
   },
 
   aporteReactivacion: {
@@ -63,6 +72,7 @@ export const ANALYTICS_METRICS = {
     mode: 'weighted',
     unit: '%',
     direction: 'growth',
+    round: 2,
   },
 
   indiceReemplazo: {
@@ -71,6 +81,7 @@ export const ANALYTICS_METRICS = {
     mode: 'ranking',
     unit: '%',
     direction: 'growth',
+    round: 2,
   },
 
   recuperaciones: {
@@ -79,6 +90,7 @@ export const ANALYTICS_METRICS = {
     mode: 'ranking',
     unit: 'number',
     direction: 'growth',
+    round: 0,
   },
 
   arpu: {
@@ -87,6 +99,7 @@ export const ANALYTICS_METRICS = {
     mode: 'weighted',
     unit: '$',
     direction: 'growth',
+    round: 2,
   },
 
   billing: {
@@ -95,6 +108,7 @@ export const ANALYTICS_METRICS = {
     mode: 'ranking',
     unit: '$',
     direction: 'growth',
+    round: 2,
   },
 } satisfies Record<string, AnalyticsMetricConfig>;
 

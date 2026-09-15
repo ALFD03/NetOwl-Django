@@ -1,3 +1,14 @@
+"""Logs sinteticos: lo que Odoo no registro y el calculo necesita.
+
+Odoo no deja un log para todo -una suscripcion puede no tener ninguno, o que el
+primero sea ya un corte por impago, o contradecir su propio estado-, asi que
+aqui se fabrican los que faltan. Cada uno queda marcado con `_sintetico` y una
+nota que lo identifica, de modo que siempre se puede distinguir del dato real.
+
+Ademas se aplica el tramo de servicio gratuito, que va desde el log de
+archivado hasta el de desarchivado.
+"""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -116,6 +127,22 @@ def _ordenes_siempre_gratis(df_subs_full: pd.DataFrame, df_free_meta) -> set[str
 
 
 def apply_log_rules(df_clean_logs: pd.DataFrame, df_subs_full: pd.DataFrame, df_free_meta=None):
+    """Completa el historico con los logs sinteticos y aplica el tramo gratuito.
+
+    Casos que cubre, todos observados en los datos reales:
+
+    * **sin logs**: se le da uno con su estado actual en su fecha de inicio;
+    * **el primer log es un corte por impago**: para cortarla tuvo que haber
+      estado activa, asi que se le antepone el alta;
+    * **log inactivo seguido de corte por impago**: se intercala el activo;
+    * **el ultimo log contradice el estado de la suscripcion**, en los dos
+      sentidos: se anade el estado bueno un segundo despues;
+    * **archivada sin log de archivado**: se fecha con la deteccion de planes
+      gratuitos y, a falta de ella, con su fecha de inicio.
+
+    Devuelve `(logs, ordenes_con_actividad)`; lo segundo es lo que distingue un
+    alta real de una suscripcion que nunca llego a estar activa.
+    """
     valid_ordens = set(df_subs_full["orden"].to_numpy())
     ordenes_siempre_gratis = _ordenes_siempre_gratis(df_subs_full, df_free_meta)
     log_filtered = df_clean_logs[df_clean_logs["orden"].isin(valid_ordens)].copy()

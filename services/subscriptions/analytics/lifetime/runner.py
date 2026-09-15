@@ -1,3 +1,5 @@
+"""Orquestacion del analisis de supervivencia."""
+
 from __future__ import annotations
 
 import json
@@ -14,6 +16,12 @@ from .loader import build_clean_logs, load_data
 
 
 def run_lifecycle_analysis(db=None) -> dict[str, Any]:
+    """Calcula y persiste el ciclo de vida completo.
+
+    No tiene periodo: recorre todo el historico. Guarda los periodos, las metricas
+    globales y el desglose por dimension con `periodo = "global"` y
+    `metodo = "lifetime"`, y devuelve las metricas globales.
+    """
     if db is None:
         db = DBConnector()
     subs, l1, l2 = load_data(db)

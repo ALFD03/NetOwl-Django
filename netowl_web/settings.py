@@ -17,6 +17,8 @@ import os
 import re
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 from core.vault import get_config
 
 # Configuración sensible (Django + base de datos) obtenida de Vault
@@ -38,9 +40,24 @@ SECRET_KEY = config.django.SECRET_KEY
 ALLOWED_HOSTS = config.django.ALLOWED_HOSTS
 
 # --- Seguridad HTTPS / Headers ---
+# Nginx termina el TLS y habla HTTP con gunicorn, asi que sin esta cabecera
+# `request.is_secure()` es siempre False: SECURE_SSL_REDIRECT redirige a https,
+# Nginx vuelve a entrar por http y el navegador da vueltas. La salida facil era
+# apagar DJANGO_SECURE_SSL, que ademas de la redireccion desactiva HSTS y el
+# flag Secure de las dos cookies. Gunicorn tiene que arrancar con
+# `--forwarded-allow-ips` para no descartar la cabecera (ver Dockerfile).
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
 SECURE_SSL_REDIRECT = config.django.SECURE_SSL
 SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
 CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
+SESSION_COOKIE_HTTPONLY = True
+# Explicitos aunque coincidan con el valor por defecto de Django: de estos
+# cuatro ajustes depende que la cookie de sesion no viaje en claro ni se envie
+# desde otro sitio, y conviene que se lean aqui y no en la documentacion.
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
 
 # 3. Cabecera HSTS (HTTP Strict Transport Security)
 # Fuerza a los navegadores a conectarse exclusivamente mediante HTTPS durante un año.
@@ -50,7 +67,9 @@ SECURE_HSTS_PRELOAD = SECURE_SSL_REDIRECT
 
 # 4. Cabeceras de protección del navegador
 SECURE_CONTENT_TYPE_NOSNIFF = True  # Evita que el navegador adivine el tipo MIME (previene inyección de scripts)
-SECURE_BROWSER_XSS_FILTER = True    # Activa el filtro XSS del navegador
+# `SECURE_BROWSER_XSS_FILTER` estaba aqui y se ha retirado: emite
+# `X-XSS-Protection`, una cabecera que ningun navegador actual honra (y cuya
+# implementacion antigua introducia sus propios fallos).
 X_FRAME_OPTIONS = "DENY"            # Protege contra Clickjacking (impide que el sitio se cargue en <frame> o <iframe> externos)
 
 # 5. Política de Referrer (Referrer Policy)
@@ -65,6 +84,26 @@ CSRF_TRUSTED_ORIGINS = config.django.CSRF_TRUSTED_ORIGINS
 
 # Limite de tiempo se sesiones 
 SESSION_COOKIE_AGE = 8*60*60
+
+# --- Politica de contrasenas ---
+# No existia ninguna: Django aplica una lista vacia si no se define, de modo
+# que `create_user` aceptaba cualquier cosa. Los tres `len(clave) < 8` sueltos
+# que habia en services/config/views.py se sustituyeron por una llamada a
+# `validate_password`, que es lo que lee esta lista (ver `validar_clave`).
+#
+# `min_length` 8 es el minimo del proyecto. Los otros tres validadores siguen
+# siendo los que hacen el trabajo: rechazan la contrasena parecida al nombre de
+# la cuenta, la que esta en la lista de las mas usadas y la que es solo digitos,
+# que es por donde entran las contrasenas debiles de verdad.
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 # --- Aislamiento por entorno ---
 # `ENV_SUFFIX` identifica el entorno a partir del esquema de Postgres, que es
@@ -98,7 +137,12 @@ SESSION_ENGINE = "services.config.sessions"
 # --- Límites de subida ---
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
-FILE_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
+# Este es distinto del anterior y no debe igualarse a el: marca a partir de que
+# tamano Django deja de guardar el fichero subido en memoria y lo vuelca a un
+# temporal. Con los dos en 100 MB, cinco subidas simultaneas (una por worker de
+# gunicorn) mantenian medio giga residente, y ademas el temporal que crea
+# services/config/uploads.py recibia un fichero que ya estaba entero en RAM.
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
 
 # --- Aplicaciones instaladas ---
 INSTALLED_APPS = [
@@ -269,6 +313,30 @@ ANALYSIS_JOB_STALE_SECONDS = 15 * 60
 ANALYSIS_LOCK_TIMEOUT = 2 * 60 * 60
 
 
+# --- Cache compartida (y contadores del limitador de peticiones) ---
+# No habia `CACHES`, asi que Django usaba `LocMemCache`, que es donde
+# django-ratelimit guarda sus contadores: con `--workers 5` cada worker llevaba
+# la cuenta por su lado (el limite real era ~5x el declarado), los contadores se
+# borraban en cada despliegue y el worker de Celery no compartia ninguno. Redis
+# ya es una dependencia dura del proyecto —sin el no se puede lanzar un
+# analisis— asi que esto no anade infraestructura.
+#
+# El prefijo lleva el sufijo del entorno por el mismo motivo que la cola y las
+# cookies: desarrollo y produccion comparten Redis.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "KEY_PREFIX": f"netowl_{ENV_SUFFIX}",
+    }
+}
+
+# Como se identifica al cliente para contar sus peticiones. Con el valor por
+# defecto (REMOTE_ADDR) todos los usuarios comparten cubo detras de Nginx, y el
+# limite de 2/m de los calculos se convertia en un 2/m para toda la empresa.
+# El porque de una funcion y no de `"HTTP_X_FORWARDED_FOR"` esta en el modulo.
+RATELIMIT_IP_META_KEY = "netowl_web.ratelimit.ip_cliente"
+
 # --- Campos auto-generados ---
 # Tipo de campo por defecto para claves primarias auto-generadas
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -317,16 +385,44 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
-        # Codigo propio: las apps de `frontend` y el paquete de analitica.
-        "frontend": {
+        # Codigo propio. Los nombres tienen que ser los de los paquetes reales:
+        # los veinte modulos que crean un logger lo hacen con
+        # `logging.getLogger(__name__)`, asi que sus nombres empiezan por
+        # `services.` o por `core.`. Los dos loggers que habia antes aqui
+        # —`frontend` y `backend`— no correspondian a ningun paquete, de modo
+        # que no captaban nada: todo propagaba al logger raiz, que no tiene
+        # handler, y `logs/app.log` se quedaba vacio.
+        "services": {
             "handlers": ["app_file", "console"],
             "level": "INFO",
             "propagate": False,
         },
-        "backend": {
+        "core": {
             "handlers": ["app_file", "console"],
             "level": "INFO",
             "propagate": False,
         },
     },
 }
+
+
+# --- Cortafuegos de arranque ---
+# Toda la postura HTTPS cuelga de un unico booleano de Vault
+# (`DJANGO_SECURE_SSL`): de el salen la redireccion, HSTS y el flag Secure de
+# las cookies de sesion y CSRF. Si esa clave viene a false, la aplicacion
+# arrancaba igual y servia las cookies en claro sin que nadie se enterase.
+#
+# La salida existe —hay entornos internos que se sirven por HTTP a proposito—
+# pero hay que escribirla: `PERMITIR_HTTP_INSEGURO=1` en el `.env`. La
+# diferencia con el comportamiento anterior es que ahora servir en claro es una
+# decision anotada en el despliegue y no el resultado de olvidar una clave.
+PERMITIR_HTTP_INSEGURO = os.getenv("PERMITIR_HTTP_INSEGURO", "").lower() in {"1", "true", "yes"}
+
+if not DEBUG and not SECURE_SSL_REDIRECT and not PERMITIR_HTTP_INSEGURO:
+    raise ImproperlyConfigured(
+        "DJANGO_SECURE_SSL está en false con DJANGO_DEBUG en false: la sesión y "
+        "el token CSRF viajarían sin el flag Secure y sin HSTS. Ponga "
+        "DJANGO_SECURE_SSL=true en el secreto de Vault, o declare "
+        "PERMITIR_HTTP_INSEGURO=1 en el .env si este entorno se sirve por HTTP "
+        "a propósito."
+    )

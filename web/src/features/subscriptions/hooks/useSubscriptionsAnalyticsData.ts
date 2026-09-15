@@ -1,3 +1,5 @@
+/** Recorta a un periodo y una dimensión lo que ya llegó en los props. */
+
 import { useMemo } from 'react';
 import type { DimensionGroup, DimensionVal, Periodo } from '@/shared/types/domain';
 

@@ -1,3 +1,5 @@
+/** Las columnas de esa tabla. */
+
 import { StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils/formatters';
 import type { CrmDimensionValue } from '../../types';

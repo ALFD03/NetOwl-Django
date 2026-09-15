@@ -1,3 +1,11 @@
+/**
+ * Anillo pequeño con un porcentaje.
+ *
+ * Se usa para el «% que excede el promedio», que es lo que delata una
+ * distribución con cola: si muy pocos casos superan la media, la media la está
+ * marcando la cola.
+ */
+
 import type { FC } from 'react';
 
 interface MiniExceedRingProps {

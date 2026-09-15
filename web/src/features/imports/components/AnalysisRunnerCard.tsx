@@ -1,3 +1,10 @@
+/**
+ * Tarjeta de ejecución de un análisis: mes, progreso y consola en vivo.
+ *
+ * El análisis corre en el worker, así que esta tarjeta sondea la fila del job; si
+ * se recarga la página se reengancha al que siga abierto.
+ */
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play } from 'lucide-react';
 
@@ -139,7 +146,7 @@ export function AnalysisRunnerCard({
       title={title}
       description={description}
       actions={
-        <>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <MonthPicker value={selectedMonth} onChange={setSelectedMonth} placeholder={monthPlaceholder} />
           <Button
             onClick={handleRun}
@@ -149,7 +156,7 @@ export function AnalysisRunnerCard({
           >
             {runLabel}
           </Button>
-        </>
+        </div>
       }
     >
       <StatusMessage status={validation ?? analysis.status} className="mb-4" />

@@ -1,3 +1,5 @@
+/** Página Inertia `Support/Dashboard` (`/support/`). */
+
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { SupportDashboardView, useSupportDashboard } from '@/features/support';

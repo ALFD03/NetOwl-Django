@@ -22,3 +22,4 @@ logs/
 CLAUDE.md
 web/static/dist/
 graphify-out/
+.vscode

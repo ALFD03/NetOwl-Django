@@ -9,8 +9,10 @@ usaban. Aqui se centraliza lo que estaba repetido o escondido en literales.
 from __future__ import annotations
 
 # --- Orden de presentacion de los sites -------------------------------------
-# Los sites no se ordenan alfabeticamente sino por relevancia comercial; este
-# es el orden que espera la UI. Lo que no este listado se va al final.
+# Los sites no se ordenan alfabeticamente sino por relevancia comercial. Ese
+# orden vive ahora en la columna `Site.orden` del catalogo y se lee con
+# `fixtures.orden_sites()`; esta lista sobrevive solo como su semilla, y la usa
+# unicamente `manage.py cargar_catalogos`.
 CUSTOM_SITE_ORDER = [
     "Valencia",
     "Naguanagua",
@@ -40,7 +42,6 @@ PLANES_NO_RESIDENCIALES = [PLAN_TRANSPORTE, PLAN_DEDICADO]
 TECH_MAP = {
     "RF": "Inalámbrico",
     "FTTH": "Alámbrico",
-    "GPON": "Alámbrico",
     "INALAMBRICO": "Inalámbrico",
     "ALAMBRICO": "Alámbrico",
     "FIBRA": "Alámbrico",

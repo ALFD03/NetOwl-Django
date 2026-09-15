@@ -1,3 +1,17 @@
+"""Importacion del export de tickets y esquema de las tablas de soporte.
+
+Lo delicado aqui no es el volumen sino los nombres de las columnas: `rename`
+con el mapa literal exige coincidencia exacta y Odoo no la da siempre -cambia
+la caja, los acentos, el genero del campo, y a un campo relacional le anade el
+sub-campo detras de una barra-. Cada fallo dejaba la columna fuera del frame y
+el relleno la ponia entera en "Sin Especificar", colapsando una dimension sin
+que nada fallara. Por eso la resolucion de cabeceras es tolerante y el error,
+cuando toca, lista lo que si encontro.
+
+Solo los tickets se rehacen desde cero en cada importacion; las tablas de
+resultados no se tocan aqui.
+"""
+
 # backend/support/loader.py
 
 from __future__ import annotations

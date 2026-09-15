@@ -1,3 +1,5 @@
+/** Formateo de la etiqueta de un periodo. */
+
 const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'] as const;
 
 export const formatPeriodoLabel = (value: string): string => {

@@ -1,3 +1,5 @@
+/** Formateo de números: enteros, decimales y porcentajes, siempre en locale `en-US`. */
+
 export type NumericValue = number | string | null | undefined;
 
 /**

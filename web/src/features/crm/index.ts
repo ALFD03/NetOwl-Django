@@ -1,3 +1,5 @@
+/** Barril del feature de CRM: vistas, hooks, utilidades y tipos. */
+
 export { CrmDashboardView } from './components/CrmDashboardView';
 export { CrmAnalyticsView } from './components/CrmAnalyticsView';
 export { CrmAnalyticsFilters } from './components/analytics/CrmAnalyticsFilters';

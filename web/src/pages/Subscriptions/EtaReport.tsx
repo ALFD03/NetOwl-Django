@@ -1,3 +1,5 @@
+/** Página Inertia `Subscriptions/EtaReport` (`/subscriptions/eta-report/`): el reporte de la reguladora. */
+
 import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';

@@ -1,3 +1,8 @@
+"""Las metricas del embudo: efectividad, riesgo de devolucion y tiempos.
+
+Un modulo por familia, y `core` los compone en el bloque que se persiste.
+"""
+
 from .core import compute_crm_metrics_for_period
 from .efectividad import atribuir_perdidas, compute_efectividad
 from .probabilidad import (

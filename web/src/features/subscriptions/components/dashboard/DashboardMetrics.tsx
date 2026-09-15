@@ -1,3 +1,5 @@
+/** Las tarjetas de la portada: churn, crecimiento, ARPU y winback promedio. */
+
 import { Activity, AlertTriangle, DollarSign, RefreshCw, ShieldCheck, TrendingDown, TrendingUp } from 'lucide-react';
 import { MetricCard } from '@/shared/ui';
 import { getChurnColor, getCrecimientoColor } from '@/shared/utils';

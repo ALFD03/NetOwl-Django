@@ -1,3 +1,5 @@
+/** Distribuciones de una dimensión para la página de Analytics. */
+
 import type { DimensionVal, Periodo } from '@/shared/types/domain';
 import { toNumber } from '@/shared/utils/formatters';
 import {
@@ -35,6 +37,7 @@ export interface AnalyticsMetricConfig extends RankingOptions {
   unit?: '%' | '$' | 'number';
   /** Defaults to `growth` where unset. */
   direction?: MetricDirection;
+  round?: number;
 }
 
 /**

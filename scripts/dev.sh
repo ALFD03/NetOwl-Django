@@ -55,6 +55,10 @@ trap apagar INT TERM EXIT
 # Es idempotente, asi que se ejecuta en cada arranque.
 "$PYTHON" manage.py preparar_sesiones
 
+# Igual que arriba: las tablas ORM de imports son propias de cada esquema y la
+# migracion que las crea queda anotada como aplicada para todos los entornos.
+"$PYTHON" manage.py preparar_imports
+
 # `stdbuf -oL` evita que el prefijo salga a bloques por el buffer de la tuberia.
 VITE_DEV_SERVER=1 stdbuf -oL "$PYTHON" manage.py runserver 2>&1 \
   | sed -u 's/^/[django] /' &

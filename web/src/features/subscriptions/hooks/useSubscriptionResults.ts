@@ -1,3 +1,5 @@
+/** Carga el detalle de un periodo cuando se abre su modal. */
+
 import { useEffect, useState } from 'react';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
 import type { SubscriptionResultsResponse } from '@/features/subscriptions/types';

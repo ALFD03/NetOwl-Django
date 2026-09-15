@@ -1,3 +1,5 @@
+/** Curvas de supervivencia, sus estadísticos y el desglose por dimensión. */
+
 import { useMemo, useState } from 'react';
 import { Activity, Clock, Loader2, RefreshCw } from 'lucide-react';
 

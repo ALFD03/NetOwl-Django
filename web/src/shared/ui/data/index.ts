@@ -1,3 +1,5 @@
+/** Lecturas tabulares y agrupadas: tabla, grupos de cifras y exportación. */
+
 export { DataTable, type Column } from './DataTable';
 export { ExcelExportButton } from './ExcelExportButton';
 export { StickyLabel, type StickyLabelProps } from './StickyLabel';

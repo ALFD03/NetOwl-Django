@@ -1,3 +1,9 @@
+/**
+ * Registra en Chart.js los controladores y elementos que usa la aplicación.
+ *
+ * Se importa una sola vez desde `app/main.tsx`.
+ */
+
 import {
   ArcElement,
   BarController,

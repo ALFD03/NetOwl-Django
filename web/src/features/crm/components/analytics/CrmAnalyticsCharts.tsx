@@ -1,3 +1,5 @@
+/** Los gráficos de la distribución de la métrica elegida. */
+
 import { CHART_CHROME } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import {
@@ -84,6 +86,7 @@ function CrmChartItem({ title, metric, type, theme, globalData, rows }: CrmChart
    * total, whatever the underlying metric is measured in.
    */
   const plottedSuffix = config.mode === 'ranking' ? suffix : '%';
+  const round = config.round;
 
   // The chart title names the series in the bar legend; several titles already
   // carry their unit, so the suffix is not appended here a second time.
@@ -91,8 +94,8 @@ function CrmChartItem({ title, metric, type, theme, globalData, rows }: CrmChart
   const doughnutData = useMemo(() => toDoughnutChartData(distribution), [distribution]);
 
   const barOptions = useMemo(
-    () => getHorizontalBarOptions(undefined, plottedSuffix),
-    [plottedSuffix],
+    () => getHorizontalBarOptions(undefined, plottedSuffix, round),
+    [plottedSuffix, round],
   );
 
   const doughnutOptions = useMemo(

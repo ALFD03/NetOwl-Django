@@ -1,3 +1,5 @@
+"""Las mismas curvas de supervivencia, desglosadas por dimension."""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +12,13 @@ from .loader import DIMS
 
 
 def compute_dimension_metrics(subs: pd.DataFrame, periods: pd.DataFrame) -> pd.DataFrame:
+    """Curvas de vida activa y de reactivacion por valor de cada dimension.
+
+    Solo se ajusta el estimador cuando el grupo llega a `MIN_COHORT_SIZE` (15):
+    por debajo el resultado es ruido, y ajustarlo se lleva la mayor parte del
+    tiempo de calculo. Los intervalos de confianza se desactivan aqui por el mismo
+    motivo.
+    """
     if periods.empty:
         return pd.DataFrame()
 

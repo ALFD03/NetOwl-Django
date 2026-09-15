@@ -1,3 +1,5 @@
+/** Portada de CRM: tarjetas, tendencias y salud por etapa. */
+
 import { READONLY_TABLE, READONLY_TABLE_BODY, READONLY_TABLE_HEAD_STICKY } from '@/shared/ui/data/tableClasses';
 import {
   CheckCircle2, XCircle, Users, Activity,

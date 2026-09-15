@@ -1,3 +1,5 @@
+/** El formulario de acceso y de alta del primer administrador. */
+
 import { AlertCircle } from 'lucide-react';
 import type { FormEvent, ReactNode } from 'react';
 

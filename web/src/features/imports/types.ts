@@ -1,3 +1,5 @@
+/** Tipos del feature de importaciones. */
+
 export type ImportKind = 'subscriptions' | 'logs' | 'crm' | 'support';
 
 export interface ImportOperationResult {
