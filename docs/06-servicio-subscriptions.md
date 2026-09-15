@@ -442,6 +442,9 @@ cierre de un mes**.
 | `get_discovered_unmapped_plans` / `_subs` | Lo que falta por parametrizar |
 | `get_all_known_plans` | Para el desplegable del formulario |
 | `get_config_page_data(periodo)` | Todo lo que necesita la pantalla de parametrización |
+| `get_tasa_bcv` / `set_tasa_bcv` | La tasa del periodo y de dónde salió |
+| `asegurar_tasa_bcv(periodo)` | La consulta al BCV **solo si no hay ninguna guardada**. No propaga el fallo |
+| `consultar_tasa_bcv(periodo)` | Fuerza la consulta y pisa lo guardado. Deja subir `TasaNoDisponible` |
 
 ### El cálculo
 
@@ -463,8 +466,78 @@ cierre de un mes**.
    todos sus cruces; las de TV; el conteo de transporte de datos; y la
    penetración de velocidades en seis rangos (`256 Kbps–2 Mbps`, …, `1 Gbps en
    adelante`).
-7. Guarda el JSON en `analyzer_eta_reporte_mensual` **salvo que el periodo esté
-   bloqueado**.
+7. Arma además los **formularios** (`analytics/eta_forms.py`): una fila por
+   producto declarado, en tres hojas.
+8. Guarda el JSON en `analyzer_eta_reporte_mensual` **salvo que el periodo esté
+   bloqueado**. La tasa del BCV se guarda en su propia columna, fuera de ese
+   JSON.
+
+### Los formularios (`analytics/eta_forms.py`)
+
+Las matrices responden a «cuántos suscriptores hay por tecnología, persona y
+entidad». Los formularios preguntan otra cosa: **una fila por producto
+declarado**, con su velocidad, su renta y su consumo teórico. Son tres hojas
+—internet, transporte de datos y televisión—, cada una con sus columnas, y se
+descargan en un solo `.xlsx` desde la barra del reporte.
+
+**De dónde sale cada fila.** Un plan del catálogo comercial se declara por su
+**plan regulador** (`Plan.plan_regulador` → `catalogo_planes_reguladores`).
+Varios planes comerciales colapsan en uno: la misma velocidad con dos tarifas es
+un solo producto ante la reguladora, y declararla dos veces cuenta sus
+suscriptores dos veces. El regulador lleva **sus propios** campos y no los hereda
+del primer plan que le cuelgue: cuando dos planes del grupo difieren en precio o
+velocidad, lo declarado tiene que ser una decisión explícita.
+
+El internet dedicado y el transporte no están en el catálogo comercial —cada
+contrato tiene su velocidad y su tarifa— así que su fila se **sintetiza**
+agrupando las excepciones por orden que comparten velocidad: `Internet Dedicado
+10 Mbps`, `Transporte de Datos 100 Mbps`. Su renta es el promedio de la columna
+`precio` de esas excepciones. Registrar un plan regulador con ese mismo nombre
+lo sustituye: es la forma de corregir a mano la renta o la tecnología de un
+grupo entero.
+
+Un plan **sin plan regulador asignado** sigue contando en las matrices pero no
+aparece en el formulario; sale en `planes_sin_regulador` y el botón de exportar
+lo avisa.
+
+**Los precios viajan en divisa, sin convertir.** La renta básica en bolívares es
+el precio por la tasa del BCV, y la tasa se aplica **al exportar**: así un
+periodo bloqueado no queda congelado a la tasa que hubiera el día del cálculo, y
+corregir la tasa no obliga a recalcular el mes.
+
+### La tasa del BCV (`analytics/bcv.py`)
+
+Se consulta a `ve.dolarapi.com/v1/historicos/dolares/oficial/{YYYY/MM/DD}`, que
+sirve el histórico del dólar oficial. De la respuesta se lee **`promedio`**:
+`compra` y `venta` llegan a `null` en el histórico.
+
+**Se pide el día 1 del mes del reporte, pero ese día no siempre existe.** El BCV
+no publica fines de semana ni feriados y la API responde **404**: entre 2025 y
+2026 son ocho de veinticuatro meses, un tercio. Por eso no se pide una fecha
+sino que se **avanza hasta el primer día publicado del mes**, con un tope de
+siete días y sin salirse del mes. El día que respondió se guarda en
+`tasa_fuente` —«BCV 2026-08-03 (ve.dolarapi.com)»— para que nadie se pregunte
+por qué la tasa de agosto es del día 3.
+
+**Se sale a la red una vez por periodo, no una por visita.** `asegurar_tasa_bcv`
+solo consulta cuando no hay nada guardado: la tasa del primer día publicado de
+un mes pasado ya no cambia. Eso hace, además, que una tasa escrita a mano no se
+pise sola; para volver a la oficial está el botón de consultar, que llama a
+`consultar_tasa_bcv`.
+
+**Un fallo del servicio no rompe el reporte.** `asegurar_tasa_bcv` devuelve el
+motivo como aviso en vez de propagarlo, y las rentas salen vacías, que es lo
+mismo que pasaba antes de que hubiera consulta automática. El aviso se enseña
+bajo la barra del reporte: si no, una tasa ausente parece una tasa de cero.
+
+Las fórmulas que pide la reguladora, y que están en `eta_forms.py`:
+
+| Columna | Fórmula |
+|---|---|
+| Uplink / Downlink (Kbps) | `Mbps × 1000` |
+| Velocidad promedio teórica (Kbps) | `Mbps × 0,5 × 1000` si es RF; `Mbps × 0,2 × 1000` si es FTTH |
+| Promedio de consumo del plan (MB) | `((Mbps × 1000) / 8000) × 3600 × 24 × 90 × suscriptores` |
+| Renta básica (Bs. sin IVA) | `precio × tasa_bcv`; vacía si la tasa no está fijada |
 
 ### El catálogo es el único sitio donde se clasifica un plan
 
@@ -481,6 +554,11 @@ El maestro conserva **solo sus excepciones por suscripción**
 no tienen equivalente en el catálogo. La pestaña «planes por clasificar» sigue
 existiendo —es donde se descubren los productos sin clasificar— pero **enlaza al
 catálogo en vez de editar nada**.
+
+Sus dos tablas son `DataTable`, como las del catálogo: búsqueda, orden y filtros
+por columna. La de excepciones guardadas muestra la **renta** de cada contrato,
+con un filtro «con renta / sin renta» — es el único sitio donde se ve que a un
+dedicado le falta el precio con el que declararlo.
 
 `es_transporte` / `es_dedicado` se derivan del nombre del plan
 (`PLAN_TRANSPORTE`, `PLAN_DEDICADO`): son dos planes concretos, no un atributo
@@ -555,7 +633,7 @@ reguladora eso se colapsa a alámbrico o inalámbrico.
 
 ### La pantalla y su CRUD
 
-`views_catalogos.py` sirve **seis catálogos con un solo par de endpoints** en vez
+`views_catalogos.py` sirve **siete catálogos con un solo par de endpoints** en vez
 de doce vistas casi iguales: lo único que cambia entre ellos es qué campos se
 leen del cuerpo y cómo se serializa la fila, y eso lo declara el diccionario
 `CATALOGOS`. Añadir un catálogo es añadir una entrada ahí y una pestaña en la

@@ -91,6 +91,49 @@ export interface EtaMetrics {
   [key: string]: unknown;
 }
 
+/**
+ * Una fila de la hoja de internet del formulario de la reguladora.
+ *
+ * `precio` viaja **en divisa, sin convertir**: la renta básica en bolívares es
+ * ese precio por la tasa del BCV, y la tasa se aplica al exportar para que un
+ * periodo ya calculado no quede congelado a la tasa de aquel día.
+ */
+export interface EtaFormularioInternet {
+  nombre: string;
+  tipo_suscriptor: string;
+  /** Todas las entidades federales del catálogo, encadenadas. */
+  entidades: string;
+  suscriptores: number;
+  precio: number;
+  tipo_servicio: string;
+  uplink_kbps: number;
+  downlink_kbps: number;
+  velocidad_promedio_kbps: number;
+  consumo_promedio_mb: number;
+}
+
+export interface EtaFormularioTransporte {
+  nombre: string;
+  suscriptores: number;
+  precio: number;
+  velocidad_kbps: number;
+}
+
+export interface EtaFormularioTelevision {
+  nombre: string;
+  tipo_suscriptor: string;
+  entidades: string;
+  suscriptores: number;
+  precio: number;
+}
+
+export interface EtaFormularios {
+  internet: EtaFormularioInternet[];
+  transporte: EtaFormularioTransporte[];
+  television: EtaFormularioTelevision[];
+  entidades: string;
+}
+
 export interface SubscriptionEtaReportResponse {
   status?: string;
   periodo?: string;
@@ -104,6 +147,26 @@ export interface SubscriptionEtaReportResponse {
   total_muestreado?: number;
   unmapped_plans?: unknown[];
   unmapped_subs?: unknown[];
+  /**
+   * Las tres hojas del libro que se declara.
+   *
+   * Ausente en los periodos bloqueados antes de que existieran: hay que
+   * recalcular el periodo para que aparezcan.
+   */
+  formularios?: EtaFormularios;
+  /** Planes que cuentan en las matrices pero no tienen plan regulador asignado. */
+  planes_sin_regulador?: string[];
+  /** Tasa del BCV fijada para el periodo. `0` = todavía sin fijar. */
+  tasa_bcv?: number;
+  /** De dónde salió: el día que publicó el BCV, o «Escrita a mano». */
+  tasa_bcv_fuente?: string;
+  /**
+   * Por qué no hay tasa, cuando la consulta automática falló.
+   *
+   * No impide ver el reporte —las rentas salen vacías, como antes de que
+   * hubiera consulta— pero hay que decirlo o parece que la tasa es cero.
+   */
+  tasa_bcv_aviso?: string;
   [key: string]: unknown;
 }
 
@@ -152,6 +215,15 @@ export interface EtaSubscriptionConfig {
   reportar?: boolean;
   es_transporte?: boolean;
   es_dedicado?: boolean;
+  /**
+   * La renta de este contrato, en divisa.
+   *
+   * El catálogo comercial no puede darla: cada enlace dedicado y cada
+   * transporte negocia la suya, y es con lo que se declara su renta básica.
+   * Las órdenes de la misma velocidad se declaran en una sola fila, con el
+   * promedio de sus rentas.
+   */
+  precio?: number;
 }
 
 export interface EtaPlanConfig {
@@ -170,6 +242,9 @@ export interface EtaDiscoveredSubscription extends EtaSubscriptionConfig {
   orden: string;
   cliente?: string;
   producto?: string;
+  /** De dónde viene el contrato. Solo para localizarlo: no se declara. */
+  sucursal?: string;
+  zona?: string;
 }
 
 export interface SubscriptionEtaManagementProps {
@@ -218,7 +293,8 @@ export type CatalogoTipo =
   | 'sites'
   | 'estados'
   | 'coordinadores'
-  | 'ignorados';
+  | 'ignorados'
+  | 'reguladores';
 
 export interface CatalogoOption {
   value: string;
@@ -238,6 +314,33 @@ export interface CatalogoPlan {
   precio: number;
   /** Si el plan se declara a la reguladora en el reporte ETA. */
   declarar_en_eta: boolean;
+  /** Con qué fila del formulario se declara. `null` = todavía sin agrupar. */
+  plan_regulador_id: number | null;
+  plan_regulador: string;
+}
+
+/**
+ * El plan tal y como se **declara**, no como se vende.
+ *
+ * Varios planes comerciales colapsan en uno: la misma velocidad con dos
+ * tarifas es un solo producto ante la reguladora. Lleva sus propios campos
+ * porque, cuando dos planes del grupo difieren en precio o velocidad, lo
+ * declarado tiene que ser una decisión explícita.
+ */
+export interface CatalogoPlanRegulador {
+  id: number;
+  nombre: string;
+  tecnologia: string;
+  tipo_persona: string;
+  datas_mbps: number;
+  /** En divisa. La conversión a bolívares se hace al exportar. */
+  precio: number;
+  tiene_tv: boolean;
+  /** Decide en qué hoja del libro cae la fila. */
+  es_transporte: boolean;
+  notas: string;
+  /** Cuántos planes comerciales se declaran con él. */
+  planes: number;
 }
 
 export interface CatalogoZona {
@@ -283,6 +386,7 @@ export interface ProductoPendiente {
 
 export interface SubscriptionCatalogosProps {
   planes: CatalogoPlan[];
+  reguladores: CatalogoPlanRegulador[];
   zonas: CatalogoZona[];
   sites: CatalogoSite[];
   estados: CatalogoNombrado[];

@@ -1,21 +1,37 @@
 /** Pantalla de parametrización ETA: pendientes y excepciones por suscripción. */
 
+import {
+  CheckCircle2, Edit3, EyeOff, Network, Plus, Settings2, ShieldAlert, Trash2,
+} from 'lucide-react';
+
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
-import { Modal } from '@/shared/ui';
-import { NeonContainer } from '@/shared/ui';
-import {
-  Plus, Settings2, ShieldAlert, CheckCircle2, Network,
-  Edit3, Trash2, EyeOff, Search
-} from 'lucide-react';
+import { DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
+import { formatTwoDecimals } from '@/shared/utils/formatters';
 import { useEtaManagement } from '@/features/subscriptions/hooks/useEtaManagement';
-import { inputClass } from '@/features/subscriptions/lib/formClasses';
 import type {
+  EtaDiscoveredSubscription,
+  EtaSubscriptionConfig,
   SubscriptionEtaManagementProps,
 } from '@/features/subscriptions/types';
 import { SubscriptionForm } from './Forms';
 
 type Props = SubscriptionEtaManagementProps;
+
+/**
+ * Cómo se declara una excepción: en la hoja de internet, en la de transporte,
+ * o como un enlace dedicado que va en la de internet con nombre propio.
+ *
+ * Es lo primero por lo que se filtra cuando se revisa el maestro, y no es un
+ * campo sino la combinación de dos banderas, así que se resuelve una vez aquí.
+ */
+const tipoDeclaracion = (sub: EtaSubscriptionConfig): string => {
+  if (sub.es_transporte) return 'Transporte';
+  if (sub.es_dedicado) return 'Dedicado';
+  return 'Internet';
+};
+
+const textoOGuion = (valor?: string) => valor?.trim() || '—';
 
 /**
  * Parametrización del reporte ETA.
@@ -24,6 +40,10 @@ type Props = SubscriptionEtaManagementProps;
  * catálogo (`/subscriptions/config/`) y no había motivo para que ETA guardara
  * una segunda clasificación que pisaba a aquella. Lo que queda aquí son las
  * excepciones por orden, que sí son de cada contrato.
+ *
+ * Las dos tablas son `DataTable` y no marcado propio: traen búsqueda, orden y
+ * filtros por columna, que es justo lo que hace falta para encontrar un
+ * contrato entre miles, y antes estaban escritas a mano sin nada de eso.
  */
 export function EtaManagementView({
   individualConfigs = [],
@@ -32,9 +52,10 @@ export function EtaManagementView({
   allKnownPlans = [],
 }: Props) {
   const {
-    search, setSearch, isCustomProduct, setIsCustomProduct, isSaving, activeView, setActiveTab,
-    editingSub, setEditingSub, deletingItem, setDeletingItem, filteredSubs,
-    handleOpenEditSub, handleUpdateSub, handleQuickIgnoreSub, handleConfirmDelete, handleSelectPredefinedPlan,
+    isCustomProduct, setIsCustomProduct, isSaving, activeView, setActiveTab,
+    editingSub, setEditingSub, deletingItem, setDeletingItem,
+    handleOpenEditSub, handleUpdateSub, handleQuickIgnoreSub, handleConfirmDelete,
+    handleSelectPredefinedPlan,
   } = useEtaManagement({ individualConfigs, allKnownPlans, discoveredPlans, discoveredSubs });
 
   const createSub = () => {
@@ -46,12 +67,104 @@ export function EtaManagementView({
       tecnologia: 'FTTH',
       tipo_persona: 'pyme',
       datas_mbps: 100,
+      precio: 0,
       reportar: true,
       tiene_tv: false,
       es_transporte: false,
       es_dedicado: false,
     });
   };
+
+  const botonIcono = (
+    onClick: () => void,
+    titulo: string,
+    icono: React.ReactNode,
+    tono: string,
+  ) => (
+    <button type="button" onClick={onClick} title={titulo} className={`rounded-lg border p-2 ${tono}`}>
+      {icono}
+    </button>
+  );
+
+  const columnasPendientes: Column<EtaDiscoveredSubscription>[] = [
+    { header: 'Orden', accessor: 'orden', sortKey: 'orden', className: 'font-bold text-white' },
+    { header: 'Cliente', accessor: (row) => textoOGuion(row.cliente), sortKey: 'cliente' },
+    { header: 'Producto', accessor: (row) => textoOGuion(row.producto), sortKey: 'producto', filterable: true },
+    {
+      header: 'Sucursal',
+      accessor: (row) => textoOGuion(row.sucursal),
+      sortKey: 'sucursal',
+      filterable: true,
+      filterValue: (row) => row.sucursal?.trim() || 'Sin sucursal',
+    },
+    {
+      header: 'Zona',
+      accessor: (row) => textoOGuion(row.zona),
+      sortKey: 'zona',
+      filterable: true,
+      filterValue: (row) => row.zona?.trim() || 'Sin zona',
+    },
+    {
+      header: 'Acciones',
+      align: 'right',
+      accessor: (row) => (
+        <div className="flex justify-end gap-2">
+          {botonIcono(() => handleOpenEditSub(row), 'Clasificar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
+          {botonIcono(() => handleQuickIgnoreSub(row), 'Ignorar', <EyeOff className="h-4 w-4" />, 'border-slate-700 text-slate-400 hover:bg-slate-700/30')}
+        </div>
+      ),
+    },
+  ];
+
+  const columnasGuardadas: Column<EtaSubscriptionConfig>[] = [
+    { header: 'Orden', accessor: 'orden', sortKey: 'orden', className: 'font-bold text-white' },
+    { header: 'Cliente', accessor: (row) => textoOGuion(row.cliente), sortKey: 'cliente' },
+    { header: 'Producto', accessor: (row) => textoOGuion(row.producto), sortKey: 'producto', filterable: true },
+    {
+      header: 'Declaración',
+      accessor: tipoDeclaracion,
+      filterable: true,
+      filterValue: tipoDeclaracion,
+    },
+    { header: 'Tecnología', accessor: (row) => textoOGuion(row.tecnologia), sortKey: 'tecnologia', filterable: true },
+    { header: 'Persona', accessor: (row) => textoOGuion(row.tipo_persona), sortKey: 'tipo_persona', filterable: true },
+    { header: 'Mbps', accessor: 'datas_mbps', align: 'right', sortKey: 'datas_mbps' },
+    {
+      // La renta con la que se declara este enlace. El catálogo comercial no
+      // puede darla —cada dedicado negocia la suya—, así que es el único sitio
+      // donde se ve si falta.
+      header: 'Renta',
+      accessor: (row) => (row.precio ? formatTwoDecimals(row.precio) : '— sin fijar'),
+      align: 'right',
+      sortKey: 'precio',
+      filterable: true,
+      filterValue: (row) => (row.precio ? 'Con renta' : 'Sin renta'),
+    },
+    {
+      header: 'TV',
+      accessor: (row) => (row.tiene_tv ? 'Sí' : '—'),
+      filterable: true,
+      filterValue: (row) => (row.tiene_tv ? 'Sí' : 'No'),
+    },
+    {
+      header: 'Reportar',
+      accessor: (row) => (row.reportar === false
+        ? <EyeOff className="h-4 w-4 text-slate-500" />
+        : <CheckCircle2 className="h-4 w-4 text-emerald-400" />),
+      filterable: true,
+      filterValue: (row) => (row.reportar === false ? 'No se reporta' : 'Se reporta'),
+    },
+    {
+      header: 'Acciones',
+      align: 'right',
+      accessor: (row) => (
+        <div className="flex justify-end gap-2">
+          {botonIcono(() => handleOpenEditSub(row), 'Editar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
+          {botonIcono(() => setDeletingItem({ type: 'sub', id: row.orden }), 'Eliminar', <Trash2 className="h-4 w-4" />, 'border-rose-500/30 text-rose-400 hover:bg-rose-500/10')}
+        </div>
+      ),
+    },
+  ];
 
   return (
     <AppLayout
@@ -103,48 +216,52 @@ export function EtaManagementView({
       )}
 
       {activeView === 'discovered_subs' && (
-        <NeonContainer title="Suscripciones detectadas" subtitle="Registros que requieren clasificación manual" icon={<ShieldAlert className="w-5 h-5" />} theme="yellow">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead><tr className="border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-500"><th className="p-3">Orden</th><th>Cliente</th><th>Producto</th><th className="text-right p-3">Acciones</th></tr></thead>
-              <tbody>
-                {discoveredSubs.map((sub) => (
-                  <tr key={sub.orden} className="border-b border-slate-900 hover:bg-slate-800/30">
-                    <td className="p-3 font-bold text-white">{sub.orden}</td><td className="p-3 text-slate-300">{sub.cliente || '—'}</td><td className="p-3 text-slate-300">{sub.producto || '—'}</td>
-                    <td className="p-3 text-right space-x-2">
-                      <button onClick={() => handleOpenEditSub(sub)} className="rounded-lg border border-sky-500/30 p-2 text-sky-400" title="Editar"><Edit3 className="w-4 h-4" /></button>
-                      <button onClick={() => handleQuickIgnoreSub(sub)} className="rounded-lg border border-slate-700 p-2 text-slate-400" title="Ignorar"><EyeOff className="w-4 h-4" /></button>
-                    </td>
-                  </tr>
-                ))}
-                {discoveredSubs.length === 0 && <tr><td colSpan={4} className="p-10 text-center text-slate-500">No hay suscripciones pendientes.</td></tr>}
-              </tbody>
-            </table>
-          </div>
+        <NeonContainer
+          title="Suscripciones detectadas"
+          subtitle="Registros que requieren clasificación manual"
+          icon={<ShieldAlert className="w-5 h-5" />}
+          theme="yellow"
+          noPadding
+        >
+          {discoveredSubs.length === 0 ? (
+            <EmptyState
+              title="No hay suscripciones pendientes"
+              description="Todos los contratos dedicados y de transporte están clasificados."
+              icon={<CheckCircle2 />}
+            />
+          ) : (
+            <DataTable
+              columns={columnasPendientes}
+              data={discoveredSubs}
+              searchable
+              searchPlaceholder="Buscar por orden, cliente o producto..."
+            />
+          )}
         </NeonContainer>
       )}
 
       {activeView === 'individual' && (
-        <NeonContainer title="Suscripciones guardadas" subtitle="Configuración individual de órdenes ETA" icon={<Network className="w-5 h-5" />} theme="blue">
-          <div className="mb-4 relative max-w-md">
-            <Search className="absolute left-3 top-3 w-4 h-4 text-slate-500" />
-            <input className={`${inputClass} pl-10`} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por orden o cliente..." />
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead><tr className="border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-500"><th className="p-3">Orden</th><th>Cliente</th><th>Producto</th><th>Tecnología</th><th>Reportar</th><th className="text-right p-3">Acciones</th></tr></thead>
-              <tbody>
-                {filteredSubs.map((sub) => (
-                  <tr key={sub.orden} className="border-b border-slate-900 hover:bg-slate-800/30">
-                    <td className="p-3 font-bold text-white">{sub.orden}</td><td className="p-3 text-slate-300">{sub.cliente || '—'}</td><td className="p-3 text-slate-300">{sub.producto || '—'}</td><td className="p-3 text-slate-400">{sub.tecnologia || '—'}</td>
-                    <td className="p-3">{sub.reportar === false ? <EyeOff className="w-4 h-4 text-slate-500" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}</td>
-                    <td className="p-3 text-right space-x-2"><button onClick={() => handleOpenEditSub(sub)} className="rounded-lg border border-sky-500/30 p-2 text-sky-400"><Edit3 className="w-4 h-4" /></button><button onClick={() => setDeletingItem({ type: 'sub', id: sub.orden })} className="rounded-lg border border-rose-500/30 p-2 text-rose-400"><Trash2 className="w-4 h-4" /></button></td>
-                  </tr>
-                ))}
-                {filteredSubs.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-500">No hay registros que coincidan.</td></tr>}
-              </tbody>
-            </table>
-          </div>
+        <NeonContainer
+          title="Suscripciones guardadas"
+          subtitle="Configuración individual de órdenes ETA"
+          icon={<Network className="w-5 h-5" />}
+          theme="blue"
+          noPadding
+        >
+          {individualConfigs.length === 0 ? (
+            <EmptyState
+              title="Todavía no hay excepciones guardadas"
+              description="Las excepciones por orden se crean desde la pestaña de corporativos pendientes."
+              icon={<Network />}
+            />
+          ) : (
+            <DataTable
+              columns={columnasGuardadas}
+              data={individualConfigs}
+              searchable
+              searchPlaceholder="Buscar por orden, cliente o producto..."
+            />
+          )}
         </NeonContainer>
       )}
 

@@ -31,7 +31,8 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
 | `catalogo_coordinadores` | `Coordinador` | Responsable comercial |
 | `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
-| `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)` |
+| `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
+| `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
 | `catalogo_productos_ignorados` | `ProductoIgnorado` | Líneas del export que nunca serán un plan |
 | `django_migrations` | Django | **Compartida: es la causa de los comandos `preparar_*`** |
 
@@ -120,8 +121,8 @@ Escritas con `periodo_reporte = "global"` y `metodo_calculo = "lifetime"`.
 
 | Tabla | Cómo se crea | Contenido |
 |---|---|---|
-| `analyzer_eta_config_subs_individual` | DDL explícito | Excepciones por orden: `orden` (PK), `cliente`, `producto`, `reportar`, `tecnologia`, `tipo_persona`, `tiene_tv`, `datas_mbps`, `es_transporte`, `es_dedicado`, `updated_at` |
-| `analyzer_eta_reporte_mensual` | DDL explícito | `periodo_reporte` (PK), `reporte_data` (JSONB), `esta_bloqueado`, `fecha_calculo` |
+| `analyzer_eta_config_subs_individual` | DDL explícito | Excepciones por orden: `orden` (PK), `cliente`, `producto`, `reportar`, `tecnologia`, `tipo_persona`, `tiene_tv`, `datas_mbps`, `es_transporte`, `es_dedicado`, `precio`, `updated_at`. `precio` es la renta con que se declara ese enlace: el catálogo comercial no la tiene |
+| `analyzer_eta_reporte_mensual` | DDL explícito | `periodo_reporte` (PK), `reporte_data` (JSONB), `esta_bloqueado`, `tasa_bcv`, `tasa_fuente`, `fecha_calculo`. `tasa_fuente` dice de dónde salió la cifra (el día que publicó el BCV, o «Escrita a mano»). La tasa vive **fuera** de `reporte_data`: los formularios guardan el precio en divisa y la conversión es del exportador, así que se corrige sin recalcular |
 | `analyzer_eta_config_planes` | — | **Obsoleta.** Guardaba una segunda copia, con prioridad, de la clasificación de cada plan. Sigue en la base de datos, **vacía y sin leer**; el nombre se conserva en `TableNames` solo para poder identificarla |
 
 ---

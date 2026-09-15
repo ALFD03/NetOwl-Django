@@ -6,6 +6,7 @@ import { subscriptionsApi, type CatalogoPayload } from '@/shared/lib/api/subscri
 import type {
   CatalogoNombrado,
   CatalogoPlan,
+  CatalogoPlanRegulador,
   CatalogoProductoIgnorado,
   CatalogoSite,
   CatalogoTipo,
@@ -14,6 +15,7 @@ import type {
 
 /** Una fila en edición. Sin `id` es un alta. */
 export type PlanDraft = Omit<CatalogoPlan, 'id'> & { id?: number };
+export type ReguladorDraft = Omit<CatalogoPlanRegulador, 'id' | 'planes'> & { id?: number };
 export type ZonaDraft = {
   id?: number;
   nombre: string;
@@ -33,7 +35,8 @@ export type CatalogoVista =
   | 'sites'
   | 'estados'
   | 'coordinadores'
-  | 'ignorados';
+  | 'ignorados'
+  | 'reguladores';
 
 const PLAN_VACIO: PlanDraft = {
   nombre: '',
@@ -45,6 +48,19 @@ const PLAN_VACIO: PlanDraft = {
   datas_mbps: 0,
   precio: 0,
   declarar_en_eta: true,
+  plan_regulador_id: null,
+  plan_regulador: '',
+};
+
+const REGULADOR_VACIO: ReguladorDraft = {
+  nombre: '',
+  tecnologia: 'FTTH',
+  tipo_persona: 'nat',
+  datas_mbps: 0,
+  precio: 0,
+  tiene_tv: false,
+  es_transporte: false,
+  notas: '',
 };
 
 interface Args {
@@ -77,6 +93,7 @@ export function useCatalogos({ sites, estados, nuevoPlan }: Args) {
   const [planDraft, setPlanDraft] = useState<PlanDraft | null>(
     () => (nuevoPlan ? { ...PLAN_VACIO, nombre: nuevoPlan } : null),
   );
+  const [reguladorDraft, setReguladorDraft] = useState<ReguladorDraft | null>(null);
   const [zonaDraft, setZonaDraft] = useState<ZonaDraft | null>(null);
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
   const [nombreDraft, setNombreDraft] = useState<NombreDraft | null>(null);
@@ -86,6 +103,23 @@ export function useCatalogos({ sites, estados, nuevoPlan }: Args) {
   const nuevoPlanVacio = () => setPlanDraft({ ...PLAN_VACIO });
   const editarPlan = (plan: CatalogoPlan) => setPlanDraft({ ...plan });
   const crearPlanDesde = (nombre: string) => setPlanDraft({ ...PLAN_VACIO, nombre });
+
+  const nuevoRegulador = () => setReguladorDraft({ ...REGULADOR_VACIO });
+  // `planes` se queda fuera a propósito: es un conteo que calcula el servidor,
+  // no un campo del formulario, y mandarlo de vuelta sería enviar un dato que
+  // el backend ignora y que aquí solo confunde.
+  const editarRegulador = (fila: CatalogoPlanRegulador) =>
+    setReguladorDraft({
+      id: fila.id,
+      nombre: fila.nombre,
+      tecnologia: fila.tecnologia,
+      tipo_persona: fila.tipo_persona,
+      datas_mbps: fila.datas_mbps,
+      precio: fila.precio,
+      tiene_tv: fila.tiene_tv,
+      es_transporte: fila.es_transporte,
+      notas: fila.notas,
+    });
 
   const nuevaZona = () =>
     setZonaDraft({
@@ -118,6 +152,7 @@ export function useCatalogos({ sites, estados, nuevoPlan }: Args) {
 
   const cerrarFormularios = () => {
     setPlanDraft(null);
+    setReguladorDraft(null);
     setZonaDraft(null);
     setSiteDraft(null);
     setNombreDraft(null);
@@ -167,6 +202,7 @@ export function useCatalogos({ sites, estados, nuevoPlan }: Args) {
   return {
     vista, setVista, guardando, error, setError,
     planDraft, setPlanDraft, nuevoPlanVacio, editarPlan, crearPlanDesde,
+    reguladorDraft, setReguladorDraft, nuevoRegulador, editarRegulador,
     zonaDraft, setZonaDraft, nuevaZona, editarZona,
     siteDraft, setSiteDraft, nuevoSite, editarSite,
     nombreDraft, setNombreDraft, nuevoNombre, editarNombre,

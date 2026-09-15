@@ -119,4 +119,4 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 | **Turno de módulo** | El cerrojo en Redis que impide que dos análisis del mismo módulo escriban a la vez |
 | **Job muerto** | Ejecución abierta sin señales de vida en 15 minutos. Deja de bloquear |
 | **Duplicado exacto** | Mismo módulo **y** mismo periodo ya abiertos. Es lo único que se rechaza con 409 |
-| **Instantánea del catálogo** | La copia coherente de los seis catálogos que `fixtures` cachea 60 segundos |
+| **Instantánea del catálogo** | la copia coherente de los siete catálogos que `fixtures` cachea 60 segundos |

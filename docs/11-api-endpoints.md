@@ -88,6 +88,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | POST | `api/lifecycle/run/` | `can_run_lifetime` | 2/m | Encola; **202** con el job. Sin periodo |
 | GET | `api/eta-report/data/?period=&force=` | `can_view_eta` | — | `force=true` recalcula aunque esté bloqueado |
 | POST | `api/eta-report/lock/` | `can_manage_eta` | — | `{period, lock}`. Al bloquear, recalcula y congela |
+| POST | `api/eta-report/tasa/` | `can_manage_eta` | 30/m | `{period, tasa}`. Escribe la tasa a mano; no recalcula nada |
+| POST | `api/eta-report/tasa/consultar/` | `can_manage_eta` | 10/m | `{period}`. Vuelve a pedirla al BCV y pisa la guardada. **502** si el tercero falla |
 | POST | `api/eta-report/save-sub-config/` | `can_manage_eta` | — | Excepción individual: `orden` obligatorio |
 | POST | `api/eta-report/delete-sub-config/` | `can_manage_eta` | — | `{orden}` |
 | POST | `api/catalogos/guardar/` | `can_manage_catalogos` | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido |
