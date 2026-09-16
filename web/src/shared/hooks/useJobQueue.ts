@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { jobsApi, type AnalysisJob } from '@/shared/lib/api/jobs';
+import { jobsApi, suscribirseAJobsEncolados, type AnalysisJob } from '@/shared/lib/api/jobs';
 
 /** Cadencia de sondeo: rápida mientras algo corre, lenta cuando no hay nada. */
 const INTERVALO_ACTIVO_MS = 4000;
@@ -85,13 +85,24 @@ export function useJobQueue(): JobQueueState {
 
     const programar = (ms: number) => {
       if (!vivo) return;
+      if (temporizadorRef.current) clearTimeout(temporizadorRef.current);
       temporizadorRef.current = setTimeout(sondear, ms);
     };
+
+    // Lanzar un analisis no espera al siguiente sondeo: la fila del job ya
+    // existe cuando la peticion responde, asi que se consulta en el acto y el
+    // aviso aparece a la vez que el trabajo, no hasta veinte segundos despues.
+    const desuscribir = suscribirseAJobsEncolados(() => {
+      if (!vivo) return;
+      if (temporizadorRef.current) clearTimeout(temporizadorRef.current);
+      void sondear();
+    });
 
     void sondear();
 
     return () => {
       vivo = false;
+      desuscribir();
       if (temporizadorRef.current) clearTimeout(temporizadorRef.current);
     };
   }, []);

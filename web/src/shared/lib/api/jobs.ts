@@ -38,6 +38,28 @@ interface StartJobResponse {
 
 const POLL_INTERVAL_MS = 2000;
 
+/**
+ * Aviso de que acaba de encolarse un análisis.
+ *
+ * El aviso flotante sondea la cola con su propia cadencia, y entre lanzar un
+ * análisis y el siguiente sondeo pueden pasar hasta veinte segundos en los que
+ * la pantalla no refleja nada de lo que se acaba de pedir. Esto le da la señal
+ * para consultar en el acto, sin bajar el intervalo de todos los demás sondeos.
+ */
+type OyenteDeCola = () => void;
+const oyentesDeCola = new Set<OyenteDeCola>();
+
+export function notificarJobEncolado(): void {
+  oyentesDeCola.forEach((oyente) => oyente());
+}
+
+export function suscribirseAJobsEncolados(oyente: OyenteDeCola): () => void {
+  oyentesDeCola.add(oyente);
+  return () => {
+    oyentesDeCola.delete(oyente);
+  };
+}
+
 const isFinished = (job: AnalysisJob) => job.status === 'success' || job.status === 'error';
 
 /** Everything the worker is running or has queued, for the floating indicator. */
@@ -104,8 +126,10 @@ export async function startAndFollow(
     // el usuario, es el mismo trabajo: nos enganchamos a el.
     const running = extractRunningJob(error);
     if (!running) throw error;
+    notificarJobEncolado();
     return followJob(running.job, onProgress);
   }
+  notificarJobEncolado();
   return followJob(started.job, onProgress);
 }
 
