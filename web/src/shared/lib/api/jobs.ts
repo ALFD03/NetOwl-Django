@@ -7,12 +7,12 @@
  */
 
 import { apiClient } from './client';
-import { JobFailedError } from '../http/errors';
+import { JobCancelledError, JobFailedError } from '../http/errors';
 
 /** Modules that run their analysis through the Celery worker. */
 export type JobModule = 'subs_analysis' | 'crm_analysis' | 'support_analysis' | 'subs_lifetime';
 
-export type JobStatus = 'pending' | 'running' | 'success' | 'error';
+export type JobStatus = 'pending' | 'running' | 'success' | 'error' | 'cancelled';
 
 export interface AnalysisJob {
   id: string;
@@ -60,7 +60,9 @@ export function suscribirseAJobsEncolados(oyente: OyenteDeCola): () => void {
   };
 }
 
-const isFinished = (job: AnalysisJob) => job.status === 'success' || job.status === 'error';
+/** Un job deja de moverse cuando termina, falla o alguien lo cancela. */
+const isFinished = (job: AnalysisJob) =>
+  job.status === 'success' || job.status === 'error' || job.status === 'cancelled';
 
 /** Everything the worker is running or has queued, for the floating indicator. */
 export interface JobQueue {
@@ -78,6 +80,18 @@ export const jobsApi = {
   active: async (module: JobModule) =>
     (await apiClient.get<{ job: AnalysisJob | null }>('/imports/api/jobs/active/', { params: { module } }))
       .data.job,
+
+  /**
+   * Pide detener una ejecución encolada o en curso.
+   *
+   * Responde en cuanto la fila queda cerrada, no cuando el worker se entera: si
+   * ya estaba calculando, se detiene en su siguiente punto de control. El sondeo
+   * que ya está en marcha es el que enseña ese final.
+   */
+  cancel: async (id: string) =>
+    (await apiClient.post<{ status: string; message: string; job: AnalysisJob }>(
+      `/imports/api/jobs/${id}/cancel/`,
+    )).data,
 };
 
 /**
@@ -106,6 +120,9 @@ export async function followJob(
     onProgress?.(current);
   }
 
+  if (current.status === 'cancelled') {
+    throw new JobCancelledError(current.message, current.log_output);
+  }
   if (current.status === 'error') {
     throw new JobFailedError(current.message, current.log_output);
   }

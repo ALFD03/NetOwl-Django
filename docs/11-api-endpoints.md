@@ -194,6 +194,7 @@ Sin `@ratelimit` a propósito: son endpoints de sondeo continuo.
 | GET | `api/jobs/<uuid>/` | Quien lo lanzó, quien puede ver el historial, o superusuario | La ficha completa del job (estado, mensaje, `log_output`, `progress`, `result`) |
 | GET | `api/jobs/queue/` | Igual, filtrado | `{jobs: [...], en_ejecucion, en_cola}` |
 | GET | `api/jobs/active/?module=` | Igual | `{job}` o `{job: null}`. **400** si el módulo no es válido |
+| POST | `api/jobs/<uuid>/cancel/` | Quien lo lanzó, `can_run_calculations`, o superusuario. Límite 10/m | Cierra la ejecución como `cancelled`. **403** sin permiso, **404** si no existe o no se ve, **409** si ya había terminado. No habla con Celery: la que esperaba turno no llega a empezar y la que ya calculaba se detiene en su siguiente punto de control |
 
 Forma de un job:
 

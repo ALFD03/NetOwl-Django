@@ -33,7 +33,13 @@ from core.models import Periodo
 from core.utils import capture_console
 
 from .history import register_import_log
-from .jobs import ConsolaJob, bloqueo_modulo, marcar_fin, marcar_inicio
+from .jobs import (
+    AnalisisCancelado,
+    ConsolaJob,
+    bloqueo_modulo,
+    marcar_fin,
+    marcar_inicio,
+)
 from .models import AnalysisJob
 
 logger = logging.getLogger(__name__)
@@ -160,6 +166,10 @@ def ejecutar_analisis(self, job_id: str) -> None:
     No propaga la excepcion: el error interesa en el job (lo lee la interfaz) y
     en el historial de importaciones, no como traza de Celery que nadie mira.
 
+    La misma guarda que descarta una reentrega tras reiniciar el worker es la que
+    cancela un analisis que todavia esperaba en la cola: cancelarlo cierra su
+    fila, y una fila cerrada no se ejecuta.
+
     Si otro analisis del mismo modulo tiene el turno, la tarea se reencola en
     vez de esperar ocupando un hueco del worker: mientras tanto el job se queda
     en `pending` y la interfaz lo enseña, correctamente, como que espera turno.
@@ -171,10 +181,11 @@ def ejecutar_analisis(self, job_id: str) -> None:
         logger.error("Job de analisis inexistente: %s", job_id)
         return
 
-    # Reentrega tras un reinicio del worker: el mensaje sigue en la cola pero el
-    # trabajo ya se dio por terminado. Repetirlo reescribiria el periodo entero.
+    # Reentrega tras un reinicio del worker, o analisis cancelado mientras
+    # esperaba turno: el mensaje sigue en la cola pero la fila ya esta cerrada.
+    # Repetirlo reescribiria el periodo entero.
     if not job.esta_abierto:
-        logger.warning("Job %s ya cerrado (%s); se ignora la reentrega", job_id, job.status)
+        logger.warning("Job %s ya cerrado (%s); no se ejecuta", job_id, job.status)
         return
 
     with bloqueo_modulo(job.module) as turno:
@@ -199,6 +210,19 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
     try:
         with capture_console(consola):
             mensaje, resultado = runner(job, consola)
+    except AnalisisCancelado:
+        # Lo pidio alguien desde la interfaz: la fila ya esta en `cancelled` y con
+        # su mensaje. Aqui solo se cierra -vuelca el log parcial, que es lo que
+        # dice hasta donde llego- y se deja constancia en el historial.
+        texto = (
+            AnalysisJob.objects.filter(pk=job.pk)
+            .values_list('message', flat=True)
+            .first()
+            or "Análisis cancelado."
+        )
+        marcar_fin(job, consola, AnalysisJob.CANCELADO, texto)
+        register_import_log(job.user, job.module, etiqueta, 0, 'warning', texto, job.log)
+        return
     except SoftTimeLimitExceeded:
         texto = (
             "El análisis superó el tiempo máximo de ejecución y fue detenido."

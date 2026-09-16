@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { jobsApi, suscribirseAJobsEncolados, type AnalysisJob } from '@/shared/lib/api/jobs';
+import { jobsApi, notificarJobEncolado, suscribirseAJobsEncolados, type AnalysisJob } from '@/shared/lib/api/jobs';
 
 /** Cadencia de sondeo: rápida mientras algo corre, lenta cuando no hay nada. */
 const INTERVALO_ACTIVO_MS = 4000;
@@ -18,6 +18,10 @@ export interface JobQueueState {
   /** Último análisis terminado, para avisar del desenlace y desaparecer. */
   finished: AnalysisJob | null;
   dismissFinished: () => void;
+  /** Pide detener una ejecución y refresca la cola sin esperar al sondeo. */
+  cancel: (id: string) => Promise<void>;
+  /** Ids con la cancelación pedida y todavía sin reflejar en la cola. */
+  cancelling: string[];
 }
 
 /**
@@ -36,6 +40,9 @@ export function useJobQueue(): JobQueueState {
   const [running, setRunning] = useState(0);
   const [queued, setQueued] = useState(0);
   const [finished, setFinished] = useState<AnalysisJob | null>(null);
+  // Entre pedir la cancelación y verla en el sondeo pasa un momento; sin esto el
+  // botón volvería a ofrecerse como si no se hubiera pulsado.
+  const [cancelling, setCancelling] = useState<string[]>([]);
 
   // Ids vistos en el sondeo anterior: la diferencia con los actuales es lo que
   // acaba de terminar.
@@ -43,6 +50,20 @@ export function useJobQueue(): JobQueueState {
   const temporizadorRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dismissFinished = useCallback(() => setFinished(null), []);
+
+  const cancel = useCallback(async (id: string) => {
+    setCancelling((actual) => (actual.includes(id) ? actual : [...actual, id]));
+    try {
+      await jobsApi.cancel(id);
+    } catch {
+      // No se pudo: se suelta la marca para que el botón se vuelva a ofrecer.
+      setCancelling((actual) => actual.filter((otro) => otro !== id));
+      return;
+    }
+    // La fila ya está cerrada: se consulta en el acto en vez de esperar al
+    // siguiente sondeo, que es lo que hace que el aviso reaccione al clic.
+    notificarJobEncolado();
+  }, []);
 
   useEffect(() => {
     let vivo = true;
@@ -64,6 +85,7 @@ export function useJobQueue(): JobQueueState {
         setQueued(cola.en_cola);
 
         const actuales = cola.jobs.map((job) => job.id);
+        setCancelling((marcados) => marcados.filter((id) => actuales.includes(id)));
         const desaparecidos = previosRef.current.filter((id) => !actuales.includes(id));
         previosRef.current = actuales;
 
@@ -107,5 +129,5 @@ export function useJobQueue(): JobQueueState {
     };
   }, []);
 
-  return { jobs, running, queued, finished, dismissFinished };
+  return { jobs, running, queued, finished, dismissFinished, cancel, cancelling };
 }
