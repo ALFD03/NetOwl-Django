@@ -16,6 +16,7 @@ export { useCrmStageTime } from './hooks/useCrmStageTime';
 export { useCrmPeriodDimensions } from './hooks/useCrmPeriodDimensions';
 export * from './lib/crmAnalyticsDistribution';
 export * from './lib/crmEfectividad';
+export * from './lib/crmDaySummary';
 export * from './lib/crmDimensions';
 export * from './lib/crmTiempoEtapa';
 export type * from './types';

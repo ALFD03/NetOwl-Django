@@ -57,17 +57,29 @@ export interface DayPayload {
 }
 
 /**
- * La barra de dias de un modulo que pide el corte al servidor (CRM, Soporte).
+ * La serie ligera de un mes: el bloque global de cada dia, indexado por dia.
  *
- * No trae los datos de ningun dia: solo cuales hay calculados y cual se esta
- * mirando. El corte en si llega en las props normales de la pagina, ya sustituido
- * por la vista.
+ * Cada entrada es el corte ACUMULADO del mes hasta ese dia, sin desgloses
+ * dimensionales. Lo de un dia suelto se obtiene restando el dia calculado
+ * anterior (`shared/lib/daySeries`).
+ */
+export type DaySeries = Record<string, Record<string, number>>;
+
+/**
+ * La barra de dias de un modulo que pide el desglose al servidor (CRM, Soporte).
+ *
+ * `serie` trae el mes entero pero solo en su parte ligera, que es lo que hace
+ * que mover la barra sea instantaneo: tarjetas, acumulados, variacion contra el
+ * dia anterior y lineas de tendencia salen de ahi sin pedir nada. El desglose
+ * dimensional del dia elegido llega en las props normales de la pagina, y los
+ * demas dias los pide y cachea `useDayPayload`.
  */
 export interface DayCuts {
   periodo_mes: string;
   dias_disponibles: number[];
   /** Dia que resolvio el servidor; 0 cuando el mes no tiene cortes. */
   dia: number;
+  serie?: DaySeries;
 }
 
 /** Fila de analyzer_day_metrics: un mes completo, indexado por dia. */

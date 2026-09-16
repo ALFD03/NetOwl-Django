@@ -16,8 +16,8 @@ src/
 │   ├── layout/   AppLayout, Sidebar, UserMenu
 │   ├── navigation/  ModuleHeader
 │   ├── charts/   Chart.js wrappers, shared options, registration
-│   ├── lib/      cn(), colour helpers, api client, http error handling
-│   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts
+│   ├── lib/      cn(), colour helpers, api client, http error handling, daySeries
+│   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts, useDayPayload
 │   ├── utils/    formatters
 │   ├── constants/  navigation registry, permissions, design tokens
 │   └── types/    cross-cutting types only
@@ -28,20 +28,35 @@ src/
 
 ## The day bar
 
-Three modules have one and they do not work the same way, on purpose.
+All three Analytics pages have one, and **moving it never waits on the server**.
+What the bar changes comes from two places, split by weight.
+
+**The light half — always instant, in every module.** `dayMetrics.serie` carries
+the global metric block of all 31 days (a few KB; the backend cuts it out of the
+row with `-> 'global'`). From it, `shared/lib/daySeries` derives what the new
+`DaySummary` block draws: what happened *that* day, what the month has
+accumulated up to it, and how it compares with the previous computed day. Each
+module declares its metrics in a `*DaySummary.ts` spec, and the `kind` there
+(`flujo`, `stock`, `tasa`) is load-bearing — it says whether subtracting two days
+means anything. Subscriptions builds the same series out of the month it already
+receives.
+
+**The heavy half — the dimensional breakdown.**
 
 - **Subscriptions** gets the whole month in its props (`dayMetrics.dias`) and
-  `features/subscriptions/hooks/useDayMetrics` picks a day out of it. Moving the
-  bar is a regroup in memory: nothing goes to the server.
-- **CRM and Support** get only `dias_disponibles` and the day on screen
-  (`shared/types/domain.DayCuts`), because one of their days already carries the
-  full metric block of every seller, branch, work group or zone — the month would
-  be megabytes. `shared/hooks/useDayCuts` drives that bar: it holds the day
-  locally while the request is in flight, debounces the drag, and the page issues
-  a partial `router.get` with `?dia=`. The server reads **one already-computed
-  cell**; there is no recompute on either side.
+  `features/subscriptions/hooks/useDayMetrics` picks a day out of it. Its
+  breakdowns are small enough to travel.
+- **CRM and Support** cannot: one of their days already carries the full metric
+  block of every seller, branch, work group or zone. `shared/hooks/useDayPayload`
+  serves it from an in-memory cache — a visited day repaints with no request, the
+  neighbours are prefetched while the bar sits still, the last resolved day stays
+  on screen while a new one travels, and the cache is capped because holding the
+  whole month is the original problem. `shared/hooks/useDayCuts` owns the
+  selected day and writes `?dia=` into the URL with `replaceState`, so a reload
+  lands where you were without costing a visit.
 
-`shared/ui/inputs/DayProgressBar` is the same component in all three.
+Nothing on either half recomputes anything: every cut was written by the monthly
+analysis. `shared/ui/inputs/DayProgressBar` is the same component in all three.
 
 ## The three rules
 

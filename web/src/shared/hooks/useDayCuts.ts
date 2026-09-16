@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { DayCuts } from '@/shared/types/domain';
 
 const daysInMonth = (periodoMes: string): number => {
@@ -8,29 +8,30 @@ const daysInMonth = (periodoMes: string): number => {
 };
 
 /**
- * Espera tras soltar el manejador antes de pedir el día al servidor.
+ * Deja `?dia=` escrito en la barra de direcciones sin provocar una visita.
  *
- * El slider emite un `onSelect` por cada día calculado que cruza: arrastrar de
- * punta a punta del mes son treinta peticiones de las que sólo importa la
- * última.
+ * El día ya no es un viaje al servidor —`useDayPayload` lo resuelve de su caché—,
+ * pero la URL tiene que seguir describiendo lo que se está viendo: recargar o
+ * compartir el enlace debe caer en el mismo día. `replaceState` hace justo eso y
+ * nada más; un `router.get` volvería a montar la página.
  */
-const ESPERA_MS = 250;
+function anotarEnUrl(dia: number): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  url.searchParams.set('dia', String(dia));
+  window.history.replaceState(window.history.state, '', url.toString());
+}
 
 /**
- * Resuelve la barra de días de un módulo que pide el corte al servidor.
+ * La barra de días de CRM y Soporte: qué días hay y cuál se está mirando.
  *
- * CRM y Soporte no reciben el mes entero en los props —el corte de un solo día
- * ya lleva el bloque completo de cada valor dimensional—, así que lo que viaja
- * es la lista de días calculados y cuál se está mirando. Elegir otro es una
- * recarga parcial de Inertia que lee una celda ya calculada: no hay recálculo,
- * pero tampoco hay mes en memoria que reagrupar, que es lo que sí hace
- * `useDayMetrics` en Suscripciones.
- *
- * El día que dibuja la barra es local mientras la petición viaja: sin eso el
- * manejador se quedaría clavado hasta que respondiera el servidor, y el slider
- * volvería a emitir el mismo día una y otra vez.
+ * El día vive aquí, en el cliente. Moverlo no pide nada: las tarjetas y las
+ * líneas de tendencia salen de la serie ligera que ya viajó en los props
+ * (`dayMetrics.serie`), y el desglose dimensional lo sirve `useDayPayload` desde
+ * su caché. Suscripciones no usa este hook porque recibe el mes entero y le
+ * basta `useDayMetrics`.
  */
-export function useDayCuts(dayMetrics: DayCuts | undefined, navegar: (dia: number) => void) {
+export function useDayCuts(dayMetrics: DayCuts | undefined) {
   const availableDays = useMemo(
     () => (dayMetrics?.dias_disponibles ?? []).filter((day) => Number.isFinite(day)),
     [dayMetrics],
@@ -46,29 +47,17 @@ export function useDayCuts(dayMetrics: DayCuts | undefined, navegar: (dia: numbe
   const [selectedDay, setSelectedDay] = useState(diaServidor);
   const [visto, setVisto] = useState(diaServidor);
 
-  // Ajuste en render, no en efecto: cuando el servidor responde (o se cambia de
-  // mes) la barra vuelve a lo que él diga.
+  // Ajuste en render, no en efecto: al cambiar de mes —que sí es una visita— la
+  // barra vuelve a lo que diga el servidor.
   if (diaServidor !== visto) {
     setVisto(diaServidor);
     setSelectedDay(diaServidor);
   }
 
-  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(
-    () => () => {
-      if (temporizador.current) clearTimeout(temporizador.current);
-    },
-    [],
-  );
-
-  const selectDay = useCallback(
-    (dia: number) => {
-      setSelectedDay(dia);
-      if (temporizador.current) clearTimeout(temporizador.current);
-      temporizador.current = setTimeout(() => navegar(dia), ESPERA_MS);
-    },
-    [navegar],
-  );
+  const selectDay = useCallback((dia: number) => {
+    setSelectedDay(dia);
+    anotarEnUrl(dia);
+  }, []);
 
   return { availableDays, totalDays, selectedDay, selectDay };
 }

@@ -102,6 +102,12 @@ export interface CrmAnalyticsProps {
   selectedPeriod?: string;
 }
 
+/** El corte completo de un día, tal y como lo sirve `/crm/api/day-metrics/`. */
+export interface CrmDayPayload {
+  global: CrmHistoricoRow;
+  dimensiones: CrmDimensionRow[];
+}
+
 /** A single "who leads this measure" readout in the ranking section. */
 export interface CrmRankingEntry {
   id: string;

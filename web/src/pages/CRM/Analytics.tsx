@@ -4,39 +4,69 @@
  * Recibe todas las dimensiones del periodo: el selector de dimensión es de
  * cliente y no debe costar una vuelta al servidor.
  *
- * La barra de días sí vuelve al servidor, a diferencia de la de Suscripciones:
- * el corte de un día de CRM lleva el bloque completo de cada vendedor, sucursal
- * y campaña, así que el mes entero no viaja en los props. La vuelta es una
- * recarga parcial que lee una celda ya calculada — no recalcula nada.
+ * La barra de días tampoco la cuesta. Lo que mueve la barra sale de dos sitios,
+ * ninguno de ellos una consulta nueva:
+ *
+ * - las tarjetas y las líneas de tendencia, de `dayMetrics.serie` — el bloque
+ *   global de los treinta y un días, que ya viajó entero en los props;
+ * - el desglose dimensional, de la caché de `useDayPayload`, que adelanta los
+ *   días vecinos y sólo pide el que falte.
+ *
+ * El mes completo con desgloses no viaja porque un solo día ya lleva el bloque
+ * de cada vendedor, sucursal y campaña.
  */
 
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { router } from '@inertiajs/react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
-import { CrmAnalyticsFilters, CrmAnalyticsView, useCrmAnalytics } from '@/features/crm';
-import type { CrmAnalyticsProps } from '@/features/crm/types';
+import {
+  CRM_DAY_CARDS,
+  CRM_DAY_CHARTS,
+  CrmAnalyticsFilters,
+  CrmAnalyticsView,
+  useCrmAnalytics,
+} from '@/features/crm';
+import type { CrmAnalyticsProps, CrmDayPayload } from '@/features/crm/types';
 import type { CrmDimensionKey } from '@/shared/constants/labels';
 import { useDayCuts } from '@/shared/hooks/useDayCuts';
-import { DayProgressBar } from '@/shared/ui';
+import { useDayPayload } from '@/shared/hooks/useDayPayload';
+import { CRM_DAY_METRICS_URL } from '@/shared/lib/api/crm';
+import { DayProgressBar, DaySummary } from '@/shared/ui';
 
 export default function CrmAnalytics(props: CrmAnalyticsProps) {
   const { periods = [], selectedPeriod = '', dayMetrics } = props;
   const [selectedDimension, setSelectedDimension] = useState<CrmDimensionKey>('sucursal');
 
-  const { rows, globalData, healthCards, rankingCards } = useCrmAnalytics(props, selectedDimension);
+  const { availableDays, totalDays, selectedDay, selectDay } = useDayCuts(dayMetrics);
 
-  const pedirDia = useCallback(
-    (dia: number) =>
-      router.get('/crm/analytics/', { period: selectedPeriod, dia }, {
-        preserveState: true,
-        preserveScroll: true,
-        only: ['dimensionsData', 'globalData', 'dayMetrics'],
-      }),
-    [selectedPeriod],
+  const { payload } = useDayPayload<CrmDayPayload>({
+    url: CRM_DAY_METRICS_URL,
+    period: selectedPeriod,
+    dia: selectedDay,
+    dias: availableDays,
+    // El día que la vista ya resolvió llega en los props: sembrarlo evita pedir
+    // de vuelta lo que acaba de llegar.
+    inicial: dayMetrics?.dia
+      ? {
+          dia: dayMetrics.dia,
+          payload: {
+            global: props.globalData ?? {},
+            dimensiones: props.dimensionsData ?? [],
+          },
+        }
+      : null,
+  });
+
+  const { rows, globalData, healthCards, rankingCards } = useCrmAnalytics(
+    {
+      ...props,
+      dimensionsData: payload?.dimensiones ?? props.dimensionsData,
+      globalData: payload?.global ?? props.globalData,
+    },
+    selectedDimension,
   );
-  const { availableDays, totalDays, selectedDay, selectDay } = useDayCuts(dayMetrics, pedirDia);
 
   /** Al cambiar de mes se suelta el día: el del mes anterior no significa nada aquí. */
   const handlePeriodChange = (period: string) =>
@@ -69,14 +99,24 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
         </>
       }
     >
-      <CrmAnalyticsView
-        globalData={globalData}
-        rows={rows}
-        healthCards={healthCards}
-        rankingCards={rankingCards}
-        selectedDimension={selectedDimension}
-        selectedPeriod={selectedPeriod}
-      />
+      <div className="space-y-6">
+        <DaySummary
+          serie={dayMetrics?.serie}
+          dias={availableDays}
+          dia={selectedDay}
+          cards={CRM_DAY_CARDS}
+          charts={CRM_DAY_CHARTS}
+        />
+
+        <CrmAnalyticsView
+          globalData={globalData}
+          rows={rows}
+          healthCards={healthCards}
+          rankingCards={rankingCards}
+          selectedDimension={selectedDimension}
+          selectedPeriod={selectedPeriod}
+        />
+      </div>
     </AppLayout>
   );
 }
