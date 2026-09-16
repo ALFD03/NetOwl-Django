@@ -21,9 +21,11 @@ leerlo todo.
 **El mes no viaja entero a los props, a diferencia de suscripciones.** Un dia de
 CRM lleva el bloque completo de metricas de cada vendedor, sucursal y campana
 -decenas de campos por valor, mas la efectividad por etapa-, asi que el mes son
-megabytes. La barra viaja con la lista de dias calculados y elegir uno es una
-recarga parcial de Inertia que lee una sola celda ya calculada: el recalculo
-sigue sin existir, que es lo que importaba.
+megabytes. Lo que si viaja entero es la **serie ligera** (`get_crm_day_series`):
+el bloque global de los treinta y un dias, recortado en Postgres. Con eso las
+tarjetas del dia, el acumulado, la variacion contra el dia anterior y las lineas
+de tendencia se resuelven en el cliente sin pedir nada. Solo el desglose
+dimensional se pide por dia (`get_crm_day_payload`), y el cliente lo cachea.
 """
 
 from __future__ import annotations
@@ -36,7 +38,8 @@ from core.config import TableNames
 from core.database import DBConnector
 from core.day_metrics import (
     fecha_corte,
-    leer_dia,
+    leer_payload,
+    leer_serie,
     periodos_con_dias,
     ultimo_dia_a_calcular,
 )
@@ -127,13 +130,22 @@ def _guardar(db: DBConnector, label: str, dias: dict[str, Any]) -> None:
     db.save_day_metrics(label, dias, table=TableNames.CRM_DAY_METRICS)
 
 
-def get_crm_day_metrics(year_month: str, dia: int | None = None) -> dict[str, Any]:
-    """El corte de un dia del mes, mas los dias que hay calculados.
+def get_crm_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
+    """El corte completo de un dia: `{global, dimensiones}`, o None si no esta.
 
-    Devuelve `{periodo_mes, dias_disponibles, dia, payload}`; `payload` trae
-    `global` y `dimensiones` con la misma forma que el historico del mes.
+    Es lo pesado —el bloque de cada vendedor, sucursal y campana— y por eso se
+    pide de uno en uno. Los dias que hay calculados los dice `get_crm_day_series`.
     """
-    return leer_dia(TableNames.CRM_DAY_METRICS, year_month, dia, clave=year_month)
+    return leer_payload(TableNames.CRM_DAY_METRICS, year_month, dia, clave=year_month)
+
+
+def get_crm_day_series(year_month: str) -> dict[str, Any]:
+    """La serie ligera del mes: el bloque global de cada dia, sin desgloses.
+
+    Es lo que alimenta las tarjetas del dia y las lineas de tendencia sin que
+    mover la barra cueste una consulta.
+    """
+    return leer_serie(TableNames.CRM_DAY_METRICS, year_month, clave=year_month)
 
 
 def get_crm_periodos_con_dias() -> list[str]:

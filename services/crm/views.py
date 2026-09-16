@@ -12,7 +12,8 @@ from core.utils import clean_json_props, entero_de_peticion, limpiar_periodos
 from services.config.decorators import permission_required
 from services.crm.analytics import (
     get_crm_cierre_historico,
-    get_crm_day_metrics,
+    get_crm_day_payload,
+    get_crm_day_series,
     get_crm_dimensiones,
     get_crm_metric_totals,
     get_crm_periodos,
@@ -49,10 +50,12 @@ def analytics(request):
     ensena el ultimo corte calculado, que en un mes cerrado es el cierre y en el
     mes en curso es la foto mas reciente.
 
-    Aqui el dia SI vuelve al servidor, a diferencia de suscripciones: el corte
-    de un dia de CRM lleva el bloque completo de cada vendedor, sucursal y
-    campana, y mandar los treinta y uno serian megabytes. La vuelta no recalcula
-    nada, lee una celda.
+    En los props viaja ademas la **serie ligera** del mes: el bloque global de
+    los treinta y un dias, sin desgloses. Con ella el cliente resuelve solo las
+    tarjetas del dia, el acumulado, la variacion contra el dia anterior y las
+    lineas de tendencia, asi que mover la barra no espera a nadie. Lo unico que
+    se pide por dia es el desglose dimensional, y va por
+    `api/day-metrics/`, que el cliente cachea.
     """
     periodo = request.GET.get("period")
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
@@ -60,8 +63,12 @@ def analytics(request):
 
     target_period = periodo or (periodos[0] if periodos else None)
 
-    dias = get_crm_day_metrics(target_period, dia) if target_period else {}
-    corte = dias.get("payload")
+    serie = get_crm_day_series(target_period) if target_period else {}
+    disponibles = serie.get("dias_disponibles", [])
+    # Sin `?dia=`, el ultimo corte: el mas reciente y el unico que se puede
+    # ensenar sin mentir.
+    dia_activo = dia if dia in disponibles else (disponibles[-1] if disponibles else 0)
+    corte = get_crm_day_payload(target_period, dia_activo) if dia_activo else None
 
     if corte:
         dimensions_data = corte.get("dimensiones", [])
@@ -79,9 +86,10 @@ def analytics(request):
         "dimensionsData": dimensions_data,
         "globalData": global_data,
         "dayMetrics": {
-            "periodo_mes": dias.get("periodo_mes", target_period or ""),
-            "dias_disponibles": dias.get("dias_disponibles", []),
-            "dia": dias.get("dia", 0),
+            "periodo_mes": serie.get("periodo_mes", target_period or ""),
+            "dias_disponibles": disponibles,
+            "dia": dia_activo,
+            "serie": serie.get("serie", {}),
         },
         "periods": periodos,
         "selectedPeriod": target_period or "",
@@ -130,6 +138,30 @@ def api_cierre_historico(request):
     # `IN (...)`, asi que una sola peticion podia pedir cien mil.
     periodos = limpiar_periodos(request.GET.get("periods"))
     return JsonResponse({"historico": get_crm_cierre_historico(periodos)})
+
+
+@login_required
+@permission_required('can_view_crm_analytics')
+def api_day_metrics(request):
+    """El corte completo de un dia: `{global, dimensiones}`.
+
+    Existe para que la barra de dias no pase por Inertia: el cliente pide el dia
+    que le falta, lo cachea y adelanta los vecinos, de modo que moverse por el
+    mes deja de esperar a la base. No calcula nada —lee una celda de
+    `crm_day_metrics`, ya escrita por el analisis—.
+    """
+    periodo = request.GET.get("period")
+    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    if not periodo or not dia:
+        return JsonResponse(
+            {"status": "error", "message": "Se requieren period y dia."}, status=400
+        )
+
+    corte = get_crm_day_payload(periodo, dia)
+    if corte is None:
+        return JsonResponse({"status": "empty", "dia": dia}, status=404)
+
+    return JsonResponse(clean_json_props({"dia": dia, **corte}))
 
 
 @login_required

@@ -11,14 +11,18 @@ periodo, y las dos lecturas que necesitan las vistas -el mes entero o un solo
 dia-. Lo que cambia entre modulos es el contenido del JSON, y eso lo pone cada
 `analytics/day_metrics.py`.
 
-**Quien lee el mes entero y quien lee un dia.** Suscripciones manda el mes
-completo en los props: sus desgloses diarios son pequenos y mover la barra es
-entonces una reagrupacion de cliente. CRM y soporte no pueden: un dia suyo
-lleva el bloque completo de metricas de cada valor dimensional -decenas de
-campos por vendedor, por sucursal, por zona, por grupo de trabajo-, y el mes
-entero son megabytes que el navegador no deberia recibir para ensenar uno. Por
-eso `leer_dia` existe: la barra viaja con la lista de dias calculados, y elegir
-uno es una recarga parcial de Inertia que lee una sola celda ya calculada.
+**Tres lecturas, y cual usa cada quien.**
+
+* `leer_serie` -> solo el bloque global de cada dia del mes. Es ligero (unos
+  pocos kilobytes) porque el recorte lo hace Postgres y los desgloses
+  dimensionales no salen de la base. Lo usan los tres modulos: es lo que hace
+  que mover la barra sea instantaneo, porque las tarjetas del dia, el acumulado
+  y las lineas de tendencia salen de ahi sin pedir nada.
+* `leer_mes` -> el mes entero, desgloses incluidos. Solo suscripciones, cuyos
+  desgloses diarios son pequenos.
+* `leer_payload` -> un solo dia completo. CRM y soporte, cuyo dia lleva el bloque
+  de metricas de cada vendedor, sucursal, zona o grupo de trabajo: el mes entero
+  serian megabytes en el navegador. El cliente los va cacheando segun los visita.
 """
 from __future__ import annotations
 
@@ -144,75 +148,116 @@ def leer_mes(
     return salida
 
 
-def leer_dia(
-    table: str, year_month: str, dia: int | None = None, clave: str | None = None
-) -> dict[str, Any]:
-    """Un solo dia del mes, mas la lista de los que hay calculados.
+def leer_payload(
+    table: str, year_month: str, dia: int, clave: str | None = None
+) -> Any:
+    """El corte completo de un dia, desgloses incluidos, o None si no esta.
 
-    Devuelve `{periodo_mes, dias_disponibles, dia, payload}`. Sin `dia` -o con
-    uno que no este calculado- cae al ultimo corte del mes, que es el mas
-    reciente y el unico que se puede ensenar sin mentir.
-
-    Son dos consultas y no una para no arrastrar los treinta y un JSON del mes
-    hasta Python solo para quedarse con uno.
-
-    `clave` es el `periodo_reporte` de la fila, como en `leer_mes`.
+    Una sola celda: quien necesita saber que dias hay calculados lee antes
+    `leer_serie`, que ya lo dice y ademas trae lo que dibuja las tarjetas.
     """
-    vacio: dict[str, Any] = {
-        "periodo_mes": year_month or "",
-        "dias_disponibles": [],
-        "dia": 0,
-        "payload": None,
-    }
-    if not year_month:
-        return vacio
+    if not year_month or not 1 <= dia <= 31:
+        return None
     db = DBConnector()
+    if not tabla_existe(db, table):
+        return None
+    label = clave or periodo_label_mes(year_month)
+    try:
+        df = db.query(
+            f"SELECT dia{dia} AS payload FROM {DB_SCHEMA}.{table}"
+            " WHERE periodo_reporte = %s",
+            params=[label],
+        )
+    except Exception:
+        logger.exception("Error leyendo el dia %s de %s", dia, table)
+        return None
+    if df.empty:
+        return None
+    return _cargar(df.iloc[0]["payload"], f"dia{dia} de {label}")
+
+
+def leer_serie(
+    table: str,
+    year_month: str,
+    clave: str | None = None,
+    bloque: str = "global",
+) -> dict[str, Any]:
+    """La serie ligera del mes: solo el bloque `bloque` de cada dia.
+
+    Devuelve `{periodo_mes, dias_disponibles, serie: {"1": {...}, ...}}`, donde
+    cada entrada es el corte acumulado hasta ese dia **sin sus desgloses
+    dimensionales**: las metricas globales y nada mas.
+
+    Es lo que hace que la barra sea instantanea en los tres modulos. El mes
+    entero de CRM o de soporte no cabe en los props por culpa de las dimensiones
+    -decenas de bloques por vendedor, por zona, por grupo-, pero treinta y un
+    bloques globales son unos pocos kilobytes. El recorte se hace en Postgres
+    (`-> 'global'`), asi que lo pesado no llega ni a salir de la base.
+
+    Con esta serie el cliente resuelve sin pedir nada: las tarjetas del dia, el
+    acumulado hasta ese dia, la variacion contra el dia anterior y las lineas de
+    tendencia del periodo.
+
+    **`dias_disponibles` NO depende de que el bloque exista.** Un dia cuenta como
+    calculado si su celda tiene contenido, tenga o no `bloque` dentro. Los dos se
+    separan porque un mes analizado antes de que el modulo empezara a guardar
+    `global` tiene sus treinta y un cortes perfectamente utiles -el desglose se
+    lee igual- y atar la barra al bloque los hacia desaparecer todos. La serie
+    solo trae los dias que si lo tienen, y el resumen del dia se apaga solo.
+    """
+    if not year_month:
+        return {"periodo_mes": "", "dias_disponibles": [], "serie": {}}
+    if not bloque.isidentifier():
+        raise ValueError(f"Bloque invalido: {bloque!r}")
+
+    db = DBConnector()
+    vacio = {"periodo_mes": year_month, "dias_disponibles": [], "serie": {}}
     if not tabla_existe(db, table):
         return vacio
     label = clave or periodo_label_mes(year_month)
 
-    presencia = ", ".join(
-        f"({c} IS NOT NULL AND {c} <> '') AS {c}" for c in DAY_COLUMNS
+    # Dos columnas por dia: si la celda tiene algo (la barra) y el bloque recortado
+    # (el resumen). Los dos `NULLIF` porque las columnas son text y una celda sin
+    # calcular puede llegar vacia o con el `'None'` que dejaban las escrituras
+    # antiguas: el cast de cualquiera de los dos reventaria la consulta entera, no
+    # solo esa celda.
+    recorte = ", ".join(
+        f"({c} IS NOT NULL AND {c} <> '' AND {c} <> 'None') AS hay_{c},"
+        f" (NULLIF(NULLIF({c}, ''), 'None')::jsonb -> '{bloque}') AS {c}"
+        for c in DAY_COLUMNS
     )
     try:
         df = db.query(
-            f"SELECT {presencia} FROM {DB_SCHEMA}.{table} WHERE periodo_reporte = %s",
+            f"SELECT {recorte} FROM {DB_SCHEMA}.{table} WHERE periodo_reporte = %s",
             params=[label],
         )
     except Exception:
-        logger.exception("Error listando los dias calculados de %s", table)
+        logger.exception("Error leyendo la serie diaria de %s", table)
         return vacio
     if df.empty:
         return vacio
 
     row = df.iloc[0]
-    disponibles = [
-        idx for idx, col in enumerate(DAY_COLUMNS, start=1) if bool(row.get(col))
-    ]
-    if not disponibles:
-        return {**vacio, "periodo_mes": year_month}
+    serie: dict[str, Any] = {}
+    disponibles: list[int] = []
+    for idx, col in enumerate(DAY_COLUMNS, start=1):
+        if bool(row.get(f"hay_{col}")):
+            disponibles.append(idx)
+        payload = _cargar(row.get(col), f"{col} de {label}")
+        if payload is not None:
+            serie[str(idx)] = payload
 
-    elegido = dia if dia in disponibles else disponibles[-1]
-    try:
-        df_dia = db.query(
-            f"SELECT dia{elegido} AS payload FROM {DB_SCHEMA}.{table}"
-            " WHERE periodo_reporte = %s",
-            params=[label],
+    if disponibles and not serie:
+        logger.info(
+            "%s tiene %d dias calculados de %s pero ninguno guarda `%s`;"
+            " el mes se analizo antes de que ese bloque existiera.",
+            table, len(disponibles), label, bloque,
         )
-    except Exception:
-        logger.exception("Error leyendo el dia %s de %s", elegido, table)
-        return {**vacio, "periodo_mes": year_month, "dias_disponibles": disponibles}
 
-    payload = (
-        _cargar(df_dia.iloc[0]["payload"], f"dia{elegido} de {label}")
-        if not df_dia.empty
-        else None
-    )
     return {
         "periodo_mes": year_month,
         "dias_disponibles": disponibles,
-        "dia": elegido,
-        "payload": payload,
+        "serie": serie,
     }
 
 

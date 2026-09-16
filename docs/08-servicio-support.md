@@ -195,7 +195,8 @@ de ticket.
 | `get_support_breakdown(periodo, dimension, valor, grupo)` | El drill-down de un valor: sus tipos, razones y soluciones, calculado al vuelo |
 | `get_incidencia_por_zona(...)` | Tickets por cada 100 clientes de la zona |
 | `get_support_tickets_list(limit, grupo, periodo)` | Listado crudo de tickets |
-| `get_support_day_metrics(mes, dia)` | `{periodo_mes, dias_disponibles, dia, payload}` — el corte de un día y la lista de los calculados |
+| `get_support_day_series(mes)` | La serie ligera: el bloque global de cada día, sin desgloses. Es lo que dice qué días hay calculados |
+| `get_support_day_payload(mes, dia)` | El corte completo de un día: `{global, grupos, incidencia_zonas}` |
 
 `estructurar_grupos(filas)` agrupa las filas dimensionales por grupo de trabajo,
 y la usan por igual las persistidas del mes y las que un corte diario trae ya
@@ -245,10 +246,24 @@ opcional. `api/tickets/` limita a 5 000 registros como techo absoluto.
 
 `analytics` acepta además `?dia=`, que sustituye `grupos` e `incidencia_zonas`
 por el corte acumulado de ese día leído de `support_day_metrics`; sin él se envía
-el último corte calculado (en un mes cerrado, el cierre). `dayMetrics` lleva solo
-la lista de días y cuál se está mirando, que es lo que dibuja la barra.
+el último corte calculado (en un mes cerrado, el cierre).
 
-**Aquí el día sí vuelve al servidor**, a diferencia de suscripciones: un corte de
-soporte lleva las métricas de cada grupo por sus seis ejes —varios cientos de
-bloques— y el mes entero no cabe en los props. La vuelta es una recarga parcial
-de Inertia que lee una celda ya calculada — no recalcula nada.
+`dayMetrics` lleva además la **serie ligera** del mes: `serie` es la cohorte
+completa de cada día y `serie_grupos` la misma abierta por equipo. Las dos viajan
+porque **la página entera está filtrada por grupo** y el selector no tiene un
+«todos»: las tarjetas del día siguen al equipo elegido, y cambiarlo no cuesta una
+vuelta al servidor. `global_grupos` no añade cálculo —`build_dimension_rows` ya
+mide cada grupo para su fila `grupo_trabajo`—.
+
+Soporte empezó a guardar esos bloques después que CRM, así que **un mes analizado
+antes tiene sus cortes pero no el resumen del día**: la barra y el desglose
+funcionan igual y el bloque de tarjetas lo dice en pantalla; se arregla volviendo
+a ejecutar el análisis del mes. Con ella
+el cliente resuelve sin pedir nada las tarjetas del día, el acumulado, la
+variación contra el día anterior y las líneas de tendencia. Lo único que se pide
+por día es el desglose por grupo, y va por `api/day-metrics/`, que el navegador
+cachea y adelanta por vecinos: moverse por la barra no espera a la base.
+
+El mes entero con desgloses no viaja porque un corte de soporte lleva las
+métricas de cada grupo por sus seis ejes, varios cientos de bloques. Nada de esto
+recalcula: se leen celdas ya escritas por el análisis.

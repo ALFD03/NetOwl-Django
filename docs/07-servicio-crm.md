@@ -318,7 +318,8 @@ ejecución se corta, lo ya hecho queda guardado.
 | `get_crm_cierre_historico(periodos)` | Las filas del cierre, con `efectividad` y `tiempo_por_etapa` ya parseados a lista |
 | `get_crm_metric_totals(periodo)` | Promedio global + tiempos + efectividad + la serie histórica (sin los dos JSON por periodo, que nadie lee ahí) |
 | `get_crm_dimensiones(periodos, dimension)` | Las filas dimensionales con su JSONB parseado |
-| `get_crm_day_metrics(mes, dia)` | `{periodo_mes, dias_disponibles, dia, payload}` — el corte de un día y la lista de los calculados |
+| `get_crm_day_series(mes)` | La serie ligera: el bloque global de cada día, sin desgloses. Es lo que dice qué días hay calculados |
+| `get_crm_day_payload(mes, dia)` | El corte completo de un día: `{global, dimensiones}` |
 
 | Ruta | Página | Permiso |
 |---|---|---|
@@ -333,10 +334,15 @@ global de los pesos simples y la fuente de las tarjetas de cabecera.
 
 `?dia=` sustituye esas dos props por el corte acumulado de ese día, leído de
 `crm_day_metrics`; sin él se envía el último corte calculado (en un mes cerrado,
-el cierre). `dayMetrics` lleva solo la lista de días y cuál se está mirando, que
-es lo que dibuja la barra.
+el cierre).
 
-**Aquí el día sí vuelve al servidor**, a diferencia de suscripciones: un corte de
-CRM lleva el bloque completo de cada vendedor, sucursal y campaña, y mandar los
-treinta y uno serían megabytes. La vuelta es una recarga parcial de Inertia que
-lee una celda ya calculada — no recalcula nada.
+`dayMetrics` lleva además la **serie ligera** del mes (`serie`): el bloque global
+de los treinta y un días. Con ella el cliente resuelve sin pedir nada las
+tarjetas del día, el acumulado, la variación contra el día anterior y las líneas
+de tendencia. Lo único que se pide por día es el desglose dimensional, y va por
+`api/day-metrics/`, que el navegador cachea y adelanta por vecinos: moverse por
+la barra no espera a la base.
+
+El mes entero con desgloses no viaja porque un corte de CRM lleva el bloque
+completo de cada vendedor, sucursal y campaña, y los treinta y uno serían
+megabytes. Nada de esto recalcula: se leen celdas ya escritas por el análisis.

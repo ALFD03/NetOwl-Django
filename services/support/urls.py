@@ -19,5 +19,6 @@ urlpatterns = [
     path("api/global-metrics/", views.api_global_metrics, name="api_global_metrics"),
     path("api/dimension-metrics/", views.api_dimension_metrics, name="api_dimension_metrics"),
     path("api/breakdown/", views.api_breakdown, name="api_breakdown"),
+    path("api/day-metrics/", views.api_day_metrics, name="api_day_metrics"),
     path("api/tickets/", views.api_tickets_list, name="api_tickets_list"),
 ]

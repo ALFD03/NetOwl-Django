@@ -5,7 +5,8 @@
 from .analyzer import run_support_analysis
 from .day_metrics import (
     build_support_day_metrics,
-    get_support_day_metrics,
+    get_support_day_payload,
+    get_support_day_series,
     get_support_periodos_con_dias,
 )
 from .loader import import_support_csv
@@ -23,7 +24,8 @@ __all__ = [
     "import_support_csv",
     "run_support_analysis",
     "build_support_day_metrics",
-    "get_support_day_metrics",
+    "get_support_day_payload",
+    "get_support_day_series",
     "get_support_periodos_con_dias",
     "get_support_periodos",
     "get_support_cierre_historico",

@@ -141,15 +141,29 @@ Lo común a las tres tablas, sin dominio: `mes_bounds`, `periodo_label_mes`,
 
 | Lectura | Devuelve | Quién la usa |
 |---|---|---|
-| `leer_mes(tabla, mes, escalares, clave)` | El mes entero: `{periodo_mes, dias: {"1": {...}, …}}` | Suscripciones |
-| `leer_dia(tabla, mes, dia, clave)` | `{periodo_mes, dias_disponibles, dia, payload}` | CRM y soporte |
+| `leer_serie(tabla, mes, clave, bloque)` | `{periodo_mes, dias_disponibles, serie: {"1": {…}, …}}` — solo el bloque `global` de cada día | Los tres |
+| `leer_mes(tabla, mes, escalares, clave)` | El mes entero, desgloses incluidos | Suscripciones |
+| `leer_payload(tabla, mes, dia, clave)` | El corte completo de **un** día, o `None` | CRM y soporte |
 
-La diferencia es de tamaño, no de gusto: un día de suscripciones es pequeño y el
-mes entero cabe en los props, así que mover la barra es una reagrupación de
-cliente. Un día de CRM o de soporte lleva el bloque completo de métricas de cada
-valor dimensional, y el mes entero serían megabytes; ahí viaja la lista de días
-calculados y elegir uno es una recarga parcial que lee **una celda ya
-calculada** — sigue sin haber recálculo, que es lo que importaba.
+`dias_disponibles` cuenta los días **cuya celda tiene contenido**, tenga o no el
+bloque dentro; `serie` trae solo los que sí lo tienen. Están separados a
+propósito: un mes analizado antes de que su módulo empezara a guardar `global`
+conserva sus 31 cortes perfectamente útiles —el desglose se lee igual— y atar la
+barra al bloque los hacía desaparecer todos. El resumen del día se apaga solo y
+dice por qué.
+
+`leer_serie` es la que hace que la barra sea instantánea. El recorte lo hace
+Postgres (`-> 'global'`), así que los desgloses ni salen de la base: treinta y un
+bloques globales son unos pocos kilobytes, y con ellos el cliente resuelve solo
+las tarjetas del día, el acumulado, la variación contra el día anterior y las
+líneas de tendencia.
+
+Lo que no cabe entero es el **desglose dimensional** de un día: el bloque de
+métricas de cada vendedor, sucursal, zona o grupo de trabajo. Un día de
+suscripciones sí es pequeño y viaja completo (`leer_mes`); en CRM y soporte se
+pide de uno en uno (`leer_payload`, servido por `api/day-metrics/`) y el
+navegador lo cachea. En ningún caso se recalcula nada: se lee una celda ya
+escrita por el análisis.
 
 `clave` es el `periodo_reporte` de la fila: la etiqueta larga de `Periodo.label()`
 en suscripciones, el `YYYY-MM` en CRM y soporte, como en el resto de sus tablas.

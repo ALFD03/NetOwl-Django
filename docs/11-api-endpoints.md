@@ -110,6 +110,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/global-metrics/?period=` | `can_view_crm` | Promedio global + tiempos + efectividad + serie |
 | GET | `api/cierre-historico/?periods=` | `can_view_crm_results` | `{historico}` |
 | GET | `api/dimension-metrics/?period=&dimension=` | `can_view_crm_analytics` **o** `can_view_crm_results` | `{dimensiones}` |
+| GET | `api/day-metrics/?period=&dia=` | `can_view_crm_analytics` | `{dia, global, dimensiones}` — el corte de un día de `crm_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
 
 ---
 
@@ -124,6 +125,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/cierre-historico/?periods=` | `can_view_support` | `{historico}` aplanado |
 | GET | `api/global-metrics/` | `can_view_support` | Promedio de todos los periodos |
 | GET | `api/dimension-metrics/?period=` | `can_view_support_analytics` | `{dimensiones}`. **400** sin `period` |
+| GET | `api/day-metrics/?period=&dia=` | `can_view_support_analytics` | `{dia, global, grupos, incidencia_zonas}` — el corte de un día de `support_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
 | GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |
 | GET | `api/tickets/?limit=&grupo=&period=` | `can_view_support_results` | Listado crudo; `limit` con techo de 5 000 |
 
