@@ -4,7 +4,7 @@ Planes y zonas eran `data/Planes.json` y `data/Zonas.json`, y cambiarlos
 exigia editar un fichero del repositorio y volver a desplegar. Aqui se
 mantienen desde la propia aplicacion.
 
-Es un solo par de endpoints para los seis catalogos y no doce vistas casi
+Es un solo par de endpoints para los siete catalogos y no catorce vistas casi
 iguales: lo unico que cambia entre ellos es que campos se leen del cuerpo y
 como se serializa la fila, y eso es lo que declara `CATALOGOS`.
 
@@ -37,6 +37,7 @@ from services.subscriptions.models import (
     Coordinador,
     Estado,
     Plan,
+    PlanRegulador,
     ProductoIgnorado,
     Site,
     Zona,
@@ -104,6 +105,24 @@ def _plan(p: Plan) -> dict[str, Any]:
         "datas_mbps": float(p.datas_mbps),
         "precio": float(p.precio),
         "declarar_en_eta": p.declarar_en_eta,
+        "plan_regulador_id": p.plan_regulador_id,
+        "plan_regulador": p.plan_regulador.nombre if p.plan_regulador_id else "",
+    }
+
+
+def _plan_regulador(r: PlanRegulador) -> dict[str, Any]:
+    """Un plan regulador, con cuantos planes comerciales se declaran con el."""
+    return {
+        "id": r.id,
+        "nombre": r.nombre,
+        "tecnologia": r.tecnologia,
+        "tipo_persona": r.tipo_persona,
+        "datas_mbps": float(r.datas_mbps),
+        "precio": float(r.precio),
+        "tiene_tv": r.tiene_tv,
+        "es_transporte": r.es_transporte,
+        "notas": r.notas,
+        "planes": r.planes.count(),
     }
 
 
@@ -161,6 +180,21 @@ def _aplicar_plan(fila: Plan, data: dict, request) -> None:
     fila.datas_mbps = _numero(data, "datas_mbps")
     fila.precio = _numero(data, "precio")
     fila.declarar_en_eta = bool(data.get("declarar_en_eta", True))
+    # Opcional: un plan recien creado todavia no esta agrupado, y hasta que lo
+    # este no aparece en los formularios de la reguladora.
+    fila.plan_regulador = _relacion(PlanRegulador, data, "plan_regulador_id", obligatorio=False)
+
+
+def _aplicar_plan_regulador(fila: PlanRegulador, data: dict, request) -> None:
+    """Vuelca el cuerpo de la peticion sobre un plan regulador."""
+    fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=200)
+    fila.tecnologia = _opcion(data, "tecnologia", TECNOLOGIA_CHOICES, "FTTH")
+    fila.tipo_persona = _opcion(data, "tipo_persona", TIPO_PERSONA_CHOICES, "nat")
+    fila.datas_mbps = _numero(data, "datas_mbps")
+    fila.precio = _numero(data, "precio")
+    fila.tiene_tv = bool(data.get("tiene_tv", False))
+    fila.es_transporte = bool(data.get("es_transporte", False))
+    fila.notas = _texto(data, "notas")
 
 
 def _aplicar_zona(fila: Zona, data: dict, request) -> None:
@@ -195,6 +229,7 @@ def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:
 # nuevo es anadir una entrada aqui y una pestana en la interfaz.
 CATALOGOS: dict[str, dict[str, Any]] = {
     "planes": {"modelo": Plan, "serializar": _plan, "aplicar": _aplicar_plan, "etiqueta": "plan"},
+    "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador"},
     "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona"},
     "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site"},
     "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado"},
@@ -209,6 +244,8 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     consulta = catalogo["modelo"].objects.all()
     if nombre == "zonas":
         consulta = consulta.select_related("site", "estado", "coordinador")
+    elif nombre == "planes":
+        consulta = consulta.select_related("plan_regulador")
     elif nombre == "ignorados":
         consulta = consulta.select_related("creado_por")
     return [catalogo["serializar"](fila) for fila in consulta]
@@ -227,6 +264,7 @@ def catalogos_view(request):
     """
     props = {
         "planes": _listado("planes"),
+        "reguladores": _listado("reguladores"),
         "zonas": _listado("zonas"),
         "sites": _listado("sites"),
         "estados": _listado("estados"),

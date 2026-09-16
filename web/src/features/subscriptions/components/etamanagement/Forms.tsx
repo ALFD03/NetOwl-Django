@@ -208,15 +208,31 @@ export function SubscriptionForm({
             </Field>
           </div>
 
-          <Field label="Velocidad Asignada (Mbps)">
-            <input
-              type="number"
-              min="0"
-              className={modalInputClass}
-              value={value.datas_mbps ?? 0}
-              onChange={(event) => onChange({ datas_mbps: Number(event.target.value) })}
-            />
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Velocidad Asignada (Mbps)">
+              <input
+                type="number"
+                min="0"
+                className={modalInputClass}
+                value={value.datas_mbps ?? 0}
+                onChange={(event) => onChange({ datas_mbps: Number(event.target.value) })}
+              />
+            </Field>
+
+            <Field
+              label="Renta (divisa)"
+              hint="El catálogo comercial no puede darla: cada enlace dedicado negocia la suya, y es con lo que se declara su renta básica en el formulario. Las órdenes de la misma velocidad se declaran juntas, con el promedio."
+            >
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className={modalInputClass}
+                value={value.precio ?? 0}
+                onChange={(event) => onChange({ precio: Number(event.target.value) })}
+              />
+            </Field>
+          </div>
 
           <OptionCard
             className="w-full"

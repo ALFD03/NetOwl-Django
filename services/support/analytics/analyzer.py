@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import pandas as pd
@@ -20,6 +21,7 @@ from services.support.analytics.config import (
     SUPPORT_VOLUME_FIELDS,
     TIME_STATS,
 )
+from services.support.analytics.day_metrics import build_support_day_metrics
 from services.support.analytics.dimensions import (
     build_dimension_rows,
     save_support_dimensiones_periodo,
@@ -116,13 +118,21 @@ def average_blocks(bloques: list[dict]) -> dict[str, Any]:
     return avg
 
 
-def run_support_analysis(periodo_str: str | None = None) -> dict:
+def run_support_analysis(
+    periodo_str: str | None = None,
+    progreso: Callable[[int, int, str], None] | None = None,
+) -> dict:
     """
     Recalcula soporte: la cohorte de cada periodo y el promedio global.
 
     El promedio acumulado se recalcula siempre sobre TODO lo que hay en
     `support_cierre_historico`, no sólo sobre los periodos recién procesados:
     analizar un mes suelto no debe borrar el histórico del dashboard de empresa.
+
+    De la misma tabla ya clasificada salen también los cortes de cada día del
+    periodo (`build_support_day_metrics`): leer y clasificar los tickets es el
+    coste, recortar la cohorte treinta y un veces no. `progreso` es lo que
+    alimenta la barra de la interfaz mientras los recorre.
     """
     db = DBConnector()
     ensure_support_schema(db)
@@ -134,10 +144,8 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
 
     df_all = classify_tickets(df_all)
 
-    if periodo_str and len(periodo_str) == 7:
-        periodos_target = [periodo_str]
-    else:
-        periodos_target = periodos_disponibles(df_all)
+    un_solo_mes = bool(periodo_str and len(periodo_str) == 7)
+    periodos_target = [periodo_str] if un_solo_mes else periodos_disponibles(df_all)
 
     print(f"\n📊 PROCESANDO SOPORTE TÉCNICO PARA {len(periodos_target)} PERIODO(S)...")
 
@@ -149,6 +157,11 @@ def run_support_analysis(periodo_str: str | None = None) -> dict:
 
         _save_cierre_historico(db, periodo, metricas)
         save_support_dimensiones_periodo(db, periodo, build_dimension_rows(cohorte))
+        # Solo del mes pedido: recorrer los dias de todo el historico son
+        # treinta y un cortes por cada mes que haya, y nadie lanza un analisis
+        # global esperando eso. El cierre de cada mes si se recalcula entero.
+        if un_solo_mes:
+            build_support_day_metrics(periodo, db=db, df_all=df_all, progreso=progreso)
 
         resumenes[periodo] = metricas
         print(f"   · {periodo}: {metricas['tickets_creados']} creados, "

@@ -8,6 +8,9 @@ export interface CrmAnalysisRequest { month: string; }
 
 export type CrmAnalysisResponse = ApiMessageResponse;
 
+/** Corte completo de un día; lo pide y cachea `useDayPayload`, no `crmApi`. */
+export const CRM_DAY_METRICS_URL = '/crm/api/day-metrics/';
+
 export const crmApi = {
   runAnalysis: async (request: CrmAnalysisRequest) =>
     (await apiClient.post<CrmAnalysisResponse>('/imports/api/run-crm-analysis/', request)).data,

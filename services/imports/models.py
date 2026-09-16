@@ -90,18 +90,28 @@ class AnalysisJob(models.Model):
 
     `ImportActionLog` sigue existiendo y no lo sustituye: aquel es el historial
     permanente que ve el usuario, este el estado vivo de una ejecucion concreta.
+
+    **La cancelacion es este mismo campo.** Cancelar escribe `cancelled` en
+    `status` y ya esta: no hace falta una bandera aparte porque la fila ya es la
+    fuente de verdad. Un job en cola deja de estar abierto, asi que la tarea lo
+    descarta al recogerlo (ver `ejecutar_analisis`); uno en curso lo ve en su
+    siguiente punto de control y se detiene solo (ver `ConsolaJob`). El estado
+    tampoco lleva CHECK en Postgres -Django no lo genera para `choices`-, asi que
+    anadir el valor no toca la tabla.
     """
 
     PENDIENTE = 'pending'
     EN_CURSO = 'running'
     EXITO = 'success'
     ERROR = 'error'
+    CANCELADO = 'cancelled'
 
     STATUS_CHOICES = [
         (PENDIENTE, 'En cola'),
         (EN_CURSO, 'En ejecucion'),
         (EXITO, 'Completado'),
         (ERROR, 'Error'),
+        (CANCELADO, 'Cancelado'),
     ]
 
     ESTADOS_ABIERTOS = (PENDIENTE, EN_CURSO)

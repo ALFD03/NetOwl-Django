@@ -124,6 +124,66 @@ class Zona(models.Model):
         }
 
 
+class PlanRegulador(models.Model):
+    """Plan tal y como se **declara** a la reguladora, no como se vende.
+
+    La reguladora no quiere el catalogo comercial: quiere una fila por producto
+    declarado. Varios planes comerciales acaban siendo el mismo producto —la
+    misma velocidad con dos tarifas, o el mismo servicio renombrado por una
+    campana—, y declararlos por separado los cuenta dos veces.
+
+    Por eso esta capa existe y por eso lleva sus **propios** campos en vez de
+    heredarlos del primer plan que le cuelgue: cuando dos planes del grupo
+    difieren en precio o en velocidad, el valor declarado tiene que ser una
+    decision explicita y no la del plan que el ORM devuelva primero.
+
+    Un plan comercial sin regulador simplemente no aparece en los formularios;
+    `ETAReportManager` lo reporta aparte para que se note.
+    """
+
+    nombre = models.CharField(max_length=200, unique=True)
+    tecnologia = models.CharField(max_length=10, choices=TECNOLOGIA_CHOICES, default="FTTH")
+    tipo_persona = models.CharField(max_length=10, choices=TIPO_PERSONA_CHOICES, default="nat")
+    datas_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # En divisa, igual que `Plan.precio`. La conversion a bolivares se hace al
+    # exportar, con la tasa del dia: guardarla aqui congelaria el reporte a la
+    # tasa que hubiera cuando alguien edito el catalogo.
+    precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tiene_tv = models.BooleanField(default=False)
+    # Decide en que hoja del libro cae la fila: transporte va en la suya, que
+    # pide otras columnas (medio de transmision, numero de enlaces).
+    es_transporte = models.BooleanField(default=False)
+    notas = models.CharField(max_length=255, blank=True, default="")
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_planes_reguladores"
+        ordering = ["nombre"]
+        verbose_name = "plan regulador"
+        verbose_name_plural = "planes reguladores"
+
+    def __str__(self):
+        return self.nombre
+
+    def to_fixture(self) -> dict[str, str]:
+        """El regulador con las claves planas que consume `eta_report`.
+
+        Mismo criterio que `Plan.to_fixture`: numeros como texto, porque los
+        consumidores de `core/fixtures` los convierten ellos.
+        """
+        return {
+            "name": self.nombre,
+            "type": self.tecnologia,
+            "people": self.tipo_persona,
+            "TV": "True" if self.tiene_tv else "False",
+            "datas": _numero(self.datas_mbps),
+            "price": _numero(self.precio),
+            "es_transporte": self.es_transporte,
+        }
+
+
 class Plan(models.Model):
     """Producto comercial contratable.
 
@@ -146,6 +206,16 @@ class Plan(models.Model):
     datas_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     declarar_en_eta = models.BooleanField(default=True)
+    # Con que fila de los formularios de la reguladora se declara este plan.
+    # Nulo no es un error de datos: un plan recien creado todavia no esta
+    # agrupado, y hasta que lo este no se declara.
+    plan_regulador = models.ForeignKey(
+        PlanRegulador,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="planes",
+    )
 
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
@@ -182,6 +252,10 @@ class Plan(models.Model):
             "price": _numero(self.precio),
             "tarifa": self.tarifa,
             "declarar_en_eta": self.declarar_en_eta,
+            # El regulador viaja como el diccionario entero y no como su id:
+            # el consumidor (`eta_report`) necesita sus campos, y `fixtures`
+            # sirve diccionarios planos, no filas del ORM.
+            "regulador": self.plan_regulador.to_fixture() if self.plan_regulador_id else None,
         }
 
 

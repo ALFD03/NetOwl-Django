@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
 import pandas as pd
@@ -31,7 +32,7 @@ from services.support.analytics.config import (
 
 # Columnas derivadas que `classify_tickets` añade sobre la tabla completa.
 DERIVED_COLUMNS = [
-    "periodo_creacion", "periodo_cierre",
+    "periodo_creacion", "periodo_cierre", "dt_creacion", "dt_cierre",
     "es_resuelto", "es_cancelado", "es_cerrado", "es_rezagado",
 ]
 
@@ -48,10 +49,12 @@ def classify_tickets(df: pd.DataFrame) -> pd.DataFrame:
     """
     out = df.copy()
 
-    out["periodo_creacion"] = pd.to_datetime(out["creado_el"], errors="coerce").dt.strftime("%Y-%m")
-    out["periodo_cierre"] = pd.to_datetime(
-        out["ultima_actualizacion_etapa"], errors="coerce"
-    ).dt.strftime("%Y-%m")
+    # La fecha se guarda aparte del periodo porque es la que permite cortar por
+    # dia; el periodo, en texto `YYYY-MM`, es lo que compara el resto del modulo.
+    out["dt_creacion"] = pd.to_datetime(out["creado_el"], errors="coerce")
+    out["dt_cierre"] = pd.to_datetime(out["ultima_actualizacion_etapa"], errors="coerce")
+    out["periodo_creacion"] = out["dt_creacion"].dt.strftime("%Y-%m")
+    out["periodo_cierre"] = out["dt_cierre"].dt.strftime("%Y-%m")
 
     etapa = out["etapa"].astype(str).str.strip().str.lower()
     out["es_resuelto"] = etapa.isin(RESOLVED_STAGES)
@@ -117,14 +120,27 @@ class PeriodCohort:
         raise ValueError(f"Población desconocida: {clave!r}")
 
 
-def build_cohort(df_all: pd.DataFrame, periodo: str) -> PeriodCohort:
+def build_cohort(
+    df_all: pd.DataFrame, periodo: str, hasta: date | None = None
+) -> PeriodCohort:
     """
     Los tickets de un periodo: los que nacieron en él o los que cerraron en él.
 
     `df_all` tiene que venir de `classify_tickets`.
+
+    Con `hasta` la cohorte es el acumulado del mes hasta ese día: sólo lo que
+    nació o cerró hasta esa fecha, incluida. Un ticket que cerró el 20 sigue
+    contando como creado el 3 en el corte del 15, pero todavía no como cerrado,
+    que es exactamente lo que se veía ese día.
     """
     nacidos = df_all["periodo_creacion"] == periodo
     cerrados = df_all["es_cerrado"] & (df_all["periodo_cierre"] == periodo)
+
+    if hasta is not None:
+        # El día del corte entra entero.
+        tope = pd.Timestamp(hasta) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
+        nacidos = nacidos & (df_all["dt_creacion"] <= tope)
+        cerrados = cerrados & (df_all["dt_cierre"] <= tope)
 
     df = df_all[nacidos | cerrados].copy()
     df["nacido_en_periodo"] = nacidos[nacidos | cerrados]

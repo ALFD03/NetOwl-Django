@@ -43,8 +43,10 @@ class _Catalogo:
     """Todos los catalogos leidos de una vez, ya en la forma que se sirve."""
 
     planes: tuple[dict[str, Any], ...] = ()
+    reguladores: tuple[dict[str, Any], ...] = ()
     zonas: tuple[dict[str, Any], ...] = ()
     sites: tuple[str, ...] = ()
+    estados: tuple[str, ...] = ()
     ignorados: frozenset[str] = frozenset()
     nombres_planes: frozenset[str] = frozenset()
     zonas_indexadas: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -58,27 +60,40 @@ _tomada_en: float = 0.0
 
 
 def _leer() -> _Catalogo:
-    """Una lectura completa de las cinco tablas del catalogo.
+    """Una lectura completa de las tablas del catalogo.
 
     Los modelos se importan aqui dentro y no arriba: este modulo lo importan
     paquetes de analisis que se cargan antes de que Django termine de registrar
     las apps, y un import de modelos a nivel de fichero reventaria con
     `AppRegistryNotReady`.
     """
-    from services.subscriptions.models import Plan, ProductoIgnorado, Site, Zona
+    from services.subscriptions.models import (
+        Estado,
+        Plan,
+        PlanRegulador,
+        ProductoIgnorado,
+        Site,
+        Zona,
+    )
 
-    planes = tuple(p.to_fixture() for p in Plan.objects.all())
+    # `select_related` no es cosmetico: `Plan.to_fixture()` serializa el plan
+    # regulador, y sin el son tantas consultas como planes tenga el catalogo.
+    planes = tuple(p.to_fixture() for p in Plan.objects.select_related("plan_regulador").all())
+    reguladores = tuple(r.to_fixture() for r in PlanRegulador.objects.all())
     zonas = tuple(
         z.to_fixture()
         for z in Zona.objects.select_related("site", "estado", "coordinador").all()
     )
     sites = tuple(Site.objects.values_list("nombre", flat=True))
+    estados = tuple(Estado.objects.values_list("nombre", flat=True))
     ignorados = frozenset(ProductoIgnorado.objects.values_list("nombre", flat=True))
 
     return _Catalogo(
         planes=planes,
+        reguladores=reguladores,
         zonas=zonas,
         sites=sites,
+        estados=estados,
         ignorados=ignorados,
         nombres_planes=frozenset(p["name"] for p in planes if p.get("name")),
         zonas_indexadas={
@@ -125,6 +140,26 @@ def reset_cache() -> None:
 def planes() -> list[dict[str, Any]]:
     """Planes del catalogo, con las claves de `Planes.json`."""
     return list(_catalogo().planes)
+
+
+def planes_reguladores() -> list[dict[str, Any]]:
+    """Los planes tal y como se declaran a la reguladora.
+
+    Se sirven todos, tambien los que no tienen ningun plan comercial colgando:
+    las filas de internet dedicado y de transporte no salen del catalogo
+    comercial sino de las excepciones por orden, y se emparejan con su
+    regulador por velocidad.
+    """
+    return list(_catalogo().reguladores)
+
+
+def estados() -> list[str]:
+    """Entidades federales del catalogo, en orden alfabetico.
+
+    La reguladora pide la lista entera encadenada en cada fila del formulario,
+    no las entidades en las que ese plan tiene suscriptores.
+    """
+    return list(_catalogo().estados)
 
 
 def zonas() -> list[dict[str, Any]]:

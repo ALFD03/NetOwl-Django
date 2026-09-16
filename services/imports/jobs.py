@@ -25,6 +25,15 @@ from .models import AnalysisJob
 logger = logging.getLogger(__name__)
 
 
+class AnalisisCancelado(Exception):
+    """Alguien pidio parar la ejecucion desde la interfaz.
+
+    No es un error del analisis: la levanta el punto de control de `ConsolaJob`
+    al ver que su fila ya no esta abierta, y `ejecutar_analisis` la distingue del
+    resto para cerrar el job como cancelado y no como fallido.
+    """
+
+
 def job_en_curso(module: str) -> AnalysisJob | None:
     """Ejecucion abierta de ese modulo, o None si no hay ninguna viva.
 
@@ -140,6 +149,17 @@ class ConsolaJob(io.StringIO):
     No se vuelca en cada `write` a proposito: un analisis mensual imprime una
     linea por dia y varias por bloque, y un UPDATE por linea multiplicaria las
     escrituras sin que el usuario note diferencia.
+
+    **Es tambien el punto de control de la cancelacion.** Cada vez que vuelca,
+    mira si su fila sigue abierta; si alguien la paso a `cancelled` desde la
+    interfaz, levanta `AnalisisCancelado` y el analisis se detiene ahi. Se pone
+    aqui porque es el unico sitio por el que pasan los cuatro analisis sin
+    excepcion -todos narran su avance- y porque ya viene con su propio ritmo:
+    no anade ni una consulta de mas por encima de las que ya hacia.
+
+    Detener a medias no deja nada inconsistente: `save_historico` reescribe el
+    periodo entero la proxima vez, y los volcados parciales de metricas diarias
+    son deliberadamente reanudables (ver `day_metrics`).
     """
 
     INTERVALO_VOLCADO = 2.0
@@ -153,11 +173,16 @@ class ConsolaJob(io.StringIO):
         self._volcando = False
 
     def write(self, s):  # noqa: D102 - contrato de StringIO
-        """Acumula la salida y, cada `INTERVALO_VOLCADO`, la guarda en el job."""
+        """Acumula la salida y, cada `INTERVALO_VOLCADO`, la guarda en el job.
+
+        Al mismo ritmo comprueba si le han pedido parar; si es asi, levanta
+        `AnalisisCancelado` desde el `print` del analisis, que es lo que lo corta.
+        """
         escrito = super().write(s)
         ahora = time.monotonic()
         if not self._volcando and ahora - self._ultimo_volcado >= self.INTERVALO_VOLCADO:
             self.volcar()
+            self.abortar_si_cancelado()
         return escrito
 
     def volcar(self, **campos) -> None:
@@ -190,8 +215,35 @@ class ConsolaJob(io.StringIO):
         finally:
             self._volcando = False
 
+    def abortar_si_cancelado(self) -> None:
+        """Levanta `AnalisisCancelado` si la fila del job ya no esta abierta.
+
+        Se relee solo el estado, no la fila entera: es una consulta minima al
+        ritmo del volcado. Un fallo al preguntar no detiene nada -se seguira
+        preguntando en el siguiente punto de control-, porque dar por cancelado
+        un analisis porque la base parpadeo seria peor que tardar dos segundos
+        mas en pararlo.
+        """
+        try:
+            estado = (
+                AnalysisJob.objects.filter(pk=self.job.pk)
+                .values_list('status', flat=True)
+                .first()
+            )
+        except Exception:
+            logger.exception("No se pudo comprobar la cancelacion del job %s", self.job.pk)
+            return
+
+        if estado == AnalysisJob.CANCELADO:
+            raise AnalisisCancelado
+
     def progreso(self, hechos: int, total: int, etiqueta: str = '') -> None:
-        """Callback de avance que reciben los analisis con pasos contables."""
+        """Callback de avance que reciben los analisis con pasos contables.
+
+        Es el punto de control mas fino que tiene un analisis largo: los que
+        recorren dias lo llaman una vez por dia, asi que una cancelacion se nota
+        en lo que tarda un corte, no en lo que tarda el mes.
+        """
         self.job.progress_done = hechos
         self.job.progress_total = total
         self.job.progress_label = etiqueta
@@ -200,6 +252,26 @@ class ConsolaJob(io.StringIO):
         self.volcar(
             progress_done=hechos, progress_total=total, progress_label=etiqueta
         )
+        self.abortar_si_cancelado()
+
+
+def cancelar_job(job: AnalysisJob, username: str) -> None:
+    """Marca el job como cancelado. Es todo lo que hace falta.
+
+    No se le manda nada a Celery. Un job en cola deja de estar abierto, y la
+    tarea ya descartaba los jobs cerrados al recogerlos -la guarda que protege de
+    una reentrega tras reiniciar el worker sirve igual para esto-. Uno en curso
+    lo ve en el siguiente punto de control de su consola y se detiene solo.
+
+    Lo que se evita asi es `revoke(terminate=True)`, que mata el proceso del
+    worker a senal limpia: en mitad de un `COPY` o de un `ALTER TABLE` eso deja
+    la conexion y la tabla como caigan. Parar en un punto conocido cuesta como
+    mucho un par de segundos mas y no deja nada a medias.
+    """
+    job.status = AnalysisJob.CANCELADO
+    job.message = f"Análisis cancelado por {username}."
+    job.finished_at = timezone.now()
+    job.save(update_fields=['status', 'message', 'finished_at', 'updated_at'])
 
 
 def marcar_inicio(job: AnalysisJob, task_id: str) -> None:

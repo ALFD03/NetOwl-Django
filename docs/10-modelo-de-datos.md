@@ -31,7 +31,8 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
 | `catalogo_coordinadores` | `Coordinador` | Responsable comercial |
 | `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
-| `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)` |
+| `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
+| `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
 | `catalogo_productos_ignorados` | `ProductoIgnorado` | Líneas del export que nunca serán un plan |
 | `django_migrations` | Django | **Compartida: es la causa de los comandos `preparar_*`** |
 
@@ -102,9 +103,11 @@ Todas llevan `periodo_reporte` con la etiqueta `Periodo.label()`
 | `analyzer_churn_dimensiones` | `dimension`, `valor` y las mismas métricas del cierre |
 | `analyzer_day_metrics` | `periodo_reporte` (único), `activos_inicio`, `dia1`…`dia31` (JSON en texto) |
 
-`analyzer_day_metrics` es la única con un índice único explícito
+`analyzer_day_metrics` es la única de este bloque con un índice único explícito
 (`ix_day_metrics_periodo`) y con *upsert*: el resto se reescriben con
-`DELETE` + `INSERT` del periodo.
+`DELETE` + `INSERT` del periodo. `crm_day_metrics` y `support_day_metrics`
+siguen el mismo patrón (las tres las escribe `DBConnector.save_day_metrics`),
+con el índice nombrado a partir de la tabla.
 
 ### Ciclo de vida
 
@@ -120,8 +123,8 @@ Escritas con `periodo_reporte = "global"` y `metodo_calculo = "lifetime"`.
 
 | Tabla | Cómo se crea | Contenido |
 |---|---|---|
-| `analyzer_eta_config_subs_individual` | DDL explícito | Excepciones por orden: `orden` (PK), `cliente`, `producto`, `reportar`, `tecnologia`, `tipo_persona`, `tiene_tv`, `datas_mbps`, `es_transporte`, `es_dedicado`, `updated_at` |
-| `analyzer_eta_reporte_mensual` | DDL explícito | `periodo_reporte` (PK), `reporte_data` (JSONB), `esta_bloqueado`, `fecha_calculo` |
+| `analyzer_eta_config_subs_individual` | DDL explícito | Excepciones por orden: `orden` (PK), `cliente`, `producto`, `reportar`, `tecnologia`, `tipo_persona`, `tiene_tv`, `datas_mbps`, `es_transporte`, `es_dedicado`, `precio`, `updated_at`. `precio` es la renta con que se declara ese enlace: el catálogo comercial no la tiene |
+| `analyzer_eta_reporte_mensual` | DDL explícito | `periodo_reporte` (PK), `reporte_data` (JSONB), `esta_bloqueado`, `tasa_bcv`, `tasa_fuente`, `fecha_calculo`. `tasa_fuente` dice de dónde salió la cifra (el día que publicó el BCV, o «Escrita a mano»). La tasa vive **fuera** de `reporte_data`: los formularios guardan el precio en divisa y la conversión es del exportador, así que se corrige sin recalcular |
 | `analyzer_eta_config_planes` | — | **Obsoleta.** Guardaba una segunda copia, con prioridad, de la clasificación de cada plan. Sigue en la base de datos, **vacía y sin leer**; el nombre se conserva en `TableNames` solo para poder identificarla |
 
 ---
@@ -133,6 +136,7 @@ Escritas con `periodo_reporte = "global"` y `metodo_calculo = "lifetime"`.
 | `crm_cierre_historico` | Una fila por `periodo_reporte` (`YYYY-MM`, único) con los escalares declarados en `_COLUMNAS_CIERRE` más `efectividad` y `tiempo_por_etapa` como JSONB |
 | `crm_dimensiones_historico` | `periodo_reporte`, `dimension`, `valor`, `metricas` (JSONB), `efectividad` (JSONB) |
 | `crm_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `tiempo_por_etapa`, `efectividad` |
+| `crm_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (JSON en texto). Cada día es `{"global": {...}, "dimensiones": [...]}`: el corte acumulado del mes hasta ese día, con la misma forma que el cierre y sus dimensiones. `global` se lee aparte de los 31 días a la vez (`-> 'global'` en SQL) para la barra de días |
 
 Bloques de columnas de `crm_cierre_historico`:
 
@@ -162,6 +166,7 @@ dimensiones.
 | `support_cierre_historico` | `periodo_reporte` (`YYYY-MM`, único) y **todo el bloque como un único JSONB `metricas`** |
 | `support_dimensiones_historico` | `periodo_reporte`, `grupo_trabajo`, `dimension`, `valor`, `metricas` (JSONB) |
 | `support_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `por_grupo_trabajo`, `periodos_evaluados` |
+| `support_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (JSON en texto). Cada día es `{"global": {...}, "global_grupos": {...}, "grupos": {...}, "incidencia_zonas": {...}}`: el corte acumulado del mes hasta ese día. `grupos` e `incidencia_zonas` tienen la forma del bloque del periodo; `global` (la cohorte completa) y `global_grupos` (la misma por equipo) se leen aparte de los 31 días a la vez para las tarjetas del día |
 
 Dentro del JSONB, las claves siguen `SUPPORT_VOLUME_FIELDS`,
 `SUPPORT_RATE_FIELDS` y, por cada medida de tiempo, once columnas

@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { AlertTriangle, Download, FileX2 } from 'lucide-react';
 
 import { downloadRowsAsExcel } from '@/shared/lib/excel';
+import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
-import { Button } from '@/shared/ui';
+import { Button, StatusMessage } from '@/shared/ui';
 import { BAJAS_COLUMNS, bajasFileName } from '../../lib/bajasExport';
 
 interface BajasExportButtonProps {
@@ -61,9 +62,11 @@ export function BajasExportButton({
   className,
 }: BajasExportButtonProps) {
   const [estado, setEstado] = useState<Estado>('idle');
+  const [error, setError] = useState<string | null>(null);
 
   const handleClick = async () => {
     setEstado('busy');
+    setError(null);
     try {
       const data = await subscriptionsApi.getBajasDetalle(period, nodos);
       if (!data.bajas?.length) {
@@ -77,10 +80,13 @@ export function BajasExportButton({
         sheetName: 'Bajas',
       });
       setEstado('idle');
-    } catch (error) {
-      // El fallo es de la petición o del navegador al escribir el archivo: se
-      // deja visible en el propio botón, sin montar un modal por esto.
-      console.error('Fallo al exportar el detalle de bajas:', error);
+    } catch (err) {
+      // El motivo se enseña, no solo se registra: un permiso denegado, un
+      // periodo que ya no existe y un fallo del navegador al escribir el
+      // archivo se arreglan de tres formas distintas, y «No se pudo exportar»
+      // no distingue entre ellos. La traza sigue yendo a la consola.
+      console.error('Fallo al exportar el detalle de bajas:', err);
+      setError(getApiErrorMessage(err, 'No se pudo obtener el detalle de las bajas.'));
       setEstado('error');
     }
   };
@@ -97,17 +103,29 @@ export function BajasExportButton({
   ].filter(Boolean).join(' ');
 
   return (
-    <Button
-      variant="secondary"
-      size={size}
-      className={iconOnly ? `!px-2 !gap-0 ${className ?? ''}` : className}
-      onClick={handleClick}
-      isLoading={estado === 'busy'}
-      disabled={!period}
-      icon={icono}
-      title={titulo}
-    >
-      {iconOnly ? '' : MENSAJE[estado] ?? label}
-    </Button>
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        variant="secondary"
+        size={size}
+        className={iconOnly ? `!px-2 !gap-0 ${className ?? ''}` : className}
+        onClick={handleClick}
+        isLoading={estado === 'busy'}
+        disabled={!period}
+        icon={icono}
+        title={error ? `${titulo} ${error}` : titulo}
+      >
+        {iconOnly ? '' : MENSAJE[estado] ?? label}
+      </Button>
+
+      {/* En la variante de solo icono va en el `title`: el botón vive dentro de
+          una celda de la tabla de nodos y un banner ahí rompería la fila. */}
+      {!iconOnly && (
+        <StatusMessage
+          status={error ? { type: 'error', text: error } : null}
+          icon={<AlertTriangle />}
+          className="max-w-md"
+        />
+      )}
+    </div>
   );
 }

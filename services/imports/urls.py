@@ -33,4 +33,5 @@ urlpatterns = [
     path("api/jobs/queue/", views.api_jobs_queue, name="api_jobs_queue"),
     path("api/jobs/active/", views.api_job_active, name="api_job_active"),
     path("api/jobs/<uuid:job_id>/", views.api_job_detail, name="api_job_detail"),
+    path("api/jobs/<uuid:job_id>/cancel/", views.api_job_cancel, name="api_job_cancel"),
 ]

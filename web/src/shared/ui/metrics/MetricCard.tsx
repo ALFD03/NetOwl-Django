@@ -20,6 +20,10 @@ interface MetricCardProps {
   icon?: ReactNode;
   indicator?: boolean;
   trend?: number;
+  /** Unidad de `trend`. `pp` para las métricas que ya son un porcentaje: un 40 % que pasa a 42 % subió dos puntos, no un 5 %. */
+  trendSuffix?: string;
+  /** De qué lado está lo bueno. En bajas, churn o cancelaciones, subir es malo. */
+  trendGoodWhen?: 'up' | 'down';
   onClick?: () => void;
   children?: ReactNode;
 }
@@ -42,19 +46,24 @@ export const MetricCard: FC<MetricCardProps> = ({
   icon,
   indicator = false,
   trend,
+  trendSuffix = '%',
+  trendGoodWhen = 'up',
   onClick,
   children,
 }) => {
   const isClickable = Boolean(onClick);
   const showTrend = trend != null;
   const isUp = (trend ?? 0) >= 0;
+  // El color dice si la noticia es buena, no hacia dónde apunta la flecha: en
+  // bajas o en churn, subir es rojo.
+  const isGood = isUp === (trendGoodWhen === 'up');
 
   const accessory = indicator ? (
     <PulseDot color={color} />
   ) : showTrend ? (
-    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full flex items-center gap-1 ${isUp ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'}`}>
+    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full flex items-center gap-1 ${isGood ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'}`}>
       {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-      {(trend ?? 0) > 0 ? `+${trend}%` : `${trend}%`}
+      {(trend ?? 0) > 0 ? `+${trend}${trendSuffix}` : `${trend}${trendSuffix}`}
     </span>
   ) : (
     <div className="opacity-80">{icon || defaultIcons[color]}</div>

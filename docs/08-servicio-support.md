@@ -145,9 +145,14 @@ que se mide cada métrica.
 `periodos_disponibles` une los meses de creación y los de cierre: **un mes en el
 que no nació nada pero sí se cerró arrastre sigue teniendo un reporte que dar**.
 
+`build_cohort(df_all, periodo, hasta=None)` acepta un día de corte: con `hasta`
+la cohorte es el acumulado del mes hasta esa fecha, incluida. Un ticket abierto
+el 3 y cerrado el 20 cuenta como **creado** —y como rezagado— en el corte del 15,
+y solo pasa a cerrado del 20 en adelante. Es lo que alimenta `day_metrics.py`.
+
 ---
 
-## `run_support_analysis(periodo=None)`
+## `run_support_analysis(periodo=None, progreso=None)`
 
 1. `ensure_support_schema(db)` — idempotente, no pierde nada en una instalación
    con datos.
@@ -159,6 +164,11 @@ que no nació nada pero sí se cerró arrastre sigue teniendo un reporte que dar
    - `support_dimensiones_historico` — las filas de grupo, dimensión y desglose
      (`build_dimension_rows`), insertadas en una sola sentencia con
      `execute_values`.
+   - `support_day_metrics` — el corte de cada día del mes
+     (`build_support_day_metrics`), sobre los mismos tickets ya clasificados.
+     Solo cuando se pidió un mes concreto: en una corrida global los cierres se
+     recalculan todos, pero recorrer 31 días por cada mes del histórico no es lo
+     que nadie espera de ese botón.
 4. **Recalcula el promedio acumulado sobre TODO lo que hay en
    `support_cierre_historico`**, no solo sobre los periodos recién procesados:
    analizar un mes suelto no debe borrar el histórico del dashboard de empresa.
@@ -185,6 +195,12 @@ de ticket.
 | `get_support_breakdown(periodo, dimension, valor, grupo)` | El drill-down de un valor: sus tipos, razones y soluciones, calculado al vuelo |
 | `get_incidencia_por_zona(...)` | Tickets por cada 100 clientes de la zona |
 | `get_support_tickets_list(limit, grupo, periodo)` | Listado crudo de tickets |
+| `get_support_day_series(mes)` | La serie ligera: el bloque global de cada día, sin desgloses. Es lo que dice qué días hay calculados |
+| `get_support_day_payload(mes, dia)` | El corte completo de un día: `{global, grupos, incidencia_zonas}` |
+
+`estructurar_grupos(filas)` agrupa las filas dimensionales por grupo de trabajo,
+y la usan por igual las persistidas del mes y las que un corte diario trae ya
+calculadas: el front recibe exactamente lo mismo en los dos casos.
 
 `_load_period_cohort` reconstruye la cohorte desde los tickets aplicando **las
 mismas reglas** del analizador, así que el drill-down es idéntico a lo que se
@@ -227,3 +243,27 @@ selector de grupo es de cliente igual que el de dimensión.
 Todas las respuestas pasan por `clean_json_props`. El drill-down
 (`api/breakdown/`) exige `period`, `dimension` y `valor`, y acepta `grupo`
 opcional. `api/tickets/` limita a 5 000 registros como techo absoluto.
+
+`analytics` acepta además `?dia=`, que sustituye `grupos` e `incidencia_zonas`
+por el corte acumulado de ese día leído de `support_day_metrics`; sin él se envía
+el último corte calculado (en un mes cerrado, el cierre).
+
+`dayMetrics` lleva además la **serie ligera** del mes: `serie` es la cohorte
+completa de cada día y `serie_grupos` la misma abierta por equipo. Las dos viajan
+porque **la página entera está filtrada por grupo** y el selector no tiene un
+«todos»: las tarjetas del día siguen al equipo elegido, y cambiarlo no cuesta una
+vuelta al servidor. `global_grupos` no añade cálculo —`build_dimension_rows` ya
+mide cada grupo para su fila `grupo_trabajo`—.
+
+Soporte empezó a guardar esos bloques después que CRM, así que **un mes analizado
+antes tiene sus cortes pero no el resumen del día**: la barra y el desglose
+funcionan igual y el bloque de tarjetas lo dice en pantalla; se arregla volviendo
+a ejecutar el análisis del mes. Con ella
+el cliente resuelve sin pedir nada las tarjetas del día, el acumulado, la
+variación contra el día anterior y las líneas de tendencia. Lo único que se pide
+por día es el desglose por grupo, y va por `api/day-metrics/`, que el navegador
+cachea y adelanta por vecinos: moverse por la barra no espera a la base.
+
+El mes entero con desgloses no viaja porque un corte de soporte lleva las
+métricas de cada grupo por sus seis ejes, varios cientos de bloques. Nada de esto
+recalcula: se leen celdas ya escritas por el análisis.

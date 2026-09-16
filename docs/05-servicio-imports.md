@@ -44,7 +44,7 @@ Celery corre sin backend de resultados.
 |---|---|
 | `id` | **UUID, no autoincremental**: el id viaja al navegador y se sondea; un entero correlativo dejaría adivinar ejecuciones ajenas |
 | `module`, `periodo` | `periodo` es `YYYY-MM`, vacío en los análisis sin periodo (ciclo de vida) |
-| `status` | `pending` → `running` → `success` / `error` |
+| `status` | `pending` → `running` → `success` / `error` / `cancelled` |
 | `task_id` | Id de la tarea Celery |
 | `log` | Salida de consola acumulada |
 | `message`, `result` | Lo que la vista devolvía antes en el JSON final |
@@ -59,6 +59,30 @@ Dos propiedades:
   golpe, la fila se queda en `running` para siempre y bloquearía cualquier
   ejecución posterior del mismo módulo**; pasado el margen se ignora.
 
+### Cancelar es escribir en `status`
+
+No hay bandera aparte ni columna nueva: cancelar pone `cancelled` en `status` y
+eso es todo. De ahí salen las dos mitades solas:
+
+- **En cola** — la fila deja de estar abierta, y `ejecutar_analisis` ya
+  descartaba los jobs cerrados al recogerlos (la guarda que protege de una
+  reentrega tras reiniciar el worker). El análisis no llega a empezar.
+- **En curso** — `ConsolaJob` lo ve en su siguiente volcado y levanta
+  `AnalisisCancelado`, que la tarea distingue del resto de excepciones.
+
+**No se le manda nada a Celery.** `revoke(terminate=True)` mata el proceso del
+worker a señal limpia, y en mitad de un `COPY` o de un `ALTER TABLE` eso deja la
+conexión y la tabla como caigan. Parar en un punto conocido cuesta como mucho un
+par de segundos más y no deja nada a medias: `save_historico` reescribe el
+periodo entero la próxima vez, y los volcados parciales de métricas diarias son
+deliberadamente reanudables.
+
+Elegir el campo en vez de una columna nueva no es sólo economía: **añadir un
+valor a `choices` no toca la tabla** —Django no genera un CHECK en Postgres— y
+por tanto no hay que crear nada esquema por esquema. Una columna sí habría
+obligado, porque `preparar_imports` solo crea la tabla que falta y
+`django_migrations` es compartida (ver ese comando).
+
 ---
 
 ## `jobs.py` — el puente entre la vista y la tarea
@@ -72,6 +96,8 @@ Dos propiedades:
 | `bloqueo_modulo(module)` | Context manager: toma el turno de escritura del módulo o cede con `None` |
 | `ConsolaJob(job)` | Buffer de stdout que además vuelca el log a la fila |
 | `marcar_inicio` / `marcar_fin` | Transiciones de estado |
+| `cancelar_job(job, username)` | Cierra la fila como `cancelled`. No habla con Celery |
+| `AnalisisCancelado` | La levanta el punto de control de `ConsolaJob`; no es un error del análisis |
 | `lanzar_analisis(request, module, requiere_periodo=True)` | Valida, rechaza el duplicado, crea y encola. Devuelve la respuesta ya hecha |
 
 ### `bloqueo_modulo` — por qué existe
@@ -102,6 +128,13 @@ usuario note diferencia.
   fallo típico es una conexión caducada entre dos volcados.
 - `progreso(hechos, total, etiqueta)` **sí fuerza** el volcado: es lo que mueve
   la barra y llega una vez por día calculado, no una por línea impresa.
+- `abortar_si_cancelado()` es el **punto de control de la cancelación**: relee
+  sólo el estado de la fila y levanta `AnalisisCancelado` si ya está en
+  `cancelled`. Se llama al ritmo del volcado y en cada `progreso`, así que es el
+  único sitio por el que pasan los cuatro análisis sin excepción y no añade ni
+  una consulta por encima de las que ya hacía. Un fallo al preguntar **no**
+  detiene nada: dar por cancelado un análisis porque la base parpadeó sería peor
+  que tardar dos segundos más en pararlo.
 - `_volcando` evita reentrar si algo dentro del propio volcado escribiera a
   stdout, que en ese momento sigue redirigido a este buffer.
 
@@ -160,9 +193,11 @@ with bloqueo_modulo(job.module) as turno:
    catálogo a mitad de un cálculo de minutos**.
 2. `marcar_inicio(job, task_id)`.
 3. `with capture_console(consola): runner(job, consola)`.
-4. Captura `SoftTimeLimitExceeded` y cualquier `Exception`: el desenlace se deja
-   en el job y en `ImportActionLog`. **No propaga**: el error interesa donde lo
-   lee la interfaz, no como traza de Celery que nadie mira.
+4. Captura `AnalisisCancelado` (cierra el job como `cancelled`, con el log
+   parcial, y lo deja en el historial como advertencia — no es un fallo),
+   `SoftTimeLimitExceeded` y cualquier `Exception`: el desenlace se deja en el
+   job y en `ImportActionLog`. **No propaga**: el error interesa donde lo lee la
+   interfaz, no como traza de Celery que nadie mira.
 5. `marcar_fin(...)` + `register_import_log(...)`.
 
 ---

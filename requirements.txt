@@ -25,6 +25,11 @@ numpy==2.4.6
 psycopg2==2.9.13
 python-dotenv==1.2.3
 hvac==2.4.0
+# Se instalaba sola como dependencia de hvac. Ahora la importa tambien
+# `services/subscriptions/analytics/bcv.py` para consultar la tasa del dolar
+# oficial, asi que se declara: una dependencia directa que solo esta ahi de
+# rebote desaparece el dia que la indirecta cambie de arbol.
+requests==2.34.2
 pydantic==2.13.5
 lifelines==0.30.3
 django-ratelimit==4.1.0

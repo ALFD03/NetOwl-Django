@@ -6,5 +6,6 @@ export { SupportResultsView } from './components/SupportResultsView';
 export { SupportAnalyticsFilters } from './components/analytics/SupportAnalyticsFilters';
 export { useSupportDashboard } from './hooks/useSupportDashboard';
 export { useSupportAnalytics } from './hooks/useSupportAnalytics';
+export * from './lib/supportDaySummary';
 export * from './lib/supportMetrics';
 export type * from './types';

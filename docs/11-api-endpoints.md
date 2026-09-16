@@ -88,6 +88,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | POST | `api/lifecycle/run/` | `can_run_lifetime` | 2/m | Encola; **202** con el job. Sin periodo |
 | GET | `api/eta-report/data/?period=&force=` | `can_view_eta` | — | `force=true` recalcula aunque esté bloqueado |
 | POST | `api/eta-report/lock/` | `can_manage_eta` | — | `{period, lock}`. Al bloquear, recalcula y congela |
+| POST | `api/eta-report/tasa/` | `can_manage_eta` | 30/m | `{period, tasa}`. Escribe la tasa a mano; no recalcula nada |
+| POST | `api/eta-report/tasa/consultar/` | `can_manage_eta` | 10/m | `{period}`. Vuelve a pedirla al BCV y pisa la guardada. **502** si el tercero falla |
 | POST | `api/eta-report/save-sub-config/` | `can_manage_eta` | — | Excepción individual: `orden` obligatorio |
 | POST | `api/eta-report/delete-sub-config/` | `can_manage_eta` | — | `{orden}` |
 | POST | `api/catalogos/guardar/` | `can_manage_catalogos` | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido |
@@ -102,12 +104,13 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | Método | Ruta | Permiso | Devuelve |
 |---|---|---|---|
 | GET | `/crm/`, `/crm/dashboard/` | `can_view_crm` | Página `CRM/Dashboard` |
-| GET | `/crm/analytics/?period=` | `can_view_crm_analytics` | Página `CRM/Analytics` |
+| GET | `/crm/analytics/?period=&dia=` | `can_view_crm_analytics` | Página `CRM/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `crm_day_metrics`; sin él, el último calculado |
 | GET | `/crm/results/?periods=` | `can_view_crm_results` | Página `CRM/Results` |
 | GET | `api/periods/` | `can_view_crm` | `{periods}` |
 | GET | `api/global-metrics/?period=` | `can_view_crm` | Promedio global + tiempos + efectividad + serie |
 | GET | `api/cierre-historico/?periods=` | `can_view_crm_results` | `{historico}` |
 | GET | `api/dimension-metrics/?period=&dimension=` | `can_view_crm_analytics` **o** `can_view_crm_results` | `{dimensiones}` |
+| GET | `api/day-metrics/?period=&dia=` | `can_view_crm_analytics` | `{dia, global, dimensiones}` — el corte de un día de `crm_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
 
 ---
 
@@ -116,12 +119,13 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | Método | Ruta | Permiso | Devuelve |
 |---|---|---|---|
 | GET | `/support/`, `/support/dashboard/` | `can_view_support` | Página `Support/Dashboard` |
-| GET | `/support/analytics/?period=` | `can_view_support_analytics` | Página `Support/Analytics` |
+| GET | `/support/analytics/?period=&dia=` | `can_view_support_analytics` | Página `Support/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `support_day_metrics`; sin él, el último calculado |
 | GET | `/support/results/?periods=` | `can_view_support_results` | Página `Support/Results` |
 | GET | `api/periods/` | `can_view_support` | `{periods}` |
 | GET | `api/cierre-historico/?periods=` | `can_view_support` | `{historico}` aplanado |
 | GET | `api/global-metrics/` | `can_view_support` | Promedio de todos los periodos |
 | GET | `api/dimension-metrics/?period=` | `can_view_support_analytics` | `{dimensiones}`. **400** sin `period` |
+| GET | `api/day-metrics/?period=&dia=` | `can_view_support_analytics` | `{dia, global, grupos, incidencia_zonas}` — el corte de un día de `support_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
 | GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |
 | GET | `api/tickets/?limit=&grupo=&period=` | `can_view_support_results` | Listado crudo; `limit` con techo de 5 000 |
 
@@ -190,6 +194,7 @@ Sin `@ratelimit` a propósito: son endpoints de sondeo continuo.
 | GET | `api/jobs/<uuid>/` | Quien lo lanzó, quien puede ver el historial, o superusuario | La ficha completa del job (estado, mensaje, `log_output`, `progress`, `result`) |
 | GET | `api/jobs/queue/` | Igual, filtrado | `{jobs: [...], en_ejecucion, en_cola}` |
 | GET | `api/jobs/active/?module=` | Igual | `{job}` o `{job: null}`. **400** si el módulo no es válido |
+| POST | `api/jobs/<uuid>/cancel/` | Quien lo lanzó, `can_run_calculations`, o superusuario. Límite 10/m | Cierra la ejecución como `cancelled`. **403** sin permiso, **404** si no existe o no se ve, **409** si ya había terminado. No habla con Celery: la que esperaba turno no llega a empezar y la que ya calculaba se detiene en su siguiente punto de control |
 
 Forma de un job:
 

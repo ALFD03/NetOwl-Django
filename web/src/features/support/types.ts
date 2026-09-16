@@ -1,6 +1,7 @@
 /** Tipos del feature de soporte: medidas de tiempo, tasas y bloques de métricas. */
 
 import type { MetricColor } from '@/shared/ui';
+import type { DayCuts, DaySeries } from '@/shared/types/domain';
 
 export interface SupportAnalysisRequest { month: string | null; }
 export interface SupportAnalysisResponse { message: string; log_output?: string; }
@@ -205,8 +206,33 @@ export interface SupportAnalyticsProps {
     /** Keyed by work group; the selector picks one client-side. */
     incidencia_zonas?: Record<string, SupportZoneEntry[]>;
   };
+  /**
+   * Which days of the month have a cut computed, and which one is on screen,
+   * plus the light per-day series. The dimensional breakdown arrives inside
+   * `analyticsData`; `useDayPayload` serves the other days from its cache.
+   */
+  dayMetrics?: SupportDayCuts;
   periods?: string[];
   selectedPeriod?: string;
+}
+
+/**
+ * La barra de días de soporte, con la serie ligera abierta por grupo de trabajo.
+ *
+ * `serie` es el total del mes y `serie_grupos` lo mismo por equipo. Existen las
+ * dos porque la página entera está filtrada por grupo —el selector no tiene un
+ * «todos»—, así que unas tarjetas con el total de la empresa dirían otra cosa
+ * que el resto de la pantalla.
+ */
+export interface SupportDayCuts extends DayCuts {
+  /** `{ día: { grupo: métricas } }`. Ausente en meses analizados antes. */
+  serie_grupos?: Record<string, Record<string, DaySeries[string]>>;
+}
+
+/** El corte completo de un día, tal y como lo sirve `/support/api/day-metrics/`. */
+export interface SupportDayPayload {
+  grupos: Record<string, SupportGroup>;
+  incidencia_zonas: Record<string, SupportZoneEntry[]>;
 }
 
 /** One entry of the group selector, ordered by volume. */

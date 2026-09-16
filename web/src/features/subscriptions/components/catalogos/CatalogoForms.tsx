@@ -2,8 +2,8 @@
 
 import type { FormEvent, ReactNode } from 'react';
 import {
-  Building2, EyeOff, Gauge, MapPin, Network, RadioTower, ShieldCheck,
-  Tv2, User, UserCheck, Zap,
+  Building2, Cable, EyeOff, Gauge, MapPin, Network, RadioTower,
+  ShieldCheck, Tv2, User, UserCheck, Zap,
 } from 'lucide-react';
 
 import { SelectMenu } from '@/shared/ui';
@@ -13,9 +13,14 @@ import {
 } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
 import type {
-  IgnoradoDraft, NombreDraft, PlanDraft, SiteDraft, ZonaDraft,
+  IgnoradoDraft, NombreDraft, PlanDraft, ReguladorDraft, SiteDraft, ZonaDraft,
 } from '@/features/subscriptions/hooks/useCatalogos';
-import type { CatalogoNombrado, CatalogoOption, CatalogoSite } from '@/features/subscriptions/types';
+import type {
+  CatalogoNombrado, CatalogoOption, CatalogoPlanRegulador, CatalogoSite,
+} from '@/features/subscriptions/types';
+
+/** Valor del desplegable cuando el plan todavía no está agrupado. */
+const SIN_REGULADOR = '';
 
 /**
  * Formularios de los catálogos, en el mismo lenguaje que el maestro ETA.
@@ -92,10 +97,12 @@ export function PlanForm({
   onChange,
   onSubmit,
   onClose,
+  reguladores,
 }: Acciones & {
   value: PlanDraft;
   tecnologias: CatalogoOption[];
   tiposPersona: CatalogoOption[];
+  reguladores: CatalogoPlanRegulador[];
   onChange: (patch: Partial<PlanDraft>) => void;
 }) {
   return (
@@ -203,6 +210,22 @@ export function PlanForm({
             </Field>
           </div>
 
+          <Field
+            label="Plan regulador"
+            hint="Con qué fila del formulario se declara. Varios planes comerciales pueden compartirla: es lo que evita contar dos veces la misma velocidad con dos tarifas. Sin asignar, el plan sigue contando en las matrices pero no aparece en el formulario."
+          >
+            <SelectMenu
+              aria-label="Plan regulador"
+              className={modalInputClass}
+              value={String(value.plan_regulador_id ?? SIN_REGULADOR)}
+              options={[
+                { value: SIN_REGULADOR, label: 'Sin asignar — no se declara' },
+                ...reguladores.map((r) => ({ value: String(r.id), label: r.nombre })),
+              ]}
+              onChange={(id) => onChange({ plan_regulador_id: id ? Number(id) : null })}
+            />
+          </Field>
+
           <OptionCard
             className="w-full"
             icon={<Tv2 />}
@@ -216,6 +239,141 @@ export function PlanForm({
       </FormColumns>
 
       <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : 'Crear plan'} />
+    </ModalForm>
+  );
+}
+
+export function PlanReguladorForm({
+  value,
+  tecnologias,
+  tiposPersona,
+  saving,
+  onChange,
+  onSubmit,
+  onClose,
+}: Acciones & {
+  value: ReguladorDraft;
+  tecnologias: CatalogoOption[];
+  tiposPersona: CatalogoOption[];
+  onChange: (patch: Partial<ReguladorDraft>) => void;
+}) {
+  return (
+    <ModalForm onSubmit={onSubmit}>
+      <FormBanner
+        title="Hoja del formulario"
+        description="El transporte de datos se declara en su propia hoja, con otras columnas: medio de transmisión y número de enlaces en vez de velocidades de subida y bajada."
+        action={
+          <TogglePill
+            active={value.es_transporte}
+            icon={<Cable />}
+            activeLabel="Transporte de datos"
+            inactiveLabel="Internet"
+            onToggle={() => onChange({ es_transporte: !value.es_transporte })}
+          />
+        }
+      />
+
+      <TecnologiaCards
+        opciones={tecnologias}
+        valor={value.tecnologia}
+        onChange={(tecnologia) => onChange({ tecnologia })}
+        label="Tecnología declarada"
+      />
+
+      <OptionCardGroup label="Tipo de suscriptor declarado" columns="md:grid-cols-2">
+        {tiposPersona.map((opcion) => {
+          const ui = PERSONA_UI[opcion.value] ?? PERSONA_POR_DEFECTO;
+          return (
+            <OptionCard
+              key={opcion.value}
+              icon={ui.icon}
+              title={opcion.label}
+              description={ui.description}
+              tone={ui.tone}
+              selected={value.tipo_persona === opcion.value}
+              onSelect={() => onChange({ tipo_persona: opcion.value })}
+            />
+          );
+        })}
+      </OptionCardGroup>
+
+      <FormColumns>
+        <div className="space-y-4">
+          <Field
+            label="Nombre del plan declarado"
+            hint="Tal y como debe salir en el formulario. El internet dedicado y el transporte se nombran «Internet Dedicado N Mbps» y «Transporte de Datos N Mbps»: con ese nombre exacto, esta fila sustituye a la que se calcula sola."
+          >
+            <input
+              type="text"
+              required
+              className={modalInputClass}
+              placeholder="Internet Fibra 100 Mbps"
+              value={value.nombre}
+              onChange={(e) => onChange({ nombre: e.target.value })}
+            />
+          </Field>
+
+          <Field
+            label="Notas"
+            hint="Para quien mantenga el catálogo. No sale en el formulario."
+          >
+            <input
+              type="text"
+              className={modalInputClass}
+              value={value.notas}
+              onChange={(e) => onChange({ notas: e.target.value })}
+            />
+          </Field>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label="Velocidad (Mbps)"
+              hint="De aquí salen las velocidades de subida, de bajada y el consumo teórico."
+            >
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className={modalInputClass}
+                value={value.datas_mbps}
+                onChange={(e) => onChange({ datas_mbps: Number(e.target.value) })}
+              />
+            </Field>
+
+            <Field
+              label="Precio"
+              hint="En divisa. La renta básica en bolívares es este precio por la tasa del BCV del mes, que se fija en el reporte."
+            >
+              <input
+                type="number"
+                min="0"
+                step="any"
+                className={modalInputClass}
+                value={value.precio}
+                onChange={(e) => onChange({ precio: Number(e.target.value) })}
+              />
+            </Field>
+          </div>
+
+          <OptionCard
+            className="w-full"
+            icon={<Tv2 />}
+            title="IPTV"
+            description="Además de su hoja, esta fila se declara en la de televisión con la parrilla de canales."
+            tone="sky"
+            selected={value.tiene_tv}
+            onSelect={() => onChange({ tiene_tv: !value.tiene_tv })}
+          />
+        </div>
+      </FormColumns>
+
+      <FormFooter
+        saving={saving}
+        onClose={onClose}
+        submitLabel={value.id ? 'Guardar cambios' : 'Crear plan regulador'}
+      />
     </ModalForm>
   );
 }

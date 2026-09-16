@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Loader2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Search, Loader2, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FilterX } from 'lucide-react';
+
+import { FilterField, FILTER_TRIGGER_CLASS, SearchInput, SelectMenu } from '../inputs';
 
 export interface Column<T> {
   header: string;
@@ -7,7 +9,28 @@ export interface Column<T> {
   align?: 'left' | 'center' | 'right';
   className?: string;
   sortKey?: keyof T; // Campo real de la data para ordenar
+  /**
+   * Anade un desplegable de filtro para esta columna.
+   *
+   * Las opciones **salen de los datos**, no de una lista fija: un catalogo gana
+   * valores con el tiempo y una lista escrita a mano se queda corta sin que
+   * nadie se entere. Solo tiene sentido en columnas de pocos valores distintos
+   * —tecnologia, estado, site—; para buscar texto libre esta el buscador.
+   */
+  filterable?: boolean;
+  /**
+   * De donde sale el valor por el que se filtra.
+   *
+   * Por defecto se lee `sortKey` (o el `accessor`, si es un campo). Hace falta
+   * darlo cuando la celda se pinta con una funcion y el dato crudo no sirve
+   * como etiqueta: un booleano que se muestra como «Si»/«—» se filtraria por
+   * `true`/`false`, que no es lo que lee quien abre el desplegable.
+   */
+  filterValue?: (row: T) => string;
 }
+
+/** Valor del desplegable que no filtra nada. */
+const TODOS = '__todos__';
 
 interface DataTableProps<T> {
   columns: Column<T>[];
@@ -30,12 +53,53 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof T; direction: 'asc' | 'desc' } | null>(null);
+  // Un filtro por columna, indexado por su cabecera: es lo unico que identifica
+  // a una columna de forma estable sin obligar a darle un id a mano.
+  const [filters, setFilters] = useState<Record<string, string>>({});
+
+  const filterColumns = useMemo(
+    () => columns.filter((col) =>
+      col.filterable && (col.filterValue || col.sortKey || typeof col.accessor === 'string')),
+    [columns],
+  );
+
+  const valorFiltro = (col: Column<T>, row: T): string => {
+    if (col.filterValue) return col.filterValue(row);
+    const key = col.sortKey ?? (col.accessor as keyof T);
+    return String((row as Record<string, unknown>)[String(key)] ?? '').trim();
+  };
+
+  // Las opciones se calculan sobre los datos completos y no sobre los ya
+  // filtrados: si se estrecharan entre ellas, elegir un valor vaciaria los
+  // desplegables de al lado y no habria forma de cambiar de idea.
+  const filterOptions = useMemo(() => {
+    const mapa: Record<string, string[]> = {};
+    filterColumns.forEach((col) => {
+      const valores = new Set<string>();
+      data.forEach((row) => {
+        const valor = valorFiltro(col, row);
+        if (valor) valores.add(valor);
+      });
+      mapa[col.header] = [...valores].sort((a, b) => a.localeCompare(b, 'es'));
+    });
+    return mapa;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `valorFiltro` se recrea en cada render y solo lee de `col`.
+  }, [data, filterColumns]);
+
+  const filtrosActivos = Object.values(filters).filter(Boolean).length;
 
   // Lógica de Ordenamiento y Filtrado combinada
   const processedData = useMemo(() => {
     let filtered = [...data];
 
-    // 1. Filtrar
+    // 1. Filtrar por columna
+    filterColumns.forEach((col) => {
+      const elegido = filters[col.header];
+      if (!elegido || elegido === TODOS) return;
+      filtered = filtered.filter((row) => valorFiltro(col, row) === elegido);
+    });
+
+    // 2. Buscar
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase();
       filtered = filtered.filter((row) =>
@@ -45,7 +109,7 @@ export function DataTable<T>({
       );
     }
 
-    // 2. Ordenar
+    // 3. Ordenar
     if (sortConfig) {
       filtered.sort((a: T, b: T) => {
         const aVal = a[sortConfig.key] as unknown;
@@ -63,7 +127,8 @@ export function DataTable<T>({
     }
 
     return filtered;
-  }, [data, searchTerm, sortConfig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `valorFiltro` se recrea en cada render y solo lee de `col`.
+  }, [data, searchTerm, sortConfig, filters, filterColumns]);
 
   const handleSort = (key?: keyof T) => {
     if (!key) return;
@@ -78,18 +143,62 @@ export function DataTable<T>({
 
   return (
     <div className="flex flex-col h-full">
-      {searchable && (
-        <div className="p-3 border-b border-slate-800 bg-surface-secondary/50">
-          <div className="relative max-w-xs">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder={searchPlaceholder}
-              className="w-full bg-surface-tertiary border border-slate-700 rounded-lg pl-9 pr-4 py-1.5 text-xs text-slate-200 focus:border-brand outline-none transition-all"
-            />
-          </div>
+      {(searchable || filterColumns.length > 0) && (
+        /* Misma forma que los filtros de Ventas y Unidades de Negocio: cada uno
+           es una `FilterField`, con su cabecera diciendo qué se filtra. */
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-surface-secondary/50 p-3">
+          {filterColumns.map((col) => (
+            <FilterField
+              key={col.header}
+              label={col.header}
+              icon={<Filter className="h-4 w-4 text-brand" />}
+              title={`Filtrar la tabla por ${col.header.toLowerCase()}`}
+            >
+              <SelectMenu
+                aria-label={`Filtrar por ${col.header}`}
+                className={FILTER_TRIGGER_CLASS}
+                panelWidth={220}
+                value={filters[col.header] ?? TODOS}
+                options={[
+                  { value: TODOS, label: 'Todos' },
+                  ...(filterOptions[col.header] ?? []).map((valor) => ({ value: valor, label: valor })),
+                ]}
+                onChange={(valor) =>
+                  setFilters((previos) => ({ ...previos, [col.header]: valor === TODOS ? '' : valor }))
+                }
+              />
+            </FilterField>
+          ))}
+
+          {searchable && (
+            <FilterField grow icon={<Search className="h-4 w-4" />}>
+              <SearchInput
+                value={searchTerm}
+                placeholder={searchPlaceholder}
+                onChange={setSearchTerm}
+                className="w-full bg-transparent px-0"
+              />
+            </FilterField>
+          )}
+
+          {filtrosActivos > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilters({})}
+              className="flex items-center gap-2 rounded-2xl border border-slate-700/50 bg-surface-secondary px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-400 shadow-2xl transition-colors hover:text-white"
+              title="Quitar todos los filtros"
+            >
+              <FilterX className="h-4 w-4" /> Limpiar
+            </button>
+          )}
+
+          {/* Cuántas filas quedan a la vista. Sin esto, un filtro que deja la
+              tabla corta se confunde con una tabla que trae pocos datos. */}
+          {(filtrosActivos > 0 || searchTerm) && (
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+              {processedData.length} de {data.length}
+            </span>
+          )}
         </div>
       )}
 

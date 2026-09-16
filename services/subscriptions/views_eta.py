@@ -23,6 +23,7 @@ from core.database import DBConnector
 from core.utils import clean_json_props, es_periodo
 from services.config.decorators import permission_required
 from services.subscriptions.analytics import ETAReportManager, get_periodos
+from services.subscriptions.analytics.bcv import TasaNoDisponible
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,11 @@ def api_eta_report_save_sub_config(request):
             "tiene_tv": bool(data.get("tiene_tv", False)),
             "datas_mbps": float(data.get("datas_mbps", 0)),
             "es_transporte": bool(data.get("es_transporte", False)),
-            "es_dedicado": bool(data.get("es_dedicado", False))
+            "es_dedicado": bool(data.get("es_dedicado", False)),
+            # La renta de este contrato. Sin ella, su fila del formulario sale
+            # sin renta basica: el catalogo comercial no puede darla, porque
+            # cada enlace dedicado negocia la suya.
+            "precio": float(data.get("precio", 0)),
         }
     except (json.JSONDecodeError, TypeError, ValueError):
         return JsonResponse(
@@ -224,3 +229,92 @@ def api_eta_report_delete_sub_config(request):
         return JsonResponse({"status": "success", "message": f"Suscripción '{orden}' eliminada."})
     except Exception:
         return error_interno("Error al eliminar la excepción individual de ETA")
+
+
+@login_required
+@permission_required('can_manage_eta')
+@ratelimit(key='ip', rate='30/m', block=True)
+@require_POST
+def api_eta_report_tasa(request):
+    """Fija la tasa del BCV con que se declara la renta basica del periodo.
+
+    Se guarda por periodo: la renta se declara a la tasa del mes, y exportar un
+    mes viejo con la tasa de hoy daria cifras que nadie declaro. No recalcula
+    el reporte —los formularios guardan el precio en divisa y la conversion es
+    del exportador—, asi que se puede corregir tambien en un periodo bloqueado.
+
+    Mientras se teclea a mano. Cuando exista la consulta automatica al BCV solo
+    cambia de donde sale el numero.
+    """
+    try:
+        data = json.loads(request.body)
+        periodo = data.get("period")
+        tasa = float(data.get("tasa", 0))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return JsonResponse(
+            {"status": "error", "message": "Cuerpo de la petición inválido."}, status=400
+        )
+
+    if not es_periodo(periodo):
+        return JsonResponse(
+            {"status": "error", "message": "Periodo inválido (se espera YYYY-MM)."},
+            status=400,
+        )
+
+    # Una tasa negativa no es un dato raro sino un error de tecleo, y produciria
+    # rentas negativas en un formulario oficial. Cero si vale: significa
+    # "todavia sin fijar" y el exportador lo distingue de una tasa real.
+    if tasa < 0:
+        return JsonResponse(
+            {"status": "error", "message": "La tasa no puede ser negativa."}, status=400
+        )
+
+    manager = ETAReportManager(DBConnector())
+    fuente = "Escrita a mano"
+    try:
+        manager.set_tasa_bcv(periodo, tasa, fuente)
+    except Exception:
+        return error_interno("Error al guardar la tasa del BCV")
+    return JsonResponse({"status": "success", "tasa_bcv": tasa, "tasa_bcv_fuente": fuente})
+
+
+@login_required
+@permission_required('can_manage_eta')
+@ratelimit(key='ip', rate='10/m', block=True)
+@require_POST
+def api_eta_report_tasa_consultar(request):
+    """Vuelve a pedirle al BCV la tasa del periodo y la guarda.
+
+    El reporte ya la consulta solo la primera vez que hace falta, asi que esto
+    es para los dos casos en que aquello no basta: el servicio estaba caido
+    cuando se miro el mes, o alguien escribio una tasa a mano y quiere volver a
+    la del BCV. Por eso pisa lo que hubiera guardado.
+
+    El limite es mas estrecho que el de las demas escrituras porque cada
+    llamada sale a un tercero, y hasta siete veces si el mes empieza en puente.
+    """
+    try:
+        periodo = json.loads(request.body).get("period")
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse(
+            {"status": "error", "message": "Cuerpo de la petición inválido."}, status=400
+        )
+
+    if not es_periodo(periodo):
+        return JsonResponse(
+            {"status": "error", "message": "Periodo inválido (se espera YYYY-MM)."},
+            status=400,
+        )
+
+    manager = ETAReportManager(DBConnector())
+    try:
+        tasa, fuente = manager.consultar_tasa_bcv(periodo)
+    except TasaNoDisponible as e:
+        # 502 y no 500: el fallo es del tercero, no nuestro, y el mensaje esta
+        # escrito para leerse —dice si no se pudo contactar o si el BCV no
+        # publico esos dias— asi que se enseña tal cual.
+        return JsonResponse({"status": "error", "message": str(e)}, status=502)
+    except Exception:
+        return error_interno("Error al consultar la tasa del BCV")
+
+    return JsonResponse({"status": "success", "tasa_bcv": tasa, "tasa_bcv_fuente": fuente})

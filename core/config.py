@@ -66,6 +66,7 @@ class TableNames:
     CRM_CIERRE_HISTORICO = "crm_cierre_historico"
     CRM_METRICAS_GLOBALES = "crm_metricas_globales"
     CRM_DIMENSIONES_HISTORICO = "crm_dimensiones_historico"
+    CRM_DAY_METRICS = "crm_day_metrics"
     ANALYZER_ACTIVOS_CIERRE = "analyzer_activos_cierre"
     ANALYZER_REACTIVACIONES = "analyzer_reactivaciones"
     ANALYZER_BAJAS_DETALLADAS = "analyzer_bajas_detalladas"
@@ -94,6 +95,7 @@ class TableNames:
     SUPPORT_METRICAS_GLOBALES = "support_metricas_globales"
     SUPPORT_DIMENSIONES_HISTORICO = "support_dimensiones_historico"
     SUPPORT_CIERRE_HISTORICO = "support_cierre_historico"
+    SUPPORT_DAY_METRICS = "support_day_metrics"
 
 
 # --- Columna `Activo` de los exports de Odoo ---------------------------------

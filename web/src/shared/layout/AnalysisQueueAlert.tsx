@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle2, ChevronDown, Clock, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, ChevronDown, Clock, Loader2, X, XCircle } from 'lucide-react';
 
 import { useJobQueue } from '@/shared/hooks/useJobQueue';
 import { cn } from '@/shared/lib/cn';
@@ -25,18 +25,47 @@ function subtitulo(job: AnalysisJob): string {
   return job.periodo ? `${job.module_display} · ${job.periodo}` : job.module_display;
 }
 
-function FilaEnCurso({ job }: { job: AnalysisJob }) {
+interface AccionCancelar {
+  onCancel: (id: string) => void;
+  cancelando: boolean;
+}
+
+/**
+ * Botón de parar de una fila.
+ *
+ * Cancelar no mata el proceso: cierra la fila del job y el análisis se detiene en
+ * su siguiente punto de control, a lo sumo un par de segundos después. Mientras
+ * tanto el botón queda marcado, porque el sondeo tarda en reflejarlo y si no
+ * parecería que el clic no hizo nada.
+ */
+function BotonCancelar({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
+  return (
+    <button
+      type="button"
+      onClick={() => onCancel(job.id)}
+      disabled={cancelando}
+      title={cancelando ? 'Cancelando...' : 'Cancelar este análisis'}
+      aria-label={`Cancelar ${subtitulo(job)}`}
+      className="shrink-0 rounded p-1 text-slate-500 transition-colors hover:bg-rose-500/10 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <Ban className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+function FilaEnCurso({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
   const pct = porcentaje(job);
 
   return (
     <div className="px-4 py-3">
       <div className="flex items-center gap-2">
         <PulseDot color="blue" />
-        <span className="truncate text-xs font-semibold text-white">{subtitulo(job)}</span>
+        <span className="flex-1 truncate text-xs font-semibold text-white">{subtitulo(job)}</span>
+        <BotonCancelar job={job} onCancel={onCancel} cancelando={cancelando} />
       </div>
 
       <p className="mt-1 truncate text-[11px] text-slate-400">
-        {job.progress.label || 'Preparando el cálculo...'}
+        {cancelando ? 'Deteniendo en el próximo punto de control...' : (job.progress.label || 'Preparando el cálculo...')}
       </p>
 
       {pct !== null && (
@@ -59,28 +88,36 @@ function FilaEnCurso({ job }: { job: AnalysisJob }) {
   );
 }
 
-function FilaEnEspera({ job }: { job: AnalysisJob }) {
+function FilaEnEspera({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
   return (
     <div className="flex items-center gap-2 px-4 py-2">
       <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-      <span className="truncate text-[11px] text-slate-400">{subtitulo(job)}</span>
+      <span className="flex-1 truncate text-[11px] text-slate-400">{subtitulo(job)}</span>
+      <BotonCancelar job={job} onCancel={onCancel} cancelando={cancelando} />
     </div>
   );
 }
 
+/** Los tres desenlaces posibles. Cancelado no es un fallo y no se pinta como tal. */
+const DESENLACES = {
+  success: { icono: CheckCircle2, tono: METRIC_TEXT.green, titulo: 'Análisis completado' },
+  cancelled: { icono: XCircle, tono: METRIC_TEXT.yellow, titulo: 'Análisis cancelado' },
+  error: { icono: AlertTriangle, tono: METRIC_TEXT.red, titulo: 'El análisis falló' },
+} as const;
+
 function AvisoFinal({ job, onClose }: { job: AnalysisJob; onClose: () => void }) {
-  const ok = job.status === 'success';
+  const desenlace =
+    job.status === 'success' ? DESENLACES.success
+    : job.status === 'cancelled' ? DESENLACES.cancelled
+    : DESENLACES.error;
+  const Icono = desenlace.icono;
 
   return (
     <div className="flex items-start gap-2 px-4 py-3">
-      {ok ? (
-        <CheckCircle2 className={cn('mt-0.5 h-4 w-4 shrink-0', METRIC_TEXT.green)} />
-      ) : (
-        <AlertTriangle className={cn('mt-0.5 h-4 w-4 shrink-0', METRIC_TEXT.red)} />
-      )}
+      <Icono className={cn('mt-0.5 h-4 w-4 shrink-0', desenlace.tono)} />
       <div className="min-w-0 flex-1">
-        <p className={cn('text-xs font-semibold', ok ? METRIC_TEXT.green : METRIC_TEXT.red)}>
-          {ok ? 'Análisis completado' : 'El análisis falló'}
+        <p className={cn('text-xs font-semibold', desenlace.tono)}>
+          {desenlace.titulo}
         </p>
         <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-400">
           {job.message || subtitulo(job)}
@@ -111,7 +148,7 @@ function AvisoFinal({ job, onClose }: { job: AnalysisJob; onClose: () => void })
  * No se renderiza nada cuando no hay nada que contar.
  */
 export function AnalysisQueueAlert() {
-  const { jobs, running, queued, finished, dismissFinished } = useJobQueue();
+  const { jobs, running, queued, finished, dismissFinished, cancel, cancelling } = useJobQueue();
   const [abierto, setAbierto] = useState(true);
 
   const hayTrabajo = jobs.length > 0;
@@ -158,10 +195,20 @@ export function AnalysisQueueAlert() {
           {hayTrabajo && abierto && (
             <div className="divide-y divide-slate-800">
               {enCurso.map((job) => (
-                <FilaEnCurso key={job.id} job={job} />
+                <FilaEnCurso
+                  key={job.id}
+                  job={job}
+                  onCancel={cancel}
+                  cancelando={cancelling.includes(job.id)}
+                />
               ))}
               {enEspera.map((job) => (
-                <FilaEnEspera key={job.id} job={job} />
+                <FilaEnEspera
+                  key={job.id}
+                  job={job}
+                  onCancel={cancel}
+                  cancelando={cancelling.includes(job.id)}
+                />
               ))}
             </div>
           )}

@@ -16,8 +16,8 @@ src/
 │   ├── layout/   AppLayout, Sidebar, UserMenu
 │   ├── navigation/  ModuleHeader
 │   ├── charts/   Chart.js wrappers, shared options, registration
-│   ├── lib/      cn(), colour helpers, api client, http error handling
-│   ├── hooks/    usePermissions, useAsyncAction
+│   ├── lib/      cn(), colour helpers, api client, http error handling, daySeries
+│   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts, useDayPayload
 │   ├── utils/    formatters
 │   ├── constants/  navigation registry, permissions, design tokens
 │   └── types/    cross-cutting types only
@@ -25,6 +25,38 @@ src/
 │   └── <module>/{components,hooks,types.ts,index.ts}
 └── pages/        Inertia entry points — thin shells, nothing else
 ```
+
+## The day bar
+
+All three Analytics pages have one, and **moving it never waits on the server**.
+What the bar changes comes from two places, split by weight.
+
+**The light half — always instant, in every module.** `dayMetrics.serie` carries
+the global metric block of all 31 days (a few KB; the backend cuts it out of the
+row with `-> 'global'`). From it, `shared/lib/daySeries` derives what the new
+`DaySummary` block draws: what happened *that* day, what the month has
+accumulated up to it, and how it compares with the previous computed day. Each
+module declares its metrics in a `*DaySummary.ts` spec, and the `kind` there
+(`flujo`, `stock`, `tasa`) is load-bearing — it says whether subtracting two days
+means anything. Subscriptions builds the same series out of the month it already
+receives.
+
+**The heavy half — the dimensional breakdown.**
+
+- **Subscriptions** gets the whole month in its props (`dayMetrics.dias`) and
+  `features/subscriptions/hooks/useDayMetrics` picks a day out of it. Its
+  breakdowns are small enough to travel.
+- **CRM and Support** cannot: one of their days already carries the full metric
+  block of every seller, branch, work group or zone. `shared/hooks/useDayPayload`
+  serves it from an in-memory cache — a visited day repaints with no request, the
+  neighbours are prefetched while the bar sits still, the last resolved day stays
+  on screen while a new one travels, and the cache is capped because holding the
+  whole month is the original problem. `shared/hooks/useDayCuts` owns the
+  selected day and writes `?dia=` into the URL with `replaceState`, so a reload
+  lands where you were without costing a visit.
+
+Nothing on either half recomputes anything: every cut was written by the monthly
+analysis. `shared/ui/inputs/DayProgressBar` is the same component in all three.
 
 ## The three rules
 
@@ -76,8 +108,25 @@ Concretely, these already exist — do not re-inline them:
 | Server execution log | `ConsoleOutput` |
 | Labelled input with leading icon | `TextField` |
 | Segmented view switch | `ToggleGroup` |
-| Sortable/searchable table | `DataTable` |
+| Filter capsule (label cap + control) | `FilterField` |
+| Sortable/searchable/filterable table | `DataTable` |
 | Module tab bar | `ModuleHeader module="…"` |
+
+**Filters look the way they look in Sales Report and Business Units**, and that
+is not a convention but a component: `FilterField` is the capsule — a dark cap
+naming *what* is being filtered, and flush against it the control saying *by
+which value*. Put a `SelectMenu` inside with `FILTER_TRIGGER_CLASS`, a
+`SearchInput` with `grow`, or a field of your own. It used to be copied into
+`PeriodSelector` and three times into `SubscriptionReportFilters`, and every
+new copy reinterpreted it slightly worse.
+
+`DataTable` is the *only* table. Free-text search, click-to-sort and per-column
+filters live in it, so a screen that hand-rolls `<table>` markup silently loses
+all three — which is exactly what had happened to the ETA master screen. Mark a
+column `filterable` to get a dropdown whose options are derived from the data;
+add `filterValue` when the cell is rendered by a function and the raw field is
+not what the reader would pick from a list (a boolean shown as `Sí`/`—` filters
+as `Sí`/`No`, not `true`/`false`).
 
 Import from the barrel (`@/shared/ui`), not the file. Components are function
 declarations, never `React.FC`; only files under `pages/` use a default export.
