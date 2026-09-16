@@ -77,7 +77,13 @@ análisis.
 
 ---
 
-## `run_crm_analysis(periodo=None)`
+## `run_crm_analysis(periodo=None, progreso=None)`
+
+Los pasos 1–5 los hace `poblaciones.preparar_datos(db)` y el 6,
+`poblaciones.construir_poblaciones(datos, periodo, hasta=None)`. Están en un
+módulo aparte porque **el corte del mes y el corte de un día son la misma
+operación con distinto `hasta`**, y no puede haber dos definiciones de qué es
+una oportunidad ganada.
 
 1. `ensure_crm_schema(db)`.
 2. Lee `crm_clients` y `crm_logs`. **Descarta oportunidades duplicadas por `id`**
@@ -108,7 +114,11 @@ análisis.
 
 7. `compute_crm_metrics_for_period(...)` y persistencia en
    `crm_cierre_historico` + `crm_dimensiones_historico`.
-8. Al final, el promedio acumulado global en `crm_metricas_globales`.
+8. **El corte de cada día del periodo** (`build_crm_day_metrics`), sobre la misma
+   base ya preparada. Solo cuando se pidió un mes concreto: en una corrida global
+   los cierres se recalculan todos, pero recorrer 31 días por cada mes del
+   histórico no es lo que nadie espera de ese botón.
+9. Al final, el promedio acumulado global en `crm_metricas_globales`.
 
 `_COLUMNAS_CIERRE` declara **una sola vez** las columnas escalares del cierre;
 el SQL (columnas, marcadores y valores) se construye a partir de ella. Se usa
@@ -271,6 +281,35 @@ Se guarda un `DELETE` + `INSERT` del periodo en `crm_dimensiones_historico`, con
 
 ---
 
+## Cortes por día (`day_metrics.py`)
+
+Una fila por mes en `crm_day_metrics`, con `dia1..dia31`. Cada día es
+`{"global": {...}, "dimensiones": [...]}`: **el acumulado del mes hasta ese
+día**, con la misma forma que el cierre y sus dimensiones, para que la vista no
+tenga que distinguirlos.
+
+Qué significa el corte del día N:
+
+- lo creado hasta ese día, lo cerrado hasta ese día, los movimientos hasta ese
+  día. Una oportunidad que cerró el 20 aparece como **pendiente** en el corte del
+  15, porque el 15 lo estaba;
+- lo que el corte **no** puede deshacer es `etapa_actual`: `crm_clients` guarda
+  un estado, no su historia. Solo se usa para distinguir una ganada de una
+  pendiente ya cerrada, y esas ya cuentan como pendientes en el corte;
+- las estancias en curso se siguen midiendo contra AHORA, igual que en el
+  análisis mensual;
+- **el corte del último día no siempre coincide con el cierre del mes**, y no es
+  un fallo: una oportunidad de enero perdida en marzo es una pérdida en el cierre
+  —la efectividad cobra el fallo donde ocurrió— y una pendiente en el corte del
+  31 de enero, porque ese día seguía viva. La barra responde «qué se veía ese
+  día»; el cierre, «cómo acabó el mes».
+
+El coste dominante es preparar la base, no el corte, así que los 31 días salen
+de la misma lectura que el cierre. El volcado es parcial cada cinco días: si la
+ejecución se corta, lo ya hecho queda guardado.
+
+---
+
 ## Lectura (`queries.py`) y vistas
 
 | Función | Devuelve |
@@ -279,6 +318,7 @@ Se guarda un `DELETE` + `INSERT` del periodo en `crm_dimensiones_historico`, con
 | `get_crm_cierre_historico(periodos)` | Las filas del cierre, con `efectividad` y `tiempo_por_etapa` ya parseados a lista |
 | `get_crm_metric_totals(periodo)` | Promedio global + tiempos + efectividad + la serie histórica (sin los dos JSON por periodo, que nadie lee ahí) |
 | `get_crm_dimensiones(periodos, dimension)` | Las filas dimensionales con su JSONB parseado |
+| `get_crm_day_metrics(mes, dia)` | `{periodo_mes, dias_disponibles, dia, payload}` — el corte de un día y la lista de los calculados |
 
 | Ruta | Página | Permiso |
 |---|---|---|
@@ -290,3 +330,13 @@ Se guarda un `DELETE` + `INSERT` del periodo en `crm_dimensiones_historico`, con
 de dimensión es de cliente, así que cambiarlo no debe costar una vuelta al
 servidor. Envía también la fila de cierre del periodo, que es el denominador
 global de los pesos simples y la fuente de las tarjetas de cabecera.
+
+`?dia=` sustituye esas dos props por el corte acumulado de ese día, leído de
+`crm_day_metrics`; sin él se envía el último corte calculado (en un mes cerrado,
+el cierre). `dayMetrics` lleva solo la lista de días y cuál se está mirando, que
+es lo que dibuja la barra.
+
+**Aquí el día sí vuelve al servidor**, a diferencia de suscripciones: un corte de
+CRM lleva el bloque completo de cada vendedor, sucursal y campaña, y mandar los
+treinta y uno serían megabytes. La vuelta es una recarga parcial de Inertia que
+lee una celda ya calculada — no recalcula nada.

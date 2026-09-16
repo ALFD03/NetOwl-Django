@@ -56,6 +56,20 @@ export interface DayPayload {
   dims?: Record<string, DimensionVal[]>;
 }
 
+/**
+ * La barra de dias de un modulo que pide el corte al servidor (CRM, Soporte).
+ *
+ * No trae los datos de ningun dia: solo cuales hay calculados y cual se esta
+ * mirando. El corte en si llega en las props normales de la pagina, ya sustituido
+ * por la vista.
+ */
+export interface DayCuts {
+  periodo_mes: string;
+  dias_disponibles: number[];
+  /** Dia que resolvio el servidor; 0 cuando el mes no tiene cortes. */
+  dia: number;
+}
+
 /** Fila de analyzer_day_metrics: un mes completo, indexado por dia. */
 export interface DayMetrics {
   periodo_reporte: string;

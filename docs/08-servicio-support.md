@@ -145,9 +145,14 @@ que se mide cada métrica.
 `periodos_disponibles` une los meses de creación y los de cierre: **un mes en el
 que no nació nada pero sí se cerró arrastre sigue teniendo un reporte que dar**.
 
+`build_cohort(df_all, periodo, hasta=None)` acepta un día de corte: con `hasta`
+la cohorte es el acumulado del mes hasta esa fecha, incluida. Un ticket abierto
+el 3 y cerrado el 20 cuenta como **creado** —y como rezagado— en el corte del 15,
+y solo pasa a cerrado del 20 en adelante. Es lo que alimenta `day_metrics.py`.
+
 ---
 
-## `run_support_analysis(periodo=None)`
+## `run_support_analysis(periodo=None, progreso=None)`
 
 1. `ensure_support_schema(db)` — idempotente, no pierde nada en una instalación
    con datos.
@@ -159,6 +164,11 @@ que no nació nada pero sí se cerró arrastre sigue teniendo un reporte que dar
    - `support_dimensiones_historico` — las filas de grupo, dimensión y desglose
      (`build_dimension_rows`), insertadas en una sola sentencia con
      `execute_values`.
+   - `support_day_metrics` — el corte de cada día del mes
+     (`build_support_day_metrics`), sobre los mismos tickets ya clasificados.
+     Solo cuando se pidió un mes concreto: en una corrida global los cierres se
+     recalculan todos, pero recorrer 31 días por cada mes del histórico no es lo
+     que nadie espera de ese botón.
 4. **Recalcula el promedio acumulado sobre TODO lo que hay en
    `support_cierre_historico`**, no solo sobre los periodos recién procesados:
    analizar un mes suelto no debe borrar el histórico del dashboard de empresa.
@@ -185,6 +195,11 @@ de ticket.
 | `get_support_breakdown(periodo, dimension, valor, grupo)` | El drill-down de un valor: sus tipos, razones y soluciones, calculado al vuelo |
 | `get_incidencia_por_zona(...)` | Tickets por cada 100 clientes de la zona |
 | `get_support_tickets_list(limit, grupo, periodo)` | Listado crudo de tickets |
+| `get_support_day_metrics(mes, dia)` | `{periodo_mes, dias_disponibles, dia, payload}` — el corte de un día y la lista de los calculados |
+
+`estructurar_grupos(filas)` agrupa las filas dimensionales por grupo de trabajo,
+y la usan por igual las persistidas del mes y las que un corte diario trae ya
+calculadas: el front recibe exactamente lo mismo en los dos casos.
 
 `_load_period_cohort` reconstruye la cohorte desde los tickets aplicando **las
 mismas reglas** del analizador, así que el drill-down es idéntico a lo que se
@@ -227,3 +242,13 @@ selector de grupo es de cliente igual que el de dimensión.
 Todas las respuestas pasan por `clean_json_props`. El drill-down
 (`api/breakdown/`) exige `period`, `dimension` y `valor`, y acepta `grupo`
 opcional. `api/tickets/` limita a 5 000 registros como techo absoluto.
+
+`analytics` acepta además `?dia=`, que sustituye `grupos` e `incidencia_zonas`
+por el corte acumulado de ese día leído de `support_day_metrics`; sin él se envía
+el último corte calculado (en un mes cerrado, el cierre). `dayMetrics` lleva solo
+la lista de días y cuál se está mirando, que es lo que dibuja la barra.
+
+**Aquí el día sí vuelve al servidor**, a diferencia de suscripciones: un corte de
+soporte lleva las métricas de cada grupo por sus seis ejes —varios cientos de
+bloques— y el mes entero no cabe en los props. La vuelta es una recarga parcial
+de Inertia que lee una celda ya calculada — no recalcula nada.

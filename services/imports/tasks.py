@@ -96,21 +96,33 @@ def _correr_subscriptions(job: AnalysisJob, consola: ConsolaJob):
 
 
 def _correr_crm(job: AnalysisJob, consola: ConsolaJob):
-    """Analisis del embudo de CRM para un mes."""
-    from services.crm.analytics import run_crm_analysis
+    """Analisis del embudo de CRM para un mes, mas el corte de cada dia.
 
-    run_crm_analysis(job.periodo)
-    mensaje = f"Análisis de CRM completado exitosamente para el periodo {job.periodo}."
-    return mensaje, {"periodo_label": job.periodo}
+    El recorrido de los dias lo hace el propio analisis sobre la base que ya
+    tiene cargada; aqui solo se le pasa la consola para que alimente la barra.
+    """
+    from services.crm.analytics import get_crm_day_metrics, run_crm_analysis
+
+    run_crm_analysis(job.periodo, progreso=consola.progreso)
+    dias = len(get_crm_day_metrics(job.periodo).get("dias_disponibles", []))
+    mensaje = (
+        f"Análisis de CRM completado exitosamente para el periodo {job.periodo}"
+        f" ({dias} días calculados)."
+    )
+    return mensaje, {"periodo_label": job.periodo, "dias_calculados": dias}
 
 
 def _correr_support(job: AnalysisJob, consola: ConsolaJob):
-    """Analisis de las cohortes de soporte para un mes."""
-    from services.support.analytics import run_support_analysis
+    """Analisis de las cohortes de soporte para un mes, mas el corte de cada dia."""
+    from services.support.analytics import get_support_day_metrics, run_support_analysis
 
-    run_support_analysis(job.periodo)
-    mensaje = f"Análisis de Technical Support completado para {job.periodo}."
-    return mensaje, {"periodo_label": job.periodo}
+    run_support_analysis(job.periodo, progreso=consola.progreso)
+    dias = len(get_support_day_metrics(job.periodo).get("dias_disponibles", []))
+    mensaje = (
+        f"Análisis de Technical Support completado para {job.periodo}"
+        f" ({dias} días calculados)."
+    )
+    return mensaje, {"periodo_label": job.periodo, "dias_calculados": dias}
 
 
 def _correr_lifetime(job: AnalysisJob, consola: ConsolaJob):

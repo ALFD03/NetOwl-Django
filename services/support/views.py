@@ -12,6 +12,7 @@ from inertia import render as render_inertia
 
 from core.utils import clean_json_props, entero_de_peticion, limpiar_periodos
 from services.config.decorators import permission_required
+from services.support.analytics.day_metrics import get_support_day_metrics
 from services.support.analytics.queries import (
     get_support_analytics_structured,
     get_support_breakdown,
@@ -40,14 +41,33 @@ def analytics(request):
 
     Las dimensiones llegan enteras porque el selector es de cliente; solo el
     drill-down de un valor concreto pide datos nuevos.
+
+    `?dia=` cambia el bloque por el corte acumulado del mes hasta ese dia, ya
+    calculado en `support_day_metrics`. Sin el se ensena el ultimo corte, que en
+    un mes cerrado coincide con el cierre. El dia vuelve al servidor -a
+    diferencia de suscripciones- porque un corte de soporte lleva las metricas
+    de cada grupo por sus seis ejes y el mes entero no cabe en los props; la
+    vuelta lee una celda, no recalcula nada.
     """
     periodos = get_support_periodos()
     analytics_data = get_support_analytics_structured(request.GET.get("period"))
+    periodo = analytics_data.get("periodo", "")
+
+    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    dias = get_support_day_metrics(periodo, dia) if periodo else {}
+    corte = dias.get("payload")
+    if corte:
+        analytics_data = {**analytics_data, **corte}
 
     return render_inertia(request, "Support/Analytics", clean_json_props({
         "analyticsData": analytics_data,
+        "dayMetrics": {
+            "periodo_mes": dias.get("periodo_mes", periodo),
+            "dias_disponibles": dias.get("dias_disponibles", []),
+            "dia": dias.get("dia", 0),
+        },
         "periods": periodos,
-        "selectedPeriod": analytics_data.get("periodo", ""),
+        "selectedPeriod": periodo,
         "section": "analytics",
     }))
 

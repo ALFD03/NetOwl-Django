@@ -294,23 +294,31 @@ class DBConnector:
     def save_day_metrics(
         self,
         periodo_reporte: str,
-        activos_inicio: int,
         dias: dict[str, Any],
+        table: str = TableNames.ANALYZER_DAY_METRICS,
+        escalares: dict[str, Any] | None = None,
     ):
-        """Guarda una fila por mes en analyzer_day_metrics.
+        """Guarda una fila por mes en una tabla de metricas diarias.
 
-        Columnas: periodo_reporte, activos_inicio y dia1..dia31 (JSON en texto).
-        Los dias no incluidos en `dias` conservan su valor previo, de modo que
-        recalcular solo los dias nuevos del mes en curso no borra los anteriores.
+        Columnas: periodo_reporte, las de `escalares` y dia1..dia31 (JSON en
+        texto). Los dias no incluidos en `dias` conservan su valor previo, de
+        modo que recalcular solo los dias nuevos del mes en curso no borra los
+        anteriores.
+
+        `table` la eligen los tres modulos que guardan cortes diarios
+        -suscripciones, CRM y soporte-: la forma de la fila es la misma y lo
+        unico que cambia es que en `escalares` viaje algo (el `activos_inicio`
+        de suscripciones) o nada.
         """
-        table_name = TableNames.ANALYZER_DAY_METRICS
+        table_name = table
         day_cols = [f"dia{d}" for d in range(1, 32)]
+        extra_cols = list(escalares or {})
 
         with self.get_connection() as conn:
             with conn.cursor() as cur:
                 col_defs = [
                     sql.SQL("{} text").format(sql.Identifier(c))
-                    for c in ["periodo_reporte", "activos_inicio"] + day_cols
+                    for c in ["periodo_reporte"] + extra_cols + day_cols
                 ]
                 cur.execute(
                     sql.SQL(
@@ -321,7 +329,7 @@ class DBConnector:
                         fields=sql.SQL(", ").join(col_defs),
                     )
                 )
-                for col in ["activos_inicio"] + day_cols:
+                for col in extra_cols + day_cols:
                     cur.execute(
                         sql.SQL(
                             "ALTER TABLE {schema}.{table}"
@@ -332,24 +340,34 @@ class DBConnector:
                             c=sql.Identifier(col),
                         )
                     )
+                # El nombre del indice se deriva de la tabla: en Postgres los
+                # indices viven en el esquema, asi que un nombre fijo colisionaria
+                # entre las tres tablas de metricas diarias. `analyzer_day_metrics`
+                # conserva el suyo historico -ya existe en las bases desplegadas y
+                # renombrarlo solo crearia un segundo indice identico-.
+                indice = (
+                    "ix_day_metrics_periodo"
+                    if table_name == TableNames.ANALYZER_DAY_METRICS
+                    else f"ix_{table_name}_periodo"
+                )
                 cur.execute(
                     sql.SQL(
-                        "CREATE UNIQUE INDEX IF NOT EXISTS"
-                        " ix_day_metrics_periodo ON {schema}.{table}"
-                        " (periodo_reporte)"
+                        "CREATE UNIQUE INDEX IF NOT EXISTS {idx}"
+                        " ON {schema}.{table} (periodo_reporte)"
                     ).format(
+                        idx=sql.Identifier(indice),
                         schema=sql.Identifier(DB_SCHEMA),
                         table=sql.Identifier(table_name),
                     )
                 )
 
-                columnas = ["periodo_reporte", "activos_inicio"] + sorted(
-                    dias.keys(), key=lambda c: int(c[3:])
-                )
-                valores: list[Any] = [periodo_reporte, str(activos_inicio)]
+                dia_cols = sorted(dias.keys(), key=lambda c: int(c[3:]))
+                columnas = ["periodo_reporte"] + extra_cols + dia_cols
+                valores: list[Any] = [periodo_reporte]
+                valores.extend(str((escalares or {})[c]) for c in extra_cols)
                 valores.extend(
                     json.dumps(dias[c], ensure_ascii=False, separators=(",", ":"))
-                    for c in columnas[2:]
+                    for c in dia_cols
                 )
 
                 actualizables = [c for c in columnas if c != "periodo_reporte"]

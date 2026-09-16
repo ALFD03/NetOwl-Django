@@ -104,7 +104,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | Método | Ruta | Permiso | Devuelve |
 |---|---|---|---|
 | GET | `/crm/`, `/crm/dashboard/` | `can_view_crm` | Página `CRM/Dashboard` |
-| GET | `/crm/analytics/?period=` | `can_view_crm_analytics` | Página `CRM/Analytics` |
+| GET | `/crm/analytics/?period=&dia=` | `can_view_crm_analytics` | Página `CRM/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `crm_day_metrics`; sin él, el último calculado |
 | GET | `/crm/results/?periods=` | `can_view_crm_results` | Página `CRM/Results` |
 | GET | `api/periods/` | `can_view_crm` | `{periods}` |
 | GET | `api/global-metrics/?period=` | `can_view_crm` | Promedio global + tiempos + efectividad + serie |
@@ -118,7 +118,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | Método | Ruta | Permiso | Devuelve |
 |---|---|---|---|
 | GET | `/support/`, `/support/dashboard/` | `can_view_support` | Página `Support/Dashboard` |
-| GET | `/support/analytics/?period=` | `can_view_support_analytics` | Página `Support/Analytics` |
+| GET | `/support/analytics/?period=&dia=` | `can_view_support_analytics` | Página `Support/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `support_day_metrics`; sin él, el último calculado |
 | GET | `/support/results/?periods=` | `can_view_support_results` | Página `Support/Results` |
 | GET | `api/periods/` | `can_view_support` | `{periods}` |
 | GET | `api/cierre-historico/?periods=` | `can_view_support` | `{historico}` aplanado |

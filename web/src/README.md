@@ -17,7 +17,7 @@ src/
 │   ├── navigation/  ModuleHeader
 │   ├── charts/   Chart.js wrappers, shared options, registration
 │   ├── lib/      cn(), colour helpers, api client, http error handling
-│   ├── hooks/    usePermissions, useAsyncAction
+│   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts
 │   ├── utils/    formatters
 │   ├── constants/  navigation registry, permissions, design tokens
 │   └── types/    cross-cutting types only
@@ -25,6 +25,23 @@ src/
 │   └── <module>/{components,hooks,types.ts,index.ts}
 └── pages/        Inertia entry points — thin shells, nothing else
 ```
+
+## The day bar
+
+Three modules have one and they do not work the same way, on purpose.
+
+- **Subscriptions** gets the whole month in its props (`dayMetrics.dias`) and
+  `features/subscriptions/hooks/useDayMetrics` picks a day out of it. Moving the
+  bar is a regroup in memory: nothing goes to the server.
+- **CRM and Support** get only `dias_disponibles` and the day on screen
+  (`shared/types/domain.DayCuts`), because one of their days already carries the
+  full metric block of every seller, branch, work group or zone — the month would
+  be megabytes. `shared/hooks/useDayCuts` drives that bar: it holds the day
+  locally while the request is in flight, debounces the drag, and the page issues
+  a partial `router.get` with `?dia=`. The server reads **one already-computed
+  cell**; there is no recompute on either side.
+
+`shared/ui/inputs/DayProgressBar` is the same component in all three.
 
 ## The three rules
 

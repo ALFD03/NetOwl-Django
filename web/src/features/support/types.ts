@@ -1,6 +1,7 @@
 /** Tipos del feature de soporte: medidas de tiempo, tasas y bloques de métricas. */
 
 import type { MetricColor } from '@/shared/ui';
+import type { DayCuts } from '@/shared/types/domain';
 
 export interface SupportAnalysisRequest { month: string | null; }
 export interface SupportAnalysisResponse { message: string; log_output?: string; }
@@ -205,6 +206,12 @@ export interface SupportAnalyticsProps {
     /** Keyed by work group; the selector picks one client-side. */
     incidencia_zonas?: Record<string, SupportZoneEntry[]>;
   };
+  /**
+   * Which days of the month have a cut computed, and which one is on screen.
+   * The cut itself arrives inside `analyticsData`, already swapped by the view —
+   * a day is a partial reload, not a client-side regroup.
+   */
+  dayMetrics?: DayCuts;
   periods?: string[];
   selectedPeriod?: string;
 }

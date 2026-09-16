@@ -103,9 +103,11 @@ Todas llevan `periodo_reporte` con la etiqueta `Periodo.label()`
 | `analyzer_churn_dimensiones` | `dimension`, `valor` y las mismas métricas del cierre |
 | `analyzer_day_metrics` | `periodo_reporte` (único), `activos_inicio`, `dia1`…`dia31` (JSON en texto) |
 
-`analyzer_day_metrics` es la única con un índice único explícito
+`analyzer_day_metrics` es la única de este bloque con un índice único explícito
 (`ix_day_metrics_periodo`) y con *upsert*: el resto se reescriben con
-`DELETE` + `INSERT` del periodo.
+`DELETE` + `INSERT` del periodo. `crm_day_metrics` y `support_day_metrics`
+siguen el mismo patrón (las tres las escribe `DBConnector.save_day_metrics`),
+con el índice nombrado a partir de la tabla.
 
 ### Ciclo de vida
 
@@ -134,6 +136,7 @@ Escritas con `periodo_reporte = "global"` y `metodo_calculo = "lifetime"`.
 | `crm_cierre_historico` | Una fila por `periodo_reporte` (`YYYY-MM`, único) con los escalares declarados en `_COLUMNAS_CIERRE` más `efectividad` y `tiempo_por_etapa` como JSONB |
 | `crm_dimensiones_historico` | `periodo_reporte`, `dimension`, `valor`, `metricas` (JSONB), `efectividad` (JSONB) |
 | `crm_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `tiempo_por_etapa`, `efectividad` |
+| `crm_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (JSON en texto). Cada día es `{"global": {...}, "dimensiones": [...]}`: el corte acumulado del mes hasta ese día, con la misma forma que el cierre y sus dimensiones |
 
 Bloques de columnas de `crm_cierre_historico`:
 
@@ -163,6 +166,7 @@ dimensiones.
 | `support_cierre_historico` | `periodo_reporte` (`YYYY-MM`, único) y **todo el bloque como un único JSONB `metricas`** |
 | `support_dimensiones_historico` | `periodo_reporte`, `grupo_trabajo`, `dimension`, `valor`, `metricas` (JSONB) |
 | `support_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `por_grupo_trabajo`, `periodos_evaluados` |
+| `support_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (JSON en texto). Cada día es `{"grupos": {...}, "incidencia_zonas": {...}}`: el corte acumulado del mes hasta ese día, con la misma forma que el bloque del periodo |
 
 Dentro del JSONB, las claves siguen `SUPPORT_VOLUME_FIELDS`,
 `SUPPORT_RATE_FIELDS` y, por cada medida de tiempo, once columnas
