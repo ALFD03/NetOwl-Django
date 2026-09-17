@@ -109,6 +109,7 @@ export interface Periodo {
   arpu?: number;
   total_billing?: number;
   nuevos_mes?: number;
+  ingresos?: number,
   churn_neto_pct?: number;
   churn_bruto_pct?: number;
   corte_impagado?: number;

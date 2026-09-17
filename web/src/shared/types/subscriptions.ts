@@ -175,6 +175,7 @@ export interface PeriodoData {
   activos_inicio: number;
   activos_final: number;
   nuevos_mes: number;
+  ingresos: number,
   bajas: number;
   churn_neto_pct: number;
   churn_bruto_pct: number;
