@@ -53,6 +53,7 @@ def get_cierre_churn(
                 "activos_inicio": int(row.get("activos_inicio") or 0),
                 "activos_final": int(row.get("activos_final") or 0),
                 "nuevos_mes": int(row.get("nuevos_mes") or 0),
+                "ingresos": int(row.get("ingresos") or 0),
                 "crecimiento": float(row.get("crecimiento") or 0),
                 "bajas": int(row.get("bajas") or 0),
                 "churn_neto_pct": float(row.get("churn_neto_pct") or 0),

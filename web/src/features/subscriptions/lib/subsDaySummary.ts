@@ -38,16 +38,16 @@ export const SUBS_DAY_CARDS: DayCardSpec[] = [
   {
     key: 'react_4_P',
     label: 'Reactivaciones',
-    kind: 'stock',
+    kind: 'flujo',
     color: 'blue',
-    subValue: 'Total, recuperaciones incluidas',
+    subValue: 'Reactviaciones de corte impago',
   },
   {
     key: 'react_val',
     label: 'Recuperaciones',
-    kind: 'stock',
+    kind: 'flujo',
     color: 'purple',
-    subValue: 'Total, recuperaciones incluidas',
+    subValue: 'Recuperacion de clientes de meses anteriores',
   },
   {
     key: 'corte_impagado',
@@ -77,17 +77,20 @@ export const SUBS_DAY_CHARTS: DayChartSpec[] = [
   {
     // Las dos como nivel, que es lo único que las hace comparables: altas
     // acumuladas del mes contra la base inicial que a esa fecha no está.
-    title: 'Altas y bajas del mes',
-    subtitle: 'Acumulado a cada fecha; las bajas retroceden si alguien vuelve',
+    title: 'Ingresos Reales',
+    subtitle: 'Flujo de ingresos o perdida de cliente dia a dia',
     series: [
-      { key: 'nuevos_mes', label: 'Altas acumuladas', kind: 'stock', color: 'green' },
-      { key: 'bajas', label: 'Bajas a esa fecha', kind: 'stock', color: 'red', trendGoodWhen: 'down' },
+      { key: 'adiciones_brutas', label: 'Ingresos Reales', kind: 'stock', color: 'purple' },
+      // { key: 'bajas', label: 'Bajas a esa fecha', kind: 'stock', color: 'red', trendGoodWhen: 'down' },
     ],
   },
   {
     title: 'Churn bruto',
     subtitle: 'Cómo se asienta el mes corte a corte',
-    esTasa: true,
-    series: [{ key: 'churn_bruto_pct', label: 'Churn bruto', kind: 'tasa', color: 'red', trendGoodWhen: 'down' }],
+    // esTasa: true,
+    series: [
+      { key: 'ingresos', label: 'Ingresos', kind: 'stock', color: 'green', trendGoodWhen: 'up' },
+      { key: 'bajas', label: 'Perdidas', kind: 'stock', color: 'red', trendGoodWhen: 'down' },
+    ],
   },
 ];
