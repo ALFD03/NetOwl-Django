@@ -66,6 +66,7 @@ from .queries import (
     estructurar_grupos,
     get_incidencia_por_zona,
 )
+from .usuarios import anotar_departamentos
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +149,15 @@ def get_support_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
 
     Es lo pesado —cada grupo de trabajo por sus seis ejes— y por eso se pide de
     uno en uno. Los dias calculados los dice `get_support_day_series`.
+
+    El departamento de cada persona se anota **aqui, al leer**, y no esta
+    guardado dentro del corte: asi un cambio en el directorio se ve en todos
+    los dias ya calculados sin volver a analizar el mes.
     """
-    return leer_payload(TableNames.SUPPORT_DAY_METRICS, year_month, dia, clave=year_month)
+    payload = leer_payload(TableNames.SUPPORT_DAY_METRICS, year_month, dia, clave=year_month)
+    if payload:
+        anotar_departamentos(payload.get("grupos") or {})
+    return payload
 
 
 def get_support_day_series(year_month: str) -> dict[str, Any]:

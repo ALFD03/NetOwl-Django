@@ -121,6 +121,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `/support/`, `/support/dashboard/` | `can_view_support` | Página `Support/Dashboard` |
 | GET | `/support/analytics/?period=&dia=` | `can_view_support_analytics` | Página `Support/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `support_day_metrics`; sin él, el último calculado |
 | GET | `/support/results/?periods=` | `can_view_support_results` | Página `Support/Results` |
+| GET | `/support/users/?nuevo_usuario=` | `can_manage_support_users` | Página `Support/Users`: directorio de usuarios, departamentos y los nombres de los tickets que el directorio no reconoce. `nuevo_usuario` abre el alta con ese nombre ya escrito |
 | GET | `api/periods/` | `can_view_support` | `{periods}` |
 | GET | `api/cierre-historico/?periods=` | `can_view_support` | `{historico}` aplanado |
 | GET | `api/global-metrics/` | `can_view_support` | Promedio de todos los periodos |
@@ -128,6 +129,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/day-metrics/?period=&dia=` | `can_view_support_analytics` | `{dia, global, grupos, incidencia_zonas}` — el corte de un día de `support_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
 | GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |
 | GET | `api/tickets/?limit=&grupo=&period=` | `can_view_support_results` | Listado crudo; `limit` con techo de 5 000 |
+| POST | `api/usuarios/guardar/` | `can_manage_support_users` | Alta o edición de una fila de `usuarios` o `departamentos` (`tipo` en el cuerpo). **409** si el nombre ya existe. `60/m` |
+| POST | `api/usuarios/eliminar/` | `can_manage_support_users` | Baja. **409** si el departamento tiene usuarios (`PROTECT`). `60/m` |
 
 ---
 

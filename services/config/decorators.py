@@ -38,6 +38,7 @@ LANDING_ROUTES = [
     ('imports:support', ('can_view_imports', 'can_view_imports_support')),
     ('imports:history', ('can_view_imports', 'can_view_import_history')),
     ('subscriptions:catalogos', ('can_manage_catalogos',)),
+    ('support:usuarios', ('can_manage_support_users',)),
     ('config:user_management', ('can_manage_users',)),
 ]
 
