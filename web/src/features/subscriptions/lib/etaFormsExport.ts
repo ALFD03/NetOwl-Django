@@ -132,9 +132,16 @@ export const hojasFormularioEta = (
   },
 ];
 
-/** Nombre del archivo: qué se declara y de qué cierre. */
-export const formularioEtaFileName = (periodo: string): string =>
-  `Formularios ETA ${periodo}`.trim();
+/**
+ * Nombre del archivo: qué se declara, de qué cierre y a qué tasa.
+ *
+ * La tasa entra en el nombre porque el mismo mes se puede exportar dos veces
+ * —a la tasa con la que se declara y a la de hoy— y los dos libros son
+ * idénticos salvo en las columnas de renta. Sin distinguirlos, el segundo pisa
+ * al primero en la carpeta de descargas y nadie sabe cuál declaró.
+ */
+export const formularioEtaFileName = (periodo: string, sufijoTasa = ''): string =>
+  `Formularios ETA ${periodo}${sufijoTasa ? ` (${sufijoTasa})` : ''}`.trim();
 
 /** Cuántas filas tiene el libro. Con cero no hay nada que declarar. */
 export const totalFilasFormulario = (formularios: EtaFormularios | undefined): number =>

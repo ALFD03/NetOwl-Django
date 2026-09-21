@@ -99,6 +99,16 @@ export const subscriptionsApi = {
   consultarEtaTasa: async (period: string) =>
     (await apiClient.post<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/consultar/', { period })).data,
 
+  /**
+   * La última tasa publicada por el BCV, la de hoy.
+   *
+   * No es la del periodo y no se guarda en ninguna parte: la declaración va a
+   * la tasa del mes, y esta sirve para exportar el mismo formulario valorado
+   * a día de hoy. Por eso es un GET y no pisa nada.
+   */
+  getEtaTasaActual: async () =>
+    (await apiClient.get<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/actual/')).data,
+
   saveEtaSubConfig: async (request: EtaSubConfigRequest) =>
     (await apiClient.post('/subscriptions/api/eta-report/save-sub-config/', request)).data,
 
