@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { AlertTriangle, Download } from 'lucide-react';
+import { AlertTriangle, FileSpreadsheet } from 'lucide-react';
 
 import { downloadRowsAsExcel, type ExcelColumn } from '@/shared/lib/excel';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { StatusMessage } from '../feedback';
-import { Button } from '../primitives';
+import { ExportButton } from '../primitives';
 
 interface Props<Row> {
   rows: Row[];
@@ -13,7 +13,6 @@ interface Props<Row> {
   fileName: string;
   sheetName?: string;
   label?: string;
-  size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
@@ -31,7 +30,6 @@ export function ExcelExportButton<Row>({
   fileName,
   sheetName,
   label = 'Exportar a Excel',
-  size = 'sm',
   className,
 }: Props<Row>) {
   const [state, setState] = useState<'idle' | 'busy' | 'error'>('idle');
@@ -56,18 +54,15 @@ export function ExcelExportButton<Row>({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <Button
-        variant="secondary"
-        size={size}
+      <ExportButton
         className={className}
         onClick={handleClick}
-        isLoading={state === 'busy'}
+        estado={state}
+        label={label}
+        icon={<FileSpreadsheet className="h-4 w-4 text-brand" />}
         disabled={rows.length === 0}
-        icon={state === 'error' ? <AlertTriangle className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
         title={rows.length === 0 ? 'No hay filas que exportar.' : `Descargar ${rows.length} filas en formato .xlsx`}
-      >
-        {state === 'error' ? 'No se pudo exportar' : label}
-      </Button>
+      />
 
       <StatusMessage
         status={error ? { type: 'error', text: error } : null}
