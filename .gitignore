@@ -5,7 +5,6 @@ staticfiles/
 venv/
 AGENTS.md
 DESIGN.md
-docker-compose.yml
 deploy/
 COMMITS.md
 logs.log
