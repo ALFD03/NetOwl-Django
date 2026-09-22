@@ -34,6 +34,8 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
 | `catalogo_productos_ignorados` | `ProductoIgnorado` | Líneas del export que nunca serán un plan |
+| `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
+| `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido y departamento (FK obligatoria, `PROTECT`) |
 | `django_migrations` | Django | **Compartida: es la causa de los comandos `preparar_*`** |
 
 ### Cualificadas por esquema (`DB_SCHEMA`)
@@ -80,7 +82,7 @@ oportunidad, no el del movimiento**: deduplicar por él dejaría una sola
 transición por oportunidad.
 
 `support_tickets`: `id` (PK), `ticket_sequence`, `cliente`, `etapa`,
-`grupo_trabajo`, `asignado_a`, `sucursal`, `zona`, `tipo_solicitud`,
+`grupo_trabajo`, `asignado_a`, `creado_por`, `sucursal`, `zona`, `tipo_solicitud`,
 `razon_falla`, `solucion_falla`, `creado_el`, `primera_fecha_asignada`,
 `ultima_actualizacion_etapa`, `duracion_total_horas`.
 
@@ -188,7 +190,8 @@ servirlas.
 | `analyzer_eta_*` | `ETAReportManager` | Reporte ETA y su pantalla de parametrización |
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
-| `catalogo_*` | Pantalla de catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
+| `catalogo_*` (planes, zonas, sites…) | Pantalla de catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
+| `catalogo_departamentos`, `catalogo_usuarios_soporte` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio` |
 | `analysis_jobs` | Vistas de lanzamiento y worker | Sondeo de la interfaz |
 | `import_action_logs` | `register_import_log` | Página de historial |
 

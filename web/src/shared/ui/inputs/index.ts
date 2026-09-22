@@ -10,3 +10,4 @@ export { useAnchoredPanel } from './useAnchoredPanel';
 export { DayProgressBar } from './DayProgressBar';
 export { ToggleGroup, type ToggleGroupProps, type ToggleOption } from './ToggleGroup';
 export { FileUploadZone } from './FileUploadZone';
+export { Switch, type SwitchProps } from './Switch';

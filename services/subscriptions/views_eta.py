@@ -23,7 +23,7 @@ from core.database import DBConnector
 from core.utils import clean_json_props, es_periodo
 from services.config.decorators import permission_required
 from services.subscriptions.analytics import ETAReportManager, get_periodos
-from services.subscriptions.analytics.bcv import TasaNoDisponible
+from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_actual
 
 logger = logging.getLogger(__name__)
 
@@ -316,5 +316,32 @@ def api_eta_report_tasa_consultar(request):
         return JsonResponse({"status": "error", "message": str(e)}, status=502)
     except Exception:
         return error_interno("Error al consultar la tasa del BCV")
+
+    return JsonResponse({"status": "success", "tasa_bcv": tasa, "tasa_bcv_fuente": fuente})
+
+
+@login_required
+@permission_required('can_view_eta')
+@ratelimit(key='ip', rate='10/m', block=True)
+def api_eta_report_tasa_actual(request):
+    """La ultima tasa publicada por el BCV, sin guardarla en ningun sitio.
+
+    No es la tasa del periodo: la reguladora declara con la del primer dia
+    publicado del mes, y esa es la que vive en `analyzer_eta_reporte_mensual`.
+    Esta es la de hoy, que cambia cada dia y sirve para exportar el formulario
+    a precio de hoy cuando lo que se pide no es la declaracion del mes.
+
+    Por eso no escribe nada —guardarla pisaria la tasa con la que se declaro—
+    ni exige `can_manage_eta`: es una lectura.
+
+    Un fallo del tercero se devuelve como 502 con su mensaje, igual que en la
+    consulta del mes: el reporte se sigue viendo sin ella.
+    """
+    try:
+        tasa, fuente = consultar_tasa_actual()
+    except TasaNoDisponible as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=502)
+    except Exception:
+        return error_interno("Error al consultar la tasa vigente del BCV")
 
     return JsonResponse({"status": "success", "tasa_bcv": tasa, "tasa_bcv_fuente": fuente})

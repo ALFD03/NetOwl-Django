@@ -1,14 +1,15 @@
-/** Barra del reporte ETA: periodo, tasa del BCV, exportación y bloqueo del mes. */
+/** Barra del reporte ETA: periodo, tasas del BCV, exportación y bloqueo del mes. */
 
 import { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import {
-  AlertTriangle, Calendar, DollarSign, Loader2, Lock, RefreshCw, Settings, Unlock,
+  AlertTriangle, Calendar, DollarSign, Loader2, Lock, RefreshCw, Settings, TrendingUp, Unlock,
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
 import { FilterField, PeriodSelector, StatusMessage } from '@/shared/ui';
 import { EtaFormsExportButton } from './EtaFormsExportButton';
+import { useTasaBcvActual } from '../../hooks/useTasaBcvActual';
 import type { EtaFormularios } from '@/shared/types/subscriptions';
 
 interface EtaReportToolbarProps {
@@ -125,6 +126,53 @@ function TasaBcvField({
   );
 }
 
+/**
+ * La tasa de hoy, al lado de la del mes.
+ *
+ * Se enseña sin poder editarla, y es la diferencia con la del mes: aquella es
+ * un dato del periodo que se declara y se puede corregir a mano; esta es lo
+ * que el BCV publica hoy, y escribirla a mano no querría decir nada. Solo sirve
+ * para dos cosas: comparar de un vistazo cuánto se ha movido desde que se
+ * declaró, y exportar el formulario valorado a día de hoy.
+ */
+function TasaActualField({
+  tasa,
+  fuente,
+  cargando,
+  onRecargar,
+}: {
+  tasa: number;
+  fuente: string;
+  cargando: boolean;
+  onRecargar: () => Promise<void>;
+}) {
+  return (
+    <FilterField
+      label="Tasa hoy"
+      icon={<TrendingUp className="h-4 w-4 text-brand" />}
+      title={[
+        'Última tasa publicada por el BCV. No es la que declara el periodo:',
+        'sirve para exportar el formulario valorado a día de hoy.',
+        fuente ? `Origen: ${fuente}.` : '',
+      ].filter(Boolean).join(' ')}
+    >
+      <span className="px-4 py-2.5 text-xs font-bold text-white">
+        {tasa > 0 ? tasa.toLocaleString('es-VE', { maximumFractionDigits: 4 }) : '—'}
+      </span>
+      <button
+        type="button"
+        onClick={() => { void onRecargar(); }}
+        disabled={cargando}
+        title="Volver a consultar la tasa vigente del BCV"
+        aria-label="Volver a consultar la tasa vigente del BCV"
+        className="border-l border-slate-700/50 px-3 py-2.5 text-slate-400 transition-colors hover:text-white disabled:opacity-50"
+      >
+        <RefreshCw className={cn('h-4 w-4', cargando && 'animate-spin')} />
+      </button>
+    </FilterField>
+  );
+}
+
 export function EtaReportToolbar({
   period,
   periods,
@@ -141,6 +189,10 @@ export function EtaReportToolbar({
   onTasaChange,
   onTasaConsultar,
 }: EtaReportToolbarProps) {
+  // La tasa vigente no se guarda en ninguna parte: no es un dato del periodo,
+  // cambia cada día y su sitio es la pantalla, no la tabla del reporte.
+  const tasaActual = useTasaBcvActual();
+
   return (
     <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
       <div className="flex flex-wrap items-center gap-4">
@@ -159,6 +211,13 @@ export function EtaReportToolbar({
           onTasaConsultar={onTasaConsultar}
         />
 
+        <TasaActualField
+          tasa={tasaActual.tasa}
+          fuente={tasaActual.fuente}
+          cargando={tasaActual.cargando}
+          onRecargar={tasaActual.recargar}
+        />
+
         <Link
           href={`/subscriptions/eta-report/config/?period=${period}`}
           className="flex items-center gap-2 rounded-2xl border border-slate-700/50 bg-surface-secondary px-5 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-300 shadow-2xl transition-colors hover:text-white"
@@ -173,6 +232,8 @@ export function EtaReportToolbar({
             formularios={formularios}
             period={period}
             tasa={tasa}
+            tasaActual={tasaActual.tasa}
+            tasaActualFuente={tasaActual.fuente}
             sinRegulador={sinRegulador}
           />
         )}
@@ -201,7 +262,11 @@ export function EtaReportToolbar({
           las rentas del libro saldrán vacías y eso hay que verlo sin pasar el
           ratón por encima. */}
       <StatusMessage
-        status={tasaAviso ? { type: 'warning', text: tasaAviso } : null}
+        status={
+          tasaAviso || tasaActual.aviso
+            ? { type: 'warning', text: [tasaAviso, tasaActual.aviso].filter(Boolean).join(' ') }
+            : null
+        }
         icon={<AlertTriangle />}
         className="w-full"
       />

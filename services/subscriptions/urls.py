@@ -32,6 +32,7 @@ urlpatterns = [
     path("api/eta-report/lock/", views_eta.api_eta_report_lock, name="api_eta_report_lock"),
     path("api/eta-report/tasa/", views_eta.api_eta_report_tasa, name="api_eta_report_tasa"),
     path("api/eta-report/tasa/consultar/", views_eta.api_eta_report_tasa_consultar, name="api_eta_report_tasa_consultar"),
+    path("api/eta-report/tasa/actual/", views_eta.api_eta_report_tasa_actual, name="api_eta_report_tasa_actual"),
     path("api/eta-report/save-sub-config/", views_eta.api_eta_report_save_sub_config, name="api_eta_report_save_sub_config"),
     path("api/business-units/", views.api_business_units_report, name="api_business_units_report"),
     path("api/eta-report/delete-sub-config/", views_eta.api_eta_report_delete_sub_config, name="api_eta_report_delete_sub_config"),

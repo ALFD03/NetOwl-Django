@@ -90,6 +90,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | POST | `api/eta-report/lock/` | `can_manage_eta` | — | `{period, lock}`. Al bloquear, recalcula y congela |
 | POST | `api/eta-report/tasa/` | `can_manage_eta` | 30/m | `{period, tasa}`. Escribe la tasa a mano; no recalcula nada |
 | POST | `api/eta-report/tasa/consultar/` | `can_manage_eta` | 10/m | `{period}`. Vuelve a pedirla al BCV y pisa la guardada. **502** si el tercero falla |
+| GET | `api/eta-report/tasa/actual/` | `can_view_eta` | 10/m | La última tasa publicada por el BCV. No es la del periodo y no se guarda: sirve para exportar a precio de hoy. **502** si el tercero falla |
 | POST | `api/eta-report/save-sub-config/` | `can_manage_eta` | — | Excepción individual: `orden` obligatorio |
 | POST | `api/eta-report/delete-sub-config/` | `can_manage_eta` | — | `{orden}` |
 | POST | `api/catalogos/guardar/` | `can_manage_catalogos` | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido |
@@ -121,6 +122,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `/support/`, `/support/dashboard/` | `can_view_support` | Página `Support/Dashboard` |
 | GET | `/support/analytics/?period=&dia=` | `can_view_support_analytics` | Página `Support/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `support_day_metrics`; sin él, el último calculado |
 | GET | `/support/results/?periods=` | `can_view_support_results` | Página `Support/Results` |
+| GET | `/support/users/?nuevo_usuario=` | `can_manage_support_users` | Página `Support/Users`: directorio de usuarios, departamentos y los nombres de los tickets que el directorio no reconoce. `nuevo_usuario` abre el alta con ese nombre ya escrito |
 | GET | `api/periods/` | `can_view_support` | `{periods}` |
 | GET | `api/cierre-historico/?periods=` | `can_view_support` | `{historico}` aplanado |
 | GET | `api/global-metrics/` | `can_view_support` | Promedio de todos los periodos |
@@ -128,6 +130,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/day-metrics/?period=&dia=` | `can_view_support_analytics` | `{dia, global, grupos, incidencia_zonas}` — el corte de un día de `support_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
 | GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |
 | GET | `api/tickets/?limit=&grupo=&period=` | `can_view_support_results` | Listado crudo; `limit` con techo de 5 000 |
+| POST | `api/usuarios/guardar/` | `can_manage_support_users` | Alta o edición de una fila de `usuarios` o `departamentos` (`tipo` en el cuerpo). **409** si el nombre ya existe. `60/m` |
+| POST | `api/usuarios/eliminar/` | `can_manage_support_users` | Baja. **409** si el departamento tiene usuarios (`PROTECT`). `60/m` |
 
 ---
 

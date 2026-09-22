@@ -16,7 +16,6 @@ import pandas as pd
 from core.utils import clean_json_props
 from services.support.analytics.cohorts import PeriodCohort
 from services.support.analytics.config import (
-    MIN_DURACION_HORAS,
     TIME_MEASURE_SPECS,
     TIME_STATS,
 )
@@ -26,17 +25,18 @@ def _compute_stats_for_series(series: pd.Series) -> dict[str, float]:
     """
     Estadísticos de una serie de duraciones en horas.
 
-    Sólo entran duraciones de al menos `MIN_DURACION_HORAS` (1 minuto). Por
-    debajo de ese umbral no hay un tiempo de servicio que medir: son acciones
-    masivas de Odoo que asignan y cierran en el mismo segundo, o fechas
-    ausentes. Contarlas hunde el promedio y la mediana e infla el % que excede
-    el promedio.
+    Entra todo lo medible. Lo único que se descarta es lo que no es un tiempo:
+    el NaN de una fecha ausente y el valor negativo de una fecha capturada al
+    revés. No hay duración mínima —un ciclo de treinta segundos es tan real
+    como uno de treinta horas, y filtrarlo por corto tiraba dato bueno para
+    protegerse del malo; de la fila incoherente ya se encarga la coherencia de
+    sus fechas—.
 
     `muestra` expone cuántos tickets sí se pudieron medir, para poder juzgar la
     cobertura del cálculo desde la interfaz.
     """
     s = pd.to_numeric(series, errors="coerce").dropna()
-    s = s[s >= MIN_DURACION_HORAS]
+    s = s[s >= 0]
     n = len(s)
 
     if n == 0:
@@ -62,6 +62,20 @@ def _nan_series(df: pd.DataFrame) -> pd.Series:
     return pd.Series(float("nan"), index=df.index, dtype=float)
 
 
+def _fecha(df: pd.DataFrame, col: str) -> pd.Series:
+    """
+    Una columna de fecha de la cohorte, sin volver a parsearla si ya lo está.
+
+    `classify_tickets` convierte las tres fechas una sola vez sobre la tabla
+    completa. La conversión sólo ocurre aquí para el caso raro de una cohorte
+    armada a mano, y no en las cientos de sub-cohortes de un corte.
+    """
+    serie = df[col]
+    if pd.api.types.is_datetime64_any_dtype(serie):
+        return serie
+    return pd.to_datetime(serie, errors="coerce")
+
+
 def _hours_between(df: pd.DataFrame, col_inicio: str, col_fin: str) -> pd.Series:
     """
     Diferencia en horas entre dos columnas de fecha, sin rellenos.
@@ -77,20 +91,24 @@ def _hours_between(df: pd.DataFrame, col_inicio: str, col_fin: str) -> pd.Series
     if col_inicio not in df.columns or col_fin not in df.columns:
         return _nan_series(df)
 
-    t_inicio = pd.to_datetime(df[col_inicio], errors="coerce")
-    t_fin = pd.to_datetime(df[col_fin], errors="coerce")
+    return (_fecha(df, col_fin) - _fecha(df, col_inicio)).dt.total_seconds() / 3600.0
 
-    return (t_fin - t_inicio).dt.total_seconds() / 3600.0
+
+def _horas_hasta(df: pd.DataFrame, col_inicio: str, instante: pd.Timestamp) -> pd.Series:
+    """Horas entre una columna de fecha y un instante fijo: el reloj abierto."""
+    if col_inicio not in df.columns:
+        return _nan_series(df)
+    return (instante - _fecha(df, col_inicio)).dt.total_seconds() / 3600.0
 
 
 def _duracion_total(df: pd.DataFrame) -> pd.Series:
     """
     Duración creación → cierre tal y como la reporta Odoo.
 
-    Se lee el campo en vez de restar las dos fechas porque es el dato que Odoo
-    da por bueno para el ciclo completo, cola incluida. Quién entra en la
-    medida no lo decide este campo sino `_tramos_validos`, que exige el minuto
-    en cada uno de los dos tramos.
+    Se lee el campo en vez de restar las dos fechas porque ya viene calculado:
+    promediarlo es sumar y dividir entre la muestra, sin una resta de fechas
+    más por ticket. Quién entra en la medida no lo decide este campo sino
+    `_tramos_validos`, que mira si las tres fechas del ciclo son coherentes.
     """
     if "duracion_total_horas" not in df.columns:
         return _nan_series(df)
@@ -99,36 +117,63 @@ def _duracion_total(df: pd.DataFrame) -> pd.Series:
 
 def _tramos_validos(espera: pd.Series, gestion: pd.Series) -> pd.Series:
     """
-    Qué tickets tienen un ciclo de cierre medible, tramo a tramo.
+    Qué tickets tienen un ciclo de cierre medible: los de fechas coherentes.
 
-    Un cierre sólo cuenta si sus DOS tramos duraron al menos
-    `MIN_DURACION_HORAS` (1 minuto): la espera creación → primera asignación y
-    la gestión asignación → cierre. Un total de dos minutos, por tanto, es el
-    mínimo con el que un ticket entra en las medidas de cierre.
+    Los dos tramos —espera creación → primera asignación y gestión primera
+    asignación → cierre— tienen que existir y no ir hacia atrás. No se les pide
+    durar un mínimo: un cierre rápido es un cierre, y el ticket que Odoo asignó
+    y cerró en el mismo segundo entra ahora con sus cero horas.
 
-    Mirar sólo el total no bastaba: un ticket que se asigna y se cierra en el
-    mismo segundo —el rastro de una acción masiva de Odoo— pasaba el filtro con
-    tal de llevar horas en cola, y metía en la media un tiempo de gestión que
-    nunca ocurrió. La comparación con NaN es False, así que al ticket sin fecha
-    de asignación se le descarta el cierre por el mismo camino.
+    Lo que sigue quedando fuera es el ticket **sin fecha de asignación**: la
+    comparación con NaN es False. No es un descarte de medición sino de
+    higiene, y es el punto: un ticket no debería estar cerrado sin haber sido
+    asignado, y la diferencia entre `muestra_*` y `tickets_cerrados` es la
+    cuenta de los que lo están.
     """
-    return (espera >= MIN_DURACION_HORAS) & (gestion >= MIN_DURACION_HORAS)
+    return (espera >= 0) & (gestion >= 0)
 
 
-def _serie_de_formula(df: pd.DataFrame, formula: str) -> pd.Series:
+def _serie_asignacion(df: pd.DataFrame, corte: pd.Timestamp) -> pd.Series:
+    """
+    La espera creación → asignación, censurada en el corte.
+
+    Dos casos, y el segundo es el que importa:
+
+      * ya asignado al corte → la espera real.
+      * creado, sin asignar y todavía abierto a esa hora → creación → corte.
+        Es la espera que se acumuló dentro del periodo: fin del día en la barra
+        diaria, fin del mes en el cierre. Dejarlos fuera vaciaba la métrica
+        justo de los que más esperan, que es a quienes sirve para encontrar, y
+        medirlos contra la hora del cálculo habría hecho que el mes cambiara de
+        valor cada vez que se reanaliza.
+
+    El cerrado sin asignación nunca entra, ni por la espera real —que no tiene—
+    ni por la censura: su espera no terminó, es que el dato está mal, y es lo
+    que `_tramos_validos` señala en las medidas de cierre.
+    """
+    espera = _hours_between(df, "dt_creacion", "asignado_al_corte")
+
+    if "asignado_al_corte" not in df.columns or "cerrado_al_corte" not in df.columns:
+        return espera
+
+    esperando = df["asignado_al_corte"].isna() & ~df["cerrado_al_corte"]
+    return espera.mask(esperando, _horas_hasta(df, "dt_creacion", corte))
+
+
+def _serie_de_formula(
+    df: pd.DataFrame, formula: str, corte: pd.Timestamp
+) -> pd.Series:
     """La serie de horas de una medida, segun como este definida."""
     if df.empty:
         return pd.Series(dtype=float)
 
-    espera = _hours_between(df, "creado_el", "primera_fecha_asignada")
-
-    # La asignación es un tramo único: su propio umbral en
-    # `_compute_stats_for_series` ya es la regla del minuto, y no depende del
-    # cierre —un ticket abierto sigue teniendo espera que medir—.
+    # La asignación es un tramo único y no depende del cierre: un ticket
+    # abierto sigue teniendo espera que medir, y es la que se censura.
     if formula == "creado_a_asignacion":
-        return espera
+        return _serie_asignacion(df, corte)
 
-    gestion = _hours_between(df, "primera_fecha_asignada", "ultima_actualizacion_etapa")
+    espera = _hours_between(df, "dt_creacion", "asignado_al_corte")
+    gestion = _hours_between(df, "asignado_al_corte", "dt_cierre")
 
     if formula == "duracion_total":
         serie = _duracion_total(df)
@@ -217,7 +262,7 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
     }
 
     for medida, formula, poblacion in TIME_MEASURE_SPECS:
-        serie = _serie_de_formula(cohorte.poblacion(poblacion), formula)
+        serie = _serie_de_formula(cohorte.poblacion(poblacion), formula, cohorte.corte)
         metrics.update(_prefixed(_compute_stats_for_series(serie), medida))
 
     return clean_json_props(metrics)

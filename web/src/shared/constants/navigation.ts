@@ -6,7 +6,7 @@
  */
 
 import {
-  BarChart3, BookMarked, Clock, CloudDownload, FileSpreadsheet, Gauge, Headset,
+  BarChart3, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, Headset,
   Layers, Lock, Table, TrendingUp, UserCheck, Users,
 } from 'lucide-react';
 
@@ -83,6 +83,7 @@ export const MODULE_NAVIGATION = {
       { id: 'dashboard', label: 'Dashboard', href: '/support/dashboard/', icon: Gauge },
       { id: 'analytics', label: 'Analytics', href: '/support/analytics/', icon: BarChart3, permission: PERMISSIONS.VIEW_SUPPORT_ANALYTICS },
       { id: 'results', label: 'Results', href: '/support/results/', icon: Table, permission: PERMISSIONS.VIEW_SUPPORT_RESULTS },
+      { id: 'usuarios', label: 'Users', href: '/support/users/', icon: Contact, permission: PERMISSIONS.MANAGE_SUPPORT_USERS },
     ],
   },
   imports: {

@@ -24,6 +24,7 @@ export type Permission =
   | 'can_manage_eta'
   | 'can_manage_users'
   | 'can_manage_catalogos'
+  | 'can_manage_support_users'
   | 'can_import_subs'
   | 'can_import_crm'
   | 'can_import_support'
@@ -56,6 +57,7 @@ export interface UserProfile {
   can_manage_eta: boolean;
   can_manage_users: boolean;
   can_manage_catalogos: boolean;
+  can_manage_support_users: boolean;
   can_import_subs: boolean;
   can_import_crm: boolean;
   can_import_support: boolean;

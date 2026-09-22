@@ -108,8 +108,10 @@ Concretely, these already exist — do not re-inline them:
 | Server execution log | `ConsoleOutput` |
 | Labelled input with leading icon | `TextField` |
 | Segmented view switch | `ToggleGroup` |
+| On/off boolean, labelled | `Switch` |
 | Filter capsule (label cap + control) | `FilterField` |
 | Sortable/searchable/filterable table | `DataTable` |
+| Download button (any file) | `ExportButton` |
 | Module tab bar | `ModuleHeader module="…"` |
 
 **Filters look the way they look in Sales Report and Business Units**, and that
@@ -119,6 +121,16 @@ which value*. Put a `SelectMenu` inside with `FILTER_TRIGGER_CLASS`, a
 `SearchInput` with `grow`, or a field of your own. It used to be copied into
 `PeriodSelector` and three times into `SubscriptionReportFilters`, and every
 new copy reinterpreted it slightly worse.
+
+**Anything that writes a file downloads through `ExportButton`.** It carries the
+shape — the filter capsule, the brand-tinted icon — and the four states, said in
+the button itself: idle, writing, nothing to export, failed. Exporting used to be
+`Button variant="secondary"` in three places, which made the button that writes a
+file look like the one that opens a panel, and each copy drifted. `ExcelExportButton`
+(rows already on the page), `BajasExportButton` (fetches them, and has an icon-only
+variant for table cells) and `EtaFormsExportButton` (with its rate selector welded
+to its right) are all the same button underneath. Mounting it inside another capsule
+takes `seamless`, so it doesn't draw a border of its own.
 
 `DataTable` is the *only* table. Free-text search, click-to-sort and per-column
 filters live in it, so a screen that hand-rolls `<table>` markup silently loses

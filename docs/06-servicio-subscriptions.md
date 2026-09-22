@@ -530,6 +530,32 @@ motivo como aviso en vez de propagarlo, y las rentas salen vacías, que es lo
 mismo que pasaba antes de que hubiera consulta automática. El aviso se enseña
 bajo la barra del reporte: si no, una tasa ausente parece una tasa de cero.
 
+#### La tasa vigente, al lado de la del mes
+
+`consultar_tasa_actual()` pregunta por `ve.dolarapi.com/v1/dolares/oficial`, que
+devuelve la **última tasa publicada** sin pedir fecha, y la sirve
+`GET api/eta-report/tasa/actual/` (`can_view_eta`, 10/m). Es otra pregunta que
+la del mes: aquella es la que fija la declaración —el primer día publicado del
+periodo— y esta es la que vale hoy.
+
+**No se guarda en ninguna parte.** Cambia cada día, así que escribirla en
+`analyzer_eta_reporte_mensual` solo serviría para pisar la tasa con la que se
+declaró. Vive en la pantalla: el reporte la consulta una vez al abrirse —no una
+por periodo hojeado, porque no depende del mes que se mire— y el botón de
+recargar está para la página que lleva horas abierta.
+
+**Al exportar se elige con cuál se convierte la renta.** El botón de
+exportación es una cápsula partida —la misma que los filtros de la barra— con
+la acción a la izquierda y un selector a la derecha: la tasa del mes por
+defecto, la que se declara, o la de hoy, que responde a cuánto costaría hoy ese
+mismo parque. Van juntos porque son la misma decisión, qué libro sale; en dos
+controles sueltos parecían dos exportaciones distintas. Las filas son las mismas;
+solo cambian las columnas en bolívares, y el archivo exportado a la tasa
+vigente lleva «(tasa de hoy)» en el nombre para no confundirse con el que se
+declaró. Si la consulta falló, el selector queda deshabilitado y lo dice: elegir una
+tasa que no se pudo leer exportaría rentas vacías sin avisar, y esconder el
+control haría cambiar de forma a la barra según responda un tercero.
+
 Las fórmulas que pide la reguladora, y que están en `eta_forms.py`:
 
 | Columna | Fórmula |

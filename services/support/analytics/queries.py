@@ -30,6 +30,7 @@ from services.support.analytics.config import (
     SUPPORT_DIMENSIONES,
 )
 from services.support.analytics.metrics import compute_metrics_for_period
+from services.support.analytics.usuarios import anotar_departamentos
 
 logger = logging.getLogger(__name__)
 
@@ -414,7 +415,7 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
 
     db = DBConnector()
     try:
-        grupos = estructurar_grupos(get_support_dimension_metrics(periodo))
+        grupos = anotar_departamentos(estructurar_grupos(get_support_dimension_metrics(periodo)))
         cohorte = _load_period_cohort(db, periodo)
 
         return {
@@ -447,7 +448,8 @@ def get_support_tickets_list(
 
         df = db.query(f"""
             SELECT ticket_sequence, cliente, etapa, grupo_trabajo, asignado_a,
-                   sucursal, zona, tipo_solicitud, razon_falla, solucion_falla,
+                   creado_por, sucursal, zona, tipo_solicitud, razon_falla,
+                   solucion_falla,
                    creado_el, primera_fecha_asignada, ultima_actualizacion_etapa,
                    duracion_total_horas
             FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}

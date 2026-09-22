@@ -147,8 +147,8 @@ def reset_support_tickets(db: DBConnector) -> None:
     Deja `support_tickets` vacía y con la forma actual, sin tocar lo calculado.
 
     Sólo los tickets se rehacen desde cero: el CSV de Odoo es un export completo
-    y su esquema ha cambiado de forma (ganaron `asignado_a`, perdieron
-    `municipio`), así que DROP + CREATE es más barato que migrar. Las tablas de
+    y su esquema ha cambiado de forma (ganaron `asignado_a` y `creado_por`,
+    perdieron `municipio`), así que DROP + CREATE es más barato que migrar. Las tablas de
     resultados —cierre, dimensiones y métricas globales— NO se tocan aquí:
     guardan los periodos ya evaluados y `run_support_analysis` las reescribe
     periodo a periodo. Borrarlas en cada importación vaciaba el histórico
@@ -164,6 +164,7 @@ def reset_support_tickets(db: DBConnector) -> None:
             etapa TEXT,
             grupo_trabajo TEXT,
             asignado_a TEXT,
+            creado_por TEXT,
             sucursal TEXT,
             zona TEXT,
             tipo_solicitud TEXT,

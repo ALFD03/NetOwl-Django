@@ -1,12 +1,12 @@
 /** Descarga en `.xlsx` las bajas de un cierre, con la ficha de cada cliente. */
 
 import { useState } from 'react';
-import { AlertTriangle, Download, FileX2 } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 import { downloadRowsAsExcel } from '@/shared/lib/excel';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
-import { Button, StatusMessage } from '@/shared/ui';
+import { ExportButton, StatusMessage, type ExportEstado } from '@/shared/ui';
 import { BAJAS_COLUMNS, bajasFileName } from '../../lib/bajasExport';
 
 interface BajasExportButtonProps {
@@ -31,18 +31,8 @@ interface BajasExportButtonProps {
   label?: string;
   /** Solo el icono: es como va en cada fila de la tabla de nodos. */
   iconOnly?: boolean;
-  size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
-
-type Estado = 'idle' | 'busy' | 'error' | 'empty';
-
-const MENSAJE: Record<Estado, string | null> = {
-  idle: null,
-  busy: null,
-  error: 'No se pudo exportar',
-  empty: 'Sin bajas que exportar',
-};
 
 /**
  * Pide el detalle al servidor y lo escribe como hoja de cálculo.
@@ -58,10 +48,9 @@ export function BajasExportButton({
   avisoDia = false,
   label = 'Exportar bajas',
   iconOnly = false,
-  size = 'sm',
   className,
 }: BajasExportButtonProps) {
-  const [estado, setEstado] = useState<Estado>('idle');
+  const [estado, setEstado] = useState<ExportEstado>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const handleClick = async () => {
@@ -91,12 +80,6 @@ export function BajasExportButton({
     }
   };
 
-  const icono = estado === 'error'
-    ? <AlertTriangle className="h-3.5 w-3.5" />
-    : estado === 'empty'
-      ? <FileX2 className="h-3.5 w-3.5" />
-      : <Download className="h-3.5 w-3.5" />;
-
   const titulo = [
     `Descargar el detalle de las bajas de ${alcance} (${period}).`,
     avisoDia ? 'El detalle nominal solo existe por cierre mensual: se exporta el mes completo, no el día seleccionado.' : '',
@@ -104,18 +87,16 @@ export function BajasExportButton({
 
   return (
     <div className="flex flex-col items-start gap-2">
-      <Button
-        variant="secondary"
-        size={size}
-        className={iconOnly ? `!px-2 !gap-0 ${className ?? ''}` : className}
+      <ExportButton
+        className={className}
         onClick={handleClick}
-        isLoading={estado === 'busy'}
+        estado={estado}
+        label={label}
+        labelEmpty="Sin bajas que exportar"
+        iconOnly={iconOnly}
         disabled={!period}
-        icon={icono}
         title={error ? `${titulo} ${error}` : titulo}
-      >
-        {iconOnly ? '' : MENSAJE[estado] ?? label}
-      </Button>
+      />
 
       {/* En la variante de solo icono va en el `title`: el botón vive dentro de
           una celda de la tabla de nodos y un banner ahí rompería la fila. */}
