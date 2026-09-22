@@ -108,6 +108,7 @@ Concretely, these already exist — do not re-inline them:
 | Server execution log | `ConsoleOutput` |
 | Labelled input with leading icon | `TextField` |
 | Segmented view switch | `ToggleGroup` |
+| On/off boolean, labelled | `Switch` |
 | Filter capsule (label cap + control) | `FilterField` |
 | Sortable/searchable/filterable table | `DataTable` |
 | Download button (any file) | `ExportButton` |

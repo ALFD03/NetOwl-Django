@@ -6,7 +6,11 @@
  * backend hay que añadirlo también aquí.
  */
 
+import { CloudDownload, Headset, KeyRound, Layers, Users } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
 import type { Permission } from '@/shared/types/auth';
+import type { MetricColor } from '@/shared/ui/theme/types';
 
 export const PERMISSIONS = {
   VIEW_SUBSCRIPTIONS: 'can_view_subscriptions',
@@ -77,73 +81,116 @@ export const DEFAULT_USER_PERMISSIONS = {
   [PERMISSIONS.VIEW_SUBSCRIPTIONS]: true,
 } as Record<Permission, boolean>;
 
-export const PERMISSION_GROUPS = [
+/**
+ * El catálogo tal y como se ve en el editor: **una categoría por módulo**, con
+ * su icono, su tono y una línea que dice qué concede.
+ *
+ * Están agrupados por *a qué módulo afectan* y no por tipo de acción, que es
+ * como estaban antes. Conceder el acceso a CRM significaba entonces marcar en
+ * cuatro categorías distintas —el módulo, sus páginas, su carga de CSV y su
+ * análisis— y nada en la pantalla decía que esas cuatro casillas eran el mismo
+ * encargo. Dentro de la tarjeta, `section` vuelve a separar ver / cargar y
+ * calcular / administrar, que es la escalada de riesgo dentro de un módulo.
+ *
+ * Es metadato de presentación, no normativo —quien manda sobre qué permisos
+ * existen sigue siendo `PERMISSIONS`, espejo del modelo—, pero vive aquí porque
+ * es la misma lista, y separarla obligaría a mantener dos órdenes de acuerdo.
+ */
+export interface PermissionCategory {
+  category: string;
+  /** Una línea que explica qué abre la categoría, bajo el título. */
+  hint: string;
+  icon: LucideIcon;
+  tone: MetricColor;
+  /**
+   * Los permisos, en plano y cada uno con el bloque al que pertenece. Plano y
+   * no anidado para que contar y filtrar sigan siendo una línea; el editor los
+   * agrupa por `section` al pintarlos.
+   */
+  perms: readonly { key: Permission; label: string; section: string }[];
+}
+
+/** Los bloques dentro de una tarjeta, en orden de riesgo creciente. */
+export const PERMISSION_SECTIONS = ['Ver', 'Cargar y calcular', 'Administrar'] as const;
+
+export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
   {
-    category: 'Módulos Principales (Navegación)',
+    category: 'Subscriptions',
+    hint: 'Churn, ciclo de vida, ventas y el reporte regulatorio ETA.',
+    icon: Layers,
+    tone: 'blue',
     perms: [
-      { key: PERMISSIONS.VIEW_SUBSCRIPTIONS, label: 'Módulo Subscriptions' },
-      { key: PERMISSIONS.VIEW_CRM, label: 'Módulo CRM Analytics' },
-      { key: PERMISSIONS.VIEW_SUPPORT, label: 'Módulo Technical Support' },
-      { key: PERMISSIONS.VIEW_IMPORTS, label: 'Módulo de Importaciones' },
+      { key: PERMISSIONS.VIEW_SUBSCRIPTIONS, label: 'Entrar al módulo', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUBS_ANALYTICS, label: 'Subscriptions Analytics', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUBS_RESULTS, label: 'Subscriptions Results', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUBS_LIFETIME, label: 'Life Time Cycle', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUBS_SALES, label: 'Sales Report & Business Units', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_ETA, label: 'Reporte Regulatorio ETA', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_IMPORTS_SUBS, label: 'Página de importación', section: 'Ver' },
+      { key: PERMISSIONS.IMPORT_SUBS, label: 'Cargar el CSV de suscripciones', section: 'Cargar y calcular' },
+      { key: PERMISSIONS.RUN_SUBS_ANALYSIS, label: 'Ejecutar el análisis de churn', section: 'Cargar y calcular' },
+      { key: PERMISSIONS.RUN_LIFETIME, label: 'Ejecutar el motor Kaplan-Meier', section: 'Cargar y calcular' },
+      { key: PERMISSIONS.MANAGE_ETA, label: 'Administrar el Maestro ETA', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGOS, label: 'Administrar catálogos (planes, zonas, sites…)', section: 'Administrar' },
     ],
   },
   {
-    category: 'Métricas de Subscriptions',
+    category: 'CRM Analytics',
+    hint: 'Oportunidades, efectividad y tiempos de la fuerza comercial.',
+    icon: Users,
+    tone: 'purple',
     perms: [
-      { key: PERMISSIONS.VIEW_SUBS_ANALYTICS, label: 'Ver Subscriptions Analytics' },
-      { key: PERMISSIONS.VIEW_SUBS_RESULTS, label: 'Ver Subscriptions Results' },
-      { key: PERMISSIONS.VIEW_SUBS_LIFETIME, label: 'Ver Life Time Cycle' },
-      { key: PERMISSIONS.VIEW_SUBS_SALES, label: 'Ver Sales Report & Business Units' },
-      { key: PERMISSIONS.VIEW_ETA, label: 'Ver Reporte Regulatorio ETA' },
+      { key: PERMISSIONS.VIEW_CRM, label: 'Entrar al módulo', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_CRM_ANALYTICS, label: 'CRM Analytics', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_CRM_RESULTS, label: 'CRM Results', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_IMPORTS_CRM, label: 'Página de importación', section: 'Ver' },
+      { key: PERMISSIONS.IMPORT_CRM, label: 'Cargar el CSV de CRM', section: 'Cargar y calcular' },
+      { key: PERMISSIONS.RUN_CRM_ANALYSIS, label: 'Ejecutar el análisis de CRM', section: 'Cargar y calcular' },
     ],
   },
   {
-    category: 'Métricas de CRM & Support',
+    category: 'Technical Support',
+    hint: 'Tickets, grupos de trabajo y el directorio de técnicos.',
+    icon: Headset,
+    tone: 'green',
     perms: [
-      { key: PERMISSIONS.VIEW_CRM_ANALYTICS, label: 'Ver CRM Analytics' },
-      { key: PERMISSIONS.VIEW_CRM_RESULTS, label: 'Ver CRM Results' },
-      { key: PERMISSIONS.VIEW_SUPPORT_ANALYTICS, label: 'Ver Support Analytics' },
-      { key: PERMISSIONS.VIEW_SUPPORT_RESULTS, label: 'Ver Support Results' },
+      { key: PERMISSIONS.VIEW_SUPPORT, label: 'Entrar al módulo', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUPPORT_ANALYTICS, label: 'Support Analytics', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUPPORT_RESULTS, label: 'Support Results', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_IMPORTS_SUPPORT, label: 'Página de importación', section: 'Ver' },
+      { key: PERMISSIONS.IMPORT_SUPPORT, label: 'Cargar el CSV de soporte', section: 'Cargar y calcular' },
+      { key: PERMISSIONS.RUN_SUPPORT_ANALYSIS, label: 'Ejecutar el análisis de soporte', section: 'Cargar y calcular' },
+      { key: PERMISSIONS.MANAGE_SUPPORT_USERS, label: 'Administrar el directorio de soporte', section: 'Administrar' },
     ],
   },
   {
-    category: 'Páginas del Módulo de Importaciones',
+    category: 'Importaciones',
+    hint: 'El módulo en sí. Lo que se carga en él va en cada módulo de arriba.',
+    icon: CloudDownload,
+    tone: 'slate',
     perms: [
-      { key: PERMISSIONS.VIEW_IMPORTS_SUBS, label: 'Ver Importar Subscriptions' },
-      { key: PERMISSIONS.VIEW_IMPORTS_CRM, label: 'Ver Importar CRM Analytics' },
-      { key: PERMISSIONS.VIEW_IMPORTS_SUPPORT, label: 'Ver Importar Technical Support' },
-      { key: PERMISSIONS.VIEW_IMPORT_HISTORY, label: 'Ver Historial de Acciones' },
+      { key: PERMISSIONS.VIEW_IMPORTS, label: 'Entrar al módulo', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_IMPORT_HISTORY, label: 'Historial de acciones', section: 'Ver' },
     ],
   },
   {
-    category: 'Cargas de CSV por Módulo',
+    category: 'Transversales y Administración',
+    hint: 'No son de un módulo: valen para los tres. Concede solo lo que haga falta.',
+    icon: KeyRound,
+    tone: 'red',
     perms: [
-      { key: PERMISSIONS.IMPORT_SUBS, label: 'Cargar CSV de Subscriptions' },
-      { key: PERMISSIONS.IMPORT_CRM, label: 'Cargar CSV de CRM Analytics' },
-      { key: PERMISSIONS.IMPORT_SUPPORT, label: 'Cargar CSV de Technical Support' },
+      { key: PERMISSIONS.IMPORT_DATA, label: 'Cargar cualquier CSV (comodín de los tres módulos)', section: 'Cargar y calcular' },
+      { key: PERMISSIONS.RUN_CALCULATIONS, label: 'Ejecutar cualquier análisis (comodín de los tres módulos)', section: 'Cargar y calcular' },
+      { key: PERMISSIONS.MANAGE_USERS, label: 'Administrar usuarios, grupos y permisos', section: 'Administrar' },
     ],
   },
-  {
-    category: 'Ejecución de Análisis por Motor',
-    perms: [
-      { key: PERMISSIONS.RUN_SUBS_ANALYSIS, label: 'Ejecutar Análisis de Churn' },
-      { key: PERMISSIONS.RUN_CRM_ANALYSIS, label: 'Ejecutar Análisis de CRM' },
-      { key: PERMISSIONS.RUN_SUPPORT_ANALYSIS, label: 'Ejecutar Análisis de Support' },
-    ],
-  },
-  {
-    category: 'Acciones & Privilegios Especiales',
-    perms: [
-      { key: PERMISSIONS.IMPORT_DATA, label: 'Importar archivos CSV (comodín global)' },
-      { key: PERMISSIONS.RUN_CALCULATIONS, label: 'Ejecutar Cálculos y Motores (comodín global)' },
-      { key: PERMISSIONS.RUN_LIFETIME, label: 'Ejecutar Motor Kaplan-Meier' },
-      { key: PERMISSIONS.MANAGE_ETA, label: 'Administrar Maestro ETA' },
-      { key: PERMISSIONS.MANAGE_CATALOGOS, label: 'Administrar Catálogos (planes, zonas, sites…)' },
-      { key: PERMISSIONS.MANAGE_SUPPORT_USERS, label: 'Administrar Usuarios de Soporte (directorio y departamentos)' },
-      { key: PERMISSIONS.MANAGE_USERS, label: 'Administrar Usuarios y Seguridad' },
-    ],
-  },
-] as const;
+];
+
+/** Cuántos permisos hay en total, para el contador del editor. */
+export const TOTAL_PERMISSIONS = PERMISSION_GROUPS.reduce(
+  (total, group) => total + group.perms.length,
+  0,
+);
 
 /**
  * Permisos que habilitan cada acción del módulo de Importaciones.
