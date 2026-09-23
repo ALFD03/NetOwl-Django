@@ -665,6 +665,18 @@ leen del cuerpo y cómo se serializa la fila, y eso lo declara el diccionario
 `CATALOGOS`. Añadir un catálogo es añadir una entrada ahí y una pestaña en la
 interfaz.
 
+**Dos permisos, uno por mitad.** Cada entrada de `CATALOGOS` declara su
+`permiso`: `can_manage_catalogo_comercial` para planes, planes reguladores e
+ignorados (y la pestaña de productos por registrar), y
+`can_manage_catalogo_operacional` para zonas, sites, estados y coordinadores. Los
+mantienen equipos distintos, y las dos mitades no se referencian entre sí, así
+que cada formulario se completa con lo que su permiso ya envía. La página abre
+con cualquiera de los dos y solo envía las filas del que se tiene; los endpoints
+de escritura comprueban el permiso del `tipo` concreto y responden **403** si es
+de la otra mitad. La migración `config/0006` renombró el antiguo
+`can_manage_catalogos` a comercial y copió su valor al operacional, así que nadie
+perdió acceso con el cambio.
+
 - `GET /subscriptions/config/` — la página. Acepta `?nuevo_plan=<nombre>`, que
   abre el formulario de plan ya relleno; es a donde lleva el aviso de la
   importación. Incluye `pendientes` (lo ya importado que no está en el catálogo),

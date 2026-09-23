@@ -11,6 +11,13 @@ como se serializa la fila, y eso es lo que declara `CATALOGOS`.
 Toda escritura llama a `fixtures.reset_cache()`: el catalogo se lee cacheado
 —el worker de Celery es otro proceso— y sin esto una edicion tardaria hasta un
 minuto en verse, o no se veria nunca en el proceso que ya la tenia leida.
+
+Los catalogos se reparten entre dos permisos, porque los mantienen equipos
+distintos: el **comercial** (planes, planes reguladores, ignorados y la lista de
+productos por registrar) y el **operacional** (zonas, sites, estados y
+coordinadores). Cada entrada de `CATALOGOS` declara el suyo; la pantalla abre
+con cualquiera de los dos y solo envia las pestanas del que se tiene, y cada
+escritura comprueba el del catalogo que toca, no el de la pantalla.
 """
 
 from __future__ import annotations
@@ -225,17 +232,50 @@ def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:
         fila.creado_por = request.user
 
 
-# Un catalogo = un modelo, como se sirve y como se lee del cuerpo. Anadir uno
-# nuevo es anadir una entrada aqui y una pestana en la interfaz.
+PERMISO_COMERCIAL = "can_manage_catalogo_comercial"
+PERMISO_OPERACIONAL = "can_manage_catalogo_operacional"
+
+# Un catalogo = un modelo, como se sirve, como se lee del cuerpo y que permiso
+# lo administra. Anadir uno nuevo es anadir una entrada aqui y una pestana en
+# la interfaz.
 CATALOGOS: dict[str, dict[str, Any]] = {
-    "planes": {"modelo": Plan, "serializar": _plan, "aplicar": _aplicar_plan, "etiqueta": "plan"},
-    "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador"},
-    "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona"},
-    "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site"},
-    "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado"},
-    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_nombre, "etiqueta": "coordinador"},
-    "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "producto ignorado"},
+    "planes": {"modelo": Plan, "serializar": _plan, "aplicar": _aplicar_plan, "etiqueta": "plan", "permiso": PERMISO_COMERCIAL},
+    "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador", "permiso": PERMISO_COMERCIAL},
+    "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "producto ignorado", "permiso": PERMISO_COMERCIAL},
+    "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "permiso": PERMISO_OPERACIONAL},
+    "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_OPERACIONAL},
+    "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado", "permiso": PERMISO_OPERACIONAL},
+    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_nombre, "etiqueta": "coordinador", "permiso": PERMISO_OPERACIONAL},
 }
+
+
+def _puede(request, permiso: str) -> bool:
+    """Si el usuario de la peticion tiene `permiso` (superusuario incluido)."""
+    if request.user.is_superuser:
+        return True
+    perfil = getattr(request.user, "profile", None)
+    return bool(perfil and perfil.has_permission(permiso))
+
+
+def _catalogo_permitido(request, data: dict) -> tuple[dict[str, Any] | None, JsonResponse | None]:
+    """El catalogo que pide el cuerpo, o la respuesta de error si no se puede tocar.
+
+    Los endpoints de escritura dejan pasar a quien tenga cualquiera de los dos
+    permisos; aqui se exige el del catalogo concreto, que es lo que impide que
+    el grupo operacional edite un plan mandando `tipo: "planes"` a mano.
+    """
+    catalogo = CATALOGOS.get(str(data.get("tipo") or ""))
+    if catalogo is None:
+        return None, JsonResponse({"status": "error", "message": "Catálogo desconocido."}, status=400)
+    if not _puede(request, catalogo["permiso"]):
+        return None, JsonResponse(
+            {
+                "status": "error",
+                "message": f"Acceso denegado. Se requiere el privilegio: {catalogo['permiso']}.",
+            },
+            status=403,
+        )
+    return catalogo, None
 
 
 def _listado(nombre: str) -> list[dict[str, Any]]:
@@ -254,43 +294,51 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
 # --- Vistas -----------------------------------------------------------------
 
 @login_required
-@permission_required('can_manage_catalogos')
+@permission_required(PERMISO_COMERCIAL, PERMISO_OPERACIONAL)
 def catalogos_view(request):
     """Pantalla de configuracion de los catalogos.
+
+    Solo se envian los catalogos del permiso que se tiene: los del otro llegan
+    como listas vacias y la interfaz oculta sus pestanas. `comercial` y
+    `operacional` le dicen cuales mostrar sin que tenga que deducirlo de que
+    una lista venga vacia, que tambien puede ser un catalogo sin filas.
 
     `?nuevo_plan=<nombre>` abre el formulario de plan ya relleno con ese
     nombre: es a donde lleva el aviso de la importacion cuando encuentra un
     producto sin catalogar, para no obligar a copiarlo a mano.
     """
+    comercial = _puede(request, PERMISO_COMERCIAL)
+    operacional = _puede(request, PERMISO_OPERACIONAL)
+
     props = {
-        "planes": _listado("planes"),
-        "reguladores": _listado("reguladores"),
-        "zonas": _listado("zonas"),
-        "sites": _listado("sites"),
-        "estados": _listado("estados"),
-        "coordinadores": _listado("coordinadores"),
-        "ignorados": _listado("ignorados"),
+        nombre: _listado(nombre) if _puede(request, catalogo["permiso"]) else []
+        for nombre, catalogo in CATALOGOS.items()
+    }
+    props.update({
+        "comercial": comercial,
+        "operacional": operacional,
         "tecnologias": [{"value": v, "label": t} for v, t in TECNOLOGIA_CHOICES],
         "tiposPersona": [{"value": v, "label": t} for v, t in TIPO_PERSONA_CHOICES],
-        "nuevoPlan": (request.GET.get("nuevo_plan") or "").strip(),
+        "nuevoPlan": (request.GET.get("nuevo_plan") or "").strip() if comercial else "",
         "section": "catalogos",
-    }
+    })
 
     # Lo que ya esta importado y hoy no esta en el catalogo. Es la razon de ser
-    # de la pantalla: enterarse de que falta algo sin esperar al proximo
+    # de la mitad comercial: enterarse de que falta algo sin esperar al proximo
     # analisis. Si la consulta falla (entorno sin datos aun) no se rompe la
     # pagina por ello.
-    try:
-        props["pendientes"] = productos_fuera_de_catalogo()
-    except Exception:
-        logger.exception("No se pudieron calcular los productos fuera de catalogo")
-        props["pendientes"] = []
+    props["pendientes"] = []
+    if comercial:
+        try:
+            props["pendientes"] = productos_fuera_de_catalogo()
+        except Exception:
+            logger.exception("No se pudieron calcular los productos fuera de catalogo")
 
     return render_inertia(request, "Subscriptions/Catalogos", clean_json_props(props))
 
 
 @login_required
-@permission_required('can_manage_catalogos')
+@permission_required(PERMISO_COMERCIAL, PERMISO_OPERACIONAL)
 @ratelimit(key='ip', rate='60/m', block=True)
 @require_POST
 def api_catalogo_guardar(request):
@@ -300,9 +348,9 @@ def api_catalogo_guardar(request):
     except ValueError:
         return JsonResponse({"status": "error", "message": "JSON invalido."}, status=400)
 
-    catalogo = CATALOGOS.get(str(data.get("tipo") or ""))
-    if catalogo is None:
-        return JsonResponse({"status": "error", "message": "Catálogo desconocido."}, status=400)
+    catalogo, rechazo = _catalogo_permitido(request, data)
+    if rechazo is not None:
+        return rechazo
 
     fila_id = data.get("id")
     if fila_id:
@@ -332,7 +380,7 @@ def api_catalogo_guardar(request):
 
 
 @login_required
-@permission_required('can_manage_catalogos')
+@permission_required(PERMISO_COMERCIAL, PERMISO_OPERACIONAL)
 @ratelimit(key='ip', rate='60/m', block=True)
 @require_POST
 def api_catalogo_eliminar(request):
@@ -347,9 +395,9 @@ def api_catalogo_eliminar(request):
     except ValueError:
         return JsonResponse({"status": "error", "message": "JSON invalido."}, status=400)
 
-    catalogo = CATALOGOS.get(str(data.get("tipo") or ""))
-    if catalogo is None:
-        return JsonResponse({"status": "error", "message": "Catálogo desconocido."}, status=400)
+    catalogo, rechazo = _catalogo_permitido(request, data)
+    if rechazo is not None:
+        return rechazo
 
     fila = catalogo["modelo"].objects.filter(pk=data.get("id")).first()
     if fila is None:

@@ -394,6 +394,12 @@ export interface SubscriptionCatalogosProps {
   coordinadores: CatalogoNombrado[];
   ignorados: CatalogoProductoIgnorado[];
   pendientes: ProductoPendiente[];
+  /**
+   * Qué mitad del catálogo administra el usuario. Las listas de la otra llegan
+   * vacías, y sus pestañas se ocultan por estos flags y no por estar vacías.
+   */
+  comercial: boolean;
+  operacional: boolean;
   tecnologias: CatalogoOption[];
   tiposPersona: CatalogoOption[];
   /** `?nuevo_plan=` — abre el formulario de plan ya relleno con ese nombre. */

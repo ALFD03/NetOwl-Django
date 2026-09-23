@@ -187,7 +187,10 @@ and the copy.
 
 `pages/Subscriptions/Catalogos.tsx` edits the plan / zone / site / state /
 coordinator tables that used to be `data/Planes.json` and `data/Zonas.json`. It
-sits behind `can_manage_catalogos` and is the only place a plan is classified —
+sits behind two permissions — `can_manage_catalogo_comercial` (pending products,
+plans, regulator plans, ignored) and `can_manage_catalogo_operacional` (zones,
+sites, states, coordinators); the page opens with either and shows only the tabs
+of the one held — and it is the only place a plan is classified —
 the ETA screen no longer keeps a second, overriding copy of that classification,
 only its per-subscription exceptions.
 

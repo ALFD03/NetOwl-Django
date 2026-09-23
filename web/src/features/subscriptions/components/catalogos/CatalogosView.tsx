@@ -38,6 +38,11 @@ import {
  * La primera pestaña no es un catálogo sino la lista de lo que falta: los
  * productos que ya están importados y que ningún plan reconoce. Es lo que
  * bloquea una importación o un análisis, y se resuelve desde ahí mismo.
+ *
+ * Las pestañas se reparten entre dos permisos: la mitad comercial (por
+ * registrar, planes, reguladores, ignorados) y la operacional (zonas, sites,
+ * estados, coordinadores). Solo se pintan las del permiso que se tiene; el
+ * servidor tampoco envía las filas de la otra ni deja escribir en ella.
  */
 export function CatalogosView({
   planes,
@@ -48,11 +53,13 @@ export function CatalogosView({
   coordinadores,
   ignorados,
   pendientes,
+  comercial,
+  operacional,
   tecnologias,
   tiposPersona,
   nuevoPlan,
 }: SubscriptionCatalogosProps) {
-  const c = useCatalogos({ sites, estados, nuevoPlan });
+  const c = useCatalogos({ sites, estados, nuevoPlan, comercial });
 
   const enviar = (event: FormEvent, accion: () => void) => {
     event.preventDefault();
@@ -227,14 +234,24 @@ export function CatalogosView({
               activeKey={c.vista}
               onChange={(key) => c.setVista(key as CatalogoVista)}
               options={[
-                { key: 'pendientes', label: `Por registrar (${pendientes.length})`, icon: AlertTriangle },
-                { key: 'planes', label: `Planes (${planes.length})`, icon: BookMarked },
-                { key: 'reguladores', label: `Planes reguladores (${reguladores.length})`, icon: FileSpreadsheet },
-                { key: 'zonas', label: `Zonas (${zonas.length})`, icon: Network },
-                { key: 'sites', label: `Sites (${sites.length})`, icon: MapPin },
-                { key: 'estados', label: `Estados (${estados.length})`, icon: MapPin },
-                { key: 'coordinadores', label: `Coordinadores (${coordinadores.length})`, icon: UserCheck },
-                { key: 'ignorados', label: `Ignorados (${ignorados.length})`, icon: EyeOff },
+                ...(comercial
+                  ? [
+                      { key: 'pendientes', label: `Por registrar (${pendientes.length})`, icon: AlertTriangle },
+                      { key: 'planes', label: `Planes (${planes.length})`, icon: BookMarked },
+                      { key: 'reguladores', label: `Planes reguladores (${reguladores.length})`, icon: FileSpreadsheet },
+                    ]
+                  : []),
+                ...(operacional
+                  ? [
+                      { key: 'zonas', label: `Zonas (${zonas.length})`, icon: Network },
+                      { key: 'sites', label: `Sites (${sites.length})`, icon: MapPin },
+                      { key: 'estados', label: `Estados (${estados.length})`, icon: MapPin },
+                      { key: 'coordinadores', label: `Coordinadores (${coordinadores.length})`, icon: UserCheck },
+                    ]
+                  : []),
+                ...(comercial
+                  ? [{ key: 'ignorados', label: `Ignorados (${ignorados.length})`, icon: EyeOff }]
+                  : []),
               ]}
             />
 

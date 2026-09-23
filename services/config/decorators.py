@@ -37,7 +37,8 @@ LANDING_ROUTES = [
     ('imports:crm', ('can_view_imports', 'can_view_imports_crm')),
     ('imports:support', ('can_view_imports', 'can_view_imports_support')),
     ('imports:history', ('can_view_imports', 'can_view_import_history')),
-    ('subscriptions:catalogos', ('can_manage_catalogos',)),
+    ('subscriptions:catalogos', ('can_manage_catalogo_comercial',)),
+    ('subscriptions:catalogos', ('can_manage_catalogo_operacional',)),
     ('support:usuarios', ('can_manage_support_users',)),
     ('config:user_management', ('can_manage_users',)),
 ]

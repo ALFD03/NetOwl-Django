@@ -68,6 +68,8 @@ interface Args {
   estados: CatalogoNombrado[];
   /** Nombre que llega en `?nuevo_plan=`: abre el alta ya rellena. */
   nuevoPlan: string;
+  /** Si administra la mitad comercial; sin ella se abre en la operacional. */
+  comercial: boolean;
 }
 
 /**
@@ -81,8 +83,11 @@ interface Args {
  * los listados dependen unos de otros (borrar un site cambia lo que puede
  * elegir una zona) y el servidor ya devuelve todo junto.
  */
-export function useCatalogos({ sites, estados, nuevoPlan }: Args) {
-  const [vista, setVista] = useState<CatalogoVista>(() => (nuevoPlan ? 'planes' : 'pendientes'));
+export function useCatalogos({ sites, estados, nuevoPlan, comercial }: Args) {
+  const [vista, setVista] = useState<CatalogoVista>(() => {
+    if (!comercial) return 'zonas';
+    return nuevoPlan ? 'planes' : 'pendientes';
+  });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

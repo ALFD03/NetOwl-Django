@@ -46,7 +46,8 @@ VIEW_PERMISSION_FIELDS = [
 # Permisos de accion: por defecto cerrados (False), como los de lectura.
 ACTION_PERMISSION_FIELDS = [
     'can_import_data', 'can_run_calculations', 'can_run_lifetime',
-    'can_manage_eta', 'can_manage_users', 'can_manage_catalogos',
+    'can_manage_eta', 'can_manage_users',
+    'can_manage_catalogo_comercial', 'can_manage_catalogo_operacional',
     'can_manage_support_users',
     # Cargas de CSV, una por modulo de origen.
     'can_import_subs', 'can_import_crm', 'can_import_support',
@@ -109,11 +110,17 @@ class PermissionMatrix(models.Model):
     can_run_lifetime = models.BooleanField(default=False)
     can_manage_eta = models.BooleanField(default=False)
     can_manage_users = models.BooleanField(default=False)
-    # Catalogos de referencia (planes, zonas, sites, estados, coordinadores).
-    can_manage_catalogos = models.BooleanField(default=False)
-    # Directorio de usuarios de soporte y sus departamentos. Va aparte de
-    # `can_manage_catalogos`: quien mantiene el catalogo comercial no es
-    # necesariamente quien sabe quien trabaja en soporte.
+    # Catalogos de referencia, partidos en dos porque los mantienen equipos
+    # distintos. El comercial es el vocabulario de lo que se vende: planes,
+    # planes reguladores, productos ignorados y la lista de productos por
+    # registrar. El operacional es la geografia de la red: zonas, sites,
+    # estados y coordinadores. Las dos mitades no se referencian entre si, asi
+    # que cada formulario se completa sin necesitar la otra.
+    can_manage_catalogo_comercial = models.BooleanField(default=False)
+    can_manage_catalogo_operacional = models.BooleanField(default=False)
+    # Directorio de usuarios de soporte y sus departamentos. Va aparte de los
+    # catalogos de suscripciones: quien los mantiene no es necesariamente quien
+    # sabe quien trabaja en soporte.
     can_manage_support_users = models.BooleanField(default=False)
 
     # --- Cargas de CSV por modulo ---
