@@ -5,12 +5,21 @@ import { RefreshCw, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
+import { useObjetivosConfig } from '../../hooks/useObjetivos';
 import {
   calcComercial,
   completionBar,
   completionTone,
   type CommercialNode,
 } from '../../lib/commercial';
+import {
+  OBJETIVOS_POR_DEFECTO,
+  TEXTO_TONO,
+  metaDeBase,
+  objetivoGeneral,
+  tonoChurn,
+  tonoCrecimiento,
+} from '../../lib/objetivos';
 
 export interface NodePerformanceTableProps<T extends CommercialNode> {
   nodes: T[];
@@ -47,6 +56,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
   clampCompletion = false,
   renderRowAction,
 }: NodePerformanceTableProps<T>) {
+  const { semaforo } = useObjetivosConfig();
   const num = (extra?: string) => cn('py-3 text-right', mono && 'font-mono', extra);
 
   return (
@@ -73,12 +83,19 @@ export function NodePerformanceTable<T extends CommercialNode>({
         </thead>
         <tbody className="divide-y divide-slate-800/50 text-xs font-bold">
           {nodes.map((node, idx) => {
+            const inicio = Number(node.activos_inicio ?? 0);
+            // Los hooks de los reportes resuelven la meta de cada nodo; el
+            // respaldo solo cubre un uso que no pase por ellos.
+            const meta = node.meta
+              ?? metaDeBase(inicio, objetivoGeneral(OBJETIVOS_POR_DEFECTO, ''));
             const metrics = calcComercial(
-              Number(node.activos_inicio ?? 0),
+              inicio,
               Number(node.activos_final ?? 0),
+              meta.metaCrecimiento,
               { clamp: clampCompletion },
             );
             const growth = Number(node.crecimiento ?? 0);
+            const churn = Number(node.churn_bruto_pct ?? 0);
 
             return (
               <tr key={idx} className="group transition-colors hover:bg-white/5">
@@ -90,19 +107,27 @@ export function NodePerformanceTable<T extends CommercialNode>({
                 <td className={num('text-emerald-400')}>+{formatInteger(node.nuevos)}</td>
                 <td className={num('text-blue-400')}>{formatInteger(node.reactivaciones)}</td>
                 <td className={num('text-rose-500')}>-{formatInteger(node.bajas)}</td>
-                <td className={num('text-rose-500')}>{formatTwoDecimals(node.churn_bruto_pct)}%</td>
-                <td className={num(growth >= 4 ? 'text-emerald-400' : growth >= 0 ? 'text-amber-400' : 'text-rose-400')}>
+                <td
+                  className={num(TEXTO_TONO[tonoChurn(churn, meta.churnPct, semaforo)])}
+                  title={`Objetivo de churn: ${formatTwoDecimals(meta.churnPct)}%`}
+                >
+                  {formatTwoDecimals(node.churn_bruto_pct)}%
+                </td>
+                <td
+                  className={num(TEXTO_TONO[tonoCrecimiento(growth, meta.crecimientoPct, semaforo)])}
+                  title={`Objetivo de crecimiento: ${formatTwoDecimals(meta.crecimientoPct)}%`}
+                >
                   {formatTwoDecimals(node.crecimiento)}%
                 </td>
                 <td className={num('font-black text-amber-500/80')}>{formatInteger(metrics.faltante)}</td>
                 <td className="py-3 text-right">
                   <div className="flex flex-col items-end">
-                    <span className={cn('font-black', mono && 'font-mono', completionTone(metrics.tasaCumplimiento))}>
+                    <span className={cn('font-black', mono && 'font-mono', completionTone(metrics.tasaCumplimiento, semaforo))}>
                       {formatTwoDecimals(metrics.tasaCumplimiento)}%
                     </span>
                     <div className="mt-1 h-1 w-12 overflow-hidden rounded-full bg-slate-800">
                       <div
-                        className={cn('h-full', completionBar(metrics.tasaCumplimiento))}
+                        className={cn('h-full', completionBar(metrics.tasaCumplimiento, semaforo))}
                         style={{ width: `${Math.min(Math.max(metrics.tasaCumplimiento, 0), 100)}%` }}
                       />
                     </div>

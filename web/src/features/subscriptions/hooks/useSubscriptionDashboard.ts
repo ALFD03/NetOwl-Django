@@ -11,6 +11,7 @@ import { formatPeriodoLabel } from '@/shared/utils';
 import { getDoughnutOptions, handleHover, type DoughnutHoverValue } from '@/shared/charts';
 import { buildChurnData, buildGrowthData, buildZoneDonut } from '@/features/subscriptions/charts/dashboardCharts';
 import type { SubscriptionDashboardProps } from '@/features/subscriptions/types';
+import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
 
 export function useSubscriptionDashboard({ periodos, dimensiones = {} }: SubscriptionDashboardProps) {
   const [hoveredChurnZone, setHoveredChurnZone] = useState<DoughnutHoverValue | null>(null);
@@ -26,6 +27,16 @@ export function useSubscriptionDashboard({ periodos, dimensiones = {} }: Subscri
   const avgIndiceReemplazo = average((p) => p.indice_reemplazo_react_pct);
   const avgSuspensiones = average((p) => p.porcentaje_suspensiones);
   const avgWinback = average((p) => p.tasa_winback_pct);
+
+  // Los promedios mezclan meses y cada mes pudo tener su objetivo: se comparan
+  // contra el promedio de esos mismos objetivos, no contra el de hoy.
+  const objetivos = useObjetivos();
+  const objetivoPromedio = periodos.length
+    ? {
+        crecimiento: average((p) => objetivos.general(p.periodo_reporte).crecimiento),
+        churn: average((p) => objetivos.general(p.periodo_reporte).churn),
+      }
+    : objetivos.general('');
 
   const churnRaw = useMemo(() => (dimensiones.zona ?? []).map((z) => ({ label: z.valor, original: z.churn_bruto_pct })), [dimensiones.zona]);
   const growthRaw = useMemo(() => (dimensiones.zona ?? []).map((z) => ({ label: z.valor, original: z.crecimiento })), [dimensiones.zona]);
@@ -58,5 +69,5 @@ export function useSubscriptionDashboard({ periodos, dimensiones = {} }: Subscri
     { label: 'Suspensiones', data: reversed.map((p) => Number(p.corte_impagado) || 0), borderColor: CHART_PALETTE[0], backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
     { label: 'Recuperaciones', data: reversed.map((p) => Number(p.react_4_P) || 0), borderColor: CHART_PALETTE[4], backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
   ] };
-  return { latest, avgChurnNeto, avgChurnBruto, avgCrecimiento, avgTasaAporte, avgIndiceReemplazo, avgSuspensiones, avgWinback, labels, reversed, churnChartData: buildChurnData(reversed, labels), growthChartData: buildGrowthData(reversed, labels), aporteReemplazoData, suspensionWinbackData, churnDonutData, growthDonutData, churnDonutOptions, growthDonutOptions };
+  return { latest, objetivoPromedio, semaforo: objetivos.semaforo, avgChurnNeto, avgChurnBruto, avgCrecimiento, avgTasaAporte, avgIndiceReemplazo, avgSuspensiones, avgWinback, labels, reversed, churnChartData: buildChurnData(reversed, labels), growthChartData: buildGrowthData(reversed, labels), aporteReemplazoData, suspensionWinbackData, churnDonutData, growthDonutData, churnDonutOptions, growthDonutOptions };
 }

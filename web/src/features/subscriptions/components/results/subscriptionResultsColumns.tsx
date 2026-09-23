@@ -2,27 +2,61 @@
 
 import { StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatPeriodoLabel, formatTwoDecimals } from '@/shared/utils/formatters';
-import type { SubscriptionCierre, SubscriptionResultDimensionRow } from '../../types';
+import {
+  TEXTO_TONO,
+  cumplimientoDelPeriodo,
+  tonoCumplimiento,
+  type ResolverObjetivos,
+} from '../../lib/objetivos';
+import type { SemaforoObjetivos, SubscriptionCierre, SubscriptionResultDimensionRow } from '../../types';
 
 const int = formatInteger;
 const dec = formatTwoDecimals;
 
-const meta_ingresos = (activos_inicio: number) => activos_inicio * 0.06;
-const meta_ventas = (activos_inicio: number) => activos_inicio * 0.06;
-const meta_cierre = (activos_inicio: number) => activos_inicio * 1.06;
-/** Top-level period history. */
-export const PERIOD_COLUMNS: Column<SubscriptionCierre>[] = [
-  { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodoLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
-  { header: 'Inicio', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
-  { header: 'Final', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
-  { header: 'Instalaciones', accessor: (r) => <span className="font-semibold text-emerald-400">+{int(r.nuevos_mes)}</span>, align: 'right', sortKey: 'nuevos_mes' },
-  { header: 'Bajas', accessor: (r) => <span className="font-semibold text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
-  { header: 'Churn Rate', accessor: (r) => <span className="font-bold text-rose-400">{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
-  { header: 'Crecimiento', accessor: (r) => <span className="font-bold text-emerald-400">{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
-  { header: 'Cumpli. Ingresos', accessor: (r) => <span className={`font-semibold ${Number(dec((r.adiciones_brutas/meta_ingresos(r.activos_inicio))*100)) >= 100 ? 'text-emerald-400' : Number(dec((r.adiciones_brutas/meta_ingresos(r.activos_inicio))*100)) >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>{dec((r.adiciones_brutas/meta_ingresos(r.activos_inicio))*100)} %</span>, align: 'right', sortKey: 'cumplimiento_ingresos' },
-  { header: 'Cumpli. Ventas', accessor: (r) => <span className={`font-semibold ${Number(dec((r.nuevos_mes/meta_ventas(r.activos_inicio))*100)) >= 100 ? 'text-emerald-400' : Number(dec((r.nuevos_mes/meta_ventas(r.activos_inicio))*100)) >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>{dec((r.nuevos_mes/meta_ventas(r.activos_inicio))*100)} %</span>, align: 'right', sortKey: 'cumplimiento_ventas' },
-  { header: 'Cumpli. Cierre', accessor: (r) => <span className={`font-semibold ${Number(dec((r.activos_final/meta_cierre(r.activos_inicio))*100)) >= 100 ? 'text-emerald-400' : Number(dec((r.activos_final/meta_cierre(r.activos_inicio))*100)) >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>{dec((r.activos_final/meta_cierre(r.activos_inicio))*100)} %</span>, align: 'right', sortKey: 'cumplimiento_cierre' },
-];
+/**
+ * Top-level period history.
+ *
+ * Una fábrica y no una constante: el color del cumplimiento depende del
+ * semáforo del catálogo. Los `cumplimiento_*` los añade a cada fila
+ * `conCumplimiento`, con el objetivo de su mes; por eso las columnas pueden
+ * ordenarse por ellos.
+ */
+export function buildPeriodColumns(semaforo: SemaforoObjetivos): Column<SubscriptionCierre>[] {
+  const cumplimiento = (valor: number) => (
+    <span className={`font-semibold ${TEXTO_TONO[tonoCumplimiento(valor, semaforo)]}`}>{dec(valor)} %</span>
+  );
+  return [
+    { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodoLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
+    { header: 'Inicio', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
+    { header: 'Final', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
+    { header: 'Instalaciones', accessor: (r) => <span className="font-semibold text-emerald-400">+{int(r.nuevos_mes)}</span>, align: 'right', sortKey: 'nuevos_mes' },
+    { header: 'Bajas', accessor: (r) => <span className="font-semibold text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
+    { header: 'Churn Rate', accessor: (r) => <span className="font-bold text-rose-400">{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
+    { header: 'Crecimiento', accessor: (r) => <span className="font-bold text-emerald-400">{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
+    { header: 'Cumpli. Ingresos', accessor: (r) => cumplimiento(r.cumplimiento_ingresos), align: 'right', sortKey: 'cumplimiento_ingresos' },
+    { header: 'Cumpli. Ventas', accessor: (r) => cumplimiento(r.cumplimiento_ventas), align: 'right', sortKey: 'cumplimiento_ventas' },
+    { header: 'Cumpli. Cierre', accessor: (r) => cumplimiento(r.cumplimiento_cierre), align: 'right', sortKey: 'cumplimiento_cierre' },
+  ];
+}
+
+/**
+ * Las filas de cierres con su cumplimiento, cada una contra el objetivo de su
+ * mes. El backend no los envía: son objetivos, no métricas del análisis.
+ */
+export function conCumplimiento(
+  periodos: SubscriptionCierre[],
+  objetivos: ResolverObjetivos,
+): SubscriptionCierre[] {
+  return periodos.map((periodo) => {
+    const c = cumplimientoDelPeriodo(periodo, objetivos.general(periodo.periodo_reporte));
+    return {
+      ...periodo,
+      cumplimiento_ingresos: c.cumplimientoIngresos,
+      cumplimiento_ventas: c.cumplimientoVentas,
+      cumplimiento_cierre: c.cumplimientoCierre,
+    };
+  });
+}
 
 /** Full dimensional breakdown shown inside the period modal. */
 export const DIMENSION_COLUMNS: Column<SubscriptionResultDimensionRow>[] = [

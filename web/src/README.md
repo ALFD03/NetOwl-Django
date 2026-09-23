@@ -205,9 +205,26 @@ written when it does: the check runs before the truncate, so the previous data
 is intact and the file can be re-uploaded once the decisions are made.
 
 
+## Commercial objectives are applied here, not stored
+
+The growth target and the maximum churn (6% / 3% by default) are catalogue data served in
+the `objetivos` prop of the subscriptions pages. `features/subscriptions/lib/objetivos.ts`
+is the only place that resolves them — meta, completion and colour — and
+`hooks/useObjetivos` reads them from the page. Never hardcode a target or a colour threshold
+again: that is how the app ended up with the 6% written in eight files and three different
+"green" cut-offs.
+
+Inheritance looks upwards only: zone → coordinator → site → state → general. A zone row
+starts at the zone, a coordinator total at the coordinator, a site total at the site, and
+global totals use the month's general objective. Group metas are the sum of their zones'
+metas resolved from the group's level, so a group never contradicts its parts. The report
+hooks (`useSalesReportData`, `useBusinessUnitsData`) attach a `meta` to every node and group;
+components only paint.
+
 ## Careful: the two reports disagree on completion
 
-`features/subscriptions/lib/commercial.ts` holds the single `calcComercial`. It takes a
+`features/subscriptions/lib/commercial.ts` holds the single `calcComercial`. It receives the
+absolute growth meta (`Meta.metaCrecimiento`) and takes a
 `clamp` option because Sales Report and Business Units have always computed
 `tasaCumplimiento` differently — Sales Report clamps to `[0, 100]`, Business Units does
 not, which is what lets its "Meta Cumplida" badge fire above 100%. Both behaviours are

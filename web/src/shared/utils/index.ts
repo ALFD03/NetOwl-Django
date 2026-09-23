@@ -2,16 +2,6 @@
 
 export * from './formatters';
 
-
-
-export const getChurnColor = (value: number): 'green' | 'yellow' | 'red' => {
-  if (value < 3) return 'green';
-  if (value < 4) return 'yellow';
-  return 'red';
-};
-
-export const getCrecimientoColor = (value: number): 'red' | 'yellow' | 'green' => {
-  if (value < 0) return 'red';
-  if (value < 2) return 'yellow';
-  return 'green';
-};
+// Aqui vivian `getChurnColor` y `getCrecimientoColor`, con el 3% y el 2%
+// escritos a mano. Los colores de churn y crecimiento dependen ahora del
+// objetivo del mes: ver `features/subscriptions/lib/objetivos.ts`.

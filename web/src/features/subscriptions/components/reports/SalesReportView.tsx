@@ -68,6 +68,7 @@ export function SalesReportView({ sites, period, diaSeleccionado = false }: Sale
                     bajas={tech.dynamic.bajas}
                     crecimiento={tech.dynamic.crecimiento}
                     churnRate={tech.dynamic.churn_rate}
+                    meta={tech.dynamic.meta}
                     clampCompletion
                   />
 

@@ -288,6 +288,53 @@ export interface LifetimeDimensionInfo {
 // Planes, zonas, sites, estados y coordinadores. Antes eran `Planes.json` y
 // `Zonas.json`; hoy son tablas que se editan en `/subscriptions/config/`.
 
+// --- Objetivos comerciales (ver features/subscriptions/lib/objetivos.ts) ---
+
+/**
+ * Un tramo con vigencia: vale desde `desde` (`YYYY-MM`, nulo = siempre) hasta
+ * que empieza el siguiente. Un valor nulo no fija esa métrica.
+ */
+export interface TramoObjetivo {
+  desde: string | null;
+  crecimiento: number | null;
+  churn: number | null;
+}
+
+export interface ValoresObjetivo {
+  crecimiento: number | null;
+  churn: number | null;
+}
+
+/**
+ * Umbrales de color, todos relativos al objetivo.
+ *
+ * El cumplimiento ya es relativo (% de la meta). Crecimiento y churn se miden en
+ * puntos respecto de su objetivo, para que los umbrales se muevan con él.
+ */
+export interface SemaforoObjetivos {
+  /** Cumplimiento (% de la meta) desde el que es verde / amarillo. */
+  cumpl_verde: number;
+  cumpl_amarillo: number;
+  /** Puntos por debajo del objetivo de crecimiento hasta los que sigue siendo verde / amarillo. */
+  crec_verde_margen: number;
+  crec_amarillo_margen: number;
+  /** Puntos por encima del objetivo de churn hasta los que sigue siendo verde / amarillo. */
+  churn_verde_margen: number;
+  churn_amarillo_margen: number;
+}
+
+/** Lo que envía `get_objetivos_config()`. Las entidades van por nombre. */
+export interface ObjetivosConfig {
+  general: TramoObjetivo[];
+  /** Excepciones de un mes concreto, por `YYYY-MM`. Sustituyen al general. */
+  meses: Record<string, ValoresObjetivo>;
+  estados: Record<string, TramoObjetivo[]>;
+  sites: Record<string, TramoObjetivo[]>;
+  coordinadores: Record<string, TramoObjetivo[]>;
+  zonas: Record<string, TramoObjetivo[]>;
+  semaforo: SemaforoObjetivos;
+}
+
 export type CatalogoTipo =
   | 'planes'
   | 'zonas'
@@ -295,7 +342,10 @@ export type CatalogoTipo =
   | 'estados'
   | 'coordinadores'
   | 'ignorados'
-  | 'reguladores';
+  | 'reguladores'
+  | 'objetivos'
+  | 'objetivos_mes'
+  | 'semaforo';
 
 export interface CatalogoOption {
   value: string;
@@ -379,6 +429,41 @@ export interface CatalogoProductoIgnorado {
   creado_en: string;
 }
 
+/** Nivel de un objetivo, de más alto a más bajo. */
+export type NivelObjetivoCatalogo = 'general' | 'estado' | 'site' | 'coordinador' | 'zona';
+
+/** Un tramo de objetivo tal y como lo edita la pestaña de objetivos. */
+export interface CatalogoObjetivo {
+  id: number;
+  nivel: NivelObjetivoCatalogo;
+  /** La fila de zona, site, estado o coordinador. Nulo en el general. */
+  entidad_id: number | null;
+  entidad: string;
+  /** `YYYY-MM`, o vacío si vale desde siempre. */
+  desde: string;
+  /** Nulo: esa métrica se hereda. */
+  crecimiento_pct: number | null;
+  churn_pct: number | null;
+  nota: string;
+  actualizado_por: string;
+  actualizado_en: string;
+}
+
+/** La excepción de un mes concreto al objetivo general. */
+export interface CatalogoObjetivoMes {
+  id: number;
+  periodo: string;
+  crecimiento_pct: number | null;
+  churn_pct: number | null;
+  nota: string;
+  actualizado_por: string;
+  actualizado_en: string;
+}
+
+export interface CatalogoSemaforo extends SemaforoObjetivos {
+  id: number;
+}
+
 /** Producto ya importado que hoy no está en el catálogo. */
 export interface ProductoPendiente {
   nombre: string;
@@ -393,6 +478,13 @@ export interface SubscriptionCatalogosProps {
   estados: CatalogoNombrado[];
   coordinadores: CatalogoNombrado[];
   ignorados: CatalogoProductoIgnorado[];
+  objetivos: CatalogoObjetivo[];
+  objetivos_mes: CatalogoObjetivoMes[];
+  /** Nulos sin el permiso comercial, que es el que administra los objetivos. */
+  semaforo: CatalogoSemaforo | null;
+  objetivosConfig: ObjetivosConfig | null;
+  /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
+  periodosCalculados: string[];
   pendientes: ProductoPendiente[];
   /**
    * Qué mitad del catálogo administra el usuario. Las listas de la otra llegan

@@ -5,12 +5,16 @@ import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { subscriptionsApi, type CatalogoPayload } from '@/shared/lib/api/subscriptions';
 import type {
   CatalogoNombrado,
+  CatalogoObjetivo,
+  CatalogoObjetivoMes,
   CatalogoPlan,
   CatalogoPlanRegulador,
   CatalogoProductoIgnorado,
   CatalogoSite,
   CatalogoTipo,
   CatalogoZona,
+  NivelObjetivoCatalogo,
+  SemaforoObjetivos,
 } from '@/features/subscriptions/types';
 
 /** Una fila en edición. Sin `id` es un alta. */
@@ -28,6 +32,33 @@ export type SiteDraft = { id?: number; nombre: string; orden: number };
 export type NombreDraft = { id?: number; nombre: string; tipo: 'estados' | 'coordinadores' };
 export type IgnoradoDraft = { id?: number; nombre: string; nota: string };
 
+/**
+ * Un tramo de objetivo en edición. Los porcentajes van como texto porque vacío
+ * significa algo —"se hereda"— y un `number` no puede estar vacío.
+ */
+export type ObjetivoDraft = {
+  id?: number;
+  nivel: NivelObjetivoCatalogo;
+  entidad_id: number | null;
+  /** `YYYY-MM`; vacío es "desde siempre". */
+  desde: string;
+  crecimiento_pct: string;
+  churn_pct: string;
+  nota: string;
+  /** El general desde siempre: no admite fecha ni valores vacíos. */
+  esBase?: boolean;
+};
+export type ObjetivoMesDraft = {
+  id?: number;
+  periodo: string;
+  crecimiento_pct: string;
+  churn_pct: string;
+  nota: string;
+};
+export type SemaforoDraft = SemaforoObjetivos;
+
+const comoTexto = (valor: number | null): string => (valor === null ? '' : String(valor));
+
 export type CatalogoVista =
   | 'pendientes'
   | 'planes'
@@ -36,7 +67,8 @@ export type CatalogoVista =
   | 'estados'
   | 'coordinadores'
   | 'ignorados'
-  | 'reguladores';
+  | 'reguladores'
+  | 'objetivos';
 
 const PLAN_VACIO: PlanDraft = {
   nombre: '',
@@ -103,6 +135,9 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
   const [nombreDraft, setNombreDraft] = useState<NombreDraft | null>(null);
   const [ignoradoDraft, setIgnoradoDraft] = useState<IgnoradoDraft | null>(null);
+  const [objetivoDraft, setObjetivoDraft] = useState<ObjetivoDraft | null>(null);
+  const [objetivoMesDraft, setObjetivoMesDraft] = useState<ObjetivoMesDraft | null>(null);
+  const [semaforoDraft, setSemaforoDraft] = useState<SemaforoDraft | null>(null);
   const [borrando, setBorrando] = useState<{ tipo: CatalogoTipo; id: number; nombre: string } | null>(null);
 
   const nuevoPlanVacio = () => setPlanDraft({ ...PLAN_VACIO });
@@ -155,6 +190,40 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
   const editarIgnorado = (fila: CatalogoProductoIgnorado) =>
     setIgnoradoDraft({ id: fila.id, nombre: fila.nombre, nota: fila.nota });
 
+  const nuevoObjetivo = (nivel: NivelObjetivoCatalogo) =>
+    setObjetivoDraft({
+      nivel,
+      entidad_id: null,
+      desde: '',
+      crecimiento_pct: '',
+      churn_pct: '',
+      nota: '',
+    });
+  const editarObjetivo = (fila: CatalogoObjetivo) =>
+    setObjetivoDraft({
+      id: fila.id,
+      nivel: fila.nivel,
+      entidad_id: fila.entidad_id,
+      desde: fila.desde,
+      crecimiento_pct: comoTexto(fila.crecimiento_pct),
+      churn_pct: comoTexto(fila.churn_pct),
+      nota: fila.nota,
+      esBase: fila.nivel === 'general' && !fila.desde,
+    });
+
+  const nuevoObjetivoMes = (periodo = '') =>
+    setObjetivoMesDraft({ periodo, crecimiento_pct: '', churn_pct: '', nota: '' });
+  const editarObjetivoMes = (fila: CatalogoObjetivoMes) =>
+    setObjetivoMesDraft({
+      id: fila.id,
+      periodo: fila.periodo,
+      crecimiento_pct: comoTexto(fila.crecimiento_pct),
+      churn_pct: comoTexto(fila.churn_pct),
+      nota: fila.nota,
+    });
+
+  const editarSemaforo = (semaforo: SemaforoObjetivos) => setSemaforoDraft({ ...semaforo });
+
   const cerrarFormularios = () => {
     setPlanDraft(null);
     setReguladorDraft(null);
@@ -162,6 +231,9 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
     setSiteDraft(null);
     setNombreDraft(null);
     setIgnoradoDraft(null);
+    setObjetivoDraft(null);
+    setObjetivoMesDraft(null);
+    setSemaforoDraft(null);
   };
 
   const guardar = async (tipo: CatalogoTipo, payload: CatalogoPayload) => {
@@ -212,6 +284,9 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
     siteDraft, setSiteDraft, nuevoSite, editarSite,
     nombreDraft, setNombreDraft, nuevoNombre, editarNombre,
     ignoradoDraft, setIgnoradoDraft, nuevoIgnorado, editarIgnorado,
+    objetivoDraft, setObjetivoDraft, nuevoObjetivo, editarObjetivo,
+    objetivoMesDraft, setObjetivoMesDraft, nuevoObjetivoMes, editarObjetivoMes,
+    semaforoDraft, setSemaforoDraft, editarSemaforo,
     borrando, setBorrando, confirmarBorrado,
     cerrarFormularios, guardar, ignorarProducto,
   };

@@ -2,7 +2,11 @@
 
 import { SummaryStrip } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
+import { useObjetivosConfig } from '../../hooks/useObjetivos';
 import { calcComercial } from '../../lib/commercial';
+import {
+  formatObjetivo, tonoChurn, tonoCrecimiento, tonoCumplimiento, type Meta,
+} from '../../lib/objetivos';
 
 export interface CommercialSummaryStripProps {
   /** First cell — the technology for Sales Report, the status for Business Units. */
@@ -13,6 +17,8 @@ export interface CommercialSummaryStripProps {
   crecimiento: number;
   churnRate: number;
   bajas: number;
+  /** Meta del grupo, resuelta por el hook del reporte desde su nivel. */
+  meta: Meta;
   mono?: boolean;
   /** Clamp completion to [0, 100]. See `calcComercial`. */
   clampCompletion?: boolean;
@@ -32,15 +38,16 @@ export function CommercialSummaryStrip({
   crecimiento,
   churnRate,
   bajas,
+  meta,
   mono = false,
   clampCompletion = false,
 }: CommercialSummaryStripProps) {
-  const metrics = calcComercial(activosInicio, activosFinal, { clamp: clampCompletion });
+  const { semaforo } = useObjetivosConfig();
+  const metrics = calcComercial(activosInicio, activosFinal, meta.metaCrecimiento, { clamp: clampCompletion });
 
-  const completionColor =
-    metrics.tasaCumplimiento >= 100 ? 'green' : metrics.tasaCumplimiento >= 60 ? 'yellow' : 'red';
-  const growthColor = crecimiento >= 4 ? 'green' : crecimiento >= 0 ? 'yellow' : 'red';
-  const churnColor = churnRate <= 3 ? 'green' : churnRate <= 4 ? 'yellow' : 'red';
+  const completionColor = tonoCumplimiento(metrics.tasaCumplimiento, semaforo);
+  const growthColor = tonoCrecimiento(crecimiento, meta.crecimientoPct, semaforo);
+  const churnColor = tonoChurn(churnRate, meta.churnPct, semaforo);
 
   return (
     <SummaryStrip
@@ -49,7 +56,7 @@ export function CommercialSummaryStrip({
       items={[
         { id: 'lead', label: leadLabel, value: leadValue, tone: 'brand' },
         { id: 'inicio', label: 'Base Inicio', value: formatInteger(activosInicio) },
-        { id: 'objetivo', label: 'Objetivo (6%)', value: `+${formatInteger(metrics.objetivo)}` },
+        { id: 'objetivo', label: `Objetivo (${formatObjetivo(meta.crecimientoPct)})`, value: `+${formatInteger(metrics.objetivo)}` },
         { id: 'esperado', label: 'Cierre Esperado', value: formatInteger(metrics.cierreEsperado) },
         { id: 'bajas', label: 'Bajas', value: formatInteger(bajas), tone: 'red' },
         {
@@ -67,7 +74,7 @@ export function CommercialSummaryStrip({
         },
         {
           id: 'churn',
-          label: 'Churn Rate',
+          label: `Churn (obj. ${formatObjetivo(meta.churnPct)})`,
           value: `${formatTwoDecimals(churnRate)}%`,
           tone: churnColor,
         },

@@ -17,6 +17,8 @@ export interface ZonaConfig {
   site: string;
   type: string;
   coordinador?: string;
+  /** Para la herencia de objetivos (ver `lib/objetivos.ts`). */
+  estado?: string;
 }
 
 export interface ZonasConfig {

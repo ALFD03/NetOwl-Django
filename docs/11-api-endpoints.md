@@ -93,8 +93,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/eta-report/tasa/actual/` | `can_view_eta` | 10/m | La última tasa publicada por el BCV. No es la del periodo y no se guarda: sirve para exportar a precio de hoy. **502** si el tercero falla |
 | POST | `api/eta-report/save-sub-config/` | `can_manage_eta` | — | Excepción individual: `orden` obligatorio |
 | POST | `api/eta-report/delete-sub-config/` | `can_manage_eta` | — | `{orden}` |
-| POST | `api/catalogos/guardar/` | el del `tipo` (comercial u operacional) | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido, **403** si el `tipo` es de la otra mitad |
-| POST | `api/catalogos/eliminar/` | el del `tipo` (comercial u operacional) | 60/m | `{tipo, id}`. **409** si tiene zonas asociadas |
+| POST | `api/catalogos/guardar/` | el del `tipo` (comercial u operacional) | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido, **403** si el `tipo` es de la otra mitad. Los tipos `objetivos`, `objetivos_mes` y `semaforo` (fila única: se ignora el `id`) van con el comercial |
+| POST | `api/catalogos/eliminar/` | el del `tipo` (comercial u operacional) | 60/m | `{tipo, id}`. **409** si tiene zonas asociadas o si es el objetivo general de base; **400** con `semaforo`, que no se borra |
 
 `tipo` ∈ `planes`, `zonas`, `sites`, `estados`, `coordinadores`, `ignorados`.
 

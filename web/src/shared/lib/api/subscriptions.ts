@@ -118,7 +118,7 @@ export const subscriptionsApi = {
   /**
    * Alta o edición de una fila de catálogo.
    *
-   * Un solo endpoint para los seis catálogos: lo que cambia entre ellos son
+   * Un solo endpoint para todos los catálogos: lo que cambia entre ellos son
    * los campos del cuerpo, no la forma de la petición.
    */
   saveCatalogo: async (tipo: CatalogoTipo, payload: CatalogoPayload) =>

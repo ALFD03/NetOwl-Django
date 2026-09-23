@@ -1,5 +1,5 @@
-/** Monthly growth target applied to the opening active base. */
-export const GROWTH_TARGET_RATE = 0.06;
+import type { SemaforoObjetivos } from '../types';
+import { BARRA_TONO, TEXTO_TONO, tonoCumplimiento, type Meta } from './objetivos';
 
 /** The node/zone shape both the Sales and Business Units reports render. */
 export interface CommercialNode {
@@ -14,6 +14,11 @@ export interface CommercialNode {
   bajas?: number;
   crecimiento?: number;
   churn_bruto_pct?: number;
+  /**
+   * Meta de la fila, resuelta al nivel de zona por el hook del reporte (ver
+   * `lib/objetivos.ts`). Ausente solo si nadie la resolvió todavía.
+   */
+  meta?: Meta;
 }
 
 export interface CommercialMetrics {
@@ -40,7 +45,12 @@ export interface CalcCommercialOptions {
 }
 
 /**
- * Commercial performance of a node against its 6% growth target.
+ * Commercial performance of a node against its growth target.
+ *
+ * `metaCrecimiento` is the absolute net growth required (`Meta.metaCrecimiento`):
+ * the node's own objective for a row, or the sum over its zones for a group.
+ * It used to be a hardcoded 6% of `inicio`; the objective now comes from the
+ * catalogue and is resolved in `lib/objetivos.ts`.
  *
  * Single implementation of what used to be two subtly different copies in
  * `useSalesReportData` and `useBusinessUnitsData`.
@@ -48,10 +58,11 @@ export interface CalcCommercialOptions {
 export function calcComercial(
   inicio: number,
   final: number,
+  metaCrecimiento: number,
   { clamp = false }: CalcCommercialOptions = {},
 ): CommercialMetrics {
-  const cierreEsperado = inicio * (1 + GROWTH_TARGET_RATE);
-  const objetivo = inicio * GROWTH_TARGET_RATE;
+  const objetivo = metaCrecimiento;
+  const cierreEsperado = inicio + objetivo;
   const rawFaltante = cierreEsperado - final;
   const rawTasa = objetivo > 0 ? 100 - (rawFaltante / objetivo) * 100 : 0;
 
@@ -88,15 +99,11 @@ export function aggregateNodes<T extends CommercialNode>(nodes: T[]) {
 }
 
 /** Tailwind text colour for a completion rate, shared by both reports. */
-export function completionTone(tasaCumplimiento: number): string {
-  if (tasaCumplimiento >= 100) return 'text-emerald-400';
-  if (tasaCumplimiento >= 60) return 'text-amber-400';
-  return 'text-rose-400';
+export function completionTone(tasaCumplimiento: number, semaforo: SemaforoObjetivos): string {
+  return TEXTO_TONO[tonoCumplimiento(tasaCumplimiento, semaforo)];
 }
 
 /** Tailwind background for the completion progress bar. */
-export function completionBar(tasaCumplimiento: number): string {
-  if (tasaCumplimiento >= 100) return 'bg-emerald-400';
-  if (tasaCumplimiento >= 60) return 'bg-amber-400';
-  return 'bg-rose-400';
+export function completionBar(tasaCumplimiento: number, semaforo: SemaforoObjetivos): string {
+  return BARRA_TONO[tonoCumplimiento(tasaCumplimiento, semaforo)];
 }

@@ -4,7 +4,7 @@ Planes y zonas eran `data/Planes.json` y `data/Zonas.json`, y cambiarlos
 exigia editar un fichero del repositorio y volver a desplegar. Aqui se
 mantienen desde la propia aplicacion.
 
-Es un solo par de endpoints para los siete catalogos y no catorce vistas casi
+Es un solo par de endpoints para todos los catalogos y no veinte vistas casi
 iguales: lo unico que cambia entre ellos es que campos se leen del cuerpo y
 como se serializa la fila, y eso es lo que declara `CATALOGOS`.
 
@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
@@ -38,14 +39,21 @@ from core import fixtures
 from core.utils import clean_json_props
 from services.config.decorators import permission_required
 from services.subscriptions.analytics.imports import productos_fuera_de_catalogo
+from services.subscriptions.analytics.objetivos import get_objetivos_config, serializar_semaforo
+from services.subscriptions.analytics.queries import get_periodos
 from services.subscriptions.models import (
+    NIVEL_OBJETIVO_CHOICES,
+    REFERENCIA_POR_NIVEL,
     TECNOLOGIA_CHOICES,
     TIPO_PERSONA_CHOICES,
     Coordinador,
     Estado,
+    ObjetivoComercial,
+    ObjetivoMes,
     Plan,
     PlanRegulador,
     ProductoIgnorado,
+    SemaforoObjetivos,
     Site,
     Zona,
 )
@@ -55,6 +63,10 @@ logger = logging.getLogger(__name__)
 
 class DatosInvalidos(ValueError):
     """Lo que mando el cliente no compone una fila valida."""
+
+
+class Duplicado(DatosInvalidos):
+    """La fila chocaria con otra que ya existe (se responde 409, no 400)."""
 
 
 def _texto(data: dict, clave: str, *, obligatorio: bool = False, maximo: int = 255) -> str:
@@ -232,6 +244,184 @@ def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:
         fila.creado_por = request.user
 
 
+# --- Objetivos ----------------------------------------------------------------
+
+_MES = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+# Los modelos de cada nivel, para resolver la referencia que manda el cliente.
+_MODELO_POR_NIVEL = {"estado": Estado, "site": Site, "coordinador": Coordinador, "zona": Zona}
+
+
+def _mes(data: dict, clave: str, *, obligatorio: bool) -> str | None:
+    """Lee un mes `YYYY-MM`; vacio es None (en `desde`, "desde siempre")."""
+    valor = str(data.get(clave) or "").strip()
+    if not valor:
+        if obligatorio:
+            raise DatosInvalidos(f"El campo «{clave}» es obligatorio.")
+        return None
+    if not _MES.match(valor):
+        raise DatosInvalidos(f"«{valor}» no es un mes valido: se espera AAAA-MM.")
+    return valor
+
+
+def _porcentaje(data: dict, clave: str) -> float | None:
+    """Lee un porcentaje opcional entre 0 y 100; vacio es None ("hereda")."""
+    bruto = data.get(clave)
+    if bruto in (None, ""):
+        return None
+    try:
+        valor = float(bruto)
+    except (TypeError, ValueError):
+        raise DatosInvalidos(f"El campo «{clave}» debe ser un numero.") from None
+    if not 0 <= valor <= 100:
+        raise DatosInvalidos(f"El campo «{clave}» debe estar entre 0 y 100.")
+    return valor
+
+
+def _valores_objetivo(fila, data: dict) -> None:
+    """Crecimiento y churn: al menos uno, porque el otro puede heredarse."""
+    fila.crecimiento_pct = _porcentaje(data, "crecimiento_pct")
+    fila.churn_pct = _porcentaje(data, "churn_pct")
+    if fila.crecimiento_pct is None and fila.churn_pct is None:
+        raise DatosInvalidos("Indica al menos el objetivo de crecimiento o el de churn.")
+
+
+def _pct(valor) -> float | None:
+    """Decimal del ORM a float, conservando el nulo que significa "hereda"."""
+    return None if valor is None else float(valor)
+
+
+def _objetivo(o: ObjetivoComercial) -> dict[str, Any]:
+    """Un tramo de objetivo, con el nombre de su entidad resuelto."""
+    entidad = o.entidad
+    return {
+        "id": o.id,
+        "nivel": o.nivel,
+        "entidad_id": entidad.id if entidad else None,
+        "entidad": entidad.nombre if entidad else "",
+        "desde": o.desde or "",
+        "crecimiento_pct": _pct(o.crecimiento_pct),
+        "churn_pct": _pct(o.churn_pct),
+        "nota": o.nota,
+        "actualizado_por": o.actualizado_por.username if o.actualizado_por else "",
+        "actualizado_en": o.actualizado_en.strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def _objetivo_mes(o: ObjetivoMes) -> dict[str, Any]:
+    """La excepcion de un mes."""
+    return {
+        "id": o.id,
+        "periodo": o.periodo,
+        "crecimiento_pct": _pct(o.crecimiento_pct),
+        "churn_pct": _pct(o.churn_pct),
+        "nota": o.nota,
+        "actualizado_por": o.actualizado_por.username if o.actualizado_por else "",
+        "actualizado_en": o.actualizado_en.strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def _semaforo(s: SemaforoObjetivos) -> dict[str, Any]:
+    """Los umbrales de color, con el id de la fila unica."""
+    return {"id": s.id, **serializar_semaforo(s)}
+
+
+def _es_base_general(fila: ObjetivoComercial) -> bool:
+    """El tramo general "desde siempre": el que responde cuando nadie mas lo hace."""
+    return fila.pk is not None and fila.nivel == "general" and fila.desde is None
+
+
+def _aplicar_objetivo(fila: ObjetivoComercial, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre un tramo de objetivo.
+
+    El nivel y la entidad solo se fijan al crearlo: mover un tramo de una zona
+    a otra es borrar uno y crear otro, y asi la tabla no cambia de significado
+    bajo los pies de quien la esta mirando.
+    """
+    if fila.pk is None:
+        fila.nivel = _opcion(data, "nivel", NIVEL_OBJETIVO_CHOICES, "general")
+        campo = REFERENCIA_POR_NIVEL.get(fila.nivel)
+        if campo:
+            entidad = _relacion(_MODELO_POR_NIVEL[fila.nivel], data, "entidad_id", obligatorio=True)
+            setattr(fila, campo, entidad)
+
+    desde = _mes(data, "desde", obligatorio=False)
+    if _es_base_general(fila) and desde is not None:
+        raise DatosInvalidos("El objetivo general de base vale desde siempre: no admite fecha.")
+    if fila.nivel == "general" and fila.pk is None and desde is None:
+        raise Duplicado("El objetivo general desde siempre ya existe: edítalo o crea un tramo con fecha.")
+    fila.desde = desde
+
+    _valores_objetivo(fila, data)
+    if fila.nivel == "general" and fila.desde is None and (
+        fila.crecimiento_pct is None or fila.churn_pct is None
+    ):
+        raise DatosInvalidos("El objetivo general de base necesita crecimiento y churn: no hay de quien heredar.")
+
+    # La unicidad (entidad, desde) no la puede exigir la BD —los NULL son
+    # distintos en un UNIQUE—, asi que se comprueba aqui.
+    campo = REFERENCIA_POR_NIVEL.get(fila.nivel)
+    filtro = {"nivel": fila.nivel, "desde": fila.desde}
+    if campo:
+        filtro[f"{campo}_id"] = getattr(fila, f"{campo}_id")
+    if ObjetivoComercial.objects.filter(**filtro).exclude(pk=fila.pk).exists():
+        cuando = f"desde {fila.desde}" if fila.desde else "desde siempre"
+        quien = fila.entidad.nombre if fila.entidad else "el nivel general"
+        raise Duplicado(f"Ya hay un objetivo {cuando} para {quien}: edítalo.")
+
+    fila.nota = _texto(data, "nota")
+    fila.actualizado_por = request.user
+
+
+def _borrar_objetivo(fila: ObjetivoComercial) -> str | None:
+    """Por que no se puede borrar este tramo, o None si se puede."""
+    if _es_base_general(fila):
+        return "El objetivo general de base no se puede eliminar: es el que responde cuando nadie más lo hace."
+    return None
+
+
+def _aplicar_objetivo_mes(fila: ObjetivoMes, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre la excepcion de un mes."""
+    periodo = _mes(data, "periodo", obligatorio=True)
+    if ObjetivoMes.objects.filter(periodo=periodo).exclude(pk=fila.pk).exists():
+        raise Duplicado(f"El mes {periodo} ya tiene una excepción: edítala.")
+    fila.periodo = periodo
+    _valores_objetivo(fila, data)
+    fila.nota = _texto(data, "nota")
+    fila.actualizado_por = request.user
+
+
+def _aplicar_semaforo(fila: SemaforoObjetivos, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre los umbrales de color."""
+    campos = (
+        "cumpl_verde", "cumpl_amarillo",
+        "crec_verde_margen", "crec_amarillo_margen",
+        "churn_verde_margen", "churn_amarillo_margen",
+    )
+    valores = {}
+    for campo in campos:
+        # No `_numero`: su `or por_defecto` tomaria un 0 legitimo (margen verde
+        # de churn, por ejemplo) por un campo vacio.
+        bruto = data.get(campo)
+        if bruto in (None, ""):
+            raise DatosInvalidos(f"El campo «{campo}» es obligatorio.")
+        try:
+            valores[campo] = float(bruto)
+        except (TypeError, ValueError):
+            raise DatosInvalidos(f"El campo «{campo}» debe ser un numero.") from None
+    if any(valor < 0 for valor in valores.values()):
+        raise DatosInvalidos("Los umbrales no pueden ser negativos.")
+    if valores["cumpl_amarillo"] > valores["cumpl_verde"]:
+        raise DatosInvalidos("El umbral amarillo de cumplimiento no puede superar al verde.")
+    if valores["crec_verde_margen"] > valores["crec_amarillo_margen"]:
+        raise DatosInvalidos("El margen amarillo de crecimiento tiene que ser igual o mayor que el verde.")
+    if valores["churn_verde_margen"] > valores["churn_amarillo_margen"]:
+        raise DatosInvalidos("El margen amarillo de churn tiene que ser igual o mayor que el verde.")
+    for campo, valor in valores.items():
+        setattr(fila, campo, valor)
+    fila.actualizado_por = request.user
+
+
 PERMISO_COMERCIAL = "can_manage_catalogo_comercial"
 PERMISO_OPERACIONAL = "can_manage_catalogo_operacional"
 
@@ -246,6 +436,13 @@ CATALOGOS: dict[str, dict[str, Any]] = {
     "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_COMERCIAL},
     "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado", "permiso": PERMISO_COMERCIAL},
     "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_nombre, "etiqueta": "coordinador", "permiso": PERMISO_COMERCIAL},
+    # Los objetivos van con el catalogo comercial: quien reparte la red entre
+    # los equipos de venta es quien fija lo que se espera de cada parte.
+    # `borrable` responde por que no se puede borrar una fila concreta.
+    "objetivos": {"modelo": ObjetivoComercial, "serializar": _objetivo, "aplicar": _aplicar_objetivo, "etiqueta": "objetivo", "permiso": PERMISO_COMERCIAL, "borrable": _borrar_objetivo},
+    "objetivos_mes": {"modelo": ObjetivoMes, "serializar": _objetivo_mes, "aplicar": _aplicar_objetivo_mes, "etiqueta": "objetivo del mes", "permiso": PERMISO_COMERCIAL},
+    # Fila unica: se edita siempre la misma y no se borra.
+    "semaforo": {"modelo": SemaforoObjetivos, "serializar": _semaforo, "aplicar": _aplicar_semaforo, "etiqueta": "semáforo", "permiso": PERMISO_COMERCIAL, "unico": True},
 }
 
 
@@ -288,6 +485,10 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
         consulta = consulta.select_related("plan_regulador")
     elif nombre == "ignorados":
         consulta = consulta.select_related("creado_por")
+    elif nombre == "objetivos":
+        consulta = consulta.select_related(*REFERENCIA_POR_NIVEL.values(), "actualizado_por")
+    elif nombre == "objetivos_mes":
+        consulta = consulta.select_related("actualizado_por")
     return [catalogo["serializar"](fila) for fila in consulta]
 
 
@@ -313,6 +514,7 @@ def catalogos_view(request):
     props = {
         nombre: _listado(nombre) if _puede(request, catalogo["permiso"]) else []
         for nombre, catalogo in CATALOGOS.items()
+        if not catalogo.get("unico")
     }
     props.update({
         "comercial": comercial,
@@ -327,6 +529,15 @@ def catalogos_view(request):
     # de la mitad operacional: enterarse de que falta algo sin esperar al proximo
     # analisis. Si la consulta falla (entorno sin datos aun) no se rompe la
     # pagina por ello.
+    # Lo que la pestana de objetivos necesita ademas de sus filas: el semaforo,
+    # la configuracion ya resuelta (para mostrar el objetivo efectivo de cada
+    # mes con la misma regla que los reportes) y los meses calculados.
+    props["semaforo"] = _semaforo(SemaforoObjetivos.actual()) if comercial else None
+    props["objetivosConfig"] = get_objetivos_config() if comercial else None
+    props["periodosCalculados"] = (
+        sorted({p[:7] for p in get_periodos()}, reverse=True) if comercial else []
+    )
+
     props["pendientes"] = []
     if operacional:
         try:
@@ -353,7 +564,9 @@ def api_catalogo_guardar(request):
         return rechazo
 
     fila_id = data.get("id")
-    if fila_id:
+    if catalogo.get("unico"):
+        fila = catalogo["modelo"].actual()
+    elif fila_id:
         fila = catalogo["modelo"].objects.filter(pk=fila_id).first()
         if fila is None:
             return JsonResponse({"status": "error", "message": "El registro ya no existe."}, status=404)
@@ -363,6 +576,8 @@ def api_catalogo_guardar(request):
     try:
         catalogo["aplicar"](fila, data, request)
         fila.save()
+    except Duplicado as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=409)
     except DatosInvalidos as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=400)
     except IntegrityError:
@@ -399,9 +614,20 @@ def api_catalogo_eliminar(request):
     if rechazo is not None:
         return rechazo
 
+    if catalogo.get("unico"):
+        return JsonResponse(
+            {"status": "error", "message": f"El {catalogo['etiqueta']} no se elimina: edítalo."},
+            status=400,
+        )
+
     fila = catalogo["modelo"].objects.filter(pk=data.get("id")).first()
     if fila is None:
         return JsonResponse({"status": "success", "message": "El registro ya no existía."})
+
+    if borrable := catalogo.get("borrable"):
+        motivo = borrable(fila)
+        if motivo:
+            return JsonResponse({"status": "error", "message": motivo}, status=409)
 
     try:
         fila.delete()

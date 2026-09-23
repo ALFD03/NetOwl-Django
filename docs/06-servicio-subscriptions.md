@@ -659,7 +659,7 @@ reguladora eso se colapsa a alámbrico o inalámbrico.
 
 ### La pantalla y su CRUD
 
-`views_catalogos.py` sirve **siete catálogos con un solo par de endpoints** en vez
+`views_catalogos.py` sirve **todos los catálogos con un solo par de endpoints** en vez
 de doce vistas casi iguales: lo único que cambia entre ellos es qué campos se
 leen del cuerpo y cómo se serializa la fila, y eso lo declara el diccionario
 `CATALOGOS`. Añadir un catálogo es añadir una entrada ahí y una pestaña en la
@@ -694,6 +694,46 @@ mismas pestañas con el nombre correcto.
 **Toda escritura llama a `fixtures.reset_cache()`.** Sin eso, una edición
 tardaría hasta un minuto en verse, o no se vería nunca en el proceso que ya la
 tenía leída (el worker es otro proceso).
+
+### Los objetivos comerciales
+
+La meta de crecimiento y el churn máximo **no alteran ningún análisis**: solo
+deciden la meta, el cumplimiento y el color con que se pinta cada cifra. Por eso
+no se guardan con las métricas calculadas ni exigen relanzar nada: viven en tres
+tablas del catálogo (`ObjetivoComercial`, `ObjetivoMes`, `SemaforoObjetivos`),
+`analytics/objetivos.get_objetivos_config()` los sirve en los props de
+Dashboard, Analytics, Results, Sales Report y Business Units, y el cliente los
+aplica al pintar (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un
+objetivo se ve al recargar la página. Si las tablas no existen (entorno sin
+migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
+
+- **Vigencia.** Cada tramo vale desde su `desde` (`YYYY-MM`, nulo = siempre)
+  hasta el siguiente de la misma entidad: cambiar un objetivo no reescribe los
+  meses que ya pasaron. Para corregir un mes cerrado está `ObjetivoMes`, que
+  sustituye al general solo en ese mes.
+- **Herencia: cada nivel mira hacia arriba, nunca hacia abajo.** De más bajo a
+  más alto: zona → coordinador → site → estado → general. La fila de una zona usa
+  su objetivo o el primero que encuentre subiendo. El total de un coordinador
+  empieza la cadena en el coordinador (la excepción de una zona no lo mueve, el
+  objetivo de su site sí); el de un site, en el site (ni el coordinador ni la
+  zona lo mueven, porque un site reparte sus zonas entre varios coordinadores).
+  Los totales globales —Analytics, Results, Dashboard, consolidado FTTH y bloque
+  RF— usan el general del mes.
+- **Un grupo tiene meta, no tasa**: la suma de la meta de cada zona resuelta
+  desde el nivel del grupo. Si el grupo tiene objetivo propio eso es su base ×
+  su tasa; si no, cada zona aporta la de su site o su estado.
+- **Crecimiento y churn se resuelven por separado.** Un tramo puede fijar solo
+  uno; gana el tramo más reciente de la entidad que fije esa métrica, y si
+  ninguno la fija se hereda del nivel de arriba.
+- **El semáforo es relativo al objetivo.** Cumplimiento en % de la meta;
+  crecimiento y churn en puntos respecto de su objetivo, para que los umbrales se
+  muevan con él. Los valores sembrados reproducen los colores que los reportes
+  tenían escritos a mano (crecimiento verde desde 4 y amarillo desde 0 con 6%;
+  churn verde hasta 3 y amarillo hasta 4 con 3%; cumplimiento 100 / 60).
+
+Se editan en la pestaña **Objetivos** del catálogo, con el permiso comercial. El
+general desde siempre no se puede borrar ni fechar: es el que responde cuando
+nadie más lo hace.
 
 ### `manage.py cargar_catalogos`
 

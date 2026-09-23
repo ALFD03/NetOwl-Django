@@ -3,11 +3,16 @@
  *
  * Los totales se recalculan sobre los valores absolutos, no promediando
  * porcentajes.
+ *
+ * Aquí se resuelven también las metas: cada nodo con su objetivo de zona, y
+ * cada bloque de tecnología con el del **site**, que ni el coordinador ni la
+ * zona mueven (ver `lib/objetivos.ts`).
  */
 
 import { useMemo } from 'react';
 
 import { aggregateNodes, type CommercialNode } from '../lib/commercial';
+import type { Meta, ResolverObjetivos } from '../lib/objetivos';
 
 export type SalesReportNode = CommercialNode;
 
@@ -22,7 +27,8 @@ export interface SalesReportTechnology {
     bajas: number;
     churn_rate: number;
     crecimiento: number;
-
+    /** Meta del bloque, resuelta desde el site. */
+    meta: Meta;
   };
 }
 
@@ -36,6 +42,9 @@ interface UseSalesReportDataParams {
   searchTerm: string;
   selectedBranch: string;
   selectedTech: 'ALL' | 'FTTH' | 'RF';
+  /** El periodo del reporte: decide qué tramo de objetivo está vigente. */
+  period: string;
+  objetivos: ResolverObjetivos;
 }
 
 export function useSalesReportData({
@@ -43,6 +52,8 @@ export function useSalesReportData({
   searchTerm,
   selectedBranch,
   selectedTech,
+  period,
+  objetivos,
 }: UseSalesReportDataParams) {
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -66,11 +77,11 @@ export function useSalesReportData({
       if (selectedTech === 'FTTH' && normalizedTechnology !== 'FTTH') return [];
       if (selectedTech === 'RF' && normalizedTechnology !== 'RF') return [];
 
-      const nodes = tech.nodes?.filter((node) => {
+      const nodes = (tech.nodes?.filter((node) => {
         const nodeMatchesSearch = String(node.zona_sucursal || '').toLowerCase().includes(normalizedSearch);
         const branchMatches = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
         return (siteMatchesSearch || nodeMatchesSearch) && branchMatches;
-      }) ?? [];
+      }) ?? []).map((node) => ({ ...node, meta: objetivos.meta(period, [node], 'zona') }));
 
       if (!nodes.length) return [];
 
@@ -86,12 +97,13 @@ export function useSalesReportData({
           reactivaciones: totals.reactivaciones,
           churn_rate: totals.churn_rate,
           crecimiento: totals.crecimiento,
+          meta: objetivos.meta(period, nodes, 'site'),
         },
       }];
     }) ?? [];
 
     return technologies.length ? [{ ...site, technologies }] : [];
-  }), [sites, normalizedSearch, selectedBranch, selectedTech]);
+  }), [sites, normalizedSearch, selectedBranch, selectedTech, period, objetivos]);
 
   return { branchList, filteredData };
 }

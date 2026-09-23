@@ -1,6 +1,6 @@
 /** Tabla de cierres por periodo, con detalle al pulsar una fila. */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Activity, Table as TableIcon } from 'lucide-react';
 
 import { DataTable, Modal, NeonContainer, ToggleGroup } from '@/shared/ui';
@@ -8,7 +8,8 @@ import { DIMENSION_CONFIG } from '@/shared/constants/labels';
 import { formatInteger } from '@/shared/utils/formatters';
 import { BajasExportButton } from '../reports/BajasExportButton';
 import { SubscriptionPeriodDetail } from './SubscriptionPeriodDetail';
-import { DIMENSION_COLUMNS, PERIOD_COLUMNS } from './subscriptionResultsColumns';
+import { DIMENSION_COLUMNS, buildPeriodColumns, conCumplimiento } from './subscriptionResultsColumns';
+import { useObjetivos } from '../../hooks/useObjetivos';
 import { useSubscriptionResults } from '../../hooks/useSubscriptionResults';
 import type { SubscriptionCierre } from '../../types';
 
@@ -26,6 +27,9 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
   const [selectedRow, setSelectedRow] = useState<SubscriptionCierre | null>(null);
   const [activeDimension, setActiveDimension] = useState('zona');
   const { data: details, loading } = useSubscriptionResults(selectedRow?.periodo_reporte ?? null);
+  const objetivos = useObjetivos();
+  const columnas = useMemo(() => buildPeriodColumns(objetivos.semaforo), [objetivos]);
+  const filas = useMemo(() => conCumplimiento(periodos, objetivos), [periodos, objetivos]);
 
   const activeLabel = DIMENSION_CONFIG[activeDimension]?.label ?? activeDimension;
 
@@ -39,7 +43,7 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
         noPadding
       >
         <div className="h-[550px]">
-          <DataTable columns={PERIOD_COLUMNS} data={periodos} searchable onRowClick={setSelectedRow} />
+          <DataTable columns={columnas} data={filas} searchable onRowClick={setSelectedRow} />
         </div>
       </NeonContainer>
 

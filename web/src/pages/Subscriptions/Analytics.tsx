@@ -102,7 +102,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
       />
 
       <div className="mt-6">
-        <AnalyticsMetrics data={globalData} />
+        <AnalyticsMetrics data={globalData} periodo={selectedPeriod} />
       </div>
       <AnalyticsCharts
         globalData={globalData}

@@ -4,6 +4,10 @@ import { RefreshCw, Target, TrendingDown, TrendingUp, Zap } from 'lucide-react';
 
 import { CompactMetric, MetricGroup } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
+import { useObjetivos } from '../../hooks/useObjetivos';
+import {
+  cumplimientoDelPeriodo, formatObjetivo, tonoChurn, tonoCrecimiento, tonoCumplimiento,
+} from '../../lib/objetivos';
 import type { SubscriptionCierre } from '../../types';
 
 interface SubscriptionPeriodDetailProps {
@@ -16,20 +20,23 @@ const money = (value: number) => `$${formatTwoDecimals(value)}`;
 
 /** The four-quadrant executive summary for one closed subscription period. */
 export function SubscriptionPeriodDetail({ row }: SubscriptionPeriodDetailProps) {
-  const metaIngresos = (row.activos_inicio || 0) * 0.06;
-  const metaVentas = (row.activos_inicio || 0) * 0.06;
-  const metaCierre = (row.activos_inicio || 0) * 1.06;
+  const objetivos = useObjetivos();
+  const objetivo = objetivos.general(row.periodo_reporte);
+  const { semaforo } = objetivos;
+  const {
+    metaIngresos, metaVentas, metaCierre, cumplimientoIngresos, cumplimientoVentas, cumplimientoCierre,
+  } = cumplimientoDelPeriodo(row, objetivo);
+  const tonoIngresos = tonoCumplimiento(cumplimientoIngresos, semaforo);
+  const tonoVentas = tonoCumplimiento(cumplimientoVentas, semaforo);
+  const tonoCierre = tonoCumplimiento(cumplimientoCierre, semaforo);
 
-  const cumplimientoIngresos = ((row.adiciones_brutas || 0) / metaIngresos) * 100;
-  const cumplimientoVentas = ((row.nuevos_mes || 0) / metaVentas) * 100;
-  const cumplimientoCierre = ((row.activos_final || 0) / metaCierre) * 100;
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
       <MetricGroup title="Crecimiento e Ingresos" tone="green" icon={<TrendingUp className="h-3.5 w-3.5" />}>
         <CompactMetric label="Base Inicio" value={int(row.activos_inicio)} color="slate" />
         <CompactMetric label="Base Cierre" value={int(row.activos_final)} color="slate" />
         <CompactMetric label="Nuevos Mes" value={int(row.nuevos_mes)} color="green" />
-        <CompactMetric label="Crecimiento %" value={pct(row.crecimiento)} color="green" />
+        <CompactMetric label="Crecimiento %" value={pct(row.crecimiento)} color={tonoCrecimiento(row.crecimiento, objetivo.crecimiento, semaforo)} />
         <CompactMetric label="Adic. Netas" value={int(row.adiciones_netas)} color="green" />
         <CompactMetric label="Adic. Brutas" value={int(row.adiciones_brutas)} color="green" />
       </MetricGroup>
@@ -37,21 +44,26 @@ export function SubscriptionPeriodDetail({ row }: SubscriptionPeriodDetailProps)
       <MetricGroup title="Pérdida (Churn)" tone="red" icon={<TrendingDown className="h-3.5 w-3.5" />}>
         <CompactMetric label="Bajas Totales" value={int(row.bajas)} color="red" />
         <CompactMetric label="Churn Neto %" value={pct(row.churn_neto_pct)} color="red" />
-        <CompactMetric label="Churn Bruto %" value={pct(row.churn_bruto_pct)} color="red" />
+        <CompactMetric label="Churn Bruto %" value={pct(row.churn_bruto_pct)} color={tonoChurn(row.churn_bruto_pct, objetivo.churn, semaforo)} />
         <CompactMetric label="Corte Impago" value={int(row.corte_impagado)} color="red" />
         <CompactMetric label="Suspensiones %" value={pct(row.porcentaje_suspensiones)} color="red" />
         <CompactMetric label="Total Inactivos" value={int(row.total_inactivos)} color="slate" />
         <CompactMetric label="Gratuitos" value={int(row.clientes_gratuitos)} color="purple" />
       </MetricGroup>
 
-      <MetricGroup title="Objetivos" tone="blue" icon={<Target className="h-3.5 w-3.5" />} columns={3}>
-        <CompactMetric label="Meta de Ingresos" value={int(metaIngresos)} color={`${Number(cumplimientoIngresos) >= 90 ? 'green' : Number(cumplimientoIngresos) >= 60 ? 'yellow' : 'red'}`} />
-        <CompactMetric label="Meta de Ventas" value={int(metaVentas)} color={`${Number(cumplimientoVentas) >= 90 ? 'green' : Number(cumplimientoVentas) >= 60 ? 'yellow' : 'red'}`} />
-        <CompactMetric label="Meta de Cierre" value={int(metaCierre)} color={`${Number(cumplimientoCierre) >= 90 ? 'green' : Number(cumplimientoCierre) >= 60 ? 'yellow' : 'red'}`} />
+      <MetricGroup
+        title={`Objetivos (${formatObjetivo(objetivo.crecimiento)} / churn ${formatObjetivo(objetivo.churn)})`}
+        tone="blue"
+        icon={<Target className="h-3.5 w-3.5" />}
+        columns={3}
+      >
+        <CompactMetric label="Meta de Ingresos" value={int(metaIngresos)} color={tonoIngresos} />
+        <CompactMetric label="Meta de Ventas" value={int(metaVentas)} color={tonoVentas} />
+        <CompactMetric label="Meta de Cierre" value={int(metaCierre)} color={tonoCierre} />
 
-        <CompactMetric label="Cumplimiento de Ingresos" value={pct(cumplimientoIngresos)} color={`${Number(cumplimientoIngresos) >= 90 ? 'green' : Number(cumplimientoIngresos) >= 60 ? 'yellow' : 'red'}`} />
-        <CompactMetric label="Cumplimiento de Ventas" value={pct(cumplimientoVentas)} color={`${Number(cumplimientoVentas) >= 90 ? 'green' : Number(cumplimientoVentas) >= 60 ? 'yellow' : 'red'}`} />
-        <CompactMetric label="Cumplimiento de Cierre" value={pct(cumplimientoCierre)} color={`${Number(cumplimientoCierre) >= 90 ? 'green' : Number(cumplimientoCierre) >= 60 ? 'yellow' : 'red'}`} />
+        <CompactMetric label="Cumplimiento de Ingresos" value={pct(cumplimientoIngresos)} color={tonoIngresos} />
+        <CompactMetric label="Cumplimiento de Ventas" value={pct(cumplimientoVentas)} color={tonoVentas} />
+        <CompactMetric label="Cumplimiento de Cierre" value={pct(cumplimientoCierre)} color={tonoCierre} />
       </MetricGroup>
 
 

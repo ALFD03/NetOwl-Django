@@ -286,6 +286,191 @@ class ProductoIgnorado(models.Model):
         return self.nombre
 
 
+# --- Objetivos comerciales ---------------------------------------------------
+#
+# Las metas de crecimiento y de churn no alteran ningun analisis: solo deciden
+# la meta, el cumplimiento y el color con que se pinta cada cifra. Por eso no
+# se guardan junto a las metricas calculadas sino aqui, y el cliente las aplica
+# al pintar (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un
+# objetivo se ve al recargar la pagina, sin relanzar ningun mes.
+#
+# Los niveles, de mas alto a mas bajo: general, estado, site, coordinador y
+# zona. **Cada nivel hereda del de arriba y nunca del de abajo**: el objetivo de
+# una zona solo cambia esa zona; el de un coordinador, sus zonas y su total; el
+# de un site, sus zonas y los coordinadores de esas zonas. La regla completa
+# esta en el modulo del cliente, que es quien la aplica.
+
+NIVEL_OBJETIVO_CHOICES = [
+    ("general", "General"),
+    ("estado", "Estado"),
+    ("site", "Site"),
+    ("coordinador", "Coordinador"),
+    ("zona", "Zona"),
+]
+
+# El campo que referencia la entidad de cada nivel. El general no tiene.
+REFERENCIA_POR_NIVEL = {
+    "estado": "estado",
+    "site": "site",
+    "coordinador": "coordinador",
+    "zona": "zona",
+}
+
+
+def _solo_referencia(nivel: str | None) -> models.Q:
+    """La condicion "solo esta rellena la referencia de `nivel`" (None: ninguna)."""
+    return models.Q(
+        nivel=nivel or "general",
+        **{
+            f"{campo}__isnull": campo != REFERENCIA_POR_NIVEL.get(nivel or "")
+            for campo in REFERENCIA_POR_NIVEL.values()
+        },
+    )
+
+
+class ObjetivoComercial(models.Model):
+    """Un tramo de objetivo: a partir de `desde`, este nivel apunta a estos valores.
+
+    Mismo criterio que `HistorialDepartamento` en soporte: el tramo vale desde
+    su mes hasta que empieza el siguiente de la misma entidad, y `desde` nulo
+    significa "desde siempre". Asi cambiar un objetivo no reescribe los meses
+    que ya pasaron; quien quiera corregir un mes cerrado usa `ObjetivoMes`.
+
+    `crecimiento_pct` y `churn_pct` son independientes y cualquiera de los dos
+    puede quedar vacio. Cada metrica se resuelve por separado: gana el tramo
+    mas reciente de la entidad que la fije, asi que un tramo que solo cambia el
+    churn desde agosto conserva el crecimiento que la entidad ya tenia; si
+    ningun tramo suyo la fija, se hereda del nivel de arriba. El general
+    sembrado (6% / 3%, desde siempre) es el que responde cuando nadie mas lo
+    hace, y no se puede borrar.
+
+    Las referencias son `CASCADE`: el objetivo de una zona que ya no existe no
+    significa nada.
+    """
+
+    nivel = models.CharField(max_length=12, choices=NIVEL_OBJETIVO_CHOICES)
+    estado = models.ForeignKey(Estado, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
+    coordinador = models.ForeignKey(
+        Coordinador, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos"
+    )
+    zona = models.ForeignKey(Zona, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
+    # `YYYY-MM`, el mismo texto con el que empiezan los `periodo_reporte`: asi
+    # se compara como cadena tanto aqui como en el cliente.
+    desde = models.CharField(max_length=7, null=True, blank=True)
+    crecimiento_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    churn_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    nota = models.CharField(max_length=255, blank=True, default="")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_objetivos"
+        ordering = ["nivel", models.F("desde").asc(nulls_first=True), "id"]
+        verbose_name = "objetivo comercial"
+        verbose_name_plural = "objetivos comerciales"
+        constraints = [
+            # Exactamente la referencia que corresponde al nivel. La unicidad de
+            # (entidad, desde) no se puede pedir con un UNIQUE —Postgres trata
+            # los NULL como distintos— y la comprueba la vista al guardar.
+            models.CheckConstraint(
+                condition=(
+                    _solo_referencia(None)
+                    | _solo_referencia("estado")
+                    | _solo_referencia("site")
+                    | _solo_referencia("coordinador")
+                    | _solo_referencia("zona")
+                ),
+                name="objetivo_referencia_segun_nivel",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(crecimiento_pct__isnull=False) | models.Q(churn_pct__isnull=False),
+                name="objetivo_con_algun_valor",
+            ),
+        ]
+
+    @property
+    def entidad(self):
+        """La fila de catalogo a la que apunta, o None si es el general."""
+        campo = REFERENCIA_POR_NIVEL.get(self.nivel)
+        return getattr(self, campo) if campo else None
+
+    def __str__(self):
+        entidad = self.entidad
+        return f"{self.nivel}:{entidad or '-'} desde {self.desde or 'siempre'}"
+
+
+class ObjetivoMes(models.Model):
+    """La excepcion de un mes concreto al objetivo general.
+
+    Es la manera de corregir un mes ya calculado sin mover el general: vale
+    para ese mes y para ninguno mas. Solo sustituye al general; los objetivos
+    propios de zonas, coordinadores, sites y estados siguen ganandole.
+    """
+
+    periodo = models.CharField(max_length=7, unique=True)
+    crecimiento_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    churn_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    nota = models.CharField(max_length=255, blank=True, default="")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_objetivos_mes"
+        ordering = ["-periodo"]
+        verbose_name = "objetivo de un mes"
+        verbose_name_plural = "objetivos de meses"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(crecimiento_pct__isnull=False) | models.Q(churn_pct__isnull=False),
+                name="objetivo_mes_con_algun_valor",
+            ),
+        ]
+
+    def __str__(self):
+        return self.periodo
+
+
+class SemaforoObjetivos(models.Model):
+    """Los umbrales de color, todos relativos al objetivo. Fila unica (pk=1).
+
+    El cumplimiento ya es relativo (porcentaje de la meta). Crecimiento y churn
+    se miden en puntos respecto de su objetivo, para que los umbrales se muevan
+    con el: con un 6% de objetivo, `crec_verde_margen = 2` pinta en verde desde
+    el 4%; con un 8%, desde el 6%.
+
+    Los valores por defecto reproducen los colores que los reportes tenian
+    escritos a mano: crecimiento verde >= 4 y amarillo >= 0 (con 6%), churn
+    verde <= 3 y amarillo <= 4 (con 3%), cumplimiento verde >= 100 y amarillo
+    >= 60.
+    """
+
+    cumpl_verde = models.DecimalField(max_digits=6, decimal_places=2, default=100)
+    cumpl_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=60)
+    # Puntos por debajo del objetivo de crecimiento hasta donde sigue el color.
+    crec_verde_margen = models.DecimalField(max_digits=6, decimal_places=2, default=2)
+    crec_amarillo_margen = models.DecimalField(max_digits=6, decimal_places=2, default=6)
+    # Puntos por encima del objetivo de churn hasta donde sigue el color.
+    churn_verde_margen = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    churn_amarillo_margen = models.DecimalField(max_digits=6, decimal_places=2, default=1)
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_objetivos_semaforo"
+        verbose_name = "semaforo de objetivos"
+        verbose_name_plural = "semaforo de objetivos"
+
+    @classmethod
+    def actual(cls) -> SemaforoObjetivos:
+        """La fila unica, creandola con los valores por defecto si falta."""
+        fila, _ = cls.objects.get_or_create(pk=1)
+        return fila
+
+    def __str__(self):
+        return "semaforo de objetivos"
+
+
 def _numero(valor) -> str:
     """Decimal a texto sin ceros de relleno: `60.00` -> `60`, `2.50` -> `2.5`."""
     if valor is None:

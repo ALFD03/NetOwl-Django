@@ -12,6 +12,7 @@ import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { DayProgressBar } from '@/shared/ui';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
+import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
 import { buildBusinessUnitGroups, type ZonasConfig } from '@/features/subscriptions/lib/dayReports';
 import type { DayMetrics } from '@/shared/types/domain';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
@@ -39,11 +40,17 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
     [dayData, zonasConfig, buData.data],
   );
 
+  // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
+  // site y estado pertenece cada zona, que es por donde se heredan.
+  const objetivos = useObjetivos(zonasConfig?.zonas);
+
   const { branchList, filteredData, dynamicFtthSummary } = useBusinessUnitsData({
     groups,
     searchTerm,
     selectedBranch,
     selectedTech,
+    period: buData.period ?? '',
+    objetivos,
   });
 
   const changePeriod = (period: string) => {
