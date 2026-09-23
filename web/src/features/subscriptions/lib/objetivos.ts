@@ -1,27 +1,31 @@
 /**
  * Objetivos comerciales: qué meta tiene cada fila y de qué color se pinta.
  *
- * Los objetivos no alteran ningún análisis, solo la meta, el cumplimiento y el
- * color. Por eso se aplican aquí, al pintar, y no se guardan con las métricas:
- * cambiar un objetivo en el catálogo se ve al recargar, sin relanzar ningún mes.
- * El servidor solo los sirve (`services/subscriptions/analytics/objetivos.py`).
+ * Los objetivos no alteran ningún análisis, solo la meta y el cumplimiento; el
+ * color lo pone el semáforo, con umbrales fijos. Por eso se aplican aquí, al
+ * pintar, y no se guardan con las métricas: cambiar un objetivo en el catálogo
+ * se ve al recargar, sin relanzar ningún mes. El servidor solo los sirve
+ * (`services/subscriptions/analytics/objetivos.py`).
  *
- * **La regla de herencia: cada nivel mira hacia arriba, nunca hacia abajo.**
- * De más bajo a más alto: zona → coordinador → site → estado → general.
+ * **Manda el nivel más alto que tenga objetivo.** De más alto a más bajo:
+ * estado → site → coordinador → zona, y el general del mes cuando ninguno
+ * tiene. El objetivo de una zona solo rige si ni su coordinador, ni su site, ni
+ * su estado fijan uno: con la zona al 10% y su coordinador al 15%, la zona
+ * cumple contra el 15%.
  *
- * - Una fila de zona usa su objetivo; si no tiene, el de su coordinador, luego
- *   el de su site, el de su estado y, por último, el general del mes.
- * - El total de un coordinador empieza la cadena en el coordinador: la
- *   excepción de una de sus zonas no lo mueve.
- * - El total de un site la empieza en el site: ni el coordinador ni la zona lo
+ * Los totales **ignoran los niveles por debajo del grupo**:
+ * - El total de un coordinador mira coordinador, site y estado: la excepción
+ *   de una de sus zonas no lo mueve.
+ * - El total de un site mira site y estado: ni el coordinador ni la zona lo
  *   mueven, porque un site reparte sus zonas entre varios coordinadores.
  * - Los totales globales (Analytics, Results, Dashboard, consolidado FTTH y
  *   bloque RF) usan el general del mes.
  *
  * Un grupo no tiene una tasa: tiene una meta, que es la suma de la meta de cada
- * zona resuelta desde el nivel del grupo. Si el grupo tiene objetivo propio,
- * esa suma es exactamente su base × su tasa; si no, cada zona aporta la de su
- * site o su estado, y el grupo nunca contradice a sus partes.
+ * zona resuelta desde el nivel del grupo. Si el grupo tiene objetivo propio (y
+ * nada por encima lo anula), esa suma es exactamente su base × su tasa; si no,
+ * cada zona aporta la de su site o su estado, y el grupo nunca contradice a sus
+ * partes.
  */
 
 import type { MetricColor } from '@/shared/ui/theme/types';
@@ -57,12 +61,20 @@ type NivelEntidad = Exclude<NivelObjetivo, 'general'>;
 /** De más bajo a más alto; `general` va aparte porque no es una entidad. */
 const CADENA: readonly NivelEntidad[] = ['zona', 'coordinador', 'site', 'estado'];
 
+/** De dónde sale un objetivo resuelto: el nivel que lo fija y su nombre. */
+export interface OrigenObjetivo {
+  nivel: NivelObjetivo;
+  /** Nombre de la zona, coordinador, site o estado; vacío en el general. */
+  nombre: string;
+  valor: number;
+}
+
 /**
  * Los valores que la aplicación tuvo escritos a mano. Solo responden si faltan
  * los props (una página que no los recibe, o un entorno sin migrar).
  */
 export const OBJETIVOS_POR_DEFECTO: ObjetivosConfig = {
-  general: [{ desde: null, crecimiento: 6, churn: 3 }],
+  general: { crecimiento: 6, churn: 3 },
   meses: {},
   estados: {},
   sites: {},
@@ -71,10 +83,10 @@ export const OBJETIVOS_POR_DEFECTO: ObjetivosConfig = {
   semaforo: {
     cumpl_verde: 100,
     cumpl_amarillo: 60,
-    crec_verde_margen: 2,
-    crec_amarillo_margen: 6,
-    churn_verde_margen: 0,
-    churn_amarillo_margen: 1,
+    crec_verde: 4,
+    crec_amarillo: 0,
+    churn_verde: 3,
+    churn_amarillo: 4,
   },
 };
 
@@ -102,14 +114,11 @@ export function valorVigente(
   return mejor ? (mejor[metrica] as number) : null;
 }
 
-/** El objetivo general de un periodo: su excepción, o el tramo general vigente. */
+/** El objetivo general de un periodo: su excepción de mes, o el general. */
 export function objetivoGeneral(cfg: ObjetivosConfig, periodo: string): Objetivo {
-  const mes = mesDe(periodo);
-  const excepcion = cfg.meses[mes];
+  const excepcion = cfg.meses[mesDe(periodo)];
   const resolver = (metrica: Metrica): number =>
-    excepcion?.[metrica]
-    ?? valorVigente(cfg.general, mes, metrica)
-    ?? (OBJETIVOS_POR_DEFECTO.general[0]![metrica] as number);
+    excepcion?.[metrica] ?? cfg.general?.[metrica] ?? OBJETIVOS_POR_DEFECTO.general[metrica];
   return { crecimiento: resolver('crecimiento'), churn: resolver('churn') };
 }
 
@@ -132,8 +141,18 @@ export interface ResolverObjetivos {
   semaforo: SemaforoObjetivos;
   /** El objetivo general del periodo (excepción del mes o tramo vigente). */
   general: (periodo: string) => Objetivo;
-  /** El objetivo de una zona, resolviendo la cadena desde `desde` hacia arriba. */
+  /**
+   * El objetivo de una zona. Solo cuentan `desde` y los niveles por encima, y
+   * entre ellos manda el más alto que tenga objetivo.
+   */
   zona: (periodo: string, zona: string | undefined, desde?: NivelObjetivo) => Objetivo;
+  /** Qué nivel fija una métrica de una zona: para explicar por qué rige lo que rige. */
+  origen: (
+    periodo: string,
+    zona: string | undefined,
+    metrica: Metrica,
+    desde?: NivelObjetivo,
+  ) => OrigenObjetivo;
   /** La meta de un conjunto de nodos, cada uno resuelto desde `desde`. */
   meta: (
     periodo: string,
@@ -168,26 +187,30 @@ export function crearResolver(
 
   const general = (periodo: string) => objetivoGeneral(cfg, periodo);
 
-  const zona = (periodo: string, nombre: string | undefined, desde: NivelObjetivo = 'zona'): Objetivo => {
-    const base = general(periodo);
+  const origen: ResolverObjetivos['origen'] = (periodo, nombre, metrica, desde = 'zona') => {
+    const base: OrigenObjetivo = { nivel: 'general', nombre: '', valor: general(periodo)[metrica] };
     if (desde === 'general') return base;
 
     const mes = mesDe(periodo);
     // Una zona fuera del catálogo solo puede tener objetivo propio por nombre.
     const ubicacion = ubicaciones.get(clave(nombre)) ?? { zona: nombre };
-    const niveles = CADENA.slice(CADENA.indexOf(desde));
+    // Los niveles desde `desde` hacia arriba, recorridos del más alto al más
+    // bajo: el primero que fije la métrica es el que manda.
+    const niveles = CADENA.slice(CADENA.indexOf(desde)).reverse();
 
-    const resolver = (metrica: Metrica): number => {
-      for (const nivel of niveles) {
-        const nombreNivel = ubicacion[nivel];
-        if (!nombreNivel) continue;
-        const valor = valorVigente(tablas[nivel].get(clave(nombreNivel)), mes, metrica);
-        if (valor !== null) return valor;
-      }
-      return base[metrica];
-    };
-    return { crecimiento: resolver('crecimiento'), churn: resolver('churn') };
+    for (const nivel of niveles) {
+      const nombreNivel = ubicacion[nivel];
+      if (!nombreNivel) continue;
+      const valor = valorVigente(tablas[nivel].get(clave(nombreNivel)), mes, metrica);
+      if (valor !== null) return { nivel, nombre: nombreNivel, valor };
+    }
+    return base;
   };
+
+  const zona = (periodo: string, nombre: string | undefined, desde: NivelObjetivo = 'zona'): Objetivo => ({
+    crecimiento: origen(periodo, nombre, 'crecimiento', desde).valor,
+    churn: origen(periodo, nombre, 'churn', desde).valor,
+  });
 
   const meta: ResolverObjetivos['meta'] = (periodo, nodos, desde) => {
     let base = 0;
@@ -213,7 +236,7 @@ export function crearResolver(
     };
   };
 
-  return { semaforo: cfg.semaforo ?? OBJETIVOS_POR_DEFECTO.semaforo, general, zona, meta };
+  return { semaforo: cfg.semaforo ?? OBJETIVOS_POR_DEFECTO.semaforo, general, zona, origen, meta };
 }
 
 /** La meta de una base con un objetivo global (sin reparto por zonas). */
@@ -262,6 +285,9 @@ export function cumplimientoDelPeriodo(
 }
 
 // --- Semáforo ---------------------------------------------------------------
+//
+// Umbrales fijos, iguales para todo el módulo: no dependen del objetivo de la
+// fila. Así el mismo churn se pinta igual en Analytics, Results y los reportes.
 
 export type Tono = Extract<MetricColor, 'green' | 'yellow' | 'red'>;
 
@@ -272,17 +298,17 @@ export function tonoCumplimiento(cumplimiento: number, s: SemaforoObjetivos): To
   return 'red';
 }
 
-/** Crecimiento: verde hasta `crec_verde_margen` puntos por debajo del objetivo. */
-export function tonoCrecimiento(crecimiento: number, objetivo: number, s: SemaforoObjetivos): Tono {
-  if (crecimiento >= objetivo - s.crec_verde_margen) return 'green';
-  if (crecimiento >= objetivo - s.crec_amarillo_margen) return 'yellow';
+/** Crecimiento (%), más es mejor: verde desde `crec_verde`, amarillo desde `crec_amarillo`. */
+export function tonoCrecimiento(crecimiento: number, s: SemaforoObjetivos): Tono {
+  if (crecimiento >= s.crec_verde) return 'green';
+  if (crecimiento >= s.crec_amarillo) return 'yellow';
   return 'red';
 }
 
-/** Churn: verde hasta `churn_verde_margen` puntos por encima del objetivo. */
-export function tonoChurn(churn: number, objetivo: number, s: SemaforoObjetivos): Tono {
-  if (churn <= objetivo + s.churn_verde_margen) return 'green';
-  if (churn <= objetivo + s.churn_amarillo_margen) return 'yellow';
+/** Churn (%), menos es mejor: verde hasta `churn_verde`, amarillo hasta `churn_amarillo`. */
+export function tonoChurn(churn: number, s: SemaforoObjetivos): Tono {
+  if (churn <= s.churn_verde) return 'green';
+  if (churn <= s.churn_amarillo) return 'yellow';
   return 'red';
 }
 

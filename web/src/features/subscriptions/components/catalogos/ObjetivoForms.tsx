@@ -16,6 +16,7 @@ import {
   type FormTone,
 } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
+import { EscalaSemaforo, type MetricaSemaforo } from './EscalaSemaforo';
 import { formatObjetivo, type Objetivo } from '@/features/subscriptions/lib/objetivos';
 import type {
   ObjetivoDraft, ObjetivoMesDraft, SemaforoDraft,
@@ -49,25 +50,25 @@ export const NIVEL_OBJETIVO_UI: Record<
     label: 'Estado',
     icon: <MapPin />,
     tone: 'purple',
-    description: 'Todas sus zonas, sites y coordinadores sin objetivo propio.',
+    description: 'Manda sobre todos sus sites, coordinadores y zonas.',
   },
   site: {
     label: 'Site',
     icon: <Building2 />,
     tone: 'blue',
-    description: 'Sus zonas y el total de los coordinadores de esas zonas. No el estado.',
+    description: 'Manda sobre sus zonas, también en el total de sus coordinadores. Su estado, si tiene objetivo, manda sobre él.',
   },
   coordinador: {
     label: 'Coordinador',
     icon: <UserCheck />,
     tone: 'emerald',
-    description: 'Sus zonas y su total en Business Units. No el site.',
+    description: 'Manda sobre sus zonas y su total en Business Units. No mueve el total del site.',
   },
   zona: {
     label: 'Zona',
     icon: <Network />,
     tone: 'amber',
-    description: 'Solo esa zona. Los totales de su site y su coordinador no cambian.',
+    description: 'Solo rige si ni su coordinador, ni su site, ni su estado tienen objetivo. No mueve ningún total.',
   },
 };
 
@@ -154,8 +155,8 @@ export function ObjetivoForm({
         title={esGeneral ? 'Objetivo general' : `Objetivo por ${ui.label.toLowerCase()}`}
         description={
           esGeneral
-            ? 'Rige en todo lo que no tenga un objetivo propio. Un tramo con fecha lo cambia desde ese mes sin tocar los anteriores.'
-            : `${ui.description} Cada nivel hereda del de arriba y nunca del de abajo.`
+            ? 'Rige en todo lo que no tenga un objetivo propio. Para cambiar solo un mes, usa una excepción de ese mes.'
+            : `${ui.description} Manda siempre el nivel más alto que tenga objetivo: estado, site, coordinador y, por último, la zona.`
         }
         action={<Target className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
@@ -202,21 +203,17 @@ export function ObjetivoForm({
           </Field>
         )}
 
-        {value.esBase ? (
-          <div className="rounded-2xl border border-slate-800 bg-surface-tertiary/30 p-4">
+        {esGeneral ? (
+          <div className="rounded-2xl border border-slate-800 bg-surface-tertiary/30 p-4 md:col-span-2">
             <p className="text-[10px] leading-relaxed text-slate-400">
-              Es el objetivo general de base: vale desde siempre y no admite fecha. Para cambiarlo
-              desde un mes concreto, crea un tramo general nuevo con esa fecha.
+              El objetivo general es uno solo y no lleva fecha: vale para todos los meses que no
+              tengan una excepción. Cambiarlo cambia la meta de esos meses, también los pasados.
             </p>
           </div>
         ) : (
           <Field
             label="Vigente desde"
-            hint={
-              esGeneral && esNuevo
-                ? 'Obligatorio: el general desde siempre ya existe. Los meses anteriores conservan el suyo.'
-                : 'Vacío: desde siempre. Los meses anteriores conservan el objetivo que tenían.'
-            }
+            hint="Vacío: desde siempre. Los meses anteriores conservan el objetivo que tenían."
             action={
               desdeSiempre ? undefined : (
                 <button
@@ -242,7 +239,7 @@ export function ObjetivoForm({
         crecimiento={value.crecimiento_pct}
         churn={value.churn_pct}
         heredado={esGeneral ? undefined : general}
-        obligatorio={Boolean(value.esBase)}
+        obligatorio={esGeneral}
         onChange={onChange}
       />
 
@@ -324,21 +321,22 @@ export function ObjetivoMesForm({
 /** Un campo numérico del semáforo. */
 function Umbral({
   label,
-  hint,
   valor,
+  min,
   onChange,
 }: {
   label: string;
-  hint: string;
   valor: number;
+  /** El crecimiento admite umbrales negativos; churn y cumplimiento no. */
+  min?: number;
   onChange: (valor: number) => void;
 }) {
   return (
-    <Field label={label} hint={hint}>
+    <Field label={label}>
       <input
         type="number"
         step="0.01"
-        min="0"
+        min={min}
         required
         className={modalInputClass}
         value={Number.isFinite(valor) ? valor : ''}
@@ -348,86 +346,111 @@ function Umbral({
   );
 }
 
+/** Una métrica del semáforo: su barra en vivo y sus dos umbrales. */
+function BloqueSemaforo({
+  titulo,
+  explicacion,
+  metrica,
+  verde,
+  amarillo,
+  etiquetaVerde,
+  etiquetaAmarillo,
+  min,
+  onVerde,
+  onAmarillo,
+}: {
+  titulo: string;
+  explicacion: string;
+  metrica: MetricaSemaforo;
+  verde: number;
+  amarillo: number;
+  etiquetaVerde: string;
+  etiquetaAmarillo: string;
+  min?: number;
+  onVerde: (valor: number) => void;
+  onAmarillo: (valor: number) => void;
+}) {
+  return (
+    <div className="space-y-4 rounded-2xl border border-slate-800 bg-surface-tertiary/30 p-4">
+      <div>
+        <p className="text-[11px] font-black uppercase tracking-wider text-white">{titulo}</p>
+        <p className="text-[10px] text-slate-400">{explicacion}</p>
+      </div>
+      <EscalaSemaforo metrica={metrica} verde={verde} amarillo={amarillo} />
+      {/* Los campos en el mismo orden que los colores de la barra: en churn el
+          verde va a la izquierda; en crecimiento y cumplimiento, a la derecha. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {metrica === 'churn' ? (
+          <>
+            <Umbral label={etiquetaVerde} valor={verde} min={min} onChange={onVerde} />
+            <Umbral label={etiquetaAmarillo} valor={amarillo} min={min} onChange={onAmarillo} />
+          </>
+        ) : (
+          <>
+            <Umbral label={etiquetaAmarillo} valor={amarillo} min={min} onChange={onAmarillo} />
+            <Umbral label={etiquetaVerde} valor={verde} min={min} onChange={onVerde} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SemaforoForm({
   value,
-  general,
   saving,
   onChange,
   onSubmit,
   onClose,
 }: Acciones & {
   value: SemaforoDraft;
-  /** El general vigente hoy: la vista previa se calcula sobre él. */
-  general: Objetivo;
   onChange: (patch: Partial<SemaforoDraft>) => void;
 }) {
-  const f = (n: number) => formatObjetivo(Number.isFinite(n) ? n : 0);
-  const crecVerde = general.crecimiento - value.crec_verde_margen;
-  const crecAmarillo = general.crecimiento - value.crec_amarillo_margen;
-  const churnVerde = general.churn + value.churn_verde_margen;
-  const churnAmarillo = general.churn + value.churn_amarillo_margen;
-
   return (
     <ModalForm onSubmit={onSubmit}>
       <FormBanner
         title="Semáforo de objetivos"
-        description="Los umbrales son relativos al objetivo: si el objetivo de una zona cambia, sus colores se mueven con él."
+        description="Umbrales fijos, iguales para todo el módulo: el mismo churn o crecimiento se pinta igual en cualquier zona y en cualquier página."
         action={<TrafficCone className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
 
-      <div className="space-y-2">
-        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Cumplimiento (% de la meta)</p>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Umbral
-            label="Verde desde"
-            hint="Cumplimiento a partir del cual se pinta verde."
-            valor={value.cumpl_verde}
-            onChange={(cumpl_verde) => onChange({ cumpl_verde })}
-          />
-          <Umbral
-            label="Amarillo desde"
-            hint="Por debajo, rojo."
-            valor={value.cumpl_amarillo}
-            onChange={(cumpl_amarillo) => onChange({ cumpl_amarillo })}
-          />
-        </div>
-      </div>
+      <BloqueSemaforo
+        titulo="Crecimiento"
+        explicacion="Más es mejor. Rojo por debajo del amarillo; verde a partir del umbral verde."
+        metrica="crecimiento"
+        verde={value.crec_verde}
+        amarillo={value.crec_amarillo}
+        etiquetaVerde="Verde desde (%)"
+        etiquetaAmarillo="Amarillo desde (%)"
+        onVerde={(crec_verde) => onChange({ crec_verde })}
+        onAmarillo={(crec_amarillo) => onChange({ crec_amarillo })}
+      />
 
-      <div className="space-y-2">
-        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Crecimiento (puntos por debajo del objetivo)</p>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Umbral
-            label="Verde hasta"
-            hint={`Con el ${f(general.crecimiento)} de hoy: verde desde ${f(crecVerde)}.`}
-            valor={value.crec_verde_margen}
-            onChange={(crec_verde_margen) => onChange({ crec_verde_margen })}
-          />
-          <Umbral
-            label="Amarillo hasta"
-            hint={`Amarillo desde ${f(crecAmarillo)}; por debajo, rojo.`}
-            valor={value.crec_amarillo_margen}
-            onChange={(crec_amarillo_margen) => onChange({ crec_amarillo_margen })}
-          />
-        </div>
-      </div>
+      <BloqueSemaforo
+        titulo="Churn"
+        explicacion="Menos es mejor. Verde hasta el umbral verde; rojo por encima del amarillo."
+        metrica="churn"
+        verde={value.churn_verde}
+        amarillo={value.churn_amarillo}
+        etiquetaVerde="Verde hasta (%)"
+        etiquetaAmarillo="Amarillo hasta (%)"
+        min={0}
+        onVerde={(churn_verde) => onChange({ churn_verde })}
+        onAmarillo={(churn_amarillo) => onChange({ churn_amarillo })}
+      />
 
-      <div className="space-y-2">
-        <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Churn (puntos por encima del objetivo)</p>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Umbral
-            label="Verde hasta"
-            hint={`Con el ${f(general.churn)} de hoy: verde hasta ${f(churnVerde)}.`}
-            valor={value.churn_verde_margen}
-            onChange={(churn_verde_margen) => onChange({ churn_verde_margen })}
-          />
-          <Umbral
-            label="Amarillo hasta"
-            hint={`Amarillo hasta ${f(churnAmarillo)}; por encima, rojo.`}
-            valor={value.churn_amarillo_margen}
-            onChange={(churn_amarillo_margen) => onChange({ churn_amarillo_margen })}
-          />
-        </div>
-      </div>
+      <BloqueSemaforo
+        titulo="Cumplimiento de la meta"
+        explicacion="Porcentaje de la meta alcanzado. Es lo único que depende del objetivo de cada fila."
+        metrica="cumplimiento"
+        verde={value.cumpl_verde}
+        amarillo={value.cumpl_amarillo}
+        etiquetaVerde="Verde desde (% de la meta)"
+        etiquetaAmarillo="Amarillo desde (% de la meta)"
+        min={0}
+        onVerde={(cumpl_verde) => onChange({ cumpl_verde })}
+        onAmarillo={(cumpl_amarillo) => onChange({ cumpl_amarillo })}
+      />
 
       <FormFooter saving={saving} onClose={onClose} submitLabel="Guardar semáforo" />
     </ModalForm>

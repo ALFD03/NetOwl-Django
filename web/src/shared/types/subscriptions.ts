@@ -306,26 +306,27 @@ export interface ValoresObjetivo {
 }
 
 /**
- * Umbrales de color, todos relativos al objetivo.
+ * Umbrales de color: valores directos en %, iguales para todo el módulo.
  *
- * El cumplimiento ya es relativo (% de la meta). Crecimiento y churn se miden en
- * puntos respecto de su objetivo, para que los umbrales se muevan con él.
+ * No dependen del objetivo: el mismo churn se pinta igual en cualquier zona y
+ * en cualquier página. El cumplimiento ya es un % de la meta.
  */
 export interface SemaforoObjetivos {
-  /** Cumplimiento (% de la meta) desde el que es verde / amarillo. */
+  /** Cumplimiento (% de la meta): verde desde / amarillo desde. */
   cumpl_verde: number;
   cumpl_amarillo: number;
-  /** Puntos por debajo del objetivo de crecimiento hasta los que sigue siendo verde / amarillo. */
-  crec_verde_margen: number;
-  crec_amarillo_margen: number;
-  /** Puntos por encima del objetivo de churn hasta los que sigue siendo verde / amarillo. */
-  churn_verde_margen: number;
-  churn_amarillo_margen: number;
+  /** Crecimiento (%), más es mejor: verde desde / amarillo desde. */
+  crec_verde: number;
+  crec_amarillo: number;
+  /** Churn (%), menos es mejor: verde hasta / amarillo hasta. */
+  churn_verde: number;
+  churn_amarillo: number;
 }
 
 /** Lo que envía `get_objetivos_config()`. Las entidades van por nombre. */
 export interface ObjetivosConfig {
-  general: TramoObjetivo[];
+  /** El objetivo general: uno solo, sin fecha. */
+  general: { crecimiento: number; churn: number };
   /** Excepciones de un mes concreto, por `YYYY-MM`. Sustituyen al general. */
   meses: Record<string, ValoresObjetivo>;
   estados: Record<string, TramoObjetivo[]>;

@@ -28,20 +28,30 @@ export interface CommercialMetrics {
   objetivo: number;
   /** Shortfall against `cierreEsperado`. */
   faltante: number;
-  /** Progress toward `objetivo`, as a percentage. */
+  /**
+   * Cumplimiento de ingreso: el crecimiento neto (`final − inicio`) contra
+   * `objetivo`, en %. Es el "Cumpl %" histórico de los dos reportes.
+   */
   tasaCumplimiento: number;
+  /** Cumplimiento de ventas: las instalaciones (`nuevos`) contra `objetivo`, en %. */
+  cumplimientoVentas: number;
+  /** Cumplimiento de cierre: la base final contra `cierreEsperado`, en %. */
+  cumplimientoCierre: number;
 }
 
 export interface CalcCommercialOptions {
   /**
-   * Clamp `faltante` at 0 and `tasaCumplimiento` to [0, 100].
+   * Clamp `faltante` at 0 and the three completions to [0, 100].
    *
    * The two reports disagree here and always have: Sales Report clamps, so an
    * over-performing node reads as exactly 100%; Business Units does not, so it
    * can report >100% and drive its "Meta Cumplida" badge. Both behaviours are
-   * preserved deliberately — do not change one without the other.
+   * preserved deliberately — do not change one without the other. The ventas
+   * and cierre completions follow the same rule as the report they are in.
    */
   clamp?: boolean;
+  /** Instalaciones del nodo o del grupo, para el cumplimiento de ventas. */
+  nuevos?: number;
 }
 
 /**
@@ -59,18 +69,23 @@ export function calcComercial(
   inicio: number,
   final: number,
   metaCrecimiento: number,
-  { clamp = false }: CalcCommercialOptions = {},
+  { clamp = false, nuevos = 0 }: CalcCommercialOptions = {},
 ): CommercialMetrics {
   const objetivo = metaCrecimiento;
   const cierreEsperado = inicio + objetivo;
   const rawFaltante = cierreEsperado - final;
   const rawTasa = objetivo > 0 ? 100 - (rawFaltante / objetivo) * 100 : 0;
+  const rawVentas = objetivo > 0 ? (nuevos / objetivo) * 100 : 0;
+  const rawCierre = cierreEsperado > 0 ? (final / cierreEsperado) * 100 : 0;
+  const recorte = (valor: number) => (clamp ? Math.min(100, Math.max(0, valor)) : valor);
 
   return {
     cierreEsperado,
     objetivo,
     faltante: clamp ? Math.max(rawFaltante, 0) : rawFaltante,
-    tasaCumplimiento: clamp ? Math.min(100, Math.max(0, rawTasa)) : rawTasa,
+    tasaCumplimiento: recorte(rawTasa),
+    cumplimientoVentas: recorte(rawVentas),
+    cumplimientoCierre: recorte(rawCierre),
   };
 }
 

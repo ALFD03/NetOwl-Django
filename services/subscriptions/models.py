@@ -289,16 +289,19 @@ class ProductoIgnorado(models.Model):
 # --- Objetivos comerciales ---------------------------------------------------
 #
 # Las metas de crecimiento y de churn no alteran ningun analisis: solo deciden
-# la meta, el cumplimiento y el color con que se pinta cada cifra. Por eso no
-# se guardan junto a las metricas calculadas sino aqui, y el cliente las aplica
-# al pintar (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un
-# objetivo se ve al recargar la pagina, sin relanzar ningun mes.
+# la meta y el cumplimiento de cada fila. Por eso no se guardan junto a las
+# metricas calculadas sino aqui, y el cliente las aplica al pintar
+# (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un objetivo se ve
+# al recargar la pagina, sin relanzar ningun mes. El color lo decide aparte el
+# semaforo, con umbrales fijos (`SemaforoObjetivos`).
 #
-# Los niveles, de mas alto a mas bajo: general, estado, site, coordinador y
-# zona. **Cada nivel hereda del de arriba y nunca del de abajo**: el objetivo de
-# una zona solo cambia esa zona; el de un coordinador, sus zonas y su total; el
-# de un site, sus zonas y los coordinadores de esas zonas. La regla completa
-# esta en el modulo del cliente, que es quien la aplica.
+# Los niveles, de mas alto a mas bajo: estado, site, coordinador y zona, con el
+# general como respaldo. **Manda el nivel mas alto que tenga objetivo**: el de
+# una zona solo rige si ni su coordinador, ni su site, ni su estado fijan uno.
+# Los totales ignoran los niveles por debajo del grupo: el objetivo de una zona
+# no mueve el total de su coordinador ni el de su site, y el de un coordinador
+# no mueve el del site. La regla completa esta en el modulo del cliente, que es
+# quien la aplica.
 
 NIVEL_OBJETIVO_CHOICES = [
     ("general", "General"),
@@ -335,6 +338,11 @@ class ObjetivoComercial(models.Model):
     su mes hasta que empieza el siguiente de la misma entidad, y `desde` nulo
     significa "desde siempre". Asi cambiar un objetivo no reescribe los meses
     que ya pasaron; quien quiera corregir un mes cerrado usa `ObjetivoMes`.
+
+    **El general es una sola fila, sin fecha.** Es el valor por defecto de la
+    empresa, no una historia: lo que cambia en un mes concreto es una excepcion
+    de ese mes (`ObjetivoMes`), y lo que cambia desde un mes para una parte de
+    la red es un tramo de su zona, site, estado o coordinador.
 
     `crecimiento_pct` y `churn_pct` son independientes y cualquiera de los dos
     puede quedar vacio. Cada metrica se resuelve por separado: gana el tramo
@@ -387,6 +395,10 @@ class ObjetivoComercial(models.Model):
                 condition=models.Q(crecimiento_pct__isnull=False) | models.Q(churn_pct__isnull=False),
                 name="objetivo_con_algun_valor",
             ),
+            models.CheckConstraint(
+                condition=~models.Q(nivel="general") | models.Q(desde__isnull=True),
+                name="objetivo_general_sin_fecha",
+            ),
         ]
 
     @property
@@ -432,27 +444,30 @@ class ObjetivoMes(models.Model):
 
 
 class SemaforoObjetivos(models.Model):
-    """Los umbrales de color, todos relativos al objetivo. Fila unica (pk=1).
+    """Los umbrales de color, fijos e iguales para todo el modulo. Fila unica (pk=1).
 
-    El cumplimiento ya es relativo (porcentaje de la meta). Crecimiento y churn
-    se miden en puntos respecto de su objetivo, para que los umbrales se muevan
-    con el: con un 6% de objetivo, `crec_verde_margen = 2` pinta en verde desde
-    el 4%; con un 8%, desde el 6%.
+    Son valores directos, no distancias al objetivo: "crecimiento verde desde
+    el 6%" vale igual para una zona con objetivo del 6% que para una con el 10%.
+    Asi se leen de un vistazo y el mismo porcentaje se pinta igual en cualquier
+    pagina. Lo que si depende del objetivo es el cumplimiento, porque ya es un
+    porcentaje de la meta.
 
-    Los valores por defecto reproducen los colores que los reportes tenian
-    escritos a mano: crecimiento verde >= 4 y amarillo >= 0 (con 6%), churn
-    verde <= 3 y amarillo <= 4 (con 3%), cumplimiento verde >= 100 y amarillo
-    >= 60.
+    - Crecimiento, mas es mejor: verde desde `crec_verde`, amarillo desde
+      `crec_amarillo`, rojo por debajo.
+    - Churn, menos es mejor: verde hasta `churn_verde`, amarillo hasta
+      `churn_amarillo`, rojo por encima.
+    - Cumplimiento (% de la meta): verde desde `cumpl_verde`, amarillo desde
+      `cumpl_amarillo`.
+
+    Los valores por defecto son los que los reportes tenian escritos a mano.
     """
 
     cumpl_verde = models.DecimalField(max_digits=6, decimal_places=2, default=100)
     cumpl_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=60)
-    # Puntos por debajo del objetivo de crecimiento hasta donde sigue el color.
-    crec_verde_margen = models.DecimalField(max_digits=6, decimal_places=2, default=2)
-    crec_amarillo_margen = models.DecimalField(max_digits=6, decimal_places=2, default=6)
-    # Puntos por encima del objetivo de churn hasta donde sigue el color.
-    churn_verde_margen = models.DecimalField(max_digits=6, decimal_places=2, default=0)
-    churn_amarillo_margen = models.DecimalField(max_digits=6, decimal_places=2, default=1)
+    crec_verde = models.DecimalField(max_digits=6, decimal_places=2, default=4)
+    crec_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    churn_verde = models.DecimalField(max_digits=6, decimal_places=2, default=3)
+    churn_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=4)
     actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     actualizado_en = models.DateTimeField(auto_now=True)
 

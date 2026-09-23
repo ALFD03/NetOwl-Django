@@ -36,12 +36,12 @@ export function AnalyticsMetrics({ data, periodo }: Props) {
   return (
     <div className="space-y-8 mb-10">
       <MetricGroup title="Grupo Pérdida" icon={<TrendingDown className="w-4 h-4" />} tone="text-rose-400" columns='md:grid-cols-2 lg:grid-cols-5'>
-        <MetricCard label="Churn Neto" value={`${(data.churn_neto_pct || 0).toFixed(2)} %`} color="red" />
+        <MetricCard label="Churn Neto" value={`${(data.churn_neto_pct || 0).toFixed(2)} %`} color={tonoChurn(data.churn_neto_pct || 0, semaforo)} />
         <MetricCard
           label="Churn Bruto"
           value={`${(data.churn_bruto_pct || 0).toFixed(2)} %`}
           subValue={`Objetivo ${formatObjetivo(objetivo.churn)}`}
-          color={tonoChurn(data.churn_bruto_pct || 0, objetivo.churn, semaforo)}
+          color={tonoChurn(data.churn_bruto_pct || 0, semaforo)}
         />
         <MetricCard label="Bajas" value={`${(data.bajas || 0)}`} color="red" />
         <MetricCard label="Corte Impago" value={data.corte_impagado || 0} color="yellow" />
@@ -56,7 +56,7 @@ export function AnalyticsMetrics({ data, periodo }: Props) {
           label="Crecimiento"
           value={`${(data.crecimiento || 0).toFixed(2)} %`}
           subValue={`Objetivo ${formatObjetivo(objetivo.crecimiento)}`}
-          color={tonoCrecimiento(data.crecimiento || 0, objetivo.crecimiento, semaforo)}
+          color={tonoCrecimiento(data.crecimiento || 0, semaforo)}
         />
       </MetricGroup>
 

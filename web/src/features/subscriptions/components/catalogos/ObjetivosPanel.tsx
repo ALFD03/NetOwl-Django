@@ -1,7 +1,7 @@
 /**
- * La pestaña de objetivos del catálogo: el general con su semáforo, las
- * excepciones por mes y los objetivos propios de zonas, sites, estados y
- * coordinadores.
+ * La pestaña de objetivos del catálogo: el general y el semáforo como
+ * métricas, las excepciones por mes y los objetivos propios de zonas, sites,
+ * estados y coordinadores.
  *
  * Solo edita. Quien aplica los objetivos es el cliente de cada reporte
  * (`lib/objetivos.ts`); aquí se usa esa misma función para enseñar el objetivo
@@ -9,12 +9,13 @@
  */
 
 import type { ReactNode } from 'react';
-import { CalendarRange, Edit3, Globe2, Layers, Plus, Trash2, TrafficCone } from 'lucide-react';
+import { CalendarRange, Edit3, Globe2, Layers, Plus, Target, Trash2, TrafficCone, TrendingDown } from 'lucide-react';
 
-import { Button, DataTable, EmptyState, NeonContainer, type Column } from '@/shared/ui';
+import { Button, DataTable, EmptyState, MetricCard, NeonContainer, type Column } from '@/shared/ui';
 import { formatPeriodoLabel } from '@/shared/utils/formatters';
 import {
   OBJETIVOS_POR_DEFECTO,
+  crearResolver,
   formatObjetivo,
   mesDe,
   objetivoGeneral,
@@ -23,8 +24,10 @@ import type {
   CatalogoObjetivo,
   CatalogoObjetivoMes,
   CatalogoSemaforo,
+  CatalogoZona,
   ObjetivosConfig,
 } from '../../types';
+import { EscalaSemaforo } from './EscalaSemaforo';
 import { NIVEL_OBJETIVO_UI } from './ObjetivoForms';
 
 export interface ObjetivosPanelProps {
@@ -34,7 +37,9 @@ export interface ObjetivosPanelProps {
   config: ObjetivosConfig | null;
   /** Meses con cierre calculado, `YYYY-MM`. */
   periodos: string[];
-  onNuevoGeneral: () => void;
+  /** El catálogo de zonas: dice a qué coordinador, site y estado pertenece cada una. */
+  zonas: CatalogoZona[];
+  onEditarGeneral: (fila: CatalogoObjetivo) => void;
   onNuevoObjetivo: () => void;
   onEditarObjetivo: (fila: CatalogoObjetivo) => void;
   onBorrarObjetivo: (fila: CatalogoObjetivo) => void;
@@ -46,9 +51,6 @@ export interface ObjetivosPanelProps {
 /** Un porcentaje de objetivo, o "hereda" si el tramo no lo fija. */
 const valor = (pct: number | null): ReactNode =>
   pct === null ? <span className="text-slate-500">hereda</span> : formatObjetivo(pct);
-
-/** El mes de hoy, `YYYY-MM`: el que se usa para la vista previa del semáforo. */
-const mesActual = (): string => new Date().toISOString().slice(0, 7);
 
 interface FilaMes {
   periodo: string;
@@ -75,7 +77,8 @@ export function ObjetivosPanel({
   semaforo,
   config,
   periodos,
-  onNuevoGeneral,
+  zonas,
+  onEditarGeneral,
   onNuevoObjetivo,
   onEditarObjetivo,
   onBorrarObjetivo,
@@ -84,10 +87,41 @@ export function ObjetivosPanel({
   onEditarSemaforo,
 }: ObjetivosPanelProps) {
   const cfg = config ?? OBJETIVOS_POR_DEFECTO;
-  const hoy = objetivoGeneral(cfg, periodos[0] ?? mesActual());
   const s = semaforo ?? OBJETIVOS_POR_DEFECTO.semaforo;
 
-  const generales = objetivos.filter((o) => o.nivel === 'general');
+  // Con la misma resolución que los reportes, para decir de cada zona con
+  // objetivo propio si rige o si un nivel superior lo anula. Se mide en el mes
+  // más reciente calculado.
+  const mesReferencia = periodos[0] ?? new Date().toISOString().slice(0, 7);
+  const resolver = crearResolver(
+    cfg,
+    zonas.map((z) => ({ name: z.nombre, site: z.site, type: z.tecnologia, coordinador: z.coordinador, estado: z.estado })),
+  );
+
+  /** En una fila de zona: qué rige hoy en cada métrica que fija, y por qué. */
+  const rigeHoy = (row: CatalogoObjetivo): ReactNode => {
+    if (row.nivel !== 'zona') return <span className="text-slate-600">—</span>;
+    const anuladas = (['crecimiento', 'churn'] as const)
+      .filter((metrica) => row[`${metrica}_pct`] !== null)
+      .map((metrica) => ({ metrica, origen: resolver.origen(mesReferencia, row.entidad, metrica) }))
+      .filter(({ origen }) => origen.nivel !== 'zona');
+    if (anuladas.length === 0) {
+      return <span className="font-bold text-emerald-400">Su objetivo</span>;
+    }
+    return (
+      <span className="font-bold text-amber-400">
+        {anuladas.map(({ metrica, origen }) => (
+          <span key={metrica} className="block">
+            {metrica === 'crecimiento' ? 'Crec.' : 'Churn'}: manda {NIVEL_OBJETIVO_UI[origen.nivel].label.toLowerCase()}
+            {' '}{origen.nombre} ({formatObjetivo(origen.valor)})
+          </span>
+        ))}
+      </span>
+    );
+  };
+
+  // El general es una sola fila: se enseña como métrica, no como tabla.
+  const general = objetivos.find((o) => o.nivel === 'general');
   const porEntidad = objetivos.filter((o) => o.nivel !== 'general');
 
   // Los meses calculados y, además, los que tengan excepción sin estar
@@ -105,35 +139,17 @@ export function ObjetivosPanel({
   const accionesTramo: Column<CatalogoObjetivo> = {
     header: 'Acciones',
     align: 'right',
-    accessor: (row) => {
-      const esBase = row.nivel === 'general' && !row.desde;
-      return (
-        <div className="flex justify-end gap-2">
-          <BotonIcono onClick={() => onEditarObjetivo(row)} title="Editar" tone="sky">
-            <Edit3 className="h-4 w-4" />
-          </BotonIcono>
-          {!esBase && (
-            <BotonIcono onClick={() => onBorrarObjetivo(row)} title="Eliminar" tone="rose">
-              <Trash2 className="h-4 w-4" />
-            </BotonIcono>
-          )}
-        </div>
-      );
-    },
+    accessor: (row) => (
+      <div className="flex justify-end gap-2">
+        <BotonIcono onClick={() => onEditarObjetivo(row)} title="Editar" tone="sky">
+          <Edit3 className="h-4 w-4" />
+        </BotonIcono>
+        <BotonIcono onClick={() => onBorrarObjetivo(row)} title="Eliminar" tone="rose">
+          <Trash2 className="h-4 w-4" />
+        </BotonIcono>
+      </div>
+    ),
   };
-
-  const columnasGeneral: Column<CatalogoObjetivo>[] = [
-    {
-      header: 'Vigente desde',
-      accessor: (row) => (row.desde ? formatPeriodoLabel(row.desde) : <span className="font-bold text-white">Siempre</span>),
-      sortKey: 'desde',
-    },
-    { header: 'Crecimiento', accessor: (row) => valor(row.crecimiento_pct), align: 'right' },
-    { header: 'Churn máx.', accessor: (row) => valor(row.churn_pct), align: 'right' },
-    { header: 'Nota', accessor: (row) => row.nota || '—' },
-    { header: 'Actualizado', accessor: (row) => `${row.actualizado_en}${row.actualizado_por ? ` · ${row.actualizado_por}` : ''}` },
-    accionesTramo,
-  ];
 
   const columnasEntidad: Column<CatalogoObjetivo>[] = [
     {
@@ -151,6 +167,7 @@ export function ObjetivosPanel({
     },
     { header: 'Crecimiento', accessor: (row) => valor(row.crecimiento_pct), align: 'right' },
     { header: 'Churn máx.', accessor: (row) => valor(row.churn_pct), align: 'right' },
+    { header: 'Rige hoy', accessor: rigeHoy },
     { header: 'Nota', accessor: (row) => row.nota || '—' },
     accionesTramo,
   ];
@@ -210,41 +227,81 @@ export function ObjetivosPanel({
 
   return (
     <div className="space-y-8">
-      <NeonContainer
-        title="Objetivo general"
-        subtitle="Rige en todo lo que no tenga un objetivo propio. Cada tramo vale desde su mes hasta el siguiente."
-        icon={<Globe2 className="h-5 w-5" />}
-        theme="slate"
-        noPadding
-        headerAction={
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" icon={<TrafficCone className="h-4 w-4" />} onClick={onEditarSemaforo} disabled={!semaforo}>
-              Semáforo
+      <div className="grid grid-cols-1 items-start gap-8 xl:grid-cols-5">
+        <NeonContainer
+          className="xl:col-span-2"
+          title="Objetivo general"
+          subtitle="Rige en todo lo que no tenga un objetivo propio ni una excepción de mes."
+          icon={<Globe2 className="h-5 w-5" />}
+          theme="slate"
+          headerAction={
+            <Button
+              size="sm"
+              icon={<Edit3 className="h-4 w-4" />}
+              onClick={() => general && onEditarGeneral(general)}
+              disabled={!general}
+            >
+              Editar
             </Button>
-            <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={onNuevoGeneral}>
-              Nuevo tramo
-            </Button>
+          }
+        >
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <MetricCard
+              label="Crecimiento objetivo"
+              value={formatObjetivo(cfg.general.crecimiento)}
+              subValue="Sobre la base inicial"
+              color="green"
+              icon={<Target className="h-4 w-4 text-emerald-400" />}
+            />
+            <MetricCard
+              label="Churn máximo"
+              value={formatObjetivo(cfg.general.churn)}
+              subValue="Bajas / base inicial"
+              color="red"
+              icon={<TrendingDown className="h-4 w-4 text-rose-400" />}
+            />
           </div>
-        }
-      >
-        <div className="grid grid-cols-1 gap-3 border-b border-slate-800 p-4 text-[11px] text-slate-400 md:grid-cols-3">
-          <p>
-            <span className="font-black uppercase tracking-wider text-slate-300">Cumplimiento</span>
-            {' '}verde ≥ {formatObjetivo(s.cumpl_verde)} · amarillo ≥ {formatObjetivo(s.cumpl_amarillo)}
-          </p>
-          <p>
-            <span className="font-black uppercase tracking-wider text-slate-300">Crecimiento</span>
-            {' '}con {formatObjetivo(hoy.crecimiento)}: verde ≥ {formatObjetivo(hoy.crecimiento - s.crec_verde_margen)}
-            {' '}· amarillo ≥ {formatObjetivo(hoy.crecimiento - s.crec_amarillo_margen)}
-          </p>
-          <p>
-            <span className="font-black uppercase tracking-wider text-slate-300">Churn</span>
-            {' '}con {formatObjetivo(hoy.churn)}: verde ≤ {formatObjetivo(hoy.churn + s.churn_verde_margen)}
-            {' '}· amarillo ≤ {formatObjetivo(hoy.churn + s.churn_amarillo_margen)}
-          </p>
-        </div>
-        <DataTable columns={columnasGeneral} data={generales} />
-      </NeonContainer>
+          {general && (
+            <p className="mt-4 text-[10px] text-slate-500">
+              {general.nota ? `${general.nota} · ` : ''}
+              Actualizado {general.actualizado_en}
+              {general.actualizado_por ? ` por ${general.actualizado_por}` : ''}
+            </p>
+          )}
+        </NeonContainer>
+
+        <NeonContainer
+          className="xl:col-span-3"
+          title="Semáforo"
+          subtitle="Umbrales fijos, iguales en todas las páginas del módulo."
+          icon={<TrafficCone className="h-5 w-5" />}
+          theme="yellow"
+          headerAction={
+            <Button
+              size="sm"
+              variant="outline"
+              icon={<Edit3 className="h-4 w-4" />}
+              onClick={onEditarSemaforo}
+              disabled={!semaforo}
+            >
+              Editar semáforo
+            </Button>
+          }
+        >
+          <div className="space-y-5">
+            {([
+              ['Crecimiento', 'crecimiento', s.crec_verde, s.crec_amarillo],
+              ['Churn', 'churn', s.churn_verde, s.churn_amarillo],
+              ['Cumplimiento de la meta', 'cumplimiento', s.cumpl_verde, s.cumpl_amarillo],
+            ] as const).map(([titulo, metrica, verde, amarillo]) => (
+              <div key={metrica}>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-300">{titulo}</p>
+                <EscalaSemaforo metrica={metrica} verde={verde} amarillo={amarillo} />
+              </div>
+            ))}
+          </div>
+        </NeonContainer>
+      </div>
 
       <NeonContainer
         title="Objetivo de cada mes"
@@ -267,7 +324,7 @@ export function ObjetivosPanel({
 
       <NeonContainer
         title="Por zona, site, estado y coordinador"
-        subtitle="Cada nivel hereda del de arriba y nunca del de abajo: el objetivo de una zona no mueve el total de su site ni el de su coordinador."
+        subtitle="Manda el nivel más alto que tenga objetivo: estado, site, coordinador y, por último, la zona. «Rige hoy» avisa cuando el de una zona queda anulado."
         icon={<Layers className="h-5 w-5" />}
         theme="purple"
         noPadding

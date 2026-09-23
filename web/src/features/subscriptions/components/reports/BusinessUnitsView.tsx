@@ -54,8 +54,8 @@ function FtthConsolidated({ summary }: { summary: FtthSummary }) {
   // "Meta Cumplida" es llegar a la meta, no al umbral verde del semáforo: con
   // el verde en 90 se pintaría verde un grupo que todavía no la alcanzó.
   const met = summary.tasaCumplimiento >= 100;
-  const ventasCumplimiento = summary.objetivo > 0 ? (summary.nuevos / summary.objetivo) * 100 : 0;
-  const cierreCumplimiento = summary.cierreEsperado > 0 ? (summary.activos_final / summary.cierreEsperado) * 100 : 0;
+  const ventasCumplimiento = summary.cumplimientoVentas;
+  const cierreCumplimiento = summary.cumplimientoCierre;
   const tonoIngreso = tonoCumplimiento(summary.tasaCumplimiento, semaforo);
   const tonoVentas = tonoCumplimiento(ventasCumplimiento, semaforo);
   const tonoCierre = tonoCumplimiento(cierreCumplimiento, semaforo);
@@ -94,14 +94,14 @@ function FtthConsolidated({ summary }: { summary: FtthSummary }) {
             label="Churn Rate"
             value={`${formatTwoDecimals(summary.churn_rate)} %`}
             subValue={`Objetivo ${formatObjetivo(summary.meta.churnPct)}`}
-            color={tonoChurn(summary.churn_rate, summary.meta.churnPct, semaforo)}
+            color={tonoChurn(summary.churn_rate, semaforo)}
             icon={<Percent className="text-rose-400" />}
           />
           <MetricCard
             label="Crecimiento"
             value={`${formatTwoDecimals(summary.crecimiento)} %`}
             subValue={`Objetivo ${formatObjetivo(summary.meta.crecimientoPct)}`}
-            color={tonoCrecimiento(summary.crecimiento, summary.meta.crecimientoPct, semaforo)}
+            color={tonoCrecimiento(summary.crecimiento, semaforo)}
             icon={<CircleArrowUp className="text-emerald-400" />}
           />
           <MetricCard

@@ -698,7 +698,8 @@ tenía leída (el worker es otro proceso).
 ### Los objetivos comerciales
 
 La meta de crecimiento y el churn máximo **no alteran ningún análisis**: solo
-deciden la meta, el cumplimiento y el color con que se pinta cada cifra. Por eso
+deciden la meta y el cumplimiento de cada fila; el color lo pone aparte el
+semáforo, con umbrales fijos. Por eso
 no se guardan con las métricas calculadas ni exigen relanzar nada: viven en tres
 tablas del catálogo (`ObjetivoComercial`, `ObjetivoMes`, `SemaforoObjetivos`),
 `analytics/objetivos.get_objetivos_config()` los sirve en los props de
@@ -707,33 +708,43 @@ aplica al pintar (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un
 objetivo se ve al recargar la página. Si las tablas no existen (entorno sin
 migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
 
-- **Vigencia.** Cada tramo vale desde su `desde` (`YYYY-MM`, nulo = siempre)
-  hasta el siguiente de la misma entidad: cambiar un objetivo no reescribe los
-  meses que ya pasaron. Para corregir un mes cerrado está `ObjetivoMes`, que
-  sustituye al general solo en ese mes.
-- **Herencia: cada nivel mira hacia arriba, nunca hacia abajo.** De más bajo a
-  más alto: zona → coordinador → site → estado → general. La fila de una zona usa
-  su objetivo o el primero que encuentre subiendo. El total de un coordinador
-  empieza la cadena en el coordinador (la excepción de una zona no lo mueve, el
-  objetivo de su site sí); el de un site, en el site (ni el coordinador ni la
-  zona lo mueven, porque un site reparte sus zonas entre varios coordinadores).
-  Los totales globales —Analytics, Results, Dashboard, consolidado FTTH y bloque
-  RF— usan el general del mes.
+- **El general es uno solo y sin fecha** (restricción `objetivo_general_sin_fecha`):
+  es el valor por defecto de la empresa y rige en todos los meses sin excepción,
+  pasados incluidos. Para cambiar un mes concreto está `ObjetivoMes`, que lo
+  sustituye solo en ese mes.
+- **Vigencia por entidad.** Los tramos de zona, coordinador, site y estado valen
+  desde su `desde` (`YYYY-MM`, nulo = siempre) hasta el siguiente de la misma
+  entidad: cambiarlos no reescribe los meses que ya pasaron.
+- **Manda el nivel más alto que tenga objetivo.** De más alto a más bajo:
+  estado → site → coordinador → zona, con el general del mes como respaldo. El
+  objetivo de una zona solo rige si ni su coordinador, ni su site, ni su estado
+  fijan uno: con la zona al 10% y su coordinador al 15%, la zona cumple contra el
+  15%. La pestaña de objetivos lo avisa en la columna «Rige hoy».
+- **Los totales ignoran los niveles por debajo del grupo.** El de un coordinador
+  mira coordinador, site y estado (la excepción de una zona no lo mueve, el
+  objetivo de su site sí); el de un site mira site y estado (ni el coordinador ni
+  la zona lo mueven, porque un site reparte sus zonas entre varios
+  coordinadores). Los totales globales —Analytics, Results, Dashboard,
+  consolidado FTTH y bloque RF— usan el general del mes.
 - **Un grupo tiene meta, no tasa**: la suma de la meta de cada zona resuelta
   desde el nivel del grupo. Si el grupo tiene objetivo propio eso es su base ×
   su tasa; si no, cada zona aporta la de su site o su estado.
 - **Crecimiento y churn se resuelven por separado.** Un tramo puede fijar solo
-  uno; gana el tramo más reciente de la entidad que fije esa métrica, y si
-  ninguno la fija se hereda del nivel de arriba.
-- **El semáforo es relativo al objetivo.** Cumplimiento en % de la meta;
-  crecimiento y churn en puntos respecto de su objetivo, para que los umbrales se
-  muevan con él. Los valores sembrados reproducen los colores que los reportes
-  tenían escritos a mano (crecimiento verde desde 4 y amarillo desde 0 con 6%;
-  churn verde hasta 3 y amarillo hasta 4 con 3%; cumplimiento 100 / 60).
+  uno; dentro de una entidad gana su tramo más reciente que fije esa métrica, y
+  entre niveles manda el más alto que la fije.
+- **El semáforo tiene umbrales fijos**, iguales en todo el módulo y sin relación
+  con el objetivo de la fila: crecimiento verde desde `crec_verde` y amarillo
+  desde `crec_amarillo`; churn verde hasta `churn_verde` y amarillo hasta
+  `churn_amarillo`; cumplimiento (% de la meta) verde desde `cumpl_verde`. Así el
+  mismo porcentaje se pinta igual en Analytics, Results, el Dashboard y los
+  reportes. Empezaron siendo distancias al objetivo; `subscriptions/0005` los
+  convirtió a valores directos conservando los colores que se veían.
 
-Se editan en la pestaña **Objetivos** del catálogo, con el permiso comercial. El
-general desde siempre no se puede borrar ni fechar: es el que responde cuando
-nadie más lo hace.
+Se editan en la pestaña **Objetivos** del catálogo, con el permiso comercial:
+el general y el semáforo como métricas (el semáforo dibujado como una barra
+rojo/amarillo/verde), las excepciones por mes y los tramos por entidad como
+tablas. El general no se puede borrar: es el que responde cuando nadie más lo
+hace.
 
 ### `manage.py cargar_catalogos`
 

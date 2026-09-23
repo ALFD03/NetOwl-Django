@@ -30,7 +30,7 @@ from services.subscriptions.models import (
 # Lo que responde si la tabla estuviera vacia: el 6% / 3% que la aplicacion
 # tuvo escrito a mano. La migracion ya lo siembra; esto solo evita que un
 # entorno sin sembrar pinte metas de cero.
-GENERAL_POR_DEFECTO = {"desde": None, "crecimiento": 6.0, "churn": 3.0}
+GENERAL_POR_DEFECTO = {"crecimiento": 6.0, "churn": 3.0}
 
 logger = logging.getLogger(__name__)
 
@@ -54,17 +54,17 @@ def serializar_semaforo(semaforo: SemaforoObjetivos) -> dict[str, float]:
     return {
         "cumpl_verde": float(semaforo.cumpl_verde),
         "cumpl_amarillo": float(semaforo.cumpl_amarillo),
-        "crec_verde_margen": float(semaforo.crec_verde_margen),
-        "crec_amarillo_margen": float(semaforo.crec_amarillo_margen),
-        "churn_verde_margen": float(semaforo.churn_verde_margen),
-        "churn_amarillo_margen": float(semaforo.churn_amarillo_margen),
+        "crec_verde": float(semaforo.crec_verde),
+        "crec_amarillo": float(semaforo.crec_amarillo),
+        "churn_verde": float(semaforo.churn_verde),
+        "churn_amarillo": float(semaforo.churn_amarillo),
     }
 
 
 def _config_por_defecto() -> dict[str, Any]:
     """El 6% / 3% de siempre con el semaforo por defecto, sin tocar la BD."""
     return {
-        "general": [dict(GENERAL_POR_DEFECTO)],
+        "general": dict(GENERAL_POR_DEFECTO),
         "meses": {},
         "estados": {},
         "sites": {},
@@ -78,13 +78,13 @@ def get_objetivos_config() -> dict[str, Any]:
     """Todos los objetivos y el semaforo, listos para el cliente.
 
     Si la lectura falla (un entorno donde aun no se aplico la migracion) se
-    sirven los valores por defecto: los objetivos solo colorean y ponen metas,
-    y no deben tumbar la pagina que los muestra.
+    sirven los valores por defecto: los objetivos solo ponen metas y colores, y
+    no deben tumbar la pagina que los muestra.
 
     Forma:
 
         {
-          "general": [tramo, ...],              # ordenados por `desde`
+          "general": {crecimiento, churn},      # una sola fila, sin fecha
           "meses": {"YYYY-MM": {crecimiento, churn}},
           "estados" | "sites" | "coordinadores" | "zonas": {nombre: [tramo, ...]},
           "semaforo": {...},
@@ -103,7 +103,7 @@ def get_objetivos_config() -> dict[str, Any]:
 def _leer_objetivos() -> dict[str, Any]:
     """La lectura de verdad de `get_objetivos_config`."""
     config: dict[str, Any] = {
-        "general": [],
+        "general": dict(GENERAL_POR_DEFECTO),
         "meses": {},
         "estados": {},
         "sites": {},
@@ -122,14 +122,15 @@ def _leer_objetivos() -> dict[str, Any]:
     filas = ObjetivoComercial.objects.select_related(*REFERENCIA_POR_NIVEL.values())
     for fila in filas:
         if fila.nivel == "general":
-            config["general"].append(_tramo(fila))
+            # Una sola fila y sin fecha (`objetivo_general_sin_fecha`). Un
+            # valor nulo no deberia darse, pero si se diera cae al por defecto.
+            for metrica, valor in (("crecimiento", fila.crecimiento_pct), ("churn", fila.churn_pct)):
+                if valor is not None:
+                    config["general"][metrica] = float(valor)
             continue
         entidad = fila.entidad
         if entidad is not None:
             por_nivel[fila.nivel].setdefault(entidad.nombre, []).append(_tramo(fila))
-
-    if not config["general"]:
-        config["general"].append(dict(GENERAL_POR_DEFECTO))
 
     for fila in ObjetivoMes.objects.all():
         config["meses"][fila.periodo] = {

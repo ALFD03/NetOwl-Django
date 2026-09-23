@@ -8,7 +8,7 @@ import { DIMENSION_CONFIG } from '@/shared/constants/labels';
 import { formatInteger } from '@/shared/utils/formatters';
 import { BajasExportButton } from '../reports/BajasExportButton';
 import { SubscriptionPeriodDetail } from './SubscriptionPeriodDetail';
-import { DIMENSION_COLUMNS, buildPeriodColumns, conCumplimiento } from './subscriptionResultsColumns';
+import { buildDimensionColumns, buildPeriodColumns, conCumplimiento } from './subscriptionResultsColumns';
 import { useObjetivos } from '../../hooks/useObjetivos';
 import { useSubscriptionResults } from '../../hooks/useSubscriptionResults';
 import type { SubscriptionCierre } from '../../types';
@@ -29,6 +29,7 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
   const { data: details, loading } = useSubscriptionResults(selectedRow?.periodo_reporte ?? null);
   const objetivos = useObjetivos();
   const columnas = useMemo(() => buildPeriodColumns(objetivos.semaforo), [objetivos]);
+  const columnasDimension = useMemo(() => buildDimensionColumns(objetivos.semaforo), [objetivos]);
   const filas = useMemo(() => conCumplimiento(periodos, objetivos), [periodos, objetivos]);
 
   const activeLabel = DIMENSION_CONFIG[activeDimension]?.label ?? activeDimension;
@@ -87,7 +88,7 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
 
               <div className="h-[420px] overflow-hidden rounded-2xl border border-slate-800">
                 <DataTable
-                  columns={DIMENSION_COLUMNS}
+                  columns={columnasDimension}
                   data={details?.dimensions[activeDimension] ?? []}
                   isLoading={loading}
                   searchable

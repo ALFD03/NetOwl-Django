@@ -12,7 +12,8 @@ import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { useSubscriptionsAnalyticsData } from '@/features/subscriptions/hooks/useSubscriptionsAnalyticsData';
 import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, type DimensionKey } from '@/features/subscriptions/components/analytics';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
-import { SUBS_DAY_CARDS, SUBS_DAY_CHARTS } from '@/features/subscriptions/lib/subsDaySummary';
+import { SUBS_DAY_CHARTS, subsDayCards } from '@/features/subscriptions/lib/subsDaySummary';
+import { useObjetivosConfig } from '@/features/subscriptions/hooks/useObjetivos';
 import { DayProgressBar, DaySummary } from '@/shared/ui';
 import type { DayMetrics, DaySeries, DimensionGroup, Periodo } from '@/shared/types/domain';
 
@@ -34,6 +35,10 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
     dayMetrics,
     selectedDay,
   );
+
+  // El churn del día se pinta con el semáforo del catálogo.
+  const { semaforo } = useObjetivosConfig();
+  const diaCards = useMemo(() => subsDayCards(semaforo), [semaforo]);
 
   // La serie ligera que CRM y Soporte reciben aparte, aqui se saca del mes que
   // ya viajo entero: es el mismo bloque global, dia a dia.
@@ -97,7 +102,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
         serie={serie}
         dias={availableDays}
         dia={effectiveDay}
-        cards={SUBS_DAY_CARDS}
+        cards={diaCards}
         charts={SUBS_DAY_CHARTS}
       />
 

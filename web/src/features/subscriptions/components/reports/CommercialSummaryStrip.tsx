@@ -46,8 +46,8 @@ export function CommercialSummaryStrip({
   const metrics = calcComercial(activosInicio, activosFinal, meta.metaCrecimiento, { clamp: clampCompletion });
 
   const completionColor = tonoCumplimiento(metrics.tasaCumplimiento, semaforo);
-  const growthColor = tonoCrecimiento(crecimiento, meta.crecimientoPct, semaforo);
-  const churnColor = tonoChurn(churnRate, meta.churnPct, semaforo);
+  const growthColor = tonoCrecimiento(crecimiento, semaforo);
+  const churnColor = tonoChurn(churnRate, semaforo);
 
   return (
     <SummaryStrip

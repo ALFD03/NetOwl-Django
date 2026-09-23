@@ -36,15 +36,15 @@ export function SubscriptionPeriodDetail({ row }: SubscriptionPeriodDetailProps)
         <CompactMetric label="Base Inicio" value={int(row.activos_inicio)} color="slate" />
         <CompactMetric label="Base Cierre" value={int(row.activos_final)} color="slate" />
         <CompactMetric label="Nuevos Mes" value={int(row.nuevos_mes)} color="green" />
-        <CompactMetric label="Crecimiento %" value={pct(row.crecimiento)} color={tonoCrecimiento(row.crecimiento, objetivo.crecimiento, semaforo)} />
+        <CompactMetric label="Crecimiento %" value={pct(row.crecimiento)} color={tonoCrecimiento(row.crecimiento, semaforo)} />
         <CompactMetric label="Adic. Netas" value={int(row.adiciones_netas)} color="green" />
         <CompactMetric label="Adic. Brutas" value={int(row.adiciones_brutas)} color="green" />
       </MetricGroup>
 
       <MetricGroup title="Pérdida (Churn)" tone="red" icon={<TrendingDown className="h-3.5 w-3.5" />}>
         <CompactMetric label="Bajas Totales" value={int(row.bajas)} color="red" />
-        <CompactMetric label="Churn Neto %" value={pct(row.churn_neto_pct)} color="red" />
-        <CompactMetric label="Churn Bruto %" value={pct(row.churn_bruto_pct)} color={tonoChurn(row.churn_bruto_pct, objetivo.churn, semaforo)} />
+        <CompactMetric label="Churn Neto %" value={pct(row.churn_neto_pct)} color={tonoChurn(row.churn_neto_pct, semaforo)} />
+        <CompactMetric label="Churn Bruto %" value={pct(row.churn_bruto_pct)} color={tonoChurn(row.churn_bruto_pct, semaforo)} />
         <CompactMetric label="Corte Impago" value={int(row.corte_impagado)} color="red" />
         <CompactMetric label="Suspensiones %" value={pct(row.porcentaje_suspensiones)} color="red" />
         <CompactMetric label="Total Inactivos" value={int(row.total_inactivos)} color="slate" />

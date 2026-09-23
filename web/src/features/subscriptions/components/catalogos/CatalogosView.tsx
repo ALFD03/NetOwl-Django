@@ -370,7 +370,8 @@ export function CatalogosView({
           semaforo={semaforo}
           config={objetivosConfig}
           periodos={periodosCalculados}
-          onNuevoGeneral={() => c.nuevoObjetivo('general')}
+          zonas={zonas}
+          onEditarGeneral={c.editarObjetivo}
           onNuevoObjetivo={() => c.nuevoObjetivo('zona')}
           onEditarObjetivo={c.editarObjetivo}
           onBorrarObjetivo={(fila) =>
@@ -582,14 +583,13 @@ export function CatalogosView({
         isOpen={Boolean(c.semaforoDraft)}
         onClose={c.cerrarFormularios}
         title="Semáforo de objetivos"
-        subtitle="Desde dónde es verde, amarillo o rojo cada métrica, relativo a su objetivo"
+        subtitle="Desde dónde es verde, amarillo o rojo cada métrica, igual en todo el módulo"
         icon={<TrafficCone className="h-5 w-5 text-amber-400" />}
         theme="yellow"
       >
         {c.semaforoDraft && (
           <SemaforoForm
             value={c.semaforoDraft}
-            general={generalHoy}
             saving={c.guardando}
             onChange={(patch) => c.setSemaforoDraft({ ...c.semaforoDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('semaforo', { ...c.semaforoDraft }))}

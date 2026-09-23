@@ -45,7 +45,7 @@ export type ObjetivoDraft = {
   crecimiento_pct: string;
   churn_pct: string;
   nota: string;
-  /** El general desde siempre: no admite fecha ni valores vacíos. */
+  /** El objetivo general: uno solo, sin fecha ni valores vacíos. */
   esBase?: boolean;
 };
 export type ObjetivoMesDraft = {
@@ -208,7 +208,7 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
       crecimiento_pct: comoTexto(fila.crecimiento_pct),
       churn_pct: comoTexto(fila.churn_pct),
       nota: fila.nota,
-      esBase: fila.nivel === 'general' && !fila.desde,
+      esBase: fila.nivel === 'general',
     });
 
   const nuevoObjetivoMes = (periodo = '') =>

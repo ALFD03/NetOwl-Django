@@ -121,7 +121,7 @@ export function useBusinessUnitsData({
       adiciones_brutas: totals.nuevos + totals.reactivaciones - totals.bajas,
       total_nodos: ftthNodes.length,
       meta,
-      ...calcComercial(totals.activos_inicio, totals.activos_final, meta.metaCrecimiento),
+      ...calcComercial(totals.activos_inicio, totals.activos_final, meta.metaCrecimiento, { nuevos: totals.nuevos }),
     };
   }, [groups, selectedBranch, normalizedSearch, period, objetivos]);
 

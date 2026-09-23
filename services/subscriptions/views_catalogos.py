@@ -326,9 +326,9 @@ def _semaforo(s: SemaforoObjetivos) -> dict[str, Any]:
     return {"id": s.id, **serializar_semaforo(s)}
 
 
-def _es_base_general(fila: ObjetivoComercial) -> bool:
-    """El tramo general "desde siempre": el que responde cuando nadie mas lo hace."""
-    return fila.pk is not None and fila.nivel == "general" and fila.desde is None
+def _es_general(fila: ObjetivoComercial) -> bool:
+    """El objetivo general: una sola fila, sin fecha, que no se crea ni se borra."""
+    return fila.nivel == "general"
 
 
 def _aplicar_objetivo(fila: ObjetivoComercial, data: dict, request) -> None:
@@ -337,26 +337,29 @@ def _aplicar_objetivo(fila: ObjetivoComercial, data: dict, request) -> None:
     El nivel y la entidad solo se fijan al crearlo: mover un tramo de una zona
     a otra es borrar uno y crear otro, y asi la tabla no cambia de significado
     bajo los pies de quien la esta mirando.
+
+    El general es una sola fila sin fecha: se edita, pero no se crea otro ni se
+    le pone vigencia. Lo que cambia en un mes concreto es una excepcion de mes.
     """
     if fila.pk is None:
-        fila.nivel = _opcion(data, "nivel", NIVEL_OBJETIVO_CHOICES, "general")
+        fila.nivel = _opcion(data, "nivel", NIVEL_OBJETIVO_CHOICES, "zona")
+        if _es_general(fila) and ObjetivoComercial.objects.filter(nivel="general").exists():
+            raise Duplicado("El objetivo general es uno solo: edítalo.")
         campo = REFERENCIA_POR_NIVEL.get(fila.nivel)
         if campo:
             entidad = _relacion(_MODELO_POR_NIVEL[fila.nivel], data, "entidad_id", obligatorio=True)
             setattr(fila, campo, entidad)
 
     desde = _mes(data, "desde", obligatorio=False)
-    if _es_base_general(fila) and desde is not None:
-        raise DatosInvalidos("El objetivo general de base vale desde siempre: no admite fecha.")
-    if fila.nivel == "general" and fila.pk is None and desde is None:
-        raise Duplicado("El objetivo general desde siempre ya existe: edítalo o crea un tramo con fecha.")
+    if _es_general(fila) and desde is not None:
+        raise DatosInvalidos(
+            "El objetivo general no lleva fecha: para cambiar un mes concreto usa una excepción de mes."
+        )
     fila.desde = desde
 
     _valores_objetivo(fila, data)
-    if fila.nivel == "general" and fila.desde is None and (
-        fila.crecimiento_pct is None or fila.churn_pct is None
-    ):
-        raise DatosInvalidos("El objetivo general de base necesita crecimiento y churn: no hay de quien heredar.")
+    if _es_general(fila) and (fila.crecimiento_pct is None or fila.churn_pct is None):
+        raise DatosInvalidos("El objetivo general necesita crecimiento y churn: no hay de quien heredar.")
 
     # La unicidad (entidad, desde) no la puede exigir la BD —los NULL son
     # distintos en un UNIQUE—, asi que se comprueba aqui.
@@ -375,8 +378,8 @@ def _aplicar_objetivo(fila: ObjetivoComercial, data: dict, request) -> None:
 
 def _borrar_objetivo(fila: ObjetivoComercial) -> str | None:
     """Por que no se puede borrar este tramo, o None si se puede."""
-    if _es_base_general(fila):
-        return "El objetivo general de base no se puede eliminar: es el que responde cuando nadie más lo hace."
+    if _es_general(fila):
+        return "El objetivo general no se puede eliminar: es el que responde cuando nadie más lo hace."
     return None
 
 
@@ -392,16 +395,16 @@ def _aplicar_objetivo_mes(fila: ObjetivoMes, data: dict, request) -> None:
 
 
 def _aplicar_semaforo(fila: SemaforoObjetivos, data: dict, request) -> None:
-    """Vuelca el cuerpo sobre los umbrales de color."""
+    """Vuelca el cuerpo sobre los umbrales de color (valores directos, en %)."""
     campos = (
         "cumpl_verde", "cumpl_amarillo",
-        "crec_verde_margen", "crec_amarillo_margen",
-        "churn_verde_margen", "churn_amarillo_margen",
+        "crec_verde", "crec_amarillo",
+        "churn_verde", "churn_amarillo",
     )
     valores = {}
     for campo in campos:
-        # No `_numero`: su `or por_defecto` tomaria un 0 legitimo (margen verde
-        # de churn, por ejemplo) por un campo vacio.
+        # No `_numero`: su `or por_defecto` tomaria un 0 legitimo (amarillo de
+        # crecimiento desde 0%, por ejemplo) por un campo vacio.
         bruto = data.get(campo)
         if bruto in (None, ""):
             raise DatosInvalidos(f"El campo «{campo}» es obligatorio.")
@@ -409,14 +412,16 @@ def _aplicar_semaforo(fila: SemaforoObjetivos, data: dict, request) -> None:
             valores[campo] = float(bruto)
         except (TypeError, ValueError):
             raise DatosInvalidos(f"El campo «{campo}» debe ser un numero.") from None
-    if any(valor < 0 for valor in valores.values()):
-        raise DatosInvalidos("Los umbrales no pueden ser negativos.")
+    # El crecimiento puede ser negativo (amarillo desde -1%, por ejemplo); un
+    # churn o un cumplimiento negativos no significan nada.
+    if any(valores[campo] < 0 for campo in ("cumpl_verde", "cumpl_amarillo", "churn_verde", "churn_amarillo")):
+        raise DatosInvalidos("Los umbrales de churn y de cumplimiento no pueden ser negativos.")
     if valores["cumpl_amarillo"] > valores["cumpl_verde"]:
-        raise DatosInvalidos("El umbral amarillo de cumplimiento no puede superar al verde.")
-    if valores["crec_verde_margen"] > valores["crec_amarillo_margen"]:
-        raise DatosInvalidos("El margen amarillo de crecimiento tiene que ser igual o mayor que el verde.")
-    if valores["churn_verde_margen"] > valores["churn_amarillo_margen"]:
-        raise DatosInvalidos("El margen amarillo de churn tiene que ser igual o mayor que el verde.")
+        raise DatosInvalidos("En cumplimiento, el amarillo tiene que empezar por debajo del verde.")
+    if valores["crec_amarillo"] > valores["crec_verde"]:
+        raise DatosInvalidos("En crecimiento, el amarillo tiene que empezar por debajo del verde.")
+    if valores["churn_verde"] > valores["churn_amarillo"]:
+        raise DatosInvalidos("En churn, el verde tiene que acabar por debajo del amarillo.")
     for campo, valor in valores.items():
         setattr(fila, campo, valor)
     fila.actualizado_por = request.user

@@ -214,9 +214,10 @@ is the only place that resolves them — meta, completion and colour — and
 again: that is how the app ended up with the 6% written in eight files and three different
 "green" cut-offs.
 
-Inheritance looks upwards only: zone → coordinator → site → state → general. A zone row
-starts at the zone, a coordinator total at the coordinator, a site total at the site, and
-global totals use the month's general objective. Group metas are the sum of their zones'
+The highest level that sets an objective wins: state → site → coordinator → zone, then the
+month's general. A zone's own objective applies only if nothing above it sets one. Totals
+ignore the levels below the group: a coordinator total resolves from the coordinator up, a
+site total from the site up, and global totals use the month's general objective. Group metas are the sum of their zones'
 metas resolved from the group's level, so a group never contradicts its parts. The report
 hooks (`useSalesReportData`, `useBusinessUnitsData`) attach a `meta` to every node and group;
 components only paint.
@@ -227,6 +228,8 @@ components only paint.
 absolute growth meta (`Meta.metaCrecimiento`) and takes a
 `clamp` option because Sales Report and Business Units have always computed
 `tasaCumplimiento` differently — Sales Report clamps to `[0, 100]`, Business Units does
-not, which is what lets its "Meta Cumplida" badge fire above 100%. Both behaviours are
-preserved intentionally. Unifying them changes displayed commercial KPIs, so treat it as
+not, which is what lets its "Meta Cumplida" badge fire above 100%. The node table shows the
+three completions — ingreso (net growth), ventas (installations) and cierre (final base against
+the expected one) — next to each row's objective, and the clamp applies to all three in Sales
+Report. Both behaviours are preserved intentionally. Unifying them changes displayed commercial KPIs, so treat it as
 a product decision, not a cleanup.

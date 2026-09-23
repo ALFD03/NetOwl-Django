@@ -1,4 +1,4 @@
-/** La tabla de nodos de los dos reportes comerciales, con su KPI de cumplimiento. */
+/** La tabla de nodos de los dos reportes comerciales, con su objetivo y sus tres cumplimientos. */
 
 import type { ReactNode } from 'react';
 import { RefreshCw, TrendingUp } from 'lucide-react';
@@ -15,11 +15,13 @@ import {
 import {
   OBJETIVOS_POR_DEFECTO,
   TEXTO_TONO,
+  formatObjetivo,
   metaDeBase,
   objetivoGeneral,
   tonoChurn,
   tonoCrecimiento,
 } from '../../lib/objetivos';
+import type { SemaforoObjetivos } from '../../types';
 
 export interface NodePerformanceTableProps<T extends CommercialNode> {
   nodes: T[];
@@ -40,13 +42,44 @@ export interface NodePerformanceTableProps<T extends CommercialNode> {
   renderRowAction?: (node: T) => ReactNode;
 }
 
+/** Un cumplimiento: el porcentaje con el color del semáforo y una barra de progreso. */
+function CeldaCumplimiento({
+  valor,
+  semaforo,
+  mono,
+}: {
+  valor: number;
+  semaforo: SemaforoObjetivos;
+  mono: boolean;
+}) {
+  return (
+    <td className="py-3 text-right">
+      <div className="flex flex-col items-end">
+        <span className={cn('font-black', mono && 'font-mono', completionTone(valor, semaforo))}>
+          {formatTwoDecimals(valor)}%
+        </span>
+        <div className="mt-1 h-1 w-12 overflow-hidden rounded-full bg-slate-800">
+          <div
+            className={cn('h-full', completionBar(valor, semaforo))}
+            style={{ width: `${Math.min(Math.max(valor, 0), 100)}%` }}
+          />
+        </div>
+      </div>
+    </td>
+  );
+}
 
 /**
  * Per-node commercial performance table.
  *
  * `SalesReport` and `BusinessUnits` each carried a verbatim copy of this
- * ten-column table; they now differ only by `labelHeader`, `renderBadge`,
- * `mono` and the clamping rule.
+ * table; they now differ only by `labelHeader`, `renderBadge`, `mono` and the
+ * clamping rule.
+ *
+ * Cada fila enseña su objetivo —la meta absoluta y el porcentaje que la
+ * produce, que puede ser propio de la zona— y los tres cumplimientos contra
+ * ella: ingreso (crecimiento neto), ventas (instalaciones) y cierre (base
+ * final contra la esperada).
  */
 export function NodePerformanceTable<T extends CommercialNode>({
   nodes,
@@ -75,8 +108,11 @@ export function NodePerformanceTable<T extends CommercialNode>({
             <th className="pb-3 text-right">Bajas</th>
             <th className="pb-3 text-right">Churn %</th>
             <th className="pb-3 text-right">Crec %</th>
+            <th className="pb-3 text-right text-sky-400">Objetivo</th>
             <th className="pb-3 text-right font-bold text-amber-500">Faltante</th>
-            <th className="pb-3 text-right">Cumpl %</th>
+            <th className="pb-3 text-right">Cumpl. Ingreso</th>
+            <th className="pb-3 text-right">Cumpl. Ventas</th>
+            <th className="pb-3 text-right">Cumpl. Cierre</th>
             <th className="pb-3 pr-2 text-right">Cierre</th>
             {renderRowAction && <th className="pb-3 pr-2 text-right"><span className="sr-only">Acciones</span></th>}
           </tr>
@@ -92,7 +128,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
               inicio,
               Number(node.activos_final ?? 0),
               meta.metaCrecimiento,
-              { clamp: clampCompletion },
+              { clamp: clampCompletion, nuevos: Number(node.nuevos ?? 0) },
             );
             const growth = Number(node.crecimiento ?? 0);
             const churn = Number(node.churn_bruto_pct ?? 0);
@@ -108,31 +144,31 @@ export function NodePerformanceTable<T extends CommercialNode>({
                 <td className={num('text-blue-400')}>{formatInteger(node.reactivaciones)}</td>
                 <td className={num('text-rose-500')}>-{formatInteger(node.bajas)}</td>
                 <td
-                  className={num(TEXTO_TONO[tonoChurn(churn, meta.churnPct, semaforo)])}
+                  className={num(TEXTO_TONO[tonoChurn(churn, semaforo)])}
                   title={`Objetivo de churn: ${formatTwoDecimals(meta.churnPct)}%`}
                 >
                   {formatTwoDecimals(node.churn_bruto_pct)}%
                 </td>
                 <td
-                  className={num(TEXTO_TONO[tonoCrecimiento(growth, meta.crecimientoPct, semaforo)])}
+                  className={num(TEXTO_TONO[tonoCrecimiento(growth, semaforo)])}
                   title={`Objetivo de crecimiento: ${formatTwoDecimals(meta.crecimientoPct)}%`}
                 >
                   {formatTwoDecimals(node.crecimiento)}%
                 </td>
-                <td className={num('font-black text-amber-500/80')}>{formatInteger(metrics.faltante)}</td>
-                <td className="py-3 text-right">
+                <td className="py-3 text-right" title={`Cierre esperado: ${formatInteger(metrics.cierreEsperado)}`}>
                   <div className="flex flex-col items-end">
-                    <span className={cn('font-black', mono && 'font-mono', completionTone(metrics.tasaCumplimiento, semaforo))}>
-                      {formatTwoDecimals(metrics.tasaCumplimiento)}%
+                    <span className={cn('font-black text-sky-300', mono && 'font-mono')}>
+                      +{formatInteger(metrics.objetivo)}
                     </span>
-                    <div className="mt-1 h-1 w-12 overflow-hidden rounded-full bg-slate-800">
-                      <div
-                        className={cn('h-full', completionBar(metrics.tasaCumplimiento, semaforo))}
-                        style={{ width: `${Math.min(Math.max(metrics.tasaCumplimiento, 0), 100)}%` }}
-                      />
-                    </div>
+                    <span className="text-[9px] font-bold text-slate-500">
+                      {formatObjetivo(meta.crecimientoPct)} de la base
+                    </span>
                   </div>
                 </td>
+                <td className={num('font-black text-amber-500/80')}>{formatInteger(metrics.faltante)}</td>
+                <CeldaCumplimiento valor={metrics.tasaCumplimiento} semaforo={semaforo} mono={mono} />
+                <CeldaCumplimiento valor={metrics.cumplimientoVentas} semaforo={semaforo} mono={mono} />
+                <CeldaCumplimiento valor={metrics.cumplimientoCierre} semaforo={semaforo} mono={mono} />
                 <td className={cn('py-3 pr-2 text-right font-black text-white', mono && 'font-mono')}>
                   {formatInteger(node.activos_final)}
                 </td>
