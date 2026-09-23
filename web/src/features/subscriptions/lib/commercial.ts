@@ -1,5 +1,5 @@
 import type { SemaforoObjetivos } from '../types';
-import { BARRA_TONO, TEXTO_TONO, tonoCumplimiento, type Meta } from './objetivos';
+import { BARRA_TONO, TEXTO_TONO, tonoCumplimiento, type Meta, type OrigenObjetivo } from './objetivos';
 
 /** The node/zone shape both the Sales and Business Units reports render. */
 export interface CommercialNode {
@@ -19,6 +19,8 @@ export interface CommercialNode {
    * `lib/objetivos.ts`). Ausente solo si nadie la resolvió todavía.
    */
   meta?: Meta;
+  /** Qué nivel fija el objetivo de crecimiento del nodo, para enseñarlo junto a él. */
+  origenObjetivo?: OrigenObjetivo;
 }
 
 export interface CommercialMetrics {

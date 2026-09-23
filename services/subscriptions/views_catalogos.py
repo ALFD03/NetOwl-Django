@@ -39,10 +39,16 @@ from core import fixtures
 from core.utils import clean_json_props
 from services.config.decorators import permission_required
 from services.subscriptions.analytics.imports import productos_fuera_de_catalogo
-from services.subscriptions.analytics.objetivos import get_objetivos_config, serializar_semaforo
+from services.subscriptions.analytics.objetivos import (
+    get_objetivos_config,
+    nodos_conocidos,
+    serializar_semaforo,
+)
 from services.subscriptions.analytics.queries import get_periodos
 from services.subscriptions.models import (
+    CAMPOS_REFERENCIA,
     NIVEL_OBJETIVO_CHOICES,
+    NIVELES_CON_SUCURSAL,
     REFERENCIA_POR_NIVEL,
     TECNOLOGIA_CHOICES,
     TIPO_PERSONA_CHOICES,
@@ -249,7 +255,13 @@ def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:
 _MES = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 # Los modelos de cada nivel, para resolver la referencia que manda el cliente.
-_MODELO_POR_NIVEL = {"estado": Estado, "site": Site, "coordinador": Coordinador, "zona": Zona}
+_MODELO_POR_NIVEL = {
+    "estado": Estado,
+    "site": Site,
+    "coordinador": Coordinador,
+    "zona": Zona,
+    "zona_sucursal": Zona,
+}
 
 
 def _mes(data: dict, clave: str, *, obligatorio: bool) -> str | None:
@@ -292,13 +304,18 @@ def _pct(valor) -> float | None:
 
 
 def _objetivo(o: ObjetivoComercial) -> dict[str, Any]:
-    """Un tramo de objetivo, con el nombre de su entidad resuelto."""
+    """Un tramo de objetivo, con el nombre de su entidad resuelto.
+
+    `entidad` es el nombre con el que se cruza contra los reportes: la sucursal
+    tal cual, o `"Zona - Sucursal"` en un nodo.
+    """
     entidad = o.entidad
     return {
         "id": o.id,
         "nivel": o.nivel,
         "entidad_id": entidad.id if entidad else None,
-        "entidad": entidad.nombre if entidad else "",
+        "entidad": o.nombre_entidad,
+        "sucursal": o.sucursal,
         "desde": o.desde or "",
         "crecimiento_pct": _pct(o.crecimiento_pct),
         "churn_pct": _pct(o.churn_pct),
@@ -331,6 +348,49 @@ def _es_general(fila: ObjetivoComercial) -> bool:
     return fila.nivel == "general"
 
 
+def _entidad_objetivo(nivel: str, data: dict):
+    """La fila de catalogo del nivel: por `entidad_id` o por `entidad_nombre`.
+
+    El nombre existe porque un nodo se elige de los datos (`"Guacara - NYC"`),
+    que traen el nombre de la zona y no su id.
+    """
+    modelo = _MODELO_POR_NIVEL[nivel]
+    if data.get("entidad_id") not in (None, "", 0):
+        return _relacion(modelo, data, "entidad_id", obligatorio=True)
+    nombre = _texto(data, "entidad_nombre", maximo=200)
+    if not nombre:
+        raise DatosInvalidos("Indica a qué zona, site, estado o coordinador va el objetivo.")
+    fila = modelo.objects.filter(nombre__iexact=nombre).first()
+    if fila is None:
+        raise DatosInvalidos(f"«{nombre}» no está en el catálogo.")
+    return fila
+
+
+def _referencia_objetivo(nivel: str, data: dict) -> dict[str, Any]:
+    """Los campos que identifican a quien tiene el objetivo en `nivel`."""
+    referencia: dict[str, Any] = {}
+    campo = REFERENCIA_POR_NIVEL.get(nivel)
+    if campo:
+        referencia[campo] = _entidad_objetivo(nivel, data)
+    if nivel in NIVELES_CON_SUCURSAL:
+        referencia["sucursal"] = _texto(data, "sucursal", obligatorio=True, maximo=80)
+    return referencia
+
+
+def _filtro_referencia(nivel: str, referencia: dict[str, Any], desde: str | None) -> dict[str, Any]:
+    """El filtro de "el mismo tramo": mismo nivel, misma entidad, mismo `desde`.
+
+    La sucursal se compara sin mayusculas: `nyc` y `NYC` son la misma.
+    """
+    filtro: dict[str, Any] = {"nivel": nivel, "desde": desde}
+    for campo, valor in referencia.items():
+        if campo == "sucursal":
+            filtro["sucursal__iexact"] = valor
+        else:
+            filtro[campo] = valor
+    return filtro
+
+
 def _aplicar_objetivo(fila: ObjetivoComercial, data: dict, request) -> None:
     """Vuelca el cuerpo sobre un tramo de objetivo.
 
@@ -345,10 +405,8 @@ def _aplicar_objetivo(fila: ObjetivoComercial, data: dict, request) -> None:
         fila.nivel = _opcion(data, "nivel", NIVEL_OBJETIVO_CHOICES, "zona")
         if _es_general(fila) and ObjetivoComercial.objects.filter(nivel="general").exists():
             raise Duplicado("El objetivo general es uno solo: edítalo.")
-        campo = REFERENCIA_POR_NIVEL.get(fila.nivel)
-        if campo:
-            entidad = _relacion(_MODELO_POR_NIVEL[fila.nivel], data, "entidad_id", obligatorio=True)
-            setattr(fila, campo, entidad)
+        for campo, valor in _referencia_objetivo(fila.nivel, data).items():
+            setattr(fila, campo, valor)
 
     desde = _mes(data, "desde", obligatorio=False)
     if _es_general(fila) and desde is not None:
@@ -364,12 +422,13 @@ def _aplicar_objetivo(fila: ObjetivoComercial, data: dict, request) -> None:
     # La unicidad (entidad, desde) no la puede exigir la BD —los NULL son
     # distintos en un UNIQUE—, asi que se comprueba aqui.
     campo = REFERENCIA_POR_NIVEL.get(fila.nivel)
-    filtro = {"nivel": fila.nivel, "desde": fila.desde}
-    if campo:
-        filtro[f"{campo}_id"] = getattr(fila, f"{campo}_id")
+    referencia: dict[str, Any] = {campo: getattr(fila, campo)} if campo else {}
+    if fila.nivel in NIVELES_CON_SUCURSAL:
+        referencia["sucursal"] = fila.sucursal
+    filtro = _filtro_referencia(fila.nivel, referencia, fila.desde)
     if ObjetivoComercial.objects.filter(**filtro).exclude(pk=fila.pk).exists():
         cuando = f"desde {fila.desde}" if fila.desde else "desde siempre"
-        quien = fila.entidad.nombre if fila.entidad else "el nivel general"
+        quien = fila.nombre_entidad or "el nivel general"
         raise Duplicado(f"Ya hay un objetivo {cuando} para {quien}: edítalo.")
 
     fila.nota = _texto(data, "nota")
@@ -491,7 +550,7 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     elif nombre == "ignorados":
         consulta = consulta.select_related("creado_por")
     elif nombre == "objetivos":
-        consulta = consulta.select_related(*REFERENCIA_POR_NIVEL.values(), "actualizado_por")
+        consulta = consulta.select_related(*CAMPOS_REFERENCIA, "actualizado_por")
     elif nombre == "objetivos_mes":
         consulta = consulta.select_related("actualizado_por")
     return [catalogo["serializar"](fila) for fila in consulta]
@@ -542,6 +601,9 @@ def catalogos_view(request):
     props["periodosCalculados"] = (
         sorted({p[:7] for p in get_periodos()}, reverse=True) if comercial else []
     )
+    # La sucursal no es un catalogo: los nodos que ya aparecen en los datos son
+    # de donde se eligen la sucursal y el nodo de un objetivo.
+    props["nodosConocidos"] = nodos_conocidos() if comercial else []
 
     props["pendientes"] = []
     if operacional:

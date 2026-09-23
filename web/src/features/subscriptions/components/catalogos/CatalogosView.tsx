@@ -60,6 +60,7 @@ export function CatalogosView({
   semaforo,
   objetivosConfig,
   periodosCalculados,
+  nodosConocidos,
   pendientes,
   comercial,
   operacional,
@@ -75,6 +76,10 @@ export function CatalogosView({
   const configObjetivos = objetivosConfig ?? OBJETIVOS_POR_DEFECTO;
   const mesReferencia = periodosCalculados[0] ?? new Date().toISOString().slice(0, 7);
   const generalHoy = objetivoGeneral(configObjetivos, mesReferencia);
+  // Solo los nodos cuya zona está en el catálogo pueden tener objetivo de nodo:
+  // el objetivo cuelga de la zona. La sucursal, en cambio, vale sin catálogo.
+  const nombresZona = new Set(zonas.map((z) => z.nombre.toLowerCase()));
+  const nodosDelCatalogo = nodosConocidos.filter((n) => nombresZona.has(n.zona.toLowerCase()));
   const generalSinExcepcion = (periodo: string) =>
     objetivoGeneral({ ...configObjetivos, meses: {} }, periodo || mesReferencia);
 
@@ -371,6 +376,7 @@ export function CatalogosView({
           config={objetivosConfig}
           periodos={periodosCalculados}
           zonas={zonas}
+          nodos={nodosConocidos}
           onEditarGeneral={c.editarObjetivo}
           onNuevoObjetivo={() => c.nuevoObjetivo('zona')}
           onEditarObjetivo={c.editarObjetivo}
@@ -548,6 +554,7 @@ export function CatalogosView({
           <ObjetivoForm
             value={c.objetivoDraft}
             entidades={{ zona: zonas, site: sites, estado: estados, coordinador: coordinadores }}
+            nodos={nodosDelCatalogo}
             general={generalHoy}
             saving={c.guardando}
             onChange={(patch) => c.setObjetivoDraft({ ...c.objetivoDraft!, ...patch })}

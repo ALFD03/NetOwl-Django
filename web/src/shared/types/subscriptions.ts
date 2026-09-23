@@ -333,6 +333,10 @@ export interface ObjetivosConfig {
   sites: Record<string, TramoObjetivo[]>;
   coordinadores: Record<string, TramoObjetivo[]>;
   zonas: Record<string, TramoObjetivo[]>;
+  /** Por sucursal tal y como la trae el export (`NETCOM`, `NYC`...). */
+  sucursales: Record<string, TramoObjetivo[]>;
+  /** Por nodo, con la clave de la dimensión `zona_sucursal`: `"Guacara - NYC"`. */
+  zonas_sucursal: Record<string, TramoObjetivo[]>;
   semaforo: SemaforoObjetivos;
 }
 
@@ -430,16 +434,34 @@ export interface CatalogoProductoIgnorado {
   creado_en: string;
 }
 
-/** Nivel de un objetivo, de más alto a más bajo. */
-export type NivelObjetivoCatalogo = 'general' | 'estado' | 'site' | 'coordinador' | 'zona';
+/** Nivel de un objetivo, de más alto a más bajo (el general es el respaldo). */
+export type NivelObjetivoCatalogo =
+  | 'general'
+  | 'sucursal'
+  | 'estado'
+  | 'site'
+  | 'coordinador'
+  | 'zona'
+  | 'zona_sucursal';
+
+/** Un nodo (zona - sucursal) que aparece en algún cierre calculado. */
+export interface NodoConocido {
+  /** `"Guacara - NYC"`. */
+  nodo: string;
+  zona: string;
+  sucursal: string;
+}
 
 /** Un tramo de objetivo tal y como lo edita la pestaña de objetivos. */
 export interface CatalogoObjetivo {
   id: number;
   nivel: NivelObjetivoCatalogo;
-  /** La fila de zona, site, estado o coordinador. Nulo en el general. */
+  /** La fila de zona, site, estado o coordinador (la zona de un nodo). Nulo en el general y la sucursal. */
   entidad_id: number | null;
+  /** Nombre con el que se cruza: la sucursal tal cual, o `"Zona - Sucursal"` en un nodo. */
   entidad: string;
+  /** En los niveles `sucursal` y `zona_sucursal`; vacío en el resto. */
+  sucursal: string;
   /** `YYYY-MM`, o vacío si vale desde siempre. */
   desde: string;
   /** Nulo: esa métrica se hereda. */
@@ -486,6 +508,8 @@ export interface SubscriptionCatalogosProps {
   objetivosConfig: ObjetivosConfig | null;
   /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
   periodosCalculados: string[];
+  /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
+  nodosConocidos: NodoConocido[];
   pendientes: ProductoPendiente[];
   /**
    * Qué mitad del catálogo administra el usuario. Las listas de la otra llegan

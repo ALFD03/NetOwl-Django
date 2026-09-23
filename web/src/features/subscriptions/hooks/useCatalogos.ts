@@ -40,6 +40,12 @@ export type ObjetivoDraft = {
   id?: number;
   nivel: NivelObjetivoCatalogo;
   entidad_id: number | null;
+  /** La zona de un nodo, por nombre: los nodos salen de los datos, no del catálogo. */
+  entidad_nombre?: string;
+  /** En los niveles `sucursal` y `zona_sucursal`. */
+  sucursal: string;
+  /** Cómo se llama lo que tiene el objetivo, para enseñarlo al editar. */
+  etiqueta?: string;
   /** `YYYY-MM`; vacío es "desde siempre". */
   desde: string;
   crecimiento_pct: string;
@@ -194,6 +200,7 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
     setObjetivoDraft({
       nivel,
       entidad_id: null,
+      sucursal: '',
       desde: '',
       crecimiento_pct: '',
       churn_pct: '',
@@ -204,6 +211,8 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
       id: fila.id,
       nivel: fila.nivel,
       entidad_id: fila.entidad_id,
+      sucursal: fila.sucursal,
+      etiqueta: fila.entidad,
       desde: fila.desde,
       crecimiento_pct: comoTexto(fila.crecimiento_pct),
       churn_pct: comoTexto(fila.churn_pct),

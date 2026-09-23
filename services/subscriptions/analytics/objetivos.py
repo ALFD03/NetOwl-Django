@@ -20,6 +20,8 @@ from typing import Any
 
 from django.db import DatabaseError
 
+from core.config import DB_SCHEMA, TableNames
+from core.database import DBConnector
 from services.subscriptions.models import (
     REFERENCIA_POR_NIVEL,
     ObjetivoComercial,
@@ -70,6 +72,8 @@ def _config_por_defecto() -> dict[str, Any]:
         "sites": {},
         "coordinadores": {},
         "zonas": {},
+        "sucursales": {},
+        "zonas_sucursal": {},
         "semaforo": serializar_semaforo(SemaforoObjetivos()),
     }
 
@@ -86,7 +90,8 @@ def get_objetivos_config() -> dict[str, Any]:
         {
           "general": {crecimiento, churn},      # una sola fila, sin fecha
           "meses": {"YYYY-MM": {crecimiento, churn}},
-          "estados" | "sites" | "coordinadores" | "zonas": {nombre: [tramo, ...]},
+          "estados" | "sites" | "coordinadores" | "zonas" | "sucursales": {nombre: [tramo, ...]},
+          "zonas_sucursal": {"Zona - Sucursal": [tramo, ...]},
           "semaforo": {...},
         }
 
@@ -109,12 +114,16 @@ def _leer_objetivos() -> dict[str, Any]:
         "sites": {},
         "coordinadores": {},
         "zonas": {},
+        "sucursales": {},
+        "zonas_sucursal": {},
     }
     por_nivel = {
         "estado": config["estados"],
         "site": config["sites"],
         "coordinador": config["coordinadores"],
         "zona": config["zonas"],
+        "sucursal": config["sucursales"],
+        "zona_sucursal": config["zonas_sucursal"],
     }
 
     # El `ordering` del modelo ya los deja con el tramo "desde siempre" primero
@@ -128,9 +137,11 @@ def _leer_objetivos() -> dict[str, Any]:
                 if valor is not None:
                     config["general"][metrica] = float(valor)
             continue
-        entidad = fila.entidad
-        if entidad is not None:
-            por_nivel[fila.nivel].setdefault(entidad.nombre, []).append(_tramo(fila))
+        # Un nodo va con la misma clave que el `valor` de la dimension
+        # `zona_sucursal` ("Guacara - NYC"), que es contra lo que se cruza.
+        nombre = fila.nombre_entidad
+        if nombre:
+            por_nivel[fila.nivel].setdefault(nombre, []).append(_tramo(fila))
 
     for fila in ObjetivoMes.objects.all():
         config["meses"][fila.periodo] = {
@@ -140,3 +151,30 @@ def _leer_objetivos() -> dict[str, Any]:
 
     config["semaforo"] = serializar_semaforo(SemaforoObjetivos.actual())
     return config
+
+
+def nodos_conocidos() -> list[dict[str, str]]:
+    """Los nodos (zona - sucursal) que aparecen en algun cierre calculado.
+
+    La sucursal no es un catalogo: solo existe en los datos. Esta lista es de
+    donde elegirla, y el nodo, al fijar un objetivo desde el catalogo. Si la
+    lectura falla, lista vacia: el formulario sigue sirviendo para lo demas.
+    """
+    try:
+        df = DBConnector().query(
+            f"""
+            SELECT DISTINCT valor
+            FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+            WHERE dimension = 'zona_sucursal'
+            """
+        )
+    except Exception:
+        logger.exception("No se pudieron leer los nodos conocidos")
+        return []
+
+    nodos = []
+    for valor in sorted(str(v) for v in df.get("valor", [])):
+        zona, _, sucursal = valor.partition(" - ")
+        if zona.strip() and sucursal.strip():
+            nodos.append({"nodo": valor, "zona": zona.strip(), "sucursal": sucursal.strip()})
+    return nodos

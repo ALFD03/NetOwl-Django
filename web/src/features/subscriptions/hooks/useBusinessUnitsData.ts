@@ -4,9 +4,10 @@
  * Ojo: aquí `tasaCumplimiento` **no se recorta a 100**, a diferencia del Sales
  * Report. Es una discrepancia intencionada (ver `lib/commercial.ts`).
  *
- * Las metas: cada nodo con su objetivo de zona; cada coordinador con el suyo,
- * que la excepción de una zona no mueve pero el de su site sí; el bloque RF y
- * el consolidado FTTH con el general del mes (ver `lib/objetivos.ts`).
+ * Las metas: cada nodo con el suyo (desde su nivel de nodo hacia arriba);
+ * cada coordinador con el suyo, que la excepción de una zona o de un nodo no
+ * mueve pero el de su site, su estado o su sucursal sí; el bloque RF y el
+ * consolidado FTTH con el general del mes (ver `lib/objetivos.ts`).
  */
 
 import { useMemo } from 'react';
@@ -88,7 +89,11 @@ export function useBusinessUnitsData({
       const branchMatches = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
       const techMatches = selectedTech === 'ALL' || node.type === selectedTech;
       return (coordinatorMatches || zoneMatches) && branchMatches && techMatches;
-    }) ?? []).map((node) => ({ ...node, meta: objetivos.meta(period, [node], 'zona') }));
+    }) ?? []).map((node) => ({
+      ...node,
+      meta: objetivos.meta(period, [node], 'zona_sucursal'),
+      origenObjetivo: objetivos.origen(period, node, 'crecimiento'),
+    }));
 
     if (filteredNodes.length === 0) return [];
 

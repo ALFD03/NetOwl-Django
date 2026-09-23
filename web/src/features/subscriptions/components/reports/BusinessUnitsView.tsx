@@ -11,6 +11,7 @@ import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import { BajasExportButton } from './BajasExportButton';
 import { CommercialSummaryStrip } from './CommercialSummaryStrip';
 import { NodePerformanceTable } from './NodePerformanceTable';
+import { ObjetivoGrupo } from './ObjetivoGrupo';
 import { useObjetivosConfig } from '../../hooks/useObjetivos';
 import { nodosDeGrupo } from '../../lib/bajasExport';
 import { completionTone } from '../../lib/commercial';
@@ -152,15 +153,18 @@ export function BusinessUnitsView({
               subtitle={`Gestión de Nodos y Crecimiento Comercial (${group.dynamic.total_nodos} zonas)`}
               icon={isRf ? <Radio className="h-5 w-5" /> : <UserCheck className="h-5 w-5" />}
               headerAction={
-                <BajasExportButton
-                  period={period}
-                  // El bloque RF no es un coordinador, pero se acota igual: por
-                  // los nodos que tiene en pantalla.
-                  nodos={nodosDeGrupo(group.nodes)}
-                  alcance={group.coordinador}
-                  avisoDia={diaSeleccionado}
-                  label={isRf ? 'Exportar bajas RF' : 'Exportar bajas del coordinador'}
-                />
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <ObjetivoGrupo meta={group.dynamic.meta} />
+                  <BajasExportButton
+                    period={period}
+                    // El bloque RF no es un coordinador, pero se acota igual: por
+                    // los nodos que tiene en pantalla.
+                    nodos={nodosDeGrupo(group.nodes)}
+                    alcance={group.coordinador}
+                    avisoDia={diaSeleccionado}
+                    label={isRf ? 'Exportar bajas RF' : 'Exportar bajas del coordinador'}
+                  />
+                </div>
               }
             >
               <div className="space-y-6">

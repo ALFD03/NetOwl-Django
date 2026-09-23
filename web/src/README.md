@@ -214,8 +214,8 @@ is the only place that resolves them — meta, completion and colour — and
 again: that is how the app ended up with the 6% written in eight files and three different
 "green" cut-offs.
 
-The highest level that sets an objective wins: state → site → coordinator → zone, then the
-month's general. A zone's own objective applies only if nothing above it sets one. Totals
+The highest level that sets an objective wins: sucursal → state → site → coordinator → zone →
+node (zone - sucursal), then the month's general. A zone's own objective applies only if nothing above it sets one. Totals
 ignore the levels below the group: a coordinator total resolves from the coordinator up, a
 site total from the site up, and global totals use the month's general objective. Group metas are the sum of their zones'
 metas resolved from the group's level, so a group never contradicts its parts. The report

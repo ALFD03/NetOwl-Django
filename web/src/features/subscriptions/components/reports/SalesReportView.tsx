@@ -7,6 +7,7 @@ import { formatPeriodoLabel } from '@/shared/utils/formatters';
 import { BajasExportButton } from './BajasExportButton';
 import { CommercialSummaryStrip } from './CommercialSummaryStrip';
 import { NodePerformanceTable } from './NodePerformanceTable';
+import { ObjetivoGrupo } from './ObjetivoGrupo';
 import { nodosDeGrupo } from '../../lib/bajasExport';
 import type { SalesReportSite, SalesReportTechnology } from '../../hooks/useSalesReportData';
 
@@ -43,15 +44,18 @@ export function SalesReportView({ sites, period, diaSeleccionado = false }: Sale
           subtitle={`Auditoría Regional de Cierre (${formatPeriodoLabel(period)})`}
           icon={<Building2 className="h-5 w-5" />}
           headerAction={
-            <BajasExportButton
-              period={period}
-              // Los nodos que el site tiene en pantalla, no los del catálogo:
-              // los filtros de tecnología y sucursal ya recortaron la tabla.
-              nodos={nodosDeGrupo(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
-              alcance={String(site.site ?? '')}
-              avisoDia={diaSeleccionado}
-              label="Exportar bajas del site"
-            />
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <ObjetivoGrupo meta={site.meta} />
+              <BajasExportButton
+                period={period}
+                // Los nodos que el site tiene en pantalla, no los del catálogo:
+                // los filtros de tecnología y sucursal ya recortaron la tabla.
+                nodos={nodosDeGrupo(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
+                alcance={String(site.site ?? '')}
+                avisoDia={diaSeleccionado}
+                label="Exportar bajas del site"
+              />
+            </div>
           }
         >
           <div className="space-y-10">

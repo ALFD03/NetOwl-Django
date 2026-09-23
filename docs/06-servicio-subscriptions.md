@@ -716,14 +716,20 @@ migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
   desde su `desde` (`YYYY-MM`, nulo = siempre) hasta el siguiente de la misma
   entidad: cambiarlos no reescribe los meses que ya pasaron.
 - **Manda el nivel más alto que tenga objetivo.** De más alto a más bajo:
-  estado → site → coordinador → zona, con el general del mes como respaldo. El
-  objetivo de una zona solo rige si ni su coordinador, ni su site, ni su estado
-  fijan uno: con la zona al 10% y su coordinador al 15%, la zona cumple contra el
-  15%. La pestaña de objetivos lo avisa en la columna «Rige hoy».
+  sucursal → estado → site → coordinador → zona → zona-sucursal (el nodo), con el
+  general del mes como respaldo. El objetivo de un nivel solo rige si nada por
+  encima fija uno: con la zona al 10% y su coordinador al 15%, la zona cumple
+  contra el 15%; una sucursal al 8% manda sobre toda la geografía de sus nodos.
+  La pestaña de objetivos avisa en «Rige hoy» en qué nodos queda anulado cada uno.
+- **Sucursal y nodo.** La sucursal (`NETCOM`, `NYC`...) no es un catálogo: es el
+  texto del export y se guarda en `ObjetivoComercial.sucursal`. Un nodo es su
+  zona (clave ajena) más ese texto, y se cruza con la clave `"Zona - Sucursal"`
+  de la dimensión `zona_sucursal`. Las que se ofrecen al elegir salen de
+  `objetivos.nodos_conocidos()`, los nodos de los cierres calculados.
 - **Los totales ignoran los niveles por debajo del grupo.** El de un coordinador
-  mira coordinador, site y estado (la excepción de una zona no lo mueve, el
-  objetivo de su site sí); el de un site mira site y estado (ni el coordinador ni
-  la zona lo mueven, porque un site reparte sus zonas entre varios
+  mira coordinador, site, estado y sucursal (la excepción de una zona o de un
+  nodo no lo mueve); el de un site mira site, estado y sucursal (ni el
+  coordinador ni la zona lo mueven, porque un site reparte sus zonas entre varios
   coordinadores). Los totales globales —Analytics, Results, Dashboard,
   consolidado FTTH y bloque RF— usan el general del mes.
 - **Un grupo tiene meta, no tasa**: la suma de la meta de cada zona resuelta
@@ -739,6 +745,11 @@ migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
   mismo porcentaje se pinta igual en Analytics, Results, el Dashboard y los
   reportes. Empezaron siendo distancias al objetivo; `subscriptions/0005` los
   convirtió a valores directos conservando los colores que se veían.
+
+**En los reportes solo se ven.** En la tabla de nodos de Sales Report y Business
+Units el objetivo es una insignia con el porcentaje, la meta y el nivel del que
+sale, y junto al botón de exportar bajas de cada site o coordinador está el
+objetivo de ese grupo. Editarlos es cosa del catálogo y de nadie más.
 
 Se editan en la pestaña **Objetivos** del catálogo, con el permiso comercial:
 el general y el semáforo como métricas (el semáforo dibujado como una barra

@@ -4,9 +4,9 @@
  * Los totales se recalculan sobre los valores absolutos, no promediando
  * porcentajes.
  *
- * Aquí se resuelven también las metas: cada nodo con su objetivo de zona, y
- * cada bloque de tecnología con el del **site**, que ni el coordinador ni la
- * zona mueven (ver `lib/objetivos.ts`).
+ * Aquí se resuelven también las metas: cada nodo con el suyo (desde su nivel
+ * de nodo hacia arriba), y cada bloque de tecnología con el del **site**, que
+ * ni el coordinador, ni la zona, ni el nodo mueven (ver `lib/objetivos.ts`).
  */
 
 import { useMemo } from 'react';
@@ -35,6 +35,8 @@ export interface SalesReportTechnology {
 export interface SalesReportSite {
   site?: string;
   technologies?: SalesReportTechnology[];
+  /** Meta del site entero (todas sus tecnologías en pantalla), resuelta desde el site. */
+  meta?: Meta;
 }
 
 interface UseSalesReportDataParams {
@@ -81,7 +83,11 @@ export function useSalesReportData({
         const nodeMatchesSearch = String(node.zona_sucursal || '').toLowerCase().includes(normalizedSearch);
         const branchMatches = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
         return (siteMatchesSearch || nodeMatchesSearch) && branchMatches;
-      }) ?? []).map((node) => ({ ...node, meta: objetivos.meta(period, [node], 'zona') }));
+      }) ?? []).map((node) => ({
+        ...node,
+        meta: objetivos.meta(period, [node], 'zona_sucursal'),
+        origenObjetivo: objetivos.origen(period, node, 'crecimiento'),
+      }));
 
       if (!nodes.length) return [];
 
@@ -102,7 +108,11 @@ export function useSalesReportData({
       }];
     }) ?? [];
 
-    return technologies.length ? [{ ...site, technologies }] : [];
+    if (!technologies.length) return [];
+    // La del site entero, para enseñarla junto a su botón de exportar bajas:
+    // sobre los mismos nodos que la tabla tiene en pantalla.
+    const nodosSite = technologies.flatMap((tech) => tech.nodes ?? []);
+    return [{ ...site, technologies, meta: objetivos.meta(period, nodosSite, 'site') }];
   }), [sites, normalizedSearch, selectedBranch, selectedTech, period, objetivos]);
 
   return { branchList, filteredData };

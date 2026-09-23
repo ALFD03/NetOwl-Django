@@ -295,40 +295,52 @@ class ProductoIgnorado(models.Model):
 # al recargar la pagina, sin relanzar ningun mes. El color lo decide aparte el
 # semaforo, con umbrales fijos (`SemaforoObjetivos`).
 #
-# Los niveles, de mas alto a mas bajo: estado, site, coordinador y zona, con el
-# general como respaldo. **Manda el nivel mas alto que tenga objetivo**: el de
-# una zona solo rige si ni su coordinador, ni su site, ni su estado fijan uno.
-# Los totales ignoran los niveles por debajo del grupo: el objetivo de una zona
-# no mueve el total de su coordinador ni el de su site, y el de un coordinador
-# no mueve el del site. La regla completa esta en el modulo del cliente, que es
-# quien la aplica.
+# Los niveles, de mas alto a mas bajo: sucursal, estado, site, coordinador,
+# zona y zona-sucursal (el nodo), con el general como respaldo. **Manda el nivel
+# mas alto que tenga objetivo**: el de un nodo solo rige si nada por encima fija
+# uno, y el de una sucursal manda sobre toda la geografia. Los totales ignoran
+# los niveles por debajo del grupo: el objetivo de una zona no mueve el total de
+# su coordinador ni el de su site, y el de un coordinador no mueve el del site.
+# La regla completa esta en el modulo del cliente, que es quien la aplica.
 
 NIVEL_OBJETIVO_CHOICES = [
     ("general", "General"),
+    ("sucursal", "Sucursal"),
     ("estado", "Estado"),
     ("site", "Site"),
     ("coordinador", "Coordinador"),
     ("zona", "Zona"),
+    ("zona_sucursal", "Zona - sucursal"),
 ]
 
-# El campo que referencia la entidad de cada nivel. El general no tiene.
+# La clave ajena de la entidad de cada nivel. El general no tiene; la sucursal
+# tampoco, porque no es un catalogo sino el texto que trae el export (`NETCOM`,
+# `NYC`...), y va en `sucursal`. Un nodo es su zona mas su sucursal.
 REFERENCIA_POR_NIVEL = {
     "estado": "estado",
     "site": "site",
     "coordinador": "coordinador",
     "zona": "zona",
+    "zona_sucursal": "zona",
 }
+CAMPOS_REFERENCIA = ("estado", "site", "coordinador", "zona")
+NIVELES_CON_SUCURSAL = ("sucursal", "zona_sucursal")
 
 
 def _solo_referencia(nivel: str | None) -> models.Q:
-    """La condicion "solo esta rellena la referencia de `nivel`" (None: ninguna)."""
-    return models.Q(
-        nivel=nivel or "general",
-        **{
-            f"{campo}__isnull": campo != REFERENCIA_POR_NIVEL.get(nivel or "")
-            for campo in REFERENCIA_POR_NIVEL.values()
-        },
+    """La condicion "solo esta rellena la referencia de `nivel`" (None: el general).
+
+    Ademas de las claves ajenas, la sucursal: obligatoria en los dos niveles
+    que la usan y vacia en el resto.
+    """
+    nivel = nivel or "general"
+    condicion = models.Q(
+        nivel=nivel,
+        **{f"{campo}__isnull": campo != REFERENCIA_POR_NIVEL.get(nivel) for campo in CAMPOS_REFERENCIA},
     )
+    if nivel in NIVELES_CON_SUCURSAL:
+        return condicion & ~models.Q(sucursal="")
+    return condicion & models.Q(sucursal="")
 
 
 class ObjetivoComercial(models.Model):
@@ -356,13 +368,16 @@ class ObjetivoComercial(models.Model):
     significa nada.
     """
 
-    nivel = models.CharField(max_length=12, choices=NIVEL_OBJETIVO_CHOICES)
+    nivel = models.CharField(max_length=16, choices=NIVEL_OBJETIVO_CHOICES)
     estado = models.ForeignKey(Estado, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
     site = models.ForeignKey(Site, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
     coordinador = models.ForeignKey(
         Coordinador, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos"
     )
     zona = models.ForeignKey(Zona, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
+    # El texto de la sucursal tal y como lo trae el export, en los niveles
+    # `sucursal` y `zona_sucursal`; vacio en el resto.
+    sucursal = models.CharField(max_length=80, blank=True, default="")
     # `YYYY-MM`, el mismo texto con el que empiezan los `periodo_reporte`: asi
     # se compara como cadena tanto aqui como en el cliente.
     desde = models.CharField(max_length=7, null=True, blank=True)
@@ -384,10 +399,12 @@ class ObjetivoComercial(models.Model):
             models.CheckConstraint(
                 condition=(
                     _solo_referencia(None)
+                    | _solo_referencia("sucursal")
                     | _solo_referencia("estado")
                     | _solo_referencia("site")
                     | _solo_referencia("coordinador")
                     | _solo_referencia("zona")
+                    | _solo_referencia("zona_sucursal")
                 ),
                 name="objetivo_referencia_segun_nivel",
             ),
@@ -403,13 +420,28 @@ class ObjetivoComercial(models.Model):
 
     @property
     def entidad(self):
-        """La fila de catalogo a la que apunta, o None si es el general."""
+        """La fila de catalogo a la que apunta (la zona de un nodo), o None."""
         campo = REFERENCIA_POR_NIVEL.get(self.nivel)
         return getattr(self, campo) if campo else None
 
-    def __str__(self):
+    @property
+    def nombre_entidad(self) -> str:
+        """Como se llama lo que tiene el objetivo, con la clave que usan los nodos.
+
+        Un nodo se escribe `"Zona - Sucursal"`, igual que el `valor` de la
+        dimension `zona_sucursal`: es lo que el cliente cruza contra cada fila.
+        """
+        if self.nivel == "sucursal":
+            return self.sucursal
         entidad = self.entidad
-        return f"{self.nivel}:{entidad or '-'} desde {self.desde or 'siempre'}"
+        if entidad is None:
+            return ""
+        if self.nivel == "zona_sucursal":
+            return f"{entidad.nombre} - {self.sucursal}"
+        return entidad.nombre
+
+    def __str__(self):
+        return f"{self.nivel}:{self.nombre_entidad or '-'} desde {self.desde or 'siempre'}"
 
 
 class ObjetivoMes(models.Model):

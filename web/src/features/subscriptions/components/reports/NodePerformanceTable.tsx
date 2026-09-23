@@ -22,6 +22,7 @@ import {
   tonoCrecimiento,
 } from '../../lib/objetivos';
 import type { SemaforoObjetivos } from '../../types';
+import { NIVEL_OBJETIVO_UI } from '../objetivos/niveles';
 
 export interface NodePerformanceTableProps<T extends CommercialNode> {
   nodes: T[];
@@ -40,6 +41,41 @@ export interface NodePerformanceTableProps<T extends CommercialNode> {
    * reportes y no todos sus usos tienen algo que poner ahí.
    */
   renderRowAction?: (node: T) => ReactNode;
+}
+
+/**
+ * El objetivo de un nodo, a la vista: el porcentaje grande, la meta en altas
+ * netas y de qué nivel sale (el nodo, su zona, su sucursal, su coordinador...).
+ * Solo se enseña: los objetivos se editan en el catálogo.
+ */
+function InsigniaObjetivo({
+  porcentaje,
+  meta,
+  origen,
+  cierreEsperado,
+  mono,
+}: {
+  porcentaje: number;
+  meta: number;
+  origen?: CommercialNode['origenObjetivo'];
+  cierreEsperado: number;
+  mono: boolean;
+}) {
+  const ui = NIVEL_OBJETIVO_UI[origen?.nivel ?? 'general'];
+  const contenido = (
+    <>
+      <span className="flex items-baseline gap-1.5">
+        <span className={cn('text-sm font-black text-sky-300', mono && 'font-mono')}>{formatObjetivo(porcentaje)}</span>
+        <span className={cn('text-[10px] font-bold text-slate-400', mono && 'font-mono')}>+{formatInteger(meta)}</span>
+      </span>
+      <span className={cn('mt-0.5 max-w-[140px] truncate rounded border px-1.5 py-px text-[9px] font-black uppercase', ui.chip)}>
+        {ui.corto}{origen?.nombre && origen.nivel !== 'zona_sucursal' ? ` ${origen.nombre}` : ''}
+      </span>
+    </>
+  );
+  const titulo = `Objetivo ${formatObjetivo(porcentaje)} (${ui.label.toLowerCase()}${origen?.nombre ? ` ${origen.nombre}` : ''}) · cierre esperado ${formatInteger(cierreEsperado)}`;
+
+  return <div className="flex flex-col items-end" title={titulo}>{contenido}</div>;
 }
 
 /** Un cumplimiento: el porcentaje con el color del semáforo y una barra de progreso. */
@@ -155,15 +191,14 @@ export function NodePerformanceTable<T extends CommercialNode>({
                 >
                   {formatTwoDecimals(node.crecimiento)}%
                 </td>
-                <td className="py-3 text-right" title={`Cierre esperado: ${formatInteger(metrics.cierreEsperado)}`}>
-                  <div className="flex flex-col items-end">
-                    <span className={cn('font-black text-sky-300', mono && 'font-mono')}>
-                      +{formatInteger(metrics.objetivo)}
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-500">
-                      {formatObjetivo(meta.crecimientoPct)} de la base
-                    </span>
-                  </div>
+                <td className="py-2 text-right">
+                  <InsigniaObjetivo
+                    porcentaje={meta.crecimientoPct}
+                    meta={metrics.objetivo}
+                    origen={node.origenObjetivo}
+                    cierreEsperado={metrics.cierreEsperado}
+                    mono={mono}
+                  />
                 </td>
                 <td className={num('font-black text-amber-500/80')}>{formatInteger(metrics.faltante)}</td>
                 <CeldaCumplimiento valor={metrics.tasaCumplimiento} semaforo={semaforo} mono={mono} />

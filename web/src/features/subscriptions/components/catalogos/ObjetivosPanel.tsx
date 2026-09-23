@@ -25,10 +25,11 @@ import type {
   CatalogoObjetivoMes,
   CatalogoSemaforo,
   CatalogoZona,
+  NodoConocido,
   ObjetivosConfig,
 } from '../../types';
 import { EscalaSemaforo } from './EscalaSemaforo';
-import { NIVEL_OBJETIVO_UI } from './ObjetivoForms';
+import { NIVEL_OBJETIVO_UI } from '../objetivos/niveles';
 
 export interface ObjetivosPanelProps {
   objetivos: CatalogoObjetivo[];
@@ -39,6 +40,8 @@ export interface ObjetivosPanelProps {
   periodos: string[];
   /** El catálogo de zonas: dice a qué coordinador, site y estado pertenece cada una. */
   zonas: CatalogoZona[];
+  /** Los nodos de los datos: a cuáles alcanza cada objetivo. */
+  nodos: NodoConocido[];
   onEditarGeneral: (fila: CatalogoObjetivo) => void;
   onNuevoObjetivo: () => void;
   onEditarObjetivo: (fila: CatalogoObjetivo) => void;
@@ -78,6 +81,7 @@ export function ObjetivosPanel({
   config,
   periodos,
   zonas,
+  nodos,
   onEditarGeneral,
   onNuevoObjetivo,
   onEditarObjetivo,
@@ -89,33 +93,63 @@ export function ObjetivosPanel({
   const cfg = config ?? OBJETIVOS_POR_DEFECTO;
   const s = semaforo ?? OBJETIVOS_POR_DEFECTO.semaforo;
 
-  // Con la misma resolución que los reportes, para decir de cada zona con
-  // objetivo propio si rige o si un nivel superior lo anula. Se mide en el mes
+  // Con la misma resolución que los reportes, para decir de cada objetivo en
+  // qué nodos rige y en cuáles lo anula un nivel superior. Se mide en el mes
   // más reciente calculado.
   const mesReferencia = periodos[0] ?? new Date().toISOString().slice(0, 7);
+  const zonaDe = new Map(zonas.map((z) => [z.nombre.toLowerCase(), z]));
   const resolver = crearResolver(
     cfg,
     zonas.map((z) => ({ name: z.nombre, site: z.site, type: z.tecnologia, coordinador: z.coordinador, estado: z.estado })),
   );
 
-  /** En una fila de zona: qué rige hoy en cada métrica que fija, y por qué. */
+  /** Los nodos de los datos a los que alcanza un objetivo. */
+  const nodosDe = (row: CatalogoObjetivo): NodoConocido[] => {
+    const igual = (a: string | undefined, b: string) => (a ?? '').toLowerCase() === b.toLowerCase();
+    return nodos.filter((n) => {
+      const zona = zonaDe.get(n.zona.toLowerCase());
+      switch (row.nivel) {
+        case 'zona_sucursal': return igual(n.nodo, row.entidad);
+        case 'zona': return igual(n.zona, row.entidad);
+        case 'sucursal': return igual(n.sucursal, row.entidad);
+        case 'coordinador': return igual(zona?.coordinador, row.entidad);
+        case 'site': return igual(zona?.site, row.entidad);
+        case 'estado': return igual(zona?.estado, row.entidad);
+        default: return false;
+      }
+    });
+  };
+
+  /** Qué rige hoy en los nodos que alcanza el objetivo, por cada métrica que fija. */
   const rigeHoy = (row: CatalogoObjetivo): ReactNode => {
-    if (row.nivel !== 'zona') return <span className="text-slate-600">—</span>;
-    const anuladas = (['crecimiento', 'churn'] as const)
+    const alcance = nodosDe(row);
+    if (alcance.length === 0) return <span className="text-slate-600">Sin nodos en los datos</span>;
+
+    const lineas = (['crecimiento', 'churn'] as const)
       .filter((metrica) => row[`${metrica}_pct`] !== null)
-      .map((metrica) => ({ metrica, origen: resolver.origen(mesReferencia, row.entidad, metrica) }))
-      .filter(({ origen }) => origen.nivel !== 'zona');
-    if (anuladas.length === 0) {
-      return <span className="font-bold text-emerald-400">Su objetivo</span>;
+      .flatMap((metrica) => {
+        const anulados = alcance
+          .map((n) => resolver.origen(mesReferencia, n, metrica))
+          .filter((origen) => origen.nivel !== row.nivel);
+        if (anulados.length === 0) return [];
+        const quien = anulados[0]!;
+        const donde = anulados.length === alcance.length ? '' : ` en ${anulados.length} de ${alcance.length} nodos`;
+        return [{
+          metrica,
+          texto: `${metrica === 'crecimiento' ? 'Crec.' : 'Churn'}${donde}: manda ${NIVEL_OBJETIVO_UI[quien.nivel].label.toLowerCase()}${quien.nombre ? ` ${quien.nombre}` : ''} (${formatObjetivo(quien.valor)})`,
+        }];
+      });
+
+    if (lineas.length === 0) {
+      return (
+        <span className="font-bold text-emerald-400">
+          Rige{alcance.length > 1 ? ` en ${alcance.length} nodos` : ''}
+        </span>
+      );
     }
     return (
       <span className="font-bold text-amber-400">
-        {anuladas.map(({ metrica, origen }) => (
-          <span key={metrica} className="block">
-            {metrica === 'crecimiento' ? 'Crec.' : 'Churn'}: manda {NIVEL_OBJETIVO_UI[origen.nivel].label.toLowerCase()}
-            {' '}{origen.nombre} ({formatObjetivo(origen.valor)})
-          </span>
-        ))}
+        {lineas.map(({ metrica, texto }) => <span key={metrica} className="block">{texto}</span>)}
       </span>
     );
   };
@@ -323,8 +357,8 @@ export function ObjetivosPanel({
       </NeonContainer>
 
       <NeonContainer
-        title="Por zona, site, estado y coordinador"
-        subtitle="Manda el nivel más alto que tenga objetivo: estado, site, coordinador y, por último, la zona. «Rige hoy» avisa cuando el de una zona queda anulado."
+        title="Por sucursal, estado, site, coordinador, zona y nodo"
+        subtitle="Manda el nivel más alto que tenga objetivo: sucursal, estado, site, coordinador, zona y, por último, el nodo. «Rige hoy» avisa en qué nodos lo anula un nivel superior."
         icon={<Layers className="h-5 w-5" />}
         theme="purple"
         noPadding
@@ -337,7 +371,7 @@ export function ObjetivosPanel({
         {porEntidad.length === 0 ? (
           <EmptyState
             title="Nadie tiene objetivo propio"
-            description="Todas las zonas, sites, estados y coordinadores se rigen por el objetivo de su mes."
+            description="Todos los nodos se rigen por el objetivo de su mes. Desde aquí o desde la insignia de objetivo de los reportes se fija uno."
             icon={<Layers />}
           />
         ) : (

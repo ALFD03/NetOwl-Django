@@ -8,16 +8,16 @@
  * (`services/subscriptions/analytics/objetivos.py`).
  *
  * **Manda el nivel más alto que tenga objetivo.** De más alto a más bajo:
- * estado → site → coordinador → zona, y el general del mes cuando ninguno
- * tiene. El objetivo de una zona solo rige si ni su coordinador, ni su site, ni
- * su estado fijan uno: con la zona al 10% y su coordinador al 15%, la zona
- * cumple contra el 15%.
+ * sucursal → estado → site → coordinador → zona → zona-sucursal (el nodo), y el
+ * general del mes cuando ninguno tiene. El objetivo de una zona solo rige si
+ * nada por encima fija uno: con la zona al 10% y su coordinador al 15%, la zona
+ * cumple contra el 15%. La sucursal manda sobre toda la geografía.
  *
  * Los totales **ignoran los niveles por debajo del grupo**:
- * - El total de un coordinador mira coordinador, site y estado: la excepción
- *   de una de sus zonas no lo mueve.
- * - El total de un site mira site y estado: ni el coordinador ni la zona lo
- *   mueven, porque un site reparte sus zonas entre varios coordinadores.
+ * - El total de un coordinador mira coordinador, site, estado y sucursal: la
+ *   excepción de una de sus zonas o de uno de sus nodos no lo mueve.
+ * - El total de un site mira site, estado y sucursal: ni el coordinador ni la
+ *   zona lo mueven, porque un site reparte sus zonas entre varios coordinadores.
  * - Los totales globales (Analytics, Results, Dashboard, consolidado FTTH y
  *   bloque RF) usan el general del mes.
  *
@@ -53,13 +53,33 @@ export interface Meta {
 }
 
 /** Nivel desde el que se empieza a resolver: el de la fila o el del grupo. */
-export type NivelObjetivo = 'zona' | 'coordinador' | 'site' | 'estado' | 'general';
+export type NivelObjetivo =
+  | 'zona_sucursal'
+  | 'zona'
+  | 'coordinador'
+  | 'site'
+  | 'estado'
+  | 'sucursal'
+  | 'general';
 
 type Metrica = keyof Objetivo;
 type NivelEntidad = Exclude<NivelObjetivo, 'general'>;
 
-/** De más bajo a más alto; `general` va aparte porque no es una entidad. */
-const CADENA: readonly NivelEntidad[] = ['zona', 'coordinador', 'site', 'estado'];
+/**
+ * De más bajo a más alto; `general` va aparte porque no es una entidad. La
+ * sucursal está arriba del todo: su objetivo manda sobre toda la geografía.
+ */
+const CADENA: readonly NivelEntidad[] = ['zona_sucursal', 'zona', 'coordinador', 'site', 'estado', 'sucursal'];
+
+/**
+ * Un nodo de los reportes: su zona y su sucursal. Los niveles `zona_sucursal`
+ * y `sucursal` necesitan la segunda; el resto se deduce de la zona.
+ */
+export interface NodoObjetivo {
+  zona?: string;
+  sucursal?: string;
+}
+
 
 /** De dónde sale un objetivo resuelto: el nivel que lo fija y su nombre. */
 export interface OrigenObjetivo {
@@ -80,6 +100,8 @@ export const OBJETIVOS_POR_DEFECTO: ObjetivosConfig = {
   sites: {},
   coordinadores: {},
   zonas: {},
+  sucursales: {},
+  zonas_sucursal: {},
   semaforo: {
     cumpl_verde: 100,
     cumpl_amarillo: 60,
@@ -122,13 +144,8 @@ export function objetivoGeneral(cfg: ObjetivosConfig, periodo: string): Objetivo
   return { crecimiento: resolver('crecimiento'), churn: resolver('churn') };
 }
 
-/** Dónde está una zona: su nombre y los de sus niveles superiores. */
-interface Ubicacion {
-  zona?: string;
-  coordinador?: string;
-  site?: string;
-  estado?: string;
-}
+/** Dónde está un nodo: el nombre que tiene en cada nivel de la cadena. */
+type Ubicacion = Partial<Record<NivelEntidad, string>>;
 
 const clave = (nombre: string | undefined): string => String(nombre ?? '').trim().toLowerCase();
 
@@ -142,21 +159,22 @@ export interface ResolverObjetivos {
   /** El objetivo general del periodo (excepción del mes o tramo vigente). */
   general: (periodo: string) => Objetivo;
   /**
-   * El objetivo de una zona. Solo cuentan `desde` y los niveles por encima, y
-   * entre ellos manda el más alto que tenga objetivo.
+   * El objetivo de un nodo (o de una zona, si se pasa solo su nombre). Solo
+   * cuentan `desde` y los niveles por encima, y entre ellos manda el más alto
+   * que tenga objetivo.
    */
-  zona: (periodo: string, zona: string | undefined, desde?: NivelObjetivo) => Objetivo;
-  /** Qué nivel fija una métrica de una zona: para explicar por qué rige lo que rige. */
+  zona: (periodo: string, nodo: NodoObjetivo | string | undefined, desde?: NivelObjetivo) => Objetivo;
+  /** Qué nivel fija una métrica de un nodo: para explicar por qué rige lo que rige. */
   origen: (
     periodo: string,
-    zona: string | undefined,
+    nodo: NodoObjetivo | string | undefined,
     metrica: Metrica,
     desde?: NivelObjetivo,
   ) => OrigenObjetivo;
   /** La meta de un conjunto de nodos, cada uno resuelto desde `desde`. */
   meta: (
     periodo: string,
-    nodos: readonly { zona?: string; activos_inicio?: number }[],
+    nodos: readonly (NodoObjetivo & { activos_inicio?: number })[],
     desde: NivelObjetivo,
   ) => Meta;
 }
@@ -173,27 +191,42 @@ export function crearResolver(
   zonas: readonly ZonaConfig[] = [],
 ): ResolverObjetivos {
   const tablas: Record<NivelEntidad, Map<string, TramoObjetivo[]>> = {
+    zona_sucursal: indexar(cfg.zonas_sucursal),
     zona: indexar(cfg.zonas),
     coordinador: indexar(cfg.coordinadores),
     site: indexar(cfg.sites),
     estado: indexar(cfg.estados),
+    sucursal: indexar(cfg.sucursales),
   };
-  const ubicaciones = new Map<string, Ubicacion>(
+  const zonasCatalogo = new Map<string, Ubicacion>(
     zonas.map((z) => [
       clave(z.name),
       { zona: z.name, coordinador: z.coordinador || undefined, site: z.site, estado: z.estado || undefined },
     ]),
   );
 
+  /**
+   * El nombre del nodo en cada nivel. La zona fuera del catálogo solo puede
+   * tener objetivo propio, de nodo o de sucursal: no se sabe de quién cuelga.
+   */
+  const ubicar = (nodo: NodoObjetivo | string | undefined): Ubicacion => {
+    const { zona, sucursal } = typeof nodo === 'string' ? { zona: nodo, sucursal: undefined } : (nodo ?? {});
+    const ubicacion: Ubicacion = { ...(zonasCatalogo.get(clave(zona)) ?? { zona }) };
+    if (sucursal) {
+      ubicacion.sucursal = sucursal;
+      if (zona) ubicacion.zona_sucursal = `${zona} - ${sucursal}`;
+    }
+    return ubicacion;
+  };
+
   const general = (periodo: string) => objetivoGeneral(cfg, periodo);
 
-  const origen: ResolverObjetivos['origen'] = (periodo, nombre, metrica, desde = 'zona') => {
+  const origen: ResolverObjetivos['origen'] = (periodo, nodo, metrica, desde = 'zona_sucursal') => {
     const base: OrigenObjetivo = { nivel: 'general', nombre: '', valor: general(periodo)[metrica] };
     if (desde === 'general') return base;
 
     const mes = mesDe(periodo);
-    // Una zona fuera del catálogo solo puede tener objetivo propio por nombre.
-    const ubicacion = ubicaciones.get(clave(nombre)) ?? { zona: nombre };
+    const ubicacion = ubicar(nodo);
     // Los niveles desde `desde` hacia arriba, recorridos del más alto al más
     // bajo: el primero que fije la métrica es el que manda.
     const niveles = CADENA.slice(CADENA.indexOf(desde)).reverse();
@@ -207,9 +240,9 @@ export function crearResolver(
     return base;
   };
 
-  const zona = (periodo: string, nombre: string | undefined, desde: NivelObjetivo = 'zona'): Objetivo => ({
-    crecimiento: origen(periodo, nombre, 'crecimiento', desde).valor,
-    churn: origen(periodo, nombre, 'churn', desde).valor,
+  const zona: ResolverObjetivos['zona'] = (periodo, nodo, desde = 'zona_sucursal') => ({
+    crecimiento: origen(periodo, nodo, 'crecimiento', desde).valor,
+    churn: origen(periodo, nodo, 'churn', desde).valor,
   });
 
   const meta: ResolverObjetivos['meta'] = (periodo, nodos, desde) => {
@@ -218,7 +251,7 @@ export function crearResolver(
     let bajasPermitidas = 0;
     for (const nodo of nodos) {
       const inicio = Number(nodo.activos_inicio ?? 0);
-      const objetivo = zona(periodo, nodo.zona, desde);
+      const objetivo = zona(periodo, nodo, desde);
       base += inicio;
       metaCrecimiento += (inicio * objetivo.crecimiento) / 100;
       bajasPermitidas += (inicio * objetivo.churn) / 100;
@@ -226,7 +259,7 @@ export function crearResolver(
     // Sin base no hay ponderación posible: se informa el objetivo del nivel
     // tal cual, para que el rótulo no diga 0%.
     if (base <= 0) {
-      const objetivo = nodos.length === 1 ? zona(periodo, nodos[0]?.zona, desde) : general(periodo);
+      const objetivo = nodos.length === 1 ? zona(periodo, nodos[0], desde) : general(periodo);
       return { crecimientoPct: objetivo.crecimiento, churnPct: objetivo.churn, metaCrecimiento: 0 };
     }
     return {

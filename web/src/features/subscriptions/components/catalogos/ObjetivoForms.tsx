@@ -7,13 +7,12 @@
  * crecimiento/churn con su "vacío = hereda"—.
  */
 
-import type { FormEvent, ReactNode } from 'react';
-import { Building2, Globe2, MapPin, Network, Target, TrafficCone, UserCheck, X } from 'lucide-react';
+import type { FormEvent } from 'react';
+import { Target, TrafficCone, X } from 'lucide-react';
 
 import { MonthPicker, SelectMenu } from '@/shared/ui';
 import {
   Field, FormBanner, FormColumns, FormFooter, ModalForm, OptionCard, OptionCardGroup,
-  type FormTone,
 } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
 import { EscalaSemaforo, type MetricaSemaforo } from './EscalaSemaforo';
@@ -21,7 +20,8 @@ import { formatObjetivo, type Objetivo } from '@/features/subscriptions/lib/obje
 import type {
   ObjetivoDraft, ObjetivoMesDraft, SemaforoDraft,
 } from '@/features/subscriptions/hooks/useCatalogos';
-import type { NivelObjetivoCatalogo } from '@/features/subscriptions/types';
+import type { NodoConocido } from '@/features/subscriptions/types';
+import { NIVELES_ENTIDAD, NIVEL_OBJETIVO_UI } from '../objetivos/niveles';
 
 interface Acciones {
   saving: boolean;
@@ -35,44 +35,9 @@ export interface EntidadObjetivo {
   nombre: string;
 }
 
-/** Cómo se presenta cada nivel, de más alto a más bajo. */
-export const NIVEL_OBJETIVO_UI: Record<
-  NivelObjetivoCatalogo,
-  { label: string; icon: ReactNode; tone: FormTone; description: string }
-> = {
-  general: {
-    label: 'General',
-    icon: <Globe2 />,
-    tone: 'slate',
-    description: 'Lo que rige cuando nadie más fija un objetivo.',
-  },
-  estado: {
-    label: 'Estado',
-    icon: <MapPin />,
-    tone: 'purple',
-    description: 'Manda sobre todos sus sites, coordinadores y zonas.',
-  },
-  site: {
-    label: 'Site',
-    icon: <Building2 />,
-    tone: 'blue',
-    description: 'Manda sobre sus zonas, también en el total de sus coordinadores. Su estado, si tiene objetivo, manda sobre él.',
-  },
-  coordinador: {
-    label: 'Coordinador',
-    icon: <UserCheck />,
-    tone: 'emerald',
-    description: 'Manda sobre sus zonas y su total en Business Units. No mueve el total del site.',
-  },
-  zona: {
-    label: 'Zona',
-    icon: <Network />,
-    tone: 'amber',
-    description: 'Solo rige si ni su coordinador, ni su site, ni su estado tienen objetivo. No mueve ningún total.',
-  },
-};
-
-const NIVELES_CON_ENTIDAD: NivelObjetivoCatalogo[] = ['estado', 'site', 'coordinador', 'zona'];
+// Los metadatos de cada nivel viven en `objetivos/niveles`, compartidos con los
+// reportes; se reexportan aquí para quien ya los importaba de este módulo.
+export { NIVEL_OBJETIVO_UI };
 
 /** Crecimiento y churn: vacío significa "se hereda" (salvo en el general de base). */
 function ValoresObjetivo({
@@ -127,9 +92,20 @@ function ValoresObjetivo({
   );
 }
 
+type NivelCatalogo = 'estado' | 'site' | 'coordinador' | 'zona';
+
+/** Quién tiene el objetivo, para enseñarlo al editar (nivel y entidad no se cambian). */
+function etiquetaEntidad(value: ObjetivoDraft, entidades: Record<NivelCatalogo, EntidadObjetivo[]>): string {
+  if (value.etiqueta) return value.etiqueta;
+  if (value.nivel === 'sucursal') return value.sucursal;
+  if (value.nivel === 'general' || value.nivel === 'zona_sucursal') return value.etiqueta ?? '—';
+  return entidades[value.nivel].find((fila) => fila.id === value.entidad_id)?.nombre ?? '—';
+}
+
 export function ObjetivoForm({
   value,
   entidades,
+  nodos,
   general,
   saving,
   onChange,
@@ -137,8 +113,10 @@ export function ObjetivoForm({
   onClose,
 }: Acciones & {
   value: ObjetivoDraft;
-  /** Las filas elegibles de cada nivel. */
-  entidades: Record<Exclude<NivelObjetivoCatalogo, 'general'>, EntidadObjetivo[]>;
+  /** Las filas elegibles de cada nivel del catálogo. */
+  entidades: Record<NivelCatalogo, EntidadObjetivo[]>;
+  /** Los nodos de los datos, cuya zona está en el catálogo: de ellos salen sucursales y nodos. */
+  nodos: NodoConocido[];
   /** El general vigente hoy, para decir qué se hereda si se deja un valor vacío. */
   general: Objetivo;
   onChange: (patch: Partial<ObjetivoDraft>) => void;
@@ -146,8 +124,51 @@ export function ObjetivoForm({
   const esNuevo = !value.id;
   const esGeneral = value.nivel === 'general';
   const ui = NIVEL_OBJETIVO_UI[value.nivel];
-  const opciones: EntidadObjetivo[] = value.nivel === 'general' ? [] : entidades[value.nivel];
   const desdeSiempre = !value.desde;
+  const sucursales = [...new Set(nodos.map((n) => n.sucursal))].sort();
+
+  /** El selector de a quién va el objetivo, según el nivel. */
+  const selectorEntidad = () => {
+    if (value.nivel === 'sucursal') {
+      return (
+        <SelectMenu
+          aria-label="Sucursal"
+          className={modalInputClass}
+          value={value.sucursal}
+          placeholder="Elegir sucursal..."
+          options={sucursales.map((s) => ({ value: s, label: s }))}
+          onChange={(sucursal) => onChange({ sucursal })}
+        />
+      );
+    }
+    if (value.nivel === 'zona_sucursal') {
+      const actual = value.entidad_nombre && value.sucursal ? `${value.entidad_nombre} - ${value.sucursal}` : '';
+      return (
+        <SelectMenu
+          aria-label="Nodo"
+          className={modalInputClass}
+          value={actual}
+          placeholder="Elegir nodo (zona - sucursal)..."
+          options={nodos.map((n) => ({ value: n.nodo, label: n.nodo }))}
+          onChange={(valor) => {
+            const nodo = nodos.find((n) => n.nodo === valor);
+            if (nodo) onChange({ entidad_id: null, entidad_nombre: nodo.zona, sucursal: nodo.sucursal });
+          }}
+        />
+      );
+    }
+    if (value.nivel === 'general') return null;
+    return (
+      <SelectMenu
+        aria-label={ui.label}
+        className={modalInputClass}
+        value={value.entidad_id === null ? '' : String(value.entidad_id)}
+        placeholder={`Elegir ${ui.label.toLowerCase()}...`}
+        options={entidades[value.nivel].map((fila) => ({ value: String(fila.id), label: fila.nombre }))}
+        onChange={(id) => onChange({ entidad_id: Number(id) })}
+      />
+    );
+  };
 
   return (
     <ModalForm onSubmit={onSubmit}>
@@ -156,14 +177,14 @@ export function ObjetivoForm({
         description={
           esGeneral
             ? 'Rige en todo lo que no tenga un objetivo propio. Para cambiar solo un mes, usa una excepción de ese mes.'
-            : `${ui.description} Manda siempre el nivel más alto que tenga objetivo: estado, site, coordinador y, por último, la zona.`
+            : `${ui.description} Manda siempre el nivel más alto que tenga objetivo: sucursal, estado, site, coordinador, zona y, por último, el nodo.`
         }
         action={<Target className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
 
       {esNuevo && !esGeneral && (
-        <OptionCardGroup label="Nivel" columns="md:grid-cols-2">
-          {NIVELES_CON_ENTIDAD.map((nivel) => {
+        <OptionCardGroup label="Nivel" columns="md:grid-cols-3">
+          {NIVELES_ENTIDAD.map((nivel) => {
             const nivelUi = NIVEL_OBJETIVO_UI[nivel];
             return (
               <OptionCard
@@ -173,7 +194,7 @@ export function ObjetivoForm({
                 description={nivelUi.description}
                 tone={nivelUi.tone}
                 selected={value.nivel === nivel}
-                onSelect={() => onChange({ nivel, entidad_id: null })}
+                onSelect={() => onChange({ nivel, entidad_id: null, entidad_nombre: '', sucursal: '' })}
               />
             );
           })}
@@ -187,17 +208,10 @@ export function ObjetivoForm({
             hint={esNuevo ? undefined : 'Para mover el objetivo a otra entidad, elimínalo y crea uno nuevo.'}
           >
             {esNuevo ? (
-              <SelectMenu
-                aria-label={ui.label}
-                className={modalInputClass}
-                value={value.entidad_id === null ? '' : String(value.entidad_id)}
-                placeholder={`Elegir ${ui.label.toLowerCase()}...`}
-                options={opciones.map((fila) => ({ value: String(fila.id), label: fila.nombre }))}
-                onChange={(id) => onChange({ entidad_id: Number(id) })}
-              />
+              selectorEntidad()
             ) : (
               <p className="rounded-xl border border-slate-800 bg-surface-tertiary/40 p-2.5 text-xs font-bold text-white">
-                {opciones.find((fila) => fila.id === value.entidad_id)?.nombre ?? '—'}
+                {etiquetaEntidad(value, entidades)}
               </p>
             )}
           </Field>
