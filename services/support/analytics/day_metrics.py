@@ -156,7 +156,7 @@ def get_support_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
     """
     payload = leer_payload(TableNames.SUPPORT_DAY_METRICS, year_month, dia, clave=year_month)
     if payload:
-        anotar_departamentos(payload.get("grupos") or {})
+        anotar_departamentos(payload.get("grupos") or {}, fecha_corte(year_month, dia))
     return payload
 
 

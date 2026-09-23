@@ -353,8 +353,38 @@ export interface UsuarioSoporte {
   nombre: string;
   apellido: string;
   nombre_completo: string;
+  /** El departamento vigente: la última fila de `historial`. */
   departamento_id: number;
   departamento: string;
+  /** `YYYY-MM-DD`. Nula en quien se registró antes de que existiera el campo. */
+  fecha_ingreso: string | null;
+  /** `YYYY-MM-DD`. Con fecha, el usuario está dado de baja pero no borrado. */
+  fecha_egreso: string | null;
+  activo: boolean;
+  /** Los departamentos por los que ha pasado, del ingreso a hoy. */
+  historial: PasoDepartamento[];
+}
+
+/** Un tramo de la historia: «a partir de `desde`, en `departamento`». */
+export interface PasoDepartamento {
+  id: number;
+  departamento_id: number;
+  departamento: string;
+  /** Nula en el tramo inicial: significa «desde el ingreso». */
+  desde: string | null;
+}
+
+/** Un usuario dado de baja a cuyo nombre siguen entrando tickets. */
+export interface UsuarioTrasBaja {
+  id: number;
+  nombre_odoo: string;
+  fecha_egreso: string;
+  /** Tickets creados después de la baja que lo tienen asignado. */
+  asignados: number;
+  /** Tickets creados después de la baja que figuran como creados por él. */
+  creados: number;
+  /** El día del ticket más reciente. */
+  ultimo: string;
 }
 
 export interface DepartamentoSoporte {
@@ -378,6 +408,7 @@ export interface SupportUsersProps {
   usuarios: UsuarioSoporte[];
   departamentos: DepartamentoSoporte[];
   pendientes: UsuarioPendiente[];
+  trasBaja: UsuarioTrasBaja[];
   /** El sufijo que el servidor añade solo; se enseña como pista en el formulario. */
   sufijo: string;
   /** Nombre que llega en `?nuevo_usuario=`: abre el alta ya rellena. */

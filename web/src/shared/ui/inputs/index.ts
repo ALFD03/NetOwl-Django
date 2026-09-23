@@ -4,6 +4,7 @@ export { SearchInput } from './SearchInput';
 export { FilterField, FILTER_TRIGGER_CLASS } from './FilterField';
 export { TextField, type TextFieldProps } from './TextField';
 export { MonthPicker } from './MonthPicker';
+export { DatePicker } from './DatePicker';
 export { PeriodSelector } from './PeriodSelector';
 export { SelectMenu, type SelectOption } from './SelectMenu';
 export { useAnchoredPanel } from './useAnchoredPanel';

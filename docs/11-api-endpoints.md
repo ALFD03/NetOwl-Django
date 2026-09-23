@@ -131,7 +131,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |
 | GET | `api/tickets/?limit=&grupo=&period=` | `can_view_support_results` | Listado crudo; `limit` con techo de 5 000 |
 | POST | `api/usuarios/guardar/` | `can_manage_support_users` | Alta o edición de una fila de `usuarios` o `departamentos` (`tipo` en el cuerpo). **409** si el nombre ya existe. `60/m` |
-| POST | `api/usuarios/eliminar/` | `can_manage_support_users` | Baja. **409** si el departamento tiene usuarios (`PROTECT`). `60/m` |
+| POST | `api/usuarios/eliminar/` | `can_manage_support_users` | Borrado. **409** si el departamento tiene usuarios o aparece en algún historial (`PROTECT`). `60/m` |
+| POST | `api/usuarios/movimiento/` | `can_manage_support_users` | `accion`: `cambiar_departamento` (`departamento_id`, `fecha`), `deshacer_cambio`, `baja` (`fecha`), `reactivar`. **400** si las fechas no cuadran con la historia. `60/m` |
 
 ---
 

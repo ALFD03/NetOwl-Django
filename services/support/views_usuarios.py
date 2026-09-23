@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -24,10 +25,14 @@ from inertia import render as render_inertia
 
 from core.utils import clean_json_props
 from services.config.decorators import permission_required
-from services.support.analytics.usuarios import usuarios_fuera_del_directorio
+from services.support.analytics.usuarios import (
+    tickets_tras_la_baja,
+    usuarios_fuera_del_directorio,
+)
 from services.support.models import (
     SUFIJO_USUARIOS,
     Departamento,
+    MovimientoInvalido,
     UsuarioSoporte,
     normalizar_nombre_odoo,
 )
@@ -47,6 +52,19 @@ def _texto(data: dict, clave: str, *, obligatorio: bool = False, maximo: int = 2
     return valor[:maximo]
 
 
+def _fecha(data: dict, clave: str, *, obligatorio: bool = False) -> date | None:
+    """Lee una fecha `YYYY-MM-DD` del cuerpo."""
+    bruto = str(data.get(clave) or "").strip()
+    if not bruto:
+        if obligatorio:
+            raise DatosInvalidos(f"El campo «{clave}» es obligatorio.")
+        return None
+    try:
+        return date.fromisoformat(bruto)
+    except ValueError:
+        raise DatosInvalidos(f"«{bruto}» no es una fecha válida.") from None
+
+
 def _relacion(modelo, data: dict, clave: str):
     """Resuelve la clave ajena de un campo del cuerpo."""
     bruto = data.get(clave)
@@ -60,8 +78,12 @@ def _relacion(modelo, data: dict, clave: str):
 
 # --- Serializacion ----------------------------------------------------------
 
+def _iso(valor: date | None) -> str | None:
+    return valor.isoformat() if valor else None
+
+
 def _usuario(u: UsuarioSoporte) -> dict[str, Any]:
-    """Un usuario del directorio, con su departamento resuelto."""
+    """Un usuario del directorio, con su departamento y su historia resueltos."""
     return {
         "id": u.id,
         "nombre_odoo": u.nombre_odoo,
@@ -70,6 +92,18 @@ def _usuario(u: UsuarioSoporte) -> dict[str, Any]:
         "nombre_completo": u.nombre_completo,
         "departamento_id": u.departamento_id,
         "departamento": u.departamento.nombre,
+        "fecha_ingreso": _iso(u.fecha_ingreso),
+        "fecha_egreso": _iso(u.fecha_egreso),
+        "activo": u.activo,
+        "historial": [
+            {
+                "id": paso.id,
+                "departamento_id": paso.departamento_id,
+                "departamento": paso.departamento.nombre,
+                "desde": _iso(paso.desde),
+            }
+            for paso in u.historial.all()
+        ],
     }
 
 
@@ -90,7 +124,44 @@ def _aplicar_usuario(fila: UsuarioSoporte, data: dict) -> None:
     fila.nombre_odoo = nombre_odoo
     fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=120)
     fila.apellido = _texto(data, "apellido", maximo=120)
-    fila.departamento = _relacion(Departamento, data, "departamento_id")
+
+    # Obligatoria en el alta; en la edicion puede seguir vacia para quien se
+    # registro antes de que existiera el campo.
+    fecha_ingreso = _fecha(data, "fecha_ingreso", obligatorio=fila.pk is None)
+    pasos = list(fila.historial.all()) if fila.pk else []
+    if fecha_ingreso:
+        primer_cambio = next((p.desde for p in pasos if p.desde), None)
+        if primer_cambio and fecha_ingreso >= primer_cambio:
+            raise DatosInvalidos("La fecha de ingreso tiene que ser anterior al primer cambio de departamento.")
+        if fila.fecha_egreso and fecha_ingreso > fila.fecha_egreso:
+            raise DatosInvalidos("La fecha de ingreso no puede ser posterior a la de egreso.")
+    fila.fecha_ingreso = fecha_ingreso
+
+    # El departamento solo se elige aqui en el alta, o para corregir el de
+    # alguien que todavia no ha cambiado nunca. Con cambios encima, tocarlo
+    # desde aqui reescribiria la historia: para eso esta «Cambiar departamento».
+    departamento = _relacion(Departamento, data, "departamento_id")
+    if len(pasos) > 1 and departamento.pk != fila.departamento_id:
+        raise DatosInvalidos(
+            "Este usuario ya tiene cambios de departamento: usa «Cambiar departamento» "
+            "o deshaz el último cambio."
+        )
+    fila.departamento = departamento
+
+
+def _sincronizar_historial(fila: UsuarioSoporte) -> None:
+    """Deja el tramo inicial de la historia de acuerdo con el alta.
+
+    En el alta lo crea; en una edicion sin cambios encima, lo corrige si se
+    eligio otro departamento. Con cambios encima `_aplicar_usuario` ya impidio
+    tocarlo.
+    """
+    pasos = list(fila.historial.all())
+    if not pasos:
+        fila.historial.create(departamento=fila.departamento, desde=None)
+    elif len(pasos) == 1 and pasos[0].departamento_id != fila.departamento_id:
+        pasos[0].departamento = fila.departamento
+        pasos[0].save(update_fields=["departamento"])
 
 
 def _aplicar_departamento(fila: Departamento, data: dict) -> None:
@@ -104,6 +175,7 @@ CATALOGOS: dict[str, dict[str, Any]] = {
         "modelo": UsuarioSoporte,
         "serializar": _usuario,
         "aplicar": _aplicar_usuario,
+        "despues": _sincronizar_historial,
         "etiqueta": "usuario",
     },
     "departamentos": {
@@ -120,7 +192,7 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     catalogo = CATALOGOS[nombre]
     consulta = catalogo["modelo"].objects.all()
     if nombre == "usuarios":
-        consulta = consulta.select_related("departamento")
+        consulta = consulta.select_related("departamento").prefetch_related("historial__departamento")
     return [catalogo["serializar"](fila) for fila in consulta]
 
 
@@ -152,6 +224,12 @@ def usuarios_view(request):
         logger.exception("No se pudieron calcular los usuarios fuera del directorio")
         props["pendientes"] = []
 
+    try:
+        props["trasBaja"] = tickets_tras_la_baja()
+    except Exception:
+        logger.exception("No se pudieron calcular los tickets posteriores a las bajas")
+        props["trasBaja"] = []
+
     return render_inertia(request, "Support/Users", clean_json_props(props))
 
 
@@ -179,8 +257,11 @@ def api_usuario_guardar(request):
         fila = catalogo["modelo"]()
 
     try:
-        catalogo["aplicar"](fila, data)
-        fila.save()
+        with transaction.atomic():
+            catalogo["aplicar"](fila, data)
+            fila.save()
+            if despues := catalogo.get("despues"):
+                despues(fila)
     except DatosInvalidos as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=400)
     except IntegrityError:
@@ -228,10 +309,75 @@ def api_usuario_eliminar(request):
                 "status": "error",
                 "message": (
                     "No se puede eliminar este departamento: tiene usuarios "
-                    "asignados. Reasígnalos primero."
+                    "asignados o alguien pasó por él. Reasígnalos primero; si "
+                    "solo aparece en la historia, se conserva para no dejar "
+                    "meses pasados sin departamento."
                 ),
             },
             status=409,
         )
 
     return JsonResponse({"status": "success", "message": f"{catalogo['etiqueta'].capitalize()} eliminado."})
+
+
+# --- Movimientos de un usuario ----------------------------------------------
+
+def _cambiar_departamento(usuario: UsuarioSoporte, data: dict) -> str:
+    departamento = _relacion(Departamento, data, "departamento_id")
+    usuario.cambiar_departamento(departamento, _fecha(data, "fecha", obligatorio=True))
+    return f"{usuario.nombre_completo} pasa a {departamento.nombre}."
+
+
+def _deshacer_cambio(usuario: UsuarioSoporte, data: dict) -> str:
+    usuario.deshacer_ultimo_cambio()
+    return f"{usuario.nombre_completo} vuelve a {usuario.departamento.nombre}."
+
+
+def _dar_de_baja(usuario: UsuarioSoporte, data: dict) -> str:
+    usuario.dar_de_baja(_fecha(data, "fecha", obligatorio=True))
+    return f"{usuario.nombre_completo} queda dado de baja."
+
+
+def _reactivar(usuario: UsuarioSoporte, data: dict) -> str:
+    usuario.reactivar()
+    return f"{usuario.nombre_completo} vuelve a estar activo."
+
+
+MOVIMIENTOS = {
+    "cambiar_departamento": _cambiar_departamento,
+    "deshacer_cambio": _deshacer_cambio,
+    "baja": _dar_de_baja,
+    "reactivar": _reactivar,
+}
+
+
+@login_required
+@permission_required('can_manage_support_users')
+@ratelimit(key='ip', rate='60/m', block=True)
+@require_POST
+def api_usuario_movimiento(request):
+    """Cambio de departamento, baja o reactivacion de un usuario.
+
+    Van aparte del guardado porque no son una edicion de la ficha sino un
+    hecho con fecha: las reglas que los validan —cada cambio despues del
+    anterior, la baja despues del ultimo cambio— viven en el modelo.
+    """
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({"status": "error", "message": "JSON invalido."}, status=400)
+
+    accion = MOVIMIENTOS.get(str(data.get("accion") or ""))
+    if accion is None:
+        return JsonResponse({"status": "error", "message": "Acción desconocida."}, status=400)
+
+    usuario = UsuarioSoporte.objects.select_related("departamento").filter(pk=data.get("id")).first()
+    if usuario is None:
+        return JsonResponse({"status": "error", "message": "El usuario ya no existe."}, status=404)
+
+    try:
+        mensaje = accion(usuario, data)
+    except (DatosInvalidos, MovimientoInvalido) as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+    return JsonResponse({"status": "success", "message": mensaje, "registro": _usuario(usuario)})

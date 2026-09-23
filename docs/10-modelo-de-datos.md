@@ -35,7 +35,8 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
 | `catalogo_productos_ignorados` | `ProductoIgnorado` | Líneas del export que nunca serán un plan |
 | `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
-| `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido y departamento (FK obligatoria, `PROTECT`) |
+| `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
+| `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
 | `django_migrations` | Django | **Compartida: es la causa de los comandos `preparar_*`** |
 
 ### Cualificadas por esquema (`DB_SCHEMA`)
@@ -191,7 +192,7 @@ servirlas.
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
 | `catalogo_*` (planes, zonas, sites…) | Pantalla de catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
-| `catalogo_departamentos`, `catalogo_usuarios_soporte` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio` |
+| `catalogo_departamentos`, `catalogo_usuarios_soporte`, `catalogo_usuarios_soporte_historial` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio`, `tickets_tras_la_baja`, `anotar_departamentos` |
 | `analysis_jobs` | Vistas de lanzamiento y worker | Sondeo de la interfaz |
 | `import_action_logs` | `register_import_log` | Página de historial |
 
