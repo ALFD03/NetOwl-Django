@@ -165,6 +165,11 @@ Agrupado por tipo, todo se importa desde el barril `@/shared/ui`:
 | `feedback/` | `EmptyState`, `LoadingState`, `StatusMessage`, `ConsoleOutput` |
 | `theme/` | `metricTheme` y las uniones a las que va indexado |
 
+`SelectMenu` es el único desplegable de la aplicación, y con siete opciones o más
+lleva buscador (se fuerza con `searchable`): filtra sin distinguir mayúsculas ni
+tildes, se maneja con flechas y Enter —sin enviar el formulario— y Escape cierra
+solo la lista, no el modal que la contiene.
+
 `tableClasses` cubre el caso contrario a `DataTable`: una tabla que solo muestra,
 con cabecera pegajosa, montada a mano por varias vistas.
 

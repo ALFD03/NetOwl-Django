@@ -122,6 +122,14 @@ which value*. Put a `SelectMenu` inside with `FILTER_TRIGGER_CLASS`, a
 `PeriodSelector` and three times into `SubscriptionReportFilters`, and every
 new copy reinterpreted it slightly worse.
 
+**Every dropdown is a `SelectMenu`, and long ones search.** From seven options up
+it grows a search box on its own (`searchable` forces it either way): typing
+filters case- and accent-insensitively, the arrows move the highlighted option,
+Enter picks it without submitting the surrounding form, and Escape closes only
+the list, not the modal around it. With the trigger focused, just typing opens
+it already searching. Don't build a second combobox — pass the options to this
+one.
+
 **Anything that writes a file downloads through `ExportButton`.** It carries the
 shape — the filter capsule, the brand-tinted icon — and the four states, said in
 the button itself: idle, writing, nothing to export, failed. Exporting used to be
