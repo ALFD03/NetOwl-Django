@@ -132,8 +132,8 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
       { key: PERMISSIONS.RUN_SUBS_ANALYSIS, label: 'Ejecutar el análisis de churn', section: 'Cargar y calcular' },
       { key: PERMISSIONS.RUN_LIFETIME, label: 'Ejecutar el motor Kaplan-Meier', section: 'Cargar y calcular' },
       { key: PERMISSIONS.MANAGE_ETA, label: 'Administrar el Maestro ETA', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Catálogo comercial (planes, reguladores, ignorados, por registrar)', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL, label: 'Catálogo operacional (zonas, sites, estados, coordinadores)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Catálogo comercial (zonas, sites, estados, coordinadores)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL, label: 'Catálogo operacional (planes, reguladores, ignorados, por registrar)', section: 'Administrar' },
     ],
   },
   {

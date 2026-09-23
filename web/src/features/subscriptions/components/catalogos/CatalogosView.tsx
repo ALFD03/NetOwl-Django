@@ -39,8 +39,8 @@ import {
  * productos que ya están importados y que ningún plan reconoce. Es lo que
  * bloquea una importación o un análisis, y se resuelve desde ahí mismo.
  *
- * Las pestañas se reparten entre dos permisos: la mitad comercial (por
- * registrar, planes, reguladores, ignorados) y la operacional (zonas, sites,
+ * Las pestañas se reparten entre dos permisos: la mitad operacional (por
+ * registrar, planes, reguladores, ignorados) y la comercial (zonas, sites,
  * estados, coordinadores). Solo se pintan las del permiso que se tiene; el
  * servidor tampoco envía las filas de la otra ni deja escribir en ella.
  */
@@ -59,7 +59,7 @@ export function CatalogosView({
   tiposPersona,
   nuevoPlan,
 }: SubscriptionCatalogosProps) {
-  const c = useCatalogos({ sites, estados, nuevoPlan, comercial });
+  const c = useCatalogos({ sites, estados, nuevoPlan, operacional });
 
   const enviar = (event: FormEvent, accion: () => void) => {
     event.preventDefault();
@@ -234,14 +234,14 @@ export function CatalogosView({
               activeKey={c.vista}
               onChange={(key) => c.setVista(key as CatalogoVista)}
               options={[
-                ...(comercial
+                ...(operacional
                   ? [
                       { key: 'pendientes', label: `Por registrar (${pendientes.length})`, icon: AlertTriangle },
                       { key: 'planes', label: `Planes (${planes.length})`, icon: BookMarked },
                       { key: 'reguladores', label: `Planes reguladores (${reguladores.length})`, icon: FileSpreadsheet },
                     ]
                   : []),
-                ...(operacional
+                ...(comercial
                   ? [
                       { key: 'zonas', label: `Zonas (${zonas.length})`, icon: Network },
                       { key: 'sites', label: `Sites (${sites.length})`, icon: MapPin },
@@ -249,7 +249,7 @@ export function CatalogosView({
                       { key: 'coordinadores', label: `Coordinadores (${coordinadores.length})`, icon: UserCheck },
                     ]
                   : []),
-                ...(comercial
+                ...(operacional
                   ? [{ key: 'ignorados', label: `Ignorados (${ignorados.length})`, icon: EyeOff }]
                   : []),
               ]}

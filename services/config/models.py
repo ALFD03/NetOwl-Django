@@ -111,11 +111,12 @@ class PermissionMatrix(models.Model):
     can_manage_eta = models.BooleanField(default=False)
     can_manage_users = models.BooleanField(default=False)
     # Catalogos de referencia, partidos en dos porque los mantienen equipos
-    # distintos. El comercial es el vocabulario de lo que se vende: planes,
-    # planes reguladores, productos ignorados y la lista de productos por
-    # registrar. El operacional es la geografia de la red: zonas, sites,
-    # estados y coordinadores. Las dos mitades no se referencian entre si, asi
-    # que cada formulario se completa sin necesitar la otra.
+    # distintos. El comercial es como se reparte la red entre los equipos de
+    # venta: zonas, sites, estados y coordinadores. El operacional es el
+    # vocabulario de lo que se vende: planes, planes reguladores, productos
+    # ignorados y la lista de productos por registrar. Las dos mitades no se
+    # referencian entre si, asi que cada formulario se completa sin necesitar
+    # la otra.
     can_manage_catalogo_comercial = models.BooleanField(default=False)
     can_manage_catalogo_operacional = models.BooleanField(default=False)
     # Directorio de usuarios de soporte y sus departamentos. Va aparte de los

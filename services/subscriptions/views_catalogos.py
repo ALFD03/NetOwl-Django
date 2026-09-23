@@ -13,9 +13,9 @@ Toda escritura llama a `fixtures.reset_cache()`: el catalogo se lee cacheado
 minuto en verse, o no se veria nunca en el proceso que ya la tenia leida.
 
 Los catalogos se reparten entre dos permisos, porque los mantienen equipos
-distintos: el **comercial** (planes, planes reguladores, ignorados y la lista de
-productos por registrar) y el **operacional** (zonas, sites, estados y
-coordinadores). Cada entrada de `CATALOGOS` declara el suyo; la pantalla abre
+distintos: el **comercial** (zonas, sites, estados y coordinadores: como se
+reparte la red entre los equipos de venta) y el **operacional** (planes, planes
+reguladores, ignorados y la lista de productos por registrar). Cada entrada de `CATALOGOS` declara el suyo; la pantalla abre
 con cualquiera de los dos y solo envia las pestanas del que se tiene, y cada
 escritura comprueba el del catalogo que toca, no el de la pantalla.
 """
@@ -239,13 +239,13 @@ PERMISO_OPERACIONAL = "can_manage_catalogo_operacional"
 # lo administra. Anadir uno nuevo es anadir una entrada aqui y una pestana en
 # la interfaz.
 CATALOGOS: dict[str, dict[str, Any]] = {
-    "planes": {"modelo": Plan, "serializar": _plan, "aplicar": _aplicar_plan, "etiqueta": "plan", "permiso": PERMISO_COMERCIAL},
-    "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador", "permiso": PERMISO_COMERCIAL},
-    "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "producto ignorado", "permiso": PERMISO_COMERCIAL},
-    "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "permiso": PERMISO_OPERACIONAL},
-    "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_OPERACIONAL},
-    "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado", "permiso": PERMISO_OPERACIONAL},
-    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_nombre, "etiqueta": "coordinador", "permiso": PERMISO_OPERACIONAL},
+    "planes": {"modelo": Plan, "serializar": _plan, "aplicar": _aplicar_plan, "etiqueta": "plan", "permiso": PERMISO_OPERACIONAL},
+    "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador", "permiso": PERMISO_OPERACIONAL},
+    "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "producto ignorado", "permiso": PERMISO_OPERACIONAL},
+    "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "permiso": PERMISO_COMERCIAL},
+    "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_COMERCIAL},
+    "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado", "permiso": PERMISO_COMERCIAL},
+    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_nombre, "etiqueta": "coordinador", "permiso": PERMISO_COMERCIAL},
 }
 
 
@@ -262,7 +262,7 @@ def _catalogo_permitido(request, data: dict) -> tuple[dict[str, Any] | None, Jso
 
     Los endpoints de escritura dejan pasar a quien tenga cualquiera de los dos
     permisos; aqui se exige el del catalogo concreto, que es lo que impide que
-    el grupo operacional edite un plan mandando `tipo: "planes"` a mano.
+    el grupo comercial edite un plan mandando `tipo: "planes"` a mano.
     """
     catalogo = CATALOGOS.get(str(data.get("tipo") or ""))
     if catalogo is None:
@@ -319,16 +319,16 @@ def catalogos_view(request):
         "operacional": operacional,
         "tecnologias": [{"value": v, "label": t} for v, t in TECNOLOGIA_CHOICES],
         "tiposPersona": [{"value": v, "label": t} for v, t in TIPO_PERSONA_CHOICES],
-        "nuevoPlan": (request.GET.get("nuevo_plan") or "").strip() if comercial else "",
+        "nuevoPlan": (request.GET.get("nuevo_plan") or "").strip() if operacional else "",
         "section": "catalogos",
     })
 
     # Lo que ya esta importado y hoy no esta en el catalogo. Es la razon de ser
-    # de la mitad comercial: enterarse de que falta algo sin esperar al proximo
+    # de la mitad operacional: enterarse de que falta algo sin esperar al proximo
     # analisis. Si la consulta falla (entorno sin datos aun) no se rompe la
     # pagina por ello.
     props["pendientes"] = []
-    if comercial:
+    if operacional:
         try:
             props["pendientes"] = productos_fuera_de_catalogo()
         except Exception:
