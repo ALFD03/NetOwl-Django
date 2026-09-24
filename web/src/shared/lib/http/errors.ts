@@ -31,6 +31,23 @@ export class JobFailedError extends Error {
 }
 
 /**
+ * Un análisis que alguien detuvo desde la interfaz.
+ *
+ * No es un fallo y por eso no es un `JobFailedError`: nada salió mal, se pidió
+ * parar. Quien la reciba debe contarlo como un aviso, no como un error. Lleva el
+ * log igual, que es lo que dice hasta dónde llegó el cálculo.
+ */
+export class JobCancelledError extends Error {
+  readonly logOutput?: string;
+
+  constructor(message: string, logOutput?: string) {
+    super(message);
+    this.name = 'JobCancelledError';
+    this.logOutput = logOutput;
+  }
+}
+
+/**
  * Normalise anything thrown by an API call into a predictable shape.
  *
  * Replaces the hand-rolled `typeof d === 'object' && d !== null && 'message' in d`
@@ -45,7 +62,7 @@ export function extractApiError(error: unknown, fallback: string): ApiError {
     };
   }
 
-  if (error instanceof JobFailedError) {
+  if (error instanceof JobFailedError || error instanceof JobCancelledError) {
     return { message: error.message || fallback, logOutput: error.logOutput };
   }
 

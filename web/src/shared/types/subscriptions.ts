@@ -91,6 +91,49 @@ export interface EtaMetrics {
   [key: string]: unknown;
 }
 
+/**
+ * Una fila de la hoja de internet del formulario de la reguladora.
+ *
+ * `precio` viaja **en divisa, sin convertir**: la renta básica en bolívares es
+ * ese precio por la tasa del BCV, y la tasa se aplica al exportar para que un
+ * periodo ya calculado no quede congelado a la tasa de aquel día.
+ */
+export interface EtaFormularioInternet {
+  nombre: string;
+  tipo_suscriptor: string;
+  /** Todas las entidades federales del catálogo, encadenadas. */
+  entidades: string;
+  suscriptores: number;
+  precio: number;
+  tipo_servicio: string;
+  uplink_kbps: number;
+  downlink_kbps: number;
+  velocidad_promedio_kbps: number;
+  consumo_promedio_mb: number;
+}
+
+export interface EtaFormularioTransporte {
+  nombre: string;
+  suscriptores: number;
+  precio: number;
+  velocidad_kbps: number;
+}
+
+export interface EtaFormularioTelevision {
+  nombre: string;
+  tipo_suscriptor: string;
+  entidades: string;
+  suscriptores: number;
+  precio: number;
+}
+
+export interface EtaFormularios {
+  internet: EtaFormularioInternet[];
+  transporte: EtaFormularioTransporte[];
+  television: EtaFormularioTelevision[];
+  entidades: string;
+}
+
 export interface SubscriptionEtaReportResponse {
   status?: string;
   periodo?: string;
@@ -104,6 +147,26 @@ export interface SubscriptionEtaReportResponse {
   total_muestreado?: number;
   unmapped_plans?: unknown[];
   unmapped_subs?: unknown[];
+  /**
+   * Las tres hojas del libro que se declara.
+   *
+   * Ausente en los periodos bloqueados antes de que existieran: hay que
+   * recalcular el periodo para que aparezcan.
+   */
+  formularios?: EtaFormularios;
+  /** Planes que cuentan en las matrices pero no tienen plan regulador asignado. */
+  planes_sin_regulador?: string[];
+  /** Tasa del BCV fijada para el periodo. `0` = todavía sin fijar. */
+  tasa_bcv?: number;
+  /** De dónde salió: el día que publicó el BCV, o «Escrita a mano». */
+  tasa_bcv_fuente?: string;
+  /**
+   * Por qué no hay tasa, cuando la consulta automática falló.
+   *
+   * No impide ver el reporte —las rentas salen vacías, como antes de que
+   * hubiera consulta— pero hay que decirlo o parece que la tasa es cero.
+   */
+  tasa_bcv_aviso?: string;
   [key: string]: unknown;
 }
 
@@ -112,6 +175,7 @@ export interface PeriodoData {
   activos_inicio: number;
   activos_final: number;
   nuevos_mes: number;
+  ingresos: number,
   bajas: number;
   churn_neto_pct: number;
   churn_bruto_pct: number;
@@ -152,6 +216,15 @@ export interface EtaSubscriptionConfig {
   reportar?: boolean;
   es_transporte?: boolean;
   es_dedicado?: boolean;
+  /**
+   * La renta de este contrato, en divisa.
+   *
+   * El catálogo comercial no puede darla: cada enlace dedicado y cada
+   * transporte negocia la suya, y es con lo que se declara su renta básica.
+   * Las órdenes de la misma velocidad se declaran en una sola fila, con el
+   * promedio de sus rentas.
+   */
+  precio?: number;
 }
 
 export interface EtaPlanConfig {
@@ -170,6 +243,9 @@ export interface EtaDiscoveredSubscription extends EtaSubscriptionConfig {
   orden: string;
   cliente?: string;
   producto?: string;
+  /** De dónde viene el contrato. Solo para localizarlo: no se declara. */
+  sucursal?: string;
+  zona?: string;
 }
 
 export interface SubscriptionEtaManagementProps {
@@ -212,13 +288,69 @@ export interface LifetimeDimensionInfo {
 // Planes, zonas, sites, estados y coordinadores. Antes eran `Planes.json` y
 // `Zonas.json`; hoy son tablas que se editan en `/subscriptions/config/`.
 
+// --- Objetivos comerciales (ver features/subscriptions/lib/objetivos.ts) ---
+
+/**
+ * Un tramo con vigencia: vale desde `desde` (`YYYY-MM`, nulo = siempre) hasta
+ * que empieza el siguiente. Un valor nulo no fija esa métrica.
+ */
+export interface TramoObjetivo {
+  desde: string | null;
+  crecimiento: number | null;
+  churn: number | null;
+}
+
+export interface ValoresObjetivo {
+  crecimiento: number | null;
+  churn: number | null;
+}
+
+/**
+ * Umbrales de color: valores directos en %, iguales para todo el módulo.
+ *
+ * No dependen del objetivo: el mismo churn se pinta igual en cualquier zona y
+ * en cualquier página. El cumplimiento ya es un % de la meta.
+ */
+export interface SemaforoObjetivos {
+  /** Cumplimiento (% de la meta): verde desde / amarillo desde. */
+  cumpl_verde: number;
+  cumpl_amarillo: number;
+  /** Crecimiento (%), más es mejor: verde desde / amarillo desde. */
+  crec_verde: number;
+  crec_amarillo: number;
+  /** Churn (%), menos es mejor: verde hasta / amarillo hasta. */
+  churn_verde: number;
+  churn_amarillo: number;
+}
+
+/** Lo que envía `get_objetivos_config()`. Las entidades van por nombre. */
+export interface ObjetivosConfig {
+  /** El objetivo general: uno solo, sin fecha. */
+  general: { crecimiento: number; churn: number };
+  /** Excepciones de un mes concreto, por `YYYY-MM`. Sustituyen al general. */
+  meses: Record<string, ValoresObjetivo>;
+  estados: Record<string, TramoObjetivo[]>;
+  sites: Record<string, TramoObjetivo[]>;
+  coordinadores: Record<string, TramoObjetivo[]>;
+  zonas: Record<string, TramoObjetivo[]>;
+  /** Por sucursal tal y como la trae el export (`NETCOM`, `NYC`...). */
+  sucursales: Record<string, TramoObjetivo[]>;
+  /** Por nodo, con la clave de la dimensión `zona_sucursal`: `"Guacara - NYC"`. */
+  zonas_sucursal: Record<string, TramoObjetivo[]>;
+  semaforo: SemaforoObjetivos;
+}
+
 export type CatalogoTipo =
   | 'planes'
   | 'zonas'
   | 'sites'
   | 'estados'
   | 'coordinadores'
-  | 'ignorados';
+  | 'ignorados'
+  | 'reguladores'
+  | 'objetivos'
+  | 'objetivos_mes'
+  | 'semaforo';
 
 export interface CatalogoOption {
   value: string;
@@ -238,6 +370,33 @@ export interface CatalogoPlan {
   precio: number;
   /** Si el plan se declara a la reguladora en el reporte ETA. */
   declarar_en_eta: boolean;
+  /** Con qué fila del formulario se declara. `null` = todavía sin agrupar. */
+  plan_regulador_id: number | null;
+  plan_regulador: string;
+}
+
+/**
+ * El plan tal y como se **declara**, no como se vende.
+ *
+ * Varios planes comerciales colapsan en uno: la misma velocidad con dos
+ * tarifas es un solo producto ante la reguladora. Lleva sus propios campos
+ * porque, cuando dos planes del grupo difieren en precio o velocidad, lo
+ * declarado tiene que ser una decisión explícita.
+ */
+export interface CatalogoPlanRegulador {
+  id: number;
+  nombre: string;
+  tecnologia: string;
+  tipo_persona: string;
+  datas_mbps: number;
+  /** En divisa. La conversión a bolívares se hace al exportar. */
+  precio: number;
+  tiene_tv: boolean;
+  /** Decide en qué hoja del libro cae la fila. */
+  es_transporte: boolean;
+  notas: string;
+  /** Cuántos planes comerciales se declaran con él. */
+  planes: number;
 }
 
 export interface CatalogoZona {
@@ -275,6 +434,59 @@ export interface CatalogoProductoIgnorado {
   creado_en: string;
 }
 
+/** Nivel de un objetivo, de más alto a más bajo (el general es el respaldo). */
+export type NivelObjetivoCatalogo =
+  | 'general'
+  | 'sucursal'
+  | 'estado'
+  | 'site'
+  | 'coordinador'
+  | 'zona'
+  | 'zona_sucursal';
+
+/** Un nodo (zona - sucursal) que aparece en algún cierre calculado. */
+export interface NodoConocido {
+  /** `"Guacara - NYC"`. */
+  nodo: string;
+  zona: string;
+  sucursal: string;
+}
+
+/** Un tramo de objetivo tal y como lo edita la pestaña de objetivos. */
+export interface CatalogoObjetivo {
+  id: number;
+  nivel: NivelObjetivoCatalogo;
+  /** La fila de zona, site, estado o coordinador (la zona de un nodo). Nulo en el general y la sucursal. */
+  entidad_id: number | null;
+  /** Nombre con el que se cruza: la sucursal tal cual, o `"Zona - Sucursal"` en un nodo. */
+  entidad: string;
+  /** En los niveles `sucursal` y `zona_sucursal`; vacío en el resto. */
+  sucursal: string;
+  /** `YYYY-MM`, o vacío si vale desde siempre. */
+  desde: string;
+  /** Nulo: esa métrica se hereda. */
+  crecimiento_pct: number | null;
+  churn_pct: number | null;
+  nota: string;
+  actualizado_por: string;
+  actualizado_en: string;
+}
+
+/** La excepción de un mes concreto al objetivo general. */
+export interface CatalogoObjetivoMes {
+  id: number;
+  periodo: string;
+  crecimiento_pct: number | null;
+  churn_pct: number | null;
+  nota: string;
+  actualizado_por: string;
+  actualizado_en: string;
+}
+
+export interface CatalogoSemaforo extends SemaforoObjetivos {
+  id: number;
+}
+
 /** Producto ya importado que hoy no está en el catálogo. */
 export interface ProductoPendiente {
   nombre: string;
@@ -283,12 +495,28 @@ export interface ProductoPendiente {
 
 export interface SubscriptionCatalogosProps {
   planes: CatalogoPlan[];
+  reguladores: CatalogoPlanRegulador[];
   zonas: CatalogoZona[];
   sites: CatalogoSite[];
   estados: CatalogoNombrado[];
   coordinadores: CatalogoNombrado[];
   ignorados: CatalogoProductoIgnorado[];
+  objetivos: CatalogoObjetivo[];
+  objetivos_mes: CatalogoObjetivoMes[];
+  /** Nulos sin el permiso comercial, que es el que administra los objetivos. */
+  semaforo: CatalogoSemaforo | null;
+  objetivosConfig: ObjetivosConfig | null;
+  /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
+  periodosCalculados: string[];
+  /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
+  nodosConocidos: NodoConocido[];
   pendientes: ProductoPendiente[];
+  /**
+   * Qué mitad del catálogo administra el usuario. Las listas de la otra llegan
+   * vacías, y sus pestañas se ocultan por estos flags y no por estar vacías.
+   */
+  comercial: boolean;
+  operacional: boolean;
   tecnologias: CatalogoOption[];
   tiposPersona: CatalogoOption[];
   /** `?nuevo_plan=` — abre el formulario de plan ya relleno con ese nombre. */

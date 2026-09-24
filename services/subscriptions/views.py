@@ -23,6 +23,7 @@ from services.subscriptions.analytics import (
     get_dashboard_data,
     get_day_metrics,
     get_dimensiones,
+    get_objetivos_config,
     get_periodos,
     get_sales_report_data,
     get_zonas_config,
@@ -58,6 +59,7 @@ def dashboard(request):
         "dimensiones": {
             "zona": todas_las_zonas # React recibirá los 7 objetos por zona
         },
+        "objetivos": get_objetivos_config(),
         "section": "dashboard"
     })
 
@@ -84,6 +86,7 @@ def analytics(request):
         "periodos": data.get("periodos", []),
         "dimensiones": data.get("dimensiones", []),
         "dayMetrics": get_day_metrics(mes),
+        "objetivos": get_objetivos_config(),
         "section": "analytics"
     })
 
@@ -95,6 +98,7 @@ def results(request, periodo=None):
     return render_inertia(request, "Subscriptions/Results", {
         "periodos": cierres,
         "selected_periodo": periodo,
+        "objetivos": get_objetivos_config(),
         "section": "results"
     })
 
@@ -136,6 +140,7 @@ def sales_report(request):
         "reportData": data,
         "dayMetrics": get_day_metrics((data.get("period") or "")[:7]),
         "zonasConfig": get_zonas_config(),
+        "objetivos": get_objetivos_config(),
         "section": "sales_report"
     })
 
@@ -150,6 +155,7 @@ def business_units(request):
         "buData": data,
         "dayMetrics": get_day_metrics((data.get("period") or "")[:7]),
         "zonasConfig": get_zonas_config(),
+        "objetivos": get_objetivos_config(),
         "section": "business_units"
     })
 

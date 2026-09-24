@@ -12,6 +12,10 @@ from inertia import render as render_inertia
 
 from core.utils import clean_json_props, entero_de_peticion, limpiar_periodos
 from services.config.decorators import permission_required
+from services.support.analytics.day_metrics import (
+    get_support_day_payload,
+    get_support_day_series,
+)
 from services.support.analytics.queries import (
     get_support_analytics_structured,
     get_support_breakdown,
@@ -40,14 +44,45 @@ def analytics(request):
 
     Las dimensiones llegan enteras porque el selector es de cliente; solo el
     drill-down de un valor concreto pide datos nuevos.
+
+    `?dia=` cambia el bloque por el corte acumulado del mes hasta ese dia, ya
+    calculado en `support_day_metrics`. Sin el se ensena el ultimo corte, que en
+    un mes cerrado coincide con el cierre.
+
+    En los props viaja ademas la **serie ligera** del mes: el bloque global de
+    los treinta y un dias -el total y el de cada grupo de trabajo-, sin
+    desgloses. Con ella el cliente resuelve solo las tarjetas del dia, el
+    acumulado, la variacion contra el dia anterior y las lineas de tendencia, y
+    ademas sigue al selector de grupo sin ir al servidor. Lo unico que
+    se pide por dia es el desglose por grupo, y va por `api/day-metrics/`, que el
+    cliente cachea.
     """
     periodos = get_support_periodos()
     analytics_data = get_support_analytics_structured(request.GET.get("period"))
+    periodo = analytics_data.get("periodo", "")
+
+    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    serie = get_support_day_series(periodo) if periodo else {}
+    disponibles = serie.get("dias_disponibles", [])
+    dia_activo = dia if dia in disponibles else (disponibles[-1] if disponibles else 0)
+
+    corte = get_support_day_payload(periodo, dia_activo) if dia_activo else None
+    if corte:
+        analytics_data = {**analytics_data, **corte}
 
     return render_inertia(request, "Support/Analytics", clean_json_props({
         "analyticsData": analytics_data,
+        "dayMetrics": {
+            "periodo_mes": serie.get("periodo_mes", periodo),
+            "dias_disponibles": disponibles,
+            "dia": dia_activo,
+            "serie": serie.get("serie", {}),
+            # Abierta por grupo de trabajo: la pagina esta filtrada por grupo y
+            # las tarjetas del dia tienen que seguir al selector.
+            "serie_grupos": serie.get("serie_grupos", {}),
+        },
         "periods": periodos,
-        "selectedPeriod": analytics_data.get("periodo", ""),
+        "selectedPeriod": periodo,
         "section": "analytics",
     }))
 
@@ -129,6 +164,30 @@ def api_breakdown(request):
         valor=valor,
         grupo=request.GET.get("grupo") or None,
     )))
+
+
+@login_required
+@permission_required('can_view_support_analytics')
+def api_day_metrics(request):
+    """El corte completo de un dia: `{global, grupos, incidencia_zonas}`.
+
+    Existe para que la barra de dias no pase por Inertia: el cliente pide el dia
+    que le falta, lo cachea y adelanta los vecinos, de modo que moverse por el
+    mes deja de esperar a la base. No calcula nada —lee una celda de
+    `support_day_metrics`, ya escrita por el analisis—.
+    """
+    periodo = request.GET.get("period")
+    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    if not periodo or not dia:
+        return JsonResponse(
+            {"status": "error", "message": "Se requieren period y dia."}, status=400
+        )
+
+    corte = get_support_day_payload(periodo, dia)
+    if corte is None:
+        return JsonResponse({"status": "empty", "dia": dia}, status=404)
+
+    return JsonResponse(clean_json_props({"dia": dia, **corte}))
 
 
 @login_required

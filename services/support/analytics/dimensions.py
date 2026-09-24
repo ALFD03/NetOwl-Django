@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from psycopg2.extras import execute_values
 
@@ -35,15 +36,22 @@ logger = logging.getLogger(__name__)
 _INSERT_COLUMNS = ["periodo_reporte", "grupo_trabajo", "dimension", "valor", "metricas"]
 
 
-def build_dimension_rows(cohorte: PeriodCohort) -> list[tuple]:
-    """Las filas de dimensión de una cohorte, listas para insertar."""
-    rows: list[tuple] = []
+def build_dimension_rows(cohorte: PeriodCohort) -> list[dict[str, Any]]:
+    """Las filas de dimensión de una cohorte.
+
+    La forma de cada fila es la misma que devuelve `get_support_dimension_metrics`
+    al leerlas de la base, de modo que un corte recién calculado y uno persistido
+    se estructuran con la misma función.
+    """
+    rows: list[dict[str, Any]] = []
 
     def fila(grupo: str, dimension: str, valor: str, sub: PeriodCohort) -> None:
-        rows.append((
-            cohorte.periodo, grupo, dimension, valor,
-            json.dumps(compute_metrics_for_period(sub)),
-        ))
+        rows.append({
+            "grupo_trabajo": grupo,
+            "dimension": dimension,
+            "valor": valor,
+            "metricas": compute_metrics_for_period(sub),
+        })
 
     for grupo, c_grupo in cohorte.desglosar(DIM_GRUPO):
         fila(grupo, DIM_GRUPO, grupo, c_grupo)
@@ -55,7 +63,9 @@ def build_dimension_rows(cohorte: PeriodCohort) -> list[tuple]:
     return rows
 
 
-def save_support_dimensiones_periodo(db: DBConnector, periodo: str, rows: list[tuple]) -> None:
+def save_support_dimensiones_periodo(
+    db: DBConnector, periodo: str, rows: list[dict[str, Any]]
+) -> None:
     """
     Reemplaza las filas dimensionales del periodo por las recién calculadas.
 
@@ -78,7 +88,13 @@ def save_support_dimensiones_periodo(db: DBConnector, periodo: str, rows: list[t
                     ({", ".join(_INSERT_COLUMNS)}, updated_at)
                     VALUES %s
                     """,
-                    rows,
+                    [
+                        (
+                            periodo, r["grupo_trabajo"], r["dimension"], r["valor"],
+                            json.dumps(r["metricas"]),
+                        )
+                        for r in rows
+                    ],
                     template="(%s, %s, %s, %s, %s, NOW())",
                 )
         conn.commit()

@@ -17,23 +17,25 @@ dispare ningun recalculo.
 """
 from __future__ import annotations
 
-import calendar
-import json
 import logging
 from collections.abc import Callable
-from datetime import date
 from typing import Any
 
-from core.config import DB_SCHEMA, TableNames
+from core.config import TableNames
 from core.database import DBConnector
+from core.day_metrics import (
+    leer_mes,
+    mes_bounds,
+    periodo_label_mes,
+    periodos_con_dias,
+    ultimo_dia_a_calcular,
+)
 from core.models import Periodo
 
 from .analyzer import MetricsAnalyzer
 from .analyzer import dimensions as dim_mod
 
 logger = logging.getLogger(__name__)
-
-DAY_COLUMNS = [f"dia{d}" for d in range(1, 32)]
 
 # Dimension que necesitan SalesReport y BusinessUnits para agrupar por sede.
 DIMENSION_DIARIA = "zona_sucursal"
@@ -46,17 +48,6 @@ DIMENSIONES_DIARIAS = [DIMENSION_DIARIA, *DIMENSIONES_ANALYTICS]
 
 # Cada cuantos dias se vuelca el progreso a la base.
 FLUSH_CADA_N_DIAS = 5
-
-
-def _mes_bounds(year_month: str) -> tuple[int, int, int]:
-    """Ano, mes y ultimo dia de un `YYYY-MM`."""
-    anio, mes = int(year_month[:4]), int(year_month[5:7])
-    return anio, mes, calendar.monthrange(anio, mes)[1]
-
-
-def periodo_label_mes(year_month: str) -> str:
-    """Etiqueta del mes completo, la misma clave que usan las demas tablas."""
-    return Periodo.build(f"{year_month}-01").label()
 
 
 def _payload_dia(c: dict[str, Any], dim_rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -103,15 +94,8 @@ def build_day_metrics(
     dias es la parte larga y es la unica con pasos contables.
     """
     db = db or DBConnector()
-    anio, mes, ultimo_dia = _mes_bounds(year_month)
-
-    # En el mes en curso no tiene sentido calcular dias futuros.
-    hoy = date.today()
-    tope = ultimo_dia
-    if (anio, mes) == (hoy.year, hoy.month):
-        tope = min(tope, hoy.day)
-    if hasta_dia:
-        tope = min(tope, hasta_dia)
+    anio, mes, _ = mes_bounds(year_month)
+    tope = ultimo_dia_a_calcular(year_month, hasta_dia)
 
     if analyzer is None:
         analyzer = MetricsAnalyzer(db, Periodo.build(f"{year_month}-01"))
@@ -151,88 +135,40 @@ def build_day_metrics(
         # Volcado parcial: el upsert solo toca los dias enviados, asi que si la
         # ejecucion se corta el trabajo ya hecho queda guardado.
         if len(pendientes) >= FLUSH_CADA_N_DIAS:
-            db.save_day_metrics(label, activos_inicio, pendientes)
+            _guardar(db, label, activos_inicio, pendientes)
             print(f"  -> guardados {len(pendientes)} dias")
             pendientes = {}
 
     if pendientes:
-        db.save_day_metrics(label, activos_inicio, pendientes)
+        _guardar(db, label, activos_inicio, pendientes)
 
     print(f"\nMETRICAS DIARIAS GUARDADAS | {label} | {tope} dias")
     return {"periodo_reporte": label, "dias_calculados": tope}
 
 
-def _tabla_existe(db: DBConnector) -> bool:
-    """to_regclass devuelve NULL si la tabla no existe, sin lanzar error.
-
-    Evita consultar una tabla ausente (aun no se han calculado metricas diarias).
-    """
-    try:
-        df = db.query(
-            "SELECT to_regclass(%s) AS t",
-            params=[f"{DB_SCHEMA}.{TableNames.ANALYZER_DAY_METRICS}"],
-        )
-        return not df.empty and df.iloc[0]["t"] is not None
-    except Exception:
-        logger.exception("Error comprobando la tabla de metricas diarias")
-        return False
+def _guardar(
+    db: DBConnector, label: str, activos_inicio: int, dias: dict[str, Any]
+) -> None:
+    """Vuelca los dias pendientes a `analyzer_day_metrics`."""
+    db.save_day_metrics(
+        label,
+        dias,
+        table=TableNames.ANALYZER_DAY_METRICS,
+        escalares={"activos_inicio": activos_inicio},
+    )
 
 
 def get_day_metrics(year_month: str) -> dict[str, Any]:
     """Devuelve el mes completo: {activos_inicio, dias: {1: {...}, ...}}."""
-    if not year_month:
+    datos = leer_mes(
+        TableNames.ANALYZER_DAY_METRICS, year_month, escalares=("activos_inicio",)
+    )
+    if not datos:
         return {}
-    db = DBConnector()
-    if not _tabla_existe(db):
-        return {}
-    label = periodo_label_mes(year_month)
-    try:
-        df = db.query(
-            f"""
-            SELECT * FROM {DB_SCHEMA}.{TableNames.ANALYZER_DAY_METRICS}
-            WHERE periodo_reporte = %s
-            """,
-            params=[label],
-        )
-    except Exception:
-        logger.exception("Error leyendo metricas diarias")
-        return {}
-    if df.empty:
-        return {}
-
-    row = df.iloc[0]
-    dias: dict[str, Any] = {}
-    for idx, col in enumerate(DAY_COLUMNS, start=1):
-        raw = row.get(col)
-        if raw in (None, "", "None"):
-            continue
-        try:
-            dias[str(idx)] = json.loads(raw) if isinstance(raw, str) else raw
-        except (ValueError, TypeError):
-            logger.warning("JSON invalido en %s de %s", col, label)
-
-    return {
-        "periodo_reporte": label,
-        "periodo_mes": year_month,
-        "activos_inicio": int(row.get("activos_inicio") or 0),
-        "dias": dias,
-    }
+    datos["activos_inicio"] = int(datos.get("activos_inicio") or 0)
+    return datos
 
 
 def get_periodos_con_dias() -> list[str]:
     """Meses (YYYY-MM) que ya tienen metricas diarias calculadas."""
-    db = DBConnector()
-    if not _tabla_existe(db):
-        return []
-    try:
-        df = db.query(
-            f"""
-            SELECT DISTINCT LEFT(periodo_reporte, 7) AS mes
-            FROM {DB_SCHEMA}.{TableNames.ANALYZER_DAY_METRICS}
-            ORDER BY mes DESC
-            """
-        )
-        return df["mes"].dropna().tolist() if not df.empty else []
-    except Exception:
-        logger.exception("Error listando meses con metricas diarias")
-        return []
+    return periodos_con_dias(TableNames.ANALYZER_DAY_METRICS)

@@ -15,5 +15,6 @@ export { EtaManagementView } from './components/etamanagement/EtaView';
 export { CatalogosView } from './components/catalogos/CatalogosView';
 export * from './lib/bajasExport';
 export * from './lib/commercial';
+export * from './lib/objetivos';
 export * from './lib/analyticsDistribution';
 export type * from './types';

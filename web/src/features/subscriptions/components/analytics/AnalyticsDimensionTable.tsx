@@ -1,11 +1,13 @@
 /** La tabla cruda de una dimensión: la lectura contra la que comprobar un gráfico. */
 
+import { useMemo } from 'react';
 import { Table as TableIcon } from 'lucide-react';
 
 import { DataTable, NeonContainer } from '@/shared/ui';
 import { DIMENSION_LABELS } from '@/shared/constants/labels';
 import type { DimensionVal } from '@/shared/types/domain';
-import { ANALYTICS_DIMENSION_COLUMNS } from './analyticsDimensionColumns';
+import { useObjetivosConfig } from '../../hooks/useObjetivos';
+import { buildAnalyticsDimensionColumns } from './analyticsDimensionColumns';
 
 export interface AnalyticsDimensionTableProps {
   rows: DimensionVal[];
@@ -21,6 +23,8 @@ export interface AnalyticsDimensionTableProps {
  */
 export function AnalyticsDimensionTable({ rows, dimension, period }: AnalyticsDimensionTableProps) {
   const label = DIMENSION_LABELS[dimension as keyof typeof DIMENSION_LABELS] ?? dimension;
+  const { semaforo } = useObjetivosConfig();
+  const columnas = useMemo(() => buildAnalyticsDimensionColumns(semaforo), [semaforo]);
 
   return (
     <NeonContainer
@@ -36,7 +40,7 @@ export function AnalyticsDimensionTable({ rows, dimension, period }: AnalyticsDi
     >
       <div className="h-[550px]">
         <DataTable
-          columns={ANALYTICS_DIMENSION_COLUMNS}
+          columns={columnas}
           data={rows}
           searchable
           searchPlaceholder={`Buscar ${label.toLowerCase()}...`}

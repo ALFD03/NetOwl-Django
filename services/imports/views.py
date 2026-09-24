@@ -36,7 +36,7 @@ from services.support.analytics import import_support_csv
 from services.support.analytics.config import REQUIRED_SUPPORT_HEADERS
 
 from .history import register_import_log
-from .jobs import job_en_curso, jobs_abiertos, lanzar_analisis
+from .jobs import cancelar_job, job_en_curso, jobs_abiertos, lanzar_analisis
 from .models import AnalysisJob, ImportActionLog
 
 logger = logging.getLogger(__name__)
@@ -325,6 +325,70 @@ def api_job_detail(request, job_id):
             {"status": "error", "message": "Ejecución no encontrada."}, status=404
         )
     return JsonResponse(job.to_dict())
+
+
+def _job_cancelable(request, job):
+    """Quien lanzo el analisis, quien puede lanzar analisis, y los superusuarios.
+
+    Cancelar es una accion, no una lectura: no basta con poder ver el job. Se
+    exige el permiso con el que se habrian podido lanzar (`can_run_calculations`,
+    el que ya agrupa esa capacidad), de modo que quien puede empezar un calculo
+    puede pararlo.
+    """
+    if request.user.is_superuser or job.user_id == request.user.id:
+        return True
+    profile = getattr(request.user, 'profile', None)
+    return bool(profile and profile.has_permission('can_run_calculations'))
+
+
+@login_required
+@ratelimit(key='ip', rate='10/m', block=True)
+@require_POST
+def api_job_cancel(request, job_id):
+    """Cancela una ejecucion encolada o en curso.
+
+    No manda nada a Celery: cerrar la fila basta. Si el analisis todavia esperaba
+    turno, la tarea lo descarta al recogerlo; si ya estaba calculando, su consola
+    lo ve en el siguiente punto de control -a lo sumo un par de segundos- y se
+    detiene. Matar el proceso del worker seria lo unico mas rapido, y dejaria a
+    medias el `COPY` o el `ALTER TABLE` que estuviera corriendo.
+
+    El limite es mas suelto que el de los endpoints de calculo (2/m): cancelar no
+    dispara trabajo, y cortar una cola de varios trabajos son varias llamadas
+    seguidas. Tampoco lleva `@permission_required` encima del limite como el
+    resto: aqui el permiso depende del job -su dueno tambien puede- y eso no se
+    puede decidir en un decorador.
+    """
+    job = AnalysisJob.objects.filter(pk=job_id).first()
+    if job is None or not _job_visible(request, job):
+        return JsonResponse(
+            {"status": "error", "message": "Ejecución no encontrada."}, status=404
+        )
+
+    if not _job_cancelable(request, job):
+        return JsonResponse(
+            {"status": "error", "message": "No tienes permiso para cancelar esta ejecución."},
+            status=403,
+        )
+
+    if not job.esta_abierto:
+        return JsonResponse({
+            "status": "error",
+            "message": f"La ejecución ya terminó ({job.get_status_display()}).",
+            "job": job.to_dict(),
+        }, status=409)
+
+    cancelar_job(job, request.user.username)
+    return JsonResponse({
+        "status": "cancelled",
+        "message": (
+            "Cancelación solicitada. El análisis se detiene en su próximo punto"
+            " de control."
+            if job.started_at else
+            "Análisis cancelado antes de empezar."
+        ),
+        "job": job.to_dict(),
+    })
 
 
 @login_required

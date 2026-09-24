@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { formatPeriodoLabel } from '@/shared/utils';
 
+import { FilterField, FILTER_TRIGGER_CLASS } from './FilterField';
 import { SelectMenu } from './SelectMenu';
 
 interface Props {
@@ -29,11 +30,7 @@ export function PeriodSelector({ label = 'Mes', icon, value, options, onChange, 
   );
 
   return (
-    <div className={`flex items-center overflow-hidden rounded-2xl border border-slate-700/50 bg-surface-secondary shadow-2xl ${className}`}>
-      <div className="flex items-center gap-2 border-r border-slate-700/50 bg-slate-800/50 px-4 py-2.5 text-slate-400">
-        {icon}
-        <span className="text-[10px] font-black uppercase tracking-wider">{label}</span>
-      </div>
+    <FilterField label={label} icon={icon} className={className}>
       <SelectMenu
         value={value}
         options={opciones}
@@ -41,8 +38,8 @@ export function PeriodSelector({ label = 'Mes', icon, value, options, onChange, 
         placeholder="Sin periodos"
         aria-label={label}
         panelWidth={220}
-        className="flex cursor-pointer items-center gap-2 py-2.5 pl-4 pr-3 text-xs font-bold text-white outline-none hover:bg-white/5"
+        className={FILTER_TRIGGER_CLASS}
       />
-    </div>
+    </FilterField>
   );
 }

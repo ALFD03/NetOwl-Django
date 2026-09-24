@@ -72,59 +72,55 @@ Todo lo demás vive en **un único secreto KV v2** con esta forma (ver
 ## `DB_SCHEMA`: un esquema de Postgres por entorno
 
 Desarrollo y producción apuntan a **la misma base de datos** y se separan por
-esquema. De ahí salen varias decisiones que conviene no deshacer.
+esquema: `test` en desarrollo, `netowl` en producción. **Cada entorno vive
+entero en su esquema y no comparte nada con el otro**: usuarios, perfiles y
+permisos, los catálogos, el directorio de soporte, las sesiones,
+`django_migrations` y todos los datos calculados.
 
-### Qué se cualifica con el esquema y qué no
+### Cómo se consigue
 
-| Tabla / grupo | Esquema | Por qué |
-|---|---|---|
-| Todo lo calculado por la analítica (`analyzer_*`, `crm_*`, `support_*`, `subscriptions*`, `lifetime_*`) | `DB_SCHEMA` | Son datos computados: cada entorno tiene los suyos. |
-| `import_action_logs`, `analysis_jobs` (`services/imports/models.py`) | `DB_SCHEMA` | Ídem: bitácora y trabajos del entorno. |
-| `django_session` (`SesionEntorno`) | `DB_SCHEMA` | Compartirla cerraba la sesión del otro entorno. |
-| `auth_user`, `config_profile`, la matriz de permisos | `public` (compartido) | **La misma cuenta debe valer en los dos entornos.** |
-| `catalogo_*` — planes, zonas, sites, estados, coordinadores, ignorados | `public` (compartido) | El catálogo comercial es uno por empresa; uno por entorno solo produce divergencias silenciosas. |
-| `django_migrations` | `public` (compartido) | No se elige: es de Django. Es la causa de los dos comandos `preparar_*`. |
+- **La conexión solo ve su esquema.** `DATABASES["default"]["OPTIONS"]` pasa
+  `-c search_path=<DB_SCHEMA>`, sin `public` detrás, y `DBConnector` hace lo
+  mismo. Los modelos del ORM no cualifican su `db_table`: el `search_path` los
+  lleva al esquema. Una tabla que falte da `relation does not exist` en vez de
+  leerse en silencio de otro sitio.
+- **`DB_SCHEMA` es obligatorio y no puede ser `public`.** `settings.py` se niega
+  a arrancar sin él: un `.env` incompleto volvería a juntar los entornos sin
+  que nadie lo note.
+- **`django_migrations` es de cada esquema**, así que `migrate` crea y
+  actualiza todo el entorno, incluido uno recién creado. Lo ejecutan
+  `entrypoint.sh` (salvo `SKIP_MIGRATE=1`, que lleva el worker) y
+  `scripts/dev.sh` en cada arranque.
+- **Las cookies llevan el sufijo del entorno** (`netowl_sessionid_<ENV_SUFFIX>`),
+  porque los dos entornos comparten host y el navegador no distingue puertos.
 
-La regla en una frase: **se cualifica por esquema el dato calculado, no el
-vocabulario del negocio ni la identidad de los usuarios.**
+Algunos restos son anteriores a esta separación y hoy son redundantes pero
+inofensivos: `import_action_logs`/`analysis_jobs` y `SesionEntorno` cualifican
+su `db_table` con `DB_SCHEMA` (el mismo esquema al que ya apunta el
+`search_path`), y `SESSION_ENGINE` sigue siendo `services.config.sessions`.
 
-### Sesiones aisladas (y por qué las cookies no bastaban)
+### La separación de `public` (septiembre de 2026)
 
-Renombrar las cookies por entorno (`SESSION_COOKIE_NAME = netowl_sessionid_<ENV_SUFFIX>`)
-solo importa cuando dos entornos comparten host: evita que un login pise la
-cookie del otro. **No resolvía el problema real**, que estaba en las filas: con
-una única `public.django_session`, iniciar sesión en un entorno borraba la fila
-del otro y cerraba su sesión.
+Hasta entonces usuarios, permisos, catálogos, directorio de soporte y
+`django_migrations` vivían en `public` y se compartían a propósito. Para pasar
+a esquemas aislados, `manage.py copiar_desde_public` clona cada tabla de
+`public` (salvo `django_session`) en el esquema del entorno: estructura,
+secuencias propias, restricciones e índices con sus nombres originales, y las
+filas con sus ids. Es transaccional, no toca `public` y se detiene si alguna
+tabla ya existe en el destino. `--simular` hace la copia y la deshace.
 
-La solución son tres piezas:
-
-1. `SesionEntorno` (`services/config/models.py`) — modelo `managed = False` cuya
-   `db_table` lleva el esquema dentro. Declara `expire_date` con
-   `db_index=False` porque el nombre que Django autogeneraría es un hash del
-   nombre de la tabla y cambiaría por entorno, dejando
-   `makemigrations --check` reportando cambios pendientes para siempre.
-2. `services/config/sessions.py` — el backend de base de datos de Django con un
-   único cambio: usa ese modelo. Se activa con
-   `SESSION_ENGINE = "services.config.sessions"`.
-3. `manage.py preparar_sesiones` — crea la tabla, idempotente
-   (`CREATE TABLE IF NOT EXISTS`). **No puede ser una migración**: como
-   `django_migrations` es compartida, se marcaría como aplicada al ejecutarla en
-   el primer entorno y el segundo se quedaría sin tabla, fallando en el primer
-   login. `config/migrations/0002` existe solo para que
-   `makemigrations --check` quede limpio; no crea nada.
-
-`manage.py preparar_imports` hace lo mismo con `import_action_logs` y
-`analysis_jobs`, y por el mismo motivo. Su DDL no está escrito a mano: lo genera
-el `schema_editor` desde el modelo, así que añadir un campo no obliga a tocar el
-comando. Ambos se ejecutan en cada arranque (`entrypoint.sh` y `scripts/dev.sh`).
+Se ejecuta una vez por entorno, con el código nuevo desplegado y **antes** de
+que nadie entre, para que ninguna edición hecha en `public` en el intervalo se
+quede atrás. Las tablas de `public` quedan como copia de seguridad; nada las lee.
 
 ### Migraciones
 
-Tres apps tienen modelos y por tanto `migrations/`:
+Cuatro apps tienen modelos y por tanto `migrations/`:
 
 - `services/config/` — usuarios, perfiles, grupos de permisos, `SesionEntorno`.
 - `services/imports/` — `ImportActionLog` y `AnalysisJob`.
 - `services/subscriptions/` — los catálogos de referencia.
+- `services/support/` — el directorio de usuarios de soporte.
 
 **Están versionadas: no se regeneran desde cero.** Las de `imports` se editan a
 mano en exactamente un punto: `db_table` incrusta el esquema de Postgres, así
@@ -146,8 +142,8 @@ Se comprueban los dos entornos a la vez con:
 DB_SCHEMA=<otro_esquema> python manage.py makemigrations --check --dry-run
 ```
 
-Las de `services/subscriptions` no necesitan ninguna edición: sus tablas viven
-en `public` deliberadamente.
+Las de `services/subscriptions` y `services/support` no necesitan ninguna
+edición: sus `db_table` no llevan esquema y el `search_path` los resuelve.
 
 ## Seguridad (`netowl_web/settings.py`)
 

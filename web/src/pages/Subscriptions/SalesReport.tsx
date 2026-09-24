@@ -11,6 +11,7 @@ import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { DayProgressBar } from '@/shared/ui';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
+import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
 import { buildSalesSites, type ZonasConfig } from '@/features/subscriptions/lib/dayReports';
 import type { DayMetrics } from '@/shared/types/domain';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
@@ -40,11 +41,17 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
     [dayData, zonasConfig, reportData.data],
   );
 
+  // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
+  // site y estado pertenece cada zona, que es por donde se heredan.
+  const objetivos = useObjetivos(zonasConfig?.zonas);
+
   const { branchList, filteredData } = useSalesReportData({
     sites,
     searchTerm,
     selectedBranch,
     selectedTech,
+    period: currentPeriod,
+    objetivos,
   });
 
   const changePeriod = (period: string) => {

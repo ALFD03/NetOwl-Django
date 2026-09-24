@@ -41,7 +41,14 @@ export function SupportAnalyticsView({ data, dimension }: Props) {
         sharePct={sharePct}
       />
 
+      {/*
+        `key` remonta el panel al cambiar de eje, que es lo que descarta su
+        estado local —la vista por departamento y el departamento filtrado—.
+        Arrastrarlo de «Asignado a» a «Zona» dejaria un filtro aplicado sobre
+        una dimension que no tiene departamentos.
+      */}
       <SupportDimensionPanel
+        key={dimension}
         dimension={dimension}
         rows={dimensionRows}
         groupName={activeGroupName}

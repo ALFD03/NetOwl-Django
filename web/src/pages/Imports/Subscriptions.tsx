@@ -136,7 +136,7 @@ export default function ImportSubscriptions() {
           requireMonth
           missingMonthMessage="Por favor selecciona un mes en el calendario."
           pendingLog={(month) => `Iniciando motor de análisis de Churn para el periodo ${month}...`}
-          onRun={(month) => importsApi.runSubscriptionsAnalysis(month)}
+          onRun={(month, onProgress) => importsApi.runSubscriptionsAnalysis(month, onProgress)}
           successMessage={(result, month) =>
             `Análisis de Churn completado exitosamente para ${result.periodo_label || month}` +
             (result.dias_calculados ? ` (${result.dias_calculados} días calculados).` : '.')}

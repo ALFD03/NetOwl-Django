@@ -182,10 +182,14 @@ def compute_permanencias_en_etapa(
     de ahí a `creado_el`.
 
     Devuelve una fila por oportunidad con `client_id`, `etapa`, `horas`,
-    `cerrada` y `periodo_entrada`, para que el análisis la reparta por periodo y
-    por dimensión igual que reparte los logs.
+    `cerrada`, `periodo_entrada` y `fecha_entrada`, para que el análisis la
+    reparta por periodo y por dimensión igual que reparte los logs.
+    `fecha_entrada` es lo que permite además recortarla por día, que es lo que
+    necesitan los cortes diarios del periodo.
     """
-    columnas = ["client_id", "etapa", "horas", "cerrada", "periodo_entrada"]
+    columnas = [
+        "client_id", "etapa", "horas", "cerrada", "periodo_entrada", "fecha_entrada",
+    ]
     if df_clients.empty or not {"id", "etapa_actual"} <= set(df_clients.columns):
         return pd.DataFrame(columns=columnas)
 
@@ -247,6 +251,7 @@ def compute_permanencias_en_etapa(
         "horas": horas,
         "cerrada": cierre.notna(),
         "periodo_entrada": entrada.dt.strftime("%Y-%m"),
+        "fecha_entrada": entrada,
     })
 
     # Una estancia negativa es un cierre anterior a la entrada a la etapa: ruido

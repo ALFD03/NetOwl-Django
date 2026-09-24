@@ -8,13 +8,13 @@ de usuarios se quedaba vacia alguna vez, entregando el superusuario a quien
 llegase primero por la red.
 
 Crear al primer administrador es una operacion de despliegue, no una pantalla:
-va por la misma via que `preparar_sesiones` y `preparar_imports`.
+va por la misma via que `migrate`.
 
     python manage.py crear_admin --usuario admin
     python manage.py crear_admin --usuario admin --clave '...'   # no interactivo
 
-Recuerde que `auth_user` vive en `public` y la comparten todos los entornos
-(ver CLAUDE.md): basta con crear la cuenta una vez.
+`auth_user` vive en el esquema del entorno (DB_SCHEMA): cada entorno tiene
+sus propias cuentas y hay que crear el administrador en cada uno.
 """
 
 from getpass import getpass

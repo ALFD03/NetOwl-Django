@@ -9,7 +9,8 @@ export interface NavigationTab {
   label: string;
   href: string;
   icon: LucideIcon;
-  permission?: Permission;
+  /** Un permiso, o varios de los que basta con uno (OR). */
+  permission?: Permission | readonly Permission[];
 }
 
 export interface ModuleNavigation {

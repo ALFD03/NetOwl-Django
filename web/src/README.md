@@ -16,8 +16,8 @@ src/
 │   ├── layout/   AppLayout, Sidebar, UserMenu
 │   ├── navigation/  ModuleHeader
 │   ├── charts/   Chart.js wrappers, shared options, registration
-│   ├── lib/      cn(), colour helpers, api client, http error handling
-│   ├── hooks/    usePermissions, useAsyncAction
+│   ├── lib/      cn(), colour helpers, api client, http error handling, daySeries
+│   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts, useDayPayload
 │   ├── utils/    formatters
 │   ├── constants/  navigation registry, permissions, design tokens
 │   └── types/    cross-cutting types only
@@ -25,6 +25,38 @@ src/
 │   └── <module>/{components,hooks,types.ts,index.ts}
 └── pages/        Inertia entry points — thin shells, nothing else
 ```
+
+## The day bar
+
+All three Analytics pages have one, and **moving it never waits on the server**.
+What the bar changes comes from two places, split by weight.
+
+**The light half — always instant, in every module.** `dayMetrics.serie` carries
+the global metric block of all 31 days (a few KB; the backend cuts it out of the
+row with `-> 'global'`). From it, `shared/lib/daySeries` derives what the new
+`DaySummary` block draws: what happened *that* day, what the month has
+accumulated up to it, and how it compares with the previous computed day. Each
+module declares its metrics in a `*DaySummary.ts` spec, and the `kind` there
+(`flujo`, `stock`, `tasa`) is load-bearing — it says whether subtracting two days
+means anything. Subscriptions builds the same series out of the month it already
+receives.
+
+**The heavy half — the dimensional breakdown.**
+
+- **Subscriptions** gets the whole month in its props (`dayMetrics.dias`) and
+  `features/subscriptions/hooks/useDayMetrics` picks a day out of it. Its
+  breakdowns are small enough to travel.
+- **CRM and Support** cannot: one of their days already carries the full metric
+  block of every seller, branch, work group or zone. `shared/hooks/useDayPayload`
+  serves it from an in-memory cache — a visited day repaints with no request, the
+  neighbours are prefetched while the bar sits still, the last resolved day stays
+  on screen while a new one travels, and the cache is capped because holding the
+  whole month is the original problem. `shared/hooks/useDayCuts` owns the
+  selected day and writes `?dia=` into the URL with `replaceState`, so a reload
+  lands where you were without costing a visit.
+
+Nothing on either half recomputes anything: every cut was written by the monthly
+analysis. `shared/ui/inputs/DayProgressBar` is the same component in all three.
 
 ## The three rules
 
@@ -76,8 +108,45 @@ Concretely, these already exist — do not re-inline them:
 | Server execution log | `ConsoleOutput` |
 | Labelled input with leading icon | `TextField` |
 | Segmented view switch | `ToggleGroup` |
-| Sortable/searchable table | `DataTable` |
+| On/off boolean, labelled | `Switch` |
+| Filter capsule (label cap + control) | `FilterField` |
+| Sortable/searchable/filterable table | `DataTable` |
+| Download button (any file) | `ExportButton` |
 | Module tab bar | `ModuleHeader module="…"` |
+
+**Filters look the way they look in Sales Report and Business Units**, and that
+is not a convention but a component: `FilterField` is the capsule — a dark cap
+naming *what* is being filtered, and flush against it the control saying *by
+which value*. Put a `SelectMenu` inside with `FILTER_TRIGGER_CLASS`, a
+`SearchInput` with `grow`, or a field of your own. It used to be copied into
+`PeriodSelector` and three times into `SubscriptionReportFilters`, and every
+new copy reinterpreted it slightly worse.
+
+**Every dropdown is a `SelectMenu`, and long ones search.** From seven options up
+it grows a search box on its own (`searchable` forces it either way): typing
+filters case- and accent-insensitively, the arrows move the highlighted option,
+Enter picks it without submitting the surrounding form, and Escape closes only
+the list, not the modal around it. With the trigger focused, just typing opens
+it already searching. Don't build a second combobox — pass the options to this
+one.
+
+**Anything that writes a file downloads through `ExportButton`.** It carries the
+shape — the filter capsule, the brand-tinted icon — and the four states, said in
+the button itself: idle, writing, nothing to export, failed. Exporting used to be
+`Button variant="secondary"` in three places, which made the button that writes a
+file look like the one that opens a panel, and each copy drifted. `ExcelExportButton`
+(rows already on the page), `BajasExportButton` (fetches them, and has an icon-only
+variant for table cells) and `EtaFormsExportButton` (with its rate selector welded
+to its right) are all the same button underneath. Mounting it inside another capsule
+takes `seamless`, so it doesn't draw a border of its own.
+
+`DataTable` is the *only* table. Free-text search, click-to-sort and per-column
+filters live in it, so a screen that hand-rolls `<table>` markup silently loses
+all three — which is exactly what had happened to the ETA master screen. Mark a
+column `filterable` to get a dropdown whose options are derived from the data;
+add `filterValue` when the cell is rendered by a function and the raw field is
+not what the reader would pick from a list (a boolean shown as `Sí`/`—` filters
+as `Sí`/`No`, not `true`/`false`).
 
 Import from the barrel (`@/shared/ui`), not the file. Components are function
 declarations, never `React.FC`; only files under `pages/` use a default export.
@@ -126,7 +195,10 @@ and the copy.
 
 `pages/Subscriptions/Catalogos.tsx` edits the plan / zone / site / state /
 coordinator tables that used to be `data/Planes.json` and `data/Zonas.json`. It
-sits behind `can_manage_catalogos` and is the only place a plan is classified —
+sits behind two permissions — `can_manage_catalogo_comercial` (zones, sites,
+states, coordinators) and `can_manage_catalogo_operacional` (pending products,
+plans, regulator plans, ignored); the page opens with either and shows only the tabs
+of the one held — and it is the only place a plan is classified —
 the ETA screen no longer keeps a second, overriding copy of that classification,
 only its per-subscription exceptions.
 
@@ -141,11 +213,31 @@ written when it does: the check runs before the truncate, so the previous data
 is intact and the file can be re-uploaded once the decisions are made.
 
 
+## Commercial objectives are applied here, not stored
+
+The growth target and the maximum churn (6% / 3% by default) are catalogue data served in
+the `objetivos` prop of the subscriptions pages. `features/subscriptions/lib/objetivos.ts`
+is the only place that resolves them — meta, completion and colour — and
+`hooks/useObjetivos` reads them from the page. Never hardcode a target or a colour threshold
+again: that is how the app ended up with the 6% written in eight files and three different
+"green" cut-offs.
+
+The highest level that sets an objective wins: sucursal → state → site → coordinator → zone →
+node (zone - sucursal), then the month's general. A zone's own objective applies only if nothing above it sets one. Totals
+ignore the levels below the group: a coordinator total resolves from the coordinator up, a
+site total from the site up, and global totals use the month's general objective. Group metas are the sum of their zones'
+metas resolved from the group's level, so a group never contradicts its parts. The report
+hooks (`useSalesReportData`, `useBusinessUnitsData`) attach a `meta` to every node and group;
+components only paint.
+
 ## Careful: the two reports disagree on completion
 
-`features/subscriptions/lib/commercial.ts` holds the single `calcComercial`. It takes a
+`features/subscriptions/lib/commercial.ts` holds the single `calcComercial`. It receives the
+absolute growth meta (`Meta.metaCrecimiento`) and takes a
 `clamp` option because Sales Report and Business Units have always computed
 `tasaCumplimiento` differently — Sales Report clamps to `[0, 100]`, Business Units does
-not, which is what lets its "Meta Cumplida" badge fire above 100%. Both behaviours are
-preserved intentionally. Unifying them changes displayed commercial KPIs, so treat it as
+not, which is what lets its "Meta Cumplida" badge fire above 100%. The node table shows the
+three completions — ingreso (net growth), ventas (installations) and cierre (final base against
+the expected one) — next to each row's objective, and the clamp applies to all three in Sales
+Report. Both behaviours are preserved intentionally. Unifying them changes displayed commercial KPIs, so treat it as
 a product decision, not a cleanup.

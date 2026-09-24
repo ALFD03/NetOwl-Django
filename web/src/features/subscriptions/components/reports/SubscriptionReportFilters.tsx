@@ -1,7 +1,9 @@
 /** Filtros de los reportes comerciales: periodo, tecnología, sucursal y día. */
 
 import { Calendar, Filter, Search, Wifi } from 'lucide-react';
-import { PeriodSelector, SearchInput, SelectMenu } from '@/shared/ui';
+import {
+  FilterField, FILTER_TRIGGER_CLASS, PeriodSelector, SearchInput, SelectMenu,
+} from '@/shared/ui';
 
 type Technology = 'ALL' | 'FTTH' | 'RF';
 
@@ -19,6 +21,14 @@ interface Props {
   searchPlaceholder: string;
 }
 
+/**
+ * La fila de filtros de Ventas y Unidades de Negocio.
+ *
+ * Es donde se fijó la forma que siguen los filtros de toda la aplicación: cada
+ * uno es una `FilterField` —cabecera etiquetada con su icono, y pegado el
+ * control—. La cápsula estaba copiada aquí tres veces; ahora es el componente
+ * compartido, y esta pantalla lo consume como cualquier otra.
+ */
 export function SubscriptionReportFilters({
   period,
   periods,
@@ -42,11 +52,7 @@ export function SubscriptionReportFilters({
         onChange={onPeriodChange}
       />
 
-      <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-surface-secondary overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
-          <Wifi className="w-4 h-4 text-brand" />
-          <span className="text-[10px] font-black uppercase tracking-wider">Servicio</span>
-        </div>
+      <FilterField label="Servicio" icon={<Wifi className="w-4 h-4 text-brand" />}>
         <SelectMenu
           aria-label="Servicio"
           value={selectedTech}
@@ -57,15 +63,11 @@ export function SubscriptionReportFilters({
           ]}
           onChange={(v) => onTechChange(v as Technology)}
           panelWidth={180}
-          className="flex min-w-[130px] cursor-pointer items-center justify-between gap-2 py-2.5 pl-4 pr-3 text-xs font-bold text-white outline-none hover:bg-white/5"
+          className={FILTER_TRIGGER_CLASS}
         />
-      </div>
+      </FilterField>
 
-      <div className="flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-surface-secondary overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400">
-          <Filter className="w-4 h-4 text-emerald-500" />
-          <span className="text-[10px] font-black uppercase tracking-wider">Sucursal</span>
-        </div>
+      <FilterField label="Sucursal" icon={<Filter className="w-4 h-4 text-emerald-500" />}>
         <SelectMenu
           aria-label="Sucursal"
           value={selectedBranch}
@@ -75,16 +77,18 @@ export function SubscriptionReportFilters({
           ]}
           onChange={onBranchChange}
           panelWidth={200}
-          className="flex min-w-[140px] cursor-pointer items-center justify-between gap-2 py-2.5 pl-4 pr-3 text-xs font-bold text-white outline-none hover:bg-white/5"
+          className={FILTER_TRIGGER_CLASS}
         />
-      </div>
+      </FilterField>
 
-      <div className="flex-1 min-w-[280px] flex items-center shadow-2xl rounded-2xl border border-slate-700/50 bg-surface-secondary overflow-hidden group">
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 border-r border-slate-700/50 text-slate-400 group-focus-within:text-brand transition-colors">
-          <Search className="w-4 h-4" />
-        </div>
-        <SearchInput value={searchTerm} placeholder={searchPlaceholder} onChange={onSearchChange} className="w-full bg-transparent px-0" />
-      </div>
+      <FilterField grow icon={<Search className="w-4 h-4" />}>
+        <SearchInput
+          value={searchTerm}
+          placeholder={searchPlaceholder}
+          onChange={onSearchChange}
+          className="w-full bg-transparent px-0"
+        />
+      </FilterField>
     </div>
   );
 }

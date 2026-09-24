@@ -6,8 +6,8 @@ Cuatro decisiones de negocio viven aqui y merecen leerse antes de tocar nada:
 * **las poblaciones**: no hay universo seleccionable, cada metrica trae fijada
   la suya -los tiempos de cierre se miden sobre lo cerrado en el mes y el de
   asignacion sobre lo creado-;
-* **el umbral de un minuto** (`MIN_DURACION_HORAS`), que separa un tiempo de
-  servicio real del rastro de una accion masiva de Odoo;
+* **la regla de medibilidad**: un tiempo entra si sus fechas existen y son
+  coherentes, y no entra por ninguna otra razon;
 * **las dimensiones**, todas colgando del grupo de trabajo.
 
 El mapa de columnas admite alias porque Odoo no nombra siempre igual la misma
@@ -18,14 +18,21 @@ cabecera, y cada fallo de ese tipo era silencioso.
 from __future__ import annotations
 
 # Mapeo exacto de los nombres de columnas del CSV de Odoo Support a la BD.
-# `Asignado a` es el usuario responsable del ticket: es la dimensión "usuario
-# del cierre" del reporte, y por eso entra en el export obligatorio.
+#
+# `Asignado a` y `Creado por` son DOS personas distintas y no hay que
+# confundirlas: `asignado_a` es quien responde del ticket —la dimensión del
+# cierre, la que mide gestión y resolución— y `creado_por` quien lo abrió en
+# Odoo —la dimensión de la apertura, la que mide demanda registrada—. Leer los
+# tickets creados por la columna del asignado atribuía la apertura al técnico
+# que después lo atendió, que en Odoo casi nunca es el mismo. Las dos entran en
+# el export obligatorio.
 SUPPORT_CSV_COLUMN_MAP = {
     "Secuencia ID del ticket": "ticket_sequence",
     "Cliente": "cliente",
     "Etapa": "etapa",
     "Equipo de soporte al cliente": "grupo_trabajo",
     "Asignado a": "asignado_a",
+    "Creado por": "creado_por",
     "Suscripción/Sucursal": "sucursal",
     "Zona": "zona",
     "Tipo": "tipo_solicitud",
@@ -49,6 +56,13 @@ SUPPORT_CSV_COLUMN_ALIASES = {
     "responsable": "asignado_a",
     "tecnico asignado": "asignado_a",
     "usuario asignado": "asignado_a",
+
+    "creada por": "creado_por",
+    "creado por el usuario": "creado_por",
+    "creador": "creado_por",
+    "autor": "creado_por",
+    "usuario creador": "creado_por",
+    "reportado por": "creado_por",
 }
 
 # Columnas que el loader exige DESPUÉS de resolver el mapa y los alias. Van
@@ -59,6 +73,7 @@ SUPPORT_CSV_COLUMN_ALIASES = {
 SUPPORT_LOADER_REQUIRED_COLUMNS = {
     "ticket_sequence": "Secuencia ID del ticket",
     "asignado_a": "Asignado a",
+    "creado_por": "Creado por",
 }
 
 # Cabeceras mínimas obligatorias para validar la estructura del CSV. Sin estas
@@ -75,8 +90,8 @@ REQUIRED_SUPPORT_HEADERS = {
 # Odoo las exporta vacías, porque son claves de agrupación: un NULL partiría la
 # misma zona o el mismo técnico en dos filas distintas del reporte.
 SUPPORT_TEXT_COLUMNS = [
-    "cliente", "etapa", "grupo_trabajo", "asignado_a", "sucursal", "zona",
-    "tipo_solicitud", "razon_falla", "solucion_falla",
+    "cliente", "etapa", "grupo_trabajo", "asignado_a", "creado_por",
+    "sucursal", "zona", "tipo_solicitud", "razon_falla", "solucion_falla",
 ]
 
 SUPPORT_TICKET_COLUMNS = [
@@ -94,20 +109,25 @@ CANCELED_STAGES = {
     "rechazado", "rechazada", "canceled", "cancelled",
 }
 
-# Duración mínima medible, en horas (1 minuto). Por debajo de este umbral la
-# diferencia entre dos marcas de tiempo no es un tiempo de servicio real sino el
-# rastro de una acción masiva de Odoo, que asigna y cierra en el mismo segundo.
-# Contarlas hunde el promedio y la mediana e infla el % que excede el promedio.
+# --- Qué hace medible un tiempo ---------------------------------------------
 #
-# El umbral se exige TRAMO A TRAMO, no sobre el total (`metrics._tramos_validos`):
-#   · asignación → 1 minuto entre creación y primera asignación.
-#   · cierre     → 1 minuto entre creación y primera asignación Y otro minuto
-#                  entre primera asignación y última actualización de la etapa;
-#                  dos minutos en total como mínimo.
-# Un ticket sin fecha de asignación, por tanto, ya no entra en las medidas de
-# cierre aunque Odoo le reporte una `duracion_total_horas`: sin ese punto medio
-# no hay forma de distinguir el ciclo real del cierre masivo.
-MIN_DURACION_HORAS = 0.016
+# Lo único que deja fuera a un ticket es que sus fechas no sirvan. No hay
+# umbral de duración: un ciclo de treinta segundos es un ciclo de treinta
+# segundos, y descartarlo por corto era descartar dato bueno junto con el malo.
+# Lo que se descarta es la fila incoherente —fecha ausente o tramo negativo—,
+# que no es un tiempo corto sino un tiempo desconocido.
+#
+# La condición, tramo a tramo (`metrics._tramos_validos`):
+#   · cierre     → las TRES fechas presentes y en orden: creación ≤ primera
+#                  asignación ≤ última actualización de la etapa.
+#   · asignación → creación presente; la asignación, si la hay, no anterior a
+#                  ella.
+#
+# Que el cierre exija la fecha de asignación no es una regla de medición sino
+# de higiene: un ticket cerrado sin haber sido asignado nunca es un dato mal
+# capturado, y dejarlo fuera de las medidas es como se hace visible. `muestra_*`
+# es lo que lo cuantifica —la distancia entre esa cifra y `tickets_cerrados` es
+# exactamente el dato sucio del periodo—.
 
 
 # --- Poblaciones ------------------------------------------------------------
@@ -135,16 +155,20 @@ POB_CREADOS = "creados_periodo"
 #
 #   cierre_creado_*   — creación → cierre. Es `duracion_total_horas` de Odoo:
 #                       el proceso completo, cola incluida. Se lee el campo en
-#                       vez de restar las fechas porque es su cifra oficial del
-#                       ciclo, pero sólo entra si los dos tramos pasan el
-#                       minuto (ver `MIN_DURACION_HORAS`).
+#                       vez de restar las fechas porque ya viene calculado y
+#                       promediarlo es sumar y dividir; quién entra en la
+#                       medida lo siguen decidiendo las fechas.
 #   cierre_asignado_* — primera asignación → cierre. Sólo la gestión del
 #                       técnico, sin la espera en cola.
 #   asignacion        — creación → primera asignación, sobre lo creado en el
-#                       mes. No exige desenlace: entra todo ticket que tenga
-#                       las dos fechas, esté cerrado o no, porque la espera ya
-#                       ocurrió y medirla sólo sobre lo cerrado dejaría fuera
-#                       justo a los que llevan más tiempo esperando.
+#                       mes. No exige desenlace, y el que todavía no tiene
+#                       asignación tampoco queda fuera: su reloj se cierra
+#                       contra el corte —fin del día en la barra diaria, fin
+#                       del mes en el cierre—, así que mide lo que se esperó
+#                       DENTRO del periodo y el mes no cambia de valor al
+#                       reanalizarlo. Medir sólo lo ya asignado dejaba fuera
+#                       justo a los que llevan más tiempo esperando, que son
+#                       los que la métrica existe para encontrar.
 TIME_MEASURE_SPECS = [
     ("cierre_creado_resuelto", "duracion_total", POB_RESUELTOS),
     ("cierre_creado_cancelado", "duracion_total", POB_CANCELADOS),
@@ -200,9 +224,18 @@ SUPPORT_RATE_FIELDS = [
 
 # --- Dimensiones ------------------------------------------------------------
 #
-# Todo cuelga del equipo de trabajo. Dentro de él, las tres dimensiones de
-# primer nivel son el dónde (zona, sucursal) y el quién (asignado a); los tres
-# desgloses son el qué (tipo, razón, solución).
+# Todo cuelga del equipo de trabajo. Dentro de él, las cuatro dimensiones de
+# primer nivel son el dónde (zona, sucursal) y el quién, que son DOS y no uno:
+# quién abrió el ticket (`creado_por`) y quién responde de él (`asignado_a`).
+# Los tres desgloses son el qué (tipo, razón, solución).
+#
+# Separarlas es el motivo de que `creado_por` exista: en la dimensión del
+# asignado, `tickets_creados` cuenta los tickets creados en el mes que le
+# tocaron a esa persona, no los que esa persona abrió. Es una cifra legítima
+# —la carga que entró a su nombre— pero se estaba leyendo como la otra, y en
+# Odoo el que crea y el que atiende casi nunca coinciden. Cada eje mide ahora
+# lo suyo: el de creación, la demanda que cada quien registró; el de
+# asignación, el trabajo despachado.
 #
 # El cruce dimensión × desglose no se persiste: el producto cartesiano son
 # decenas de miles de filas JSONB por periodo para algo que se consulta de una
@@ -210,7 +243,13 @@ SUPPORT_RATE_FIELDS = [
 # del periodo, con las mismas funciones de métrica.
 DIM_GRUPO = "grupo_trabajo"
 
-SUPPORT_DIMENSIONES = ["zona", "sucursal", "asignado_a"]
+SUPPORT_DIMENSIONES = ["zona", "sucursal", "asignado_a", "creado_por"]
+
+# Las dos dimensiones cuyo valor es una persona, y por tanto las unicas que el
+# directorio de `services/support/models.py` puede anotar con un departamento.
+# Se declaran aparte para que quien anada un eje de persona no tenga que
+# acordarse de tocar tambien la anotacion.
+SUPPORT_DIMENSIONES_PERSONA = ["asignado_a", "creado_por"]
 SUPPORT_DESGLOSES = ["tipo_solicitud", "razon_falla", "solucion_falla"]
 
 SUPPORT_DIMENSION_COLUMNS = [DIM_GRUPO, *SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES]

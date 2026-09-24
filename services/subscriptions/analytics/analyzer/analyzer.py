@@ -263,6 +263,7 @@ class MetricsAnalyzer:
             "activos_inicio": len(act_ini),
             "activos_final": len(act_fin),
             "nuevos_mes": len(set_nue),
+            "ingresos": len(set_nue) + n_react_val,
             "crecimiento": round(((len(act_fin) - len(act_ini)) / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,
             "bajas": bajas_brutas,
             "churn_neto_pct": round((bajas_netas / len(act_ini) * 100), 4) if len(act_ini) > 0 else 0,

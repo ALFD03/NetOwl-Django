@@ -5,6 +5,8 @@ import type { Plugin } from 'chart.js';
 import { centerTextPlugin } from './plugins';
 
 export { LineChart } from './LineChart';
+export { DayTrendChart } from './DayTrendChart';
+export type { DayTrendSeries } from './DayTrendChart';
 export { BarChart } from './BarChart';
 export { DoughnutChart } from './DoughnutChart';
 export { centerTextPlugin };

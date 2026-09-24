@@ -157,7 +157,7 @@ Agrupado por tipo, todo se importa desde el barril `@/shared/ui`:
 
 | Grupo | Componentes |
 |---|---|
-| `primitives/` | `Button`, `ProgressBar`, `PulseDot`, `SectionHeading` |
+| `primitives/` | `Button`, `ExportButton`, `ProgressBar`, `PulseDot`, `SectionHeading` |
 | `surfaces/` | `Panel`, `NeonContainer`, `Modal`, `AuthCard` |
 | `data/` | `DataTable`, `StatGroup`, `SummaryStrip`, `MilestoneTimeline`, `StickyLabel`, `ExcelExportButton`, `tableClasses` |
 | `inputs/` | `TextField`, `SelectMenu`, `SearchInput`, `ToggleGroup`, `MonthPicker`, `PeriodSelector`, `DayProgressBar`, `FileUploadZone`, `useAnchoredPanel` |
@@ -165,8 +165,25 @@ Agrupado por tipo, todo se importa desde el barril `@/shared/ui`:
 | `feedback/` | `EmptyState`, `LoadingState`, `StatusMessage`, `ConsoleOutput` |
 | `theme/` | `metricTheme` y las uniones a las que va indexado |
 
+`SelectMenu` es el único desplegable de la aplicación, y con siete opciones o más
+lleva buscador (se fuerza con `searchable`): filtra sin distinguir mayúsculas ni
+tildes, se maneja con flechas y Enter —sin enviar el formulario— y Escape cierra
+solo la lista, no el modal que la contiene.
+
 `tableClasses` cubre el caso contrario a `DataTable`: una tabla que solo muestra,
 con cabecera pegajosa, montada a mano por varias vistas.
+
+`ExportButton` es la forma que tiene descargar algo en toda la aplicación: la
+cápsula de la barra de filtros, el icono en color de marca y los cuatro estados
+—reposo, escribiendo, sin nada que exportar, falló— dichos en el propio botón y
+no solo en el banner de al lado. Se hizo componente porque exportar era un
+`Button variant="secondary"` repetido en tres sitios: el botón que escribe un
+archivo se veía igual que el que abre un panel, y cada copia lo reinterpretaba
+un poco distinto. Lo usan `ExcelExportButton` (filas de una tabla),
+`BajasExportButton` (las pide al servidor, y tiene variante de solo icono para
+las celdas) y `EtaFormsExportButton`, que además lleva pegado el selector de
+tasa con el que convierte las rentas. Quien lo monta dentro de otra cápsula
+pasa `seamless` para que no ponga borde ni radio propios.
 
 ### `charts/` y `utils/`
 

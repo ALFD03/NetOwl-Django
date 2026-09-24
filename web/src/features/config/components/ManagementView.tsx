@@ -2,18 +2,18 @@
 
 import React, { useState, useMemo } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { Modal, SelectMenu } from '@/shared/ui';
+import { Button, Modal, SearchInput, TextField, ToggleGroup } from '@/shared/ui';
 import { router } from '@inertiajs/react';
-import { 
-  Users, Shield, Plus, UserPlus
+import {
+  AlertTriangle, KeyRound, Lock, Plus, Shield, ShieldCheck, User, UserPlus, Users,
 } from 'lucide-react';
 import { configApi } from '@/shared/lib/api/config';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { DEFAULT_GROUP_PERMISSIONS, DEFAULT_USER_PERMISSIONS } from '@/shared/constants/permissions';
-import { ToggleGroup, SearchInput } from '@/shared/ui';
 import { UsersTable } from '@/features/config/components/management/UsersTable';
 import { GroupsGrid } from '@/features/config/components/management/GroupsGrid';
 import { PermissionEditor } from '@/features/config/components/management/PermissionEditor';
+import { CampoSelect, PieDeModal } from '@/features/config/components/management/FormControls';
 
 import type {
   ConfigManagementProps, EditableGroup, EditableUser, NewUserForm, PasswordForm, UserData,
@@ -196,113 +196,288 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
         />
       )}
 
-      {/* MODAL 1: CREAR USUARIO */}
-      <Modal isOpen={!!userToCreate} onClose={() => setUserToCreate(null)} title="Crear Nuevo Usuario" theme="green" size="md">
+      {/* Alta de cuenta: los datos de acceso, el encuadre (rol y grupo) y la
+          matriz, en ese orden. El rol y el grupo se elegian antes en una
+          segunda visita al modal de edicion, aunque el endpoint ya los aceptaba
+          al crear. */}
+      <Modal
+        isOpen={!!userToCreate}
+        onClose={() => setUserToCreate(null)}
+        title="Crear Nuevo Usuario"
+        subtitle="Datos de acceso y permisos iniciales"
+        icon={<UserPlus className="h-5 w-5 text-emerald-400" />}
+        theme="green"
+        size="xl"
+      >
         {userToCreate && (
-          <form onSubmit={handleCreateUser} className="space-y-4">
-            <div className="space-y-1">
-              <label className="block text-xs text-slate-400">Usuario</label>
-              <input
-                className="w-full px-3 py-2 rounded-md bg-surface-deep border border-slate-800 text-white"
-                value={userToCreate.username}
-                onChange={(e) => setUserToCreate({ ...userToCreate, username: e.target.value })}
-              />
-            </div>
+          <form onSubmit={handleCreateUser} className="space-y-5">
+            <section className="rounded-2xl border border-slate-800 bg-surface-primary/80 p-4">
+              <h4 className="mb-3 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Identidad y acceso
+              </h4>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <TextField
+                  label="Usuario"
+                  icon={<User />}
+                  required
+                  autoComplete="off"
+                  placeholder="nombre.apellido"
+                  value={userToCreate.username}
+                  onChange={(e) => setUserToCreate({ ...userToCreate, username: e.target.value })}
+                />
+                <TextField
+                  label="Contraseña"
+                  type="password"
+                  icon={<KeyRound />}
+                  required
+                  autoComplete="new-password"
+                  placeholder="Mínimo según la política"
+                  value={userToCreate.password}
+                  onChange={(e) => setUserToCreate({ ...userToCreate, password: e.target.value })}
+                />
+                <CampoSelect
+                  label="Rol"
+                  value={userToCreate.role}
+                  options={roles.map(([value, label]) => ({ value, label }))}
+                  onChange={(role) => setUserToCreate({ ...userToCreate, role })}
+                />
+                <CampoSelect
+                  label="Grupo"
+                  value={String(userToCreate.group_id ?? '')}
+                  options={[
+                    { value: '', label: 'Sin grupo' },
+                    ...groups.map((group) => ({ value: String(group.id), label: group.name })),
+                  ]}
+                  onChange={(group_id) => setUserToCreate({ ...userToCreate, group_id })}
+                  hint={userToCreate.group_id ? 'Hereda la matriz del grupo.' : 'Permisos individuales.'}
+                />
+              </div>
+            </section>
 
-            <div className="space-y-1">
-              <label className="block text-xs text-slate-400">Contraseña</label>
-              <input
-                type="password"
-                className="w-full px-3 py-2 rounded-md bg-surface-deep border border-slate-800 text-white"
-                value={userToCreate.password}
-                onChange={(e) => setUserToCreate({ ...userToCreate, password: e.target.value })}
+            {userToCreate.group_id ? (
+              <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-xs text-amber-300">
+                <Lock className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>
+                  La cuenta heredará la matriz del grupo. Elige <strong>Sin grupo</strong> para concederle
+                  permisos propios.
+                </span>
+              </p>
+            ) : (
+              <PermissionEditor
+                permissions={userToCreate.permissions}
+                onChange={(permissions) => setUserToCreate({ ...userToCreate, permissions })}
               />
-            </div>
+            )}
 
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={saving}
-                className="bg-emerald-600 px-4 py-2 rounded-xl text-white font-bold"
-              >
-                {saving ? 'Guardando...' : 'Crear Usuario'}
-              </button>
-            </div>
+            <PieDeModal
+              onCancel={() => setUserToCreate(null)}
+              nota="La contraseña se valida contra la política del servidor."
+            >
+              <Button type="submit" isLoading={saving} icon={<UserPlus className="h-4 w-4" />} size="sm">
+                {saving ? 'Creando...' : 'Crear Usuario'}
+              </Button>
+            </PieDeModal>
           </form>
         )}
       </Modal>
-      <Modal isOpen={!!userToEdit} onClose={() => setUserToEdit(null)} title="Editar Usuario y Permisos" theme="blue" size="wide">
+
+      {/* Edicion: mismo encuadre que el alta, para que la pantalla se lea igual
+          en los dos sentidos. */}
+      <Modal
+        isOpen={!!userToEdit}
+        onClose={() => setUserToEdit(null)}
+        title="Editar Usuario y Permisos"
+        subtitle={userToEdit?.username}
+        icon={<ShieldCheck className="h-5 w-5 text-sky-400" />}
+        theme="blue"
+        size="xl"
+      >
         {userToEdit && (
           <form onSubmit={handleUpdateUser} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <input className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={userToEdit.username} disabled />
-              {/* Menus propios y no `<select>`: dentro del modal, que framer-motion
-                  anima con `scale`, el menu nativo salia desplazado y se cerraba
-                  solo en cuanto algo reajustaba el layout. */}
-              <SelectMenu
-                aria-label="Rol en el sistema"
-                value={userToEdit.role}
-                options={roles.map(([value, label]) => ({ value, label }))}
-                onChange={(role) => setUserToEdit({ ...userToEdit, role })}
-                className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-surface-deep px-3 py-2 text-left text-white"
-              />
-              <SelectMenu
-                aria-label="Grupo de permisos"
-                value={String(userToEdit.group_id ?? '')}
-                options={[
-                  { value: '', label: 'Sin grupo' },
-                  ...groups.map((group) => ({ value: String(group.id), label: group.name })),
-                ]}
-                onChange={(group_id) => setUserToEdit({ ...userToEdit, group_id })}
-                className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-800 bg-surface-deep px-3 py-2 text-left text-white"
-              />
-            </div>
+            <section className="rounded-2xl border border-slate-800 bg-surface-primary/80 p-4">
+              <h4 className="mb-3 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Identidad y encuadre
+              </h4>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <TextField
+                  label="Usuario"
+                  icon={<User />}
+                  value={userToEdit.username}
+                  disabled
+                  title="El nombre de la cuenta no se cambia"
+                />
+                <CampoSelect
+                  label="Rol en el sistema"
+                  value={userToEdit.role}
+                  options={roles.map(([value, label]) => ({ value, label }))}
+                  onChange={(role) => setUserToEdit({ ...userToEdit, role })}
+                />
+                <CampoSelect
+                  label="Grupo de permisos"
+                  value={String(userToEdit.group_id ?? '')}
+                  options={[
+                    { value: '', label: 'Sin grupo' },
+                    ...groups.map((group) => ({ value: String(group.id), label: group.name })),
+                  ]}
+                  onChange={(group_id) => setUserToEdit({ ...userToEdit, group_id })}
+                />
+              </div>
+            </section>
+
             {userToEdit.group_id ? (
-              <p className="text-xs text-amber-400">
-                Este usuario pertenece a un grupo: sus permisos se heredan del grupo y no se editan aqui. Selecciona <strong>Sin grupo</strong> para asignar permisos individuales.
+              <p className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-950/30 px-4 py-3 text-xs text-amber-300">
+                <Lock className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>
+                  Este usuario pertenece a un grupo: sus permisos se heredan del grupo y no se editan aquí.
+                  Selecciona <strong>Sin grupo</strong> para asignar permisos individuales.
+                </span>
               </p>
             ) : null}
+
             <PermissionEditor
               permissions={userToEdit.permissions}
               onChange={(permissions) => setUserToEdit({ ...userToEdit, permissions })}
               disabled={Boolean(userToEdit.group_id)}
             />
-            <div className="flex justify-end"><button type="submit" disabled={saving} className="bg-emerald-600 px-5 py-2.5 rounded-xl text-white font-bold">{saving ? 'Guardando...' : 'Guardar Cambios'}</button></div>
+
+            <PieDeModal
+              onCancel={() => setUserToEdit(null)}
+              nota={userToEdit.group_id ? 'Solo se guardarán el rol y el grupo.' : 'Se guarda la matriz completa tal y como se ve.'}
+            >
+              <Button type="submit" isLoading={saving} icon={<ShieldCheck className="h-4 w-4" />} size="sm">
+                {saving ? 'Guardando...' : 'Guardar Cambios'}
+              </Button>
+            </PieDeModal>
           </form>
         )}
       </Modal>
 
-      <Modal isOpen={!!userToChangePass} onClose={() => setUserToChangePass(null)} title="Cambiar Contraseña" theme="yellow" size="md">
+      <Modal
+        isOpen={!!userToChangePass}
+        onClose={() => setUserToChangePass(null)}
+        title="Cambiar Contraseña"
+        subtitle={userToChangePass?.username}
+        icon={<KeyRound className="h-5 w-5 text-amber-400" />}
+        theme="yellow"
+        size="md"
+      >
         {userToChangePass && (
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <p className="text-xs text-slate-400">Actualizando contraseña de <strong className="text-white">{userToChangePass.username}</strong>.</p>
-            <input type="password" autoComplete="new-password" required className="w-full px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={userToChangePass.password} onChange={(e) => setUserToChangePass({ ...userToChangePass, password: e.target.value })} placeholder="Nueva contraseña" />
-            <div className="flex justify-end"><button type="submit" disabled={saving} className="bg-amber-500 px-5 py-2.5 rounded-xl text-surface-primary font-bold">{saving ? 'Actualizando...' : 'Cambiar Contraseña'}</button></div>
+          <form onSubmit={handleChangePassword} className="space-y-5">
+            <p className="rounded-2xl border border-slate-800 bg-surface-primary/80 px-4 py-3 text-xs text-slate-400">
+              Actualizando la contraseña de <strong className="text-white">{userToChangePass.username}</strong>.
+              La sesión que tenga abierta no se cierra.
+            </p>
+            <TextField
+              label="Nueva contraseña"
+              type="password"
+              icon={<KeyRound />}
+              autoComplete="new-password"
+              required
+              value={userToChangePass.password}
+              onChange={(e) => setUserToChangePass({ ...userToChangePass, password: e.target.value })}
+            />
+            <PieDeModal onCancel={() => setUserToChangePass(null)}>
+              <Button
+                type="submit"
+                isLoading={saving}
+                size="sm"
+                icon={<KeyRound className="h-4 w-4" />}
+                className="bg-amber-500 text-surface-primary shadow-amber-600/20 hover:bg-amber-400"
+              >
+                {saving ? 'Actualizando...' : 'Cambiar Contraseña'}
+              </Button>
+            </PieDeModal>
           </form>
         )}
       </Modal>
 
-      <Modal isOpen={!!groupToEdit} onClose={() => setGroupToEdit(null)} title={groupToEdit?.id ? 'Editar Grupo' : 'Crear Grupo'} theme="blue" size="wide">
+      <Modal
+        isOpen={!!groupToEdit}
+        onClose={() => setGroupToEdit(null)}
+        title={groupToEdit?.id ? 'Editar Grupo' : 'Crear Grupo'}
+        subtitle={groupToEdit?.id ? groupToEdit.name : 'Una matriz reutilizable para varias cuentas'}
+        icon={<Shield className="h-5 w-5 text-sky-400" />}
+        theme="blue"
+        size="xl"
+      >
         {groupToEdit && (
           <form onSubmit={handleSaveGroup} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input required className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={groupToEdit.name} onChange={(e) => setGroupToEdit({ ...groupToEdit, name: e.target.value })} placeholder="Nombre del grupo" />
-              <input className="px-3 py-2 rounded-xl bg-surface-deep border border-slate-800 text-white" value={groupToEdit.description} onChange={(e) => setGroupToEdit({ ...groupToEdit, description: e.target.value })} placeholder="Descripción" />
-            </div>
-            <PermissionEditor permissions={groupToEdit.permissions} onChange={(permissions) => setGroupToEdit({ ...groupToEdit, permissions })} />
-            <div className="flex justify-end"><button type="submit" disabled={saving} className="bg-emerald-600 px-5 py-2.5 rounded-xl text-white font-bold">{saving ? 'Guardando...' : 'Guardar Grupo'}</button></div>
+            <section className="rounded-2xl border border-slate-800 bg-surface-primary/80 p-4">
+              <h4 className="mb-3 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Identificación del grupo
+              </h4>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <TextField
+                  label="Nombre"
+                  icon={<Shield />}
+                  required
+                  placeholder="Analistas de CRM"
+                  value={groupToEdit.name}
+                  onChange={(e) => setGroupToEdit({ ...groupToEdit, name: e.target.value })}
+                />
+                <TextField
+                  label="Descripción"
+                  placeholder="Para qué existe este grupo"
+                  value={groupToEdit.description}
+                  onChange={(e) => setGroupToEdit({ ...groupToEdit, description: e.target.value })}
+                />
+              </div>
+            </section>
+
+            <PermissionEditor
+              permissions={groupToEdit.permissions}
+              onChange={(permissions) => setGroupToEdit({ ...groupToEdit, permissions })}
+            />
+
+            <PieDeModal
+              onCancel={() => setGroupToEdit(null)}
+              nota="Cada cuenta del grupo recibe esta matriz."
+            >
+              <Button type="submit" isLoading={saving} icon={<Shield className="h-4 w-4" />} size="sm">
+                {saving ? 'Guardando...' : 'Guardar Grupo'}
+              </Button>
+            </PieDeModal>
           </form>
         )}
       </Modal>
 
-      <Modal isOpen={!!deletingItem} onClose={() => setDeletingItem(null)} title="Confirmar eliminación" theme="red" size="sm">
+      <Modal
+        isOpen={!!deletingItem}
+        onClose={() => setDeletingItem(null)}
+        title="Confirmar eliminación"
+        subtitle={deletingItem?.type === 'group' ? 'Grupo de permisos' : 'Cuenta de usuario'}
+        icon={<AlertTriangle className="h-5 w-5 text-rose-400" />}
+        theme="red"
+        size="sm"
+      >
         {deletingItem && (
           <div className="space-y-5">
-            <p className="text-sm text-slate-300">¿Seguro que deseas eliminar <strong className="text-white">{deletingItem.name}</strong>? Esta acción no se puede deshacer.</p>
-            <div className="flex justify-end gap-2"><button onClick={() => setDeletingItem(null)} className="px-4 py-2 rounded-xl border border-slate-800 text-slate-300">Cancelar</button><button onClick={handleConfirmDelete} className="px-4 py-2 rounded-xl bg-rose-600 text-white font-bold">Eliminar</button></div>
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-950/30 px-4 py-4 text-center">
+              <p className="text-[10px] font-black uppercase tracking-wider text-rose-400">
+                {deletingItem.type === 'group' ? 'Se eliminará el grupo' : 'Se eliminará la cuenta'}
+              </p>
+              <p className="mt-1 text-lg font-black text-white">{deletingItem.name}</p>
+            </div>
+            <p className="text-xs text-slate-400">
+              {deletingItem.type === 'group'
+                ? 'Las cuentas que pertenezcan a él se quedan sin grupo, conservando la matriz que tuvieran.'
+                : 'La cuenta deja de poder entrar. Esta acción no se puede deshacer.'}
+            </p>
+            <PieDeModal onCancel={() => setDeletingItem(null)}>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={handleConfirmDelete}
+                icon={<AlertTriangle className="h-4 w-4" />}
+              >
+                Eliminar
+              </Button>
+            </PieDeModal>
           </div>
         )}
       </Modal>
+
     </AppLayout>
   );
 }

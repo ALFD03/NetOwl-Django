@@ -97,7 +97,7 @@ usan.
 | `query(sql, params=None)` | SQL libre a DataFrame |
 | `tabla_existe(tabla)` | Consulta `information_schema`. Necesario porque las tablas de análisis las crea `save_historico` al vuelo: preguntar por una que no existe aborta la transacción y sube como 500 |
 | `save_historico(df, tabla, periodo, metodo=None)` | El escritor principal (ver abajo) |
-| `save_day_metrics(periodo, activos_inicio, dias)` | Una fila por mes en `analyzer_day_metrics` |
+| `save_day_metrics(periodo, dias, table=…, escalares=None)` | Una fila por mes en la tabla de métricas diarias del módulo |
 | `copy_dataframe(df, tabla)` | `COPY` directo, sin crear ni truncar |
 
 ### `save_historico` paso a paso
@@ -120,10 +120,53 @@ usan.
 
 ### `save_day_metrics`
 
-Tabla `analyzer_day_metrics` con `periodo_reporte`, `activos_inicio` y
-`dia1..dia31` (JSON en texto). Crea un índice único sobre `periodo_reporte` y
-hace *upsert* `ON CONFLICT DO UPDATE` **solo de los días enviados**, de modo que
-recalcular los días nuevos del mes en curso no borra los anteriores.
+Una fila por mes con `periodo_reporte`, las columnas escalares que se le pasen en
+`escalares` y `dia1..dia31` (JSON en texto). Crea un índice único sobre
+`periodo_reporte` y hace *upsert* `ON CONFLICT DO UPDATE` **solo de los días
+enviados**, de modo que recalcular los días nuevos del mes en curso no borra los
+anteriores.
+
+La escriben los tres módulos que guardan cortes diarios —`analyzer_day_metrics`
+(con `activos_inicio` como escalar), `crm_day_metrics` y `support_day_metrics`,
+estos dos sin ninguno—, y `table` es lo único que cambia. El nombre del índice se
+deriva de la tabla, porque en Postgres los índices viven en el esquema y un
+nombre fijo colisionaría entre las tres; `analyzer_day_metrics` conserva el suyo
+histórico (`ix_day_metrics_periodo`), que ya existe en las bases desplegadas.
+
+### `core/day_metrics.py`
+
+Lo común a las tres tablas, sin dominio: `mes_bounds`, `periodo_label_mes`,
+`ultimo_dia_a_calcular` (que no calcula días futuros del mes en curso),
+`fecha_corte`, `tabla_existe` y las dos lecturas.
+
+| Lectura | Devuelve | Quién la usa |
+|---|---|---|
+| `leer_serie(tabla, mes, clave, bloque)` | `{periodo_mes, dias_disponibles, serie: {"1": {…}, …}}` — solo el bloque `global` de cada día | Los tres |
+| `leer_mes(tabla, mes, escalares, clave)` | El mes entero, desgloses incluidos | Suscripciones |
+| `leer_payload(tabla, mes, dia, clave)` | El corte completo de **un** día, o `None` | CRM y soporte |
+
+`dias_disponibles` cuenta los días **cuya celda tiene contenido**, tenga o no el
+bloque dentro; `serie` trae solo los que sí lo tienen. Están separados a
+propósito: un mes analizado antes de que su módulo empezara a guardar `global`
+conserva sus 31 cortes perfectamente útiles —el desglose se lee igual— y atar la
+barra al bloque los hacía desaparecer todos. El resumen del día se apaga solo y
+dice por qué.
+
+`leer_serie` es la que hace que la barra sea instantánea. El recorte lo hace
+Postgres (`-> 'global'`), así que los desgloses ni salen de la base: treinta y un
+bloques globales son unos pocos kilobytes, y con ellos el cliente resuelve solo
+las tarjetas del día, el acumulado, la variación contra el día anterior y las
+líneas de tendencia.
+
+Lo que no cabe entero es el **desglose dimensional** de un día: el bloque de
+métricas de cada vendedor, sucursal, zona o grupo de trabajo. Un día de
+suscripciones sí es pequeño y viaja completo (`leer_mes`); en CRM y soporte se
+pide de uno en uno (`leer_payload`, servido por `api/day-metrics/`) y el
+navegador lo cachea. En ningún caso se recalcula nada: se lee una celda ya
+escrita por el análisis.
+
+`clave` es el `periodo_reporte` de la fila: la etiqueta larga de `Periodo.label()`
+en suscripciones, el `YYYY-MM` en CRM y soporte, como en el resto de sus tablas.
 
 ---
 

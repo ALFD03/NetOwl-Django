@@ -22,6 +22,7 @@ export type {
 } from '@/shared/types/crm';
 
 import type { CrmDimensionRow, CrmEfectividadRow, CrmHistoricoRow } from '@/shared/types/crm';
+import type { DayCuts } from '@/shared/types/domain';
 
 export interface CrmDashboardProps {
   metrics?: {
@@ -91,8 +92,20 @@ export interface CrmAnalyticsProps {
   dimensionsData?: CrmDimensionRow[];
   /** The cierre row of the selected period: global denominators and header stats. */
   globalData?: CrmHistoricoRow;
+  /**
+   * Which days of the month have a cut computed, and which one is on screen.
+   * The cut itself arrives in `dimensionsData` / `globalData`, already swapped
+   * by the view — a day is a partial reload, not a client-side regroup.
+   */
+  dayMetrics?: DayCuts;
   periods?: string[];
   selectedPeriod?: string;
+}
+
+/** El corte completo de un día, tal y como lo sirve `/crm/api/day-metrics/`. */
+export interface CrmDayPayload {
+  global: CrmHistoricoRow;
+  dimensiones: CrmDimensionRow[];
 }
 
 /** A single "who leads this measure" readout in the ranking section. */

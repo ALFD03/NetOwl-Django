@@ -12,7 +12,7 @@ calculo el modulo de suscripciones.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -30,6 +30,7 @@ from services.support.analytics.config import (
     SUPPORT_DIMENSIONES,
 )
 from services.support.analytics.metrics import compute_metrics_for_period
+from services.support.analytics.usuarios import anotar_departamentos
 
 logger = logging.getLogger(__name__)
 
@@ -319,8 +320,20 @@ def _filas_incidencia(
     return filas
 
 
+def contexto_incidencia(db: DBConnector, periodo: str) -> tuple[dict, dict[str, int]]:
+    """Las zonas del catalogo y los activos del periodo, para reutilizarlos.
+
+    Los cortes diarios de un mes recorren treinta y un cohortes contra las mismas
+    zonas y los mismos activos: se leen una vez y se pasan a cada llamada.
+    """
+    return _load_zone_info(), _get_activos_por_zona(db, periodo)
+
+
 def get_incidencia_por_zona(
-    db: DBConnector, cohorte: PeriodCohort
+    db: DBConnector,
+    cohorte: PeriodCohort,
+    zone_info: dict | None = None,
+    activos_map: dict[str, int] | None = None,
 ) -> dict[str, list[dict]]:
     """
     Incidencia por zona de cada grupo de trabajo: (tickets del grupo en la zona
@@ -335,14 +348,21 @@ def get_incidencia_por_zona(
 
     Se devuelven todos los grupos en un mapa, y no sólo el seleccionado, porque
     el selector de grupo es client-side, igual que el de dimensión: cambiarlo
-    no debe costar una vuelta al servidor. `Zonas.json` y los activos se leen
-    una sola vez y se comparten entre grupos.
+    no debe costar una vuelta al servidor. El catálogo de zonas y los activos se
+    leen una sola vez y se comparten entre grupos.
+
+    `zone_info` y `activos_map` permiten además compartirlos entre llamadas: los
+    cortes diarios de un mes recorren treinta y un cohortes contra las mismas
+    zonas y los mismos activos, y volver a leerlos en cada uno serían sesenta y
+    dos consultas para el mismo resultado.
     """
     if cohorte.empty:
         return {}
 
-    zone_info = _load_zone_info()
-    activos_map = _get_activos_por_zona(db, cohorte.periodo)
+    zone_info = _load_zone_info() if zone_info is None else zone_info
+    activos_map = (
+        _get_activos_por_zona(db, cohorte.periodo) if activos_map is None else activos_map
+    )
 
     return {
         grupo: _filas_incidencia(sub, zone_info, activos_map)
@@ -351,6 +371,40 @@ def get_incidencia_por_zona(
 
 
 # --- Payload de la vista Analytics ------------------------------------------
+
+def estructurar_grupos(filas: list[dict]) -> dict[str, dict]:
+    """Agrupa las filas dimensionales por grupo de trabajo.
+
+    Es la forma que consume la vista: cada grupo con sus metricas totales y una
+    lista por cada eje y desglose. La usan por igual las filas persistidas del
+    mes y las que un corte diario trae ya calculadas, para que el front reciba
+    exactamente lo mismo en los dos casos.
+    """
+    grupos: dict[str, dict] = {}
+    for fila in filas:
+        grupo = grupos.setdefault(fila["grupo_trabajo"], {
+            "metricas": {},
+            **{dim: [] for dim in (*SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES)},
+        })
+
+        if fila["dimension"] == DIM_GRUPO:
+            grupo["metricas"] = fila["metricas"]
+        elif fila["dimension"] in grupo:
+            grupo[fila["dimension"]].append({
+                "nombre": fila["valor"],
+                "metricas": fila["metricas"],
+            })
+
+    return grupos
+
+
+def _fecha_final(periodo: str) -> date | None:
+    """El ultimo dia de una etiqueta `"YYYY-MM-DD al YYYY-MM-DD"`, o None."""
+    try:
+        return date.fromisoformat(periodo[-10:])
+    except ValueError:
+        return None
+
 
 def get_support_analytics_structured(periodo: str | None = None) -> dict:
     """
@@ -369,23 +423,10 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
 
     db = DBConnector()
     try:
-        filas = get_support_dimension_metrics(periodo)
-
-        grupos: dict[str, dict] = {}
-        for fila in filas:
-            grupo = grupos.setdefault(fila["grupo_trabajo"], {
-                "metricas": {},
-                **{dim: [] for dim in (*SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES)},
-            })
-
-            if fila["dimension"] == DIM_GRUPO:
-                grupo["metricas"] = fila["metricas"]
-            elif fila["dimension"] in grupo:
-                grupo[fila["dimension"]].append({
-                    "nombre": fila["valor"],
-                    "metricas": fila["metricas"],
-                })
-
+        grupos = anotar_departamentos(
+            estructurar_grupos(get_support_dimension_metrics(periodo)),
+            _fecha_final(periodo),
+        )
         cohorte = _load_period_cohort(db, periodo)
 
         return {
@@ -418,7 +459,8 @@ def get_support_tickets_list(
 
         df = db.query(f"""
             SELECT ticket_sequence, cliente, etapa, grupo_trabajo, asignado_a,
-                   sucursal, zona, tipo_solicitud, razon_falla, solucion_falla,
+                   creado_por, sucursal, zona, tipo_solicitud, razon_falla,
+                   solucion_falla,
                    creado_el, primera_fecha_asignada, ultima_actualizacion_etapa,
                    duracion_total_horas
             FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}

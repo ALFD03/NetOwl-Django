@@ -5,15 +5,17 @@
  * barra de días es una reagrupación en cliente y no una vuelta al servidor.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { useSubscriptionsAnalyticsData } from '@/features/subscriptions/hooks/useSubscriptionsAnalyticsData';
 import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, type DimensionKey } from '@/features/subscriptions/components/analytics';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
-import { DayProgressBar } from '@/shared/ui';
-import type { DayMetrics, DimensionGroup, Periodo } from '@/shared/types/domain';
+import { SUBS_DAY_CHARTS, subsDayCards } from '@/features/subscriptions/lib/subsDaySummary';
+import { useObjetivosConfig } from '@/features/subscriptions/hooks/useObjetivos';
+import { DayProgressBar, DaySummary } from '@/shared/ui';
+import type { DayMetrics, DaySeries, DimensionGroup, Periodo } from '@/shared/types/domain';
 
 interface Props {
   periodos: Periodo[];
@@ -32,6 +34,23 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   const { availableDays, totalDays, effectiveDay, dayData } = useDayMetrics(
     dayMetrics,
     selectedDay,
+  );
+
+  // El churn del día se pinta con el semáforo del catálogo.
+  const { semaforo } = useObjetivosConfig();
+  const diaCards = useMemo(() => subsDayCards(semaforo), [semaforo]);
+
+  // La serie ligera que CRM y Soporte reciben aparte, aqui se saca del mes que
+  // ya viajo entero: es el mismo bloque global, dia a dia.
+  const serie = useMemo<DaySeries>(
+    () =>
+      Object.fromEntries(
+        Object.entries(dayMetrics?.dias ?? {}).map(([dia, payload]) => [
+          dia,
+          (payload.global ?? {}) as unknown as Record<string, number>,
+        ]),
+      ),
+    [dayMetrics],
   );
 
   // Con un dia elegido mandan sus metricas globales y su desglose por
@@ -79,7 +98,17 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
         </>
       }
     >
-      <AnalyticsMetrics data={globalData} />
+      <DaySummary
+        serie={serie}
+        dias={availableDays}
+        dia={effectiveDay}
+        cards={diaCards}
+        charts={SUBS_DAY_CHARTS}
+      />
+
+      <div className="mt-6">
+        <AnalyticsMetrics data={globalData} periodo={selectedPeriod} />
+      </div>
       <AnalyticsCharts
         globalData={globalData}
         currentDimensionData={currentDimensionData}

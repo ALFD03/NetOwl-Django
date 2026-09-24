@@ -106,32 +106,37 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # --- Aislamiento por entorno ---
-# `ENV_SUFFIX` identifica el entorno a partir del esquema de Postgres, que es
-# lo unico que ya los distingue. Lo usan las cookies (abajo) y el nombre de la
-# cola de Celery (ver la seccion de tareas asincronas).
-# Desarrollo y produccion comparten host (las cookies ignoran el puerto) y
-# comparten la tabla django_session del esquema public. Con los nombres de
-# cookie por defecto ("sessionid" / "csrftoken") iniciar sesion en un entorno
-# sobreescribe las cookies del otro: el otro entorno aparece deslogueado y su
-# pagina ya cargada queda con un token CSRF viejo -> 403 al hacer POST.
-# Sufijar el nombre de la cookie con el esquema (DB_SCHEMA, unico por entorno)
-# le da a cada entorno su propio par de cookies en el navegador.
-ENV_SUFFIX = re.sub(r"[^A-Za-z0-9_-]", "_", os.getenv("DB_SCHEMA", "public"))
+# Desarrollo y produccion apuntan a la misma base de datos y se separan por
+# esquema de Postgres (DB_SCHEMA): todo lo del entorno —usuarios, permisos,
+# catalogos, directorio de soporte, sesiones, `django_migrations` y los datos
+# calculados— vive dentro de su esquema, y nada se comparte a traves de
+# `public`. La conexion fija `search_path` a ese esquema y a nada mas (ver
+# DATABASES), asi que una tabla que falte da un error en vez de leerse en
+# silencio de otro sitio.
+#
+# Por eso el esquema es obligatorio y no puede ser `public`: sin el, dos
+# entornos mal configurados volverian a compartir datos sin que nadie lo note.
+DB_SCHEMA = os.getenv("DB_SCHEMA", "")
+if not re.fullmatch(r"[a-z_][a-z0-9_]*", DB_SCHEMA) or DB_SCHEMA == "public":
+    raise ImproperlyConfigured(
+        "DB_SCHEMA debe nombrar el esquema propio del entorno (p. ej. 'test' o "
+        f"'netowl'), en minusculas y distinto de 'public'. Valor actual: {DB_SCHEMA!r}."
+    )
+
+# `ENV_SUFFIX` identifica el entorno a partir del esquema. Lo usan las cookies
+# (abajo) y el nombre de la cola de Celery (ver la seccion de tareas
+# asincronas). Desarrollo y produccion comparten host (las cookies ignoran el
+# puerto): con los nombres por defecto ("sessionid" / "csrftoken") iniciar
+# sesion en un entorno sobreescribe las cookies del otro, que aparece
+# deslogueado y con un token CSRF viejo -> 403 al hacer POST.
+ENV_SUFFIX = DB_SCHEMA
 SESSION_COOKIE_NAME = f"netowl_sessionid_{ENV_SUFFIX}"
 CSRF_COOKIE_NAME = f"netowl_csrftoken_{ENV_SUFFIX}"
 
-# Las sesiones tampoco pueden compartirse, y renombrar la cookie no basta: los
-# entornos apuntan a la misma base de datos, y con una unica
-# `public.django_session` entrar en uno cerraba la sesion del otro borrando su
-# fila. Este backend es el de base de datos de Django escribiendo en la tabla
-# del esquema del entorno (ver services/config/sessions.py).
-#
-# Usuarios, perfiles y permisos siguen compartidos en `public` a proposito: la
-# misma cuenta tiene que valer en los dos entornos. Lo unico que se separa es
-# la sesion.
-#
-# La tabla no la crea una migracion sino `manage.py preparar_sesiones`; el
-# porque esta en ese comando.
+# El backend de sesiones es el de base de datos de Django escribiendo en
+# `SesionEntorno` (ver services/config/sessions.py). Viene de cuando la tabla de
+# sesiones era lo unico propio de cada esquema; hoy apunta a la misma
+# `<esquema>.django_session` que usaria el backend estandar.
 SESSION_ENGINE = "services.config.sessions"
 
 # --- Límites de subida ---
@@ -222,6 +227,9 @@ DATABASES = {
         "PORT": str(config.db.DB_PORT),     # Puerto (por defecto 5432)
         "OPTIONS": {
             "sslmode": config.db.DB_SSLMODE,  # Modo SSL de la conexión
+            # Solo el esquema del entorno, sin `public` detras: es lo que aisla
+            # los entornos (ver "Aislamiento por entorno" mas arriba).
+            "options": f"-c search_path={DB_SCHEMA}",
         },
     }
 }

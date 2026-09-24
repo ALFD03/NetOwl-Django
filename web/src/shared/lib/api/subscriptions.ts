@@ -14,6 +14,15 @@ export interface EtaReportResponse {
 
 export interface EtaLockRequest { period: string; lock: boolean; }
 
+export interface EtaTasaRequest { period: string; tasa: number; }
+
+export interface EtaTasaResponse {
+  status: string;
+  tasa_bcv: number;
+  tasa_bcv_fuente: string;
+  message?: string;
+}
+
 export interface EtaSubConfigRequest {
   orden?: string;
   cliente?: string;
@@ -25,6 +34,13 @@ export interface EtaSubConfigRequest {
   reportar?: boolean;
   es_transporte?: boolean;
   es_dedicado?: boolean;
+  /**
+   * La renta de este contrato, en divisa.
+   *
+   * El catálogo comercial no puede darla: cada enlace dedicado negocia la
+   * suya, y es el único dato con que se declara su renta básica.
+   */
+  precio?: number;
 }
 
 export interface DeleteEtaSubRequest { orden: string; }
@@ -63,6 +79,36 @@ export const subscriptionsApi = {
   lockEtaReport: async (request: EtaLockRequest) =>
     (await apiClient.post('/subscriptions/api/eta-report/lock/', request)).data,
 
+  /**
+   * Fija la tasa del BCV con que se declara la renta básica del periodo.
+   *
+   * Se guarda por periodo porque la renta se declaró a la tasa de aquel mes.
+   * No recalcula nada: los formularios guardan el precio en divisa y la
+   * conversión la hace el exportador, así que también vale en un mes bloqueado.
+   */
+  setEtaTasa: async (request: EtaTasaRequest) =>
+    (await apiClient.post<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/', request)).data,
+
+  /**
+   * Vuelve a pedirle al BCV la tasa del periodo, pisando la guardada.
+   *
+   * El reporte ya la consulta solo la primera vez que hace falta; esto es para
+   * cuando aquello no bastó — el servicio estaba caído, o alguien escribió una
+   * tasa a mano y quiere volver a la oficial.
+   */
+  consultarEtaTasa: async (period: string) =>
+    (await apiClient.post<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/consultar/', { period })).data,
+
+  /**
+   * La última tasa publicada por el BCV, la de hoy.
+   *
+   * No es la del periodo y no se guarda en ninguna parte: la declaración va a
+   * la tasa del mes, y esta sirve para exportar el mismo formulario valorado
+   * a día de hoy. Por eso es un GET y no pisa nada.
+   */
+  getEtaTasaActual: async () =>
+    (await apiClient.get<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/actual/')).data,
+
   saveEtaSubConfig: async (request: EtaSubConfigRequest) =>
     (await apiClient.post('/subscriptions/api/eta-report/save-sub-config/', request)).data,
 
@@ -72,7 +118,7 @@ export const subscriptionsApi = {
   /**
    * Alta o edición de una fila de catálogo.
    *
-   * Un solo endpoint para los seis catálogos: lo que cambia entre ellos son
+   * Un solo endpoint para todos los catálogos: lo que cambia entre ellos son
    * los campos del cuerpo, no la forma de la petición.
    */
   saveCatalogo: async (tipo: CatalogoTipo, payload: CatalogoPayload) =>

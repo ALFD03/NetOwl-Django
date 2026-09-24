@@ -2,7 +2,7 @@
 
 import type { ExcelColumn } from '@/shared/lib/excel';
 import { toNumber } from '@/shared/utils';
-import type { SupportDimensionRow } from '../types';
+import type { SupportDepartamentoRow, SupportDimensionRow } from '../types';
 
 const INT = '#,##0';
 const DEC = '0.00';
@@ -58,3 +58,17 @@ export const SUPPORT_DIMENSION_EXCEL_COLUMNS: ExcelColumn<SupportDimensionRow>[]
 export function supportExportFileName(partes: Array<string | undefined>): string {
   return ['Soporte', ...partes.filter((p): p is string => Boolean(p && p.trim()))].join(' - ');
 }
+
+/**
+ * La tabla de departamentos como hoja de cálculo.
+ *
+ * Mismo criterio que la de personas —lo exportado es el cuadro de la pantalla—,
+ * así que tampoco lleva la mediana: ver `SUPPORT_DEPARTAMENTO_COLUMNS`.
+ */
+export const SUPPORT_DEPARTAMENTO_EXCEL_COLUMNS: ExcelColumn<SupportDepartamentoRow>[] = [
+  { header: 'Departamento', value: (r) => r.nombre, width: 34 },
+  { header: 'Personas', value: (r) => num(r.personas), format: INT },
+  ...SUPPORT_DIMENSION_EXCEL_COLUMNS.filter(
+    (col) => col.header !== 'Valor' && col.header !== 'Cierre Total Med (h)',
+  ),
+] as ExcelColumn<SupportDepartamentoRow>[];

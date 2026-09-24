@@ -159,8 +159,9 @@ docker build -t netowl .
 # El contenedor que atiende HTTP
 docker run --env-file .env -p 8000:8000 netowl
 
-# El worker: misma imagen, otro comando. SKIP_COLLECTSTATIC porque no sirve estaticos.
-docker run --env-file .env -e SKIP_COLLECTSTATIC=1 netowl \
+# El worker: misma imagen, otro comando. SKIP_COLLECTSTATIC porque no sirve estaticos;
+# SKIP_MIGRATE porque las migraciones las aplica el contenedor web al arrancar.
+docker run --env-file .env -e SKIP_COLLECTSTATIC=1 -e SKIP_MIGRATE=1 netowl \
   celery -A netowl_web worker --concurrency=1 --max-tasks-per-child=1
 ```
 

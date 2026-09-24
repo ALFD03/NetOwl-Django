@@ -48,7 +48,7 @@ export default function ImportCrm() {
           monthPlaceholder="Elegir mes de análisis..."
           requireMonth
           pendingLog={(month) => `Iniciando motor de análisis CRM para el periodo ${month}...`}
-          onRun={(month) => importsApi.runCrmAnalysis(month ?? '')}
+          onRun={(month, onProgress) => importsApi.runCrmAnalysis(month ?? '', onProgress)}
           successMessage={(result, month) =>
             `Análisis de CRM completado exitosamente para ${result.periodo_label || month}.`}
           errorMessage="Error al ejecutar el análisis CRM."

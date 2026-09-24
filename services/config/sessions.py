@@ -4,10 +4,10 @@ Es el backend de base de datos de Django con un unico cambio: usa
 `SesionEntorno` (services/config/models.py) en lugar del modelo `Session` de
 `django.contrib.sessions`, cuya tabla es siempre `public.django_session`.
 
-Existe porque desarrollo y produccion comparten base de datos —el mismo Vault,
-distinto DB_SCHEMA—, y compartir tambien la tabla de sesiones hacia que entrar
-en un entorno cerrase la sesion del otro. Usuarios y permisos si se comparten,
-que es lo que se quiere: lo unico que se separa es la sesion.
+Existe porque, cuando usuarios y permisos se compartian en `public`, la tabla
+de sesiones era lo unico propio de cada esquema. Hoy la conexion fija
+`search_path` al esquema del entorno y todo vive alli, asi que esta tabla es la
+misma que usaria el backend estandar.
 
 Se activa con SESSION_ENGINE en netowl_web/settings.py.
 """

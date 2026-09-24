@@ -56,7 +56,7 @@ export default function ImportSupport() {
           consoleTitle="Consola de Ejecución Technical Support"
           monthPlaceholder="Mes de soporte..."
           pendingLog={() => 'Calculando métricas de Soporte Técnico...'}
-          onRun={(month) => importsApi.runSupportAnalysis(month)}
+          onRun={(month, onProgress) => importsApi.runSupportAnalysis(month, onProgress)}
           successMessage={() => 'Análisis de soporte completado con éxito.'}
           errorMessage="Error al ejecutar análisis de soporte."
         />

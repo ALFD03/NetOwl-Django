@@ -1,6 +1,7 @@
 /** Tipos del feature de soporte: medidas de tiempo, tasas y bloques de métricas. */
 
 import type { MetricColor } from '@/shared/ui';
+import type { DayCuts, DaySeries } from '@/shared/types/domain';
 
 export interface SupportAnalysisRequest { month: string | null; }
 export interface SupportAnalysisResponse { message: string; log_output?: string; }
@@ -14,8 +15,17 @@ export interface SupportAnalysisResponse { message: string; log_output?: string;
  * period — `cierre_creado_*` is Odoo's own `duracion_total_horas`, the whole
  * process with the queue included, and `cierre_asignado_*` only the
  * technician's handling. `asignacion` is measured on what was RAISED in the
- * period and requires no outcome: the wait already happened even on a ticket
- * that is still open.
+ * period and requires no outcome: a ticket still waiting for an assignee is
+ * measured against the cut itself (end of day on the day bar, end of month on
+ * the month), because the wait is happening — leaving it out emptied the
+ * measure of exactly the tickets it exists to surface. The cut is the end of
+ * the period and not the time of the run, so a closed month always reports the
+ * same figures however often it is re-analysed.
+ *
+ * Nothing is dropped for being short: only a missing or out-of-order date
+ * keeps a ticket out. `muestra_<measure>` is the coverage, and on the closing
+ * clocks its distance from `tickets_cerrados` is the count of tickets closed
+ * without ever having been assigned.
  */
 export const SUPPORT_TIME_MEASURES = [
   'cierre_creado_resuelto',
@@ -160,9 +170,32 @@ export interface SupportGroupCard {
 
 // --- Analytics --------------------------------------------------------------
 
-/** The three first-level axes inside a work group. */
-export const SUPPORT_DIMENSIONS = ['zona', 'sucursal', 'asignado_a'] as const;
+/**
+ * The four first-level axes inside a work group.
+ *
+ * `asignado_a` and `creado_por` are two different people and must stay apart:
+ * Odoo's creator is whoever opened the ticket, the assignee whoever answers
+ * for it, and they are almost never the same. Reading tickets raised off the
+ * assignee axis credited the opening to the technician who later handled it.
+ */
+export const SUPPORT_DIMENSIONS = ['zona', 'sucursal', 'asignado_a', 'creado_por'] as const;
 export type SupportDimension = (typeof SUPPORT_DIMENSIONS)[number];
+
+/**
+ * Los dos ejes cuyo valor es una persona, espejo de `SUPPORT_DIMENSIONES_PERSONA`
+ * en `services/support/analytics/config.py`. Son los únicos que el servidor
+ * anota con un departamento.
+ */
+export const SUPPORT_DIMENSIONES_PERSONA = ['asignado_a', 'creado_por'] as const;
+
+export type SupportDimensionPersona = (typeof SUPPORT_DIMENSIONES_PERSONA)[number];
+
+/** Si ese eje lleva departamento, estrechando el tipo al comprobarlo. */
+export function esDimensionPersona(
+  dimension: SupportDimension,
+): dimension is SupportDimensionPersona {
+  return (SUPPORT_DIMENSIONES_PERSONA as readonly string[]).includes(dimension);
+}
 
 /** The three ways a dimension value is broken down. */
 export const SUPPORT_DESGLOSES = ['tipo_solicitud', 'razon_falla', 'solucion_falla'] as const;
@@ -172,6 +205,15 @@ export type SupportDesglose = (typeof SUPPORT_DESGLOSES)[number];
 export interface SupportDimensionEntry {
   nombre: string;
   metricas?: SupportMetrics;
+  /**
+   * Departamento de esa persona, sólo en los ejes `asignado_a` y `creado_por`.
+   *
+   * Lo resuelve el servidor **al leer** contra el directorio de
+   * `/support/users/` (`anotar_departamentos`), no al calcular: así corregir a
+   * quién pertenece alguien se ve en todos los meses sin reanalizar. Cadena
+   * vacía = no está en el directorio.
+   */
+  departamento?: string;
 }
 
 /** One work group with its own block and every axis already grouped. */
@@ -205,8 +247,33 @@ export interface SupportAnalyticsProps {
     /** Keyed by work group; the selector picks one client-side. */
     incidencia_zonas?: Record<string, SupportZoneEntry[]>;
   };
+  /**
+   * Which days of the month have a cut computed, and which one is on screen,
+   * plus the light per-day series. The dimensional breakdown arrives inside
+   * `analyticsData`; `useDayPayload` serves the other days from its cache.
+   */
+  dayMetrics?: SupportDayCuts;
   periods?: string[];
   selectedPeriod?: string;
+}
+
+/**
+ * La barra de días de soporte, con la serie ligera abierta por grupo de trabajo.
+ *
+ * `serie` es el total del mes y `serie_grupos` lo mismo por equipo. Existen las
+ * dos porque la página entera está filtrada por grupo —el selector no tiene un
+ * «todos»—, así que unas tarjetas con el total de la empresa dirían otra cosa
+ * que el resto de la pantalla.
+ */
+export interface SupportDayCuts extends DayCuts {
+  /** `{ día: { grupo: métricas } }`. Ausente en meses analizados antes. */
+  serie_grupos?: Record<string, Record<string, DaySeries[string]>>;
+}
+
+/** El corte completo de un día, tal y como lo sirve `/support/api/day-metrics/`. */
+export interface SupportDayPayload {
+  grupos: Record<string, SupportGroup>;
+  incidencia_zonas: Record<string, SupportZoneEntry[]>;
 }
 
 /** One entry of the group selector, ordered by volume. */
@@ -221,6 +288,27 @@ export interface SupportDimensionRow extends SupportMetrics {
   nombre: string;
   /** Share of the parent's ticket volume. */
   pctDelPadre: number;
+  /** Vacío salvo en los dos ejes de persona; ver `SupportDimensionEntry`. */
+  departamento: string;
+}
+
+/**
+ * Las personas de un eje sumadas por departamento.
+ *
+ * Se calcula en el cliente sobre las filas que ya están en pantalla: dentro de
+ * un grupo de trabajo, cada ticket tiene un solo asignado y un solo creador, así
+ * que las personas parten el conjunto y los volúmenes se suman sin contar nada
+ * dos veces. Las tasas se recalculan desde esas sumas y los tiempos medios son
+ * la media ponderada por su muestra, que es exactamente la media del conjunto.
+ *
+ * Lo que **no** se puede reconstruir desde los bloques ya calculados son las
+ * medianas, los percentiles, la desviación y el `pct_excede_promedio`: hacen
+ * falta los tickets uno a uno. Salen en cero y la tabla de departamentos no los
+ * enseña, en vez de inventar un promedio de medianas.
+ */
+export interface SupportDepartamentoRow extends SupportDimensionRow {
+  /** Cuántas personas del eje caen en este departamento. */
+  personas: number;
 }
 
 /** A zone ranked by how many tickets each 100 of its active subscribers raise. */
@@ -251,4 +339,78 @@ export interface SupportBreakdownResponse {
 
 export interface SupportResultsProps {
   historico?: SupportHistoricoRow[];
+}
+
+// --- Directorio de usuarios -------------------------------------------------
+//
+// Quién puede crear o tener asignado un ticket. `nombre_odoo` es la clave real:
+// el literal con el que la persona sale en las columnas `Asignado a` y
+// `Creado por` del export, sufijo `(User)` incluido.
+
+export interface UsuarioSoporte {
+  id: number;
+  nombre_odoo: string;
+  nombre: string;
+  apellido: string;
+  nombre_completo: string;
+  /** El departamento vigente: la última fila de `historial`. */
+  departamento_id: number;
+  departamento: string;
+  /** `YYYY-MM-DD`. Nula en quien se registró antes de que existiera el campo. */
+  fecha_ingreso: string | null;
+  /** `YYYY-MM-DD`. Con fecha, el usuario está dado de baja pero no borrado. */
+  fecha_egreso: string | null;
+  activo: boolean;
+  /** Los departamentos por los que ha pasado, del ingreso a hoy. */
+  historial: PasoDepartamento[];
+}
+
+/** Un tramo de la historia: «a partir de `desde`, en `departamento`». */
+export interface PasoDepartamento {
+  id: number;
+  departamento_id: number;
+  departamento: string;
+  /** Nula en el tramo inicial: significa «desde el ingreso». */
+  desde: string | null;
+}
+
+/** Un usuario dado de baja a cuyo nombre siguen entrando tickets. */
+export interface UsuarioTrasBaja {
+  id: number;
+  nombre_odoo: string;
+  fecha_egreso: string;
+  /** Tickets creados después de la baja que lo tienen asignado. */
+  asignados: number;
+  /** Tickets creados después de la baja que figuran como creados por él. */
+  creados: number;
+  /** El día del ticket más reciente. */
+  ultimo: string;
+}
+
+export interface DepartamentoSoporte {
+  id: number;
+  nombre: string;
+  /** Cuánta gente lo referencia: un departamento con usuarios no se borra. */
+  usuarios: number;
+}
+
+/** Un nombre que ya firma o atiende tickets y que el directorio no reconoce. */
+export interface UsuarioPendiente {
+  /** Ya normalizado, con el sufijo puesto: es lo que se guardaría. */
+  nombre_odoo: string;
+  /** Tal y como lo escribe el export, por si difiere del normalizado. */
+  literal: string;
+  asignados: number;
+  creados: number;
+}
+
+export interface SupportUsersProps {
+  usuarios: UsuarioSoporte[];
+  departamentos: DepartamentoSoporte[];
+  pendientes: UsuarioPendiente[];
+  trasBaja: UsuarioTrasBaja[];
+  /** El sufijo que el servidor añade solo; se enseña como pista en el formulario. */
+  sufijo: string;
+  /** Nombre que llega en `?nuevo_usuario=`: abre el alta ya rellena. */
+  nuevoUsuario: string;
 }

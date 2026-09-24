@@ -35,7 +35,6 @@ export function buildGrowthData(periodos: PeriodoData[], labels: string[]): Char
     { label: 'Nuevos Clientes', data: crecimiento.map((_, i) => aporte(i, 'nuevos')), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6, stack: 'crecimiento', datalabels: { display: false } },
     // Última de la pila: es la que lleva la etiqueta con el total.
     { label: 'Reactivaciones', data: crecimiento.map((_, i) => aporte(i, 'react')), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6, stack: 'crecimiento', datalabels: { ...TOTAL_PILA_LABEL, color: CHART_CHROME.textStrong } },
-    { label: 'Churn Bruto', data: periodos.map((p) => Number((-p.churn_bruto_pct).toFixed(2))), backgroundColor: 'rgba(255, 42, 95, 0.85)', borderRadius: 6, stack: 'churn' },
   ] };
 }
 

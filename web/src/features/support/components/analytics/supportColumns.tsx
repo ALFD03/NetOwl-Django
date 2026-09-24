@@ -2,7 +2,7 @@
 
 import { StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils';
-import type { SupportDimensionRow, SupportZoneRow } from '../../types';
+import type { SupportDepartamentoRow, SupportDimensionRow, SupportZoneRow } from '../../types';
 
 const int = formatInteger;
 const dec = formatTwoDecimals;
@@ -55,6 +55,25 @@ export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
   { header: 'Asignación (h)', accessor: (r) => hrs(r.tiempo_medio_asignacion_horas), align: 'right', sortKey: 'tiempo_medio_asignacion_horas' },
   { header: 'Muestra Asignación', accessor: (r) => <span className="text-slate-500">{int(r.muestra_asignacion)}</span>, align: 'right', sortKey: 'muestra_asignacion' },
 ];
+
+/**
+ * Los departamentos: las mismas columnas de la tabla de personas menos las que
+ * no se pueden sumar, más cuánta gente entra en cada fila.
+ *
+ * La mediana de cierre no está, y su ausencia es el punto: la mediana de un
+ * departamento no se puede reconstruir desde las medianas de su gente, hacen
+ * falta los tickets uno a uno. Los promedios sí están, porque la media
+ * ponderada por la muestra es exactamente la media del conjunto. Para la
+ * distribución completa de alguien, su fila sigue estando en la vista por
+ * persona.
+ */
+export const SUPPORT_DEPARTAMENTO_COLUMNS: Column<SupportDepartamentoRow>[] = [
+  { header: 'Departamento', accessor: (r) => <StickyLabel>{r.nombre}</StickyLabel>, sortKey: 'nombre' },
+  { header: 'Personas', accessor: (r) => int(r.personas), align: 'right', sortKey: 'personas' },
+  ...SUPPORT_DIMENSION_COLUMNS.filter(
+    (col) => col.header !== 'Valor' && col.header !== 'Cierre Total Med (h)',
+  ),
+] as Column<SupportDepartamentoRow>[];
 
 export const SUPPORT_ZONE_COLUMNS: Column<SupportZoneRow>[] = [
   { header: 'Zona', accessor: (r) => <StickyLabel>{r.zona}</StickyLabel>, sortKey: 'zona' },

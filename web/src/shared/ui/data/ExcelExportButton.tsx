@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { AlertTriangle, Download } from 'lucide-react';
+import { AlertTriangle, FileSpreadsheet } from 'lucide-react';
 
 import { downloadRowsAsExcel, type ExcelColumn } from '@/shared/lib/excel';
-import { Button } from '../primitives';
+import { getApiErrorMessage } from '@/shared/lib/api/client';
+import { StatusMessage } from '../feedback';
+import { ExportButton } from '../primitives';
 
 interface Props<Row> {
   rows: Row[];
@@ -11,7 +13,6 @@ interface Props<Row> {
   fileName: string;
   sheetName?: string;
   label?: string;
-  size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
@@ -29,36 +30,45 @@ export function ExcelExportButton<Row>({
   fileName,
   sheetName,
   label = 'Exportar a Excel',
-  size = 'sm',
   className,
 }: Props<Row>) {
   const [state, setState] = useState<'idle' | 'busy' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
 
   const handleClick = async () => {
     setState('busy');
+    setError(null);
     try {
       await downloadRowsAsExcel({ rows, columns, fileName, sheetName });
       setState('idle');
-    } catch (error) {
-      // El fallo es del navegador al escribir el archivo, no de la app: se
-      // deja visible en el propio botón para no montar un modal por esto.
-      console.error('Fallo al generar el archivo de Excel:', error);
+    } catch (err) {
+      // El motivo se enseña, no solo se registra: «No se pudo exportar» obliga
+      // a abrir la consola para saber si falta un permiso, si el libro está
+      // mal formado o si el navegador bloqueó la descarga. La traza completa
+      // sigue yendo a la consola, que es donde sirve.
+      console.error('Fallo al generar el archivo de Excel:', err);
+      setError(getApiErrorMessage(err, 'El navegador no pudo escribir el archivo.'));
       setState('error');
     }
   };
 
   return (
-    <Button
-      variant="secondary"
-      size={size}
-      className={className}
-      onClick={handleClick}
-      isLoading={state === 'busy'}
-      disabled={rows.length === 0}
-      icon={state === 'error' ? <AlertTriangle className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
-      title={rows.length === 0 ? 'No hay filas que exportar.' : `Descargar ${rows.length} filas en formato .xlsx`}
-    >
-      {state === 'error' ? 'No se pudo exportar' : label}
-    </Button>
+    <div className="flex flex-col items-start gap-2">
+      <ExportButton
+        className={className}
+        onClick={handleClick}
+        estado={state}
+        label={label}
+        icon={<FileSpreadsheet className="h-4 w-4 text-brand" />}
+        disabled={rows.length === 0}
+        title={rows.length === 0 ? 'No hay filas que exportar.' : `Descargar ${rows.length} filas en formato .xlsx`}
+      />
+
+      <StatusMessage
+        status={error ? { type: 'error', text: error } : null}
+        icon={<AlertTriangle />}
+        className="max-w-md"
+      />
+    </div>
   );
 }

@@ -104,7 +104,7 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 
 | Término | Definición |
 |---|---|
-| **Catálogo** | Las seis tablas de referencia (`catalogo_*`), compartidas por todos los entornos |
+| **Catálogo** | Las tablas de referencia (`catalogo_*`); cada entorno tiene las suyas en su esquema |
 | **Producto ignorado** | Línea del export que nunca será un plan: routers, instalaciones, servicios puntuales |
 | **Producto sin catalogar** | Línea que podría ser un plan nuevo. **Bloquea la importación antes de escribir nada** |
 | **Fixture** | Un diccionario con las claves de la época JSON, que es lo que `core/fixtures` sirve a los análisis |
@@ -119,4 +119,4 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 | **Turno de módulo** | El cerrojo en Redis que impide que dos análisis del mismo módulo escriban a la vez |
 | **Job muerto** | Ejecución abierta sin señales de vida en 15 minutos. Deja de bloquear |
 | **Duplicado exacto** | Mismo módulo **y** mismo periodo ya abiertos. Es lo único que se rechaza con 409 |
-| **Instantánea del catálogo** | La copia coherente de los seis catálogos que `fixtures` cachea 60 segundos |
+| **Instantánea del catálogo** | la copia coherente de los siete catálogos que `fixtures` cachea 60 segundos |

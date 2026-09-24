@@ -33,7 +33,13 @@ from core.models import Periodo
 from core.utils import capture_console
 
 from .history import register_import_log
-from .jobs import ConsolaJob, bloqueo_modulo, marcar_fin, marcar_inicio
+from .jobs import (
+    AnalisisCancelado,
+    ConsolaJob,
+    bloqueo_modulo,
+    marcar_fin,
+    marcar_inicio,
+)
 from .models import AnalysisJob
 
 logger = logging.getLogger(__name__)
@@ -96,21 +102,33 @@ def _correr_subscriptions(job: AnalysisJob, consola: ConsolaJob):
 
 
 def _correr_crm(job: AnalysisJob, consola: ConsolaJob):
-    """Analisis del embudo de CRM para un mes."""
-    from services.crm.analytics import run_crm_analysis
+    """Analisis del embudo de CRM para un mes, mas el corte de cada dia.
 
-    run_crm_analysis(job.periodo)
-    mensaje = f"Análisis de CRM completado exitosamente para el periodo {job.periodo}."
-    return mensaje, {"periodo_label": job.periodo}
+    El recorrido de los dias lo hace el propio analisis sobre la base que ya
+    tiene cargada; aqui solo se le pasa la consola para que alimente la barra.
+    """
+    from services.crm.analytics import get_crm_day_series, run_crm_analysis
+
+    run_crm_analysis(job.periodo, progreso=consola.progreso)
+    dias = len(get_crm_day_series(job.periodo).get("dias_disponibles", []))
+    mensaje = (
+        f"Análisis de CRM completado exitosamente para el periodo {job.periodo}"
+        f" ({dias} días calculados)."
+    )
+    return mensaje, {"periodo_label": job.periodo, "dias_calculados": dias}
 
 
 def _correr_support(job: AnalysisJob, consola: ConsolaJob):
-    """Analisis de las cohortes de soporte para un mes."""
-    from services.support.analytics import run_support_analysis
+    """Analisis de las cohortes de soporte para un mes, mas el corte de cada dia."""
+    from services.support.analytics import get_support_day_series, run_support_analysis
 
-    run_support_analysis(job.periodo)
-    mensaje = f"Análisis de Technical Support completado para {job.periodo}."
-    return mensaje, {"periodo_label": job.periodo}
+    run_support_analysis(job.periodo, progreso=consola.progreso)
+    dias = len(get_support_day_series(job.periodo).get("dias_disponibles", []))
+    mensaje = (
+        f"Análisis de Technical Support completado para {job.periodo}"
+        f" ({dias} días calculados)."
+    )
+    return mensaje, {"periodo_label": job.periodo, "dias_calculados": dias}
 
 
 def _correr_lifetime(job: AnalysisJob, consola: ConsolaJob):
@@ -148,6 +166,10 @@ def ejecutar_analisis(self, job_id: str) -> None:
     No propaga la excepcion: el error interesa en el job (lo lee la interfaz) y
     en el historial de importaciones, no como traza de Celery que nadie mira.
 
+    La misma guarda que descarta una reentrega tras reiniciar el worker es la que
+    cancela un analisis que todavia esperaba en la cola: cancelarlo cierra su
+    fila, y una fila cerrada no se ejecuta.
+
     Si otro analisis del mismo modulo tiene el turno, la tarea se reencola en
     vez de esperar ocupando un hueco del worker: mientras tanto el job se queda
     en `pending` y la interfaz lo enseña, correctamente, como que espera turno.
@@ -159,10 +181,11 @@ def ejecutar_analisis(self, job_id: str) -> None:
         logger.error("Job de analisis inexistente: %s", job_id)
         return
 
-    # Reentrega tras un reinicio del worker: el mensaje sigue en la cola pero el
-    # trabajo ya se dio por terminado. Repetirlo reescribiria el periodo entero.
+    # Reentrega tras un reinicio del worker, o analisis cancelado mientras
+    # esperaba turno: el mensaje sigue en la cola pero la fila ya esta cerrada.
+    # Repetirlo reescribiria el periodo entero.
     if not job.esta_abierto:
-        logger.warning("Job %s ya cerrado (%s); se ignora la reentrega", job_id, job.status)
+        logger.warning("Job %s ya cerrado (%s); no se ejecuta", job_id, job.status)
         return
 
     with bloqueo_modulo(job.module) as turno:
@@ -187,6 +210,19 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
     try:
         with capture_console(consola):
             mensaje, resultado = runner(job, consola)
+    except AnalisisCancelado:
+        # Lo pidio alguien desde la interfaz: la fila ya esta en `cancelled` y con
+        # su mensaje. Aqui solo se cierra -vuelca el log parcial, que es lo que
+        # dice hasta donde llego- y se deja constancia en el historial.
+        texto = (
+            AnalysisJob.objects.filter(pk=job.pk)
+            .values_list('message', flat=True)
+            .first()
+            or "Análisis cancelado."
+        )
+        marcar_fin(job, consola, AnalysisJob.CANCELADO, texto)
+        register_import_log(job.user, job.module, etiqueta, 0, 'warning', texto, job.log)
+        return
     except SoftTimeLimitExceeded:
         texto = (
             "El análisis superó el tiempo máximo de ejecución y fue detenido."

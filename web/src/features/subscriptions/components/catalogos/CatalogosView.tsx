@@ -1,9 +1,9 @@
-/** La pantalla de catálogos: seis pestañas más la de productos sin catalogar. */
+/** La pantalla de catálogos: los catálogos, la pestaña de objetivos y la de productos sin catalogar. */
 
 import type { FormEvent } from 'react';
 import {
-  AlertTriangle, BookMarked, Edit3, EyeOff, Gauge, MapPin, Network,
-  Plus, ShieldAlert, Trash2, UserCheck,
+  AlertTriangle, BookMarked, Edit3, EyeOff, FileSpreadsheet, Gauge, MapPin, Network,
+  Plus, ShieldAlert, Target, TrafficCone, Trash2, UserCheck,
 } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
@@ -16,13 +16,19 @@ import { useCatalogos, type CatalogoVista } from '@/features/subscriptions/hooks
 import type {
   CatalogoNombrado,
   CatalogoPlan,
+  CatalogoPlanRegulador,
   CatalogoProductoIgnorado,
   CatalogoSite,
   CatalogoZona,
   ProductoPendiente,
   SubscriptionCatalogosProps,
 } from '@/features/subscriptions/types';
-import { IgnoradoForm, NombreForm, PlanForm, SiteForm, ZonaForm } from './CatalogoForms';
+import {
+  IgnoradoForm, NombreForm, PlanForm, PlanReguladorForm, SiteForm, ZonaForm,
+} from './CatalogoForms';
+import { NIVEL_OBJETIVO_UI, ObjetivoForm, ObjetivoMesForm, SemaforoForm } from './ObjetivoForms';
+import { ObjetivosPanel } from './ObjetivosPanel';
+import { OBJETIVOS_POR_DEFECTO, objetivoGeneral } from '../../lib/objetivos';
 
 /**
  * Catálogos de referencia del negocio.
@@ -35,20 +41,47 @@ import { IgnoradoForm, NombreForm, PlanForm, SiteForm, ZonaForm } from './Catalo
  * La primera pestaña no es un catálogo sino la lista de lo que falta: los
  * productos que ya están importados y que ningún plan reconoce. Es lo que
  * bloquea una importación o un análisis, y se resuelve desde ahí mismo.
+ *
+ * Las pestañas se reparten entre dos permisos: la mitad operacional (por
+ * registrar, planes, reguladores, ignorados) y la comercial (zonas, sites,
+ * estados, coordinadores). Solo se pintan las del permiso que se tiene; el
+ * servidor tampoco envía las filas de la otra ni deja escribir en ella.
  */
 export function CatalogosView({
   planes,
+  reguladores,
   zonas,
   sites,
   estados,
   coordinadores,
   ignorados,
+  objetivos,
+  objetivos_mes: objetivosMes,
+  semaforo,
+  objetivosConfig,
+  periodosCalculados,
+  nodosConocidos,
   pendientes,
+  comercial,
+  operacional,
   tecnologias,
   tiposPersona,
   nuevoPlan,
 }: SubscriptionCatalogosProps) {
-  const c = useCatalogos({ sites, estados, nuevoPlan });
+  const c = useCatalogos({ sites, estados, nuevoPlan, operacional });
+
+  // El general que rige hoy, para decir en los formularios qué se hereda si
+  // se deja un valor vacío. La excepción de un mes no cuenta como "heredado"
+  // de ese mismo mes, de ahí la configuración sin `meses`.
+  const configObjetivos = objetivosConfig ?? OBJETIVOS_POR_DEFECTO;
+  const mesReferencia = periodosCalculados[0] ?? new Date().toISOString().slice(0, 7);
+  const generalHoy = objetivoGeneral(configObjetivos, mesReferencia);
+  // Solo los nodos cuya zona está en el catálogo pueden tener objetivo de nodo:
+  // el objetivo cuelga de la zona. La sucursal, en cambio, vale sin catálogo.
+  const nombresZona = new Set(zonas.map((z) => z.nombre.toLowerCase()));
+  const nodosDelCatalogo = nodosConocidos.filter((n) => nombresZona.has(n.zona.toLowerCase()));
+  const generalSinExcepcion = (periodo: string) =>
+    objetivoGeneral({ ...configObjetivos, meses: {} }, periodo || mesReferencia);
 
   const enviar = (event: FormEvent, accion: () => void) => {
     event.preventDefault();
@@ -107,22 +140,62 @@ export function CatalogosView({
   const columnasPlanes: Column<CatalogoPlan>[] = [
     { header: 'Plan', accessor: 'nombre', sortKey: 'nombre' },
     { header: 'Tarifa', accessor: (row) => row.tarifa || '—', sortKey: 'tarifa' },
-    { header: 'Tecnología', accessor: 'tecnologia', sortKey: 'tecnologia' },
-    { header: 'Persona', accessor: 'tipo_persona', sortKey: 'tipo_persona' },
+    { header: 'Tecnología', accessor: 'tecnologia', sortKey: 'tecnologia', filterable: true },
+    { header: 'Persona', accessor: 'tipo_persona', sortKey: 'tipo_persona', filterable: true },
     { header: 'Mbps', accessor: 'datas_mbps', align: 'right', sortKey: 'datas_mbps' },
     { header: 'Precio', accessor: 'precio', align: 'right', sortKey: 'precio' },
-    { header: 'TV', accessor: (row) => (row.tiene_tv ? 'Sí' : '—') },
-    { header: 'ETA', accessor: (row) => (row.declarar_en_eta ? 'Declara' : 'No declara') },
+    // El filtro va por la etiqueta que se ve, no por el booleano: nadie busca
+    // «false» en un desplegable que en la tabla pone «—».
+    { header: 'TV', accessor: (row) => (row.tiene_tv ? 'Sí' : '—'), filterable: true, filterValue: (row) => (row.tiene_tv ? 'Sí' : 'No') },
+    {
+      header: 'ETA',
+      accessor: (row) => (row.declarar_en_eta ? 'Declara' : 'No declara'),
+      filterable: true,
+      filterValue: (row) => (row.declarar_en_eta ? 'Declara' : 'No declara'),
+    },
+    {
+      header: 'Plan regulador',
+      accessor: (row) => row.plan_regulador || '— sin asignar',
+      sortKey: 'plan_regulador',
+      filterable: true,
+      // Los planes sin asignar son justo lo que hay que encontrar para poder
+      // declararlos, así que necesitan su propia opción en el desplegable.
+      filterValue: (row) => row.plan_regulador || 'Sin asignar',
+    },
     acciones<CatalogoPlan>(c.editarPlan, (row) =>
       c.setBorrando({ tipo: 'planes', id: row.id, nombre: row.nombre })),
   ];
 
+  const columnasReguladores: Column<CatalogoPlanRegulador>[] = [
+    { header: 'Plan declarado', accessor: 'nombre', sortKey: 'nombre' },
+    {
+      header: 'Hoja',
+      accessor: (row) => (row.es_transporte ? 'Transporte' : 'Internet'),
+      filterable: true,
+      filterValue: (row) => (row.es_transporte ? 'Transporte' : 'Internet'),
+    },
+    { header: 'Tecnología', accessor: 'tecnologia', sortKey: 'tecnologia', filterable: true },
+    { header: 'Persona', accessor: 'tipo_persona', sortKey: 'tipo_persona', filterable: true },
+    { header: 'Mbps', accessor: 'datas_mbps', align: 'right', sortKey: 'datas_mbps' },
+    { header: 'Precio', accessor: 'precio', align: 'right', sortKey: 'precio' },
+    { header: 'TV', accessor: (row) => (row.tiene_tv ? 'Sí' : '—'), filterable: true, filterValue: (row) => (row.tiene_tv ? 'Sí' : 'No') },
+    { header: 'Planes', accessor: 'planes', align: 'right', sortKey: 'planes' },
+    acciones<CatalogoPlanRegulador>(c.editarRegulador, (row) =>
+      c.setBorrando({ tipo: 'reguladores', id: row.id, nombre: row.nombre })),
+  ];
+
   const columnasZonas: Column<CatalogoZona>[] = [
     { header: 'Zona', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Site', accessor: 'site', sortKey: 'site' },
-    { header: 'Estado', accessor: 'estado', sortKey: 'estado' },
-    { header: 'Tecnología', accessor: 'tecnologia', sortKey: 'tecnologia' },
-    { header: 'Coordinador', accessor: (row) => row.coordinador || '—', sortKey: 'coordinador' },
+    { header: 'Site', accessor: 'site', sortKey: 'site', filterable: true },
+    { header: 'Estado', accessor: 'estado', sortKey: 'estado', filterable: true },
+    { header: 'Tecnología', accessor: 'tecnologia', sortKey: 'tecnologia', filterable: true },
+    {
+      header: 'Coordinador',
+      accessor: (row) => row.coordinador || '—',
+      sortKey: 'coordinador',
+      filterable: true,
+      filterValue: (row) => row.coordinador || 'Sin coordinador',
+    },
     acciones<CatalogoZona>(c.editarZona, (row) =>
       c.setBorrando({ tipo: 'zonas', id: row.id, nombre: row.nombre })),
   ];
@@ -147,7 +220,12 @@ export function CatalogosView({
   const columnasIgnorados: Column<CatalogoProductoIgnorado>[] = [
     { header: 'Producto', accessor: 'nombre', sortKey: 'nombre' },
     { header: 'Nota', accessor: (row) => row.nota || '—' },
-    { header: 'Registrado por', accessor: (row) => row.creado_por || '—' },
+    {
+      header: 'Registrado por',
+      accessor: (row) => row.creado_por || '—',
+      filterable: true,
+      filterValue: (row) => row.creado_por || 'Sin registrar',
+    },
     { header: 'Fecha', accessor: 'creado_en', sortKey: 'creado_en' },
     acciones<CatalogoProductoIgnorado>(c.editarIgnorado, (row) =>
       c.setBorrando({ tipo: 'ignorados', id: row.id, nombre: row.nombre })),
@@ -157,6 +235,7 @@ export function CatalogosView({
   // creando un plan o marcándolo como ignorado desde su propia fila.
   const ALTAS: Partial<Record<CatalogoVista, { label: string; onClick: () => void }>> = {
     planes: { label: 'Nuevo plan', onClick: c.nuevoPlanVacio },
+    reguladores: { label: 'Nuevo plan regulador', onClick: c.nuevoRegulador },
     zonas: { label: 'Nueva zona', onClick: c.nuevaZona },
     sites: { label: 'Nuevo site', onClick: c.nuevoSite },
     estados: { label: 'Nuevo estado', onClick: () => c.nuevoNombre('estados') },
@@ -177,13 +256,25 @@ export function CatalogosView({
               activeKey={c.vista}
               onChange={(key) => c.setVista(key as CatalogoVista)}
               options={[
-                { key: 'pendientes', label: `Por registrar (${pendientes.length})`, icon: AlertTriangle },
-                { key: 'planes', label: `Planes (${planes.length})`, icon: BookMarked },
-                { key: 'zonas', label: `Zonas (${zonas.length})`, icon: Network },
-                { key: 'sites', label: `Sites (${sites.length})`, icon: MapPin },
-                { key: 'estados', label: `Estados (${estados.length})`, icon: MapPin },
-                { key: 'coordinadores', label: `Coordinadores (${coordinadores.length})`, icon: UserCheck },
-                { key: 'ignorados', label: `Ignorados (${ignorados.length})`, icon: EyeOff },
+                ...(operacional
+                  ? [
+                      { key: 'pendientes', label: `Por registrar (${pendientes.length})`, icon: AlertTriangle },
+                      { key: 'planes', label: `Planes (${planes.length})`, icon: BookMarked },
+                      { key: 'reguladores', label: `Planes reguladores (${reguladores.length})`, icon: FileSpreadsheet },
+                    ]
+                  : []),
+                ...(comercial
+                  ? [
+                      { key: 'zonas', label: `Zonas (${zonas.length})`, icon: Network },
+                      { key: 'sites', label: `Sites (${sites.length})`, icon: MapPin },
+                      { key: 'estados', label: `Estados (${estados.length})`, icon: MapPin },
+                      { key: 'coordinadores', label: `Coordinadores (${coordinadores.length})`, icon: UserCheck },
+                      { key: 'objetivos', label: 'Objetivos', icon: Target },
+                    ]
+                  : []),
+                ...(operacional
+                  ? [{ key: 'ignorados', label: `Ignorados (${ignorados.length})`, icon: EyeOff }]
+                  : []),
               ]}
             />
 
@@ -228,6 +319,31 @@ export function CatalogosView({
         </NeonContainer>
       )}
 
+      {c.vista === 'reguladores' && (
+        <NeonContainer
+          title="Planes reguladores"
+          subtitle="Una fila por producto declarado: es lo que se exporta en el formulario de la reguladora"
+          icon={<FileSpreadsheet className="h-5 w-5" />}
+          theme="purple"
+          noPadding
+        >
+          {reguladores.length === 0 ? (
+            <EmptyState
+              title="Todavía no hay planes reguladores"
+              description="Sin ellos el formulario sale vacío: cada plan comercial necesita saber con qué fila se declara."
+              icon={<FileSpreadsheet />}
+            />
+          ) : (
+            <DataTable
+              columns={columnasReguladores}
+              data={reguladores}
+              searchable
+              searchPlaceholder="Buscar plan declarado..."
+            />
+          )}
+        </NeonContainer>
+      )}
+
       {c.vista === 'zonas' && (
         <NeonContainer title="Zonas" subtitle="Nodos de red, con su site, su estado y su coordinador" icon={<Network className="h-5 w-5" />} theme="blue" noPadding>
           <DataTable columns={columnasZonas} data={zonas} searchable searchPlaceholder="Buscar zona..." />
@@ -250,6 +366,32 @@ export function CatalogosView({
         <NeonContainer title="Coordinadores" subtitle="Responsables comerciales por los que agrupa Business Units" icon={<UserCheck className="h-5 w-5" />} theme="green" noPadding>
           <DataTable columns={columnasNombrados('coordinadores')} data={coordinadores} searchable searchPlaceholder="Buscar coordinador..." />
         </NeonContainer>
+      )}
+
+      {c.vista === 'objetivos' && (
+        <ObjetivosPanel
+          objetivos={objetivos}
+          objetivosMes={objetivosMes}
+          semaforo={semaforo}
+          config={objetivosConfig}
+          periodos={periodosCalculados}
+          zonas={zonas}
+          nodos={nodosConocidos}
+          onEditarGeneral={c.editarObjetivo}
+          onNuevoObjetivo={() => c.nuevoObjetivo('zona')}
+          onEditarObjetivo={c.editarObjetivo}
+          onBorrarObjetivo={(fila) =>
+            c.setBorrando({
+              tipo: 'objetivos',
+              id: fila.id,
+              nombre: `el objetivo ${NIVEL_OBJETIVO_UI[fila.nivel].label.toLowerCase()} ${fila.entidad} ${fila.desde ? `desde ${fila.desde}` : 'desde siempre'}`.replace(/\s+/g, ' '),
+            })}
+          onExcepcionMes={(periodo, existente) =>
+            (existente ? c.editarObjetivoMes(existente) : c.nuevoObjetivoMes(periodo))}
+          onBorrarMes={(fila) =>
+            c.setBorrando({ tipo: 'objetivos_mes', id: fila.id, nombre: `la excepción de ${fila.periodo}` })}
+          onEditarSemaforo={() => semaforo && c.editarSemaforo(semaforo)}
+        />
       )}
 
       {c.vista === 'ignorados' && (
@@ -277,9 +419,31 @@ export function CatalogosView({
             value={c.planDraft}
             tecnologias={tecnologias}
             tiposPersona={tiposPersona}
+            reguladores={reguladores}
             saving={c.guardando}
             onChange={(patch) => c.setPlanDraft({ ...c.planDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('planes', { ...c.planDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.reguladorDraft)}
+        onClose={c.cerrarFormularios}
+        title={c.reguladorDraft?.id ? 'Editar plan regulador' : 'Nuevo plan regulador'}
+        subtitle="Una fila del formulario de la reguladora: velocidad, renta y tipo de suscriptor declarados"
+        icon={<FileSpreadsheet className="h-5 w-5 text-purple-400" />}
+        theme="purple"
+      >
+        {c.reguladorDraft && (
+          <PlanReguladorForm
+            value={c.reguladorDraft}
+            tecnologias={tecnologias}
+            tiposPersona={tiposPersona}
+            saving={c.guardando}
+            onChange={(patch) => c.setReguladorDraft({ ...c.reguladorDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('reguladores', { ...c.reguladorDraft }))}
             onClose={c.cerrarFormularios}
           />
         )}
@@ -373,6 +537,69 @@ export function CatalogosView({
             saving={c.guardando}
             onChange={(patch) => c.setIgnoradoDraft({ ...c.ignoradoDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('ignorados', { ...c.ignoradoDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.objetivoDraft)}
+        onClose={c.cerrarFormularios}
+        title={c.objetivoDraft?.id ? 'Editar objetivo' : 'Nuevo objetivo'}
+        subtitle="Meta de crecimiento y churn máximo. No cambia ningún análisis: solo metas, cumplimiento y colores"
+        icon={<Target className="h-5 w-5 text-purple-400" />}
+        theme="purple"
+      >
+        {c.objetivoDraft && (
+          <ObjetivoForm
+            value={c.objetivoDraft}
+            entidades={{ zona: zonas, site: sites, estado: estados, coordinador: coordinadores }}
+            nodos={nodosDelCatalogo}
+            general={generalHoy}
+            saving={c.guardando}
+            onChange={(patch) => c.setObjetivoDraft({ ...c.objetivoDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('objetivos', { ...c.objetivoDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.objetivoMesDraft)}
+        onClose={c.cerrarFormularios}
+        title={c.objetivoMesDraft?.id ? 'Editar excepción del mes' : 'Excepción de un mes'}
+        subtitle="Sustituye al objetivo general solo en ese mes"
+        icon={<Target className="h-5 w-5 text-sky-400" />}
+        theme="blue"
+        size="md"
+      >
+        {c.objetivoMesDraft && (
+          <ObjetivoMesForm
+            value={c.objetivoMesDraft}
+            periodos={periodosCalculados}
+            general={generalSinExcepcion(c.objetivoMesDraft.periodo)}
+            saving={c.guardando}
+            onChange={(patch) => c.setObjetivoMesDraft({ ...c.objetivoMesDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('objetivos_mes', { ...c.objetivoMesDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.semaforoDraft)}
+        onClose={c.cerrarFormularios}
+        title="Semáforo de objetivos"
+        subtitle="Desde dónde es verde, amarillo o rojo cada métrica, igual en todo el módulo"
+        icon={<TrafficCone className="h-5 w-5 text-amber-400" />}
+        theme="yellow"
+      >
+        {c.semaforoDraft && (
+          <SemaforoForm
+            value={c.semaforoDraft}
+            saving={c.guardando}
+            onChange={(patch) => c.setSemaforoDraft({ ...c.semaforoDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('semaforo', { ...c.semaforoDraft }))}
             onClose={c.cerrarFormularios}
           />
         )}
