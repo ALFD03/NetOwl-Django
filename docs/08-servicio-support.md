@@ -350,9 +350,8 @@ El departamento es **otro modelo** (`Departamento`) y la FK es obligatoria con
 libremente se escribe de tres maneras y deja de agrupar. Borrar uno con gente
 dentro responde 409 en vez de dejar filas huérfanas.
 
-Las dos tablas viven en **`public`, sin cualificar con `DB_SCHEMA`**, como los
-catálogos de suscripciones: la plantilla es una por empresa, y darle a cada
-entorno la suya solo produce divergencias silenciosas.
+Las dos tablas viven en el esquema del entorno, como los catálogos de
+suscripciones: cada entorno tiene su propio directorio.
 
 ### La pestaña «Por registrar»
 

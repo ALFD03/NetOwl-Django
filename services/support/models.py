@@ -10,10 +10,9 @@ Por eso `nombre_odoo` no es un nombre bonito sino **el nombre exacto tal y como
 Odoo lo exporta**, sufijo incluido; el nombre y el apellido de persona van
 aparte, para poder presentarlos sin tocar la clave.
 
-**Viven en `public`, sin cualificar con DB_SCHEMA**, igual que los catalogos de
-`services/subscriptions/models.py`: la plantilla es una por empresa, y darle a
-cada entorno la suya solo produce divergencias silenciosas. Lo que se cualifica
-por esquema son los datos calculados, no el vocabulario del negocio.
+Viven en el esquema del entorno, igual que los catalogos de
+`services/subscriptions/models.py`: la conexion fija `search_path` a DB_SCHEMA,
+asi que el `db_table` no se cualifica.
 """
 
 from __future__ import annotations
@@ -224,7 +223,7 @@ class HistorialDepartamento(models.Model):
     "desde el ingreso": asi no hay que mantenerla sincronizada con
     `fecha_ingreso`, que puede faltar o corregirse despues.
 
-    Vive en `public`, como el resto del directorio.
+    Vive en el esquema del entorno, como el resto del directorio.
     """
 
     usuario = models.ForeignKey(

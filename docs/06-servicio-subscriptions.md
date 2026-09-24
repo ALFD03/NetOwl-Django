@@ -20,7 +20,7 @@ services/subscriptions/
 │   ├── lifetime/           Supervivencia Kaplan-Meier (pipeline aparte)
 │   ├── eta_report.py       El reporte de la reguladora
 │   └── queries.py          Lectura de resultados + Sales Report + Business Units
-├── models.py               Los catálogos de referencia (tablas en `public`)
+├── models.py               Los catálogos de referencia
 ├── views.py                Dashboard, analytics, results, lifetime, reportes
 ├── views_eta.py            Las vistas del reporte ETA
 ├── views_catalogos.py      La pantalla de catálogos y su CRUD
@@ -629,9 +629,8 @@ tecnología por defecto, en vez de perderse.
 
 ### Los modelos
 
-**Viven en `public`, sin cualificar con `DB_SCHEMA`**, igual que `auth_user`: el
-catálogo comercial es uno por empresa, y darle a cada entorno el suyo solo
-produce divergencias silenciosas.
+Viven en el esquema del entorno, como todo lo demás: desarrollo y producción
+tienen cada uno su catálogo, y un cambio en uno no alcanza al otro.
 
 | Modelo | Tabla | Notas |
 |---|---|---|

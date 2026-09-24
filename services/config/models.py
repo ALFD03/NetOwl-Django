@@ -8,9 +8,9 @@ Tres cosas, todas de infraestructura y ninguna de negocio:
 * `Profile` y `PermissionGroup`, que comparten esa matriz;
 * `SesionEntorno`, la tabla de sesiones cualificada por esquema.
 
-Usuarios, perfiles y permisos viven en `public` a proposito: la misma cuenta
-tiene que valer en desarrollo y en produccion. Lo unico que se separa por
-entorno es la sesion.
+Como todo lo demas, usuarios, perfiles y permisos viven en el esquema del
+entorno (DB_SCHEMA): una cuenta de desarrollo no existe en produccion, ni al
+reves.
 """
 
 from django.contrib.auth.models import User
@@ -240,21 +240,12 @@ def save_user_profile(sender, instance, **kwargs):
     instance.profile.save()
 
 
-# --- Sesiones aisladas por entorno ---
-# Usuarios, perfiles y permisos son compartidos a proposito: la misma cuenta
-# tiene que servir en desarrollo y en produccion. Las sesiones no: las dos
-# aplicaciones apuntan a la misma base de datos, y con una unica
-# `public.django_session` entrar en un entorno cerraba la sesion del otro.
-#
-# Por eso la tabla de sesiones —y solo ella— se cualifica con DB_SCHEMA, igual
-# que hace services/imports/models.py con las suyas.
-#
-# `managed = False` es deliberado. La tabla es distinta en cada esquema, pero
-# `django_migrations` vive en `public` y la comparten todos los entornos: una
-# migracion que la creara se registraria como aplicada al ejecutarla en el
-# primer entorno y el segundo se quedaria sin tabla, fallando en el primer
-# login. La crea `manage.py preparar_sesiones`, que es idempotente y se ejecuta
-# en cada arranque (ver entrypoint.sh y scripts/dev.sh).
+# --- Sesiones del entorno ---
+# Nacio cuando usuarios y permisos se compartian en `public` y la tabla de
+# sesiones era lo unico propio de cada esquema; por eso cualifica su `db_table`
+# con DB_SCHEMA y es `managed = False`. Hoy todo el entorno vive en su esquema
+# y esta es la misma `<esquema>.django_session` que crea la migracion de
+# `django.contrib.sessions`.
 class SesionEntorno(AbstractBaseSession):
     # AbstractBaseSession marca expire_date con db_index, y el nombre que Django
     # autogenera es un hash del nombre de la tabla: seria distinto en cada
@@ -262,9 +253,8 @@ class SesionEntorno(AbstractBaseSession):
     # siempre. Mismo motivo por el que AnalysisJob nombra su indice a mano.
     """La tabla de sesiones del esquema del entorno.
 
-    `managed = False` es deliberado: la crea `manage.py preparar_sesiones` y no
-    una migracion, porque `django_migrations` vive en `public` y la comparten
-    todos los entornos (el detalle esta en ese comando).
+    `managed = False`: la tabla la crea la migracion de `django.contrib.sessions`
+    dentro del esquema del entorno, y este modelo solo la lee.
     """
 
     expire_date = models.DateTimeField(db_index=False)

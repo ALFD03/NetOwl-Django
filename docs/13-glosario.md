@@ -104,7 +104,7 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 
 | Término | Definición |
 |---|---|
-| **Catálogo** | Las seis tablas de referencia (`catalogo_*`), compartidas por todos los entornos |
+| **Catálogo** | Las tablas de referencia (`catalogo_*`); cada entorno tiene las suyas en su esquema |
 | **Producto ignorado** | Línea del export que nunca será un plan: routers, instalaciones, servicios puntuales |
 | **Producto sin catalogar** | Línea que podría ser un plan nuevo. **Bloquea la importación antes de escribir nada** |
 | **Fixture** | Un diccionario con las claves de la época JSON, que es lo que `core/fixtures` sirve a los análisis |

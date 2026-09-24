@@ -50,14 +50,9 @@ apagar() {
 }
 trap apagar INT TERM EXIT
 
-# La tabla de sesiones es propia de cada esquema y no la crea ninguna migracion
-# (django_migrations es compartida; ver services/config/management/commands/).
-# Es idempotente, asi que se ejecuta en cada arranque.
-"$PYTHON" manage.py preparar_sesiones
-
-# Igual que arriba: las tablas ORM de imports son propias de cada esquema y la
-# migracion que las crea queda anotada como aplicada para todos los entornos.
-"$PYTHON" manage.py preparar_imports
+# Cada esquema lleva su propia django_migrations: aplicarlas deja el entorno
+# completo, incluido uno recien creado. Sin nada pendiente no hace nada.
+"$PYTHON" manage.py migrate --noinput
 
 # `stdbuf -oL` evita que el prefijo salga a bloques por el buffer de la tuberia.
 VITE_DEV_SERVER=1 stdbuf -oL "$PYTHON" manage.py runserver 2>&1 \
@@ -144,7 +139,7 @@ if hay_redis; then
   # El nombre de la cola sale de DB_SCHEMA (ver settings.py): asi el worker de
   # desarrollo no puede consumir un analisis encolado por produccion. Se lee del
   # .env con la misma normalizacion, porque aqui no esta en el entorno.
-  cola=$("$PYTHON" -c 'import os, re; from dotenv import load_dotenv; load_dotenv(); print("analisis_" + re.sub(r"[^A-Za-z0-9_-]", "_", os.getenv("DB_SCHEMA", "public")))')
+  cola=$("$PYTHON" -c 'import os, re; from dotenv import load_dotenv; load_dotenv(); print("analisis_" + re.sub(r"[^A-Za-z0-9_-]", "_", os.getenv("DB_SCHEMA", "")))')
   worker_msg="==> Worker  cola $cola (Celery)"
 else
   worker_msg="==> Worker  sin arrancar: no hay Redis en REDIS_URL, los analisis quedaran en cola"

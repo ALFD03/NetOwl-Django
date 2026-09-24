@@ -5,10 +5,9 @@ Antes vivian en `data/Planes.json` y `data/Zonas.json`, y cambiarlos exigia
 editar un fichero del repositorio y volver a desplegar. Aqui son tablas que se
 mantienen desde `/subscriptions/config/`.
 
-**Viven en `public`, sin cualificar con DB_SCHEMA**, igual que `auth_user` y la
-matriz de permisos. El catalogo comercial es uno por empresa: darle a cada
-entorno el suyo solo produce divergencias silenciosas. Lo que si se cualifica
-por esquema son los datos calculados, no el vocabulario del negocio.
+Viven en el esquema del entorno, como todo lo demas: el `db_table` no se
+cualifica porque la conexion ya fija `search_path` a DB_SCHEMA. Desarrollo y
+produccion tienen cada uno su catalogo, y un cambio en uno no alcanza al otro.
 
 Nadie los lee directamente: `core/fixtures.py` es el unico consumidor, y sirve
 a los analisis los mismos diccionarios con las mismas claves de la epoca JSON

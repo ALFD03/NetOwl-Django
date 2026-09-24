@@ -11,14 +11,12 @@ if [ "${SKIP_COLLECTSTATIC:-0}" != "1" ]; then
     python manage.py collectstatic --noinput
 fi
 
-# La tabla de sesiones vive en el esquema del entorno y no puede crearla una
-# migracion, porque django_migrations es compartida (ver el comando). Es
-# idempotente: en un esquema ya preparado no hace nada.
-python manage.py preparar_sesiones
-
-# Por lo mismo, las tablas ORM de imports (import_action_logs, analysis_jobs)
-# estan cualificadas con DB_SCHEMA y sus migraciones se anotan en la
-# django_migrations compartida. Tambien idempotente.
-python manage.py preparar_imports
+# Cada esquema lleva su propia django_migrations, asi que las migraciones crean
+# todo lo del entorno —usuarios, catalogos, sesiones, imports— dentro de el.
+# Solo las aplica el contenedor web: el worker (SKIP_MIGRATE=1) usa la misma
+# imagen y arrancar los dos a la vez los pondria a migrar en paralelo.
+if [ "${SKIP_MIGRATE:-0}" != "1" ]; then
+    python manage.py migrate --noinput
+fi
 
 exec "$@"

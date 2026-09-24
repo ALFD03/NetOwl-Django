@@ -5,7 +5,7 @@ Una única base de datos PostgreSQL, con **un esquema por entorno**
 
 | Familia | Quién la crea | Dónde vive |
 |---|---|---|
-| **ORM de Django** | Migraciones (o los comandos `preparar_*`) | `public` o `DB_SCHEMA`, según el modelo |
+| **ORM de Django** | Migraciones (`migrate`, por esquema) | `DB_SCHEMA` |
 | **DDL explícito** | `ensure_*_schema` / `_ensure_tables_exist` en el código analítico | `DB_SCHEMA` |
 | **Dinámicas** | `DBConnector.save_historico` / `copy_dataframe` sobre la marcha | `DB_SCHEMA` |
 
@@ -20,7 +20,10 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 
 ## 1. Tablas del ORM
 
-### Compartidas entre entornos (`public`)
+Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
+`search_path` a él y nada se comparte a través de `public`.
+
+### Usuarios, permisos y catálogos
 
 | Tabla | Modelo | Contenido |
 |---|---|---|
@@ -40,13 +43,13 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 | `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
 | `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
 | `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
-| `django_migrations` | Django | **Compartida: es la causa de los comandos `preparar_*`** |
+| `django_migrations` | Django | Propia de cada esquema |
 
-### Cualificadas por esquema (`DB_SCHEMA`)
+### Sesiones e importaciones
 
 | Tabla | Modelo | Contenido |
 |---|---|---|
-| `django_session` | `SesionEntorno` (`managed=False`) | Sesiones del entorno. La crea `manage.py preparar_sesiones` |
+| `django_session` | `SesionEntorno` (`managed=False`) | Sesiones del entorno. La crea la migración de `django.contrib.sessions` |
 | `import_action_logs` | `ImportActionLog` | Historial permanente de importaciones y cálculos |
 | `analysis_jobs` | `AnalysisJob` | Estado vivo de cada ejecución. Índice `analysis_jobs_mod_est_idx` sobre `(module, status)` |
 

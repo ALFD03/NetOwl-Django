@@ -17,8 +17,8 @@ etiquetados y apagándose juntos con Ctrl-C:
 | Túnel SSH | `[tunel]` | Solo si hace falta y `REDIS_SSH_HOST` está en `.env` |
 | Worker | `[worker]` | Celery, **solo si hay un Redis respondiendo** |
 
-Antes de arrancar nada ejecuta `preparar_sesiones` y `preparar_imports`, que son
-idempotentes.
+Antes de arrancar nada ejecuta `migrate --noinput`; sin nada pendiente no hace
+nada.
 
 ### El túnel a Redis
 
@@ -75,17 +75,12 @@ Equivalentes de solo frontend en `package.json`: `dev`, `build`, `preview`,
 
 | Comando | Qué hace | Cuándo |
 |---|---|---|
-| `manage.py preparar_sesiones` | Crea `<esquema>.django_session` si falta | En cada arranque (entrypoint y dev.sh) |
-| `manage.py preparar_imports` | Crea `import_action_logs` y `analysis_jobs` en el esquema | Igual |
 | `manage.py cargar_catalogos [--actualizar]` | Siembra planes, zonas, sites, estados y coordinadores desde `data/*.json` | Al montar un entorno nuevo, o para la migración inicial |
+| `manage.py copiar_desde_public [--esquema X] [--simular]` | Copia al esquema del entorno las tablas que antes se compartían en `public` | **Una vez por entorno**, al desplegar la separación de esquemas |
 
-Los dos primeros existen porque `django_migrations` es **compartida** entre
-entornos: una migración que creara una tabla por esquema se marcaría como
-aplicada al ejecutarse en el primero y el segundo se quedaría sin tabla.
-
-**Síntoma típico de que faltan:** un 500 al lanzar cualquier análisis con
-`relation "<esquema>.analysis_jobs" does not exist`, mientras `migrate` insiste
-en que no hay nada pendiente.
+Cada esquema tiene su propia `django_migrations`, así que `migrate` basta para
+dejar completo un entorno nuevo. `copiar_desde_public` solo sirve para la
+transición desde `public`; ver [02 · Configuración](02-configuracion.md#la-separación-de-public-septiembre-de-2026).
 
 ## Producción
 
@@ -129,9 +124,9 @@ Las tres opciones que no son obvias:
 
 1. `collectstatic` (salvo `SKIP_COLLECTSTATIC=1`, que es lo que usa el worker:
    no sirve estáticos y recolectarlos solo retrasa su arranque).
-2. `preparar_sesiones`.
-3. `preparar_imports`.
-4. `exec "$@"`.
+2. `migrate --noinput` (salvo `SKIP_MIGRATE=1`, que lleva el worker: dos
+   contenedores migrando a la vez chocarían).
+3. `exec "$@"`.
 
 `collectstatic` se ejecuta **al arrancar el contenedor y no al construirlo**
 porque `settings.py` necesita Vault desde el momento en que se importa, y
@@ -265,7 +260,7 @@ primer mensaje). El log de un análisis concreto no está aquí sino en la colum
 | El análisis se queda en «En cola» para siempre | No hay worker, o no hay Redis. Comprobar el túnel y `make worker` |
 | El análisis pide turno y no avanza | Otro del mismo módulo tiene el cerrojo. Se reintenta cada 20 s |
 | 409 al lanzar un análisis | Ya hay uno abierto del **mismo módulo y periodo**. La interfaz se engancha a él |
-| 500 con `relation "<esquema>.<tabla>" does not exist` | Faltan `preparar_sesiones` / `preparar_imports`, o esa tabla de análisis aún no se ha calculado nunca |
+| 500 con `relation "<tabla>" does not exist` | Faltan migraciones en el esquema (`migrate`), no se ejecutó `copiar_desde_public` al separar el entorno, o esa tabla de análisis aún no se ha calculado nunca |
 | La página carga vacía o rota tras un cambio | ¿Se renombró un fichero de `pages/`? Rompe la vista en tiempo de ejecución sin error de compilación |
 | Los assets dan 404 en desarrollo | Vite no está en el 5173 (puerto estricto), o falta `VITE_DEV_SERVER=1` |
 | 403 al hacer POST | Token CSRF viejo. El cliente lee la cookie antes que el meta precisamente por esto; comprobar que el meta `csrf-cookie-name` coincide con el entorno |

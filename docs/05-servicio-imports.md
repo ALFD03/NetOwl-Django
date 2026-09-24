@@ -14,7 +14,6 @@ conviene no confundir:
 | `history.py` | `register_import_log()` |
 | `views.py` | Pantallas y endpoints |
 | `urls.py` | Bajo el prefijo `/imports/` |
-| `management/commands/preparar_imports.py` | Crea las tablas ORM en el esquema del entorno |
 
 ---
 
@@ -79,9 +78,9 @@ deliberadamente reanudables.
 
 Elegir el campo en vez de una columna nueva no es sólo economía: **añadir un
 valor a `choices` no toca la tabla** —Django no genera un CHECK en Postgres— y
-por tanto no hay que crear nada esquema por esquema. Una columna sí habría
-obligado, porque `preparar_imports` solo crea la tabla que falta y
-`django_migrations` es compartida (ver ese comando).
+por tanto no hace falta ninguna migración. (Cuando se decidió, además,
+`django_migrations` era compartida entre entornos y una columna nueva habría
+que haberla creado esquema por esquema; hoy cada esquema tiene la suya.)
 
 ---
 
