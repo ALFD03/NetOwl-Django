@@ -11,6 +11,7 @@ import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { useSubscriptionsAnalyticsData } from '@/features/subscriptions/hooks/useSubscriptionsAnalyticsData';
 import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, type DimensionKey } from '@/features/subscriptions/components/analytics';
+import { CampannasExportButton } from '@/features/subscriptions/components/campaigns/CampannasExportButton';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
 import { SUBS_DAY_CHARTS, subsDayCards } from '@/features/subscriptions/lib/subsDaySummary';
 import { useObjetivosConfig } from '@/features/subscriptions/hooks/useObjetivos';
@@ -28,7 +29,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   const [selectedDim, setSelectedDim] = useState<DimensionKey>('zona');
   const [selectedDay, setSelectedDay] = useState(0);
 
-  const { globalData: monthData, currentDimensionData: monthDimensionData } =
+  const { globalData: monthData, dimensionGroup: monthDimensions, currentDimensionData: monthDimensionData } =
     useSubscriptionsAnalyticsData(periodos, dimensiones, selectedPeriod, selectedDim);
 
   const { availableDays, totalDays, effectiveDay, dayData } = useDayMetrics(
@@ -58,6 +59,10 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   // al cierre del mes.
   const globalData = dayData?.global ?? monthData;
   const currentDimensionData = dayData?.dims?.[selectedDim] ?? monthDimensionData;
+  // El reporte de campañas sigue la misma regla, pero siempre sobre `campanna`;
+  // si cae al cierre, el archivo no debe decir que es el corte de un día.
+  const campannasDelDia = dayData?.dims?.campanna;
+  const campannas = campannasDelDia ?? monthDimensions.campanna ?? [];
 
   // El mes se elige en cliente, pero la barra de dias vive en los props:
   // se recarga solo esa prop al cambiar de periodo.
@@ -98,6 +103,10 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
         </>
       }
     >
+      <div className="mb-6">
+        <CampannasExportButton filas={campannas} periodo={selectedPeriod} dia={campannasDelDia ? effectiveDay : 0} />
+      </div>
+
       <DaySummary
         serie={serie}
         dias={availableDays}
