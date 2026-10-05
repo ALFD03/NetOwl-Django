@@ -174,6 +174,26 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
     <div className="space-y-6">
       {toolbar}
 
+      {/* El encabezado del mes: de dónde salen las bajas medidas y cuáles no. */}
+      <div className="space-y-3">
+        <p className="text-sm text-slate-400">
+          {formatPeriodoLabel(lifetime.mes)}: {formatInteger(lifetime.bajas_mes)} bajas en el cierre mensual, de las
+          que se miden {formatInteger(lifetime.bajas)}.
+          {fuera.length > 0 && <> Quedan fuera {fuera.join(', ')}.</>}
+          {lifetime.mes_en_curso && (
+            <> Mes en curso: datos hasta el {lifetime.fecha_corte}, y sus bajas todavía pueden volver antes del cierre.</>
+          )}
+        </p>
+        {!cuadra && (
+          <StatusMessage
+            status={{
+              type: 'warning',
+              text: `El cierre mensual guardado cuenta ${formatInteger(lifetime.bajas_reporte ?? 0)} bajas y aquí salen ${formatInteger(lifetime.bajas_mes)}: uno de los dos se calculó con otros datos. Recalcula el que esté atrasado.`,
+            }}
+          />
+        )}
+      </div>
+
       <NeonContainer
         theme="blue"
         title="Tiempo activo desde la instalación"
