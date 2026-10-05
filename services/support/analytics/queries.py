@@ -12,7 +12,7 @@ calculo el modulo de suscripciones.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -398,6 +398,14 @@ def estructurar_grupos(filas: list[dict]) -> dict[str, dict]:
     return grupos
 
 
+def _fecha_final(periodo: str) -> date | None:
+    """El ultimo dia de una etiqueta `"YYYY-MM-DD al YYYY-MM-DD"`, o None."""
+    try:
+        return date.fromisoformat(periodo[-10:])
+    except ValueError:
+        return None
+
+
 def get_support_analytics_structured(periodo: str | None = None) -> dict:
     """
     Todo lo que la vista de periodo necesita en una sola carga.
@@ -415,7 +423,10 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
 
     db = DBConnector()
     try:
-        grupos = anotar_departamentos(estructurar_grupos(get_support_dimension_metrics(periodo)))
+        grupos = anotar_departamentos(
+            estructurar_grupos(get_support_dimension_metrics(periodo)),
+            _fecha_final(periodo),
+        )
         cohorte = _load_period_cohort(db, periodo)
 
         return {

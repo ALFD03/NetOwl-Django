@@ -12,7 +12,7 @@ import {
 
 import { PERMISSIONS } from './permissions';
 import type { Permission } from '@/shared/types/auth';
-import type { AppNavigationItem, ModuleNavigation } from '@/shared/types/navigation';
+import type { AppNavigationItem, ModuleNavigation, NavigationTab } from '@/shared/types/navigation';
 
 /** Top-level modules shown in the sidebar. */
 export const APP_NAVIGATION: AppNavigationItem[] = [
@@ -64,7 +64,7 @@ export const MODULE_NAVIGATION = {
       { id: 'sales', label: 'Sales Report', href: '/subscriptions/sales-report/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_SUBS_SALES },
       { id: 'business_units', label: 'Business Units', href: '/subscriptions/business-units/', icon: UserCheck, permission: PERMISSIONS.VIEW_SUBS_SALES },
       { id: 'eta', label: 'ETA Report', href: '/subscriptions/eta-report/', icon: Lock, permission: PERMISSIONS.VIEW_ETA },
-      { id: 'catalogos', label: 'Catálogos', href: '/subscriptions/config/', icon: BookMarked, permission: PERMISSIONS.MANAGE_CATALOGOS },
+      { id: 'catalogos', label: 'Catálogos', href: '/subscriptions/config/', icon: BookMarked, permission: [PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL] },
     ],
   },
   crm: {
@@ -105,6 +105,18 @@ export type ModuleTabId<M extends ModuleKey> =
   (typeof MODULE_NAVIGATION)[M]['tabs'][number]['id'];
 
 /**
+ * Si el usuario ve la pestaña: sin permiso declarado, siempre; con una lista,
+ * basta con uno (la de catálogos abre con el comercial o con el operacional).
+ */
+export function tabVisible(
+  tab: NavigationTab,
+  can: (permission: Permission) => boolean,
+): boolean {
+  if (!tab.permission) return true;
+  return typeof tab.permission === 'string' ? can(tab.permission) : tab.permission.some(can);
+}
+
+/**
  * First tab of `module` that `can` allows, or `null` when none is reachable.
  *
  * The sidebar uses this instead of a hardcoded href: pointing "Imports" at
@@ -116,6 +128,6 @@ export function firstVisibleTabHref(
   module: ModuleKey,
   can: (permission: Permission) => boolean,
 ): string | null {
-  const tab = MODULE_NAVIGATION[module].tabs.find((t) => !t.permission || can(t.permission));
+  const tab = MODULE_NAVIGATION[module].tabs.find((t: NavigationTab) => tabVisible(t, can));
   return tab?.href ?? null;
 }

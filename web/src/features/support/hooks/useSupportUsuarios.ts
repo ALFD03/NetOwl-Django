@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { router } from '@inertiajs/react';
 
 import { getApiErrorMessage } from '@/shared/lib/api/client';
-import { supportApi, type DirectorioPayload, type DirectorioTipo } from '@/shared/lib/api/support';
+import {
+  supportApi,
+  type DirectorioPayload,
+  type DirectorioTipo,
+  type MovimientoUsuario,
+} from '@/shared/lib/api/support';
 import type { DepartamentoSoporte, UsuarioSoporte } from '@/features/support/types';
 
 /** Una fila en edición. Sin `id` es un alta. */
@@ -12,11 +17,29 @@ export type UsuarioDraft = {
   nombre: string;
   apellido: string;
   departamento_id: number | null;
+  fecha_ingreso: string;
+  /**
+   * Si el departamento todavía se puede elegir aquí: en el alta, o mientras el
+   * usuario no haya cambiado nunca. Con cambios encima se usa «Cambiar
+   * departamento», que es lo que deja la historia bien fechada.
+   */
+  departamentoEditable: boolean;
+  /**
+   * La última fecha de ingreso posible: el día antes del primer cambio de
+   * departamento, o el egreso. Nula si nada la limita.
+   */
+  maxIngreso: string | null;
 };
 
 export type DepartamentoDraft = { id?: number; nombre: string };
 
-export type DirectorioVista = 'pendientes' | 'usuarios' | 'departamentos';
+/** El formulario de «Cambiar departamento»: a cuál, y desde cuándo. */
+export type CambioDraft = { usuario: UsuarioSoporte; departamento_id: number | null; fecha: string };
+
+/** El formulario de baja: solo la fecha de egreso. */
+export type BajaDraft = { usuario: UsuarioSoporte; fecha: string };
+
+export type DirectorioVista = 'pendientes' | 'trasBaja' | 'usuarios' | 'departamentos';
 
 interface Args {
   departamentos: DepartamentoSoporte[];
@@ -58,7 +81,19 @@ export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
       nombre: fila.nombre,
       apellido: fila.apellido,
       departamento_id: fila.departamento_id,
+      fecha_ingreso: fila.fecha_ingreso ?? '',
+      departamentoEditable: fila.historial.length <= 1,
+      maxIngreso: limiteIngreso(fila),
     });
+
+  const [cambioDraft, setCambioDraft] = useState<CambioDraft | null>(null);
+  const [bajaDraft, setBajaDraft] = useState<BajaDraft | null>(null);
+
+  // Sin fecha de partida: hoy puede caer antes del último cambio, y un valor
+  // ya puesto que el servidor rechaza confunde más que un campo vacío. El
+  // calendario ofrece «Hoy» a un clic cuando es válido.
+  const abrirCambio = (usuario: UsuarioSoporte) => setCambioDraft({ usuario, departamento_id: null, fecha: '' });
+  const abrirBaja = (usuario: UsuarioSoporte) => setBajaDraft({ usuario, fecha: '' });
 
   const nuevoDepartamento = () => setDepartamentoDraft({ nombre: '' });
   // `usuarios` se queda fuera a propósito: es un conteo que calcula el
@@ -69,6 +104,8 @@ export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
   const cerrarFormularios = () => {
     setUsuarioDraft(null);
     setDepartamentoDraft(null);
+    setCambioDraft(null);
+    setBajaDraft(null);
   };
 
   const guardar = async (tipo: DirectorioTipo, payload: DirectorioPayload) => {
@@ -81,6 +118,27 @@ export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo guardar el registro.'));
+      return false;
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  /** Un cambio de departamento, su deshacer, una baja o una reactivación. */
+  const mover = async (
+    accion: MovimientoUsuario,
+    id: number,
+    extra: { departamento_id?: number | null; fecha?: string } = {},
+  ) => {
+    setGuardando(true);
+    setError(null);
+    try {
+      await supportApi.moverUsuario(accion, id, extra);
+      cerrarFormularios();
+      router.reload();
+      return true;
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'No se pudo registrar el movimiento.'));
       return false;
     } finally {
       setGuardando(false);
@@ -106,6 +164,7 @@ export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
     vista, setVista, guardando, error, setError,
     usuarioDraft, setUsuarioDraft, nuevoUsuarioVacio, editarUsuario, crearUsuarioDesde,
     departamentoDraft, setDepartamentoDraft, nuevoDepartamento, editarDepartamento,
+    cambioDraft, setCambioDraft, abrirCambio, bajaDraft, setBajaDraft, abrirBaja, mover,
     borrando, setBorrando, confirmarBorrado,
     cerrarFormularios, guardar,
   };
@@ -123,5 +182,18 @@ function usuarioVacio(departamentos: DepartamentoSoporte[]): UsuarioDraft {
     nombre: '',
     apellido: '',
     departamento_id: departamentos[0]?.id ?? null,
+    fecha_ingreso: '',
+    departamentoEditable: true,
+    maxIngreso: null,
   };
+}
+
+/** El tope de `fecha_ingreso` que aplica el servidor, para no ofrecer días que rechazaría. */
+function limiteIngreso(fila: UsuarioSoporte): string | null {
+  const primerCambio = fila.historial.find((p) => p.desde)?.desde;
+  if (primerCambio) {
+    const [a, m, d] = primerCambio.split('-').map(Number);
+    return new Date(Date.UTC(a, m - 1, d - 1)).toISOString().slice(0, 10);
+  }
+  return fila.fecha_egreso;
 }

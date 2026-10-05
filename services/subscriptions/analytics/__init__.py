@@ -15,6 +15,7 @@ from .imports import (
     import_subscriptions_csv,
     productos_fuera_de_catalogo,
 )
+from .objetivos import get_objetivos_config
 from .queries import (
     get_analytics_data,
     get_business_units_data,
@@ -31,7 +32,7 @@ __all__ = [
     "get_bajas_detalle", "limpiar_nodos",
     "get_cierre_churn", "get_dimensiones", "get_periodos",
     "get_dashboard_data", "get_analytics_data", "get_sales_report_data",
-    "get_business_units_data", "get_zonas_config", "import_subscriptions_csv", "import_logs_csv", "ETAReportManager",
+    "get_business_units_data", "get_zonas_config", "get_objetivos_config", "import_subscriptions_csv", "import_logs_csv", "ETAReportManager",
     "CatalogoVacio", "ProductosSinCatalogo", "productos_fuera_de_catalogo",
     "import_gratis_csv", "load_free_subs", "summarize_detection",
     "build_day_metrics", "get_day_metrics", "get_periodos_con_dias",

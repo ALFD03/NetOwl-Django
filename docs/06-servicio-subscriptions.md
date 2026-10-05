@@ -17,10 +17,10 @@ services/subscriptions/
 │   │   ├── dimensions.py   Desglose por las seis dimensiones
 │   │   └── analyzer.py     `MetricsAnalyzer`: orquesta, calcula y persiste
 │   ├── day_metrics.py      El corte acumulado de cada día del mes
-│   ├── lifetime/           Supervivencia Kaplan-Meier (pipeline aparte)
+│   ├── lifetime/           Cuánto duraron activas las bajas de cada mes
 │   ├── eta_report.py       El reporte de la reguladora
 │   └── queries.py          Lectura de resultados + Sales Report + Business Units
-├── models.py               Los catálogos de referencia (tablas en `public`)
+├── models.py               Los catálogos de referencia
 ├── views.py                Dashboard, analytics, results, lifetime, reportes
 ├── views_eta.py            Las vistas del reporte ETA
 ├── views_catalogos.py      La pantalla de catálogos y su CRUD
@@ -373,58 +373,85 @@ análisis no la tiene, y eso no es un error.
 
 ---
 
-## 5. Ciclo de vida (`analytics/lifetime/`)
+## 5. Lifetime (`analytics/lifetime/`)
 
-Pipeline independiente, con su propio cargador, que usa `lifelines`. Se lanza
-aparte (`can_run_lifetime`) y **no tiene periodo**: recorre todo el histórico.
+Responde **cuánto duraron activas las suscripciones que se dieron de baja en un
+mes**. Se elige el mes en la página y se ven sus bajas —las mismas que cuenta el
+churn mensual— con los días que duró cada una desde su instalación, **solo de
+las instaladas desde 2026**. Se lanza aparte (`can_run_lifetime`),
+sin periodo: un solo job calcula todos los meses.
 
 | Módulo | Contenido |
 |---|---|
-| `loader.py` | Lee suscripciones y los dos formatos de log; `build_clean_logs` los une y ordena |
-| `lifecycle.py` | `build_lifecycle_periods` y `compute_metrics` |
-| `km_utils.py` | `compute_km`: ajusta Kaplan-Meier y devuelve curva, mediana, p25, p75 y conteos |
-| `dimensions.py` | Las mismas curvas por valor de dimensión |
-| `runner.py` | `run_lifecycle_analysis()`: orquesta y persiste |
-| `queries.py` | Lectura y composición del payload de la página |
+| `loader.py` | `load_data`: `analyzer.loader` + `cleaner` + `rules`, sin lectura propia. Devuelve suscripciones, el log limpio y las órdenes con actividad |
+| `bajas_mes.py` | `calcular_bajas_por_mes`: las bajas de cada mes con sus fechas y duraciones. `MES_INICIO`, `DIMS_BAJAS` |
+| `runner.py` | `run_lifecycle_analysis()`: carga una vez, calcula todos los meses y guarda cada uno |
+| `queries.py` | `get_meses_lifetime`, `get_lifetime_mes` (resumen, tramos y desglose) y `get_lifetime_detalle` (una fila por baja, para exportar) |
 
-### `build_lifecycle_periods`
+### Las bajas del mes
 
-Recorre los logs relevantes (activo + inactivos) por suscripción y emite
-**periodos**:
+Son `bajas_idx` del mensual: activas justo antes del día 1 cuyo último log al
+cierre no es activo ni gratuito. Se leen del mismo log limpio (sintéticos y
+tramo gratuito incluidos) con el mismo `EstadoAcumulado`, así que el total de
+cada mes coincide con `analyzer_bajas_detalladas`; la página avisa si no
+(`bajas_reporte`), que solo pasa cuando uno de los dos se calculó con otros datos.
 
-- `tipo="activo"` — desde el alta o desde la última reactivación hasta que cae a
-  un estado inactivo. `evento=1` si terminó; `evento=0` si sigue viva
-  (**censurada**, medida contra la fecha máxima del histórico).
-- `tipo="cancelado"` — desde que cae inactiva hasta que vuelve a activo.
-  `evento=1` si volvió; `evento=0` si sigue inactiva.
+Desde `MES_INICIO` (enero de 2026): antes, el estado al inicio de mes solo se ve
+para las órdenes del formato v15. El mes de la fecha de corte sale marcado
+`mes_en_curso`: sus bajas son las de hoy y alguna puede volver antes del cierre.
 
-Las fechas se convierten a días flotantes desde 1970 antes del bucle y se
-reconvierten al final: el bucle es entonces aritmética pura.
+### Las fechas y la duración
 
-### Métricas
+Un **tramo** son logs consecutivos de la misma clase (activo, gratuito o
+inactivo): pausa → +30 días → cancelado es un solo tramo inactivo.
 
-- **Vida activa**: Kaplan-Meier sobre el **primer** periodo activo de cada
-  suscriptor. Mediana, promedio, p25, p75, censurados.
-- **Reactivación**: KM sobre los periodos cancelados con `evento=1` **y duración
-  ≥ 15 días**, para no contar como reactivación un rebote administrativo.
-- `ciclos_por_suscriptor` (mín, máx, mediana, promedio) y el número de
-  suscriptores que nunca estuvieron inactivos.
+- **Fecha de baja**: el inicio del tramo inactivo vigente al cierre, no el día
+  del cierre.
+- `dias_desde_instalacion` = baja − `fecha_inicio`: toda su antigüedad. Solo
+  necesita esas dos fechas, así que vale para órdenes de cualquier año.
 
-Por dimensión se exige una cohorte mínima de **15** (`MIN_COHORT_SIZE`) y se
-desactivan los intervalos de confianza de Greenwood: ahorra la mayor parte del
-coste estadístico en grupos que no se leen.
+La página mide **solo las bajas instaladas desde `INSTALADAS_DESDE`**
+(2026-01-01): los clientes captados desde la migración de la base antigua, que
+es lo que interesa. Se guardan todas las bajas y `queries.py` filtra al leer
+(`_las_que_cuentan`). Enero de 2026 no tiene ninguna (sus bajas estaban activas
+el día 1), y en los primeros meses son pocas.
 
-Se persiste en `lifetime_periodos`, `lifetime_metricas` y `lifetime_dimensiones`
-con `periodo="global"` y `metodo="lifetime"`.
+El activo sintético que `rules.py` intercala entre un log inactivo y un «corte
+automático por factura impaga» cuenta para el estado al cierre, como en el
+mensual, pero **no** parte los tramos: un cliente en pausa recibe un corte por
+factura, y ese activo inventado fechaba la baja en el último corte en vez de en
+el inicio de la pausa.
 
-`get_survival_report(dim)` compone el payload de la página: curva global, sus
-estadísticos —incluidas **tasa de censura** y **tiempo máximo**, que se calculan
-aquí porque son parte de la métrica y no del transporte HTTP— y, si se pide, las
-curvas por dimensión. `DIMENSION_ALIASES` traduce el nombre de la interfaz
-(`campana`) al de la columna (`campanna`) y evita filtrar hacia la base un valor
-arbitrario de la query string.
+Cada baja lleva su zona, sucursal, municipio, campaña y nodo del
+`DimsPreparadas` del mensual. **El producto no se desglosa**: el export guarda
+el plan de hoy, y el de casi todas las bajas es `Cancelado`.
 
----
+**Las campañas «Sin campanna» y «Exonerado» tampoco cuentan**
+(`CAMPANNAS_EXCLUIDAS` en `queries.py`): se quitan al leer, de todo —resumen,
+tramos, dimensiones y exportación—. «Sin campanna» es la base anterior a las
+campañas, casi entera instalada antes de 2026 (agosto de 2026: 1.659 de 2.695
+bajas); «Exonerado» no paga. Siguen guardadas en la tabla: el cuadre con
+`analyzer_bajas_detalladas` se hace con todas (`bajas_mes`), y la página dice
+cuántas se quitaron por campaña y cuántas por instalarse antes de 2026
+(`anteriores`). En agosto de 2026 se miden 1.035.
+
+Se guarda en `lifetime_bajas_mes` con `periodo_reporte = "YYYY-MM"`. Todo lo
+demás se calcula al leer, sobre unas miles de filas:
+
+- **Resumen**: promedio, mediana, P25/P75 y extremos.
+- **Tramos** («¿Cuándo se van?»), con bajas, % y % acumulado: meses de 30 días
+  del mismo ancho (0-30, 31-60… 331-360, +360); con un tramo más largo entre
+  medias, ese aparentaba concentrar bajas solo por ser más ancho. Cortan en 30 y
+  90 días, que es lo que la página destaca, y los tramos vacíos del final se
+  quitan.
+- **Desglose por dimensión**: bajas, promedio, mediana, P25/P75 y el % que se fue
+  en sus primeros 30 y 90 días. Los valores sin ninguna baja no aparecen.
+
+El detalle no viaja en la página: lo pide el botón de exportar a
+`api/lifetime/detalle/`.
+
+Las tablas `lifetime_periodos`, `lifetime_metricas` y `lifetime_dimensiones` son
+de la versión anterior (curvas de supervivencia) y ya no se escriben ni se leen.
 
 ## 6. El reporte ETA (`analytics/eta_report.py`)
 
@@ -629,9 +656,8 @@ tecnología por defecto, en vez de perderse.
 
 ### Los modelos
 
-**Viven en `public`, sin cualificar con `DB_SCHEMA`**, igual que `auth_user`: el
-catálogo comercial es uno por empresa, y darle a cada entorno el suyo solo
-produce divergencias silenciosas.
+Viven en el esquema del entorno, como todo lo demás: desarrollo y producción
+tienen cada uno su catálogo, y un cambio en uno no alcanza al otro.
 
 | Modelo | Tabla | Notas |
 |---|---|---|
@@ -659,11 +685,26 @@ reguladora eso se colapsa a alámbrico o inalámbrico.
 
 ### La pantalla y su CRUD
 
-`views_catalogos.py` sirve **siete catálogos con un solo par de endpoints** en vez
+`views_catalogos.py` sirve **todos los catálogos con un solo par de endpoints** en vez
 de doce vistas casi iguales: lo único que cambia entre ellos es qué campos se
 leen del cuerpo y cómo se serializa la fila, y eso lo declara el diccionario
 `CATALOGOS`. Añadir un catálogo es añadir una entrada ahí y una pestaña en la
 interfaz.
+
+**Dos permisos, uno por mitad.** Cada entrada de `CATALOGOS` declara su
+`permiso`: `can_manage_catalogo_comercial` para zonas, sites, estados y
+coordinadores (cómo se reparte la red entre los equipos de venta), y
+`can_manage_catalogo_operacional` para planes, planes reguladores e ignorados (y
+la pestaña de productos por registrar). Los
+mantienen equipos distintos, y las dos mitades no se referencian entre sí, así
+que cada formulario se completa con lo que su permiso ya envía. La página abre
+con cualquiera de los dos y solo envía las filas del que se tiene; los endpoints
+de escritura comprueban el permiso del `tipo` concreto y responden **403** si es
+de la otra mitad. La migración `config/0006` renombró el antiguo
+`can_manage_catalogos` a comercial y copió su valor al operacional, así que nadie
+perdió acceso con el cambio. Aquella migración nombró las dos mitades al revés;
+`config/0007` intercambia los valores guardados para que cada cuenta conserve las
+mismas pestañas con el nombre correcto.
 
 - `GET /subscriptions/config/` — la página. Acepta `?nuevo_plan=<nombre>`, que
   abre el formulario de plan ya relleno; es a donde lleva el aviso de la
@@ -679,6 +720,68 @@ interfaz.
 **Toda escritura llama a `fixtures.reset_cache()`.** Sin eso, una edición
 tardaría hasta un minuto en verse, o no se vería nunca en el proceso que ya la
 tenía leída (el worker es otro proceso).
+
+### Los objetivos comerciales
+
+La meta de crecimiento y el churn máximo **no alteran ningún análisis**: solo
+deciden la meta y el cumplimiento de cada fila; el color lo pone aparte el
+semáforo, con umbrales fijos. Por eso
+no se guardan con las métricas calculadas ni exigen relanzar nada: viven en tres
+tablas del catálogo (`ObjetivoComercial`, `ObjetivoMes`, `SemaforoObjetivos`),
+`analytics/objetivos.get_objetivos_config()` los sirve en los props de
+Dashboard, Analytics, Results, Sales Report y Business Units, y el cliente los
+aplica al pintar (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un
+objetivo se ve al recargar la página. Si las tablas no existen (entorno sin
+migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
+
+- **El general es uno solo y sin fecha** (restricción `objetivo_general_sin_fecha`):
+  es el valor por defecto de la empresa y rige en todos los meses sin excepción,
+  pasados incluidos. Para cambiar un mes concreto está `ObjetivoMes`, que lo
+  sustituye solo en ese mes.
+- **Vigencia por entidad.** Los tramos de zona, coordinador, site y estado valen
+  desde su `desde` (`YYYY-MM`, nulo = siempre) hasta el siguiente de la misma
+  entidad: cambiarlos no reescribe los meses que ya pasaron.
+- **Manda el nivel más alto que tenga objetivo.** De más alto a más bajo:
+  sucursal → estado → site → coordinador → zona → zona-sucursal (el nodo), con el
+  general del mes como respaldo. El objetivo de un nivel solo rige si nada por
+  encima fija uno: con la zona al 10% y su coordinador al 15%, la zona cumple
+  contra el 15%; una sucursal al 8% manda sobre toda la geografía de sus nodos.
+  La pestaña de objetivos avisa en «Rige hoy» en qué nodos queda anulado cada uno.
+- **Sucursal y nodo.** La sucursal (`NETCOM`, `NYC`...) no es un catálogo: es el
+  texto del export y se guarda en `ObjetivoComercial.sucursal`. Un nodo es su
+  zona (clave ajena) más ese texto, y se cruza con la clave `"Zona - Sucursal"`
+  de la dimensión `zona_sucursal`. Las que se ofrecen al elegir salen de
+  `objetivos.nodos_conocidos()`, los nodos de los cierres calculados.
+- **Los totales ignoran los niveles por debajo del grupo.** El de un coordinador
+  mira coordinador, site, estado y sucursal (la excepción de una zona o de un
+  nodo no lo mueve); el de un site mira site, estado y sucursal (ni el
+  coordinador ni la zona lo mueven, porque un site reparte sus zonas entre varios
+  coordinadores). Los totales globales —Analytics, Results, Dashboard,
+  consolidado FTTH y bloque RF— usan el general del mes.
+- **Un grupo tiene meta, no tasa**: la suma de la meta de cada zona resuelta
+  desde el nivel del grupo. Si el grupo tiene objetivo propio eso es su base ×
+  su tasa; si no, cada zona aporta la de su site o su estado.
+- **Crecimiento y churn se resuelven por separado.** Un tramo puede fijar solo
+  uno; dentro de una entidad gana su tramo más reciente que fije esa métrica, y
+  entre niveles manda el más alto que la fije.
+- **El semáforo tiene umbrales fijos**, iguales en todo el módulo y sin relación
+  con el objetivo de la fila: crecimiento verde desde `crec_verde` y amarillo
+  desde `crec_amarillo`; churn verde hasta `churn_verde` y amarillo hasta
+  `churn_amarillo`; cumplimiento (% de la meta) verde desde `cumpl_verde`. Así el
+  mismo porcentaje se pinta igual en Analytics, Results, el Dashboard y los
+  reportes. Empezaron siendo distancias al objetivo; `subscriptions/0005` los
+  convirtió a valores directos conservando los colores que se veían.
+
+**En los reportes solo se ven.** En la tabla de nodos de Sales Report y Business
+Units el objetivo es una insignia con el porcentaje, la meta y el nivel del que
+sale, y junto al botón de exportar bajas de cada site o coordinador está el
+objetivo de ese grupo. Editarlos es cosa del catálogo y de nadie más.
+
+Se editan en la pestaña **Objetivos** del catálogo, con el permiso comercial:
+el general y el semáforo como métricas (el semáforo dibujado como una barra
+rojo/amarillo/verde), las excepciones por mes y los tramos por entidad como
+tablas. El general no se puede borrar: es el que responde cuando nadie más lo
+hace.
 
 ### `manage.py cargar_catalogos`
 

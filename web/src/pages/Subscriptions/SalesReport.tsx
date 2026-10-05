@@ -11,11 +11,13 @@ import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { DayProgressBar } from '@/shared/ui';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
+import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
 import { buildSalesSites, type ZonasConfig } from '@/features/subscriptions/lib/dayReports';
 import type { DayMetrics } from '@/shared/types/domain';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { SalesReportView } from '@/features/subscriptions/components/reports/SalesReportView';
+import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
 import { useSalesReportData, type SalesReportSite } from '@/features/subscriptions/hooks/useSalesReportData';
 
 interface SalesReportProps {
@@ -29,7 +31,7 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
   const [selectedDay, setSelectedDay] = useState(reportData.dia ?? 0);
-  const { availableDays, totalDays, effectiveDay, dayData } = useDayMetrics(dayMetrics, selectedDay);
+  const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
 
   const currentPeriod = reportData.period ?? '';
 
@@ -40,11 +42,17 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
     [dayData, zonasConfig, reportData.data],
   );
 
+  // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
+  // site y estado pertenece cada zona, que es por donde se heredan.
+  const objetivos = useObjetivos(zonasConfig?.zonas);
+
   const { branchList, filteredData } = useSalesReportData({
     sites,
     searchTerm,
     selectedBranch,
     selectedTech,
+    period: currentPeriod,
+    objetivos,
   });
 
   const changePeriod = (period: string) => {
@@ -84,6 +92,7 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}
               />
+              <ProyeccionNota proyeccion={proyeccion} />
             </div>
           )}
         </>
@@ -93,6 +102,7 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
         sites={filteredData}
         period={currentPeriod}
         diaSeleccionado={Boolean(dayData)}
+        proyeccion={proyeccion}
       />
     </AppLayout>
   );

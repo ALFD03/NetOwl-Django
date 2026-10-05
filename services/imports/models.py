@@ -5,7 +5,8 @@
 primera dice que paso, la segunda que esta pasando.
 
 Ambas cualifican su `db_table` con `DB_SCHEMA`, asi que cada entorno tiene las
-suyas; las crea `manage.py preparar_imports` (ver ese comando).
+suyas. Es de antes de que la conexion fijara `search_path` al esquema, y hoy es
+redundante pero inofensivo; las crea `migrate`, como al resto.
 """
 
 import uuid

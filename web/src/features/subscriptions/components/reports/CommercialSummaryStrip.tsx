@@ -1,8 +1,13 @@
 /** La franja de cifras de cabecera de un grupo de nodos. */
 
-import { SummaryStrip } from '@/shared/ui';
+import type { Proyeccion } from '@/shared/lib/proyeccion';
+import { SummaryStrip, type SummaryStripItem } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
+import { useObjetivosConfig } from '../../hooks/useObjetivos';
 import { calcComercial } from '../../lib/commercial';
+import {
+  formatObjetivo, tonoChurn, tonoCrecimiento, tonoCumplimiento, type Meta,
+} from '../../lib/objetivos';
 
 export interface CommercialSummaryStripProps {
   /** First cell — the technology for Sales Report, the status for Business Units. */
@@ -13,9 +18,15 @@ export interface CommercialSummaryStripProps {
   crecimiento: number;
   churnRate: number;
   bajas: number;
+  /** Meta del grupo, resuelta por el hook del reporte desde su nivel. */
+  meta: Meta;
   mono?: boolean;
   /** Clamp completion to [0, 100]. See `calcComercial`. */
   clampCompletion?: boolean;
+  /** Instalaciones del grupo, de las que sale la proyección. */
+  nuevos?: number;
+  /** Los días laborables del corte; sin ellos no hay celda de proyección. */
+  proyeccion?: Proyeccion | null;
 }
 
 
@@ -32,24 +43,43 @@ export function CommercialSummaryStrip({
   crecimiento,
   churnRate,
   bajas,
+  meta,
   mono = false,
   clampCompletion = false,
+  nuevos = 0,
+  proyeccion = null,
 }: CommercialSummaryStripProps) {
-  const metrics = calcComercial(activosInicio, activosFinal, { clamp: clampCompletion });
+  const { semaforo } = useObjetivosConfig();
+  const metrics = calcComercial(activosInicio, activosFinal, meta.metaCrecimiento, {
+    clamp: clampCompletion,
+    nuevos,
+    proyeccion,
+  });
 
-  const completionColor =
-    metrics.tasaCumplimiento >= 100 ? 'green' : metrics.tasaCumplimiento >= 60 ? 'yellow' : 'red';
-  const growthColor = crecimiento >= 4 ? 'green' : crecimiento >= 0 ? 'yellow' : 'red';
-  const churnColor = churnRate <= 3 ? 'green' : churnRate <= 4 ? 'yellow' : 'red';
+  const completionColor = tonoCumplimiento(metrics.tasaCumplimiento, semaforo);
+  const growthColor = tonoCrecimiento(crecimiento, semaforo);
+  const churnColor = tonoChurn(churnRate, semaforo);
+
+  const celdaProyeccion: SummaryStripItem[] = metrics.instalacionesProyectadas === null ? [] : [{
+    id: 'proyeccion',
+    label: 'Proyección Inst.',
+    value: formatInteger(metrics.instalacionesProyectadas),
+    caption: metrics.cumplimientoVentasProyectado === null
+      ? undefined
+      : `${formatTwoDecimals(metrics.cumplimientoVentasProyectado)}% del objetivo`,
+    tone: metrics.cumplimientoVentasProyectado === null
+      ? 'white'
+      : tonoCumplimiento(metrics.cumplimientoVentasProyectado, semaforo),
+  }];
 
   return (
     <SummaryStrip
-      columns={8}
+      columns={celdaProyeccion.length ? 9 : 8}
       mono={mono}
       items={[
         { id: 'lead', label: leadLabel, value: leadValue, tone: 'brand' },
         { id: 'inicio', label: 'Base Inicio', value: formatInteger(activosInicio) },
-        { id: 'objetivo', label: 'Objetivo (6%)', value: `+${formatInteger(metrics.objetivo)}` },
+        { id: 'objetivo', label: `Objetivo (${formatObjetivo(meta.crecimientoPct)})`, value: `+${formatInteger(metrics.objetivo)}` },
         { id: 'esperado', label: 'Cierre Esperado', value: formatInteger(metrics.cierreEsperado) },
         { id: 'bajas', label: 'Bajas', value: formatInteger(bajas), tone: 'red' },
         {
@@ -67,10 +97,11 @@ export function CommercialSummaryStrip({
         },
         {
           id: 'churn',
-          label: 'Churn Rate',
+          label: `Churn (obj. ${formatObjetivo(meta.churnPct)})`,
           value: `${formatTwoDecimals(churnRate)}%`,
           tone: churnColor,
         },
+        ...celdaProyeccion,
       ]}
     />
   );

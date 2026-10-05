@@ -2,11 +2,13 @@
 
 import { Building2, Search } from 'lucide-react';
 
+import type { Proyeccion } from '@/shared/lib/proyeccion';
 import { EmptyState, NeonContainer } from '@/shared/ui';
 import { formatPeriodoLabel } from '@/shared/utils/formatters';
 import { BajasExportButton } from './BajasExportButton';
 import { CommercialSummaryStrip } from './CommercialSummaryStrip';
 import { NodePerformanceTable } from './NodePerformanceTable';
+import { ObjetivoGrupo } from './ObjetivoGrupo';
 import { nodosDeGrupo } from '../../lib/bajasExport';
 import type { SalesReportSite, SalesReportTechnology } from '../../hooks/useSalesReportData';
 
@@ -19,9 +21,16 @@ interface SalesReportViewProps {
    * El export de bajas es siempre el del cierre del mes; el botón lo avisa.
    */
   diaSeleccionado?: boolean;
+  /** Los días laborables del corte elegido, para proyectar las instalaciones al cierre. */
+  proyeccion?: Proyeccion | null;
 }
 
-export function SalesReportView({ sites, period, diaSeleccionado = false }: SalesReportViewProps) {
+export function SalesReportView({
+  sites,
+  period,
+  diaSeleccionado = false,
+  proyeccion = null,
+}: SalesReportViewProps) {
   if (sites.length === 0) {
     return (
       <EmptyState
@@ -43,15 +52,18 @@ export function SalesReportView({ sites, period, diaSeleccionado = false }: Sale
           subtitle={`Auditoría Regional de Cierre (${formatPeriodoLabel(period)})`}
           icon={<Building2 className="h-5 w-5" />}
           headerAction={
-            <BajasExportButton
-              period={period}
-              // Los nodos que el site tiene en pantalla, no los del catálogo:
-              // los filtros de tecnología y sucursal ya recortaron la tabla.
-              nodos={nodosDeGrupo(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
-              alcance={String(site.site ?? '')}
-              avisoDia={diaSeleccionado}
-              label="Exportar bajas del site"
-            />
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <ObjetivoGrupo meta={site.meta} />
+              <BajasExportButton
+                period={period}
+                // Los nodos que el site tiene en pantalla, no los del catálogo:
+                // los filtros de tecnología y sucursal ya recortaron la tabla.
+                nodos={nodosDeGrupo(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
+                alcance={String(site.site ?? '')}
+                avisoDia={diaSeleccionado}
+                label="Exportar bajas del site"
+              />
+            </div>
           }
         >
           <div className="space-y-10">
@@ -68,6 +80,9 @@ export function SalesReportView({ sites, period, diaSeleccionado = false }: Sale
                     bajas={tech.dynamic.bajas}
                     crecimiento={tech.dynamic.crecimiento}
                     churnRate={tech.dynamic.churn_rate}
+                    meta={tech.dynamic.meta}
+                    nuevos={tech.dynamic.nuevos}
+                    proyeccion={proyeccion}
                     clampCompletion
                   />
 
@@ -85,6 +100,7 @@ export function SalesReportView({ sites, period, diaSeleccionado = false }: Sale
                     nodes={tech.nodes ?? []}
                     labelHeader="Nodo / Zona"
                     clampCompletion
+                    proyeccion={proyeccion}
                     renderRowAction={(node) => (
                       <BajasExportButton
                         period={period}

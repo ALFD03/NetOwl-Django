@@ -22,6 +22,7 @@ import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import {
+  CampanasExportButton,
   CRM_DAY_CARDS,
   CRM_DAY_CHARTS,
   CrmAnalyticsFilters,
@@ -41,7 +42,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
 
   const { availableDays, totalDays, selectedDay, selectDay } = useDayCuts(dayMetrics);
 
-  const { payload } = useDayPayload<CrmDayPayload>({
+  const { payload, diaResuelto } = useDayPayload<CrmDayPayload>({
     url: CRM_DAY_METRICS_URL,
     period: selectedPeriod,
     dia: selectedDay,
@@ -59,10 +60,14 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
       : null,
   });
 
+  // Lo que está en pantalla: el último día resuelto, o el cierre si el mes no
+  // tiene cortes.
+  const dimensionsData = payload?.dimensiones ?? props.dimensionsData ?? [];
+
   const { rows, globalData, healthCards, rankingCards } = useCrmAnalytics(
     {
       ...props,
-      dimensionsData: payload?.dimensiones ?? props.dimensionsData,
+      dimensionsData,
       globalData: payload?.global ?? props.globalData,
     },
     selectedDimension,
@@ -100,6 +105,8 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
       }
     >
       <div className="space-y-6">
+        <CampanasExportButton dimensiones={dimensionsData} periodo={selectedPeriod} dia={payload ? diaResuelto : 0} />
+
         <DaySummary
           serie={dayMetrics?.serie}
           dias={availableDays}

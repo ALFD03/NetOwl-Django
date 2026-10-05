@@ -43,6 +43,9 @@ class DBConnector:
             "password": db.DB_PASSWORD,
             "port": str(db.DB_PORT),
             "sslmode": db.DB_SSLMODE,
+            # Todo se cualifica ya con DB_SCHEMA; fijar el search_path es la
+            # red: una consulta sin cualificar tampoco puede alcanzar `public`.
+            "options": f"-c search_path={DB_SCHEMA}",
         }
         self.pool = pool.SimpleConnectionPool(1, 10, **self.conn_params)
         self._schema_cache: dict[str, set] = {}

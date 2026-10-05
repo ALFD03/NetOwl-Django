@@ -137,32 +137,31 @@ export function AnalysisRunnerCard({
   // Reenganche: si al abrir la pagina ya hay un analisis de este modulo en
   // curso (lo lanzo otra pestana, u otro usuario), se sigue en vez de ofrecer
   // un boton que solo devolveria un 409.
+  //
+  // Va con `.then` y no con `async`/`await` dentro del efecto: el linter no
+  // distingue un `setState` que sigue a un `await` de uno sincrono, y aqui
+  // todos ocurren cuando responde el servidor.
   const attachedRef = useRef(false);
-  const attach = useCallback(async () => {
+  useEffect(() => {
     if (!jobModule || attachedRef.current) return;
     attachedRef.current = true;
 
-    const running = await jobsApi.active(jobModule).catch(() => null);
-    if (!running) return;
+    void jobsApi.active(jobModule)
+      .catch(() => null)
+      .then((running) => {
+        if (!running) return;
 
-    setJob(running);
-    setIsAttached(true);
-    try {
-      const done = await followJob(running, onJobUpdate);
-      setValidation({ type: 'success', text: done.message });
-    } catch (error) {
-      setValidation({
-        type: 'error',
-        text: error instanceof Error ? error.message : errorMessage,
+        setJob(running);
+        setIsAttached(true);
+        return followJob(running, onJobUpdate)
+          .then((done) => setValidation({ type: 'success', text: done.message }))
+          .catch((error: unknown) => setValidation({
+            type: 'error',
+            text: error instanceof Error ? error.message : errorMessage,
+          }))
+          .finally(() => setIsAttached(false));
       });
-    } finally {
-      setIsAttached(false);
-    }
   }, [jobModule, errorMessage, onJobUpdate]);
-
-  useEffect(() => {
-    void attach();
-  }, [attach]);
 
   // `isPending` sigue gobernando el log y la barra -lo que hay que mirar
   // mientras calcula- pero ya no bloquea el boton: se pueden encolar varios

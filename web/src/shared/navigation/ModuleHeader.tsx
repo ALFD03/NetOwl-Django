@@ -8,7 +8,7 @@ import { Link } from '@inertiajs/react';
 
 import { cn } from '@/shared/lib/cn';
 import { usePermissions } from '@/shared/hooks/usePermissions';
-import { MODULE_NAVIGATION, type ModuleKey, type ModuleTabId } from '@/shared/constants/navigation';
+import { MODULE_NAVIGATION, tabVisible, type ModuleKey, type ModuleTabId } from '@/shared/constants/navigation';
 import type { ModuleNavigation } from '@/shared/types/navigation';
 
 export interface ModuleHeaderProps<M extends ModuleKey> {
@@ -36,7 +36,7 @@ export function ModuleHeader<M extends ModuleKey>({
   const { can } = usePermissions();
   const { title, icon: ModuleIcon, tabs } = navigation ?? MODULE_NAVIGATION[module];
 
-  const visibleTabs = tabs.filter((tab) => !tab.permission || can(tab.permission));
+  const visibleTabs = tabs.filter((tab) => tabVisible(tab, can));
 
   return (
     <header

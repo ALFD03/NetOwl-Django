@@ -6,13 +6,18 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
+import type { Proyeccion } from '@/shared/lib/proyeccion';
 import { MetricCard, NeonContainer } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
+import { ProyeccionCierre } from '../analytics/ProyeccionCierre';
 import { BajasExportButton } from './BajasExportButton';
 import { CommercialSummaryStrip } from './CommercialSummaryStrip';
 import { NodePerformanceTable } from './NodePerformanceTable';
+import { ObjetivoGrupo } from './ObjetivoGrupo';
+import { useObjetivosConfig } from '../../hooks/useObjetivos';
 import { nodosDeGrupo } from '../../lib/bajasExport';
 import { completionTone } from '../../lib/commercial';
+import { formatObjetivo, tonoChurn, tonoCrecimiento, tonoCumplimiento } from '../../lib/objetivos';
 import type {
   BusinessUnitGroup, BusinessUnitNode, FtthSummary,
 } from '../../hooks/useBusinessUnitsData';
@@ -29,6 +34,8 @@ interface BusinessUnitsViewProps {
    * El export de bajas es siempre el del cierre del mes; el botón lo avisa.
    */
   diaSeleccionado?: boolean;
+  /** Los días laborables del corte elegido, para proyectar las instalaciones al cierre. */
+  proyeccion?: Proyeccion | null;
 }
 
 function TechnologyBadge({ node }: { node: BusinessUnitNode }) {
@@ -47,10 +54,16 @@ function TechnologyBadge({ node }: { node: BusinessUnitNode }) {
   );
 }
 
-function FtthConsolidated({ summary }: { summary: FtthSummary }) {
+function FtthConsolidated({ summary, proyeccion }: { summary: FtthSummary; proyeccion: Proyeccion | null }) {
+  const { semaforo } = useObjetivosConfig();
+  // "Meta Cumplida" es llegar a la meta, no al umbral verde del semáforo: con
+  // el verde en 90 se pintaría verde un grupo que todavía no la alcanzó.
   const met = summary.tasaCumplimiento >= 100;
-  const ventasCumplimiento = (summary.nuevos / summary.objetivo) * 100
-  const cierreCumplimiento = (summary.activos_final / summary.cierreEsperado) * 100
+  const ventasCumplimiento = summary.cumplimientoVentas;
+  const cierreCumplimiento = summary.cumplimientoCierre;
+  const tonoIngreso = tonoCumplimiento(summary.tasaCumplimiento, semaforo);
+  const tonoVentas = tonoCumplimiento(ventasCumplimiento, semaforo);
+  const tonoCierre = tonoCumplimiento(cierreCumplimiento, semaforo);
 
   return (
     <div className="mb-10">
@@ -77,32 +90,60 @@ function FtthConsolidated({ summary }: { summary: FtthSummary }) {
           <MetricCard label="Instalaciones" value={`+ ${formatInteger(summary.nuevos)}`} color="green" icon={<Wrench className="text-emerald-400" />} />
           <MetricCard label="Reactivaciones" value={`+ ${formatInteger(summary.reactivaciones)}`} color="blue" icon={<Repeat className="text-sky-400" />} />
           <MetricCard label="Ingresos Reales" value={`+ ${formatInteger(summary.adiciones_brutas)}`} color="purple" icon={<TrendingUp className="text-purple-400" />} />
-          <MetricCard label="Objetivo" value={formatInteger(summary.objetivo)} color="green" icon={<Target className="text-emerald-400" />} />
+          <MetricCard label="Objetivo" value={formatInteger(summary.objetivo)} subValue={`${formatObjetivo(summary.meta.crecimientoPct)} de la base`} color="green" icon={<Target className="text-emerald-400" />} />
           <MetricCard label="Bajas" value={`- ${formatInteger(summary.bajas)}`} color="red" icon={<TrendingDown className="text-rose-400" />} />
           <MetricCard label="Activos Cierre" value={formatInteger(summary.activos_final)} color="slate" icon={<Users />} />
           <MetricCard label="Cierre Esperado" value={formatInteger(summary.cierreEsperado)} color="slate" icon={<UserRoundCheck />} />
           <MetricCard label="Faltante" value={formatInteger(summary.faltante)} color="yellow" icon={<Ellipsis className="text-amber-400" />} />
-          <MetricCard label="Churn Rate" value={`${formatTwoDecimals(summary.churn_rate)} %`} color="red" icon={<Percent className="text-rose-400" />} />
-          <MetricCard label="Crecimiento" value={`${formatTwoDecimals(summary.crecimiento)} %`} color="green" icon={<CircleArrowUp className="text-emerald-400" />} />
+          <MetricCard
+            label="Churn Rate"
+            value={`${formatTwoDecimals(summary.churn_rate)} %`}
+            subValue={`Objetivo ${formatObjetivo(summary.meta.churnPct)}`}
+            color={tonoChurn(summary.churn_rate, semaforo)}
+            icon={<Percent className="text-rose-400" />}
+          />
+          <MetricCard
+            label="Crecimiento"
+            value={`${formatTwoDecimals(summary.crecimiento)} %`}
+            subValue={`Objetivo ${formatObjetivo(summary.meta.crecimientoPct)}`}
+            color={tonoCrecimiento(summary.crecimiento, semaforo)}
+            icon={<CircleArrowUp className="text-emerald-400" />}
+          />
           <MetricCard
             label="Cumplimiento de Ingreso"
             value={`${formatTwoDecimals(summary.tasaCumplimiento)} %`}
-            color={summary.tasaCumplimiento >= 100 ? 'green' : summary.tasaCumplimiento >= 60 ? 'yellow' : 'red'}
-            icon={<CircleCheckBig className={completionTone(summary.tasaCumplimiento)} />}
+            color={tonoIngreso}
+            icon={<CircleCheckBig className={completionTone(summary.tasaCumplimiento, semaforo)} />}
           />
           <MetricCard
             label="Cumplimiento de Ventas"
             value={`${formatTwoDecimals(ventasCumplimiento)} %`}
-            color={ventasCumplimiento >= 100 ? 'green' : ventasCumplimiento >= 60 ? 'yellow' : 'red'}
-            icon={<CircleCheckBig className={completionTone(ventasCumplimiento)} />}
+            color={tonoVentas}
+            icon={<CircleCheckBig className={completionTone(ventasCumplimiento, semaforo)} />}
           />
           <MetricCard
             label="Cumplimiento de Cierre"
             value={`${formatTwoDecimals(cierreCumplimiento)} %`}
-            color={cierreCumplimiento >= 100 ? 'green' : cierreCumplimiento >= 60 ? 'yellow' : 'red'}
-            icon={<CircleCheckBig className={completionTone(cierreCumplimiento)} />}
+            color={tonoCierre}
+            icon={<CircleCheckBig className={completionTone(cierreCumplimiento, semaforo)} />}
           />
         </div>
+
+        {proyeccion && (
+          // Aparte de las tarjetas del corte: esto no es lo que hay, es adónde
+          // lleva el ritmo de los días laborables si sigue igual hasta el cierre.
+          <div className="mt-6">
+            <ProyeccionCierre
+              instalaciones={summary.nuevos}
+              proyeccion={proyeccion}
+              cumplimiento={summary.cumplimientoVentasProyectado === null ? null : {
+                valor: summary.cumplimientoVentasProyectado,
+                objetivo: summary.objetivo,
+                tono: tonoCumplimiento(summary.cumplimientoVentasProyectado, semaforo),
+              }}
+            />
+          </div>
+        )}
       </NeonContainer>
     </div>
   );
@@ -114,10 +155,11 @@ export function BusinessUnitsView({
   showFtthSummary,
   period,
   diaSeleccionado = false,
+  proyeccion = null,
 }: BusinessUnitsViewProps) {
   return (
     <>
-      {showFtthSummary && ftthSummary.total_nodos > 0 && <FtthConsolidated summary={ftthSummary} />}
+      {showFtthSummary && ftthSummary.total_nodos > 0 && <FtthConsolidated summary={ftthSummary} proyeccion={proyeccion} />}
 
       <div className="space-y-10">
         {groups.map((group) => {
@@ -132,15 +174,18 @@ export function BusinessUnitsView({
               subtitle={`Gestión de Nodos y Crecimiento Comercial (${group.dynamic.total_nodos} zonas)`}
               icon={isRf ? <Radio className="h-5 w-5" /> : <UserCheck className="h-5 w-5" />}
               headerAction={
-                <BajasExportButton
-                  period={period}
-                  // El bloque RF no es un coordinador, pero se acota igual: por
-                  // los nodos que tiene en pantalla.
-                  nodos={nodosDeGrupo(group.nodes)}
-                  alcance={group.coordinador}
-                  avisoDia={diaSeleccionado}
-                  label={isRf ? 'Exportar bajas RF' : 'Exportar bajas del coordinador'}
-                />
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <ObjetivoGrupo meta={group.dynamic.meta} />
+                  <BajasExportButton
+                    period={period}
+                    // El bloque RF no es un coordinador, pero se acota igual: por
+                    // los nodos que tiene en pantalla.
+                    nodos={nodosDeGrupo(group.nodes)}
+                    alcance={group.coordinador}
+                    avisoDia={diaSeleccionado}
+                    label={isRf ? 'Exportar bajas RF' : 'Exportar bajas del coordinador'}
+                  />
+                </div>
               }
             >
               <div className="space-y-6">
@@ -152,6 +197,9 @@ export function BusinessUnitsView({
                   crecimiento={group.dynamic.crecimiento}
                   churnRate={group.dynamic.churn_rate}
                   bajas={group.dynamic.bajas}
+                  meta={group.dynamic.meta}
+                  nuevos={group.dynamic.nuevos}
+                  proyeccion={proyeccion}
                   mono
                 />
 
@@ -160,6 +208,7 @@ export function BusinessUnitsView({
                   labelHeader="Zona / Sucursal"
                   renderBadge={(node) => <TechnologyBadge node={node} />}
                   mono
+                  proyeccion={proyeccion}
                   renderRowAction={(node) => (
                     <BajasExportButton
                       period={period}

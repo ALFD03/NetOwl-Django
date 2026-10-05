@@ -14,7 +14,6 @@ conviene no confundir:
 | `history.py` | `register_import_log()` |
 | `views.py` | Pantallas y endpoints |
 | `urls.py` | Bajo el prefijo `/imports/` |
-| `management/commands/preparar_imports.py` | Crea las tablas ORM en el esquema del entorno |
 
 ---
 
@@ -79,9 +78,9 @@ deliberadamente reanudables.
 
 Elegir el campo en vez de una columna nueva no es sólo economía: **añadir un
 valor a `choices` no toca la tabla** —Django no genera un CHECK en Postgres— y
-por tanto no hay que crear nada esquema por esquema. Una columna sí habría
-obligado, porque `preparar_imports` solo crea la tabla que falta y
-`django_migrations` es compartida (ver ese comando).
+por tanto no hace falta ninguna migración. (Cuando se decidió, además,
+`django_migrations` era compartida entre entornos y una columna nueva habría
+que haberla creado esquema por esquema; hoy cada esquema tiene la suya.)
 
 ---
 
@@ -173,7 +172,7 @@ tarea.**
 | `_correr_subscriptions` | Comprueba `productos_fuera_de_catalogo()` **antes de calcular**, luego `MetricsAnalyzer.run()` y `build_day_metrics()` reutilizando el mismo analyzer (una sola lectura de datos para el cierre y los 31 días) |
 | `_correr_crm` | `run_crm_analysis(job.periodo)` |
 | `_correr_support` | `run_support_analysis(job.periodo)` |
-| `_correr_lifetime` | `run_lifecycle_analysis()`; del resultado solo guarda los escalares, porque las curvas de supervivencia son series largas que se leen después con `get_lifecycle_results` |
+| `_correr_lifetime` | `run_lifecycle_analysis()`: el lifetime de las bajas de todos los meses desde enero de 2026. En el job guarda el resumen (meses, bajas, fecha de corte); la página lee el mes elegido con `get_lifetime_mes` |
 
 ### `ejecutar_analisis(job_id)`
 

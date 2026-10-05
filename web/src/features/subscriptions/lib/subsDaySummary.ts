@@ -25,7 +25,14 @@
 
 import type { DayCardSpec, DayChartSpec } from '@/shared/ui';
 
-export const SUBS_DAY_CARDS: DayCardSpec[] = [
+import type { SemaforoObjetivos } from '../types';
+import { tonoChurn } from './objetivos';
+
+/**
+ * Las tarjetas del día. Una fábrica y no una constante porque el churn se pinta
+ * con el semáforo del catálogo.
+ */
+export const subsDayCards = (semaforo: SemaforoObjetivos): DayCardSpec[] => [
   { key: 'nuevos_mes', label: 'Nuevos', kind: 'flujo', color: 'green', subValue: 'Altas de ese día' },
   {
     key: 'bajas',
@@ -63,6 +70,7 @@ export const SUBS_DAY_CARDS: DayCardSpec[] = [
     label: 'Churn Bruto',
     kind: 'tasa',
     color: 'red',
+    colorFor: (valor) => tonoChurn(valor, semaforo),
     subValue: 'Bajas / base inicial',
     trendGoodWhen: 'down',
   },

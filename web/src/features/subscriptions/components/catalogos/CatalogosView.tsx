@@ -1,9 +1,9 @@
-/** La pantalla de catálogos: siete pestañas más la de productos sin catalogar. */
+/** La pantalla de catálogos: los catálogos, la pestaña de objetivos y la de productos sin catalogar. */
 
 import type { FormEvent } from 'react';
 import {
   AlertTriangle, BookMarked, Edit3, EyeOff, FileSpreadsheet, Gauge, MapPin, Network,
-  Plus, ShieldAlert, Trash2, UserCheck,
+  Plus, ShieldAlert, Target, TrafficCone, Trash2, UserCheck,
 } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
@@ -26,6 +26,9 @@ import type {
 import {
   IgnoradoForm, NombreForm, PlanForm, PlanReguladorForm, SiteForm, ZonaForm,
 } from './CatalogoForms';
+import { NIVEL_OBJETIVO_UI, ObjetivoForm, ObjetivoMesForm, SemaforoForm } from './ObjetivoForms';
+import { ObjetivosPanel } from './ObjetivosPanel';
+import { OBJETIVOS_POR_DEFECTO, objetivoGeneral } from '../../lib/objetivos';
 
 /**
  * Catálogos de referencia del negocio.
@@ -38,6 +41,11 @@ import {
  * La primera pestaña no es un catálogo sino la lista de lo que falta: los
  * productos que ya están importados y que ningún plan reconoce. Es lo que
  * bloquea una importación o un análisis, y se resuelve desde ahí mismo.
+ *
+ * Las pestañas se reparten entre dos permisos: la mitad operacional (por
+ * registrar, planes, reguladores, ignorados) y la comercial (zonas, sites,
+ * estados, coordinadores). Solo se pintan las del permiso que se tiene; el
+ * servidor tampoco envía las filas de la otra ni deja escribir en ella.
  */
 export function CatalogosView({
   planes,
@@ -47,12 +55,33 @@ export function CatalogosView({
   estados,
   coordinadores,
   ignorados,
+  objetivos,
+  objetivos_mes: objetivosMes,
+  semaforo,
+  objetivosConfig,
+  periodosCalculados,
+  nodosConocidos,
   pendientes,
+  comercial,
+  operacional,
   tecnologias,
   tiposPersona,
   nuevoPlan,
 }: SubscriptionCatalogosProps) {
-  const c = useCatalogos({ sites, estados, nuevoPlan });
+  const c = useCatalogos({ sites, estados, nuevoPlan, operacional });
+
+  // El general que rige hoy, para decir en los formularios qué se hereda si
+  // se deja un valor vacío. La excepción de un mes no cuenta como "heredado"
+  // de ese mismo mes, de ahí la configuración sin `meses`.
+  const configObjetivos = objetivosConfig ?? OBJETIVOS_POR_DEFECTO;
+  const mesReferencia = periodosCalculados[0] ?? new Date().toISOString().slice(0, 7);
+  const generalHoy = objetivoGeneral(configObjetivos, mesReferencia);
+  // Solo los nodos cuya zona está en el catálogo pueden tener objetivo de nodo:
+  // el objetivo cuelga de la zona. La sucursal, en cambio, vale sin catálogo.
+  const nombresZona = new Set(zonas.map((z) => z.nombre.toLowerCase()));
+  const nodosDelCatalogo = nodosConocidos.filter((n) => nombresZona.has(n.zona.toLowerCase()));
+  const generalSinExcepcion = (periodo: string) =>
+    objetivoGeneral({ ...configObjetivos, meses: {} }, periodo || mesReferencia);
 
   const enviar = (event: FormEvent, accion: () => void) => {
     event.preventDefault();
@@ -227,14 +256,25 @@ export function CatalogosView({
               activeKey={c.vista}
               onChange={(key) => c.setVista(key as CatalogoVista)}
               options={[
-                { key: 'pendientes', label: `Por registrar (${pendientes.length})`, icon: AlertTriangle },
-                { key: 'planes', label: `Planes (${planes.length})`, icon: BookMarked },
-                { key: 'reguladores', label: `Planes reguladores (${reguladores.length})`, icon: FileSpreadsheet },
-                { key: 'zonas', label: `Zonas (${zonas.length})`, icon: Network },
-                { key: 'sites', label: `Sites (${sites.length})`, icon: MapPin },
-                { key: 'estados', label: `Estados (${estados.length})`, icon: MapPin },
-                { key: 'coordinadores', label: `Coordinadores (${coordinadores.length})`, icon: UserCheck },
-                { key: 'ignorados', label: `Ignorados (${ignorados.length})`, icon: EyeOff },
+                ...(operacional
+                  ? [
+                      { key: 'pendientes', label: `Por registrar (${pendientes.length})`, icon: AlertTriangle },
+                      { key: 'planes', label: `Planes (${planes.length})`, icon: BookMarked },
+                      { key: 'reguladores', label: `Planes reguladores (${reguladores.length})`, icon: FileSpreadsheet },
+                    ]
+                  : []),
+                ...(comercial
+                  ? [
+                      { key: 'zonas', label: `Zonas (${zonas.length})`, icon: Network },
+                      { key: 'sites', label: `Sites (${sites.length})`, icon: MapPin },
+                      { key: 'estados', label: `Estados (${estados.length})`, icon: MapPin },
+                      { key: 'coordinadores', label: `Coordinadores (${coordinadores.length})`, icon: UserCheck },
+                      { key: 'objetivos', label: 'Objetivos', icon: Target },
+                    ]
+                  : []),
+                ...(operacional
+                  ? [{ key: 'ignorados', label: `Ignorados (${ignorados.length})`, icon: EyeOff }]
+                  : []),
               ]}
             />
 
@@ -326,6 +366,32 @@ export function CatalogosView({
         <NeonContainer title="Coordinadores" subtitle="Responsables comerciales por los que agrupa Business Units" icon={<UserCheck className="h-5 w-5" />} theme="green" noPadding>
           <DataTable columns={columnasNombrados('coordinadores')} data={coordinadores} searchable searchPlaceholder="Buscar coordinador..." />
         </NeonContainer>
+      )}
+
+      {c.vista === 'objetivos' && (
+        <ObjetivosPanel
+          objetivos={objetivos}
+          objetivosMes={objetivosMes}
+          semaforo={semaforo}
+          config={objetivosConfig}
+          periodos={periodosCalculados}
+          zonas={zonas}
+          nodos={nodosConocidos}
+          onEditarGeneral={c.editarObjetivo}
+          onNuevoObjetivo={() => c.nuevoObjetivo('zona')}
+          onEditarObjetivo={c.editarObjetivo}
+          onBorrarObjetivo={(fila) =>
+            c.setBorrando({
+              tipo: 'objetivos',
+              id: fila.id,
+              nombre: `el objetivo ${NIVEL_OBJETIVO_UI[fila.nivel].label.toLowerCase()} ${fila.entidad} ${fila.desde ? `desde ${fila.desde}` : 'desde siempre'}`.replace(/\s+/g, ' '),
+            })}
+          onExcepcionMes={(periodo, existente) =>
+            (existente ? c.editarObjetivoMes(existente) : c.nuevoObjetivoMes(periodo))}
+          onBorrarMes={(fila) =>
+            c.setBorrando({ tipo: 'objetivos_mes', id: fila.id, nombre: `la excepción de ${fila.periodo}` })}
+          onEditarSemaforo={() => semaforo && c.editarSemaforo(semaforo)}
+        />
       )}
 
       {c.vista === 'ignorados' && (
@@ -471,6 +537,69 @@ export function CatalogosView({
             saving={c.guardando}
             onChange={(patch) => c.setIgnoradoDraft({ ...c.ignoradoDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('ignorados', { ...c.ignoradoDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.objetivoDraft)}
+        onClose={c.cerrarFormularios}
+        title={c.objetivoDraft?.id ? 'Editar objetivo' : 'Nuevo objetivo'}
+        subtitle="Meta de crecimiento y churn máximo. No cambia ningún análisis: solo metas, cumplimiento y colores"
+        icon={<Target className="h-5 w-5 text-purple-400" />}
+        theme="purple"
+      >
+        {c.objetivoDraft && (
+          <ObjetivoForm
+            value={c.objetivoDraft}
+            entidades={{ zona: zonas, site: sites, estado: estados, coordinador: coordinadores }}
+            nodos={nodosDelCatalogo}
+            general={generalHoy}
+            saving={c.guardando}
+            onChange={(patch) => c.setObjetivoDraft({ ...c.objetivoDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('objetivos', { ...c.objetivoDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.objetivoMesDraft)}
+        onClose={c.cerrarFormularios}
+        title={c.objetivoMesDraft?.id ? 'Editar excepción del mes' : 'Excepción de un mes'}
+        subtitle="Sustituye al objetivo general solo en ese mes"
+        icon={<Target className="h-5 w-5 text-sky-400" />}
+        theme="blue"
+        size="md"
+      >
+        {c.objetivoMesDraft && (
+          <ObjetivoMesForm
+            value={c.objetivoMesDraft}
+            periodos={periodosCalculados}
+            general={generalSinExcepcion(c.objetivoMesDraft.periodo)}
+            saving={c.guardando}
+            onChange={(patch) => c.setObjetivoMesDraft({ ...c.objetivoMesDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('objetivos_mes', { ...c.objetivoMesDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.semaforoDraft)}
+        onClose={c.cerrarFormularios}
+        title="Semáforo de objetivos"
+        subtitle="Desde dónde es verde, amarillo o rojo cada métrica, igual en todo el módulo"
+        icon={<TrafficCone className="h-5 w-5 text-amber-400" />}
+        theme="yellow"
+      >
+        {c.semaforoDraft && (
+          <SemaforoForm
+            value={c.semaforoDraft}
+            saving={c.guardando}
+            onChange={(patch) => c.setSemaforoDraft({ ...c.semaforoDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('semaforo', { ...c.semaforoDraft }))}
             onClose={c.cerrarFormularios}
           />
         )}

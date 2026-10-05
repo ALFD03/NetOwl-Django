@@ -11,7 +11,7 @@ demás dependen de ella (decoradores, matriz de permisos, subida de CSV).
 | `urls.py` | Bajo el prefijo `/auth/` |
 | `sessions.py` | Backend de sesiones que escribe en la tabla del entorno |
 | `uploads.py` | Recepción de CSV compartida por todas las apps |
-| `management/commands/preparar_sesiones.py` | Crea la tabla de sesiones del esquema |
+| `management/commands/copiar_desde_public.py` | Copia al esquema del entorno lo que antes se compartía en `public` (una vez por entorno) |
 
 ---
 
@@ -50,7 +50,8 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_run_lifetime` | Análisis de ciclo de vida |
 | `can_manage_eta` | Parametrizar y bloquear el reporte ETA |
 | `can_manage_users` | Administrar usuarios y grupos |
-| `can_manage_catalogos` | Editar planes, zonas, sites, estados, coordinadores e ignorados |
+| `can_manage_catalogo_comercial` | Editar zonas, sites, estados y coordinadores |
+| `can_manage_catalogo_operacional` | Editar planes, planes reguladores, ignorados y resolver los productos por registrar |
 
 > **Añadir un permiso** es añadir un campo booleano a `PermissionMatrix` y su
 > nombre a una de las dos listas. A partir de ahí aparece solo en la interfaz de
@@ -146,8 +147,9 @@ permisos individuales; quitarlo los vuelve a aceptar del payload.
 
 ## Sesiones por entorno
 
-`SesionEntorno` + `services/config/sessions.py` + `preparar_sesiones`. El porqué
-completo está en [02 · Configuración](02-configuracion.md#sesiones-aisladas-y-por-qué-las-cookies-no-bastaban).
+`SesionEntorno` + `services/config/sessions.py`. Hoy todo el entorno vive en su
+esquema y la tabla la crea la migración de `django.contrib.sessions`; ver
+[02 · Configuración](02-configuracion.md#db_schema-un-esquema-de-postgres-por-entorno).
 
 ---
 

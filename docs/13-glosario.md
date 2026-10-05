@@ -41,17 +41,15 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 | `9_free` | En servicio gratuito |
 | `0_other` | Cotización o instalación: fuera del cómputo |
 
-## Ciclo de vida (supervivencia)
+## Lifetime
 
 | Término | Definición |
 |---|---|
-| **Kaplan-Meier** | Estimador no paramétrico de la curva de supervivencia. Lo calcula `lifelines` |
-| **Evento** | El desenlace que se mide: caer inactivo (vida activa) o volver a activo (reactivación) |
-| **Censura** | El periodo sigue abierto cuando termina la observación: cuenta el tiempo vivido, pero no como evento |
-| **Tasa de censura** | Proporción de suscriptores censurados sobre el total |
-| **Mediana de supervivencia** | Tiempo en el que la curva cruza el 0,5. **`null` cuando no se puede calcular**, nunca 0 |
-| **p25 / p75** | Tiempos en los que la curva cruza 0,75 y 0,25 |
-| **Cohorte mínima** | 15 suscriptores (`MIN_COHORT_SIZE`) para que una dimensión produzca curva |
+| **Bajas del mes** | Las del churn mensual: activas al inicio del mes que lo cierran sin estar activas ni en plan gratuito |
+| **Tramo** | Logs consecutivos de la misma clase (activo, gratuito, inactivo). Pausa → +30 días → cancelado es un solo tramo inactivo |
+| **Fecha de baja** | El inicio del tramo inactivo vigente al cierre del mes |
+| **Días desde la instalación** | Fecha de baja − `fecha_inicio`: la antigüedad entera de la suscripción |
+| **Instaladas desde 2026** | La población que mide la página de lifetime: las bajas con `fecha_inicio` desde el 01/01/2026, sin las campañas «Sin campanna» y «Exonerado» |
 
 ## CRM
 
@@ -104,7 +102,7 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 
 | Término | Definición |
 |---|---|
-| **Catálogo** | Las seis tablas de referencia (`catalogo_*`), compartidas por todos los entornos |
+| **Catálogo** | Las tablas de referencia (`catalogo_*`); cada entorno tiene las suyas en su esquema |
 | **Producto ignorado** | Línea del export que nunca será un plan: routers, instalaciones, servicios puntuales |
 | **Producto sin catalogar** | Línea que podría ser un plan nuevo. **Bloquea la importación antes de escribir nada** |
 | **Fixture** | Un diccionario con las claves de la época JSON, que es lo que `core/fixtures` sirve a los análisis |

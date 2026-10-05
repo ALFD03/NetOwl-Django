@@ -22,6 +22,9 @@ export interface DirectorioPayload extends Record<string, unknown> {
   id?: number | null;
 }
 
+/** Lo que le puede pasar a un usuario del directorio, además de editarlo. */
+export type MovimientoUsuario = 'cambiar_departamento' | 'deshacer_cambio' | 'baja' | 'reactivar';
+
 export const supportApi = {
   runAnalysis: async (request: SupportAnalysisRequest) =>
     (await apiClient.post<SupportAnalysisResponse>('/imports/api/run-support-analysis/', request)).data,
@@ -37,4 +40,14 @@ export const supportApi = {
 
   deleteDirectorio: async (tipo: DirectorioTipo, id: number) =>
     (await apiClient.post('/support/api/usuarios/eliminar/', { tipo, id })).data,
+
+  /**
+   * Cambio de departamento, baja o reactivación. `fecha` la piden el cambio
+   * (desde cuándo) y la baja (el egreso).
+   */
+  moverUsuario: async (
+    accion: MovimientoUsuario,
+    id: number,
+    extra: { departamento_id?: number | null; fecha?: string } = {},
+  ) => (await apiClient.post('/support/api/usuarios/movimiento/', { accion, id, ...extra })).data,
 };

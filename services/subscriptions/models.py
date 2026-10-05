@@ -5,10 +5,9 @@ Antes vivian en `data/Planes.json` y `data/Zonas.json`, y cambiarlos exigia
 editar un fichero del repositorio y volver a desplegar. Aqui son tablas que se
 mantienen desde `/subscriptions/config/`.
 
-**Viven en `public`, sin cualificar con DB_SCHEMA**, igual que `auth_user` y la
-matriz de permisos. El catalogo comercial es uno por empresa: darle a cada
-entorno el suyo solo produce divergencias silenciosas. Lo que si se cualifica
-por esquema son los datos calculados, no el vocabulario del negocio.
+Viven en el esquema del entorno, como todo lo demas: el `db_table` no se
+cualifica porque la conexion ya fija `search_path` a DB_SCHEMA. Desarrollo y
+produccion tienen cada uno su catalogo, y un cambio en uno no alcanza al otro.
 
 Nadie los lee directamente: `core/fixtures.py` es el unico consumidor, y sirve
 a los analisis los mismos diccionarios con las mismas claves de la epoca JSON
@@ -284,6 +283,238 @@ class ProductoIgnorado(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
+# --- Objetivos comerciales ---------------------------------------------------
+#
+# Las metas de crecimiento y de churn no alteran ningun analisis: solo deciden
+# la meta y el cumplimiento de cada fila. Por eso no se guardan junto a las
+# metricas calculadas sino aqui, y el cliente las aplica al pintar
+# (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un objetivo se ve
+# al recargar la pagina, sin relanzar ningun mes. El color lo decide aparte el
+# semaforo, con umbrales fijos (`SemaforoObjetivos`).
+#
+# Los niveles, de mas alto a mas bajo: sucursal, estado, site, coordinador,
+# zona y zona-sucursal (el nodo), con el general como respaldo. **Manda el nivel
+# mas alto que tenga objetivo**: el de un nodo solo rige si nada por encima fija
+# uno, y el de una sucursal manda sobre toda la geografia. Los totales ignoran
+# los niveles por debajo del grupo: el objetivo de una zona no mueve el total de
+# su coordinador ni el de su site, y el de un coordinador no mueve el del site.
+# La regla completa esta en el modulo del cliente, que es quien la aplica.
+
+NIVEL_OBJETIVO_CHOICES = [
+    ("general", "General"),
+    ("sucursal", "Sucursal"),
+    ("estado", "Estado"),
+    ("site", "Site"),
+    ("coordinador", "Coordinador"),
+    ("zona", "Zona"),
+    ("zona_sucursal", "Zona - sucursal"),
+]
+
+# La clave ajena de la entidad de cada nivel. El general no tiene; la sucursal
+# tampoco, porque no es un catalogo sino el texto que trae el export (`NETCOM`,
+# `NYC`...), y va en `sucursal`. Un nodo es su zona mas su sucursal.
+REFERENCIA_POR_NIVEL = {
+    "estado": "estado",
+    "site": "site",
+    "coordinador": "coordinador",
+    "zona": "zona",
+    "zona_sucursal": "zona",
+}
+CAMPOS_REFERENCIA = ("estado", "site", "coordinador", "zona")
+NIVELES_CON_SUCURSAL = ("sucursal", "zona_sucursal")
+
+
+def _solo_referencia(nivel: str | None) -> models.Q:
+    """La condicion "solo esta rellena la referencia de `nivel`" (None: el general).
+
+    Ademas de las claves ajenas, la sucursal: obligatoria en los dos niveles
+    que la usan y vacia en el resto.
+    """
+    nivel = nivel or "general"
+    condicion = models.Q(
+        nivel=nivel,
+        **{f"{campo}__isnull": campo != REFERENCIA_POR_NIVEL.get(nivel) for campo in CAMPOS_REFERENCIA},
+    )
+    if nivel in NIVELES_CON_SUCURSAL:
+        return condicion & ~models.Q(sucursal="")
+    return condicion & models.Q(sucursal="")
+
+
+class ObjetivoComercial(models.Model):
+    """Un tramo de objetivo: a partir de `desde`, este nivel apunta a estos valores.
+
+    Mismo criterio que `HistorialDepartamento` en soporte: el tramo vale desde
+    su mes hasta que empieza el siguiente de la misma entidad, y `desde` nulo
+    significa "desde siempre". Asi cambiar un objetivo no reescribe los meses
+    que ya pasaron; quien quiera corregir un mes cerrado usa `ObjetivoMes`.
+
+    **El general es una sola fila, sin fecha.** Es el valor por defecto de la
+    empresa, no una historia: lo que cambia en un mes concreto es una excepcion
+    de ese mes (`ObjetivoMes`), y lo que cambia desde un mes para una parte de
+    la red es un tramo de su zona, site, estado o coordinador.
+
+    `crecimiento_pct` y `churn_pct` son independientes y cualquiera de los dos
+    puede quedar vacio. Cada metrica se resuelve por separado: gana el tramo
+    mas reciente de la entidad que la fije, asi que un tramo que solo cambia el
+    churn desde agosto conserva el crecimiento que la entidad ya tenia; si
+    ningun tramo suyo la fija, se hereda del nivel de arriba. El general
+    sembrado (6% / 3%, desde siempre) es el que responde cuando nadie mas lo
+    hace, y no se puede borrar.
+
+    Las referencias son `CASCADE`: el objetivo de una zona que ya no existe no
+    significa nada.
+    """
+
+    nivel = models.CharField(max_length=16, choices=NIVEL_OBJETIVO_CHOICES)
+    estado = models.ForeignKey(Estado, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
+    coordinador = models.ForeignKey(
+        Coordinador, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos"
+    )
+    zona = models.ForeignKey(Zona, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
+    # El texto de la sucursal tal y como lo trae el export, en los niveles
+    # `sucursal` y `zona_sucursal`; vacio en el resto.
+    sucursal = models.CharField(max_length=80, blank=True, default="")
+    # `YYYY-MM`, el mismo texto con el que empiezan los `periodo_reporte`: asi
+    # se compara como cadena tanto aqui como en el cliente.
+    desde = models.CharField(max_length=7, null=True, blank=True)
+    crecimiento_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    churn_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    nota = models.CharField(max_length=255, blank=True, default="")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_objetivos"
+        ordering = ["nivel", models.F("desde").asc(nulls_first=True), "id"]
+        verbose_name = "objetivo comercial"
+        verbose_name_plural = "objetivos comerciales"
+        constraints = [
+            # Exactamente la referencia que corresponde al nivel. La unicidad de
+            # (entidad, desde) no se puede pedir con un UNIQUE —Postgres trata
+            # los NULL como distintos— y la comprueba la vista al guardar.
+            models.CheckConstraint(
+                condition=(
+                    _solo_referencia(None)
+                    | _solo_referencia("sucursal")
+                    | _solo_referencia("estado")
+                    | _solo_referencia("site")
+                    | _solo_referencia("coordinador")
+                    | _solo_referencia("zona")
+                    | _solo_referencia("zona_sucursal")
+                ),
+                name="objetivo_referencia_segun_nivel",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(crecimiento_pct__isnull=False) | models.Q(churn_pct__isnull=False),
+                name="objetivo_con_algun_valor",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(nivel="general") | models.Q(desde__isnull=True),
+                name="objetivo_general_sin_fecha",
+            ),
+        ]
+
+    @property
+    def entidad(self):
+        """La fila de catalogo a la que apunta (la zona de un nodo), o None."""
+        campo = REFERENCIA_POR_NIVEL.get(self.nivel)
+        return getattr(self, campo) if campo else None
+
+    @property
+    def nombre_entidad(self) -> str:
+        """Como se llama lo que tiene el objetivo, con la clave que usan los nodos.
+
+        Un nodo se escribe `"Zona - Sucursal"`, igual que el `valor` de la
+        dimension `zona_sucursal`: es lo que el cliente cruza contra cada fila.
+        """
+        if self.nivel == "sucursal":
+            return self.sucursal
+        entidad = self.entidad
+        if entidad is None:
+            return ""
+        if self.nivel == "zona_sucursal":
+            return f"{entidad.nombre} - {self.sucursal}"
+        return entidad.nombre
+
+    def __str__(self):
+        return f"{self.nivel}:{self.nombre_entidad or '-'} desde {self.desde or 'siempre'}"
+
+
+class ObjetivoMes(models.Model):
+    """La excepcion de un mes concreto al objetivo general.
+
+    Es la manera de corregir un mes ya calculado sin mover el general: vale
+    para ese mes y para ninguno mas. Solo sustituye al general; los objetivos
+    propios de zonas, coordinadores, sites y estados siguen ganandole.
+    """
+
+    periodo = models.CharField(max_length=7, unique=True)
+    crecimiento_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    churn_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    nota = models.CharField(max_length=255, blank=True, default="")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_objetivos_mes"
+        ordering = ["-periodo"]
+        verbose_name = "objetivo de un mes"
+        verbose_name_plural = "objetivos de meses"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(crecimiento_pct__isnull=False) | models.Q(churn_pct__isnull=False),
+                name="objetivo_mes_con_algun_valor",
+            ),
+        ]
+
+    def __str__(self):
+        return self.periodo
+
+
+class SemaforoObjetivos(models.Model):
+    """Los umbrales de color, fijos e iguales para todo el modulo. Fila unica (pk=1).
+
+    Son valores directos, no distancias al objetivo: "crecimiento verde desde
+    el 6%" vale igual para una zona con objetivo del 6% que para una con el 10%.
+    Asi se leen de un vistazo y el mismo porcentaje se pinta igual en cualquier
+    pagina. Lo que si depende del objetivo es el cumplimiento, porque ya es un
+    porcentaje de la meta.
+
+    - Crecimiento, mas es mejor: verde desde `crec_verde`, amarillo desde
+      `crec_amarillo`, rojo por debajo.
+    - Churn, menos es mejor: verde hasta `churn_verde`, amarillo hasta
+      `churn_amarillo`, rojo por encima.
+    - Cumplimiento (% de la meta): verde desde `cumpl_verde`, amarillo desde
+      `cumpl_amarillo`.
+
+    Los valores por defecto son los que los reportes tenian escritos a mano.
+    """
+
+    cumpl_verde = models.DecimalField(max_digits=6, decimal_places=2, default=100)
+    cumpl_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=60)
+    crec_verde = models.DecimalField(max_digits=6, decimal_places=2, default=4)
+    crec_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=0)
+    churn_verde = models.DecimalField(max_digits=6, decimal_places=2, default=3)
+    churn_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=4)
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_objetivos_semaforo"
+        verbose_name = "semaforo de objetivos"
+        verbose_name_plural = "semaforo de objetivos"
+
+    @classmethod
+    def actual(cls) -> SemaforoObjetivos:
+        """La fila unica, creandola con los valores por defecto si falta."""
+        fila, _ = cls.objects.get_or_create(pk=1)
+        return fila
+
+    def __str__(self):
+        return "semaforo de objetivos"
 
 
 def _numero(valor) -> str:

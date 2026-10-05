@@ -122,6 +122,14 @@ which value*. Put a `SelectMenu` inside with `FILTER_TRIGGER_CLASS`, a
 `PeriodSelector` and three times into `SubscriptionReportFilters`, and every
 new copy reinterpreted it slightly worse.
 
+**Every dropdown is a `SelectMenu`, and long ones search.** From seven options up
+it grows a search box on its own (`searchable` forces it either way): typing
+filters case- and accent-insensitively, the arrows move the highlighted option,
+Enter picks it without submitting the surrounding form, and Escape closes only
+the list, not the modal around it. With the trigger focused, just typing opens
+it already searching. Don't build a second combobox — pass the options to this
+one.
+
 **Anything that writes a file downloads through `ExportButton`.** It carries the
 shape — the filter capsule, the brand-tinted icon — and the four states, said in
 the button itself: idle, writing, nothing to export, failed. Exporting used to be
@@ -187,7 +195,10 @@ and the copy.
 
 `pages/Subscriptions/Catalogos.tsx` edits the plan / zone / site / state /
 coordinator tables that used to be `data/Planes.json` and `data/Zonas.json`. It
-sits behind `can_manage_catalogos` and is the only place a plan is classified —
+sits behind two permissions — `can_manage_catalogo_comercial` (zones, sites,
+states, coordinators) and `can_manage_catalogo_operacional` (pending products,
+plans, regulator plans, ignored); the page opens with either and shows only the tabs
+of the one held — and it is the only place a plan is classified —
 the ETA screen no longer keeps a second, overriding copy of that classification,
 only its per-subscription exceptions.
 
@@ -202,11 +213,31 @@ written when it does: the check runs before the truncate, so the previous data
 is intact and the file can be re-uploaded once the decisions are made.
 
 
+## Commercial objectives are applied here, not stored
+
+The growth target and the maximum churn (6% / 3% by default) are catalogue data served in
+the `objetivos` prop of the subscriptions pages. `features/subscriptions/lib/objetivos.ts`
+is the only place that resolves them — meta, completion and colour — and
+`hooks/useObjetivos` reads them from the page. Never hardcode a target or a colour threshold
+again: that is how the app ended up with the 6% written in eight files and three different
+"green" cut-offs.
+
+The highest level that sets an objective wins: sucursal → state → site → coordinator → zone →
+node (zone - sucursal), then the month's general. A zone's own objective applies only if nothing above it sets one. Totals
+ignore the levels below the group: a coordinator total resolves from the coordinator up, a
+site total from the site up, and global totals use the month's general objective. Group metas are the sum of their zones'
+metas resolved from the group's level, so a group never contradicts its parts. The report
+hooks (`useSalesReportData`, `useBusinessUnitsData`) attach a `meta` to every node and group;
+components only paint.
+
 ## Careful: the two reports disagree on completion
 
-`features/subscriptions/lib/commercial.ts` holds the single `calcComercial`. It takes a
+`features/subscriptions/lib/commercial.ts` holds the single `calcComercial`. It receives the
+absolute growth meta (`Meta.metaCrecimiento`) and takes a
 `clamp` option because Sales Report and Business Units have always computed
 `tasaCumplimiento` differently — Sales Report clamps to `[0, 100]`, Business Units does
-not, which is what lets its "Meta Cumplida" badge fire above 100%. Both behaviours are
-preserved intentionally. Unifying them changes displayed commercial KPIs, so treat it as
+not, which is what lets its "Meta Cumplida" badge fire above 100%. The node table shows the
+three completions — ingreso (net growth), ventas (installations) and cierre (final base against
+the expected one) — next to each row's objective, and the clamp applies to all three in Sales
+Report. Both behaviours are preserved intentionally. Unifying them changes displayed commercial KPIs, so treat it as
 a product decision, not a cleanup.

@@ -24,4 +24,5 @@ urlpatterns = [
     path("api/tickets/", views.api_tickets_list, name="api_tickets_list"),
     path("api/usuarios/guardar/", views_usuarios.api_usuario_guardar, name="api_usuario_guardar"),
     path("api/usuarios/eliminar/", views_usuarios.api_usuario_eliminar, name="api_usuario_eliminar"),
+    path("api/usuarios/movimiento/", views_usuarios.api_usuario_movimiento, name="api_usuario_movimiento"),
 ]

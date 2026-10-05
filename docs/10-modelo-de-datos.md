@@ -5,7 +5,7 @@ Una única base de datos PostgreSQL, con **un esquema por entorno**
 
 | Familia | Quién la crea | Dónde vive |
 |---|---|---|
-| **ORM de Django** | Migraciones (o los comandos `preparar_*`) | `public` o `DB_SCHEMA`, según el modelo |
+| **ORM de Django** | Migraciones (`migrate`, por esquema) | `DB_SCHEMA` |
 | **DDL explícito** | `ensure_*_schema` / `_ensure_tables_exist` en el código analítico | `DB_SCHEMA` |
 | **Dinámicas** | `DBConnector.save_historico` / `copy_dataframe` sobre la marcha | `DB_SCHEMA` |
 
@@ -20,7 +20,10 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 
 ## 1. Tablas del ORM
 
-### Compartidas entre entornos (`public`)
+Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
+`search_path` a él y nada se comparte a través de `public`.
+
+### Usuarios, permisos y catálogos
 
 | Tabla | Modelo | Contenido |
 |---|---|---|
@@ -34,15 +37,19 @@ código lo usa; **no se escriben literales de nombre de tabla**.
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
 | `catalogo_productos_ignorados` | `ProductoIgnorado` | Líneas del export que nunca serán un plan |
+| `catalogo_objetivos` | `ObjetivoComercial` | Objetivos por nivel (general, sucursal, estado, site, coordinador, zona, zona-sucursal); `sucursal` es el texto del export en los niveles que la usan: `desde` (`YYYY-MM`, nulo = siempre; el general es una sola fila y siempre nulo), `crecimiento_pct` y `churn_pct` (nulo = se hereda). Lo escribe la pestaña Objetivos del catálogo; lo lee `analytics/objetivos.py` y lo aplica el cliente |
+| `catalogo_objetivos_mes` | `ObjetivoMes` | Excepción de un mes concreto al objetivo general |
+| `catalogo_objetivos_semaforo` | `SemaforoObjetivos` | Fila única con los umbrales de color, fijos: crecimiento y cumplimiento "verde desde", churn "verde hasta" |
 | `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
-| `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido y departamento (FK obligatoria, `PROTECT`) |
-| `django_migrations` | Django | **Compartida: es la causa de los comandos `preparar_*`** |
+| `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
+| `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
+| `django_migrations` | Django | Propia de cada esquema |
 
-### Cualificadas por esquema (`DB_SCHEMA`)
+### Sesiones e importaciones
 
 | Tabla | Modelo | Contenido |
 |---|---|---|
-| `django_session` | `SesionEntorno` (`managed=False`) | Sesiones del entorno. La crea `manage.py preparar_sesiones` |
+| `django_session` | `SesionEntorno` (`managed=False`) | Sesiones del entorno. La crea la migración de `django.contrib.sessions` |
 | `import_action_logs` | `ImportActionLog` | Historial permanente de importaciones y cálculos |
 | `analysis_jobs` | `AnalysisJob` | Estado vivo de cada ejecución. Índice `analysis_jobs_mod_est_idx` sobre `(module, status)` |
 
@@ -113,13 +120,12 @@ con el índice nombrado a partir de la tabla.
 
 ### Ciclo de vida
 
-Escritas con `periodo_reporte = "global"` y `metodo_calculo = "lifetime"`.
+Escritas con `metodo_calculo = "lifetime"`.
 
 | Tabla | Contenido |
 |---|---|
-| `lifetime_periodos` | Un periodo activo o cancelado por fila: `orden`, `tipo`, `f_inicio`, `f_fin`, `duracion`, `evento`, `periodo_idx` |
-| `lifetime_metricas` | Una fila con las curvas globales en JSON (`curva_activo_json`, `curva_reactivacion_json`), medianas, percentiles y conteos |
-| `lifetime_dimensiones` | Lo mismo por `dimension` y `valor` |
+| `lifetime_bajas_mes` | Una fila por baja del mes, `periodo_reporte = "YYYY-MM"`: `orden`, `f_ini`, `f_baja`, `estado_cierre`, `dias_desde_instalacion`, las dimensiones (sin producto), `mes_en_curso` y `fecha_corte` |
+| `lifetime_periodos`, `lifetime_metricas`, `lifetime_dimensiones` | Obsoletas: las curvas de supervivencia de la versión anterior. Ya no se escriben ni se leen |
 
 ### Reporte ETA
 
@@ -186,12 +192,12 @@ servirlas.
 | `subscriptions-logs`, `-logs-v15` | Importación de logs / — | Análisis mensual, ciclo de vida |
 | `subscriptions_gratis` | Importación de gratuitos | Análisis mensual (solo si falta el log real) |
 | `analyzer_*` | `MetricsAnalyzer`, `build_day_metrics` | Dashboard, Analytics, Results, Sales Report, Business Units, ETA, **e incidencia por zona de soporte** |
-| `lifetime_*` | `run_lifecycle_analysis` | Página Lifetime |
+| `lifetime_bajas_mes` | `run_lifecycle_analysis` | Página Lifetime |
 | `analyzer_eta_*` | `ETAReportManager` | Reporte ETA y su pantalla de parametrización |
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
 | `catalogo_*` (planes, zonas, sites…) | Pantalla de catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
-| `catalogo_departamentos`, `catalogo_usuarios_soporte` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio` |
+| `catalogo_departamentos`, `catalogo_usuarios_soporte`, `catalogo_usuarios_soporte_historial` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio`, `tickets_tras_la_baja`, `anotar_departamentos` |
 | `analysis_jobs` | Vistas de lanzamiento y worker | Sondeo de la interfaz |
 | `import_action_logs` | `register_import_log` | Página de historial |
 

@@ -3,7 +3,7 @@
 import { apiClient } from './client';
 import { startAndFollow, type AnalysisJob } from './jobs';
 import type {
-  BajasDetalleResponse, CatalogoTipo, SubscriptionResultsResponse,
+  BajasDetalleResponse, CatalogoTipo, LifetimeDetalleResponse, SubscriptionResultsResponse,
 } from '@/shared/types/subscriptions';
 
 export interface EtaReportResponse {
@@ -118,7 +118,7 @@ export const subscriptionsApi = {
   /**
    * Alta o edición de una fila de catálogo.
    *
-   * Un solo endpoint para los seis catálogos: lo que cambia entre ellos son
+   * Un solo endpoint para todos los catálogos: lo que cambia entre ellos son
    * los campos del cuerpo, no la forma de la petición.
    */
   saveCatalogo: async (tipo: CatalogoTipo, payload: CatalogoPayload) =>
@@ -128,11 +128,17 @@ export const subscriptionsApi = {
     (await apiClient.post('/subscriptions/api/catalogos/eliminar/', { tipo, id })).data,
 
   /**
-   * Runs the survival analysis in the Celery worker and waits for it.
+   * Recalcula en el worker el lifetime de todos los meses y espera a que termine.
    *
-   * It walks the whole subscription history with `lifelines`, so it hit the
-   * same request timeout as the monthly analysis and now goes through a job.
+   * Carga y limpia el log entero como el análisis mensual, así que chocaba con
+   * el mismo timeout y va por un job.
    */
   runLifetime: async (onProgress?: (job: AnalysisJob) => void) =>
     startAndFollow('/subscriptions/api/lifecycle/run/', {}, onProgress),
+
+  /** Las bajas de un mes con sus duraciones, una por orden, para exportar. */
+  getLifetimeDetalle: async (period: string) =>
+    (await apiClient.get<LifetimeDetalleResponse>('/subscriptions/api/lifetime/detalle/', {
+      params: { period },
+    })).data,
 };

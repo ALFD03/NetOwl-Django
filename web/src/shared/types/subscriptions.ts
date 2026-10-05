@@ -256,37 +256,146 @@ export interface SubscriptionEtaManagementProps {
   currentPeriod?: string;
 }
 
-// Lifetime / Survival analysis types
-export interface CurvaPoint {
-  tiempo: number;
-  sup: number;
+// --- Lifetime: cuánto duraron activas las bajas de un mes -------------------
+// Ver services/subscriptions/analytics/lifetime/. Una sola duración, de la
+// instalación a la baja, y solo de las bajas instaladas desde `instaladas_desde`
+// que no son de las campañas excluidas.
+
+/** Estadísticos de una duración en días; null si no hay ninguna baja. */
+export interface LifetimeResumen {
+  n: number;
+  promedio: number | null;
+  mediana: number | null;
+  p25: number | null;
+  p75: number | null;
+  min: number | null;
+  max: number | null;
 }
 
-export interface LifetimeData {
-  mediana_activo?: number;
-  p25_activo?: number;
-  p75_activo?: number;
-  n_total_activo?: number;
-  total_suscriptores?: number;
-  n_censurado_activo?: number;
-  curva_activo?: CurvaPoint[];
-  mediana_reactivacion?: number;
-  [key: string]: unknown;
+/**
+ * Un tramo de duración (un mes de 30 días): cuántas bajas caen en él, su %
+ * sobre las bajas que cuentan y el % acumulado hasta ese tramo.
+ */
+export interface LifetimeTramo {
+  tramo: string;
+  desde: number;
+  /** Null en el último tramo, que no tiene tope. */
+  hasta: number | null;
+  bajas: number;
+  pct: number;
+  pct_acumulado: number;
 }
 
-export interface LifetimeDimensionInfo {
-  n_total_activo?: number;
-  mediana_activo?: number;
-  p25_activo?: number;
-  p75_activo?: number;
-  mediana_reactivacion?: number;
-  curva_activo?: CurvaPoint[];
-  [key: string]: unknown;
+/** Un valor de una dimensión, con sus bajas que cuentan. */
+export interface LifetimeDimensionFila {
+  valor: string;
+  bajas: number;
+  promedio: number | null;
+  mediana: number | null;
+  p25: number | null;
+  p75: number | null;
+  /** % de esas bajas que se fue en sus primeros 30 / 90 días. */
+  pct_30: number;
+  pct_90: number;
+}
+
+export interface LifetimeMes {
+  mes: string;
+  /** Hasta dónde llegan los logs (YYYY-MM-DD). */
+  fecha_corte: string;
+  /** El mes de la fecha de corte: sus bajas todavía pueden volver antes del cierre. */
+  mes_en_curso: boolean;
+  /** Las bajas que cuentan: instaladas desde `instaladas_desde` y fuera de las campañas excluidas. */
+  bajas: number;
+  /** Todas las bajas del mes, excluidas incluidas: es lo que cuadra con el cierre mensual. */
+  bajas_mes: number;
+  /** Cuántas bajas se quitaron de cada campaña excluida ("Sin campanna", "Exonerado"). */
+  excluidas: Record<string, number>;
+  /** Del resto, cuántas se instalaron antes de `instaladas_desde` y no se miden. */
+  anteriores: number;
+  /** Las bajas del cierre mensual guardado; si difiere de `bajas_mes`, uno de los dos se hizo con otros datos. */
+  bajas_reporte: number | null;
+  /** Fecha (YYYY-MM-DD) de instalación desde la que se miden las bajas. */
+  instaladas_desde: string;
+  resumen: LifetimeResumen;
+  tramos: LifetimeTramo[];
+  por_dimension: Record<string, LifetimeDimensionFila[]>;
+}
+
+/** Una baja del mes, tal y como se exporta. */
+export interface LifetimeBaja {
+  orden: string;
+  f_ini: string | null;
+  f_baja: string | null;
+  estado_cierre: string;
+  dias_desde_instalacion: number | null;
+  zona?: string;
+  sucursal?: string;
+  municipio?: string;
+  campanna?: string;
+  zona_sucursal?: string;
+}
+
+export interface LifetimeDetalleResponse {
+  period: string | null;
+  bajas: LifetimeBaja[];
 }
 
 // --- Catálogos de referencia -------------------------------------------------
 // Planes, zonas, sites, estados y coordinadores. Antes eran `Planes.json` y
 // `Zonas.json`; hoy son tablas que se editan en `/subscriptions/config/`.
+
+// --- Objetivos comerciales (ver features/subscriptions/lib/objetivos.ts) ---
+
+/**
+ * Un tramo con vigencia: vale desde `desde` (`YYYY-MM`, nulo = siempre) hasta
+ * que empieza el siguiente. Un valor nulo no fija esa métrica.
+ */
+export interface TramoObjetivo {
+  desde: string | null;
+  crecimiento: number | null;
+  churn: number | null;
+}
+
+export interface ValoresObjetivo {
+  crecimiento: number | null;
+  churn: number | null;
+}
+
+/**
+ * Umbrales de color: valores directos en %, iguales para todo el módulo.
+ *
+ * No dependen del objetivo: el mismo churn se pinta igual en cualquier zona y
+ * en cualquier página. El cumplimiento ya es un % de la meta.
+ */
+export interface SemaforoObjetivos {
+  /** Cumplimiento (% de la meta): verde desde / amarillo desde. */
+  cumpl_verde: number;
+  cumpl_amarillo: number;
+  /** Crecimiento (%), más es mejor: verde desde / amarillo desde. */
+  crec_verde: number;
+  crec_amarillo: number;
+  /** Churn (%), menos es mejor: verde hasta / amarillo hasta. */
+  churn_verde: number;
+  churn_amarillo: number;
+}
+
+/** Lo que envía `get_objetivos_config()`. Las entidades van por nombre. */
+export interface ObjetivosConfig {
+  /** El objetivo general: uno solo, sin fecha. */
+  general: { crecimiento: number; churn: number };
+  /** Excepciones de un mes concreto, por `YYYY-MM`. Sustituyen al general. */
+  meses: Record<string, ValoresObjetivo>;
+  estados: Record<string, TramoObjetivo[]>;
+  sites: Record<string, TramoObjetivo[]>;
+  coordinadores: Record<string, TramoObjetivo[]>;
+  zonas: Record<string, TramoObjetivo[]>;
+  /** Por sucursal tal y como la trae el export (`NETCOM`, `NYC`...). */
+  sucursales: Record<string, TramoObjetivo[]>;
+  /** Por nodo, con la clave de la dimensión `zona_sucursal`: `"Guacara - NYC"`. */
+  zonas_sucursal: Record<string, TramoObjetivo[]>;
+  semaforo: SemaforoObjetivos;
+}
 
 export type CatalogoTipo =
   | 'planes'
@@ -295,7 +404,10 @@ export type CatalogoTipo =
   | 'estados'
   | 'coordinadores'
   | 'ignorados'
-  | 'reguladores';
+  | 'reguladores'
+  | 'objetivos'
+  | 'objetivos_mes'
+  | 'semaforo';
 
 export interface CatalogoOption {
   value: string;
@@ -379,6 +491,59 @@ export interface CatalogoProductoIgnorado {
   creado_en: string;
 }
 
+/** Nivel de un objetivo, de más alto a más bajo (el general es el respaldo). */
+export type NivelObjetivoCatalogo =
+  | 'general'
+  | 'sucursal'
+  | 'estado'
+  | 'site'
+  | 'coordinador'
+  | 'zona'
+  | 'zona_sucursal';
+
+/** Un nodo (zona - sucursal) que aparece en algún cierre calculado. */
+export interface NodoConocido {
+  /** `"Guacara - NYC"`. */
+  nodo: string;
+  zona: string;
+  sucursal: string;
+}
+
+/** Un tramo de objetivo tal y como lo edita la pestaña de objetivos. */
+export interface CatalogoObjetivo {
+  id: number;
+  nivel: NivelObjetivoCatalogo;
+  /** La fila de zona, site, estado o coordinador (la zona de un nodo). Nulo en el general y la sucursal. */
+  entidad_id: number | null;
+  /** Nombre con el que se cruza: la sucursal tal cual, o `"Zona - Sucursal"` en un nodo. */
+  entidad: string;
+  /** En los niveles `sucursal` y `zona_sucursal`; vacío en el resto. */
+  sucursal: string;
+  /** `YYYY-MM`, o vacío si vale desde siempre. */
+  desde: string;
+  /** Nulo: esa métrica se hereda. */
+  crecimiento_pct: number | null;
+  churn_pct: number | null;
+  nota: string;
+  actualizado_por: string;
+  actualizado_en: string;
+}
+
+/** La excepción de un mes concreto al objetivo general. */
+export interface CatalogoObjetivoMes {
+  id: number;
+  periodo: string;
+  crecimiento_pct: number | null;
+  churn_pct: number | null;
+  nota: string;
+  actualizado_por: string;
+  actualizado_en: string;
+}
+
+export interface CatalogoSemaforo extends SemaforoObjetivos {
+  id: number;
+}
+
 /** Producto ya importado que hoy no está en el catálogo. */
 export interface ProductoPendiente {
   nombre: string;
@@ -393,7 +558,22 @@ export interface SubscriptionCatalogosProps {
   estados: CatalogoNombrado[];
   coordinadores: CatalogoNombrado[];
   ignorados: CatalogoProductoIgnorado[];
+  objetivos: CatalogoObjetivo[];
+  objetivos_mes: CatalogoObjetivoMes[];
+  /** Nulos sin el permiso comercial, que es el que administra los objetivos. */
+  semaforo: CatalogoSemaforo | null;
+  objetivosConfig: ObjetivosConfig | null;
+  /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
+  periodosCalculados: string[];
+  /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
+  nodosConocidos: NodoConocido[];
   pendientes: ProductoPendiente[];
+  /**
+   * Qué mitad del catálogo administra el usuario. Las listas de la otra llegan
+   * vacías, y sus pestañas se ocultan por estos flags y no por estar vacías.
+   */
+  comercial: boolean;
+  operacional: boolean;
   tecnologias: CatalogoOption[];
   tiposPersona: CatalogoOption[];
   /** `?nuevo_plan=` — abre el formulario de plan ya relleno con ese nombre. */

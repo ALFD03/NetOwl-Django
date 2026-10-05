@@ -132,21 +132,19 @@ def _correr_support(job: AnalysisJob, consola: ConsolaJob):
 
 
 def _correr_lifetime(job: AnalysisJob, consola: ConsolaJob):
-    """Analisis de supervivencia sobre todo el historico.
+    """Lifetime de las bajas de cada mes, desde enero de 2026.
 
-    Del resultado solo se guardan los escalares: las curvas son series largas y se
-    leen despues con `get_lifecycle_results`.
+    Calcula todos los meses de una vez; la pagina lee despues el que se elija
+    con `get_lifetime_mes`. El job solo guarda el resumen escalar.
     """
     from services.subscriptions.analytics.lifetime import run_lifecycle_analysis
 
-    metrics = run_lifecycle_analysis()
-    # Las curvas de supervivencia son series largas: no viajan en el estado del
-    # job, se leen despues con `get_lifecycle_results`.
-    resumen = {
-        k: v for k, v in (metrics or {}).items()
-        if isinstance(v, (int, float, str, bool)) or v is None
-    }
-    return "Análisis de ciclo de vida completado.", resumen
+    resumen = run_lifecycle_analysis()
+    mensaje = (
+        f"Lifetime calculado: {resumen['meses_calculados']} meses,"
+        f" {resumen['bajas_totales']} bajas (datos al {resumen['fecha_corte']})."
+    )
+    return mensaje, resumen
 
 
 RUNNERS: dict[str, Callable[[AnalysisJob, ConsolaJob], tuple[str, dict]]] = {

@@ -22,6 +22,11 @@ export interface DayCardSpec {
   icon?: ReactNode;
   /** De qué lado está lo bueno. En bajas o churn, subir es malo. */
   trendGoodWhen?: 'up' | 'down';
+  /**
+   * Color según el valor del día, en lugar del fijo `color`: para las métricas
+   * con semáforo (el churn de Subscriptions, por ejemplo).
+   */
+  colorFor?: (valor: number) => MetricColor;
 }
 
 export interface DayChartSpec {
@@ -50,6 +55,11 @@ interface Props {
   title?: string;
   subtitle?: string;
   theme?: NeonTheme;
+  /**
+   * Lo que un módulo añade entre las tarjetas y las líneas, p. ej. la
+   * proyección al cierre de Subscriptions.
+   */
+  children?: ReactNode;
 }
 
 /**
@@ -72,6 +82,7 @@ export function DaySummary({
   title = 'El día seleccionado',
   subtitle = 'Lo ocurrido ese día, lo que va del mes y cómo se compara con el día anterior',
   theme = 'purple',
+  children,
 }: Props) {
   // Los días de la barra y los de este bloque no son siempre los mismos: un mes
   // analizado antes de que su módulo guardara el bloque global tiene cortes
@@ -114,20 +125,25 @@ export function DaySummary({
       icon={<CalendarClock className="h-5 w-5" />}
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
-        {cards.map((card) => (
-          <DayMetricCard
-            key={card.key}
-            label={card.label}
-            kind={card.kind}
-            dia={diaActivo}
-            color={card.color}
-            icon={card.icon}
-            subValue={card.subValue}
-            trendGoodWhen={card.trendGoodWhen}
-            reading={leerDia(serie, diasSerie, diaActivo, card.key, card.kind)}
-          />
-        ))}
+        {cards.map((card) => {
+          const reading = leerDia(serie, diasSerie, diaActivo, card.key, card.kind);
+          return (
+            <DayMetricCard
+              key={card.key}
+              label={card.label}
+              kind={card.kind}
+              dia={diaActivo}
+              color={card.colorFor ? card.colorFor(reading.delDia) : card.color}
+              icon={card.icon}
+              subValue={card.subValue}
+              trendGoodWhen={card.trendGoodWhen}
+              reading={reading}
+            />
+          );
+        })}
       </div>
+
+      {children && <div className="mt-6">{children}</div>}
 
       {charts.length > 0 && (
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">

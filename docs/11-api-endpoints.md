@@ -55,12 +55,12 @@ Respuesta uniforme: `{"status": "success"|"error", "message": "..."}`.
 | `/subscriptions/`, `/subscriptions/dashboard/` | `Subscriptions/Dashboard` | `can_view_subscriptions` |
 | `/subscriptions/analytics/` | `Subscriptions/Analytics` | `can_view_subs_analytics` |
 | `/subscriptions/results/`, `/results/<periodo>/` | `Subscriptions/Results` | `can_view_subs_results` |
-| `/subscriptions/lifetime/` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |
+| `/subscriptions/lifetime/?period=YYYY-MM` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |
 | `/subscriptions/sales-report/` | `Subscriptions/SalesReport` | `can_view_subs_sales` |
 | `/subscriptions/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_sales` |
 | `/subscriptions/eta-report/` | `Subscriptions/EtaReport` | `can_view_eta` |
 | `/subscriptions/eta-report/config/` | `Subscriptions/EtaManagement` | `can_manage_eta` |
-| `/subscriptions/config/` | `Subscriptions/Catalogos` | `can_manage_catalogos` |
+| `/subscriptions/config/` | `Subscriptions/Catalogos` | `can_manage_catalogo_comercial` o `can_manage_catalogo_operacional` |
 
 Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 `?dia=N` en los dos reportes, `?periods=a,b,c` en `analytics` y `results`,
@@ -75,8 +75,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/periods/` | `can_view_subscriptions` | `{periods: [...]}` |
 | GET | `api/results/` | `can_view_subs_results` | `{periods: [...]}` (cierres completos) |
 | GET | `api/results/<periodo>/` | `can_view_subs_results` | `{periodo, summary, dimensions}` |
-| GET | `api/survival/global/?dim=` | `can_view_subs_lifetime` | Curvas, estadísticos y curvas por dimensión |
-| GET | `api/lifecycle/results/` | `can_view_subs_lifetime` | `{status, data, dimensiones}` o `status: "empty"` |
+| GET | `api/lifetime/detalle/?period=YYYY-MM` | `can_view_subs_lifetime` | `{period, bajas: [...]}`: una fila por baja del mes con instalación, fecha de baja y días desde la instalación. Vacío si el mes no está calculado |
 | GET | `api/sales-report/?period=&dia=` | `can_view_subs_sales` | Site → Tecnología → Nodos |
 | GET | `api/business-units/?period=&dia=` | `can_view_subs_sales` | Coordinador → Nodos + resumen FTTH + bloque RF |
 | GET | `api/bajas/detalle/?period=&nodo=&nodo=` | `can_view_subs_results` **o** `can_view_subs_sales` | `{status, period, periods, total, bajas: [...]}`. `nodo` repetido (`"Zona - Sucursal"`, como la dimensión) acota a esos nodos (máx. 300); sin él, el periodo entero. Filtra por el par, no por la zona sola, que puede estar repartida entre varias sucursales. No admite `dia`: el detalle nominal solo existe por cierre mensual |
@@ -85,7 +84,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 
 | Método | Ruta | Permiso | Límite | Notas |
 |---|---|---|---|---|
-| POST | `api/lifecycle/run/` | `can_run_lifetime` | 2/m | Encola; **202** con el job. Sin periodo |
+| POST | `api/lifecycle/run/` | `can_run_lifetime` | 2/m | Encola; **202** con el job. Sin periodo: recalcula todos los meses |
 | GET | `api/eta-report/data/?period=&force=` | `can_view_eta` | — | `force=true` recalcula aunque esté bloqueado |
 | POST | `api/eta-report/lock/` | `can_manage_eta` | — | `{period, lock}`. Al bloquear, recalcula y congela |
 | POST | `api/eta-report/tasa/` | `can_manage_eta` | 30/m | `{period, tasa}`. Escribe la tasa a mano; no recalcula nada |
@@ -93,8 +92,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/eta-report/tasa/actual/` | `can_view_eta` | 10/m | La última tasa publicada por el BCV. No es la del periodo y no se guarda: sirve para exportar a precio de hoy. **502** si el tercero falla |
 | POST | `api/eta-report/save-sub-config/` | `can_manage_eta` | — | Excepción individual: `orden` obligatorio |
 | POST | `api/eta-report/delete-sub-config/` | `can_manage_eta` | — | `{orden}` |
-| POST | `api/catalogos/guardar/` | `can_manage_catalogos` | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido |
-| POST | `api/catalogos/eliminar/` | `can_manage_catalogos` | 60/m | `{tipo, id}`. **409** si tiene zonas asociadas |
+| POST | `api/catalogos/guardar/` | el del `tipo` (comercial u operacional) | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido, **403** si el `tipo` es de la otra mitad. Los tipos `objetivos`, `objetivos_mes` y `semaforo` (fila única: se ignora el `id`) van con el comercial. En `objetivos` la entidad puede ir por `entidad_id` o por `entidad_nombre` (más `sucursal` en los niveles de sucursal y nodo) |
+| POST | `api/catalogos/eliminar/` | el del `tipo` (comercial u operacional) | 60/m | `{tipo, id}`. **409** si tiene zonas asociadas o si es el objetivo general de base; **400** con `semaforo`, que no se borra |
 
 `tipo` ∈ `planes`, `zonas`, `sites`, `estados`, `coordinadores`, `ignorados`.
 
@@ -131,7 +130,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |
 | GET | `api/tickets/?limit=&grupo=&period=` | `can_view_support_results` | Listado crudo; `limit` con techo de 5 000 |
 | POST | `api/usuarios/guardar/` | `can_manage_support_users` | Alta o edición de una fila de `usuarios` o `departamentos` (`tipo` en el cuerpo). **409** si el nombre ya existe. `60/m` |
-| POST | `api/usuarios/eliminar/` | `can_manage_support_users` | Baja. **409** si el departamento tiene usuarios (`PROTECT`). `60/m` |
+| POST | `api/usuarios/eliminar/` | `can_manage_support_users` | Borrado. **409** si el departamento tiene usuarios o aparece en algún historial (`PROTECT`). `60/m` |
+| POST | `api/usuarios/movimiento/` | `can_manage_support_users` | `accion`: `cambiar_departamento` (`departamento_id`, `fecha`), `deshacer_cambio`, `baja` (`fecha`), `reactivar`. **400** si las fechas no cuadran con la historia. `60/m` |
 
 ---
 

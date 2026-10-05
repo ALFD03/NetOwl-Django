@@ -4,4 +4,5 @@ export { AnalyticsFilters, type DimensionKey } from './AnalyticsFilters';
 export { AnalyticsMetrics } from './AnalyticsMetrics';
 export { AnalyticsCharts } from './AnalyticsCharts';
 export { AnalyticsDimensionTable, type AnalyticsDimensionTableProps } from './AnalyticsDimensionTable';
-export { ANALYTICS_DIMENSION_COLUMNS } from './analyticsDimensionColumns';
+export { buildAnalyticsDimensionColumns } from './analyticsDimensionColumns';
+export { ProyeccionCierre } from './ProyeccionCierre';
