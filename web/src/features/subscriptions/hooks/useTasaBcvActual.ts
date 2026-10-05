@@ -37,18 +37,22 @@ export function useTasaBcvActual(): TasaBcvActual {
   // así el efecto no tiene que anunciarlo con un `setState` de más.
   const [cargando, setCargando] = useState(true);
 
-  const consultar = useCallback(async () => {
-    try {
-      const respuesta = await subscriptionsApi.getEtaTasaActual();
-      setTasa(respuesta.tasa_bcv);
-      setFuente(respuesta.tasa_bcv_fuente);
-      setAviso('');
-    } catch (error) {
-      setAviso(getApiErrorMessage(error, 'No se pudo consultar la tasa vigente del BCV.'));
-    } finally {
-      setCargando(false);
-    }
-  }, []);
+  // Con `.then` y no con `await`: el linter no distingue un `setState` que
+  // sigue a un `await` de uno síncrono, y esta función se llama desde el efecto.
+  const consultar = useCallback(
+    () =>
+      subscriptionsApi.getEtaTasaActual()
+        .then((respuesta) => {
+          setTasa(respuesta.tasa_bcv);
+          setFuente(respuesta.tasa_bcv_fuente);
+          setAviso('');
+        })
+        .catch((error: unknown) => {
+          setAviso(getApiErrorMessage(error, 'No se pudo consultar la tasa vigente del BCV.'));
+        })
+        .finally(() => setCargando(false)),
+    [],
+  );
 
   const recargar = useCallback(async () => {
     setCargando(true);
