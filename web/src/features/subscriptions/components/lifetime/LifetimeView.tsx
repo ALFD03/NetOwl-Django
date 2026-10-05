@@ -1,38 +1,64 @@
-/** Curvas de supervivencia, sus estadísticos y el desglose por dimensión. */
+/**
+ * Lifetime de un mes: cuánto duraron activas las suscripciones que se dieron
+ * de baja en él.
+ *
+ * Las bajas son las mismas que cuenta el churn mensual —activas al inicio del
+ * mes que lo cierran sin estar activas—, y de cada una se mide cuánto duró
+ * desde su instalación. Solo las instaladas desde 2026 y fuera de las campañas
+ * excluidas: el resto se dice en el encabezado, pero no se mide. Todo lo de
+ * esta página ya viene calculado; elegir otro mes solo vuelve a pedir la página.
+ */
 
-import { useMemo, useState } from 'react';
-import { Activity, Clock, Loader2, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { router } from '@inertiajs/react';
+import { Activity, Calendar, Clock, Loader2, RefreshCw, Timer } from 'lucide-react';
 
-import { LineChart } from '@/shared/charts';
 import { DIMENSION_CONFIG } from '@/shared/constants/labels';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
 import {
-  Column, DataTable, MetricCard, MilestoneTimeline, NeonContainer, StatusMessage, ToggleGroup,
+  Column, DataTable, EmptyState, MetricCard, NeonContainer, PeriodSelector, StatusMessage, ToggleGroup,
 } from '@/shared/ui';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
-import { formatInteger } from '@/shared/utils/formatters';
-import {
-  buildSurvivalChartData, censorshipRate, firstYearSurvival, survivalChartOptions,
-} from '../../charts/lifetimeChart';
-import type { LifetimeData, LifetimeDimensionInfo } from '../../types';
+import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
+import { colorTramo } from '../../charts/lifetimeChart';
+import type { LifetimeDimensionFila, LifetimeMes, LifetimeResumen } from '../../types';
+import { LifetimeExportButton } from './LifetimeExportButton';
+import { LifetimeTramosPanel } from './LifetimeTramosPanel';
 
 interface LifetimeViewProps {
-  lifecycle?: LifetimeData;
-  dimensiones?: Record<string, Record<string, LifetimeDimensionInfo>>;
+  meses: string[];
+  periodo: string | null;
+  lifetime: LifetimeMes | null;
 }
 
-type DimensionRow = LifetimeDimensionInfo & { valor: string };
+// El producto no se desglosa: el export guarda el plan de hoy, y el de casi
+// todas las bajas es "Cancelado". `DIMENSION_CONFIG` es compartido, por eso se
+// filtra aquí.
+const DIMENSION_OPTIONS = Object.entries(DIMENSION_CONFIG)
+  .filter(([key]) => key !== 'producto')
+  .map(([key, config]) => ({ key, label: config.label, icon: config.icon }));
 
-const DIMENSION_OPTIONS = Object.entries(DIMENSION_CONFIG).map(([key, config]) => ({
-  key,
-  label: config.label,
-  icon: config.icon,
-}));
+const formatDias = (value: number | null | undefined): string =>
+  value === null || value === undefined ? '—' : `${formatInteger(value)} d`;
 
-/** Reference lifetime used to scale the median bar, in days. */
-const MEDIAN_BAR_SCALE = 400;
+/**
+ * Un % de bajas tempranas con su barrita: el color va del verde al rojo según
+ * pese más, para que la tabla se lea por color antes que por número.
+ */
+function PctTemprano({ pct }: { pct: number }) {
+  // Un valor alto es malo: se fueron pronto. Se usa la rampa de los tramos al revés.
+  const color = colorTramo(Math.round((1 - Math.min(pct, 100) / 100) * 4), 5);
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <div className="hidden h-1.5 w-14 overflow-hidden rounded-full bg-slate-800 xl:block">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: color }} />
+      </div>
+      <span className="w-12 text-right font-black tabular-nums" style={{ color }}>{pct}%</span>
+    </div>
+  );
+}
 
-const DIMENSION_COLUMNS: Column<DimensionRow>[] = [
+const DIMENSION_COLUMNS: Column<LifetimeDimensionFila>[] = [
   {
     header: 'Etiqueta',
     accessor: (r) => (
@@ -42,55 +68,51 @@ const DIMENSION_COLUMNS: Column<DimensionRow>[] = [
     ),
     sortKey: 'valor',
   },
-  { header: 'Muestra Total', accessor: (r) => formatInteger(r.n_total_activo), align: 'right', sortKey: 'n_total_activo' },
-  { header: 'Baja Temprana (P25)', accessor: (r) => `${formatInteger(r.p25_activo)} d`, align: 'right', sortKey: 'p25_activo' },
+  { header: 'Bajas', accessor: (r) => formatInteger(r.bajas), align: 'right', sortKey: 'bajas' },
   {
-    header: 'Vida Media (P50)',
-    accessor: (r) => (
-      <div className="flex items-center justify-end gap-3">
-        <span className="font-black text-blue-400">{formatInteger(r.mediana_activo)} d</span>
-        <div className="hidden h-1 w-16 overflow-hidden rounded-full bg-slate-800 xl:block">
-          <div
-            className="h-full bg-brand"
-            style={{ width: `${Math.min((Number(r.mediana_activo ?? 0) / MEDIAN_BAR_SCALE) * 100, 100)}%` }}
-          />
-        </div>
-      </div>
-    ),
+    header: 'Mediana',
+    accessor: (r) => <span className="font-black text-amber-400">{formatDias(r.mediana)}</span>,
     align: 'right',
-    sortKey: 'mediana_activo',
+    sortKey: 'mediana',
   },
-  { header: 'Fidelización (P75)', accessor: (r) => `${formatInteger(r.p75_activo)} d`, align: 'right', sortKey: 'p75_activo' },
+  { header: 'Promedio', accessor: (r) => formatDias(r.promedio), align: 'right', sortKey: 'promedio' },
   {
-    header: 'Tasa Reactivación',
-    accessor: (r) => r.mediana_reactivacion
-      ? <span className="text-amber-400">{formatInteger(r.mediana_reactivacion)} d</span>
-      : <span className="text-slate-600">--</span>,
+    header: 'P25 – P75',
+    accessor: (r) => <span className="text-slate-400">{formatDias(r.p25)} – {formatDias(r.p75)}</span>,
     align: 'right',
-    sortKey: 'mediana_reactivacion',
+    sortKey: 'p25',
   },
+  { header: 'Se fueron ≤ 30 d', accessor: (r) => <PctTemprano pct={r.pct_30} />, align: 'right', sortKey: 'pct_30' },
+  { header: 'Se fueron ≤ 90 d', accessor: (r) => <PctTemprano pct={r.pct_90} />, align: 'right', sortKey: 'pct_90' },
 ];
 
-export function LifetimeView({ lifecycle, dimensiones }: LifetimeViewProps) {
-  const [activeDimension, setActiveDimension] = useState('sucursal');
+function ResumenMedida({ resumen, color }: { resumen: LifetimeResumen; color: 'blue' }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <MetricCard label="Promedio" value={formatDias(resumen.promedio)} color={color} />
+      <MetricCard label="Mediana" value={formatDias(resumen.mediana)} color={color} subValue="La mitad duró menos" />
+      <MetricCard
+        label="P25 – P75"
+        value={`${formatDias(resumen.p25)} – ${formatDias(resumen.p75)}`}
+        color="slate"
+        subValue="La mitad central"
+      />
+      <MetricCard
+        label="Mínimo – Máximo"
+        value={`${formatDias(resumen.min)} – ${formatDias(resumen.max)}`}
+        color="slate"
+      />
+    </div>
+  );
+}
 
-  const data = useMemo(() => lifecycle ?? ({} as LifetimeData), [lifecycle]);
-  const dims = useMemo(() => dimensiones ?? {}, [dimensiones]);
+export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
+  const [activeDimension, setActiveDimension] = useState('sucursal');
   const activeLabel = DIMENSION_CONFIG[activeDimension]?.label ?? activeDimension;
 
-  const chartData = useMemo(
-    () => buildSurvivalChartData(data, dims[activeDimension] ?? {}),
-    [data, dims, activeDimension],
-  );
-
-  const dimensionRows = useMemo<DimensionRow[]>(
-    () => Object.entries(dims[activeDimension] ?? {}).map(([valor, info]) => ({ valor, ...info })),
-    [dims, activeDimension],
-  );
-
   const recompute = useAsyncAction(subscriptionsApi.runLifetime, {
-    successMessage: () => 'Motor Kaplan-Meier actualizado.',
-    errorMessage: 'No se pudo actualizar el motor Kaplan-Meier.',
+    successMessage: () => 'Lifetime recalculado.',
+    errorMessage: 'No se pudo recalcular el lifetime.',
   });
 
   const handleRun = async () => {
@@ -98,50 +120,75 @@ export function LifetimeView({ lifecycle, dimensiones }: LifetimeViewProps) {
     if (result !== undefined) window.location.reload();
   };
 
-  const milestones = [
-    { id: 'p25', label: 'Baja Temprana (25%)', value: formatInteger(data.p25_activo), unit: 'días', markerClass: 'bg-rose-500' },
-    { id: 'p50', label: 'Punto Crítico (50%)', value: formatInteger(data.mediana_activo), unit: 'días', markerClass: 'bg-brand' },
-    { id: 'p75', label: 'Fidelización (75%)', value: formatInteger(data.p75_activo), unit: 'días', markerClass: 'bg-emerald-500' },
+  const cambiarMes = (mes: string) =>
+    router.get('/subscriptions/lifetime/', { period: mes }, { preserveScroll: true, preserveState: true });
+
+  const toolbar = (
+    <div className="flex flex-wrap items-start gap-4">
+      <PeriodSelector
+        label="Mes de las bajas"
+        icon={<Calendar className="h-4 w-4 text-brand" />}
+        value={periodo ?? ''}
+        options={meses}
+        onChange={cambiarMes}
+      />
+      {lifetime && <LifetimeExportButton mes={lifetime.mes} />}
+      <div className="flex flex-col items-start gap-2">
+        <button
+          type="button"
+          onClick={handleRun}
+          disabled={recompute.isPending}
+          title="Vuelve a calcular todos los meses con los datos importados hoy."
+          className="flex items-center gap-2 rounded-2xl bg-slate-800/80 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-300 shadow-lg transition-all hover:bg-brand hover:text-white disabled:opacity-60"
+        >
+          {recompute.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+          Recalcular
+        </button>
+        <StatusMessage status={recompute.status} />
+      </div>
+    </div>
+  );
+
+  if (!lifetime) {
+    return (
+      <div className="space-y-6">
+        {toolbar}
+        <EmptyState
+          title="Todavía no hay lifetime calculado"
+          description="Pulsa «Recalcular» para medir cuánto duraron activas las bajas de cada mes."
+          icon={<Timer />}
+          size="lg"
+          bordered
+        />
+      </div>
+    );
+  }
+
+  const cuadra = lifetime.bajas_reporte === null || lifetime.bajas_reporte === lifetime.bajas_mes;
+  const fuera = [
+    ...Object.entries(lifetime.excluidas).map(([campanna, n]) => `${formatInteger(n)} de «${campanna}»`),
+    ...(lifetime.anteriores > 0 ? [`${formatInteger(lifetime.anteriores)} instaladas antes de 2026`] : []),
   ];
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <MetricCard label="Vida Media (50%)" value={`${formatInteger(data.mediana_activo)} días`} color="blue" subValue="Expectativa de permanencia" />
-        <MetricCard label="Supervivencia 1er Año" value={`${firstYearSurvival(data)}%`} color="green" />
-        <MetricCard label="Tasa de Censura" value={`${censorshipRate(data)}%`} color="yellow" subValue="Clientes que no han cancelado" />
-        <MetricCard label="Muestra Total" value={formatInteger(data.n_total_activo ?? data.total_suscriptores)} color="slate" subValue="Histórico analizado" />
-      </div>
+      {toolbar}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-        <div className="lg:col-span-1">
-          <NeonContainer theme="blue" title="Timeline de Deserción" icon={<Clock className="h-5 w-5" />}>
-            <MilestoneTimeline milestones={milestones} />
+      <NeonContainer
+        theme="blue"
+        title="Tiempo activo desde la instalación"
+        subtitle={`De la fecha de instalación a la baja, de las ${formatInteger(lifetime.bajas)} bajas instaladas desde ${lifetime.instaladas_desde}.`}
+        icon={<Clock className="h-5 w-5" />}
+      >
+        <ResumenMedida resumen={lifetime.resumen} color="blue" />
+      </NeonContainer>
 
-            <StatusMessage status={recompute.status} className="mb-3" />
-
-            <button
-              type="button"
-              onClick={handleRun}
-              disabled={recompute.isPending}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-800/80 py-3 text-[10px] font-black uppercase tracking-widest text-slate-300 shadow-lg transition-all hover:bg-brand hover:text-white disabled:opacity-60"
-            >
-              {recompute.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-              Actualizar Motor KM
-            </button>
-          </NeonContainer>
-        </div>
-
-        <div className="lg:col-span-3">
-          <NeonContainer theme="cyan" title={`Análisis de Supervivencia: ${activeLabel}`} icon={<Activity className="h-5 w-5" />}>
-            <LineChart data={chartData} options={survivalChartOptions} className="h-80 w-full" />
-          </NeonContainer>
-        </div>
-      </div>
+      <LifetimeTramosPanel lifetime={lifetime} />
 
       <NeonContainer
         theme="slate"
-        title={`Rendimiento por ${activeLabel}`}
+        title={`Por ${activeLabel.toLowerCase()}`}
+        subtitle="Las bajas del mes instaladas desde 2026. Rojo: una parte grande se fue en sus primeros días."
         icon={<Activity className="h-5 w-5" />}
         headerAction={
           <div className="rounded-2xl border border-slate-800 bg-surface-primary p-1">
@@ -151,12 +198,20 @@ export function LifetimeView({ lifecycle, dimensiones }: LifetimeViewProps) {
         noPadding
       >
         <div className="h-[450px]">
-          <DataTable
-            columns={DIMENSION_COLUMNS}
-            data={dimensionRows}
-            searchable
-            searchPlaceholder={`Buscar en ${activeLabel}...`}
-          />
+          {(lifetime.por_dimension[activeDimension] ?? []).length === 0 ? (
+            <EmptyState
+              title="Ninguna baja de este mes se instaló desde 2026"
+              icon={<Activity />}
+              size="md"
+            />
+          ) : (
+            <DataTable
+              columns={DIMENSION_COLUMNS}
+              data={lifetime.por_dimension[activeDimension] ?? []}
+              searchable
+              searchPlaceholder={`Buscar en ${activeLabel}...`}
+            />
+          )}
         </div>
       </NeonContainer>
     </div>

@@ -83,6 +83,10 @@ class TableNames:
     ANALYZER_ETA_CONFIG_PLANES = "analyzer_eta_config_planes"
     ANALYZER_ETA_CONFIG_SUBS = "analyzer_eta_config_subs_individual"
     ANALYZER_ETA_REPORTE_MENSUAL = "analyzer_eta_reporte_mensual"
+    LIFETIME_BAJAS_MES = "lifetime_bajas_mes"
+    # Obsoletas: guardaban las curvas de supervivencia que mostraba Lifetime
+    # antes de pasar a medir las bajas de cada mes. Siguen en la base, sin
+    # escribirse ni leerse; los nombres se conservan para poder identificarlas.
     LIFETIME_PERIODOS = "lifetime_periodos"
     LIFETIME_METRICAS = "lifetime_metricas"
     LIFETIME_DIMENSIONES = "lifetime_dimensiones"

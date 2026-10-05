@@ -55,7 +55,7 @@ Respuesta uniforme: `{"status": "success"|"error", "message": "..."}`.
 | `/subscriptions/`, `/subscriptions/dashboard/` | `Subscriptions/Dashboard` | `can_view_subscriptions` |
 | `/subscriptions/analytics/` | `Subscriptions/Analytics` | `can_view_subs_analytics` |
 | `/subscriptions/results/`, `/results/<periodo>/` | `Subscriptions/Results` | `can_view_subs_results` |
-| `/subscriptions/lifetime/` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |
+| `/subscriptions/lifetime/?period=YYYY-MM` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |
 | `/subscriptions/sales-report/` | `Subscriptions/SalesReport` | `can_view_subs_sales` |
 | `/subscriptions/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_sales` |
 | `/subscriptions/eta-report/` | `Subscriptions/EtaReport` | `can_view_eta` |
@@ -75,8 +75,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/periods/` | `can_view_subscriptions` | `{periods: [...]}` |
 | GET | `api/results/` | `can_view_subs_results` | `{periods: [...]}` (cierres completos) |
 | GET | `api/results/<periodo>/` | `can_view_subs_results` | `{periodo, summary, dimensions}` |
-| GET | `api/survival/global/?dim=` | `can_view_subs_lifetime` | Curvas, estadísticos y curvas por dimensión |
-| GET | `api/lifecycle/results/` | `can_view_subs_lifetime` | `{status, data, dimensiones}` o `status: "empty"` |
+| GET | `api/lifetime/detalle/?period=YYYY-MM` | `can_view_subs_lifetime` | `{period, bajas: [...]}`: una fila por baja del mes con instalación, fecha de baja y días desde la instalación. Vacío si el mes no está calculado |
 | GET | `api/sales-report/?period=&dia=` | `can_view_subs_sales` | Site → Tecnología → Nodos |
 | GET | `api/business-units/?period=&dia=` | `can_view_subs_sales` | Coordinador → Nodos + resumen FTTH + bloque RF |
 | GET | `api/bajas/detalle/?period=&nodo=&nodo=` | `can_view_subs_results` **o** `can_view_subs_sales` | `{status, period, periods, total, bajas: [...]}`. `nodo` repetido (`"Zona - Sucursal"`, como la dimensión) acota a esos nodos (máx. 300); sin él, el periodo entero. Filtra por el par, no por la zona sola, que puede estar repartida entre varias sucursales. No admite `dia`: el detalle nominal solo existe por cierre mensual |
@@ -85,7 +84,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 
 | Método | Ruta | Permiso | Límite | Notas |
 |---|---|---|---|---|
-| POST | `api/lifecycle/run/` | `can_run_lifetime` | 2/m | Encola; **202** con el job. Sin periodo |
+| POST | `api/lifecycle/run/` | `can_run_lifetime` | 2/m | Encola; **202** con el job. Sin periodo: recalcula todos los meses |
 | GET | `api/eta-report/data/?period=&force=` | `can_view_eta` | — | `force=true` recalcula aunque esté bloqueado |
 | POST | `api/eta-report/lock/` | `can_manage_eta` | — | `{period, lock}`. Al bloquear, recalcula y congela |
 | POST | `api/eta-report/tasa/` | `can_manage_eta` | 30/m | `{period, tasa}`. Escribe la tasa a mano; no recalcula nada |

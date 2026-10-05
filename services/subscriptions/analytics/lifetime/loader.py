@@ -1,80 +1,34 @@
 """Lectura de datos para el analisis de supervivencia.
 
-Es un cargador propio y no el del analisis mensual porque necesita otra cosa:
-el historico entero sin recortar por periodo, y sin los logs sinteticos.
+No tiene cargador propio: lee y limpia exactamente como el analisis mensual
+(`analyzer.loader` + `cleaner` + `rules`). La baja del ciclo de vida se define
+por el estado al cierre de mes, y ese estado tiene que ser el mismo que ve el
+churn mensual, logs sinteticos y tramo gratuito incluidos. Con un cargador
+aparte los dos calculos terminaban contando clientes distintos.
 """
 
 from __future__ import annotations
 
-import logging
-
 import pandas as pd
 
-from core.config import DIMS, EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP, TableNames
 from core.database import DBConnector
 
-logger = logging.getLogger(__name__)
+from ..analyzer import cleaner, rules
+from ..analyzer import loader as analyzer_loader
 
 
-def _normalize_estado(series: pd.Series) -> pd.Series:
-    """Texto de estado comparable: sin espacios y en minusculas."""
-    return series.astype(str).str.strip().str.lower()
+def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, set[str]]:
+    """Devuelve `(suscripciones, logs, ordenes_con_actividad)`.
 
-def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Suscripciones y los dos formatos de log.
-
-    El formato antiguo (v15) va envuelto en un `try`: puede no existir en un
-    entorno que nunca lo cargo.
+    Los logs salen ordenados por `["orden", "f_dt"]`, que es la invariante de la
+    que depende `metrics_calc.EstadoAcumulado`. `ordenes_con_actividad` son las
+    que alguna vez estuvieron activas: el mismo filtro que usa el mensual para
+    contar un alta.
     """
     if db is None:
         db = DBConnector()
-    subs = db.read_table(TableNames.SUBSCRIPTIONS)
-    subs = subs.rename(columns={"orden_producto": "orden", "fecha_inicio": "f_ini"})
-    subs["orden"] = subs["orden"].astype(str).str.strip()
-    subs["f_ini_dt"] = pd.to_datetime(subs["f_ini"], errors="coerce")
-    for col in DIMS:
-        if col in subs.columns:
-            subs[col] = subs[col].astype(str).str.strip()
-
-    if "Estado" in subs.columns:
-        subs["estado_subs"] = _normalize_estado(subs["Estado"])
-        subs["estado_subs"] = (
-            subs["estado_subs"].map(SUBS_STATE_TO_LOG_MAP).fillna(EXCLUDED_STATE)
-        )
-    else:
-        subs["estado_subs"] = EXCLUDED_STATE
-    subs = subs.drop_duplicates(subset=["orden"])
-
-    l1 = db.read_table(TableNames.SUBSCRIPTIONS_LOGS, columns=["orden", "fecha_log", "log", "estado"])
-    l1 = l1.rename(columns={"fecha_log": "fecha"})
-    l1["fuente"] = "v1"
-
-    try:
-        l2 = db.read_table(TableNames.SUBSCRIPTIONS_LOGS_V15, columns=["orden", "tipo", "categoria", "fecha"])
-        l2["nota"] = l2["tipo"]
-        l2["estado"] = _normalize_estado(
-            l2["categoria"].map({"En progreso": "3_progress", "Cerrado": "6_churn"}).fillna(l2["categoria"])
-        )
-        l2["fuente"] = "v15"
-    except Exception:
-        logger.exception("Failed to load v15 logs table")
-        l2 = pd.DataFrame(columns=["orden", "fecha", "estado", "fuente"])
-
-    return subs, l1, l2
-
-def build_clean_logs(l1: pd.DataFrame, l2: pd.DataFrame) -> pd.DataFrame:
-    """Une los dos formatos de log y los deja ordenados por orden y fecha."""
-    cols_base = ["orden", "fecha", "estado"]
-    for df in [l1, l2]:
-        for c in list(df.columns):
-            if c not in cols_base:
-                df.drop(columns=[c], inplace=True, errors="ignore")
-
-    combined = pd.concat([l1, l2], ignore_index=True, sort=False)
-    combined["orden"] = combined["orden"].astype(str).str.strip()
-    combined["estado"] = _normalize_estado(combined["estado"])
-    combined["f_dt"] = pd.to_datetime(combined["fecha"], format="mixed", errors="coerce")
-    
-    combined = combined.dropna(subset=["orden", "f_dt"])
-    combined = combined.sort_values(["orden", "f_dt"]).reset_index(drop=True)
-    return combined
+    df_subs_raw, df_logs, df_logs_v15, df_free_raw = analyzer_loader.load_data(db)
+    df_free_meta = cleaner.build_free_meta(df_free_raw)
+    subs, logs = cleaner.build_clean_data(df_subs_raw, df_logs, df_logs_v15)
+    logs, ordenes_con_actividad = rules.apply_log_rules(logs, subs, df_free_meta)
+    return subs, logs, ordenes_con_actividad

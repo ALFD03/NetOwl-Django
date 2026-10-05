@@ -256,32 +256,89 @@ export interface SubscriptionEtaManagementProps {
   currentPeriod?: string;
 }
 
-// Lifetime / Survival analysis types
-export interface CurvaPoint {
-  tiempo: number;
-  sup: number;
+// --- Lifetime: cuánto duraron activas las bajas de un mes -------------------
+// Ver services/subscriptions/analytics/lifetime/. Una sola duración, de la
+// instalación a la baja, y solo de las bajas instaladas desde `instaladas_desde`
+// que no son de las campañas excluidas.
+
+/** Estadísticos de una duración en días; null si no hay ninguna baja. */
+export interface LifetimeResumen {
+  n: number;
+  promedio: number | null;
+  mediana: number | null;
+  p25: number | null;
+  p75: number | null;
+  min: number | null;
+  max: number | null;
 }
 
-export interface LifetimeData {
-  mediana_activo?: number;
-  p25_activo?: number;
-  p75_activo?: number;
-  n_total_activo?: number;
-  total_suscriptores?: number;
-  n_censurado_activo?: number;
-  curva_activo?: CurvaPoint[];
-  mediana_reactivacion?: number;
-  [key: string]: unknown;
+/**
+ * Un tramo de duración (un mes de 30 días): cuántas bajas caen en él, su %
+ * sobre las bajas que cuentan y el % acumulado hasta ese tramo.
+ */
+export interface LifetimeTramo {
+  tramo: string;
+  desde: number;
+  /** Null en el último tramo, que no tiene tope. */
+  hasta: number | null;
+  bajas: number;
+  pct: number;
+  pct_acumulado: number;
 }
 
-export interface LifetimeDimensionInfo {
-  n_total_activo?: number;
-  mediana_activo?: number;
-  p25_activo?: number;
-  p75_activo?: number;
-  mediana_reactivacion?: number;
-  curva_activo?: CurvaPoint[];
-  [key: string]: unknown;
+/** Un valor de una dimensión, con sus bajas que cuentan. */
+export interface LifetimeDimensionFila {
+  valor: string;
+  bajas: number;
+  promedio: number | null;
+  mediana: number | null;
+  p25: number | null;
+  p75: number | null;
+  /** % de esas bajas que se fue en sus primeros 30 / 90 días. */
+  pct_30: number;
+  pct_90: number;
+}
+
+export interface LifetimeMes {
+  mes: string;
+  /** Hasta dónde llegan los logs (YYYY-MM-DD). */
+  fecha_corte: string;
+  /** El mes de la fecha de corte: sus bajas todavía pueden volver antes del cierre. */
+  mes_en_curso: boolean;
+  /** Las bajas que cuentan: instaladas desde `instaladas_desde` y fuera de las campañas excluidas. */
+  bajas: number;
+  /** Todas las bajas del mes, excluidas incluidas: es lo que cuadra con el cierre mensual. */
+  bajas_mes: number;
+  /** Cuántas bajas se quitaron de cada campaña excluida ("Sin campanna", "Exonerado"). */
+  excluidas: Record<string, number>;
+  /** Del resto, cuántas se instalaron antes de `instaladas_desde` y no se miden. */
+  anteriores: number;
+  /** Las bajas del cierre mensual guardado; si difiere de `bajas_mes`, uno de los dos se hizo con otros datos. */
+  bajas_reporte: number | null;
+  /** Fecha (YYYY-MM-DD) de instalación desde la que se miden las bajas. */
+  instaladas_desde: string;
+  resumen: LifetimeResumen;
+  tramos: LifetimeTramo[];
+  por_dimension: Record<string, LifetimeDimensionFila[]>;
+}
+
+/** Una baja del mes, tal y como se exporta. */
+export interface LifetimeBaja {
+  orden: string;
+  f_ini: string | null;
+  f_baja: string | null;
+  estado_cierre: string;
+  dias_desde_instalacion: number | null;
+  zona?: string;
+  sucursal?: string;
+  municipio?: string;
+  campanna?: string;
+  zona_sucursal?: string;
+}
+
+export interface LifetimeDetalleResponse {
+  period: string | null;
+  bajas: LifetimeBaja[];
 }
 
 // --- Catálogos de referencia -------------------------------------------------
