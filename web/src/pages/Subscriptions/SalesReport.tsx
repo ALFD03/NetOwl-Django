@@ -17,6 +17,7 @@ import type { DayMetrics } from '@/shared/types/domain';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { SalesReportView } from '@/features/subscriptions/components/reports/SalesReportView';
+import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
 import { useSalesReportData, type SalesReportSite } from '@/features/subscriptions/hooks/useSalesReportData';
 
 interface SalesReportProps {
@@ -30,7 +31,7 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
   const [selectedDay, setSelectedDay] = useState(reportData.dia ?? 0);
-  const { availableDays, totalDays, effectiveDay, dayData } = useDayMetrics(dayMetrics, selectedDay);
+  const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
 
   const currentPeriod = reportData.period ?? '';
 
@@ -91,6 +92,7 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}
               />
+              <ProyeccionNota proyeccion={proyeccion} />
             </div>
           )}
         </>
@@ -100,6 +102,7 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
         sites={filteredData}
         period={currentPeriod}
         diaSeleccionado={Boolean(dayData)}
+        proyeccion={proyeccion}
       />
     </AppLayout>
   );

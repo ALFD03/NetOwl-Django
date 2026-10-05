@@ -18,6 +18,7 @@ import type { DayMetrics } from '@/shared/types/domain';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { BusinessUnitsView } from '@/features/subscriptions/components/reports/BusinessUnitsView';
+import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
 import { useBusinessUnitsData, type BusinessUnitGroup } from '@/features/subscriptions/hooks/useBusinessUnitsData';
 
 interface BusinessUnitsProps {
@@ -31,7 +32,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
   const [selectedDay, setSelectedDay] = useState(buData.dia ?? 0);
-  const { availableDays, totalDays, effectiveDay, dayData } = useDayMetrics(dayMetrics, selectedDay);
+  const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
 
   // Mismo criterio que en Ventas: el dia se resuelve en cliente sobre el mes
   // que ya esta en los props; el cierre del mes es el respaldo.
@@ -51,6 +52,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
     selectedTech,
     period: buData.period ?? '',
     objetivos,
+    proyeccion,
   });
 
   const changePeriod = (period: string) => {
@@ -90,6 +92,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}
               />
+              <ProyeccionNota proyeccion={proyeccion} />
             </div>
           )}
         </>
@@ -101,6 +104,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
         showFtthSummary={selectedTech !== 'RF'}
         period={buData.period ?? ''}
         diaSeleccionado={Boolean(dayData)}
+        proyeccion={proyeccion}
       />
     </AppLayout>
   );

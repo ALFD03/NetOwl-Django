@@ -10,7 +10,7 @@ import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { useSubscriptionsAnalyticsData } from '@/features/subscriptions/hooks/useSubscriptionsAnalyticsData';
-import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, type DimensionKey } from '@/features/subscriptions/components/analytics';
+import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, ProyeccionCierre, type DimensionKey } from '@/features/subscriptions/components/analytics';
 import { CampannasExportButton } from '@/features/subscriptions/components/campaigns/CampannasExportButton';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
 import { SUBS_DAY_CHARTS, subsDayCards } from '@/features/subscriptions/lib/subsDaySummary';
@@ -32,7 +32,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   const { globalData: monthData, dimensionGroup: monthDimensions, currentDimensionData: monthDimensionData } =
     useSubscriptionsAnalyticsData(periodos, dimensiones, selectedPeriod, selectedDim);
 
-  const { availableDays, totalDays, effectiveDay, dayData } = useDayMetrics(
+  const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(
     dayMetrics,
     selectedDay,
   );
@@ -58,6 +58,9 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   // dimension; si no (o si el dia se calculo antes de guardar `dims`), se cae
   // al cierre del mes.
   const globalData = dayData?.global ?? monthData;
+  // La proyección sale de las instalaciones acumuladas al corte elegido; un día
+  // calculado antes de guardar el bloque global no tiene de dónde sacarlas.
+  const instaladasAlCorte = dayData?.global?.nuevos_mes;
   const currentDimensionData = dayData?.dims?.[selectedDim] ?? monthDimensionData;
   // El reporte de campañas sigue la misma regla, pero siempre sobre `campanna`;
   // si cae al cierre, el archivo no debe decir que es el corte de un día.
@@ -113,7 +116,11 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
         dia={effectiveDay}
         cards={diaCards}
         charts={SUBS_DAY_CHARTS}
-      />
+      >
+        {proyeccion && instaladasAlCorte !== undefined && (
+          <ProyeccionCierre instalaciones={Number(instaladasAlCorte)} proyeccion={proyeccion} />
+        )}
+      </DaySummary>
 
       <div className="mt-6">
         <AnalyticsMetrics data={globalData} periodo={selectedPeriod} />

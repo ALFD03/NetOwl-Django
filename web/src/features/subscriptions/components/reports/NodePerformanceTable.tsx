@@ -1,9 +1,10 @@
 /** La tabla de nodos de los dos reportes comerciales, con su objetivo y sus tres cumplimientos. */
 
 import type { ReactNode } from 'react';
-import { RefreshCw, TrendingUp } from 'lucide-react';
+import { Gauge, RefreshCw, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
+import type { Proyeccion } from '@/shared/lib/proyeccion';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import { useObjetivosConfig } from '../../hooks/useObjetivos';
 import {
@@ -41,6 +42,11 @@ export interface NodePerformanceTableProps<T extends CommercialNode> {
    * reportes y no todos sus usos tienen algo que poner ahí.
    */
   renderRowAction?: (node: T) => ReactNode;
+  /**
+   * Los días laborables del corte elegido. Con ellos aparece la columna de
+   * proyección: las instalaciones al ritmo actual hasta el cierre del mes.
+   */
+  proyeccion?: Proyeccion | null;
 }
 
 /**
@@ -105,6 +111,37 @@ function CeldaCumplimiento({
   );
 }
 
+/** Las instalaciones proyectadas al cierre y el cumplimiento de ventas que darían. */
+function CeldaProyeccion({
+  instalaciones,
+  cumplimiento,
+  semaforo,
+  mono,
+}: {
+  instalaciones: number | null;
+  cumplimiento: number | null;
+  semaforo: SemaforoObjetivos;
+  mono: boolean;
+}) {
+  if (instalaciones === null) return <td className="py-3 text-right text-slate-600">—</td>;
+
+  return (
+    <td className="py-3 text-right">
+      <div className="flex flex-col items-end">
+        <span className={cn('font-black text-cyan-300', mono && 'font-mono')}>{formatInteger(instalaciones)}</span>
+        {cumplimiento !== null && (
+          <span
+            className={cn('text-[10px] font-bold', mono && 'font-mono', completionTone(cumplimiento, semaforo))}
+            title="Cumplimiento de ventas proyectado al cierre"
+          >
+            {formatTwoDecimals(cumplimiento)}% obj.
+          </span>
+        )}
+      </div>
+    </td>
+  );
+}
+
 /**
  * Per-node commercial performance table.
  *
@@ -115,7 +152,8 @@ function CeldaCumplimiento({
  * Cada fila enseña su objetivo —la meta absoluta y el porcentaje que la
  * produce, que puede ser propio de la zona— y los tres cumplimientos contra
  * ella: ingreso (crecimiento neto), ventas (instalaciones) y cierre (base
- * final contra la esperada).
+ * final contra la esperada). Con un día de corte elegido, además, la
+ * proyección de las instalaciones al cierre (ver `shared/lib/proyeccion`).
  */
 export function NodePerformanceTable<T extends CommercialNode>({
   nodes,
@@ -124,6 +162,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
   mono = false,
   clampCompletion = false,
   renderRowAction,
+  proyeccion = null,
 }: NodePerformanceTableProps<T>) {
   const { semaforo } = useObjetivosConfig();
   const num = (extra?: string) => cn('py-3 text-right', mono && 'font-mono', extra);
@@ -138,6 +177,14 @@ export function NodePerformanceTable<T extends CommercialNode>({
             <th className="pb-3 text-right text-emerald-500">
               <TrendingUp className="mr-1 inline h-3 w-3" />Inst.
             </th>
+            {proyeccion && (
+              <th
+                className="pb-3 text-right text-cyan-400"
+                title={`Instalaciones al cierre al ritmo de ${proyeccion.diasTranscurridos} de ${proyeccion.diasMes} días laborables`}
+              >
+                <Gauge className="mr-1 inline h-3 w-3" />Proyección
+              </th>
+            )}
             <th className="pb-3 text-right text-blue-400">
               <RefreshCw className="mr-1 inline h-3 w-3" />React.
             </th>
@@ -164,7 +211,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
               inicio,
               Number(node.activos_final ?? 0),
               meta.metaCrecimiento,
-              { clamp: clampCompletion, nuevos: Number(node.nuevos ?? 0) },
+              { clamp: clampCompletion, nuevos: Number(node.nuevos ?? 0), proyeccion },
             );
             const growth = Number(node.crecimiento ?? 0);
             const churn = Number(node.churn_bruto_pct ?? 0);
@@ -177,6 +224,14 @@ export function NodePerformanceTable<T extends CommercialNode>({
                 </td>
                 <td className={num('text-slate-400')}>{formatInteger(node.activos_inicio)}</td>
                 <td className={num('text-emerald-400')}>+{formatInteger(node.nuevos)}</td>
+                {proyeccion && (
+                  <CeldaProyeccion
+                    instalaciones={metrics.instalacionesProyectadas}
+                    cumplimiento={metrics.cumplimientoVentasProyectado}
+                    semaforo={semaforo}
+                    mono={mono}
+                  />
+                )}
                 <td className={num('text-blue-400')}>{formatInteger(node.reactivaciones)}</td>
                 <td className={num('text-rose-500')}>-{formatInteger(node.bajas)}</td>
                 <td

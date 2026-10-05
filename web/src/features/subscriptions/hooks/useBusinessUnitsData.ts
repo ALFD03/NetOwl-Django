@@ -15,6 +15,8 @@ import { useMemo } from 'react';
 import {
   aggregateNodes, calcComercial, type CommercialMetrics, type CommercialNode,
 } from '../lib/commercial';
+import type { Proyeccion } from '@/shared/lib/proyeccion';
+
 import type { Meta, ResolverObjetivos } from '../lib/objetivos';
 
 export interface BusinessUnitNode extends CommercialNode {
@@ -60,6 +62,8 @@ interface UseBusinessUnitsDataParams {
   /** El periodo del reporte: decide qué tramo de objetivo está vigente. */
   period: string;
   objetivos: ResolverObjetivos;
+  /** Los días laborables del corte elegido; el consolidado FTTH proyecta con ellos. */
+  proyeccion?: Proyeccion | null;
 }
 
 export function useBusinessUnitsData({
@@ -69,6 +73,7 @@ export function useBusinessUnitsData({
   selectedTech,
   period,
   objetivos,
+  proyeccion = null,
 }: UseBusinessUnitsDataParams) {
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -126,9 +131,12 @@ export function useBusinessUnitsData({
       adiciones_brutas: totals.nuevos + totals.reactivaciones - totals.bajas,
       total_nodos: ftthNodes.length,
       meta,
-      ...calcComercial(totals.activos_inicio, totals.activos_final, meta.metaCrecimiento, { nuevos: totals.nuevos }),
+      ...calcComercial(totals.activos_inicio, totals.activos_final, meta.metaCrecimiento, {
+        nuevos: totals.nuevos,
+        proyeccion,
+      }),
     };
-  }, [groups, selectedBranch, normalizedSearch, period, objetivos]);
+  }, [groups, selectedBranch, normalizedSearch, period, objetivos, proyeccion]);
 
   return { branchList, filteredData, dynamicFtthSummary };
 }
