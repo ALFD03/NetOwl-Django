@@ -122,14 +122,22 @@ porque `shared` no puede depender de un feature; los features los reexportan.
 | Hook | Qué hace |
 |---|---|
 | `usePermissions()` | `can`, `canAny`, `canAll`, `isSuperuser`. **Los componentes nunca leen `user.profile.can_*` directamente** |
+| `useBreakpoint(bp)` | `true` si el viewport llega a ese breakpoint. Para lo que una clase no alcanza (opciones de Chart.js); para maquetar se usan las clases |
+| `useScrollLock(activo)` | Congela el scroll del body y de `<main data-app-scroll>` mientras un modal o el cajón del menú tapan la página |
 | `useAsyncAction(action, options)` | Sustituye el triplete `isLoading` / `message` / `consoleLog` y el *narrowing* de errores de axios que cada página de importación repetía |
 | `useJobQueue()` | Sondea la cola desde cualquier página: **4 s** si hay algo corriendo, **20 s** si no, y también 20 s con la pestaña en segundo plano. Detecta el final comparando los ids con el sondeo anterior y pide la ficha del que desapareció, para poder decir *cómo* terminó y no solo que «ya no está» |
 
 ### `layout` y `navigation`
 
-- **`AppLayout`** — sidebar + `<main>` con el scroll (es lo que convierte la
-  barra superior en un `sticky` real), la zona `toolbar` fija arriba, y
-  **`AnalysisQueueAlert`** montado siempre.
+- **`AppLayout`** — navegación + `<main>` con el scroll (es lo que convierte la
+  barra superior en un `sticky` real), la zona `toolbar` y
+  **`AnalysisQueueAlert`** montado siempre. Cambia de forma en `lg`: desde ahí
+  sidebar fijo (plegable a iconos, recordado en `localStorage`) y `toolbar`
+  pegajosa; por debajo, `MobileTopBar` con hamburguesa que abre
+  `MobileNavDrawer` y la `toolbar` deja de ser fija. Las reglas de cada
+  breakpoint están en `web/src/README.md` («Phones and breakpoints»).
+- **`Sidebar`** — `SidebarContent` es un solo contenido (logo, módulos, pie de
+  usuario) montado en dos marcos: `Sidebar` (desde `lg`) y `MobileNavDrawer`.
 - **`AnalysisQueueAlert`** — el aviso flotante que sigue la cola. Vive en
   `shared/layout` y no en `features/imports` porque lo monta `AppLayout` y
   **shared no puede importar de features**. No pinta nada si la cola está vacía.
@@ -142,7 +150,8 @@ porque `shared` no puede depender de un feature; los features los reexportan.
 |---|---|
 | `navigation.ts` | `APP_NAVIGATION` (sidebar) y `MODULE_NAVIGATION` (pestañas). `firstVisibleTabHref(module, can)` evita apuntar el sidebar a una pestaña que el usuario no puede abrir, que es la misma resolución que hace `/imports/` en el servidor |
 | `permissions.ts` | `PERMISSIONS` — **espejo manual** de `PERMISSION_FIELDS` del backend. También `IMPORT_ACTION_PERMISSIONS` y `ANALYSIS_ACTION_PERMISSIONS`, los pares granular + comodín |
-| `design-tokens.json` | **La única fuente de color**, leída por `tailwind.config.js` (Node) y por `shared/constants/theme` (TS) |
+| `design-tokens.json` | **La única fuente de color y de breakpoints** (`screens`), leída por `tailwind.config.js` (Node) y por `shared/constants/theme` y `breakpoints` (TS) |
+| `breakpoints.ts` | `BREAKPOINTS` y `mediaDesde(bp)`, con el papel de cada breakpoint. Lo usa `useBreakpoint(bp)` (`shared/hooks`) |
 | `labels.ts` | Etiquetas legibles de dimensiones y etapas |
 
 Los tokens dan `surface.*`, `brand.*`, `metric.*` (slate, green, red, blue,

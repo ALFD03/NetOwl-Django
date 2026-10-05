@@ -116,7 +116,7 @@ export function EscalaSemaforo({ metrica, verde, amarillo, className }: EscalaSe
         ))}
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {escala.tramos.map((tramo) => (
           <div key={tramo.tono} className="flex items-center gap-1.5 text-[10px]">
             <span className={cn('h-2 w-2 flex-shrink-0 rounded-full', COLOR_TRAMO[tramo.tono].punto)} />

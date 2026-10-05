@@ -91,7 +91,7 @@ export default function ImportSubscriptions() {
             errorMessage="Error al procesar la importación."
             onUpload={subirArchivo}
           >
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               {IMPORT_TYPES.map((option) => (
                 <label
                   key={option.value}

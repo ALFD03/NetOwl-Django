@@ -122,7 +122,7 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
           icon={<Gauge className="h-5 w-5" />}
           headerAction={
             <ToggleGroup
-              className="flex-wrap justify-end"
+              className="lg:justify-end"
               options={etapaOptions}
               activeKey={selectedEtapa}
               onChange={setSelectedEtapa}

@@ -128,7 +128,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
       toolbar={
         // Barra superior de control: pestanas, busqueda y alta de usuarios/grupos.
         <div className="bg-surface-secondary border border-slate-800 rounded-3xl p-4 mb-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
-          <div className="flex gap-2 bg-surface-primary p-1.5 rounded-2xl border border-slate-800">
+          <div className="flex min-w-0 max-w-full gap-2 bg-surface-primary p-1.5 rounded-2xl border border-slate-800">
             <ToggleGroup
               options={[
                 { key: 'users', label: `Usuarios (${users.length})`, icon: Users },
@@ -139,7 +139,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
             {activeTab === 'users' && (
               <SearchInput value={search} placeholder="Buscar usuario..." onChange={setSearch} />
             )}

@@ -50,7 +50,9 @@ export function useAnchoredPanel<T extends HTMLElement = HTMLDivElement>({
     if (!trigger) return;
 
     const r = trigger.getBoundingClientRect();
-    const ancho = width ?? r.width;
+    // Nunca más ancho que la pantalla: en un teléfono un panel de 360px fijos
+    // se salía por la derecha aunque `left` se recortara.
+    const ancho = Math.min(width ?? r.width, window.innerWidth - 2 * MARGEN);
 
     // Si no cabe debajo pero si encima, se abre hacia arriba.
     const cabeDebajo = r.bottom + MARGEN + estimatedHeight <= window.innerHeight;

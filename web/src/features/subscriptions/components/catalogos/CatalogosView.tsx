@@ -252,7 +252,6 @@ export function CatalogosView({
           <ModuleHeader module="subscriptions" activeTab="catalogos" />
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
             <ToggleGroup
-              className="flex-wrap"
               activeKey={c.vista}
               onChange={(key) => c.setVista(key as CatalogoVista)}
               options={[

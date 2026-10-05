@@ -173,6 +173,55 @@ for both `tailwind.config.js` and the TypeScript side:
 Tailwind cannot see interpolated class names, so any dynamic class must come from a
 written-out lookup map (see `COLUMNS` in `SummaryStrip`), never a template string.
 
+## Phones and breakpoints
+
+Every screen has to be readable on a phone. Layouts are written **mobile first**:
+the unprefixed class is the phone, and each prefix adds what fits from that width.
+The five breakpoints are declared in `design-tokens.json` (`screens`), which
+`tailwind.config.js` uses as the *whole* set — not `extend` — and which
+`shared/constants/breakpoints.ts` reads for JS. The values are Tailwind's defaults,
+so existing classes kept their meaning; what is new is that each one has a job:
+
+| Prefix | From | Screen | What changes in the shell |
+| --- | --- | --- | --- |
+| — | 0 | Phone, portrait | Menu in a drawer, filters full width, modal as a bottom sheet |
+| `sm:` | 640px | Phone, landscape | Filters back to natural width, modal centred |
+| `md:` | 768px | Tablet, portrait | Card grids at 3–4 columns |
+| `lg:` | 1024px | Tablet landscape / laptop | **Fixed sidebar, sticky toolbar** |
+| `xl:` | 1280px | Desktop | Wide grids, charts side by side |
+| `2xl:` | 1536px | Large desktop | Density only |
+
+`lg` is the one that matters. Below it `AppLayout` has no sidebar: `MobileTopBar`
+shows a hamburger that opens `MobileNavDrawer`, the same `SidebarContent` in a
+drawer. From `lg` the sidebar is fixed and can be folded to an icon rail
+(remembered per browser in `localStorage`). The toolbar (`ModuleHeader`, filters,
+day bar) is sticky only from `lg` too: on a phone, filters plus the day bar pinned
+on top would leave a third of the screen for the data.
+
+What the shared kit already does, so a view does not have to:
+
+- `ModuleHeader` and `ToggleGroup` are horizontally scrolling strips below `lg`
+  (the active tab is scrolled into view) and wrap from `lg`. Don't pass
+  `flex-wrap` to a `ToggleGroup`: it would undo the strip. A wrapper around one
+  needs `min-w-0 max-w-full`, or the strip cannot shrink and the page overflows.
+- `FilterField` is full width below `sm` and its control stretches inside it
+  (`FILTER_TRIGGER_CLASS` carries `flex-1`). A custom control inside a capsule
+  should do the same (`min-w-0 flex-1 sm:flex-none`).
+- `Modal` is a bottom sheet below `sm`; its `size` only applies from `sm`.
+- `Panel`, `NeonContainer` pad `p-4` on a phone and `p-6` from `sm`.
+- `BarChart`, `LineChart`, `DoughnutChart` shrink their value labels, let the
+  X axis rotate to vertical and move the doughnut legend below the ring under
+  `sm` (`shared/charts/compacto.ts`). Build options as usual; the wrapper adapts them.
+- `DataTable` scrolls horizontally. Mark the row's label column `sticky: true`
+  so it stays pinned while the figures slide past (`StickyLabel` only sets its
+  width and style — a `sticky` *inside* a `<td>` cannot leave its cell).
+  A hand-written `<table>` goes inside an `overflow-x-auto` wrapper.
+
+When a class is not enough — Chart.js options, whether to draw something at all —
+use `useBreakpoint('sm')` from `shared/hooks`. Write grids as
+`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`, never a bare `grid-cols-4`, and
+prefer `dvh` to `vh`/`h-screen`: on a phone `100vh` includes the address bar.
+
 ## Adding a module
 
 1. Add its entry to `MODULE_NAVIGATION` in `shared/constants/navigation.ts`.

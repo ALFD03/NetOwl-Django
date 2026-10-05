@@ -73,22 +73,22 @@ export const NeonContainer: FC<NeonContainerProps> = ({
   return (
     <div className={`h-full rounded-3xl border shadow-2xl flex flex-col justify-between overflow-hidden relative ${currentTheme.card} ${className}`}>
       {(title || headerAction) && (
-        <div className="p-6 border-b border-slate-800/80 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="p-4 sm:p-6 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+          <div className="flex min-w-0 items-center gap-3">
             {icon && (
               <div className={`p-2.5 rounded-2xl border ${currentTheme.iconBg}`}>
                 {icon}
               </div>
             )}
-            <div>
+            <div className="min-w-0">
               {title && <h3 className={`text-xs font-black uppercase tracking-wider ${currentTheme.title}`}>{title}</h3>}
               {subtitle && <p className="text-[10px] text-slate-400 font-medium mt-0.5">{subtitle}</p>}
             </div>
           </div>
-          {headerAction && <div>{headerAction}</div>}
+          {headerAction && <div className="min-w-0 max-w-full">{headerAction}</div>}
         </div>
       )}
-      <div className={noPadding ? 'flex-1' : 'p-6 flex-1'}>
+      <div className={noPadding ? 'flex-1 min-w-0' : 'p-4 sm:p-6 flex-1 min-w-0'}>
         {children}
       </div>
     </div>

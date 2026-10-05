@@ -18,7 +18,7 @@ const dec = formatTwoDecimals;
  * del catálogo.
  */
 export const buildAnalyticsDimensionColumns = (s: SemaforoObjetivos): Column<DimensionVal>[] => [
-  { header: 'Valor', accessor: (r) => <StickyLabel>{r.valor}</StickyLabel>, sortKey: 'valor' },
+  { header: 'Valor', accessor: (r) => <StickyLabel>{r.valor}</StickyLabel>, sortKey: 'valor', sticky: true },
 
   { header: 'Base Ini', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
   { header: 'Base Fin', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },

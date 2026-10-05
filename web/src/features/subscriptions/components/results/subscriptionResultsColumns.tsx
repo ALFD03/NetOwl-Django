@@ -62,7 +62,7 @@ export function conCumplimiento(
 
 /** Full dimensional breakdown shown inside the period modal, con el semáforo en churn y crecimiento. */
 export const buildDimensionColumns = (s: SemaforoObjetivos): Column<SubscriptionResultDimensionRow>[] => [
-  { header: 'Etiqueta', accessor: (r) => <StickyLabel minWidth="160px">{r.valor}</StickyLabel>, sortKey: 'valor' },
+  { header: 'Etiqueta', accessor: (r) => <StickyLabel minWidth="160px">{r.valor}</StickyLabel>, sortKey: 'valor', sticky: true },
   { header: 'Base Ini', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
   { header: 'Base Fin', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
   { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{int(r.nuevos)}</span>, align: 'right', sortKey: 'nuevos' },

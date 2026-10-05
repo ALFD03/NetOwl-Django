@@ -16,7 +16,7 @@ import { Activity, Calendar, Clock, Loader2, RefreshCw, Timer } from 'lucide-rea
 import { DIMENSION_CONFIG } from '@/shared/constants/labels';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
 import {
-  Column, DataTable, EmptyState, MetricCard, NeonContainer, PeriodSelector, StatusMessage, ToggleGroup,
+  Column, DataTable, EmptyState, MetricCard, NeonContainer, PeriodSelector, StatusMessage, StickyLabel, ToggleGroup,
 } from '@/shared/ui';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
 import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
@@ -62,11 +62,10 @@ const DIMENSION_COLUMNS: Column<LifetimeDimensionFila>[] = [
   {
     header: 'Etiqueta',
     accessor: (r) => (
-      <span className="sticky left-0 z-10 block min-w-[140px] bg-surface-secondary pr-4 font-bold text-white">
-        {r.valor}
-      </span>
+      <StickyLabel minWidth="140px">{r.valor}</StickyLabel>
     ),
     sortKey: 'valor',
+    sticky: true,
   },
   { header: 'Bajas', accessor: (r) => formatInteger(r.bajas), align: 'right', sortKey: 'bajas' },
   {
