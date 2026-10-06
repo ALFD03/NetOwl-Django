@@ -14,7 +14,6 @@ import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
 import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
 import { buildSalesSites, type ZonasConfig } from '@/features/subscriptions/lib/dayReports';
 import type { DayMetrics } from '@/shared/types/domain';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { SalesReportView } from '@/features/subscriptions/components/reports/SalesReportView';
 import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
@@ -66,10 +65,8 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
 
   return (
     <AppLayout
-      title="Reporte Regional de Ventas"
       toolbar={
         <>
-          <ModuleHeader module="subscriptions" activeTab="sales" />
           <SubscriptionReportFilters
             period={currentPeriod}
             periods={reportData.periods ?? []}

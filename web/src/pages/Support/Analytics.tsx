@@ -20,7 +20,6 @@ import { useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import {
   SUPPORT_DAY_CARDS,
   SUPPORT_DAY_CHARTS,
@@ -96,10 +95,8 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
 
   return (
     <AppLayout
-      title="Análisis de Soporte Técnico por Periodo"
       toolbar={
         <>
-          <ModuleHeader module="support" activeTab="analytics" />
           <SupportAnalyticsFilters
             periods={periods}
             selectedPeriod={periodo}

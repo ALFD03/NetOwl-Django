@@ -15,19 +15,30 @@
 import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePage } from '@inertiajs/react';
+import { ChevronRight } from 'lucide-react';
 
+import { resolveLocation } from '@/shared/constants/navigation';
 import type { AuthenticatedPageProps } from '@/shared/types/inertia';
 import { AnalysisQueueAlert } from './AnalysisQueueAlert';
 import { MobileNavDrawer, MobileTopBar, Sidebar } from './Sidebar';
 
 interface Props {
   children: React.ReactNode;
+  /**
+   * Encabezado de las pantallas que no están en el registro de navegación (la
+   * gestión de usuarios). En un módulo no se usa: el encabezado es la ruta
+   * «Módulo › Página», sacada de la URL.
+   */
   title?: string;
   /**
-   * Navegacion del modulo y filtros (periodo, dimension, dias). Va aqui y no
-   * dentro de `children` porque esta zona queda fija arriba (desde `lg`): al
-   * bajar por la pantalla se sigue teniendo a mano el cambio de pagina,
-   * dimension y periodo.
+   * Tercer tramo de la ruta, para una subruta que cuelga de una página del
+   * registro (el maestro de planes, dentro de Reporte ETA).
+   */
+  subpagina?: string;
+  /**
+   * Filtros (periodo, dimension, dias). Van aqui y no dentro de `children`
+   * porque esta zona queda fija arriba (desde `lg`): al bajar por la pantalla
+   * se siguen teniendo a mano la dimension y el periodo.
    */
   toolbar?: React.ReactNode;
 }
@@ -43,7 +54,7 @@ function leerPlegado(): boolean {
   }
 }
 
-export function AppLayout({ children, title, toolbar }: Props) {
+export function AppLayout({ children, title, subpagina, toolbar }: Props) {
   const { url, props } = usePage<AuthenticatedPageProps>();
   const username = props.auth.user.username;
 
@@ -66,6 +77,11 @@ export function AppLayout({ children, title, toolbar }: Props) {
 
   const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
 
+  // La ruta de migas sale de la URL, igual que la página marcada en el
+  // sidebar: las páginas no declaran dónde están.
+  const ubicacion = resolveLocation(url);
+  const ModuloIcon = ubicacion?.item.icon;
+
   return (
     // El scroll vive en <main>, no en la ventana: es lo que convierte a la
     // barra superior en un `sticky` real y mantiene el sidebar completo.
@@ -80,14 +96,32 @@ export function AppLayout({ children, title, toolbar }: Props) {
       <main data-app-scroll className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
         <MobileTopBar onOpenMenu={() => setMenuAbierto(true)} />
 
-        {(title || toolbar) && (
+        {(title || toolbar || ubicacion) && (
           <div className="bg-surface-primary/95 px-4 pb-4 pt-4 sm:px-6 lg:sticky lg:top-0 lg:z-30 lg:px-8 lg:pt-6 lg:shadow-lg lg:shadow-surface-primary/50 lg:backdrop-blur">
             {/* Si la barra crece demasiado (filtros + barra de dias) hace
                 scroll interno en vez de comerse la pantalla. Solo cuando es
                 fija: suelta, crece con la pagina como todo lo demas. */}
             <div className="flex flex-col gap-4 lg:max-h-[55vh] lg:overflow-y-auto [&>*]:mb-0">
-              {title && (
-                <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">{title}</h2>
+              {ubicacion && ModuloIcon ? (
+                <nav
+                  aria-label="Ubicación"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-bold tracking-tight sm:text-xl"
+                >
+                  <ModuloIcon className="h-5 w-5 shrink-0 text-brand" />
+                  <span className="text-slate-400">{ubicacion.item.name}</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
+                  {subpagina ? (
+                    <>
+                      <span className="text-slate-400">{ubicacion.page.label}</span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
+                      <span aria-current="page" className="text-white">{subpagina}</span>
+                    </>
+                  ) : (
+                    <span aria-current="page" className="text-white">{ubicacion.page.label}</span>
+                  )}
+                </nav>
+              ) : (
+                title && <h2 className="text-xl font-bold tracking-tight text-white sm:text-2xl">{title}</h2>
               )}
               {toolbar}
             </div>

@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import {
   Button, DataTable, EmptyState, Modal, NeonContainer, StatusMessage, ToggleGroup,
   type Column,
@@ -246,10 +245,8 @@ export function CatalogosView({
 
   return (
     <AppLayout
-      title="Catálogos de Subscriptions"
       toolbar={
         <>
-          <ModuleHeader module="subscriptions" activeTab="catalogos" />
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
             <ToggleGroup
               activeKey={c.vista}

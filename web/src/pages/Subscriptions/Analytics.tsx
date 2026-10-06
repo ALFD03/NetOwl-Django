@@ -8,7 +8,6 @@
 import { useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { useSubscriptionsAnalyticsData } from '@/features/subscriptions/hooks/useSubscriptionsAnalyticsData';
 import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, ProyeccionCierre, type DimensionKey } from '@/features/subscriptions/components/analytics';
 import { CampannasExportButton } from '@/features/subscriptions/components/campaigns/CampannasExportButton';
@@ -81,10 +80,8 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
 
   return (
     <AppLayout
-      title="Subscriptions Advanced Analytics"
       toolbar={
         <>
-          <ModuleHeader module="subscriptions" activeTab="analytics" />
           <AnalyticsFilters
             periods={periodos.map((period) => period.periodo_reporte)}
             selectedPeriod={selectedPeriod}

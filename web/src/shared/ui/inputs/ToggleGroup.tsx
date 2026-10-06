@@ -28,9 +28,8 @@ function renderIcon(icon?: ReactNode | LucideIcon) {
 /**
  * Segmented control for switching between mutually exclusive views.
  *
- * Por debajo de `lg` es una tira con scroll horizontal, como las pestañas de
- * `ModuleHeader`: los nueve catálogos envueltos ocupaban media pantalla de un
- * teléfono antes de llegar a los datos. Desde `lg` envuelve en filas.
+ * Por debajo de `lg` es una tira con scroll horizontal: los nueve catálogos
+ * envueltos ocupaban media pantalla de un teléfono antes de llegar a los datos. Desde `lg` envuelve en filas.
  */
 export function ToggleGroup({ options, activeKey, onChange, className }: ToggleGroupProps) {
   return (

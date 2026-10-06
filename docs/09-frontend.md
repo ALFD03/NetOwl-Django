@@ -136,19 +136,27 @@ porque `shared` no puede depender de un feature; los features los reexportan.
   pegajosa; por debajo, `MobileTopBar` con hamburguesa que abre
   `MobileNavDrawer` y la `toolbar` deja de ser fija. Las reglas de cada
   breakpoint están en `web/src/README.md` («Phones and breakpoints»).
-- **`Sidebar`** — `SidebarContent` es un solo contenido (logo, módulos, pie de
-  usuario) montado en dos marcos: `Sidebar` (desde `lg`) y `MobileNavDrawer`.
+- **`Sidebar`** — **la única navegación de la app**: un árbol de módulos y sus
+  páginas, agrupadas por `section` (Reportes, Configuración). Los módulos
+  desplegados se recuerdan en `localStorage`, y el de la página actual llega
+  siempre abierto. Plegado a iconos, cada módulo abre sus páginas en un panel al
+  pasar por encima o al llegar con el teclado. `SidebarContent` es un solo
+  contenido (logo, árbol, pie de usuario) montado en dos marcos: `Sidebar`
+  (desde `lg`) y `MobileNavDrawer`.
+- **Ruta de migas** — es el encabezado de toda página de un módulo: `AppLayout`
+  pinta «Módulo › Página», resuelta de la URL con `resolveLocation`. Las páginas
+  no llevan título ni declaran dónde están. `subpagina` añade un tercer tramo a
+  una subruta (Reporte ETA › Maestro de planes); `title` queda solo para las
+  pantallas fuera del registro (la gestión de usuarios).
 - **`AnalysisQueueAlert`** — el aviso flotante que sigue la cola. Vive en
   `shared/layout` y no en `features/imports` porque lo monta `AppLayout` y
   **shared no puede importar de features**. No pinta nada si la cola está vacía.
-- **`ModuleHeader module="…" activeTab="…"`** — lee `MODULE_NAVIGATION`
-  directamente; **no hay componentes de cabecera por módulo**.
 
 ### `constants`
 
 | Fichero | Contenido |
 |---|---|
-| `navigation.ts` | `APP_NAVIGATION` (sidebar) y `MODULE_NAVIGATION` (pestañas). `firstVisibleTabHref(module, can)` evita apuntar el sidebar a una pestaña que el usuario no puede abrir, que es la misma resolución que hace `/imports/` en el servidor |
+| `navigation.ts` | `APP_NAVIGATION`: los módulos y sus páginas. `visibleNavigation(can)` filtra por permisos y oculta el módulo sin ninguna página visible (la misma resolución que hace `/imports/` en el servidor); `resolveLocation(url)` da el módulo y la página de una URL (gana el `href` que sea el prefijo más largo, así `eta-report/config/` cuelga de Reporte ETA) |
 | `permissions.ts` | `PERMISSIONS` — **espejo manual** de `PERMISSION_FIELDS` del backend. También `IMPORT_ACTION_PERMISSIONS` y `ANALYSIS_ACTION_PERMISSIONS`, los pares granular + comodín |
 | `design-tokens.json` | **La única fuente de color y de breakpoints** (`screens`), leída por `tailwind.config.js` (Node) y por `shared/constants/theme` y `breakpoints` (TS) |
 | `breakpoints.ts` | `BREAKPOINTS` y `mediaDesde(bp)`, con el papel de cada breakpoint. Lo usa `useBreakpoint(bp)` (`shared/hooks`) |
@@ -294,8 +302,9 @@ concentra la lectura de los bloques de métricas y las etiquetas de las medidas
 
 ## Añadir un módulo
 
-1. Añadir su entrada a `MODULE_NAVIGATION` en `shared/constants/navigation.ts`
-   (y a `APP_NAVIGATION` si va en el sidebar).
+1. Añadir su entrada, con sus `pages`, a `APP_NAVIGATION` en
+   `shared/constants/navigation.ts`. El sidebar y la ruta de migas salen de ahí;
+   no hay nada más que registrar.
 2. Crear `features/<module>/` con `types.ts`, `hooks/`, `components/` e
    `index.ts`.
 3. Crear las páginas bajo `pages/<Module>/`, **con el nombre exacto que pasa la

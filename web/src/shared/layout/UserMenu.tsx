@@ -1,6 +1,6 @@
 /** Pie del sidebar: acceso a configuración, usuario de la sesión y salida. */
 
-import { LogOut, ShieldCheck } from 'lucide-react';
+import { LogOut, PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
 import { Link, router } from '@inertiajs/react';
 
 import { cn } from '@/shared/lib/cn';
@@ -12,6 +12,8 @@ interface UserMenuProps {
   /** Solo iconos, para el sidebar plegado. */
   compact?: boolean;
   onNavigate?: () => void;
+  /** Pliega o despliega el sidebar; sin él (el cajón del teléfono) no hay botón. */
+  onToggleCollapsed?: () => void;
 }
 
 export function UserMenu({
@@ -20,6 +22,7 @@ export function UserMenu({
   isUsersPageActive,
   compact = false,
   onNavigate,
+  onToggleCollapsed,
 }: UserMenuProps) {
   return (
     <div className="space-y-2 border-t border-slate-800 pt-4">
@@ -37,20 +40,36 @@ export function UserMenu({
               : 'border-slate-700 text-slate-300 hover:bg-surface-hover hover:text-white',
           )}
         >
-          <ShieldCheck className="h-4 w-4 text-brand" />
+          {/* Activo, el fondo ya es `bg-brand`: el icono en `text-brand` desaparecía. */}
+          <ShieldCheck className={cn('h-4 w-4', !isUsersPageActive && 'text-brand')} />
           {!compact && <span>Configuración</span>}
         </Link>
       )}
 
       <div
         className={cn(
-          'flex items-center rounded-lg bg-surface-tertiary p-2 text-xs',
-          compact ? 'justify-center' : 'justify-between',
+          'flex items-center gap-1 rounded-lg bg-surface-tertiary p-1.5 text-xs',
+          compact && 'flex-col',
         )}
         title={compact ? username : undefined}
       >
+        {/* Plegar el menú es un icono discreto junto a la sesión, no un botón
+            ancho propio: se usa poco y no debe competir con la navegación. */}
+        {onToggleCollapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            title={compact ? 'Mostrar el menú' : 'Ocultar el menú'}
+            aria-label={compact ? 'Mostrar el menú' : 'Ocultar el menú'}
+            aria-expanded={!compact}
+            className="shrink-0 rounded-md p-1.5 text-slate-500 transition-colors hover:bg-surface-hover hover:text-slate-200"
+          >
+            {compact ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+          </button>
+        )}
+
         {!compact && (
-          <div className="truncate">
+          <div className="min-w-0 flex-1 truncate px-1">
             <p className="text-slate-400">Sesión:</p>
             <p className="truncate font-semibold text-white">{username}</p>
           </div>
