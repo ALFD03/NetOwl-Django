@@ -1,7 +1,6 @@
 /** Página Inertia `Imports/Crm` (`/imports/crm/`). */
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { usePermissions } from '@/shared/hooks/usePermissions';
 import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
 import { importsApi } from '@/shared/lib/api/imports';
@@ -16,7 +15,7 @@ export default function ImportCrm() {
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.crm);
 
   return (
-    <AppLayout title="Importar CRM Analytics" toolbar={<ModuleHeader module="imports" activeTab="crm" />}>
+    <AppLayout>
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {canUpload && (
           <CsvUploadCard

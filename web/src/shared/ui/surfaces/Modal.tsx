@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
+import { useScrollLock } from '@/shared/hooks/useScrollLock';
+
 export type ModalTheme = 'slate' | 'blue' | 'green' | 'red' | 'yellow' | 'purple';
 
 interface ModalProps {
@@ -34,44 +36,26 @@ export function Modal({
     onCloseRef.current = onClose;
   });
 
+  useScrollLock(isOpen);
+
   useEffect(() => {
-    // Un modal cerrado no debe tocar los estilos globales. Antes la limpieza
-    // corria igualmente, asi que en una pantalla con varios modales montados
-    // (Configuracion tiene cinco) los cerrados le quitaban el bloqueo de
-    // scroll al que si estaba abierto, en cada render. Ese vaiven de
-    // `overflow` reajusta la barra de scroll, y un desplegable nativo abierto
-    // -el `<select>` de grupo, el de periodo- se cierra solo cuando eso pasa.
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
     };
 
-    // El scroll de la app vive en <main data-app-scroll>, no en el body:
-    // hay que congelar ese contenedor para que el fondo no se mueva.
-    const scroller = document.querySelector<HTMLElement>('[data-app-scroll]');
-    const bodyPrevio = document.body.style.overflow;
-    const scrollerPrevio = scroller?.style.overflow ?? '';
-
-    document.body.style.overflow = 'hidden';
-    if (scroller) scroller.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      // Se restaura lo que hubiera, en vez de asumir 'auto': si hay un modal
-      // encima del otro, el de abajo debe seguir bloqueando.
-      document.body.style.overflow = bodyPrevio;
-      if (scroller) scroller.style.overflow = scrollerPrevio;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
+  // Los anchos solo rigen desde `sm`: por debajo el modal ocupa la pantalla.
   const sizes = {
-    sm: 'max-w-md',
-    md: 'max-w-lg',
-    lg: 'max-w-2xl',
-    xl: 'max-w-4xl',
-    wide: 'max-w-[85vw]',
+    sm: 'sm:max-w-md',
+    md: 'sm:max-w-lg',
+    lg: 'sm:max-w-2xl',
+    xl: 'sm:max-w-4xl',
+    wide: 'sm:max-w-[85vw]',
   };
 
   const themeBorders: Record<ModalTheme, string> = {
@@ -86,7 +70,9 @@ export function Modal({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        // En el teléfono el modal sube desde abajo y ocupa el ancho entero (una
+        // hoja); desde `sm` vuelve a ser la tarjeta centrada.
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
           {/* Backdrop con Blur suave */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -102,25 +88,25 @@ export function Modal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 15 }}
             transition={{ type: 'spring', damping: 25, stiffness: 320 }}
-            className={`relative w-full ${sizes[size]} bg-gradient-to-br from-slate-900 via-surface-secondary to-surface-primary border ${themeBorders[theme]} rounded-3xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[90vh]`}
+            className={`relative w-full ${sizes[size]} bg-gradient-to-br from-slate-900 via-surface-secondary to-surface-primary border ${themeBorders[theme]} rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[92dvh] sm:max-h-[90vh]`}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800/80 bg-slate-900/40 flex-shrink-0">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5 border-b border-slate-800/80 bg-slate-900/40 flex-shrink-0">
+              <div className="flex min-w-0 items-center gap-3">
                 {icon && (
                   <div className="p-2 rounded-xl bg-surface-primary border border-slate-800">
                     {icon}
                   </div>
                 )}
-                <div>
-                  <h3 className="text-base font-black text-white tracking-tight uppercase">{title}</h3>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-black text-white tracking-tight uppercase">{title}</h3>
                   {subtitle && <p className="text-[11px] text-slate-400 font-medium">{subtitle}</p>}
                 </div>
               </div>
 
               <button
                 onClick={onClose}
-                className="p-2 rounded-xl text-slate-400 hover:text-white bg-surface-primary hover:bg-rose-500/20 border border-slate-800 hover:border-rose-500/40 transition-all"
+                className="shrink-0 p-2 rounded-xl text-slate-400 hover:text-white bg-surface-primary hover:bg-rose-500/20 border border-slate-800 hover:border-rose-500/40 transition-all"
                 title="Cerrar (Esc)"
               >
                 <X className="w-4 h-4" />
@@ -128,7 +114,7 @@ export function Modal({
             </div>
 
             {/* Body con Scroll Personalizado */}
-            <div className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 custom-scrollbar">
               {children}
             </div>
           </motion.div>

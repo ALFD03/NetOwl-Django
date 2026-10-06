@@ -15,7 +15,7 @@ export function SearchInput({ value, placeholder = 'Buscar...', onChange, classN
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={`bg-surface-primary border-slate-700/60 px-4 py-2.5 text-xs text-white outline-none focus:border-brand ${className}`}
+      className={`min-w-0 bg-surface-primary border-slate-700/60 px-4 py-2.5 text-xs text-white outline-none focus:border-brand ${className}`}
     />
   );
 }

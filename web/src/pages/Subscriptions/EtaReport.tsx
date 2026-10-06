@@ -5,7 +5,6 @@ import { Link } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
 import { EtaReportToolbar } from '@/features/subscriptions/components/eta/EtaReportToolbar';
@@ -77,10 +76,8 @@ export default function EtaReport({ etaData }: EtaReportProps) {
 
   return (
     <AppLayout
-      title="Reporte Regulatorio ETA"
       toolbar={
         <>
-          <ModuleHeader module="subscriptions" activeTab="eta" />
           <EtaReportToolbar
             period={selectedPeriod}
             periods={data.periods ?? []}

@@ -16,7 +16,7 @@ const hrs = formatOneDecimal;
  * bucket — so it is the table to check a chart against.
  */
 export const CRM_ANALYTICS_COLUMNS: Column<CrmDimensionValue>[] = [
-  { header: 'Valor', accessor: (r) => <StickyLabel>{r.valor}</StickyLabel>, sortKey: 'valor' },
+  { header: 'Valor', accessor: (r) => <StickyLabel>{r.valor}</StickyLabel>, sortKey: 'valor', sticky: true },
 
   { header: 'Oportunidades', accessor: (r) => int(r.total_oportunidades), align: 'right', sortKey: 'total_oportunidades' },
   { header: 'Ganados', accessor: (r) => <span className="text-emerald-400">{int(r.ganados)}</span>, align: 'right', sortKey: 'ganados' },

@@ -33,8 +33,8 @@ export function CrmAnalyticsFilters({
         onChange={onPeriodChange}
       />
 
-      <div className="flex items-center gap-1 rounded-2xl border border-slate-700/50 bg-surface-secondary p-1.5 shadow-2xl">
-        <span className="border-r border-slate-800 px-3 text-[10px] font-black uppercase text-slate-500">
+      <div className="flex w-full min-w-0 items-center gap-1 rounded-2xl border border-slate-700/50 bg-surface-secondary p-1.5 shadow-2xl sm:w-auto sm:max-w-full">
+        <span className="shrink-0 border-r border-slate-800 px-3 text-[10px] font-black uppercase text-slate-500">
           Analizar por
         </span>
         <ToggleGroup

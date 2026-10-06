@@ -1,9 +1,12 @@
 /** Envoltorio de la gráfica de anillo de Chart.js. */
 
+import { useMemo } from 'react';
 import type { ChartData, ChartOptions, Plugin } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Doughnut } from 'react-chartjs-2';
 
+import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { compactarAnillo } from './compacto';
 import { centerTextPlugin } from './plugins';
 
 interface DoughnutChartProps {
@@ -27,9 +30,15 @@ export function DoughnutChart({
   plugins = DEFAULT_PLUGINS,
   className = 'h-96 w-full',
 }: DoughnutChartProps) {
+  const ancho = useBreakpoint('sm');
+  const resolvedOptions = useMemo(
+    () => (ancho || !options ? options : compactarAnillo(options)),
+    [options, ancho],
+  );
+
   return (
     <div className={className}>
-      <Doughnut data={data} options={options} plugins={plugins} />
+      <Doughnut data={data} options={resolvedOptions} plugins={plugins} />
     </div>
   );
 }

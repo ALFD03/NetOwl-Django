@@ -5,7 +5,6 @@ import {
 } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
 import { formatTwoDecimals } from '@/shared/utils/formatters';
 import { useEtaManagement } from '@/features/subscriptions/hooks/useEtaManagement';
@@ -168,10 +167,9 @@ export function EtaManagementView({
 
   return (
     <AppLayout
-      title="Gestión Maestro de Planes ETA"
+      subpagina="Maestro de planes"
       toolbar={
         <>
-          <ModuleHeader module="subscriptions" activeTab="eta" />
           <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap gap-1 bg-surface-secondary p-1.5 rounded-2xl border border-slate-800 shadow-xl">
               {[

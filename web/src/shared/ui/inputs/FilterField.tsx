@@ -39,8 +39,11 @@ export function FilterField({ label, icon, children, grow = false, className, ti
     <div
       title={title}
       className={cn(
-        'group flex items-center overflow-hidden rounded-2xl border border-slate-700/50 bg-surface-secondary shadow-2xl',
-        grow && 'min-w-[280px] flex-1',
+        // En el teléfono cada cápsula ocupa su fila entera, y el control se
+        // estira dentro (ver `FILTER_TRIGGER_CLASS`); desde `sm` vuelven a su
+        // ancho natural y se alinean en fila.
+        'group flex w-full min-w-0 items-center overflow-hidden rounded-2xl border border-slate-700/50 bg-surface-secondary shadow-2xl sm:w-auto',
+        grow && 'sm:min-w-[280px] sm:flex-1',
         className,
       )}
     >
@@ -62,4 +65,4 @@ export function FilterField({ label, icon, children, grow = false, className, ti
  * por `className` y la cápsula no envuelve al botón, lo acompaña.
  */
 export const FILTER_TRIGGER_CLASS =
-  'flex min-w-[130px] cursor-pointer items-center justify-between gap-2 py-2.5 pl-4 pr-3 text-xs font-bold text-white outline-none hover:bg-white/5';
+  'flex min-w-0 flex-1 cursor-pointer sm:min-w-[130px] items-center justify-between gap-2 py-2.5 pl-4 pr-3 text-xs font-bold text-white outline-none hover:bg-white/5';

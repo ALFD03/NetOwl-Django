@@ -9,7 +9,6 @@
 import { useState } from 'react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { usePermissions } from '@/shared/hooks/usePermissions';
 import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
@@ -82,7 +81,7 @@ export default function ImportSubscriptions() {
   };
 
   return (
-    <AppLayout title="Importar Subscriptions" toolbar={<ModuleHeader module="imports" activeTab="subscriptions" />}>
+    <AppLayout>
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {canUpload && (
           <CsvUploadCard
@@ -91,7 +90,7 @@ export default function ImportSubscriptions() {
             errorMessage="Error al procesar la importación."
             onUpload={subirArchivo}
           >
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               {IMPORT_TYPES.map((option) => (
                 <label
                   key={option.value}

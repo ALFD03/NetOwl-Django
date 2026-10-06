@@ -169,10 +169,12 @@ export function NodePerformanceTable<T extends CommercialNode>({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-separate border-spacing-0 text-left">
+      {/* `whitespace-nowrap`: en un teléfono la tabla se desliza en vez de
+          partir cada cifra en dos líneas. La primera columna queda fijada. */}
+      <table className="w-full whitespace-nowrap border-separate border-spacing-0 text-left [&_td:not(:first-child)]:pl-3 [&_th:not(:first-child)]:pl-3">
         <thead>
           <tr className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-            <th className="pb-3 pl-2">{labelHeader}</th>
+            <th className="sticky left-0 z-10 bg-surface-secondary pb-3 pl-2 pr-3">{labelHeader}</th>
             <th className="pb-3 text-right">Inicio</th>
             <th className="pb-3 text-right text-emerald-500">
               <TrendingUp className="mr-1 inline h-3 w-3" />Inst.
@@ -218,9 +220,11 @@ export function NodePerformanceTable<T extends CommercialNode>({
 
             return (
               <tr key={idx} className="group transition-colors hover:bg-white/5">
-                <td className="flex items-center gap-2 py-3 pl-2 font-black text-white">
-                  {renderBadge?.(node)}
-                  <span>{node.zona_sucursal}</span>
+                <td className="sticky left-0 z-10 bg-surface-secondary py-3 pl-2 pr-3 font-black text-white">
+                  <div className="flex items-center gap-2">
+                    {renderBadge?.(node)}
+                    <span>{node.zona_sucursal}</span>
+                  </div>
                 </td>
                 <td className={num('text-slate-400')}>{formatInteger(node.activos_inicio)}</td>
                 <td className={num('text-emerald-400')}>+{formatInteger(node.nuevos)}</td>

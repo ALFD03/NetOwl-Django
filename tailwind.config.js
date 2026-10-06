@@ -15,6 +15,10 @@ export default {
   ],
   darkMode: 'class',
   theme: {
+    // Los breakpoints se declaran enteros (no en `extend`) para que no haya más
+    // que estos cinco. Qué significa cada uno está en `shared/constants/breakpoints.ts`,
+    // que lee los mismos valores para los hooks de JS.
+    screens: tokens.screens,
     extend: {
       colors: {
         surface: tokens.surface,

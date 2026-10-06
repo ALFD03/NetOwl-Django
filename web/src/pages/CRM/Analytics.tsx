@@ -20,7 +20,6 @@ import { useState } from 'react';
 import { router } from '@inertiajs/react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import {
   CampanasExportButton,
   CRM_DAY_CARDS,
@@ -79,10 +78,8 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
 
   return (
     <AppLayout
-      title="CRM Analytics"
       toolbar={
         <>
-          <ModuleHeader module="crm" activeTab="analytics" />
           <CrmAnalyticsFilters
             periods={periods}
             selectedPeriod={selectedPeriod}

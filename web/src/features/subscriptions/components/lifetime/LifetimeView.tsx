@@ -16,10 +16,10 @@ import { Activity, Calendar, Clock, Loader2, RefreshCw, Timer } from 'lucide-rea
 import { DIMENSION_CONFIG } from '@/shared/constants/labels';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
 import {
-  Column, DataTable, EmptyState, MetricCard, NeonContainer, PeriodSelector, StatusMessage, ToggleGroup,
+  Column, DataTable, EmptyState, MetricCard, NeonContainer, PeriodSelector, StatusMessage, StickyLabel, ToggleGroup,
 } from '@/shared/ui';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
+import { formatInteger } from '@/shared/utils/formatters';
 import { colorTramo } from '../../charts/lifetimeChart';
 import type { LifetimeDimensionFila, LifetimeMes, LifetimeResumen } from '../../types';
 import { LifetimeExportButton } from './LifetimeExportButton';
@@ -62,11 +62,10 @@ const DIMENSION_COLUMNS: Column<LifetimeDimensionFila>[] = [
   {
     header: 'Etiqueta',
     accessor: (r) => (
-      <span className="sticky left-0 z-10 block min-w-[140px] bg-surface-secondary pr-4 font-bold text-white">
-        {r.valor}
-      </span>
+      <StickyLabel minWidth="140px">{r.valor}</StickyLabel>
     ),
     sortKey: 'valor',
+    sticky: true,
   },
   { header: 'Bajas', accessor: (r) => formatInteger(r.bajas), align: 'right', sortKey: 'bajas' },
   {
@@ -164,35 +163,9 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
     );
   }
 
-  const cuadra = lifetime.bajas_reporte === null || lifetime.bajas_reporte === lifetime.bajas_mes;
-  const fuera = [
-    ...Object.entries(lifetime.excluidas).map(([campanna, n]) => `${formatInteger(n)} de «${campanna}»`),
-    ...(lifetime.anteriores > 0 ? [`${formatInteger(lifetime.anteriores)} instaladas antes de 2026`] : []),
-  ];
-
   return (
     <div className="space-y-6">
       {toolbar}
-
-      {/* El encabezado del mes: de dónde salen las bajas medidas y cuáles no. */}
-      <div className="space-y-3">
-        <p className="text-sm text-slate-400">
-          {formatPeriodoLabel(lifetime.mes)}: {formatInteger(lifetime.bajas_mes)} bajas en el cierre mensual, de las
-          que se miden {formatInteger(lifetime.bajas)}.
-          {fuera.length > 0 && <> Quedan fuera {fuera.join(', ')}.</>}
-          {lifetime.mes_en_curso && (
-            <> Mes en curso: datos hasta el {lifetime.fecha_corte}, y sus bajas todavía pueden volver antes del cierre.</>
-          )}
-        </p>
-        {!cuadra && (
-          <StatusMessage
-            status={{
-              type: 'warning',
-              text: `El cierre mensual guardado cuenta ${formatInteger(lifetime.bajas_reporte ?? 0)} bajas y aquí salen ${formatInteger(lifetime.bajas_mes)}: uno de los dos se calculó con otros datos. Recalcula el que esté atrasado.`,
-            }}
-          />
-        )}
-      </div>
 
       <NeonContainer
         theme="blue"

@@ -227,13 +227,13 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
             </div>
 
             <div className="overflow-hidden rounded-3xl border border-slate-800 bg-surface-primary shadow-inner">
-              <div className="flex items-center justify-between border-b border-slate-800 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 p-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
                   Desglose Numérico por Periodo
                 </span>
                 <span className="font-mono text-xs font-bold text-brand">{periodsLabel}</span>
               </div>
-              <div className="custom-scrollbar max-h-60 overflow-y-auto">
+              <div className="custom-scrollbar max-h-60 overflow-auto">
                 <table className={READONLY_TABLE}>
                   <thead className={READONLY_TABLE_HEAD_STICKY}>
                     <tr>

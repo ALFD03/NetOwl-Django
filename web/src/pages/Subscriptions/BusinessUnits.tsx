@@ -15,7 +15,6 @@ import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
 import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
 import { buildBusinessUnitGroups, type ZonasConfig } from '@/features/subscriptions/lib/dayReports';
 import type { DayMetrics } from '@/shared/types/domain';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { BusinessUnitsView } from '@/features/subscriptions/components/reports/BusinessUnitsView';
 import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
@@ -66,10 +65,8 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
 
   return (
     <AppLayout
-      title="Business Units"
       toolbar={
         <>
-          <ModuleHeader module="subscriptions" activeTab="business_units" />
           <SubscriptionReportFilters
             period={buData.period ?? ''}
             periods={buData.periods ?? []}

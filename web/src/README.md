@@ -13,8 +13,7 @@ src/
 ├── app/          Bootstrap only: main.tsx, csrf, providers
 ├── shared/       Reusable across every module. Knows nothing about any feature.
 │   ├── ui/       The component kit, grouped by kind (see below)
-│   ├── layout/   AppLayout, Sidebar, UserMenu
-│   ├── navigation/  ModuleHeader
+│   ├── layout/   AppLayout, Sidebar (the navigation tree), UserMenu
 │   ├── charts/   Chart.js wrappers, shared options, registration
 │   ├── lib/      cn(), colour helpers, api client, http error handling, daySeries
 │   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts, useDayPayload
@@ -65,14 +64,15 @@ Django views name their component as a string (`inertia_render(request, "CRM/Das
 and `app/main.tsx` resolves it against `import.meta.glob('../pages/**/*.tsx')`. A page file's
 path is therefore fixed — renaming or moving one breaks the backend silently, at runtime.
 
-Pages hold no logic. A page picks a layout, a header and a feature view:
+Pages hold no logic. A page picks a layout and a feature view. It has no title: the
+heading is the breadcrumb ("Module › Page"), derived from the URL, so the page declares
+nothing about where it sits:
 
 ```tsx
 export default function CrmDashboard(props: CrmDashboardProps) {
   const data = useCrmDashboard(props);
   return (
-    <AppLayout title="CRM Analytics Dashboard">
-      <ModuleHeader module="crm" activeTab="dashboard" />
+    <AppLayout>
       <CrmDashboardView data={data} />
     </AppLayout>
   );
@@ -112,7 +112,6 @@ Concretely, these already exist — do not re-inline them:
 | Filter capsule (label cap + control) | `FilterField` |
 | Sortable/searchable/filterable table | `DataTable` |
 | Download button (any file) | `ExportButton` |
-| Module tab bar | `ModuleHeader module="…"` |
 
 **Filters look the way they look in Sales Report and Business Units**, and that
 is not a convention but a component: `FilterField` is the capsule — a dark cap
@@ -173,10 +172,62 @@ for both `tailwind.config.js` and the TypeScript side:
 Tailwind cannot see interpolated class names, so any dynamic class must come from a
 written-out lookup map (see `COLUMNS` in `SummaryStrip`), never a template string.
 
+## Phones and breakpoints
+
+Every screen has to be readable on a phone. Layouts are written **mobile first**:
+the unprefixed class is the phone, and each prefix adds what fits from that width.
+The five breakpoints are declared in `design-tokens.json` (`screens`), which
+`tailwind.config.js` uses as the *whole* set — not `extend` — and which
+`shared/constants/breakpoints.ts` reads for JS. The values are Tailwind's defaults,
+so existing classes kept their meaning; what is new is that each one has a job:
+
+| Prefix | From | Screen | What changes in the shell |
+| --- | --- | --- | --- |
+| — | 0 | Phone, portrait | Menu in a drawer, filters full width, modal as a bottom sheet |
+| `sm:` | 640px | Phone, landscape | Filters back to natural width, modal centred |
+| `md:` | 768px | Tablet, portrait | Card grids at 3–4 columns |
+| `lg:` | 1024px | Tablet landscape / laptop | **Fixed sidebar, sticky toolbar** |
+| `xl:` | 1280px | Desktop | Wide grids, charts side by side |
+| `2xl:` | 1536px | Large desktop | Density only |
+
+`lg` is the one that matters. Below it `AppLayout` has no sidebar: `MobileTopBar`
+shows a hamburger that opens `MobileNavDrawer`, the same `SidebarContent` in a
+drawer. From `lg` the sidebar is fixed and can be folded to an icon rail
+(remembered per browser in `localStorage`); folded, hovering or focusing a module's
+icon opens its pages in a flyout. The toolbar (breadcrumb, filters, day bar) is
+sticky only from `lg` too: on a phone, filters plus the day bar pinned
+on top would leave a third of the screen for the data.
+
+What the shared kit already does, so a view does not have to:
+
+- `ToggleGroup` is a horizontally scrolling strip below `lg` and wraps from `lg`. Don't pass
+  `flex-wrap` to a `ToggleGroup`: it would undo the strip. A wrapper around one
+  needs `min-w-0 max-w-full`, or the strip cannot shrink and the page overflows.
+- `FilterField` is full width below `sm` and its control stretches inside it
+  (`FILTER_TRIGGER_CLASS` carries `flex-1`). A custom control inside a capsule
+  should do the same (`min-w-0 flex-1 sm:flex-none`).
+- `Modal` is a bottom sheet below `sm`; its `size` only applies from `sm`.
+- `Panel`, `NeonContainer` pad `p-4` on a phone and `p-6` from `sm`.
+- `BarChart`, `LineChart`, `DoughnutChart` shrink their value labels, let the
+  X axis rotate to vertical and move the doughnut legend below the ring under
+  `sm` (`shared/charts/compacto.ts`). Build options as usual; the wrapper adapts them.
+- `DataTable` scrolls horizontally. Mark the row's label column `sticky: true`
+  so it stays pinned while the figures slide past (`StickyLabel` only sets its
+  width and style — a `sticky` *inside* a `<td>` cannot leave its cell).
+  A hand-written `<table>` goes inside an `overflow-x-auto` wrapper.
+
+When a class is not enough — Chart.js options, whether to draw something at all —
+use `useBreakpoint('sm')` from `shared/hooks`. Write grids as
+`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`, never a bare `grid-cols-4`, and
+prefer `dvh` to `vh`/`h-screen`: on a phone `100vh` includes the address bar.
+
 ## Adding a module
 
-1. Add its entry to `MODULE_NAVIGATION` in `shared/constants/navigation.ts`.
-   `ModuleHeader` picks it up automatically; there is no per-module header component.
+1. Add its entry, with its `pages`, to `APP_NAVIGATION` in `shared/constants/navigation.ts`.
+   That is the only navigation there is: the sidebar draws it as a tree (pages with a
+   `section` are grouped under it) and `AppLayout` derives the breadcrumb from the URL.
+   A page's sub-routes (`eta-report/config/`) hang from the page whose `href` is their
+   longest prefix.
 2. Create `features/<module>/` with `types.ts`, `hooks/`, `components/`, `index.ts`.
 3. Create the page shells under `pages/<Module>/`, matching the names the Django
    views pass to `inertia_render`.

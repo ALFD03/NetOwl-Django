@@ -110,7 +110,7 @@ function TasaBcvField({
         onChange={(event) => setTexto(event.target.value)}
         onBlur={confirmar}
         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-        className="w-24 bg-transparent px-4 py-2.5 text-xs font-bold text-white placeholder-slate-500 outline-none"
+        className="w-24 min-w-0 flex-1 bg-transparent px-4 py-2.5 text-xs font-bold text-white placeholder-slate-500 outline-none sm:flex-none"
       />
       <button
         type="button"
@@ -156,7 +156,7 @@ function TasaActualField({
         fuente ? `Origen: ${fuente}.` : '',
       ].filter(Boolean).join(' ')}
     >
-      <span className="px-4 py-2.5 text-xs font-bold text-white">
+      <span className="flex-1 px-4 py-2.5 text-xs font-bold text-white sm:flex-none">
         {tasa > 0 ? tasa.toLocaleString('es-VE', { maximumFractionDigits: 4 }) : '—'}
       </span>
       <button

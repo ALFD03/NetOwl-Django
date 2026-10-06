@@ -140,7 +140,7 @@ export interface FormBannerProps {
 export function FormBanner({ title, description, action }: FormBannerProps) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-surface-tertiary/30 p-4">
-      <div>
+      <div className="min-w-0">
         <h6 className="text-xs font-bold text-white">{title}</h6>
         <p className="text-[10px] text-slate-400">{description}</p>
       </div>
