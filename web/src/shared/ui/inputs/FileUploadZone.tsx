@@ -2,16 +2,23 @@
 
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileCheck, X } from 'lucide-react';
+import { cn } from '@/shared/lib/cn';
 import { Button } from '../primitives/Button';
 
 interface FileUploadZoneProps {
   onFileSelect: (file: File | null) => void;
   accept?: string;
+  /**
+   * Hace que la zona crezca hasta llenar el alto que le deje su contenedor
+   * (que debe ser un flex en columna), con el contenido centrado.
+   */
+  fill?: boolean;
 }
 
 export function FileUploadZone({
   onFileSelect,
   accept = '.csv',
+  fill = false,
 }: FileUploadZoneProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -31,7 +38,7 @@ export function FileUploadZone({
   };
 
   return (
-    <div className="space-y-4">
+    <div className={cn('space-y-4', fill && 'flex flex-1 flex-col')}>
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -40,11 +47,13 @@ export function FileUploadZone({
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+        className={cn(
+          'border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all',
+          fill && 'flex flex-1 flex-col items-center justify-center',
           isDragOver
             ? 'border-brand bg-brand/10 scale-[1.01]'
-            : 'border-slate-700 bg-surface-tertiary hover:border-slate-500 hover:bg-surface-hover'
-        }`}
+            : 'border-slate-700 bg-surface-tertiary hover:border-slate-500 hover:bg-surface-hover',
+        )}
       >
         <UploadCloud className="w-12 h-12 text-brand mx-auto mb-3" />
         <h4 className="text-sm font-bold text-white mb-1">Arrastra tu archivo CSV aquí</h4>

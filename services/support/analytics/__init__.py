@@ -9,7 +9,7 @@ from .day_metrics import (
     get_support_day_series,
     get_support_periodos_con_dias,
 )
-from .loader import import_support_csv
+from .loader import campos_odoo_importacion, import_support_csv
 from .queries import (
     get_support_analytics_structured,
     get_support_breakdown,
@@ -22,6 +22,7 @@ from .queries import (
 
 __all__ = [
     "import_support_csv",
+    "campos_odoo_importacion",
     "run_support_analysis",
     "build_support_day_metrics",
     "get_support_day_payload",

@@ -2,14 +2,15 @@
  * Tarjeta de ejecución de un análisis: mes, progreso y consola en vivo.
  *
  * El análisis corre en el worker, así que esta tarjeta sondea la fila del job; si
- * se recarga la página se reengancha al que siga abierto.
+ * se recarga la página se reengancha al que siga abierto. Cancelar no está aquí
+ * sino en el aviso flotante (`AnalysisQueueAlert`), que es el único sitio que ve
+ * toda la cola y está en todas las pantallas.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Ban, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
 
 import { useAsyncAction, type ActionStatus } from '@/shared/hooks/useAsyncAction';
-import { getApiErrorMessage } from '@/shared/lib/api';
 import { followJob, jobsApi, type AnalysisJob, type JobModule } from '@/shared/lib/api/jobs';
 import { Button, ConsoleOutput, MonthPicker, Panel, ProgressBar, StatusMessage } from '@/shared/ui';
 import type { ImportOperationResult } from '../types';
@@ -71,9 +72,6 @@ export function AnalysisRunnerCard({
   // Estado vivo del job: lo que llega en cada sondeo mientras el worker calcula.
   const [job, setJob] = useState<AnalysisJob | null>(null);
   const [isAttached, setIsAttached] = useState(false);
-  // Entre pedir la cancelación y que el worker llegue a su punto de control pasa
-  // un momento: sin esto el botón parecería no haber hecho nada.
-  const [cancelando, setCancelando] = useState(false);
   // Solo mientras se encola, no mientras se calcula: el boton vuelve a estar
   // disponible en cuanto el analisis tiene su sitio en la cola.
   const [enviando, setEnviando] = useState(false);
@@ -88,31 +86,17 @@ export function AnalysisRunnerCard({
   /**
    * Cada estado que llega del sondeo.
    *
-   * Cancelar no es un fallo, y `useAsyncAction` solo sabe de éxito y error: el
-   * desenlace se escribe aquí como aviso, y manda sobre el suyo porque
-   * `validation` tiene preferencia.
+   * Se cancela desde el aviso flotante, pero el desenlace también se refleja
+   * aquí. Cancelar no es un fallo, y `useAsyncAction` solo sabe de éxito y
+   * error: se escribe como aviso, y manda sobre el suyo porque `validation`
+   * tiene preferencia.
    */
   const onJobUpdate = useCallback((vivo: AnalysisJob) => {
     setJob(vivo);
     if (vivo.status === 'cancelled') {
-      setCancelando(false);
       setValidation({ type: 'warning', text: vivo.message || 'Análisis cancelado.' });
     }
   }, []);
-
-  const handleCancel = async () => {
-    if (!job) return;
-    setCancelando(true);
-    try {
-      await jobsApi.cancel(job.id);
-    } catch (error) {
-      setCancelando(false);
-      setValidation({
-        type: 'error',
-        text: getApiErrorMessage(error, 'No se pudo cancelar el análisis.'),
-      });
-    }
-  };
 
   const handleRun = async () => {
     if (requireMonth && !selectedMonth) {
@@ -121,7 +105,6 @@ export function AnalysisRunnerCard({
     }
     setValidation(null);
     setJob(null);
-    setCancelando(false);
     setEnviando(true);
     try {
       // El primer sondeo con el job ya creado es la senal de que esta encolado.
@@ -169,7 +152,6 @@ export function AnalysisRunnerCard({
   // duplica nada: el servidor responde 409 y el cliente se engancha al que ya
   // estaba, en vez de lanzar otro.
   const isPending = analysis.isPending || isAttached;
-  const jobAbierto = job?.status === 'pending' || job?.status === 'running';
   const progress = job?.progress;
   const hasProgress = isPending && !!progress && progress.total > 1;
   // Mientras corre manda el log del job; al terminar, el que devolvio la accion.
@@ -190,18 +172,6 @@ export function AnalysisRunnerCard({
           >
             {runLabel}
           </Button>
-          {/* Solo con una ejecución viva delante: cancelar algo terminado no
-              significa nada, y el botón desaparece en cuanto se detiene. */}
-          {jobAbierto && (
-            <Button
-              onClick={handleCancel}
-              variant="danger"
-              disabled={cancelando}
-              icon={<Ban className="h-4 w-4" />}
-            >
-              {cancelando ? 'Deteniendo...' : 'Cancelar'}
-            </Button>
-          )}
         </div>
       }
     >

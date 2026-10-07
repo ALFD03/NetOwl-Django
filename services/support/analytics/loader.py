@@ -25,6 +25,7 @@ import pandas as pd
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from services.support.analytics.config import (
+    REQUIRED_SUPPORT_HEADERS,
     SUPPORT_CSV_COLUMN_ALIASES,
     SUPPORT_CSV_COLUMN_MAP,
     SUPPORT_LOADER_REQUIRED_COLUMNS,
@@ -233,3 +234,23 @@ def ensure_support_schema(db: DBConnector) -> None:
             for stmt in statements:
                 cur.execute(stmt)
         conn.commit()
+
+
+def campos_odoo_importacion() -> list[dict]:
+    """Las cabeceras del export de soporte que lee la importacion.
+
+    Sale de los mismos mapas que `_resolve_columns`, para que la lista que ve el
+    usuario no pueda separarse de lo que de verdad se lee. Son requeridas las que
+    se validan en el CSV crudo y las que el loader exige tras resolver alias
+    (`Asignado a`, `Creado por`). `alias` son las otras formas en que Odoo
+    escribe la misma columna; la comparacion ignora acentos y mayusculas.
+    """
+    requeridas = {*REQUIRED_SUPPORT_HEADERS, *SUPPORT_LOADER_REQUIRED_COLUMNS.values()}
+    return [
+        {
+            "nombre": cabecera,
+            "requerido": cabecera in requeridas,
+            "alias": [a.capitalize() for a, d in SUPPORT_CSV_COLUMN_ALIASES.items() if d == destino],
+        }
+        for cabecera, destino in SUPPORT_CSV_COLUMN_MAP.items()
+    ]

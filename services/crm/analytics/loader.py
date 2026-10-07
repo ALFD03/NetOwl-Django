@@ -19,7 +19,7 @@ import pandas as pd
 from core.config import ACTIVO_FALSE_TOKENS, ACTIVO_TRUE_TOKENS, DB_SCHEMA, TableNames
 from core.database import DBConnector
 
-from .config import CLIENT_FIELDS, CSV_COLUMN_MAP, ETAPA_MAP, GANADO_STATES
+from .config import CLIENT_FIELDS, CSV_COLUMN_MAP, ETAPA_MAP, GANADO_STATES, REQUIRED_CRM_HEADERS
 
 
 def normalize_col(col: str) -> str:
@@ -398,3 +398,15 @@ def _create_tables_if_not_exist(db: DBConnector):
             for stmt in statements:
                 cur.execute(stmt)
         conn.commit()
+
+def campos_odoo_importacion() -> list[dict]:
+    """Las cabeceras del export de Odoo CRM que lee la importacion.
+
+    Sale del mismo mapa que usa `parse_odoo_chunk`, para que la lista que ve el
+    usuario no pueda separarse de lo que de verdad se lee. `requerido` marca las
+    que se validan antes de cargar; cualquier otra columna se descarta sin error.
+    """
+    return [
+        {"nombre": c, "requerido": c in REQUIRED_CRM_HEADERS, "alias": []}
+        for c in CSV_COLUMN_MAP
+    ]
