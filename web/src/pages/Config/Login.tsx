@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { useForm } from '@inertiajs/react';
 import { Lock, User } from 'lucide-react';
 
+import { useTheme } from '@/shared/hooks/useTheme';
 import { AuthCard, TextField } from '@/shared/ui';
 import { AuthForm } from '@/features/config/components/AuthForm';
 
@@ -13,6 +14,7 @@ interface ConfigLoginProps {
 
 export default function ConfigLogin({ errorMessage }: ConfigLoginProps) {
   const { data, setData, post, processing, errors } = useForm({ username: '', password: '' });
+  const { tema } = useTheme();
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -25,7 +27,7 @@ export default function ConfigLogin({ errorMessage }: ConfigLoginProps) {
       subtitle="Acceso seguro a analíticas corporativas"
       brand={
         <img
-          src="/static/img/logo.png"
+          src={tema === 'claro' ? '/static/img/logo_light.png' : '/static/img/logo_dark.png'}
           alt="NetOwl"
           className="h-16 w-auto object-contain transition-transform hover:scale-105"
         />

@@ -48,5 +48,25 @@
     "grid": "rgba(30, 41, 59, 0.4)",
     "gridSoft": "rgba(51, 65, 85, 0.25)",
     "surfaceDeep": "#0f172a"
+  },
+  "light": {
+    "white": "#0f172a",
+    "surface": {
+      "primary": "#eef2f7",
+      "secondary": "#ffffff",
+      "tertiary": "#f1f5f9",
+      "hover": "#e2e8f0",
+      "deep": "#e2e8f0"
+    },
+    "chart": {
+      "textStrong": "#0f172a",
+      "textMuted": "#334155",
+      "textAxis": "#64748b",
+      "border": "#cbd5e1",
+      "labelStroke": "#ffffff",
+      "grid": "rgba(148, 163, 184, 0.3)",
+      "gridSoft": "rgba(148, 163, 184, 0.2)",
+      "surfaceDeep": "#ffffff"
+    }
   }
 }

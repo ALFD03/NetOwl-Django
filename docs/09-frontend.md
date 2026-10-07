@@ -21,12 +21,13 @@ Dependencias notables: `@inertiajs/react`, `axios`, `chart.js` +
 ```
 web/templates/app.html   ← la única plantilla Django
    ├─ meta csrf-token y csrf-cookie-name (el nombre de la cookie cambia por entorno)
+   ├─ script en línea: pone `light`/`dark` en <html> antes de pintar (clave `netowl-tema`)
    ├─ dev:  http://localhost:5173/static/src/app/main.tsx  (+ react-refresh)
    └─ prod: {% static 'dist/assets/main.js' %} y main.css
              └─ web/src/app/main.tsx
                   ├─ import './csrf'                (cabecera X-CSRFToken en axios global)
                   ├─ import '@/shared/charts/register'
-                  ├─ ThemeProvider                  (clase dark/light en <html>, localStorage)
+                  ├─ ThemeProvider                  (@/shared/hooks/useTheme: claro/oscuro/sistema)
                   └─ createInertiaApp({ resolve })  → import.meta.glob('../pages/**/*.tsx')
 ```
 
@@ -82,7 +83,6 @@ venir de un mapa escrito a mano porque **Tailwind no ve nombres interpolados**.
 |---|---|
 | `main.tsx` | Bootstrap de Inertia y resolución de páginas |
 | `csrf.ts` | Aplica `applyCsrf` a la instancia **global** de axios, que es la que usa Inertia |
-| `providers/ThemeContext.tsx` | `dark` / `light`, persistido en `localStorage` bajo `netowl-theme` |
 
 ---
 
@@ -124,6 +124,7 @@ porque `shared` no puede depender de un feature; los features los reexportan.
 | `usePermissions()` | `can`, `canAny`, `canAll`, `isSuperuser`. **Los componentes nunca leen `user.profile.can_*` directamente** |
 | `useBreakpoint(bp)` | `true` si el viewport llega a ese breakpoint. Para lo que una clase no alcanza (opciones de Chart.js); para maquetar se usan las clases |
 | `useScrollLock(activo)` | Congela el scroll del body y de `<main data-app-scroll>` mientras un modal o el cajón del menú tapan la página |
+| `useTheme()` / `ThemeProvider` | Tema `claro`/`oscuro`/`sistema` por navegador (`localStorage`, `netowl-tema`); `sistema` sigue a `prefers-color-scheme`. Cómo cambian las clases y las gráficas: `web/src/README.md`, «Light and dark theme» |
 | `useAsyncAction(action, options)` | Sustituye el triplete `isLoading` / `message` / `consoleLog` y el *narrowing* de errores de axios que cada página de importación repetía |
 | `useJobQueue()` | Sondea la cola desde cualquier página: **4 s** si hay algo corriendo, **20 s** si no, y también 20 s con la pestaña en segundo plano. Detecta el final comparando los ids con el sondeo anterior y pide la ficha del que desapareció, para poder decir *cómo* terminó y no solo que «ya no está» |
 

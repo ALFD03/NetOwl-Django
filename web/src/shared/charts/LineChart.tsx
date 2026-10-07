@@ -5,8 +5,10 @@ import type { ChartData, ChartOptions, Plugin } from 'chart.js';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Line } from 'react-chartjs-2';
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { useTheme } from '@/shared/hooks/useTheme';
 import { seriesDatalabelColor } from './chartOptions';
 import { compactarCartesiana } from './compacto';
+import { adaptarAlTema } from './tema';
 
 interface LineChartProps {
   data: ChartData<'line'>;
@@ -38,10 +40,12 @@ function withSeriesLabelColor(options?: ChartOptions<'line'>): ChartOptions<'lin
 
 export function LineChart({ data, options, plugins = DEFAULT_PLUGINS, className = 'h-96 w-full' }: LineChartProps) {
   const ancho = useBreakpoint('sm');
+  const { tema } = useTheme();
   const resolvedOptions = useMemo(() => {
-    const conColor = withSeriesLabelColor(options);
+    const conColor = withSeriesLabelColor(adaptarAlTema(options, tema));
     return ancho ? conColor : compactarCartesiana(conColor);
-  }, [options, ancho]);
+  }, [options, ancho, tema]);
+  const resolvedData = useMemo(() => adaptarAlTema(data, tema), [data, tema]);
 
-  return <div className={className}><Line data={data} options={resolvedOptions} plugins={plugins} /></div>;
+  return <div className={className}><Line data={resolvedData} options={resolvedOptions} plugins={plugins} /></div>;
 }
