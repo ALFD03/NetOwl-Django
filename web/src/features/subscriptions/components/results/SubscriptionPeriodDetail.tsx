@@ -67,7 +67,7 @@ export function SubscriptionPeriodDetail({ row }: SubscriptionPeriodDetailProps)
       </MetricGroup>
 
 
-      <MetricGroup title="Recuperación (Winback)" tone="purple" icon={<RefreshCw className="h-3.5 w-3.5" />} columns={3}>
+      <MetricGroup title="Recuperación" tone="purple" icon={<RefreshCw className="h-3.5 w-3.5" />} columns={3}>
         <div className="col-span-3 grid grid-cols-2 gap-1.5">
           <CompactMetric label="React. Totales" value={int(row.reactivaciones)} color="purple" />
           <CompactMetric label="React. Ingreso" value={int(row.react_val)} color="purple" />
@@ -77,7 +77,7 @@ export function SubscriptionPeriodDetail({ row }: SubscriptionPeriodDetailProps)
         <CompactMetric label="En pausa" value={int(row.react_4_paused)} color="purple" />
         <CompactMetric label="Recupera" value={int(row.react_4_P)} color="purple" />
         <CompactMetric label="De otros Periodos" value={int(row.react_4_H)} color="purple" />
-        <CompactMetric label="Winback %" value={pct(row.tasa_winback_pct)} color="purple" />
+        <CompactMetric label="Tasa recup. %" value={pct(row.tasa_winback_pct)} color="purple" />
       </MetricGroup>
 
       <MetricGroup title="Finanzas y Eficiencia" tone="yellow" icon={<Zap className="h-3.5 w-3.5" />} columns={1}>

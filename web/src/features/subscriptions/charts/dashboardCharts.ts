@@ -4,8 +4,8 @@ import { CHART_CHROME, CHART_PALETTE, SURFACE } from '@/shared/constants/theme';
 import type { ChartData, ChartOptions } from 'chart.js';
 import type { PeriodoData, ZonaData } from '@/features/subscriptions/types';
 import type { Context } from 'chartjs-plugin-datalabels';
-import { getHorizontalBarOptions, horizontalBarOptions } from '@/shared/charts';
-import { formatTwoDecimals } from '@/shared/utils/formatters/number';
+import { getHorizontalBarOptions, getLineOptions, horizontalBarOptions } from '@/shared/charts';
+import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters/number';
 
 export function buildChurnData(periodos: PeriodoData[], labels: string[]): ChartData<'line'> {
   return { labels, datasets: [
@@ -68,6 +68,63 @@ export const growthChartOptions: ChartOptions<'bar'> = getHorizontalBarOptions(u
     y: { ...horizontalBarOptions.scales?.y, stacked: true },
   },
 });
+
+/**
+ * Balanza de recuperaciones: la tasa de suspensión contra la de recuperación,
+ * las dos sobre la misma base (los activos al inicio) para que se puedan
+ * comparar en un solo eje. La recuperación se mide sobre los cortados
+ * (`react_4_P / corte_impagado`), así que se reescala a la base: con un 40 % de
+ * suspensión y un 80 % de recuperación, la línea marca 32 %. La tasa sobre los
+ * cortados y los clientes de cada métrica van en el tooltip.
+ *
+ * Todo sale de los conteos y no de `tasa_winback_pct`: los meses analizados
+ * antes del cambio de fórmula guardan ahí la definición vieja.
+ */
+function balanzaPeriodo(p: PeriodoData) {
+  const base = p.activos_inicio || 0;
+  const cortes = p.corte_impagado || 0;
+  const recuperados = p.react_4_P || 0;
+  return {
+    cortes,
+    recuperados,
+    suspensionPct: base > 0 ? (cortes / base) * 100 : 0,
+    recuperacionBasePct: base > 0 ? (recuperados / base) * 100 : 0,
+    recuperacionPct: cortes > 0 ? (recuperados / cortes) * 100 : 0,
+  };
+}
+
+export function buildBalanzaRecuperacionData(periodos: PeriodoData[], labels: string[]): ChartData<'line'> {
+  const balanza = periodos.map(balanzaPeriodo);
+  return { labels, datasets: [
+    { label: 'Tasa de Suspensión %', data: balanza.map((b) => Number(b.suspensionPct.toFixed(2))), borderColor: CHART_PALETTE[0], backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
+    { label: 'Tasa de Recuperación %', data: balanza.map((b) => Number(b.recuperacionBasePct.toFixed(2))), borderColor: CHART_PALETTE[4], backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
+  ] };
+}
+
+export function buildBalanzaRecuperacionOptions(periodos: PeriodoData[]): ChartOptions<'line'> {
+  const base = getLineOptions(' %', 2);
+  return {
+    ...base,
+    plugins: {
+      ...base.plugins,
+      tooltip: {
+        ...base.plugins?.tooltip,
+        callbacks: {
+          label: (ctx) => {
+            const b = balanzaPeriodo(periodos[ctx.dataIndex]);
+            if (ctx.datasetIndex === 0) {
+              return `Suspensión: ${formatTwoDecimals(b.suspensionPct)} % · ${formatInteger(b.cortes)} clientes cortados`;
+            }
+            return [
+              `Recuperación: ${formatTwoDecimals(b.recuperacionPct)} % de los cortados · ${formatInteger(b.recuperados)} clientes`,
+              `  equivale a ${formatTwoDecimals(b.recuperacionBasePct)} % de la base`,
+            ];
+          },
+        },
+      },
+    },
+  };
+}
 
 export function buildZoneDonut(labels: string[], values: number[], raw: Array<{ label: string; original: number }>): ChartData<'doughnut'> & { _raw: typeof raw } {
   return { labels, datasets: [{ data: values, backgroundColor: CHART_PALETTE.slice(0, labels.length), borderWidth: 2, borderColor: SURFACE.secondary }], _raw: raw };

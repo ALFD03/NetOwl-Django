@@ -9,7 +9,7 @@ import { CHART_PALETTE } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import { formatPeriodoLabel } from '@/shared/utils';
 import { getDoughnutOptions, handleHover, type DoughnutHoverValue } from '@/shared/charts';
-import { buildChurnData, buildGrowthData, buildZoneDonut } from '@/features/subscriptions/charts/dashboardCharts';
+import { buildBalanzaRecuperacionData, buildBalanzaRecuperacionOptions, buildChurnData, buildGrowthData, buildZoneDonut } from '@/features/subscriptions/charts/dashboardCharts';
 import type { SubscriptionDashboardProps } from '@/features/subscriptions/types';
 import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
 
@@ -59,9 +59,7 @@ export function useSubscriptionDashboard({ periodos, dimensiones = {} }: Subscri
     { label: 'Tasa Aporte Reactivación %', data: reversed.map((p) => Number(p.tasa_aporte_react_pct.toFixed(2)) || 0), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6 },
     { label: 'Índice Reemplazo %', data: reversed.map((p) => Number(p.indice_reemplazo_react_pct.toFixed(2)) || 0), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6 },
   ] };
-  const suspensionWinbackData = { labels, datasets: [
-    { label: 'Suspensiones', data: reversed.map((p) => Number(p.corte_impagado) || 0), borderColor: CHART_PALETTE[0], backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
-    { label: 'Recuperaciones', data: reversed.map((p) => Number(p.react_4_P) || 0), borderColor: CHART_PALETTE[4], backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
-  ] };
-  return { latest, semaforo, avgChurnNeto, avgChurnBruto, avgCrecimiento, avgTasaAporte, avgIndiceReemplazo, avgSuspensiones, avgWinback, labels, reversed, churnChartData: buildChurnData(reversed, labels), growthChartData: buildGrowthData(reversed, labels), aporteReemplazoData, suspensionWinbackData, churnDonutData, growthDonutData, churnDonutOptions, growthDonutOptions };
+  const suspensionWinbackData = useMemo(() => buildBalanzaRecuperacionData(reversed, labels), [reversed, labels]);
+  const suspensionWinbackOptions = useMemo(() => buildBalanzaRecuperacionOptions(reversed), [reversed]);
+  return { latest, semaforo, avgChurnNeto, avgChurnBruto, avgCrecimiento, avgTasaAporte, avgIndiceReemplazo, avgSuspensiones, avgWinback, labels, reversed, churnChartData: buildChurnData(reversed, labels), growthChartData: buildGrowthData(reversed, labels), aporteReemplazoData, suspensionWinbackData, suspensionWinbackOptions, churnDonutData, growthDonutData, churnDonutOptions, growthDonutOptions };
 }

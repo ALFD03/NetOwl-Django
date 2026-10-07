@@ -277,7 +277,10 @@ class MetricsAnalyzer:
             "react_4_paused": n_react_4_P + n_react_4_H,
             "react_4_P": n_react_4_P,
             "react_4_H": n_react_4_H,
-            "tasa_winback_pct": round((n_react_unicas / total_inactivos) * 100, 4) if total_inactivos > 0 else 0,
+            # Tasa de recuperacion: react_4_P sobre los cortes por impago del mes.
+            # Conserva el nombre de la clave porque es la columna de los meses
+            # ya guardados.
+            "tasa_winback_pct": round((n_react_4_P / len(set_corte_impagado)) * 100, 4) if len(set_corte_impagado) > 0 else 0,
             "total_billing": total_billing,
             "arpu": arpu,
             "react_val": n_react_val,
@@ -376,7 +379,7 @@ class MetricsAnalyzer:
         print(f"Base Inicio: {len(act_ini)} | Nuevos: {len(set_nue)} | Base Final: {len(act_fin)}")
         print(f"BAJAS -> Netas: {bajas_netas} | Brutas: {bajas_brutas}")
         print(f"Churn Neto: {summary['churn_neto_pct']}% | Bruto: {summary['churn_bruto_pct']}%")
-        print(f"CORTE IMPAGADO: {len(set_corte_impagado)} | INACTIVOS: {total_inactivos} | Winback: {summary['tasa_winback_pct']}%")
+        print(f"CORTE IMPAGADO: {len(set_corte_impagado)} | INACTIVOS: {total_inactivos} | Recuperacion: {summary['tasa_winback_pct']}%")
         print(f"GRATUITOS (archivados): {len(set_free_fin)} | Nuevos: {summary['gratuitos_nuevos']} | Retornados: {n_free_retorno}")
         print(f"COMPARATIVA -> Detalle: {len(df_bajas)} | Netas: {bajas_netas} | Brutas: {bajas_brutas}")
         print(f"  REACTIVACIONES: 6_churn={n_react_6_churn} | 8_30days={n_react_8_30days} | 4_paused={n_react_4_P + n_react_4_H} | Total={n_react_unicas}")

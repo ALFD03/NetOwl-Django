@@ -18,7 +18,7 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 | **Reactivación** | Vuelta a activo desde un estado inactivo, o un log cuyo texto la nombra. **Un alta nueva no es una reactivación** |
 | `react_4_P` / `react_4_H` | Reactivación desde pausa de alguien que **ya estaba** en la base al inicio (`P`) o que **no** estaba (`H`) |
 | `react_val` | Las reactivaciones que realmente **añaden** base: `react_6_churn + react_8_30days + react_4_H` |
-| **Winback** | `reactivaciones / inactivos_al_inicio × 100` |
+| **Tasa de recuperación** (`tasa_winback_pct`) | `react_4_P / corte_impagado × 100`: los que estaban activos al inicio, se pausaron en el mes y volvieron, sobre los cortes por impago del mes. La clave conserva el nombre «winback» por los meses ya guardados |
 | **Índice de reemplazo** | Qué parte de las bajas brutas cubren las reactivaciones válidas |
 | **Tasa de aporte** | Qué parte del crecimiento bruto viene de reactivaciones y no de altas |
 | **Adiciones netas / brutas** | `nuevos − bajas_brutas`, y lo mismo sumando las reactivaciones que no estaban |
