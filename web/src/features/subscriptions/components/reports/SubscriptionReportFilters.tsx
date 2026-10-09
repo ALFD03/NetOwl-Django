@@ -1,9 +1,11 @@
-/** Filtros de los reportes comerciales: periodo, tecnología, sucursal y día. */
+/** Filtros de los reportes comerciales: periodo, tecnología, sucursal, métrica y búsqueda. */
 
 import { Calendar, Filter, Search, Wifi } from 'lucide-react';
 import {
   FilterField, FILTER_TRIGGER_CLASS, PeriodSelector, SearchInput, SelectMenu,
 } from '@/shared/ui';
+import type { FiltroMetrica, NivelFiltro } from '../../lib/filtroMetrica';
+import { FiltroMetricaField } from './FiltroMetricaField';
 
 type Technology = 'ALL' | 'FTTH' | 'RF';
 
@@ -19,6 +21,12 @@ interface Props {
   searchTerm: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder: string;
+  filtroMetrica: FiltroMetrica;
+  onFiltroMetricaChange: (filtro: FiltroMetrica) => void;
+  /** Cómo se llaman en este reporte los dos niveles a los que se aplica el filtro por métrica. */
+  nivelesFiltro: Record<NivelFiltro, string>;
+  /** Hay un día de corte: sin él no se puede filtrar por proyección. */
+  proyeccionDisponible: boolean;
 }
 
 /**
@@ -41,6 +49,10 @@ export function SubscriptionReportFilters({
   searchTerm,
   onSearchChange,
   searchPlaceholder,
+  filtroMetrica,
+  onFiltroMetricaChange,
+  nivelesFiltro,
+  proyeccionDisponible,
 }: Props) {
   return (
     <div className="mb-8 flex flex-wrap items-center gap-4">
@@ -80,6 +92,13 @@ export function SubscriptionReportFilters({
           className={FILTER_TRIGGER_CLASS}
         />
       </FilterField>
+
+      <FiltroMetricaField
+        filtro={filtroMetrica}
+        onChange={onFiltroMetricaChange}
+        niveles={nivelesFiltro}
+        proyeccionDisponible={proyeccionDisponible}
+      />
 
       <FilterField grow icon={<Search className="w-4 h-4" />}>
         <SearchInput

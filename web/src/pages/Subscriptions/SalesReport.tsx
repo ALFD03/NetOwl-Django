@@ -13,6 +13,7 @@ import { DayProgressBar } from '@/shared/ui';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
 import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
 import { buildSalesSites, type ZonasConfig } from '@/features/subscriptions/lib/dayReports';
+import { FILTRO_METRICA_VACIO, type FiltroMetrica } from '@/features/subscriptions/lib/filtroMetrica';
 import type { DayMetrics } from '@/shared/types/domain';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { SalesReportView } from '@/features/subscriptions/components/reports/SalesReportView';
@@ -30,6 +31,7 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
   const [selectedDay, setSelectedDay] = useState(reportData.dia ?? 0);
+  const [filtroMetrica, setFiltroMetrica] = useState<FiltroMetrica>(FILTRO_METRICA_VACIO);
   const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
 
   const currentPeriod = reportData.period ?? '';
@@ -52,6 +54,8 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
     selectedTech,
     period: currentPeriod,
     objetivos,
+    filtroMetrica,
+    proyeccion,
   });
 
   const changePeriod = (period: string) => {
@@ -79,6 +83,10 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
             searchPlaceholder="Buscar por Sede o Zona..."
+            filtroMetrica={filtroMetrica}
+            onFiltroMetricaChange={setFiltroMetrica}
+            nivelesFiltro={{ zona: 'Zonas', grupo: 'Sites' }}
+            proyeccionDisponible={Boolean(proyeccion)}
           />
           {availableDays.length > 0 && (
             <div className="mb-8">
