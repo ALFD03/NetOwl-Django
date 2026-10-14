@@ -211,7 +211,7 @@ En su lugar se guarda **una sola instantánea coherente de todos los catálogos*
   error dejaría al sistema sin catálogo durante un minuto por un corte de un
   segundo.
 - `reset_cache()` lo llaman todas las escrituras del catálogo
-  (`views_catalogos.py`) y también `_ejecutar_con_turno` al empezar cada
+  (`services/catalogos/views.py`) y también `_ejecutar_con_turno` al empezar cada
   análisis, de modo que una ejecución no cambia de catálogo a mitad de camino.
 
 ### API

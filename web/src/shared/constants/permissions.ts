@@ -6,7 +6,7 @@
  * backend hay que añadirlo también aquí.
  */
 
-import { CloudDownload, Headset, KeyRound, Layers, Users } from 'lucide-react';
+import { BookMarked, CloudDownload, Headset, KeyRound, Layers, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { Permission } from '@/shared/types/auth';
@@ -37,6 +37,7 @@ export const PERMISSIONS = {
   MANAGE_USERS: 'can_manage_users',
   MANAGE_CATALOGO_COMERCIAL: 'can_manage_catalogo_comercial',
   MANAGE_CATALOGO_OPERACIONAL: 'can_manage_catalogo_operacional',
+  MANAGE_CATALOGO_VENTAS: 'can_manage_catalogo_ventas',
   MANAGE_SUPPORT_USERS: 'can_manage_support_users',
   IMPORT_SUBS: 'can_import_subs',
   IMPORT_CRM: 'can_import_crm',
@@ -132,8 +133,17 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
       { key: PERMISSIONS.RUN_SUBS_ANALYSIS, label: 'Ejecutar el análisis de churn', section: 'Cargar y calcular' },
       { key: PERMISSIONS.RUN_LIFETIME, label: 'Ejecutar el motor Kaplan-Meier', section: 'Cargar y calcular' },
       { key: PERMISSIONS.MANAGE_ETA, label: 'Administrar el Maestro ETA', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Catálogo comercial (zonas, sites, estados, coordinadores)', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL, label: 'Catálogo operacional (planes, reguladores, ignorados, por registrar)', section: 'Administrar' },
+    ],
+  },
+  {
+    category: 'Catálogos',
+    hint: 'Los catálogos de referencia que usan Suscripciones y Comisiones. Un permiso por grupo.',
+    icon: BookMarked,
+    tone: 'yellow',
+    perms: [
+      { key: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL, label: 'Productos (planes, reguladores y sus pendientes)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Estructura (zonas, sites, estados y sus pendientes)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGO_VENTAS, label: 'Ventas (coordinadores y objetivos comerciales)', section: 'Administrar' },
     ],
   },
   {

@@ -36,7 +36,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
-| `catalogo_productos_ignorados` | `ProductoIgnorado` | Líneas del export que nunca serán un plan |
+| `catalogo_productos_ignorados` | `ProductoIgnorado` | Nombres del export que no se registrarán, por `area` (`productos`, `estructura`, `ventas`); únicos por `(area, nombre)` |
 | `catalogo_objetivos` | `ObjetivoComercial` | Objetivos por nivel (general, sucursal, estado, site, coordinador, zona, zona-sucursal); `sucursal` es el texto del export en los niveles que la usan: `desde` (`YYYY-MM`, nulo = siempre; el general es una sola fila y siempre nulo), `crecimiento_pct` y `churn_pct` (nulo = se hereda). Lo escribe la pestaña Objetivos del catálogo; lo lee `analytics/objetivos.py` y lo aplica el cliente |
 | `catalogo_objetivos_mes` | `ObjetivoMes` | Excepción de un mes concreto al objetivo general |
 | `catalogo_objetivos_semaforo` | `SemaforoObjetivos` | Fila única con los umbrales de color, fijos: crecimiento y cumplimiento "verde desde", churn "verde hasta" |

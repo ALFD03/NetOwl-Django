@@ -21,7 +21,13 @@ from psycopg2 import sql
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
-from core.fixtures import nombres_reconocidos, plan_names, productos_ignorados
+from core.fixtures import (
+    ignorados,
+    nombres_reconocidos,
+    plan_names,
+    productos_ignorados,
+    zonas_por_nombre,
+)
 
 from .config import REQUIRED_SUBS_HEADERS, SUBS_ACTIVO_ALIASES, SUBS_COLUMN_MAPPING
 from .free_plans import LOG_COLUMNS, MSG_COLUMNS, REQUIRED_GRATIS_HEADERS
@@ -118,8 +124,8 @@ def _verificar_catalogo(df_local: pd.DataFrame) -> None:
     """
     if not plan_names():
         raise CatalogoVacio(
-            "El catalogo de planes esta vacio. Cargalo desde Subscriptions -> "
-            "Catalogos antes de importar."
+            "El catalogo de planes esta vacio. Cargalo desde Catalogos -> "
+            "Productos antes de importar."
         )
 
     columnas = {"orden_producto", "producto"}
@@ -183,6 +189,42 @@ def productos_fuera_de_catalogo() -> list[dict[str, Any]]:
     return [
         {"nombre": str(row["producto"]), "ordenes": int(row["ordenes"])}
         for _, row in fuera.iterrows()
+    ]
+
+
+def zonas_fuera_de_catalogo() -> list[dict[str, Any]]:
+    """Zonas que traen las suscripciones importadas y el catalogo no tiene.
+
+    A diferencia de un producto, una zona sin catalogar no bloquea nada: sus
+    ordenes se analizan igual, pero se quedan sin site, estado ni coordinador
+    y caen fuera de los reportes que agrupan por ellos. Es una lista para
+    revisar, no una comprobacion.
+
+    Se compara como lo hacen los analisis (`zonas_por_nombre`): sin espacios
+    de sobra y sin distinguir mayusculas.
+    """
+    db = DBConnector()
+    if not db.tabla_existe(TableNames.SUBSCRIPTIONS):
+        return []
+
+    df = db.query(
+        f"""
+        SELECT zona, COUNT(DISTINCT orden_producto) AS ordenes
+        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
+        WHERE zona IS NOT NULL AND TRIM(zona) <> ''
+        GROUP BY zona
+        """
+    )
+    if df.empty:
+        return []
+
+    catalogadas = zonas_por_nombre()
+    callados = {n.strip().lower() for n in ignorados("estructura")}
+    clave = df["zona"].astype(str).str.strip().str.lower()
+    fuera = df[~clave.isin(catalogadas) & ~clave.isin(callados)]
+    return [
+        {"nombre": str(row["zona"]).strip(), "ordenes": int(row["ordenes"])}
+        for _, row in fuera.sort_values("ordenes", ascending=False).iterrows()
     ]
 
 

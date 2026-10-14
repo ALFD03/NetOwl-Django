@@ -13,7 +13,7 @@ import { usePermissions } from '@/shared/hooks/usePermissions';
 import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { importsApi, type ImportResponse } from '@/shared/lib/api/imports';
-import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
+import { catalogosApi } from '@/shared/lib/api/catalogos';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
 import { CatalogoBloqueoModal } from '@/features/imports/components/CatalogoBloqueoModal';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
@@ -79,7 +79,7 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
     setIgnorando(nombre);
     setErrorCatalogo(null);
     try {
-      await subscriptionsApi.saveCatalogo('ignorados', { nombre, nota: '' });
+      await catalogosApi.guardar('ignorados', { nombre, nota: '', area: 'productos' });
       setBloqueo((previo) =>
         previo
           ? { ...previo, productos: previo.productos.filter((p) => p.nombre !== nombre) }

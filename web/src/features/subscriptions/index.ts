@@ -12,7 +12,10 @@ export { SubscriptionReportFilters } from './components/reports/SubscriptionRepo
 export { EtaReportView } from './components/eta/EtaReportView';
 export { EtaReportToolbar } from './components/eta/EtaReportToolbar';
 export { EtaManagementView } from './components/etamanagement/EtaView';
-export { CatalogosView } from './components/catalogos/CatalogosView';
+export { NotificacionesView } from './components/catalogos/NotificacionesView';
+export { ProductosView } from './components/catalogos/ProductosView';
+export { EstructuraView } from './components/catalogos/EstructuraView';
+export { VentasView } from './components/catalogos/VentasView';
 export * from './lib/bajasExport';
 export * from './lib/commercial';
 export * from './lib/objetivos';

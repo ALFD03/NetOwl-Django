@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { router } from '@inertiajs/react';
 
 import { getApiErrorMessage } from '@/shared/lib/api/client';
-import { subscriptionsApi, type CatalogoPayload } from '@/shared/lib/api/subscriptions';
+import { catalogosApi, type CatalogoPayload } from '@/shared/lib/api/catalogos';
 import type {
+  AreaCatalogo,
   CatalogoNombrado,
   CatalogoObjetivo,
   CatalogoObjetivoMes,
@@ -30,7 +31,7 @@ export type ZonaDraft = {
 };
 export type SiteDraft = { id?: number; nombre: string; orden: number };
 export type NombreDraft = { id?: number; nombre: string; tipo: 'estados' | 'coordinadores' };
-export type IgnoradoDraft = { id?: number; nombre: string; nota: string };
+export type IgnoradoDraft = { id?: number; nombre: string; nota: string; area: AreaCatalogo };
 
 /**
  * Un tramo de objetivo en edición. Los porcentajes van como texto porque vacío
@@ -102,16 +103,21 @@ const REGULADOR_VACIO: ReguladorDraft = {
 };
 
 interface Args {
-  sites: CatalogoSite[];
-  estados: CatalogoNombrado[];
-  /** Nombre que llega en `?nuevo_plan=`: abre el alta ya rellena. */
-  nuevoPlan: string;
-  /** Si administra la mitad operacional; sin ella se abre en la comercial. */
-  operacional: boolean;
+  /** La pestaña con la que abre la página. */
+  vistaInicial: CatalogoVista;
+  sites?: CatalogoSite[];
+  estados?: CatalogoNombrado[];
+  /** Nombre que llega en `?nuevo_plan=`: abre el alta de plan ya rellena. */
+  nuevoPlan?: string;
+  /** Nombre que llega en `?nueva_zona=`: abre el alta de zona ya rellena. */
+  nuevaZona?: string;
 }
 
 /**
- * Estado de la pantalla de catálogos.
+ * Estado de una página del módulo de Catálogos.
+ *
+ * Las cuatro páginas comparten el hook: cada una usa los borradores de sus
+ * pestañas y los demás se quedan sin abrir.
  *
  * Cada catálogo tiene su propio borrador en lugar de uno genérico: los campos
  * de un plan y los de una zona no se parecen en nada, y un único objeto suelto
@@ -121,23 +127,32 @@ interface Args {
  * los listados dependen unos de otros (borrar un site cambia lo que puede
  * elegir una zona) y el servidor ya devuelve todo junto.
  */
-export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
-  const [vista, setVista] = useState<CatalogoVista>(() => {
-    if (!operacional) return 'zonas';
-    return nuevoPlan ? 'planes' : 'pendientes';
-  });
+export function useCatalogos({
+  vistaInicial, sites = [], estados = [], nuevoPlan = '', nuevaZona = '',
+}: Args) {
+  const [vista, setVista] = useState<CatalogoVista>(vistaInicial);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // `?nuevo_plan=` viene del aviso de la importación y de la pestaña de planes
-  // por clasificar del ETA: el formulario abre con el nombre ya escrito para no
-  // obligar a copiarlo a mano. Estado inicial y no efecto: el valor llega con
-  // la primera pintada y no vuelve a cambiar mientras la página viva.
+  // `?nuevo_plan=` viene del aviso de la importación, de la pestaña de planes
+  // por clasificar del ETA y de las notificaciones: el formulario abre con el
+  // nombre ya escrito para no obligar a copiarlo a mano. `?nueva_zona=`, igual
+  // para las zonas. Estado inicial y no efecto: el valor llega con la primera
+  // pintada y no vuelve a cambiar mientras la página viva.
   const [planDraft, setPlanDraft] = useState<PlanDraft | null>(
     () => (nuevoPlan ? { ...PLAN_VACIO, nombre: nuevoPlan } : null),
   );
   const [reguladorDraft, setReguladorDraft] = useState<ReguladorDraft | null>(null);
-  const [zonaDraft, setZonaDraft] = useState<ZonaDraft | null>(null);
+  const zonaVacia = (nombre = ''): ZonaDraft => ({
+    nombre,
+    site_id: sites[0]?.id ?? null,
+    estado_id: estados[0]?.id ?? null,
+    tecnologia: 'FTTH',
+    coordinador_id: null,
+  });
+  const [zonaDraft, setZonaDraft] = useState<ZonaDraft | null>(
+    () => (nuevaZona ? zonaVacia(nuevaZona) : null),
+  );
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
   const [nombreDraft, setNombreDraft] = useState<NombreDraft | null>(null);
   const [ignoradoDraft, setIgnoradoDraft] = useState<IgnoradoDraft | null>(null);
@@ -167,14 +182,7 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
       notas: fila.notas,
     });
 
-  const nuevaZona = () =>
-    setZonaDraft({
-      nombre: '',
-      site_id: sites[0]?.id ?? null,
-      estado_id: estados[0]?.id ?? null,
-      tecnologia: 'FTTH',
-      coordinador_id: null,
-    });
+  const nuevaZonaVacia = () => setZonaDraft(zonaVacia());
   const editarZona = (zona: CatalogoZona) =>
     setZonaDraft({
       id: zona.id,
@@ -192,9 +200,9 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
   const editarNombre = (tipo: NombreDraft['tipo'], fila: CatalogoNombrado) =>
     setNombreDraft({ id: fila.id, nombre: fila.nombre, tipo });
 
-  const nuevoIgnorado = () => setIgnoradoDraft({ nombre: '', nota: '' });
+  const nuevoIgnorado = (area: AreaCatalogo) => setIgnoradoDraft({ nombre: '', nota: '', area });
   const editarIgnorado = (fila: CatalogoProductoIgnorado) =>
-    setIgnoradoDraft({ id: fila.id, nombre: fila.nombre, nota: fila.nota });
+    setIgnoradoDraft({ id: fila.id, nombre: fila.nombre, nota: fila.nota, area: fila.area });
 
   const nuevoObjetivo = (nivel: NivelObjetivoCatalogo) =>
     setObjetivoDraft({
@@ -249,7 +257,7 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
     setGuardando(true);
     setError(null);
     try {
-      await subscriptionsApi.saveCatalogo(tipo, payload);
+      await catalogosApi.guardar(tipo, payload);
       cerrarFormularios();
       router.reload();
       return true;
@@ -262,20 +270,21 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
   };
 
   /**
-   * Declara que un producto nunca será un plan.
+   * Declara que un nombre pendiente nunca será una fila de su catálogo.
    *
-   * Es la otra respuesta posible ante un producto sin catalogar: la
-   * comprobación no puede distinguir un plan nuevo de un router o una
-   * instalación, así que la decisión la toma quien mira la lista.
+   * Es la otra respuesta posible ante un nombre sin registrar: la comprobación
+   * no puede distinguir un plan nuevo de un router o una instalación, ni una
+   * zona nueva de una mal escrita, así que la decisión la toma quien mira la
+   * lista.
    */
-  const ignorarProducto = (nombre: string) => guardar('ignorados', { nombre, nota: '' });
+  const ignorar = (area: AreaCatalogo, nombre: string) => guardar('ignorados', { nombre, nota: '', area });
 
   const confirmarBorrado = async () => {
     if (!borrando) return;
     setGuardando(true);
     setError(null);
     try {
-      await subscriptionsApi.deleteCatalogo(borrando.tipo, borrando.id);
+      await catalogosApi.eliminar(borrando.tipo, borrando.id);
       setBorrando(null);
       router.reload();
     } catch (err: unknown) {
@@ -289,7 +298,7 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
     vista, setVista, guardando, error, setError,
     planDraft, setPlanDraft, nuevoPlanVacio, editarPlan, crearPlanDesde,
     reguladorDraft, setReguladorDraft, nuevoRegulador, editarRegulador,
-    zonaDraft, setZonaDraft, nuevaZona, editarZona,
+    zonaDraft, setZonaDraft, nuevaZonaVacia, editarZona,
     siteDraft, setSiteDraft, nuevoSite, editarSite,
     nombreDraft, setNombreDraft, nuevoNombre, editarNombre,
     ignoradoDraft, setIgnoradoDraft, nuevoIgnorado, editarIgnorado,
@@ -297,6 +306,6 @@ export function useCatalogos({ sites, estados, nuevoPlan, operacional }: Args) {
     objetivoMesDraft, setObjetivoMesDraft, nuevoObjetivoMes, editarObjetivoMes,
     semaforoDraft, setSemaforoDraft, editarSemaforo,
     borrando, setBorrando, confirmarBorrado,
-    cerrarFormularios, guardar, ignorarProducto,
+    cerrarFormularios, guardar, ignorar,
   };
 }

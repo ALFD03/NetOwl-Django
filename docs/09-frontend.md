@@ -53,7 +53,7 @@ rompe la vista en tiempo de ejecución, sin error de compilación.
 | `/subscriptions/business-units/` | `Subscriptions/BusinessUnits` | `pages/Subscriptions/BusinessUnits.tsx` |
 | `/subscriptions/eta-report/` | `Subscriptions/EtaReport` | `pages/Subscriptions/EtaReport.tsx` |
 | `/subscriptions/eta-report/config/` | `Subscriptions/EtaManagement` | `pages/Subscriptions/EtaManagement.tsx` |
-| `/subscriptions/config/` | `Subscriptions/Catalogos` | `pages/Subscriptions/Catalogos.tsx` |
+| `/catalogos/notificaciones|productos|estructura|ventas/` | `Catalogos/*` | `pages/Catalogos/*.tsx` |
 | `/crm/`, `/crm/analytics/`, `/crm/results/` | `CRM/Dashboard`, `CRM/Analytics`, `CRM/Results` | `pages/CRM/*.tsx` |
 | `/support/`, `/support/analytics/`, `/support/results/` | `Support/*` | `pages/Support/*.tsx` |
 | `/imports/subscriptions|crm|support|history/` | `Imports/*` | `pages/Imports/*.tsx` |
@@ -240,8 +240,8 @@ de configuración distinto y se enseña como un error normal.
 
 El modal ofrece las dos respuestas que el servidor no puede distinguir:
 **registrar el producto como plan** (enlaza a
-`/subscriptions/config/?nuevo_plan=…`) o **marcarlo como ignorado** (POST a
-`api/catalogos/guardar/` con tipo `ignorados`). Cuando aparece **no se escribió
+`/catalogos/productos/?nuevo_plan=…`) o **marcarlo como ignorado** (POST a
+`/catalogos/api/guardar/` con tipo `ignorados` y `area: 'productos'`). Cuando aparece **no se escribió
 nada**: la comprobación corre antes del truncate.
 
 ### `subscriptions`

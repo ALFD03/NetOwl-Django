@@ -278,19 +278,25 @@ and the copy.
 
 ## The reference catalogues
 
-`pages/Subscriptions/Catalogos.tsx` edits the plan / zone / site / state /
-coordinator tables that used to be `data/Planes.json` and `data/Zonas.json`. It
-sits behind two permissions — `can_manage_catalogo_comercial` (zones, sites,
-states, coordinators) and `can_manage_catalogo_operacional` (pending products,
-plans, regulator plans, ignored); the page opens with either and shows only the tabs
-of the one held — and it is the only place a plan is classified —
-the ETA screen no longer keeps a second, overriding copy of that classification,
-only its per-subscription exceptions.
+`pages/Catalogos/` is a module of its own, one page per group, each behind its own
+permission: **Productos** (plans and regulator plans; `can_manage_catalogo_operacional`),
+**Estructura** (zones, sites, states; `can_manage_catalogo_comercial`) and **Ventas**
+(business-unit coordinators and objectives; `can_manage_catalogo_ventas`). They edit the
+tables that used to be `data/Planes.json` and `data/Zonas.json`, and Productos is the
+only place a plan is classified — the ETA screen no longer keeps a second, overriding
+copy of that classification, only its per-subscription exceptions.
 
-Its first tab is not a catalogue but what is *missing*: products already
-imported that no plan recognises. That list is what blocks an import or an
-analysis, and each row offers the two answers the server cannot tell apart —
-register it as a plan, or mark it as a product that never will be one.
+The components still live in `features/subscriptions/components/catalogos/`: the
+objectives tab leans on `features/subscriptions/lib/objetivos.ts` and the subscriptions
+form controls, and pages may compose any feature, so moving them would only have meant
+promoting all of that to `shared/` for nothing. `CatalogoComun.tsx` holds what the four
+pages share (tab bar, action column, delete confirmation); `useCatalogos` serves all four.
+
+**Notificaciones** is not a catalogue but what is *missing*: names already imported
+that no row recognises, per area (products, zones), plus the ones someone decided to
+ignore. Each pending row offers the two answers the server cannot tell apart — register
+it (a link to the right page with `?nuevo_plan=` / `?nueva_zona=`), or ignore it in its
+area. Pending products block an import or an analysis; pending zones do not.
 
 The same pair of answers appears in `CatalogoBloqueoModal`
 (`features/imports/`), which opens when an upload comes back 409. Nothing was

@@ -3,7 +3,7 @@ coordinadores.
 
 Antes vivian en `data/Planes.json` y `data/Zonas.json`, y cambiarlos exigia
 editar un fichero del repositorio y volver a desplegar. Aqui son tablas que se
-mantienen desde `/subscriptions/config/`.
+mantienen desde el modulo de Catalogos (`/catalogos/`).
 
 Viven en el esquema del entorno, como todo lo demas: el `db_table` no se
 cualifica porque la conexion ya fija `search_path` a DB_SCHEMA. Desarrollo y
@@ -29,6 +29,15 @@ TECNOLOGIA_CHOICES = [
 TIPO_PERSONA_CHOICES = [
     ("nat", "Persona natural"),
     ("PYME", "Persona juridica / PYME"),
+]
+
+
+# Las listas de "por registrar" que admiten un "ignorar": cada area del modulo
+# de catalogos detecta en los datos importados los nombres que no reconoce.
+AREA_IGNORADO_CHOICES = [
+    ("productos", "Productos"),
+    ("estructura", "Estructura"),
+    ("ventas", "Ventas"),
 ]
 
 
@@ -259,7 +268,12 @@ class Plan(models.Model):
 
 
 class ProductoIgnorado(models.Model):
-    """Linea del export que nunca sera un plan (routers, instalaciones...).
+    """Nombre del export que nunca sera una fila del catalogo.
+
+    Nacio para las lineas que nunca seran un plan (routers, instalaciones...)
+    y se extendio a las otras dos listas de pendientes: zonas que no son nodos
+    de verdad y vendedores que no se registran. `area` dice de cual sale; lo
+    que sigue se escribio para los productos y sigue valiendo para ellos.
 
     La verificacion del catalogo no puede distinguir un plan nuevo de un
     servicio puntual, asi que ofrece las dos respuestas. Registrar el nombre
@@ -270,16 +284,24 @@ class ProductoIgnorado(models.Model):
     queda fuera del reporte de la reguladora y sigue contando como plan.
     """
 
-    nombre = models.CharField(max_length=200, unique=True)
+    nombre = models.CharField(max_length=200)
+    # De que lista de "por registrar" sale el nombre. El mismo texto puede ser
+    # un producto que no es plan y, a la vez, un vendedor que no se registra:
+    # ignorarlo en un sitio no lo calla en el otro. Solo los de `productos`
+    # alimentan `fixtures.productos_ignorados()`.
+    area = models.CharField(max_length=16, choices=AREA_IGNORADO_CHOICES, default="productos")
     nota = models.CharField(max_length=255, blank=True, default="")
     creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "catalogo_productos_ignorados"
-        ordering = ["nombre"]
-        verbose_name = "producto ignorado"
-        verbose_name_plural = "productos ignorados"
+        ordering = ["area", "nombre"]
+        constraints = [
+            models.UniqueConstraint(fields=["area", "nombre"], name="catalogo_ignorado_area_nombre"),
+        ]
+        verbose_name = "nombre ignorado"
+        verbose_name_plural = "nombres ignorados"
 
     def __str__(self):
         return self.nombre

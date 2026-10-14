@@ -7,8 +7,8 @@
  */
 
 import {
-  BarChart3, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, Headset,
-  Layers, Lock, Table, TrendingUp, UserCheck, Users,
+  BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, Headset,
+  Layers, Lock, Network, Package, Table, TrendingUp, UserCheck, Users,
 } from 'lucide-react';
 
 import { PERMISSIONS } from './permissions';
@@ -16,6 +16,12 @@ import type { Permission } from '@/shared/types/auth';
 import type { AppNavigationItem, NavigationPage } from '@/shared/types/navigation';
 
 const REPORTES = 'Reportes';
+// El módulo de Catálogos lo abre cualquiera de sus tres permisos.
+const CATALOGOS = [
+  PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL,
+  PERMISSIONS.MANAGE_CATALOGO_COMERCIAL,
+  PERMISSIONS.MANAGE_CATALOGO_VENTAS,
+] as const;
 const CONFIGURACION = 'Configuración';
 
 export const APP_NAVIGATION: AppNavigationItem[] = [
@@ -33,7 +39,6 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       { id: 'sales', label: 'Reporte de ventas', href: '/subscriptions/sales-report/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_SUBS_SALES, section: REPORTES },
       { id: 'business_units', label: 'Unidades de negocio', href: '/subscriptions/business-units/', icon: UserCheck, permission: PERMISSIONS.VIEW_SUBS_SALES, section: REPORTES },
       { id: 'eta', label: 'Reporte ETA', href: '/subscriptions/eta-report/', icon: Lock, permission: PERMISSIONS.VIEW_ETA, section: REPORTES },
-      { id: 'catalogos', label: 'Catálogos', href: '/subscriptions/config/', icon: BookMarked, permission: [PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL], section: CONFIGURACION },
     ],
   },
   {
@@ -62,6 +67,19 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     ],
   },
   {
+    module: 'catalogos',
+    name: 'Catálogos',
+    icon: BookMarked,
+    pathPrefix: '/catalogos',
+    permission: CATALOGOS,
+    pages: [
+      { id: 'notificaciones', label: 'Notificaciones', href: '/catalogos/notificaciones/', icon: Bell, permission: CATALOGOS },
+      { id: 'productos', label: 'Productos', href: '/catalogos/productos/', icon: Package, permission: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL },
+      { id: 'estructura', label: 'Estructura', href: '/catalogos/estructura/', icon: Network, permission: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL },
+      { id: 'ventas', label: 'Ventas', href: '/catalogos/ventas/', icon: UserCheck, permission: PERMISSIONS.MANAGE_CATALOGO_VENTAS },
+    ],
+  },
+  {
     module: 'imports',
     name: 'Importaciones',
     icon: CloudDownload,
@@ -77,11 +95,11 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
 ];
 
 /**
- * Si el usuario ve la página: sin permiso declarado, siempre; con una lista,
- * basta con uno (la de catálogos abre con el comercial o con el operacional).
+ * Si el usuario ve la página (o el módulo): sin permiso declarado, siempre;
+ * con una lista, basta con uno (Catálogos abre con cualquiera de sus tres).
  */
 export function pageVisible(
-  page: NavigationPage,
+  page: Pick<NavigationPage, 'permission'>,
   can: (permission: Permission) => boolean,
 ): boolean {
   if (!page.permission) return true;
@@ -94,7 +112,7 @@ export function visibleNavigation(can: (permission: Permission) => boolean): App
   // expulsaría de vuelta a su página de inicio. `/imports/` hace en el
   // servidor la misma resolución para quien entra por la URL.
   return APP_NAVIGATION.flatMap((item) => {
-    if (!can(item.permission)) return [];
+    if (!pageVisible(item, can)) return [];
     const pages = item.pages.filter((page) => pageVisible(page, can));
     return pages.length ? [{ ...item, pages }] : [];
   });

@@ -23,7 +23,6 @@ services/subscriptions/
 ├── models.py               Los catálogos de referencia
 ├── views.py                Dashboard, analytics, results, lifetime, reportes
 ├── views_eta.py            Las vistas del reporte ETA
-├── views_catalogos.py      La pantalla de catálogos y su CRUD
 ├── urls.py
 └── management/commands/cargar_catalogos.py
 ```
@@ -85,7 +84,7 @@ si hay candidatas → ProductosSinCatalogo(productos, órdenes)
 La pantalla que lo recibe ofrece **las dos respuestas** por producto, porque la
 comprobación no puede distinguir un plan nuevo de una línea que nunca lo será:
 
-- **Crear plan** → `/subscriptions/config/?nuevo_plan=<nombre>`, que abre el
+- **Crear plan** → `/catalogos/productos/?nuevo_plan=<nombre>`, que abre el
   formulario ya relleno.
 - **Ignorar** → registra el nombre en `ProductoIgnorado`.
 
@@ -652,7 +651,7 @@ tecnología por defecto, en vez de perderse.
 
 ---
 
-## 8. Los catálogos de referencia (`models.py`, `views_catalogos.py`)
+## 8. Los catálogos de referencia (`models.py`; la pantalla vive en `services/catalogos/`)
 
 ### Los modelos
 
@@ -666,7 +665,7 @@ tienen cada uno su catálogo, y un cambio en uno no alcanza al otro.
 | `Coordinador` | `catalogo_coordinadores` | Responsable comercial (reporte Business Units) |
 | `Zona` | `catalogo_zonas` | Nodo de red. `site` y `estado` con `PROTECT`, `coordinador` con `SET_NULL` |
 | `Plan` | `catalogo_planes` | Producto contratable |
-| `ProductoIgnorado` | `catalogo_productos_ignorados` | Línea del export que nunca será un plan |
+| `ProductoIgnorado` | `catalogo_productos_ignorados` | Nombre del export que no se registrará, por `area` (`productos`, `estructura`, `ventas`). Único por `(area, nombre)`; solo los de `productos` alimentan `fixtures.productos_ignorados()` |
 
 Sobre `Plan`:
 
@@ -683,37 +682,55 @@ Sobre `Plan`:
 Vocabulario de tecnologías: **son dos y solo dos** (`FTTH`, `RF`). Ante la
 reguladora eso se colapsa a alámbrico o inalámbrico.
 
-### La pantalla y su CRUD
+### El módulo de Catálogos y su CRUD
 
-`views_catalogos.py` sirve **todos los catálogos con un solo par de endpoints** en vez
+Los catálogos fueron una pantalla de Subscriptions (`/subscriptions/config/`).
+Desde que los usan dos módulos —Subscriptions y Comisiones— son un módulo
+propio, `services/catalogos/`, montado en `/catalogos/` con una página por
+grupo. **Los modelos no se mudaron**: siguen en `services/subscriptions/models.py`,
+sus tablas ya tienen nombre propio y mover las clases de app no le daba nada a
+nadie. `/subscriptions/config/` sigue respondiendo con una redirección (con
+`?nuevo_plan=` va a Productos con el formulario abierto).
+
+| Página | Contenido | Permiso |
+|---|---|---|
+| `/catalogos/notificaciones/` | Por registrar (productos y zonas importados que el catálogo no reconoce) e Ignorados | cualquiera de los tres; cada área solo con el suyo |
+| `/catalogos/productos/` | Planes y planes reguladores. `?nuevo_plan=` | `can_manage_catalogo_operacional` |
+| `/catalogos/estructura/` | Zonas, sites y estados. `?nueva_zona=` | `can_manage_catalogo_comercial` |
+| `/catalogos/ventas/` | Coordinadores de unidad de negocio y objetivos | `can_manage_catalogo_ventas` |
+
+Las zonas por registrar (`zonas_fuera_de_catalogo`, en `analytics/imports.py`)
+**no bloquean nada**, a diferencia de los productos: sus órdenes se analizan
+igual, pero se quedan sin site, estado ni coordinador.
+
+`services/catalogos/views.py` sirve **todos los catálogos con un solo par de endpoints** en vez
 de doce vistas casi iguales: lo único que cambia entre ellos es qué campos se
 leen del cuerpo y cómo se serializa la fila, y eso lo declara el diccionario
 `CATALOGOS`. Añadir un catálogo es añadir una entrada ahí y una pestaña en la
 interfaz.
 
-**Dos permisos, uno por mitad.** Cada entrada de `CATALOGOS` declara su
-`permiso`: `can_manage_catalogo_comercial` para zonas, sites, estados y
-coordinadores (cómo se reparte la red entre los equipos de venta), y
-`can_manage_catalogo_operacional` para planes, planes reguladores e ignorados (y
-la pestaña de productos por registrar). Los
-mantienen equipos distintos, y las dos mitades no se referencian entre sí, así
-que cada formulario se completa con lo que su permiso ya envía. La página abre
-con cualquiera de los dos y solo envía las filas del que se tiene; los endpoints
-de escritura comprueban el permiso del `tipo` concreto y responden **403** si es
-de la otra mitad. La migración `config/0006` renombró el antiguo
+**Un permiso por grupo.** Cada entrada de `CATALOGOS` declara su `permiso`:
+`can_manage_catalogo_operacional` para planes y planes reguladores,
+`can_manage_catalogo_comercial` para zonas, sites y estados, y
+`can_manage_catalogo_ventas` para coordinadores, objetivos y semáforo. Los
+ignorados declaran además `permiso_fila`: el de su área. Los endpoints de
+escritura dejan pasar a quien tenga cualquiera de los tres y comprueban el del
+`tipo` (y de la fila) concreto, respondiendo **403** si no es suyo. La
+migración `config/0008` creó el de ventas copiando el comercial, así que nadie
+perdió los coordinadores ni los objetivos al separarlos. La migración `config/0006` renombró el antiguo
 `can_manage_catalogos` a comercial y copió su valor al operacional, así que nadie
 perdió acceso con el cambio. Aquella migración nombró las dos mitades al revés;
 `config/0007` intercambia los valores guardados para que cada cuenta conserve las
 mismas pestañas con el nombre correcto.
 
-- `GET /subscriptions/config/` — la página. Acepta `?nuevo_plan=<nombre>`, que
-  abre el formulario de plan ya relleno; es a donde lleva el aviso de la
-  importación. Incluye `pendientes` (lo ya importado que no está en el catálogo),
-  y si esa consulta falla no rompe la página.
-- `POST api/catalogos/guardar/` — alta o edición. Valida con `_texto`,
+- `GET /catalogos/<grupo>/` — las páginas. Productos acepta `?nuevo_plan=<nombre>`,
+  que abre el formulario de plan ya relleno; es a donde lleva el aviso de la
+  importación. Notificaciones incluye los pendientes de cada área, y si una
+  consulta falla no rompe la página.
+- `POST /catalogos/api/guardar/` — alta o edición. Valida con `_texto`,
   `_numero`, `_opcion` y `_relacion`, que levantan `DatosInvalidos` → 400. Un
   duplicado responde **409**.
-- `POST api/catalogos/eliminar/` — baja. Un site, estado o coordinador **con
+- `POST /catalogos/api/eliminar/` — baja. Un site, estado o coordinador **con
   zonas colgando no se borra**: la zona los referencia con `PROTECT` y se
   responde 409 explicando cuál es el estorbo, en vez de un 500.
 

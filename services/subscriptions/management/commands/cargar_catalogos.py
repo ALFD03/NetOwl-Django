@@ -2,7 +2,7 @@
 
 Es lo unico que sigue leyendo esos ficheros. Sirve para la migracion inicial y
 para levantar un entorno nuevo; a partir de ahi el catalogo se mantiene desde
-`/subscriptions/config/`.
+el modulo de Catalogos (`/catalogos/`).
 
 Es idempotente: lo que ya existe no se toca salvo que se pase `--actualizar`,
 para no pisar con el fichero una correccion hecha desde la web.

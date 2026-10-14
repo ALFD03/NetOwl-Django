@@ -1,6 +1,6 @@
 """Directorio de usuarios de soporte: la pantalla y su CRUD.
 
-Mismo patron que `services/subscriptions/views_catalogos.py`: un unico par de
+Mismo patron que `services/catalogos/views.py`: un unico par de
 endpoints para los dos catalogos —usuarios y departamentos—, porque entre ellos
 solo cambia que campos se leen del cuerpo y como se serializa la fila.
 

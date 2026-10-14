@@ -48,6 +48,7 @@ ACTION_PERMISSION_FIELDS = [
     'can_import_data', 'can_run_calculations', 'can_run_lifetime',
     'can_manage_eta', 'can_manage_users',
     'can_manage_catalogo_comercial', 'can_manage_catalogo_operacional',
+    'can_manage_catalogo_ventas',
     'can_manage_support_users',
     # Cargas de CSV, una por modulo de origen.
     'can_import_subs', 'can_import_crm', 'can_import_support',
@@ -110,15 +111,16 @@ class PermissionMatrix(models.Model):
     can_run_lifetime = models.BooleanField(default=False)
     can_manage_eta = models.BooleanField(default=False)
     can_manage_users = models.BooleanField(default=False)
-    # Catalogos de referencia, partidos en dos porque los mantienen equipos
-    # distintos. El comercial es como se reparte la red entre los equipos de
-    # venta: zonas, sites, estados y coordinadores. El operacional es el
-    # vocabulario de lo que se vende: planes, planes reguladores, productos
-    # ignorados y la lista de productos por registrar. Las dos mitades no se
-    # referencian entre si, asi que cada formulario se completa sin necesitar
-    # la otra.
+    # Catalogos de referencia: un permiso por grupo del modulo de Catalogos,
+    # porque los mantienen equipos distintos. Los nombres son anteriores al
+    # modulo y se conservan. El comercial es la Estructura: como se reparte la
+    # red (zonas, sites, estados). El operacional son los Productos: planes,
+    # planes reguladores y sus productos por registrar e ignorados. Ventas son
+    # los coordinadores, los objetivos comerciales y el directorio de
+    # vendedores, que lleva quien paga comisiones y no quien reparte la red.
     can_manage_catalogo_comercial = models.BooleanField(default=False)
     can_manage_catalogo_operacional = models.BooleanField(default=False)
+    can_manage_catalogo_ventas = models.BooleanField(default=False)
     # Directorio de usuarios de soporte y sus departamentos. Va aparte de los
     # catalogos de suscripciones: quien los mantiene no es necesariamente quien
     # sabe quien trabaja en soporte.

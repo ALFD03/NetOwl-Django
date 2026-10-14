@@ -343,7 +343,7 @@ export interface LifetimeDetalleResponse {
 
 // --- Catálogos de referencia -------------------------------------------------
 // Planes, zonas, sites, estados y coordinadores. Antes eran `Planes.json` y
-// `Zonas.json`; hoy son tablas que se editan en `/subscriptions/config/`.
+// `Zonas.json`; hoy son tablas que se editan en el módulo de Catálogos (`/catalogos/`).
 
 // --- Objetivos comerciales (ver features/subscriptions/lib/objetivos.ts) ---
 
@@ -483,9 +483,14 @@ export interface CatalogoNombrado {
   zonas: number;
 }
 
+/** Las áreas del módulo de Catálogos con una lista de pendientes propia. */
+export type AreaCatalogo = 'productos' | 'estructura' | 'ventas';
+
+/** Un nombre de los datos que se decidió no registrar en su área. */
 export interface CatalogoProductoIgnorado {
   id: number;
   nombre: string;
+  area: AreaCatalogo;
   nota: string;
   creado_por: string;
   creado_en: string;
@@ -544,38 +549,67 @@ export interface CatalogoSemaforo extends SemaforoObjetivos {
   id: number;
 }
 
-/** Producto ya importado que hoy no está en el catálogo. */
+/** Nombre ya importado que hoy no está en su catálogo (un producto, una zona…). */
 export interface ProductoPendiente {
   nombre: string;
   ordenes: number;
 }
 
-export interface SubscriptionCatalogosProps {
+/** Qué grupos del módulo de Catálogos administra el usuario: uno por permiso. */
+export interface CatalogosPermisos {
+  operacional: boolean;
+  comercial: boolean;
+  ventas: boolean;
+}
+
+interface CatalogosPaginaProps {
+  permisos: CatalogosPermisos;
+}
+
+/** `Catalogos/Notificaciones`: lo pendiente de cada área y lo ignorado. */
+export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
+  /** `null` en las áreas que el usuario no administra; vacía es "todo registrado". */
+  pendientes: Record<Exclude<AreaCatalogo, 'ventas'>, ProductoPendiente[] | null>;
+  ignorados: CatalogoProductoIgnorado[];
+  /** Las áreas cuyos ignorados puede ver y deshacer. */
+  areas: CatalogoOption[];
+}
+
+/** `Catalogos/Productos`: planes y planes reguladores. */
+export interface CatalogosProductosProps extends CatalogosPaginaProps {
   planes: CatalogoPlan[];
   reguladores: CatalogoPlanRegulador[];
-  zonas: CatalogoZona[];
-  sites: CatalogoSite[];
-  estados: CatalogoNombrado[];
-  coordinadores: CatalogoNombrado[];
-  ignorados: CatalogoProductoIgnorado[];
-  objetivos: CatalogoObjetivo[];
-  objetivos_mes: CatalogoObjetivoMes[];
-  /** Nulos sin el permiso comercial, que es el que administra los objetivos. */
-  semaforo: CatalogoSemaforo | null;
-  objetivosConfig: ObjetivosConfig | null;
-  /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
-  periodosCalculados: string[];
-  /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
-  nodosConocidos: NodoConocido[];
-  pendientes: ProductoPendiente[];
-  /**
-   * Qué mitad del catálogo administra el usuario. Las listas de la otra llegan
-   * vacías, y sus pestañas se ocultan por estos flags y no por estar vacías.
-   */
-  comercial: boolean;
-  operacional: boolean;
   tecnologias: CatalogoOption[];
   tiposPersona: CatalogoOption[];
   /** `?nuevo_plan=` — abre el formulario de plan ya relleno con ese nombre. */
   nuevoPlan: string;
+}
+
+/** `Catalogos/Estructura`: zonas, sites y estados. */
+export interface CatalogosEstructuraProps extends CatalogosPaginaProps {
+  zonas: CatalogoZona[];
+  sites: CatalogoSite[];
+  estados: CatalogoNombrado[];
+  /** Solo para elegir el de una zona: se administran en Ventas. */
+  coordinadores: CatalogoNombrado[];
+  tecnologias: CatalogoOption[];
+  /** `?nueva_zona=` — abre el formulario de zona ya relleno con ese nombre. */
+  nuevaZona: string;
+}
+
+/** `Catalogos/Ventas`: coordinadores de unidad de negocio y objetivos. */
+export interface CatalogosVentasProps extends CatalogosPaginaProps {
+  coordinadores: CatalogoNombrado[];
+  objetivos: CatalogoObjetivo[];
+  objetivos_mes: CatalogoObjetivoMes[];
+  semaforo: CatalogoSemaforo;
+  objetivosConfig: ObjetivosConfig;
+  /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
+  periodosCalculados: string[];
+  /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
+  nodosConocidos: NodoConocido[];
+  /** Las entidades a las que se les puede fijar un objetivo. */
+  zonas: CatalogoZona[];
+  sites: CatalogoSite[];
+  estados: CatalogoNombrado[];
 }

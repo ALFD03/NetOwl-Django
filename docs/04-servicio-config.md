@@ -50,8 +50,9 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_run_lifetime` | Análisis de ciclo de vida |
 | `can_manage_eta` | Parametrizar y bloquear el reporte ETA |
 | `can_manage_users` | Administrar usuarios y grupos |
-| `can_manage_catalogo_comercial` | Editar zonas, sites, estados y coordinadores |
-| `can_manage_catalogo_operacional` | Editar planes, planes reguladores, ignorados y resolver los productos por registrar |
+| `can_manage_catalogo_operacional` | Catálogos › Productos: planes, planes reguladores y los productos por registrar e ignorados |
+| `can_manage_catalogo_comercial` | Catálogos › Estructura: zonas, sites, estados y las zonas por registrar e ignoradas |
+| `can_manage_catalogo_ventas` | Catálogos › Ventas: coordinadores de unidad de negocio y objetivos comerciales |
 
 > **Añadir un permiso** es añadir un campo booleano a `PermissionMatrix` y su
 > nombre a una de las dos listas. A partir de ahí aparece solo en la interfaz de

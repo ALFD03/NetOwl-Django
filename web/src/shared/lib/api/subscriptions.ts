@@ -3,7 +3,7 @@
 import { apiClient } from './client';
 import { startAndFollow, type AnalysisJob } from './jobs';
 import type {
-  BajasDetalleResponse, CatalogoTipo, LifetimeDetalleResponse, SubscriptionResultsResponse,
+  BajasDetalleResponse, LifetimeDetalleResponse, SubscriptionResultsResponse,
 } from '@/shared/types/subscriptions';
 
 export interface EtaReportResponse {
@@ -44,11 +44,6 @@ export interface EtaSubConfigRequest {
 }
 
 export interface DeleteEtaSubRequest { orden: string; }
-
-/** Una fila de cualquier catálogo. Sin `id` es un alta. */
-export interface CatalogoPayload extends Record<string, unknown> {
-  id?: number | null;
-}
 
 export const subscriptionsApi = {
   getResultsDetails: async (period: string) =>
@@ -114,18 +109,6 @@ export const subscriptionsApi = {
 
   deleteEtaSubConfig: async (request: DeleteEtaSubRequest) =>
     (await apiClient.post('/subscriptions/api/eta-report/delete-sub-config/', request)).data,
-
-  /**
-   * Alta o edición de una fila de catálogo.
-   *
-   * Un solo endpoint para todos los catálogos: lo que cambia entre ellos son
-   * los campos del cuerpo, no la forma de la petición.
-   */
-  saveCatalogo: async (tipo: CatalogoTipo, payload: CatalogoPayload) =>
-    (await apiClient.post('/subscriptions/api/catalogos/guardar/', { tipo, ...payload })).data,
-
-  deleteCatalogo: async (tipo: CatalogoTipo, id: number) =>
-    (await apiClient.post('/subscriptions/api/catalogos/eliminar/', { tipo, id })).data,
 
   /**
    * Recalcula en el worker el lifetime de todos los meses y espera a que termine.

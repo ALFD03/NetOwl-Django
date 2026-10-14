@@ -7,7 +7,7 @@ import type { EtaDiscoveredSubscription, EtaSubscriptionConfig, SubscriptionEtaM
  * Estado de la pantalla de parametrización ETA.
  *
  * Ya no gestiona planes: la clasificación de un plan vive en el catálogo
- * (`/subscriptions/config/`) y ETA solo conserva lo que no tiene equivalente
+ * (`/catalogos/productos/`) y ETA solo conserva lo que no tiene equivalente
  * allí, las excepciones por orden.
  */
 // `individualConfigs` ya no se lee aqui: el buscado y el filtrado de esa tabla

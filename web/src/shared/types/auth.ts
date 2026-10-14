@@ -25,6 +25,7 @@ export type Permission =
   | 'can_manage_users'
   | 'can_manage_catalogo_comercial'
   | 'can_manage_catalogo_operacional'
+  | 'can_manage_catalogo_ventas'
   | 'can_manage_support_users'
   | 'can_import_subs'
   | 'can_import_crm'
@@ -59,6 +60,7 @@ export interface UserProfile {
   can_manage_users: boolean;
   can_manage_catalogo_comercial: boolean;
   can_manage_catalogo_operacional: boolean;
+  can_manage_catalogo_ventas: boolean;
   can_manage_support_users: boolean;
   can_import_subs: boolean;
   can_import_crm: boolean;
