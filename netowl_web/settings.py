@@ -161,6 +161,7 @@ INSTALLED_APPS = [
     "services.support",             # Soporte: cohortes de tickets
     "services.imports",             # Carga de CSV y ejecucion de analisis
     "services.catalogos",           # Catalogos de referencia (vistas; modelos en subscriptions)
+    "services.comisiones",          # Comisiones de la fuerza de ventas
     "services.config",              # Autenticacion y permisos
     "inertia",
 ]

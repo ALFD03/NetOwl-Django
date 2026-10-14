@@ -7,8 +7,9 @@
  */
 
 import {
-  BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, Headset,
-  Layers, Lock, Network, Package, Table, TrendingUp, UserCheck, Users,
+  BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitFork,
+  HandCoins, Headset, Layers, Lock, Network, Package, SlidersHorizontal, Table, TrendingUp,
+  UserCheck, Users,
 } from 'lucide-react';
 
 import { PERMISSIONS } from './permissions';
@@ -77,6 +78,18 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       { id: 'productos', label: 'Productos', href: '/catalogos/productos/', icon: Package, permission: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL },
       { id: 'estructura', label: 'Estructura', href: '/catalogos/estructura/', icon: Network, permission: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL },
       { id: 'ventas', label: 'Ventas', href: '/catalogos/ventas/', icon: UserCheck, permission: PERMISSIONS.MANAGE_CATALOGO_VENTAS },
+    ],
+  },
+  {
+    module: 'comisiones',
+    name: 'Comisiones',
+    icon: HandCoins,
+    pathPrefix: '/comisiones',
+    permission: [PERMISSIONS.VIEW_COMISIONES, PERMISSIONS.MANAGE_COMISIONES],
+    pages: [
+      { id: 'informe', label: 'Informe', href: '/comisiones/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_COMISIONES },
+      { id: 'jerarquia', label: 'Estructura jerárquica', href: '/comisiones/jerarquia/', icon: GitFork, permission: PERMISSIONS.MANAGE_COMISIONES, section: CONFIGURACION },
+      { id: 'condiciones', label: 'Condiciones de pago', href: '/comisiones/condiciones/', icon: SlidersHorizontal, permission: PERMISSIONS.MANAGE_COMISIONES, section: CONFIGURACION },
     ],
   },
   {

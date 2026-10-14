@@ -229,6 +229,11 @@ class Plan(models.Model):
     datas_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     declarar_en_eta = models.BooleanField(default=True)
+    # Lo que se lleva quien vende un plan PYME, en % de `precio`. Solo tiene
+    # sentido en los PYME: un plan residencial se paga por tramos de cantidad
+    # de ventas (ver `services/comisiones`). Nulo es "sin definir": la venta
+    # sale en el informe de comisiones sin monto, para que se note.
+    comision_pyme_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     # Con que fila de los formularios de la reguladora se declara este plan.
     # Nulo no es un error de datos: un plan recien creado todavia no esta
     # agrupado, y hasta que lo este no se declara.
@@ -275,6 +280,10 @@ class Plan(models.Model):
             "price": _numero(self.precio),
             "tarifa": self.tarifa,
             "declarar_en_eta": self.declarar_en_eta,
+            # Nulo y no texto vacio: es "sin definir", y Comisiones lo distingue de 0.
+            "comision_pyme_pct": (
+                float(self.comision_pyme_pct) if self.comision_pyme_pct is not None else None
+            ),
             # El regulador viaja como el diccionario entero y no como su id:
             # el consumidor (`eta_report`) necesita sus campos, y `fixtures`
             # sirve diccionarios planos, no filas del ORM.

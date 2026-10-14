@@ -41,6 +41,8 @@ LANDING_ROUTES = [
     ('catalogos:notificaciones', ('can_manage_catalogo_comercial',)),
     ('catalogos:notificaciones', ('can_manage_catalogo_ventas',)),
     ('support:usuarios', ('can_manage_support_users',)),
+    ('comisiones:informe', ('can_view_comisiones',)),
+    ('comisiones:jerarquia', ('can_manage_comisiones',)),
     ('config:user_management', ('can_manage_users',)),
 ]
 

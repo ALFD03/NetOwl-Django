@@ -304,6 +304,15 @@ written when it does: the check runs before the truncate, so the previous data
 is intact and the file can be re-uploaded once the decisions are made.
 
 
+## Commissions
+
+`features/comisiones/` serves the three pages of the Comisiones module (report, hierarchy, payment
+conditions). The report is calculated on the server; the client only edits what the server cannot know (the
+objective %, a business unit's growth when the month is not analysed, the review decisions) and reloads. The
+sale-by-sale detail is fetched from `api/ventas/` the first time it is needed and kept per period in
+`useInformeComisiones`. The advisor-tier preview in Condiciones mirrors `reglas.pago_asesor` only to show the
+effect of the table being edited; the server's figure is the one that counts.
+
 ## Commercial objectives are applied here, not stored
 
 The growth target and the maximum churn (6% / 3% by default) are catalogue data served in

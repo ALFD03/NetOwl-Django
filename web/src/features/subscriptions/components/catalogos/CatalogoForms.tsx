@@ -210,6 +210,23 @@ export function PlanForm({
             </Field>
           </div>
 
+          {value.tipo_persona === 'PYME' && (
+            <Field
+              label="Comisión PYME (% del precio)"
+              hint="Lo que cobra quien vende el plan, y solo esa persona. Vacío es «sin definir»: Comisiones avisa de esas ventas en vez de pagarlas a 0."
+            >
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="any"
+                className={modalInputClass}
+                value={value.comision_pyme_pct ?? ''}
+                onChange={(e) => onChange({ comision_pyme_pct: e.target.value === '' ? null : Number(e.target.value) })}
+              />
+            </Field>
+          )}
+
           <Field
             label="Plan regulador"
             hint="Con qué fila del formulario se declara. Varios planes comerciales pueden compartirla: es lo que evita contar dos veces la misma velocidad con dos tarifas. Sin asignar, el plan sigue contando en las matrices pero no aparece en el formulario."

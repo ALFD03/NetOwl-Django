@@ -30,6 +30,7 @@ repositorio:
 | 11 | [Referencia de endpoints](11-api-endpoints.md) | Todas las URLs con su permiso, su límite de peticiones y su respuesta. |
 | 12 | [Operación](12-operacion.md) | `make`, `dev.sh`, Docker, comandos de gestión, logs y diagnóstico de fallos. |
 | 13 | [Glosario](13-glosario.md) | Vocabulario de negocio: churn neto/bruto, reactivación, cohorte, ETA, winsorización… |
+| 15 | [`services/comisiones/`](15-servicio-comisiones.md) | Comisiones de la fuerza de ventas: periodos por días promocionales, clasificación de ventas, reglas de pago, revisión y cierre. |
 
 ## Convenciones
 

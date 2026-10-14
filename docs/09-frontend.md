@@ -54,6 +54,7 @@ rompe la vista en tiempo de ejecución, sin error de compilación.
 | `/subscriptions/eta-report/` | `Subscriptions/EtaReport` | `pages/Subscriptions/EtaReport.tsx` |
 | `/subscriptions/eta-report/config/` | `Subscriptions/EtaManagement` | `pages/Subscriptions/EtaManagement.tsx` |
 | `/catalogos/notificaciones|productos|estructura|ventas/` | `Catalogos/*` | `pages/Catalogos/*.tsx` |
+| `/comisiones/`, `/comisiones/jerarquia/`, `/comisiones/condiciones/` | `Comisiones/Informe`, `Comisiones/Jerarquia`, `Comisiones/Condiciones` | `pages/Comisiones/*.tsx` (feature `features/comisiones/`) |
 | `/crm/`, `/crm/analytics/`, `/crm/results/` | `CRM/Dashboard`, `CRM/Analytics`, `CRM/Results` | `pages/CRM/*.tsx` |
 | `/support/`, `/support/analytics/`, `/support/results/` | `Support/*` | `pages/Support/*.tsx` |
 | `/imports/subscriptions|crm|support|history/` | `Imports/*` | `pages/Imports/*.tsx` |

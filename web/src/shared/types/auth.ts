@@ -18,6 +18,7 @@ export type Permission =
   | 'can_view_imports_crm'
   | 'can_view_imports_support'
   | 'can_view_import_history'
+  | 'can_view_comisiones'
   | 'can_import_data'
   | 'can_run_calculations'
   | 'can_run_lifetime'
@@ -27,6 +28,7 @@ export type Permission =
   | 'can_manage_catalogo_operacional'
   | 'can_manage_catalogo_ventas'
   | 'can_manage_support_users'
+  | 'can_manage_comisiones'
   | 'can_import_subs'
   | 'can_import_crm'
   | 'can_import_support'
@@ -53,6 +55,7 @@ export interface UserProfile {
   can_view_imports_crm: boolean;
   can_view_imports_support: boolean;
   can_view_import_history: boolean;
+  can_view_comisiones: boolean;
   can_import_data: boolean;
   can_run_calculations: boolean;
   can_run_lifetime: boolean;
@@ -62,6 +65,7 @@ export interface UserProfile {
   can_manage_catalogo_operacional: boolean;
   can_manage_catalogo_ventas: boolean;
   can_manage_support_users: boolean;
+  can_manage_comisiones: boolean;
   can_import_subs: boolean;
   can_import_crm: boolean;
   can_import_support: boolean;

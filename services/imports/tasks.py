@@ -78,7 +78,7 @@ def _correr_subscriptions(job: AnalysisJob, consola: ConsolaJob):
             detalle += f" y {len(fuera) - 10} más"
         raise RuntimeError(
             f"{len(fuera)} producto(s) no están en el catálogo: {detalle}. "
-            "Regístralos en Subscriptions → Catálogos (o márcalos como ignorados) "
+            "Regístralos en Catálogos → Productos (o márcalos como ignorados) "
             "y vuelve a lanzar el análisis."
         )
 

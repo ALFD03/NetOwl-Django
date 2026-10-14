@@ -94,6 +94,7 @@ const PLAN_VACIO: PlanDraft = {
   datas_mbps: 0,
   precio: 0,
   declarar_en_eta: true,
+  comision_pyme_pct: null,
   plan_regulador_id: null,
   plan_regulador: '',
 };

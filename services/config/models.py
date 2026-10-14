@@ -41,6 +41,7 @@ VIEW_PERMISSION_FIELDS = [
     # Paginas del modulo de Importaciones (una por pestana).
     'can_view_imports_subs', 'can_view_imports_crm', 'can_view_imports_support',
     'can_view_import_history',
+    'can_view_comisiones',
 ]
 
 # Permisos de accion: por defecto cerrados (False), como los de lectura.
@@ -50,6 +51,7 @@ ACTION_PERMISSION_FIELDS = [
     'can_manage_catalogo_comercial', 'can_manage_catalogo_operacional',
     'can_manage_catalogo_ventas',
     'can_manage_support_users',
+    'can_manage_comisiones',
     # Cargas de CSV, una por modulo de origen.
     'can_import_subs', 'can_import_crm', 'can_import_support',
     # Ejecucion de cada motor de analisis por separado.
@@ -105,6 +107,11 @@ class PermissionMatrix(models.Model):
     can_view_imports_support = models.BooleanField(default=False)
     can_view_import_history = models.BooleanField(default=False)
 
+    # --- Comisiones ---
+    # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar la
+    # jerarquia y las condiciones de pago es `can_manage_comisiones`.
+    can_view_comisiones = models.BooleanField(default=False)
+
     # --- Acciones globales ---
     can_import_data = models.BooleanField(default=False)
     can_run_calculations = models.BooleanField(default=False)
@@ -125,6 +132,7 @@ class PermissionMatrix(models.Model):
     # catalogos de suscripciones: quien los mantiene no es necesariamente quien
     # sabe quien trabaja en soporte.
     can_manage_support_users = models.BooleanField(default=False)
+    can_manage_comisiones = models.BooleanField(default=False)
 
     # --- Cargas de CSV por modulo ---
     can_import_subs = models.BooleanField(default=False)

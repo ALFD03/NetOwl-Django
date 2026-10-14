@@ -428,6 +428,8 @@ export interface CatalogoPlan {
   precio: number;
   /** Si el plan se declara a la reguladora en el reporte ETA. */
   declarar_en_eta: boolean;
+  /** % del precio que se lleva quien vende el plan, solo en los PYME. Nulo: sin definir. */
+  comision_pyme_pct: number | null;
   /** Con qué fila del formulario se declara. `null` = todavía sin agrupar. */
   plan_regulador_id: number | null;
   plan_regulador: string;

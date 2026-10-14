@@ -145,6 +145,7 @@ def _plan(p: Plan) -> dict[str, Any]:
         "datas_mbps": float(p.datas_mbps),
         "precio": float(p.precio),
         "declarar_en_eta": p.declarar_en_eta,
+        "comision_pyme_pct": float(p.comision_pyme_pct) if p.comision_pyme_pct is not None else None,
         "plan_regulador_id": p.plan_regulador_id,
         "plan_regulador": p.plan_regulador.nombre if p.plan_regulador_id else "",
     }
@@ -240,6 +241,11 @@ def _aplicar_plan(fila: Plan, data: dict, request) -> None:
     fila.datas_mbps = _numero(data, "datas_mbps")
     fila.precio = _numero(data, "precio")
     fila.declarar_en_eta = bool(data.get("declarar_en_eta", True))
+    # Solo en los PYME, que son los unicos que se pagan por porcentaje. Vacio
+    # es "sin definir", no 0: Comisiones avisa en vez de pagar nada en silencio.
+    fila.comision_pyme_pct = (
+        _porcentaje(data, "comision_pyme_pct") if fila.tipo_persona == "PYME" else None
+    )
     # Opcional: un plan recien creado todavia no esta agrupado, y hasta que lo
     # este no aparece en los formularios de la reguladora.
     fila.plan_regulador = _relacion(PlanRegulador, data, "plan_regulador_id", obligatorio=False)

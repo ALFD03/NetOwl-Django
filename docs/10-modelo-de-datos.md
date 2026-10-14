@@ -44,6 +44,13 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
 | `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
 | `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
+| `comisiones_jerarquia` | `PosicionJerarquia` | A quién responde cada persona de ventas (una fila por persona; la cima no tiene). Solo rellena lo que la venta no trae |
+| `comisiones_condiciones` | `CondicionesComision` | Fila única: montos, tramos (JSON) del asesor y del coordinador de UN, día promocional habitual y días de espera |
+| `comisiones_periodos` | `ComisionPeriodo` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana), `estado` (borrador/cerrado) y, al cerrar, `condiciones` y `resumen` congelados |
+| `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta por facturar en progreso: contar en su periodo o diferir a otro. Única por `(orden, periodo_origen)` |
+| `comisiones_indicadores` | `IndicadorComision` | Por periodo y persona: `cumplimiento_pct` (supervisor, coord. de oficina) y `crecimiento_pct` a mano (coord. de UN) |
+| `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`) |
+| `comisiones_pagos` | `ComisionPago` | Lo que cobró cada persona en un periodo cerrado, con nombre y cargo copiados |
 | `django_migrations` | Django | Propia de cada esquema |
 
 ### Sesiones e importaciones
@@ -200,7 +207,8 @@ servirlas.
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
 | `catalogo_*` (planes, zonas, sites…) | Módulo de Catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
-| `catalogo_personas_ventas` | Catálogos › Ventas | `personas_fuera_del_directorio` (Notificaciones) |
+| `catalogo_personas_ventas` | Catálogos › Ventas | `personas_fuera_del_directorio` (Notificaciones), Comisiones |
+| `comisiones_*` | Módulo de Comisiones | Módulo de Comisiones |
 | `catalogo_departamentos`, `catalogo_usuarios_soporte`, `catalogo_usuarios_soporte_historial` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio`, `tickets_tras_la_baja`, `anotar_departamentos` |
 | `analysis_jobs` | Vistas de lanzamiento y worker | Sondeo de la interfaz |
 | `import_action_logs` | `register_import_log` | Página de historial |
