@@ -1,29 +1,137 @@
-/** Las tarjetas de los grupos de permisos. */
+/**
+ * Las tarjetas de los grupos de permisos: qué abre cada uno, cuánto de la
+ * matriz concede y quién está dentro.
+ */
 
-import { Settings2, ShieldCheck, Trash2 } from 'lucide-react';
-import { NeonContainer } from '@/shared/ui';
-import type { GroupData } from '@/features/config/types';
+import { Plus, Search, Settings2, Shield, Trash2 } from 'lucide-react';
+
+import { EmptyState } from '@/shared/ui';
+import type { GroupData, UserData } from '@/features/config/types';
+import { Avatar, ModulosConAcceso, TOTAL_PERMISSIONS, contarPermisos } from './acceso';
 
 interface Props {
   groups: GroupData[];
+  users: UserData[];
   onEdit: (group: GroupData) => void;
   onDelete: (group: GroupData) => void;
+  onCreate: () => void;
+  /** Hay un filtro de búsqueda activo: la lista vacía no significa que no haya grupos. */
+  filtrando: boolean;
 }
 
-export function GroupsGrid({ groups, onEdit, onDelete }: Props) {
+/** Cuántos avatares se pintan antes de resumir el resto en «+N». */
+const MAX_AVATARES = 5;
+
+export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrando }: Props) {
+  if (!groups.length && filtrando) {
+    return (
+      <EmptyState
+        bordered
+        icon={<Search />}
+        title="Ningún grupo coincide"
+        description="Prueba con otro nombre o descripción."
+      />
+    );
+  }
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {groups.map((group) => (
-        <NeonContainer key={group.id} theme="blue" title={group.name} subtitle={`${group.members_count} miembro(s) asignado(s)`} icon={<ShieldCheck className="w-5 h-5" />}>
-          <div className="flex flex-col justify-between h-full space-y-4">
-            <p className="text-xs text-slate-400 min-h-[40px] leading-relaxed">{group.description || 'Sin descripción asignada para esta plantilla.'}</p>
-            <div className="pt-4 border-t border-slate-800/80 flex justify-end gap-2">
-              <button onClick={() => onEdit(group)} className="px-4 py-2 bg-surface-primary hover:bg-brand text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-all border border-slate-800 flex items-center gap-1.5"><Settings2 className="w-3.5 h-3.5" /> Editar</button>
-              <button onClick={() => onDelete(group)} className="p-2 bg-surface-primary hover:bg-rose-600 text-slate-400 hover:text-white rounded-xl border border-slate-800 transition-colors"><Trash2 className="w-4 h-4" /></button>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {groups.map((group) => {
+        const concedidos = contarPermisos(group.permissions);
+        const porcentaje = Math.round((concedidos / TOTAL_PERMISSIONS) * 100);
+        const miembros = users.filter((user) => user.group_id === group.id);
+        const sobrantes = group.members_count - Math.min(miembros.length, MAX_AVATARES);
+
+        return (
+          <article
+            key={group.id}
+            className="group flex flex-col rounded-2xl border border-slate-800 bg-surface-secondary p-5 shadow-xl transition-colors hover:border-slate-700"
+          >
+            <header className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-300 ring-1 ring-sky-500/30">
+                <Shield className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="truncate font-bold text-white">{group.name}</h3>
+                <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-400">
+                  {group.description || <span className="italic text-slate-500">Sin descripción</span>}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => onEdit(group)}
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-surface-hover hover:text-brand-light"
+                  title="Editar grupo y permisos"
+                  aria-label={`Editar ${group.name}`}
+                >
+                  <Settings2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(group)}
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-surface-hover hover:text-rose-400"
+                  title="Eliminar grupo"
+                  aria-label={`Eliminar ${group.name}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </header>
+
+            {/* `flex-1`: empuja el pie al fondo, así las tarjetas de una fila
+                alinean sus miembros aunque las descripciones midan distinto. */}
+            <div className="mt-4 flex-1">
+              <ModulosConAcceso permisos={group.permissions} conEtiqueta />
             </div>
-          </div>
-        </NeonContainer>
-      ))}
+
+            <div className="mt-4">
+              <div className="mb-1 flex justify-between text-[11px] font-semibold">
+                <span className="text-slate-500">Permisos concedidos</span>
+                <span className="tabular-nums text-slate-300">
+                  {concedidos} de {TOTAL_PERMISSIONS}
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-surface-primary">
+                <div className="h-full rounded-full bg-brand" style={{ width: `${porcentaje}%` }} />
+              </div>
+            </div>
+
+            <footer className="mt-4 flex min-h-[2.75rem] items-center justify-between gap-3 border-t border-slate-800 pt-4">
+              {group.members_count ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1">
+                    {miembros.slice(0, MAX_AVATARES).map((user) => (
+                      <span key={user.id} title={user.username}>
+                        <Avatar nombre={user.username} size="sm" />
+                      </span>
+                    ))}
+                  </div>
+                  <span className="text-xs text-slate-400">
+                    {sobrantes > 0 && `+${sobrantes} · `}
+                    {group.members_count} {group.members_count === 1 ? 'miembro' : 'miembros'}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-xs italic text-slate-500">Sin miembros</span>
+              )}
+            </footer>
+          </article>
+        );
+      })}
+
+      {/* Solo sin filtro: con una búsqueda activa, una tarjeta de «crear» en
+          medio de los resultados se leería como uno más. */}
+      {!filtrando && (
+        <button
+          type="button"
+          onClick={onCreate}
+          className="flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-700 text-slate-500 transition-colors hover:border-brand/60 hover:bg-brand/5 hover:text-brand-light"
+        >
+          <Plus className="h-6 w-6" />
+          <span className="text-sm font-semibold">Nuevo grupo</span>
+        </button>
+      )}
     </div>
   );
 }

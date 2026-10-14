@@ -2,32 +2,30 @@
 
 import type { LucideIcon } from 'lucide-react';
 import type { Permission } from './auth';
-import type { ModuleKey } from '@/shared/constants/navigation';
 
-export interface NavigationTab {
+/** Una página de un módulo: una hoja del árbol del sidebar. */
+export interface NavigationPage {
   id: string;
   label: string;
   href: string;
   icon: LucideIcon;
   /** Un permiso, o varios de los que basta con uno (OR). */
   permission?: Permission | readonly Permission[];
+  /**
+   * Grupo dentro del módulo (Reportes, Configuración…). Las páginas sin
+   * sección van primero y sin encabezado; las demás se agrupan en el orden en
+   * que aparecen.
+   */
+  section?: string;
 }
 
-export interface ModuleNavigation {
-  title: string;
-  icon: LucideIcon;
-  tabs: NavigationTab[];
-}
-
+/** Un módulo: una rama del árbol del sidebar. */
 export interface AppNavigationItem {
+  module: string;
   name: string;
   icon: LucideIcon;
   pathPrefix: string;
+  /** Permiso de entrada al módulo; cada página puede pedir además el suyo. */
   permission: Permission;
-  /**
-   * Module whose tabs this entry opens. The destination is resolved to the
-   * first tab the user can actually see, so a user who holds the module
-   * permission but not the permission of its first tab still gets in.
-   */
-  module: ModuleKey;
+  pages: NavigationPage[];
 }

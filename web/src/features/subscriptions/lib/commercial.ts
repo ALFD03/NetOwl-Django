@@ -1,3 +1,5 @@
+import { proyectar, type Proyeccion } from '@/shared/lib/proyeccion';
+
 import type { SemaforoObjetivos } from '../types';
 import { BARRA_TONO, TEXTO_TONO, tonoCumplimiento, type Meta, type OrigenObjetivo } from './objetivos';
 
@@ -39,6 +41,14 @@ export interface CommercialMetrics {
   cumplimientoVentas: number;
   /** Cumplimiento de cierre: la base final contra `cierreEsperado`, en %. */
   cumplimientoCierre: number;
+  /**
+   * Las instalaciones a las que se llegaría al cierre si el resto del mes
+   * siguiera el ritmo de los días laborables transcurridos (`shared/lib/proyeccion`).
+   * `null` sin un corte del que proyectar.
+   */
+  instalacionesProyectadas: number | null;
+  /** El cumplimiento de ventas con esas instalaciones proyectadas, en %. */
+  cumplimientoVentasProyectado: number | null;
 }
 
 export interface CalcCommercialOptions {
@@ -54,6 +64,8 @@ export interface CalcCommercialOptions {
   clamp?: boolean;
   /** Instalaciones del nodo o del grupo, para el cumplimiento de ventas. */
   nuevos?: number;
+  /** Los días laborables del corte, para proyectar las instalaciones al cierre. */
+  proyeccion?: Proyeccion | null;
 }
 
 /**
@@ -71,7 +83,7 @@ export function calcComercial(
   inicio: number,
   final: number,
   metaCrecimiento: number,
-  { clamp = false, nuevos = 0 }: CalcCommercialOptions = {},
+  { clamp = false, nuevos = 0, proyeccion = null }: CalcCommercialOptions = {},
 ): CommercialMetrics {
   const objetivo = metaCrecimiento;
   const cierreEsperado = inicio + objetivo;
@@ -80,6 +92,10 @@ export function calcComercial(
   const rawVentas = objetivo > 0 ? (nuevos / objetivo) * 100 : 0;
   const rawCierre = cierreEsperado > 0 ? (final / cierreEsperado) * 100 : 0;
   const recorte = (valor: number) => (clamp ? Math.min(100, Math.max(0, valor)) : valor);
+  const instalacionesProyectadas = proyeccion ? proyectar(nuevos, proyeccion) : null;
+  const rawVentasProyectado = instalacionesProyectadas !== null && objetivo > 0
+    ? (instalacionesProyectadas / objetivo) * 100
+    : null;
 
   return {
     cierreEsperado,
@@ -88,6 +104,8 @@ export function calcComercial(
     tasaCumplimiento: recorte(rawTasa),
     cumplimientoVentas: recorte(rawVentas),
     cumplimientoCierre: recorte(rawCierre),
+    instalacionesProyectadas,
+    cumplimientoVentasProyectado: rawVentasProyectado === null ? null : recorte(rawVentasProyectado),
   };
 }
 

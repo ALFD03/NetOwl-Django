@@ -27,7 +27,17 @@ export interface Column<T> {
    * `true`/`false`, que no es lo que lee quien abre el desplegable.
    */
   filterValue?: (row: T) => string;
+  /**
+   * Fija la columna al borde izquierdo al hacer scroll horizontal. Para la
+   * etiqueta de la fila (el valor de la dimensión, el nombre): en un teléfono
+   * la tabla se lee deslizando, y sin ella las cifras pierden a quién son.
+   */
+  sticky?: boolean;
 }
+
+/** Celda fijada: opaca, porque por debajo pasan las demás columnas. */
+const STICKY_TD = 'sticky left-0 z-10 bg-surface-secondary';
+const STICKY_TH = 'sticky left-0 z-30 bg-surface-tertiary';
 
 /** Valor del desplegable que no filtra nada. */
 const TODOS = '__todos__';
@@ -212,7 +222,7 @@ export function DataTable<T>({
                   onClick={() => handleSort(col.sortKey || (typeof col.accessor === 'string' ? col.accessor : undefined))}
                   className={`p-3 text-[10px] uppercase font-bold tracking-wider border-b border-slate-800 transition-colors 
                     ${col.sortKey || typeof col.accessor === 'string' ? 'cursor-pointer hover:text-white hover:bg-slate-700/50' : ''} 
-                    ${alignMap[col.align || 'left']} ${col.className || ''}`}
+                    ${alignMap[col.align || 'left']} ${col.sticky ? STICKY_TH : ''} ${col.className || ''}`}
                 >
                   <div className={`flex items-center gap-2 ${col.align === 'right' ? 'justify-end' : ''}`}>
                     <span>{col.header}</span>
@@ -243,7 +253,7 @@ export function DataTable<T>({
                   className={`group transition-colors ${onRowClick ? 'cursor-pointer hover:bg-white/5' : 'hover:bg-white/2'}`}
                 >
                   {columns.map((col, colIdx) => (
-                    <td key={colIdx} className={`p-3 text-xs ${alignMap[col.align || 'left']} ${col.className || ''}`}>
+                    <td key={colIdx} className={`p-3 text-xs ${alignMap[col.align || 'left']} ${col.sticky ? STICKY_TD : ''} ${col.className || ''}`}>
                       {typeof col.accessor === 'function' ? col.accessor(row) : String((row as Record<string, unknown>)[String(col.accessor)])}
                     </td>
                   ))}

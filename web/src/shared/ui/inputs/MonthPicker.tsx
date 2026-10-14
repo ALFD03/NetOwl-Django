@@ -79,11 +79,13 @@ export function MonthPicker({
   const initialYear = value ? parseInt(value.split('-')[0], 10) : new Date().getFullYear();
   const [displayYear, setDisplayYear] = useState<number>(initialYear);
 
-  useEffect(() => {
-    if (value) {
-      setDisplayYear(parseInt(value.split('-')[0], 10));
-    }
-  }, [value]);
+  // Un valor nuevo desde fuera lleva el panel a su año. Ajuste en render, no en
+  // efecto: así no hay un render intermedio con el año viejo.
+  const [valorVisto, setValorVisto] = useState(value);
+  if (value !== valorVisto) {
+    setValorVisto(value);
+    if (value) setDisplayYear(parseInt(value.split('-')[0], 10));
+  }
 
   // Cerrar al hacer clic fuera. El panel ya no es descendiente del contenedor
   // (vive en el portal), asi que hay que comprobar los dos.

@@ -9,8 +9,8 @@ Odoo cargados como CSV:
   reactivaciones, cortes por impago, ARPU, clientes en plan gratuito, y el
   desglose de todo ello por seis dimensiones, tanto al cierre del mes como día a
   día.
-- **Ciclo de vida** — supervivencia Kaplan-Meier de la vida activa y del tiempo
-  hasta reactivar.
+- **Lifetime** — cuánto duraron activas las suscripciones que se dieron de baja
+  en cada mes, desde su instalación: todas y solo las instaladas desde 2026.
 - **CRM** — efectividad del embudo comercial por etapa, riesgo de devolución a
   la etapa 8 y tiempos de permanencia.
 - **Soporte** — cohortes mensuales de tickets, tiempos de asignación y cierre,

@@ -153,7 +153,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
             </div>
 
             <div className="bg-surface-primary border border-slate-800 rounded-3xl overflow-hidden shadow-inner">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
                   Desglose Numérico por Periodo
                 </span>
@@ -161,7 +161,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                   {historico.length} periodos evaluados
                 </span>
               </div>
-              <div className="max-h-60 overflow-y-auto custom-scrollbar">
+              <div className="max-h-60 overflow-auto custom-scrollbar">
                 <table className={READONLY_TABLE}>
                   <thead className={READONLY_TABLE_HEAD_STICKY}>
                     <tr>

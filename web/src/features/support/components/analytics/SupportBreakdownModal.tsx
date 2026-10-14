@@ -70,7 +70,6 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, periodo
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <ToggleGroup
-              className="flex-wrap"
               options={SUPPORT_DESGLOSES.map((key) => ({
                 key,
                 label: SUPPORT_DESGLOSE_LABELS[key],

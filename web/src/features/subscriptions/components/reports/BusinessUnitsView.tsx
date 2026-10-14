@@ -6,8 +6,10 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
+import type { Proyeccion } from '@/shared/lib/proyeccion';
 import { MetricCard, NeonContainer } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
+import { ProyeccionCierre } from '../analytics/ProyeccionCierre';
 import { BajasExportButton } from './BajasExportButton';
 import { CommercialSummaryStrip } from './CommercialSummaryStrip';
 import { NodePerformanceTable } from './NodePerformanceTable';
@@ -32,6 +34,8 @@ interface BusinessUnitsViewProps {
    * El export de bajas es siempre el del cierre del mes; el botón lo avisa.
    */
   diaSeleccionado?: boolean;
+  /** Los días laborables del corte elegido, para proyectar las instalaciones al cierre. */
+  proyeccion?: Proyeccion | null;
 }
 
 function TechnologyBadge({ node }: { node: BusinessUnitNode }) {
@@ -50,7 +54,7 @@ function TechnologyBadge({ node }: { node: BusinessUnitNode }) {
   );
 }
 
-function FtthConsolidated({ summary }: { summary: FtthSummary }) {
+function FtthConsolidated({ summary, proyeccion }: { summary: FtthSummary; proyeccion: Proyeccion | null }) {
   const { semaforo } = useObjetivosConfig();
   // "Meta Cumplida" es llegar a la meta, no al umbral verde del semáforo: con
   // el verde en 90 se pintaría verde un grupo que todavía no la alcanzó.
@@ -124,6 +128,22 @@ function FtthConsolidated({ summary }: { summary: FtthSummary }) {
             icon={<CircleCheckBig className={completionTone(cierreCumplimiento, semaforo)} />}
           />
         </div>
+
+        {proyeccion && (
+          // Aparte de las tarjetas del corte: esto no es lo que hay, es adónde
+          // lleva el ritmo de los días laborables si sigue igual hasta el cierre.
+          <div className="mt-6">
+            <ProyeccionCierre
+              instalaciones={summary.nuevos}
+              proyeccion={proyeccion}
+              cumplimiento={summary.cumplimientoVentasProyectado === null ? null : {
+                valor: summary.cumplimientoVentasProyectado,
+                objetivo: summary.objetivo,
+                tono: tonoCumplimiento(summary.cumplimientoVentasProyectado, semaforo),
+              }}
+            />
+          </div>
+        )}
       </NeonContainer>
     </div>
   );
@@ -135,10 +155,11 @@ export function BusinessUnitsView({
   showFtthSummary,
   period,
   diaSeleccionado = false,
+  proyeccion = null,
 }: BusinessUnitsViewProps) {
   return (
     <>
-      {showFtthSummary && ftthSummary.total_nodos > 0 && <FtthConsolidated summary={ftthSummary} />}
+      {showFtthSummary && ftthSummary.total_nodos > 0 && <FtthConsolidated summary={ftthSummary} proyeccion={proyeccion} />}
 
       <div className="space-y-10">
         {groups.map((group) => {
@@ -177,6 +198,8 @@ export function BusinessUnitsView({
                   churnRate={group.dynamic.churn_rate}
                   bajas={group.dynamic.bajas}
                   meta={group.dynamic.meta}
+                  nuevos={group.dynamic.nuevos}
+                  proyeccion={proyeccion}
                   mono
                 />
 
@@ -185,6 +208,7 @@ export function BusinessUnitsView({
                   labelHeader="Zona / Sucursal"
                   renderBadge={(node) => <TechnologyBadge node={node} />}
                   mono
+                  proyeccion={proyeccion}
                   renderRowAction={(node) => (
                     <BajasExportButton
                       period={period}

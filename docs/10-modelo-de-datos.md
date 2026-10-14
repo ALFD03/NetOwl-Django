@@ -120,13 +120,12 @@ con el índice nombrado a partir de la tabla.
 
 ### Ciclo de vida
 
-Escritas con `periodo_reporte = "global"` y `metodo_calculo = "lifetime"`.
+Escritas con `metodo_calculo = "lifetime"`.
 
 | Tabla | Contenido |
 |---|---|
-| `lifetime_periodos` | Un periodo activo o cancelado por fila: `orden`, `tipo`, `f_inicio`, `f_fin`, `duracion`, `evento`, `periodo_idx` |
-| `lifetime_metricas` | Una fila con las curvas globales en JSON (`curva_activo_json`, `curva_reactivacion_json`), medianas, percentiles y conteos |
-| `lifetime_dimensiones` | Lo mismo por `dimension` y `valor` |
+| `lifetime_bajas_mes` | Una fila por baja del mes, `periodo_reporte = "YYYY-MM"`: `orden`, `f_ini`, `f_baja`, `estado_cierre`, `dias_desde_instalacion`, las dimensiones (sin producto), `mes_en_curso` y `fecha_corte` |
+| `lifetime_periodos`, `lifetime_metricas`, `lifetime_dimensiones` | Obsoletas: las curvas de supervivencia de la versión anterior. Ya no se escriben ni se leen |
 
 ### Reporte ETA
 
@@ -193,7 +192,7 @@ servirlas.
 | `subscriptions-logs`, `-logs-v15` | Importación de logs / — | Análisis mensual, ciclo de vida |
 | `subscriptions_gratis` | Importación de gratuitos | Análisis mensual (solo si falta el log real) |
 | `analyzer_*` | `MetricsAnalyzer`, `build_day_metrics` | Dashboard, Analytics, Results, Sales Report, Business Units, ETA, **e incidencia por zona de soporte** |
-| `lifetime_*` | `run_lifecycle_analysis` | Página Lifetime |
+| `lifetime_bajas_mes` | `run_lifecycle_analysis` | Página Lifetime |
 | `analyzer_eta_*` | `ETAReportManager` | Reporte ETA y su pantalla de parametrización |
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |

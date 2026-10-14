@@ -55,6 +55,11 @@ interface Props {
   title?: string;
   subtitle?: string;
   theme?: NeonTheme;
+  /**
+   * Lo que un módulo añade entre las tarjetas y las líneas, p. ej. la
+   * proyección al cierre de Subscriptions.
+   */
+  children?: ReactNode;
 }
 
 /**
@@ -77,6 +82,7 @@ export function DaySummary({
   title = 'El día seleccionado',
   subtitle = 'Lo ocurrido ese día, lo que va del mes y cómo se compara con el día anterior',
   theme = 'purple',
+  children,
 }: Props) {
   // Los días de la barra y los de este bloque no son siempre los mismos: un mes
   // analizado antes de que su módulo guardara el bloque global tiene cortes
@@ -136,6 +142,8 @@ export function DaySummary({
           );
         })}
       </div>
+
+      {children && <div className="mt-6">{children}</div>}
 
       {charts.length > 0 && (
         <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">

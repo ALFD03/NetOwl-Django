@@ -33,4 +33,11 @@ export const CHART_PALETTE = tokens.chartPalette;
  */
 export const CHART_CHROME = tokens.chart;
 
+/**
+ * Lo que cambia en el tema claro. Las clases lo reciben por variables CSS
+ * (`tailwind.config.js`); un canvas no las lee, así que las gráficas traducen
+ * `SURFACE` y `CHART_CHROME` con esto (`shared/charts/tema.ts`).
+ */
+export const LIGHT = tokens.light;
+
 export type MetricColorToken = keyof typeof METRIC_COLOR;

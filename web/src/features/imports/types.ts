@@ -23,3 +23,19 @@ export interface ImportHistoryItem {
   message: string;
   details: string;
 }
+
+/** Una cabecera del export de Odoo que lee una importación. */
+export interface CampoOdoo {
+  nombre: string;
+  /** Se valida antes de cargar; sin ella el fichero se rechaza. */
+  requerido: boolean;
+  /** Otras formas en que Odoo escribe la misma columna y que también se aceptan. */
+  alias?: string[];
+}
+
+/** Los campos de un tipo de export, para listarlos junto a sus requisitos. */
+export interface GrupoCamposOdoo {
+  key: string;
+  label: string;
+  campos: CampoOdoo[];
+}

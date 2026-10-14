@@ -22,7 +22,7 @@ const hrs = formatOneDecimal;
  * here turns the table into a panel.
  */
 export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
-  { header: 'Valor', accessor: (r) => <StickyLabel>{r.nombre}</StickyLabel>, sortKey: 'nombre' },
+  { header: 'Valor', accessor: (r) => <StickyLabel>{r.nombre}</StickyLabel>, sortKey: 'nombre', sticky: true },
   { header: '% del Total', accessor: (r) => <span className="font-bold text-brand">{dec(r.pctDelPadre)}%</span>, align: 'right', sortKey: 'pctDelPadre' },
 
   { header: 'Creados', accessor: (r) => int(r.tickets_creados), align: 'right', sortKey: 'tickets_creados' },
@@ -68,7 +68,7 @@ export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
  * persona.
  */
 export const SUPPORT_DEPARTAMENTO_COLUMNS: Column<SupportDepartamentoRow>[] = [
-  { header: 'Departamento', accessor: (r) => <StickyLabel>{r.nombre}</StickyLabel>, sortKey: 'nombre' },
+  { header: 'Departamento', accessor: (r) => <StickyLabel>{r.nombre}</StickyLabel>, sortKey: 'nombre', sticky: true },
   { header: 'Personas', accessor: (r) => int(r.personas), align: 'right', sortKey: 'personas' },
   ...SUPPORT_DIMENSION_COLUMNS.filter(
     (col) => col.header !== 'Valor' && col.header !== 'Cierre Total Med (h)',
@@ -76,7 +76,7 @@ export const SUPPORT_DEPARTAMENTO_COLUMNS: Column<SupportDepartamentoRow>[] = [
 ] as Column<SupportDepartamentoRow>[];
 
 export const SUPPORT_ZONE_COLUMNS: Column<SupportZoneRow>[] = [
-  { header: 'Zona', accessor: (r) => <StickyLabel>{r.zona}</StickyLabel>, sortKey: 'zona' },
+  { header: 'Zona', accessor: (r) => <StickyLabel>{r.zona}</StickyLabel>, sortKey: 'zona', sticky: true },
   { header: 'Site', accessor: (r) => r.site, sortKey: 'site' },
   { header: 'Tecnología', accessor: (r) => <span className="text-slate-400">{r.tecnologia}</span>, sortKey: 'tecnologia' },
   { header: 'Tickets', accessor: (r) => int(r.totalTickets), align: 'right', sortKey: 'totalTickets' },

@@ -2,10 +2,10 @@
 
 import React, { useState, useMemo } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { Button, Modal, SearchInput, TextField, ToggleGroup } from '@/shared/ui';
+import { Button, Modal, TextField, ToggleGroup } from '@/shared/ui';
 import { router } from '@inertiajs/react';
 import {
-  AlertTriangle, KeyRound, Lock, Plus, Shield, ShieldCheck, User, UserPlus, Users,
+  AlertTriangle, KeyRound, Lock, Plus, Search, Shield, ShieldCheck, User, UserPlus, Users,
 } from 'lucide-react';
 import { configApi } from '@/shared/lib/api/config';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
@@ -115,37 +115,60 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
     }
   };
 
+  // Una sola búsqueda para las dos vistas: en cuentas mira nombre, rol y
+  // grupo; en grupos, nombre y descripción.
+  const termino = search.trim().toLowerCase();
   const filteredUsers = useMemo(() => {
-    return users.filter((u: UserData) => 
-      u.username.toLowerCase().includes(search.toLowerCase()) || 
-      (u.group_name && u.group_name.toLowerCase().includes(search.toLowerCase()))
+    if (!termino) return users;
+    return users.filter((u: UserData) =>
+      [u.username, u.role_display, u.group_name ?? 'individuales'].some((campo) =>
+        campo.toLowerCase().includes(termino),
+      ),
     );
-  }, [users, search]);
+  }, [users, termino]);
+  const filteredGroups = useMemo(() => {
+    if (!termino) return groups;
+    return groups.filter((g) => [g.name, g.description].some((campo) => campo.toLowerCase().includes(termino)));
+  }, [groups, termino]);
+
+  const nuevoGrupo = () => setGroupToEdit({
+    name: '',
+    description: '',
+    permissions: { ...DEFAULT_GROUP_PERMISSIONS }
+  });
 
   return (
     <AppLayout
-      title="Configuración de Permisos y Usuarios"
+      title="Usuarios y permisos"
       toolbar={
-        // Barra superior de control: pestanas, busqueda y alta de usuarios/grupos.
-        <div className="bg-surface-secondary border border-slate-800 rounded-3xl p-4 mb-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
-          <div className="flex gap-2 bg-surface-primary p-1.5 rounded-2xl border border-slate-800">
-            <ToggleGroup
-              options={[
-                { key: 'users', label: `Usuarios (${users.length})`, icon: Users },
-                { key: 'groups', label: `Grupos (${groups.length})`, icon: Shield },
-              ]}
-              activeKey={activeTab}
-              onChange={(k) => setActiveTab(k as 'users' | 'groups')}
-            />
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <ToggleGroup
+            options={[
+              { key: 'users', label: `Usuarios (${users.length})`, icon: Users },
+              { key: 'groups', label: `Grupos (${groups.length})`, icon: Shield },
+            ]}
+            activeKey={activeTab}
+            onChange={(k) => setActiveTab(k as 'users' | 'groups')}
+            className="min-w-0"
+          />
 
-          <div className="flex items-center gap-3">
-            {activeTab === 'users' && (
-              <SearchInput value={search} placeholder="Buscar usuario..." onChange={setSearch} />
-            )}
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <label className="relative min-w-0 flex-1 sm:w-72 sm:flex-none">
+              <span className="sr-only">Buscar</span>
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={activeTab === 'users' ? 'Buscar usuario, rol o grupo' : 'Buscar grupo'}
+                className="w-full rounded-lg border border-slate-800 bg-surface-secondary py-2 pl-9 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-brand"
+              />
+            </label>
 
             {activeTab === 'users' ? (
-              <button
+              <Button
+                size="sm"
+                icon={<UserPlus className="h-4 w-4" />}
                 // Sin grupo y con la matriz minima. Antes preseleccionaba
                 // `groups[0]`, asi que toda cuenta nueva heredaba la matriz del
                 // primer grupo de la lista —el de administradores— sin que
@@ -157,23 +180,13 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
                   group_id: '',
                   permissions: { ...DEFAULT_USER_PERMISSIONS }
                 })}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30"
               >
-                <UserPlus className="w-4 h-4" />
-                <span>Nuevo Usuario</span>
-              </button>
+                Nuevo usuario
+              </Button>
             ) : (
-              <button
-                onClick={() => setGroupToEdit({
-                  name: '',
-                  description: '',
-                  permissions: { ...DEFAULT_GROUP_PERMISSIONS }
-                })}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-emerald-900/30"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Nuevo Grupo</span>
-              </button>
+              <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={nuevoGrupo}>
+                Nuevo grupo
+              </Button>
             )}
           </div>
         </div>
@@ -182,6 +195,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
       {activeTab === 'users' && (
         <UsersTable
           users={filteredUsers}
+          groups={groups}
           onEdit={(user) => setUserToEdit({ ...user })}
           onChangePassword={(user) => setUserToChangePass({ user_id: user.id, username: user.username, password: '' })}
           onDelete={(user) => setDeletingItem({ type: 'user', id: user.id, name: user.username })}
@@ -190,7 +204,10 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
 
       {activeTab === 'groups' && (
         <GroupsGrid
-          groups={groups}
+          groups={filteredGroups}
+          users={users}
+          filtrando={Boolean(termino)}
+          onCreate={nuevoGrupo}
           onEdit={(group) => setGroupToEdit({ ...group })}
           onDelete={(group) => setDeletingItem({ type: 'group', id: group.id, name: group.name })}
         />

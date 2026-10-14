@@ -14,7 +14,7 @@ export interface AuthCardProps {
 /** Centred card for the full-screen, chrome-less auth pages. */
 export function AuthCard({ title, subtitle, brand, children, className }: AuthCardProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface-primary p-4">
+    <div className="flex min-h-dvh items-center justify-center bg-surface-primary p-4">
       <div
         className={cn(
           'w-full max-w-md rounded-2xl border border-slate-800 bg-surface-secondary p-8 shadow-2xl',

@@ -30,10 +30,10 @@ from services.subscriptions.analytics import (
     limpiar_nodos,
 )
 from services.subscriptions.analytics.lifetime import (
-    get_lifecycle_results,
-    get_lifetime_dimensiones,
+    get_lifetime_detalle,
+    get_lifetime_mes,
+    get_meses_lifetime,
 )
-from services.subscriptions.analytics.lifetime.queries import get_survival_report
 
 logger = logging.getLogger(__name__)
 
@@ -105,27 +105,25 @@ def results(request, periodo=None):
 @login_required
 @permission_required('can_view_subs_lifetime')
 def lifetime(request):
-    """Curvas de supervivencia y su desglose por dimension.
+    """Cuanto duraron activas las suscripciones que se dieron de baja en un mes.
 
-    Blinda los datos a `{}` si la lectura falla: la pagina debe abrir aunque el
-    analisis nunca se haya ejecutado.
+    `?period=YYYY-MM` elige el mes; sin el, o con uno no calculado, se muestra
+    el mas reciente. La pagina abre aunque el analisis nunca se haya ejecutado:
+    sin meses, `lifetime` llega en `null`.
     """
     try:
-        results_data = get_lifecycle_results()
-        dims_data = get_lifetime_dimensiones()
-        
-        # Garantía absoluta de que no son None
-        if results_data is None: results_data = {}
-        if dims_data is None: dims_data = {}
-        
-    except Exception as e:
-        logger.error(f"Error cargando Lifetime view: {e}")
-        results_data = {}
-        dims_data = {}
+        meses = get_meses_lifetime()
+    except Exception:
+        logger.exception("Error leyendo los meses de lifetime")
+        meses = []
+    periodo = request.GET.get("period")
+    if periodo not in meses:
+        periodo = meses[0] if meses else None
 
     return render_inertia(request, "Subscriptions/Lifetime", {
-        "lifecycle": results_data,
-        "dimensiones": dims_data,
+        "meses": meses,
+        "periodo": periodo,
+        "lifetime": get_lifetime_mes(periodo),
         "section": "lifetime"
     })
 
@@ -208,9 +206,10 @@ def api_results_detail(request, periodo):
 
 @login_required
 @permission_required('can_view_subs_lifetime')
-def api_survival_data(request):
-    """El payload completo de la pagina de supervivencia."""
-    return JsonResponse(get_survival_report(request.GET.get("dim")))
+def api_lifetime_detalle(request):
+    """Las bajas de un mes con sus duraciones, una por orden, para exportar."""
+    periodo = request.GET.get("period")
+    return JsonResponse({"period": periodo, "bajas": get_lifetime_detalle(periodo)})
 
 @login_required
 @permission_required('can_view_subs_sales')
@@ -248,23 +247,14 @@ def api_bajas_detalle(request):
 @ratelimit(key='ip', rate='2/m', block=True)
 @require_POST
 def api_lifecycle_run(request):
-    """Encola el analisis de supervivencia; el worker lo ejecuta.
+    """Encola el calculo del lifetime de todos los meses; el worker lo ejecuta.
 
-    Recorre todo el historico de suscripciones con `lifelines`, asi que sufria
-    el mismo timeout que el analisis mensual. Se sigue con los endpoints de
+    Carga y limpia el log entero como el analisis mensual, asi que sufria el
+    mismo timeout. Se sigue con los endpoints de
     `imports` (`/imports/api/jobs/<id>/`), que son comunes a todos los modulos.
     """
     return lanzar_analisis(request, 'subs_lifetime', requiere_periodo=False)
 
-@login_required
-@permission_required('can_view_subs_lifetime')
-def api_lifecycle_results(request):
-    """Los resultados del ultimo analisis de ciclo de vida."""
-    data = get_lifecycle_results()
-    if not data:
-        return JsonResponse({"status": "empty", "message": "Ejecute el análisis de ciclo de vida primero"})
-    dimensiones = get_lifetime_dimensiones()
-    return JsonResponse({"status": "success", "data": data, "dimensiones": dimensiones})
 
 
 

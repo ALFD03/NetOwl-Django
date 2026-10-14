@@ -21,8 +21,8 @@ interface Props {
 
 function LabelledToggle({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1 rounded-2xl border border-slate-700/50 bg-surface-secondary p-1.5 shadow-2xl">
-      <span className="border-r border-slate-800 px-3 text-[10px] font-black uppercase text-slate-500">
+    <div className="flex w-full min-w-0 items-center gap-1 rounded-2xl border border-slate-700/50 bg-surface-secondary p-1.5 shadow-2xl sm:w-auto sm:max-w-full">
+      <span className="shrink-0 border-r border-slate-800 px-3 text-[10px] font-black uppercase text-slate-500">
         {label}
       </span>
       {children}
@@ -53,7 +53,6 @@ export function SupportAnalyticsFilters({
       {groups.length > 0 && (
         <LabelledToggle label="Grupo">
           <ToggleGroup
-            className="flex-wrap"
             options={groups.map((group) => ({
               key: group.key,
               label: `${group.label} · ${formatInteger(group.totalTickets)}`,
@@ -66,7 +65,6 @@ export function SupportAnalyticsFilters({
 
       <LabelledToggle label="Dimensión">
         <ToggleGroup
-          className="flex-wrap"
           options={SUPPORT_DIMENSIONS.map((key) => ({ key, label: SUPPORT_DIMENSION_LABELS[key] }))}
           activeKey={selectedDimension}
           onChange={(key) => onDimensionChange(key as SupportDimension)}

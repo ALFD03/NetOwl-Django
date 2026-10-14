@@ -172,7 +172,7 @@ tarea.**
 | `_correr_subscriptions` | Comprueba `productos_fuera_de_catalogo()` **antes de calcular**, luego `MetricsAnalyzer.run()` y `build_day_metrics()` reutilizando el mismo analyzer (una sola lectura de datos para el cierre y los 31 días) |
 | `_correr_crm` | `run_crm_analysis(job.periodo)` |
 | `_correr_support` | `run_support_analysis(job.periodo)` |
-| `_correr_lifetime` | `run_lifecycle_analysis()`; del resultado solo guarda los escalares, porque las curvas de supervivencia son series largas que se leen después con `get_lifecycle_results` |
+| `_correr_lifetime` | `run_lifecycle_analysis()`: el lifetime de las bajas de todos los meses desde enero de 2026. En el job guarda el resumen (meses, bajas, fecha de corte); la página lee el mes elegido con `get_lifetime_mes` |
 
 ### `ejecutar_analisis(job_id)`
 

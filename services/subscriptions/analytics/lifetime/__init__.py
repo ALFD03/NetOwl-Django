@@ -1,14 +1,15 @@
-"""Analisis de supervivencia: cuanto dura una suscripcion y cuanto tarda en volver.
+"""Lifetime: cuanto duraron activas las suscripciones que se dieron de baja cada mes.
 
-Pipeline aparte del analisis mensual, con su propio cargador y su propio
-recorrido del historico: aqui no hay periodo, se mira todo de una vez.
+Lee y limpia el log como el analisis mensual, y sus bajas son las mismas que
+cuenta el churn. Ver `bajas_mes`.
 """
 
-from .queries import get_lifecycle_results, get_lifetime_dimensiones
+from .queries import get_lifetime_detalle, get_lifetime_mes, get_meses_lifetime
 from .runner import run_lifecycle_analysis
 
 __all__ = [
     "run_lifecycle_analysis",
-    "get_lifecycle_results",
-    "get_lifetime_dimensiones",
+    "get_lifetime_detalle",
+    "get_lifetime_mes",
+    "get_meses_lifetime",
 ]

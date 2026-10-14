@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Activity, Table as TableIcon } from 'lucide-react';
 
-import { DataTable, Modal, NeonContainer, type Column } from '@/shared/ui';
+import { DataTable, Modal, NeonContainer, StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
 import { CrmPeriodDetail } from './CrmPeriodDetail';
 import { CrmPeriodDimensions } from './CrmPeriodDimensions';
@@ -17,11 +17,10 @@ const COLUMNS: Column<CrmCierre>[] = [
   {
     header: 'Periodo',
     accessor: (r) => (
-      <span className="sticky left-0 z-10 block min-w-[120px] bg-surface-secondary pr-4 font-bold text-white">
-        {formatPeriodoLabel(r.periodo_reporte)}
-      </span>
+      <StickyLabel minWidth="120px">{formatPeriodoLabel(r.periodo_reporte)}</StickyLabel>
     ),
     sortKey: 'periodo_reporte',
+    sticky: true,
   },
   { header: 'Oportunidades', accessor: (r) => formatInteger(r.total_oportunidades), align: 'right', sortKey: 'total_oportunidades' },
   { header: 'Ganados', accessor: (r) => <span className="font-semibold text-emerald-400">+{formatInteger(r.ganados)}</span>, align: 'right', sortKey: 'ganados' },

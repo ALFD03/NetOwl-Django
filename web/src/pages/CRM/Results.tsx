@@ -1,7 +1,6 @@
 /** Página Inertia `CRM/Results` (`/crm/results/`). */
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { ModuleHeader } from '@/shared/navigation/ModuleHeader';
 import { CrmResultsView } from '@/features/crm';
 import type { CrmCierre } from '@/features/crm/types';
 
@@ -11,7 +10,7 @@ interface CrmResultsProps {
 
 export default function CrmResults({ historico = [] }: CrmResultsProps) {
   return (
-    <AppLayout title="Historial de Cierres CRM" toolbar={<ModuleHeader module="crm" activeTab="results" />}>
+    <AppLayout>
       <CrmResultsView historico={historico} />
     </AppLayout>
   );

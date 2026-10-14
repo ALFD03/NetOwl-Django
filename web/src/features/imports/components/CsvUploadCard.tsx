@@ -3,6 +3,7 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
+import { cn } from '@/shared/lib/cn';
 import { Button, FileUploadZone, Panel, StatusMessage } from '@/shared/ui';
 import type { ImportOperationResult } from '../types';
 
@@ -21,7 +22,9 @@ export interface CsvUploadCardProps {
  * CSV upload form shared by every import page.
  *
  * Owns the file selection and the request lifecycle, so pages only supply the
- * endpoint and the copy.
+ * endpoint and the copy. Va junto al cuadro de requisitos, que es más alto: la
+ * tarjeta llena el alto de la fila y la zona de arrastre se estira para ocupar
+ * lo que sobra, en vez de dejar la mitad de la tarjeta vacía.
  */
 export function CsvUploadCard({
   title,
@@ -47,11 +50,11 @@ export function CsvUploadCard({
   };
 
   return (
-    <Panel title={title} className={className}>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Panel title={title} className={cn('flex flex-col', className)} bodyClassName="flex flex-1 flex-col">
+      <form onSubmit={handleSubmit} className="flex flex-1 flex-col gap-4">
         {children}
 
-        <FileUploadZone onFileSelect={setSelectedFile} />
+        <FileUploadZone onFileSelect={setSelectedFile} fill />
 
         <StatusMessage status={upload.status} />
 

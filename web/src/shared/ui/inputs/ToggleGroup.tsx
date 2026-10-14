@@ -25,10 +25,15 @@ function renderIcon(icon?: ReactNode | LucideIcon) {
   return <Icon className="h-4 w-4" aria-hidden />;
 }
 
-/** Segmented control for switching between mutually exclusive views. */
+/**
+ * Segmented control for switching between mutually exclusive views.
+ *
+ * Por debajo de `lg` es una tira con scroll horizontal: los nueve catálogos
+ * envueltos ocupaban media pantalla de un teléfono antes de llegar a los datos. Desde `lg` envuelve en filas.
+ */
 export function ToggleGroup({ options, activeKey, onChange, className }: ToggleGroupProps) {
   return (
-    <div className={cn('flex gap-2', className)}>
+    <div className={cn('flex max-w-full gap-2 overflow-x-auto py-1 lg:flex-wrap lg:overflow-visible', className)}>
       {options.map((option) => {
         const isActive = activeKey === option.key;
 
@@ -39,7 +44,7 @@ export function ToggleGroup({ options, activeKey, onChange, className }: ToggleG
             onClick={() => onChange(option.key)}
             aria-pressed={isActive}
             className={cn(
-              'flex items-center gap-2 rounded-xl px-5 py-2 text-xs font-black uppercase tracking-wider transition-all',
+              'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wider transition-all sm:px-5',
               isActive
                 ? 'scale-105 bg-brand text-white shadow-lg shadow-brand/30'
                 : 'text-slate-400 hover:bg-white/5 hover:text-white',

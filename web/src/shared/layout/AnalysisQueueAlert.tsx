@@ -158,7 +158,8 @@ export function AnalysisQueueAlert() {
   const enEspera = jobs.filter((job) => job.status !== 'running');
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-40 w-80 max-w-[calc(100vw-3rem)]">
+    // En el teléfono ocupa el ancho de abajo; desde `sm`, la esquina.
+    <div className="pointer-events-none fixed inset-x-3 bottom-3 z-40 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-80">
       <AnimatePresence>
         <motion.div
           key="cola"

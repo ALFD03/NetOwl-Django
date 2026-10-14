@@ -73,7 +73,7 @@ export function AnalyticsMetrics({ data, periodo }: Props) {
         <MetricCard label="Reactivaciones" value={data.reactivaciones || 0} color="blue" />
         <MetricCard label="Recuperaciones" value={data.react_4_P || 0} color="green" />
         <MetricCard label="React. Ingreso" value={data.react_val || 0} color="blue" subValue="Peso en crecimiento" />
-        <MetricCard label="Winback" value={`${(data.tasa_winback_pct || 0).toFixed(2)} %`} color="green" />
+        <MetricCard label="Tasa de recuperación" value={`${(data.tasa_winback_pct || 0).toFixed(2)} %`} color="green" />
         <MetricCard label="Indice Reemplazo" value={`${(data.indice_reemplazo_react_pct || 0).toFixed(2)} %`} color="yellow" />
         <MetricCard
           label="Clientes Gratuitos"

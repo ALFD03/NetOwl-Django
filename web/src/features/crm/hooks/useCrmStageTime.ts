@@ -9,7 +9,10 @@ import {
   stageTimeLeaders,
   tiempoEtapa,
 } from '../lib/crmTiempoEtapa';
-import type { CrmDimensionValue, CrmHistoricoRow } from '../types';
+import type { CrmDimensionValue, CrmHistoricoRow, CrmTiempoEtapaRow } from '../types';
+
+/** Una sola lista vacía: un `[]` nuevo en cada render invalidaría todos los memos de abajo. */
+const SIN_ETAPAS: CrmTiempoEtapaRow[] = [];
 
 /**
  * Everything the stage-time section draws.
@@ -23,7 +26,7 @@ export function useCrmStageTime(globalData: CrmHistoricoRow, rows: CrmDimensionV
   const [etapaElegida, setSelectedEtapa] = useState<string>(CRM_ETAPAS_CLAVE[0]);
   const [verTodas, setVerTodas] = useState(false);
 
-  const tiempoPorEtapa = globalData.tiempo_por_etapa ?? [];
+  const tiempoPorEtapa = globalData.tiempo_por_etapa ?? SIN_ETAPAS;
 
   /**
    * Which stages to show. `es_clave` comes from the analysis, so the full list

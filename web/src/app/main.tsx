@@ -12,7 +12,7 @@ import { createInertiaApp } from '@inertiajs/react';
 import type { Page } from '@inertiajs/core';
 import type { ComponentType } from 'react';
 
-import { ThemeProvider } from './providers/ThemeContext';
+import { ThemeProvider } from '@/shared/hooks/useTheme';
 import type { AppPageProps } from '@/shared/types/inertia';
 import '../styles/global.css';
 

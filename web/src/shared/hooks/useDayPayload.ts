@@ -39,6 +39,11 @@ interface Opciones<T> {
 interface Resultado<T> {
   /** El corte del día pedido, o el último que se pudo resolver. */
   payload: T | undefined;
+  /**
+   * El día al que pertenece `payload`, que mientras viaja el pedido es el
+   * anterior y no `dia`. 0 si todavía no hay ninguno.
+   */
+  diaResuelto: number;
   /** `true` mientras el día en pantalla todavía no está resuelto. */
   cargando: boolean;
 }
@@ -172,5 +177,9 @@ export function useDayPayload<T>({ url, period, dia, dias, inicial }: Opciones<T
     return () => clearTimeout(id);
   }, [cache, dia, dias, enCache, pedir]);
 
-  return { payload: enCache ?? ultimo?.payload, cargando: enCache === undefined };
+  return {
+    payload: enCache ?? ultimo?.payload,
+    diaResuelto: enCache !== undefined ? dia : (ultimo?.dia ?? 0),
+    cargando: enCache === undefined,
+  };
 }

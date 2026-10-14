@@ -68,7 +68,7 @@ export const ANALYTICS_CHART_SECTIONS: AnalyticsSectionDefinition[] = [
     theme: 'blue',
     charts: [
       {
-        title: 'Aporte a Tasa Winback',
+        title: 'Aporte a Tasa de Recuperación',
         metric: 'winback',
         type: 'doughnut',
       },

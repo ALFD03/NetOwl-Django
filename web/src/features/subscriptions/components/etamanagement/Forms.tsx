@@ -180,7 +180,7 @@ export function SubscriptionForm({
         </div>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Tecnología">
               <SelectMenu
                 aria-label="Tecnología"
@@ -208,7 +208,7 @@ export function SubscriptionForm({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Velocidad Asignada (Mbps)">
               <input
                 type="number"

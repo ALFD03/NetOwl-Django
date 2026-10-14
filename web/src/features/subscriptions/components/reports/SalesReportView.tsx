@@ -2,6 +2,7 @@
 
 import { Building2, Search } from 'lucide-react';
 
+import type { Proyeccion } from '@/shared/lib/proyeccion';
 import { EmptyState, NeonContainer } from '@/shared/ui';
 import { formatPeriodoLabel } from '@/shared/utils/formatters';
 import { BajasExportButton } from './BajasExportButton';
@@ -20,9 +21,16 @@ interface SalesReportViewProps {
    * El export de bajas es siempre el del cierre del mes; el botón lo avisa.
    */
   diaSeleccionado?: boolean;
+  /** Los días laborables del corte elegido, para proyectar las instalaciones al cierre. */
+  proyeccion?: Proyeccion | null;
 }
 
-export function SalesReportView({ sites, period, diaSeleccionado = false }: SalesReportViewProps) {
+export function SalesReportView({
+  sites,
+  period,
+  diaSeleccionado = false,
+  proyeccion = null,
+}: SalesReportViewProps) {
   if (sites.length === 0) {
     return (
       <EmptyState
@@ -73,6 +81,8 @@ export function SalesReportView({ sites, period, diaSeleccionado = false }: Sale
                     crecimiento={tech.dynamic.crecimiento}
                     churnRate={tech.dynamic.churn_rate}
                     meta={tech.dynamic.meta}
+                    nuevos={tech.dynamic.nuevos}
+                    proyeccion={proyeccion}
                     clampCompletion
                   />
 
@@ -90,6 +100,7 @@ export function SalesReportView({ sites, period, diaSeleccionado = false }: Sale
                     nodes={tech.nodes ?? []}
                     labelHeader="Nodo / Zona"
                     clampCompletion
+                    proyeccion={proyeccion}
                     renderRowAction={(node) => (
                       <BajasExportButton
                         period={period}

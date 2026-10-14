@@ -1,12 +1,13 @@
 /** Plugins propios de Chart.js, empezando por el texto central del *doughnut*. */
 
 import { CHART_CHROME } from '@/shared/constants/theme';
+import { colorDelTema } from './tema';
 import type { ArcElement, Chart, Plugin } from 'chart.js';
 
 export interface CenterTextConfig {
   title: string;
   value: string | number;
-  /** Accent for the value. Defaults to white so it reads on the dark surface. */
+  /** Accent for the value. Defaults to the strong chart text of the active theme. */
   color?: string;
   /** Colour for the caption above the value. */
   titleColor?: string;
@@ -16,6 +17,7 @@ type CenterTextChart = Chart<'doughnut'> & {
   options: Chart<'doughnut'>['options'] & { customCenterText?: CenterTextConfig };
 };
 
+// Se resuelven al dibujar, no al cargar el módulo: el tema puede cambiar después.
 const TITLE_COLOR = CHART_CHROME.textStrong;
 const VALUE_COLOR = CHART_CHROME.textStrong;
 
@@ -85,14 +87,14 @@ export const centerTextPlugin: Plugin<'doughnut'> = {
 
     if (title) {
       ctx.font = `700 ${titleSize}px Inter, sans-serif`;
-      ctx.fillStyle = customText.titleColor ?? TITLE_COLOR;
+      ctx.fillStyle = colorDelTema(customText.titleColor ?? TITLE_COLOR);
       ctx.fillText(title, x, cursor + titleSize / 2);
       cursor += titleSize + gap;
     }
 
     if (value) {
       ctx.font = `700 ${valueSize}px Inter, sans-serif`;
-      ctx.fillStyle = customText.color ?? VALUE_COLOR;
+      ctx.fillStyle = colorDelTema(customText.color ?? VALUE_COLOR);
       ctx.fillText(value, x, cursor + valueSize / 2);
     }
 
