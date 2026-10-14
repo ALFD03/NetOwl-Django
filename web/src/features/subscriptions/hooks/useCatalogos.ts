@@ -5,7 +5,10 @@ import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { catalogosApi, type CatalogoPayload } from '@/shared/lib/api/catalogos';
 import type {
   AreaCatalogo,
+  CargoVentas,
   CatalogoNombrado,
+  CatalogoPersonaVentas,
+  CatalogoUnidadNegocio,
   CatalogoObjetivo,
   CatalogoObjetivoMes,
   CatalogoPlan,
@@ -30,7 +33,9 @@ export type ZonaDraft = {
   coordinador_id: number | null;
 };
 export type SiteDraft = { id?: number; nombre: string; orden: number };
-export type NombreDraft = { id?: number; nombre: string; tipo: 'estados' | 'coordinadores' };
+export type NombreDraft = { id?: number; nombre: string; tipo: 'estados' };
+export type PersonaDraft = Omit<CatalogoPersonaVentas, 'id' | 'unidades'> & { id?: number };
+export type UnidadDraft = { id?: number; nombre: string; persona_id: number | null };
 export type IgnoradoDraft = { id?: number; nombre: string; nota: string; area: AreaCatalogo };
 
 /**
@@ -67,6 +72,8 @@ export type SemaforoDraft = SemaforoObjetivos;
 const comoTexto = (valor: number | null): string => (valor === null ? '' : String(valor));
 
 export type CatalogoVista =
+  | CargoVentas
+  | 'unidades'
   | 'pendientes'
   | 'planes'
   | 'zonas'
@@ -111,6 +118,41 @@ interface Args {
   nuevoPlan?: string;
   /** Nombre que llega en `?nueva_zona=`: abre el alta de zona ya rellena. */
   nuevaZona?: string;
+  /** Literal y cargo de `?nueva_persona=&cargo=`: abre el alta de persona ya rellena. */
+  nuevaPersona?: { literal: string; cargo: CargoVentas };
+}
+
+/**
+ * Una persona en blanco del cargo indicado, rellena a partir del literal del
+ * export si lo hay.
+ *
+ * El literal de `Vendedor` (coordinador de oficina) es el nombre completo con
+ * `(User)`: va entero al usuario de Odoo, y de él se adivinan nombre, apellido
+ * y medio —dos nombres y dos apellidos es lo habitual—. Los de `Medio` son ya
+ * nombre + apellido y van al medio. Todo queda editable: es una sugerencia.
+ */
+export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft {
+  const base = literal.replace(/\s*\(\s*users?\s*\)\s*$/i, '').trim();
+  const partes = base.split(/\s+/).filter(Boolean);
+  if (cargo === 'coord_oficina') {
+    const corte = partes.length >= 4 ? 2 : 1;
+    const nombre = partes.slice(0, corte).join(' ');
+    const apellido = partes.slice(corte).join(' ');
+    return {
+      nombre,
+      apellido,
+      cargo,
+      medio: [partes[0], partes[corte]].filter(Boolean).join(' '),
+      usuario_odoo: literal ? `${base} (User)` : '',
+    };
+  }
+  return {
+    nombre: partes[0] ?? '',
+    apellido: partes.slice(1).join(' '),
+    cargo,
+    medio: base,
+    usuario_odoo: '',
+  };
 }
 
 /**
@@ -128,7 +170,7 @@ interface Args {
  * elegir una zona) y el servidor ya devuelve todo junto.
  */
 export function useCatalogos({
-  vistaInicial, sites = [], estados = [], nuevoPlan = '', nuevaZona = '',
+  vistaInicial, sites = [], estados = [], nuevoPlan = '', nuevaZona = '', nuevaPersona,
 }: Args) {
   const [vista, setVista] = useState<CatalogoVista>(vistaInicial);
   const [guardando, setGuardando] = useState(false);
@@ -154,6 +196,10 @@ export function useCatalogos({
     () => (nuevaZona ? zonaVacia(nuevaZona) : null),
   );
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
+  const [personaDraft, setPersonaDraft] = useState<PersonaDraft | null>(
+    () => (nuevaPersona?.literal ? personaDesde(nuevaPersona.literal, nuevaPersona.cargo) : null),
+  );
+  const [unidadDraft, setUnidadDraft] = useState<UnidadDraft | null>(null);
   const [nombreDraft, setNombreDraft] = useState<NombreDraft | null>(null);
   const [ignoradoDraft, setIgnoradoDraft] = useState<IgnoradoDraft | null>(null);
   const [objetivoDraft, setObjetivoDraft] = useState<ObjetivoDraft | null>(null);
@@ -195,6 +241,21 @@ export function useCatalogos({
 
   const nuevoSite = () => setSiteDraft({ nombre: '', orden: 999 });
   const editarSite = (site: CatalogoSite) => setSiteDraft({ id: site.id, nombre: site.nombre, orden: site.orden });
+
+  const nuevaPersonaVacia = (cargo: CargoVentas) => setPersonaDraft(personaDesde('', cargo));
+  const editarPersona = (fila: CatalogoPersonaVentas) =>
+    setPersonaDraft({
+      id: fila.id,
+      nombre: fila.nombre,
+      apellido: fila.apellido,
+      cargo: fila.cargo,
+      medio: fila.medio,
+      usuario_odoo: fila.usuario_odoo,
+    });
+
+  const nuevaUnidad = () => setUnidadDraft({ nombre: '', persona_id: null });
+  const editarUnidad = (fila: CatalogoUnidadNegocio) =>
+    setUnidadDraft({ id: fila.id, nombre: fila.nombre, persona_id: fila.persona_id });
 
   const nuevoNombre = (tipo: NombreDraft['tipo']) => setNombreDraft({ nombre: '', tipo });
   const editarNombre = (tipo: NombreDraft['tipo'], fila: CatalogoNombrado) =>
@@ -246,6 +307,8 @@ export function useCatalogos({
     setReguladorDraft(null);
     setZonaDraft(null);
     setSiteDraft(null);
+    setPersonaDraft(null);
+    setUnidadDraft(null);
     setNombreDraft(null);
     setIgnoradoDraft(null);
     setObjetivoDraft(null);
@@ -300,6 +363,8 @@ export function useCatalogos({
     reguladorDraft, setReguladorDraft, nuevoRegulador, editarRegulador,
     zonaDraft, setZonaDraft, nuevaZonaVacia, editarZona,
     siteDraft, setSiteDraft, nuevoSite, editarSite,
+    personaDraft, setPersonaDraft, nuevaPersonaVacia, editarPersona,
+    unidadDraft, setUnidadDraft, nuevaUnidad, editarUnidad,
     nombreDraft, setNombreDraft, nuevoNombre, editarNombre,
     ignoradoDraft, setIgnoradoDraft, nuevoIgnorado, editarIgnorado,
     objetivoDraft, setObjetivoDraft, nuevoObjetivo, editarObjetivo,

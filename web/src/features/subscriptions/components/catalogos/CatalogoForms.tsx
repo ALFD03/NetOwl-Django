@@ -537,24 +537,12 @@ export function NombreForm({
   onSubmit,
   onClose,
 }: Acciones & { value: NombreDraft; onChange: (patch: Partial<NombreDraft>) => void }) {
-  const esCoordinador = value.tipo === 'coordinadores';
-
   return (
     <ModalForm onSubmit={onSubmit}>
       <FormBanner
-        title={esCoordinador ? 'Responsable comercial' : 'Entidad federal'}
-        description={
-          esCoordinador
-            ? 'Business Units agrupa por aquí las zonas que se le asignen.'
-            : 'El reporte ETA agrupa por aquí a los suscriptores de cada zona.'
-        }
-        action={
-          esCoordinador ? (
-            <UserCheck className="h-8 w-8 flex-shrink-0 text-slate-600" />
-          ) : (
-            <Gauge className="h-8 w-8 flex-shrink-0 text-slate-600" />
-          )
-        }
+        title="Entidad federal"
+        description="El reporte ETA agrupa por aquí a los suscriptores de cada zona."
+        action={<Gauge className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
 
       <Field

@@ -23,19 +23,14 @@ from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
+from core.odoo_nombres import SUFIJO_USUARIOS, normalizar_nombre_odoo
 from core.utils import clean_json_props
 from services.config.decorators import permission_required
 from services.support.analytics.usuarios import (
     tickets_tras_la_baja,
     usuarios_fuera_del_directorio,
 )
-from services.support.models import (
-    SUFIJO_USUARIOS,
-    Departamento,
-    MovimientoInvalido,
-    UsuarioSoporte,
-    normalizar_nombre_odoo,
-)
+from services.support.models import Departamento, MovimientoInvalido, UsuarioSoporte
 
 logger = logging.getLogger(__name__)
 

@@ -93,7 +93,23 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | POST | `api/eta-report/save-sub-config/` | `can_manage_eta` | — | Excepción individual: `orden` obligatorio |
 | POST | `api/eta-report/delete-sub-config/` | `can_manage_eta` | — | `{orden}` |
 
-`tipo` ∈ `planes`, `zonas`, `sites`, `estados`, `coordinadores`, `ignorados`.
+---
+
+## `/catalogos/` — `services.catalogos`
+
+Las vistas y el CRUD de los catálogos de referencia. Los modelos de planes,
+zonas y objetivos siguen en `services.subscriptions`; el directorio de ventas
+es de esta app.
+
+| Método | Ruta | Permiso | Límite | Devuelve / notas |
+|---|---|---|---|---|
+| GET | `/catalogos/` | cualquiera de los tres de catálogo | — | Redirige a Notificaciones |
+| GET | `notificaciones/` | cualquiera de los tres | — | Página `Catalogos/Notificaciones`: pendientes por área (productos, zonas y personas de ventas; `null` en las que no se administran) e ignorados de las áreas propias |
+| GET | `productos/?nuevo_plan=` | `can_manage_catalogo_operacional` | — | Página `Catalogos/Productos`. `nuevo_plan` abre el alta ya rellena |
+| GET | `estructura/?nueva_zona=` | `can_manage_catalogo_comercial` | — | Página `Catalogos/Estructura`. `nueva_zona` abre el alta ya rellena |
+| GET | `ventas/?nueva_persona=&cargo=` | `can_manage_catalogo_ventas` | — | Página `Catalogos/Ventas`: directorio de ventas por cargo, unidades de negocio y objetivos. `nueva_persona` abre el alta ya rellena con ese literal (al usuario de Odoo si `cargo=coord_oficina`, al medio en los demás) |
+| POST | `api/guardar/` | el del `tipo` | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido, **403** si el `tipo` no es de un permiso propio. `planes` y `reguladores` van con el operacional; `zonas`, `sites` y `estados` con el comercial; `personas`, `coordinadores` (con `persona_id`, que tiene que ser un coordinador de UN), `objetivos`, `objetivos_mes` y `semaforo` (fila única: se ignora el `id`) con el de ventas; `ignorados` con el de su `area`, que solo se fija en el alta. En `objetivos` la entidad puede ir por `entidad_id` o por `entidad_nombre` (más `sucursal` en los niveles de sucursal y nodo) |
+| POST | `api/eliminar/` | el del `tipo` | 60/m | `{tipo, id}`. **409** si tiene zonas asociadas o si es el objetivo general de base; **400** con `semaforo`, que no se borra |
 
 ---
 

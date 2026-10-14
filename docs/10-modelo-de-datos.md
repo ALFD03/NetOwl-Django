@@ -32,7 +32,8 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `config_permissiongroup` | `services.config.PermissionGroup` | Plantillas de permisos reutilizables |
 | `catalogo_estados` | `Estado` | Entidad federal |
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
-| `catalogo_coordinadores` | `Coordinador` | Responsable comercial |
+| `catalogo_coordinadores` | `Coordinador` | Unidad de negocio: el grupo de zonas por el que agrupa Unidades de negocio. `persona` (FK nullable a `catalogo_personas_ventas`) es quien la lleva; una persona puede llevar varias |
+| `catalogo_personas_ventas` | `catalogos.PersonaVentas` | Directorio de ventas: nombre, apellido, `cargo` (`asesor`, `supervisor`, `coord_oficina`, `coord_un`), `medio` (el literal de `Medio` y `Medio/Supervisor`; único sin distinguir mayúsculas) y `usuario_odoo` (el de `Vendedor`, con `(User)`; obligatorio solo en el coordinador de oficina) |
 | `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
@@ -71,7 +72,9 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 Columnas principales de `subscriptions` / `subscriptions-b`: `orden_producto`,
 `producto`, `cliente`, `ci`, `sucursal`, `zona`, `municipio`, `tipo`, `estado`,
 `campanna`, `fecha_factura`, `fecha_inicio`, `tarifa`, `total`, `telefono`,
-`phone`, `phone2`, `vendedor`, `activo`.
+`phone`, `phone2`, `vendedor`, `activo`, `medio`, `medio_supervisor`, `estado_factura`.
+Las tres últimas (para Comisiones) y `activo` solo existen si el export las trajo:
+la importación las añade a la tabla al encontrarlas.
 
 `subscriptions_gratis`: `orden_producto`, `cliente`, `fecha_inicio`, `tarifa`,
 `fecha_factura`, `fecha_gratuito`, `metodo`, `confianza`, `siempre_gratuito`,
@@ -196,7 +199,8 @@ servirlas.
 | `analyzer_eta_*` | `ETAReportManager` | Reporte ETA y su pantalla de parametrización |
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
-| `catalogo_*` (planes, zonas, sites…) | Pantalla de catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
+| `catalogo_*` (planes, zonas, sites…) | Módulo de Catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
+| `catalogo_personas_ventas` | Catálogos › Ventas | `personas_fuera_del_directorio` (Notificaciones) |
 | `catalogo_departamentos`, `catalogo_usuarios_soporte`, `catalogo_usuarios_soporte_historial` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio`, `tickets_tras_la_baja`, `anotar_departamentos` |
 | `analysis_jobs` | Vistas de lanzamiento y worker | Sondeo de la interfaz |
 | `import_action_logs` | `register_import_log` | Página de historial |

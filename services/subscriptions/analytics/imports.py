@@ -38,7 +38,7 @@ SUBSCRIPTIONS_METADATA_COLS = [
     "cliente", "ci", "sucursal", "zona", "municipio",
     "tipo", "estado", "campanna", "fecha_factura", "fecha_inicio",
     "tarifa", "total", "producto", "telefono", "phone", "phone2", "vendedor",
-    "activo",
+    "activo", "medio", "medio_supervisor", "estado_factura",
 ]
 
 LOGS_COLUMN_MAPPING = {
@@ -267,7 +267,8 @@ def import_subscriptions_csv(csv_path: str) -> int:
     # suscripcion y agrupadas formarian una fila fantasma con orden vacia.
     df_local = df_local.dropna(subset=["orden_producto"])
 
-    # `activo` solo existe en los exports nuevos: se trabaja con lo que venga.
+    # `activo`, `medio`, `medio_supervisor` y `estado_factura` solo existen en
+    # los exports nuevos: se trabaja con lo que venga.
     meta_cols = [c for c in SUBSCRIPTIONS_METADATA_COLS if c in df_local.columns]
 
     df_local[meta_cols] = (

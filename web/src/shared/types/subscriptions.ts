@@ -398,6 +398,7 @@ export interface ObjetivosConfig {
 }
 
 export type CatalogoTipo =
+  | 'personas'
   | 'planes'
   | 'zonas'
   | 'sites'
@@ -555,6 +556,40 @@ export interface ProductoPendiente {
   ordenes: number;
 }
 
+/** El cargo de una persona del directorio de ventas. */
+export type CargoVentas = 'asesor' | 'supervisor' | 'coord_oficina' | 'coord_un';
+
+/** Las columnas del export que nombran a una persona de ventas. */
+export type ColumnaVentas = 'vendedor' | 'medio_supervisor' | 'medio';
+
+/** Una persona del directorio de ventas, tal y como la escribe Odoo. */
+export interface CatalogoPersonaVentas {
+  id: number;
+  nombre: string;
+  apellido: string;
+  cargo: CargoVentas;
+  /** El literal de `Medio` y `Medio/Supervisor`. */
+  medio: string;
+  /** El literal de `Vendedor`, con `(User)`. Solo el coordinador de oficina. */
+  usuario_odoo: string;
+  /** Las unidades de negocio que lleva (solo el coordinador de UN). */
+  unidades: string[];
+}
+
+/** Una unidad de negocio (el `Coordinador` de las zonas) y quién la lleva. */
+export interface CatalogoUnidadNegocio extends CatalogoNombrado {
+  persona_id: number | null;
+  persona: string;
+}
+
+/** Un nombre de las suscripciones que el directorio de ventas no reconoce. */
+export interface PersonaPendiente {
+  nombre: string;
+  /** Órdenes por columna: no se suman, la venta directa de un supervisor está en dos. */
+  ordenes: Partial<Record<ColumnaVentas, number>>;
+  cargo: CargoVentas;
+}
+
 /** Qué grupos del módulo de Catálogos administra el usuario: uno por permiso. */
 export interface CatalogosPermisos {
   operacional: boolean;
@@ -569,7 +604,11 @@ interface CatalogosPaginaProps {
 /** `Catalogos/Notificaciones`: lo pendiente de cada área y lo ignorado. */
 export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
   /** `null` en las áreas que el usuario no administra; vacía es "todo registrado". */
-  pendientes: Record<Exclude<AreaCatalogo, 'ventas'>, ProductoPendiente[] | null>;
+  pendientes: {
+    productos: ProductoPendiente[] | null;
+    estructura: ProductoPendiente[] | null;
+    ventas: PersonaPendiente[] | null;
+  };
   ignorados: CatalogoProductoIgnorado[];
   /** Las áreas cuyos ignorados puede ver y deshacer. */
   areas: CatalogoOption[];
@@ -597,9 +636,13 @@ export interface CatalogosEstructuraProps extends CatalogosPaginaProps {
   nuevaZona: string;
 }
 
-/** `Catalogos/Ventas`: coordinadores de unidad de negocio y objetivos. */
+/** `Catalogos/Ventas`: el directorio de ventas, las unidades de negocio y los objetivos. */
 export interface CatalogosVentasProps extends CatalogosPaginaProps {
-  coordinadores: CatalogoNombrado[];
+  personas: CatalogoPersonaVentas[];
+  cargos: CatalogoOption[];
+  /** `?nueva_persona=&cargo=` — abre el alta ya rellena con ese literal. */
+  nuevaPersona: { literal: string; cargo: CargoVentas };
+  coordinadores: CatalogoUnidadNegocio[];
   objetivos: CatalogoObjetivo[];
   objetivos_mes: CatalogoObjetivoMes[];
   semaforo: CatalogoSemaforo;

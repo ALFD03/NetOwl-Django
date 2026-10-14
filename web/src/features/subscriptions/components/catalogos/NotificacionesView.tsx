@@ -1,7 +1,7 @@
 /** Catálogos › Notificaciones: lo pendiente de cada área y lo que se decidió ignorar. */
 
 import type { ReactNode } from 'react';
-import { AlertTriangle, BookMarked, EyeOff, Network, Plus, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, BookMarked, Briefcase, EyeOff, Network, Plus, ShieldAlert } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { Button, DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
@@ -10,6 +10,8 @@ import type {
   AreaCatalogo,
   CatalogoProductoIgnorado,
   CatalogosNotificacionesProps,
+  ColumnaVentas,
+  PersonaPendiente,
   ProductoPendiente,
 } from '@/features/subscriptions/types';
 import { IgnoradoForm } from './CatalogoForms';
@@ -43,6 +45,21 @@ const LISTAS: Record<Exclude<AreaCatalogo, 'ventas'>, {
   },
 };
 
+/** Cómo se llama en pantalla cada columna del export que nombra a alguien de ventas. */
+const COLUMNA_VENTAS: Record<ColumnaVentas, string> = {
+  vendedor: 'Vendedor',
+  medio_supervisor: 'Supervisor',
+  medio: 'Medio',
+};
+
+/** Los cargos tal y como se sugieren al registrar. */
+const CARGO_SUGERIDO: Record<PersonaPendiente['cargo'], string> = {
+  asesor: 'Asesor',
+  supervisor: 'Supervisor',
+  coord_oficina: 'Coord. de oficina',
+  coord_un: 'Coord. de UN',
+};
+
 /**
  * La bandeja del módulo. «Por registrar» es lo que está en los datos y
  * ninguna fila del catálogo reconoce, área por área; cada nombre se resuelve
@@ -60,7 +77,8 @@ export function NotificacionesView({ pendientes, ignorados, areas }: CatalogosNo
       const filas = pendientes[area];
       return filas ? [{ area, filas, ...LISTAS[area] }] : [];
     });
-  const totalPendientes = listas.reduce((total, lista) => total + lista.filas.length, 0);
+  const totalPendientes = listas.reduce((total, lista) => total + lista.filas.length, 0)
+    + (pendientes.ventas?.length ?? 0);
   const etiquetaArea = (area: AreaCatalogo) => areas.find((a) => a.value === area)?.label ?? area;
 
   const columnasPendientes = (
@@ -87,6 +105,51 @@ export function NotificacionesView({ pendientes, ignorados, areas }: CatalogosNo
             variant="outline"
             icon={<EyeOff className="h-4 w-4" />}
             onClick={() => c.ignorar(area, row.nombre)}
+          >
+            Ignorar
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  const columnasVentas: Column<PersonaPendiente>[] = [
+    { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
+    {
+      header: 'Aparece como',
+      // Una cuenta por columna y no un total: la venta directa de un
+      // supervisor está a la vez en «Medio» y en «Supervisor».
+      accessor: (row) => (Object.keys(COLUMNA_VENTAS) as ColumnaVentas[])
+        .filter((col) => row.ordenes[col])
+        .map((col) => `${COLUMNA_VENTAS[col]}: ${row.ordenes[col]}`)
+        .join(' · '),
+    },
+    {
+      header: 'Cargo sugerido',
+      accessor: (row) => CARGO_SUGERIDO[row.cargo],
+      filterable: true,
+      filterValue: (row) => CARGO_SUGERIDO[row.cargo],
+    },
+    {
+      header: 'Acciones',
+      align: 'right',
+      accessor: (row) => (
+        <div className="flex justify-end gap-2">
+          <Button
+            size="sm"
+            icon={<Plus className="h-4 w-4" />}
+            onClick={() => {
+              const query = new URLSearchParams({ nueva_persona: row.nombre, cargo: row.cargo });
+              window.location.href = `/catalogos/ventas/?${query.toString()}`;
+            }}
+          >
+            Registrar
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<EyeOff className="h-4 w-4" />}
+            onClick={() => c.ignorar('ventas', row.nombre)}
           >
             Ignorar
           </Button>
@@ -160,10 +223,29 @@ export function NotificacionesView({ pendientes, ignorados, areas }: CatalogosNo
               )}
             </NeonContainer>
           ))}
-          {listas.length === 0 && (
+          {pendientes.ventas && (
+            <NeonContainer
+              title={`Personas de ventas por registrar (${pendientes.ventas.length})`}
+              subtitle="Aparecen como Vendedor, Medio o Supervisor en las suscripciones y no están en el directorio: Comisiones no tiene a quién pagarles"
+              icon={<Briefcase className="h-5 w-5" />}
+              theme={pendientes.ventas.length ? 'yellow' : 'slate'}
+              noPadding
+            >
+              {pendientes.ventas.length === 0 ? (
+                <EmptyState
+                  title="Nada pendiente"
+                  description="Todos los nombres de ventas de las suscripciones están en el directorio (o el export todavía no trae «Medio»)."
+                  icon={<ShieldAlert />}
+                />
+              ) : (
+                <DataTable columns={columnasVentas} data={pendientes.ventas} searchable searchPlaceholder="Buscar nombre..." />
+              )}
+            </NeonContainer>
+          )}
+          {listas.length === 0 && !pendientes.ventas && (
             <EmptyState
               title="Ninguna lista de pendientes"
-              description="Las listas de pendientes son de Productos y de Estructura, y no administras ninguno de los dos."
+              description="Las listas de pendientes son de Productos, Estructura y Ventas, y no administras ninguno de los tres."
               icon={<ShieldAlert />}
             />
           )}

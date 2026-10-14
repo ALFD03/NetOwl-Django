@@ -44,7 +44,10 @@ from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
 from core import fixtures
+from core.odoo_nombres import nombre_base, normalizar_nombre_odoo
 from core.utils import clean_json_props
+from services.catalogos.directorio import personas_fuera_del_directorio
+from services.catalogos.models import CARGO_CHOICES, CARGO_CON_USUARIO, PersonaVentas
 from services.config.decorators import permission_required
 from services.subscriptions.analytics.imports import (
     productos_fuera_de_catalogo,
@@ -189,8 +192,27 @@ def _estado(e: Estado) -> dict[str, Any]:
 
 
 def _coordinador(c: Coordinador) -> dict[str, Any]:
-    """Un coordinador, con cuantas zonas lo referencian."""
-    return {"id": c.id, "nombre": c.nombre, "zonas": c.zonas.count()}
+    """Una unidad de negocio, con quien la lleva y cuantas zonas tiene."""
+    return {
+        "id": c.id,
+        "nombre": c.nombre,
+        "zonas": c.zonas.count(),
+        "persona_id": c.persona_id,
+        "persona": c.persona.nombre_completo if c.persona_id else "",
+    }
+
+
+def _persona(p: PersonaVentas) -> dict[str, Any]:
+    """Una persona del directorio de ventas, con las unidades que lleva."""
+    return {
+        "id": p.id,
+        "nombre": p.nombre,
+        "apellido": p.apellido,
+        "cargo": p.cargo,
+        "medio": p.medio,
+        "usuario_odoo": p.usuario_odoo,
+        "unidades": [u.nombre for u in p.unidades_negocio.all()],
+    }
 
 
 def _ignorado(i: ProductoIgnorado) -> dict[str, Any]:
@@ -253,6 +275,50 @@ def _aplicar_site(fila: Site, data: dict, request) -> None:
 def _aplicar_nombre(fila, data: dict, request) -> None:
     """Vuelca el cuerpo sobre un catalogo que solo tiene nombre."""
     fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=120)
+
+
+def _aplicar_coordinador(fila: Coordinador, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre una unidad de negocio y quien la lleva."""
+    fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=120)
+    persona = _relacion(PersonaVentas, data, "persona_id", obligatorio=False)
+    if persona is not None and persona.cargo != "coord_un":
+        raise DatosInvalidos(
+            f"{persona.nombre_completo} no es coordinador de unidad de negocio."
+        )
+    fila.persona = persona
+
+
+def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre una persona del directorio de ventas.
+
+    El usuario de Odoo solo se guarda en el coordinador de oficina, el unico
+    que aparece en `Vendedor`; en los demas cargos se descarta aunque llegue.
+    La unicidad del medio y del usuario no distingue mayusculas, como el
+    cruce con el export, asi que se comprueba aqui con un mensaje claro en vez
+    de dejar que la base de datos responda con un choque generico.
+    """
+    fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=80)
+    fila.apellido = _texto(data, "apellido", obligatorio=True, maximo=80)
+    cargo = _opcion(data, "cargo", CARGO_CHOICES, "asesor")
+    if fila.pk and fila.cargo == "coord_un" and cargo != "coord_un" and fila.unidades_negocio.exists():
+        raise DatosInvalidos(
+            "Lleva unidades de negocio: reasígnalas antes de cambiarle el cargo."
+        )
+    fila.cargo = cargo
+    fila.medio = nombre_base(_texto(data, "medio", obligatorio=True, maximo=160))
+
+    usuario = ""
+    if cargo == CARGO_CON_USUARIO:
+        usuario = normalizar_nombre_odoo(_texto(data, "usuario_odoo", obligatorio=True, maximo=200))
+        if not nombre_base(usuario):
+            raise DatosInvalidos("El usuario de Odoo es obligatorio para un coordinador de oficina.")
+    fila.usuario_odoo = usuario
+
+    otras = PersonaVentas.objects.exclude(pk=fila.pk)
+    if otras.filter(medio__iexact=fila.medio).exists():
+        raise Duplicado(f"Ya hay alguien registrado con el medio «{fila.medio}».")
+    if usuario and otras.filter(usuario_odoo__iexact=usuario).exists():
+        raise Duplicado(f"Ya hay alguien registrado con el usuario «{usuario}».")
 
 
 def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:
@@ -537,10 +603,11 @@ CATALOGOS: dict[str, dict[str, Any]] = {
     "planes": {"modelo": Plan, "serializar": _plan, "aplicar": _aplicar_plan, "etiqueta": "plan", "permiso": PERMISO_OPERACIONAL},
     "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador", "permiso": PERMISO_OPERACIONAL},
     "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "nombre ignorado", "permiso": PERMISO_OPERACIONAL, "permiso_fila": _permiso_ignorado},
-    "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "permiso": PERMISO_COMERCIAL},
+    "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "femenino": True, "permiso": PERMISO_COMERCIAL},
     "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_COMERCIAL},
     "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado", "permiso": PERMISO_COMERCIAL},
-    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_nombre, "etiqueta": "coordinador", "permiso": PERMISO_VENTAS},
+    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_coordinador, "etiqueta": "unidad de negocio", "femenino": True, "permiso": PERMISO_VENTAS},
+    "personas": {"modelo": PersonaVentas, "serializar": _persona, "aplicar": _aplicar_persona, "etiqueta": "persona", "femenino": True, "permiso": PERMISO_VENTAS},
     # Los objetivos van con ventas: quien organiza a los equipos de venta es
     # quien fija lo que se espera de cada parte de la red.
     # `borrable` responde por que no se puede borrar una fila concreta.
@@ -551,6 +618,11 @@ CATALOGOS: dict[str, dict[str, Any]] = {
 }
 
 PERMISOS_CATALOGO = (PERMISO_OPERACIONAL, PERMISO_COMERCIAL, PERMISO_VENTAS)
+
+
+def _participio(catalogo: dict[str, Any], raiz: str) -> str:
+    """`guardado`/`guardada` segun el genero de la etiqueta del catalogo."""
+    return raiz + ("a" if catalogo.get("femenino") else "o")
 
 
 def _puede(request, permiso: str) -> bool:
@@ -594,6 +666,10 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     consulta = catalogo["modelo"].objects.all()
     if nombre == "zonas":
         consulta = consulta.select_related("site", "estado", "coordinador")
+    elif nombre == "coordinadores":
+        consulta = consulta.select_related("persona")
+    elif nombre == "personas":
+        consulta = consulta.prefetch_related("unidades_negocio")
     elif nombre == "planes":
         consulta = consulta.select_related("plan_regulador")
     elif nombre == "ignorados":
@@ -682,6 +758,9 @@ def notificaciones_view(request):
         "estructura": (
             _pendientes("zonas", zonas_fuera_de_catalogo) if permisos["comercial"] else None
         ),
+        "ventas": (
+            _pendientes("personas", personas_fuera_del_directorio) if permisos["ventas"] else None
+        ),
     }
     areas = [area for area, permiso in PERMISO_POR_AREA.items() if _puede(request, permiso)]
     ignorados = [fila for fila in _listado("ignorados") if fila["area"] in areas]
@@ -733,14 +812,26 @@ def estructura_view(request):
 @login_required
 @permission_required(PERMISO_VENTAS)
 def ventas_view(request):
-    """Coordinadores de unidad de negocio y objetivos comerciales.
+    """El directorio de ventas, las unidades de negocio y los objetivos.
+
+    `?nueva_persona=<literal>&cargo=<cargo>` abre el alta ya rellena: es a
+    donde lleva «Registrar» desde Notificaciones. El literal va al usuario de
+    Odoo si el cargo es coordinador de oficina (salio de `Vendedor`) y al medio
+    en los demas.
 
     Lo que la pestana de objetivos necesita ademas de sus filas: el semaforo,
     la configuracion ya resuelta (para mostrar el objetivo efectivo de cada mes
     con la misma regla que los reportes), los meses calculados y las entidades
     a las que se les puede fijar un objetivo.
     """
+    cargo = request.GET.get("cargo") or "asesor"
     return _render(request, "Ventas", "ventas", {
+        "personas": _listado("personas"),
+        "cargos": _opciones(CARGO_CHOICES),
+        "nuevaPersona": {
+            "literal": (request.GET.get("nueva_persona") or "").strip(),
+            "cargo": cargo if cargo in dict(CARGO_CHOICES) else "asesor",
+        },
         "coordinadores": _listado("coordinadores"),
         "objetivos": _listado("objetivos"),
         "objetivos_mes": _listado("objetivos_mes"),
@@ -804,14 +895,14 @@ def api_catalogo_guardar(request):
         return JsonResponse({"status": "error", "message": str(e)}, status=400)
     except IntegrityError:
         return JsonResponse(
-            {"status": "error", "message": f"Ya existe un {catalogo['etiqueta']} con ese nombre."},
+            {"status": "error", "message": f"Ya existe {'una' if catalogo.get('femenino') else 'un'} {catalogo['etiqueta']} con ese nombre."},
             status=409,
         )
 
     fixtures.reset_cache()
     return JsonResponse({
         "status": "success",
-        "message": f"{catalogo['etiqueta'].capitalize()} guardado.",
+        "message": f"{catalogo['etiqueta'].capitalize()} {_participio(catalogo, 'guardad')}.",
         "registro": catalogo["serializar"](fila),
     })
 
@@ -869,4 +960,4 @@ def api_catalogo_eliminar(request):
         )
 
     fixtures.reset_cache()
-    return JsonResponse({"status": "success", "message": f"{catalogo['etiqueta'].capitalize()} eliminado."})
+    return JsonResponse({"status": "success", "message": f"{catalogo['etiqueta'].capitalize()} {_participio(catalogo, 'eliminad')}."})

@@ -17,46 +17,12 @@ asi que el `db_table` no se cualifica.
 
 from __future__ import annotations
 
-import re
 from datetime import date
 
 from django.db import models, transaction
 
-# Sufijo con el que Odoo cierra el nombre de usuario en los exports.
-#
-# **Es `(User)`, en singular.** Se comprobo contra los tickets ya cargados: de
-# los 329 nombres distintos que hay en `asignado_a` y `creado_por`, todos menos
-# cuatro lo escriben asi, los otros cuatro en minuscula, y solo `OdooBot` y el
-# relleno `Sin Especificar` no lo llevan. Guardar `(Users)` habria dejado un
-# directorio que no casa con una sola fila del export.
-SUFIJO_USUARIOS = "(User)"
-
-# Un sufijo de usuario al final de la cadena, escrito como sea: `(User)`,
-# `(user)`, `(Users)`, con o sin espacios. Solo se reconoce esa palabra, para
-# no comerse un parentesis que forme parte del nombre.
-_SUFIJO_RE = re.compile(r"\s*\(\s*users?\s*\)\s*$", re.IGNORECASE)
-
-
-def nombre_base(valor: str) -> str:
-    """El nombre de la persona sin el sufijo y con los espacios colapsados.
-
-    Es lo que identifica a alguien: **la coincidencia no depende de que
-    variante del sufijo traiga el export**, que ya viene escrito de tres formas
-    distintas en los mismos datos.
-    """
-    return _SUFIJO_RE.sub("", " ".join(str(valor or "").split()))
-
-
-def normalizar_nombre_odoo(valor: str) -> str:
-    """El nombre exacto de Odoo, con el sufijo canonico puesto.
-
-    Escribirlo a mano es la mitad de los errores de tipeo —o se olvida, o se
-    escribe `(users)`, o con dos espacios delante—, y cualquiera de las tres
-    deja una fila que se lee distinta de las demas. Se acepta cualquier
-    variante y se guarda siempre la misma.
-    """
-    base = nombre_base(valor)
-    return f"{base} {SUFIJO_USUARIOS}" if base else ""
+# El sufijo y su normalizacion viven en `core`: los comparte el directorio de ventas.
+from core.odoo_nombres import normalizar_nombre_odoo
 
 
 class Departamento(models.Model):

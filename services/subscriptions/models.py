@@ -78,9 +78,24 @@ class Site(models.Model):
 
 
 class Coordinador(models.Model):
-    """Responsable comercial de un conjunto de zonas (reporte Business Units)."""
+    """Unidad de negocio: un conjunto de zonas con su responsable comercial.
+
+    `nombre` es como se presenta en Unidades de negocio, no una persona: una
+    misma persona puede llevar dos unidades («German Cerruti» y «German
+    Cerruti 2») y una unidad puede estar «Vacante». Quien la lleva es `persona`,
+    del directorio de ventas, y es a ella a quien Comisiones le paga por el
+    crecimiento de sus unidades.
+    """
 
     nombre = models.CharField(max_length=120, unique=True)
+    persona = models.ForeignKey(
+        "catalogos.PersonaVentas",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="unidades_negocio",
+        limit_choices_to={"cargo": "coord_un"},
+    )
 
     class Meta:
         db_table = "catalogo_coordinadores"

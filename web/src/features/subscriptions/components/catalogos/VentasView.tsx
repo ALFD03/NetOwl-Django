@@ -1,23 +1,37 @@
-/** Catálogos › Ventas: coordinadores de unidad de negocio y objetivos comerciales. */
+/** Catálogos › Ventas: el directorio de ventas, las unidades de negocio y los objetivos. */
 
-import { Target, TrafficCone, UserCheck } from 'lucide-react';
+import { Briefcase, Crown, Target, TrafficCone } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { DataTable, Modal, NeonContainer, type Column } from '@/shared/ui';
+import { DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
 import { useCatalogos } from '@/features/subscriptions/hooks/useCatalogos';
-import type { CatalogoNombrado, CatalogosVentasProps } from '@/features/subscriptions/types';
-import { NombreForm } from './CatalogoForms';
+import type {
+  CargoVentas,
+  CatalogoPersonaVentas,
+  CatalogoUnidadNegocio,
+  CatalogosVentasProps,
+} from '@/features/subscriptions/types';
 import { BarraCatalogo, ConfirmarBorrado, ErrorCatalogo, columnaAcciones, enviar } from './CatalogoComun';
+import { CARGO_UI, PersonaForm, UnidadForm } from './VentasForms';
 import { NIVEL_OBJETIVO_UI, ObjetivoForm, ObjetivoMesForm, SemaforoForm } from './ObjetivoForms';
 import { ObjetivosPanel } from './ObjetivosPanel';
 import { objetivoGeneral } from '../../lib/objetivos';
 
+const CARGOS: CargoVentas[] = ['asesor', 'supervisor', 'coord_oficina', 'coord_un'];
+
 /**
- * Cómo se organizan los equipos de venta y qué se espera de cada parte de la
- * red. Los coordinadores son los de Unidades de negocio: cada uno es dueño de
- * un conjunto de zonas, que se le asignan desde Estructura.
+ * Quién vende y qué se espera de cada parte de la red.
+ *
+ * Una pestaña por cargo del directorio de ventas —la misma tabla, filtrada—,
+ * con cómo escribe Odoo a cada persona: es contra eso que Comisiones reparte
+ * cada venta. Las unidades de negocio son los «coordinadores» por los que
+ * agrupa Unidades de negocio: cada una es dueña de un conjunto de zonas (se
+ * asignan en Estructura) y apunta a la persona que la lleva.
  */
 export function VentasView({
+  personas,
+  cargos,
+  nuevaPersona,
   coordinadores,
   objetivos,
   objetivos_mes: objetivosMes,
@@ -29,7 +43,10 @@ export function VentasView({
   sites,
   estados,
 }: CatalogosVentasProps) {
-  const c = useCatalogos({ vistaInicial: 'coordinadores' });
+  const c = useCatalogos({
+    vistaInicial: nuevaPersona.literal ? nuevaPersona.cargo : 'asesor',
+    nuevaPersona,
+  });
 
   // El general que rige hoy, para decir en los formularios qué se hereda si
   // se deja un valor vacío. La excepción de un mes no cuenta como "heredado"
@@ -43,18 +60,46 @@ export function VentasView({
   const generalSinExcepcion = (periodo: string) =>
     objetivoGeneral({ ...objetivosConfig, meses: {} }, periodo || mesReferencia);
 
-  const columnasCoordinadores: Column<CatalogoNombrado>[] = [
+  const etiquetaCargo = (cargo: CargoVentas) => cargos.find((o) => o.value === cargo)?.label ?? cargo;
+  const porCargo = (cargo: CargoVentas) => personas.filter((p) => p.cargo === cargo);
+  const coordinadoresUn = porCargo('coord_un');
+
+  const columnasPersonas = (cargo: CargoVentas): Column<CatalogoPersonaVentas>[] => [
     { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Zonas', accessor: 'zonas', align: 'right', sortKey: 'zonas' },
-    columnaAcciones<CatalogoNombrado>(
-      (row) => c.editarNombre('coordinadores', row),
-      (row) => c.setBorrando({ tipo: 'coordinadores', id: row.id, nombre: row.nombre }),
-    ),
+    { header: 'Apellido', accessor: 'apellido', sortKey: 'apellido' },
+    { header: 'Medio / Supervisor', accessor: 'medio', sortKey: 'medio' },
+    ...(cargo === 'coord_oficina'
+      ? [{ header: 'Usuario de Odoo', accessor: 'usuario_odoo', sortKey: 'usuario_odoo' } as Column<CatalogoPersonaVentas>]
+      : []),
+    ...(cargo === 'coord_un'
+      ? [{ header: 'Unidades', accessor: (row) => row.unidades.join(', ') || '—' } as Column<CatalogoPersonaVentas>]
+      : []),
+    columnaAcciones<CatalogoPersonaVentas>(c.editarPersona, (row) =>
+      c.setBorrando({ tipo: 'personas', id: row.id, nombre: `${row.nombre} ${row.apellido}` })),
   ];
 
-  const altas = {
-    coordinadores: { label: 'Nuevo coordinador', onClick: () => c.nuevoNombre('coordinadores') },
-  } as Record<string, { label: string; onClick: () => void }>;
+  const columnasUnidades: Column<CatalogoUnidadNegocio>[] = [
+    { header: 'Unidad', accessor: 'nombre', sortKey: 'nombre' },
+    {
+      header: 'Coordinador',
+      accessor: (row) => row.persona || '— sin asignar',
+      sortKey: 'persona',
+      filterable: true,
+      filterValue: (row) => row.persona || 'Sin asignar',
+    },
+    { header: 'Zonas', accessor: 'zonas', align: 'right', sortKey: 'zonas' },
+    columnaAcciones<CatalogoUnidadNegocio>(c.editarUnidad, (row) =>
+      c.setBorrando({ tipo: 'coordinadores', id: row.id, nombre: row.nombre })),
+  ];
+
+  const altas: Record<string, { label: string; onClick: () => void }> = {
+    ...Object.fromEntries(CARGOS.map((cargo) => [
+      cargo,
+      { label: `Registrar ${etiquetaCargo(cargo).toLowerCase()}`, onClick: () => c.nuevaPersonaVacia(cargo) },
+    ])),
+    unidades: { label: 'Nueva unidad', onClick: c.nuevaUnidad },
+  };
+  const cargoActivo = CARGOS.find((cargo) => cargo === c.vista);
 
   return (
     <AppLayout
@@ -64,7 +109,12 @@ export function VentasView({
           onChange={(key) => c.setVista(key as typeof c.vista)}
           alta={altas[c.vista]}
           pestanas={[
-            { key: 'coordinadores', label: `Coordinadores de UN (${coordinadores.length})`, icon: UserCheck },
+            ...CARGOS.map((cargo) => ({
+              key: cargo,
+              label: `${CARGO_UI[cargo].corto} (${porCargo(cargo).length})`,
+              icon: Briefcase,
+            })),
+            { key: 'unidades', label: `Unidades de negocio (${coordinadores.length})`, icon: Crown },
             { key: 'objetivos', label: 'Objetivos', icon: Target },
           ]}
         />
@@ -72,9 +122,34 @@ export function VentasView({
     >
       <ErrorCatalogo c={c} />
 
-      {c.vista === 'coordinadores' && (
-        <NeonContainer title="Coordinadores de unidad de negocio" subtitle="Responsables comerciales por los que agrupa Unidades de negocio" icon={<UserCheck className="h-5 w-5" />} theme="green" noPadding>
-          <DataTable columns={columnasCoordinadores} data={coordinadores} searchable searchPlaceholder="Buscar coordinador..." />
+      {cargoActivo && (
+        <NeonContainer
+          title={etiquetaCargo(cargoActivo)}
+          subtitle={CARGO_UI[cargoActivo].description}
+          icon={<Briefcase className="h-5 w-5" />}
+          theme="green"
+          noPadding
+        >
+          {porCargo(cargoActivo).length === 0 ? (
+            <EmptyState
+              title="Nadie registrado con este cargo"
+              description="Notificaciones lista los nombres de las suscripciones que el directorio todavía no reconoce."
+              icon={<Briefcase />}
+            />
+          ) : (
+            <DataTable
+              columns={columnasPersonas(cargoActivo)}
+              data={porCargo(cargoActivo)}
+              searchable
+              searchPlaceholder="Buscar persona..."
+            />
+          )}
+        </NeonContainer>
+      )}
+
+      {c.vista === 'unidades' && (
+        <NeonContainer title="Unidades de negocio" subtitle="Los grupos de zonas de Unidades de negocio y la persona que lleva cada uno" icon={<Crown className="h-5 w-5" />} theme="green" noPadding>
+          <DataTable columns={columnasUnidades} data={coordinadores} searchable searchPlaceholder="Buscar unidad..." />
         </NeonContainer>
       )}
 
@@ -105,22 +180,41 @@ export function VentasView({
       )}
 
       <Modal
-        isOpen={Boolean(c.nombreDraft)}
+        isOpen={Boolean(c.personaDraft)}
         onClose={c.cerrarFormularios}
-        title="Coordinador de unidad de negocio"
-        subtitle="Responsable comercial de un conjunto de zonas"
-        icon={<UserCheck className="h-5 w-5 text-emerald-400" />}
+        title={c.personaDraft?.id ? 'Editar persona de ventas' : 'Registrar persona de ventas'}
+        subtitle="Cómo aparece en las suscripciones: es contra esto que Comisiones reparte cada venta"
+        icon={<Briefcase className="h-5 w-5 text-emerald-400" />}
+        theme="green"
+      >
+        {c.personaDraft && (
+          <PersonaForm
+            value={c.personaDraft}
+            cargos={cargos}
+            saving={c.guardando}
+            onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('personas', { ...c.personaDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.unidadDraft)}
+        onClose={c.cerrarFormularios}
+        title={c.unidadDraft?.id ? 'Editar unidad de negocio' : 'Nueva unidad de negocio'}
+        subtitle="Un conjunto de zonas y la persona que lo lleva"
+        icon={<Crown className="h-5 w-5 text-emerald-400" />}
         theme="green"
         size="md"
       >
-        {c.nombreDraft && (
-          <NombreForm
-            value={c.nombreDraft}
+        {c.unidadDraft && (
+          <UnidadForm
+            value={c.unidadDraft}
+            personas={coordinadoresUn}
             saving={c.guardando}
-            onChange={(patch) => c.setNombreDraft({ ...c.nombreDraft!, ...patch })}
-            onSubmit={(e) =>
-              enviar(e, () => c.guardar(c.nombreDraft!.tipo, { id: c.nombreDraft!.id, nombre: c.nombreDraft!.nombre }))
-            }
+            onChange={(patch) => c.setUnidadDraft({ ...c.unidadDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('coordinadores', { ...c.unidadDraft }))}
             onClose={c.cerrarFormularios}
           />
         )}
