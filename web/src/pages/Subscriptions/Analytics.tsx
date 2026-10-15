@@ -13,7 +13,9 @@ import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMe
 import { CampannasExportButton } from '@/features/subscriptions/components/campaigns/CampannasExportButton';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
 import { SUBS_DAY_CHARTS, subsDayCards } from '@/features/subscriptions/lib/subsDaySummary';
-import { useObjetivosConfig } from '@/features/subscriptions/hooks/useObjetivos';
+import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
+import { cumplimientoDelPeriodo, tonoCumplimiento } from '@/features/subscriptions/lib/objetivos';
+import { proyectar } from '@/shared/lib/proyeccion';
 import { DayProgressBar, DaySummary } from '@/shared/ui';
 import type { DayMetrics, DaySeries, DimensionGroup, Periodo } from '@/shared/types/domain';
 
@@ -37,7 +39,8 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   );
 
   // El churn del día se pinta con el semáforo del catálogo.
-  const { semaforo } = useObjetivosConfig();
+  const objetivos = useObjetivos();
+  const { semaforo } = objetivos;
   const diaCards = useMemo(() => subsDayCards(semaforo), [semaforo]);
 
   // La serie ligera que CRM y Soporte reciben aparte, aqui se saca del mes que
@@ -60,6 +63,19 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   // La proyección sale de las instalaciones acumuladas al corte elegido; un día
   // calculado antes de guardar el bloque global no tiene de dónde sacarlas.
   const instaladasAlCorte = dayData?.global?.nuevos_mes;
+  // El cumplimiento de ventas que darían las instalaciones proyectadas, contra
+  // la misma meta y sin recorte, como la tarjeta de Cumplimiento de Ventas.
+  // Sin base inicial no hay meta y la franja no habla del objetivo.
+  const cumplimientoProyectado = useMemo(() => {
+    if (!proyeccion || instaladasAlCorte === undefined) return null;
+    const proyectadas = proyectar(Number(instaladasAlCorte), proyeccion);
+    const { metaVentas, cumplimientoVentas } = cumplimientoDelPeriodo(
+      { activos_inicio: globalData.activos_inicio, nuevos_mes: proyectadas },
+      objetivos.general(selectedPeriod),
+    );
+    if (metaVentas <= 0) return null;
+    return { valor: cumplimientoVentas, objetivo: metaVentas, tono: tonoCumplimiento(cumplimientoVentas, semaforo) };
+  }, [proyeccion, instaladasAlCorte, globalData.activos_inicio, objetivos, selectedPeriod, semaforo]);
   const currentDimensionData = dayData?.dims?.[selectedDim] ?? monthDimensionData;
   // El reporte de campañas sigue la misma regla, pero siempre sobre `campanna`;
   // si cae al cierre, el archivo no debe decir que es el corte de un día.
@@ -115,7 +131,11 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
         charts={SUBS_DAY_CHARTS}
       >
         {proyeccion && instaladasAlCorte !== undefined && (
-          <ProyeccionCierre instalaciones={Number(instaladasAlCorte)} proyeccion={proyeccion} />
+          <ProyeccionCierre
+            instalaciones={Number(instaladasAlCorte)}
+            proyeccion={proyeccion}
+            cumplimiento={cumplimientoProyectado}
+          />
         )}
       </DaySummary>
 

@@ -6,8 +6,10 @@ import ChartDataLabels from 'chartjs-plugin-datalabels';
 import { Doughnut } from 'react-chartjs-2';
 
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
+import { useTheme } from '@/shared/hooks/useTheme';
 import { compactarAnillo } from './compacto';
 import { centerTextPlugin } from './plugins';
+import { adaptarAlTema } from './tema';
 
 interface DoughnutChartProps {
   data: ChartData<'doughnut'>;
@@ -31,14 +33,16 @@ export function DoughnutChart({
   className = 'h-96 w-full',
 }: DoughnutChartProps) {
   const ancho = useBreakpoint('sm');
-  const resolvedOptions = useMemo(
-    () => (ancho || !options ? options : compactarAnillo(options)),
-    [options, ancho],
-  );
+  const { tema } = useTheme();
+  const resolvedOptions = useMemo(() => {
+    const enTema = adaptarAlTema(options, tema);
+    return ancho || !enTema ? enTema : compactarAnillo(enTema);
+  }, [options, ancho, tema]);
+  const resolvedData = useMemo(() => adaptarAlTema(data, tema), [data, tema]);
 
   return (
     <div className={className}>
-      <Doughnut data={data} options={resolvedOptions} plugins={plugins} />
+      <Doughnut data={resolvedData} options={resolvedOptions} plugins={plugins} />
     </div>
   );
 }

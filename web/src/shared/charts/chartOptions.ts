@@ -7,6 +7,7 @@ import type { ActiveElement, ChartEvent, ChartOptions } from 'chart.js';
 import type { Context as DatalabelContext } from 'chartjs-plugin-datalabels';
 import type React from 'react';
 import type { CenterTextConfig } from './plugins';
+import { colorDelTema } from './tema';
 
 /** Used when a dataset carries no colour of its own to borrow. */
 export const DATALABEL_FALLBACK_COLOR = CHART_CHROME.textStrong;
@@ -16,7 +17,9 @@ export const DATALABEL_FALLBACK_COLOR = CHART_CHROME.textStrong;
  * and `LineChart` tint each label with the colour of the bar or line it belongs
  * to, so a reader can tell at a glance which number goes with which series.
  * The dark stroke is what keeps a light-palette entry (`#ffb703`, `#00ff88`)
- * legible once the text is no longer plain white.
+ * legible once the text is no longer plain white. In the light theme the stroke
+ * becomes a white halo (`shared/charts/tema.ts`): black on a white page made
+ * every label look smudged.
  */
 export const DATALABEL_TEXT = {
   font: { weight: 'bold', size: 15 },
@@ -46,7 +49,7 @@ export function seriesDatalabelColor(...sources: SeriesColorKey[]) {
       if (typeof resolved === 'string') return resolved;
     }
 
-    return DATALABEL_FALLBACK_COLOR;
+    return colorDelTema(DATALABEL_FALLBACK_COLOR);
   };
 }
 

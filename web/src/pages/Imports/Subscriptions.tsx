@@ -19,6 +19,7 @@ import { CatalogoBloqueoModal } from '@/features/imports/components/CatalogoBloq
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
 import { extractCatalogoBloqueo, type CatalogoBloqueo } from '@/features/imports/lib/catalogo';
+import type { CampoOdoo, GrupoCamposOdoo } from '@/features/imports/types';
 
 type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis';
 
@@ -34,7 +35,12 @@ const UPLOADERS: Record<SubscriptionImportType, (file: File) => Promise<ImportRe
   gratis: (file) => importsApi.importGratis(file),
 };
 
-export default function ImportSubscriptions() {
+interface ImportSubscriptionsProps {
+  /** Cabeceras de Odoo que lee cada importación, por tipo de export. */
+  camposOdoo?: Partial<Record<SubscriptionImportType, CampoOdoo[]>>;
+}
+
+export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscriptionsProps) {
   const [importType, setImportType] = useState<SubscriptionImportType>('subscriptions');
   const [bloqueo, setBloqueo] = useState<CatalogoBloqueo | null>(null);
   const [ignorando, setIgnorando] = useState<string | null>(null);
@@ -43,6 +49,12 @@ export default function ImportSubscriptions() {
 
   const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.subs);
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.subs);
+
+  const gruposCampos: GrupoCamposOdoo[] = IMPORT_TYPES.map((tipo) => ({
+    key: tipo.value,
+    label: tipo.label,
+    campos: camposOdoo[tipo.value] ?? [],
+  }));
 
   /**
    * Intercepta el 409 de "producto sin catalogar" y lo enseña como una
@@ -120,6 +132,8 @@ export default function ImportSubscriptions() {
             <><strong>Logs:</strong> Debe contener orden, fecha de cambio, nota y estado interno.</>,
             <><strong>Planes Gratuitos:</strong> Export con tarifa, próxima fecha de factura y mensajes del chatter; detecta desde cuándo cada suscripción es gratuita.</>,
           ]}
+          camposOdoo={gruposCampos}
+          grupoActivo={importType}
           note="Tras cargar ambos archivos, selecciona el mes correspondiente y ejecuta el análisis en la sección inferior. El análisis calcula también las métricas de cada día del mes."
         />
       </div>

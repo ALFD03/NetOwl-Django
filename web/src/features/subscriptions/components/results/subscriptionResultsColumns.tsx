@@ -83,7 +83,7 @@ export const buildDimensionColumns = (s: SemaforoObjetivos): Column<Subscription
   { header: 'W. Pausa', accessor: (r) => int(r.react_4_paused), align: 'right', sortKey: 'react_4_paused' },
   { header: 'R. 4P', accessor: (r) => int(r.react_4_P), align: 'right', sortKey: 'react_4_P' },
   { header: 'R. 4H', accessor: (r) => int(r.react_4_H), align: 'right', sortKey: 'react_4_H' },
-  { header: 'Winback %', accessor: (r) => <span className="text-blue-400">{dec(r.tasa_winback_pct)}%</span>, align: 'right', sortKey: 'tasa_winback_pct' },
+  { header: 'Recuperación %', accessor: (r) => <span className="text-blue-400">{dec(r.tasa_winback_pct)}%</span>, align: 'right', sortKey: 'tasa_winback_pct' },
   { header: 'Aporte R%', accessor: (r) => `${dec(r.tasa_aporte_react_pct)}%`, align: 'right', sortKey: 'tasa_aporte_react_pct' },
   { header: 'Reempl %', accessor: (r) => `${dec(r.indice_reemplazo_react_pct)}%`, align: 'right', sortKey: 'indice_reemplazo_react_pct' },
   { header: 'ARPU', accessor: (r) => <span className="text-amber-400">${dec(r.arpu)}</span>, align: 'right', sortKey: 'arpu' },

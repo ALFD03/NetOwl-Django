@@ -15,7 +15,7 @@ export function DashboardCharts({ data }: DashboardChartsProps) {
     </div>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
       <NeonContainer theme="blue" title="Comportamiento de Reactivaciones" subtitle="Aporte al crecimiento e índice de reemplazo" icon={<BarChart3 className="w-5 h-5" />}><BarChart data={data.aporteReemplazoData} options={getHorizontalBarOptions(undefined, ' %', 2)} /></NeonContainer>
-      <NeonContainer theme="yellow" title="Balanza de Recuperaciones" subtitle="Suspensiones vs Reactivaciones de Pausa" icon={<Activity className="w-5 h-5" />}><LineChart data={data.suspensionWinbackData} options={getLineOptions()} /></NeonContainer>
+      <NeonContainer theme="yellow" title="Balanza de Recuperaciones" subtitle="Tasa de suspensión vs tasa de recuperación, sobre la base al inicio" icon={<Activity className="w-5 h-5" />}><LineChart data={data.suspensionWinbackData} options={data.suspensionWinbackOptions} /></NeonContainer>
     </div>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
       <NeonContainer theme="red" title="Concentración % de Bajas por Zona" subtitle="Pasa el cursor para ver el Churn % de esa Zona" icon={<PieChart className="w-5 h-5" />}><DoughnutChart data={data.churnDonutData} options={data.churnDonutOptions} plugins={defaultPlugins}/></NeonContainer>

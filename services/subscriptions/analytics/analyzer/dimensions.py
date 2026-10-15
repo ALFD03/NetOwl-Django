@@ -238,7 +238,7 @@ def aggregate_dimensions(
                 "indice_reemplazo_react_pct": round((react_val / bb) * 100, 4) if bb > 0 else 0.0,
                 "adiciones_netas": nv - bb,
                 "adiciones_brutas": (nv + d_react_not_in_ini.get(val, 0)) - bb,
-                "tasa_winback_pct": round((reac / inac) * 100, 4) if inac > 0 else 0.0,
+                "tasa_winback_pct": round((d_react_4_P.get(val, 0) / d_corte.get(val, 0)) * 100, 4) if d_corte.get(val, 0) > 0 else 0.0,
                 "corte_impagado": d_corte.get(val, 0),
                 "porcentaje_suspensiones": round((d_corte.get(val, 0) / a_ini) * 100, 4) if a_ini > 0 else 0.0,
                 "total_billing": billing_val,

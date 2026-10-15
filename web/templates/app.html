@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,6 +7,18 @@
   <!-- El nombre de la cookie CSRF varia por entorno; el cliente lo lee de aqui -->
   <meta name="csrf-cookie-name" content="{{ csrf_cookie_name }}">
   <title>NetOwl Analytics</title>
+  <!-- El tema se aplica antes de pintar nada: esperar a React mostraba un
+       destello del tema equivocado. Misma clave y misma regla que
+       `web/src/shared/hooks/useTheme.tsx`. -->
+  <script>
+    (function () {
+      var preferencia = null;
+      try { preferencia = localStorage.getItem('netowl-tema'); } catch (e) {}
+      var claro = preferencia === 'claro' ||
+        (preferencia !== 'oscuro' && window.matchMedia('(prefers-color-scheme: light)').matches);
+      document.documentElement.classList.add(claro ? 'light' : 'dark');
+    })();
+  </script>
   {% load static %}
   <link rel="icon" href="{% static 'img/favicon_dark.png' %}">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -26,7 +38,7 @@
     <script type="module" src="{% static 'dist/assets/main.js' %}"></script>
   {% endif %}
 </head>
-<body class="bg-[#0b1326] text-[#E6EEF6] font-sans antialiased min-h-screen">
+<body class="font-sans antialiased min-h-screen">
   {% block inertia %}
     <div id="app" data-page="{{ page }}"></div>
   {% endblock inertia %}

@@ -10,13 +10,13 @@ React + TypeScript + Inertia, served by Django. Tailwind for styling, Chart.js f
 
 ```
 src/
-├── app/          Bootstrap only: main.tsx, csrf, providers
+├── app/          Bootstrap only: main.tsx, csrf
 ├── shared/       Reusable across every module. Knows nothing about any feature.
 │   ├── ui/       The component kit, grouped by kind (see below)
 │   ├── layout/   AppLayout, Sidebar (the navigation tree), UserMenu
 │   ├── charts/   Chart.js wrappers, shared options, registration
 │   ├── lib/      cn(), colour helpers, api client, http error handling, daySeries
-│   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts, useDayPayload
+│   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts, useDayPayload, useTheme
 │   ├── utils/    formatters
 │   ├── constants/  navigation registry, permissions, design tokens
 │   └── types/    cross-cutting types only
@@ -171,6 +171,40 @@ for both `tailwind.config.js` and the TypeScript side:
 
 Tailwind cannot see interpolated class names, so any dynamic class must come from a
 written-out lookup map (see `COLUMNS` in `SummaryStrip`), never a template string.
+
+### Light and dark theme
+
+The UI was written dark-only, and it stays written that way: **do not add `dark:`
+variants.** `tailwind.config.js` serves every palette (`slate`, `emerald`, `rose`…),
+`white` and `surface` as CSS variables. Under `:root` they hold Tailwind's own values,
+so the dark theme is exactly what it always was; under `.light` each shade takes its
+mirror (50↔950, 100↔900, 400↔600, 500 stays). A class keeps its *role* in both themes:
+`text-white` is the strongest text, `text-slate-400` muted text, `bg-slate-900/40` a
+sunken fill, `bg-emerald-950/40` a tinted card. Write new markup for the dark theme and
+it will read in the light one.
+
+- `brand` is not mirrored — it is the brand. Text on a `bg-brand` surface stays real
+  white through an override in `styles/global.css`; on any other solid colour,
+  `text-white` turns dark, which is what a mirrored (lighter) fill needs.
+- The light values that are not a mirror (surfaces, chart chrome, the dark ink that
+  `white` becomes) live in `design-tokens.json` under `light`.
+- Charts draw on a canvas and cannot read CSS variables. `BarChart`, `LineChart` and
+  `DoughnutChart` pass their options and data through `shared/charts/tema.ts`, which swaps
+  every `CHART_CHROME`/`SURFACE` value for its light pair; series colours are untouched.
+  So keep using the tokens in chart options — a raw hex would not be translated — and go
+  through the wrappers rather than `react-chartjs-2` directly. Colours resolved at draw
+  time (plugins, scriptable options) call `colorDelTema()`.
+- The choice (`claro` / `oscuro` / `sistema`, the default, which follows
+  `prefers-color-scheme` live) is per browser, in `localStorage` (`netowl-tema`), set from
+  the sidebar footer. `shared/hooks/useTheme` owns it; an inline script in
+  `templates/app.html` applies it before the first paint, so the two must agree on the key
+  and the rule.
+- Images with white lettering have `_light` variants in `web/static/img/`
+  (`logo_sidebar_light.png`, `isotipo_sidebar_light.png`), derived from `logo_light.png`
+  the same way as the dark ones.
+
+Changing `tailwind.config.js` needs a restart of Vite (`make dev`): the running server
+keeps the config it loaded.
 
 ## Phones and breakpoints
 

@@ -20,6 +20,7 @@ import { ChevronDown, Menu, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { usePermissions } from '@/shared/hooks/usePermissions';
 import { useScrollLock } from '@/shared/hooks/useScrollLock';
+import { useTheme } from '@/shared/hooks/useTheme';
 import { groupBySection, resolveLocation, visibleNavigation } from '@/shared/constants/navigation';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import type { AppNavigationItem, NavigationPage } from '@/shared/types/navigation';
@@ -236,6 +237,8 @@ interface SidebarContentProps {
 function SidebarContent({ url, username, compact = false, onNavigate, onToggleCollapsed }: SidebarContentProps) {
   const { can } = usePermissions();
   const canManageUsers = can(PERMISSIONS.MANAGE_USERS);
+  const { tema } = useTheme();
+  const sufijo = tema === 'claro' ? '_light' : '';
 
   const modulos = visibleNavigation(can);
   const ubicacion = resolveLocation(url);
@@ -267,7 +270,8 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
         {/* Imágenes propias del sidebar, recortadas al contenido y reducidas
             con Lanczos (ver `web/static/img/`): los PNG originales son lienzos
             de 1024px con mucho aire transparente, y el búho quedaba diminuto y
-            con los bordes dentados al reducirlo el navegador. */}
+            con los bordes dentados al reducirlo el navegador. Las `_light` salen
+            igual de `logo_light.png`: el texto blanco no se ve en el tema claro. */}
         <div
           className={cn(
             'mb-6 flex items-center border-b border-slate-800 pb-4',
@@ -276,7 +280,7 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
         >
           <Link href="/" onClick={onNavigate} className={cn('flex items-center', !compact && 'w-full')}>
             <img
-              src={compact ? '/static/img/isotipo_sidebar.png' : '/static/img/logo_sidebar.png'}
+              src={compact ? `/static/img/isotipo_sidebar${sufijo}.png` : `/static/img/logo_sidebar${sufijo}.png`}
               alt="NetOwl"
               className={compact ? 'h-14 w-auto' : 'h-auto w-full'}
             />
@@ -351,6 +355,7 @@ interface MobileTopBarProps {
 
 /** Barra superior del teléfono: la hamburguesa y el logo. Desaparece desde `lg`. */
 export function MobileTopBar({ onOpenMenu }: MobileTopBarProps) {
+  const { tema } = useTheme();
   return (
     <div className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-slate-800 bg-surface-secondary/95 px-3 backdrop-blur lg:hidden">
       <button
@@ -362,7 +367,11 @@ export function MobileTopBar({ onOpenMenu }: MobileTopBarProps) {
         <Menu className="h-5 w-5" />
       </button>
       <Link href="/" className="flex items-center">
-        <img src="/static/img/logo_sidebar.png" alt="NetOwl" className="h-8 w-auto" />
+        <img
+          src={tema === 'claro' ? '/static/img/logo_sidebar_light.png' : '/static/img/logo_sidebar.png'}
+          alt="NetOwl"
+          className="h-8 w-auto"
+        />
       </Link>
     </div>
   );

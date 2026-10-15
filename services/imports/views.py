@@ -21,17 +21,20 @@ from inertia import render as render_inertia
 
 from services.config.decorators import deny, permission_required, permissions_all_required
 from services.config.uploads import cleanup_tempfile, handle_csv_upload
+from services.crm.analytics import campos_odoo_importacion as campos_odoo_crm
 from services.crm.analytics import import_crm_csv
 from services.crm.analytics.config import REQUIRED_CRM_HEADERS
 from services.subscriptions.analytics import (
     CatalogoVacio,
     ProductosSinCatalogo,
+    campos_odoo_importacion,
     import_gratis_csv,
     import_logs_csv,
     import_subscriptions_csv,
 )
 from services.subscriptions.analytics.config import REQUIRED_LOGS_HEADERS, REQUIRED_SUBS_HEADERS
 from services.subscriptions.analytics.free_plans import REQUIRED_GRATIS_HEADERS
+from services.support.analytics import campos_odoo_importacion as campos_odoo_support
 from services.support.analytics import import_support_csv
 from services.support.analytics.config import REQUIRED_SUPPORT_HEADERS
 
@@ -76,19 +79,28 @@ def imports_index_view(request):
 @permissions_all_required('can_view_imports', 'can_view_imports_subs')
 def subscriptions_import_view(request):
     """Pestana de importacion de suscripciones."""
-    return render_inertia(request, "Imports/Subscriptions", {"section": "subscriptions"})
+    return render_inertia(request, "Imports/Subscriptions", {
+        "section": "subscriptions",
+        "camposOdoo": campos_odoo_importacion(),
+    })
 
 @login_required
 @permissions_all_required('can_view_imports', 'can_view_imports_crm')
 def crm_import_view(request):
     """Pestana de importacion de CRM."""
-    return render_inertia(request, "Imports/Crm", {"section": "crm"})
+    return render_inertia(request, "Imports/Crm", {
+        "section": "crm",
+        "camposOdoo": campos_odoo_crm(),
+    })
 
 @login_required
 @permissions_all_required('can_view_imports', 'can_view_imports_support')
 def support_import_view(request):
     """Pestana de importacion de soporte."""
-    return render_inertia(request, "Imports/Support", {"section": "support"})
+    return render_inertia(request, "Imports/Support", {
+        "section": "support",
+        "camposOdoo": campos_odoo_support(),
+    })
 
 @login_required
 @permissions_all_required('can_view_imports', 'can_view_import_history')

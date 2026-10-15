@@ -10,8 +10,8 @@ interface Props {
   proyeccion: Proyeccion;
   /**
    * El cumplimiento de ventas que darían las instalaciones proyectadas, ya
-   * calculado por el reporte (que decide si se recorta a 100). Sin él, la
-   * franja no habla del objetivo: Analytics no resuelve metas.
+   * calculado por quien llama (que decide si se recorta a 100). Sin él, la
+   * franja no habla del objetivo.
    */
   cumplimiento?: { valor: number; objetivo: number; tono: StatTileTone } | null;
 }

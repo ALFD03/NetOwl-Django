@@ -1,4 +1,4 @@
-/** Las tarjetas de la portada: churn, crecimiento, ARPU y winback promedio. */
+/** Las tarjetas de la portada: churn, crecimiento, ARPU y tasa de recuperación promedio. */
 
 import { Activity, AlertTriangle, DollarSign, RefreshCw, ShieldCheck, TrendingDown, TrendingUp } from 'lucide-react';
 import { MetricCard } from '@/shared/ui';
@@ -19,7 +19,7 @@ export function DashboardMetrics({ data }: DashboardMetricsProps) {
       <MetricCard label="Tasa Aporte Reactivaciones" value={`${data.avgTasaAporte.toFixed(2)}%`} color="blue" subValue="Peso en adiciones" icon={<RefreshCw className="w-4 h-4 text-sky-400" />} />
       <MetricCard label="Índice Reemplazo Bajas" value={`${data.avgIndiceReemplazo.toFixed(2)}%`} color="green" subValue="Cobertura sobre churn" icon={<ShieldCheck className="w-4 h-4 text-emerald-400" />} />
       <MetricCard label="Porcentaje Suspensiones" value={`${data.avgSuspensiones.toFixed(2)}%`} color="red" subValue="Corte por impago" icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} />
-      <MetricCard label="Tasa Winback Promedio" value={`${data.avgWinback.toFixed(2)}%`} color="yellow" subValue="Recuperados / Inactivos" icon={<Activity className="w-4 h-4 text-amber-400" />} />
+      <MetricCard label="Tasa de Recuperación Promedio" value={`${data.avgWinback.toFixed(2)}%`} color="yellow" subValue="Recuperados / Cortes por impago" icon={<Activity className="w-4 h-4 text-amber-400" />} />
     </div>
   </>;
 }

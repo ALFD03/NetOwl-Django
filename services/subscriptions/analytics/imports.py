@@ -23,7 +23,8 @@ from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import nombres_reconocidos, plan_names, productos_ignorados
 
-from .config import SUBS_ACTIVO_ALIASES, SUBS_COLUMN_MAPPING
+from .config import REQUIRED_SUBS_HEADERS, SUBS_ACTIVO_ALIASES, SUBS_COLUMN_MAPPING
+from .free_plans import LOG_COLUMNS, MSG_COLUMNS, REQUIRED_GRATIS_HEADERS
 
 SUBSCRIPTIONS_COLUMN_MAPPING = {**SUBS_COLUMN_MAPPING, **SUBS_ACTIVO_ALIASES}
 
@@ -362,3 +363,33 @@ def import_logs_csv(csv_path: str) -> int:
     db_tool.copy_dataframe(df_logs, TableNames.SUBSCRIPTIONS_LOGS)
 
     return len(df_logs)
+
+def campos_odoo_importacion() -> dict[str, list[dict[str, Any]]]:
+    """Los campos del export de Odoo que lee cada importacion de suscripciones.
+
+    Sale de los mismos mapeos que usan los importadores, para que la lista que
+    ve el usuario no pueda separarse de lo que de verdad se lee. `requerido`
+    marca las cabeceras que se validan antes de cargar; las demas se aprovechan
+    si vienen y se ignoran si faltan. Cualquier otra columna del fichero se
+    descarta sin error.
+    """
+    def _campos(cabeceras, requeridas) -> list[dict[str, Any]]:
+        return [
+            {"nombre": c, "requerido": c in requeridas, "alias": []}
+            for c in dict.fromkeys(cabeceras)
+        ]
+
+    # `Activo` llega escrita de varias formas; se lista una y las demas de alias.
+    activo, *alias_activo = dict.fromkeys(a for a in SUBS_ACTIVO_ALIASES if a[0].isupper())
+
+    return {
+        "subscriptions": [
+            *_campos(SUBS_COLUMN_MAPPING, REQUIRED_SUBS_HEADERS),
+            {"nombre": activo, "requerido": False, "alias": alias_activo},
+        ],
+        "logs": _campos(LOGS_COLUMN_MAPPING, LOGS_COLUMN_MAPPING),
+        "gratis": _campos(
+            [*SUBS_COLUMN_MAPPING, *LOG_COLUMNS, *MSG_COLUMNS],
+            REQUIRED_GRATIS_HEADERS,
+        ),
+    }

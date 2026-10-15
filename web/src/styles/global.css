@@ -3,24 +3,25 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --bg-primary: #0b1326;
-    --bg-secondary: #0f1a36;
-    --text-primary: #E6EEF6;
-  }
-
-  .light {
-    --bg-primary: #f8fafc;
-    --bg-secondary: #ffffff;
-    --text-primary: #0f172a;
-  }
-
+  /* Las variables de color las declara `tailwind.config.js` (`:root` oscuro,
+     `.light` claro); el tema lo elige `useTheme` poniendo la clase en `<html>`. */
   body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
+    @apply bg-surface-primary text-slate-100;
     font-family: 'Inter', sans-serif;
     min-height: 100vh;
   }
+}
+
+/* En claro `white` pasa a ser el texto oscuro, que es lo que hace legibles
+   los ~130 `text-white` de títulos y cifras. Sobre el azul de la marca, que no
+   cambia con el tema, el texto tiene que seguir siendo blanco de verdad.
+   Fuera de `@layer` para que Tailwind no lo descarte, y con selectores de
+   atributo porque un `@apply bg-brand` copiaría cualquier regla que nombre
+   `.bg-brand` (lo hacía con el pulgar del slider). */
+.light :is([class~='bg-brand'], [class~='bg-brand-hover'], [class~='bg-brand-light']),
+.light :is([class~='hover:bg-brand'], [class~='hover:bg-brand-hover']):hover,
+.light .day-slider {
+  --c-white: 255 255 255;
 }
 
 /* Custom Scrollbar estilizado */
@@ -32,7 +33,7 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #1e293b;
+  background-color: rgb(var(--c-slate-800));
   border-radius: 3px;
 }
 /* Slider de fecha de corte (DayProgressBar).
