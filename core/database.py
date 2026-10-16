@@ -156,6 +156,25 @@ class DBConnector:
                 )
                 return cur.fetchone() is not None
 
+    def columnas(self, table_name: str) -> set[str]:
+        """Las columnas de una tabla del esquema del entorno (vacio si no existe).
+
+        Las tablas de importacion ganan columnas cuando el export las trae
+        (`ADD COLUMN IF NOT EXISTS`), asi que una columna nueva del export no
+        esta en un entorno que todavia no ha importado con ella. Quien la
+        necesita pregunta antes, en vez de recibir un error de SQL.
+        """
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_schema = %s AND table_name = %s
+                    """,
+                    (DB_SCHEMA, table_name),
+                )
+                return {fila[0] for fila in cur.fetchall()}
+
     def save_historico(
         self,
         df: pd.DataFrame,

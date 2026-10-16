@@ -141,6 +141,26 @@ def consultar_tasa_del_mes(periodo: str) -> tuple[float, str]:
     )
 
 
+def consultar_tasa_vigente_el(dia: date) -> tuple[float, date]:
+    """El valor del bolivar oficial vigente ese dia, y de que publicacion salio.
+
+    Si el BCV publico ese dia, es esa. Si no (fin de semana o feriado, la API
+    responde 404), vale la ultima publicada antes: es la que estaba en vigor ese
+    dia. A diferencia de `consultar_tasa_del_mes`, que avanza al primer dia
+    publicado del mes, esto retrocede, porque pregunta por el valor de un dia
+    concreto y no por la primera tasa de un mes.
+    """
+    for salto in range(DIAS_A_PROBAR):
+        publicada = dia - timedelta(days=salto)
+        tasa = _consultar_dia(publicada)
+        if tasa is not None:
+            return tasa, publicada
+
+    raise TasaNoDisponible(
+        f"El BCV no publico tasa en los {DIAS_A_PROBAR} dias hasta el {dia.strftime('%d/%m/%Y')}."
+    )
+
+
 def _fecha_publicacion(datos: object) -> str:
     """El dia que la fuente dice haber publicado, en `YYYY-MM-DD`.
 

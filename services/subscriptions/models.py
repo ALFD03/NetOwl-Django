@@ -3,7 +3,7 @@ coordinadores.
 
 Antes vivian en `data/Planes.json` y `data/Zonas.json`, y cambiarlos exigia
 editar un fichero del repositorio y volver a desplegar. Aqui son tablas que se
-mantienen desde `/subscriptions/config/`.
+mantienen desde el modulo de Catalogos (`/catalogos/`).
 
 Viven en el esquema del entorno, como todo lo demas: el `db_table` no se
 cualifica porque la conexion ya fija `search_path` a DB_SCHEMA. Desarrollo y
@@ -29,6 +29,15 @@ TECNOLOGIA_CHOICES = [
 TIPO_PERSONA_CHOICES = [
     ("nat", "Persona natural"),
     ("PYME", "Persona juridica / PYME"),
+]
+
+
+# Las listas de "por registrar" que admiten un "ignorar": cada area del modulo
+# de catalogos detecta en los datos importados los nombres que no reconoce.
+AREA_IGNORADO_CHOICES = [
+    ("productos", "Productos"),
+    ("estructura", "Estructura"),
+    ("ventas", "Ventas"),
 ]
 
 
@@ -69,9 +78,24 @@ class Site(models.Model):
 
 
 class Coordinador(models.Model):
-    """Responsable comercial de un conjunto de zonas (reporte Business Units)."""
+    """Unidad de negocio: un conjunto de zonas con su responsable comercial.
+
+    `nombre` es como se presenta en Unidades de negocio, no una persona: una
+    misma persona puede llevar dos unidades («German Cerruti» y «German
+    Cerruti 2») y una unidad puede estar «Vacante». Quien la lleva es `persona`,
+    del directorio de ventas, y es a ella a quien Comisiones le paga por el
+    crecimiento de sus unidades.
+    """
 
     nombre = models.CharField(max_length=120, unique=True)
+    persona = models.ForeignKey(
+        "catalogos.PersonaVentas",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="unidades_negocio",
+        limit_choices_to={"cargo": "coord_un"},
+    )
 
     class Meta:
         db_table = "catalogo_coordinadores"
@@ -205,6 +229,11 @@ class Plan(models.Model):
     datas_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     declarar_en_eta = models.BooleanField(default=True)
+    # Lo que se lleva quien vende un plan PYME, en % de `precio`. Solo tiene
+    # sentido en los PYME: un plan residencial se paga por tramos de cantidad
+    # de ventas (ver `services/comisiones`). Nulo es "sin definir": la venta
+    # sale en el informe de comisiones sin monto, para que se note.
+    comision_pyme_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     # Con que fila de los formularios de la reguladora se declara este plan.
     # Nulo no es un error de datos: un plan recien creado todavia no esta
     # agrupado, y hasta que lo este no se declara.
@@ -251,6 +280,10 @@ class Plan(models.Model):
             "price": _numero(self.precio),
             "tarifa": self.tarifa,
             "declarar_en_eta": self.declarar_en_eta,
+            # Nulo y no texto vacio: es "sin definir", y Comisiones lo distingue de 0.
+            "comision_pyme_pct": (
+                float(self.comision_pyme_pct) if self.comision_pyme_pct is not None else None
+            ),
             # El regulador viaja como el diccionario entero y no como su id:
             # el consumidor (`eta_report`) necesita sus campos, y `fixtures`
             # sirve diccionarios planos, no filas del ORM.
@@ -259,7 +292,12 @@ class Plan(models.Model):
 
 
 class ProductoIgnorado(models.Model):
-    """Linea del export que nunca sera un plan (routers, instalaciones...).
+    """Nombre del export que nunca sera una fila del catalogo.
+
+    Nacio para las lineas que nunca seran un plan (routers, instalaciones...)
+    y se extendio a las otras dos listas de pendientes: zonas que no son nodos
+    de verdad y vendedores que no se registran. `area` dice de cual sale; lo
+    que sigue se escribio para los productos y sigue valiendo para ellos.
 
     La verificacion del catalogo no puede distinguir un plan nuevo de un
     servicio puntual, asi que ofrece las dos respuestas. Registrar el nombre
@@ -270,16 +308,24 @@ class ProductoIgnorado(models.Model):
     queda fuera del reporte de la reguladora y sigue contando como plan.
     """
 
-    nombre = models.CharField(max_length=200, unique=True)
+    nombre = models.CharField(max_length=200)
+    # De que lista de "por registrar" sale el nombre. El mismo texto puede ser
+    # un producto que no es plan y, a la vez, un vendedor que no se registra:
+    # ignorarlo en un sitio no lo calla en el otro. Solo los de `productos`
+    # alimentan `fixtures.productos_ignorados()`.
+    area = models.CharField(max_length=16, choices=AREA_IGNORADO_CHOICES, default="productos")
     nota = models.CharField(max_length=255, blank=True, default="")
     creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "catalogo_productos_ignorados"
-        ordering = ["nombre"]
-        verbose_name = "producto ignorado"
-        verbose_name_plural = "productos ignorados"
+        ordering = ["area", "nombre"]
+        constraints = [
+            models.UniqueConstraint(fields=["area", "nombre"], name="catalogo_ignorado_area_nombre"),
+        ]
+        verbose_name = "nombre ignorado"
+        verbose_name_plural = "nombres ignorados"
 
     def __str__(self):
         return self.nombre

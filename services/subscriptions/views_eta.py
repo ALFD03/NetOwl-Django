@@ -7,7 +7,7 @@ la mitad del archivo, y son un bloque cerrado. Se separan aqui para que
 Lo unico que ETA parametriza hoy son las **suscripciones individuales**: las
 excepciones por orden, que son genuinamente de cada contrato y no tienen
 equivalente en el catalogo. La clasificacion de un plan se edita en
-`/subscriptions/config/` (ver `views_catalogos.py`), que es la unica fuente.
+el modulo de Catalogos (ver `services/catalogos/views.py`), que es la unica fuente.
 """
 
 import json

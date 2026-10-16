@@ -267,7 +267,7 @@ def get_sales_report_data(
         target_period = periodo_reporte or available_periods[0]
         
         if not zonas_disponibles():
-            return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Subscriptions → Catálogos."}
+            return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Catálogos → Estructura."}
 
         # Mapeamos zonas a su respectivo Site y Type (Tecnología)
         zone_info = {}
@@ -395,7 +395,7 @@ def get_business_units_data(
         target_period = periodo_reporte or available_periods[0]
         
         if not zonas_disponibles():
-            return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Subscriptions → Catálogos."}
+            return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Catálogos → Estructura."}
 
         # 1. Indexar zonas por Coordinador, RF y FTTH
         zone_coord_map = {}

@@ -343,7 +343,7 @@ export interface LifetimeDetalleResponse {
 
 // --- Catálogos de referencia -------------------------------------------------
 // Planes, zonas, sites, estados y coordinadores. Antes eran `Planes.json` y
-// `Zonas.json`; hoy son tablas que se editan en `/subscriptions/config/`.
+// `Zonas.json`; hoy son tablas que se editan en el módulo de Catálogos (`/catalogos/`).
 
 // --- Objetivos comerciales (ver features/subscriptions/lib/objetivos.ts) ---
 
@@ -398,6 +398,7 @@ export interface ObjetivosConfig {
 }
 
 export type CatalogoTipo =
+  | 'personas'
   | 'planes'
   | 'zonas'
   | 'sites'
@@ -427,6 +428,8 @@ export interface CatalogoPlan {
   precio: number;
   /** Si el plan se declara a la reguladora en el reporte ETA. */
   declarar_en_eta: boolean;
+  /** % del precio que se lleva quien vende el plan, solo en los PYME. Nulo: sin definir. */
+  comision_pyme_pct: number | null;
   /** Con qué fila del formulario se declara. `null` = todavía sin agrupar. */
   plan_regulador_id: number | null;
   plan_regulador: string;
@@ -483,9 +486,14 @@ export interface CatalogoNombrado {
   zonas: number;
 }
 
+/** Las áreas del módulo de Catálogos con una lista de pendientes propia. */
+export type AreaCatalogo = 'productos' | 'estructura' | 'ventas';
+
+/** Un nombre de los datos que se decidió no registrar en su área. */
 export interface CatalogoProductoIgnorado {
   id: number;
   nombre: string;
+  area: AreaCatalogo;
   nota: string;
   creado_por: string;
   creado_en: string;
@@ -544,38 +552,129 @@ export interface CatalogoSemaforo extends SemaforoObjetivos {
   id: number;
 }
 
-/** Producto ya importado que hoy no está en el catálogo. */
+/** Nombre ya importado que hoy no está en su catálogo (un producto, una zona…). */
 export interface ProductoPendiente {
   nombre: string;
   ordenes: number;
 }
 
-export interface SubscriptionCatalogosProps {
+/** El cargo de una persona del directorio de ventas. */
+export type CargoVentas = 'asesor' | 'supervisor' | 'coord_oficina' | 'coord_un';
+
+/** Las columnas del export que nombran a una persona de ventas. */
+export type ColumnaVentas = 'vendedor' | 'medio_supervisor' | 'medio';
+
+/** Una persona del directorio de ventas, tal y como la escribe Odoo. */
+export interface CatalogoPersonaVentas {
+  id: number;
+  nombre: string;
+  apellido: string;
+  cargo: CargoVentas;
+  /** El literal de `Medio`. */
+  medio: string;
+  /**
+   * El de `Oportunidad/Administrador`, cuando Odoo lo escribe distinto que en `Medio`.
+   * Vacío: el mismo que `medio`. Solo los cargos que supervisan.
+   */
+  medio_supervisor: string;
+  /** El literal de `Vendedor`, con `(User)`. Solo el coordinador de oficina. */
+  usuario_odoo: string;
+  /** Las unidades de negocio que lleva (solo el coordinador de UN). */
+  unidades: string[];
+}
+
+/** Una unidad de negocio (el `Coordinador` de las zonas) y quién la lleva. */
+export interface CatalogoUnidadNegocio extends CatalogoNombrado {
+  persona_id: number | null;
+  persona: string;
+}
+
+/** Un nombre de las suscripciones que el directorio de ventas no reconoce. */
+export interface PersonaPendiente {
+  nombre: string;
+  /** Órdenes por columna: no se suman, la venta directa de un supervisor está en dos. */
+  ordenes: Partial<Record<ColumnaVentas, number>>;
+  cargo: CargoVentas;
+}
+
+/** Qué grupos del módulo de Catálogos administra el usuario: uno por permiso. */
+export interface CatalogosPermisos {
+  operacional: boolean;
+  comercial: boolean;
+  ventas: boolean;
+}
+
+interface CatalogosPaginaProps {
+  permisos: CatalogosPermisos;
+}
+
+/** `Catalogos/Notificaciones`: lo pendiente de cada área y lo ignorado. */
+export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
+  /** `null` en las áreas que el usuario no administra; vacía es "todo registrado". */
+  pendientes: {
+    productos: ProductoPendiente[] | null;
+    estructura: ProductoPendiente[] | null;
+    ventas: PersonaPendiente[] | null;
+  };
+  ignorados: CatalogoProductoIgnorado[];
+  /** Las áreas cuyos ignorados puede ver y deshacer. */
+  areas: CatalogoOption[];
+  /**
+   * Lo que piden los formularios de alta, que se abren aquí mismo. Vacías las
+   * listas de las áreas que el usuario no administra.
+   */
+  opciones: {
+    reguladores: CatalogoPlanRegulador[];
+    tiposPersona: CatalogoOption[];
+    tecnologias: CatalogoOption[];
+    sites: CatalogoSite[];
+    estados: CatalogoNombrado[];
+    coordinadores: CatalogoNombrado[];
+    cargos: CatalogoOption[];
+    /** Quienes pueden aparecer en `Oportunidad/Administrador`, para vincularles un nombre. */
+    supervisores: CatalogoPersonaVentas[];
+  };
+}
+
+/** `Catalogos/Productos`: planes y planes reguladores. */
+export interface CatalogosProductosProps extends CatalogosPaginaProps {
   planes: CatalogoPlan[];
   reguladores: CatalogoPlanRegulador[];
-  zonas: CatalogoZona[];
-  sites: CatalogoSite[];
-  estados: CatalogoNombrado[];
-  coordinadores: CatalogoNombrado[];
-  ignorados: CatalogoProductoIgnorado[];
-  objetivos: CatalogoObjetivo[];
-  objetivos_mes: CatalogoObjetivoMes[];
-  /** Nulos sin el permiso comercial, que es el que administra los objetivos. */
-  semaforo: CatalogoSemaforo | null;
-  objetivosConfig: ObjetivosConfig | null;
-  /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
-  periodosCalculados: string[];
-  /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
-  nodosConocidos: NodoConocido[];
-  pendientes: ProductoPendiente[];
-  /**
-   * Qué mitad del catálogo administra el usuario. Las listas de la otra llegan
-   * vacías, y sus pestañas se ocultan por estos flags y no por estar vacías.
-   */
-  comercial: boolean;
-  operacional: boolean;
   tecnologias: CatalogoOption[];
   tiposPersona: CatalogoOption[];
   /** `?nuevo_plan=` — abre el formulario de plan ya relleno con ese nombre. */
   nuevoPlan: string;
+}
+
+/** `Catalogos/Estructura`: zonas, sites y estados. */
+export interface CatalogosEstructuraProps extends CatalogosPaginaProps {
+  zonas: CatalogoZona[];
+  sites: CatalogoSite[];
+  estados: CatalogoNombrado[];
+  /** Solo para elegir el de una zona: se administran en Ventas. */
+  coordinadores: CatalogoNombrado[];
+  tecnologias: CatalogoOption[];
+  /** `?nueva_zona=` — abre el formulario de zona ya relleno con ese nombre. */
+  nuevaZona: string;
+}
+
+/** `Catalogos/Ventas`: el directorio de ventas, las unidades de negocio y los objetivos. */
+export interface CatalogosVentasProps extends CatalogosPaginaProps {
+  personas: CatalogoPersonaVentas[];
+  cargos: CatalogoOption[];
+  /** `?nueva_persona=&cargo=` — abre el alta ya rellena con ese literal. */
+  nuevaPersona: { literal: string; cargo: CargoVentas };
+  coordinadores: CatalogoUnidadNegocio[];
+  objetivos: CatalogoObjetivo[];
+  objetivos_mes: CatalogoObjetivoMes[];
+  semaforo: CatalogoSemaforo;
+  objetivosConfig: ObjetivosConfig;
+  /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
+  periodosCalculados: string[];
+  /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
+  nodosConocidos: NodoConocido[];
+  /** Las entidades a las que se les puede fijar un objetivo. */
+  zonas: CatalogoZona[];
+  sites: CatalogoSite[];
+  estados: CatalogoNombrado[];
 }

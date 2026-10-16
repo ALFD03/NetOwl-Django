@@ -6,7 +6,7 @@
  * backend hay que añadirlo también aquí.
  */
 
-import { CloudDownload, Headset, KeyRound, Layers, Users } from 'lucide-react';
+import { BookMarked, CloudDownload, HandCoins, Headset, KeyRound, Layers, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { Permission } from '@/shared/types/auth';
@@ -30,6 +30,7 @@ export const PERMISSIONS = {
   VIEW_IMPORTS_CRM: 'can_view_imports_crm',
   VIEW_IMPORTS_SUPPORT: 'can_view_imports_support',
   VIEW_IMPORT_HISTORY: 'can_view_import_history',
+  VIEW_COMISIONES: 'can_view_comisiones',
   IMPORT_DATA: 'can_import_data',
   RUN_CALCULATIONS: 'can_run_calculations',
   RUN_LIFETIME: 'can_run_lifetime',
@@ -37,7 +38,9 @@ export const PERMISSIONS = {
   MANAGE_USERS: 'can_manage_users',
   MANAGE_CATALOGO_COMERCIAL: 'can_manage_catalogo_comercial',
   MANAGE_CATALOGO_OPERACIONAL: 'can_manage_catalogo_operacional',
+  MANAGE_CATALOGO_VENTAS: 'can_manage_catalogo_ventas',
   MANAGE_SUPPORT_USERS: 'can_manage_support_users',
+  MANAGE_COMISIONES: 'can_manage_comisiones',
   IMPORT_SUBS: 'can_import_subs',
   IMPORT_CRM: 'can_import_crm',
   IMPORT_SUPPORT: 'can_import_support',
@@ -132,8 +135,17 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
       { key: PERMISSIONS.RUN_SUBS_ANALYSIS, label: 'Ejecutar el análisis de churn', section: 'Cargar y calcular' },
       { key: PERMISSIONS.RUN_LIFETIME, label: 'Ejecutar el motor Kaplan-Meier', section: 'Cargar y calcular' },
       { key: PERMISSIONS.MANAGE_ETA, label: 'Administrar el Maestro ETA', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Catálogo comercial (zonas, sites, estados, coordinadores)', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL, label: 'Catálogo operacional (planes, reguladores, ignorados, por registrar)', section: 'Administrar' },
+    ],
+  },
+  {
+    category: 'Catálogos',
+    hint: 'Los catálogos de referencia que usan Suscripciones y Comisiones. Un permiso por grupo.',
+    icon: BookMarked,
+    tone: 'yellow',
+    perms: [
+      { key: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL, label: 'Productos (planes, reguladores y sus pendientes)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Estructura (zonas, sites, estados y sus pendientes)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGO_VENTAS, label: 'Ventas (coordinadores y objetivos comerciales)', section: 'Administrar' },
     ],
   },
   {
@@ -163,6 +175,16 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
       { key: PERMISSIONS.IMPORT_SUPPORT, label: 'Cargar el CSV de soporte', section: 'Cargar y calcular' },
       { key: PERMISSIONS.RUN_SUPPORT_ANALYSIS, label: 'Ejecutar el análisis de soporte', section: 'Cargar y calcular' },
       { key: PERMISSIONS.MANAGE_SUPPORT_USERS, label: 'Administrar el directorio de soporte', section: 'Administrar' },
+    ],
+  },
+  {
+    category: 'Comisiones',
+    hint: 'El informe de comisiones de la fuerza de ventas y su configuración de pago.',
+    icon: HandCoins,
+    tone: 'green',
+    perms: [
+      { key: PERMISSIONS.VIEW_COMISIONES, label: 'Ver el informe de comisiones', section: 'Ver' },
+      { key: PERMISSIONS.MANAGE_COMISIONES, label: 'Calcular, revisar y cerrar periodos; supervisores por UN y condiciones', section: 'Administrar' },
     ],
   },
   {

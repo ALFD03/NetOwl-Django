@@ -16,7 +16,7 @@ import type {
   IgnoradoDraft, NombreDraft, PlanDraft, ReguladorDraft, SiteDraft, ZonaDraft,
 } from '@/features/subscriptions/hooks/useCatalogos';
 import type {
-  CatalogoNombrado, CatalogoOption, CatalogoPlanRegulador, CatalogoSite,
+  AreaCatalogo, CatalogoNombrado, CatalogoOption, CatalogoPlanRegulador, CatalogoSite,
 } from '@/features/subscriptions/types';
 
 /** Valor del desplegable cuando el plan todavía no está agrupado. */
@@ -209,6 +209,23 @@ export function PlanForm({
               />
             </Field>
           </div>
+
+          {value.tipo_persona === 'PYME' && (
+            <Field
+              label="Comisión PYME (% del precio)"
+              hint="Lo que cobra quien vende el plan, y solo esa persona. Vacío es «sin definir»: Comisiones avisa de esas ventas en vez de pagarlas a 0."
+            >
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="any"
+                className={modalInputClass}
+                value={value.comision_pyme_pct ?? ''}
+                onChange={(e) => onChange({ comision_pyme_pct: e.target.value === '' ? null : Number(e.target.value) })}
+              />
+            </Field>
+          )}
 
           <Field
             label="Plan regulador"
@@ -537,24 +554,12 @@ export function NombreForm({
   onSubmit,
   onClose,
 }: Acciones & { value: NombreDraft; onChange: (patch: Partial<NombreDraft>) => void }) {
-  const esCoordinador = value.tipo === 'coordinadores';
-
   return (
     <ModalForm onSubmit={onSubmit}>
       <FormBanner
-        title={esCoordinador ? 'Responsable comercial' : 'Entidad federal'}
-        description={
-          esCoordinador
-            ? 'Business Units agrupa por aquí las zonas que se le asignen.'
-            : 'El reporte ETA agrupa por aquí a los suscriptores de cada zona.'
-        }
-        action={
-          esCoordinador ? (
-            <UserCheck className="h-8 w-8 flex-shrink-0 text-slate-600" />
-          ) : (
-            <Gauge className="h-8 w-8 flex-shrink-0 text-slate-600" />
-          )
-        }
+        title="Entidad federal"
+        description="El reporte ETA agrupa por aquí a los suscriptores de cada zona."
+        action={<Gauge className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
 
       <Field
@@ -575,23 +580,70 @@ export function NombreForm({
   );
 }
 
+/** Lo que cambia del formulario de ignorar según la lista de la que sale el nombre. */
+const TEXTOS_IGNORADO: Record<AreaCatalogo, {
+  titulo: string; descripcion: string; campo: string; nota: string; boton: string;
+}> = {
+  productos: {
+    titulo: 'Producto que nunca será un plan',
+    descripcion: 'Routers, instalaciones y servicios puntuales. Dejará de bloquear importaciones y análisis sin entrar en el catálogo de planes.',
+    campo: 'Producto',
+    nota: 'Por qué nunca será un plan. Ayuda a revisar la decisión más adelante.',
+    boton: 'Ignorar producto',
+  },
+  estructura: {
+    titulo: 'Zona que no se registrará',
+    descripcion: 'Una zona mal escrita en Odoo o que no es un nodo de verdad. Dejará de aparecer en Notificaciones sin entrar en el catálogo.',
+    campo: 'Zona',
+    nota: 'Por qué no se registra. Ayuda a revisar la decisión más adelante.',
+    boton: 'Ignorar zona',
+  },
+  ventas: {
+    titulo: 'Vendedor que no se registrará',
+    descripcion: 'Un canal o un usuario genérico que no es una persona de ventas. Dejará de aparecer en Notificaciones sin entrar en el directorio.',
+    campo: 'Nombre',
+    nota: 'Por qué no se registra. Ayuda a revisar la decisión más adelante.',
+    boton: 'Ignorar nombre',
+  },
+};
+
 export function IgnoradoForm({
   value,
+  areas = [],
   saving,
   onChange,
   onSubmit,
   onClose,
-}: Acciones & { value: IgnoradoDraft; onChange: (patch: Partial<IgnoradoDraft>) => void }) {
+}: Acciones & {
+  value: IgnoradoDraft;
+  /** Entre qué listas se elige en un alta. El área no se cambia al editar. */
+  areas?: CatalogoOption[];
+  onChange: (patch: Partial<IgnoradoDraft>) => void;
+}) {
+  const textos = TEXTOS_IGNORADO[value.area];
+  const eligeArea = !value.id && areas.length > 1;
   return (
     <ModalForm onSubmit={onSubmit}>
       <FormBanner
-        title="Producto que nunca será un plan"
-        description="Routers, instalaciones y servicios puntuales. Dejará de bloquear importaciones y análisis sin entrar en el catálogo de planes."
+        title={textos.titulo}
+        description={textos.descripcion}
         action={<EyeOff className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="Producto" hint="Tal y como aparece en el export, carácter por carácter.">
+        {eligeArea && (
+          <Field label="Lista" hint="De qué lista de pendientes se calla el nombre.">
+            <SelectMenu
+              aria-label="Lista"
+              className={modalInputClass}
+              value={value.area}
+              options={areas}
+              onChange={(area) => onChange({ area: area as AreaCatalogo })}
+            />
+          </Field>
+        )}
+
+        <Field label={textos.campo} hint="Tal y como aparece en el export, carácter por carácter.">
           <input
             type="text"
             required
@@ -601,7 +653,7 @@ export function IgnoradoForm({
           />
         </Field>
 
-        <Field label="Nota" hint="Por qué nunca será un plan. Ayuda a revisar la decisión más adelante.">
+        <Field label="Nota" hint={textos.nota}>
           <input
             type="text"
             className={modalInputClass}
@@ -611,7 +663,7 @@ export function IgnoradoForm({
         </Field>
       </div>
 
-      <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : 'Ignorar producto'} />
+      <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : textos.boton} />
     </ModalForm>
   );
 }

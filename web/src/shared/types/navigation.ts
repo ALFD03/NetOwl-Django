@@ -25,7 +25,10 @@ export interface AppNavigationItem {
   name: string;
   icon: LucideIcon;
   pathPrefix: string;
-  /** Permiso de entrada al módulo; cada página puede pedir además el suyo. */
-  permission: Permission;
+  /**
+   * Permiso de entrada al módulo, o varios de los que basta con uno; cada
+   * página puede pedir además el suyo.
+   */
+  permission: Permission | readonly Permission[];
   pages: NavigationPage[];
 }

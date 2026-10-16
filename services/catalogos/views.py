@@ -1,23 +1,28 @@
-"""Catalogos de referencia: la pantalla de configuracion y su CRUD.
+"""El modulo de Catalogos: sus cuatro paginas y el CRUD de todas ellas.
 
 Planes y zonas eran `data/Planes.json` y `data/Zonas.json`, y cambiarlos
-exigia editar un fichero del repositorio y volver a desplegar. Aqui se
-mantienen desde la propia aplicacion.
+exigia editar un fichero del repositorio y volver a desplegar. Despues fueron
+una pantalla de Subscriptions (`/subscriptions/config/`), y hoy son un modulo
+propio porque los usan dos: Subscriptions y Comisiones.
+
+El modulo se reparte en grupos, una pagina cada uno y un permiso cada uno:
+**Productos** (planes y reguladores; el permiso operacional), **Estructura**
+(zonas, sites y estados; el comercial) y **Ventas** (coordinadores y
+objetivos; el de ventas). **Notificaciones** junta lo pendiente de cada area
+—lo que esta en los datos importados y nadie registro— y lo que se decidio
+ignorar; cada usuario ve ahi solo las areas que administra.
+
+Los modelos siguen en `services/subscriptions/models.py`: sus tablas ya tienen
+nombre propio y mudar las clases de app no le da nada a nadie.
 
 Es un solo par de endpoints para todos los catalogos y no veinte vistas casi
 iguales: lo unico que cambia entre ellos es que campos se leen del cuerpo y
-como se serializa la fila, y eso es lo que declara `CATALOGOS`.
+como se serializa la fila, y eso es lo que declara `CATALOGOS`. Cada escritura
+comprueba el permiso del catalogo que toca, no el de la pagina.
 
 Toda escritura llama a `fixtures.reset_cache()`: el catalogo se lee cacheado
 —el worker de Celery es otro proceso— y sin esto una edicion tardaria hasta un
 minuto en verse, o no se veria nunca en el proceso que ya la tenia leida.
-
-Los catalogos se reparten entre dos permisos, porque los mantienen equipos
-distintos: el **comercial** (zonas, sites, estados y coordinadores: como se
-reparte la red entre los equipos de venta) y el **operacional** (planes, planes
-reguladores, ignorados y la lista de productos por registrar). Cada entrada de `CATALOGOS` declara el suyo; la pantalla abre
-con cualquiera de los dos y solo envia las pestanas del que se tiene, y cada
-escritura comprueba el del catalogo que toca, no el de la pantalla.
 """
 
 from __future__ import annotations
@@ -28,17 +33,31 @@ import re
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError
-from django.db.models import ProtectedError
+from django.db import IntegrityError, transaction
+from django.db.models import ProtectedError, Q
 from django.http import JsonResponse
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.utils.http import urlencode
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
 from core import fixtures
+from core.odoo_nombres import nombre_base, normalizar_nombre_odoo
 from core.utils import clean_json_props
+from services.catalogos.directorio import personas_fuera_del_directorio
+from services.catalogos.models import (
+    CARGO_CHOICES,
+    CARGO_CON_USUARIO,
+    CARGOS_QUE_SUPERVISAN,
+    PersonaVentas,
+)
 from services.config.decorators import permission_required
-from services.subscriptions.analytics.imports import productos_fuera_de_catalogo
+from services.subscriptions.analytics.imports import (
+    productos_fuera_de_catalogo,
+    zonas_fuera_de_catalogo,
+)
 from services.subscriptions.analytics.objetivos import (
     get_objetivos_config,
     nodos_conocidos,
@@ -46,6 +65,7 @@ from services.subscriptions.analytics.objetivos import (
 )
 from services.subscriptions.analytics.queries import get_periodos
 from services.subscriptions.models import (
+    AREA_IGNORADO_CHOICES,
     CAMPOS_REFERENCIA,
     NIVEL_OBJETIVO_CHOICES,
     NIVELES_CON_SUCURSAL,
@@ -130,6 +150,7 @@ def _plan(p: Plan) -> dict[str, Any]:
         "datas_mbps": float(p.datas_mbps),
         "precio": float(p.precio),
         "declarar_en_eta": p.declarar_en_eta,
+        "comision_pyme_pct": float(p.comision_pyme_pct) if p.comision_pyme_pct is not None else None,
         "plan_regulador_id": p.plan_regulador_id,
         "plan_regulador": p.plan_regulador.nombre if p.plan_regulador_id else "",
     }
@@ -177,15 +198,36 @@ def _estado(e: Estado) -> dict[str, Any]:
 
 
 def _coordinador(c: Coordinador) -> dict[str, Any]:
-    """Un coordinador, con cuantas zonas lo referencian."""
-    return {"id": c.id, "nombre": c.nombre, "zonas": c.zonas.count()}
+    """Una unidad de negocio, con quien la lleva y cuantas zonas tiene."""
+    return {
+        "id": c.id,
+        "nombre": c.nombre,
+        "zonas": c.zonas.count(),
+        "persona_id": c.persona_id,
+        "persona": c.persona.nombre_completo if c.persona_id else "",
+    }
+
+
+def _persona(p: PersonaVentas) -> dict[str, Any]:
+    """Una persona del directorio de ventas, con las unidades que lleva."""
+    return {
+        "id": p.id,
+        "nombre": p.nombre,
+        "apellido": p.apellido,
+        "cargo": p.cargo,
+        "medio": p.medio,
+        "medio_supervisor": p.medio_supervisor,
+        "usuario_odoo": p.usuario_odoo,
+        "unidades": [u.nombre for u in p.unidades_negocio.all()],
+    }
 
 
 def _ignorado(i: ProductoIgnorado) -> dict[str, Any]:
-    """Un producto ignorado, con quien y cuando lo declaro."""
+    """Un nombre ignorado, con su area y quien y cuando lo declaro."""
     return {
         "id": i.id,
         "nombre": i.nombre,
+        "area": i.area,
         "nota": i.nota,
         "creado_por": i.creado_por.username if i.creado_por else "",
         "creado_en": i.creado_en.strftime("%Y-%m-%d %H:%M"),
@@ -205,6 +247,11 @@ def _aplicar_plan(fila: Plan, data: dict, request) -> None:
     fila.datas_mbps = _numero(data, "datas_mbps")
     fila.precio = _numero(data, "precio")
     fila.declarar_en_eta = bool(data.get("declarar_en_eta", True))
+    # Solo en los PYME, que son los unicos que se pagan por porcentaje. Vacio
+    # es "sin definir", no 0: Comisiones avisa en vez de pagar nada en silencio.
+    fila.comision_pyme_pct = (
+        _porcentaje(data, "comision_pyme_pct") if fila.tipo_persona == "PYME" else None
+    )
     # Opcional: un plan recien creado todavia no esta agrupado, y hasta que lo
     # este no aparece en los formularios de la reguladora.
     fila.plan_regulador = _relacion(PlanRegulador, data, "plan_regulador_id", obligatorio=False)
@@ -242,8 +289,71 @@ def _aplicar_nombre(fila, data: dict, request) -> None:
     fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=120)
 
 
+def _aplicar_coordinador(fila: Coordinador, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre una unidad de negocio y quien la lleva."""
+    fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=120)
+    persona = _relacion(PersonaVentas, data, "persona_id", obligatorio=False)
+    if persona is not None and persona.cargo != "coord_un":
+        raise DatosInvalidos(
+            f"{persona.nombre_completo} no es coordinador de unidad de negocio."
+        )
+    fila.persona = persona
+
+
+def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre una persona del directorio de ventas.
+
+    El usuario de Odoo solo se guarda en el coordinador de oficina, el unico
+    que aparece en `Vendedor`; en los demas cargos se descarta aunque llegue.
+    Igual el nombre como supervisor, que solo llevan los cargos que
+    supervisan. La unicidad de los tres literales no distingue mayusculas,
+    como el cruce con el export, asi que se comprueba aqui con un mensaje
+    claro en vez de dejar que la base de datos responda con un choque
+    generico. La del nombre como supervisor es sobre el que vale en esa
+    columna (`literal_supervisor`): el propio o, si no lo tiene, el medio.
+    """
+    fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=80)
+    fila.apellido = _texto(data, "apellido", obligatorio=True, maximo=80)
+    cargo = _opcion(data, "cargo", CARGO_CHOICES, "asesor")
+    if fila.pk and fila.cargo == "coord_un" and cargo != "coord_un" and fila.unidades_negocio.exists():
+        raise DatosInvalidos(
+            "Lleva unidades de negocio: reasígnalas antes de cambiarle el cargo."
+        )
+    fila.cargo = cargo
+    fila.medio = nombre_base(_texto(data, "medio", obligatorio=True, maximo=160))
+    supervisa = nombre_base(_texto(data, "medio_supervisor", maximo=160)) if cargo in CARGOS_QUE_SUPERVISAN else ""
+    fila.medio_supervisor = "" if supervisa.casefold() == fila.medio.casefold() else supervisa
+
+    usuario = ""
+    if cargo == CARGO_CON_USUARIO:
+        usuario = normalizar_nombre_odoo(_texto(data, "usuario_odoo", obligatorio=True, maximo=200))
+        if not nombre_base(usuario):
+            raise DatosInvalidos("El usuario de Odoo es obligatorio para un coordinador de oficina.")
+    fila.usuario_odoo = usuario
+
+    otras = PersonaVentas.objects.exclude(pk=fila.pk)
+    if otras.filter(medio__iexact=fila.medio).exists():
+        raise Duplicado(f"Ya hay alguien registrado con el medio «{fila.medio}».")
+    if usuario and otras.filter(usuario_odoo__iexact=usuario).exists():
+        raise Duplicado(f"Ya hay alguien registrado con el usuario «{usuario}».")
+    literal = fila.literal_supervisor
+    choque = otras.filter(
+        Q(medio_supervisor__iexact=literal) | Q(medio_supervisor="", medio__iexact=literal)
+    ).first()
+    if choque is not None:
+        raise Duplicado(
+            f"«{literal}» ya es como aparece {choque.nombre_completo} en «Oportunidad/Administrador»."
+        )
+
+
 def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:
-    """Vuelca el cuerpo sobre un producto ignorado, anotando quien lo creo."""
+    """Vuelca el cuerpo sobre un nombre ignorado, anotando quien lo creo.
+
+    El area solo se fija en el alta: cambiarla despues seria mover el nombre a
+    otra lista, y el permiso que se comprobo fue el de la que tenia.
+    """
+    if not fila.pk:
+        fila.area = _opcion(data, "area", AREA_IGNORADO_CHOICES, "productos")
     fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=200)
     fila.nota = _texto(data, "nota")
     if fila.creado_por_id is None:
@@ -486,28 +596,58 @@ def _aplicar_semaforo(fila: SemaforoObjetivos, data: dict, request) -> None:
     fila.actualizado_por = request.user
 
 
+# Un permiso por grupo del modulo. Los nombres de los campos son anteriores al
+# modulo y se conservan: «comercial» es hoy la Estructura (zonas, sites,
+# estados) y «operacional» los Productos. Ventas —coordinadores, objetivos y, en
+# adelante, el directorio de vendedores— se separo de la estructura porque lo
+# lleva quien paga comisiones, no quien reparte la red.
 PERMISO_COMERCIAL = "can_manage_catalogo_comercial"
 PERMISO_OPERACIONAL = "can_manage_catalogo_operacional"
+PERMISO_VENTAS = "can_manage_catalogo_ventas"
+
+# Que permiso administra los nombres ignorados de cada area: los mismos que
+# administran el catalogo donde se habrian registrado.
+PERMISO_POR_AREA = {
+    "productos": PERMISO_OPERACIONAL,
+    "estructura": PERMISO_COMERCIAL,
+    "ventas": PERMISO_VENTAS,
+}
+
+
+def _permiso_ignorado(fila: ProductoIgnorado, data: dict) -> str:
+    """El permiso de un ignorado es el de su area (la pedida, si es un alta)."""
+    area = fila.area if fila.pk else str(data.get("area") or "productos")
+    return PERMISO_POR_AREA.get(area, PERMISO_OPERACIONAL)
+
 
 # Un catalogo = un modelo, como se sirve, como se lee del cuerpo y que permiso
 # lo administra. Anadir uno nuevo es anadir una entrada aqui y una pestana en
-# la interfaz.
+# la interfaz. `permiso_fila`, si esta, decide el permiso mirando la fila: es
+# lo que reparte los ignorados entre los tres permisos segun su area.
 CATALOGOS: dict[str, dict[str, Any]] = {
     "planes": {"modelo": Plan, "serializar": _plan, "aplicar": _aplicar_plan, "etiqueta": "plan", "permiso": PERMISO_OPERACIONAL},
     "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador", "permiso": PERMISO_OPERACIONAL},
-    "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "producto ignorado", "permiso": PERMISO_OPERACIONAL},
-    "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "permiso": PERMISO_COMERCIAL},
+    "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "nombre ignorado", "permiso": PERMISO_OPERACIONAL, "permiso_fila": _permiso_ignorado},
+    "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "femenino": True, "permiso": PERMISO_COMERCIAL},
     "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_COMERCIAL},
     "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado", "permiso": PERMISO_COMERCIAL},
-    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_nombre, "etiqueta": "coordinador", "permiso": PERMISO_COMERCIAL},
-    # Los objetivos van con el catalogo comercial: quien reparte la red entre
-    # los equipos de venta es quien fija lo que se espera de cada parte.
+    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_coordinador, "etiqueta": "unidad de negocio", "femenino": True, "permiso": PERMISO_VENTAS},
+    "personas": {"modelo": PersonaVentas, "serializar": _persona, "aplicar": _aplicar_persona, "etiqueta": "persona", "femenino": True, "permiso": PERMISO_VENTAS},
+    # Los objetivos van con ventas: quien organiza a los equipos de venta es
+    # quien fija lo que se espera de cada parte de la red.
     # `borrable` responde por que no se puede borrar una fila concreta.
-    "objetivos": {"modelo": ObjetivoComercial, "serializar": _objetivo, "aplicar": _aplicar_objetivo, "etiqueta": "objetivo", "permiso": PERMISO_COMERCIAL, "borrable": _borrar_objetivo},
-    "objetivos_mes": {"modelo": ObjetivoMes, "serializar": _objetivo_mes, "aplicar": _aplicar_objetivo_mes, "etiqueta": "objetivo del mes", "permiso": PERMISO_COMERCIAL},
+    "objetivos": {"modelo": ObjetivoComercial, "serializar": _objetivo, "aplicar": _aplicar_objetivo, "etiqueta": "objetivo", "permiso": PERMISO_VENTAS, "borrable": _borrar_objetivo},
+    "objetivos_mes": {"modelo": ObjetivoMes, "serializar": _objetivo_mes, "aplicar": _aplicar_objetivo_mes, "etiqueta": "objetivo del mes", "permiso": PERMISO_VENTAS},
     # Fila unica: se edita siempre la misma y no se borra.
-    "semaforo": {"modelo": SemaforoObjetivos, "serializar": _semaforo, "aplicar": _aplicar_semaforo, "etiqueta": "semáforo", "permiso": PERMISO_COMERCIAL, "unico": True},
+    "semaforo": {"modelo": SemaforoObjetivos, "serializar": _semaforo, "aplicar": _aplicar_semaforo, "etiqueta": "semáforo", "permiso": PERMISO_VENTAS, "unico": True},
 }
+
+PERMISOS_CATALOGO = (PERMISO_OPERACIONAL, PERMISO_COMERCIAL, PERMISO_VENTAS)
+
+
+def _participio(catalogo: dict[str, Any], raiz: str) -> str:
+    """`guardado`/`guardada` segun el genero de la etiqueta del catalogo."""
+    return raiz + ("a" if catalogo.get("femenino") else "o")
 
 
 def _puede(request, permiso: str) -> bool:
@@ -518,24 +658,30 @@ def _puede(request, permiso: str) -> bool:
     return bool(perfil and perfil.has_permission(permiso))
 
 
-def _catalogo_permitido(request, data: dict) -> tuple[dict[str, Any] | None, JsonResponse | None]:
+def _denegado(permiso: str) -> JsonResponse:
+    """La respuesta 403 de una escritura sin el permiso de su catalogo."""
+    return JsonResponse(
+        {"status": "error", "message": f"Acceso denegado. Se requiere el privilegio: {permiso}."},
+        status=403,
+    )
+
+
+def _catalogo_permitido(request, data: dict, fila=None) -> tuple[dict[str, Any] | None, JsonResponse | None]:
     """El catalogo que pide el cuerpo, o la respuesta de error si no se puede tocar.
 
-    Los endpoints de escritura dejan pasar a quien tenga cualquiera de los dos
-    permisos; aqui se exige el del catalogo concreto, que es lo que impide que
-    el grupo comercial edite un plan mandando `tipo: "planes"` a mano.
+    Los endpoints de escritura dejan pasar a quien tenga cualquiera de los
+    permisos del modulo; aqui se exige el del catalogo concreto, que es lo que
+    impide que quien lleva la estructura edite un plan mandando
+    `tipo: "planes"` a mano. Con `fila` se aplica ademas `permiso_fila`.
     """
     catalogo = CATALOGOS.get(str(data.get("tipo") or ""))
     if catalogo is None:
         return None, JsonResponse({"status": "error", "message": "Catálogo desconocido."}, status=400)
-    if not _puede(request, catalogo["permiso"]):
-        return None, JsonResponse(
-            {
-                "status": "error",
-                "message": f"Acceso denegado. Se requiere el privilegio: {catalogo['permiso']}.",
-            },
-            status=403,
-        )
+    permiso = catalogo["permiso"]
+    if fila is not None and (por_fila := catalogo.get("permiso_fila")):
+        permiso = por_fila(fila, data)
+    if not _puede(request, permiso):
+        return None, _denegado(permiso)
     return catalogo, None
 
 
@@ -545,6 +691,10 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     consulta = catalogo["modelo"].objects.all()
     if nombre == "zonas":
         consulta = consulta.select_related("site", "estado", "coordinador")
+    elif nombre == "coordinadores":
+        consulta = consulta.select_related("persona")
+    elif nombre == "personas":
+        consulta = consulta.prefetch_related("unidades_negocio")
     elif nombre == "planes":
         consulta = consulta.select_related("plan_regulador")
     elif nombre == "ignorados":
@@ -556,75 +706,215 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     return [catalogo["serializar"](fila) for fila in consulta]
 
 
+def _permisos(request) -> dict[str, bool]:
+    """Que grupos administra el usuario: la interfaz solo enlaza los suyos."""
+    return {
+        "operacional": _puede(request, PERMISO_OPERACIONAL),
+        "comercial": _puede(request, PERMISO_COMERCIAL),
+        "ventas": _puede(request, PERMISO_VENTAS),
+    }
+
+
+def _opciones(choices) -> list[dict[str, str]]:
+    """Unas `choices` de Django tal y como las consume un desplegable."""
+    return [{"value": v, "label": t} for v, t in choices]
+
+
+def _render(request, pagina: str, grupo: str, props: dict[str, Any]):
+    """Pinta una pagina del modulo con lo que todas comparten."""
+    props.update({"permisos": _permisos(request), "section": grupo})
+    return render_inertia(request, f"Catalogos/{pagina}", clean_json_props(props))
+
+
+def _pendientes(nombre: str, funcion) -> list[dict[str, Any]]:
+    """Una lista de pendientes, o vacia si la consulta falla.
+
+    Un entorno sin datos importados todavia no tiene la tabla de
+    suscripciones: eso no es motivo para romper la pagina.
+    """
+    try:
+        return funcion()
+    except Exception:
+        logger.exception("No se pudo calcular la lista de %s por registrar", nombre)
+        return []
+
+
 # --- Vistas -----------------------------------------------------------------
 
 @login_required
-@permission_required(PERMISO_COMERCIAL, PERMISO_OPERACIONAL)
-def catalogos_view(request):
-    """Pantalla de configuracion de los catalogos.
+@permission_required(*PERMISOS_CATALOGO)
+def inicio(request):
+    """La raiz del modulo: la primera pagina que el usuario puede abrir.
 
-    Solo se envian los catalogos del permiso que se tiene: los del otro llegan
-    como listas vacias y la interfaz oculta sus pestanas. `comercial` y
-    `operacional` le dicen cuales mostrar sin que tenga que deducirlo de que
-    una lista venga vacia, que tambien puede ser un catalogo sin filas.
+    Notificaciones la abre cualquiera de los tres permisos, asi que es siempre
+    esa; la funcion existe para que `/catalogos/` no sea un 404.
+    """
+    return redirect("catalogos:notificaciones")
+
+
+def redirigir_config_antigua(request):
+    """`/subscriptions/config/` era la pantalla unica de catalogos.
+
+    Hay enlaces guardados y avisos que la usaban —el de la importacion
+    bloqueada lleva `?nuevo_plan=`—, asi que sigue respondiendo y manda cada
+    uno a su sitio nuevo.
+    """
+    nuevo_plan = (request.GET.get("nuevo_plan") or "").strip()
+    if nuevo_plan:
+        return redirect(f"{reverse('catalogos:productos')}?{urlencode({'nuevo_plan': nuevo_plan})}")
+    return redirect("catalogos:notificaciones")
+
+
+@login_required
+@permission_required(*PERMISOS_CATALOGO)
+def notificaciones_view(request):
+    """Lo que falta en cada area, y lo que se decidio no registrar.
+
+    Cada lista de pendientes se calcula solo si se administra su area, y lo
+    mismo los ignorados: quien no puede registrar una zona tampoco tiene por
+    que ver cuales faltan. Una lista ausente llega como `null`, que la
+    interfaz distingue de una lista vacia ("todo registrado").
+
+    Los nombres se registran aqui mismo, en un modal, sin ir a la pagina de
+    su grupo: se resuelven uno detras de otro. Por eso viajan tambien las
+    opciones que piden esos formularios (reguladores para un plan; sites,
+    estados y coordinadores para una zona; cargos para una persona), y solo
+    las de las areas que se administran.
+    """
+    permisos = _permisos(request)
+    pendientes: dict[str, list[dict[str, Any]] | None] = {
+        "productos": (
+            _pendientes("productos", productos_fuera_de_catalogo) if permisos["operacional"] else None
+        ),
+        "estructura": (
+            _pendientes("zonas", zonas_fuera_de_catalogo) if permisos["comercial"] else None
+        ),
+        "ventas": (
+            _pendientes("personas", personas_fuera_del_directorio) if permisos["ventas"] else None
+        ),
+    }
+    areas = [area for area, permiso in PERMISO_POR_AREA.items() if _puede(request, permiso)]
+    ignorados = [fila for fila in _listado("ignorados") if fila["area"] in areas]
+
+    return _render(request, "Notificaciones", "notificaciones", {
+        "pendientes": pendientes,
+        "ignorados": ignorados,
+        "areas": [{"value": v, "label": t} for v, t in AREA_IGNORADO_CHOICES if v in areas],
+        "opciones": {
+            "reguladores": _listado("reguladores") if permisos["operacional"] else [],
+            "tiposPersona": _opciones(TIPO_PERSONA_CHOICES),
+            "tecnologias": _opciones(TECNOLOGIA_CHOICES),
+            "sites": _listado("sites") if permisos["comercial"] else [],
+            "estados": _listado("estados") if permisos["comercial"] else [],
+            "coordinadores": _listado("coordinadores") if permisos["comercial"] else [],
+            "cargos": _opciones(CARGO_CHOICES),
+            # Para vincular un nombre de `Oportunidad/Administrador` a quien ya esta
+            # registrado con otro: Odoo escribe distinto a la misma persona.
+            "supervisores": [
+                _persona(p)
+                for p in PersonaVentas.objects.filter(cargo__in=CARGOS_QUE_SUPERVISAN).prefetch_related(
+                    "unidades_negocio"
+                )
+            ] if permisos["ventas"] else [],
+        },
+    })
+
+
+@login_required
+@permission_required(PERMISO_OPERACIONAL)
+def productos_view(request):
+    """Planes y planes reguladores: el vocabulario de lo que se vende.
 
     `?nuevo_plan=<nombre>` abre el formulario de plan ya relleno con ese
     nombre: es a donde lleva el aviso de la importacion cuando encuentra un
     producto sin catalogar, para no obligar a copiarlo a mano.
     """
-    comercial = _puede(request, PERMISO_COMERCIAL)
-    operacional = _puede(request, PERMISO_OPERACIONAL)
-
-    props = {
-        nombre: _listado(nombre) if _puede(request, catalogo["permiso"]) else []
-        for nombre, catalogo in CATALOGOS.items()
-        if not catalogo.get("unico")
-    }
-    props.update({
-        "comercial": comercial,
-        "operacional": operacional,
-        "tecnologias": [{"value": v, "label": t} for v, t in TECNOLOGIA_CHOICES],
-        "tiposPersona": [{"value": v, "label": t} for v, t in TIPO_PERSONA_CHOICES],
-        "nuevoPlan": (request.GET.get("nuevo_plan") or "").strip() if operacional else "",
-        "section": "catalogos",
+    return _render(request, "Productos", "productos", {
+        "planes": _listado("planes"),
+        "reguladores": _listado("reguladores"),
+        "tecnologias": _opciones(TECNOLOGIA_CHOICES),
+        "tiposPersona": _opciones(TIPO_PERSONA_CHOICES),
+        "nuevoPlan": (request.GET.get("nuevo_plan") or "").strip(),
     })
-
-    # Lo que ya esta importado y hoy no esta en el catalogo. Es la razon de ser
-    # de la mitad operacional: enterarse de que falta algo sin esperar al proximo
-    # analisis. Si la consulta falla (entorno sin datos aun) no se rompe la
-    # pagina por ello.
-    # Lo que la pestana de objetivos necesita ademas de sus filas: el semaforo,
-    # la configuracion ya resuelta (para mostrar el objetivo efectivo de cada
-    # mes con la misma regla que los reportes) y los meses calculados.
-    props["semaforo"] = _semaforo(SemaforoObjetivos.actual()) if comercial else None
-    props["objetivosConfig"] = get_objetivos_config() if comercial else None
-    props["periodosCalculados"] = (
-        sorted({p[:7] for p in get_periodos()}, reverse=True) if comercial else []
-    )
-    # La sucursal no es un catalogo: los nodos que ya aparecen en los datos son
-    # de donde se eligen la sucursal y el nodo de un objetivo.
-    props["nodosConocidos"] = nodos_conocidos() if comercial else []
-
-    props["pendientes"] = []
-    if operacional:
-        try:
-            props["pendientes"] = productos_fuera_de_catalogo()
-        except Exception:
-            logger.exception("No se pudieron calcular los productos fuera de catalogo")
-
-    return render_inertia(request, "Subscriptions/Catalogos", clean_json_props(props))
 
 
 @login_required
-@permission_required(PERMISO_COMERCIAL, PERMISO_OPERACIONAL)
+@permission_required(PERMISO_COMERCIAL)
+def estructura_view(request):
+    """Zonas, sites y estados: como se reparte la red.
+
+    Los coordinadores viajan aunque se administren en Ventas: el formulario de
+    zona los necesita para elegir a quien pertenece. `?nueva_zona=<nombre>`
+    abre el alta ya rellena, como `?nuevo_plan=` en productos.
+    """
+    return _render(request, "Estructura", "estructura", {
+        "zonas": _listado("zonas"),
+        "sites": _listado("sites"),
+        "estados": _listado("estados"),
+        "coordinadores": _listado("coordinadores"),
+        "tecnologias": _opciones(TECNOLOGIA_CHOICES),
+        "nuevaZona": (request.GET.get("nueva_zona") or "").strip(),
+    })
+
+
+@login_required
+@permission_required(PERMISO_VENTAS)
+def ventas_view(request):
+    """El directorio de ventas, las unidades de negocio y los objetivos.
+
+    `?nueva_persona=<literal>&cargo=<cargo>` abre el alta ya rellena: es a
+    donde lleva «Registrar» desde Notificaciones. El literal va al usuario de
+    Odoo si el cargo es coordinador de oficina (salio de `Vendedor`) y al medio
+    en los demas.
+
+    Lo que la pestana de objetivos necesita ademas de sus filas: el semaforo,
+    la configuracion ya resuelta (para mostrar el objetivo efectivo de cada mes
+    con la misma regla que los reportes), los meses calculados y las entidades
+    a las que se les puede fijar un objetivo.
+    """
+    cargo = request.GET.get("cargo") or "asesor"
+    return _render(request, "Ventas", "ventas", {
+        "personas": _listado("personas"),
+        "cargos": _opciones(CARGO_CHOICES),
+        "nuevaPersona": {
+            "literal": (request.GET.get("nueva_persona") or "").strip(),
+            "cargo": cargo if cargo in dict(CARGO_CHOICES) else "asesor",
+        },
+        "coordinadores": _listado("coordinadores"),
+        "objetivos": _listado("objetivos"),
+        "objetivos_mes": _listado("objetivos_mes"),
+        "semaforo": _semaforo(SemaforoObjetivos.actual()),
+        "objetivosConfig": get_objetivos_config(),
+        "periodosCalculados": sorted({p[:7] for p in get_periodos()}, reverse=True),
+        # La sucursal no es un catalogo: los nodos que ya aparecen en los datos
+        # son de donde se eligen la sucursal y el nodo de un objetivo.
+        "nodosConocidos": nodos_conocidos(),
+        "zonas": _listado("zonas"),
+        "sites": _listado("sites"),
+        "estados": _listado("estados"),
+    })
+
+
+def _leer_cuerpo(request) -> tuple[dict | None, JsonResponse | None]:
+    """El cuerpo JSON de una escritura, o la respuesta 400 si no lo es."""
+    try:
+        data = json.loads(request.body)
+    except ValueError:
+        return None, JsonResponse({"status": "error", "message": "JSON invalido."}, status=400)
+    if not isinstance(data, dict):
+        return None, JsonResponse({"status": "error", "message": "JSON invalido."}, status=400)
+    return data, None
+
+
+@login_required
+@permission_required(*PERMISOS_CATALOGO)
 @ratelimit(key='ip', rate='60/m', block=True)
 @require_POST
 def api_catalogo_guardar(request):
     """Alta o edicion de una fila de cualquiera de los catalogos."""
-    try:
-        data = json.loads(request.body)
-    except ValueError:
-        return JsonResponse({"status": "error", "message": "JSON invalido."}, status=400)
+    data, rechazo = _leer_cuerpo(request)
+    if rechazo is not None:
+        return rechazo
 
     catalogo, rechazo = _catalogo_permitido(request, data)
     if rechazo is not None:
@@ -640,6 +930,10 @@ def api_catalogo_guardar(request):
     else:
         fila = catalogo["modelo"]()
 
+    catalogo, rechazo = _catalogo_permitido(request, data, fila)
+    if rechazo is not None:
+        return rechazo
+
     try:
         catalogo["aplicar"](fila, data, request)
         fila.save()
@@ -649,20 +943,94 @@ def api_catalogo_guardar(request):
         return JsonResponse({"status": "error", "message": str(e)}, status=400)
     except IntegrityError:
         return JsonResponse(
-            {"status": "error", "message": f"Ya existe un {catalogo['etiqueta']} con ese nombre."},
+            {"status": "error", "message": f"Ya existe {'una' if catalogo.get('femenino') else 'un'} {catalogo['etiqueta']} con ese nombre."},
             status=409,
         )
 
     fixtures.reset_cache()
     return JsonResponse({
         "status": "success",
-        "message": f"{catalogo['etiqueta'].capitalize()} guardado.",
+        "message": f"{catalogo['etiqueta'].capitalize()} {_participio(catalogo, 'guardad')}.",
         "registro": catalogo["serializar"](fila),
     })
 
 
+# Tope de filas de un alta en bloque: lo que cabe en una lista de pendientes,
+# no una via para cargar el directorio entero sin mirarlo.
+MAXIMO_LOTE = 1000
+
+
 @login_required
-@permission_required(PERMISO_COMERCIAL, PERMISO_OPERACIONAL)
+@permission_required(*PERMISOS_CATALOGO)
+@ratelimit(key='ip', rate='20/m', block=True)
+@require_POST
+def api_catalogo_guardar_lote(request):
+    """Alta de varias filas de un mismo catalogo de una vez.
+
+    Es lo que usa Notificaciones para registrar en bloque, p. ej. todos los
+    asesores que el filtro dejo a la vista. Cada fila pasa por el mismo
+    `aplicar` que un alta suelta —las mismas validaciones, los mismos
+    duplicados— y se guarda en su propio savepoint: una que choca no se lleva
+    por delante a las demas, se devuelve con su motivo y el resto queda
+    registrado. Como se guardan en orden, dos filas del lote que choquen entre
+    si se detectan igual que contra la base. Solo altas: editar en bloque no
+    lo pide nadie y obligaria a decidir que hacer con los ids que no existen.
+    """
+    data, rechazo = _leer_cuerpo(request)
+    if rechazo is not None:
+        return rechazo
+
+    catalogo, rechazo = _catalogo_permitido(request, data)
+    if rechazo is not None:
+        return rechazo
+    if catalogo.get("unico"):
+        return JsonResponse({"status": "error", "message": "Este catálogo no admite altas en bloque."}, status=400)
+
+    filas = data.get("filas")
+    if not isinstance(filas, list) or not filas or not all(isinstance(f, dict) for f in filas):
+        return JsonResponse({"status": "error", "message": "No llegó ninguna fila que registrar."}, status=400)
+    if len(filas) > MAXIMO_LOTE:
+        return JsonResponse(
+            {"status": "error", "message": f"Como mucho {MAXIMO_LOTE} filas por lote."},
+            status=400,
+        )
+
+    registrados: list[dict[str, Any]] = []
+    errores: list[dict[str, str]] = []
+    for cuerpo in filas:
+        cuerpo = {**cuerpo, "tipo": data["tipo"], "id": None}
+        fila = catalogo["modelo"]()
+        etiqueta = str(cuerpo.get("medio") or cuerpo.get("nombre") or "").strip()
+        _, rechazo = _catalogo_permitido(request, cuerpo, fila)
+        if rechazo is not None:
+            errores.append({"nombre": etiqueta, "message": json.loads(rechazo.content)["message"]})
+            continue
+        try:
+            with transaction.atomic():
+                catalogo["aplicar"](fila, cuerpo, request)
+                fila.save()
+        except DatosInvalidos as e:
+            errores.append({"nombre": etiqueta, "message": str(e)})
+            continue
+        except IntegrityError:
+            errores.append({"nombre": etiqueta, "message": "Ya existe con ese nombre."})
+            continue
+        registrados.append(catalogo["serializar"](fila))
+
+    if registrados:
+        fixtures.reset_cache()
+    # 200 aunque no entre ninguna: el lote se proceso, y lo que interesa al
+    # cliente es la lista de motivos, que un error HTTP no le haria llegar.
+    return JsonResponse({
+        "status": "success" if registrados else "error",
+        "message": f"Se registraron {len(registrados)} de {len(filas)}.",
+        "registrados": registrados,
+        "errores": errores,
+    })
+
+
+@login_required
+@permission_required(*PERMISOS_CATALOGO)
 @ratelimit(key='ip', rate='60/m', block=True)
 @require_POST
 def api_catalogo_eliminar(request):
@@ -672,10 +1040,9 @@ def api_catalogo_eliminar(request):
     los referencia con `PROTECT` y borrarlos dejaria el catalogo incoherente.
     Se responde 409 explicando cual es el estorbo en vez de un 500.
     """
-    try:
-        data = json.loads(request.body)
-    except ValueError:
-        return JsonResponse({"status": "error", "message": "JSON invalido."}, status=400)
+    data, rechazo = _leer_cuerpo(request)
+    if rechazo is not None:
+        return rechazo
 
     catalogo, rechazo = _catalogo_permitido(request, data)
     if rechazo is not None:
@@ -690,6 +1057,10 @@ def api_catalogo_eliminar(request):
     fila = catalogo["modelo"].objects.filter(pk=data.get("id")).first()
     if fila is None:
         return JsonResponse({"status": "success", "message": "El registro ya no existía."})
+
+    catalogo, rechazo = _catalogo_permitido(request, data, fila)
+    if rechazo is not None:
+        return rechazo
 
     if borrable := catalogo.get("borrable"):
         motivo = borrable(fila)
@@ -711,4 +1082,4 @@ def api_catalogo_eliminar(request):
         )
 
     fixtures.reset_cache()
-    return JsonResponse({"status": "success", "message": f"{catalogo['etiqueta'].capitalize()} eliminado."})
+    return JsonResponse({"status": "success", "message": f"{catalogo['etiqueta'].capitalize()} {_participio(catalogo, 'eliminad')}."})

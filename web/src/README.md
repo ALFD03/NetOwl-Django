@@ -147,6 +147,20 @@ add `filterValue` when the cell is rendered by a function and the raw field is
 not what the reader would pick from a list (a boolean shown as `Sí`/`—` filters
 as `Sí`/`No`, not `true`/`false`).
 
+**Every table pages at 20 rows** (`FILAS_POR_PAGINA`). `DataTable` does it by
+default (`pageSize={0}` shows everything); the few hand-built read-only tables
+(the dashboards' history, `NodePerformanceTable`, `UsersTable`) use the same
+`usePaginacion` + `Paginacion` pair, so the pager is one component everywhere.
+**Every paginated table carries it twice, above and below** (`posicion="arriba"`
+and the default `abajo`, sharing one `estado`): at 20 rows, scrolling down to the
+foot to turn the page was the annoyance. It only appears past one page. Fixed matrices (the ETA speed grid, the
+commission tiers being edited) are not lists and are left whole. Search, filters
+and sorting jump back to the first page. With `selection`, the header checkbox
+takes *every filtered row*, not just the visible page, and changing the filter
+clears the selection: a bulk action must never touch rows the filter hid.
+`scrollClassName` bounds the table's own scroll, so the filter bar and the header
+stay on screen while the rows move.
+
 Import from the barrel (`@/shared/ui`), not the file. Components are function
 declarations, never `React.FC`; only files under `pages/` use a default export.
 
@@ -278,25 +292,45 @@ and the copy.
 
 ## The reference catalogues
 
-`pages/Subscriptions/Catalogos.tsx` edits the plan / zone / site / state /
-coordinator tables that used to be `data/Planes.json` and `data/Zonas.json`. It
-sits behind two permissions — `can_manage_catalogo_comercial` (zones, sites,
-states, coordinators) and `can_manage_catalogo_operacional` (pending products,
-plans, regulator plans, ignored); the page opens with either and shows only the tabs
-of the one held — and it is the only place a plan is classified —
-the ETA screen no longer keeps a second, overriding copy of that classification,
-only its per-subscription exceptions.
+`pages/Catalogos/` is a module of its own, one page per group, each behind its own
+permission: **Productos** (plans and regulator plans; `can_manage_catalogo_operacional`),
+**Estructura** (zones, sites, states; `can_manage_catalogo_comercial`) and **Ventas**
+(business-unit coordinators and objectives; `can_manage_catalogo_ventas`). They edit the
+tables that used to be `data/Planes.json` and `data/Zonas.json`, and Productos is the
+only place a plan is classified — the ETA screen no longer keeps a second, overriding
+copy of that classification, only its per-subscription exceptions.
 
-Its first tab is not a catalogue but what is *missing*: products already
-imported that no plan recognises. That list is what blocks an import or an
-analysis, and each row offers the two answers the server cannot tell apart —
-register it as a plan, or mark it as a product that never will be one.
+The components still live in `features/subscriptions/components/catalogos/`: the
+objectives tab leans on `features/subscriptions/lib/objetivos.ts` and the subscriptions
+form controls, and pages may compose any feature, so moving them would only have meant
+promoting all of that to `shared/` for nothing. `CatalogoComun.tsx` holds what the four
+pages share (tab bar, action column, delete confirmation); `useCatalogos` serves all four.
+
+**Notificaciones** is not a catalogue but what is *missing*: names already imported
+that no row recognises, per area (products, zones), plus the ones someone decided to
+ignore. Each pending row offers the two answers the server cannot tell apart — register
+it (a link to the right page with `?nuevo_plan=` / `?nueva_zona=`), or ignore it in its
+area. Pending products block an import or an analysis; pending zones do not.
 
 The same pair of answers appears in `CatalogoBloqueoModal`
 (`features/imports/`), which opens when an upload comes back 409. Nothing was
 written when it does: the check runs before the truncate, so the previous data
 is intact and the file can be re-uploaded once the decisions are made.
 
+
+## Commissions
+
+`features/comisiones/` serves the three pages of the Comisiones module (report, supervisors' business units,
+payment conditions). The report is calculated on the server; the client only edits what the server cannot know (the
+objective %, a business unit's growth when the month is not analysed, the review decisions) and reloads. The
+sale-by-sale detail is fetched from `api/ventas/` the first time it is needed and kept per period in
+`useInformeComisiones`. The advisor-tier preview in Condiciones mirrors `reglas.pago_asesor` only to show the
+effect of the table being edited; the server's figure is the one that counts.
+
+How the payroll is *laid out* is client work: `lib/nomina.ts` places each person once (unit → supervisor →
+advisors, offices apart) from the `equipos` rows, and explains each cut from `condiciones`; `lib/exportar.ts`
+writes the same layout to Excel through `shared/lib/excel.downloadStyledWorkbook`. Neither computes a payment —
+every amount is the server's `neto`.
 
 ## Commercial objectives are applied here, not stored
 

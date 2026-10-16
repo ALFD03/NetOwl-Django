@@ -21,4 +21,6 @@ urlpatterns = [
     path("auth/", include("services.config.urls")),
     path("imports/", include("services.imports.urls")),
     path("support/", include("services.support.urls")),
+    path("catalogos/", include("services.catalogos.urls")),
+    path("comisiones/", include("services.comisiones.urls")),
 ]

@@ -83,6 +83,19 @@ SUBS_COLUMN_MAPPING = {
     "Cliente/Phone 1": "phone",
     "Cliente/Phone 2": "phone2",
     "Vendedor": "vendedor",
+    # Las tres que necesita Comisiones. Opcionales —no estan en
+    # `REQUIRED_SUBS_HEADERS`— para no romper la importacion con el export de
+    # siempre; es Comisiones quien se niega a calcular sin ellas.
+    # `Vendedor` es el coordinador de oficina, `Medio` quien hizo la venta
+    # (asesor, o venta directa de otro cargo) y `Oportunidad/Administrador` su
+    # supervisor. `Estado de la factura` es «Por facturar», «Facturado por
+    # completo» o «Nada por facturar».
+    # El supervisor salia antes de `Medio/Supervisor`; ahora es el
+    # administrador de la oportunidad. La columna interna sigue siendo
+    # `medio_supervisor`, y `Medio/Supervisor` se ignora si el export la trae.
+    "Medio": "medio",
+    "Oportunidad/Administrador": "medio_supervisor",
+    "Estado de la factura": "estado_factura",
 }
 
 # Odoo no siempre exporta la cabecera con la misma capitalizacion.

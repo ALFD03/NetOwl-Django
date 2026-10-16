@@ -36,7 +36,7 @@ const textoOGuion = (valor?: string) => valor?.trim() || '—';
  * Parametrización del reporte ETA.
  *
  * La pestaña de "planes masivos" ya no está: un plan se clasifica en el
- * catálogo (`/subscriptions/config/`) y no había motivo para que ETA guardara
+ * catálogo (`/catalogos/productos/`) y no había motivo para que ETA guardara
  * una segunda clasificación que pisaba a aquella. Lo que queda aquí son las
  * excepciones por orden, que sí son de cada contrato.
  *
@@ -205,7 +205,7 @@ export function EtaManagementView({
                 <div><div className="font-bold text-white">{plan}</div><div className="text-[10px] uppercase text-slate-500">Sin registrar en el catálogo</div></div>
                 {/* Enlace y no formulario: el plan se da de alta en el catálogo,
                     que es de donde ETA lee su clasificación. */}
-                <a href={`/subscriptions/config/?nuevo_plan=${encodeURIComponent(plan)}`} className="rounded-xl border border-amber-500/30 p-2 text-amber-400 hover:bg-amber-500/10" title="Crear en el catálogo"><Settings2 className="w-4 h-4" /></a>
+                <a href={`/catalogos/productos/?nuevo_plan=${encodeURIComponent(plan)}`} className="rounded-xl border border-amber-500/30 p-2 text-amber-400 hover:bg-amber-500/10" title="Crear en el catálogo"><Settings2 className="w-4 h-4" /></a>
               </div>
             ))}
             {discoveredPlans.length === 0 && <div className="col-span-full py-10 text-center text-slate-500">No hay planes pendientes.</div>}

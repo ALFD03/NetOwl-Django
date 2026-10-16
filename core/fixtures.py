@@ -1,8 +1,8 @@
 """Acceso unico a los catalogos de referencia (planes, zonas, sites...).
 
 Antes esto leia `data/Planes.json` y `data/Zonas.json`. Ahora son tablas
-(`services/subscriptions/models.py`) que se mantienen desde
-`/subscriptions/config/`, pero la firma de este modulo no cambio: los cuatro
+(`services/subscriptions/models.py`) que se mantienen desde el modulo de
+Catalogos (`/catalogos/`), pero la firma de este modulo no cambio: los cuatro
 consumidores —`subscriptions/analytics/{imports,queries,eta_report}.py` y
 `support/analytics/queries.py`— siguen recibiendo los mismos diccionarios con
 las mismas claves de la epoca JSON (`Site`, `Type`, `Estado`, `TV`...). De eso
@@ -47,7 +47,9 @@ class _Catalogo:
     zonas: tuple[dict[str, Any], ...] = ()
     sites: tuple[str, ...] = ()
     estados: tuple[str, ...] = ()
-    ignorados: frozenset[str] = frozenset()
+    # Por area (`productos`, `estructura`, `ventas`): cada lista de pendientes
+    # calla solo los suyos.
+    ignorados: dict[str, frozenset[str]] = field(default_factory=dict)
     nombres_planes: frozenset[str] = frozenset()
     zonas_indexadas: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -86,7 +88,10 @@ def _leer() -> _Catalogo:
     )
     sites = tuple(Site.objects.values_list("nombre", flat=True))
     estados = tuple(Estado.objects.values_list("nombre", flat=True))
-    ignorados = frozenset(ProductoIgnorado.objects.values_list("nombre", flat=True))
+    por_area: dict[str, set[str]] = {}
+    for area, nombre in ProductoIgnorado.objects.values_list("area", "nombre"):
+        por_area.setdefault(area, set()).add(nombre)
+    ignorados = {area: frozenset(nombres) for area, nombres in por_area.items()}
 
     return _Catalogo(
         planes=planes,
@@ -213,6 +218,11 @@ def orden_sites() -> list[str]:
     return list(_catalogo().sites)
 
 
+def ignorados(area: str) -> frozenset[str]:
+    """Los nombres que alguien decidio no registrar en el area indicada."""
+    return _catalogo().ignorados.get(area, frozenset())
+
+
 def productos_ignorados() -> frozenset[str]:
     """Lineas del export que alguien declaro que nunca seran un plan."""
-    return _catalogo().ignorados
+    return ignorados("productos")

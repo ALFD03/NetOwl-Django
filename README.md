@@ -45,8 +45,8 @@ web/          src/       React: pages/ -> features/ -> shared/
 
 netowl_web/   settings, urls, wsgi, middleware
 data/         Planes.json y Zonas.json: semilla inicial de los catalogos.
-              Los catalogos vivos son tablas y se editan en
-              /subscriptions/config/; solo `manage.py cargar_catalogos`
+              Los catalogos vivos son tablas y se editan en el
+              modulo /catalogos/; solo `manage.py cargar_catalogos`
               sigue leyendo estos ficheros.
 scripts/      dev.sh
 ```

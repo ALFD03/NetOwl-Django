@@ -60,11 +60,11 @@ Respuesta uniforme: `{"status": "success"|"error", "message": "..."}`.
 | `/subscriptions/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_sales` |
 | `/subscriptions/eta-report/` | `Subscriptions/EtaReport` | `can_view_eta` |
 | `/subscriptions/eta-report/config/` | `Subscriptions/EtaManagement` | `can_manage_eta` |
-| `/subscriptions/config/` | `Subscriptions/Catalogos` | `can_manage_catalogo_comercial` o `can_manage_catalogo_operacional` |
+| `/subscriptions/config/` | — redirige a `/catalogos/` (con `?nuevo_plan=`, a Productos) | — |
 
 Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 `?dia=N` en los dos reportes, `?periods=a,b,c` en `analytics` y `results`,
-`?nuevo_plan=<nombre>` en catálogos.
+`?nuevo_plan=<nombre>` en `/subscriptions/config/` (se reenvía a Catálogos).
 
 ### Lectura
 
@@ -92,10 +92,45 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/eta-report/tasa/actual/` | `can_view_eta` | 10/m | La última tasa publicada por el BCV. No es la del periodo y no se guarda: sirve para exportar a precio de hoy. **502** si el tercero falla |
 | POST | `api/eta-report/save-sub-config/` | `can_manage_eta` | — | Excepción individual: `orden` obligatorio |
 | POST | `api/eta-report/delete-sub-config/` | `can_manage_eta` | — | `{orden}` |
-| POST | `api/catalogos/guardar/` | el del `tipo` (comercial u operacional) | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido, **403** si el `tipo` es de la otra mitad. Los tipos `objetivos`, `objetivos_mes` y `semaforo` (fila única: se ignora el `id`) van con el comercial. En `objetivos` la entidad puede ir por `entidad_id` o por `entidad_nombre` (más `sucursal` en los niveles de sucursal y nodo) |
-| POST | `api/catalogos/eliminar/` | el del `tipo` (comercial u operacional) | 60/m | `{tipo, id}`. **409** si tiene zonas asociadas o si es el objetivo general de base; **400** con `semaforo`, que no se borra |
 
-`tipo` ∈ `planes`, `zonas`, `sites`, `estados`, `coordinadores`, `ignorados`.
+---
+
+## `/catalogos/` — `services.catalogos`
+
+Las vistas y el CRUD de los catálogos de referencia. Los modelos de planes,
+zonas y objetivos siguen en `services.subscriptions`; el directorio de ventas
+es de esta app.
+
+| Método | Ruta | Permiso | Límite | Devuelve / notas |
+|---|---|---|---|---|
+| GET | `/catalogos/` | cualquiera de los tres de catálogo | — | Redirige a Notificaciones |
+| GET | `notificaciones/` | cualquiera de los tres | — | Página `Catalogos/Notificaciones`: pendientes por área (productos, zonas y personas de ventas; `null` en las que no se administran) e ignorados de las áreas propias |
+| GET | `productos/?nuevo_plan=` | `can_manage_catalogo_operacional` | — | Página `Catalogos/Productos`. `nuevo_plan` abre el alta ya rellena |
+| GET | `estructura/?nueva_zona=` | `can_manage_catalogo_comercial` | — | Página `Catalogos/Estructura`. `nueva_zona` abre el alta ya rellena |
+| GET | `ventas/?nueva_persona=&cargo=` | `can_manage_catalogo_ventas` | — | Página `Catalogos/Ventas`: directorio de ventas por cargo, unidades de negocio y objetivos. `nueva_persona` abre el alta ya rellena con ese literal (al usuario de Odoo si `cargo=coord_oficina`, al medio en los demás) |
+| POST | `api/guardar/` | el del `tipo` | 60/m | `{tipo, id?, …campos}`. **409** si duplicado, **400** si inválido, **403** si el `tipo` no es de un permiso propio. `planes` y `reguladores` van con el operacional; `zonas`, `sites` y `estados` con el comercial; `personas`, `coordinadores` (con `persona_id`, que tiene que ser un coordinador de UN), `objetivos`, `objetivos_mes` y `semaforo` (fila única: se ignora el `id`) con el de ventas; `ignorados` con el de su `area`, que solo se fija en el alta. En `objetivos` la entidad puede ir por `entidad_id` o por `entidad_nombre` (más `sucursal` en los niveles de sucursal y nodo) |
+| POST | `api/guardar-lote/` | el del `tipo` | 20/m | `{tipo, filas: […]}`: altas en bloque (hasta 1000), cada una validada como un alta suelta y en su savepoint. Responde 200 con `{registrados, errores: [{nombre, message}]}`; las que fallan no impiden las demás. Lo usa Notificaciones para registrar personas de ventas en bloque |
+| POST | `api/eliminar/` | el del `tipo` | 60/m | `{tipo, id}`. **409** si tiene zonas asociadas o si es el objetivo general de base; **400** con `semaforo`, que no se borra |
+
+---
+
+## `/comisiones/` — `services.comisiones`
+
+| Método | Ruta | Permiso | Límite | Devuelve / notas |
+|---|---|---|---|---|
+| GET | `/comisiones/?periodo=YYYY-MM` | `can_view_comisiones` | — | Página `Comisiones/Informe`. Sin `periodo`, el más reciente creado o el que toca calcular hoy. `informe` nulo si el periodo no existe; `error` si falta alguna columna del export |
+| GET | `supervisores/` | `can_manage_comisiones` | — | Página `Comisiones/Supervisores` |
+| GET | `condiciones/` | `can_manage_comisiones` | — | Página `Comisiones/Condiciones` |
+| GET | `api/ventas/?periodo=` | `can_view_comisiones` | — | `{ventas}`: el detalle venta a venta (congelado si el periodo está cerrado). **409** si faltan columnas |
+| POST | `api/periodo/guardar/` | `can_manage_comisiones` | 30/m | `{periodo, inicio_promo, inicio?}`. `inicio` solo si el mes anterior no tiene periodo. **409** si el periodo o el siguiente están cerrados |
+| POST | `api/periodo/cerrar/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** con lo que falta si queda algo pendiente |
+| POST | `api/periodo/reabrir/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** si el siguiente está cerrado |
+| POST | `api/revision/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, orden | ordenes[], decision: contar|no_contar|'', nota?}`. Vacía deshace. Hasta 5 000 órdenes por petición |
+| POST | `api/indicador/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, persona_id, cumplimiento_pct? , crecimiento_pct?}`. Vacío borra el valor (el cumplimiento vuelve al general) |
+| GET | `api/tasa-actual/` | `can_view_comisiones` | 30/m | La tasa oficial del BCV de hoy (`ve.dolarapi.com`), sin guardarla: referencia para ver el pago en bolívares. 502 si el servicio falla |
+| POST | `api/cumplimiento-general/` | `can_manage_comisiones` | 60/m | `{periodo, cumplimiento_pct}`: el de todos los supervisores y coord. de oficina sin uno propio. Vacío lo borra |
+| POST | `api/supervisores/unidad/` | `can_manage_comisiones` | 60/m | `{supervisor_ids: [...], coord_un_id}`: el coordinador de UN de uno o varios supervisores; vacío se lo quita. Todo o nada: **400** si alguno no es supervisor o el coordinador no es de UN |
+| POST | `api/condiciones/guardar/` | `can_manage_comisiones` | 30/m | Las condiciones enteras. **400** si los tramos no son coherentes |
 
 ---
 

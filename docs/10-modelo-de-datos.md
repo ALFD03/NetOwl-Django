@@ -32,17 +32,25 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `config_permissiongroup` | `services.config.PermissionGroup` | Plantillas de permisos reutilizables |
 | `catalogo_estados` | `Estado` | Entidad federal |
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
-| `catalogo_coordinadores` | `Coordinador` | Responsable comercial |
+| `catalogo_coordinadores` | `Coordinador` | Unidad de negocio: el grupo de zonas por el que agrupa Unidades de negocio. `persona` (FK nullable a `catalogo_personas_ventas`) es quien la lleva; una persona puede llevar varias |
+| `catalogo_personas_ventas` | `catalogos.PersonaVentas` | Directorio de ventas: nombre, apellido, `cargo` (`asesor`, `supervisor`, `coord_oficina`, `coord_un`), `medio` (el literal de `Medio`; único sin distinguir mayúsculas), `medio_supervisor` (el de `Oportunidad/Administrador` cuando Odoo lo escribe distinto; vacío es el mismo que `medio`; solo los cargos que supervisan; único sobre el literal que vale en esa columna) y `usuario_odoo` (el de `Vendedor`, con `(User)`; obligatorio solo en el coordinador de oficina) |
 | `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
-| `catalogo_productos_ignorados` | `ProductoIgnorado` | Líneas del export que nunca serán un plan |
+| `catalogo_productos_ignorados` | `ProductoIgnorado` | Nombres del export que no se registrarán, por `area` (`productos`, `estructura`, `ventas`); únicos por `(area, nombre)` |
 | `catalogo_objetivos` | `ObjetivoComercial` | Objetivos por nivel (general, sucursal, estado, site, coordinador, zona, zona-sucursal); `sucursal` es el texto del export en los niveles que la usan: `desde` (`YYYY-MM`, nulo = siempre; el general es una sola fila y siempre nulo), `crecimiento_pct` y `churn_pct` (nulo = se hereda). Lo escribe la pestaña Objetivos del catálogo; lo lee `analytics/objetivos.py` y lo aplica el cliente |
 | `catalogo_objetivos_mes` | `ObjetivoMes` | Excepción de un mes concreto al objetivo general |
 | `catalogo_objetivos_semaforo` | `SemaforoObjetivos` | Fila única con los umbrales de color, fijos: crecimiento y cumplimiento "verde desde", churn "verde hasta" |
 | `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
 | `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
 | `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
+| `comisiones_supervisor_unidad` | `SupervisorUnidad` | A qué coordinador de UN responde cada supervisor (una fila por supervisor; sin fila, sus ventas no pagan a ningún coordinador de UN). Lo único de la estructura de ventas que no sale de la venta |
+| `comisiones_condiciones` | `CondicionesComision` | Fila única: montos, tramos (JSON) del asesor y del coordinador de UN, día promocional habitual y días de espera |
+| `comisiones_periodos` | `ComisionPeriodo` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana), `estado` (borrador/cerrado), `cumplimiento_general_pct` (el de todos los supervisores y coord. de oficina sin uno propio), `tasa_conatel` y `tasa_conatel_publicada` (el bolívar oficial del día 1 del mes siguiente, con que se paga) y, al cerrar, `condiciones` y `resumen` congelados |
+| `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta por facturar en progreso: contarla en su periodo o no contarla (no se paga). Única por `(orden, periodo_origen)` |
+| `comisiones_indicadores` | `IndicadorComision` | Por periodo y persona: `cumplimiento_pct` propio (supervisor, coord. de oficina; sustituye al general) y `crecimiento_pct` a mano (coord. de UN) |
+| `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`) |
+| `comisiones_pagos` | `ComisionPago` | Lo que cobró cada persona en un periodo cerrado, con nombre y cargo copiados |
 | `django_migrations` | Django | Propia de cada esquema |
 
 ### Sesiones e importaciones
@@ -71,7 +79,9 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 Columnas principales de `subscriptions` / `subscriptions-b`: `orden_producto`,
 `producto`, `cliente`, `ci`, `sucursal`, `zona`, `municipio`, `tipo`, `estado`,
 `campanna`, `fecha_factura`, `fecha_inicio`, `tarifa`, `total`, `telefono`,
-`phone`, `phone2`, `vendedor`, `activo`.
+`phone`, `phone2`, `vendedor`, `activo`, `medio`, `medio_supervisor`, `estado_factura`.
+Las tres últimas (para Comisiones) y `activo` solo existen si el export las trajo:
+la importación las añade a la tabla al encontrarlas.
 
 `subscriptions_gratis`: `orden_producto`, `cliente`, `fecha_inicio`, `tarifa`,
 `fecha_factura`, `fecha_gratuito`, `metodo`, `confianza`, `siempre_gratuito`,
@@ -196,7 +206,9 @@ servirlas.
 | `analyzer_eta_*` | `ETAReportManager` | Reporte ETA y su pantalla de parametrización |
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
-| `catalogo_*` (planes, zonas, sites…) | Pantalla de catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
+| `catalogo_*` (planes, zonas, sites…) | Módulo de Catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
+| `catalogo_personas_ventas` | Catálogos › Ventas | `personas_fuera_del_directorio` (Notificaciones), Comisiones |
+| `comisiones_*` | Módulo de Comisiones | Módulo de Comisiones |
 | `catalogo_departamentos`, `catalogo_usuarios_soporte`, `catalogo_usuarios_soporte_historial` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio`, `tickets_tras_la_baja`, `anotar_departamentos` |
 | `analysis_jobs` | Vistas de lanzamiento y worker | Sondeo de la interfaz |
 | `import_action_logs` | `register_import_log` | Página de historial |

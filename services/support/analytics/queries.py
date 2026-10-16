@@ -241,7 +241,7 @@ def _load_zone_info() -> dict:
     """Mapa zona → {site, type} desde el catálogo, indexado en minúsculas.
 
     La fuente es `core.fixtures`, no el antiguo `Zonas.json`: las zonas son hoy
-    una tabla que se mantiene desde `/subscriptions/config/`.
+    una tabla que se mantiene desde el modulo de Catalogos (`/catalogos/`).
     """
     zone_info: dict[str, dict] = {}
     for nombre, z in zonas_por_nombre().items():

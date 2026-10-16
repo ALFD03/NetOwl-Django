@@ -20,13 +20,9 @@ import pandas as pd
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
+from core.odoo_nombres import clave_nombre, normalizar_nombre_odoo
 from services.support.analytics.config import SUPPORT_DIMENSIONES_PERSONA
-from services.support.models import (
-    HistorialDepartamento,
-    UsuarioSoporte,
-    nombre_base,
-    normalizar_nombre_odoo,
-)
+from services.support.models import HistorialDepartamento, UsuarioSoporte
 
 logger = logging.getLogger(__name__)
 
@@ -36,19 +32,9 @@ logger = logging.getLogger(__name__)
 SIN_ESPECIFICAR = "Sin Especificar"
 
 
-def _clave(literal: str) -> str:
-    """La forma con la que se compara un nombre contra el directorio.
-
-    El nombre a secas, sin el sufijo y sin distinguir mayusculas. Las dos
-    renuncias son deliberadas y las pide el dato: los mismos tickets escriben
-    `(User)`, `(user)` y nada, y el directorio se rellena copiando el literal
-    pero nada impide teclearlo luego con otra caja. Todo eso es una sola
-    persona.
-
-    Dos filas del directorio que solo difieran en la caja son tambien la misma
-    persona, y entonces gana una cualquiera: no es un caso que merezca regla.
-    """
-    return nombre_base(literal).casefold()
+# La comparacion es la de `core.odoo_nombres.clave_nombre`: el nombre a secas,
+# sin sufijo y sin distinguir mayusculas.
+_clave = clave_nombre
 
 
 def departamentos_por_usuario(fecha: date | None = None) -> dict[str, str]:

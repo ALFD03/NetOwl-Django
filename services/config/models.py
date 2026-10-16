@@ -41,6 +41,7 @@ VIEW_PERMISSION_FIELDS = [
     # Paginas del modulo de Importaciones (una por pestana).
     'can_view_imports_subs', 'can_view_imports_crm', 'can_view_imports_support',
     'can_view_import_history',
+    'can_view_comisiones',
 ]
 
 # Permisos de accion: por defecto cerrados (False), como los de lectura.
@@ -48,7 +49,9 @@ ACTION_PERMISSION_FIELDS = [
     'can_import_data', 'can_run_calculations', 'can_run_lifetime',
     'can_manage_eta', 'can_manage_users',
     'can_manage_catalogo_comercial', 'can_manage_catalogo_operacional',
+    'can_manage_catalogo_ventas',
     'can_manage_support_users',
+    'can_manage_comisiones',
     # Cargas de CSV, una por modulo de origen.
     'can_import_subs', 'can_import_crm', 'can_import_support',
     # Ejecucion de cada motor de analisis por separado.
@@ -104,25 +107,32 @@ class PermissionMatrix(models.Model):
     can_view_imports_support = models.BooleanField(default=False)
     can_view_import_history = models.BooleanField(default=False)
 
+    # --- Comisiones ---
+    # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar los
+    # supervisores de cada UN y las condiciones de pago es `can_manage_comisiones`.
+    can_view_comisiones = models.BooleanField(default=False)
+
     # --- Acciones globales ---
     can_import_data = models.BooleanField(default=False)
     can_run_calculations = models.BooleanField(default=False)
     can_run_lifetime = models.BooleanField(default=False)
     can_manage_eta = models.BooleanField(default=False)
     can_manage_users = models.BooleanField(default=False)
-    # Catalogos de referencia, partidos en dos porque los mantienen equipos
-    # distintos. El comercial es como se reparte la red entre los equipos de
-    # venta: zonas, sites, estados y coordinadores. El operacional es el
-    # vocabulario de lo que se vende: planes, planes reguladores, productos
-    # ignorados y la lista de productos por registrar. Las dos mitades no se
-    # referencian entre si, asi que cada formulario se completa sin necesitar
-    # la otra.
+    # Catalogos de referencia: un permiso por grupo del modulo de Catalogos,
+    # porque los mantienen equipos distintos. Los nombres son anteriores al
+    # modulo y se conservan. El comercial es la Estructura: como se reparte la
+    # red (zonas, sites, estados). El operacional son los Productos: planes,
+    # planes reguladores y sus productos por registrar e ignorados. Ventas son
+    # los coordinadores, los objetivos comerciales y el directorio de
+    # vendedores, que lleva quien paga comisiones y no quien reparte la red.
     can_manage_catalogo_comercial = models.BooleanField(default=False)
     can_manage_catalogo_operacional = models.BooleanField(default=False)
+    can_manage_catalogo_ventas = models.BooleanField(default=False)
     # Directorio de usuarios de soporte y sus departamentos. Va aparte de los
     # catalogos de suscripciones: quien los mantiene no es necesariamente quien
     # sabe quien trabaja en soporte.
     can_manage_support_users = models.BooleanField(default=False)
+    can_manage_comisiones = models.BooleanField(default=False)
 
     # --- Cargas de CSV por modulo ---
     can_import_subs = models.BooleanField(default=False)

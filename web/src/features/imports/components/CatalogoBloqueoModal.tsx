@@ -49,7 +49,7 @@ export function CatalogoBloqueoModal({
             size="sm"
             icon={<Plus className="h-4 w-4" />}
             onClick={() => {
-              window.location.href = `/subscriptions/config/?nuevo_plan=${encodeURIComponent(row.nombre)}`;
+              window.location.href = `/catalogos/productos/?nuevo_plan=${encodeURIComponent(row.nombre)}`;
             }}
           >
             Crear plan
