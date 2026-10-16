@@ -63,9 +63,9 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
       escribir(() => comisionesApi.guardarPeriodo(body), 'No se pudo guardar el periodo.'),
     cerrar: () => escribir(() => comisionesApi.cerrar(periodo), 'No se pudo cerrar el periodo.'),
     reabrir: () => escribir(() => comisionesApi.reabrir(periodo), 'No se pudo reabrir el periodo.'),
-    decidir: (ordenes: string[], decision: '' | 'contar' | 'diferir', periodo_destino?: string) =>
+    decidir: (ordenes: string[], decision: '' | 'contar' | 'no_contar') =>
       escribir(
-        () => comisionesApi.guardarRevision({ periodo, ordenes, decision, periodo_destino }),
+        () => comisionesApi.guardarRevision({ periodo, ordenes, decision }),
         'No se pudo guardar la decisión.',
       ),
     guardarCumplimiento: (persona_id: number, valor: number | null) =>

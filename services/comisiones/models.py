@@ -174,7 +174,7 @@ class ComisionPeriodo(models.Model):
 
 DECISION_REVISION_CHOICES = [
     ("contar", "Contar en este periodo"),
-    ("diferir", "Diferir a otro periodo"),
+    ("no_contar", "No contar"),
 ]
 
 
@@ -183,14 +183,13 @@ class RevisionComision(models.Model):
 
     Sin primera factura no se sabe si la campana le exonero un mes o si algo
     fallo, asi que la decide una persona: contarla en el periodo en que se
-    instalo o diferirla a uno posterior, donde vuelve a aparecer como candidata
-    y se clasifica de nuevo con lo que diga entonces su factura.
+    instalo o no contarla. Una venta solo es candidata en el periodo de su
+    instalacion, asi que no contarla es que no se paga.
     """
 
     orden = models.CharField(max_length=80)
     periodo_origen = models.CharField(max_length=7)
     decision = models.CharField(max_length=10, choices=DECISION_REVISION_CHOICES)
-    periodo_destino = models.CharField(max_length=7, blank=True, default="")
     nota = models.CharField(max_length=255, blank=True, default="")
     decidido_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     decidido_en = models.DateTimeField(auto_now=True)

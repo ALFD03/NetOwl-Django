@@ -27,7 +27,7 @@ export const comisionesApi = {
    * decisión y las ventas vuelven a Revisión.
    */
   guardarRevision: async (body: {
-    periodo: string; ordenes: string[]; decision: '' | 'contar' | 'diferir'; periodo_destino?: string; nota?: string;
+    periodo: string; ordenes: string[]; decision: '' | 'contar' | 'no_contar'; nota?: string;
   }) => (await apiClient.post<Respuesta>('/comisiones/api/revision/guardar/', body)).data,
 
   /** Solo se manda el campo que cambia; vacío lo borra. */

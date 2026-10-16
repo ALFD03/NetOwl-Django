@@ -244,7 +244,7 @@ def api_periodo_guardar(request):
 @require_POST
 @_escritura
 def api_revision_guardar(request):
-    """Decide ventas por facturar: `contar` aqui o `diferir` a `periodo_destino`.
+    """Decide ventas por facturar: `contar` o `no_contar` en el periodo.
 
     `orden` decide una venta; `ordenes`, varias de una vez —un mes puede traer
     cientos, y decidirlas una a una choca con el limite de peticiones—.
@@ -263,17 +263,8 @@ def api_revision_guardar(request):
     if not decision:
         RevisionComision.objects.filter(orden__in=ordenes, periodo_origen=periodo.periodo).delete()
         return JsonResponse({"status": "success", "message": "Decisión deshecha."})
-    if decision not in ("contar", "diferir"):
-        raise DatosInvalidos("La decisión es «contar» o «diferir».")
-
-    destino = ""
-    if decision == "diferir":
-        destino = _mes(data.get("periodo_destino"), "periodo_destino")
-        if destino <= periodo.periodo:
-            raise DatosInvalidos("Una venta solo se difiere a un periodo posterior.")
-        cerrado = ComisionPeriodo.objects.filter(periodo=destino, estado="cerrado").exists()
-        if cerrado:
-            raise NoSePuedeCerrar(f"El periodo {destino} ya está cerrado.")
+    if decision not in ("contar", "no_contar"):
+        raise DatosInvalidos("La decisión es «contar» o «no contar».")
 
     nota = str(data.get("nota") or "").strip()[:255]
     with transaction.atomic():
@@ -283,7 +274,6 @@ def api_revision_guardar(request):
                 periodo_origen=periodo.periodo,
                 defaults={
                     "decision": decision,
-                    "periodo_destino": destino,
                     "nota": nota,
                     "decidido_por": request.user,
                 },

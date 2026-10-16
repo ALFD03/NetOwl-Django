@@ -1,15 +1,16 @@
 """El informe de comisiones de un periodo: de las suscripciones a lo que cobra cada uno.
 
 1. **Candidatas**: las suscripciones instaladas (`fecha_inicio`) dentro de la
-   ventana del periodo, mas las que una revision anterior difirio a este, menos
-   las que una revision de este difirio a otro y las ya pagadas en un periodo
-   cerrado.
+   ventana del periodo, menos las ya pagadas en un periodo cerrado.
 2. **Clasificacion** (`reglas.clasificar`): por el estado de la factura y si la
-   suscripcion sigue en progreso **hoy**. Por eso un periodo se congela al
+   suscripcion sigue en progreso **hoy**. Una por facturar que cambio de plan
+   entre su instalacion y la fecha de calculo es valida sin revisarla
+   (`_cambios_de_plan`). Por eso un periodo se congela al
    cerrarlo: la tabla de suscripciones se trunca en cada importacion.
 3. **Personas**: el `Medio`, el `Oportunidad/Administrador` y el `Vendedor` de cada venta
-   contra el directorio de ventas; la jerarquia rellena lo que la venta no trae
-   y da siempre el coordinador de unidad de negocio.
+   contra el directorio de ventas, tal y como vienen: lo que la venta no trae
+   no lo cobra nadie. El coordinador de unidad de negocio, que Odoo no tiene,
+   es el del supervisor de la venta (`SupervisorUnidad`).
 4. **Pagos** (`reglas.calcular_pagos`), con el cumplimiento de cada supervisor y
    coordinador de oficina y el crecimiento de las unidades de cada coordinador
    de UN, que sale de Unidades de negocio del mes.
@@ -50,6 +51,7 @@ from services.subscriptions.models import Coordinador
 
 from .reglas import (
     EXCLUIDA,
+    MOTIVO_CAMBIO_PLAN,
     NO_PAGADA,
     REVISION,
     VALIDA,
@@ -69,6 +71,9 @@ COLUMNAS_REQUERIDAS = {
 }
 
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
+
+# El log que deja un cambio de plan en `subscriptions-logs`.
+LOG_CAMBIO_PLAN = "Plan change"
 
 
 class FaltanColumnas(RuntimeError):
@@ -128,8 +133,8 @@ def condiciones_vigentes() -> dict[str, Any]:
 
 # --- Lectura -----------------------------------------------------------------------
 
-def _leer_candidatas(inicio: date, fin: date, extra: list[str]) -> pd.DataFrame:
-    """Las suscripciones instaladas en la ventana, mas las ordenes de `extra`.
+def _leer_candidatas(inicio: date, fin: date) -> pd.DataFrame:
+    """Las suscripciones instaladas en la ventana.
 
     `fecha_inicio` es texto, como toda columna importada. Las fechas ISO se
     filtran en SQL; las que vengan en otro formato (no deberia haberlas, pero
@@ -153,9 +158,8 @@ def _leer_candidatas(inicio: date, fin: date, extra: list[str]) -> pd.DataFrame:
         WHERE (fecha_inicio ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}'
                AND LEFT(fecha_inicio, 10) BETWEEN %s AND %s)
            OR (fecha_inicio IS NOT NULL AND fecha_inicio !~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}')
-           OR orden_producto = ANY(%s)
         """,
-        params=[inicio.isoformat(), fin.isoformat(), list(extra)],
+        params=[inicio.isoformat(), fin.isoformat()],
     )
     if df.empty:
         return df
@@ -163,7 +167,32 @@ def _leer_candidatas(inicio: date, fin: date, extra: list[str]) -> pd.DataFrame:
     df["fecha"] = df["fecha_inicio"].map(lambda v: (parse_date(v) or pd.NaT) if v else pd.NaT)
     df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce").dt.date
     en_ventana = df["fecha"].map(lambda f: isinstance(f, date) and inicio <= f <= fin)
-    return df[en_ventana | df["orden_producto"].isin(extra)].copy()
+    return df[en_ventana].copy()
+
+
+def _cambios_de_plan(ordenes: list[str], hasta: date) -> dict[str, list[date]]:
+    """Los dias en que cada orden cambio de plan, hasta `hasta` incluido.
+
+    Es el log «Plan change». Lo que importa de el: al cambiar de plan Odoo
+    factura el producto nuevo y deja la venta «Por facturar», aunque la factura
+    del plan con el que se instalo ya se pago. `fecha_log` es texto ISO.
+    """
+    if not ordenes:
+        return {}
+    df = DBConnector().query(
+        f"""
+        SELECT orden, LEFT(fecha_log, 10) AS dia
+        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_LOGS}"
+        WHERE log = %s AND orden = ANY(%s) AND LEFT(fecha_log, 10) <= %s
+        """,
+        params=[LOG_CAMBIO_PLAN, ordenes, hasta.isoformat()],
+    )
+    cambios: dict[str, list[date]] = {}
+    for fila in df.itertuples(index=False):
+        dia = parse_date(fila.dia)
+        if dia:
+            cambios.setdefault(str(fila.orden), []).append(pd.Timestamp(dia).date())
+    return cambios
 
 
 def _indice_planes() -> tuple[dict[tuple[str, str], dict], dict[str, dict]]:
@@ -302,13 +331,8 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
     inicio, fin = periodo.inicio, fin_de(periodo)
     condiciones = condiciones_vigentes()
 
-    revisiones = list(
-        RevisionComision.objects.filter(periodo_origen=clave)
-        | RevisionComision.objects.filter(decision="diferir", periodo_destino=clave)
-    )
-    decisiones = {r.orden: r for r in revisiones if r.periodo_origen == clave}
-    diferidas_aqui = [r.orden for r in revisiones if r.periodo_origen != clave]
-    diferidas_fuera = {o for o, r in decisiones.items() if r.decision == "diferir"}
+    decisiones = {r.orden: r for r in RevisionComision.objects.filter(periodo_origen=clave)}
+    calculo_desde = fecha_de_calculo(clave, condiciones["dias_espera"])
 
     pagadas = dict(
         ComisionVenta.objects.filter(clasificacion=VALIDA, periodo__estado="cerrado")
@@ -316,7 +340,8 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         .values_list("orden", "periodo__periodo")
     )
 
-    df = _leer_candidatas(inicio, fin, diferidas_aqui)
+    df = _leer_candidatas(inicio, fin)
+    cambios = _cambios_de_plan(df["orden_producto"].astype(str).tolist() if not df.empty else [], calculo_desde)
     planes_tarifa, planes_nombre = _indice_planes()
     directorio = _Directorio()
 
@@ -330,15 +355,22 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         precio = float(plan.get("price") or 0) if plan else 0.0
         estado = SUBS_STATE_TO_LOG_MAP.get(normalize_text(fila.estado), "")
         decision = decisiones.get(orden)
+        # Despues del dia de la instalacion: el del mismo dia es parte de instalarla.
+        instalada = fila.fecha if isinstance(fila.fecha, date) else None
+        cambio_plan = next((d for d in sorted(cambios.get(orden, [])) if instalada and d > instalada), None)
 
-        if orden in diferidas_fuera:
-            clasificacion, motivo = EXCLUIDA, f"Diferida a {decision.periodo_destino}"
-        elif orden in pagadas:
+        if orden in pagadas:
             clasificacion, motivo = EXCLUIDA, f"Ya se pagó en {pagadas[orden]}"
         else:
             clasificacion, motivo = clasificar(
-                estado == ACTIVE_STATE, texto(fila.estado_factura), decision.decision if decision else None
+                estado == ACTIVE_STATE,
+                texto(fila.estado_factura),
+                decision.decision if decision else None,
+                cambio_plan is not None,
             )
+        # Solo se apunta el cambio de plan cuando es lo que la hizo valida.
+        if motivo != MOTIVO_CAMBIO_PLAN:
+            cambio_plan = None
 
         personas, avisos = directorio.resolver(texto(fila.medio), texto(fila.medio_supervisor), texto(fila.vendedor))
         if plan is None:
@@ -359,9 +391,8 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "clasificacion": clasificacion,
             "motivo": motivo,
             "decision": decision.decision if decision else None,
-            "periodo_destino": decision.periodo_destino if decision else "",
             "nota_revision": decision.nota if decision else "",
-            "diferida_desde": next((r.periodo_origen for r in revisiones if r.orden == orden and r.periodo_origen != clave), ""),
+            "cambio_plan": cambio_plan.isoformat() if cambio_plan else "",
             "medio": texto(fila.medio),
             "medio_supervisor": texto(fila.medio_supervisor),
             "vendedor": texto(fila.vendedor),
@@ -411,7 +442,6 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
 
     conteo = lambda c: sum(1 for v in ventas if v["clasificacion"] == c)  # noqa: E731
     hoy = date.today()
-    calculo_desde = fecha_de_calculo(clave, condiciones["dias_espera"])
     informe = {
         "periodo": clave,
         "inicio": inicio.isoformat(),
@@ -427,11 +457,12 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "revision": conteo(REVISION),
             "excluidas": conteo(EXCLUIDA),
             "validas_pyme": sum(1 for v in validas if v["pyme"]),
+            "validas_cambio_plan": sum(1 for v in validas if v["cambio_plan"]),
             "validas_sin_medio": sum(1 for v in validas if v["medio_id"] is None),
             "total": round(sum(p["neto"] for p in filas_pago), 2),
         },
         "pagos": filas_pago,
-        "revision": [v for v in ventas if v["clasificacion"] == REVISION or v["decision"] or v["diferida_desde"]],
+        "revision": [v for v in ventas if v["clasificacion"] == REVISION or (v["decision"] and not v["cambio_plan"])],
         "pendientes_cierre": _pendientes_cierre(ventas, filas_pago),
     }
     return informe, ventas

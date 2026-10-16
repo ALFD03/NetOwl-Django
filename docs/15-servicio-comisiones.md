@@ -61,13 +61,26 @@ suscripción está en progreso **hoy**:
 |---|---|---|
 | Facturado por completo | sí | **válida**: la primera mensualidad se facturó y se pagó |
 | Facturado por completo | no | **no pagada**: se facturó y no se pagó. Se pierde: en el corte siguiente ya no aparece |
+| Por facturar | sí, con cambio de plan | **válida**, sin revisión (ver abajo) |
 | Por facturar | sí | **en revisión**: sin primera factura, la campaña pudo exonerar un mes |
 | Por facturar | no | excluida |
 | Nada por facturar | — | excluida. *La política no dice nada de este caso; se tomó como no pagable* |
 
+**Un cambio de plan la hace válida sin revisarla.** Al cambiar de plan Odoo
+factura el producto nuevo y deja la suscripción «Por facturar», aunque la factura
+del plan con el que se instaló ya se pagó. Por eso una venta por facturar y en
+progreso con un log «Plan change» (`subscriptions-logs`) **después del día de
+instalación** y hasta la fecha de cálculo del periodo (`calculo_desde`: fin de
+mes + `dias_espera`) incluida cuenta como pagada. Un cambio el mismo día de la
+instalación no vale: es parte de instalarla. Pasa por encima de una decisión de
+revisión que hubiera, y el resumen cuenta cuántas válidas lo son por esto.
+
 **La revisión es manual** (`RevisionComision`): cada venta en revisión se cuenta
-en este periodo o se difiere a uno posterior, donde vuelve a ser candidata y se
-clasifica con lo que diga entonces su factura. Se puede decidir en bloque.
+en este periodo o no se cuenta. Una venta solo es candidata en el periodo en que
+se instaló, así que no contarla es que no se paga. Se puede decidir en bloque, y
+«Deshacer» la devuelve a Revisión. Hubo una tercera opción, diferirla a un
+periodo posterior; se quitó porque la venta diferida que seguía sin factura
+llegaba al destino sin forma de decidirla.
 
 ## 3. Quién cobra por una venta
 

@@ -58,11 +58,10 @@ export interface VentaComision {
   estado_factura: string;
   clasificacion: Clasificacion;
   motivo: string;
-  decision: 'contar' | 'diferir' | null;
-  periodo_destino: string;
+  decision: 'contar' | 'no_contar' | null;
   nota_revision: string;
-  /** Si llegó a este periodo diferida desde otro. */
-  diferida_desde: string;
+  /** Día del cambio de plan que la hizo válida sin revisarla; vacío si no fue por eso. */
+  cambio_plan: string;
   medio: string;
   medio_supervisor: string;
   vendedor: string;
@@ -90,6 +89,8 @@ export interface InformeComision {
     revision: number;
     excluidas: number;
     validas_pyme: number;
+    /** Por facturar que valen sin revisión porque cambiaron de plan. */
+    validas_cambio_plan: number;
     validas_sin_medio: number;
     total: number;
   };

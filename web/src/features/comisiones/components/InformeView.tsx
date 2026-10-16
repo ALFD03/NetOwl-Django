@@ -237,11 +237,10 @@ export function InformeView({
               noPadding
             >
               <RevisionTabla
-                periodo={periodo}
                 ventas={informe.revision}
                 editable={editable}
                 guardando={c.guardando}
-                onDecidir={(orden, decision, destino) => void c.decidir(orden, decision, destino)}
+                onDecidir={(orden, decision) => void c.decidir(orden, decision)}
               />
             </NeonContainer>
           )}

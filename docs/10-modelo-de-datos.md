@@ -47,7 +47,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `comisiones_supervisor_unidad` | `SupervisorUnidad` | A qué coordinador de UN responde cada supervisor (una fila por supervisor; sin fila, sus ventas no pagan a ningún coordinador de UN). Lo único de la estructura de ventas que no sale de la venta |
 | `comisiones_condiciones` | `CondicionesComision` | Fila única: montos, tramos (JSON) del asesor y del coordinador de UN, día promocional habitual y días de espera |
 | `comisiones_periodos` | `ComisionPeriodo` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana), `estado` (borrador/cerrado) y, al cerrar, `condiciones` y `resumen` congelados |
-| `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta por facturar en progreso: contar en su periodo o diferir a otro. Única por `(orden, periodo_origen)` |
+| `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta por facturar en progreso: contarla en su periodo o no contarla (no se paga). Única por `(orden, periodo_origen)` |
 | `comisiones_indicadores` | `IndicadorComision` | Por periodo y persona: `cumplimiento_pct` (supervisor, coord. de oficina) y `crecimiento_pct` a mano (coord. de UN) |
 | `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`) |
 | `comisiones_pagos` | `ComisionPago` | Lo que cobró cada persona en un periodo cerrado, con nombre y cargo copiados |

@@ -50,8 +50,12 @@ NO_PAGADA = "no_pagada"
 REVISION = "revision"
 EXCLUIDA = "excluida"
 
+MOTIVO_CAMBIO_PLAN = "Por facturar con cambio de plan: la factura del plan anterior se pagó"
 
-def clasificar(activa: bool, estado_factura: str, decision: str | None = None) -> tuple[str, str]:
+
+def clasificar(
+    activa: bool, estado_factura: str, decision: str | None = None, cambio_plan: bool = False
+) -> tuple[str, str]:
     """`(clasificacion, motivo)` de una venta del periodo.
 
     - Facturado por completo y en progreso: la primera mensualidad esta
@@ -59,9 +63,20 @@ def clasificar(activa: bool, estado_factura: str, decision: str | None = None) -
     - Facturado por completo y no en progreso: se facturo y no se pago. Esa
       comision se pierde: en el corte siguiente la venta ya no aparece.
     - Por facturar y en progreso: no ha emitido la primera factura, asi que una
-      campana le exonero un mes. Se revisa a mano: contarla aqui o diferirla a
-      un periodo posterior (`decision`).
+      campana le exonero un mes. Se revisa a mano: contarla o no contarla
+      (`decision`). Salvo si cambio de plan entre la instalacion y la fecha de
+      calculo (`cambio_plan`): entonces es **valida** sin revisar, porque Odoo
+      factura el plan nuevo y no ve que la factura del viejo ya se pago.
     - Lo demas no se paga.
+
+    >>> clasificar(True, "Por facturar")[0]
+    'revision'
+    >>> clasificar(True, "Por facturar", cambio_plan=True)[0]
+    'valida'
+    >>> clasificar(True, "Por facturar", "no_contar", cambio_plan=True)[0]
+    'valida'
+    >>> clasificar(False, "Por facturar", cambio_plan=True)[0]
+    'excluida'
     """
     factura = normalize_text(estado_factura)
     if factura == FACTURADO:
@@ -71,8 +86,12 @@ def clasificar(activa: bool, estado_factura: str, decision: str | None = None) -
     if factura == POR_FACTURAR:
         if not activa:
             return EXCLUIDA, "Por facturar y no está en progreso"
+        if cambio_plan:
+            return VALIDA, MOTIVO_CAMBIO_PLAN
         if decision == "contar":
             return VALIDA, "Por facturar: se decidió contarla en este corte"
+        if decision == "no_contar":
+            return EXCLUIDA, "Por facturar: se decidió no contarla"
         return REVISION, "Por facturar y en progreso: sin primera factura (¿mes exonerado?)"
     if factura == NADA_POR_FACTURAR:
         return EXCLUIDA, "Nada por facturar"
