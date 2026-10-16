@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Gauge, RefreshCw, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
+import { Paginacion, usePaginacion } from '@/shared/ui';
 import type { Proyeccion } from '@/shared/lib/proyeccion';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import { useObjetivosConfig } from '../../hooks/useObjetivos';
@@ -166,114 +167,119 @@ export function NodePerformanceTable<T extends CommercialNode>({
 }: NodePerformanceTableProps<T>) {
   const { semaforo } = useObjetivosConfig();
   const num = (extra?: string) => cn('py-3 text-right', mono && 'font-mono', extra);
+  const paginacion = usePaginacion(nodes);
 
   return (
-    <div className="overflow-x-auto">
-      {/* `whitespace-nowrap`: en un teléfono la tabla se desliza en vez de
-          partir cada cifra en dos líneas. La primera columna queda fijada. */}
-      <table className="w-full whitespace-nowrap border-separate border-spacing-0 text-left [&_td:not(:first-child)]:pl-3 [&_th:not(:first-child)]:pl-3">
-        <thead>
-          <tr className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-            <th className="sticky left-0 z-10 bg-surface-secondary pb-3 pl-2 pr-3">{labelHeader}</th>
-            <th className="pb-3 text-right">Inicio</th>
-            <th className="pb-3 text-right text-emerald-500">
-              <TrendingUp className="mr-1 inline h-3 w-3" />Inst.
-            </th>
-            {proyeccion && (
-              <th
-                className="pb-3 text-right text-cyan-400"
-                title={`Instalaciones al cierre al ritmo de ${proyeccion.diasTranscurridos} de ${proyeccion.diasMes} días laborables`}
-              >
-                <Gauge className="mr-1 inline h-3 w-3" />Proyección
+    <div>
+      <Paginacion estado={paginacion} posicion="arriba" className="mb-2" />
+      <div className="overflow-x-auto">
+        {/* `whitespace-nowrap`: en un teléfono la tabla se desliza en vez de
+            partir cada cifra en dos líneas. La primera columna queda fijada. */}
+        <table className="w-full whitespace-nowrap border-separate border-spacing-0 text-left [&_td:not(:first-child)]:pl-3 [&_th:not(:first-child)]:pl-3">
+          <thead>
+            <tr className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+              <th className="sticky left-0 z-10 bg-surface-secondary pb-3 pl-2 pr-3">{labelHeader}</th>
+              <th className="pb-3 text-right">Inicio</th>
+              <th className="pb-3 text-right text-emerald-500">
+                <TrendingUp className="mr-1 inline h-3 w-3" />Inst.
               </th>
-            )}
-            <th className="pb-3 text-right text-blue-400">
-              <RefreshCw className="mr-1 inline h-3 w-3" />React.
-            </th>
-            <th className="pb-3 text-right">Bajas</th>
-            <th className="pb-3 text-right">Churn %</th>
-            <th className="pb-3 text-right">Crec %</th>
-            <th className="pb-3 text-right text-sky-400">Objetivo</th>
-            <th className="pb-3 text-right font-bold text-amber-500">Faltante</th>
-            <th className="pb-3 text-right">Cumpl. Ingreso</th>
-            <th className="pb-3 text-right">Cumpl. Ventas</th>
-            <th className="pb-3 text-right">Cumpl. Cierre</th>
-            <th className="pb-3 pr-2 text-right">Cierre</th>
-            {renderRowAction && <th className="pb-3 pr-2 text-right"><span className="sr-only">Acciones</span></th>}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-800/50 text-xs font-bold">
-          {nodes.map((node, idx) => {
-            const inicio = Number(node.activos_inicio ?? 0);
-            // Los hooks de los reportes resuelven la meta de cada nodo; el
-            // respaldo solo cubre un uso que no pase por ellos.
-            const meta = node.meta
-              ?? metaDeBase(inicio, objetivoGeneral(OBJETIVOS_POR_DEFECTO, ''));
-            const metrics = calcComercial(
-              inicio,
-              Number(node.activos_final ?? 0),
-              meta.metaCrecimiento,
-              { clamp: clampCompletion, nuevos: Number(node.nuevos ?? 0), proyeccion },
-            );
-            const growth = Number(node.crecimiento ?? 0);
-            const churn = Number(node.churn_bruto_pct ?? 0);
+              {proyeccion && (
+                <th
+                  className="pb-3 text-right text-cyan-400"
+                  title={`Instalaciones al cierre al ritmo de ${proyeccion.diasTranscurridos} de ${proyeccion.diasMes} días laborables`}
+                >
+                  <Gauge className="mr-1 inline h-3 w-3" />Proyección
+                </th>
+              )}
+              <th className="pb-3 text-right text-blue-400">
+                <RefreshCw className="mr-1 inline h-3 w-3" />React.
+              </th>
+              <th className="pb-3 text-right">Bajas</th>
+              <th className="pb-3 text-right">Churn %</th>
+              <th className="pb-3 text-right">Crec %</th>
+              <th className="pb-3 text-right text-sky-400">Objetivo</th>
+              <th className="pb-3 text-right font-bold text-amber-500">Faltante</th>
+              <th className="pb-3 text-right">Cumpl. Ingreso</th>
+              <th className="pb-3 text-right">Cumpl. Ventas</th>
+              <th className="pb-3 text-right">Cumpl. Cierre</th>
+              <th className="pb-3 pr-2 text-right">Cierre</th>
+              {renderRowAction && <th className="pb-3 pr-2 text-right"><span className="sr-only">Acciones</span></th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/50 text-xs font-bold">
+            {paginacion.visibles.map((node, idx) => {
+              const inicio = Number(node.activos_inicio ?? 0);
+              // Los hooks de los reportes resuelven la meta de cada nodo; el
+              // respaldo solo cubre un uso que no pase por ellos.
+              const meta = node.meta
+                ?? metaDeBase(inicio, objetivoGeneral(OBJETIVOS_POR_DEFECTO, ''));
+              const metrics = calcComercial(
+                inicio,
+                Number(node.activos_final ?? 0),
+                meta.metaCrecimiento,
+                { clamp: clampCompletion, nuevos: Number(node.nuevos ?? 0), proyeccion },
+              );
+              const growth = Number(node.crecimiento ?? 0);
+              const churn = Number(node.churn_bruto_pct ?? 0);
 
-            return (
-              <tr key={idx} className="group transition-colors hover:bg-white/5">
-                <td className="sticky left-0 z-10 bg-surface-secondary py-3 pl-2 pr-3 font-black text-white">
-                  <div className="flex items-center gap-2">
-                    {renderBadge?.(node)}
-                    <span>{node.zona_sucursal}</span>
-                  </div>
-                </td>
-                <td className={num('text-slate-400')}>{formatInteger(node.activos_inicio)}</td>
-                <td className={num('text-emerald-400')}>+{formatInteger(node.nuevos)}</td>
-                {proyeccion && (
-                  <CeldaProyeccion
-                    instalaciones={metrics.instalacionesProyectadas}
-                    cumplimiento={metrics.cumplimientoVentasProyectado}
-                    semaforo={semaforo}
-                    mono={mono}
-                  />
-                )}
-                <td className={num('text-blue-400')}>{formatInteger(node.reactivaciones)}</td>
-                <td className={num('text-rose-500')}>-{formatInteger(node.bajas)}</td>
-                <td
-                  className={num(TEXTO_TONO[tonoChurn(churn, semaforo)])}
-                  title={`Objetivo de churn: ${formatTwoDecimals(meta.churnPct)}%`}
-                >
-                  {formatTwoDecimals(node.churn_bruto_pct)}%
-                </td>
-                <td
-                  className={num(TEXTO_TONO[tonoCrecimiento(growth, semaforo)])}
-                  title={`Objetivo de crecimiento: ${formatTwoDecimals(meta.crecimientoPct)}%`}
-                >
-                  {formatTwoDecimals(node.crecimiento)}%
-                </td>
-                <td className="py-2 text-right">
-                  <InsigniaObjetivo
-                    porcentaje={meta.crecimientoPct}
-                    meta={metrics.objetivo}
-                    origen={node.origenObjetivo}
-                    cierreEsperado={metrics.cierreEsperado}
-                    mono={mono}
-                  />
-                </td>
-                <td className={num('font-black text-amber-500/80')}>{formatInteger(metrics.faltante)}</td>
-                <CeldaCumplimiento valor={metrics.tasaCumplimiento} semaforo={semaforo} mono={mono} />
-                <CeldaCumplimiento valor={metrics.cumplimientoVentas} semaforo={semaforo} mono={mono} />
-                <CeldaCumplimiento valor={metrics.cumplimientoCierre} semaforo={semaforo} mono={mono} />
-                <td className={cn('py-3 pr-2 text-right font-black text-white', mono && 'font-mono')}>
-                  {formatInteger(node.activos_final)}
-                </td>
-                {renderRowAction && (
-                  <td className="py-3 pr-2 text-right">{renderRowAction(node)}</td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+              return (
+                <tr key={idx} className="group transition-colors hover:bg-white/5">
+                  <td className="sticky left-0 z-10 bg-surface-secondary py-3 pl-2 pr-3 font-black text-white">
+                    <div className="flex items-center gap-2">
+                      {renderBadge?.(node)}
+                      <span>{node.zona_sucursal}</span>
+                    </div>
+                  </td>
+                  <td className={num('text-slate-400')}>{formatInteger(node.activos_inicio)}</td>
+                  <td className={num('text-emerald-400')}>+{formatInteger(node.nuevos)}</td>
+                  {proyeccion && (
+                    <CeldaProyeccion
+                      instalaciones={metrics.instalacionesProyectadas}
+                      cumplimiento={metrics.cumplimientoVentasProyectado}
+                      semaforo={semaforo}
+                      mono={mono}
+                    />
+                  )}
+                  <td className={num('text-blue-400')}>{formatInteger(node.reactivaciones)}</td>
+                  <td className={num('text-rose-500')}>-{formatInteger(node.bajas)}</td>
+                  <td
+                    className={num(TEXTO_TONO[tonoChurn(churn, semaforo)])}
+                    title={`Objetivo de churn: ${formatTwoDecimals(meta.churnPct)}%`}
+                  >
+                    {formatTwoDecimals(node.churn_bruto_pct)}%
+                  </td>
+                  <td
+                    className={num(TEXTO_TONO[tonoCrecimiento(growth, semaforo)])}
+                    title={`Objetivo de crecimiento: ${formatTwoDecimals(meta.crecimientoPct)}%`}
+                  >
+                    {formatTwoDecimals(node.crecimiento)}%
+                  </td>
+                  <td className="py-2 text-right">
+                    <InsigniaObjetivo
+                      porcentaje={meta.crecimientoPct}
+                      meta={metrics.objetivo}
+                      origen={node.origenObjetivo}
+                      cierreEsperado={metrics.cierreEsperado}
+                      mono={mono}
+                    />
+                  </td>
+                  <td className={num('font-black text-amber-500/80')}>{formatInteger(metrics.faltante)}</td>
+                  <CeldaCumplimiento valor={metrics.tasaCumplimiento} semaforo={semaforo} mono={mono} />
+                  <CeldaCumplimiento valor={metrics.cumplimientoVentas} semaforo={semaforo} mono={mono} />
+                  <CeldaCumplimiento valor={metrics.cumplimientoCierre} semaforo={semaforo} mono={mono} />
+                  <td className={cn('py-3 pr-2 text-right font-black text-white', mono && 'font-mono')}>
+                    {formatInteger(node.activos_final)}
+                  </td>
+                  {renderRowAction && (
+                    <td className="py-3 pr-2 text-right">{renderRowAction(node)}</td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <Paginacion estado={paginacion} className="mt-2" />
     </div>
   );
 }

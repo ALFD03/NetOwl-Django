@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Loader2, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FilterX } from 'lucide-react';
 
 import { FilterField, FILTER_TRIGGER_CLASS, SearchInput, SelectMenu } from '../inputs';
+import { FILAS_POR_PAGINA, Paginacion, usePaginacion } from './Paginacion';
 
 export interface Column<T> {
   header: string;
@@ -42,6 +43,17 @@ const STICKY_TH = 'sticky left-0 z-30 bg-surface-tertiary';
 /** Valor del desplegable que no filtra nada. */
 const TODOS = '__todos__';
 
+/**
+ * Selección de filas con casillas, controlada desde fuera: quien usa la tabla
+ * es quien sabe qué hacer con lo elegido.
+ */
+export interface DataTableSelection<T> {
+  /** Lo que identifica a una fila de forma estable entre recargas. */
+  rowKey: (row: T) => string;
+  selected: ReadonlySet<string>;
+  onChange: (next: Set<string>) => void;
+}
+
 interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
@@ -50,6 +62,35 @@ interface DataTableProps<T> {
   isLoading?: boolean;
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
+  /** Filas por página; 0 la enseña entera. */
+  pageSize?: number;
+  /**
+   * Clases del área que hace scroll, normalmente una altura máxima. Con ella
+   * el scroll queda dentro de la tabla: la barra de filtros y la cabecera se
+   * quedan a la vista mientras se recorren las filas.
+   */
+  scrollClassName?: string;
+  selection?: DataTableSelection<T>;
+}
+
+/** La casilla de la cabecera, que además sabe pintarse a medias. */
+function CasillaTodas({ estado, onChange }: { estado: 'todas' | 'algunas' | 'ninguna'; onChange: () => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = estado === 'algunas';
+  }, [estado]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={estado === 'todas'}
+      onChange={onChange}
+      onClick={(e) => e.stopPropagation()}
+      className="h-4 w-4 cursor-pointer accent-brand"
+      title="Seleccionar todas las filas filtradas"
+      aria-label="Seleccionar todas las filas filtradas"
+    />
+  );
 }
 
 export function DataTable<T>({
@@ -60,12 +101,31 @@ export function DataTable<T>({
   isLoading = false,
   emptyMessage = 'No hay registros disponibles.',
   onRowClick,
+  pageSize = FILAS_POR_PAGINA,
+  scrollClassName = '',
+  selection,
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof T; direction: 'asc' | 'desc' } | null>(null);
   // Un filtro por columna, indexado por su cabecera: es lo unico que identifica
   // a una columna de forma estable sin obligar a darle un id a mano.
   const [filters, setFilters] = useState<Record<string, string>>({});
+
+  // Cambiar lo que se busca o se filtra vuelve a la primera pagina y vacia la
+  // seleccion: lo seleccionado tiene que estar a la vista, o una accion en
+  // bloque tocaria filas que el filtro ya escondio.
+  const alCambiarVista = () => {
+    paginacion.irA(0);
+    if (selection && selection.selected.size > 0) selection.onChange(new Set());
+  };
+  const buscar = (termino: string) => {
+    setSearchTerm(termino);
+    alCambiarVista();
+  };
+  const filtrar = (siguiente: Record<string, string>) => {
+    setFilters(siguiente);
+    alCambiarVista();
+  };
 
   const filterColumns = useMemo(
     () => columns.filter((col) =>
@@ -140,6 +200,8 @@ export function DataTable<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `valorFiltro` se recrea en cada render y solo lee de `col`.
   }, [data, searchTerm, sortConfig, filters, filterColumns]);
 
+  const paginacion = usePaginacion(processedData, pageSize);
+
   const handleSort = (key?: keyof T) => {
     if (!key) return;
     let direction: 'asc' | 'desc' = 'asc';
@@ -147,7 +209,29 @@ export function DataTable<T>({
       direction = 'desc';
     }
     setSortConfig({ key, direction });
+    paginacion.irA(0);
   };
+
+  // La casilla de la cabecera actua sobre todas las filas filtradas, no solo
+  // las de la pagina: filtrar y seleccionar todo es la forma de elegir en bloque.
+  const clavesFiltradas = selection ? processedData.map(selection.rowKey) : [];
+  const elegidasFiltradas = selection ? clavesFiltradas.filter((k) => selection.selected.has(k)).length : 0;
+  const estadoTodas = elegidasFiltradas === 0
+    ? 'ninguna'
+    : elegidasFiltradas === clavesFiltradas.length ? 'todas' : 'algunas';
+  const alternarTodas = () => {
+    if (!selection) return;
+    selection.onChange(estadoTodas === 'todas' ? new Set() : new Set(clavesFiltradas));
+  };
+  const alternarFila = (row: T) => {
+    if (!selection) return;
+    const clave = selection.rowKey(row);
+    const siguiente = new Set(selection.selected);
+    if (siguiente.has(clave)) siguiente.delete(clave);
+    else siguiente.add(clave);
+    selection.onChange(siguiente);
+  };
+  const totalColumnas = columns.length + (selection ? 1 : 0);
 
   const alignMap = { left: 'text-left', center: 'text-center', right: 'text-right' };
 
@@ -174,7 +258,7 @@ export function DataTable<T>({
                   ...(filterOptions[col.header] ?? []).map((valor) => ({ value: valor, label: valor })),
                 ]}
                 onChange={(valor) =>
-                  setFilters((previos) => ({ ...previos, [col.header]: valor === TODOS ? '' : valor }))
+                  filtrar({ ...filters, [col.header]: valor === TODOS ? '' : valor })
                 }
               />
             </FilterField>
@@ -185,7 +269,7 @@ export function DataTable<T>({
               <SearchInput
                 value={searchTerm}
                 placeholder={searchPlaceholder}
-                onChange={setSearchTerm}
+                onChange={buscar}
                 className="w-full bg-transparent px-0"
               />
             </FilterField>
@@ -194,7 +278,7 @@ export function DataTable<T>({
           {filtrosActivos > 0 && (
             <button
               type="button"
-              onClick={() => setFilters({})}
+              onClick={() => filtrar({})}
               className="flex items-center gap-2 rounded-2xl border border-slate-700/50 bg-surface-secondary px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-400 shadow-2xl transition-colors hover:text-white"
               title="Quitar todos los filtros"
             >
@@ -212,10 +296,17 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
+      <Paginacion estado={paginacion} posicion="arriba" />
+
+      <div className={`overflow-x-auto overflow-y-auto flex-1 custom-scrollbar ${scrollClassName}`}>
         <table className="w-full text-sm text-slate-300 border-collapse">
           <thead className="bg-surface-tertiary/80 sticky top-0 z-20 backdrop-blur-md">
             <tr>
+              {selection && (
+                <th className="w-10 border-b border-slate-800 p-3 text-center">
+                  <CasillaTodas estado={estadoTodas} onChange={alternarTodas} />
+                </th>
+              )}
               {columns.map((col, idx) => (
                 <th
                   key={idx}
@@ -242,16 +333,28 @@ export function DataTable<T>({
           </thead>
           <tbody className="divide-y divide-slate-800">
             {isLoading ? (
-              <tr><td colSpan={columns.length} className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-brand mx-auto" /></td></tr>
+              <tr><td colSpan={totalColumnas} className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-brand mx-auto" /></td></tr>
             ) : processedData.length === 0 ? (
-              <tr><td colSpan={columns.length} className="p-10 text-center text-slate-500">{emptyMessage}</td></tr>
+              <tr><td colSpan={totalColumnas} className="p-10 text-center text-slate-500">{emptyMessage}</td></tr>
             ) : (
-              processedData.map((row, rowIdx) => (
+              paginacion.visibles.map((row, rowIdx) => (
                 <tr
-                  key={rowIdx}
+                  key={selection ? selection.rowKey(row) : rowIdx}
                   onClick={() => onRowClick?.(row)}
                   className={`group transition-colors ${onRowClick ? 'cursor-pointer hover:bg-white/5' : 'hover:bg-white/2'}`}
                 >
+                  {selection && (
+                    <td className="w-10 p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selection.selected.has(selection.rowKey(row))}
+                        onChange={() => alternarFila(row)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 cursor-pointer accent-brand"
+                        aria-label="Seleccionar fila"
+                      />
+                    </td>
+                  )}
                   {columns.map((col, colIdx) => (
                     <td key={colIdx} className={`p-3 text-xs ${alignMap[col.align || 'left']} ${col.sticky ? STICKY_TD : ''} ${col.className || ''}`}>
                       {typeof col.accessor === 'function' ? col.accessor(row) : String((row as Record<string, unknown>)[String(col.accessor)])}
@@ -263,6 +366,8 @@ export function DataTable<T>({
           </tbody>
         </table>
       </div>
+
+      <Paginacion estado={paginacion} />
     </div>
   );
 }

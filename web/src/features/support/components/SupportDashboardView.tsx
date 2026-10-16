@@ -15,9 +15,11 @@ import {
   Modal,
   NeonContainer,
   ProgressBar,
+  Paginacion,
   SparklineCard,
   StatTile,
   METRIC_CHART,
+  usePaginacion,
 } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatPeriodoLabel, formatTwoDecimals } from '@/shared/utils';
 import { ASIGNACION, CIERRE_TOTAL, TIME_MEASURE_META, distribution } from '../lib/supportMetrics';
@@ -55,6 +57,7 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
 
   const chartColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : undefined;
   const periodsLabel = `${periodosEvaluados} periodos evaluados`;
+  const paginacion = usePaginacion(historico);
 
   const cierreTotal = distribution(stats, CIERRE_TOTAL);
   const asignacion = distribution(stats, ASIGNACION);
@@ -233,6 +236,7 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
                 </span>
                 <span className="font-mono text-xs font-bold text-brand">{periodsLabel}</span>
               </div>
+              <Paginacion estado={paginacion} posicion="arriba" />
               <div className="custom-scrollbar max-h-60 overflow-auto">
                 <table className={READONLY_TABLE}>
                   <thead className={READONLY_TABLE_HEAD_STICKY}>
@@ -247,7 +251,7 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
                     </tr>
                   </thead>
                   <tbody className={READONLY_TABLE_BODY}>
-                    {historico.map((row) => {
+                    {paginacion.visibles.map((row) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
 
@@ -266,6 +270,7 @@ export function SupportDashboardView({ data }: SupportDashboardViewProps) {
                   </tbody>
                 </table>
               </div>
+              <Paginacion estado={paginacion} />
             </div>
           </div>
         )}

@@ -10,9 +10,11 @@ import {
   MetricCard,
   Modal,
   NeonContainer,
+  Paginacion,
   ProgressBar,
   SparklineCard,
   METRIC_CHART,
+  usePaginacion,
 } from '@/shared/ui';
 import { LineChart } from '@/shared/charts';
 import { formatInteger, formatPeriodoLabel } from '@/shared/utils';
@@ -35,6 +37,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
   } = data;
 
   const chartColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : undefined;
+  const paginacion = usePaginacion(historico);
 
   return (
     <>
@@ -161,6 +164,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                   {historico.length} periodos evaluados
                 </span>
               </div>
+              <Paginacion estado={paginacion} posicion="arriba" />
               <div className="max-h-60 overflow-auto custom-scrollbar">
                 <table className={READONLY_TABLE}>
                   <thead className={READONLY_TABLE_HEAD_STICKY}>
@@ -172,7 +176,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                     </tr>
                   </thead>
                   <tbody className={READONLY_TABLE_BODY}>
-                    {historico.map((row, idx) => {
+                    {paginacion.visibles.map((row, idx) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
                       return (
@@ -187,6 +191,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                   </tbody>
                 </table>
               </div>
+              <Paginacion estado={paginacion} />
             </div>
           </div>
         )}

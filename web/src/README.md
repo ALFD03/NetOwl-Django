@@ -147,6 +147,20 @@ add `filterValue` when the cell is rendered by a function and the raw field is
 not what the reader would pick from a list (a boolean shown as `Sí`/`—` filters
 as `Sí`/`No`, not `true`/`false`).
 
+**Every table pages at 20 rows** (`FILAS_POR_PAGINA`). `DataTable` does it by
+default (`pageSize={0}` shows everything); the few hand-built read-only tables
+(the dashboards' history, `NodePerformanceTable`, `UsersTable`) use the same
+`usePaginacion` + `Paginacion` pair, so the pager is one component everywhere.
+**Every paginated table carries it twice, above and below** (`posicion="arriba"`
+and the default `abajo`, sharing one `estado`): at 20 rows, scrolling down to the
+foot to turn the page was the annoyance. It only appears past one page. Fixed matrices (the ETA speed grid, the
+commission tiers being edited) are not lists and are left whole. Search, filters
+and sorting jump back to the first page. With `selection`, the header checkbox
+takes *every filtered row*, not just the visible page, and changing the filter
+clears the selection: a bulk action must never touch rows the filter hid.
+`scrollClassName` bounds the table's own scroll, so the filter bar and the header
+stay on screen while the rows move.
+
 Import from the barrel (`@/shared/ui`), not the file. Components are function
 declarations, never `React.FC`; only files under `pages/` use a default export.
 
