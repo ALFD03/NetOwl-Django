@@ -20,7 +20,7 @@ interface Acciones {
 /** Cómo se presenta cada cargo como tarjeta. Las etiquetas las manda el servidor. */
 export const CARGO_UI: Record<CargoVentas, { icon: ReactNode; corto: string; description: string; tone: FormTone }> = {
   asesor: { icon: <Users />, corto: 'Asesores', description: 'Vende. Aparece en «Medio».', tone: 'blue' },
-  supervisor: { icon: <UserCheck />, corto: 'Supervisores', description: 'Lleva un equipo de asesores. Aparece en «Medio/Supervisor».', tone: 'emerald' },
+  supervisor: { icon: <UserCheck />, corto: 'Supervisores', description: 'Lleva un equipo de asesores. Aparece en «Oportunidad/Administrador».', tone: 'emerald' },
   coord_oficina: { icon: <Building />, corto: 'Coord. de oficina', description: 'Lleva una oficina. Aparece en «Vendedor», como usuario de Odoo.', tone: 'purple' },
   coord_un: { icon: <Crown />, corto: 'Coord. de UN', description: 'Lleva una o varias unidades de negocio. Cobra por su crecimiento.', tone: 'amber' },
 };
@@ -39,6 +39,8 @@ export function PersonaForm({
   onChange: (patch: Partial<PersonaDraft>) => void;
 }) {
   const conUsuario = value.cargo === 'coord_oficina';
+  // Quien puede aparecer en «Oportunidad/Administrador»: el asesor no.
+  const supervisa = value.cargo !== 'asesor';
 
   return (
     <ModalForm onSubmit={onSubmit}>
@@ -87,8 +89,8 @@ export function PersonaForm({
       </OptionCardGroup>
 
       <Field
-        label="Medio / Supervisor (Odoo)"
-        hint="Tal y como aparece en «Medio» y en «Medio/Supervisor»: normalmente nombre y apellido, p. ej. «Ahiam Aguilar»."
+        label="Medio (Odoo)"
+        hint="Tal y como aparece en «Medio»: normalmente nombre y apellido, p. ej. «Ahiam Aguilar»."
       >
         <input
           type="text"
@@ -98,6 +100,21 @@ export function PersonaForm({
           onChange={(e) => onChange({ medio: e.target.value })}
         />
       </Field>
+
+      {supervisa && (
+        <Field
+          label="Como supervisor (Odoo)"
+          hint="Tal y como aparece en «Oportunidad/Administrador», si Odoo lo escribe distinto que en «Medio». Vacío: el mismo que el medio."
+        >
+          <input
+            type="text"
+            className={modalInputClass}
+            placeholder={value.medio || 'El mismo que el medio'}
+            value={value.medio_supervisor}
+            onChange={(e) => onChange({ medio_supervisor: e.target.value })}
+          />
+        </Field>
+      )}
 
       {conUsuario && (
         <Field

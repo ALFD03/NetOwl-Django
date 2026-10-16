@@ -33,7 +33,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `catalogo_estados` | `Estado` | Entidad federal |
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
 | `catalogo_coordinadores` | `Coordinador` | Unidad de negocio: el grupo de zonas por el que agrupa Unidades de negocio. `persona` (FK nullable a `catalogo_personas_ventas`) es quien la lleva; una persona puede llevar varias |
-| `catalogo_personas_ventas` | `catalogos.PersonaVentas` | Directorio de ventas: nombre, apellido, `cargo` (`asesor`, `supervisor`, `coord_oficina`, `coord_un`), `medio` (el literal de `Medio` y `Medio/Supervisor`; único sin distinguir mayúsculas) y `usuario_odoo` (el de `Vendedor`, con `(User)`; obligatorio solo en el coordinador de oficina) |
+| `catalogo_personas_ventas` | `catalogos.PersonaVentas` | Directorio de ventas: nombre, apellido, `cargo` (`asesor`, `supervisor`, `coord_oficina`, `coord_un`), `medio` (el literal de `Medio`; único sin distinguir mayúsculas), `medio_supervisor` (el de `Oportunidad/Administrador` cuando Odoo lo escribe distinto; vacío es el mismo que `medio`; solo los cargos que supervisan; único sobre el literal que vale en esa columna) y `usuario_odoo` (el de `Vendedor`, con `(User)`; obligatorio solo en el coordinador de oficina) |
 | `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |

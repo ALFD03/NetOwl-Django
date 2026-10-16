@@ -31,19 +31,21 @@ COLUMNAS_VENTAS = {
 }
 
 
-def claves_registradas() -> set[str]:
-    """Las claves de todos los literales que el directorio reconoce.
+def claves_registradas() -> dict[str, set[str]]:
+    """Las claves que el directorio reconoce en cada columna.
 
-    Un mismo conjunto para las tres columnas: el `medio` de una persona casa
-    con `Medio` y con `Medio/Supervisor`, y su `usuario_odoo` con `Vendedor`.
-    Mezclarlos no confunde a nadie, porque un literal sin sufijo no se parece a
-    un usuario con nombre completo.
+    Una por columna, porque cada una se cruza con un literal distinto: `Medio`
+    con el `medio`, `Oportunidad/Administrador` con el nombre como supervisor (el
+    propio o, si no lo tiene, el medio) y `Vendedor` con el usuario de Odoo.
+    Es el mismo cruce que hace el calculo de comisiones: lo que aqui sale como
+    pendiente es exactamente lo que alli no encuentra a nadie.
     """
-    claves: set[str] = set()
-    for medio, usuario in PersonaVentas.objects.values_list("medio", "usuario_odoo"):
-        claves.add(clave_nombre(medio))
-        if usuario:
-            claves.add(clave_nombre(usuario))
+    claves: dict[str, set[str]] = {columna: set() for columna in COLUMNAS_VENTAS}
+    for persona in PersonaVentas.objects.all():
+        claves["medio"].add(clave_nombre(persona.medio))
+        claves["medio_supervisor"].add(clave_nombre(persona.literal_supervisor))
+        if persona.usuario_odoo:
+            claves["vendedor"].add(clave_nombre(persona.usuario_odoo))
     return claves
 
 
@@ -53,7 +55,7 @@ def personas_fuera_del_directorio() -> list[dict[str, Any]]:
     Una fila por nombre (comparado como `clave_nombre`), con cuantas ordenes
     lleva en cada columna en la que aparece y el cargo sugerido. Los conteos
     no se suman en un total: la venta directa de un supervisor lo lleva en
-    `Medio` y en `Medio/Supervisor` a la vez, y sumarlos la contaria dos veces.
+    `Medio` y en `Oportunidad/Administrador` a la vez, y sumarlos la contaria dos veces.
 
     Las columnas que el export todavia no trae se saltan: un entorno que no ha
     importado con `Medio` simplemente no tiene esa lista.
@@ -86,11 +88,12 @@ def personas_fuera_del_directorio() -> list[dict[str, Any]]:
     por_clave: dict[str, dict[str, Any]] = {}
     for _, fila in df.iterrows():
         nombre = str(fila["nombre"])
+        columna = str(fila["columna"])
         clave = clave_nombre(nombre)
-        if not clave or clave in registradas or clave in callados:
+        if not clave or clave in registradas[columna] or clave in callados:
             continue
         entrada = por_clave.setdefault(clave, {"nombre": nombre, "ordenes": {}})
-        entrada["ordenes"][str(fila["columna"])] = int(fila["ordenes"])
+        entrada["ordenes"][columna] = int(fila["ordenes"])
 
     filas = []
     for entrada in por_clave.values():

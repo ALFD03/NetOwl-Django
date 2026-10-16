@@ -7,7 +7,7 @@
 2. **Clasificacion** (`reglas.clasificar`): por el estado de la factura y si la
    suscripcion sigue en progreso **hoy**. Por eso un periodo se congela al
    cerrarlo: la tabla de suscripciones se trunca en cada importacion.
-3. **Personas**: el `Medio`, el `Medio/Supervisor` y el `Vendedor` de cada venta
+3. **Personas**: el `Medio`, el `Oportunidad/Administrador` y el `Vendedor` de cada venta
    contra el directorio de ventas; la jerarquia rellena lo que la venta no trae
    y da siempre el coordinador de unidad de negocio.
 4. **Pagos** (`reglas.calcular_pagos`), con el cumplimiento de cada supervisor y
@@ -64,7 +64,7 @@ from .reglas import (
 # importacion las acepta como opcionales; es aqui donde se exigen.
 COLUMNAS_REQUERIDAS = {
     "medio": "Medio",
-    "medio_supervisor": "Medio/Supervisor",
+    "medio_supervisor": "Oportunidad/Administrador",
     "estado_factura": "Estado de la factura",
 }
 
@@ -182,6 +182,8 @@ class _Directorio:
     def __init__(self):
         self.personas = {p.id: p for p in PersonaVentas.objects.all()}
         self.por_medio = {clave_nombre(p.medio): p for p in self.personas.values()}
+        # Odoo a veces escribe a la misma persona de otra forma como supervisor.
+        self.por_supervisor = {clave_nombre(p.literal_supervisor): p for p in self.personas.values()}
         self.por_usuario = {
             clave_nombre(p.usuario_odoo): p for p in self.personas.values() if p.usuario_odoo
         }
@@ -225,7 +227,7 @@ class _Directorio:
             return persona.id
 
         medio_id = buscar(medio, self.por_medio, "Medio")
-        supervisor_id = buscar(supervisor, self.por_medio, "Supervisor")
+        supervisor_id = buscar(supervisor, self.por_supervisor, "Supervisor")
         oficina_id = buscar(vendedor, self.por_usuario, "Vendedor")
 
         if not supervisor:

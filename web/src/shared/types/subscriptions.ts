@@ -570,8 +570,13 @@ export interface CatalogoPersonaVentas {
   nombre: string;
   apellido: string;
   cargo: CargoVentas;
-  /** El literal de `Medio` y `Medio/Supervisor`. */
+  /** El literal de `Medio`. */
   medio: string;
+  /**
+   * El de `Oportunidad/Administrador`, cuando Odoo lo escribe distinto que en `Medio`.
+   * Vacío: el mismo que `medio`. Solo los cargos que supervisan.
+   */
+  medio_supervisor: string;
   /** El literal de `Vendedor`, con `(User)`. Solo el coordinador de oficina. */
   usuario_odoo: string;
   /** Las unidades de negocio que lleva (solo el coordinador de UN). */

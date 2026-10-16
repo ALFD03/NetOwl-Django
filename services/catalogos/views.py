@@ -34,7 +34,7 @@ from typing import Any
 
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, Q
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -47,7 +47,12 @@ from core import fixtures
 from core.odoo_nombres import nombre_base, normalizar_nombre_odoo
 from core.utils import clean_json_props
 from services.catalogos.directorio import personas_fuera_del_directorio
-from services.catalogos.models import CARGO_CHOICES, CARGO_CON_USUARIO, PersonaVentas
+from services.catalogos.models import (
+    CARGO_CHOICES,
+    CARGO_CON_USUARIO,
+    CARGOS_QUE_SUPERVISAN,
+    PersonaVentas,
+)
 from services.config.decorators import permission_required
 from services.subscriptions.analytics.imports import (
     productos_fuera_de_catalogo,
@@ -211,6 +216,7 @@ def _persona(p: PersonaVentas) -> dict[str, Any]:
         "apellido": p.apellido,
         "cargo": p.cargo,
         "medio": p.medio,
+        "medio_supervisor": p.medio_supervisor,
         "usuario_odoo": p.usuario_odoo,
         "unidades": [u.nombre for u in p.unidades_negocio.all()],
     }
@@ -299,9 +305,12 @@ def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
 
     El usuario de Odoo solo se guarda en el coordinador de oficina, el unico
     que aparece en `Vendedor`; en los demas cargos se descarta aunque llegue.
-    La unicidad del medio y del usuario no distingue mayusculas, como el
-    cruce con el export, asi que se comprueba aqui con un mensaje claro en vez
-    de dejar que la base de datos responda con un choque generico.
+    Igual el nombre como supervisor, que solo llevan los cargos que
+    supervisan. La unicidad de los tres literales no distingue mayusculas,
+    como el cruce con el export, asi que se comprueba aqui con un mensaje
+    claro en vez de dejar que la base de datos responda con un choque
+    generico. La del nombre como supervisor es sobre el que vale en esa
+    columna (`literal_supervisor`): el propio o, si no lo tiene, el medio.
     """
     fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=80)
     fila.apellido = _texto(data, "apellido", obligatorio=True, maximo=80)
@@ -312,6 +321,8 @@ def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
         )
     fila.cargo = cargo
     fila.medio = nombre_base(_texto(data, "medio", obligatorio=True, maximo=160))
+    supervisa = nombre_base(_texto(data, "medio_supervisor", maximo=160)) if cargo in CARGOS_QUE_SUPERVISAN else ""
+    fila.medio_supervisor = "" if supervisa.casefold() == fila.medio.casefold() else supervisa
 
     usuario = ""
     if cargo == CARGO_CON_USUARIO:
@@ -325,6 +336,14 @@ def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
         raise Duplicado(f"Ya hay alguien registrado con el medio «{fila.medio}».")
     if usuario and otras.filter(usuario_odoo__iexact=usuario).exists():
         raise Duplicado(f"Ya hay alguien registrado con el usuario «{usuario}».")
+    literal = fila.literal_supervisor
+    choque = otras.filter(
+        Q(medio_supervisor__iexact=literal) | Q(medio_supervisor="", medio__iexact=literal)
+    ).first()
+    if choque is not None:
+        raise Duplicado(
+            f"«{literal}» ya es como aparece {choque.nombre_completo} en «Oportunidad/Administrador»."
+        )
 
 
 def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:

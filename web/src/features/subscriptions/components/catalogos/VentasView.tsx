@@ -67,7 +67,14 @@ export function VentasView({
   const columnasPersonas = (cargo: CargoVentas): Column<CatalogoPersonaVentas>[] => [
     { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
     { header: 'Apellido', accessor: 'apellido', sortKey: 'apellido' },
-    { header: 'Medio / Supervisor', accessor: 'medio', sortKey: 'medio' },
+    { header: 'Medio', accessor: 'medio', sortKey: 'medio' },
+    ...(cargo !== 'asesor'
+      ? [{
+        header: 'Como supervisor',
+        accessor: (row) => row.medio_supervisor || <span className="text-slate-500">= medio</span>,
+        sortKey: 'medio_supervisor',
+      } as Column<CatalogoPersonaVentas>]
+      : []),
     ...(cargo === 'coord_oficina'
       ? [{ header: 'Usuario de Odoo', accessor: 'usuario_odoo', sortKey: 'usuario_odoo' } as Column<CatalogoPersonaVentas>]
       : []),

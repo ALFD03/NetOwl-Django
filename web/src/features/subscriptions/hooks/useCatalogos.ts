@@ -144,6 +144,7 @@ export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft 
       apellido,
       cargo,
       medio: [partes[0], partes[corte]].filter(Boolean).join(' '),
+      medio_supervisor: '',
       usuario_odoo: literal ? `${base} (User)` : '',
     };
   }
@@ -152,6 +153,7 @@ export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft 
     apellido: partes.slice(1).join(' '),
     cargo,
     medio: base,
+    medio_supervisor: '',
     usuario_odoo: '',
   };
 }
@@ -251,6 +253,7 @@ export function useCatalogos({
       apellido: fila.apellido,
       cargo: fila.cargo,
       medio: fila.medio,
+      medio_supervisor: fila.medio_supervisor,
       usuario_odoo: fila.usuario_odoo,
     });
 

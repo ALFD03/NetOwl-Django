@@ -18,7 +18,7 @@ services/comisiones/
 
 Depende del directorio de ventas (`services/catalogos/models.py:PersonaVentas`,
 ver el capítulo 6 §8) y de tres columnas de la importación de suscripciones:
-`Medio`, `Medio/Supervisor` y `Estado de la factura`.
+`Medio`, `Oportunidad/Administrador` y `Estado de la factura`.
 
 ---
 
