@@ -33,7 +33,7 @@ import re
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError, Q
 from django.http import JsonResponse
 from django.shortcuts import redirect
@@ -774,6 +774,12 @@ def notificaciones_view(request):
     mismo los ignorados: quien no puede registrar una zona tampoco tiene por
     que ver cuales faltan. Una lista ausente llega como `null`, que la
     interfaz distingue de una lista vacia ("todo registrado").
+
+    Los nombres se registran aqui mismo, en un modal, sin ir a la pagina de
+    su grupo: se resuelven uno detras de otro. Por eso viajan tambien las
+    opciones que piden esos formularios (reguladores para un plan; sites,
+    estados y coordinadores para una zona; cargos para una persona), y solo
+    las de las areas que se administran.
     """
     permisos = _permisos(request)
     pendientes: dict[str, list[dict[str, Any]] | None] = {
@@ -794,6 +800,23 @@ def notificaciones_view(request):
         "pendientes": pendientes,
         "ignorados": ignorados,
         "areas": [{"value": v, "label": t} for v, t in AREA_IGNORADO_CHOICES if v in areas],
+        "opciones": {
+            "reguladores": _listado("reguladores") if permisos["operacional"] else [],
+            "tiposPersona": _opciones(TIPO_PERSONA_CHOICES),
+            "tecnologias": _opciones(TECNOLOGIA_CHOICES),
+            "sites": _listado("sites") if permisos["comercial"] else [],
+            "estados": _listado("estados") if permisos["comercial"] else [],
+            "coordinadores": _listado("coordinadores") if permisos["comercial"] else [],
+            "cargos": _opciones(CARGO_CHOICES),
+            # Para vincular un nombre de `Oportunidad/Administrador` a quien ya esta
+            # registrado con otro: Odoo escribe distinto a la misma persona.
+            "supervisores": [
+                _persona(p)
+                for p in PersonaVentas.objects.filter(cargo__in=CARGOS_QUE_SUPERVISAN).prefetch_related(
+                    "unidades_negocio"
+                )
+            ] if permisos["ventas"] else [],
+        },
     })
 
 
@@ -929,6 +952,80 @@ def api_catalogo_guardar(request):
         "status": "success",
         "message": f"{catalogo['etiqueta'].capitalize()} {_participio(catalogo, 'guardad')}.",
         "registro": catalogo["serializar"](fila),
+    })
+
+
+# Tope de filas de un alta en bloque: lo que cabe en una lista de pendientes,
+# no una via para cargar el directorio entero sin mirarlo.
+MAXIMO_LOTE = 1000
+
+
+@login_required
+@permission_required(*PERMISOS_CATALOGO)
+@ratelimit(key='ip', rate='20/m', block=True)
+@require_POST
+def api_catalogo_guardar_lote(request):
+    """Alta de varias filas de un mismo catalogo de una vez.
+
+    Es lo que usa Notificaciones para registrar en bloque, p. ej. todos los
+    asesores que el filtro dejo a la vista. Cada fila pasa por el mismo
+    `aplicar` que un alta suelta —las mismas validaciones, los mismos
+    duplicados— y se guarda en su propio savepoint: una que choca no se lleva
+    por delante a las demas, se devuelve con su motivo y el resto queda
+    registrado. Como se guardan en orden, dos filas del lote que choquen entre
+    si se detectan igual que contra la base. Solo altas: editar en bloque no
+    lo pide nadie y obligaria a decidir que hacer con los ids que no existen.
+    """
+    data, rechazo = _leer_cuerpo(request)
+    if rechazo is not None:
+        return rechazo
+
+    catalogo, rechazo = _catalogo_permitido(request, data)
+    if rechazo is not None:
+        return rechazo
+    if catalogo.get("unico"):
+        return JsonResponse({"status": "error", "message": "Este catálogo no admite altas en bloque."}, status=400)
+
+    filas = data.get("filas")
+    if not isinstance(filas, list) or not filas or not all(isinstance(f, dict) for f in filas):
+        return JsonResponse({"status": "error", "message": "No llegó ninguna fila que registrar."}, status=400)
+    if len(filas) > MAXIMO_LOTE:
+        return JsonResponse(
+            {"status": "error", "message": f"Como mucho {MAXIMO_LOTE} filas por lote."},
+            status=400,
+        )
+
+    registrados: list[dict[str, Any]] = []
+    errores: list[dict[str, str]] = []
+    for cuerpo in filas:
+        cuerpo = {**cuerpo, "tipo": data["tipo"], "id": None}
+        fila = catalogo["modelo"]()
+        etiqueta = str(cuerpo.get("medio") or cuerpo.get("nombre") or "").strip()
+        _, rechazo = _catalogo_permitido(request, cuerpo, fila)
+        if rechazo is not None:
+            errores.append({"nombre": etiqueta, "message": json.loads(rechazo.content)["message"]})
+            continue
+        try:
+            with transaction.atomic():
+                catalogo["aplicar"](fila, cuerpo, request)
+                fila.save()
+        except DatosInvalidos as e:
+            errores.append({"nombre": etiqueta, "message": str(e)})
+            continue
+        except IntegrityError:
+            errores.append({"nombre": etiqueta, "message": "Ya existe con ese nombre."})
+            continue
+        registrados.append(catalogo["serializar"](fila))
+
+    if registrados:
+        fixtures.reset_cache()
+    # 200 aunque no entre ninguna: el lote se proceso, y lo que interesa al
+    # cliente es la lista de motivos, que un error HTTP no le haria llegar.
+    return JsonResponse({
+        "status": "success" if registrados else "error",
+        "message": f"Se registraron {len(registrados)} de {len(filas)}.",
+        "registrados": registrados,
+        "errores": errores,
     })
 
 

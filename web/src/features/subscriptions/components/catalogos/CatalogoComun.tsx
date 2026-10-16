@@ -5,7 +5,7 @@
  */
 
 import type { FormEvent, ReactNode } from 'react';
-import { AlertTriangle, Edit3, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Edit3, Plus, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import { Button, Modal, StatusMessage, ToggleGroup, type Column } from '@/shared/ui';
@@ -73,13 +73,22 @@ export function BarraCatalogo({ pestanas, activa, onChange, alta }: BarraCatalog
   );
 }
 
-/** El error de la última escritura, sobre el contenido de la página. */
-export function ErrorCatalogo({ c }: { c: EstadoCatalogos }) {
+/**
+ * El error de la última escritura, sobre el contenido de la página. Con
+ * `conAviso`, también la confirmación de la última que salió bien: la usan las
+ * páginas donde se registra en serie sin salir de ellas.
+ */
+export function ErrorCatalogo({ c, conAviso = false }: { c: EstadoCatalogos; conAviso?: boolean }) {
+  const status = c.error
+    ? { type: 'error' as const, text: c.error }
+    : conAviso && c.aviso
+      ? { type: 'success' as const, text: c.aviso }
+      : null;
   return (
     <StatusMessage
-      status={c.error ? { type: 'error', text: c.error } : null}
+      status={status}
       className="mb-4"
-      icon={<AlertTriangle />}
+      icon={c.error ? <AlertTriangle /> : <CheckCircle2 />}
     />
   );
 }

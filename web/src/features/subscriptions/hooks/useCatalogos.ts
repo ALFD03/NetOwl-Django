@@ -178,6 +178,10 @@ export function useCatalogos({
   const [vista, setVista] = useState<CatalogoVista>(vistaInicial);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Lo que respondió la última escritura que salió bien. Hace falta en las
+  // páginas donde se registra en serie (Notificaciones): sin ir a otra página,
+  // es lo único que confirma que se guardó.
+  const [aviso, setAviso] = useState<string | null>(null);
 
   // `?nuevo_plan=` viene del aviso de la importación, de la pestaña de planes
   // por clasificar del ETA y de las notificaciones: el formulario abre con el
@@ -232,6 +236,7 @@ export function useCatalogos({
     });
 
   const nuevaZonaVacia = () => setZonaDraft(zonaVacia());
+  const crearZonaDesde = (nombre: string) => setZonaDraft(zonaVacia(nombre));
   const editarZona = (zona: CatalogoZona) =>
     setZonaDraft({
       id: zona.id,
@@ -246,6 +251,7 @@ export function useCatalogos({
   const editarSite = (site: CatalogoSite) => setSiteDraft({ id: site.id, nombre: site.nombre, orden: site.orden });
 
   const nuevaPersonaVacia = (cargo: CargoVentas) => setPersonaDraft(personaDesde('', cargo));
+  const crearPersonaDesde = (literal: string, cargo: CargoVentas) => setPersonaDraft(personaDesde(literal, cargo));
   const editarPersona = (fila: CatalogoPersonaVentas) =>
     setPersonaDraft({
       id: fila.id,
@@ -323,9 +329,11 @@ export function useCatalogos({
   const guardar = async (tipo: CatalogoTipo, payload: CatalogoPayload) => {
     setGuardando(true);
     setError(null);
+    setAviso(null);
     try {
-      await catalogosApi.guardar(tipo, payload);
+      const respuesta = await catalogosApi.guardar(tipo, payload);
       cerrarFormularios();
+      setAviso(respuesta?.message ?? null);
       router.reload();
       return true;
     } catch (err: unknown) {
@@ -346,6 +354,61 @@ export function useCatalogos({
    */
   const ignorar = (area: AreaCatalogo, nombre: string) => guardar('ignorados', { nombre, nota: '', area });
 
+  /**
+   * Registra de una vez varios nombres pendientes de ventas con el mismo cargo.
+   *
+   * Cada persona sale de `personaDesde`, la misma sugerencia que rellena el
+   * formulario suelto: sin revisarla una a una, el nombre y el apellido son
+   * una suposición que se corrige después en Catálogos › Ventas. El medio (y
+   * el usuario de Odoo) es el literal del export, que es lo que cuenta para el
+   * cruce. Lo que no entra se enumera con su motivo; lo demás queda guardado.
+   */
+  const registrarPersonas = async (literales: string[], cargo: CargoVentas) => {
+    setGuardando(true);
+    setError(null);
+    setAviso(null);
+    try {
+      const respuesta = await catalogosApi.guardarLote(
+        'personas',
+        literales.map((literal) => ({ ...personaDesde(literal, cargo) })),
+      );
+      if (respuesta.errores.length) {
+        const MOSTRADOS = 5;
+        const detalle = respuesta.errores
+          .slice(0, MOSTRADOS)
+          .map((e) => `${e.nombre}: ${e.message}`)
+          .join(' · ');
+        const resto = respuesta.errores.length - MOSTRADOS;
+        setError(`${respuesta.message} No entraron: ${detalle}${resto > 0 ? ` · y ${resto} más` : ''}`);
+      } else {
+        setAviso(respuesta.message);
+      }
+      if (respuesta.registrados.length) router.reload();
+      return respuesta.registrados.length;
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'No se pudo registrar el lote.'));
+      return 0;
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  /**
+   * Vincula un nombre de `Oportunidad/Administrador` a quien ya está registrado: Odoo
+   * escribe a veces a la misma persona de otra forma como supervisor que como
+   * medio, y registrarla otra vez la partiría en dos.
+   */
+  const vincularSupervisor = (persona: CatalogoPersonaVentas, literal: string) =>
+    guardar('personas', {
+      id: persona.id,
+      nombre: persona.nombre,
+      apellido: persona.apellido,
+      cargo: persona.cargo,
+      medio: persona.medio,
+      medio_supervisor: literal,
+      usuario_odoo: persona.usuario_odoo,
+    });
+
   const confirmarBorrado = async () => {
     if (!borrando) return;
     setGuardando(true);
@@ -362,12 +425,12 @@ export function useCatalogos({
   };
 
   return {
-    vista, setVista, guardando, error, setError,
+    vista, setVista, guardando, error, setError, aviso,
     planDraft, setPlanDraft, nuevoPlanVacio, editarPlan, crearPlanDesde,
     reguladorDraft, setReguladorDraft, nuevoRegulador, editarRegulador,
-    zonaDraft, setZonaDraft, nuevaZonaVacia, editarZona,
+    zonaDraft, setZonaDraft, nuevaZonaVacia, crearZonaDesde, editarZona,
     siteDraft, setSiteDraft, nuevoSite, editarSite,
-    personaDraft, setPersonaDraft, nuevaPersonaVacia, editarPersona,
+    personaDraft, setPersonaDraft, nuevaPersonaVacia, crearPersonaDesde, editarPersona,
     unidadDraft, setUnidadDraft, nuevaUnidad, editarUnidad,
     nombreDraft, setNombreDraft, nuevoNombre, editarNombre,
     ignoradoDraft, setIgnoradoDraft, nuevoIgnorado, editarIgnorado,
@@ -375,6 +438,6 @@ export function useCatalogos({
     objetivoMesDraft, setObjetivoMesDraft, nuevoObjetivoMes, editarObjetivoMes,
     semaforoDraft, setSemaforoDraft, editarSemaforo,
     borrando, setBorrando, confirmarBorrado,
-    cerrarFormularios, guardar, ignorar,
+    cerrarFormularios, guardar, ignorar, registrarPersonas, vincularSupervisor,
   };
 }

@@ -619,6 +619,21 @@ export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
   ignorados: CatalogoProductoIgnorado[];
   /** Las áreas cuyos ignorados puede ver y deshacer. */
   areas: CatalogoOption[];
+  /**
+   * Lo que piden los formularios de alta, que se abren aquí mismo. Vacías las
+   * listas de las áreas que el usuario no administra.
+   */
+  opciones: {
+    reguladores: CatalogoPlanRegulador[];
+    tiposPersona: CatalogoOption[];
+    tecnologias: CatalogoOption[];
+    sites: CatalogoSite[];
+    estados: CatalogoNombrado[];
+    coordinadores: CatalogoNombrado[];
+    cargos: CatalogoOption[];
+    /** Quienes pueden aparecer en `Oportunidad/Administrador`, para vincularles un nombre. */
+    supervisores: CatalogoPersonaVentas[];
+  };
 }
 
 /** `Catalogos/Productos`: planes y planes reguladores. */
