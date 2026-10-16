@@ -167,6 +167,9 @@ def informe_view(request):
         "informe": datos,
         "error": error,
         "propuesta": propuesta(clave, condiciones.dia_promocional),
+        # Las del cierre si esta cerrado; si no, con las que se acaba de calcular.
+        "condiciones": (periodo.condiciones if periodo is not None and periodo.cerrado and periodo.condiciones
+                        else condiciones_vigentes()),
         "cargos": [{"value": v, "label": t} for v, t in CARGO_CHOICES],
         "puedeGestionar": _puede(request, PERMISO_GESTION),
         "section": "informe",

@@ -1,12 +1,40 @@
 /** Cómo se presentan las cifras y las clasificaciones del informe de comisiones. */
 
-import type { CargoVentas, Clasificacion } from '../types';
+import type { Clasificacion } from '../types';
 
 const MONEDA = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** Un monto en dólares, con dos decimales. */
 export const formatoMonto = (valor: number | null | undefined): string =>
   valor === null || valor === undefined ? '—' : `$${MONEDA.format(valor)}`;
+
+/**
+ * Dólares a bolívares a `tasa`, redondeado a céntimos. Cada pago se convierte y
+ * redondea por separado, y los totales en bolívares son la suma de esas cifras:
+ * así una columna de la nómina suma exactamente su total. Nulo sin tasa.
+ */
+export const aBs = (dolares: number, tasa: number | null): number | null =>
+  tasa === null ? null : Math.round(dolares * tasa * 100) / 100;
+
+/** El total en bolívares de varios pagos: la suma de cada uno ya redondeado. */
+export const totalBs = (montos: number[], tasa: number | null): number | null =>
+  tasa === null ? null : Math.round(montos.reduce((t, m) => t + (aBs(m, tasa) ?? 0), 0) * 100) / 100;
+
+/** Un monto en bolívares, con dos decimales. */
+export const formatoBs = (valor: number | null | undefined): string =>
+  valor === null || valor === undefined ? '—' : `Bs ${MONEDA.format(valor)}`;
+
+const TASA = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+/** Una tasa de bolívares por dólar, con hasta cuatro decimales. */
+export const formatoTasa = (valor: number | null | undefined): string =>
+  valor === null || valor === undefined ? '—' : `${TASA.format(valor)} Bs/$`;
+
+/** Un mes `YYYY-MM` como `octubre 2026`. */
+export const formatoMes = (periodo: string): string => {
+  const [anio, mes] = periodo.split('-').map(Number);
+  return mes ? new Date(anio, mes - 1, 1).toLocaleDateString('es-VE', { month: 'long', year: 'numeric' }) : periodo;
+};
 
 /** Un porcentaje con hasta dos decimales, o un guion si no hay valor. */
 export const formatoPct = (valor: number | null | undefined): string =>
@@ -25,18 +53,4 @@ export const CLASIFICACION: Record<Clasificacion, { label: string; tone: string 
   excluida: { label: 'Excluida', tone: 'text-slate-400' },
 };
 
-/** Los cargos en el orden en que se presentan: de quien vende a quien coordina. */
-export const CARGOS: CargoVentas[] = ['asesor', 'supervisor', 'coord_oficina', 'coord_un'];
 
-export const CARGO_CORTO: Record<CargoVentas, string> = {
-  asesor: 'Asesores',
-  supervisor: 'Supervisores',
-  coord_oficina: 'Coord. de oficina',
-  coord_un: 'Coord. de UN',
-};
-
-/** `YYYY-MM` del mes siguiente: a donde se difiere una venta por defecto. */
-export function mesSiguiente(periodo: string): string {
-  const [anio, mes] = periodo.split('-').map(Number);
-  return mes === 12 ? `${anio + 1}-01` : `${anio}-${String(mes + 1).padStart(2, '0')}`;
-}

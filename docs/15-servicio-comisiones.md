@@ -203,17 +203,63 @@ pasado no cambia. Un mes que aún no empezó no tiene tasa, y un fallo del
 servicio se avisa sin romper el informe.
 
 Como referencia se enseña también la **tasa del día** (`api/tasa-actual/`), que
-no se guarda y se pide aparte para no frenar la página: es una referencia y no
+no se guarda y se pide aparte para no frenar la página. La nómina y el Excel
+enseñan solo los bolívares a la tasa CONATEL: la del día es una referencia y no
 se paga con ella.
+
+## El informe: cuatro pasos y la nómina por unidad
+
+El informe se recorre en **cuatro pasos**, en el orden en que se prepara un
+pago, y abre en el primero que falte: **Revisar ventas** (las `Por facturar`
+por decidir, o todas las ventas), **Indicadores** (el cumplimiento general, el
+propio de quien lo tenga distinto y el crecimiento de cada coordinador de UN,
+todos en una pantalla para que un 9 que debía ser 90 salte a la vista),
+**Nómina** y **Cerrar** (lo que falta, enlazado a su paso). Encima, el total a
+pagar en $ y en Bs y la tasa CONATEL; la del día, solo como referencia. Los %
+se escriben únicamente en Indicadores: la nómina es de solo lectura.
+
+La **nómina** va unidad por unidad: a la izquierda las unidades de negocio y
+las oficinas, cada una con lo que cobra y un buscador de personas; a la
+derecha, la elegida (`lib/nomina.ts`, `NominaView`).
+
+- **La unidad la encabeza su coordinador de UN**; debajo, cada supervisor con
+  sus asesores. Un supervisor va a la unidad donde más supervisa; un asesor, con
+  el supervisor con quien más vende y en la unidad de ese supervisor.
+- **Las coordinadoras de oficina no son del equipo de un coordinador de UN**:
+  van aparte, en su propia sección, y cada una enseña con qué unidades comparte
+  ventas. La unidad, a su vez, dice con qué oficinas comparte las suyas.
+- **Cada persona sale una sola vez**, con su pago entero: el tramo de un asesor
+  depende de todas sus ventas y no se reparte. Si vendió también con otro
+  supervisor, su fila lo dice («+2 con otro supervisor, incluidas»). Así las
+  unidades más las oficinas suman exactamente el total a pagar.
+- Las columnas son las del pago: **ventas pagadas / validadas** (en ámbar cuando
+  no se pagan todas: el tramo de un asesor descuenta, o el crecimiento de un
+  coordinador de UN es desconocido), el **cumplimiento, crecimiento o tramo** con
+  su barra, y lo que cobra en **$** y en **Bs a la tasa CONATEL**. A un
+  supervisor o una oficina con cumplimiento por debajo del 100 % se le cuentan
+  todas sus validadas y el recorte se ve en dólares («de $487,50»).
+- **Quien queda en $0 se ve, atenuado y con el motivo** («4 ventas: no llega a
+  6»), para que nadie falte sin explicación.
+- Los clientes vendidos y el monto de las ventas se quitaron: no deciden ningún
+  pago y se confundían con lo que se paga.
+- **Los bolívares de cada fila se redondean a céntimos** y los totales son la
+  suma de esas filas (`formato.aBs`/`totalBs`), en la página y en el Excel: la
+  columna cuadra al céntimo.
+
+El informe trae `equipos` (una fila por combinación de coordinador de UN,
+oficina, supervisor y vendedor con sus ventas válidas, unas trescientas al mes),
+`personas` (nombre y cargo de cada id) y `condiciones` (las del cierre si el
+periodo está cerrado, si no las vigentes), para armar la nómina y explicar cada
+recorte sin mandar las ventas.
 
 ## 6. Páginas y permisos
 
 | Página | Contenido | Permiso |
 |---|---|---|
-| `/comisiones/?periodo=` | El informe: ventana, KPIs, pagos por cargo, revisión, detalle de ventas, exportación a Excel, cierre | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
+| `/comisiones/?periodo=` | El informe en cuatro pasos (revisión, indicadores, nómina por unidad, cierre), total a pagar y tasas, exportación a Excel | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
 | `/comisiones/supervisores/` | A qué coordinador de UN responde cada supervisor (uno a uno o en bloque) | `can_manage_comisiones` |
 | `/comisiones/condiciones/` | Tramos, montos, día promocional, días de espera y los % de los planes PYME | `can_manage_comisiones` |
 
 El detalle venta a venta no viaja en los props —un mes son miles de filas—: lo
 pide la página a `api/ventas/` la primera vez que hace falta (desglose de una
-persona, pestaña de ventas, exportación).
+persona, paso de revisión con todas las ventas, exportación).

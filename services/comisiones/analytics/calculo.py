@@ -513,10 +513,42 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "total": round(sum(p["neto"] for p in filas_pago), 2),
         },
         "pagos": filas_pago,
+        **_equipos(ventas, directorio),
         "revision": [v for v in ventas if v["clasificacion"] == REVISION or (v["decision"] and not v["cambio_plan"])],
         "pendientes_cierre": _pendientes_cierre(ventas, filas_pago),
     }
     return informe, ventas
+
+
+def _equipos(ventas: list[dict[str, Any]], directorio: _Directorio) -> dict[str, Any]:
+    """Quien vendio con quien, para agrupar la nomina por equipos.
+
+    Una fila por combinacion de coordinador de UN, oficina, supervisor y quien
+    vendio, con sus ventas validas: `ventas` (residenciales) y `pyme`. Es lo que
+    permite ordenar la nomina por unidad, supervisor y oficina sin mandar las
+    miles de ventas: un mes son unos cientos de combinaciones. Un id nulo es que
+    la venta no trae esa columna o trae un nombre sin registrar.
+
+    `personas` da nombre y cargo a cada id, porque no todos cobran (un
+    coordinador sin pago no esta en `pagos`).
+    """
+    filas: dict[tuple, dict[str, Any]] = {}
+    for v in ventas:
+        if v["clasificacion"] != VALIDA:
+            continue
+        clave = (v["coord_un_id"], v["coord_oficina_id"], v["supervisor_id"], v["medio_id"])
+        fila = filas.setdefault(clave, {
+            "coord_un_id": clave[0], "coord_oficina_id": clave[1], "supervisor_id": clave[2], "medio_id": clave[3],
+            "ventas": 0, "pyme": 0,
+        })
+        fila["pyme" if v["pyme"] else "ventas"] += 1
+    ids = {i for clave in filas for i in clave if i is not None}
+    return {
+        "equipos": list(filas.values()),
+        "personas": {
+            str(i): {"nombre": directorio.nombre(i), "cargo": directorio.cargo(i)} for i in sorted(ids)
+        },
+    }
 
 
 def _pendientes_cierre(ventas: list[dict[str, Any]], pagos: list[dict[str, Any]]) -> list[str]:

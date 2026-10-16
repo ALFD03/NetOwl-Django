@@ -327,6 +327,10 @@ sale-by-sale detail is fetched from `api/ventas/` the first time it is needed an
 `useInformeComisiones`. The advisor-tier preview in Condiciones mirrors `reglas.pago_asesor` only to show the
 effect of the table being edited; the server's figure is the one that counts.
 
+How the payroll is *laid out* is client work: `lib/nomina.ts` places each person once (unit → supervisor →
+advisors, offices apart) from the `equipos` rows, and explains each cut from `condiciones`. It computes no
+payment — every amount is the server's `neto`.
+
 ## Commercial objectives are applied here, not stored
 
 The growth target and the maximum churn (6% / 3% by default) are catalogue data served in

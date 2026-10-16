@@ -105,9 +105,25 @@ export interface InformeComision {
     total: number;
   };
   pagos: PagoComision[];
+  /** Quién vendió con quién en las ventas válidas (falta en periodos cerrados antes de existir). */
+  equipos?: FilaEquipo[];
+  /** Nombre y cargo de cada id de `equipos`, cobre o no. */
+  personas?: Record<string, { nombre: string; cargo: CargoVentas | '' }>;
   revision: VentaComision[];
   /** Lo que impide cerrar. Vacío: se puede cerrar. */
   pendientes_cierre: string[];
+}
+
+/** Una combinación de coord. de UN, oficina, supervisor y quien vendió, con sus ventas válidas. */
+export interface FilaEquipo {
+  coord_un_id: number | null;
+  coord_oficina_id: number | null;
+  supervisor_id: number | null;
+  medio_id: number | null;
+  /** Válidas residenciales. */
+  ventas: number;
+  /** Válidas PYME. */
+  pyme: number;
 }
 
 /** Una tasa del BCV en bolívares por dólar y de dónde salió. */
@@ -132,6 +148,8 @@ export interface ComisionesInformeProps {
   informe: InformeComision | null;
   error: string | null;
   propuesta: PropuestaPeriodo;
+  /** Las del cierre si el periodo está cerrado; si no, las vigentes, con las que se calculó. */
+  condiciones: CondicionesComision;
   cargos: CatalogoOption[];
   puedeGestionar: boolean;
 }
