@@ -119,20 +119,21 @@ export interface ComisionesInformeProps {
   puedeGestionar: boolean;
 }
 
-export interface PersonaJerarquia {
+/** Un supervisor y el coordinador de UN al que responde. */
+export interface SupervisorUnidad {
   id: number;
   nombre: string;
   apellido: string;
-  cargo: CargoVentas;
   medio: string;
-  superior_id: number | null;
+  /** Cómo aparece en `Oportunidad/Administrador` (el medio, si Odoo no lo escribe distinto). */
+  medio_supervisor: string;
+  /** Vacío: sus ventas no pagan a ningún coordinador de UN. */
+  coord_un_id: number | null;
 }
 
-export interface ComisionesJerarquiaProps {
-  personas: PersonaJerarquia[];
-  cargos: CatalogoOption[];
-  /** A qué cargo responde cada uno (el coordinador de UN no responde a nadie). */
-  superiorDe: Partial<Record<CargoVentas, CargoVentas>>;
+export interface ComisionesSupervisoresProps {
+  supervisores: SupervisorUnidad[];
+  coordinadores: { id: number; nombre: string }[];
 }
 
 export interface TramoAsesor {

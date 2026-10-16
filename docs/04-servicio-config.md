@@ -54,7 +54,7 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_manage_catalogo_operacional` | Catálogos › Productos: planes, planes reguladores y los productos por registrar e ignorados |
 | `can_manage_catalogo_comercial` | Catálogos › Estructura: zonas, sites, estados y las zonas por registrar e ignoradas |
 | `can_manage_catalogo_ventas` | Catálogos › Ventas: directorio de ventas, unidades de negocio y objetivos comerciales |
-| `can_manage_comisiones` | Comisiones: crear y cerrar periodos, revisar ventas, escribir cumplimientos; jerarquía y condiciones de pago |
+| `can_manage_comisiones` | Comisiones: crear y cerrar periodos, revisar ventas, escribir cumplimientos; supervisores por UN y condiciones de pago |
 
 > **Añadir un permiso** es añadir un campo booleano a `PermissionMatrix` y su
 > nombre a una de las dos listas. A partir de ahí aparece solo en la interfaz de

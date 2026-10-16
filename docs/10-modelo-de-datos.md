@@ -44,7 +44,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
 | `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
 | `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
-| `comisiones_jerarquia` | `PosicionJerarquia` | A quién responde cada persona de ventas (una fila por persona; la cima no tiene). Solo rellena lo que la venta no trae |
+| `comisiones_supervisor_unidad` | `SupervisorUnidad` | A qué coordinador de UN responde cada supervisor (una fila por supervisor; sin fila, sus ventas no pagan a ningún coordinador de UN). Lo único de la estructura de ventas que no sale de la venta |
 | `comisiones_condiciones` | `CondicionesComision` | Fila única: montos, tramos (JSON) del asesor y del coordinador de UN, día promocional habitual y días de espera |
 | `comisiones_periodos` | `ComisionPeriodo` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana), `estado` (borrador/cerrado) y, al cerrar, `condiciones` y `resumen` congelados |
 | `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta por facturar en progreso: contar en su periodo o diferir a otro. Única por `(orden, periodo_origen)` |

@@ -38,8 +38,8 @@ from services.comisiones.models import (
     ComisionVenta,
     CondicionesComision,
     IndicadorComision,
-    PosicionJerarquia,
     RevisionComision,
+    SupervisorUnidad,
 )
 from services.subscriptions.analytics.queries import (
     calculate_aggregation_totals,
@@ -177,7 +177,7 @@ def _indice_planes() -> tuple[dict[tuple[str, str], dict], dict[str, dict]]:
 
 
 class _Directorio:
-    """El directorio de ventas y la jerarquia, indexados para resolver literales."""
+    """El directorio de ventas, indexado para resolver literales, y la UN de cada supervisor."""
 
     def __init__(self):
         self.personas = {p.id: p for p in PersonaVentas.objects.all()}
@@ -187,7 +187,7 @@ class _Directorio:
         self.por_usuario = {
             clave_nombre(p.usuario_odoo): p for p in self.personas.values() if p.usuario_odoo
         }
-        self.superior = dict(PosicionJerarquia.objects.values_list("persona_id", "superior_id"))
+        self.unidad = dict(SupervisorUnidad.objects.values_list("supervisor_id", "coord_un_id"))
 
     def nombre(self, persona_id: int | None) -> str:
         persona = self.personas.get(persona_id) if persona_id else None
@@ -197,23 +197,30 @@ class _Directorio:
         persona = self.personas.get(persona_id) if persona_id else None
         return persona.cargo if persona else ""
 
-    def subir_hasta(self, desde: int | None, cargo: str) -> int | None:
-        """El primer superior de `desde` (el mismo incluido) con el cargo pedido."""
-        actual, vistos = desde, set()
-        while actual is not None and actual not in vistos:
-            if self.cargo(actual) == cargo:
-                return actual
-            vistos.add(actual)
-            actual = self.superior.get(actual)
+    def unidad_de(self, persona_id: int | None) -> int | None:
+        """El coordinador de UN de lo que supervisa o vende `persona_id`."""
+        cargo = self.cargo(persona_id)
+        if cargo == "coord_un":
+            return persona_id
+        if cargo == "supervisor":
+            return self.unidad.get(persona_id)
         return None
 
     def resolver(self, medio: str, supervisor: str, vendedor: str) -> tuple[dict[str, int | None], list[str]]:
         """Las personas de una venta y los avisos de lo que no se pudo resolver.
 
-        Lo que trae la venta manda; la jerarquia solo rellena una columna
-        vacia, y da siempre el coordinador de UN (Odoo no lo tiene). Un
-        literal que no esta en el directorio no se rellena con la jerarquia:
-        es un problema de registro, y se avisa.
+        Cada columna se busca en el directorio tal y como viene, sin rellenar
+        nada: una venta sin `Vendedor` no paga a ninguna oficina. Un literal
+        que no esta en el directorio es un problema de registro, y se avisa.
+
+        Cualquier cargo puede ocupar cualquier columna: un coordinador de
+        oficina o de UN tambien vende (`Medio`) y supervisa (`Oportunidad/Administrador`).
+
+        El coordinador de UN sale del supervisor de la venta: el que tenga
+        asignado si es un supervisor, el mismo si es un coordinador de UN, y
+        ninguno si es una oficina. Si la venta no trae supervisor, de quien
+        vendio con la misma regla. Un supervisor escrito pero sin registrar no
+        se sustituye por quien vendio: seria inventarle el equipo.
         """
         avisos: list[str] = []
 
@@ -230,11 +237,12 @@ class _Directorio:
         supervisor_id = buscar(supervisor, self.por_supervisor, "Supervisor")
         oficina_id = buscar(vendedor, self.por_usuario, "Vendedor")
 
-        if not supervisor:
-            supervisor_id = self.subir_hasta(medio_id, "supervisor")
-        if not vendedor:
-            oficina_id = self.subir_hasta(supervisor_id or medio_id, "coord_oficina")
-        coord_un_id = self.subir_hasta(oficina_id or supervisor_id or medio_id, "coord_un")
+        if supervisor_id is not None:
+            coord_un_id = self.unidad_de(supervisor_id)
+        elif not supervisor:
+            coord_un_id = self.unidad_de(medio_id)
+        else:
+            coord_un_id = None
         return {
             "medio_id": medio_id,
             "supervisor_id": supervisor_id,

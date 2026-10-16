@@ -108,8 +108,8 @@ class PermissionMatrix(models.Model):
     can_view_import_history = models.BooleanField(default=False)
 
     # --- Comisiones ---
-    # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar la
-    # jerarquia y las condiciones de pago es `can_manage_comisiones`.
+    # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar los
+    # supervisores de cada UN y las condiciones de pago es `can_manage_comisiones`.
     can_view_comisiones = models.BooleanField(default=False)
 
     # --- Acciones globales ---

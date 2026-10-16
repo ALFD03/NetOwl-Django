@@ -23,6 +23,12 @@ La politica, en resumen:
 Una venta propia de un supervisor no le cuenta ademas como venta de equipo:
 cobra 4$, no 6.5$. Si que cuenta como venta de equipo para quienes estan por
 encima de el.
+
+El equipo de cada uno sale de la propia venta: la oficina cobra por las que
+la nombran como `Vendedor` y el supervisor por las que lo nombran como
+`Oportunidad/Administrador`. El coordinador de UN cobra por las de los supervisores
+que le responden, sean de la oficina que sean; la venta de un supervisor sin
+coordinador de UN llega aqui sin `coord_un_id`.
 """
 
 from __future__ import annotations
@@ -177,8 +183,9 @@ def monto_un(crecimiento: float, tramos: list[dict[str, float | None]]) -> float
 class Venta:
     """Una venta del periodo con las personas que cobran por ella ya resueltas.
 
-    Los `*_id` son de `PersonaVentas`; nulos si el literal no esta en el
-    directorio (o, en el coordinador de UN, si la jerarquia no lo da).
+    Los `*_id` son de `PersonaVentas`; nulos si la venta no trae la columna o
+    su literal no esta en el directorio (y, en el coordinador de UN, si el
+    supervisor no tiene uno asignado).
     """
 
     orden: str
@@ -229,6 +236,29 @@ def calcular_pagos(
     - `crecimientos`: % de crecimiento de las unidades de cada coordinador de
       UN; nulo es "desconocido", y entonces sus ventas de equipo no se pagan
       hasta que se conozca.
+
+    **Cada persona cobra una venta una sola vez, con la regla de su cargo**,
+    ocupe las columnas que ocupe. Un coordinador de oficina o de UN puede ser
+    el `Medio` (venta propia) o el supervisor de la venta, y la oficina suele
+    ser a la vez `Medio` y `Vendedor`: quien vendio cobra la propia y nada mas;
+    los demas, una venta de equipo cada uno.
+
+    >>> cond = {"monto_equipo": 2.5, "monto_directa": 4, "monto_directa_un": 4,
+    ...         "tramos_asesor": validar_tramos_asesor([{"desde": 0, "monto": 5, "descontar": 0}]),
+    ...         "tramos_un": validar_tramos_un([{"desde_pct": None, "monto": 2}])}
+    >>> cargos = {1: "asesor", 7: "coord_un", 9: "coord_oficina"}
+
+    El coordinador de UN como supervisor de la venta, y como su coordinador:
+
+    >>> p = calcular_pagos([Venta("A", False, 0, None, 1, 7, 9, 7)], cargos, cond, {}, {7: 1.0})
+    >>> p[1].ventas_propias, p[7].ventas_equipo, p[9].ventas_equipo
+    (1, 1, 1)
+
+    La oficina como `Medio` y `Vendedor`:
+
+    >>> p = calcular_pagos([Venta("B", False, 0, None, 9, None, 9, None)], cargos, cond, {9: 100}, {})
+    >>> p[9].ventas_propias, p[9].ventas_equipo, p[9].neto
+    (1, 0, 4.0)
     """
     pagos: dict[int, Pago] = {}
 
@@ -251,9 +281,9 @@ def calcular_pagos(
 
         if venta.medio_id is not None:
             pago(venta.medio_id).ventas_propias += 1
-        for superior in (venta.supervisor_id, venta.coord_oficina_id, venta.coord_un_id):
-            if superior is not None and superior != venta.medio_id:
-                pago(superior).ventas_equipo += 1
+        superiores = {venta.supervisor_id, venta.coord_oficina_id, venta.coord_un_id} - {None, venta.medio_id}
+        for superior in superiores:
+            pago(superior).ventas_equipo += 1
 
     monto_equipo = float(condiciones["monto_equipo"])
     monto_directa = float(condiciones["monto_directa"])

@@ -184,7 +184,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     tone: 'green',
     perms: [
       { key: PERMISSIONS.VIEW_COMISIONES, label: 'Ver el informe de comisiones', section: 'Ver' },
-      { key: PERMISSIONS.MANAGE_COMISIONES, label: 'Calcular, revisar y cerrar periodos; jerarquía y condiciones', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_COMISIONES, label: 'Calcular, revisar y cerrar periodos; supervisores por UN y condiciones', section: 'Administrar' },
     ],
   },
   {

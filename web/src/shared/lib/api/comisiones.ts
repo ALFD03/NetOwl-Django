@@ -35,8 +35,9 @@ export const comisionesApi = {
     periodo: string; persona_id: number; cumplimiento_pct?: number | null; crecimiento_pct?: number | null;
   }) => (await apiClient.post<Respuesta>('/comisiones/api/indicador/guardar/', body)).data,
 
-  guardarJerarquia: async (persona_id: number, superior_id: number | null) =>
-    (await apiClient.post<Respuesta>('/comisiones/api/jerarquia/guardar/', { persona_id, superior_id })).data,
+  /** El coordinador de UN de uno o varios supervisores; `null` se lo quita. */
+  asignarUnidad: async (supervisor_ids: number[], coord_un_id: number | null) =>
+    (await apiClient.post<Respuesta>('/comisiones/api/supervisores/unidad/', { supervisor_ids, coord_un_id })).data,
 
   guardarCondiciones: async (body: Record<string, unknown>) =>
     (await apiClient.post<Respuesta>('/comisiones/api/condiciones/guardar/', body)).data,

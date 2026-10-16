@@ -1,11 +1,11 @@
-"""Configuracion de pago de comisiones: la jerarquia y las condiciones.
+"""Configuracion de pago de comisiones: los supervisores de cada UN y las condiciones.
 
-Quien cobra por una venta sale, primero, de la propia suscripcion: `Medio`
-es quien vendio, `Medio/Supervisor` su supervisor y `Vendedor` el coordinador
-de oficina. La jerarquia de aqui **solo rellena huecos**: siempre el
-coordinador de unidad de negocio, que Odoo no trae, y el supervisor o el
-coordinador de oficina cuando la venta llega sin ellos. Asi una venta conserva
-el equipo con el que se hizo aunque la persona cambie de equipo despues.
+Quien cobra por una venta sale de la propia suscripcion y de nada mas:
+`Medio` es quien vendio, `Oportunidad/Administrador` su supervisor y `Vendedor` el
+coordinador de oficina. Lo unico que Odoo no trae es el coordinador de unidad
+de negocio, y eso es lo que se configura aqui: a que coordinador de UN
+responde cada supervisor (`SupervisorUnidad`). La venta paga al de su
+supervisor; un supervisor sin coordinador de UN no le paga a ninguno.
 
 Las condiciones son las tarifas y los tramos. No se versionan: un periodo
 cerrado guarda una copia de las que uso (ver `ComisionPeriodo`), asi que
@@ -21,35 +21,29 @@ from django.db import models
 
 from services.catalogos.models import PersonaVentas
 
-# A quien responde cada cargo. El coordinador de unidad de negocio es la cima.
-SUPERIOR_DE = {
-    "asesor": "supervisor",
-    "supervisor": "coord_oficina",
-    "coord_oficina": "coord_un",
-}
 
+class SupervisorUnidad(models.Model):
+    """El coordinador de unidad de negocio al que responde un supervisor.
 
-class PosicionJerarquia(models.Model):
-    """De quien depende una persona del directorio de ventas.
-
-    Una fila por persona (la cima no tiene). El superior tiene que tener el
-    cargo inmediatamente superior al de la persona: un asesor responde a un
-    supervisor, un supervisor a un coordinador de oficina y este a un
-    coordinador de unidad de negocio. Lo comprueba la vista al guardar.
+    Una fila por supervisor; sin fila, sus ventas no pagan a ningun
+    coordinador de UN. Es independiente de la oficina para la que carga: un
+    mismo coordinador de UN tiene supervisores de oficinas distintas, y la
+    oficina de cada venta la dice su `Vendedor`. La vista comprueba los cargos
+    al guardar.
     """
 
-    persona = models.OneToOneField(PersonaVentas, on_delete=models.CASCADE, related_name="posicion")
-    superior = models.ForeignKey(PersonaVentas, on_delete=models.CASCADE, related_name="subordinados")
+    supervisor = models.OneToOneField(PersonaVentas, on_delete=models.CASCADE, related_name="unidad_comision")
+    coord_un = models.ForeignKey(PersonaVentas, on_delete=models.CASCADE, related_name="supervisores_comision")
     actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "comisiones_jerarquia"
-        verbose_name = "posicion en la jerarquia"
-        verbose_name_plural = "jerarquia de ventas"
+        db_table = "comisiones_supervisor_unidad"
+        verbose_name = "coordinador de UN de un supervisor"
+        verbose_name_plural = "supervisores por coordinador de UN"
 
     def __str__(self):
-        return f"{self.persona} -> {self.superior}"
+        return f"{self.supervisor} -> {self.coord_un}"
 
 
 def _tramos_asesor() -> list[dict]:

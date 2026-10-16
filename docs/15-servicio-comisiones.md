@@ -6,8 +6,8 @@ primeras facturas de lo instalado ya deberían estar pagadas.
 
 ```
 services/comisiones/
-├── models.py            Jerarquía, condiciones, periodos, revisiones, indicadores y lo congelado
-├── views.py             Informe, jerarquía, condiciones y sus escrituras
+├── models.py            Supervisores por UN, condiciones, periodos, revisiones, indicadores y lo congelado
+├── views.py             Informe, supervisores por UN, condiciones y sus escrituras
 ├── urls.py
 └── analytics/
     ├── reglas.py        Las reglas de pago, como funciones puras (con doctests)
@@ -75,16 +75,45 @@ Las tres columnas del export se cruzan contra el directorio de ventas, sin
 distinguir mayúsculas ni el sufijo `(User)` (`core.odoo_nombres.clave_nombre`):
 
 - `Medio` → quien vendió (`PersonaVentas.medio`).
-- `Medio/Supervisor` → su supervisor (`medio` también).
+- `Oportunidad/Administrador` → su supervisor (`PersonaVentas.medio_supervisor`, o el
+  `medio` si no lo tiene: Odoo a veces escribe a la misma persona distinto como
+  supervisor que como medio, y en Catálogos › Notificaciones ese nombre se
+  vincula a quien ya está registrado con «Vincular»).
 - `Vendedor` → el coordinador de oficina (`PersonaVentas.usuario_odoo`).
 
-**Lo que trae la venta manda.** La estructura jerárquica (`PosicionJerarquia`:
-asesor → supervisor → coordinador de oficina → coordinador de UN) solo rellena
-una columna **vacía** y da **siempre** el coordinador de unidad de negocio, que
-Odoo no tiene. Un literal que no está en el directorio no se rellena con la
-jerarquía: es un problema de registro, y la venta lo lleva como aviso (y sale
-en Catálogos › Notificaciones). Así una venta conserva el equipo con el que se
-hizo aunque la persona cambie de equipo después.
+**Lo que trae la venta es lo que cobra**, sin rellenar nada: una venta sin
+`Vendedor` no paga a ninguna oficina, y una sin `Oportunidad/Administrador` a ningún
+supervisor. Un literal que no está en el directorio es un problema de registro:
+la venta lo lleva como aviso (y sale en Catálogos › Notificaciones).
+
+Lo único que Odoo no trae es el **coordinador de unidad de negocio**, y es lo
+único que se configura (`SupervisorUnidad`, en `/comisiones/supervisores/`): a
+qué coordinador de UN responde cada supervisor. Es independiente de la oficina:
+un mismo coordinador de UN tiene supervisores que cargan para oficinas
+distintas.
+
+```
+Oficina Yanny          Oficina Herminia          ← cobran por las ventas con su Vendedor
+   ├── Super1 ─┐          ├── Super3 ─┐
+   └── Super2 ─┤          └── Super4 ─┤
+               └──── UN Alvaro Maldonado ┘        ← cobra por las de sus cuatro supervisores
+```
+
+**Cualquier cargo puede ocupar cualquier columna.** Un coordinador de oficina o
+de UN también vende (`Medio`) y supervisa (`Oportunidad/Administrador`); en 2026, 3.049
+ventas tienen a la oficina como `Medio` (casi todas también como `Vendedor`) y
+1.608 a un coordinador de UN como supervisor. Por eso:
+
+- El coordinador de UN de la venta sale de su supervisor: el que tenga asignado
+  si es un supervisor, él mismo si es un coordinador de UN, ninguno si es una
+  oficina. Sin supervisor, de quien vendió con la misma regla. Un supervisor sin
+  coordinador de UN no le paga a ninguno.
+- **Cada persona cobra una venta una sola vez, con la regla de su cargo.** Quien
+  vendió cobra la venta propia y nada más; cada uno de los demás, una venta de
+  equipo, aunque ocupe dos columnas (la oficina como supervisor y `Vendedor`, el
+  coordinador de UN como supervisor y coordinador). Un coordinador de UN que
+  supervisa cobra esas ventas con su tramo de crecimiento, no con la tarifa de
+  supervisor.
 
 ## 4. Lo que cobra cada uno
 
@@ -150,7 +179,7 @@ Reabrir borra lo congelado y no se permite si el periodo siguiente está cerrado
 | Página | Contenido | Permiso |
 |---|---|---|
 | `/comisiones/?periodo=` | El informe: ventana, KPIs, pagos por cargo, revisión, detalle de ventas, exportación a Excel, cierre | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
-| `/comisiones/jerarquia/` | El árbol de equipos y a quién responde cada persona | `can_manage_comisiones` |
+| `/comisiones/supervisores/` | A qué coordinador de UN responde cada supervisor (uno a uno o en bloque) | `can_manage_comisiones` |
 | `/comisiones/condiciones/` | Tramos, montos, día promocional, días de espera y los % de los planes PYME | `can_manage_comisiones` |
 
 El detalle venta a venta no viaja en los props —un mes son miles de filas—: lo

@@ -88,7 +88,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     permission: [PERMISSIONS.VIEW_COMISIONES, PERMISSIONS.MANAGE_COMISIONES],
     pages: [
       { id: 'informe', label: 'Informe', href: '/comisiones/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_COMISIONES },
-      { id: 'jerarquia', label: 'Estructura jerárquica', href: '/comisiones/jerarquia/', icon: GitFork, permission: PERMISSIONS.MANAGE_COMISIONES, section: CONFIGURACION },
+      { id: 'supervisores', label: 'Supervisores por UN', href: '/comisiones/supervisores/', icon: GitFork, permission: PERMISSIONS.MANAGE_COMISIONES, section: CONFIGURACION },
       { id: 'condiciones', label: 'Condiciones de pago', href: '/comisiones/condiciones/', icon: SlidersHorizontal, permission: PERMISSIONS.MANAGE_COMISIONES, section: CONFIGURACION },
     ],
   },

@@ -3,8 +3,9 @@
 - `/comisiones/` — el informe de un periodo. Lo ve `can_view_comisiones`;
   crear el periodo, decidir las revisiones, escribir cumplimientos y cerrar es
   `can_manage_comisiones`.
-- `/comisiones/jerarquia/` y `/comisiones/condiciones/` — la configuracion de
-  pago, con `can_manage_comisiones`.
+- `/comisiones/supervisores/` y `/comisiones/condiciones/` — la configuracion
+  de pago (el coordinador de UN de cada supervisor, las tarifas), con
+  `can_manage_comisiones`.
 
 El informe de un borrador se calcula en la peticion: es un mes de
 instalaciones, no el historico, y no necesita el worker.
@@ -38,12 +39,11 @@ from services.comisiones.analytics.cierre import NoSePuedeCerrar, cerrar_periodo
 from services.comisiones.analytics.queries import informe, periodo_por_defecto, periodos, propuesta
 from services.comisiones.analytics.reglas import validar_tramos_asesor, validar_tramos_un
 from services.comisiones.models import (
-    SUPERIOR_DE,
     ComisionPeriodo,
     CondicionesComision,
     IndicadorComision,
-    PosicionJerarquia,
     RevisionComision,
+    SupervisorUnidad,
 )
 from services.config.decorators import permission_required
 from services.subscriptions.models import Plan
@@ -363,29 +363,31 @@ def api_periodo_reabrir(request):
     return JsonResponse({"status": "success", "message": f"Periodo {clave} reabierto."})
 
 
-# --- Configuracion: la jerarquia ----------------------------------------------------------
+# --- Configuracion: los supervisores de cada UN --------------------------------------------
 
-def _persona_jerarquia(p: PersonaVentas, superiores: dict[int, int]) -> dict[str, Any]:
+def _supervisor(p: PersonaVentas, unidades: dict[int, int]) -> dict[str, Any]:
     return {
         "id": p.id,
         "nombre": p.nombre,
         "apellido": p.apellido,
-        "cargo": p.cargo,
         "medio": p.medio,
-        "superior_id": superiores.get(p.id),
+        "medio_supervisor": p.literal_supervisor,
+        "coord_un_id": unidades.get(p.id),
     }
 
 
 @login_required
 @permission_required(PERMISO_GESTION)
-def jerarquia_view(request):
-    """La estructura jerarquica: a que equipo pertenece cada persona de ventas."""
-    superiores = dict(PosicionJerarquia.objects.values_list("persona_id", "superior_id"))
-    return render_inertia(request, "Comisiones/Jerarquia", clean_json_props({
-        "personas": [_persona_jerarquia(p, superiores) for p in PersonaVentas.objects.all()],
-        "cargos": [{"value": v, "label": t} for v, t in CARGO_CHOICES],
-        "superiorDe": SUPERIOR_DE,
-        "section": "jerarquia",
+def supervisores_view(request):
+    """A que coordinador de UN responde cada supervisor: lo unico que Odoo no trae."""
+    unidades = dict(SupervisorUnidad.objects.values_list("supervisor_id", "coord_un_id"))
+    personas = PersonaVentas.objects.filter(cargo__in=["supervisor", "coord_un"]).order_by("nombre", "apellido")
+    return render_inertia(request, "Comisiones/Supervisores", clean_json_props({
+        "supervisores": [_supervisor(p, unidades) for p in personas if p.cargo == "supervisor"],
+        "coordinadores": [
+            {"id": p.id, "nombre": p.nombre_completo} for p in personas if p.cargo == "coord_un"
+        ],
+        "section": "supervisores",
     }))
 
 
@@ -394,34 +396,44 @@ def jerarquia_view(request):
 @ratelimit(key="ip", rate="60/m", block=True)
 @require_POST
 @_escritura
-def api_jerarquia_guardar(request):
-    """Fija (o quita, con `superior_id` vacio) el superior de una persona.
+def api_supervisores_unidad(request):
+    """Asigna (o quita, con `coord_un_id` vacio) el coordinador de UN de uno o varios supervisores.
 
-    El superior tiene que tener el cargo inmediatamente superior: asesor →
-    supervisor → coordinador de oficina → coordinador de UN.
+    `{supervisor_ids: [...], coord_un_id}`. Todo o nada: si alguno no es
+    supervisor, no se guarda ninguno.
     """
     data = _cuerpo(request)
-    persona = PersonaVentas.objects.filter(pk=data.get("persona_id")).first()
-    if persona is None:
-        raise DatosInvalidos("La persona no existe.")
-    if not data.get("superior_id"):
-        PosicionJerarquia.objects.filter(persona=persona).delete()
-        return JsonResponse({"status": "success", "message": "Superior quitado."})
+    ids = data.get("supervisor_ids")
+    if not isinstance(ids, list) or not ids:
+        raise DatosInvalidos("No llegó ningún supervisor.")
+    supervisores = list(PersonaVentas.objects.filter(pk__in=ids))
+    if len(supervisores) != len(set(ids)):
+        raise DatosInvalidos("Alguno de los supervisores ya no existe.")
+    otros = [p.nombre_completo for p in supervisores if p.cargo != "supervisor"]
+    if otros:
+        raise DatosInvalidos("No son supervisores: " + ", ".join(otros) + ".")
 
-    esperado = SUPERIOR_DE.get(persona.cargo)
-    if esperado is None:
-        raise DatosInvalidos("El coordinador de unidad de negocio no responde a nadie.")
-    superior = PersonaVentas.objects.filter(pk=data.get("superior_id")).first()
-    if superior is None:
-        raise DatosInvalidos("El superior no existe.")
-    if superior.cargo != esperado:
-        etiqueta = dict(CARGO_CHOICES)[esperado].lower()
-        raise DatosInvalidos(f"El superior de {persona.nombre_completo} tiene que ser un {etiqueta}.")
+    coord_un = None
+    if data.get("coord_un_id"):
+        coord_un = PersonaVentas.objects.filter(pk=data["coord_un_id"]).first()
+        if coord_un is None or coord_un.cargo != "coord_un":
+            raise DatosInvalidos("El coordinador elegido no es un coordinador de unidad de negocio.")
 
-    PosicionJerarquia.objects.update_or_create(
-        persona=persona, defaults={"superior": superior, "actualizado_por": request.user}
-    )
-    return JsonResponse({"status": "success", "message": "Superior guardado."})
+    with transaction.atomic():
+        if coord_un is None:
+            SupervisorUnidad.objects.filter(supervisor__in=supervisores).delete()
+        else:
+            for supervisor in supervisores:
+                SupervisorUnidad.objects.update_or_create(
+                    supervisor=supervisor, defaults={"coord_un": coord_un, "actualizado_por": request.user}
+                )
+
+    n = len(supervisores)
+    destino = f"a {coord_un.nombre_completo}" if coord_un else "sin coordinador de UN"
+    return JsonResponse({
+        "status": "success",
+        "message": f"{n} supervisor{'es' if n != 1 else ''} {destino}.",
+    })
 
 
 # --- Configuracion: las condiciones ---------------------------------------------------------
