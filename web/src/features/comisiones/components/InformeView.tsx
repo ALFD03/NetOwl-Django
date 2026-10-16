@@ -82,7 +82,7 @@ export function InformeView({
     setExportando(true);
     try {
       const ventas = c.ventas ?? (await c.cargarVentas()) ?? [];
-      await exportarInforme(periodo, informe.pagos, ventas, etiquetaCargo);
+      await exportarInforme(informe, ventas, condiciones, tasa, etiquetaCargo);
     } catch {
       c.setError('No se pudo generar el Excel del informe.');
     } finally {

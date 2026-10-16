@@ -252,6 +252,22 @@ oficina, supervisor y vendedor con sus ventas válidas, unas trescientas al mes)
 periodo está cerrado, si no las vigentes), para armar la nómina y explicar cada
 recorte sin mandar las ventas.
 
+### El Excel
+
+`lib/exportar.ts` escribe un libro para leer, no una lista que filtrar:
+
+- **Resumen**: el total en $ y en Bs, la tasa CONATEL y su fuente, cuántos
+  cobran, y lo que se paga por cargo, por unidad de negocio (con las oficinas
+  como una fila aparte que cierra el total) y por oficina.
+- **Coord. de UN**, **Oficinas** (con «comparte ventas con»), **Supervisores**
+  (por unidad, con subtotales) y **Asesores** (banda de unidad, sub-banda de
+  supervisor, subtotal por unidad y total). Las ventas pagadas de menos van en
+  ámbar, quien no cobra en gris, y una columna de observaciones dice el motivo.
+- **Ventas**: el detalle venta a venta.
+
+Lo escribe `shared/lib/excel.downloadStyledWorkbook`, que recibe las hojas ya
+maquetadas celda a celda.
+
 ## 6. Páginas y permisos
 
 | Página | Contenido | Permiso |

@@ -328,8 +328,9 @@ sale-by-sale detail is fetched from `api/ventas/` the first time it is needed an
 effect of the table being edited; the server's figure is the one that counts.
 
 How the payroll is *laid out* is client work: `lib/nomina.ts` places each person once (unit → supervisor →
-advisors, offices apart) from the `equipos` rows, and explains each cut from `condiciones`. It computes no
-payment — every amount is the server's `neto`.
+advisors, offices apart) from the `equipos` rows, and explains each cut from `condiciones`; `lib/exportar.ts`
+writes the same layout to Excel through `shared/lib/excel.downloadStyledWorkbook`. Neither computes a payment —
+every amount is the server's `neto`.
 
 ## Commercial objectives are applied here, not stored
 

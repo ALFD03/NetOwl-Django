@@ -7,6 +7,8 @@
  * someone clicks Export, and this keeps it out of the initial bundle.
  */
 
+import type { Cell as ExcelCell, CellObject as ExcelCellObject, Row as ExcelRow } from 'write-excel-file/browser';
+
 /** One column of the sheet: a header and the RAW value behind the cell. */
 export interface ExcelColumn<Row> {
   header: string;
@@ -129,5 +131,39 @@ export async function downloadSheetsAsExcel(
         width: column.width ?? Math.max(12, column.header.length + 4),
       })),
     })),
+  ).toFile(`${safeFileName(fileName)}.xlsx`);
+}
+
+export type { ExcelCell, ExcelCellObject, ExcelRow };
+
+/** Una hoja ya maquetada celda a celda: títulos, bandas, totales y estilos propios. */
+export interface ExcelStyledSheet {
+  sheetName: string;
+  rows: ExcelRow[];
+  /** Ancho de cada columna, en caracteres. */
+  widths: number[];
+  /** Filas de arriba que quedan fijas al desplazarse (la cabecera de una tabla). */
+  stickyRows?: number;
+}
+
+/**
+ * Escribe un libro cuyas hojas ya vienen maquetadas.
+ *
+ * Es para los entregables que alguien va a leer, no a filtrar: un resumen con
+ * bloques, una tabla agrupada con bandas y subtotales. Las tablas planas siguen
+ * yendo por `downloadSheetsAsExcel`, que decide sola cuándo una celda es número.
+ */
+export async function downloadStyledWorkbook(sheets: ExcelStyledSheet[], fileName: string): Promise<void> {
+  const { default: writeXlsxFile } = await import('write-excel-file/browser');
+  await writeXlsxFile(
+    sheets.map((sheet) => ({
+      data: sheet.rows,
+      sheet: safeSheetName(sheet.sheetName),
+      stickyRowsCount: sheet.stickyRows,
+      showGridLines: false,
+      orientation: 'landscape' as const,
+      columns: sheet.widths.map((width) => ({ width })),
+    })),
+    { fontFamily: 'Calibri', fontSize: 11 },
   ).toFile(`${safeFileName(fileName)}.xlsx`);
 }
