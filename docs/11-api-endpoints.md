@@ -126,7 +126,9 @@ es de esta app.
 | POST | `api/periodo/cerrar/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** con lo que falta si queda algo pendiente |
 | POST | `api/periodo/reabrir/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** si el siguiente está cerrado |
 | POST | `api/revision/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, orden | ordenes[], decision: contar|no_contar|'', nota?}`. Vacía deshace. Hasta 5 000 órdenes por petición |
-| POST | `api/indicador/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, persona_id, cumplimiento_pct? , crecimiento_pct?}`. Vacío borra el valor |
+| POST | `api/indicador/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, persona_id, cumplimiento_pct? , crecimiento_pct?}`. Vacío borra el valor (el cumplimiento vuelve al general) |
+| GET | `api/tasa-actual/` | `can_view_comisiones` | 30/m | La tasa oficial del BCV de hoy (`ve.dolarapi.com`), sin guardarla: referencia para ver el pago en bolívares. 502 si el servicio falla |
+| POST | `api/cumplimiento-general/` | `can_manage_comisiones` | 60/m | `{periodo, cumplimiento_pct}`: el de todos los supervisores y coord. de oficina sin uno propio. Vacío lo borra |
 | POST | `api/supervisores/unidad/` | `can_manage_comisiones` | 60/m | `{supervisor_ids: [...], coord_un_id}`: el coordinador de UN de uno o varios supervisores; vacío se lo quita. Todo o nada: **400** si alguno no es supervisor o el coordinador no es de UN |
 | POST | `api/condiciones/guardar/` | `can_manage_comisiones` | 30/m | Las condiciones enteras. **400** si los tramos no son coherentes |
 

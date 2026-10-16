@@ -1,9 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
 
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { comisionesApi } from '@/shared/lib/api/comisiones';
-import type { VentaComision } from '../types';
+import type { TasaBolivares, VentaComision } from '../types';
 
 /**
  * Estado del informe de comisiones.
@@ -23,6 +23,20 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
   const [cargandoVentas, setCargandoVentas] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // La tasa de hoy no viaja en los props: es de un tercero y no debe frenar la
+  // página. Se pide una vez; si falla, se dice en `fuente`.
+  const [tasaHoy, setTasaHoy] = useState<TasaBolivares | null>(null);
+  useEffect(() => {
+    let vigente = true;
+    comisionesApi
+      .tasaActual()
+      .then((r) => vigente && setTasaHoy({ tasa: r.tasa, fuente: r.fuente }))
+      .catch((err: unknown) => vigente && setTasaHoy({ tasa: null, fuente: getApiErrorMessage(err, 'No se pudo consultar.') }));
+    return () => {
+      vigente = false;
+    };
+  }, []);
 
   const cargarVentas = useCallback(async () => {
     if (!existe || ventas || cargandoVentas) return ventas;
@@ -58,6 +72,7 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
 
   return {
     ventas, cargandoVentas, cargarVentas,
+    tasaHoy,
     guardando, error, setError,
     guardarPeriodo: (body: { periodo: string; inicio_promo: string; inicio?: string }) =>
       escribir(() => comisionesApi.guardarPeriodo(body), 'No se pudo guardar el periodo.'),
@@ -72,6 +87,11 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
       escribir(
         () => comisionesApi.guardarIndicador({ periodo, persona_id, cumplimiento_pct: valor }),
         'No se pudo guardar el cumplimiento.',
+      ),
+    guardarCumplimientoGeneral: (valor: number | null) =>
+      escribir(
+        () => comisionesApi.guardarCumplimientoGeneral(periodo, valor),
+        'No se pudo guardar el cumplimiento general.',
       ),
     guardarCrecimiento: (persona_id: number, valor: number | null) =>
       escribir(

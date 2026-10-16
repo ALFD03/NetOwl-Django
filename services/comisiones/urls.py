@@ -16,6 +16,8 @@ urlpatterns = [
     path("api/periodo/reabrir/", views.api_periodo_reabrir, name="api_periodo_reabrir"),
     path("api/revision/guardar/", views.api_revision_guardar, name="api_revision_guardar"),
     path("api/indicador/guardar/", views.api_indicador_guardar, name="api_indicador_guardar"),
+    path("api/cumplimiento-general/", views.api_cumplimiento_general, name="api_cumplimiento_general"),
+    path("api/tasa-actual/", views.api_tasa_actual, name="api_tasa_actual"),
     path("api/supervisores/unidad/", views.api_supervisores_unidad, name="api_supervisores_unidad"),
     path("api/condiciones/guardar/", views.api_condiciones_guardar, name="api_condiciones_guardar"),
 ]

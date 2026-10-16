@@ -33,12 +33,15 @@ export interface PagoComision {
   /** % de cumplimiento aplicado (tope 100); nulo en quien no lo usa. */
   factor_pct: number | null;
   neto: number;
-  /** Lo escrito para el periodo; nulo es "sin definir". */
+  /** El que se aplica: el propio si lo tiene, si no el general; nulo es "sin definir". */
   cumplimiento_pct: number | null;
+  /** El escrito solo para esta persona; nulo es que vale el general. */
+  cumplimiento_propio: number | null;
   crecimiento_pct: number | null;
   crecimiento_calculado: number | null;
   crecimiento_fuente: 'manual' | 'unidades de negocio' | null;
   unidades: string[];
+  /** Asesor: `tramo_desde`, `monto_por_venta`, `ventas_pagadas`. Coord. de UN: `monto_por_venta_equipo`. */
   detalle: Record<string, number | null>;
   avisos: string[];
 }
@@ -82,6 +85,13 @@ export interface InformeComision {
   /** Desde cuándo tiene sentido calcular: las primeras facturas ya deberían estar pagadas. */
   calculo_desde: string;
   antes_de_tiempo: boolean;
+  /**
+   * La tasa en bolívares con que se paga: la de CONATEL del mes siguiente (`mes`),
+   * la misma del reporte ETA. Nula si aún no se publicó o el servicio falló (`aviso`).
+   */
+  tasa_conatel: TasaBolivares & { mes: string; aviso: string };
+  /** El % de cumplimiento de todos los supervisores y coordinadores de oficina sin uno propio. */
+  cumplimiento_general_pct: number | null;
   resumen: {
     candidatas: number;
     validas: number;
@@ -98,6 +108,12 @@ export interface InformeComision {
   revision: VentaComision[];
   /** Lo que impide cerrar. Vacío: se puede cerrar. */
   pendientes_cierre: string[];
+}
+
+/** Una tasa del BCV en bolívares por dólar y de dónde salió. */
+export interface TasaBolivares {
+  tasa: number | null;
+  fuente: string;
 }
 
 /** Lo que propone el formulario del periodo. */

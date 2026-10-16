@@ -11,8 +11,9 @@
    contra el directorio de ventas, tal y como vienen: lo que la venta no trae
    no lo cobra nadie. El coordinador de unidad de negocio, que Odoo no tiene,
    es el del supervisor de la venta (`SupervisorUnidad`).
-4. **Pagos** (`reglas.calcular_pagos`), con el cumplimiento de cada supervisor y
-   coordinador de oficina y el crecimiento de las unidades de cada coordinador
+4. **Pagos** (`reglas.calcular_pagos`), con el cumplimiento de los supervisores
+   y coordinadores de oficina (el general del periodo, o el propio de quien lo
+   tenga) y el crecimiento de las unidades de cada coordinador
    de UN, que sale de Unidades de negocio del mes.
 
 Un borrador no guarda nada: esto se ejecuta cada vez que se abre.
@@ -24,6 +25,7 @@ import calendar
 import re
 from dataclasses import asdict
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 import pandas as pd
@@ -42,6 +44,7 @@ from services.comisiones.models import (
     RevisionComision,
     SupervisorUnidad,
 )
+from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_vigente_el
 from services.subscriptions.analytics.queries import (
     calculate_aggregation_totals,
     get_business_units_data,
@@ -75,6 +78,9 @@ _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
 # El log que deja un cambio de plan en `subscriptions-logs`.
 LOG_CAMBIO_PLAN = "Plan change"
 
+# Los cargos cuyo total multiplica el % de cumplimiento.
+CARGOS_CON_CUMPLIMIENTO = ("supervisor", "coord_oficina")
+
 
 class FaltanColumnas(RuntimeError):
     """La tabla de suscripciones no trae las columnas que Comisiones necesita."""
@@ -92,6 +98,41 @@ def mes_siguiente(periodo: str) -> str:
     """`YYYY-MM` del mes siguiente."""
     anio, mes = (int(x) for x in periodo.split("-"))
     return f"{anio + 1}-01" if mes == 12 else f"{anio}-{mes + 1:02d}"
+
+
+def tasa_conatel(periodo: ComisionPeriodo) -> dict[str, Any]:
+    """La tasa en bolivares con que se paga el periodo: la CONATEL del mes siguiente.
+
+    Las comisiones de un mes se pagan el mes siguiente (las de septiembre en
+    octubre), y la tasa CONATEL de un mes es el valor del bolivar oficial el
+    **dia 1** de ese mes. Si el BCV no publico ese dia, la vigente: la ultima
+    publicada antes (`bcv.consultar_tasa_vigente_el`).
+
+    El valor de un dia pasado ya no cambia, asi que se consulta una vez y se
+    guarda en el periodo. Un mes que aun no empezo no tiene tasa y no se
+    pregunta. Un fallo del servicio no rompe el informe: se devuelve en `aviso`
+    y se vuelve a intentar la proxima vez que se abra.
+    """
+    mes = mes_siguiente(periodo.periodo)
+    primero = dia_del_mes(mes, 1)
+    sin_tasa = {"mes": mes, "dia": primero.isoformat(), "tasa": None, "fuente": ""}
+    if periodo.tasa_conatel is None:
+        if primero > date.today():
+            return {**sin_tasa, "aviso": f"Se conoce a partir del {primero.strftime('%d/%m/%Y')}."}
+        try:
+            tasa, publicada = consultar_tasa_vigente_el(primero)
+        except TasaNoDisponible as e:
+            return {**sin_tasa, "aviso": str(e)}
+        periodo.tasa_conatel = Decimal(str(tasa))
+        periodo.tasa_conatel_publicada = publicada
+        periodo.save(update_fields=["tasa_conatel", "tasa_conatel_publicada"])
+
+    publicada = periodo.tasa_conatel_publicada
+    fuente = f"BCV {publicada.strftime('%d/%m/%Y')}" if publicada else "BCV"
+    if publicada and publicada != primero:
+        fuente += f", vigente el {primero.strftime('%d/%m/%Y')} (ese día no hubo publicación)"
+    fuente += " · ve.dolarapi.com"
+    return {**sin_tasa, "tasa": float(periodo.tasa_conatel), "fuente": fuente, "aviso": ""}
 
 
 def dia_del_mes(periodo: str, dia: int) -> date:
@@ -402,8 +443,14 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         })
 
     indicadores = {i.persona_id: i for i in IndicadorComision.objects.filter(periodo=clave)}
-    cumplimientos = {
+    propios = {
         pid: float(i.cumplimiento_pct) for pid, i in indicadores.items() if i.cumplimiento_pct is not None
+    }
+    general = float(periodo.cumplimiento_general_pct) if periodo.cumplimiento_general_pct is not None else None
+    cumplimientos = {
+        pid: propios.get(pid, general)
+        for pid, p in directorio.personas.items()
+        if p.cargo in CARGOS_CON_CUMPLIMIENTO and propios.get(pid, general) is not None
     }
     manuales = {pid: float(i.crecimiento_pct) for pid, i in indicadores.items() if i.crecimiento_pct is not None}
     crecimientos = _crecimientos(clave, directorio, manuales)
@@ -433,6 +480,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "nombre": persona.nombre_completo if persona else "",
             "medio": persona.medio if persona else "",
             "cumplimiento_pct": cumplimientos.get(pago.persona_id),
+            "cumplimiento_propio": propios.get(pago.persona_id),
             "crecimiento_pct": crecimiento.get("valor"),
             "crecimiento_calculado": crecimiento.get("calculado"),
             "crecimiento_fuente": crecimiento.get("fuente"),
@@ -450,6 +498,9 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         "estado": periodo.estado,
         "calculo_desde": calculo_desde.isoformat(),
         "antes_de_tiempo": hoy < calculo_desde,
+        "cumplimiento_general_pct": general,
+        # Va dentro del informe para que el cierre la congele con el resto.
+        "tasa_conatel": tasa_conatel(periodo),
         "resumen": {
             "candidatas": len(ventas),
             "validas": conteo(VALIDA),
@@ -476,10 +527,10 @@ def _pendientes_cierre(ventas: list[dict[str, Any]], pagos: list[dict[str, Any]]
         pendientes.append(f"{revision} venta(s) por facturar sin decidir en Revisión")
     sin_cumplimiento = [
         p["nombre"] for p in pagos
-        if p["cargo"] in ("supervisor", "coord_oficina") and p["cumplimiento_pct"] is None and p["bruto"]
+        if p["cargo"] in CARGOS_CON_CUMPLIMIENTO and p["cumplimiento_pct"] is None and p["bruto"]
     ]
     if sin_cumplimiento:
-        pendientes.append("Cumplimiento sin definir: " + ", ".join(sin_cumplimiento))
+        pendientes.append("Cumplimiento sin definir (escribe el general): " + ", ".join(sin_cumplimiento))
     sin_crecimiento = [
         p["nombre"] for p in pagos
         if p["cargo"] == "coord_un" and p["crecimiento_pct"] is None and p["ventas_equipo"]

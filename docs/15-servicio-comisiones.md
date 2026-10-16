@@ -151,10 +151,12 @@ Las reglas viven en `reglas.calcular_pagos`; los montos y tramos, en
 - **Supervisor** y **coordinador de oficina**: `monto_equipo` (2.5$) por cada
   venta residencial de su equipo y `monto_directa` (4$) por cada una propia
   (`Medio` es él). El total se multiplica por su **% de cumplimiento del
-  objetivo**, con tope en 100%. El cumplimiento se escribe en el informe
-  (`IndicadorComision`): la política dice que vendrá de un campo de
-  suscripciones que aún no existe. Sin escribir paga como 100% y lo avisa, pero
-  **no deja cerrar**. La PYME queda fuera de la multiplicación: es del vendedor
+  objetivo**, con tope en 100%. La política dice que vendrá de un campo de
+  suscripciones que aún no existe; hasta entonces se escribe en el informe un
+  **cumplimiento general** del periodo (`ComisionPeriodo.cumplimiento_general_pct`),
+  el mismo para todos. Quien tenga uno distinto lo lleva en su fila
+  (`IndicadorComision`), y borrarlo lo devuelve al general. Sin ninguno de los
+  dos paga como 100% y lo avisa, pero **no deja cerrar**. La PYME queda fuera de la multiplicación: es del vendedor
   directo.
 - **Coordinador de unidad de negocio**: por cada venta residencial de su
   equipo, el monto del tramo de **crecimiento del mes de sus unidades** (por
@@ -186,6 +188,23 @@ No se cierra con ventas en revisión sin decidir, supervisores o coordinadores
 de oficina sin cumplimiento, ni coordinadores de UN sin crecimiento conocido. Las
 ventas válidas de un periodo cerrado no vuelven a contar en ningún otro.
 Reabrir borra lo congelado y no se permite si el periodo siguiente está cerrado.
+
+## Bolívares: la tasa CONATEL del mes siguiente
+
+Las comisiones se calculan en dólares y se pagan el mes siguiente (las de
+septiembre, en octubre), así que el informe las pasa a bolívares con la **tasa
+CONATEL de ese mes siguiente**: el valor del bolívar oficial **el día 1**. Si el
+BCV no publicó ese día (fin de semana o feriado), la vigente: la última publicada
+antes, y la fuente lo dice (`bcv.consultar_tasa_vigente_el`). Es independiente
+del reporte ETA, que declara con el primer día *publicado* del mes (hacia
+delante). Se consulta una vez y se guarda en el periodo
+(`ComisionPeriodo.tasa_conatel`, `tasa_conatel_publicada`): el valor de un día
+pasado no cambia. Un mes que aún no empezó no tiene tasa, y un fallo del
+servicio se avisa sin romper el informe.
+
+Como referencia se enseña también la **tasa del día** (`api/tasa-actual/`), que
+no se guarda y se pide aparte para no frenar la página: es una referencia y no
+se paga con ella.
 
 ## 6. Páginas y permisos
 
