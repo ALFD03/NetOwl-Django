@@ -1,7 +1,7 @@
-/** Comisiones › Informe › Nómina: unidad por unidad, y las oficinas aparte. */
+/** Comisiones › Informe › Nómina: unidad por unidad, las oficinas con su equipo sin unidad, y lo que no tiene ninguna. */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, Network, Search, X } from 'lucide-react';
+import { AlertTriangle, Building2, Network, Search, X } from 'lucide-react';
 
 import { formatoBs, formatoMonto, formatoPct, totalBs } from '../lib/formato';
 import { armarNomina } from '../lib/nomina';
@@ -20,10 +20,13 @@ interface NominaViewProps extends Omit<DetalleProps, 'resaltado'> {
  * Los % se escriben en el paso de Indicadores, nunca aquí.
  *
  * Cada persona sale una sola vez (ver `lib/nomina`), así que la suma de la
- * lista es el total a pagar.
+ * lista es el total a pagar. Lo que no tiene unidad va con su oficina; solo lo
+ * que no tiene ninguna de las dos cierra la lista, aparte.
  */
 export function NominaView({ informe, ...props }: NominaViewProps) {
   const nomina = useMemo(() => armarNomina(informe), [informe]);
+  const conUnidad = nomina.unidades.filter((u) => u.id !== null);
+  const aparte = nomina.unidades.find((u) => u.id === null);
   const primera = nomina.unidades[0] ? `u:${nomina.unidades[0].key}` : nomina.oficinas[0] ? `o:${nomina.oficinas[0].pago.persona_id}` : '';
   const [elegida, setElegida] = useState(primera);
   const [busqueda, setBusqueda] = useState('');
@@ -56,7 +59,7 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
   const ir = (personaId: number) => {
     const donde = nomina.ubicacion.get(personaId);
     if (!donde) return;
-    setElegida(donde === 'oficinas' ? `o:${personaId}` : `u:${donde}`);
+    setElegida(donde);
     setResaltado(personaId);
     setBusqueda('');
   };
@@ -135,13 +138,12 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
         <p className="flex items-center gap-2 px-2 pb-1 pt-2 text-[10px] font-black uppercase tracking-wider text-violet-300">
           <Network className="h-3.5 w-3.5" /> Unidades de negocio
         </p>
-        {nomina.unidades.map((u) =>
+        {conUnidad.map((u) =>
           item(
             `u:${u.key}`,
             u.nombre,
             `${u.personas.length} personas${u.coordinador?.crecimiento_pct != null ? ` · crec. ${formatoPct(u.coordinador.crecimiento_pct)}` : ''}`,
             u.usd,
-            u.id === null,
           ))}
 
         {nomina.oficinas.length > 0 && (
@@ -153,9 +155,20 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
           item(
             `o:${o.pago.persona_id}`,
             o.pago.nombre,
-            o.pago.factor_pct === null ? 'cumplimiento sin definir' : `cumplimiento ${formatoPct(o.pago.factor_pct)}`,
-            o.pago.neto,
+            `${o.personas.length} ${o.personas.length === 1 ? 'persona' : 'personas'} · ${
+              o.pago.factor_pct === null ? 'cumpl. sin definir' : `cumpl. ${formatoPct(o.pago.factor_pct)}`
+            }`,
+            o.usd,
           ))}
+
+        {aparte && (
+          <>
+            <p className="flex items-center gap-2 px-2 pb-1 pt-4 text-[10px] font-black uppercase tracking-wider text-amber-300">
+              <AlertTriangle className="h-3.5 w-3.5" /> Aparte
+            </p>
+            {item(`u:${aparte.key}`, aparte.nombre, `${aparte.personas.length} personas`, aparte.usd, true)}
+          </>
+        )}
 
         <div className="mt-3 flex flex-col gap-0.5 border-t border-slate-800 px-2 pt-3">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total a pagar</span>
@@ -168,7 +181,7 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
 
       <div className="min-w-0 p-5">
         {unidad && <UnidadDetalle key={unidad.key} unidad={unidad} nomina={nomina} resaltado={resaltado} {...props} />}
-        {oficina && <OficinaDetalle key={oficina.pago.persona_id} oficina={oficina} resaltado={resaltado} {...props} />}
+        {oficina && <OficinaDetalle key={oficina.pago.persona_id} oficina={oficina} nomina={nomina} resaltado={resaltado} {...props} />}
         {props.tasa === null && (
           <p className="mt-4 text-[11px] text-amber-400">
             Los bolívares salen vacíos hasta que se conozca la tasa CONATEL del mes en que se paga.

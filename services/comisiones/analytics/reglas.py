@@ -33,6 +33,7 @@ coordinador de UN llega aqui sin `coord_un_id`.
 
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -41,61 +42,239 @@ from core.utils import normalize_text
 
 # --- Clasificacion de una venta -----------------------------------------------
 
+# `Estado de la factura` de la suscripcion, normalizado. Odoo escribe «Nada que
+# facturar»; la politica lo llama «nada por facturar».
 FACTURADO = "facturado por completo"
 POR_FACTURAR = "por facturar"
-NADA_POR_FACTURAR = "nada por facturar"
+NADA_POR_FACTURAR = frozenset({"nada que facturar", "nada por facturar"})
+
+# `Estado` y `Estado del pago` de una factura, normalizados.
+FACTURA_BORRADOR = "borrador"
+FACTURA_CANCELADA = "cancelado"
+PAGO_REVERTIDO = "revertido"
+PAGOS_VALIDOS = frozenset({"pagado", "en proceso de pago"})
+
+# `Estado de la Suscripción` de las que aun no son un servicio: una cotizacion
+# no se vendio y una instalacion no termino. No cuentan nunca.
+ESTADOS_SIN_SERVICIO = frozenset({"cotizacion", "instalacion"})
+
+
+def un_mes_despues(dia: date) -> date:
+    """El mismo dia del mes siguiente, recortado al ultimo si ese mes es mas corto.
+
+    >>> un_mes_despues(date(2026, 8, 31)), un_mes_despues(date(2026, 12, 15))
+    (datetime.date(2026, 9, 30), datetime.date(2027, 1, 15))
+    """
+    anio, mes = (dia.year + 1, 1) if dia.month == 12 else (dia.year, dia.month + 1)
+    return date(anio, mes, min(dia.day, calendar.monthrange(anio, mes)[1]))
+
+
+def cancelada_sin_cumplir_un_mes(instalada: date | None, cancelada: date | None) -> bool:
+    """Si se cancelo antes de cumplir un mes desde su instalacion.
+
+    Un mes es hasta el mismo dia del mes siguiente: instalada el 1 de septiembre
+    y cancelada el 30 no lo cumplio; cancelada el 1 de octubre, si. Sin una de
+    las dos fechas no se puede decir, y no se excluye.
+
+    >>> cancelada_sin_cumplir_un_mes(date(2026, 9, 1), date(2026, 9, 30))
+    True
+    >>> cancelada_sin_cumplir_un_mes(date(2026, 8, 31), date(2026, 9, 30))
+    False
+    >>> cancelada_sin_cumplir_un_mes(date(2026, 9, 1), None)
+    False
+    """
+    return instalada is not None and cancelada is not None and cancelada < un_mes_despues(instalada)
 
 VALIDA = "valida"
 NO_PAGADA = "no_pagada"
 REVISION = "revision"
 EXCLUIDA = "excluida"
 
-MOTIVO_CAMBIO_PLAN = "Por facturar con cambio de plan: la factura del plan anterior se pagó"
+# Lo que le paso a la primera mensualidad (`situacion`).
+PAGADA = "pagada"
+IMPAGA = "impaga"
+EN_BORRADOR = "borrador"
+CANCELADA = "cancelada"
+SIN_FACTURA = "sin_factura"
+
+MOTIVO_CAMBIO_PLAN = "Por facturar con cambio de plan: la primera mensualidad, de otro plan, está pagada"
+
+
+@dataclass(frozen=True)
+class Factura:
+    """Una factura de la suscripcion, tal y como la lee `facturas.leer_facturas`.
+
+    `plan` es el plan de catalogo de sus lineas; vacio si no factura ninguno
+    (la de instalacion, la del router), y entonces no es una mensualidad.
+    `creado_el` es texto ISO (`YYYY-MM-DD HH:MM:SS`), vacio si no se supo leer.
+    """
+
+    numero: str
+    estado: str
+    estado_pago: str
+    creado_el: str
+    plan: str
+
+
+def _cancelada(factura: Factura) -> bool:
+    return normalize_text(factura.estado) == FACTURA_CANCELADA
+
+
+def _revertida(factura: Factura) -> bool:
+    return normalize_text(factura.estado_pago) == PAGO_REVERTIDO
+
+
+def primera_mensualidad(facturas: list[Factura]) -> Factura | None:
+    """La factura que dice si se pago la primera mensualidad.
+
+    Es la primera factura con un plan, por `Creado el`, **sin contar las
+    canceladas**: una cancelada no es una mensualidad, sea del mes que sea. Si
+    todas estan canceladas se devuelve la ultima, y la venta va a revision
+    (¿la campana exonero el mes?).
+
+    Si a la elegida se le revirtio el pago y despues, **en el mismo mes**, se
+    emitio otra, manda la nueva: un pago revertido suele ser uno que no llego
+    al banco y el cliente volvio a pagar. Una de otro mes ya es la mensualidad
+    siguiente y no la sustituye.
+
+    >>> f = lambda n, dia, pago="Pagado", estado="Registrado", plan="Plan": Factura(n, estado, pago, dia, plan)
+    >>> primera_mensualidad([f("B", "2026-10-05"), f("A", "2026-09-05", "Sin pagar")]).numero
+    'A'
+    >>> primera_mensualidad([f("A", "2026-09-05", "Revertido"), f("B", "2026-09-20")]).numero
+    'B'
+    >>> primera_mensualidad([f("A", "2026-09-05", "Revertido"), f("B", "2026-10-05")]).numero
+    'A'
+    >>> primera_mensualidad([f("A", "2026-09-05", estado="Cancelado"), f("B", "2026-10-06")]).numero
+    'B'
+    >>> primera_mensualidad([f("A", "2026-09-05", estado="Cancelado"), f("B", "2026-10-06", estado="Cancelado")]).numero
+    'B'
+    >>> primera_mensualidad([f("I", "2026-09-01", plan="")]) is None
+    True
+    """
+    mensualidades = sorted(
+        (f for f in facturas if f.plan),
+        key=lambda f: (f.creado_el == "", f.creado_el, f.numero),
+    )
+    if not mensualidades:
+        return None
+    vigentes = [f for f in mensualidades if not _cancelada(f)]
+    if not vigentes:
+        return mensualidades[-1]
+    elegida = vigentes[0]
+    mes = elegida.creado_el[:7]
+    for siguiente in vigentes[1:]:
+        if not mes or siguiente.creado_el[:7] != mes or not _revertida(elegida):
+            break
+        elegida = siguiente
+    return elegida
+
+
+def situacion(factura: Factura | None) -> str:
+    """`PAGADA`, `IMPAGA`, `EN_BORRADOR`, `CANCELADA` o `SIN_FACTURA`.
+
+    Solo cuenta como pagada una factura registrada con el pago «Pagado» o «En
+    proceso de pago»: «Pagado parcialmente», «Revertido» y «Sin pagar» no.
+    """
+    if factura is None:
+        return SIN_FACTURA
+    estado = normalize_text(factura.estado)
+    if estado == FACTURA_CANCELADA:
+        return CANCELADA
+    if estado == FACTURA_BORRADOR:
+        return EN_BORRADOR
+    return PAGADA if normalize_text(factura.estado_pago) in PAGOS_VALIDOS else IMPAGA
 
 
 def clasificar(
-    activa: bool, estado_factura: str, decision: str | None = None, cambio_plan: bool = False
+    estado_factura: str,
+    factura: Factura | None,
+    plan_suscripcion: str = "",
+    gratuita: bool = False,
+    decision: str | None = None,
+    estado_suscripcion: str = "",
+    cancelada_sin_mes: bool = False,
 ) -> tuple[str, str]:
     """`(clasificacion, motivo)` de una venta del periodo.
 
-    - Facturado por completo y en progreso: la primera mensualidad esta
-      facturada y pagada. **Valida.**
-    - Facturado por completo y no en progreso: se facturo y no se pago. Esa
-      comision se pierde: en el corte siguiente la venta ya no aparece.
-    - Por facturar y en progreso: no ha emitido la primera factura, asi que una
-      campana le exonero un mes. Se revisa a mano: contarla o no contarla
-      (`decision`). Salvo si cambio de plan entre la instalacion y la fecha de
-      calculo (`cambio_plan`): entonces es **valida** sin revisar, porque Odoo
-      factura el plan nuevo y no ve que la factura del viejo ya se pago.
-    - Lo demas no se paga.
+    `factura` es su primera mensualidad (`primera_mensualidad`), `estado_factura`
+    el de la suscripcion y `plan_suscripcion` su plan de hoy si esta en el
+    catalogo. Que la suscripcion siga hoy en progreso no importa: lo que paga
+    la comision es la primera mensualidad.
 
-    >>> clasificar(True, "Por facturar")[0]
+    - Una suscripcion en **Cotización** o **Instalación** no cuenta nunca, ni
+      con una decision manual: todavia no es un servicio. Tampoco una que se
+      **cancelo sin cumplir un mes** activa (`cancelada_sin_cumplir_un_mes`).
+    - Una **decision** manual manda sobre todo lo demas hasta que se deshace.
+    - Una suscripcion que **paso a plan gratuito** no paga; si aun asi tiene la
+      mensualidad pagada, se revisa.
+    - **Mensualidad pagada**: valida, este como este la facturacion de la
+      suscripcion: la factura ya se pago. Si la suscripcion dice «Por
+      facturar» y la factura es de otro plan, se apunta como cambio de plan
+      (Odoo factura el nuevo y deja la venta por facturar).
+    - **Sin pagar** (o pagada en parte, o revertida) o **en borrador**: no pagada.
+    - **Todas sus mensualidades canceladas**, o **ninguna**: se revisa (¿la
+      campana exonero el mes?), salvo «Nada que facturar».
+
+    >>> f = lambda pago="Pagado", estado="Registrado", plan="Plan A": Factura("F1", estado, pago, "2026-09-05", plan)
+    >>> clasificar("Facturado por completo", f())[0]
+    'valida'
+    >>> clasificar("Facturado por completo", f("Pagado parcialmente"))[0]
+    'no_pagada'
+    >>> clasificar("Facturado por completo", f(estado="Cancelado"))[0]
     'revision'
-    >>> clasificar(True, "Por facturar", cambio_plan=True)[0]
+    >>> clasificar("Por facturar", f(), "Plan A")[0]
     'valida'
-    >>> clasificar(True, "Por facturar", "no_contar", cambio_plan=True)[0]
+    >>> clasificar("Por facturar", f(), "Plan B")[0]
     'valida'
-    >>> clasificar(False, "Por facturar", cambio_plan=True)[0]
+    >>> clasificar("Por facturar", None)[0]
+    'revision'
+    >>> clasificar("Por facturar", f(estado="Cancelado"), gratuita=True)[0]
+    'excluida'
+    >>> clasificar("Facturado por completo", f("Sin pagar"), decision="contar")[0]
+    'valida'
+    >>> clasificar("Nada que facturar", None)[0]
+    'excluida'
+    >>> clasificar("Facturado por completo", f(), decision="contar", estado_suscripcion="Instalación")[0]
+    'excluida'
+    >>> clasificar("Facturado por completo", f(), cancelada_sin_mes=True)[0]
     'excluida'
     """
-    factura = normalize_text(estado_factura)
-    if factura == FACTURADO:
-        if activa:
-            return VALIDA, "Facturada y en progreso"
-        return NO_PAGADA, "Facturada y no está en progreso: la primera factura no se pagó"
-    if factura == POR_FACTURAR:
-        if not activa:
-            return EXCLUIDA, "Por facturar y no está en progreso"
-        if cambio_plan:
+    if normalize_text(estado_suscripcion) in ESTADOS_SIN_SERVICIO:
+        return EXCLUIDA, f"En «{estado_suscripcion}»: todavía no es un servicio"
+    if cancelada_sin_mes:
+        return EXCLUIDA, "Se canceló sin cumplir un mes activa"
+    if decision == "contar":
+        return VALIDA, "Decisión manual: contarla"
+    if decision == "no_contar":
+        return EXCLUIDA, "Decisión manual: no contarla"
+
+    pago = situacion(factura)
+    estado = normalize_text(estado_factura)
+
+    if gratuita:
+        if pago == PAGADA:
+            return REVISION, "Pasó a plan gratuito, pero su primera mensualidad está pagada"
+        return EXCLUIDA, "Pasó a plan gratuito: no paga comisión"
+
+    if pago == PAGADA:
+        cambio_plan = plan_suscripcion and normalize_text(plan_suscripcion) != normalize_text(factura.plan)
+        if estado == POR_FACTURAR and cambio_plan:
             return VALIDA, MOTIVO_CAMBIO_PLAN
-        if decision == "contar":
-            return VALIDA, "Por facturar: se decidió contarla en este corte"
-        if decision == "no_contar":
-            return EXCLUIDA, "Por facturar: se decidió no contarla"
-        return REVISION, "Por facturar y en progreso: sin primera factura (¿mes exonerado?)"
-    if factura == NADA_POR_FACTURAR:
-        return EXCLUIDA, "Nada por facturar"
-    return EXCLUIDA, "Sin estado de factura"
+        return VALIDA, "Primera mensualidad pagada"
+    if pago == IMPAGA:
+        return NO_PAGADA, f"Primera mensualidad «{factura.estado_pago or 'sin estado de pago'}»"
+    if pago == EN_BORRADOR:
+        return NO_PAGADA, "Primera mensualidad en borrador: todavía no se emitió"
+
+    if estado in NADA_POR_FACTURAR:
+        return EXCLUIDA, "Nada que facturar"
+    if pago == CANCELADA:
+        return REVISION, "Todas sus facturas de mensualidad están canceladas: ¿exoneración?"
+    if estado == FACTURADO:
+        return REVISION, "Facturado por completo, pero sin factura de mensualidad"
+    if estado == POR_FACTURAR:
+        return REVISION, "Por facturar y sin factura de mensualidad: ¿mes exonerado?"
+    return EXCLUIDA, "Sin estado de factura ni factura de mensualidad"
 
 
 # --- Tramos ----------------------------------------------------------------------

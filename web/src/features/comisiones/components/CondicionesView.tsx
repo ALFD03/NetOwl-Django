@@ -1,47 +1,62 @@
-/** Comisiones › Condiciones de pago: tramos, tarifas, días promocionales y los % PYME. */
+/**
+ * Comisiones › Condiciones de pago: tramos, tarifas, días promocionales y los % PYME.
+ *
+ * Se abre en lectura, explicando cada regla con lo que paga; «Editar» pasa a
+ * los formularios, con los cambios pendientes a la vista y los errores en la
+ * fila que los causa antes de mandar nada al servidor.
+ */
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
-import { AlertTriangle, CalendarRange, Crown, Plus, Save, Store, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, Pencil, Save, Undo2 } from 'lucide-react';
 
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { comisionesApi } from '@/shared/lib/api/comisiones';
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { Button, DataTable, NeonContainer, StatusMessage, TextField, type Column } from '@/shared/ui';
-import { formatoMonto, formatoPct } from '../lib/formato';
-import type { ComisionesCondicionesProps, CondicionesComision, PlanPyme, TramoAsesor } from '../types';
+import { Button, Panel, StatusMessage } from '@/shared/ui';
+import { cambiosPendientes, validarCondiciones, type Cambio } from '../lib/condiciones';
+import type { ActualizacionCondiciones, ComisionesCondicionesProps, CondicionesComision } from '../types';
+import { AsesoresCard } from './condiciones/AsesoresCard';
+import { CoordinadorUnCard, SupervisoresCard } from './condiciones/EquiposCards';
+import { PeriodoCard } from './condiciones/PeriodoCard';
+import { PlanesPymeCard } from './condiciones/PlanesPymeCard';
+import { RecorridoVenta, ResumenCargos } from './condiciones/ResumenCargos';
 
-/**
- * Lo que cobraría un asesor con `ventas` ventas residenciales: vista previa
- * de los tramos mientras se editan. El cálculo que cuenta es el del servidor
- * (`reglas.pago_asesor`); esto solo enseña el efecto de la tabla.
- */
-function previaAsesor(ventas: number, tramos: TramoAsesor[]): number {
-  const ordenados = [...tramos].sort((a, b) => a.desde - b.desde);
-  const tramo = ordenados.filter((t) => t.desde <= ventas).pop() ?? ordenados[0];
-  return tramo ? Math.max(0, ventas - tramo.descontar) * tramo.monto : 0;
-}
+const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
-const CELDA = 'w-24 rounded border border-slate-700 bg-surface-tertiary px-2 py-1 text-right text-xs text-white';
-
-function Numero({ value, onChange, min, placeholder }: {
-  value: number | null; onChange: (v: number | null) => void; min?: number; placeholder?: string;
-}) {
+function Vigencia({ actualizacion }: { actualizacion: ActualizacionCondiciones }) {
+  const fecha = actualizacion.en ? new Date(actualizacion.en) : null;
   return (
-    <input
-      type="number"
-      step="any"
-      min={min}
-      placeholder={placeholder}
-      className={CELDA}
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
-    />
+    <div className="flex min-w-0 flex-col gap-1">
+      <span className="text-sm font-semibold text-white">
+        {fecha
+          ? `Vigentes · modificadas el ${fecha.toLocaleDateString('es-VE')} a las ${fecha.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}${actualizacion.por ? ` por ${actualizacion.por}` : ''}`
+          : 'Vigentes · las de la política, sin cambios desde entonces'}
+      </span>
+      <span className="text-xs text-slate-400">
+        Los cambios valen para lo que se calcule desde ahora; un periodo cerrado conserva las condiciones con que se cerró.
+      </span>
+    </div>
   );
 }
 
-function Fila({ children }: { children: ReactNode }) {
-  return <tr className="border-b border-slate-800/60 last:border-0">{children}</tr>;
+function ListaCambios({ cambios }: { cambios: Cambio[] }) {
+  return (
+    <Panel title="Cambios pendientes">
+      <ul className="flex flex-col gap-2 text-sm">
+        {cambios.map((c) => (
+          <li key={c.donde} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-hidden />
+            <span className="text-slate-400">{c.donde}</span>
+            {c.antes === null && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-400">nuevo</span>}
+            {c.despues === null && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-400">quitado</span>}
+            {c.antes !== null && <span className="font-mono tabular-nums text-slate-500 line-through">{c.antes}</span>}
+            {c.despues !== null && <span className="font-mono font-bold tabular-nums text-white">{c.antes !== null ? '→ ' : ''}{c.despues}</span>}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
 }
 
 /**
@@ -49,24 +64,56 @@ function Fila({ children }: { children: ReactNode }) {
  * que usó, así que cambiarlas solo afecta a lo que se calcule después (los
  * borradores incluidos, que se recalculan al abrirlos).
  */
-export function CondicionesView({ condiciones, planesPyme, puedeEditarPlanes }: ComisionesCondicionesProps) {
+export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeEditarPlanes }: ComisionesCondicionesProps) {
   const [draft, setDraft] = useState<CondicionesComision>(condiciones);
+  const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [estado, setEstado] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Tras guardar, la recarga trae las condiciones como las dejó el servidor (tramos ordenados):
+  // el borrador se reinicia con ellas en el mismo render, sin un efecto de por medio.
+  const [base, setBase] = useState(condiciones);
+  if (base !== condiciones) {
+    setBase(condiciones);
+    setDraft(condiciones);
+  }
+
+  const cambios = useMemo(() => cambiosPendientes(condiciones, draft), [condiciones, draft]);
+  const validacion = useMemo(() => validarCondiciones(draft), [draft]);
+  const sucio = editando && cambios.length > 0;
+
+  // Salir con cambios sin guardar pregunta antes, cierre la pestaña o navegue por la app.
+  useEffect(() => {
+    if (!sucio) return undefined;
+    const alCerrar = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', alCerrar);
+    const quitar = router.on('before', (event) => {
+      // Las recargas parciales (la de después de guardar) no salen de la página.
+      if (event.detail.visit.only.length) return undefined;
+      return window.confirm('Hay cambios sin guardar en las condiciones. ¿Salir sin guardarlos?');
+    });
+    return () => {
+      window.removeEventListener('beforeunload', alCerrar);
+      quitar();
+    };
+  }, [sucio]);
+
   const cambiar = (patch: Partial<CondicionesComision>) => setDraft((d) => ({ ...d, ...patch }));
-  const cambiarTramoAsesor = (i: number, patch: Partial<TramoAsesor>) =>
-    cambiar({ tramos_asesor: draft.tramos_asesor.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
-  const cambiarTramoUn = (i: number, patch: Partial<CondicionesComision['tramos_un'][number]>) =>
-    cambiar({ tramos_un: draft.tramos_un.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
+
+  const descartar = () => {
+    setDraft(condiciones);
+    setEditando(false);
+    setEstado(null);
+  };
 
   const guardar = async () => {
     setGuardando(true);
     setEstado(null);
     try {
       const respuesta = await comisionesApi.guardarCondiciones({ ...draft });
+      setEditando(false);
       setEstado({ type: 'success', text: respuesta.message });
-      router.reload({ only: ['condiciones'] });
+      router.reload({ only: ['condiciones', 'actualizacion'] });
     } catch (err: unknown) {
       setEstado({ type: 'error', text: getApiErrorMessage(err, 'No se pudieron guardar las condiciones.') });
     } finally {
@@ -74,230 +121,90 @@ export function CondicionesView({ condiciones, planesPyme, puedeEditarPlanes }: 
     }
   };
 
-  const columnasPyme: Column<PlanPyme>[] = [
-    { header: 'Plan', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Tarifa', accessor: (row) => row.tarifa || '—' },
-    { header: 'Precio', accessor: (row) => formatoMonto(row.precio), align: 'right', sortKey: 'precio' },
-    {
-      header: 'Comisión',
-      align: 'right',
-      accessor: (row) => (row.comision_pyme_pct === null
-        ? <span className="text-amber-400">sin definir</span>
-        : formatoPct(row.comision_pyme_pct)),
-    },
-    {
-      header: 'Por venta',
-      align: 'right',
-      accessor: (row) => (row.comision_pyme_pct === null ? '—' : formatoMonto((row.precio * row.comision_pyme_pct) / 100)),
-    },
-  ];
-
-  const sinPct = planesPyme.filter((p) => p.comision_pyme_pct === null).length;
+  const toolbar = editando ? (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-amber-500/40 bg-amber-950/30 p-4 shadow-xl">
+      <div className="flex min-w-0 items-center gap-3">
+        <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-sm font-bold text-white">
+            {cambios.length ? `${plural(cambios.length, 'cambio', 'cambios')} sin guardar` : 'Editando: todavía sin cambios'}
+            {validacion.total > 0 && <span className="text-rose-400"> · {plural(validacion.total, 'error', 'errores')} por corregir</span>}
+          </span>
+          <span className="text-xs text-slate-400">
+            Valdrán para lo que se calcule desde que guardes, borradores incluidos. Los periodos cerrados no cambian.
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" icon={<Undo2 className="h-4 w-4" />} onClick={descartar} disabled={guardando}>
+          Descartar
+        </Button>
+        <Button
+          icon={<Save className="h-4 w-4" />}
+          isLoading={guardando}
+          disabled={!cambios.length || validacion.total > 0}
+          title={validacion.total > 0 ? 'Corrige los errores antes de guardar' : undefined}
+          onClick={() => void guardar()}
+        >
+          Guardar condiciones
+        </Button>
+      </div>
+    </div>
+  ) : (
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
+      <Vigencia actualizacion={actualizacion} />
+      <Button icon={<Pencil className="h-4 w-4" />} onClick={() => { setEstado(null); setEditando(true); }}>
+        Editar condiciones
+      </Button>
+    </div>
+  );
 
   return (
-    <AppLayout
-      toolbar={
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
-          <p className="text-xs text-slate-400">
-            Los cambios valen para lo que se calcule desde ahora; un periodo cerrado conserva las condiciones con que se cerró.
-          </p>
-          <Button icon={<Save className="h-4 w-4" />} isLoading={guardando} onClick={() => void guardar()}>
-            Guardar condiciones
-          </Button>
-        </div>
-      }
-    >
+    <AppLayout toolbar={toolbar}>
       <StatusMessage status={estado} className="mb-4" icon={<AlertTriangle />} />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <NeonContainer
-          title="Asesores de venta"
-          subtitle="Por tramos de ventas residenciales. Se pagan (ventas − descontar) × monto"
-          icon={<Users className="h-5 w-5" />}
-          theme="blue"
-        >
-          <table className="w-full text-xs text-slate-300">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="py-2 text-left">Desde (ventas)</th>
-                <th className="py-2 text-right">Monto por venta</th>
-                <th className="py-2 text-right">Descontar</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {draft.tramos_asesor.map((tramo, i) => (
-                <Fila key={i}>
-                  <td className="py-2"><Numero value={tramo.desde} min={0} onChange={(v) => cambiarTramoAsesor(i, { desde: v ?? 0 })} /></td>
-                  <td className="py-2 text-right"><Numero value={tramo.monto} min={0} onChange={(v) => cambiarTramoAsesor(i, { monto: v ?? 0 })} /></td>
-                  <td className="py-2 text-right"><Numero value={tramo.descontar} min={0} onChange={(v) => cambiarTramoAsesor(i, { descontar: v ?? 0 })} /></td>
-                  <td className="py-2 text-right">
-                    <button
-                      type="button"
-                      title="Quitar tramo"
-                      className="rounded p-1 text-rose-400 hover:bg-rose-500/10"
-                      onClick={() => cambiar({ tramos_asesor: draft.tramos_asesor.filter((_, j) => j !== i) })}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </Fila>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-3 flex justify-between gap-3">
-            <Button
-              size="sm"
-              variant="outline"
-              icon={<Plus className="h-4 w-4" />}
-              onClick={() => cambiar({ tramos_asesor: [...draft.tramos_asesor, { desde: 0, monto: 0, descontar: 0 }] })}
-            >
-              Añadir tramo
-            </Button>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-400">
-            {[5, 6, 19, 20, 21, 25, 26, 30].map((n) => (
-              <span key={n} className="rounded-full border border-slate-800 px-2 py-1">
-                {n} ventas → <strong className="text-white">{formatoMonto(previaAsesor(n, draft.tramos_asesor))}</strong>
-              </span>
-            ))}
-          </div>
-        </NeonContainer>
+      <div className="flex flex-col gap-6">
+        {editando && cambios.length > 0 && <ListaCambios cambios={cambios} />}
 
-        <NeonContainer
-          title="Coordinadores de unidad de negocio"
-          subtitle="Por venta de su equipo, según el crecimiento del mes de sus unidades"
-          icon={<Crown className="h-5 w-5" />}
-          theme="purple"
-        >
-          <table className="w-full text-xs text-slate-300">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-slate-500">
-                <th className="py-2 text-left">Crecimiento desde</th>
-                <th className="py-2 text-right">Monto por venta</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {draft.tramos_un.map((tramo, i) => (
-                <Fila key={i}>
-                  <td className="py-2">
-                    {tramo.desde_pct === null && i === 0
-                      ? <span className="text-slate-400">cualquier crecimiento</span>
-                      : <Numero value={tramo.desde_pct} placeholder="%" onChange={(v) => cambiarTramoUn(i, { desde_pct: v })} />}
-                  </td>
-                  <td className="py-2 text-right"><Numero value={tramo.monto} min={0} onChange={(v) => cambiarTramoUn(i, { monto: v ?? 0 })} /></td>
-                  <td className="py-2 text-right">
-                    {i > 0 && (
-                      <button
-                        type="button"
-                        title="Quitar tramo"
-                        className="rounded p-1 text-rose-400 hover:bg-rose-500/10"
-                        onClick={() => cambiar({ tramos_un: draft.tramos_un.filter((_, j) => j !== i) })}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </td>
-                </Fila>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-3">
-            <Button
-              size="sm"
-              variant="outline"
-              icon={<Plus className="h-4 w-4" />}
-              onClick={() => cambiar({ tramos_un: [...draft.tramos_un, { desde_pct: 0, monto: 0 }] })}
-            >
-              Añadir tramo
-            </Button>
-          </div>
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <TextField
-              label="Venta propia del coordinador de UN ($)"
-              type="number"
-              step="any"
-              min={0}
-              value={draft.monto_directa_un}
-              onChange={(e) => cambiar({ monto_directa_un: Number(e.target.value) })}
-            />
-          </div>
-        </NeonContainer>
+        {!editando && (
+          <>
+            <ResumenCargos condiciones={draft} />
+            <RecorridoVenta condiciones={draft} />
+          </>
+        )}
 
-        <NeonContainer
-          title="Supervisores y coordinadores de oficina"
-          subtitle="Por venta de su equipo y por venta propia; el total por el % de cumplimiento del objetivo (tope 100%)"
-          icon={<Store className="h-5 w-5" />}
-          theme="green"
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <TextField
-              label="Venta de su equipo ($)"
-              type="number"
-              step="any"
-              min={0}
-              value={draft.monto_equipo}
-              onChange={(e) => cambiar({ monto_equipo: Number(e.target.value) })}
-            />
-            <TextField
-              label="Venta propia ($)"
-              type="number"
-              step="any"
-              min={0}
-              value={draft.monto_directa}
-              onChange={(e) => cambiar({ monto_directa: Number(e.target.value) })}
-            />
-          </div>
-        </NeonContainer>
+        <AsesoresCard
+          tramos={draft.tramos_asesor}
+          guardados={condiciones.tramos_asesor}
+          editando={editando}
+          errores={validacion.asesor}
+          onChange={(tramos_asesor) => cambiar({ tramos_asesor })}
+        />
 
-        <NeonContainer
-          title="Periodo"
-          subtitle="Dónde se corta cada periodo y cuánto se espera para calcularlo"
-          icon={<CalendarRange className="h-5 w-5" />}
-          theme="slate"
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <TextField
-              label="Día habitual de inicio de los días promocionales"
-              type="number"
-              min={1}
-              max={31}
-              value={draft.dia_promocional}
-              onChange={(e) => cambiar({ dia_promocional: Number(e.target.value) })}
-            />
-            <TextField
-              label="Días de espera tras el fin del mes"
-              type="number"
-              min={0}
-              max={60}
-              value={draft.dias_espera}
-              onChange={(e) => cambiar({ dias_espera: Number(e.target.value) })}
-            />
-          </div>
-          <p className="mt-3 text-xs text-slate-400">
-            El día promocional es solo la propuesta: cada periodo confirma el suyo al crearlo, porque se adelantan o se retrasan.
-          </p>
-        </NeonContainer>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <SupervisoresCard borrador={draft} guardadas={condiciones} editando={editando} errores={validacion.campos} cambiar={cambiar} />
+          <CoordinadorUnCard
+            borrador={draft}
+            guardadas={condiciones}
+            editando={editando}
+            errores={validacion.un}
+            erroresCampos={validacion.campos}
+            cambiar={cambiar}
+          />
+        </div>
+
+        {editando ? (
+          <>
+            <PeriodoCard borrador={draft} guardadas={condiciones} editando errores={validacion.campos} cambiar={cambiar} />
+            <PlanesPymeCard planes={planesPyme} puedeEditarPlanes={puedeEditarPlanes} compacto />
+          </>
+        ) : (
+          <>
+            <PlanesPymeCard planes={planesPyme} puedeEditarPlanes={puedeEditarPlanes} compacto={false} />
+            <PeriodoCard borrador={draft} guardadas={condiciones} editando={false} errores={validacion.campos} cambiar={cambiar} />
+          </>
+        )}
       </div>
-
-      <NeonContainer
-        title="Planes PYME"
-        subtitle={
-          sinPct
-            ? `${sinPct} plan(es) sin % de comisión: sus ventas salen en el informe sin monto`
-            : 'Lo que cobra quien vende cada plan, y solo esa persona'
-        }
-        icon={<Store className="h-5 w-5" />}
-        theme={sinPct ? 'yellow' : 'slate'}
-        noPadding
-        className="mt-6"
-        headerAction={puedeEditarPlanes ? (
-          <a href="/catalogos/productos/" className="text-xs text-sky-400 hover:underline">Editar en Catálogos › Productos</a>
-        ) : undefined}
-      >
-        <DataTable columns={columnasPyme} data={planesPyme} searchable searchPlaceholder="Buscar plan..." emptyMessage="No hay planes PYME en el catálogo." />
-      </NeonContainer>
     </AppLayout>
   );
 }

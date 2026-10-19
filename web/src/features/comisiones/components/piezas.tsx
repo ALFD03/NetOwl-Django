@@ -2,9 +2,9 @@
 
 import type { ReactNode } from 'react';
 
-import { formatoPct } from '../lib/formato';
+import { formatoFecha, formatoPct } from '../lib/formato';
 import { minimoQuePaga } from '../lib/nomina';
-import type { CargoVentas, TramoAsesor } from '../types';
+import type { CargoVentas, TramoAsesor, VentaComision } from '../types';
 
 export const CARGO_CHIP: Record<CargoVentas, { label: string; tono: string }> = {
   coord_un: { label: 'Coord. de UN', tono: 'border-violet-500/30 bg-violet-500/10 text-violet-300' },
@@ -91,5 +91,32 @@ export function BarraCrecimiento({ pct, cortes }: { pct: number; cortes: number[
         <span key={c} className="absolute -top-0.5 h-2.5 w-px bg-slate-500" style={{ left: `${pos(c)}%` }} />
       ))}
     </div>
+  );
+}
+
+/** Pagado y En proceso de pago cuentan; lo demás no. */
+const PAGO_TONO: Record<string, string> = {
+  Pagado: 'text-emerald-400',
+  'En proceso de pago': 'text-emerald-400',
+};
+
+/**
+ * La primera mensualidad de una venta: número, fecha, plan y cómo está.
+ * Una venta anterior a las facturas (periodo cerrado antes) no trae los campos.
+ */
+export function PrimeraMensualidad({ venta }: { venta: VentaComision }) {
+  if (!venta.factura_numero) {
+    return <span className="text-slate-500">{venta.facturas ? `Sin mensualidad (${venta.facturas} facturas)` : 'Sin facturas'}</span>;
+  }
+  const cancelada = venta.factura_estado === 'Cancelado' || venta.factura_estado === 'Borrador';
+  return (
+    <span className="flex flex-col leading-tight" title={venta.factura_plan}>
+      <span className="font-mono text-xs text-slate-300">
+        {venta.factura_numero} · {formatoFecha(venta.factura_fecha)}
+      </span>
+      <span className={`text-xs font-semibold ${cancelada ? 'text-rose-400' : PAGO_TONO[venta.factura_pago] ?? 'text-amber-400'}`}>
+        {cancelada ? venta.factura_estado : venta.factura_pago || 'Sin estado de pago'}
+      </span>
+    </span>
   );
 }

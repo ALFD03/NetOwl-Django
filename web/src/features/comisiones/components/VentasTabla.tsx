@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react';
 import { DataTable, type Column } from '@/shared/ui';
 import { CLASIFICACION, formatoFecha, formatoMonto } from '../lib/formato';
 import type { VentaComision } from '../types';
+import { PrimeraMensualidad } from './piezas';
 
 /** Las ventas con su clasificación, su motivo y las personas que cobran por ellas. */
 export function VentasTabla({ ventas }: { ventas: VentaComision[] }) {
@@ -20,8 +21,20 @@ export function VentasTabla({ ventas }: { ventas: VentaComision[] }) {
       filterValue: (row) => (row.pyme ? 'PYME' : 'Residencial'),
     },
     { header: 'Precio', accessor: (row) => formatoMonto(row.precio), align: 'right', sortKey: 'precio' },
-    { header: 'Estado', accessor: 'estado', filterable: true },
+    {
+      header: 'Estado actual',
+      accessor: (row) => (row.cancelada_el ? `${row.estado} · ${formatoFecha(row.cancelada_el)}` : row.estado),
+      sortKey: 'estado',
+      filterable: true,
+      filterValue: (row) => row.estado || 'Sin estado',
+    },
     { header: 'Factura', accessor: (row) => row.estado_factura || '—', filterable: true, filterValue: (row) => row.estado_factura || 'Sin estado' },
+    {
+      header: 'Primera mensualidad',
+      accessor: (row) => <PrimeraMensualidad venta={row} />,
+      filterable: true,
+      filterValue: (row) => (row.factura_numero ? row.factura_pago || row.factura_estado || 'Sin estado' : 'Sin factura'),
+    },
     {
       header: 'Clasificación',
       accessor: (row) => <span className={CLASIFICACION[row.clasificacion].tone} title={row.motivo}>{CLASIFICACION[row.clasificacion].label}</span>,

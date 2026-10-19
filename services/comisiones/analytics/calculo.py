@@ -2,11 +2,12 @@
 
 1. **Candidatas**: las suscripciones instaladas (`fecha_inicio`) dentro de la
    ventana del periodo, menos las ya pagadas en un periodo cerrado.
-2. **Clasificacion** (`reglas.clasificar`): por el estado de la factura y si la
-   suscripcion sigue en progreso **hoy**. Una por facturar que cambio de plan
-   entre su instalacion y la fecha de calculo es valida sin revisarla
-   (`_cambios_de_plan`). Por eso un periodo se congela al
-   cerrarlo: la tabla de suscripciones se trunca en cada importacion.
+2. **Clasificacion** (`reglas.clasificar`): por su primera mensualidad —la
+   primera factura con un plan, del export de facturas— y el estado de la
+   factura de la suscripcion. Se juzga con los datos de hoy, sea cual sea la
+   fecha: hasta que se cierra, el informe se recalcula con lo ultimo importado.
+   Por eso un periodo se congela al cerrarlo: las tablas de suscripciones y de
+   facturas se reemplazan en cada importacion.
 3. **Personas**: el `Medio`, el `Oportunidad/Administrador` y el `Vendedor` de cada venta
    contra el directorio de ventas, tal y como vienen: lo que la venta no trae
    no lo cobra nadie. El coordinador de unidad de negocio, que Odoo no tiene,
@@ -31,7 +32,13 @@ from typing import Any
 import pandas as pd
 
 from core import fixtures
-from core.config import ACTIVE_STATE, DB_SCHEMA, SUBS_STATE_TO_LOG_MAP, TableNames
+from core.config import (
+    ARCHIVED_EVENT,
+    DB_SCHEMA,
+    SUBS_STATE_TO_LOG_MAP,
+    UNARCHIVED_EVENT,
+    TableNames,
+)
 from core.database import DBConnector
 from core.odoo_nombres import clave_nombre
 from core.utils import normalize_text, parse_date
@@ -44,7 +51,10 @@ from services.comisiones.models import (
     RevisionComision,
     SupervisorUnidad,
 )
+from services.subscriptions.analytics.analyzer.cleaner import parse_archivado
 from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_vigente_el
+from services.subscriptions.analytics.facturas import facturas_importadas_el, leer_facturas
+from services.subscriptions.analytics.free_plans import _is_free_tariff
 from services.subscriptions.analytics.queries import (
     calculate_aggregation_totals,
     get_business_units_data,
@@ -58,9 +68,12 @@ from .reglas import (
     NO_PAGADA,
     REVISION,
     VALIDA,
+    Factura,
     Venta,
     calcular_pagos,
+    cancelada_sin_cumplir_un_mes,
     clasificar,
+    primera_mensualidad,
     validar_tramos_asesor,
     validar_tramos_un,
 )
@@ -75,15 +88,15 @@ COLUMNAS_REQUERIDAS = {
 
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
-# El log que deja un cambio de plan en `subscriptions-logs`.
-LOG_CAMBIO_PLAN = "Plan change"
+# El estado interno de los logs de una suscripcion cancelada.
+CANCELADO_LOG = SUBS_STATE_TO_LOG_MAP["cancelado"]
 
 # Los cargos cuyo total multiplica el % de cumplimiento.
 CARGOS_CON_CUMPLIMIENTO = ("supervisor", "coord_oficina")
 
 
 class FaltanColumnas(RuntimeError):
-    """La tabla de suscripciones no trae las columnas que Comisiones necesita."""
+    """Faltan datos sin los que no hay informe: columnas de suscripciones o las facturas."""
 
 
 # --- Fechas --------------------------------------------------------------------------
@@ -191,10 +204,12 @@ def _leer_candidatas(inicio: date, fin: date) -> pd.DataFrame:
             + ". Vuelve a importar las suscripciones con un export que incluya esas columnas."
         )
 
+    # `activo` llega solo con los exports nuevos: sin ella, nadie se da por archivado.
+    activo = ", activo" if "activo" in columnas else ""
     df = db.query(
         f"""
         SELECT orden_producto, cliente, sucursal, zona, estado, fecha_inicio,
-               producto, tarifa, total, vendedor, medio, medio_supervisor, estado_factura
+               producto, tarifa, total, vendedor, medio, medio_supervisor, estado_factura{activo}
         FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
         WHERE (fecha_inicio ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}'
                AND LEFT(fecha_inicio, 10) BETWEEN %s AND %s)
@@ -211,29 +226,70 @@ def _leer_candidatas(inicio: date, fin: date) -> pd.DataFrame:
     return df[en_ventana].copy()
 
 
-def _cambios_de_plan(ordenes: list[str], hasta: date) -> dict[str, list[date]]:
-    """Los dias en que cada orden cambio de plan, hasta `hasta` incluido.
+def _gratuitas(df: pd.DataFrame) -> set[str]:
+    """Las candidatas que hoy son gratuitas, y por eso no pagan comision.
 
-    Es el log «Plan change». Lo que importa de el: al cambiar de plan Odoo
-    factura el producto nuevo y deja la venta «Por facturar», aunque la factura
-    del plan con el que se instalo ya se pago. `fecha_log` es texto ISO.
+    Con la misma evidencia que el analisis mensual: archivada en el export
+    (`activo` falso), una tarifa «Gratis», o un «Suscripción archivada» como
+    ultimo log de archivado (sin un «desarchivada» despues).
     """
-    if not ordenes:
-        return {}
-    df = DBConnector().query(
+    if df.empty:
+        return set()
+    ordenes = df["orden_producto"].astype(str)
+    gratuita = df["tarifa"].map(_is_free_tariff)
+    if "activo" in df.columns:
+        gratuita |= parse_archivado(df["activo"])
+    resultado = set(ordenes[gratuita.to_numpy()])
+
+    logs = DBConnector().query(
         f"""
-        SELECT orden, LEFT(fecha_log, 10) AS dia
+        SELECT orden, log, fecha_log
         FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_LOGS}"
-        WHERE log = %s AND orden = ANY(%s) AND LEFT(fecha_log, 10) <= %s
+        WHERE orden = ANY(%s) AND log ILIKE %s
+        ORDER BY orden, fecha_log
         """,
-        params=[LOG_CAMBIO_PLAN, ordenes, hasta.isoformat()],
+        params=[ordenes.tolist(), "%archivada%"],
     )
-    cambios: dict[str, list[date]] = {}
-    for fila in df.itertuples(index=False):
-        dia = parse_date(fila.dia)
-        if dia:
-            cambios.setdefault(str(fila.orden), []).append(pd.Timestamp(dia).date())
-    return cambios
+    for orden, grupo in logs.groupby("orden", sort=False):
+        ultimo = normalize_text(grupo["log"].iloc[-1])
+        if ARCHIVED_EVENT in ultimo and UNARCHIVED_EVENT not in ultimo:
+            resultado.add(str(orden))
+    return resultado
+
+
+def _canceladas_el(df: pd.DataFrame) -> dict[str, date]:
+    """El dia en que se cancelo cada candidata que hoy esta «Cancelado».
+
+    Es el comienzo de su ultimo tramo cancelado en `subscriptions-logs`: el
+    primer log de la racha final con estado `6_churn`. Una cancelada sin ese
+    log se queda sin fecha (y entonces no se excluye por durar poco).
+    """
+    if df.empty:
+        return {}
+    canceladas = df.loc[df["estado"].map(normalize_text) == "cancelado", "orden_producto"].astype(str).tolist()
+    if not canceladas:
+        return {}
+    logs = DBConnector().query(
+        f"""
+        SELECT orden, fecha_log, estado
+        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_LOGS}"
+        WHERE orden = ANY(%s)
+        ORDER BY orden, fecha_log
+        """,
+        params=[canceladas],
+    )
+    fechas: dict[str, date] = {}
+    for orden, grupo in logs.groupby("orden", sort=False):
+        inicio = None
+        for fila in grupo.itertuples(index=False):
+            if fila.estado == CANCELADO_LOG:
+                inicio = inicio or fila.fecha_log
+            else:
+                inicio = None
+        dia = parse_date(inicio) if inicio else None
+        if dia is not None and not pd.isna(dia):
+            fechas[str(orden)] = pd.Timestamp(dia).date()
+    return fechas
 
 
 def _indice_planes() -> tuple[dict[tuple[str, str], dict], dict[str, dict]]:
@@ -381,8 +437,18 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         .values_list("orden", "periodo__periodo")
     )
 
+    importadas_el = facturas_importadas_el()
+    if importadas_el is None:
+        raise FaltanColumnas(
+            "No hay facturas importadas. Carga el export de facturas en Importaciones › Suscripciones:"
+            " sin él no se sabe qué primeras mensualidades se pagaron."
+        )
+
     df = _leer_candidatas(inicio, fin)
-    cambios = _cambios_de_plan(df["orden_producto"].astype(str).tolist() if not df.empty else [], calculo_desde)
+    ordenes = df["orden_producto"].astype(str).tolist() if not df.empty else []
+    facturas = leer_facturas(ordenes)
+    gratuitas = _gratuitas(df)
+    canceladas_el = _canceladas_el(df)
     planes_tarifa, planes_nombre = _indice_planes()
     directorio = _Directorio()
 
@@ -394,24 +460,28 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         plan = planes_tarifa.get((texto(fila.producto), texto(fila.tarifa))) or planes_nombre.get(texto(fila.producto))
         pyme = bool(plan and plan.get("people") == "PYME")
         precio = float(plan.get("price") or 0) if plan else 0.0
-        estado = SUBS_STATE_TO_LOG_MAP.get(normalize_text(fila.estado), "")
         decision = decisiones.get(orden)
-        # Despues del dia de la instalacion: el del mismo dia es parte de instalarla.
+        de_la_orden = facturas.get(orden, [])
+        mensualidad = primera_mensualidad([
+            Factura(f["numero"], f["estado"], f["estado_pago"], f["creado_el"], f["plan"]) for f in de_la_orden
+        ])
+        gratuita = orden in gratuitas
+        cancelada_el = canceladas_el.get(orden)
         instalada = fila.fecha if isinstance(fila.fecha, date) else None
-        cambio_plan = next((d for d in sorted(cambios.get(orden, [])) if instalada and d > instalada), None)
+        sin_mes = cancelada_sin_cumplir_un_mes(instalada, cancelada_el)
 
         if orden in pagadas:
             clasificacion, motivo = EXCLUIDA, f"Ya se pagó en {pagadas[orden]}"
+            motivo_analisis = motivo
         else:
+            datos = (texto(fila.estado_factura), mensualidad, plan["name"] if plan else "", gratuita)
+            # Lo que dicen las facturas se guarda aparte: con una decision, es por que se reviso.
+            estado_sub = texto(fila.estado)
+            motivo_analisis = clasificar(*datos, estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes)[1]
             clasificacion, motivo = clasificar(
-                estado == ACTIVE_STATE,
-                texto(fila.estado_factura),
-                decision.decision if decision else None,
-                cambio_plan is not None,
+                *datos, decision.decision if decision else None,
+                estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes,
             )
-        # Solo se apunta el cambio de plan cuando es lo que la hizo valida.
-        if motivo != MOTIVO_CAMBIO_PLAN:
-            cambio_plan = None
 
         personas, avisos = directorio.resolver(texto(fila.medio), texto(fila.medio_supervisor), texto(fila.vendedor))
         if plan is None:
@@ -431,9 +501,17 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "estado_factura": texto(fila.estado_factura),
             "clasificacion": clasificacion,
             "motivo": motivo,
+            "motivo_analisis": motivo_analisis,
             "decision": decision.decision if decision else None,
             "nota_revision": decision.nota if decision else "",
-            "cambio_plan": cambio_plan.isoformat() if cambio_plan else "",
+            "gratuita": gratuita,
+            "cancelada_el": cancelada_el.isoformat() if cancelada_el else "",
+            "facturas": len(de_la_orden),
+            "factura_numero": mensualidad.numero if mensualidad else "",
+            "factura_fecha": mensualidad.creado_el[:10] if mensualidad else "",
+            "factura_estado": mensualidad.estado if mensualidad else "",
+            "factura_pago": mensualidad.estado_pago if mensualidad else "",
+            "factura_plan": mensualidad.plan if mensualidad else "",
             "medio": texto(fila.medio),
             "medio_supervisor": texto(fila.medio_supervisor),
             "vendedor": texto(fila.vendedor),
@@ -498,6 +576,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         "estado": periodo.estado,
         "calculo_desde": calculo_desde.isoformat(),
         "antes_de_tiempo": hoy < calculo_desde,
+        "facturas_importadas_el": importadas_el.isoformat(),
         "cumplimiento_general_pct": general,
         # Va dentro del informe para que el cierre la congele con el resto.
         "tasa_conatel": tasa_conatel(periodo),
@@ -508,13 +587,14 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "revision": conteo(REVISION),
             "excluidas": conteo(EXCLUIDA),
             "validas_pyme": sum(1 for v in validas if v["pyme"]),
-            "validas_cambio_plan": sum(1 for v in validas if v["cambio_plan"]),
+            "validas_cambio_plan": sum(1 for v in validas if v["motivo"] == MOTIVO_CAMBIO_PLAN),
             "validas_sin_medio": sum(1 for v in validas if v["medio_id"] is None),
             "total": round(sum(p["neto"] for p in filas_pago), 2),
         },
         "pagos": filas_pago,
         **_equipos(ventas, directorio),
-        "revision": [v for v in ventas if v["clasificacion"] == REVISION or (v["decision"] and not v["cambio_plan"])],
+        # Las pendientes y las ya decididas, que se pueden deshacer.
+        "revision": [v for v in ventas if v["clasificacion"] == REVISION or v["decision"]],
         "pendientes_cierre": _pendientes_cierre(ventas, filas_pago),
     }
     return informe, ventas

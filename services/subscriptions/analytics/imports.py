@@ -30,6 +30,7 @@ from core.fixtures import (
 )
 
 from .config import REQUIRED_SUBS_HEADERS, SUBS_ACTIVO_ALIASES, SUBS_COLUMN_MAPPING
+from .facturas import FACTURAS_COLUMN_MAPPING, FACTURAS_REQUIRED
 from .free_plans import LOG_COLUMNS, MSG_COLUMNS, REQUIRED_GRATIS_HEADERS
 
 SUBSCRIPTIONS_COLUMN_MAPPING = {**SUBS_COLUMN_MAPPING, **SUBS_ACTIVO_ALIASES}
@@ -435,4 +436,5 @@ def campos_odoo_importacion() -> dict[str, list[dict[str, Any]]]:
             [*SUBS_COLUMN_MAPPING, *LOG_COLUMNS, *MSG_COLUMNS],
             REQUIRED_GRATIS_HEADERS,
         ),
+        "facturas": _campos(FACTURAS_COLUMN_MAPPING, FACTURAS_REQUIRED),
     }

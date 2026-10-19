@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { Building2, Network, Users } from 'lucide-react';
 
+import { Paginacion, usePaginacion } from '@/shared/ui';
 import { formatoMonto, formatoPct } from '../lib/formato';
 import type { InformeComision, PagoComision } from '../types';
 import { ValorEditable } from './ValorEditable';
@@ -17,28 +18,60 @@ interface IndicadoresPanelProps {
 
 const porNombre = (a: PagoComision, b: PagoComision) => a.nombre.localeCompare(b.nombre);
 
+/**
+ * Filas por página de cada lista. Las tres muestran siempre las mismas —las que
+ * faltan se rellenan con huecos— y las que tienen más se paginan: así las tres
+ * columnas miden lo mismo y una fila de una queda a la altura de la de al lado.
+ */
+const FILAS = 8;
+
+/** Lo que mide una fila (`h-14`): nombre, nota y el valor editable. */
+const ALTO_FILA = 'h-14';
+
+/** El pie de la lista, con o sin botones: la misma altura en las tres columnas. */
+const ALTO_PIE = 'min-h-[2.875rem]';
+
 function Columna({
   titulo, icono, tono, pendientes, children, vacio,
 }: { titulo: string; icono: ReactNode; tono: string; pendientes: number; children: ReactNode[]; vacio: string }) {
+  const paginas = usePaginacion(children, FILAS);
+  const huecos = FILAS - paginas.visibles.length;
   return (
-    <div className="flex min-w-0 flex-col rounded-2xl border border-slate-800 bg-surface-primary/50">
+    <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-surface-primary/50">
       <div className="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
         <span className={`flex items-center gap-2 text-[11px] font-black uppercase tracking-wider ${tono}`}>{icono}{titulo}</span>
         {pendientes > 0
           ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300">{pendientes} sin definir</span>
           : <span className="text-[10px] text-slate-500">completo</span>}
       </div>
-      {children.length ? <div className="divide-y divide-slate-800/60">{children}</div> : <p className="px-4 py-6 text-center text-xs text-slate-500">{vacio}</p>}
+      <div className="relative divide-y divide-slate-800/60">
+        {paginas.visibles}
+        {Array.from({ length: huecos }, (_, i) => (
+          <div key={`hueco-${i}`} aria-hidden className={`${ALTO_FILA} !border-transparent`} />
+        ))}
+        {!children.length && (
+          <p className="absolute inset-0 flex items-center justify-center px-4 text-center text-xs text-slate-500">{vacio}</p>
+        )}
+      </div>
+      {paginas.totalPaginas > 1 ? (
+        <Paginacion estado={paginas} className={`mt-auto ${ALTO_PIE}`} />
+      ) : (
+        <div className={`mt-auto flex items-center border-t border-slate-800 bg-surface-secondary/50 px-3 py-2 ${ALTO_PIE}`}>
+          <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+            {children.length === 1 ? '1 persona' : `${children.length} personas`}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
 function Fila({ nombre, nota, children }: { nombre: string; nota?: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+    <div className={`flex ${ALTO_FILA} items-center justify-between gap-3 px-4`}>
       <span className="min-w-0">
         <span className="block truncate text-sm text-white">{nombre}</span>
-        {nota && <span className="block text-[11px] text-slate-500">{nota}</span>}
+        {nota && <span className="block truncate text-[11px] text-slate-500">{nota}</span>}
       </span>
       <span className="shrink-0 text-sm font-semibold tabular-nums text-white">{children}</span>
     </div>

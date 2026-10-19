@@ -187,12 +187,14 @@ DECISION_REVISION_CHOICES = [
 
 
 class RevisionComision(models.Model):
-    """La decision sobre una venta «por facturar» que sigue en progreso.
+    """La decision a mano sobre una venta: contarla en su periodo o no contarla.
 
-    Sin primera factura no se sabe si la campana le exonero un mes o si algo
-    fallo, asi que la decide una persona: contarla en el periodo en que se
-    instalo o no contarla. Una venta solo es candidata en el periodo de su
-    instalacion, asi que no contarla es que no se paga.
+    Las que van a revision son las que las facturas no resuelven: la
+    suscripcion y su primera mensualidad se contradicen, la mensualidad se
+    cancelo (¿exoneracion?) o no hay ninguna. La decision manda sobre la
+    clasificacion, tambien si despues cambian los datos, hasta que se deshace.
+    Una venta solo es candidata en el periodo de su instalacion, asi que no
+    contarla es que no se paga.
     """
 
     orden = models.CharField(max_length=80)

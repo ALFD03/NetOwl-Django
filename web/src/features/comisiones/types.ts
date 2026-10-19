@@ -61,10 +61,22 @@ export interface VentaComision {
   estado_factura: string;
   clasificacion: Clasificacion;
   motivo: string;
+  /** Lo que dicen las facturas, sin la decisión manual: por qué fue a revisión. */
+  motivo_analisis: string;
   decision: 'contar' | 'no_contar' | null;
   nota_revision: string;
-  /** Día del cambio de plan que la hizo válida sin revisarla; vacío si no fue por eso. */
-  cambio_plan: string;
+  /** Hoy es gratuita (archivada, tarifa «Gratis» o archivada en los logs): no paga comisión. */
+  gratuita: boolean;
+  /** Día en que se canceló, si hoy está «Cancelado» y los logs lo fechan; vacío si no. */
+  cancelada_el: string;
+  /** Cuántas facturas tiene la orden en el export de facturas. */
+  facturas: number;
+  /** La primera mensualidad: la que decide si se pagó. Vacíos si no tiene ninguna. */
+  factura_numero: string;
+  factura_fecha: string;
+  factura_estado: string;
+  factura_pago: string;
+  factura_plan: string;
   medio: string;
   medio_supervisor: string;
   vendedor: string;
@@ -85,6 +97,8 @@ export interface InformeComision {
   /** Desde cuándo tiene sentido calcular: las primeras facturas ya deberían estar pagadas. */
   calculo_desde: string;
   antes_de_tiempo: boolean;
+  /** Cuándo se cargó el export de facturas con que se clasificó (falta en periodos cerrados antes de existir). */
+  facturas_importadas_el?: string;
   /**
    * La tasa en bolívares con que se paga: la de CONATEL del mes siguiente (`mes`),
    * la misma del reporte ETA. Nula si aún no se publicó o el servicio falló (`aviso`).
@@ -99,7 +113,7 @@ export interface InformeComision {
     revision: number;
     excluidas: number;
     validas_pyme: number;
-    /** Por facturar que valen sin revisión porque cambiaron de plan. */
+    /** Por facturar con la primera mensualidad pagada de otro plan: valen sin revisión. */
     validas_cambio_plan: number;
     validas_sin_medio: number;
     total: number;
@@ -201,8 +215,15 @@ export interface PlanPyme {
   comision_pyme_pct: number | null;
 }
 
+/** La última vez que se guardaron las condiciones; nulos si nunca se guardaron desde la página. */
+export interface ActualizacionCondiciones {
+  en: string | null;
+  por: string | null;
+}
+
 export interface ComisionesCondicionesProps {
   condiciones: CondicionesComision;
+  actualizacion: ActualizacionCondiciones;
   planesPyme: PlanPyme[];
   puedeEditarPlanes: boolean;
 }
