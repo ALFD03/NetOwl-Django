@@ -201,8 +201,15 @@ export interface PlanPyme {
   comision_pyme_pct: number | null;
 }
 
+/** La última vez que se guardaron las condiciones; nulos si nunca se guardaron desde la página. */
+export interface ActualizacionCondiciones {
+  en: string | null;
+  por: string | null;
+}
+
 export interface ComisionesCondicionesProps {
   condiciones: CondicionesComision;
+  actualizacion: ActualizacionCondiciones;
   planesPyme: PlanPyme[];
   puedeEditarPlanes: boolean;
 }

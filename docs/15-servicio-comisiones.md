@@ -274,7 +274,7 @@ maquetadas celda a celda.
 |---|---|---|
 | `/comisiones/?periodo=` | El informe en cuatro pasos (revisión, indicadores, nómina por unidad, cierre), total a pagar y tasas, exportación a Excel | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
 | `/comisiones/supervisores/` | A qué coordinador de UN responde cada supervisor (uno a uno o en bloque) | `can_manage_comisiones` |
-| `/comisiones/condiciones/` | Tramos, montos, día promocional, días de espera y los % de los planes PYME | `can_manage_comisiones` |
+| `/comisiones/condiciones/` | Tramos, montos, día promocional, días de espera y los % de los planes PYME. Se abre en lectura (quién cobra qué, tramos con sus saltos y un simulador, fechas de un periodo de ejemplo, última modificación y quién la hizo); «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_comisiones` |
 
 El detalle venta a venta no viaja en los props —un mes son miles de filas—: lo
 pide la página a `api/ventas/` la primera vez que hace falta (desglose de una

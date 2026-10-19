@@ -324,8 +324,11 @@ is intact and the file can be re-uploaded once the decisions are made.
 payment conditions). The report is calculated on the server; the client only edits what the server cannot know (the
 objective %, a business unit's growth when the month is not analysed, the review decisions) and reloads. The
 sale-by-sale detail is fetched from `api/ventas/` the first time it is needed and kept per period in
-`useInformeComisiones`. The advisor-tier preview in Condiciones mirrors `reglas.pago_asesor` only to show the
-effect of the table being edited; the server's figure is the one that counts.
+`useInformeComisiones`. Condiciones opens read-only, explaining each rule with what it pays (who is paid what per
+sale, the advisor's tiers with their jumps and a simulator, the business-unit growth tiers, the period's dates), and
+switches to the forms on «Editar». `lib/condiciones.ts` mirrors `reglas.pago_asesor`, `reglas.monto_un` and the
+checks of `validar_tramos_*` / `api_condiciones_guardar` only to show the effect of an edit and flag errors in the
+row that causes them before saving; the server validates again, and its figure is the one that counts.
 
 How the payroll is *laid out* is client work: `lib/nomina.ts` places each person once (unit → supervisor →
 advisors, offices apart) from the `equipos` rows, and explains each cut from `condiciones`; `lib/exportar.ts`

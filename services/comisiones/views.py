@@ -483,12 +483,23 @@ def _planes_pyme() -> list[dict[str, Any]]:
     ]
 
 
+def _actualizacion() -> dict[str, Any]:
+    """Cuando se cambiaron las condiciones por ultima vez, y quien."""
+    c = CondicionesComision.actual()
+    por = c.actualizado_por
+    return {
+        "en": c.actualizado_en.isoformat() if c.actualizado_en else None,
+        "por": (por.get_full_name() or por.get_username()) if por else None,
+    }
+
+
 @login_required
 @permission_required(PERMISO_GESTION)
 def condiciones_view(request):
     """Las condiciones de pago: tramos, tarifas, dias promocionales y los % PYME."""
     return render_inertia(request, "Comisiones/Condiciones", clean_json_nullable({
         "condiciones": condiciones_vigentes(),
+        "actualizacion": _actualizacion(),
         "planesPyme": _planes_pyme(),
         "puedeEditarPlanes": _puede(request, "can_manage_catalogo_operacional"),
         "section": "condiciones",
