@@ -1,7 +1,7 @@
 /**
  * Página Inertia `Imports/Subscriptions` (`/imports/subscriptions/`).
  *
- * Carga los tres exports del dominio y lanza el análisis mensual. Intercepta el
+ * Carga los exports del dominio y lanza el análisis mensual. Intercepta el
  * 409 de «producto sin catalogar» para enseñarlo como una decisión a tomar, no
  * como un fallo: cuando ocurre no se escribió nada.
  */
@@ -21,18 +21,20 @@ import { RequirementsCard } from '@/features/imports/components/RequirementsCard
 import { extractCatalogoBloqueo, type CatalogoBloqueo } from '@/features/imports/lib/catalogo';
 import type { CampoOdoo, GrupoCamposOdoo } from '@/features/imports/types';
 
-type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis';
+type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis' | 'facturas';
 
 const IMPORT_TYPES: { value: SubscriptionImportType; label: string }[] = [
   { value: 'subscriptions', label: 'Suscripciones / Clientes' },
   { value: 'logs', label: 'Logs / Transiciones' },
   { value: 'gratis', label: 'Planes Gratuitos' },
+  { value: 'facturas', label: 'Facturas' },
 ];
 
 const UPLOADERS: Record<SubscriptionImportType, (file: File) => Promise<ImportResponse>> = {
   subscriptions: (file) => importsApi.importSubscriptions(file),
   logs: (file) => importsApi.importLogs(file),
   gratis: (file) => importsApi.importGratis(file),
+  facturas: (file) => importsApi.importFacturas(file),
 };
 
 interface ImportSubscriptionsProps {
@@ -102,7 +104,7 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
             errorMessage="Error al procesar la importación."
             onUpload={subirArchivo}
           >
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {IMPORT_TYPES.map((option) => (
                 <label
                   key={option.value}
@@ -131,6 +133,7 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
             <><strong>Suscripciones:</strong> Debe contener orden, cliente, producto, fecha de inicio, tarifa, total.</>,
             <><strong>Logs:</strong> Debe contener orden, fecha de cambio, nota y estado interno.</>,
             <><strong>Planes Gratuitos:</strong> Export con tarifa, próxima fecha de factura y mensajes del chatter; detecta desde cuándo cada suscripción es gratuita.</>,
+            <><strong>Facturas:</strong> Export global de facturas con su número, estado, estado del pago, fecha de creación y productos. Reemplaza las anteriores; Comisiones lo usa para saber qué primeras mensualidades se pagaron.</>,
           ]}
           camposOdoo={gruposCampos}
           grupoActivo={importType}

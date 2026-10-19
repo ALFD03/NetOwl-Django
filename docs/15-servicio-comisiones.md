@@ -47,40 +47,68 @@ en él. Al crear un periodo:
 
 Cambiar el `inicio_promo` de un periodo mueve el inicio del siguiente, así que
 no se permite si el siguiente está cerrado. La página avisa si se calcula antes
-de `dias_espera` (15) días tras el fin del mes.
+de `dias_espera` (15) días tras el fin del mes: algunas primeras mensualidades
+pueden no estar pagadas aún.
 
 ## 2. Qué venta cuenta
 
 Las candidatas son las suscripciones con `fecha_inicio` dentro de la ventana,
-**más** las que una revisión de otro periodo difirió a este, **menos** las que una
-revisión de este difirió a otro y las que ya se pagaron en un periodo cerrado.
-Se clasifican con `reglas.clasificar`, según el estado de la factura y si la
-suscripción está en progreso **hoy**:
+**menos** las que ya se pagaron en un periodo cerrado. Lo que paga la comisión es
+la **primera mensualidad**, y sale del export de facturas (Importaciones ›
+Suscripciones › Facturas, tabla `subscriptions-facturas`, global y reemplazado
+en cada carga). Sin facturas importadas el informe no se calcula.
 
-| `Estado de la factura` | En progreso | Clasificación |
-|---|---|---|
-| Facturado por completo | sí | **válida**: la primera mensualidad se facturó y se pagó |
-| Facturado por completo | no | **no pagada**: se facturó y no se pagó. Se pierde: en el corte siguiente ya no aparece |
-| Por facturar | sí, con cambio de plan | **válida**, sin revisión (ver abajo) |
-| Por facturar | sí | **en revisión**: sin primera factura, la campaña pudo exonerar un mes |
-| Por facturar | no | excluida |
-| Nada por facturar | — | excluida. *La política no dice nada de este caso; se tomó como no pagable* |
+**La primera mensualidad** (`reglas.primera_mensualidad`) es la primera factura,
+por `Creado el`, con una línea cuyo producto es un plan del catálogo (la de
+instalación o la del router no lo son; la referencia `[...]` que Odoo antepone
+al producto se ignora). **Las canceladas no cuentan**, sean del mes que sean: se
+evalúa la primera que no lo esté, y si todas lo están la venta va a revisión. Si
+a la elegida se le **revirtió** el pago y en el **mismo mes** se emitió otra,
+manda la más nueva: un pago revertido suele ser uno que no llegó al banco y el
+cliente volvió a pagar. Una factura de otro mes ya es la mensualidad siguiente y
+no la sustituye.
 
-**Un cambio de plan la hace válida sin revisarla.** Al cambiar de plan Odoo
-factura el producto nuevo y deja la suscripción «Por facturar», aunque la factura
-del plan con el que se instaló ya se pagó. Por eso una venta por facturar y en
-progreso con un log «Plan change» (`subscriptions-logs`) **después del día de
-instalación** y hasta la fecha de cálculo del periodo (`calculo_desde`: fin de
-mes + `dias_espera`) incluida cuenta como pagada. Un cambio el mismo día de la
-instalación no vale: es parte de instalarla. Pasa por encima de una decisión de
-revisión que hubiera, y el resumen cuenta cuántas válidas lo son por esto.
+Solo cuenta como pagada una factura **Registrada** con el pago **Pagado** o **En
+proceso de pago**. Pagado parcialmente, Revertido y Sin pagar no; Borrador
+todavía no se emitió y Cancelado no cuenta. **Que la suscripción siga hoy en
+progreso no importa**: si la primera mensualidad está pagada, vale aunque hoy
+esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo
+último importado: lo que esté pagado el día del cierre es lo que cuenta.
+
+`reglas.clasificar`, en este orden:
+
+| Caso | Clasificación |
+|---|---|
+| La suscripción está en «Cotización» o «Instalación» | excluida, también con una decisión manual: todavía no es un servicio |
+| Hoy está «Cancelado» y se canceló antes de cumplir un mes desde la instalación | excluida, también con una decisión manual. El día de la cancelación es el primer log de su último tramo `6_churn`; un mes llega hasta el mismo día del mes siguiente (instalada el 1/9 y cancelada el 30/9 no lo cumplió) |
+| Hay una decisión manual | la decisión: **válida** si se cuenta, excluida si no |
+| Hoy es gratuita y la mensualidad está pagada | **en revisión** |
+| Hoy es gratuita | excluida: no paga comisión |
+| Pagada, sea cual sea el estado de la factura de la suscripción | **válida**: la factura ya se pagó. Si la suscripción dice «Por facturar» y la factura es de otro plan, se apunta como cambio de plan (Odoo factura el nuevo y deja la venta por facturar) |
+| Registrada sin pagar (o pagada en parte, o revertida) | **no pagada** |
+| En borrador | **no pagada** |
+| «Nada que facturar» sin mensualidad pagada | excluida |
+| Todas sus mensualidades canceladas | **en revisión**: ¿exoneración? |
+| Sin factura de mensualidad, «Facturado por completo» o «Por facturar» | **en revisión** |
+| Sin factura ni estado de factura | excluida |
+
+**Gratuita** es lo mismo que en el análisis mensual: archivada en el export
+(`activo` falso), una tarifa «Gratis», o un «Suscripción archivada» como último
+log de archivado. Es el caso de la suscripción que pagó su instalación y pasó a
+plan gratuito: su mensualidad se cancela y no se paga comisión.
 
 **La revisión es manual** (`RevisionComision`): cada venta en revisión se cuenta
 en este periodo o no se cuenta. Una venta solo es candidata en el periodo en que
-se instaló, así que no contarla es que no se paga. Se puede decidir en bloque, y
-«Deshacer» la devuelve a Revisión. Hubo una tercera opción, diferirla a un
-periodo posterior; se quitó porque la venta diferida que seguía sin factura
-llegaba al destino sin forma de decidirla.
+se instaló, así que no contarla es que no se paga. **La decisión manda sobre lo
+que digan las facturas**, también si después cambian, hasta que se deshace; la
+tabla de revisión muestra igualmente qué dicen (`motivo_analisis`). Se puede
+decidir en bloque, y «Deshacer» la devuelve a Revisión.
+
+Antes de las facturas la validez se deducía del estado de la factura de la
+suscripción y de si seguía en progreso, y un log «Plan change» hacía válida una
+venta por facturar. Las dos reglas se quitaron: la factura lo dice directamente.
+Las decisiones de revisión de los periodos sin cerrar se reiniciaron
+(`comisiones/0006`), porque se tomaron sin ese dato.
 
 ## 3. Quién cobra por una venta
 
@@ -218,9 +246,10 @@ todos en una pantalla para que un 9 que debía ser 90 salte a la vista),
 pagar en $ y en Bs y la tasa CONATEL; la del día, solo como referencia. Los %
 se escriben únicamente en Indicadores: la nómina es de solo lectura.
 
-La **nómina** va unidad por unidad: a la izquierda las unidades de negocio y
-las oficinas, cada una con lo que cobra y un buscador de personas; a la
-derecha, la elegida (`lib/nomina.ts`, `NominaView`).
+La **nómina** va unidad por unidad: a la izquierda las unidades de negocio, las
+oficinas y, al final, lo que no tiene ninguna de las dos, cada una con lo que
+cobra y un buscador de personas; a la derecha, la elegida (`lib/nomina.ts`,
+`NominaView`).
 
 - **La unidad la encabeza su coordinador de UN**; debajo, cada supervisor con
   sus asesores. Un supervisor va a la unidad donde más supervisa; un asesor, con
@@ -228,10 +257,17 @@ derecha, la elegida (`lib/nomina.ts`, `NominaView`).
 - **Las coordinadoras de oficina no son del equipo de un coordinador de UN**:
   van aparte, en su propia sección, y cada una enseña con qué unidades comparte
   ventas. La unidad, a su vez, dice con qué oficinas comparte las suyas.
+- **Lo que no tiene unidad va con su oficina**, con la misma forma que una
+  unidad: el supervisor sin coordinador de UN, con la oficina con que cargó más
+  ventas; el asesor sin supervisor, con la oficina de más ventas suyas (y el
+  supervisado por una oficina, con esa oficina). Solo lo que no tiene ni unidad
+  ni oficina queda en **«Sin unidad ni oficina»**, al final: en la práctica, los
+  contratistas, que no traen supervisor ni `Vendedor`.
 - **Cada persona sale una sola vez**, con su pago entero: el tramo de un asesor
   depende de todas sus ventas y no se reparte. Si vendió también con otro
   supervisor, su fila lo dice («+2 con otro supervisor, incluidas»). Así las
-  unidades más las oficinas suman exactamente el total a pagar.
+  unidades, las oficinas con su equipo y lo de aparte suman exactamente el
+  total a pagar.
 - Las columnas son las del pago: **ventas pagadas / validadas** (en ámbar cuando
   no se pagan todas: el tramo de un asesor descuenta, o el crecimiento de un
   coordinador de UN es desconocido), el **cumplimiento, crecimiento o tramo** con
@@ -257,11 +293,13 @@ recorte sin mandar las ventas.
 `lib/exportar.ts` escribe un libro para leer, no una lista que filtrar:
 
 - **Resumen**: el total en $ y en Bs, la tasa CONATEL y su fuente, cuántos
-  cobran, y lo que se paga por cargo, por unidad de negocio (con las oficinas
-  como una fila aparte que cierra el total) y por oficina.
+  cobran, y lo que se paga por cargo, por unidad de negocio (cada oficina con su
+  equipo sin unidad como una fila más, y lo de aparte al final, cerrando el
+  total) y por oficina.
 - **Coord. de UN**, **Oficinas** (con «comparte ventas con»), **Supervisores**
-  (por unidad, con subtotales) y **Asesores** (banda de unidad, sub-banda de
-  supervisor, subtotal por unidad y total). Las ventas pagadas de menos van en
+  (por unidad u oficina, con subtotales) y **Asesores** (banda de unidad u
+  oficina, sub-banda de supervisor, subtotal por banda y total), en el orden de
+  la nómina. Las ventas pagadas de menos van en
   ámbar, quien no cobra en gris, y una columna de observaciones dice el motivo.
 - **Ventas**: el detalle venta a venta.
 

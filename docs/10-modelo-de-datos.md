@@ -72,6 +72,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `subscriptions-logs` | `import_logs_csv` | `orden`, `fecha_log`, `log`, `estado` |
 | `subscriptions-logs-v15` | **nadie, a propósito** | Formato antiguo de logs (`orden`, `tipo`, `categoria`, `fecha`). Se **lee** en el análisis mensual y en el de ciclo de vida; se carga por fuera de la aplicación, una sola vez, porque es un histórico cerrado que ya no crece. El análisis mensual la exige —sin ella sus cifras históricas estarían incompletas— y el de ciclo de vida la envuelve en `try/except` |
 | `subscriptions_gratis` | `import_gratis_csv` | Desde cuándo es gratuita cada suscripción y con qué evidencia. `DROP` + `CREATE` + `COPY` |
+| `subscriptions-facturas` | `import_facturas_csv` | **Una fila por línea de factura**, con los datos de su factura repetidos. Export global: `TRUNCATE` + `COPY` en una sola transacción |
 | `crm_clients` | `import_crm_csv` | Una fila por oportunidad. `TRUNCATE` |
 | `crm_logs` | `import_crm_csv` | Un movimiento entre etapas por fila. `TRUNCATE` |
 | `support_tickets` | `import_support_csv` | Un ticket por fila. `DROP` + `CREATE` |
@@ -82,6 +83,14 @@ Columnas principales de `subscriptions` / `subscriptions-b`: `orden_producto`,
 `phone`, `phone2`, `vendedor`, `activo`, `medio`, `medio_supervisor`, `estado_factura`.
 Las tres últimas (para Comisiones) y `activo` solo existen si el export las trajo:
 la importación las añade a la tabla al encontrarlas.
+
+`subscriptions-facturas`: `orden`, `numero`, `estado_factura_sub` (el estado de la
+factura de la suscripción, solo para contrastar), `estado` (Registrado, Borrador,
+Cancelado), `estado_pago`, `creado_el` (ISO, para que ordene como texto),
+`producto` (tal cual, con la referencia `[...]` si la trae) e `importado_el`. Una
+factura se identifica por `orden` + `numero` + `creado_el`: los borradores pueden
+compartir número («/»). Qué línea es el plan se resuelve al leer
+(`facturas.leer_facturas`), contra el catálogo de ese momento.
 
 `subscriptions_gratis`: `orden_producto`, `cliente`, `fecha_inicio`, `tarifa`,
 `fecha_factura`, `fecha_gratuito`, `metodo`, `confianza`, `siempre_gratuito`,
@@ -201,6 +210,7 @@ servirlas.
 | `subscriptions`, `subscriptions-b` | Importación de suscripciones | Análisis mensual, ciclo de vida, ETA, catálogos |
 | `subscriptions-logs`, `-logs-v15` | Importación de logs / — | Análisis mensual, ciclo de vida |
 | `subscriptions_gratis` | Importación de gratuitos | Análisis mensual (solo si falta el log real) |
+| `subscriptions-facturas` | Importación de facturas | Comisiones (la primera mensualidad de cada venta) |
 | `analyzer_*` | `MetricsAnalyzer`, `build_day_metrics` | Dashboard, Analytics, Results, Sales Report, Business Units, ETA, **e incidencia por zona de soporte** |
 | `lifetime_bajas_mes` | `run_lifecycle_analysis` | Página Lifetime |
 | `analyzer_eta_*` | `ETAReportManager` | Reporte ETA y su pantalla de parametrización |

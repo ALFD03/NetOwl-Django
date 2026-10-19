@@ -1,9 +1,9 @@
-/** Comisiones › Nómina: una coordinación de oficina, que cobra aparte de las unidades de negocio. */
+/** Comisiones › Nómina: una coordinación de oficina, con el equipo sin unidad de negocio que cargó con ella. */
 
-import { aBs, formatoBs, formatoMonto } from '../lib/formato';
-import { motivoRecorte, ventasPagadas, ventasValidadas, type Oficina } from '../lib/nomina';
+import { aBs, formatoBs, formatoMonto, totalBs } from '../lib/formato';
+import { motivoRecorte, ventasPagadas, ventasValidadas, type Nomina, type Oficina } from '../lib/nomina';
 import { ChipCargo, Kpi, Medidor } from './piezas';
-import { EditarIndicador, type DetalleProps } from './UnidadDetalle';
+import { COLUMNAS_PERSONA, EditarIndicador, Grupo, type DetalleProps } from './UnidadDetalle';
 
 const TONOS = ['bg-violet-500/45', 'bg-violet-500/30', 'bg-violet-500/20', 'bg-violet-500/12'];
 
@@ -11,9 +11,14 @@ const TONOS = ['bg-violet-500/45', 'bg-violet-500/30', 'bg-violet-500/20', 'bg-v
  * Una oficina no es parte de ninguna unidad: cobra por las ventas que la nombran
  * como `Vendedor`, las haya cargado el supervisor que sea. Se enseña con qué
  * unidades comparte esas ventas, como reparto, sin meterla en ninguna.
+ *
+ * Debajo va su equipo sin unidad —los supervisores sin coordinador de UN y los
+ * asesores sin supervisor que cargaron con ella—, con la misma forma que el
+ * equipo de una unidad.
  */
-export function OficinaDetalle({ oficina, ...props }: DetalleProps & { oficina: Oficina }) {
+export function OficinaDetalle({ oficina, nomina, ...props }: DetalleProps & { oficina: Oficina; nomina: Nomina }) {
   const p = oficina.pago;
+  const equipo = oficina.personas.length - 1;
   const repartidas = oficina.unidades.reduce((t, u) => t + u.ventas, 0);
   const motivo = motivoRecorte(p, props.condiciones);
 
@@ -33,6 +38,7 @@ export function OficinaDetalle({ oficina, ...props }: DetalleProps & { oficina: 
         </div>
         <span className="text-xs text-slate-500">
           {p.ventas_propias} propias · {p.ventas_equipo} con su Vendedor{p.ventas_pyme ? ` · ${p.ventas_pyme} PYME` : ''}
+          {equipo > 0 && ` · ${equipo} ${equipo === 1 ? 'persona' : 'personas'} sin unidad`}
         </span>
       </div>
 
@@ -84,6 +90,33 @@ export function OficinaDetalle({ oficina, ...props }: DetalleProps & { oficina: 
           La oficina no pertenece a estas unidades: las ventas con su Vendedor las cargaron supervisores de cada una.
         </p>
       </div>
+
+      {oficina.grupos.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Equipo sin unidad de negocio</p>
+            <span className="text-xs text-slate-500">
+              Con la oficina {formatoMonto(oficina.usd)} · {formatoBs(totalBs(oficina.personas.map((x) => x.neto), props.tasa))}
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Supervisores sin coordinador de UN en Comisiones › Supervisores y asesores sin supervisor, que cargaron con esta
+            oficina la mayoría de sus ventas.
+          </p>
+          <div className="overflow-x-auto">
+            <div className="min-w-[860px] space-y-3">
+              <div className={`${COLUMNAS_PERSONA} px-4 text-[10px] font-black uppercase tracking-wider text-slate-400`}>
+                <span>Persona</span>
+                <span>Cumplimiento · tramo</span>
+                <span className="text-right">Pagadas / valid.</span>
+                <span className="text-right">A pagar $</span>
+                <span className="text-right">A pagar Bs · CONATEL</span>
+              </div>
+              {oficina.grupos.map((g) => <Grupo key={g.key} g={g} nomina={nomina} {...props} />)}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -113,11 +113,11 @@ function FilaAsesor({ p, nomina, ...props }: DetalleProps & { p: PagoComision; n
 const QUIEN_SUPERVISA: Record<GrupoSupervisor['supervisa'], string> = {
   supervisor: '',
   coord_un: 'Supervisados por la coordinación de la unidad',
-  coord_oficina: 'Supervisados por una coordinación de oficina',
+  coord_oficina: 'Supervisados por la coordinación de oficina',
   nadie: 'Sin supervisor en la venta',
 };
 
-function Grupo({ g, nomina, ...props }: DetalleProps & { g: GrupoSupervisor; nomina: Nomina }) {
+export function Grupo({ g, nomina, ...props }: DetalleProps & { g: GrupoSupervisor; nomina: Nomina }) {
   const s = g.pago;
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-800 bg-surface-primary/40">
@@ -223,7 +223,7 @@ export function UnidadDetalle({ unidad, nomina, ...props }: DetalleProps & { uni
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {unidad.id !== null ? <ChipCargo cargo="coord_un">Unidad de negocio</ChipCargo> : (
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-300">Sin unidad</span>
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-300">Aparte</span>
           )}
           <h3 className="truncate text-xl font-black text-white">{unidad.nombre}</h3>
         </div>
@@ -234,12 +234,13 @@ export function UnidadDetalle({ unidad, nomina, ...props }: DetalleProps & { uni
 
       {unidad.id === null && (
         <p className="text-xs text-slate-400">
-          Ventas cuyo supervisor no tiene coordinador de UN asignado en Comisiones › Supervisores, o que no traen supervisor.
+          Ni unidad de negocio ni coordinación de oficina: supervisores sin coordinador de UN en Comisiones › Supervisores
+          que no cargaron ventas con ninguna oficina, y asesores sin supervisor ni Vendedor en sus ventas.
         </p>
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Kpi label="Ventas validadas" nota="las que pasaron por la unidad">{unidad.ventas}</Kpi>
+        <Kpi label="Ventas validadas" nota={unidad.id === null ? 'sin unidad ni Vendedor' : 'las que pasaron por la unidad'}>{unidad.ventas}</Kpi>
         <Kpi label="Pagadas a asesores" nota={validadasAsesores > pagadasAsesores ? `${validadasAsesores - pagadasAsesores} bajo tramo` : 'todas'}>
           <span className={pagadasAsesores < validadasAsesores ? 'text-amber-300' : ''}>{pagadasAsesores}</span>
           <span className="text-sm font-bold text-slate-500"> / {validadasAsesores}</span>

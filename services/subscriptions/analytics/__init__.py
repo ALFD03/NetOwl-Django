@@ -7,6 +7,7 @@ from .day_metrics import (
     get_periodos_con_dias,
 )
 from .eta_report import ETAReportManager
+from .facturas import FaltanColumnasFacturas, import_facturas_csv
 from .free_plans import import_gratis_csv, load_free_subs, summarize_detection
 from .imports import (
     CatalogoVacio,
@@ -36,5 +37,6 @@ __all__ = [
     "get_business_units_data", "get_zonas_config", "get_objetivos_config", "import_subscriptions_csv", "import_logs_csv", "ETAReportManager",
     "CatalogoVacio", "ProductosSinCatalogo", "productos_fuera_de_catalogo", "campos_odoo_importacion",
     "import_gratis_csv", "load_free_subs", "summarize_detection",
+    "import_facturas_csv", "FaltanColumnasFacturas",
     "build_day_metrics", "get_day_metrics", "get_periodos_con_dias",
 ]

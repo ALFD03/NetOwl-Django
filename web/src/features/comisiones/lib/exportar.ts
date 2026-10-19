@@ -17,7 +17,7 @@ import {
 } from '@/shared/lib/excel';
 import { CLASIFICACION, aBs, formatoFecha, formatoMes, totalBs } from './formato';
 import {
-  armarNomina, motivoRecorte, rangoTramo, tramoAsesor, ventasPagadas, ventasValidadas, type Nomina,
+  armarNomina, motivoRecorte, rangoTramo, tramoAsesor, ventasPagadas, ventasValidadas, type GrupoSupervisor, type Nomina,
 } from './nomina';
 import type { CargoVentas, CondicionesComision, InformeComision, PagoComision, VentaComision } from '../types';
 
@@ -145,6 +145,19 @@ const observaciones = (nomina: Nomina, condiciones: CondicionesComision) => (p: 
   ].filter(Boolean).join(' · ');
 };
 
+/**
+ * Los equipos en el orden de la nómina: las unidades, las oficinas con su
+ * equipo sin unidad y, al final, lo que no tiene ninguna de las dos.
+ */
+function equipos(nomina: Nomina): { titulo: string; grupos: GrupoSupervisor[] }[] {
+  const aparte = nomina.unidades.filter((u) => u.id === null);
+  return [
+    ...nomina.unidades.filter((u) => u.id !== null).map((u) => ({ titulo: `Unidad de negocio · ${u.nombre}`, grupos: u.grupos })),
+    ...nomina.oficinas.map((o) => ({ titulo: `Coordinación de oficina · ${o.pago.nombre}`, grupos: o.grupos })),
+    ...aparte.map((u) => ({ titulo: u.nombre, grupos: u.grupos })),
+  ];
+}
+
 // --- Hojas ----------------------------------------------------------------------------
 
 function hojaResumen(informe: InformeComision, nomina: Nomina, tasa: number | null, etiquetaCargo: (c: CargoVentas) => string): ExcelStyledSheet {
@@ -199,10 +212,11 @@ function hojaResumen(informe: InformeComision, nomina: Nomina, tasa: number | nu
   cargos.forEach((f, i) => filas.push(filaDe(porCargo, f, i)));
   filas.push(totalDe(porCargo, cargos, 'Total', true), vacia());
 
-  // Por unidad de negocio, y las oficinas como una fila aparte que cierra el total.
+  // Por unidad de negocio, cada oficina con su equipo sin unidad, y lo que no
+  // tiene ninguna de las dos: entre todos, el total.
   type Bloque = { nombre: string; crecimiento: number | null; personas: PagoComision[]; ventas: number | null };
   const porUnidad: Col<Bloque>[] = [
-    { titulo: 'Unidad de negocio', ancho: 34, valor: (b) => b.nombre },
+    { titulo: 'Unidad de negocio u oficina', ancho: 34, valor: (b) => b.nombre },
     { titulo: 'Crecimiento', ancho: 14, valor: (b) => b.crecimiento, formato: PCT },
     { titulo: 'Personas', ancho: 12, valor: (b) => b.personas.length, formato: ENTERO, total: (bs) => sumar(bs.flatMap((b) => b.personas), () => 1) },
     { titulo: 'Ventas de la unidad', ancho: 14, valor: (b) => b.ventas, formato: ENTERO },
@@ -210,9 +224,13 @@ function hojaResumen(informe: InformeComision, nomina: Nomina, tasa: number | nu
     { titulo: 'A pagar $', ancho: 18, valor: (b) => sumaUsd(b.personas), formato: USD, total: (bs) => sumaUsd(bs.flatMap((b) => b.personas)) },
     { titulo: 'A pagar Bs', ancho: 22, valor: (b) => totalBs(b.personas.map((p) => p.neto), tasa), formato: BS, total: (bs) => totalBs(bs.flatMap((b) => b.personas).map((p) => p.neto), tasa) },
   ];
+  const deUnidad = (u: Nomina['unidades'][number]): Bloque => ({
+    nombre: u.nombre, crecimiento: u.coordinador?.crecimiento_pct ?? null, personas: u.personas, ventas: u.ventas,
+  });
   const bloques: Bloque[] = [
-    ...nomina.unidades.map((u) => ({ nombre: u.nombre, crecimiento: u.coordinador?.crecimiento_pct ?? null, personas: u.personas, ventas: u.ventas })),
-    { nombre: 'Coordinación de oficinas (aparte)', crecimiento: null, personas: nomina.oficinas.map((o) => o.pago), ventas: null },
+    ...nomina.unidades.filter((u) => u.id !== null).map(deUnidad),
+    ...nomina.oficinas.map((o) => ({ nombre: `Oficina · ${o.pago.nombre}`, crecimiento: null, personas: o.personas, ventas: null })),
+    ...nomina.unidades.filter((u) => u.id === null).map(deUnidad),
   ];
   filas.push(banda('Por unidad de negocio', N, COLOR.unidad, COLOR.unidadTexto), cabecera(porUnidad));
   bloques.forEach((b, i) => filas.push(filaDe(porUnidad, b, i)));
@@ -260,17 +278,17 @@ function hojaAsesores(nomina: Nomina, condiciones: CondicionesComision, tasa: nu
   const filas: ExcelRow[] = [cabecera(cols)];
   const todos: PagoComision[] = [];
 
-  for (const u of nomina.unidades) {
-    const asesores = u.grupos.flatMap((g) => g.asesores);
+  for (const e of equipos(nomina)) {
+    const asesores = e.grupos.flatMap((g) => g.asesores);
     if (!asesores.length) continue;
-    filas.push(banda(`Unidad de negocio · ${u.nombre}`, N, COLOR.unidad, COLOR.unidadTexto));
-    for (const g of u.grupos) {
+    filas.push(banda(e.titulo, N, COLOR.unidad, COLOR.unidadTexto));
+    for (const g of e.grupos) {
       if (!g.asesores.length) continue;
       const quien = g.pago ? `Supervisor · ${g.nombre}` : g.id === null ? 'Sin supervisor en la venta' : `Supervisa ${g.nombre}`;
       filas.push(ancha(quien, N, { fontWeight: 'bold', backgroundColor: COLOR.supervisor, textColor: COLOR.tinta, indent: 1, height: 20, alignVertical: 'center' }));
       g.asesores.forEach((p, i) => filas.push(filaDe(cols, p, i, p.neto === 0, 2)));
     }
-    filas.push(totalDe(cols, asesores, `Total ${u.nombre}`), vacia());
+    filas.push(totalDe(cols, asesores, `Total ${e.titulo.replace(/^.* · /, '')}`), vacia());
     todos.push(...asesores);
   }
   filas.push(totalDe(cols, todos, 'Total asesores', true));
@@ -279,7 +297,7 @@ function hojaAsesores(nomina: Nomina, condiciones: CondicionesComision, tasa: nu
 
 function hojaSupervisores(nomina: Nomina, condiciones: CondicionesComision, tasa: number | null): ExcelStyledSheet {
   const obs = observaciones(nomina, condiciones);
-  const asesoresDe = new Map(nomina.unidades.flatMap((u) => u.grupos).filter((g) => g.pago).map((g) => [g.pago!.persona_id, g.asesores.length]));
+  const asesoresDe = new Map(equipos(nomina).flatMap((e) => e.grupos).filter((g) => g.pago).map((g) => [g.pago!.persona_id, g.asesores.length]));
   const cols: Col<PagoComision>[] = [
     { titulo: 'Supervisor', ancho: 34, valor: (p) => p.nombre },
     { titulo: 'Asesores', ancho: 9, valor: (p) => asesoresDe.get(p.persona_id) ?? 0, formato: ENTERO },
@@ -301,12 +319,12 @@ function hojaSupervisores(nomina: Nomina, condiciones: CondicionesComision, tasa
   const N = cols.length;
   const filas: ExcelRow[] = [cabecera(cols)];
   const todos: PagoComision[] = [];
-  for (const u of nomina.unidades) {
-    const sup = u.grupos.flatMap((g) => (g.pago ? [g.pago] : []));
+  for (const e of equipos(nomina)) {
+    const sup = e.grupos.flatMap((g) => (g.pago ? [g.pago] : []));
     if (!sup.length) continue;
-    filas.push(banda(`Unidad de negocio · ${u.nombre}`, N, COLOR.unidad, COLOR.unidadTexto));
+    filas.push(banda(e.titulo, N, COLOR.unidad, COLOR.unidadTexto));
     sup.forEach((p, i) => filas.push(filaDe(cols, p, i, p.neto === 0, 1)));
-    filas.push(totalDe(cols, sup, `Total ${u.nombre}`), vacia());
+    filas.push(totalDe(cols, sup, `Total ${e.titulo.replace(/^.* · /, '')}`), vacia());
     todos.push(...sup);
   }
   filas.push(totalDe(cols, todos, 'Total supervisores', true));
@@ -375,8 +393,15 @@ function hojaVentas(ventas: VentaComision[]): ExcelStyledSheet {
     { titulo: 'Plan', ancho: 28, valor: (v) => v.producto },
     { titulo: 'Tipo', ancho: 12, valor: (v) => (v.pyme ? 'PYME' : 'Residencial') },
     { titulo: 'Precio', ancho: 11, valor: (v) => v.precio, formato: USD },
-    { titulo: 'Estado', ancho: 14, valor: (v) => v.estado },
+    { titulo: 'Estado actual', ancho: 14, valor: (v) => v.estado },
+    { titulo: 'Cancelada el', ancho: 12, valor: (v) => (v.cancelada_el ? formatoFecha(v.cancelada_el) : '') },
     { titulo: 'Estado de la factura', ancho: 20, valor: (v) => v.estado_factura },
+    { titulo: 'Primera mensualidad', ancho: 18, valor: (v) => v.factura_numero ?? '' },
+    { titulo: 'Creada el', ancho: 12, valor: (v) => (v.factura_fecha ? formatoFecha(v.factura_fecha) : '') },
+    { titulo: 'Plan facturado', ancho: 28, valor: (v) => v.factura_plan ?? '' },
+    { titulo: 'Estado', ancho: 12, valor: (v) => v.factura_estado ?? '' },
+    { titulo: 'Estado del pago', ancho: 18, valor: (v) => v.factura_pago ?? '' },
+    { titulo: 'Gratuita', ancho: 10, valor: (v) => (v.gratuita ? 'Sí' : '') },
     { titulo: 'Clasificación', ancho: 13, valor: (v) => CLASIFICACION[v.clasificacion].label },
     { titulo: 'Motivo', ancho: 40, valor: (v) => v.motivo },
     { titulo: 'Medio', ancho: 24, valor: (v) => v.medio },

@@ -42,7 +42,7 @@ export const formatoPct = (valor: number | null | undefined): string =>
 
 /** Una fecha ISO como `25/08/2026`. */
 export const formatoFecha = (iso: string): string => {
-  const [anio, mes, dia] = iso.split('-');
+  const [anio, mes, dia] = iso.slice(0, 10).split('-');
   return dia ? `${dia}/${mes}/${anio}` : iso;
 };
 

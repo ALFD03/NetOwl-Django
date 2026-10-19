@@ -95,6 +95,8 @@ class TableNames:
     SUBSCRIPTIONS_LOGS = "subscriptions-logs"
     SUBSCRIPTIONS_LOGS_V15 = "subscriptions-logs-v15"
     SUBSCRIPTIONS_FREE = "subscriptions_gratis"
+    # Una fila por linea de factura; la reemplaza entera la importacion de facturas.
+    SUBSCRIPTIONS_FACTURAS = "subscriptions-facturas"
     SUPPORT_TICKETS = "support_tickets"
     SUPPORT_METRICAS_GLOBALES = "support_metricas_globales"
     SUPPORT_DIMENSIONES_HISTORICO = "support_dimensiones_historico"

@@ -26,8 +26,10 @@ from services.crm.analytics import import_crm_csv
 from services.crm.analytics.config import REQUIRED_CRM_HEADERS
 from services.subscriptions.analytics import (
     CatalogoVacio,
+    FaltanColumnasFacturas,
     ProductosSinCatalogo,
     campos_odoo_importacion,
+    import_facturas_csv,
     import_gratis_csv,
     import_logs_csv,
     import_subscriptions_csv,
@@ -198,6 +200,39 @@ def api_import_gratis(request):
         # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
         logger.exception("Error al importar planes gratuitos")
         register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', "Fallo al importar planes gratuitos.", ERROR_GENERICO)
+        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
+    finally:
+        cleanup_tempfile(tmp_path)
+
+
+@login_required
+@permission_required('can_import_subs', 'can_import_data')
+@ratelimit(key='ip', rate='5/m', block=True)
+@require_POST
+def api_import_facturas(request):
+    """Importa el export global de facturas de suscripciones (lo usa Comisiones).
+
+    Las cabeceras se comprueban en el importador y no en `handle_csv_upload`,
+    porque se aceptan con o sin tildes.
+    """
+    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
+    tmp_path, error = handle_csv_upload(request)
+    if error:
+        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', 'Error al recibir el archivo de facturas.')
+        return error
+    try:
+        facturas = import_facturas_csv(tmp_path)
+        msg = f"Facturas: {facturas} facturas importadas."
+        register_import_log(request.user, 'subs_subscriptions', file_name, facturas, 'success', msg, f"Carga del export de facturas con {facturas} facturas.")
+        return JsonResponse({"status": "success", "message": msg})
+    except FaltanColumnasFacturas as e:
+        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', str(e), str(e))
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    except Exception:
+        # El detalle va al log del servidor, no al cliente: una excepcion de
+        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
+        logger.exception("Error al importar facturas")
+        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', "Fallo al importar facturas.", ERROR_GENERICO)
         return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
     finally:
         cleanup_tempfile(tmp_path)

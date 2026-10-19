@@ -192,6 +192,7 @@ Todos: `POST`, `multipart/form-data` con el campo **`csv_file`**, límite **5/m*
 | `api/import-subscriptions/` | `can_import_subs`, `can_import_data` | `subscriptions` + `subscriptions-b` |
 | `api/import-logs/` | `can_import_subs`, `can_import_data` | `subscriptions-logs` |
 | `api/import-gratis/` | `can_import_subs`, `can_import_data` | `subscriptions_gratis` |
+| `api/import-facturas/` | `can_import_subs`, `can_import_data` | `subscriptions-facturas`. Las cabeceras se comprueban sin tildes ni mayúsculas en el importador (400 si falta alguna) |
 | `api/import-crm/` | `can_import_crm`, `can_import_data` | `crm_clients` + `crm_logs` |
 | `api/import-support/` | `can_import_support`, `can_import_data` | `support_tickets` |
 

@@ -103,7 +103,7 @@ export function InformeView({
     {
       key: 'revision',
       titulo: 'Revisar ventas',
-      detalle: informe.resumen.revision ? `${informe.resumen.revision} por facturar sin decidir` : 'Nada por decidir',
+      detalle: informe.resumen.revision ? `${informe.resumen.revision} sin decidir` : 'Nada por decidir',
       hecho: informe.resumen.revision === 0,
       pendiente: informe.resumen.revision > 0,
       icono: <ListChecks className="h-4 w-4" />,
@@ -276,11 +276,12 @@ export function InformeView({
                 <p className="max-w-3xl text-xs text-slate-400">
                   {verTodas
                     ? 'Cada venta instalada en el periodo, con su clasificación y quién cobra por ella.'
-                    : 'Por facturar y en progreso: la campaña pudo exonerar un mes. Cuéntala o no la cuentes; si no se cuenta, no se paga.'}
+                    : 'Lo que la primera mensualidad no resuelve: todas sus mensualidades están canceladas (¿exoneración?), no tiene ninguna, o pasó a plan gratuito con la mensualidad pagada. Cuéntala o no la cuentes; si no se cuenta, no se paga.'}
                   {' '}
                   <span className="text-slate-500">
                     {informe.resumen.candidatas} instaladas · {informe.resumen.validas} válidas · {informe.resumen.no_pagadas} no pagadas ·{' '}
                     {informe.resumen.excluidas} excluidas
+                    {informe.facturas_importadas_el && <> · facturas importadas el {formatoFecha(informe.facturas_importadas_el)}</>}
                   </span>
                 </p>
                 <div className="inline-flex rounded-xl border border-slate-700/50 bg-surface-primary p-1 text-xs font-bold">
