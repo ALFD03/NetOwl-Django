@@ -5,7 +5,6 @@ staticfiles/
 venv/
 AGENTS.md
 DESIGN.md
-docker-compose.yml
 deploy/
 COMMITS.md
 logs.log
@@ -23,4 +22,3 @@ CLAUDE.md
 web/static/dist/
 graphify-out/
 .vscode
-skills-lock.json
