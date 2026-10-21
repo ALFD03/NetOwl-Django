@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { comisionesApi } from '@/shared/lib/api/comisiones';
-import type { TasaBolivares, VentaComision } from '../types';
+import type { DecisionRevision, TasaBolivares, VentaComision } from '../types';
 
 /**
  * Estado del informe de comisiones.
@@ -74,15 +74,19 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
     ventas, cargandoVentas, cargarVentas,
     tasaHoy,
     guardando, error, setError,
-    guardarPeriodo: (body: { periodo: string; inicio_promo: string; inicio?: string }) =>
+    guardarPeriodo: (body: { periodo: string; inicio_promo: string; inicio?: string; corte_adelantos?: string }) =>
       escribir(() => comisionesApi.guardarPeriodo(body), 'No se pudo guardar el periodo.'),
     cerrar: () => escribir(() => comisionesApi.cerrar(periodo), 'No se pudo cerrar el periodo.'),
     reabrir: () => escribir(() => comisionesApi.reabrir(periodo), 'No se pudo reabrir el periodo.'),
-    decidir: (ordenes: string[], decision: '' | 'contar' | 'no_contar') =>
+    decidir: (ordenes: string[], decision: '' | DecisionRevision) =>
       escribir(
         () => comisionesApi.guardarRevision({ periodo, ordenes, decision }),
         'No se pudo guardar la decisión.',
       ),
+    agregarManual: (ordenes: string[], nota: string) =>
+      escribir(() => comisionesApi.agregarManual({ periodo, ordenes, nota }), 'No se pudo agregar la venta.'),
+    quitarManual: (orden: string) =>
+      escribir(() => comisionesApi.quitarManual(periodo, orden), 'No se pudo quitar la venta.'),
     guardarCumplimiento: (persona_id: number, valor: number | null) =>
       escribir(
         () => comisionesApi.guardarIndicador({ periodo, persona_id, cumplimiento_pct: valor }),

@@ -94,6 +94,9 @@ class CondicionesComision(models.Model):
     que es donde se corta cada periodo de comisiones; se propone al calcular
     y se puede cambiar mes a mes. `dias_espera` son los dias tras el cierre
     del periodo antes de calcularlo, para que la primera factura este pagada.
+    `dia_corte` es el dia del mes siguiente hasta el que un pago adelantado de
+    lo instalado en dias promocionales cuenta en el periodo (ver
+    `ComisionPeriodo.corte_adelantos`); tambien se propone y se cambia por mes.
     """
 
     monto_equipo = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("2.5"))
@@ -103,6 +106,7 @@ class CondicionesComision(models.Model):
     tramos_un = models.JSONField(default=_tramos_un)
     dia_promocional = models.PositiveSmallIntegerField(default=25)
     dias_espera = models.PositiveSmallIntegerField(default=15)
+    dia_corte = models.PositiveSmallIntegerField(default=22)
     actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     actualizado_en = models.DateTimeField(auto_now=True)
 
@@ -133,11 +137,14 @@ class ComisionPeriodo(models.Model):
     """Un periodo de comisiones: un mes, con su ventana de instalacion.
 
     El periodo de un mes no va del 1 al ultimo dia sino del inicio de los dias
-    promocionales del mes anterior al dia antes de los del mes: lo instalado en
-    dias promocionales paga su primera mensualidad un mes mas tarde, y su
-    comision es del periodo siguiente. Como los dias promocionales se adelantan
-    o se retrasan, el inicio de los de cada mes se guarda aqui (`inicio_promo`)
-    y el periodo siguiente arranca en el.
+    promocionales del mes anterior al fin del mes. Lo instalado en dias
+    promocionales paga su primera mensualidad un mes mas tarde, asi que su
+    comision es del periodo siguiente, **salvo que el cliente adelante el
+    pago**: si la primera mensualidad estaba pagada el dia `corte_adelantos`
+    (el 22 del mes siguiente, o el que se escriba), cuenta en este y ya no en
+    el siguiente. Como los dias promocionales se adelantan o se retrasan, el
+    inicio de los de cada mes se guarda aqui (`inicio_promo`) y el periodo
+    siguiente arranca en el.
 
     **Un borrador no guarda resultados**: se recalcula cada vez que se abre,
     con las suscripciones de ese momento. Al cerrarlo se congela en
@@ -149,6 +156,8 @@ class ComisionPeriodo(models.Model):
     periodo = models.CharField(max_length=7, unique=True)
     inicio = models.DateField()
     inicio_promo = models.DateField()
+    # Nulo: el `dia_corte` de las condiciones, en el mes siguiente.
+    corte_adelantos = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=10, choices=ESTADO_PERIODO_CHOICES, default="borrador")
     # El % de cumplimiento de todos los supervisores y coordinadores de oficina
     # del periodo, salvo quien tenga uno propio en `IndicadorComision`.
@@ -183,6 +192,10 @@ class ComisionPeriodo(models.Model):
 DECISION_REVISION_CHOICES = [
     ("contar", "Contar en este periodo"),
     ("no_contar", "No contar"),
+    # Solo en el primer periodo, para lo instalado en los dias promocionales
+    # del mes anterior: si ya se cobro alli por adelantar la mensualidad.
+    ("ya_pagada", "Ya cobrada en el periodo anterior"),
+    ("normal", "Toca en este periodo"),
 ]
 
 
@@ -193,8 +206,13 @@ class RevisionComision(models.Model):
     suscripcion y su primera mensualidad se contradicen, la mensualidad se
     cancelo (¿exoneracion?) o no hay ninguna. La decision manda sobre la
     clasificacion, tambien si despues cambian los datos, hasta que se deshace.
-    Una venta solo es candidata en el periodo de su instalacion, asi que no
-    contarla es que no se paga.
+    Una venta solo es candidata en el periodo de su instalacion (o en dos, si
+    se instalo en dias promocionales), asi que no contarla es que no se paga.
+
+    En el primer periodo del sistema, lo instalado en los dias promocionales
+    del mes anterior pudo cobrarse ya alli, fuera del sistema: `ya_pagada` lo
+    excluye y `normal` lo deja clasificarse por sus facturas. A partir del
+    segundo periodo eso lo dice el cierre del anterior y no se decide.
     """
 
     orden = models.CharField(max_length=80)
@@ -214,6 +232,33 @@ class RevisionComision(models.Model):
 
     def __str__(self):
         return f"{self.orden} ({self.periodo_origen}): {self.decision}"
+
+
+class VentaManual(models.Model):
+    """Una venta agregada a mano a un periodo: cuenta en el, se instalara cuando se instalara.
+
+    Para lo que las reglas no recogen y hay que pagar igual. Las personas que
+    cobran salen de la propia suscripcion, asi que la orden tiene que estar en
+    la tabla de suscripciones. Solo se rechaza si ya se pago en otro periodo
+    cerrado: una venta no se paga dos veces.
+    """
+
+    orden = models.CharField(max_length=80)
+    periodo = models.CharField(max_length=7)
+    nota = models.CharField(max_length=255)
+    agregado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    agregado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "comisiones_ventas_manuales"
+        constraints = [
+            models.UniqueConstraint(fields=["orden", "periodo"], name="comision_manual_unica"),
+        ]
+        verbose_name = "venta agregada a mano"
+        verbose_name_plural = "ventas agregadas a mano"
+
+    def __str__(self):
+        return f"{self.orden} ({self.periodo})"
 
 
 class IndicadorComision(models.Model):

@@ -11,6 +11,13 @@ export interface Column<T> {
   className?: string;
   sortKey?: keyof T; // Campo real de la data para ordenar
   /**
+   * Por qué se ordena cuando la celda no es un campo de la fila sino algo
+   * calculado (una situación que sale de varios campos): sin esto, la columna
+   * no se puede ordenar, o se ordena por un campo crudo que no es lo que se lee.
+   * Manda sobre `sortKey`.
+   */
+  sortValue?: (row: T) => string | number;
+  /**
    * Anade un desplegable de filtro para esta columna.
    *
    * Las opciones **salen de los datos**, no de una lista fija: un catalogo gana
@@ -106,7 +113,9 @@ export function DataTable<T>({
   selection,
 }: DataTableProps<T>) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortConfig, setSortConfig] = useState<{ key: keyof T; direction: 'asc' | 'desc' } | null>(null);
+  // Se identifica la columna por su cabecera, como los filtros: una columna con
+  // `sortValue` no tiene un campo de la fila que la nombre.
+  const [sortConfig, setSortConfig] = useState<{ header: string; direction: 'asc' | 'desc' } | null>(null);
   // Un filtro por columna, indexado por su cabecera: es lo unico que identifica
   // a una columna de forma estable sin obligar a darle un id a mano.
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -180,10 +189,16 @@ export function DataTable<T>({
     }
 
     // 3. Ordenar
-    if (sortConfig) {
+    const columnaOrden = sortConfig ? columns.find((col) => col.header === sortConfig.header) : undefined;
+    if (sortConfig && columnaOrden) {
+      const valorOrden = (row: T): unknown => {
+        if (columnaOrden.sortValue) return columnaOrden.sortValue(row);
+        const key = columnaOrden.sortKey ?? (columnaOrden.accessor as keyof T);
+        return row[key];
+      };
       filtered.sort((a: T, b: T) => {
-        const aVal = a[sortConfig.key] as unknown;
-        const bVal = b[sortConfig.key] as unknown;
+        const aVal = valorOrden(a);
+        const bVal = valorOrden(b);
 
         if (aVal === bVal) return 0;
         // Coerce to string/number for comparison
@@ -198,17 +213,18 @@ export function DataTable<T>({
 
     return filtered;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `valorFiltro` se recrea en cada render y solo lee de `col`.
-  }, [data, searchTerm, sortConfig, filters, filterColumns]);
+  }, [data, searchTerm, sortConfig, filters, filterColumns, columns]);
 
   const paginacion = usePaginacion(processedData, pageSize);
 
-  const handleSort = (key?: keyof T) => {
-    if (!key) return;
+  const ordenable = (col: Column<T>) => Boolean(col.sortValue || col.sortKey || typeof col.accessor === 'string');
+  const handleSort = (col: Column<T>) => {
+    if (!ordenable(col)) return;
     let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig?.key === key && sortConfig.direction === 'asc') {
+    if (sortConfig?.header === col.header && sortConfig.direction === 'asc') {
       direction = 'desc';
     }
-    setSortConfig({ key, direction });
+    setSortConfig({ header: col.header, direction });
     paginacion.irA(0);
   };
 
@@ -310,16 +326,16 @@ export function DataTable<T>({
               {columns.map((col, idx) => (
                 <th
                   key={idx}
-                  onClick={() => handleSort(col.sortKey || (typeof col.accessor === 'string' ? col.accessor : undefined))}
+                  onClick={() => handleSort(col)}
                   className={`p-3 text-[10px] uppercase font-bold tracking-wider border-b border-slate-800 transition-colors 
-                    ${col.sortKey || typeof col.accessor === 'string' ? 'cursor-pointer hover:text-white hover:bg-slate-700/50' : ''} 
+                    ${ordenable(col) ? 'cursor-pointer hover:text-white hover:bg-slate-700/50' : ''} 
                     ${alignMap[col.align || 'left']} ${col.sticky ? STICKY_TH : ''} ${col.className || ''}`}
                 >
                   <div className={`flex items-center gap-2 ${col.align === 'right' ? 'justify-end' : ''}`}>
                     <span>{col.header}</span>
-                    {(col.sortKey || typeof col.accessor === 'string') && (
+                    {ordenable(col) && (
                       <span className="text-slate-600">
-                        {sortConfig?.key === (col.sortKey || col.accessor) ? (
+                        {sortConfig?.header === col.header ? (
                           sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3 text-brand" /> : <ChevronDown className="w-3 h-3 text-brand" />
                         ) : (
                           <ChevronsUpDown className="w-3 h-3 opacity-30" />

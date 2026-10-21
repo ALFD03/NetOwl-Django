@@ -122,15 +122,17 @@ es de esta app.
 | GET | `supervisores/` | `can_manage_comisiones` | — | Página `Comisiones/Supervisores` |
 | GET | `condiciones/` | `can_manage_comisiones` | — | Página `Comisiones/Condiciones` |
 | GET | `api/ventas/?periodo=` | `can_view_comisiones` | — | `{ventas}`: el detalle venta a venta (congelado si el periodo está cerrado). **409** si faltan columnas |
-| POST | `api/periodo/guardar/` | `can_manage_comisiones` | 30/m | `{periodo, inicio_promo, inicio?}`. `inicio` solo si el mes anterior no tiene periodo. **409** si el periodo o el siguiente están cerrados |
+| POST | `api/periodo/guardar/` | `can_manage_comisiones` | 30/m | `{periodo, inicio_promo, inicio?, corte_adelantos?}`. `inicio` solo si el mes anterior no tiene periodo; `corte_adelantos`, un día del mes siguiente (vacío: el habitual). **409** si el periodo o el siguiente están cerrados |
 | POST | `api/periodo/cerrar/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** con lo que falta si queda algo pendiente |
 | POST | `api/periodo/reabrir/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** si el siguiente está cerrado |
-| POST | `api/revision/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, orden | ordenes[], decision: contar|no_contar|'', nota?}`. Vacía deshace. Hasta 5 000 órdenes por petición |
+| POST | `api/revision/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, orden | ordenes[], decision: contar|no_contar|ya_pagada|normal|'', nota?}`. Vacía deshace. `ya_pagada`/`normal` solo si el mes anterior no tiene periodo (**400** si lo tiene). Hasta 5 000 órdenes por petición |
+| POST | `api/manual/agregar/` | `can_manage_comisiones` | 30/m | `{periodo, ordenes[], nota}`, nota obligatoria. Todo o nada: **400** si alguna orden no está en suscripciones, ya estaba agregada o ya se pagó en otro periodo cerrado. Hasta 200 |
+| POST | `api/manual/quitar/` | `can_manage_comisiones` | 30/m | `{periodo, orden}` |
 | POST | `api/indicador/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, persona_id, cumplimiento_pct? , crecimiento_pct?}`. Vacío borra el valor (el cumplimiento vuelve al general) |
 | GET | `api/tasa-actual/` | `can_view_comisiones` | 30/m | La tasa oficial del BCV de hoy (`ve.dolarapi.com`), sin guardarla: referencia para ver el pago en bolívares. 502 si el servicio falla |
 | POST | `api/cumplimiento-general/` | `can_manage_comisiones` | 60/m | `{periodo, cumplimiento_pct}`: el de todos los supervisores y coord. de oficina sin uno propio. Vacío lo borra |
 | POST | `api/supervisores/unidad/` | `can_manage_comisiones` | 60/m | `{supervisor_ids: [...], coord_un_id}`: el coordinador de UN de uno o varios supervisores; vacío se lo quita. Todo o nada: **400** si alguno no es supervisor o el coordinador no es de UN |
-| POST | `api/condiciones/guardar/` | `can_manage_comisiones` | 30/m | Las condiciones enteras. **400** si los tramos no son coherentes |
+| POST | `api/condiciones/guardar/` | `can_manage_comisiones` | 30/m | Las condiciones enteras, `dia_corte` incluido. **400** si los tramos no son coherentes |
 
 ---
 

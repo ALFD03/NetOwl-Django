@@ -89,6 +89,17 @@ VALIDA = "valida"
 NO_PAGADA = "no_pagada"
 REVISION = "revision"
 EXCLUIDA = "excluida"
+# Instalada en los dias promocionales del mes sin adelantar la mensualidad: su
+# comision es del periodo siguiente, y en este solo se informa.
+DIFERIDA = "diferida"
+
+# Las decisiones a mano (`RevisionComision.decision`). Las dos primeras
+# resuelven una venta en revision; las otras dos, en el primer periodo, si una
+# instalacion de los dias promocionales del mes anterior ya se cobro en el.
+CONTAR = "contar"
+NO_CONTAR = "no_contar"
+YA_PAGADA = "ya_pagada"
+NORMAL = "normal"
 
 # Lo que le paso a la primera mensualidad (`situacion`).
 PAGADA = "pagada"
@@ -106,7 +117,8 @@ class Factura:
 
     `plan` es el plan de catalogo de sus lineas; vacio si no factura ninguno
     (la de instalacion, la del router), y entonces no es una mensualidad.
-    `creado_el` es texto ISO (`YYYY-MM-DD HH:MM:SS`), vacio si no se supo leer.
+    `creado_el` es texto ISO (`YYYY-MM-DD HH:MM:SS`), vacio si no se supo leer;
+    `fecha_pago` y `actualizado_el` tambien, y vacias si el export no las traia.
     """
 
     numero: str
@@ -114,6 +126,8 @@ class Factura:
     estado_pago: str
     creado_el: str
     plan: str
+    fecha_pago: str = ""
+    actualizado_el: str = ""
 
 
 def _cancelada(factura: Factura) -> bool:
@@ -532,19 +546,66 @@ def calcular_pagos(
 
 # --- El periodo ---------------------------------------------------------------------
 
-def ventana(inicio_promo_anterior: date, inicio_promo: date) -> tuple[date, date]:
-    """El primer y el ultimo dia de instalacion que cuentan para un periodo.
+# En que parte de la ventana de un periodo se instalo una venta (`tramo`).
+PROMO_ANTERIOR = "promo_anterior"
+REGULAR = "regular"
+PROMO = "promo"
+MANUAL = "manual"
 
-    Va del inicio de los dias promocionales del mes anterior hasta el dia antes
-    del inicio de los del mes a calcular: lo instalado en dias promocionales no
-    paga la mensualidad siguiente sino la otra, asi que su comision es del
-    periodo siguiente.
 
-    >>> ventana(date(2026, 8, 25), date(2026, 9, 24))
-    (datetime.date(2026, 8, 25), datetime.date(2026, 9, 23))
+def tramo(instalada: date, inicio: date, inicio_promo: date) -> str:
+    """En que parte de la ventana de un periodo cae una instalacion.
+
+    La ventana va del inicio de los dias promocionales del mes anterior al
+    ultimo dia del mes, en tres trozos:
+
+    - `PROMO_ANTERIOR`: los dias promocionales del mes anterior. Su comision
+      toca en este periodo, salvo que el cliente adelantara la mensualidad y ya
+      se cobrara en el anterior.
+    - `REGULAR`: del dia 1 al anterior a los dias promocionales del mes.
+    - `PROMO`: los dias promocionales del mes. Su comision toca en el periodo
+      siguiente; solo cuenta en este si el cliente adelanto el pago.
+
+    >>> [tramo(date(2026, m, d), date(2026, 8, 25), date(2026, 9, 25)) for m, d in ((8, 31), (9, 1), (9, 24), (9, 25))]
+    ['promo_anterior', 'regular', 'regular', 'promo']
     """
-    from datetime import timedelta
+    if instalada < inicio_promo.replace(day=1):
+        return PROMO_ANTERIOR
+    return PROMO if instalada >= inicio_promo else REGULAR
 
-    if inicio_promo <= inicio_promo_anterior:
-        raise ValueError("Los días promocionales del mes tienen que empezar después de los del mes anterior.")
-    return inicio_promo_anterior, inicio_promo - timedelta(days=1)
+
+def fecha_del_pago(factura: Factura | None) -> tuple[str, str]:
+    """`(dia, fuente)`: hasta cuando se sabe que estaba pagada una factura pagada.
+
+    La «Fecha del último pago» si el export la trae. Si no, la «Última
+    actualización el»: pagarla la actualiza, asi que el pago no es posterior a
+    ella. Y si tampoco, el «Creado el», que es solo una aproximacion (el pago
+    pudo llegar despues) y por eso se avisa. Vacio si no esta pagada.
+
+    >>> f = lambda pago="", act="": Factura("F", "Registrado", "Pagado", "2026-10-01 08:00:00", "P", pago, act)
+    >>> fecha_del_pago(f("2026-10-07"))
+    ('2026-10-07', 'pago')
+    >>> fecha_del_pago(f(act="2026-10-09 10:00:00"))
+    ('2026-10-09', 'actualizacion')
+    >>> fecha_del_pago(f())
+    ('2026-10-01', 'creacion')
+    >>> fecha_del_pago(Factura("F", "Registrado", "Sin pagar", "2026-10-01", "P"))
+    ('', '')
+    """
+    if situacion(factura) != PAGADA:
+        return "", ""
+    for valor, fuente in ((factura.fecha_pago, "pago"), (factura.actualizado_el, "actualizacion"), (factura.creado_el, "creacion")):
+        if valor:
+            return valor[:10], fuente
+    return "", ""
+
+
+def pagada_hasta(factura: Factura | None, corte: date) -> bool:
+    """Si la factura estaba pagada el dia `corte` (incluido), segun `fecha_del_pago`.
+
+    >>> f = Factura("F", "Registrado", "Pagado", "2026-10-01", "P", "2026-10-07")
+    >>> pagada_hasta(f, date(2026, 10, 22)), pagada_hasta(f, date(2026, 10, 6))
+    (True, False)
+    """
+    dia, _ = fecha_del_pago(factura)
+    return bool(dia) and dia <= corte.isoformat()

@@ -7,10 +7,10 @@ from typing import Any
 
 from services.comisiones.models import ComisionPeriodo
 
-from .calculo import construir_informe, dia_del_mes, fin_de, mes_anterior
+from .calculo import construir_informe, corte_de, dia_del_mes, fin_de, mes_anterior, mes_siguiente
 
 
-def periodos() -> list[dict[str, Any]]:
+def periodos(dia_corte: int) -> list[dict[str, Any]]:
     """Los periodos creados, del mas reciente al mas antiguo."""
     return [
         {
@@ -19,6 +19,7 @@ def periodos() -> list[dict[str, Any]]:
             "inicio": p.inicio.isoformat(),
             "fin": fin_de(p).isoformat(),
             "inicio_promo": p.inicio_promo.isoformat(),
+            "corte_adelantos": corte_de(p, dia_corte).isoformat(),
         }
         for p in ComisionPeriodo.objects.all()
     ]
@@ -31,17 +32,18 @@ def informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[dict[str, An
     return construir_informe(periodo)
 
 
-def propuesta(periodo: str, dia_promocional: int) -> dict[str, Any]:
+def propuesta(periodo: str, dia_promocional: int, dia_corte: int) -> dict[str, Any]:
     """Lo que el formulario de un periodo nuevo (o editado) propone.
 
     El inicio sale de los dias promocionales del mes anterior si ese periodo
     existe —y entonces no se pregunta—; si no, se pregunta, con el dia
     habitual de ese mes como sugerencia. El inicio de los dias promocionales
-    del propio mes se propone siempre con el dia habitual.
+    del propio mes y el corte de los adelantos se proponen con el dia habitual.
     """
     existente = ComisionPeriodo.objects.filter(periodo=periodo).first()
     anterior = ComisionPeriodo.objects.filter(periodo=mes_anterior(periodo)).first()
     inicio_promo = existente.inicio_promo if existente else dia_del_mes(periodo, dia_promocional)
+    corte = corte_de(existente, dia_corte) if existente else dia_del_mes(mes_siguiente(periodo), dia_corte)
     if anterior:
         inicio, preguntar = anterior.inicio_promo, False
     elif existente:
@@ -53,6 +55,7 @@ def propuesta(periodo: str, dia_promocional: int) -> dict[str, Any]:
         "inicio": inicio.isoformat(),
         "preguntar_inicio": preguntar,
         "inicio_promo": inicio_promo.isoformat(),
+        "corte_adelantos": corte.isoformat(),
     }
 
 

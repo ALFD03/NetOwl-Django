@@ -1,7 +1,13 @@
 """El informe de comisiones de un periodo: de las suscripciones a lo que cobra cada uno.
 
 1. **Candidatas**: las suscripciones instaladas (`fecha_inicio`) dentro de la
-   ventana del periodo, menos las ya pagadas en un periodo cerrado.
+   ventana del periodo —del inicio de los dias promocionales del mes anterior
+   al fin del mes—, menos las ya pagadas en un periodo cerrado, mas las
+   agregadas a mano (`VentaManual`). Lo instalado en los dias promocionales
+   del mes solo cuenta si el cliente adelanto la primera mensualidad antes del
+   corte (`corte_de`); si no, es del periodo siguiente (`DIFERIDA`). Lo de los
+   del mes anterior, en el primer periodo del sistema, se confirma a mano: pudo
+   cobrarse ya en el anterior, fuera del sistema.
 2. **Clasificacion** (`reglas.clasificar`): por su primera mensualidad —la
    primera factura con un plan, del export de facturas— y el estado de la
    factura de la suscripcion. Se juzga con los datos de hoy, sea cual sea la
@@ -50,6 +56,7 @@ from services.comisiones.models import (
     IndicadorComision,
     RevisionComision,
     SupervisorUnidad,
+    VentaManual,
 )
 from services.subscriptions.analytics.analyzer.cleaner import parse_archivado
 from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_vigente_el
@@ -63,17 +70,28 @@ from services.subscriptions.analytics.queries import (
 from services.subscriptions.models import Coordinador
 
 from .reglas import (
+    CONTAR,
+    DIFERIDA,
     EXCLUIDA,
+    MANUAL,
     MOTIVO_CAMBIO_PLAN,
+    NO_CONTAR,
     NO_PAGADA,
+    NORMAL,
+    PROMO,
+    PROMO_ANTERIOR,
     REVISION,
     VALIDA,
+    YA_PAGADA,
     Factura,
     Venta,
     calcular_pagos,
     cancelada_sin_cumplir_un_mes,
     clasificar,
+    fecha_del_pago,
+    pagada_hasta,
     primera_mensualidad,
+    tramo,
     validar_tramos_asesor,
     validar_tramos_un,
 )
@@ -165,8 +183,21 @@ def fecha_de_calculo(periodo: str, dias_espera: int) -> date:
 
 
 def fin_de(periodo: ComisionPeriodo) -> date:
-    """El ultimo dia de instalacion del periodo: el anterior a sus dias promocionales."""
-    return periodo.inicio_promo - timedelta(days=1)
+    """El ultimo dia de instalacion que puede contar: el fin del mes.
+
+    Lo instalado desde `inicio_promo` solo cuenta si se adelanto el pago.
+    """
+    anio, mes = (int(x) for x in periodo.periodo.split("-"))
+    return date(anio, mes, calendar.monthrange(anio, mes)[1])
+
+
+def corte_de(periodo: ComisionPeriodo, dia_corte: int) -> date:
+    """Hasta que dia un pago adelantado cuenta en el periodo.
+
+    El escrito en el periodo, o el `dia_corte` (22) del mes siguiente: es
+    cuando se saca el informe, y lo que se pague despues ya va al siguiente.
+    """
+    return periodo.corte_adelantos or dia_del_mes(mes_siguiente(periodo.periodo), dia_corte)
 
 
 # --- Condiciones ------------------------------------------------------------------
@@ -182,18 +213,14 @@ def condiciones_vigentes() -> dict[str, Any]:
         "tramos_un": validar_tramos_un(c.tramos_un),
         "dia_promocional": c.dia_promocional,
         "dias_espera": c.dias_espera,
+        "dia_corte": c.dia_corte,
     }
 
 
 # --- Lectura -----------------------------------------------------------------------
 
-def _leer_candidatas(inicio: date, fin: date) -> pd.DataFrame:
-    """Las suscripciones instaladas en la ventana.
-
-    `fecha_inicio` es texto, como toda columna importada. Las fechas ISO se
-    filtran en SQL; las que vengan en otro formato (no deberia haberlas, pero
-    el export no lo garantiza) se traen y se resuelven con `parse_date`.
-    """
+def _leer(donde: str, params: list) -> pd.DataFrame:
+    """Las suscripciones que cumplen `donde`, con la fecha de instalacion leida en `fecha`."""
     db = DBConnector()
     columnas = db.columnas(TableNames.SUBSCRIPTIONS)
     faltan = [titulo for col, titulo in COLUMNAS_REQUERIDAS.items() if col not in columnas]
@@ -211,19 +238,40 @@ def _leer_candidatas(inicio: date, fin: date) -> pd.DataFrame:
         SELECT orden_producto, cliente, sucursal, zona, estado, fecha_inicio,
                producto, tarifa, total, vendedor, medio, medio_supervisor, estado_factura{activo}
         FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
-        WHERE (fecha_inicio ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}'
-               AND LEFT(fecha_inicio, 10) BETWEEN %s AND %s)
-           OR (fecha_inicio IS NOT NULL AND fecha_inicio !~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}')
+        WHERE {donde}
         """,
-        params=[inicio.isoformat(), fin.isoformat()],
+        params=params,
     )
     if df.empty:
         return df
-
     df["fecha"] = df["fecha_inicio"].map(lambda v: (parse_date(v) or pd.NaT) if v else pd.NaT)
     df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce").dt.date
+    return df
+
+
+def _leer_candidatas(inicio: date, fin: date) -> pd.DataFrame:
+    """Las suscripciones instaladas en la ventana.
+
+    `fecha_inicio` es texto, como toda columna importada. Las fechas ISO se
+    filtran en SQL; las que vengan en otro formato (no deberia haberlas, pero
+    el export no lo garantiza) se traen y se resuelven con `parse_date`.
+    """
+    df = _leer(
+        """(fecha_inicio ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' AND LEFT(fecha_inicio, 10) BETWEEN %s AND %s)
+           OR (fecha_inicio IS NOT NULL AND fecha_inicio !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}')""",
+        [inicio.isoformat(), fin.isoformat()],
+    )
+    if df.empty:
+        return df
     en_ventana = df["fecha"].map(lambda f: isinstance(f, date) and inicio <= f <= fin)
     return df[en_ventana].copy()
+
+
+def leer_ordenes(ordenes: list[str]) -> pd.DataFrame:
+    """Las suscripciones de esas ordenes, esten instaladas cuando esten: las agregadas a mano."""
+    if not ordenes:
+        return pd.DataFrame()
+    return _leer("orden_producto = ANY(%s)", [ordenes])
 
 
 def _gratuitas(df: pd.DataFrame) -> set[str]:
@@ -427,8 +475,21 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
     clave = periodo.periodo
     inicio, fin = periodo.inicio, fin_de(periodo)
     condiciones = condiciones_vigentes()
+    siguiente = mes_siguiente(clave)
+
+    # Lo instalado en los dias promocionales del mes anterior pudo cobrarse
+    # alli, si se adelanto el pago. Con el anterior cerrado lo dicen sus
+    # ventas validas (`pagadas`); sin periodo anterior, se confirma a mano lo
+    # que estaba pagado en su corte. Lo pagado despues, en su fecha, toca aqui
+    # y no se revisa.
+    anterior = ComisionPeriodo.objects.filter(periodo=mes_anterior(clave)).first()
+    primer_periodo = anterior is None
+    corte = corte_de(periodo, condiciones["dia_corte"])
+    corte_anterior = (corte_de(anterior, condiciones["dia_corte"]) if anterior
+                      else dia_del_mes(clave, condiciones["dia_corte"]))
 
     decisiones = {r.orden: r for r in RevisionComision.objects.filter(periodo_origen=clave)}
+    agregadas = {m.orden: m for m in VentaManual.objects.filter(periodo=clave)}
     calculo_desde = fecha_de_calculo(clave, condiciones["dias_espera"])
 
     pagadas = dict(
@@ -445,6 +506,10 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         )
 
     df = _leer_candidatas(inicio, fin)
+    en_ventana = set(df["orden_producto"].astype(str)) if not df.empty else set()
+    fuera = sorted(set(agregadas) - en_ventana)
+    if fuera:
+        df = pd.concat([df, leer_ordenes(fuera)], ignore_index=True)
     ordenes = df["orden_producto"].astype(str).tolist() if not df.empty else []
     facturas = leer_facturas(ordenes)
     gratuitas = _gratuitas(df)
@@ -461,27 +526,63 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         pyme = bool(plan and plan.get("people") == "PYME")
         precio = float(plan.get("price") or 0) if plan else 0.0
         decision = decisiones.get(orden)
+        decidido = decision.decision if decision else None
+        manual = agregadas.get(orden)
         de_la_orden = facturas.get(orden, [])
         mensualidad = primera_mensualidad([
-            Factura(f["numero"], f["estado"], f["estado_pago"], f["creado_el"], f["plan"]) for f in de_la_orden
+            Factura(
+                f["numero"], f["estado"], f["estado_pago"], f["creado_el"], f["plan"],
+                f.get("fecha_pago", ""), f.get("actualizado_el", ""),
+            )
+            for f in de_la_orden
         ])
+        pago_dia, pago_fuente = fecha_del_pago(mensualidad)
         gratuita = orden in gratuitas
         cancelada_el = canceladas_el.get(orden)
         instalada = fila.fecha if isinstance(fila.fecha, date) else None
         sin_mes = cancelada_sin_cumplir_un_mes(instalada, cancelada_el)
+        parte = (tramo(instalada, inicio, periodo.inicio_promo)
+                 if instalada is not None and inicio <= instalada <= fin else MANUAL)
+        adelantada = False
+        # Primer periodo: pagada hasta el corte del mes anterior, pudo cobrarse alli.
+        adelanto_anterior = False
 
+        datos = (texto(fila.estado_factura), mensualidad, plan["name"] if plan else "", gratuita)
+        estado_sub = texto(fila.estado)
+        # Lo que dicen las facturas se guarda aparte: con una decision, es por que se reviso.
+        motivo_analisis = clasificar(*datos, estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes)[1]
         if orden in pagadas:
             clasificacion, motivo = EXCLUIDA, f"Ya se pagó en {pagadas[orden]}"
             motivo_analisis = motivo
+        elif manual:
+            clasificacion, motivo = VALIDA, f"Agregada a mano: {manual.nota}"
         else:
-            datos = (texto(fila.estado_factura), mensualidad, plan["name"] if plan else "", gratuita)
-            # Lo que dicen las facturas se guarda aparte: con una decision, es por que se reviso.
-            estado_sub = texto(fila.estado)
-            motivo_analisis = clasificar(*datos, estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes)[1]
             clasificacion, motivo = clasificar(
-                *datos, decision.decision if decision else None,
+                *datos, decidido if decidido in (CONTAR, NO_CONTAR) else None,
                 estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes,
             )
+            if parte == PROMO:
+                # Su comision es del siguiente salvo que adelantara el pago.
+                adelantada = clasificacion == VALIDA and (decidido == CONTAR or pagada_hasta(mensualidad, corte))
+                if not adelantada:
+                    clasificacion = DIFERIDA
+                    motivo = (f"Día promocional sin adelantar la mensualidad al {corte.strftime('%d/%m/%Y')}:"
+                              f" toca en {siguiente}")
+            elif parte == PROMO_ANTERIOR and primer_periodo:
+                adelanto_anterior = pagada_hasta(mensualidad, corte_anterior)
+                if decidido == YA_PAGADA:
+                    clasificacion = EXCLUIDA
+                    motivo = f"Ya cobrada en la comisión de {mes_anterior(clave)}: adelantó la mensualidad"
+
+        # Solo se confirma lo que adelanto el pago y pagaria aqui: lo que otra
+        # regla ya resolvio (no pagada, excluida, decidida en Revision) no.
+        por_confirmar = adelanto_anterior and decidido is None and clasificacion == VALIDA
+        # Lo que se ve en «Dias promocionales del mes anterior»: lo que falta
+        # confirmar y lo ya confirmado (para deshacerlo); con el anterior
+        # cerrado, lo que se cobro alli.
+        revisar_promo = parte == PROMO_ANTERIOR and (
+            por_confirmar or decidido in (YA_PAGADA, NORMAL) or orden in pagadas
+        )
 
         personas, avisos = directorio.resolver(texto(fila.medio), texto(fila.medio_supervisor), texto(fila.vendedor))
         if plan is None:
@@ -502,8 +603,14 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "clasificacion": clasificacion,
             "motivo": motivo,
             "motivo_analisis": motivo_analisis,
-            "decision": decision.decision if decision else None,
+            "decision": decidido,
             "nota_revision": decision.nota if decision else "",
+            "tramo": parte,
+            "manual": manual is not None,
+            "nota_manual": manual.nota if manual else "",
+            "adelantada": adelantada,
+            "por_confirmar": por_confirmar,
+            "revisar_promo": revisar_promo,
             "gratuita": gratuita,
             "cancelada_el": cancelada_el.isoformat() if cancelada_el else "",
             "facturas": len(de_la_orden),
@@ -512,6 +619,8 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "factura_estado": mensualidad.estado if mensualidad else "",
             "factura_pago": mensualidad.estado_pago if mensualidad else "",
             "factura_plan": mensualidad.plan if mensualidad else "",
+            "pago_fecha": pago_dia,
+            "pago_fuente": pago_fuente,
             "medio": texto(fila.medio),
             "medio_supervisor": texto(fila.medio_supervisor),
             "vendedor": texto(fila.vendedor),
@@ -567,12 +676,20 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
     filas_pago.sort(key=lambda f: (f["cargo"], f["nombre"]))
 
     conteo = lambda c: sum(1 for v in ventas if v["clasificacion"] == c)  # noqa: E731
+    del_tramo = lambda t: [v for v in ventas if v["tramo"] == t]  # noqa: E731
+    promo, promo_anterior = del_tramo(PROMO), del_tramo(PROMO_ANTERIOR)
     hoy = date.today()
     informe = {
         "periodo": clave,
         "inicio": inicio.isoformat(),
         "fin": fin.isoformat(),
         "inicio_promo": periodo.inicio_promo.isoformat(),
+        "corte_adelantos": corte.isoformat(),
+        "corte_anterior": corte_anterior.isoformat(),
+        # Sin periodo anterior, lo de sus dias promocionales se confirma a mano.
+        "anterior": {"periodo": mes_anterior(clave), "estado": anterior.estado if anterior else None},
+        # Sin la fecha del pago en el export, los adelantos se fechan por la ultima actualizacion o la creacion.
+        "facturas_con_fecha_pago": "fecha_pago" in DBConnector().columnas(TableNames.SUBSCRIPTIONS_FACTURAS),
         "estado": periodo.estado,
         "calculo_desde": calculo_desde.isoformat(),
         "antes_de_tiempo": hoy < calculo_desde,
@@ -581,7 +698,8 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         # Va dentro del informe para que el cierre la congele con el resto.
         "tasa_conatel": tasa_conatel(periodo),
         "resumen": {
-            "candidatas": len(ventas),
+            # Lo diferido es del periodo siguiente: aqui solo se informa.
+            "candidatas": len(ventas) - conteo(DIFERIDA),
             "validas": conteo(VALIDA),
             "no_pagadas": conteo(NO_PAGADA),
             "revision": conteo(REVISION),
@@ -589,15 +707,45 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "validas_pyme": sum(1 for v in validas if v["pyme"]),
             "validas_cambio_plan": sum(1 for v in validas if v["motivo"] == MOTIVO_CAMBIO_PLAN),
             "validas_sin_medio": sum(1 for v in validas if v["medio_id"] is None),
+            "diferidas": conteo(DIFERIDA),
+            "promo": len(promo),
+            "adelantadas": sum(1 for v in promo if v["adelantada"]),
+            "promo_anterior": len(promo_anterior),
+            "promo_anterior_cobradas": sum(
+                1 for v in promo_anterior if v["orden"] in pagadas or v["decision"] == YA_PAGADA
+            ),
+            "promo_por_confirmar": sum(1 for v in ventas if v["por_confirmar"]),
+            "promo_anterior_revisar": sum(1 for v in ventas if v["revisar_promo"]),
+            "manuales": sum(1 for v in ventas if v["manual"]),
             "total": round(sum(p["neto"] for p in filas_pago), 2),
         },
         "pagos": filas_pago,
         **_equipos(ventas, directorio),
         # Las pendientes y las ya decididas, que se pueden deshacer.
-        "revision": [v for v in ventas if v["clasificacion"] == REVISION or v["decision"]],
-        "pendientes_cierre": _pendientes_cierre(ventas, filas_pago),
+        "revision": [
+            v for v in ventas if v["clasificacion"] == REVISION or v["decision"] in (CONTAR, NO_CONTAR)
+        ],
+        # Son pocas: viajan enteras, con las que ya no estan en suscripciones.
+        "manuales": _manuales(agregadas, ventas),
+        "pendientes_cierre": _pendientes_cierre(ventas, filas_pago, anterior),
     }
     return informe, ventas
+
+
+def _manuales(manuales: dict[str, VentaManual], ventas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Las ventas agregadas a mano, con su clasificacion; `venta` nula si la orden ya no esta en suscripciones."""
+    por_orden = {v["orden"]: v for v in ventas if v["manual"]}
+    filas = []
+    for orden, m in sorted(manuales.items()):
+        por = m.agregado_por
+        filas.append({
+            "orden": orden,
+            "nota": m.nota,
+            "agregado_por": (por.get_full_name() or por.get_username()) if por else "",
+            "agregado_en": m.agregado_en.isoformat(),
+            "venta": por_orden.get(orden),
+        })
+    return filas
 
 
 def _equipos(ventas: list[dict[str, Any]], directorio: _Directorio) -> dict[str, Any]:
@@ -631,12 +779,24 @@ def _equipos(ventas: list[dict[str, Any]], directorio: _Directorio) -> dict[str,
     }
 
 
-def _pendientes_cierre(ventas: list[dict[str, Any]], pagos: list[dict[str, Any]]) -> list[str]:
+def _pendientes_cierre(
+    ventas: list[dict[str, Any]], pagos: list[dict[str, Any]], anterior: ComisionPeriodo | None,
+) -> list[str]:
     """Lo que impide cerrar el periodo. Vacio: se puede cerrar."""
     pendientes = []
+    if anterior is not None and not anterior.cerrado:
+        pendientes.append(
+            f"El periodo {anterior.periodo} sigue en borrador: ciérralo antes, porque lo que cobre de los"
+            " días promocionales ya no cuenta en este"
+        )
     revision = sum(1 for v in ventas if v["clasificacion"] == REVISION)
     if revision:
         pendientes.append(f"{revision} venta(s) por facturar sin decidir en Revisión")
+    por_confirmar = sum(1 for v in ventas if v["por_confirmar"])
+    if por_confirmar:
+        pendientes.append(
+            f"{por_confirmar} instalación(es) de los días promocionales del mes anterior sin confirmar si ya se cobraron"
+        )
     sin_cumplimiento = [
         p["nombre"] for p in pagos
         if p["cargo"] in CARGOS_CON_CUMPLIMIENTO and p["cumplimiento_pct"] is None and p["bruto"]

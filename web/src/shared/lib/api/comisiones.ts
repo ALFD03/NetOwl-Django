@@ -13,7 +13,7 @@ export const comisionesApi = {
   ventas: async <T>(periodo: string) =>
     (await apiClient.get<{ ventas: T[] }>('/comisiones/api/ventas/', { params: { periodo } })).data.ventas,
 
-  guardarPeriodo: async (body: { periodo: string; inicio_promo: string; inicio?: string }) =>
+  guardarPeriodo: async (body: { periodo: string; inicio_promo: string; inicio?: string; corte_adelantos?: string }) =>
     (await apiClient.post<Respuesta>('/comisiones/api/periodo/guardar/', body)).data,
 
   cerrar: async (periodo: string) =>
@@ -24,11 +24,19 @@ export const comisionesApi = {
 
   /**
    * Decide una o varias ventas de una vez. `decision` vacía deshace la
-   * decisión y las ventas vuelven a Revisión.
+   * decisión y las ventas vuelven a Revisión. `ya_pagada` y `normal` solo
+   * en el primer periodo, para los días promocionales del mes anterior.
    */
   guardarRevision: async (body: {
-    periodo: string; ordenes: string[]; decision: '' | 'contar' | 'no_contar'; nota?: string;
+    periodo: string; ordenes: string[]; decision: '' | 'contar' | 'no_contar' | 'ya_pagada' | 'normal'; nota?: string;
   }) => (await apiClient.post<Respuesta>('/comisiones/api/revision/guardar/', body)).data,
+
+  /** Agrega ventas a mano al periodo: cuentan en él. La nota es obligatoria. */
+  agregarManual: async (body: { periodo: string; ordenes: string[]; nota: string }) =>
+    (await apiClient.post<Respuesta>('/comisiones/api/manual/agregar/', body)).data,
+
+  quitarManual: async (periodo: string, orden: string) =>
+    (await apiClient.post<Respuesta>('/comisiones/api/manual/quitar/', { periodo, orden })).data,
 
   /** Solo se manda el campo que cambia; vacío lo borra. */
   guardarIndicador: async (body: {

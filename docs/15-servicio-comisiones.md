@@ -22,18 +22,45 @@ ver el capítulo 6 §8) y de tres columnas de la importación de suscripciones:
 
 ---
 
-## 1. El periodo: de días promocionales a días promocionales
+## 1. El periodo: de los días promocionales del mes anterior al fin de mes
 
 Un periodo de comisiones **no va del 1 al último día del mes**. Lo instalado en
 los *días promocionales* (normalmente desde el 25) no paga la mensualidad del
-mes siguiente sino la del otro, así que su comisión es del periodo siguiente.
-El periodo de un mes va del inicio de los días promocionales del mes anterior
-al día antes de los del mes:
+mes siguiente sino la del otro, así que su comisión es, por norma, del periodo
+siguiente. El periodo de un mes va del inicio de los días promocionales del mes
+anterior **al fin del mes**, en tres tramos (`reglas.tramo`):
 
-| Periodo | Días promocionales del mes anterior | Del mes | Instalaciones que cuentan |
-|---|---|---|---|
-| 2026-09 | 25/08 | 24/09 | 25/08 al 23/09, ambos incluidos |
-| 2026-10 | 24/09 | 25/10 | 24/09 al 24/10 |
+| Tramo | 2026-09 | Qué cuenta |
+|---|---|---|
+| Días promocionales del mes anterior (`promo_anterior`) | 25/08 al 31/08 | Todo, salvo lo que ya se cobró en el periodo anterior porque el cliente adelantó la mensualidad |
+| El mes (`regular`) | 01/09 al 24/09 | Todo |
+| Días promocionales del mes (`promo`) | 25/09 al 30/09 | **Solo lo que adelantó el pago**: primera mensualidad pagada hasta el corte. Lo demás es `diferida` y cuenta en el periodo siguiente |
+
+**El pago adelantado.** Un cliente instalado el 28/09 paga normalmente su
+primera mensualidad el 1/11, y su comisión es de octubre. Si la adelanta y la
+paga el 7/10, cuando se saca el informe de septiembre (hacia el 22/10) ya está
+pagada: entra en septiembre y, al cerrarlo, octubre ya no la cuenta (es una
+venta válida de un periodo cerrado). El corte es `ComisionPeriodo.corte_adelantos`,
+propuesto el día `CondicionesComision.dia_corte` (22) del mes siguiente y
+editable por periodo; lo pagado después del corte ya va al siguiente.
+
+**Cuándo se pagó** sale del export de facturas: la «Fecha del último pago». Si el
+export cargado no la trae, la «Última actualización el» (pagar la factura la
+actualiza, así que el pago no es posterior) y, si tampoco, el «Creado el», que es
+solo una aproximación; la página avisa (`reglas.fecha_del_pago`).
+
+**Lo del mes anterior.** Con el periodo anterior **cerrado**, lo que validó ya
+no cuenta (`Ya se pagó en …`) y no hay nada que decidir. Con el anterior **en
+borrador**, este no se puede cerrar: hasta entonces no se sabe qué se cobró
+allí. **Sin periodo anterior** (el primero del sistema) se cobró fuera de él, así
+que se confirma a mano en «Días promocionales del mes anterior». Solo se
+pregunta por lo que pudo cobrarse allí: las instalaciones que, por sus facturas,
+cuentan aquí y pagaron la primera mensualidad hasta el corte de ese mes (el 22
+del mes del periodo). Lo que pagó después toca aquí sin más, y lo que otra regla
+ya resolvió (no pagada, excluida, decidida en Revisión) no aparece. Cada una se
+decide `ya_pagada` (excluida) o `normal` (se clasifica por sus facturas): una a
+una, las marcadas con la casilla o todas las pendientes de una vez. Las
+decisiones van en `RevisionComision`; hasta que estén todas, no se cierra.
 
 Como los días promocionales se adelantan o se retrasan, **cada periodo guarda
 el inicio de los suyos** (`ComisionPeriodo.inicio_promo`) y el siguiente arranca
@@ -43,7 +70,8 @@ en él. Al crear un periodo:
    pregunta.
 2. Si no, se pregunta dónde empezaron los días promocionales del mes anterior.
 3. Se confirma el inicio de los del mes, con el día habitual
-   (`CondicionesComision.dia_promocional`, 25) como propuesta.
+   (`CondicionesComision.dia_promocional`, 25) como propuesta, y el corte de
+   los adelantos (un día del mes siguiente).
 
 Cambiar el `inicio_promo` de un periodo mueve el inicio del siguiente, así que
 no se permite si el siguiente está cerrado. La página avisa si se calcula antes
@@ -53,7 +81,11 @@ pueden no estar pagadas aún.
 ## 2. Qué venta cuenta
 
 Las candidatas son las suscripciones con `fecha_inicio` dentro de la ventana,
-**menos** las que ya se pagaron en un periodo cerrado. Lo que paga la comisión es
+**menos** las que ya se pagaron en un periodo cerrado, **más** las agregadas a
+mano (`VentaManual`): una venta agregada a mano cuenta en el periodo se
+instalara cuando se instalara y digan lo que digan sus facturas, con una nota
+obligatoria; tiene que estar en suscripciones (de ahí sale quién cobra) y no se
+puede agregar si ya se pagó en otro periodo cerrado. Lo que paga la comisión es
 la **primera mensualidad**, y sale del export de facturas (Importaciones ›
 Suscripciones › Facturas, tabla `subscriptions-facturas`, global y reemplazado
 en cada carga). Sin facturas importadas el informe no se calcula.
@@ -102,7 +134,8 @@ en este periodo o no se cuenta. Una venta solo es candidata en el periodo en que
 se instaló, así que no contarla es que no se paga. **La decisión manda sobre lo
 que digan las facturas**, también si después cambian, hasta que se deshace; la
 tabla de revisión muestra igualmente qué dicen (`motivo_analisis`). Se puede
-decidir en bloque, y «Deshacer» la devuelve a Revisión.
+decidir en bloque —las marcadas con la casilla, o todas las pendientes—, y
+«Deshacer» la devuelve a Revisión.
 
 Antes de las facturas la validez se deducía del estado de la factura de la
 suscripción y de si seguía en progreso, y un log «Plan change» hacía válida una
@@ -310,10 +343,11 @@ maquetadas celda a celda.
 
 | Página | Contenido | Permiso |
 |---|---|---|
-| `/comisiones/?periodo=` | El informe en cuatro pasos (revisión, indicadores, nómina por unidad, cierre), total a pagar y tasas, exportación a Excel | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
+| `/comisiones/?periodo=` | El informe en cuatro pasos (revisión, indicadores, nómina por unidad, cierre), total a pagar y tasas, exportación a Excel. La revisión tiene cinco vistas: por decidir, días promocionales del mes anterior (qué se cobró allí; confirmación en el primer periodo), días promocionales del mes (quién adelantó el pago), agregadas a mano (con el formulario para agregar) y todas las ventas | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
 | `/comisiones/supervisores/` | A qué coordinador de UN responde cada supervisor (uno a uno o en bloque) | `can_manage_comisiones` |
-| `/comisiones/condiciones/` | Tramos, montos, día promocional, días de espera y los % de los planes PYME. Se abre en lectura (quién cobra qué, tramos con sus saltos y un simulador, fechas de un periodo de ejemplo, última modificación y quién la hizo); «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_comisiones` |
+| `/comisiones/condiciones/` | Tramos, montos, día promocional, días de espera, día de corte de los adelantos y los % de los planes PYME. Se abre en lectura (quién cobra qué, tramos con sus saltos y un simulador, fechas de un periodo de ejemplo, última modificación y quién la hizo); «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_comisiones` |
 
 El detalle venta a venta no viaja en los props —un mes son miles de filas—: lo
 pide la página a `api/ventas/` la primera vez que hace falta (desglose de una
-persona, paso de revisión con todas las ventas, exportación).
+persona, las vistas de días promocionales y de todas las ventas, exportación).
+Las agregadas a mano, que son pocas, sí viajan en los props (`informe.manuales`).

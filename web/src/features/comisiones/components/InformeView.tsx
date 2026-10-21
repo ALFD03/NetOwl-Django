@@ -1,6 +1,6 @@
 /** Comisiones › Informe: lo que cobra cada persona en un periodo. */
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { router } from '@inertiajs/react';
 import {
   AlertTriangle, CalendarRange, Check, FileSpreadsheet, HandCoins, ListChecks, Lock, LockOpen, Percent, Receipt,
@@ -12,15 +12,29 @@ import {
 } from '@/shared/ui';
 import { useInformeComisiones } from '../hooks/useInformeComisiones';
 import { exportarInforme } from '../lib/exportar';
-import { aBs, formatoBs, formatoFecha, formatoMes, formatoMonto, formatoTasa, totalBs } from '../lib/formato';
-import type { CargoVentas, ComisionesInformeProps, InformeComision, PagoComision } from '../types';
+import {
+  aBs, diaAnterior, formatoBs, formatoFecha, formatoMes, formatoMonto, formatoTasa, mesSiguiente, nombreMes, totalBs,
+} from '../lib/formato';
+import type { CargoVentas, ComisionesInformeProps, InformeComision, PagoComision, TramoVenta } from '../types';
 import { IndicadoresPanel } from './IndicadoresPanel';
+import { ManualesPanel } from './ManualesPanel';
 import { NominaView } from './NominaView';
 import { PeriodoForm } from './PeriodoForm';
+import { PromoAnteriorTabla } from './PromoAnteriorTabla';
+import { PromoMesTabla } from './PromoMesTabla';
 import { RevisionTabla } from './RevisionTabla';
 import { VentasTabla } from './VentasTabla';
 
 type Paso = 'revision' | 'indicadores' | 'nomina' | 'cierre';
+
+/**
+ * Lo que se mira en el paso de revisión: las ventas por decidir, los días
+ * promocionales del mes anterior y los del mes, las agregadas a mano, o todas.
+ */
+type Vista = 'revision' | 'promo_anterior' | 'promo' | 'manuales' | 'todas';
+
+/** Las vistas que necesitan el detalle venta a venta, y de qué tramo. */
+const TRAMO_DE: Partial<Record<Vista, TramoVenta>> = { promo_anterior: 'promo_anterior', promo: 'promo' };
 
 /** Cuántos % faltan: lo mismo que el servidor exige para cerrar. */
 function indicadoresPendientes(informe: InformeComision): number {
@@ -48,12 +62,17 @@ export function InformeView({
   const editable = puedeGestionar && informe?.estado === 'borrador';
   const pendientesIndicadores = informe ? indicadoresPendientes(informe) : 0;
 
+  const porConfirmar = informe?.resumen.promo_por_confirmar ?? 0;
+  const porRevisar = (informe?.resumen.revision ?? 0) + porConfirmar;
+
   // Quien gestiona un borrador empieza por lo que falta; los demás, por la nómina.
   const pasoInicial: Paso = !editable || !informe ? 'nomina'
-    : informe.resumen.revision > 0 ? 'revision'
+    : porRevisar > 0 ? 'revision'
       : pendientesIndicadores > 0 ? 'indicadores' : 'nomina';
   const [paso, setPaso] = useState<Paso>(pasoInicial);
-  const [verTodas, setVerTodas] = useState(false);
+  const [vista, setVista] = useState<Vista>(
+    informe && !informe.resumen.revision && porConfirmar ? 'promo_anterior' : 'revision',
+  );
   const [editandoPeriodo, setEditandoPeriodo] = useState(false);
   const [confirmando, setConfirmando] = useState<'cerrar' | 'reabrir' | null>(null);
   const [desglose, setDesglose] = useState<PagoComision | null>(null);
@@ -66,6 +85,21 @@ export function InformeView({
     setDesglose(pago);
     void c.cargarVentas();
   };
+  const verVista = (v: Vista) => {
+    setVista(v);
+    if (v !== 'revision' && v !== 'manuales') void c.cargarVentas();
+  };
+  const tramoVista = TRAMO_DE[vista];
+  const ventasDelTramo = useMemo(
+    () => (tramoVista && c.ventas ? c.ventas.filter((v) => v.tramo === tramoVista) : []),
+    [tramoVista, c.ventas],
+  );
+  // Al entrar directamente en una vista con detalle (lo primero por confirmar), se pide.
+  useEffect(() => {
+    if (paso === 'revision' && tramoVista) void c.cargarVentas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso, tramoVista]);
+
   const ventasDelDesglose = useMemo(() => {
     if (!desglose || !c.ventas) return [];
     const id = desglose.persona_id;
@@ -103,9 +137,9 @@ export function InformeView({
     {
       key: 'revision',
       titulo: 'Revisar ventas',
-      detalle: informe.resumen.revision ? `${informe.resumen.revision} sin decidir` : 'Nada por decidir',
-      hecho: informe.resumen.revision === 0,
-      pendiente: informe.resumen.revision > 0,
+      detalle: porRevisar ? `${porRevisar} sin decidir` : 'Nada por decidir',
+      hecho: porRevisar === 0,
+      pendiente: porRevisar > 0,
       icono: <ListChecks className="h-4 w-4" />,
     },
     {
@@ -153,7 +187,13 @@ export function InformeView({
             {informe && (
               <span className="text-xs text-slate-400">
                 Instalaciones del <strong className="text-slate-200">{formatoFecha(informe.inicio)}</strong> al{' '}
-                <strong className="text-slate-200">{formatoFecha(informe.fin)}</strong>
+                <strong className="text-slate-200">{formatoFecha(diaAnterior(informe.inicio_promo))}</strong>
+                {informe.corte_adelantos && (
+                  <>
+                    {' '}· del {formatoFecha(informe.inicio_promo)} al {formatoFecha(informe.fin)}, solo si adelantaron el pago
+                    hasta el <strong className="text-slate-200">{formatoFecha(informe.corte_adelantos)}</strong>
+                  </>
+                )}
               </span>
             )}
           </div>
@@ -274,42 +314,76 @@ export function InformeView({
             <div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-3">
                 <p className="max-w-3xl text-xs text-slate-400">
-                  {verTodas
-                    ? 'Cada venta instalada en el periodo, con su clasificación y quién cobra por ella.'
-                    : 'Lo que la primera mensualidad no resuelve: todas sus mensualidades están canceladas (¿exoneración?), no tiene ninguna, o pasó a plan gratuito con la mensualidad pagada. Cuéntala o no la cuentes; si no se cuenta, no se paga.'}
+                  {vista === 'revision' && 'Lo que la primera mensualidad no resuelve: todas sus mensualidades están canceladas (¿exoneración?), no tiene ninguna, o pasó a plan gratuito con la mensualidad pagada. Cuéntala o no la cuentes; si no se cuenta, no se paga.'}
+                  {vista === 'todas' && 'Cada venta instalada en el periodo, con su clasificación y quién cobra por ella.'}
+                  {vista === 'promo_anterior' && `Lo instalado en los días promocionales de ${nombreMes(informe.anterior?.periodo ?? '')}: si ya se cobró allí o toca aquí.`}
+                  {vista === 'promo' && `Lo instalado en los días promocionales de ${nombreMes(periodo)}: quién adelantó el pago y cuenta ya aquí.`}
+                  {vista === 'manuales' && 'Las ventas agregadas a mano: cuentan en este periodo aunque las reglas no las recojan.'}
                   {' '}
                   <span className="text-slate-500">
-                    {informe.resumen.candidatas} instaladas · {informe.resumen.validas} válidas · {informe.resumen.no_pagadas} no pagadas ·{' '}
+                    {informe.resumen.candidatas} en el periodo · {informe.resumen.validas} válidas · {informe.resumen.no_pagadas} no pagadas ·{' '}
                     {informe.resumen.excluidas} excluidas
+                    {informe.resumen.diferidas ? <> · {informe.resumen.diferidas} pasan a {nombreMes(mesSiguiente(periodo))}</> : null}
                     {informe.facturas_importadas_el && <> · facturas importadas el {formatoFecha(informe.facturas_importadas_el)}</>}
                   </span>
                 </p>
-                <div className="inline-flex rounded-xl border border-slate-700/50 bg-surface-primary p-1 text-xs font-bold">
-                  {([[false, `Por decidir · ${informe.revision.length}`], [true, 'Todas las ventas']] as const).map(([todas, etiqueta]) => (
+                <div className="inline-flex flex-wrap rounded-xl border border-slate-700/50 bg-surface-primary p-1 text-xs font-bold">
+                  {([
+                    ['revision', `Por decidir · ${informe.revision.length}`, informe.resumen.revision > 0],
+                    ...(informe.resumen.promo_anterior !== undefined ? [[
+                      'promo_anterior',
+                      `Días promo. ${nombreMes(informe.anterior?.periodo ?? '')} · ${porConfirmar ? `${porConfirmar} por confirmar` : informe.resumen.promo_anterior_revisar ?? 0}`,
+                      porConfirmar > 0,
+                    ] as const] : []),
+                    ...(informe.resumen.promo !== undefined ? [[
+                      'promo', `Días promo. ${nombreMes(periodo)} · ${informe.resumen.adelantadas ?? 0} adelantadas`, false,
+                    ] as const] : []),
+                    ...(informe.manuales ? [['manuales', `A mano · ${informe.manuales.length}`, false] as const] : []),
+                    ['todas', 'Todas las ventas', false],
+                  ] as const).map(([key, etiqueta, falta]) => (
                     <button
-                      key={String(todas)}
+                      key={key}
                       type="button"
-                      onClick={() => {
-                        setVerTodas(todas);
-                        if (todas) void c.cargarVentas();
-                      }}
-                      className={`rounded-lg px-3 py-1.5 transition ${verTodas === todas ? 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/40' : 'text-slate-400 hover:text-white'}`}
+                      onClick={() => verVista(key)}
+                      className={`rounded-lg px-3 py-1.5 transition ${
+                        vista === key ? 'bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/40'
+                          : falta ? 'text-amber-300 hover:text-white' : 'text-slate-400 hover:text-white'
+                      }`}
                     >
                       {etiqueta}
                     </button>
                   ))}
                 </div>
               </div>
-              {verTodas
-                ? (c.ventas ? <VentasTabla ventas={c.ventas} /> : <LoadingState message="Cargando ventas..." />)
-                : (
-                  <RevisionTabla
-                    ventas={informe.revision}
-                    editable={editable}
-                    guardando={c.guardando}
-                    onDecidir={(ordenes, decision) => void c.decidir(ordenes, decision)}
-                  />
-                )}
+              {vista === 'revision' && (
+                <RevisionTabla
+                  ventas={informe.revision}
+                  editable={editable}
+                  guardando={c.guardando}
+                  onDecidir={c.decidir}
+                />
+              )}
+              {vista === 'manuales' && (
+                <ManualesPanel
+                  manuales={informe.manuales ?? []}
+                  editable={editable}
+                  guardando={c.guardando}
+                  onAgregar={c.agregarManual}
+                  onQuitar={(orden) => void c.quitarManual(orden)}
+                />
+              )}
+              {(vista === 'todas' || tramoVista) && !c.ventas && <LoadingState message="Cargando ventas..." />}
+              {vista === 'todas' && c.ventas && <VentasTabla ventas={c.ventas} />}
+              {vista === 'promo_anterior' && c.ventas && (
+                <PromoAnteriorTabla
+                  informe={informe}
+                  ventas={ventasDelTramo}
+                  editable={editable}
+                  guardando={c.guardando}
+                  onDecidir={c.decidir}
+                />
+              )}
+              {vista === 'promo' && c.ventas && <PromoMesTabla informe={informe} ventas={ventasDelTramo} />}
             </div>
           )}
 
@@ -362,7 +436,7 @@ export function InformeView({
                   )}
                   <div className="grid gap-3 md:grid-cols-2">
                     {([
-                      ['revision', 'Ventas en revisión', informe.resumen.revision ? `${informe.resumen.revision} sin decidir` : null],
+                      ['revision', 'Ventas por revisar y confirmar', porRevisar ? `${porRevisar} sin decidir` : null],
                       ['indicadores', 'Cumplimientos y crecimientos', pendientesIndicadores ? `${pendientesIndicadores} sin definir` : null],
                     ] as const).map(([key, titulo, falta]) => (
                       <button
@@ -378,6 +452,12 @@ export function InformeView({
                       </button>
                     ))}
                   </div>
+                  {informe.pendientes_cierre.length > 0 && (
+                    <StatusMessage
+                      status={{ type: 'warning', text: `Falta para cerrar: ${informe.pendientes_cierre.join(' · ')}.` }}
+                      icon={<AlertTriangle />}
+                    />
+                  )}
                   <p className="max-w-3xl text-sm text-slate-300">
                     Cerrar guarda las ventas, los pagos y las condiciones de hoy. Sus ventas válidas no volverán a contar en ningún otro
                     periodo, y el informe deja de recalcularse.
