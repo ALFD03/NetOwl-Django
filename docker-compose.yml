@@ -1,0 +1,128 @@
+x-app-env: &app-env
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+
+x-app-build: &app-build
+  build:
+    context: ./Netowl
+    dockerfile: Dockerfile
+  image: ${NETOWL_IMAGE:-netowl:prod}
+
+services:
+  db:
+    image: postgres:latest
+    container_name: netowl_db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: Netcom
+      POSTGRES_USER: Devops
+      POSTGRES_PASSWORD: N3tc0m++P1us
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256 --auth-local=scram-sha-256'
+    volumes:
+      - aflores_postgres_data:/var/lib/postgresql
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=100
+    shm_size: 512mb
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: netowl_redis
+    restart: always
+    ports:
+      - '127.0.0.1:${REDIS_HOST_PORT:-6379}:6379'
+    user: redis
+    entrypoint:
+      - sh
+      - -c
+      - >
+        exec redis-server
+        --appendonly yes
+        --maxmemory 256mb
+        --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  netowl:
+    <<: *app-build
+    container_name: netowl
+    restart: always
+    env_file:
+      - /home/devsubs/Netowl/.env
+    environment: *app-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - netowl_logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:8000/auth/login/', headers={'Host': 'localhost', 'X-Forwarded-Proto': 'https'}), timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  worker:
+    <<: *app-build
+    container_name: netowl_worker
+    restart: always
+    command: ["celery", "-A", "netowl_web", "worker", "--loglevel=info"]
+    env_file:
+      - ./.env
+    environment:
+      <<: *app-env
+      SKIP_COLLECTSTATIC: '1'
+      WORKER_CONCURRENCY: '4'
+    volumes:
+      - netowl_logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      netowl:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 4g
+
+volumes:
+  aflores_postgres_data:
+    external: true
+  redis_data:
+  netowl_logs:
