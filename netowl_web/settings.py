@@ -140,7 +140,7 @@ CSRF_COOKIE_NAME = f"netowl_csrftoken_{ENV_SUFFIX}"
 SESSION_ENGINE = "services.config.sessions"
 
 # --- Límites de subida ---
-MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+MAX_UPLOAD_SIZE = 1000 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
 # Este es distinto del anterior y no debe igualarse a el: marca a partir de que
 # tamano Django deja de guardar el fichero subido en memoria y lo vuelca a un
