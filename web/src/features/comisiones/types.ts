@@ -4,16 +4,33 @@ import type { CargoVentas, CatalogoOption } from '@/shared/types/subscriptions';
 
 export type { CargoVentas };
 
-export type Clasificacion = 'valida' | 'no_pagada' | 'revision' | 'excluida';
+/** `diferida`: instalada en los días promocionales del mes sin adelantar el pago; cuenta en el periodo siguiente. */
+export type Clasificacion = 'valida' | 'no_pagada' | 'revision' | 'excluida' | 'diferida';
+
+/**
+ * En qué parte de la ventana se instaló (`reglas.tramo`): los días promocionales
+ * del mes anterior, del día 1 a los del mes, los del mes, o fuera de la ventana
+ * (agregada a mano).
+ */
+export type TramoVenta = 'promo_anterior' | 'regular' | 'promo' | 'manual';
+
+/**
+ * Las decisiones a mano: `contar`/`no_contar` resuelven una venta en revisión;
+ * `ya_pagada`/`normal`, en el primer periodo, si lo instalado en los días
+ * promocionales del mes anterior ya se cobró en él.
+ */
+export type DecisionRevision = 'contar' | 'no_contar' | 'ya_pagada' | 'normal';
 
 /** Un periodo creado, con su ventana de instalación. */
 export interface PeriodoComision {
   periodo: string;
   estado: 'borrador' | 'cerrado';
   inicio: string;
-  /** Último día de instalación que cuenta: el anterior a los días promocionales. */
+  /** Último día de instalación que puede contar: el fin del mes. */
   fin: string;
+  /** Desde aquí, lo instalado solo cuenta si se adelantó el pago hasta `corte_adelantos`. */
   inicio_promo: string;
+  corte_adelantos: string;
 }
 
 /** Lo que cobra una persona en el periodo (`reglas.Pago` más su ficha). */
@@ -63,8 +80,24 @@ export interface VentaComision {
   motivo: string;
   /** Lo que dicen las facturas, sin la decisión manual: por qué fue a revisión. */
   motivo_analisis: string;
-  decision: 'contar' | 'no_contar' | null;
+  decision: DecisionRevision | null;
   nota_revision: string;
+  /** Falta en periodos cerrados antes de existir los días promocionales adelantados. */
+  tramo?: TramoVenta;
+  manual?: boolean;
+  nota_manual?: string;
+  /** Días promocionales del mes con la primera mensualidad pagada hasta el corte: cuenta en este periodo. */
+  adelantada?: boolean;
+  /**
+   * Primer periodo, días promocionales del mes anterior: pagó la mensualidad antes
+   * del corte de ese mes (pudo cobrarse allí), pagaría aquí y nadie confirmó todavía.
+   */
+  por_confirmar?: boolean;
+  /**
+   * Se ve en «Días promocionales del mes anterior»: por confirmar, ya confirmada
+   * allí, o (con el anterior cerrado) cobrada en él. Lo que otra regla resolvió no.
+   */
+  revisar_promo?: boolean;
   /** Hoy es gratuita (archivada, tarifa «Gratis» o archivada en los logs): no paga comisión. */
   gratuita: boolean;
   /** Día en que se canceló, si hoy está «Cancelado» y los logs lo fechan; vacío si no. */
@@ -77,6 +110,12 @@ export interface VentaComision {
   factura_estado: string;
   factura_pago: string;
   factura_plan: string;
+  /**
+   * Hasta cuándo se sabe que estaba pagada: la «Fecha del último pago», si no la
+   * «Última actualización el» y si no el «Creado el» (aproximado). Vacío sin pagar.
+   */
+  pago_fecha?: string;
+  pago_fuente?: 'pago' | 'actualizacion' | 'creacion' | '';
   medio: string;
   medio_supervisor: string;
   vendedor: string;
@@ -93,6 +132,14 @@ export interface InformeComision {
   inicio: string;
   fin: string;
   inicio_promo: string;
+  /** Hasta qué día un pago adelantado de los días promocionales cuenta aquí. */
+  corte_adelantos?: string;
+  /** El corte del mes anterior: con él se sugiere qué se cobró ya allí. */
+  corte_anterior?: string;
+  /** El periodo del mes anterior; `estado` nulo si no existe (y entonces se confirma a mano). */
+  anterior?: { periodo: string; estado: 'borrador' | 'cerrado' | null };
+  /** Si el export de facturas trae «Fecha del último pago». */
+  facturas_con_fecha_pago?: boolean;
   estado: 'borrador' | 'cerrado';
   /** Desde cuándo tiene sentido calcular: las primeras facturas ya deberían estar pagadas. */
   calculo_desde: string;
@@ -116,6 +163,15 @@ export interface InformeComision {
     /** Por facturar con la primera mensualidad pagada de otro plan: valen sin revisión. */
     validas_cambio_plan: number;
     validas_sin_medio: number;
+    /** Lo que sigue faltando en los periodos cerrados antes de los adelantos. */
+    diferidas?: number;
+    promo?: number;
+    adelantadas?: number;
+    promo_anterior?: number;
+    promo_anterior_cobradas?: number;
+    promo_por_confirmar?: number;
+    promo_anterior_revisar?: number;
+    manuales?: number;
     total: number;
   };
   pagos: PagoComision[];
@@ -124,8 +180,19 @@ export interface InformeComision {
   /** Nombre y cargo de cada id de `equipos`, cobre o no. */
   personas?: Record<string, { nombre: string; cargo: CargoVentas | '' }>;
   revision: VentaComision[];
+  manuales?: VentaManual[];
   /** Lo que impide cerrar. Vacío: se puede cerrar. */
   pendientes_cierre: string[];
+}
+
+/** Una venta agregada a mano al periodo. */
+export interface VentaManual {
+  orden: string;
+  nota: string;
+  agregado_por: string;
+  agregado_en: string;
+  /** Nula si la orden ya no está en suscripciones. */
+  venta: VentaComision | null;
 }
 
 /** Una combinación de coord. de UN, oficina, supervisor y quien vendió, con sus ventas válidas. */
@@ -153,6 +220,7 @@ export interface PropuestaPeriodo {
   /** Falso si el mes anterior tiene periodo: el inicio sale de él. */
   preguntar_inicio: boolean;
   inicio_promo: string;
+  corte_adelantos: string;
 }
 
 export interface ComisionesInformeProps {
@@ -205,6 +273,8 @@ export interface CondicionesComision {
   tramos_un: TramoUn[];
   dia_promocional: number;
   dias_espera: number;
+  /** Día del mes siguiente hasta el que un pago adelantado cuenta en el periodo. */
+  dia_corte: number;
 }
 
 export interface PlanPyme {

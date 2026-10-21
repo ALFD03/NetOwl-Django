@@ -94,6 +94,26 @@ export function BarraCrecimiento({ pct, cortes }: { pct: number; cortes: number[
   );
 }
 
+const FUENTE_PAGO: Record<string, string> = {
+  actualizacion: 'por «Última actualización el»',
+  creacion: 'por «Creado el»: aproximada',
+};
+
+/**
+ * Hasta cuándo se sabe que la primera mensualidad estaba pagada. Sin «Fecha del
+ * último pago» en el export se lee de otra columna, y se dice cuál.
+ */
+export function PagadaEl({ venta }: { venta: VentaComision }) {
+  if (!venta.pago_fecha) return <span className="text-slate-500">—</span>;
+  const fuente = venta.pago_fuente ? FUENTE_PAGO[venta.pago_fuente] : undefined;
+  return (
+    <span className="flex flex-col leading-tight">
+      <span className="font-mono text-xs text-slate-200">{formatoFecha(venta.pago_fecha)}</span>
+      {fuente && <span className="text-[10px] text-slate-500">{fuente}</span>}
+    </span>
+  );
+}
+
 /** Pagado y En proceso de pago cuentan; lo demás no. */
 const PAGO_TONO: Record<string, string> = {
   Pagado: 'text-emerald-400',

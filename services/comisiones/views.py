@@ -1,8 +1,8 @@
 """El modulo de Comisiones: el informe y la configuracion de pago.
 
 - `/comisiones/` — el informe de un periodo. Lo ve `can_view_comisiones`;
-  crear el periodo, decidir las revisiones, escribir cumplimientos y cerrar es
-  `can_manage_comisiones`.
+  crear el periodo, decidir las revisiones, agregar ventas a mano, escribir
+  cumplimientos y cerrar es `can_manage_comisiones`.
 - `/comisiones/supervisores/` y `/comisiones/condiciones/` — la configuracion
   de pago (el coordinador de UN de cada supervisor, las tarifas), con
   `can_manage_comisiones`.
@@ -32,18 +32,29 @@ from services.catalogos.models import CARGO_CHOICES, PersonaVentas
 from services.comisiones.analytics.calculo import (
     FaltanColumnas,
     condiciones_vigentes,
+    leer_ordenes,
     mes_anterior,
     mes_siguiente,
 )
 from services.comisiones.analytics.cierre import NoSePuedeCerrar, cerrar_periodo, reabrir_periodo
 from services.comisiones.analytics.queries import informe, periodo_por_defecto, periodos, propuesta
-from services.comisiones.analytics.reglas import validar_tramos_asesor, validar_tramos_un
+from services.comisiones.analytics.reglas import (
+    CONTAR,
+    NO_CONTAR,
+    NORMAL,
+    VALIDA,
+    YA_PAGADA,
+    validar_tramos_asesor,
+    validar_tramos_un,
+)
 from services.comisiones.models import (
     ComisionPeriodo,
+    ComisionVenta,
     CondicionesComision,
     IndicadorComision,
     RevisionComision,
     SupervisorUnidad,
+    VentaManual,
 )
 from services.config.decorators import permission_required
 from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_actual
@@ -146,7 +157,7 @@ def informe_view(request):
     filas—: lo pide la pagina a `api/ventas/`.
     """
     condiciones = CondicionesComision.actual()
-    existentes = periodos()
+    existentes = periodos(condiciones.dia_corte)
     pedido = request.GET.get("periodo") or ""
     clave = pedido if _MES.match(pedido) else (existentes[0]["periodo"] if existentes else periodo_por_defecto(condiciones.dias_espera))
 
@@ -166,7 +177,7 @@ def informe_view(request):
         "periodos": existentes,
         "informe": datos,
         "error": error,
-        "propuesta": propuesta(clave, condiciones.dia_promocional),
+        "propuesta": propuesta(clave, condiciones.dia_promocional, condiciones.dia_corte),
         # Las del cierre si esta cerrado; si no, con las que se acaba de calcular.
         "condiciones": (periodo.condiciones if periodo is not None and periodo.cerrado and periodo.condiciones
                         else condiciones_vigentes()),
@@ -201,9 +212,11 @@ def api_ventas(request):
 def api_periodo_guardar(request):
     """Crea un periodo en borrador, o cambia sus dias promocionales.
 
-    `inicio_promo` es el inicio de los dias promocionales del mes; el periodo
-    termina el dia antes. `inicio` solo se acepta si el mes anterior no tiene
-    periodo: si lo tiene, el inicio es su `inicio_promo` y no se pregunta.
+    `inicio_promo` es el inicio de los dias promocionales del mes: desde ahi lo
+    instalado solo cuenta si adelanto el pago hasta `corte_adelantos` (un dia
+    del mes siguiente; vacio, el habitual). `inicio` solo se acepta si el mes
+    anterior no tiene periodo: si lo tiene, el inicio es su `inicio_promo` y no
+    se pregunta.
 
     Cambiar el `inicio_promo` de un mes mueve el inicio del siguiente, asi que
     no se permite si el siguiente esta cerrado.
@@ -213,6 +226,9 @@ def api_periodo_guardar(request):
     inicio_promo = _fecha(data.get("inicio_promo"), "inicio_promo")
     if inicio_promo.strftime("%Y-%m") != clave:
         raise DatosInvalidos("Los días promocionales del periodo tienen que empezar dentro de su mes.")
+    corte = _fecha(data["corte_adelantos"], "corte_adelantos") if data.get("corte_adelantos") else None
+    if corte and corte.strftime("%Y-%m") != mes_siguiente(clave):
+        raise DatosInvalidos("El corte de los pagos adelantados tiene que caer en el mes siguiente: es cuando se saca el informe.")
 
     anterior = ComisionPeriodo.objects.filter(periodo=mes_anterior(clave)).first()
     if anterior:
@@ -235,6 +251,8 @@ def api_periodo_guardar(request):
         periodo = existente or ComisionPeriodo(periodo=clave, creado_por=request.user)
         periodo.inicio = inicio
         periodo.inicio_promo = inicio_promo
+        if "corte_adelantos" in data:
+            periodo.corte_adelantos = corte
         periodo.save()
         if siguiente and not siguiente.cerrado:
             siguiente.inicio = inicio_promo
@@ -249,6 +267,10 @@ def api_periodo_guardar(request):
 @_escritura
 def api_revision_guardar(request):
     """Decide ventas por facturar: `contar` o `no_contar` en el periodo.
+
+    En el primer periodo (sin periodo el mes anterior) tambien `ya_pagada` o
+    `normal`: si lo instalado en los dias promocionales del mes anterior ya se
+    cobro alli. Despues eso lo dice el cierre del anterior.
 
     `orden` decide una venta; `ordenes`, varias de una vez —un mes puede traer
     cientos, y decidirlas una a una choca con el limite de peticiones—.
@@ -267,8 +289,10 @@ def api_revision_guardar(request):
     if not decision:
         RevisionComision.objects.filter(orden__in=ordenes, periodo_origen=periodo.periodo).delete()
         return JsonResponse({"status": "success", "message": "Decisión deshecha."})
-    if decision not in ("contar", "no_contar"):
-        raise DatosInvalidos("La decisión es «contar» o «no contar».")
+    if decision not in (CONTAR, NO_CONTAR, YA_PAGADA, NORMAL):
+        raise DatosInvalidos("La decisión es «contar», «no contar», «ya cobrada» o «toca aquí».")
+    if decision in (YA_PAGADA, NORMAL) and ComisionPeriodo.objects.filter(periodo=mes_anterior(periodo.periodo)).exists():
+        raise DatosInvalidos("El periodo anterior existe: lo que ya se cobró en él lo dice su cierre.")
 
     nota = str(data.get("nota") or "").strip()[:255]
     with transaction.atomic():
@@ -286,6 +310,68 @@ def api_revision_guardar(request):
         "status": "success",
         "message": "Decisión guardada." if len(ordenes) == 1 else f"Decisión guardada en {len(ordenes)} ventas.",
     })
+
+
+@login_required
+@permission_required(PERMISO_GESTION)
+@ratelimit(key="ip", rate="30/m", block=True)
+@require_POST
+@_escritura
+def api_manual_agregar(request):
+    """Agrega ventas a mano al periodo: cuentan en el, se instalaran cuando se instalaran.
+
+    `{periodo, ordenes: [...], nota}`, nota obligatoria. Todo o nada: se
+    rechaza si alguna orden no esta en suscripciones (de ahi sale quien
+    cobra), ya esta agregada o ya se pago en otro periodo cerrado.
+    """
+    data = _cuerpo(request)
+    periodo = _periodo_abierto(_mes(data.get("periodo")))
+    bruto = data.get("ordenes") if isinstance(data.get("ordenes"), list) else [data.get("orden")]
+    ordenes = sorted({str(o or "").strip()[:80] for o in bruto} - {""})
+    if not ordenes:
+        raise DatosInvalidos("Falta la orden.")
+    if len(ordenes) > 200:
+        raise DatosInvalidos("Demasiadas órdenes de una vez.")
+    nota = str(data.get("nota") or "").strip()[:255]
+    if not nota:
+        raise DatosInvalidos("Escribe por qué se agrega: queda con la venta.")
+
+    encontradas = leer_ordenes(ordenes)
+    existen = set(encontradas["orden_producto"].astype(str)) if not encontradas.empty else set()
+    faltan = [o for o in ordenes if o not in existen]
+    if faltan:
+        raise DatosInvalidos("No están en suscripciones: " + ", ".join(faltan) + ".")
+    pagadas = dict(
+        ComisionVenta.objects.filter(orden__in=ordenes, clasificacion=VALIDA, periodo__estado="cerrado")
+        .exclude(periodo=periodo).values_list("orden", "periodo__periodo")
+    )
+    if pagadas:
+        raise DatosInvalidos("Ya se pagaron: " + ", ".join(f"{o} en {p}" for o, p in sorted(pagadas.items())) + ".")
+    repetidas = set(VentaManual.objects.filter(periodo=periodo.periodo, orden__in=ordenes).values_list("orden", flat=True))
+    if repetidas:
+        raise DatosInvalidos("Ya estaban agregadas: " + ", ".join(sorted(repetidas)) + ".")
+
+    VentaManual.objects.bulk_create(
+        VentaManual(orden=o, periodo=periodo.periodo, nota=nota, agregado_por=request.user) for o in ordenes
+    )
+    n = len(ordenes)
+    return JsonResponse({"status": "success", "message": f"{n} venta{'s' if n != 1 else ''} agregada{'s' if n != 1 else ''}."})
+
+
+@login_required
+@permission_required(PERMISO_GESTION)
+@ratelimit(key="ip", rate="30/m", block=True)
+@require_POST
+@_escritura
+def api_manual_quitar(request):
+    """Quita una venta agregada a mano: vuelve a contar solo si sus reglas lo dicen."""
+    data = _cuerpo(request)
+    periodo = _periodo_abierto(_mes(data.get("periodo")))
+    orden = str(data.get("orden") or "").strip()
+    borradas, _ = VentaManual.objects.filter(periodo=periodo.periodo, orden=orden).delete()
+    if not borradas:
+        raise DatosInvalidos(f"La orden {orden} no estaba agregada a mano.")
+    return JsonResponse({"status": "success", "message": f"{orden} quitada."})
 
 
 @login_required
@@ -496,7 +582,7 @@ def _actualizacion() -> dict[str, Any]:
 @login_required
 @permission_required(PERMISO_GESTION)
 def condiciones_view(request):
-    """Las condiciones de pago: tramos, tarifas, dias promocionales y los % PYME."""
+    """Las condiciones de pago: tramos, tarifas, dias promocionales, corte y los % PYME."""
     return render_inertia(request, "Comisiones/Condiciones", clean_json_nullable({
         "condiciones": condiciones_vigentes(),
         "actualizacion": _actualizacion(),
@@ -527,12 +613,16 @@ def api_condiciones_guardar(request):
         raise DatosInvalidos(str(e)) from None
     dia = _decimal(data.get("dia_promocional"), "dia_promocional", nulo=False)
     espera = _decimal(data.get("dias_espera"), "dias_espera", nulo=False)
+    corte = _decimal(data.get("dia_corte"), "dia_corte", nulo=False)
     if not 1 <= dia <= 31 or dia != int(dia):
         raise DatosInvalidos("El día promocional es un día del mes, de 1 a 31.")
+    if not 1 <= corte <= 31 or corte != int(corte):
+        raise DatosInvalidos("El día de corte de los adelantos es un día del mes, de 1 a 31.")
     if not 0 <= espera <= 60 or espera != int(espera):
         raise DatosInvalidos("Los días de espera van de 0 a 60.")
     c.dia_promocional = int(dia)
     c.dias_espera = int(espera)
+    c.dia_corte = int(corte)
     c.actualizado_por = request.user
     c.save()
     return JsonResponse({"status": "success", "message": "Condiciones guardadas."})

@@ -15,7 +15,7 @@
 import {
   downloadStyledWorkbook, type ExcelCell, type ExcelCellObject, type ExcelRow, type ExcelStyledSheet,
 } from '@/shared/lib/excel';
-import { CLASIFICACION, aBs, formatoFecha, formatoMes, totalBs } from './formato';
+import { CLASIFICACION, TRAMO, aBs, formatoFecha, formatoMes, totalBs } from './formato';
 import {
   armarNomina, motivoRecorte, rangoTramo, tramoAsesor, ventasPagadas, ventasValidadas, type GrupoSupervisor, type Nomina,
 } from './nomina';
@@ -401,7 +401,9 @@ function hojaVentas(ventas: VentaComision[]): ExcelStyledSheet {
     { titulo: 'Plan facturado', ancho: 28, valor: (v) => v.factura_plan ?? '' },
     { titulo: 'Estado', ancho: 12, valor: (v) => v.factura_estado ?? '' },
     { titulo: 'Estado del pago', ancho: 18, valor: (v) => v.factura_pago ?? '' },
+    { titulo: 'Pagada el', ancho: 12, valor: (v) => (v.pago_fecha ? formatoFecha(v.pago_fecha) : '') },
     { titulo: 'Gratuita', ancho: 10, valor: (v) => (v.gratuita ? 'Sí' : '') },
+    { titulo: 'Tramo', ancho: 22, valor: (v) => (v.tramo ? TRAMO[v.tramo] : '') },
     { titulo: 'Clasificación', ancho: 13, valor: (v) => CLASIFICACION[v.clasificacion].label },
     { titulo: 'Motivo', ancho: 40, valor: (v) => v.motivo },
     { titulo: 'Medio', ancho: 24, valor: (v) => v.medio },

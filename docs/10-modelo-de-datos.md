@@ -45,11 +45,12 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
 | `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
 | `comisiones_supervisor_unidad` | `SupervisorUnidad` | A qué coordinador de UN responde cada supervisor (una fila por supervisor; sin fila, sus ventas no pagan a ningún coordinador de UN). Lo único de la estructura de ventas que no sale de la venta |
-| `comisiones_condiciones` | `CondicionesComision` | Fila única: montos, tramos (JSON) del asesor y del coordinador de UN, día promocional habitual y días de espera |
-| `comisiones_periodos` | `ComisionPeriodo` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana), `estado` (borrador/cerrado), `cumplimiento_general_pct` (el de todos los supervisores y coord. de oficina sin uno propio), `tasa_conatel` y `tasa_conatel_publicada` (el bolívar oficial del día 1 del mes siguiente, con que se paga) y, al cerrar, `condiciones` y `resumen` congelados |
-| `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta por facturar en progreso: contarla en su periodo o no contarla (no se paga). Única por `(orden, periodo_origen)` |
+| `comisiones_condiciones` | `CondicionesComision` | Fila única: montos, tramos (JSON) del asesor y del coordinador de UN, día promocional habitual, días de espera y `dia_corte` (el día del mes siguiente que se propone como corte de los pagos adelantados) |
+| `comisiones_periodos` | `ComisionPeriodo` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana llega al fin de mes; desde `inicio_promo` solo cuenta lo adelantado), `corte_adelantos` (nulo: el `dia_corte` habitual), `estado` (borrador/cerrado), `cumplimiento_general_pct` (el de todos los supervisores y coord. de oficina sin uno propio), `tasa_conatel` y `tasa_conatel_publicada` (el bolívar oficial del día 1 del mes siguiente, con que se paga) y, al cerrar, `condiciones` y `resumen` congelados |
+| `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta en revisión: contarla en su periodo o no contarla (no se paga). En el primer periodo, también si lo instalado en los días promocionales del mes anterior ya se cobró allí (`ya_pagada`) o toca aquí (`normal`). Única por `(orden, periodo_origen)` |
+| `comisiones_ventas_manuales` | `VentaManual` | Una venta agregada a mano a un periodo, con su nota: cuenta en él se instalara cuando se instalara. Única por `(orden, periodo)` |
 | `comisiones_indicadores` | `IndicadorComision` | Por periodo y persona: `cumplimiento_pct` propio (supervisor, coord. de oficina; sustituye al general) y `crecimiento_pct` a mano (coord. de UN) |
-| `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`) |
+| `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`). Incluye las `diferida` (días promocionales sin adelanto), solo informativas |
 | `comisiones_pagos` | `ComisionPago` | Lo que cobró cada persona en un periodo cerrado, con nombre y cargo copiados |
 | `django_migrations` | Django | Propia de cada esquema |
 
@@ -86,7 +87,9 @@ la importación las añade a la tabla al encontrarlas.
 
 `subscriptions-facturas`: `orden`, `numero`, `estado_factura_sub` (el estado de la
 factura de la suscripción, solo para contrastar), `estado` (Registrado, Borrador,
-Cancelado), `estado_pago`, `creado_el` (ISO, para que ordene como texto),
+Cancelado), `estado_pago`, `creado_el`, `fecha_pago` («Fecha del último pago») y
+`actualizado_el` («Última actualización el»), las tres en ISO para que ordenen
+como texto (las dos últimas, opcionales: vacías si el export no las trae),
 `producto` (tal cual, con la referencia `[...]` si la trae) e `importado_el`. Una
 factura se identifica por `orden` + `numero` + `creado_el`: los borradores pueden
 compartir número («/»). Qué línea es el plan se resuelve al leer

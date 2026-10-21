@@ -45,10 +45,14 @@ FACTURAS_COLUMN_MAPPING = {
     "Estado del pago": "estado_pago",
     "Creado el": "creado_el",
     "Líneas de factura/Producto": "producto",
+    "Fecha del último pago": "fecha_pago",
+    "Última actualización el": "actualizado_el",
 }
 
 # Todas salvo el estado de la factura de la suscripcion, que ya llega con el
-# export de suscripciones y aqui solo se guarda para contrastarlo.
+# export de suscripciones y aqui solo se guarda para contrastarlo, y las dos
+# fechas de despues del pago, que los exports anteriores no traian: sin ellas,
+# comisiones no sabe cuando se pago una mensualidad (ver `fecha_del_pago`).
 FACTURAS_REQUIRED = [
     "Suscripción/Referencia de la orden",
     "Número",
@@ -59,7 +63,12 @@ FACTURAS_REQUIRED = [
 ]
 
 # Los datos de la factura, que las filas de continuacion no traen.
-_COLUMNAS_FACTURA = ["orden", "numero", "estado_factura_sub", "estado", "estado_pago", "creado_el"]
+_COLUMNAS_FACTURA = [
+    "orden", "numero", "estado_factura_sub", "estado", "estado_pago", "creado_el", "fecha_pago", "actualizado_el",
+]
+
+# Las fechas, que se guardan en ISO para que en una columna `text` ordenen bien.
+_COLUMNAS_FECHA = ["creado_el", "fecha_pago", "actualizado_el"]
 
 COLUMNAS_TABLA = [*_COLUMNAS_FACTURA, "producto", "importado_el"]
 
@@ -120,8 +129,9 @@ def leer_csv_facturas(csv_path: str) -> pd.DataFrame:
 
     # Las facturas que no son de una suscripcion no le interesan a nadie aqui.
     df = df.dropna(subset=["orden"])
-    fechas = {v: _fecha_iso(v) for v in df["creado_el"].dropna().unique()}
-    df["creado_el"] = df["creado_el"].map(fechas)
+    for col in _COLUMNAS_FECHA:
+        fechas = {v: _fecha_iso(v) for v in df[col].dropna().unique()}
+        df[col] = df[col].map(fechas)
     return df.drop_duplicates().reset_index(drop=True)
 
 
@@ -175,6 +185,7 @@ def leer_facturas(ordenes: list[str]) -> dict[str, list[dict[str, Any]]]:
 
     Cada factura lleva `plan`: el nombre de catalogo de la primera de sus lineas
     que es un plan, o vacio si ninguna lo es (la de instalacion, la del router).
+    `fecha_pago` y `actualizado_el` van vacias si el export cargado no las traia.
     Una factura se identifica por orden, numero y fecha de creacion: los
     borradores de Odoo pueden compartir numero («/»).
     """
@@ -183,9 +194,13 @@ def leer_facturas(ordenes: list[str]) -> dict[str, list[dict[str, Any]]]:
     db = DBConnector()
     if not db.tabla_existe(TableNames.SUBSCRIPTIONS_FACTURAS):
         return {}
+    existentes = db.columnas(TableNames.SUBSCRIPTIONS_FACTURAS)
+    fechas = ", ".join(
+        c if c in existentes else f"NULL AS {c}" for c in ("fecha_pago", "actualizado_el")
+    )
     df = db.query(
         f"""
-        SELECT orden, numero, estado, estado_pago, creado_el, producto
+        SELECT orden, numero, estado, estado_pago, creado_el, producto, {fechas}
         FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_FACTURAS}"
         WHERE orden = ANY(%s)
         """,
@@ -196,7 +211,9 @@ def leer_facturas(ordenes: list[str]) -> dict[str, list[dict[str, Any]]]:
 
     planes = {_clave(n): n for n in fixtures.plan_names()}
     df["plan"] = df["producto"].map(lambda p: planes.get(_clave(nombre_producto(p)), ""))
-    df = df.fillna({"numero": "", "estado": "", "estado_pago": "", "creado_el": ""})
+    df = df.fillna({
+        "numero": "", "estado": "", "estado_pago": "", "creado_el": "", "fecha_pago": "", "actualizado_el": "",
+    })
 
     resultado: dict[str, list[dict[str, Any]]] = {}
     for (orden, numero, creado_el), lineas in df.groupby(["orden", "numero", "creado_el"], sort=False):
@@ -207,6 +224,8 @@ def leer_facturas(ordenes: list[str]) -> dict[str, list[dict[str, Any]]]:
             "estado": primera["estado"],
             "estado_pago": primera["estado_pago"],
             "creado_el": creado_el,
+            "fecha_pago": primera["fecha_pago"],
+            "actualizado_el": primera["actualizado_el"],
             "plan": con_plan["plan"].iloc[0] if not con_plan.empty else "",
             "productos": [nombre_producto(p) for p in lineas["producto"].dropna().unique()],
         })

@@ -184,7 +184,7 @@ export function erroresTramosUn(tramos: TramoUn[]): ErroresTramos {
   return { filas, general: siempre === -1 ? 'Un tramo tiene que valer para cualquier crecimiento.' : null };
 }
 
-export type CampoSimple = 'monto_equipo' | 'monto_directa' | 'monto_directa_un' | 'dia_promocional' | 'dias_espera';
+export type CampoSimple = 'monto_equipo' | 'monto_directa' | 'monto_directa_un' | 'dia_promocional' | 'dias_espera' | 'dia_corte';
 
 /** Lo que `api_condiciones_guardar` rechazaría de los campos sueltos. */
 export function erroresCampos(c: CondicionesComision): Partial<Record<CampoSimple, string>> {
@@ -198,6 +198,9 @@ export function erroresCampos(c: CondicionesComision): Partial<Record<CampoSimpl
   }
   if (!Number.isInteger(c.dias_espera) || c.dias_espera < 0 || c.dias_espera > 60) {
     errores.dias_espera = 'De 0 a 60 días.';
+  }
+  if (!Number.isInteger(c.dia_corte) || c.dia_corte < 1 || c.dia_corte > 31) {
+    errores.dia_corte = 'Un día del mes, de 1 a 31.';
   }
   return errores;
 }
@@ -233,6 +236,7 @@ const CAMPOS: Record<CampoSimple, { donde: string; valor: (v: number) => string 
   monto_directa_un: { donde: 'Coordinador de UN · venta propia', valor: montoOVacio },
   dia_promocional: { donde: 'Periodo · inicio de los días promocionales', valor: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
   dias_espera: { donde: 'Periodo · días de espera', valor: (v) => (Number.isFinite(v) ? `${v} días` : '—') },
+  dia_corte: { donde: 'Periodo · corte de los pagos adelantados', valor: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
 };
 
 /**
@@ -299,7 +303,7 @@ export function cambiosPendientes(guardadas: CondicionesComision, borrador: Cond
     }
   }
   cambios.push(...cambiosUn(guardadas.tramos_un, borrador.tramos_un));
-  for (const campo of ['monto_directa_un', 'dia_promocional', 'dias_espera'] as const) {
+  for (const campo of ['monto_directa_un', 'dia_promocional', 'dias_espera', 'dia_corte'] as const) {
     if (borrador[campo] !== guardadas[campo]) {
       cambios.push({ donde: CAMPOS[campo].donde, antes: CAMPOS[campo].valor(guardadas[campo]), despues: CAMPOS[campo].valor(borrador[campo]) });
     }
@@ -319,9 +323,13 @@ export interface PeriodoEjemplo {
   /** `octubre de 2026`. */
   nombre: string;
   inicio: Date;
+  /** El último día que cuenta sin condiciones: el anterior a los días promocionales. */
   fin: Date;
+  inicioPromo: Date;
   finDeMes: Date;
   calculo: Date;
+  /** Hasta cuándo un pago adelantado de los días promocionales cuenta en el periodo. */
+  corte: Date;
 }
 
 /**
@@ -329,12 +337,16 @@ export interface PeriodoEjemplo {
  * mes anterior empiezan el día habitual. Es solo un ejemplo: cada periodo
  * confirma su propio inicio al crearlo. Nulo si los campos no son válidos.
  */
-export function periodoEjemplo(diaPromocional: number, diasEspera: number, hoy = new Date()): PeriodoEjemplo | null {
+export function periodoEjemplo(
+  diaPromocional: number, diasEspera: number, diaCorte: number, hoy = new Date(),
+): PeriodoEjemplo | null {
   if (!Number.isInteger(diaPromocional) || diaPromocional < 1 || diaPromocional > 31) return null;
   if (!Number.isInteger(diasEspera) || diasEspera < 0) return null;
+  if (!Number.isInteger(diaCorte) || diaCorte < 1 || diaCorte > 31) return null;
   const anio = hoy.getFullYear();
   const mes = hoy.getMonth();
-  const fin = diaDelMes(anio, mes, diaPromocional);
+  const inicioPromo = diaDelMes(anio, mes, diaPromocional);
+  const fin = new Date(inicioPromo);
   fin.setDate(fin.getDate() - 1);
   const finDeMes = new Date(anio, mes + 1, 0);
   const calculo = new Date(finDeMes);
@@ -343,8 +355,10 @@ export function periodoEjemplo(diaPromocional: number, diasEspera: number, hoy =
     nombre: new Intl.DateTimeFormat('es-VE', { month: 'long', year: 'numeric' }).format(new Date(anio, mes, 1)),
     inicio: diaDelMes(anio, mes - 1, diaPromocional),
     fin,
+    inicioPromo,
     finDeMes,
     calculo,
+    corte: diaDelMes(anio, mes + 1, diaCorte),
   };
 }
 
