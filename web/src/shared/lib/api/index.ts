@@ -10,3 +10,4 @@ export * from './support';
 export * from './imports';
 export * from './jobs';
 export * from './config';
+export * from './auditoria';

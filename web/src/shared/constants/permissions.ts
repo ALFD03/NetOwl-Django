@@ -6,7 +6,7 @@
  * backend hay que añadirlo también aquí.
  */
 
-import { BookMarked, CloudDownload, HandCoins, Headset, KeyRound, Layers, Users } from 'lucide-react';
+import { BookMarked, CloudDownload, HandCoins, Headset, KeyRound, Layers, ScrollText, UserCog, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { Permission } from '@/shared/types/auth';
@@ -31,16 +31,23 @@ export const PERMISSIONS = {
   VIEW_IMPORTS_SUPPORT: 'can_view_imports_support',
   VIEW_IMPORT_HISTORY: 'can_view_import_history',
   VIEW_COMISIONES: 'can_view_comisiones',
+  VIEW_USERS: 'can_view_users',
+  VIEW_AUDITORIA: 'can_view_auditoria',
   IMPORT_DATA: 'can_import_data',
   RUN_CALCULATIONS: 'can_run_calculations',
   RUN_LIFETIME: 'can_run_lifetime',
   MANAGE_ETA: 'can_manage_eta',
-  MANAGE_USERS: 'can_manage_users',
   MANAGE_CATALOGO_COMERCIAL: 'can_manage_catalogo_comercial',
   MANAGE_CATALOGO_OPERACIONAL: 'can_manage_catalogo_operacional',
   MANAGE_CATALOGO_VENTAS: 'can_manage_catalogo_ventas',
   MANAGE_SUPPORT_USERS: 'can_manage_support_users',
   MANAGE_COMISIONES: 'can_manage_comisiones',
+  REOPEN_COMISIONES: 'can_reopen_comisiones',
+  CREATE_USERS: 'can_create_users',
+  EDIT_USER_PERMISSIONS: 'can_edit_user_permissions',
+  CHANGE_PASSWORDS: 'can_change_passwords',
+  DELETE_USERS: 'can_delete_users',
+  MANAGE_GROUPS: 'can_manage_groups',
   IMPORT_SUBS: 'can_import_subs',
   IMPORT_CRM: 'can_import_crm',
   IMPORT_SUPPORT: 'can_import_support',
@@ -185,6 +192,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     perms: [
       { key: PERMISSIONS.VIEW_COMISIONES, label: 'Ver el informe de comisiones', section: 'Ver' },
       { key: PERMISSIONS.MANAGE_COMISIONES, label: 'Calcular, revisar y cerrar periodos; supervisores por UN y condiciones', section: 'Administrar' },
+      { key: PERMISSIONS.REOPEN_COMISIONES, label: 'Reabrir un periodo cerrado (archiva el cierre)', section: 'Administrar' },
     ],
   },
   {
@@ -198,14 +206,36 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     ],
   },
   {
-    category: 'Transversales y Administración',
+    category: 'Transversales',
     hint: 'No son de un módulo: valen para los tres. Concede solo lo que haga falta.',
     icon: KeyRound,
     tone: 'red',
     perms: [
       { key: PERMISSIONS.IMPORT_DATA, label: 'Cargar cualquier CSV (comodín de los tres módulos)', section: 'Cargar y calcular' },
       { key: PERMISSIONS.RUN_CALCULATIONS, label: 'Ejecutar cualquier análisis (comodín de los tres módulos)', section: 'Cargar y calcular' },
-      { key: PERMISSIONS.MANAGE_USERS, label: 'Administrar usuarios, grupos y permisos', section: 'Administrar' },
+    ],
+  },
+  {
+    category: 'Usuarios y permisos',
+    hint: 'Un permiso por acción. Nadie concede lo que no tiene ni toca una cuenta con más permisos que la suya.',
+    icon: UserCog,
+    tone: 'red',
+    perms: [
+      { key: PERMISSIONS.VIEW_USERS, label: 'Ver usuarios y grupos', section: 'Ver' },
+      { key: PERMISSIONS.CREATE_USERS, label: 'Crear usuarios', section: 'Administrar' },
+      { key: PERMISSIONS.EDIT_USER_PERMISSIONS, label: 'Editar rol, grupo y permisos de un usuario', section: 'Administrar' },
+      { key: PERMISSIONS.CHANGE_PASSWORDS, label: 'Cambiar la contraseña de otro usuario', section: 'Administrar' },
+      { key: PERMISSIONS.DELETE_USERS, label: 'Eliminar usuarios', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_GROUPS, label: 'Crear, editar y eliminar grupos de permisos', section: 'Administrar' },
+    ],
+  },
+  {
+    category: 'Auditoría',
+    hint: 'El registro de quién hizo qué, cuándo y desde dónde.',
+    icon: ScrollText,
+    tone: 'slate',
+    perms: [
+      { key: PERMISSIONS.VIEW_AUDITORIA, label: 'Ver el registro de auditoría', section: 'Ver' },
     ],
   },
 ];

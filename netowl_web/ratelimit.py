@@ -26,6 +26,7 @@ habria que descartar tantas entradas por la derecha como saltos de confianza.
 """
 
 import ipaddress
+import json
 
 
 def ip_cliente(request) -> str:
@@ -42,3 +43,31 @@ def ip_cliente(request) -> str:
         return limpia
 
     return request.META.get("REMOTE_ADDR") or "0.0.0.0"
+
+
+def usuario_login(group, request) -> str:
+    """La cuenta que se intenta abrir, para contar los fallos por cuenta.
+
+    Con `key='post:username'` la libreria lee `request.POST`, que llega vacio
+    cuando el formulario se envia como JSON -que es como lo envia Inertia-: la
+    clave era la cadena vacia para todo el mundo, asi que los intentos de toda
+    la empresa caian en un unico cubo. Cinco en cinco minutos, de quien fuera,
+    dejaban sin poder entrar a todos, y el limite por cuenta no existia.
+
+    Se lee el nombre del cuerpo, venga en JSON o en formulario, y se cuenta en
+    minusculas: si no, escribir la misma cuenta con otras mayusculas abriria un
+    cubo nuevo por cada variante. Sin nombre se cuenta por IP: devolver la
+    cadena vacia volveria a crear el cubo comun.
+    """
+    nombre = ""
+    if request.content_type == "application/json":
+        try:
+            datos = json.loads(request.body or b"{}")
+        except (ValueError, UnicodeDecodeError):
+            datos = {}
+        if isinstance(datos, dict):
+            nombre = datos.get("username") or ""
+    else:
+        nombre = request.POST.get("username", "")
+    nombre = str(nombre).strip().casefold()
+    return f"usuario:{nombre}" if nombre else f"ip:{ip_cliente(request)}"

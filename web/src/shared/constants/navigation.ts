@@ -8,7 +8,7 @@
 
 import {
   BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitFork,
-  HandCoins, Headset, Layers, Lock, Network, Package, SlidersHorizontal, Table, TrendingUp,
+  HandCoins, Headset, Layers, Lock, Network, Package, ScrollText, SlidersHorizontal, Table, TrendingUp,
   UserCheck, Users,
 } from 'lucide-react';
 
@@ -103,6 +103,16 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       { id: 'crm', label: 'CRM', href: '/imports/crm/', icon: Users, permission: PERMISSIONS.VIEW_IMPORTS_CRM },
       { id: 'support', label: 'Soporte técnico', href: '/imports/support/', icon: Headset, permission: PERMISSIONS.VIEW_IMPORTS_SUPPORT },
       { id: 'history', label: 'Historial', href: '/imports/history/', icon: Clock, permission: PERMISSIONS.VIEW_IMPORT_HISTORY },
+    ],
+  },
+  {
+    module: 'auditoria',
+    name: 'Auditoría',
+    icon: ScrollText,
+    pathPrefix: '/auditoria',
+    permission: PERMISSIONS.VIEW_AUDITORIA,
+    pages: [
+      { id: 'registro', label: 'Registro', href: '/auditoria/', icon: ScrollText },
     ],
   },
 ];

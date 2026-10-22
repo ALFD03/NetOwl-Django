@@ -12,9 +12,10 @@ import { Avatar, ModulosConAcceso, TOTAL_PERMISSIONS, contarPermisos } from './a
 interface Props {
   groups: GroupData[];
   users: UserData[];
-  onEdit: (group: GroupData) => void;
-  onDelete: (group: GroupData) => void;
-  onCreate: () => void;
+  /** Nulos sin `can_manage_groups`: la rejilla queda de solo lectura. */
+  onEdit: ((group: GroupData) => void) | null;
+  onDelete: ((group: GroupData) => void) | null;
+  onCreate: (() => void) | null;
   /** Hay un filtro de búsqueda activo: la lista vacía no significa que no haya grupos. */
   filtrando: boolean;
 }
@@ -57,6 +58,7 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
                   {group.description || <span className="italic text-slate-500">Sin descripción</span>}
                 </p>
               </div>
+              {onEdit && onDelete && group.editable && (
               <div className="flex shrink-0 gap-0.5 opacity-70 transition-opacity group-hover:opacity-100">
                 <button
                   type="button"
@@ -77,6 +79,7 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
+              )}
             </header>
 
             {/* `flex-1`: empuja el pie al fondo, así las tarjetas de una fila
@@ -122,7 +125,7 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
 
       {/* Solo sin filtro: con una búsqueda activa, una tarjeta de «crear» en
           medio de los resultados se leería como uno más. */}
-      {!filtrando && (
+      {!filtrando && onCreate && (
         <button
           type="button"
           onClick={onCreate}

@@ -43,7 +43,8 @@ LANDING_ROUTES = [
     ('support:usuarios', ('can_manage_support_users',)),
     ('comisiones:informe', ('can_view_comisiones',)),
     ('comisiones:supervisores', ('can_manage_comisiones',)),
-    ('config:user_management', ('can_manage_users',)),
+    ('config:user_management', ('can_view_users',)),
+    ('auditoria:registro', ('can_view_auditoria',)),
 ]
 
 
@@ -161,13 +162,4 @@ def permissions_all_required(*perm_names):
     """
     return _authorize(perm_names, all)
 
-
-# --- DECORADORES DE COMPATIBILIDAD QUE DELEGAN A PERMISOS DINÁMICOS ---
-def admin_required(view_func):
-    """Compatibilidad: equivale a `permission_required('can_manage_users')`."""
-    return permission_required('can_manage_users')(view_func)
-
-def analyst_or_admin_required(view_func):
-    """Compatibilidad: equivale a `permission_required('can_import_data')`."""
-    return permission_required('can_import_data')(view_func)
 # --- END OF FILE NetOwl-Django/frontend/config/decorators.py ---

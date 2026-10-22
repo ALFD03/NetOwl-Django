@@ -23,4 +23,5 @@ urlpatterns = [
     path("support/", include("services.support.urls")),
     path("catalogos/", include("services.catalogos.urls")),
     path("comisiones/", include("services.comisiones.urls")),
+    path("auditoria/", include("services.auditoria.urls")),
 ]

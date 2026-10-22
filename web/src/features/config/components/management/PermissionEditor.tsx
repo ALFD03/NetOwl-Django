@@ -14,6 +14,12 @@ interface Props {
   onChange: (permissions: Record<string, boolean>) => void;
   /** Los permisos se heredan de un grupo: se muestran, pero no se pueden editar. */
   disabled?: boolean;
+  /**
+   * Permisos que quien edita no puede conceder: no los tiene y la matriz no
+   * los traía. Se ven apagados y no se pueden encender; el servidor los
+   * rechaza igual (ver `permisos_fuera_de_alcance`).
+   */
+  bloqueados?: ReadonlySet<string>;
 }
 
 /** Los permisos visibles de una tarjeta, partidos en bloques y en orden de riesgo. */
@@ -29,7 +35,7 @@ function contar(group: PermissionCategory, permissions: Record<string, boolean>)
   return group.perms.filter((permission) => permissions[permission.key]).length;
 }
 
-export function PermissionEditor({ permissions, onChange, disabled = false }: Props) {
+export function PermissionEditor({ permissions, onChange, disabled = false, bloqueados }: Props) {
   const [busqueda, setBusqueda] = useState('');
   // Colapsadas y no expandidas: la matriz entera abierta es lo que hace falta
   // ver al llegar; plegar es la excepción.
@@ -57,7 +63,10 @@ export function PermissionEditor({ permissions, onChange, disabled = false }: Pr
 
   const escribir = (cambios: Record<string, boolean>) => {
     if (disabled) return;
-    onChange({ ...permissions, ...cambios });
+    const permitidos = Object.fromEntries(
+      Object.entries(cambios).filter(([clave, valor]) => !(valor && bloqueados?.has(clave))),
+    );
+    onChange({ ...permissions, ...permitidos });
   };
 
   const marcarTodos = (valor: boolean) => {
@@ -123,6 +132,13 @@ export function PermissionEditor({ permissions, onChange, disabled = false }: Pr
             style={{ width: `${porcentaje}%` }}
           />
         </div>
+
+        {!disabled && bloqueados && bloqueados.size > 0 && (
+          <p className="flex items-start gap-2 text-[11px] text-slate-500">
+            <Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            <span>Los permisos apagados con candado son los que tú no tienes: no puedes concederlos.</span>
+          </p>
+        )}
 
         <SearchInput
           value={busqueda}
@@ -221,7 +237,7 @@ export function PermissionEditor({ permissions, onChange, disabled = false }: Pr
                             onChange={(valor) => escribir({ [permission.key]: valor })}
                             label={permission.label}
                             tone={group.tone}
-                            disabled={disabled}
+                            disabled={disabled || Boolean(bloqueados?.has(permission.key))}
                           />
                         ))}
                       </div>

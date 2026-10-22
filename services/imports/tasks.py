@@ -31,6 +31,8 @@ from core import fixtures
 from core.database import DBConnector
 from core.models import Periodo
 from core.utils import capture_console
+from services.auditoria.models import RegistroAuditoria
+from services.auditoria.registro import registrar
 
 from .history import register_import_log
 from .jobs import (
@@ -220,6 +222,7 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
         )
         marcar_fin(job, consola, AnalysisJob.CANCELADO, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'warning', texto, job.log)
+        _auditar(job, 'analisis_cancelado', RegistroAuditoria.RECHAZADO, texto)
         return
     except SoftTimeLimitExceeded:
         texto = (
@@ -228,6 +231,7 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
         )
         marcar_fin(job, consola, AnalysisJob.ERROR, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'error', texto, job.log)
+        _auditar(job, 'analisis_fallido', RegistroAuditoria.ERROR, texto)
         return
     except Exception:  # noqa: BLE001 - el desenlace se reporta, no se propaga
         logger.exception("Fallo en el analisis %s (%s)", job.module, job.id)
@@ -240,8 +244,27 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
         )
         marcar_fin(job, consola, AnalysisJob.ERROR, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'error', texto, job.log)
+        _auditar(job, 'analisis_fallido', RegistroAuditoria.ERROR, texto)
         return
 
     filas = int(resultado.get("dias_calculados") or 0)
     marcar_fin(job, consola, AnalysisJob.EXITO, mensaje, resultado)
     register_import_log(job.user, job.module, etiqueta, filas, 'success', mensaje, job.log)
+    _auditar(job, 'analisis_terminado', RegistroAuditoria.OK, mensaje)
+
+
+def _auditar(job: AnalysisJob, accion: str, resultado: str, texto: str) -> None:
+    """Anota el desenlace en auditoria, a nombre de quien lanzo el analisis.
+
+    Lanzarlo ya quedo anotado por el middleware; esto dice como acabo, que
+    ocurre en el worker, sin peticion de por medio.
+    """
+    registrar(
+        modulo='analisis',
+        accion=accion,
+        usuario=job.user,
+        descripcion=texto,
+        objeto=f"module={job.module}" + (f" · periodo={job.periodo}" if job.periodo else ""),
+        detalle={'job_id': str(job.id), 'module': job.module, 'periodo': job.periodo or None},
+        resultado=resultado,
+    )

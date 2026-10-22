@@ -19,16 +19,23 @@ export type Permission =
   | 'can_view_imports_support'
   | 'can_view_import_history'
   | 'can_view_comisiones'
+  | 'can_view_users'
+  | 'can_view_auditoria'
   | 'can_import_data'
   | 'can_run_calculations'
   | 'can_run_lifetime'
   | 'can_manage_eta'
-  | 'can_manage_users'
   | 'can_manage_catalogo_comercial'
   | 'can_manage_catalogo_operacional'
   | 'can_manage_catalogo_ventas'
   | 'can_manage_support_users'
   | 'can_manage_comisiones'
+  | 'can_reopen_comisiones'
+  | 'can_create_users'
+  | 'can_edit_user_permissions'
+  | 'can_change_passwords'
+  | 'can_delete_users'
+  | 'can_manage_groups'
   | 'can_import_subs'
   | 'can_import_crm'
   | 'can_import_support'
@@ -56,16 +63,23 @@ export interface UserProfile {
   can_view_imports_support: boolean;
   can_view_import_history: boolean;
   can_view_comisiones: boolean;
+  can_view_users: boolean;
+  can_view_auditoria: boolean;
   can_import_data: boolean;
   can_run_calculations: boolean;
   can_run_lifetime: boolean;
   can_manage_eta: boolean;
-  can_manage_users: boolean;
   can_manage_catalogo_comercial: boolean;
   can_manage_catalogo_operacional: boolean;
   can_manage_catalogo_ventas: boolean;
   can_manage_support_users: boolean;
   can_manage_comisiones: boolean;
+  can_reopen_comisiones: boolean;
+  can_create_users: boolean;
+  can_edit_user_permissions: boolean;
+  can_change_passwords: boolean;
+  can_delete_users: boolean;
+  can_manage_groups: boolean;
   can_import_subs: boolean;
   can_import_crm: boolean;
   can_import_support: boolean;

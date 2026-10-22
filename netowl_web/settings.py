@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.csp import CSP
 
 from core.vault import get_config
 
@@ -148,6 +149,12 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
 # gunicorn) mantenian medio giga residente, y ademas el temporal que crea
 # services/config/uploads.py recibia un fichero que ya estaba entero en RAM.
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+# Lo que puede mandar quien no ha iniciado sesion, y solo al formulario de
+# entrada: usuario y contrasena caben de sobra. El 1 GB de arriba es para las
+# importaciones, que exigen sesion; sin este tope cualquiera podia mandar
+# cuerpos de 1 GB al login y llenar la memoria de los workers
+# (ver netowl_web/middleware.py:LimiteCuerpoAnonimoMiddleware).
+ANON_MAX_BODY_SIZE = 16 * 1024
 
 # --- Aplicaciones instaladas ---
 INSTALLED_APPS = [
@@ -163,6 +170,7 @@ INSTALLED_APPS = [
     "services.catalogos",           # Catalogos de referencia (vistas; modelos en subscriptions)
     "services.comisiones",          # Comisiones de la fuerza de ventas
     "services.config",              # Autenticacion y permisos
+    "services.auditoria",           # Registro de auditoria: quien hizo que
     "inertia",
 ]
 
@@ -170,11 +178,16 @@ INSTALLED_APPS = [
 # Cadena de middleware ejecutado en cada petición/respuesta
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",              # Seguridad (HSTS, etc.)
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",      # Cabecera CSP (ver SECURE_CSP)
     "whitenoise.middleware.WhiteNoiseMiddleware",                 # Servir estáticos en producción
     "django.contrib.sessions.middleware.SessionMiddleware",       # Manejo de sesiones
     "django.middleware.common.CommonMiddleware",                  # Varios (URL slashes, etc.)
     "django.middleware.csrf.CsrfViewMiddleware",                  # Protección CSRF
     "django.contrib.auth.middleware.AuthenticationMiddleware",    # Autenticación por sesión
+    # Antes que el CSRF y que cualquier vista: un anonimo no sube nada (ver la clase).
+    "netowl_web.middleware.LimiteCuerpoAnonimoMiddleware",
+    # Antes del limitador, para anotar tambien los 429 (ver services/auditoria).
+    "services.auditoria.middleware.AuditoriaMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
     "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
     "netowl_web.middleware.RateLimitMiddleware",
@@ -191,6 +204,29 @@ INERTIA_LAYOUT = "app.html"
 # Es una decision de flujo de trabajo, no de seguridad: por eso tiene su propia
 # variable y no cuelga de DEBUG (ver context_processors.vite_dev_server).
 USE_VITE_DEV_SERVER = os.getenv("VITE_DEV_SERVER", "").lower() in {"1", "true", "yes"} or DEBUG
+
+# --- Content Security Policy ---
+# Solo se ejecuta el JavaScript servido por la propia aplicacion y los dos
+# <script> en linea de app.html, que llevan el nonce de la peticion: un
+# script inyectado (en un nombre de producto, un comentario de un ticket...)
+# no corre aunque llegue a pintarse. Los estilos en linea siguen permitidos
+# porque React los usa en atributos `style` (anchos de barras, framer-motion) y
+# Vite los inyecta en desarrollo; un estilo no ejecuta codigo.
+#
+# En desarrollo se anaden el servidor de Vite y su websocket de recarga.
+_VITE = ["http://localhost:5173"] if USE_VITE_DEV_SERVER else []
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF, CSP.NONCE, *_VITE],
+    "style-src": [CSP.SELF, CSP.UNSAFE_INLINE, "https://fonts.googleapis.com", *_VITE],
+    "font-src": [CSP.SELF, "https://fonts.gstatic.com", "data:"],
+    "img-src": [CSP.SELF, "data:", "blob:"],
+    "connect-src": [CSP.SELF, *_VITE, *(["ws://localhost:5173"] if _VITE else [])],
+    "object-src": [CSP.NONE],
+    "base-uri": [CSP.SELF],
+    "form-action": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+}
 # Django compara INTERNAL_IPS contra REMOTE_ADDR, asi que solo admite direcciones
 # IP: los hostnames que habia aqui nunca llegaron a coincidir. Esta lista decide
 # la variable `debug` de las plantillas (ver web/templates/app.html).
@@ -212,6 +248,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "netowl_web.context_processors.csrf_cookie_name",
                 "netowl_web.context_processors.vite_dev_server",
+                "django.template.context_processors.csp",  # `csp_nonce` para los <script> de app.html
             ],
         },
     },
