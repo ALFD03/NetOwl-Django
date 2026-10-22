@@ -19,8 +19,16 @@ export const comisionesApi = {
   cerrar: async (periodo: string) =>
     (await apiClient.post<Respuesta>('/comisiones/api/periodo/cerrar/', { periodo })).data,
 
-  reabrir: async (periodo: string) =>
-    (await apiClient.post<Respuesta>('/comisiones/api/periodo/reabrir/', { periodo })).data,
+  /**
+   * Reabre un periodo cerrado. El servidor archiva antes el cierre; exige el
+   * motivo y que `confirmacion` sea el periodo escrito a mano.
+   */
+  reabrir: async (periodo: string, motivo: string, confirmacion: string) =>
+    (await apiClient.post<Respuesta>('/comisiones/api/periodo/reabrir/', { periodo, motivo, confirmacion })).data,
+
+  /** La copia completa de un cierre archivado. */
+  archivo: async <T>(id: number) =>
+    (await apiClient.get<{ copia: T }>(`/comisiones/api/archivo/${id}/`)).data.copia,
 
   /**
    * Decide una o varias ventas de una vez. `decision` vacía deshace la

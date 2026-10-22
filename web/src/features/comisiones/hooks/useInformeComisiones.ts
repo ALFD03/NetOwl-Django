@@ -77,7 +77,8 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
     guardarPeriodo: (body: { periodo: string; inicio_promo: string; inicio?: string; corte_adelantos?: string }) =>
       escribir(() => comisionesApi.guardarPeriodo(body), 'No se pudo guardar el periodo.'),
     cerrar: () => escribir(() => comisionesApi.cerrar(periodo), 'No se pudo cerrar el periodo.'),
-    reabrir: () => escribir(() => comisionesApi.reabrir(periodo), 'No se pudo reabrir el periodo.'),
+    reabrir: (motivo: string, confirmacion: string) =>
+      escribir(() => comisionesApi.reabrir(periodo, motivo, confirmacion), 'No se pudo reabrir el periodo.'),
     decidir: (ordenes: string[], decision: '' | DecisionRevision) =>
       escribir(
         () => comisionesApi.guardarRevision({ periodo, ordenes, decision }),
