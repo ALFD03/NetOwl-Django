@@ -29,3 +29,8 @@ def vite_dev_server(request):
     en DEBUG por compatibilidad.
     """
     return {"vite_dev_server": settings.USE_VITE_DEV_SERVER}
+
+
+def csp_nonce(request):
+    """El nonce de la peticion para los `<script>` en linea (ver `CSPMiddleware`)."""
+    return {"csp_nonce": getattr(request, "csp_nonce", "")}

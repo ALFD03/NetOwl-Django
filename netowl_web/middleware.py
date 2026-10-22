@@ -3,8 +3,10 @@
 Uno corta las peticiones anonimas que intentan enviar algo mas que el
 formulario de entrada; otro traduce el corte por exceso de peticiones a una
 respuesta que el cliente sabe leer; el ultimo publica en React el usuario y sus
-permisos.
+permisos. `CSPMiddleware` pone la cabecera Content-Security-Policy.
 """
+
+import secrets
 
 import inertia
 from django.conf import settings
@@ -129,3 +131,25 @@ class InertiaShareMiddleware:
                 }
             )
         return self.get_response(request)
+
+class CSPMiddleware:
+    """Pone la cabecera Content-Security-Policy de `settings.CSP_POLITICA`.
+
+    Cada peticion recibe un nonce nuevo (`request.csp_nonce`); la plantilla lo
+    pone en sus `<script>` en linea (ver `context_processors.csp_nonce`) y la
+    cabecera solo autoriza los que lo llevan. Una respuesta que ya trae su
+    propia cabecera la conserva.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self.politica = "; ".join(
+            f"{directiva} {' '.join(fuentes)}" for directiva, fuentes in settings.CSP_POLITICA.items()
+        )
+
+    def __call__(self, request):
+        request.csp_nonce = secrets.token_urlsafe(16)
+        response = self.get_response(request)
+        if "Content-Security-Policy" not in response.headers:
+            response.headers["Content-Security-Policy"] = self.politica.replace("{nonce}", request.csp_nonce)
+        return response

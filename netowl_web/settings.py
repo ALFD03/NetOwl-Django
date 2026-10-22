@@ -18,7 +18,6 @@ import re
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
-from django.utils.csp import CSP
 
 from core.vault import get_config
 
@@ -178,7 +177,7 @@ INSTALLED_APPS = [
 # Cadena de middleware ejecutado en cada petición/respuesta
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",              # Seguridad (HSTS, etc.)
-    "django.middleware.csp.ContentSecurityPolicyMiddleware",      # Cabecera CSP (ver SECURE_CSP)
+    "netowl_web.middleware.CSPMiddleware",                        # Cabecera CSP (ver CSP_POLITICA)
     "whitenoise.middleware.WhiteNoiseMiddleware",                 # Servir estáticos en producción
     "django.contrib.sessions.middleware.SessionMiddleware",       # Manejo de sesiones
     "django.middleware.common.CommonMiddleware",                  # Varios (URL slashes, etc.)
@@ -214,18 +213,22 @@ USE_VITE_DEV_SERVER = os.getenv("VITE_DEV_SERVER", "").lower() in {"1", "true", 
 # Vite los inyecta en desarrollo; un estilo no ejecuta codigo.
 #
 # En desarrollo se anaden el servidor de Vite y su websocket de recarga.
+#
+# La aplica `netowl_web.middleware.CSPMiddleware`, no la CSP nativa de Django:
+# esa existe desde Django 6 y el contenedor corre 5.2 (ver requirements.txt).
+# `{nonce}` lo sustituye el middleware en cada peticion.
 _VITE = ["http://localhost:5173"] if USE_VITE_DEV_SERVER else []
-SECURE_CSP = {
-    "default-src": [CSP.SELF],
-    "script-src": [CSP.SELF, CSP.NONCE, *_VITE],
-    "style-src": [CSP.SELF, CSP.UNSAFE_INLINE, "https://fonts.googleapis.com", *_VITE],
-    "font-src": [CSP.SELF, "https://fonts.gstatic.com", "data:"],
-    "img-src": [CSP.SELF, "data:", "blob:"],
-    "connect-src": [CSP.SELF, *_VITE, *(["ws://localhost:5173"] if _VITE else [])],
-    "object-src": [CSP.NONE],
-    "base-uri": [CSP.SELF],
-    "form-action": [CSP.SELF],
-    "frame-ancestors": [CSP.NONE],
+CSP_POLITICA = {
+    "default-src": ["'self'"],
+    "script-src": ["'self'", "'nonce-{nonce}'", *_VITE],
+    "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", *_VITE],
+    "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+    "img-src": ["'self'", "data:", "blob:"],
+    "connect-src": ["'self'", *_VITE, *(["ws://localhost:5173"] if _VITE else [])],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+    "frame-ancestors": ["'none'"],
 }
 # Django compara INTERNAL_IPS contra REMOTE_ADDR, asi que solo admite direcciones
 # IP: los hostnames que habia aqui nunca llegaron a coincidir. Esta lista decide
@@ -248,7 +251,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "netowl_web.context_processors.csrf_cookie_name",
                 "netowl_web.context_processors.vite_dev_server",
-                "django.template.context_processors.csp",  # `csp_nonce` para los <script> de app.html
+                "netowl_web.context_processors.csp_nonce",  # el nonce de los <script> de app.html
             ],
         },
     },
@@ -389,6 +392,9 @@ RATELIMIT_IP_META_KEY = "netowl_web.ratelimit.ip_cliente"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Logging de requests ---
+# La carpeta no se versiona: se crea al arrancar si no existe (el contenedor ya la
+# trae de la imagen). Sin ella cada linea de log fallaria al abrir el archivo.
+(BASE_DIR / "logs").mkdir(exist_ok=True)
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
