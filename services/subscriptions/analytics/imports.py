@@ -341,10 +341,10 @@ def import_subscriptions_csv(csv_path: str) -> int:
                         schema_table=sql.Identifier(DB_SCHEMA, t_name)
                     )
                 )
-            conn.commit()
-
-    db_tool.copy_dataframe(df_local, TableNames.SUBSCRIPTIONS_B)
-    db_tool.copy_dataframe(df_consolidated, TableNames.SUBSCRIPTIONS)
+                # En la misma transaccion que el TRUNCATE: si la carga falla, la
+                # tabla anterior sigue intacta (ver `DBConnector.copiar`).
+                DBConnector.copiar(cur, d_frame, t_name)
+        conn.commit()
 
     return len(df_consolidated)
 
@@ -403,8 +403,8 @@ def import_logs_csv(csv_path: str) -> int:
                     )
                 )
             )
+            DBConnector.copiar(cur, df_logs, TableNames.SUBSCRIPTIONS_LOGS)
         conn.commit()
-    db_tool.copy_dataframe(df_logs, TableNames.SUBSCRIPTIONS_LOGS)
 
     return len(df_logs)
 

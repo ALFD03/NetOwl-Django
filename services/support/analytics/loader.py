@@ -134,16 +134,21 @@ def import_support_csv(csv_path: str) -> int:
 
     df = df[SUPPORT_TICKET_COLUMNS]
 
-    reset_support_tickets(db)
     # Las tablas de resultados no se tocan, pero se garantiza que existan: en una
     # instalación nueva la importación es lo primero que corre y el dashboard
     # puede consultarlas antes de que haya un análisis.
     ensure_support_schema(db)
-    db.copy_dataframe(df, TableNames.SUPPORT_TICKETS)
+    # DROP + CREATE + COPY en una sola transacción: un fallo a mitad de carga
+    # deja la tabla de tickets anterior, no una vacía.
+    with db.get_connection() as conn:
+        with conn.cursor() as cur:
+            reset_support_tickets(cur)
+            DBConnector.copiar(cur, df, TableNames.SUPPORT_TICKETS)
+        conn.commit()
     return len(df)
 
 
-def reset_support_tickets(db: DBConnector) -> None:
+def reset_support_tickets(cur) -> None:
     """
     Deja `support_tickets` vacía y con la forma actual, sin tocar lo calculado.
 
@@ -181,11 +186,10 @@ def reset_support_tickets(db: DBConnector) -> None:
         f"CREATE INDEX idx_support_tickets_cierre ON {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}(ultima_actualizacion_etapa);",
     ]
 
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            for stmt in statements:
-                cur.execute(stmt)
-        conn.commit()
+    # Con el cursor de quien llama y sin confirmar: la importación confirma el
+    # vaciado junto con la carga (ver `import_support_csv`).
+    for stmt in statements:
+        cur.execute(stmt)
 
 
 def ensure_support_schema(db: DBConnector) -> None:

@@ -11,6 +11,7 @@ conservarse.
 """
 
 import logging
+from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -41,7 +42,7 @@ from services.support.analytics import import_support_csv
 from services.support.analytics.config import REQUIRED_SUPPORT_HEADERS
 
 from .history import register_import_log
-from .jobs import cancelar_job, job_en_curso, jobs_abiertos, lanzar_analisis
+from .jobs import bloqueo_modulos, cancelar_job, job_en_curso, jobs_abiertos, lanzar_analisis
 from .models import AnalysisJob, ImportActionLog
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,46 @@ logger = logging.getLogger(__name__)
 TEMPLATE_PREFIX = "imports/"
 
 ERROR_GENERICO = "Error interno del servidor. Consulte el registro de la aplicación."
+
+
+# Los analisis que leen lo que reemplaza cada importacion. Importar mientras uno
+# de ellos calcula le cambiaria los datos a mitad de camino; ver `bloqueo_modulos`.
+ANALISIS_DE_SUSCRIPCIONES = ('subs_analysis', 'subs_lifetime')
+ANALISIS_DE_CRM = ('crm_analysis',)
+ANALISIS_DE_SOPORTE = ('support_analysis',)
+
+ETIQUETAS_ANALISIS = {
+    'subs_analysis': 'churn',
+    'subs_lifetime': 'ciclo de vida',
+    'crm_analysis': 'CRM',
+    'support_analysis': 'soporte',
+}
+
+
+def sin_analisis_en_curso(*modulos):
+    """Ejecuta la importacion con el turno de los analisis que leen sus tablas.
+
+    Si alguno esta calculando (o hay otra importacion de lo mismo en marcha)
+    responde 409 sin tocar nada: el usuario reintenta cuando termine, que es
+    mejor que un analisis con la mitad de los datos de un export y la mitad
+    del siguiente.
+    """
+    def decorador(vista):
+        @wraps(vista)
+        def envuelta(request, *args, **kwargs):
+            with bloqueo_modulos(modulos) as (turno, ocupado):
+                if turno is None:
+                    return JsonResponse({
+                        "status": "error",
+                        "message": (
+                            f"Hay un análisis de {ETIQUETAS_ANALISIS.get(ocupado, ocupado)} en curso "
+                            "(o una importación de los mismos datos). Espera a que termine e "
+                            "inténtalo de nuevo: importar ahora le cambiaría los datos a mitad de cálculo."
+                        ),
+                    }, status=409)
+                return vista(request, *args, **kwargs)
+        return envuelta
+    return decorador
 
 
 # Pestanas del modulo en el orden en que aparecen en la cabecera, con el permiso
@@ -134,6 +175,7 @@ def api_history_list(request):
 @permission_required('can_import_subs', 'can_import_data')
 @ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
+@sin_analisis_en_curso(*ANALISIS_DE_SUSCRIPCIONES)
 def api_import_subscriptions(request):
     """Importa el export de suscripciones.
 
@@ -183,6 +225,7 @@ def api_import_subscriptions(request):
 @permission_required('can_import_subs', 'can_import_data')
 @ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
+@sin_analisis_en_curso(*ANALISIS_DE_SUSCRIPCIONES)
 def api_import_gratis(request):
     """Importa el export de planes gratuitos y detecta desde cuando lo son."""
     file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
@@ -209,6 +252,7 @@ def api_import_gratis(request):
 @permission_required('can_import_subs', 'can_import_data')
 @ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
+@sin_analisis_en_curso(*ANALISIS_DE_SUSCRIPCIONES)
 def api_import_facturas(request):
     """Importa el export global de facturas de suscripciones (lo usa Comisiones).
 
@@ -242,6 +286,7 @@ def api_import_facturas(request):
 @permission_required('can_import_subs', 'can_import_data')
 @ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
+@sin_analisis_en_curso(*ANALISIS_DE_SUSCRIPCIONES)
 def api_import_logs(request):
     """Importa el export de logs de suscripciones."""
     file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
@@ -268,6 +313,7 @@ def api_import_logs(request):
 @permission_required('can_import_crm', 'can_import_data')
 @ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
+@sin_analisis_en_curso(*ANALISIS_DE_CRM)
 def api_import_crm(request):
     """Importa el export de CRM, que se desdobla en oportunidades y movimientos."""
     file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
@@ -294,6 +340,7 @@ def api_import_crm(request):
 @permission_required('can_import_support', 'can_import_data')
 @ratelimit(key='ip', rate='5/m', block=True)
 @require_POST
+@sin_analisis_en_curso(*ANALISIS_DE_SOPORTE)
 def api_import_support(request):
     """Importa el export de tickets de soporte."""
     file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"

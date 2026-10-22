@@ -107,6 +107,36 @@ def bloqueo_modulo(module: str):
             cerrojo.release()
 
 
+@contextlib.contextmanager
+def bloqueo_modulos(modulos: tuple[str, ...]):
+    """El turno de escritura de varios modulos a la vez, o ninguno.
+
+    Lo toman las importaciones: reemplazar `subscriptions` mientras el analisis
+    de churn la esta leyendo le cambia los datos a mitad de calculo (lee las
+    suscripciones de un export y los logs del siguiente). Con el turno de los
+    analisis que leen esas tablas, la importacion espera a que no haya ninguno
+    en curso, y un analisis encolado espera a que termine la importacion (su
+    tarea reintenta, ver `ejecutar_analisis`).
+
+    Todo o nada: si alguno esta ocupado se sueltan los ya tomados y se cede
+    `None`, igual que `bloqueo_modulo`. Se cede el modulo ocupado en
+    `ocupado` para poder decir cual.
+    """
+    tomados = []
+    try:
+        for modulo in modulos:
+            with contextlib.ExitStack() as pila:
+                turno = pila.enter_context(bloqueo_modulo(modulo))
+                if turno is None:
+                    yield None, modulo
+                    return
+                tomados.append(pila.pop_all())
+        yield True, None
+    finally:
+        for pila in reversed(tomados):
+            pila.close()
+
+
 def jobs_abiertos() -> list[AnalysisJob]:
     """Todas las ejecuciones vivas, en el orden en que entraron a la cola.
 
