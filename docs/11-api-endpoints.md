@@ -32,17 +32,26 @@ Los límites de peticiones son por IP y devuelven **429** con un mensaje legible
 | GET/POST | `/auth/login/` | `login_view` | — | `@ensure_csrf_cookie`. Acepta JSON y formulario. Sin usuarios, redirige a `setup` |
 | GET | `/auth/logout/` | `logout_view` | — | |
 | GET/POST | `/auth/setup/` | `setup_view` | — | Solo mientras no exista ningún usuario. Contraseña ≥ 8 caracteres |
-| GET | `/auth/users/` | `user_management_view` | `can_manage_users` | Página `Config/Management` |
-| POST | `/auth/api/users/create/` | `api_create_user` | `can_manage_users` | Body: `username`, `password`, `role`, `group_id`, `permissions` |
-| POST | `/auth/api/users/update-role/` | `api_update_user_role` | `can_manage_users` | |
-| POST | `/auth/api/users/update-permissions/` | `api_update_user_permissions` | `can_manage_users` | **No puedes modificar tus propios permisos** salvo superusuario |
-| POST | `/auth/api/users/delete/` | `api_delete_user` | `can_manage_users` | **No puedes borrar tu propia cuenta** |
-| POST | `/auth/api/users/change-password/` | `api_admin_change_password` | `can_manage_users` | ≥ 8 caracteres |
-| POST | `/auth/api/groups/save/` | `api_save_permission_group` | `can_manage_users` | Al guardar, **resincroniza a todos los miembros** |
-| POST | `/auth/api/groups/delete/` | `api_delete_permission_group` | `can_manage_users` | |
-| POST | `/auth/api/users/assign-group/` | `api_assign_user_group` | `can_manage_users` | `group_id` vacío desvincula |
+| GET | `/auth/users/` | `user_management_view` | `can_view_users` | Página `Config/Management` |
+| POST | `/auth/api/users/create/` | `api_create_user` | `can_create_users` | Body: `username`, `password`, `role`, `group_id`, `permissions`. **403** si concede algo que quien crea no tiene |
+| POST | `/auth/api/users/update-role/` | `api_update_user_role` | `can_edit_user_permissions` | |
+| POST | `/auth/api/users/update-permissions/` | `api_update_user_permissions` | `can_edit_user_permissions` | **No puedes modificar tus propios permisos** ni los de una cuenta con más que tú; no concedes lo que no tienes |
+| POST | `/auth/api/users/delete/` | `api_delete_user` | `can_delete_users` | **No puedes borrar tu propia cuenta** |
+| POST | `/auth/api/users/change-password/` | `api_admin_change_password` | `can_change_passwords` | ≥ 8 caracteres |
+| POST | `/auth/api/groups/save/` | `api_save_permission_group` | `can_manage_groups` | Al guardar, **resincroniza a todos los miembros** |
+| POST | `/auth/api/groups/delete/` | `api_delete_permission_group` | `can_manage_groups` | |
+| POST | `/auth/api/users/assign-group/` | `api_assign_user_group` | `can_edit_user_permissions` | `group_id` vacío desvincula |
 
 Respuesta uniforme: `{"status": "success"|"error", "message": "..."}`.
+
+---
+
+## `/auditoria/` — `services.auditoria`
+
+| Método | Ruta | Vista | Permiso | Notas |
+|---|---|---|---|---|
+| GET | `/auditoria/` | `registro_view` | `can_view_auditoria` | Página `Auditoria/Registro`. Filtros `desde`, `hasta` (30 días por defecto), `modulo`, `usuario`, `resultado`, `q`; envía los 1000 más recientes |
+| GET | `/auditoria/api/registro/<id>/` | `api_registro_detalle` | `can_view_auditoria` | Un registro con su `detalle` |
 
 ---
 
@@ -124,7 +133,8 @@ es de esta app.
 | GET | `api/ventas/?periodo=` | `can_view_comisiones` | — | `{ventas}`: el detalle venta a venta (congelado si el periodo está cerrado). **409** si faltan columnas |
 | POST | `api/periodo/guardar/` | `can_manage_comisiones` | 30/m | `{periodo, inicio_promo, inicio?, corte_adelantos?}`. `inicio` solo si el mes anterior no tiene periodo; `corte_adelantos`, un día del mes siguiente (vacío: el habitual). **409** si el periodo o el siguiente están cerrados |
 | POST | `api/periodo/cerrar/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** con lo que falta si queda algo pendiente |
-| POST | `api/periodo/reabrir/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** si el siguiente está cerrado |
+| POST | `api/periodo/reabrir/` | `can_reopen_comisiones` | 10/m | `{periodo, motivo, confirmacion}`: motivo ≥ 10 caracteres y `confirmacion` = el periodo. Archiva el cierre antes de borrarlo. **409** si el siguiente está cerrado o falta el motivo |
+| GET | `api/archivo/<id>/` | `can_view_comisiones` | — | La copia completa de un cierre archivado |
 | POST | `api/revision/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, orden | ordenes[], decision: contar|no_contar|ya_pagada|normal|'', nota?}`. Vacía deshace. `ya_pagada`/`normal` solo si el mes anterior no tiene periodo (**400** si lo tiene). Hasta 5 000 órdenes por petición |
 | POST | `api/manual/agregar/` | `can_manage_comisiones` | 30/m | `{periodo, ordenes[], nota}`, nota obligatoria. Todo o nada: **400** si alguna orden no está en suscripciones, ya estaba agregada o ya se pagó en otro periodo cerrado. Hasta 200 |
 | POST | `api/manual/quitar/` | `can_manage_comisiones` | 30/m | `{periodo, orden}` |

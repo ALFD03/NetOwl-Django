@@ -249,6 +249,14 @@ No se cierra con ventas en revisión sin decidir, supervisores o coordinadores
 de oficina sin cumplimiento, ni coordinadores de UN sin crecimiento conocido. Las
 ventas válidas de un periodo cerrado no vuelven a contar en ningún otro.
 Reabrir borra lo congelado y no se permite si el periodo siguiente está cerrado.
+Tiene permiso propio (`can_reopen_comisiones`), exige un motivo de al menos 10
+caracteres y el periodo escrito a mano, y **antes de borrar copia el cierre
+entero** —periodo, condiciones, resumen, cada venta y cada pago— en
+`ComisionCierreArchivado` (`comisiones_cierres_archivados`), con quién cerró,
+quién reabrió, cuándo y por qué. Copia y borrado van en una transacción con la
+fila del periodo bloqueada. Cada reapertura deja una versión más; las versiones
+no se editan ni se borran (el modelo lo impide y la FK es `PROTECT`), y desde el
+paso de cierre se descarga cada una como el mismo Excel de la nómina.
 
 ## Bolívares: la tasa CONATEL del mes siguiente
 

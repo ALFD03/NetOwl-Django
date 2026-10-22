@@ -2,7 +2,7 @@
 
 import { CHART_CHROME, CHART_PALETTE, SURFACE } from '@/shared/constants/theme';
 import type { ChartData, ChartOptions } from 'chart.js';
-import type { PeriodoData, ZonaData } from '@/features/subscriptions/types';
+import type { PeriodoData } from '@/features/subscriptions/types';
 import type { Context } from 'chartjs-plugin-datalabels';
 import { getHorizontalBarOptions, getLineOptions, horizontalBarOptions } from '@/shared/charts';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters/number';
@@ -128,17 +128,4 @@ export function buildBalanzaRecuperacionOptions(periodos: PeriodoData[]): ChartO
 
 export function buildZoneDonut(labels: string[], values: number[], raw: Array<{ label: string; original: number }>): ChartData<'doughnut'> & { _raw: typeof raw } {
   return { labels, datasets: [{ data: values, backgroundColor: CHART_PALETTE.slice(0, labels.length), borderWidth: 2, borderColor: SURFACE.secondary }], _raw: raw };
-}
-
-export function aggregateZones(zones: ZonaData[], mode: 'churn' | 'growth') {
-  const map: Record<string, { metric: number; activos: number; secondary: number; count: number }> = {};
-  zones.forEach((zone) => {
-    const key = zone.valor;
-    map[key] ??= { metric: 0, activos: 0, secondary: 0, count: 0 };
-    map[key].metric += Number(mode === 'churn' ? zone.churn_bruto_pct : zone.crecimiento || 0);
-    map[key].activos += Number(zone.activos_inicio || 0);
-    map[key].secondary += Number(mode === 'churn' ? zone.bajas : zone.nuevos);
-    map[key].count += 1;
-  });
-  return Object.entries(map).map(([zona, value]) => ({ zona, metric: value.metric / Math.max(value.count, 1), activos: value.activos / Math.max(value.count, 1), secondary: value.secondary, count: value.count }));
 }

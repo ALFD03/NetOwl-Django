@@ -13,16 +13,11 @@ import {
 } from '@/shared/utils/distribution';
 
 export {
-  RANKING_LIMIT,
-  groupMinorItems,
   toBarChartData,
   toDoughnutChartData,
 } from '@/shared/utils/distribution';
 
 export type { MetricWeightMode } from '@/shared/utils/distribution';
-
-export type AnalyticsDistributionItem = DistributionItem;
-export type ChartDistributionItem = DistributionItem;
 
 /**
  * Which way is "good" for a metric. Drives the accent of the readouts built on
@@ -54,7 +49,7 @@ export function getMetricDistribution(
   dimensions: DimensionVal[],
   globalData: Periodo,
   config: AnalyticsMetricConfig,
-): AnalyticsDistributionItem[] {
+): DistributionItem[] {
   if (config.mode === 'ranking') {
     return getRankingDistribution(dimensions, config.dimensionKey, config);
   }
@@ -74,7 +69,7 @@ export function getChartDistribution(
   dimensions: DimensionVal[],
   globalData: Periodo,
   metric: AnalyticsMetricConfig,
-): ChartDistributionItem[] {
+): DistributionItem[] {
   const distribution = getMetricDistribution(dimensions, globalData, metric);
 
   // Ranking carries no weights, so the "Otros < 1%" bucket has nothing to group

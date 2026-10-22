@@ -11,13 +11,8 @@ export type {
   CrmCierre,
   CrmDimensionRow,
   CrmDimensionValue,
-  CrmDimensionsResponse,
   CrmEfectividadRow,
   CrmHistoricoRow,
-  CrmMetricas,
-  CrmTiempoEtapaCombinado,
-  CrmTiempoEtapaDesenlace,
-  CrmTiempoEtapaPermanencia,
   CrmTiempoEtapaRow,
 } from '@/shared/types/crm';
 

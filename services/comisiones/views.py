@@ -23,6 +23,7 @@ from typing import Any
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
@@ -48,6 +49,7 @@ from services.comisiones.analytics.reglas import (
     validar_tramos_un,
 )
 from services.comisiones.models import (
+    ComisionCierreArchivado,
     ComisionPeriodo,
     ComisionVenta,
     CondicionesComision,
@@ -64,6 +66,8 @@ logger = logging.getLogger(__name__)
 
 PERMISO_VER = "can_view_comisiones"
 PERMISO_GESTION = "can_manage_comisiones"
+# Reabrir deshace una nomina cerrada: va aparte de la gestion (ver config/models.py).
+PERMISO_REABRIR = "can_reopen_comisiones"
 
 _MES = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -183,6 +187,9 @@ def informe_view(request):
                         else condiciones_vigentes()),
         "cargos": [{"value": v, "label": t} for v, t in CARGO_CHOICES],
         "puedeGestionar": _puede(request, PERMISO_GESTION),
+        "puedeReabrir": _puede(request, PERMISO_REABRIR),
+        # Las versiones archivadas de sus cierres anteriores, sin la copia.
+        "archivos": [_archivo(a) for a in periodo.archivos.all()] if periodo is not None else [],
         "section": "informe",
     }))
 
@@ -464,21 +471,58 @@ def api_periodo_cerrar(request):
 
 
 @login_required
-@permission_required(PERMISO_GESTION)
+@permission_required(PERMISO_REABRIR)
 @ratelimit(key="ip", rate="10/m", block=True)
 @require_POST
 @_escritura
 def api_periodo_reabrir(request):
-    """Devuelve un periodo cerrado a borrador. **409** si el siguiente esta cerrado."""
+    """Devuelve un periodo cerrado a borrador, archivando antes su cierre.
+
+    Exige el `motivo` (queda en el archivo y en la auditoria) y la
+    `confirmacion`: el periodo escrito a mano, que tiene que coincidir. **409**
+    si el siguiente esta cerrado o falta el motivo.
+    """
     data = _cuerpo(request)
     clave = _mes(data.get("periodo"))
+    if str(data.get("confirmacion") or "").strip() != clave:
+        raise DatosInvalidos(f"Para reabrir, escribe el periodo exacto ({clave}) en la confirmación.")
     periodo = ComisionPeriodo.objects.filter(periodo=clave).first()
     if periodo is None:
         raise DatosInvalidos(f"El periodo {clave} no existe.")
     if not periodo.cerrado:
         return JsonResponse({"status": "success", "message": "El periodo ya estaba en borrador."})
-    reabrir_periodo(periodo)
-    return JsonResponse({"status": "success", "message": f"Periodo {clave} reabierto."})
+    archivo = reabrir_periodo(periodo, request.user, str(data.get("motivo") or ""))
+    return JsonResponse({
+        "status": "success",
+        "message": f"Periodo {clave} reabierto. El cierre anterior quedó archivado como versión {archivo.version}.",
+        "archivo": _archivo(archivo),
+    })
+
+
+def _archivo(a: ComisionCierreArchivado) -> dict[str, Any]:
+    """Un cierre archivado para la lista, sin la copia."""
+    return {
+        "id": a.id,
+        "version": a.version,
+        "cerrado_por": a.cerrado_por,
+        "cerrado_en": timezone.localtime(a.cerrado_en).strftime("%Y-%m-%d %H:%M") if a.cerrado_en else None,
+        "reabierto_por": a.reabierto_por_nombre,
+        "reabierto_en": timezone.localtime(a.reabierto_en).strftime("%Y-%m-%d %H:%M"),
+        "motivo": a.motivo,
+        "total_neto": float(a.total_neto),
+        "pagos": a.pagos,
+        "ventas": a.ventas,
+    }
+
+
+@login_required
+@permission_required(PERMISO_VER)
+def api_archivo(request, archivo_id: int):
+    """La copia completa de un cierre archivado, para descargarla."""
+    archivo = ComisionCierreArchivado.objects.select_related("periodo").filter(pk=archivo_id).first()
+    if archivo is None:
+        return JsonResponse({"status": "error", "message": "Cierre archivado no encontrado."}, status=404)
+    return JsonResponse(clean_json_nullable({**_archivo(archivo), "periodo": archivo.periodo.periodo, "copia": archivo.copia}))
 
 
 # --- Configuracion: los supervisores de cada UN --------------------------------------------

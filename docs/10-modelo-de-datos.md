@@ -7,7 +7,7 @@ Una única base de datos PostgreSQL, con **un esquema por entorno**
 |---|---|---|
 | **ORM de Django** | Migraciones (`migrate`, por esquema) | `DB_SCHEMA` |
 | **DDL explícito** | `ensure_*_schema` / `_ensure_tables_exist` en el código analítico | `DB_SCHEMA` |
-| **Dinámicas** | `DBConnector.save_historico` / `copy_dataframe` sobre la marcha | `DB_SCHEMA` |
+| **Dinámicas** | `DBConnector.save_historico` / `copiar` sobre la marcha | `DB_SCHEMA` |
 
 > **Las tablas dinámicas tienen todas sus columnas de tipo `text`.** Los lectores
 > convierten explícitamente (`int(row.get(...) or 0)`). Una métrica nueva
@@ -52,6 +52,8 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `comisiones_indicadores` | `IndicadorComision` | Por periodo y persona: `cumplimiento_pct` propio (supervisor, coord. de oficina; sustituye al general) y `crecimiento_pct` a mano (coord. de UN) |
 | `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`). Incluye las `diferida` (días promocionales sin adelanto), solo informativas |
 | `comisiones_pagos` | `ComisionPago` | Lo que cobró cada persona en un periodo cerrado, con nombre y cargo copiados |
+| `comisiones_cierres_archivados` | `ComisionCierreArchivado` | La copia de un cierre, guardada al reabrir el periodo: quién cerró y reabrió, cuándo, el motivo y en `copia` el cierre entero. Única por `(periodo, version)`; solo se añade |
+| `auditoria_registro` | `RegistroAuditoria` | Quién hizo qué: cada escritura, los accesos (y los fallidos o bloqueados), algunas lecturas sensibles y el desenlace de cada análisis. Con usuario, IP, módulo, acción, resultado y `detalle` (lo enviado, sin contraseñas ni tokens). Solo se añade. Índices `ix_auditoria_modulo_fecha` e `ix_auditoria_usuario_fecha` |
 | `django_migrations` | Django | Propia de cada esquema |
 
 ### Sesiones e importaciones
@@ -59,7 +61,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | Tabla | Modelo | Contenido |
 |---|---|---|
 | `django_session` | `SesionEntorno` (`managed=False`) | Sesiones del entorno. La crea la migración de `django.contrib.sessions` |
-| `import_action_logs` | `ImportActionLog` | Historial permanente de importaciones y cálculos |
+| `import_action_logs` | `ImportActionLog` | Historial permanente de importaciones y cálculos (con su consola; la auditoría solo dice quién y cómo acabó) |
 | `analysis_jobs` | `AnalysisJob` | Estado vivo de cada ejecución. Índice `analysis_jobs_mod_est_idx` sobre `(module, status)` |
 
 ---

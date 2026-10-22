@@ -67,14 +67,3 @@ class Periodo:
     def periodo_mes(self) -> str:
         """Mes al que pertenece el corte, en formato YYYY-MM."""
         return self.fecha_inicio.strftime("%Y-%m")
-
-    def es_cierre_oficial(self) -> bool:
-        """True si el corte cae en el último día del mes del periodo."""
-        last_day = calendar.monthrange(
-            self.fecha_inicio.year, self.fecha_inicio.month
-        )[1]
-        return (
-            self.fecha_final.day == last_day
-            and self.fecha_final.month == self.fecha_inicio.month
-            and self.fecha_final.year == self.fecha_inicio.year
-        )

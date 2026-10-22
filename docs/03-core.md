@@ -79,7 +79,6 @@ para hablar de un mes o de un corte dentro de él.
 | `label()` | `"2025-03-01 al 2025-03-31"` — **es la clave `periodo_reporte` de casi todas las tablas** |
 | `fecha_corte()` | `"YYYY-MM-DD"` del día final |
 | `periodo_mes()` | `"YYYY-MM"` del mes de inicio |
-| `es_cierre_oficial()` | `True` si el corte cae en el último día del mes |
 
 ---
 
@@ -98,7 +97,7 @@ usan.
 | `tabla_existe(tabla)` | Consulta `information_schema`. Necesario porque las tablas de análisis las crea `save_historico` al vuelo: preguntar por una que no existe aborta la transacción y sube como 500 |
 | `save_historico(df, tabla, periodo, metodo=None)` | El escritor principal (ver abajo) |
 | `save_day_metrics(periodo, dias, table=…, escalares=None)` | Una fila por mes en la tabla de métricas diarias del módulo |
-| `copy_dataframe(df, tabla)` | `COPY` directo, sin crear ni truncar |
+| `copiar(cur, df, tabla)` | `COPY` en el cursor recibido, sin confirmar: va en la misma transacción que el vaciado de la tabla |
 
 ### `save_historico` paso a paso
 
@@ -219,7 +218,7 @@ En su lugar se guarda **una sola instantánea coherente de todos los catálogos*
 | Función | Devuelve |
 |---|---|
 | `planes()` / `zonas()` | Listas de diccionarios con las claves JSON |
-| `planes_disponibles()` / `zonas_disponibles()` | Distinguen «vacío» de «no configurado» |
+| `zonas_disponibles()` | Distingue «vacío» de «no configurado» |
 | `plan_names()` | Qué planes existen. **No incluye `Cancelado`** |
 | `nombres_reconocidos()` | `plan_names()` + `Cancelado`. Responde «¿esta línea del export es un plan?» |
 | `zonas_por_nombre()` | Zonas indexadas por nombre en minúsculas |

@@ -199,26 +199,29 @@ def import_crm_csv(csv_path: str) -> tuple[int, int]:
     
     _create_tables_if_not_exist(db)
     
+    # Vaciado y carga de todos los trozos en una sola transaccion: antes cada
+    # trozo se confirmaba por su cuenta despues de un TRUNCATE ya confirmado, y
+    # un fallo a mitad del fichero dejaba el CRM con la mitad de las
+    # oportunidades. Ahora un fallo deja las tablas como estaban.
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(f"TRUNCATE TABLE {DB_SCHEMA}.{TableNames.CRM_CLIENTS}, {DB_SCHEMA}.{TableNames.CRM_LOGS} CASCADE")
+
+            last_client_id = None
+            for chunk in iter_odoo_chunks(csv_path):
+                df_clients, df_logs, last_client_id = parse_odoo_chunk(chunk, prev_client_id=last_client_id)
+
+                if not df_clients.empty:
+                    DBConnector.copiar(cur, df_clients, TableNames.CRM_CLIENTS)
+                    total_clients += len(df_clients)
+
+                if not df_logs.empty:
+                    df_logs = df_logs[df_logs["client_id"].notna() & (df_logs["client_id"].astype(str).str.strip() != "")]
+                    if not df_logs.empty:
+                        DBConnector.copiar(cur, df_logs, TableNames.CRM_LOGS)
+                        total_logs += len(df_logs)
         conn.commit()
-    
-    last_client_id = None
-    
-    for chunk in iter_odoo_chunks(csv_path):
-        df_clients, df_logs, last_client_id = parse_odoo_chunk(chunk, prev_client_id=last_client_id)
-        
-        if not df_clients.empty:
-            db.copy_dataframe(df_clients, TableNames.CRM_CLIENTS)
-            total_clients += len(df_clients)
-        
-        if not df_logs.empty:
-            df_logs = df_logs[df_logs["client_id"].notna() & (df_logs["client_id"].astype(str).str.strip() != "")]
-            if not df_logs.empty:
-                db.copy_dataframe(df_logs, TableNames.CRM_LOGS)
-                total_logs += len(df_logs)
-    
+
     return total_clients, total_logs
 
 

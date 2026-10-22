@@ -20,14 +20,18 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
+from django_ratelimit.core import get_usage
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
-from netowl_web.ratelimit import ip_cliente
+from netowl_web.ratelimit import ip_cliente, usuario_login
+from services.auditoria.models import RegistroAuditoria
+from services.auditoria.registro import registrar
 
 from .decorators import permission_required, resolve_landing_url
 from .models import PERMISSION_FIELDS, PermissionGroup, Profile
@@ -63,15 +67,84 @@ def validar_clave(clave: str, usuario=None) -> str | None:
     return None
 
 
-def puede_actuar_sobre(actor, objetivo) -> bool:
-    """Si `actor` tiene rango para modificar la cuenta `objetivo`.
+def matriz_de(objetivo) -> dict[str, bool]:
+    """La matriz guardada en un Profile o PermissionGroup, campo a campo."""
+    return {field: bool(getattr(objetivo, field, False)) for field in PERMISSION_FIELDS}
 
-    `can_manage_users` no puede alcanzar a un superusuario: quien lo tuviera
-    podia cambiarle la contrasena y entrar como el, y el superusuario se salta
-    toda la matriz de permisos (ver `decorators._authorize`). Es la escalada
-    de privilegios mas directa que tenia la aplicacion.
+
+def matriz_efectiva(usuario) -> dict[str, bool]:
+    """Lo que de verdad rige para una cuenta.
+
+    Todo si es superusuario; la del grupo si pertenece a uno (el perfil le
+    delega cada comprobacion); la suya si no.
     """
-    return actor.is_superuser or not objetivo.is_superuser
+    if usuario.is_superuser:
+        return {field: True for field in PERMISSION_FIELDS}
+    profile = getattr(usuario, 'profile', None)
+    if profile is None:
+        return {field: False for field in PERMISSION_FIELDS}
+    return {field: bool(profile.has_permission(field)) for field in PERMISSION_FIELDS}
+
+
+def permisos_fuera_de_alcance(actor, nueva: dict[str, bool], previa: dict[str, bool] | None = None) -> list[str]:
+    """Los permisos que `nueva` concede, que `previa` no tenia y que `actor` no tiene.
+
+    Es el techo de la administracion de cuentas: nadie concede lo que no tiene.
+    Sin el, quien solo podia crear cuentas se creaba una con la matriz completa,
+    entraba con ella y tenia todo; y quien podia editar grupos marcaba todo en el
+    suyo. Quitar si se puede siempre: reducir permisos nunca escala.
+    """
+    if actor.is_superuser:
+        return []
+    propios = matriz_efectiva(actor)
+    previa = previa or {}
+    return [
+        field for field in PERMISSION_FIELDS
+        if nueva.get(field) and not previa.get(field) and not propios[field]
+    ]
+
+
+def respuesta_fuera_de_alcance(campos: list[str]) -> JsonResponse:
+    """403 que nombra los permisos que se intentaron conceder sin tenerlos."""
+    return JsonResponse(
+        {
+            "status": "error",
+            "message": "No puedes conceder permisos que tú no tienes: " + ", ".join(campos) + ".",
+            "permisos": campos,
+        },
+        status=403,
+    )
+
+
+def puede_actuar_sobre(actor, objetivo) -> bool:
+    """Si `actor` tiene rango para tocar la cuenta `objetivo`.
+
+    Dos reglas. Un superusuario solo lo toca otro superusuario: quien tuviera
+    permiso de cambiar contrasenas podia cambiarle la suya y entrar como el, y
+    el superusuario se salta toda la matriz (ver `decorators._authorize`). Y,
+    por la misma razon, nadie toca una cuenta **con permisos que el no tiene**:
+    cambiarle la contrasena, editarla o borrarla seria hacerse con ellos o
+    quitarselos a alguien de mas rango.
+    """
+    if actor.is_superuser:
+        return True
+    if objetivo.is_superuser:
+        return False
+    propios = matriz_efectiva(actor)
+    return all(propios[field] for field, valor in matriz_efectiva(objetivo).items() if valor)
+
+
+def respuesta_sin_rango() -> JsonResponse:
+    return JsonResponse(
+        {
+            "status": "error",
+            "message": (
+                "No puedes modificar una cuenta con permisos que tú no tienes "
+                "(ni la de un superusuario)."
+            ),
+        },
+        status=403,
+    )
 
 
 def serialize_permissions(target):
@@ -85,8 +158,8 @@ def serialize_permissions(target):
     return {field: getattr(target, field) for field in PERMISSION_FIELDS}
 
 
-def apply_permissions(target, data):
-    """Aplica los permisos del payload sobre un Profile o PermissionGroup.
+def leer_matriz(data) -> dict[str, bool]:
+    """La matriz que viene en el payload.
 
     El cliente React los envia anidados en la clave "permissions"; se admiten
     tambien en la raiz del payload por compatibilidad con llamadas antiguas.
@@ -99,51 +172,101 @@ def apply_permissions(target, data):
     nested = data.get("permissions") or {}
     if not isinstance(nested, dict):
         nested = {}
-    for field in PERMISSION_FIELDS:
-        if field in nested:
-            setattr(target, field, bool(nested[field]))
-        else:
-            setattr(target, field, bool(data.get(field, False)))
+    return {
+        field: bool(nested[field]) if field in nested else bool(data.get(field, False))
+        for field in PERMISSION_FIELDS
+    }
+
+
+def apply_permissions(target, matriz: dict[str, bool]):
+    """Escribe la matriz sobre un Profile o PermissionGroup (sin guardar)."""
+    for field, valor in matriz.items():
+        setattr(target, field, valor)
+
+
+def leer_id(valor) -> int | None:
+    """Un id entero del payload, o None si no lo es."""
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        return None
+
+
+# Los dos limites del formulario de entrada. Solo cuentan los intentos
+# **fallidos**: con el decorador contaban todos, asi que entrar y salir unas
+# cuantas veces seguidas bloqueaba a quien lo hacia.
+LIMITES_LOGIN = (
+    # Por cuenta: corta el ataque dirigido a un usuario concreto.
+    {"group": "login-usuario", "key": usuario_login, "rate": "5/5m"},
+    # Por IP: corta el rociado de una contrasena comun contra muchas cuentas.
+    {"group": "login-ip", "key": "ip", "rate": "20/5m"},
+)
+
+
+def login_bloqueado(request) -> bool:
+    """Si alguno de los dos limites ya esta agotado, sin contar este intento."""
+    for limite in LIMITES_LOGIN:
+        uso = get_usage(request, method="POST", increment=False, **limite)
+        if uso is not None and (uso["should_limit"] or uso["count"] >= uso["limit"]):
+            return True
+    return False
+
+
+def contar_fallo_login(request) -> None:
+    """Suma el intento fallido a los dos limites."""
+    for limite in LIMITES_LOGIN:
+        get_usage(request, method="POST", increment=True, **limite)
+
+
+def credenciales_del_cuerpo(request) -> tuple[str, str]:
+    """Usuario y contrasena, vengan en JSON (Inertia) o en formulario.
+
+    La contrasena **no** se recorta: un espacio al principio o al final es
+    parte de ella. Antes se aplicaba `.strip()` y una contrasena con espacios
+    se aceptaba tambien sin ellos.
+    """
+    if request.content_type == "application/json":
+        try:
+            body = json.loads(request.body)
+        except (ValueError, UnicodeDecodeError):
+            return "", ""
+        if not isinstance(body, dict):
+            return "", ""
+        return str(body.get("username") or "").strip(), str(body.get("password") or "")
+    return request.POST.get("username", "").strip(), request.POST.get("password", "")
 
 
 @ensure_csrf_cookie
-@ratelimit(key='post:username', rate='5/5m', method='POST', block=False)
-@ratelimit(key='ip', rate='20/5m', method='POST', block=False)
 def login_view(request):
     """Formulario de entrada. Acepta tanto JSON (React) como formulario.
 
-    Dos limites en vez de uno: por usuario, que es lo que corta el ataque
-    dirigido a una cuenta concreta, y por IP, que corta el rociado de una
-    contrasena comun contra muchos usuarios.
+    Dos limites (ver `LIMITES_LOGIN`): por cuenta y por IP, y solo cuentan los
+    fallos. No se usa el decorador `@ratelimit`: su `key='post:username'` leia
+    `request.POST`, vacio en las peticiones JSON de Inertia, y todos los
+    intentos de la empresa caian en el mismo cubo (ver `usuario_login`).
 
-    `block=False` es explicito y deliberado: el valor por defecto del decorador
-    es True, que lanza `Ratelimited` y el middleware lo convierte en un JSON
-    429 (ver netowl_web/middleware.py). Eso sirve para las APIs, pero aqui hay
-    una pagina que renderizar y el usuario se quedaria sin formulario y sin
-    explicacion. Con False el limite se consulta en `request.limited` y se
-    responde con el mismo formulario y un mensaje.
+    El cuerpo de una peticion anonima no puede pasar de unos pocos KB: lo corta
+    `LimiteCuerpoAnonimoMiddleware` antes de llegar aqui.
     """
     if request.user.is_authenticated:
         return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
 
     error_message = None
     if request.method == "POST":
-        # Soporta tanto payload JSON de Inertia/React como Form URL-Encoded
-        if request.content_type == "application/json":
-            try:
-                body = json.loads(request.body)
-                usr = body.get("username", "").strip()
-                pas = body.get("password", "").strip()
-            except json.JSONDecodeError:
-                usr, pas = "", ""
-        else:
-            usr = request.POST.get("username", "").strip()
-            pas = request.POST.get("password", "").strip()
+        usr, pas = credenciales_del_cuerpo(request)
 
-        if getattr(request, 'limited', False):
+        if login_bloqueado(request):
             logger.warning(
                 "Intentos de acceso bloqueados por limite: usuario=%r ip=%s",
                 usr, ip_cliente(request),
+            )
+            registrar(
+                request,
+                modulo="config",
+                accion="login_bloqueado",
+                descripcion="Intento de acceso rechazado por exceso de intentos fallidos.",
+                objeto=f"username={usr}"[:255] if usr else "",
+                resultado=RegistroAuditoria.LIMITADO,
             )
             error_message = (
                 "Demasiados intentos fallidos. Espere unos minutos antes de reintentar."
@@ -155,6 +278,7 @@ def login_view(request):
                 login(request, user)
                 return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
 
+            contar_fallo_login(request)
             # Sin esta linea un ataque de fuerza bruta no dejaba rastro en
             # ningun sitio: el limite lo corta, pero nadie se entera.
             logger.warning(
@@ -176,12 +300,17 @@ def logout_view(request):
     return redirect('config:login')
 
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_view_users')
 def user_management_view(request):
-    """Pantalla de administracion: usuarios, grupos y roles."""
+    """Pantalla de administracion: usuarios, grupos y roles.
+
+    Cada cuenta lleva `editable`: si quien mira tiene rango para tocarla (ver
+    `puede_actuar_sobre`). La interfaz esconde las acciones de las que no; el
+    servidor las rechaza igual.
+    """
     users = User.objects.all().select_related('profile', 'profile__group').order_by('username')
     groups = PermissionGroup.objects.all().order_by('name')
-    
+
     users_data = []
     for u in users:
         prof = getattr(u, 'profile', None)
@@ -194,8 +323,10 @@ def user_management_view(request):
             "group_id": prof.group_id if prof else None,
             "group_name": prof.group.name if (prof and prof.group) else None,
             "permissions": serialize_permissions(prof),
+            "editable": u.id != request.user.id and puede_actuar_sobre(request.user, u),
         })
 
+    mi_grupo = getattr(getattr(request.user, 'profile', None), 'group_id', None)
     groups_data = []
     for g in groups:
         groups_data.append({
@@ -204,156 +335,192 @@ def user_management_view(request):
             "description": g.description,
             "members_count": g.members.count(),
             "permissions": serialize_permissions(g),
+            # El grupo propio no se edita salvo siendo superusuario: seria
+            # concederse permisos a uno mismo.
+            "editable": request.user.is_superuser or g.id != mi_grupo,
         })
 
     return render_inertia(request, "Config/Management", {
         "users": users_data,
         "groups": groups_data,
         "roles": Profile.ROLE_CHOICES,
-        "section": "management"
+        "section": "management",
+        # Lo que puede conceder quien mira: el editor apaga el resto.
+        "concedibles": matriz_efectiva(request.user),
     })
 
+
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_create_users')
 @ratelimit(key='ip', rate='10/m', block=True)
 @require_POST
 def api_create_user(request):
     """Crea una cuenta.
 
     Con `group_id` hereda la matriz del grupo; sin el, la que venga en el cuerpo.
+    En los dos casos, solo con permisos que quien la crea ya tiene.
     """
     try:
         data = json.loads(request.body)
-        usr = data.get("username", "").strip()
-        pas = data.get("password", "").strip()
-        rol = data.get("role", "viewer").strip()
+        usr = str(data.get("username") or "").strip()
+        pas = str(data.get("password") or "")
+        rol = str(data.get("role") or "viewer").strip()
         group_id = data.get("group_id")
-        
+
         if not usr or not pas:
             return JsonResponse({"status": "error", "message": "Usuario y contraseña son requeridos."}, status=400)
+        if rol not in dict(Profile.ROLE_CHOICES):
+            return JsonResponse({"status": "error", "message": "Rol inválido."}, status=400)
         if User.objects.filter(username=usr).exists():
             return JsonResponse({"status": "error", "message": "El nombre de usuario ya existe."}, status=400)
+
+        grp = None
+        if group_id:
+            grp = PermissionGroup.objects.filter(pk=leer_id(group_id)).first()
+            if grp is None:
+                return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
+            matriz = matriz_de(grp)
+        else:
+            matriz = leer_matriz(data)
+        fuera = permisos_fuera_de_alcance(request.user, matriz)
+        if fuera:
+            return respuesta_fuera_de_alcance(fuera)
 
         motivo = validar_clave(pas, User(username=usr))
         if motivo:
             return JsonResponse({"status": "error", "message": motivo}, status=400)
 
-        user = User.objects.create_user(username=usr, password=pas)
-        profile = user.profile
-        profile.role = rol
-        
-        if group_id:
-            try:
-                grp = PermissionGroup.objects.get(pk=group_id)
-                profile.group = grp
-                profile.sync_permissions_from_group()
-            except PermissionGroup.DoesNotExist:
-                profile.group = None
-        else:
-            profile.group = None
-            apply_permissions(profile, data)
-
-        profile.save()
+        with transaction.atomic():
+            user = User.objects.create_user(username=usr, password=pas)
+            profile = user.profile
+            profile.role = rol
+            profile.group = grp
+            apply_permissions(profile, matriz)
+            profile.save()
         logger.info("Cuenta creada: %r por %r", usr, request.user.username)
         return JsonResponse({"status": "success", "message": f"Usuario '{usr}' creado con éxito."})
     except Exception:
         return error_interno("Error al crear la cuenta")
 
 
+def _cuenta_editable(request, uid) -> tuple[User | None, JsonResponse | None]:
+    """La cuenta `uid` si quien pide puede tocarla, o la respuesta de error.
+
+    Reune las tres comprobaciones que comparten todas las acciones sobre una
+    cuenta ajena: que el id sea valido, que exista y que haya rango.
+    """
+    uid = leer_id(uid)
+    if uid is None:
+        return None, JsonResponse({"status": "error", "message": "ID de usuario inválido."}, status=400)
+    user = User.objects.select_related('profile').filter(pk=uid).first()
+    if user is None:
+        return None, JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
+    if not puede_actuar_sobre(request.user, user):
+        return None, respuesta_sin_rango()
+    return user, None
+
+
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_edit_user_permissions')
 @ratelimit(key='ip', rate='20/m', block=True)
 @require_POST
 def api_update_user_permissions(request):
     """Actualiza rol, grupo y permisos de una cuenta.
 
     Una cuenta no puede modificar sus propios permisos salvo que sea
-    superusuario, ni alcanzar la de un superusuario si no lo es. Asignar un
-    grupo descarta los permisos individuales; quitarlo vuelve a aceptarlos del
-    cuerpo.
+    superusuario, ni alcanzar una con mas permisos que los suyos, ni conceder
+    lo que no tiene. Asignar un grupo descarta los permisos individuales;
+    quitarlo vuelve a aceptarlos del cuerpo.
     """
     try:
         data = json.loads(request.body)
-        uid = data.get("user_id")
-        
-        if not uid:
-            return JsonResponse({"status": "error", "message": "ID de usuario no enviado."}, status=400)
-
-        try:
-            uid = int(uid)
-        except (TypeError, ValueError):
-            return JsonResponse({"status": "error", "message": "ID de usuario inválido."}, status=400)
-
-        if request.user.id == uid and not request.user.is_superuser:
+        if leer_id(data.get("user_id")) == request.user.id and not request.user.is_superuser:
             return JsonResponse({"status": "error", "message": "No puedes modificar tus propios permisos."}, status=400)
-            
-        user = User.objects.get(pk=uid)
-        if not puede_actuar_sobre(request.user, user):
-            return JsonResponse(
-                {"status": "error", "message": "No puedes modificar la cuenta de un superusuario."},
-                status=403,
-            )
+
+        user, error = _cuenta_editable(request, data.get("user_id"))
+        if error:
+            return error
         profile = user.profile
-        
-        # 1. Actualizar Rol Descriptivo
-        if "role" in data:
-            profile.role = data.get("role", profile.role)
+        previa = matriz_efectiva(user)
 
-        # 2. Manejo de Grupo de Permisos vs Permisos Individuales
+        rol = data.get("role", profile.role)
+        if rol not in dict(Profile.ROLE_CHOICES):
+            return JsonResponse({"status": "error", "message": "Rol inválido."}, status=400)
+
         group_id = data.get("group_id")
+        grp = None
         if group_id:
-            try:
-                grp = PermissionGroup.objects.get(pk=group_id)
-                profile.group = grp
-                profile.sync_permissions_from_group()
-            except PermissionGroup.DoesNotExist:
-                profile.group = None
+            grp = PermissionGroup.objects.filter(pk=leer_id(group_id)).first()
+            if grp is None:
+                return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
+            nueva = matriz_de(grp)
         else:
-            profile.group = None
-            # Guardar permisos individuales explícitos
-            apply_permissions(profile, data)
+            nueva = leer_matriz(data)
 
+        fuera = permisos_fuera_de_alcance(request.user, nueva, previa)
+        if fuera:
+            return respuesta_fuera_de_alcance(fuera)
+
+        profile.role = rol
+        profile.group = grp
+        apply_permissions(profile, nueva)
         profile.save()
         logger.info("Permisos actualizados de %r por %r", user.username, request.user.username)
         return JsonResponse({"status": "success", "message": f"Permisos de '{user.username}' actualizados."})
-    except User.DoesNotExist:
-        return JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
     except Exception:
         return error_interno("Error al actualizar los permisos de la cuenta")
 
 
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_manage_groups')
 @ratelimit(key='ip', rate='20/m', block=True)
 @require_POST
 def api_save_permission_group(request):
-    """Crea o actualiza un grupo y **resincroniza a todos sus miembros**."""
+    """Crea o actualiza un grupo y **resincroniza a todos sus miembros**.
+
+    Nadie que no sea superusuario edita el grupo al que pertenece -seria
+    concederse permisos a si mismo, la via que quedaba abierta despues de
+    prohibir la auto-edicion de la cuenta-, ni concede en un grupo lo que el no
+    tiene.
+    """
     try:
         data = json.loads(request.body)
         group_id = data.get("group_id")
-        name = data.get("name", "").strip()
-        description = data.get("description", "").strip()
+        name = str(data.get("name") or "").strip()
+        description = str(data.get("description") or "").strip()
 
         if not name:
             return JsonResponse({"status": "error", "message": "El nombre del grupo es obligatorio."}, status=400)
 
         if group_id:
-            try:
-                group = PermissionGroup.objects.get(pk=group_id)
-            except PermissionGroup.DoesNotExist:
+            group = PermissionGroup.objects.filter(pk=leer_id(group_id)).first()
+            if group is None:
                 return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
-            group.name = name
-            group.description = description
+            mi_grupo = getattr(getattr(request.user, 'profile', None), 'group_id', None)
+            if group.id == mi_grupo and not request.user.is_superuser:
+                return JsonResponse(
+                    {"status": "error", "message": "No puedes editar el grupo al que perteneces."},
+                    status=403,
+                )
+            previa = matriz_de(group)
         else:
-            group = PermissionGroup(name=name, description=description)
+            group = PermissionGroup()
+            previa = {}
 
-        apply_permissions(group, data)
+        nueva = leer_matriz(data)
+        fuera = permisos_fuera_de_alcance(request.user, nueva, previa)
+        if fuera:
+            return respuesta_fuera_de_alcance(fuera)
 
-        group.save()
+        group.name = name
+        group.description = description
+        apply_permissions(group, nueva)
 
-        # Sincronizar todos los miembros del grupo
-        for member in group.members.all():
-            member.sync_permissions_from_group()
+        with transaction.atomic():
+            group.save()
+            # Sincronizar todos los miembros del grupo
+            for member in group.members.all():
+                member.sync_permissions_from_group()
 
         logger.info("Grupo de permisos guardado: %r por %r", group.name, request.user.username)
         return JsonResponse({"status": "success", "message": f"Grupo '{group.name}' guardado correctamente."})
@@ -361,61 +528,55 @@ def api_save_permission_group(request):
         return error_interno("Error al guardar el grupo de permisos")
 
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_manage_groups')
 @ratelimit(key='ip', rate='20/m', block=True)
 @require_POST
 def api_delete_permission_group(request):
     """Elimina un grupo. Sus miembros conservan la matriz que tenian copiada."""
     try:
         data = json.loads(request.body)
-        group_id = data.get("group_id")
-        PermissionGroup.objects.filter(pk=group_id).delete()
-        logger.info("Grupo de permisos eliminado: %r por %r", group_id, request.user.username)
-        return JsonResponse({"status": "success", "message": "Grupo de permisos eliminado."})
+        group = PermissionGroup.objects.filter(pk=leer_id(data.get("group_id"))).first()
+        if group is None:
+            return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
+        nombre = group.name
+        group.delete()
+        logger.info("Grupo de permisos eliminado: %r por %r", nombre, request.user.username)
+        return JsonResponse({"status": "success", "message": f"Grupo '{nombre}' eliminado."})
     except Exception:
         return error_interno("Error al eliminar el grupo de permisos")
 
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_edit_user_permissions')
 @ratelimit(key='ip', rate='20/m', block=True)
 @require_POST
 def api_assign_user_group(request):
     """Vincula una cuenta a un grupo, o la desvincula con `group_id` vacio.
 
-    Lleva la misma comprobacion de auto-edicion que
-    `api_update_user_permissions`: sin ella, un administrador sin superusuario
-    se reasignaba a si mismo a un grupo con la matriz completa, que era la via
-    para saltarse esa comprobacion.
+    Lleva las mismas comprobaciones que `api_update_user_permissions`: sin
+    ellas, se podia meter a uno mismo -o a otro- en un grupo con mas permisos
+    de los que uno tiene.
     """
     try:
         data = json.loads(request.body)
-        uid = data.get("user_id")
-        group_id = data.get("group_id")
-
-        try:
-            uid = int(uid)
-        except (TypeError, ValueError):
-            return JsonResponse({"status": "error", "message": "ID de usuario inválido."}, status=400)
-
-        if request.user.id == uid and not request.user.is_superuser:
+        if leer_id(data.get("user_id")) == request.user.id and not request.user.is_superuser:
             return JsonResponse(
                 {"status": "error", "message": "No puedes cambiar tu propio grupo de permisos."},
                 status=400,
             )
 
-        user = User.objects.get(pk=uid)
-        if not puede_actuar_sobre(request.user, user):
-            return JsonResponse(
-                {"status": "error", "message": "No puedes modificar la cuenta de un superusuario."},
-                status=403,
-            )
+        user, error = _cuenta_editable(request, data.get("user_id"))
+        if error:
+            return error
         profile = user.profile
 
+        group_id = data.get("group_id")
         if group_id:
-            try:
-                group = PermissionGroup.objects.get(pk=group_id)
-            except PermissionGroup.DoesNotExist:
+            group = PermissionGroup.objects.filter(pk=leer_id(group_id)).first()
+            if group is None:
                 return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
+            fuera = permisos_fuera_de_alcance(request.user, matriz_de(group), matriz_efectiva(user))
+            if fuera:
+                return respuesta_fuera_de_alcance(fuera)
             profile.group = group
             profile.sync_permissions_from_group()
             msg = f"Usuario '{user.username}' asignado al grupo '{group.name}'."
@@ -426,98 +587,72 @@ def api_assign_user_group(request):
 
         logger.info("Grupo de %r cambiado por %r", user.username, request.user.username)
         return JsonResponse({"status": "success", "message": msg})
-    except User.DoesNotExist:
-        return JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
     except Exception:
         return error_interno("Error al asignar el grupo de la cuenta")
 
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_edit_user_permissions')
 @ratelimit(key='ip', rate='20/m', block=True)
 @require_POST
 def api_update_user_role(request):
     """Cambia el rol descriptivo de una cuenta, sin tocar sus permisos."""
     try:
         data = json.loads(request.body)
-        uid = data.get("user_id")
         nuevo_rol = data.get("role")
-
         if nuevo_rol not in dict(Profile.ROLE_CHOICES):
             return JsonResponse({"status": "error", "message": "Rol inválido."}, status=400)
 
-        user = User.objects.get(pk=uid)
-        if not puede_actuar_sobre(request.user, user):
-            return JsonResponse(
-                {"status": "error", "message": "No puedes modificar la cuenta de un superusuario."},
-                status=403,
-            )
+        user, error = _cuenta_editable(request, data.get("user_id"))
+        if error:
+            return error
         user.profile.role = nuevo_rol
         user.profile.save()
-        return JsonResponse({"status": "success", "message": "Rol actualizado."})
-    except User.DoesNotExist:
-        return JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
+        return JsonResponse({"status": "success", "message": f"Rol de '{user.username}' actualizado."})
     except Exception:
         return error_interno("Error al actualizar el rol de la cuenta")
 
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_delete_users')
 @ratelimit(key='ip', rate='10/m', block=True)
 @require_POST
 def api_delete_user(request):
-    """Elimina una cuenta. **No se puede borrar la propia ni la de un superusuario.**"""
+    """Elimina una cuenta. **No se puede borrar la propia ni una de mas rango.**"""
     try:
         data = json.loads(request.body)
-        uid = data.get("user_id")
-
-        try:
-            uid = int(uid)
-        except (TypeError, ValueError):
-            return JsonResponse({"status": "error", "message": "ID de usuario inválido."}, status=400)
-
-        if request.user.id == uid:
+        if leer_id(data.get("user_id")) == request.user.id:
             return JsonResponse({"status": "error", "message": "No puedes eliminar tu propia cuenta."}, status=400)
 
-        user = User.objects.filter(pk=uid).first()
-        if user is None:
-            return JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
-        if not puede_actuar_sobre(request.user, user):
-            return JsonResponse(
-                {"status": "error", "message": "No puedes eliminar la cuenta de un superusuario."},
-                status=403,
-            )
+        user, error = _cuenta_editable(request, data.get("user_id"))
+        if error:
+            return error
 
         nombre = user.username
         user.delete()
         logger.info("Cuenta eliminada: %r por %r", nombre, request.user.username)
-        return JsonResponse({"status": "success", "message": "Usuario eliminado del sistema."})
+        return JsonResponse({"status": "success", "message": f"Usuario '{nombre}' eliminado del sistema."})
     except Exception:
         return error_interno("Error al eliminar la cuenta")
 
 @login_required
-@permission_required('can_manage_users')
+@permission_required('can_change_passwords')
 @ratelimit(key='ip', rate='10/m', block=True)
 @require_POST
 def api_admin_change_password(request):
     """Fija la contrasena de otra cuenta.
 
     La contrasena pasa por `AUTH_PASSWORD_VALIDATORS`, y el objetivo no puede
-    ser un superusuario salvo que quien la cambia tambien lo sea: ese era el
-    camino corto de `can_manage_users` a superusuario.
+    tener permisos que quien la cambia no tiene: fijar la contrasena de otro es
+    poder entrar como el.
     """
     try:
         data = json.loads(request.body)
-        uid = data.get("user_id")
-        nueva_clave = data.get("password", "").strip()
-        
-        if not uid or not nueva_clave:
+        nueva_clave = str(data.get("password") or "")
+        if not data.get("user_id") or not nueva_clave:
             return JsonResponse({"status": "error", "message": "ID y contraseña obligatorios."}, status=400)
 
-        user = User.objects.get(pk=uid)
-        if not puede_actuar_sobre(request.user, user):
-            return JsonResponse(
-                {"status": "error", "message": "No puedes cambiar la contraseña de un superusuario."},
-                status=403,
-            )
+        user, error = _cuenta_editable(request, data.get("user_id"))
+        if error:
+            return error
 
         motivo = validar_clave(nueva_clave, user)
         if motivo:
@@ -528,7 +663,5 @@ def api_admin_change_password(request):
 
         logger.info("Contraseña de %r cambiada por %r", user.username, request.user.username)
         return JsonResponse({"status": "success", "message": f"Contraseña de '{user.username}' actualizada."})
-    except User.DoesNotExist:
-        return JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
     except Exception:
         return error_interno("Error al cambiar la contraseña")

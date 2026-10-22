@@ -42,16 +42,22 @@ VIEW_PERMISSION_FIELDS = [
     'can_view_imports_subs', 'can_view_imports_crm', 'can_view_imports_support',
     'can_view_import_history',
     'can_view_comisiones',
+    # Administracion: ver la pantalla de cuentas y grupos, y el registro de
+    # auditoria.
+    'can_view_users', 'can_view_auditoria',
 ]
 
 # Permisos de accion: por defecto cerrados (False), como los de lectura.
 ACTION_PERMISSION_FIELDS = [
     'can_import_data', 'can_run_calculations', 'can_run_lifetime',
-    'can_manage_eta', 'can_manage_users',
+    'can_manage_eta',
     'can_manage_catalogo_comercial', 'can_manage_catalogo_operacional',
     'can_manage_catalogo_ventas',
     'can_manage_support_users',
-    'can_manage_comisiones',
+    'can_manage_comisiones', 'can_reopen_comisiones',
+    # Administracion de cuentas, un permiso por accion (antes `can_manage_users`).
+    'can_create_users', 'can_edit_user_permissions', 'can_change_passwords',
+    'can_delete_users', 'can_manage_groups',
     # Cargas de CSV, una por modulo de origen.
     'can_import_subs', 'can_import_crm', 'can_import_support',
     # Ejecucion de cada motor de analisis por separado.
@@ -111,13 +117,31 @@ class PermissionMatrix(models.Model):
     # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar los
     # supervisores de cada UN y las condiciones de pago es `can_manage_comisiones`.
     can_view_comisiones = models.BooleanField(default=False)
+    # Reabrir un periodo cerrado. Va aparte de `can_manage_comisiones` porque
+    # deshace una nomina ya pagada: el cierre queda archivado
+    # (`ComisionCierreArchivado`), pero la decision no es de quien calcula.
+    can_reopen_comisiones = models.BooleanField(default=False)
+
+    # --- Administracion de cuentas ---
+    # `can_manage_users` era un solo interruptor para todo: ver, crear, borrar,
+    # cambiar contrasenas y editar matrices y grupos. Se parte por accion, de
+    # menor a mayor riesgo. Ninguno de ellos deja conceder lo que quien actua
+    # no tiene, ni tocar una cuenta con mas permisos que la suya (ver
+    # `services/config/views.py:puede_actuar_sobre`).
+    can_view_users = models.BooleanField(default=False)
+    can_create_users = models.BooleanField(default=False)
+    can_edit_user_permissions = models.BooleanField(default=False)
+    can_change_passwords = models.BooleanField(default=False)
+    can_delete_users = models.BooleanField(default=False)
+    can_manage_groups = models.BooleanField(default=False)
+    # El registro de auditoria (`services/auditoria`): quien hizo que y cuando.
+    can_view_auditoria = models.BooleanField(default=False)
 
     # --- Acciones globales ---
     can_import_data = models.BooleanField(default=False)
     can_run_calculations = models.BooleanField(default=False)
     can_run_lifetime = models.BooleanField(default=False)
     can_manage_eta = models.BooleanField(default=False)
-    can_manage_users = models.BooleanField(default=False)
     # Catalogos de referencia: un permiso por grupo del modulo de Catalogos,
     # porque los mantienen equipos distintos. Los nombres son anteriores al
     # modulo y se conservan. El comercial es la Estructura: como se reparte la

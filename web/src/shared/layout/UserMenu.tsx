@@ -65,7 +65,8 @@ function SelectorTema({ compact }: { compact: boolean }) {
 
 interface UserMenuProps {
   username: string;
-  canManageUsers: boolean;
+  /** `can_view_users`: abre la pantalla de usuarios y grupos. */
+  canViewUsers: boolean;
   isUsersPageActive: boolean;
   /** Solo iconos, para el sidebar plegado. */
   compact?: boolean;
@@ -76,7 +77,7 @@ interface UserMenuProps {
 
 export function UserMenu({
   username,
-  canManageUsers,
+  canViewUsers,
   isUsersPageActive,
   compact = false,
   onNavigate,
@@ -84,7 +85,7 @@ export function UserMenu({
 }: UserMenuProps) {
   return (
     <div className="space-y-2 border-t border-slate-800 pt-4">
-      {canManageUsers && (
+      {canViewUsers && (
         <Link
           href="/auth/users/"
           onClick={onNavigate}

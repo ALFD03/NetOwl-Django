@@ -1,33 +1,61 @@
-# Lo que NO entra en la imagen. `Dockerfile` hace `COPY . .`, asi que todo lo
-# que no este aqui acaba dentro: `logs/` llevaba las rutas reales de las
-# peticiones servidas en la maquina de desarrollo.
-__pycache__
+# Lo que NO entra en la imagen. El Dockerfile hace `COPY . .`, asi que todo lo
+# que no este aqui acaba dentro. Los patrones llevan `**/` cuando tienen que
+# valer en cualquier carpeta: sin el, Docker solo los aplica en la raiz.
+
+# --- Secretos ---
+# (`logs/`, mas abajo, llevaba las rutas reales de las peticiones servidas en
+# desarrollo.)
+.env
+.env.*
+**/*.pem
+**/*.key
+
+# --- Control de versiones y documentacion ---
 .git
 .gitignore
-*.md
-*.pyc
-.env
+.dockerignore
+**/*.md
+docs
+
+# --- Python: entornos, cachés y herramientas de desarrollo ---
+**/__pycache__
+**/*.py[cod]
 .venv
 venv
+.ruff_cache
+.mypy_cache
+.pytest_cache
 requirements-dev.txt
+pyproject.toml
 
+# --- Frontend ---
 # El bundle lo compila la etapa de frontend; el node_modules local puede ser de
 # otra plataforma y taparia el `npm ci` limpio de esa etapa.
 node_modules
 web/static/dist
+eslint.config.js
+.prettierrc.json
 
-# El despliegue: el compose se lee desde fuera de la imagen, y deploy/ensayo
-# puede tener el secreto del ensayo con la configuracion de la base de datos.
-deploy
+# --- Desarrollo y despliegue: no se usan dentro del contenedor ---
+# El compose se lee desde fuera de la imagen; dev.sh y el Makefile son del puesto.
+docker-compose.yml
+Makefile
+scripts
 
-# Salidas locales: registros, estaticos recolectados y el grafo de graphify.
+# --- Salidas locales ---
 logs
 staticfiles
 graphify-out
+*.log
+*.zip
 
-# Configuracion de herramientas del puesto de trabajo.
+# --- Editores y asistentes ---
+**/.vscode
+.idea
 .claude
+.claudeignore
 .codex
 .cursor
 .github
 .agents
+skills-lock.json

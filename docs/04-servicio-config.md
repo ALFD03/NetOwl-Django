@@ -39,6 +39,8 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_view_support_analytics` / `can_view_support_results` | Páginas de soporte |
 | `can_view_imports_subs` / `_crm` / `_support` / `can_view_import_history` | Una por pestaña de importaciones |
 | `can_view_comisiones` | El informe de comisiones |
+| `can_view_users` | La pantalla de usuarios y grupos (solo verla) |
+| `can_view_auditoria` | El registro de auditoría (`/auditoria/`) |
 
 ### Permisos de acción (cerrados por defecto)
 
@@ -50,11 +52,36 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_run_subs_analysis` / `can_run_crm_analysis` / `can_run_support_analysis` | Ejecución por motor |
 | `can_run_lifetime` | Análisis de ciclo de vida |
 | `can_manage_eta` | Parametrizar y bloquear el reporte ETA |
-| `can_manage_users` | Administrar usuarios y grupos |
+| `can_create_users` | Crear cuentas |
+| `can_edit_user_permissions` | Cambiar rol, grupo y matriz de una cuenta |
+| `can_change_passwords` | Cambiar la contraseña de otra cuenta |
+| `can_delete_users` | Eliminar cuentas |
+| `can_manage_groups` | Crear, editar y eliminar grupos de permisos |
 | `can_manage_catalogo_operacional` | Catálogos › Productos: planes, planes reguladores y los productos por registrar e ignorados |
 | `can_manage_catalogo_comercial` | Catálogos › Estructura: zonas, sites, estados y las zonas por registrar e ignoradas |
 | `can_manage_catalogo_ventas` | Catálogos › Ventas: directorio de ventas, unidades de negocio y objetivos comerciales |
 | `can_manage_comisiones` | Comisiones: crear y cerrar periodos, revisar ventas, escribir cumplimientos; supervisores por UN y condiciones de pago |
+| `can_reopen_comisiones` | Reabrir un periodo de comisiones cerrado (archiva el cierre) |
+
+### Administración de cuentas: un permiso por acción y un techo
+
+`can_manage_users` era un solo interruptor para todo, y con él cualquiera podía
+darse a sí mismo —o a una cuenta cómplice— cualquier permiso. Se partió en los
+seis de arriba (`config/0010` se los dio, junto con `can_view_auditoria`, a quien
+lo tenía; `config/0011` lo quitó), y las vistas aplican además dos reglas:
+
+- **Nadie concede lo que no tiene** (`permisos_fuera_de_alcance`): crear una
+  cuenta, editar su matriz o guardar un grupo con un permiso que quien lo hace
+  no tiene responde 403 con la lista. Lo que la matriz ya traía se puede
+  quitar. Al asignar un grupo cuenta la matriz del grupo.
+- **Nadie toca una cuenta con más permisos que la suya** (`puede_actuar_sobre`):
+  la cuenta objetivo tiene que tener un subconjunto de los permisos de quien
+  actúa; a un superusuario solo lo toca otro. La propia cuenta tampoco se
+  edita, ni el propio grupo.
+
+La pantalla recibe `editable` por usuario y grupo y `concedibles` (la matriz de
+quien mira) para esconder lo que el servidor rechazaría; la comprobación real
+es la del servidor.
 
 > **Añadir un permiso** es añadir un campo booleano a `PermissionMatrix` y su
 > nombre a una de las dos listas. A partir de ahí aparece solo en la interfaz de
@@ -95,7 +122,6 @@ from services.config.decorators import permission_required, permissions_all_requ
 |---|---|
 | `permission_required(*perms)` | **OR** — basta con uno. Para endpoints que alimentan varias páginas |
 | `permissions_all_required(*perms)` | **AND** — para páginas detrás de dos puertas: el permiso del módulo *y* el de la pestaña. Apagar el módulo sigue cerrando el acceso por URL directa |
-| `admin_required` / `analyst_or_admin_required` | Compatibilidad: delegan en `can_manage_users` y `can_import_data` |
 
 ### Qué recibe un usuario al que se le niega el acceso
 
@@ -129,9 +155,17 @@ descarte una página denegada recibiría un JSON crudo y React reventaría con
 | `setup_view` | `/auth/setup/` | Alta del primer administrador; se cierra en cuanto existe un usuario. Exige 8 caracteres y confirmación |
 | `user_management_view` | `/auth/users/` | Página Inertia `Config/Management` con usuarios, grupos y roles |
 
-Endpoints (todos `POST`, con `can_manage_users`): crear usuario, actualizar rol,
+Endpoints (todos `POST`, cada uno con su permiso): crear usuario, actualizar rol,
 actualizar permisos, borrar usuario, cambiar contraseña, guardar grupo, borrar
 grupo, asignar grupo. Ver [11 · Endpoints](11-api-endpoints.md).
+
+**El login** cuenta solo los intentos fallidos, por usuario (5 cada 5 min) y
+por IP (20 cada 5 min), con el usuario leído del JSON o del formulario
+(`netowl_web.ratelimit.usuario_login`). Antes el decorador leía `post:username`,
+que con un cuerpo JSON estaba siempre vacío: todo el mundo compartía un mismo
+cubo. Un anónimo solo puede escribir en login y logout, con un cuerpo de como
+mucho `ANON_MAX_BODY_SIZE` (16 KB); cualquier otra escritura recibe 401 antes
+de que se lea el cuerpo (`LimiteCuerpoAnonimoMiddleware`).
 
 Dos ayudantes evitan duplicación:
 

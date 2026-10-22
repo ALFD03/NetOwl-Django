@@ -3,9 +3,6 @@
 import type { MetricColor } from '@/shared/ui';
 import type { DayCuts, DaySeries } from '@/shared/types/domain';
 
-export interface SupportAnalysisRequest { month: string | null; }
-export interface SupportAnalysisResponse { message: string; log_output?: string; }
-
 /**
  * The seven time measures, mirroring `TIME_MEASURE_SPECS` in
  * `backend/support/config.py`.

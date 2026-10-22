@@ -15,9 +15,14 @@ import {
 interface Props {
   users: UserData[];
   groups: GroupData[];
-  onEdit: (user: UserData) => void;
-  onChangePassword: (user: UserData) => void;
-  onDelete: (user: UserData) => void;
+  /**
+   * Nulo cuando quien mira no tiene el permiso de esa acción: el botón no se
+   * pinta. Tampoco en las filas que no son `editable` (su propia cuenta, o
+   * una con más permisos que la suya); el servidor lo rechaza igual.
+   */
+  onEdit: ((user: UserData) => void) | null;
+  onChangePassword: ((user: UserData) => void) | null;
+  onDelete: ((user: UserData) => void) | null;
 }
 
 /** Botón de fila: discreto en reposo, con el color de su acción al pasar por encima. */
@@ -100,27 +105,35 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
 
                   <td className="px-5 py-3">
                     <div className="flex items-center justify-end gap-1 opacity-70 transition-opacity group-hover:opacity-100">
-                      <button
-                        type="button"
-                        onClick={() => onEdit(user)}
-                        className={cn(ACCION, 'hover:text-brand-light')}
-                        title="Editar rol, grupo y permisos"
-                        aria-label={`Editar ${user.username}`}
-                      >
-                        <Settings2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onChangePassword(user)}
-                        className={cn(ACCION, 'hover:text-amber-300')}
-                        title="Cambiar contraseña"
-                        aria-label={`Cambiar la contraseña de ${user.username}`}
-                      >
-                        <Key className="h-4 w-4" />
-                      </button>
-                      {/* El superusuario no se borra desde aquí; el hueco
-                          mantiene alineada la columna. */}
-                      {user.is_superuser ? (
+                      {/* Lo que no se puede hacer deja su hueco: mantiene alineada la columna. */}
+                      {onEdit && user.editable ? (
+                        <button
+                          type="button"
+                          onClick={() => onEdit(user)}
+                          className={cn(ACCION, 'hover:text-brand-light')}
+                          title="Editar rol, grupo y permisos"
+                          aria-label={`Editar ${user.username}`}
+                        >
+                          <Settings2 className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <span className="w-8" aria-hidden />
+                      )}
+                      {onChangePassword && user.editable ? (
+                        <button
+                          type="button"
+                          onClick={() => onChangePassword(user)}
+                          className={cn(ACCION, 'hover:text-amber-300')}
+                          title="Cambiar contraseña"
+                          aria-label={`Cambiar la contraseña de ${user.username}`}
+                        >
+                          <Key className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <span className="w-8" aria-hidden />
+                      )}
+                      {/* El superusuario no se borra desde aquí. */}
+                      {user.is_superuser || !onDelete || !user.editable ? (
                         <span className="w-8" aria-hidden />
                       ) : (
                         <button

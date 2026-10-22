@@ -9,7 +9,10 @@ import {
 } from 'lucide-react';
 import { configApi } from '@/shared/lib/api/config';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
-import { DEFAULT_GROUP_PERMISSIONS, DEFAULT_USER_PERMISSIONS } from '@/shared/constants/permissions';
+import {
+  DEFAULT_GROUP_PERMISSIONS, DEFAULT_USER_PERMISSIONS, PERMISSION_GROUPS, PERMISSIONS,
+} from '@/shared/constants/permissions';
+import { usePermissions } from '@/shared/hooks/usePermissions';
 import { UsersTable } from '@/features/config/components/management/UsersTable';
 import { GroupsGrid } from '@/features/config/components/management/GroupsGrid';
 import { PermissionEditor } from '@/features/config/components/management/PermissionEditor';
@@ -19,7 +22,23 @@ import type {
   ConfigManagementProps, EditableGroup, EditableUser, NewUserForm, PasswordForm, UserData,
 } from '@/features/config/types';
 
-export function ManagementView({ users = [], groups = [], roles = [] }: ConfigManagementProps) {
+const TODOS_LOS_PERMISOS = PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => permission.key));
+
+export function ManagementView({ users = [], groups = [], roles = [], concedibles = {} }: ConfigManagementProps) {
+  const { can } = usePermissions();
+  const puedeCrear = can(PERMISSIONS.CREATE_USERS);
+  const puedeEditar = can(PERMISSIONS.EDIT_USER_PERMISSIONS);
+  const puedeCambiarClave = can(PERMISSIONS.CHANGE_PASSWORDS);
+  const puedeEliminar = can(PERMISSIONS.DELETE_USERS);
+  const puedeGrupos = can(PERMISSIONS.MANAGE_GROUPS);
+
+  /**
+   * Lo que quien mira no tiene y la matriz editada no traía: no lo puede
+   * conceder. Lo que ya estaba concedido sí se puede quitar.
+   */
+  const bloqueadosPara = (previa: Record<string, boolean>) =>
+    new Set(TODOS_LOS_PERMISOS.filter((clave) => !concedibles[clave] && !previa[clave]));
+
   const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users');
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -165,7 +184,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
               />
             </label>
 
-            {activeTab === 'users' ? (
+            {activeTab === 'users' ? puedeCrear && (
               <Button
                 size="sm"
                 icon={<UserPlus className="h-4 w-4" />}
@@ -183,7 +202,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
               >
                 Nuevo usuario
               </Button>
-            ) : (
+            ) : puedeGrupos && (
               <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={nuevoGrupo}>
                 Nuevo grupo
               </Button>
@@ -196,9 +215,11 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
         <UsersTable
           users={filteredUsers}
           groups={groups}
-          onEdit={(user) => setUserToEdit({ ...user })}
-          onChangePassword={(user) => setUserToChangePass({ user_id: user.id, username: user.username, password: '' })}
-          onDelete={(user) => setDeletingItem({ type: 'user', id: user.id, name: user.username })}
+          onEdit={puedeEditar ? (user) => setUserToEdit({ ...user, previa: { ...user.permissions } }) : null}
+          onChangePassword={puedeCambiarClave
+            ? (user) => setUserToChangePass({ user_id: user.id, username: user.username, password: '' })
+            : null}
+          onDelete={puedeEliminar ? (user) => setDeletingItem({ type: 'user', id: user.id, name: user.username }) : null}
         />
       )}
 
@@ -207,9 +228,9 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
           groups={filteredGroups}
           users={users}
           filtrando={Boolean(termino)}
-          onCreate={nuevoGrupo}
-          onEdit={(group) => setGroupToEdit({ ...group })}
-          onDelete={(group) => setDeletingItem({ type: 'group', id: group.id, name: group.name })}
+          onCreate={puedeGrupos ? nuevoGrupo : null}
+          onEdit={puedeGrupos ? (group) => setGroupToEdit({ ...group, previa: { ...group.permissions } }) : null}
+          onDelete={puedeGrupos ? (group) => setDeletingItem({ type: 'group', id: group.id, name: group.name }) : null}
         />
       )}
 
@@ -283,6 +304,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
               <PermissionEditor
                 permissions={userToCreate.permissions}
                 onChange={(permissions) => setUserToCreate({ ...userToCreate, permissions })}
+                bloqueados={bloqueadosPara(DEFAULT_USER_PERMISSIONS)}
               />
             )}
 
@@ -355,6 +377,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
               permissions={userToEdit.permissions}
               onChange={(permissions) => setUserToEdit({ ...userToEdit, permissions })}
               disabled={Boolean(userToEdit.group_id)}
+              bloqueados={bloqueadosPara(userToEdit.previa ?? {})}
             />
 
             <PieDeModal
@@ -444,6 +467,7 @@ export function ManagementView({ users = [], groups = [], roles = [] }: ConfigMa
             <PermissionEditor
               permissions={groupToEdit.permissions}
               onChange={(permissions) => setGroupToEdit({ ...groupToEdit, permissions })}
+              bloqueados={bloqueadosPara(groupToEdit.previa ?? {})}
             />
 
             <PieDeModal

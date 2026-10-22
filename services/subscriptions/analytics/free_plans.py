@@ -312,9 +312,10 @@ def import_gratis_csv(csv_path: str) -> int:
                     ),
                 )
             )
+            # DROP, CREATE y COPY en una transaccion: un fallo deja la tabla anterior.
+            DBConnector.copiar(cur, df_free, TableNames.SUBSCRIPTIONS_FREE)
         conn.commit()
 
-    db.copy_dataframe(df_free, TableNames.SUBSCRIPTIONS_FREE)
     return len(df_free)
 
 

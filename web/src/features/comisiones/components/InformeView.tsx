@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { router } from '@inertiajs/react';
 import {
   AlertTriangle, CalendarRange, Check, FileSpreadsheet, HandCoins, ListChecks, Lock, LockOpen, Percent, Receipt,
+  ShieldAlert,
 } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import {
-  Button, EmptyState, ExportButton, LoadingState, Modal, MonthPicker, NeonContainer, SelectMenu, StatusMessage,
+  Button, EmptyState, ExportButton, LoadingState, Modal, MonthPicker, NeonContainer, SelectMenu, StatusMessage, TextField,
 } from '@/shared/ui';
 import { useInformeComisiones } from '../hooks/useInformeComisiones';
 import { exportarInforme } from '../lib/exportar';
@@ -16,6 +17,7 @@ import {
   aBs, diaAnterior, formatoBs, formatoFecha, formatoMes, formatoMonto, formatoTasa, mesSiguiente, nombreMes, totalBs,
 } from '../lib/formato';
 import type { CargoVentas, ComisionesInformeProps, InformeComision, PagoComision, TramoVenta } from '../types';
+import { CierresArchivados } from './CierresArchivados';
 import { IndicadoresPanel } from './IndicadoresPanel';
 import { ManualesPanel } from './ManualesPanel';
 import { NominaView } from './NominaView';
@@ -56,7 +58,7 @@ function indicadoresPendientes(informe: InformeComision): number {
  * sus ventas válidas no vuelven a contar en otro.
  */
 export function InformeView({
-  periodo, periodos, informe, error, propuesta, condiciones, cargos, puedeGestionar,
+  periodo, periodos, informe, error, propuesta, condiciones, cargos, puedeGestionar, puedeReabrir, archivos,
 }: ComisionesInformeProps) {
   const c = useInformeComisiones(periodo, Boolean(informe));
   const editable = puedeGestionar && informe?.estado === 'borrador';
@@ -74,7 +76,9 @@ export function InformeView({
     informe && !informe.resumen.revision && porConfirmar ? 'promo_anterior' : 'revision',
   );
   const [editandoPeriodo, setEditandoPeriodo] = useState(false);
-  const [confirmando, setConfirmando] = useState<'cerrar' | 'reabrir' | null>(null);
+  const [confirmando, setConfirmando] = useState<'cerrar' | null>(null);
+  // Reabrir pide motivo y el periodo escrito a mano (ver `api_periodo_reabrir`).
+  const [reapertura, setReapertura] = useState<{ motivo: string; confirmacion: string } | null>(null);
   const [desglose, setDesglose] = useState<PagoComision | null>(null);
   const [exportando, setExportando] = useState(false);
 
@@ -417,8 +421,12 @@ export function InformeView({
                     status={{ type: 'success', text: 'Periodo cerrado: las ventas, los pagos y las condiciones quedaron congelados tal como se ven.' }}
                     icon={<Lock />}
                   />
-                  {puedeGestionar && (
-                    <Button variant="outline" icon={<LockOpen className="h-4 w-4" />} onClick={() => setConfirmando('reabrir')}>
+                  {puedeReabrir && (
+                    <Button
+                      variant="outline"
+                      icon={<LockOpen className="h-4 w-4" />}
+                      onClick={() => setReapertura({ motivo: '', confirmacion: '' })}
+                    >
                       Reabrir
                     </Button>
                   )}
@@ -469,6 +477,7 @@ export function InformeView({
                   )}
                 </>
               )}
+              <CierresArchivados archivos={archivos} etiquetaCargo={etiquetaCargo} />
             </div>
           )}
         </div>
@@ -492,33 +501,90 @@ export function InformeView({
       </Modal>
 
       <Modal
-        isOpen={Boolean(confirmando)}
+        isOpen={confirmando === 'cerrar'}
         onClose={() => setConfirmando(null)}
-        title={confirmando === 'cerrar' ? `Cerrar ${periodo}` : `Reabrir ${periodo}`}
-        subtitle={confirmando === 'cerrar' ? 'El informe queda congelado tal y como se ve ahora' : 'Vuelve a borrador y se recalcula con los datos de hoy'}
-        icon={confirmando === 'cerrar' ? <Lock className="h-5 w-5 text-emerald-400" /> : <LockOpen className="h-5 w-5 text-amber-400" />}
-        theme={confirmando === 'cerrar' ? 'green' : 'yellow'}
+        title={`Cerrar ${periodo}`}
+        subtitle="El informe queda congelado tal y como se ve ahora"
+        icon={<Lock className="h-5 w-5 text-emerald-400" />}
+        theme="green"
         size="sm"
       >
         <div className="space-y-5">
           <p className="text-sm text-slate-300">
-            {confirmando === 'cerrar'
-              ? `Se pagan ${formatoMonto(totalUsd)}${tasa !== null ? ` (${formatoBs(totalBsPago)})` : ''} a ${cobran} personas. Se guardan las ventas, los pagos y las condiciones de hoy, y sus ventas válidas no volverán a contar en ningún otro periodo.`
-              : 'Se borra lo congelado. Al abrirlo se calculará con las suscripciones de hoy, que pueden no ser las del cierre.'}
+            {`Se pagan ${formatoMonto(totalUsd)}${tasa !== null ? ` (${formatoBs(totalBsPago)})` : ''} a ${cobran} personas. Se guardan las ventas, los pagos y las condiciones de hoy, y sus ventas válidas no volverán a contar en ningún otro periodo.`}
           </p>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setConfirmando(null)}>Cancelar</Button>
             <Button
               isLoading={c.guardando}
               onClick={async () => {
-                const ok = confirmando === 'cerrar' ? await c.cerrar() : await c.reabrir();
-                if (ok) setConfirmando(null);
+                if (await c.cerrar()) setConfirmando(null);
               }}
             >
-              {confirmando === 'cerrar' ? 'Cerrar periodo' : 'Reabrir'}
+              Cerrar periodo
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Reabrir deshace una nómina cerrada: el cierre se archiva (ver
+          `CierresArchivados`), pero se pide el motivo y el periodo escrito a
+          mano, que el servidor vuelve a comprobar. */}
+      <Modal
+        isOpen={Boolean(reapertura)}
+        onClose={() => setReapertura(null)}
+        title={`Reabrir ${periodo}`}
+        subtitle="Vuelve a borrador y se recalcula con los datos de hoy"
+        icon={<LockOpen className="h-5 w-5 text-amber-400" />}
+        theme="yellow"
+        size="md"
+      >
+        {reapertura && (
+          <form
+            className="space-y-5"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (await c.reabrir(reapertura.motivo.trim(), reapertura.confirmacion.trim())) setReapertura(null);
+            }}
+          >
+            <StatusMessage
+              status={{
+                type: 'warning',
+                text: `Se deshace el cierre: ${formatoMonto(totalUsd)} a ${cobran} personas. Queda archivado como versión ${archivos.length + 1} y el periodo se recalculará con las suscripciones de hoy, que pueden no ser las del cierre.`,
+              }}
+              icon={<ShieldAlert />}
+            />
+            <TextField
+              label="Motivo de la reapertura"
+              required
+              minLength={10}
+              maxLength={500}
+              placeholder="Qué hay que corregir y quién lo pidió"
+              value={reapertura.motivo}
+              onChange={(e) => setReapertura({ ...reapertura, motivo: e.target.value })}
+            />
+            <TextField
+              label={`Escribe ${periodo} para confirmar`}
+              required
+              autoComplete="off"
+              placeholder={periodo}
+              value={reapertura.confirmacion}
+              onChange={(e) => setReapertura({ ...reapertura, confirmacion: e.target.value })}
+            />
+            {c.error && <StatusMessage status={{ type: 'error', text: c.error }} icon={<AlertTriangle />} />}
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setReapertura(null)}>Cancelar</Button>
+              <Button
+                type="submit"
+                variant="danger"
+                isLoading={c.guardando}
+                disabled={reapertura.motivo.trim().length < 10 || reapertura.confirmacion.trim() !== periodo}
+              >
+                Reabrir y archivar el cierre
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       <Modal

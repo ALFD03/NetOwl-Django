@@ -234,6 +234,32 @@ export interface ComisionesInformeProps {
   condiciones: CondicionesComision;
   cargos: CatalogoOption[];
   puedeGestionar: boolean;
+  /** `can_reopen_comisiones`: reabrir va aparte de gestionar. */
+  puedeReabrir: boolean;
+  /** Las versiones archivadas de los cierres anteriores del periodo, la más reciente primero. */
+  archivos: CierreArchivado[];
+}
+
+/** Un cierre guardado al reabrir el periodo (sin la copia, que se pide al descargarlo). */
+export interface CierreArchivado {
+  id: number;
+  version: number;
+  cerrado_por: string;
+  cerrado_en: string | null;
+  reabierto_por: string;
+  reabierto_en: string;
+  motivo: string;
+  total_neto: number;
+  pagos: number;
+  ventas: number;
+}
+
+/** La copia completa de un cierre archivado: lo que había congelado al reabrirlo. */
+export interface CopiaCierre {
+  periodo: { periodo: string; tasa_conatel: string | null; cerrado_por: string | null; cerrado_en: string | null };
+  condiciones: CondicionesComision;
+  resumen: InformeComision;
+  ventas: { orden: string; clasificacion: string; datos: VentaComision }[];
 }
 
 /** Un supervisor y el coordinador de UN al que responde. */

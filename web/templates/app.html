@@ -10,7 +10,7 @@
   <!-- El tema se aplica antes de pintar nada: esperar a React mostraba un
        destello del tema equivocado. Misma clave y misma regla que
        `web/src/shared/hooks/useTheme.tsx`. -->
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       var preferencia = null;
       try { preferencia = localStorage.getItem('netowl-tema'); } catch (e) {}
@@ -24,18 +24,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
   {% if vite_dev_server %}
-    <script type="module">
+    <script type="module" nonce="{{ csp_nonce }}">
       import RefreshRuntime from 'http://localhost:5173/static/@react-refresh'
       RefreshRuntime.injectIntoGlobalHook(window)
       window.$RefreshReg$ = () => {}
       window.$RefreshSig$ = () => (type) => type
       window.__vite_plugin_react_preamble_installed__ = true
     </script>
-    <script type="module" src="http://localhost:5173/static/@vite/client"></script>
-    <script type="module" src="http://localhost:5173/static/src/app/main.tsx"></script>
+    <script type="module" nonce="{{ csp_nonce }}" src="http://localhost:5173/static/@vite/client"></script>
+    <script type="module" nonce="{{ csp_nonce }}" src="http://localhost:5173/static/src/app/main.tsx"></script>
   {% else %}
     <link rel="stylesheet" href="{% static 'dist/assets/main.css' %}">
-    <script type="module" src="{% static 'dist/assets/main.js' %}"></script>
+    <script type="module" nonce="{{ csp_nonce }}" src="{% static 'dist/assets/main.js' %}"></script>
   {% endif %}
 </head>
 <body class="font-sans antialiased min-h-screen">

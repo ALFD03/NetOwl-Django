@@ -427,6 +427,8 @@ export async function exportarInforme(
   condiciones: CondicionesComision,
   tasa: number | null,
   etiquetaCargo: (cargo: CargoVentas) => string,
+  /** Sin extensión. Por defecto `Comisiones <periodo>`; los cierres archivados llevan su versión. */
+  nombre = `Comisiones ${informe.periodo}`,
 ): Promise<void> {
   const nomina = armarNomina(informe);
   await downloadStyledWorkbook(
@@ -438,6 +440,6 @@ export async function exportarInforme(
       hojaAsesores(nomina, condiciones, tasa),
       hojaVentas(ventas),
     ],
-    `Comisiones ${informe.periodo}`,
+    nombre,
   );
 }

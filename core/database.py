@@ -11,32 +11,157 @@ Todas las tablas se cualifican con `DB_SCHEMA`, que identifica el entorno.
 
 from __future__ import annotations
 
+import atexit
 import io
 import json
+import logging
+import os
 import re
+import threading
+import time
 from contextlib import contextmanager
 from typing import Any
 
 import pandas as pd
 import psycopg2
-from psycopg2 import pool, sql
+from psycopg2 import extensions, sql
 from psycopg2.extras import execute_values
 
 from .config import DB_SCHEMA, TableNames
 from .vault import get_config
 
+logger = logging.getLogger(__name__)
+
+# Conexiones ociosas que el proceso conserva para reutilizar. Un worker de
+# gunicorn atiende una peticion a la vez y casi nunca anida mas de dos
+# prestamos; un analisis del worker de Celery, alguno mas. Por encima de este
+# numero las conexiones se abren igual, pero se cierran al devolverse.
+POOL_MAX_OCIOSAS = int(os.getenv("DB_POOL_MAX_OCIOSAS", "4"))
+
+# Una conexion que lleva mas de esto sin usarse se cierra en vez de prestarse:
+# un cortafuegos o el propio Postgres pueden haberla cortado por inactividad, y
+# descubrirlo a mitad de una consulta cuesta un 500.
+POOL_MAX_SEGUNDOS_OCIOSA = int(os.getenv("DB_POOL_MAX_SEGUNDOS_OCIOSA", "300"))
+
+# Errores que dejan la conexion inservible (el servidor la corto, se reinicio,
+# la red cayo). Una conexion que los levanto se descarta, no vuelve al pool.
+_ERRORES_DE_CONEXION = (psycopg2.OperationalError, psycopg2.InterfaceError)
+
+
+class _PoolDelProceso:
+    """Las conexiones que reutiliza un proceso, compartidas por todos sus `DBConnector`.
+
+    Antes cada `DBConnector()` levantaba su propio `SimpleConnectionPool`, y
+    como se instancia en cada funcion de consulta (58 sitios), cada peticion
+    abria conexiones TCP+TLS nuevas y las dejaba al recolector de basura, sin
+    reutilizar ninguna. Ahora hay un pool por proceso:
+
+    * **Prestar** saca una conexion ociosa y sana, o abre una nueva. Nunca
+      falla por agotamiento: si todas estan prestadas se abre otra, porque el
+      `PoolError` de psycopg2 en ese caso convertia una consulta anidada en un
+      500.
+    * **Devolver** deja la conexion *sin transaccion abierta*. `pd.read_sql`
+      abre una y nunca la cierra; con conexiones reutilizadas eso dejaba
+      sesiones "idle in transaction" sujetando un `AccessShareLock`, y el
+      `TRUNCATE` de la siguiente importacion se quedaba esperando para siempre.
+    * Solo guarda `POOL_MAX_OCIOSAS`; el resto se cierra al volver.
+    """
+
+    def __init__(self, parametros: dict[str, Any]):
+        self.pid = os.getpid()
+        self._parametros = parametros
+        self._ociosas: list[tuple[Any, float]] = []
+        self._lock = threading.Lock()
+
+    def prestar(self):
+        """Una conexion lista para usar: ociosa y reciente, o nueva."""
+        ahora = time.monotonic()
+        while True:
+            with self._lock:
+                if not self._ociosas:
+                    break
+                conn, desde = self._ociosas.pop()
+            if conn.closed or ahora - desde > POOL_MAX_SEGUNDOS_OCIOSA:
+                self._cerrar(conn)
+                continue
+            return conn
+        return psycopg2.connect(**self._parametros)
+
+    def devolver(self, conn, descartar: bool = False) -> None:
+        """Devuelve la conexion al pool, o la cierra si no se puede reutilizar."""
+        if conn.closed:
+            return
+        if descartar:
+            self._cerrar(conn)
+            return
+        try:
+            if conn.get_transaction_status() != extensions.TRANSACTION_STATUS_IDLE:
+                conn.rollback()
+        except psycopg2.Error:
+            self._cerrar(conn)
+            return
+        with self._lock:
+            if len(self._ociosas) < POOL_MAX_OCIOSAS:
+                self._ociosas.append((conn, time.monotonic()))
+                return
+        self._cerrar(conn)
+
+    def cerrar_todas(self) -> None:
+        """Cierra las ociosas. Las prestadas se cierran solas al devolverse."""
+        with self._lock:
+            ociosas, self._ociosas = self._ociosas, []
+        for conn, _ in ociosas:
+            self._cerrar(conn)
+
+    @staticmethod
+    def _cerrar(conn) -> None:
+        try:
+            conn.close()
+        except psycopg2.Error:
+            pass
+
+
+_pool: _PoolDelProceso | None = None
+_pool_lock = threading.Lock()
+# Los pools que un proceso hereda al hacer fork (prefork de Celery, gunicorn con
+# `--preload`). Sus sockets son del padre: cerrarlos -o dejar que el recolector
+# los cierre- manda un Terminate que mata la sesion del padre. Se conservan
+# referenciados y nunca se tocan.
+_heredados: list[_PoolDelProceso] = []
+
+
+def _pool_del_proceso(parametros: dict[str, Any]) -> _PoolDelProceso:
+    """El pool de este proceso, creado la primera vez que se pide."""
+    global _pool
+    pid = os.getpid()
+    if _pool is not None and _pool.pid == pid:
+        return _pool
+    with _pool_lock:
+        if _pool is not None and _pool.pid != pid:
+            _heredados.append(_pool)
+            _pool = None
+        if _pool is None:
+            _pool = _PoolDelProceso(parametros)
+        return _pool
+
+
+@atexit.register
+def _cerrar_pool_al_salir() -> None:
+    if _pool is not None and _pool.pid == os.getpid():
+        _pool.cerrar_todas()
+
 
 class DBConnector:
-    """Pool de conexiones a Postgres con las operaciones que usa la analitica.
+    """Acceso a Postgres para la analitica sobre el pool del proceso.
 
-    Lectura a DataFrame, escritura masiva y creacion dinamica de tablas. Se
-    construye con las credenciales que devuelve Vault y mantiene entre 1 y 10
-    conexiones abiertas.
+    Lectura a DataFrame, escritura masiva y creacion dinamica de tablas.
+    Instanciarlo es barato: no abre nada, todas las instancias del proceso
+    comparten las mismas conexiones (ver `_PoolDelProceso`).
     """
 
     def __init__(self):
         db = get_config().db
-        self.conn_params: dict[str, Any] = {
+        self.pool = _pool_del_proceso({
             "host": db.DB_HOST,
             "database": db.DB_NAME,
             "user": db.DB_USER,
@@ -46,31 +171,42 @@ class DBConnector:
             # Todo se cualifica ya con DB_SCHEMA; fijar el search_path es la
             # red: una consulta sin cualificar tampoco puede alcanzar `public`.
             "options": f"-c search_path={DB_SCHEMA}",
-        }
-        self.pool = pool.SimpleConnectionPool(1, 10, **self.conn_params)
+            "application_name": f"netowl_{DB_SCHEMA}",
+            # Sin esto una conexion cortada por la red se queda esperando lo
+            # que diga el TCP del sistema (minutos) antes de fallar.
+            "connect_timeout": 10,
+            "keepalives": 1,
+            "keepalives_idle": 60,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+        })
         self._schema_cache: dict[str, set] = {}
 
     @contextmanager
     def get_connection(self):
-        """Presta una conexion del pool y la devuelve al terminar.
+        """Presta una conexion del pool del proceso y la devuelve al terminar.
 
-        Hace `rollback()` ante cualquier excepcion antes de devolverla: sin eso la
-        conexion vuelve al pool con la transaccion abortada y envenena todas las
-        consultas que la reciban despues.
+        Ante cualquier excepcion hace `rollback()` antes de devolverla: sin eso
+        la conexion vuelve con la transaccion abortada y envenena las consultas
+        siguientes. Si el error es de la propia conexion, se descarta. Al
+        devolverla sin error tambien se cierra cualquier transaccion que quien
+        la uso dejara abierta (ver `_PoolDelProceso.devolver`).
         """
-        conn = self.pool.getconn()
+        conn = self.pool.prestar()
+        descartar = False
         try:
             yield conn
+        except _ERRORES_DE_CONEXION:
+            descartar = True
+            raise
         except Exception:
-            # Sin rollback la conexion vuelve al pool con la transaccion
-            # abortada y envenena las consultas siguientes.
             try:
                 conn.rollback()
             except psycopg2.Error:
-                pass
+                descartar = True
             raise
         finally:
-            self.pool.putconn(conn)
+            self.pool.devolver(conn, descartar=descartar)
 
     def read_table(
         self, table_name: str, columns: list[str] | None = None
@@ -415,28 +551,28 @@ class DBConnector:
                 )
             conn.commit()
 
-    def copy_dataframe(self, df: pd.DataFrame, table_name: str):
-        """Carga masiva con `COPY`, sin crear ni truncar nada.
+    @staticmethod
+    def copiar(cur, df: pd.DataFrame, table_name: str) -> None:
+        """`COPY` del DataFrame con el cursor de quien llama, **sin confirmar**.
 
-        La usan los importadores, que ya han preparado la tabla por su cuenta.
+        Es la pieza de los importadores: el vaciado de la tabla y la carga tienen
+        que ir en la misma transaccion. Antes el `TRUNCATE` se confirmaba solo y
+        el `COPY` iba despues en otra conexion, asi que un fallo a mitad de carga
+        -un CSV con una fila rota, el worker de gunicorn muerto por tiempo o por
+        memoria- dejaba la tabla vacia o a medias, y esas tablas no se pueden
+        reconstruir sin volver a importar. Con las dos cosas en una transaccion,
+        un fallo deja la tabla exactamente como estaba.
         """
         output = io.StringIO()
         df.to_csv(
             output, sep="\t", header=False, index=False, na_rep="NULL"
         )
         output.seek(0)
-
-        with self.get_connection() as conn:
-            with conn.cursor() as cur:
-                table_id = sql.Identifier(DB_SCHEMA, table_name)
-                cols_id = sql.SQL(", ").join(
-                    map(sql.Identifier, df.columns)
-                )
-
-                copy_query = sql.SQL(
-                    "COPY {table} ({fields}) FROM STDIN WITH"
-                    " (FORMAT csv, DELIMITER '\t', NULL 'NULL')"
-                ).format(table=table_id, fields=cols_id)
-
-                cur.copy_expert(copy_query, output)
-            conn.commit()
+        copy_query = sql.SQL(
+            "COPY {table} ({fields}) FROM STDIN WITH"
+            " (FORMAT csv, DELIMITER '\t', NULL 'NULL')"
+        ).format(
+            table=sql.Identifier(DB_SCHEMA, table_name),
+            fields=sql.SQL(", ").join(map(sql.Identifier, df.columns)),
+        )
+        cur.copy_expert(copy_query, output)

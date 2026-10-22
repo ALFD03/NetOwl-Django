@@ -330,3 +330,56 @@ class ComisionPago(models.Model):
         ordering = ["cargo", "nombre"]
         verbose_name = "pago de un periodo cerrado"
         verbose_name_plural = "pagos de periodos cerrados"
+
+
+class CierreInmutable(Exception):
+    """Se intento modificar o borrar un cierre archivado."""
+
+
+class ComisionCierreArchivado(models.Model):
+    """La copia de un cierre, guardada en el momento de reabrir el periodo.
+
+    Reabrir borra lo congelado (`ComisionVenta`, `ComisionPago`, las condiciones y
+    el resumen) para que el periodo se recalcule, y esas filas no se pueden
+    reconstruir: las suscripciones y las facturas se reemplazan en cada
+    importacion. Antes de borrarlas se copian aqui, enteras, con quien cerro,
+    quien reabrio, cuando y por que. Cada reapertura deja una version mas.
+
+    Es **solo de anadir**: una nomina pagada no se reescribe desde la aplicacion.
+    """
+
+    periodo = models.ForeignKey(ComisionPeriodo, on_delete=models.PROTECT, related_name="archivos")
+    version = models.PositiveIntegerField()
+    cerrado_por = models.CharField(max_length=150, blank=True, default="")
+    cerrado_en = models.DateTimeField(null=True, blank=True)
+    reabierto_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    reabierto_por_nombre = models.CharField(max_length=150, blank=True, default="")
+    reabierto_en = models.DateTimeField(auto_now_add=True)
+    motivo = models.TextField()
+    # Para listar sin abrir la copia.
+    total_neto = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    pagos = models.PositiveIntegerField(default=0)
+    ventas = models.PositiveIntegerField(default=0)
+    # El cierre entero: los campos del periodo, las condiciones, el resumen, y
+    # cada venta y cada pago tal y como se congelaron.
+    copia = models.JSONField()
+
+    class Meta:
+        db_table = "comisiones_cierres_archivados"
+        ordering = ["periodo", "-version"]
+        constraints = [
+            models.UniqueConstraint(fields=["periodo", "version"], name="uq_cierre_archivado_version"),
+        ]
+        verbose_name = "cierre archivado"
+        verbose_name_plural = "cierres archivados"
+
+    def __str__(self):
+        return f"{self.periodo} v{self.version}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise CierreInmutable("Un cierre archivado no se modifica.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise CierreInmutable("Un cierre archivado no se borra.")

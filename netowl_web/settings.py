@@ -140,7 +140,7 @@ CSRF_COOKIE_NAME = f"netowl_csrftoken_{ENV_SUFFIX}"
 SESSION_ENGINE = "services.config.sessions"
 
 # --- Límites de subida ---
-MAX_UPLOAD_SIZE = 100 * 1024 * 1024
+MAX_UPLOAD_SIZE = 1000 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
 # Este es distinto del anterior y no debe igualarse a el: marca a partir de que
 # tamano Django deja de guardar el fichero subido en memoria y lo vuelca a un
@@ -148,6 +148,12 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
 # gunicorn) mantenian medio giga residente, y ademas el temporal que crea
 # services/config/uploads.py recibia un fichero que ya estaba entero en RAM.
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+# Lo que puede mandar quien no ha iniciado sesion, y solo al formulario de
+# entrada: usuario y contrasena caben de sobra. El 1 GB de arriba es para las
+# importaciones, que exigen sesion; sin este tope cualquiera podia mandar
+# cuerpos de 1 GB al login y llenar la memoria de los workers
+# (ver netowl_web/middleware.py:LimiteCuerpoAnonimoMiddleware).
+ANON_MAX_BODY_SIZE = 16 * 1024
 
 # --- Aplicaciones instaladas ---
 INSTALLED_APPS = [
@@ -163,6 +169,7 @@ INSTALLED_APPS = [
     "services.catalogos",           # Catalogos de referencia (vistas; modelos en subscriptions)
     "services.comisiones",          # Comisiones de la fuerza de ventas
     "services.config",              # Autenticacion y permisos
+    "services.auditoria",           # Registro de auditoria: quien hizo que
     "inertia",
 ]
 
@@ -170,11 +177,16 @@ INSTALLED_APPS = [
 # Cadena de middleware ejecutado en cada petición/respuesta
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",              # Seguridad (HSTS, etc.)
+    "netowl_web.middleware.CSPMiddleware",                        # Cabecera CSP (ver CSP_POLITICA)
     "whitenoise.middleware.WhiteNoiseMiddleware",                 # Servir estáticos en producción
     "django.contrib.sessions.middleware.SessionMiddleware",       # Manejo de sesiones
     "django.middleware.common.CommonMiddleware",                  # Varios (URL slashes, etc.)
     "django.middleware.csrf.CsrfViewMiddleware",                  # Protección CSRF
     "django.contrib.auth.middleware.AuthenticationMiddleware",    # Autenticación por sesión
+    # Antes que el CSRF y que cualquier vista: un anonimo no sube nada (ver la clase).
+    "netowl_web.middleware.LimiteCuerpoAnonimoMiddleware",
+    # Antes del limitador, para anotar tambien los 429 (ver services/auditoria).
+    "services.auditoria.middleware.AuditoriaMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
     "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
     "netowl_web.middleware.RateLimitMiddleware",
@@ -191,6 +203,33 @@ INERTIA_LAYOUT = "app.html"
 # Es una decision de flujo de trabajo, no de seguridad: por eso tiene su propia
 # variable y no cuelga de DEBUG (ver context_processors.vite_dev_server).
 USE_VITE_DEV_SERVER = os.getenv("VITE_DEV_SERVER", "").lower() in {"1", "true", "yes"} or DEBUG
+
+# --- Content Security Policy ---
+# Solo se ejecuta el JavaScript servido por la propia aplicacion y los dos
+# <script> en linea de app.html, que llevan el nonce de la peticion: un
+# script inyectado (en un nombre de producto, un comentario de un ticket...)
+# no corre aunque llegue a pintarse. Los estilos en linea siguen permitidos
+# porque React los usa en atributos `style` (anchos de barras, framer-motion) y
+# Vite los inyecta en desarrollo; un estilo no ejecuta codigo.
+#
+# En desarrollo se anaden el servidor de Vite y su websocket de recarga.
+#
+# La aplica `netowl_web.middleware.CSPMiddleware`, no la CSP nativa de Django:
+# esa existe desde Django 6 y el contenedor corre 5.2 (ver requirements.txt).
+# `{nonce}` lo sustituye el middleware en cada peticion.
+_VITE = ["http://localhost:5173"] if USE_VITE_DEV_SERVER else []
+CSP_POLITICA = {
+    "default-src": ["'self'"],
+    "script-src": ["'self'", "'nonce-{nonce}'", *_VITE],
+    "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", *_VITE],
+    "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+    "img-src": ["'self'", "data:", "blob:"],
+    "connect-src": ["'self'", *_VITE, *(["ws://localhost:5173"] if _VITE else [])],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+    "frame-ancestors": ["'none'"],
+}
 # Django compara INTERNAL_IPS contra REMOTE_ADDR, asi que solo admite direcciones
 # IP: los hostnames que habia aqui nunca llegaron a coincidir. Esta lista decide
 # la variable `debug` de las plantillas (ver web/templates/app.html).
@@ -212,6 +251,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "netowl_web.context_processors.csrf_cookie_name",
                 "netowl_web.context_processors.vite_dev_server",
+                "netowl_web.context_processors.csp_nonce",  # el nonce de los <script> de app.html
             ],
         },
     },
@@ -352,6 +392,9 @@ RATELIMIT_IP_META_KEY = "netowl_web.ratelimit.ip_cliente"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Logging de requests ---
+# La carpeta no se versiona: se crea al arrancar si no existe (el contenedor ya la
+# trae de la imagen). Sin ella cada linea de log fallaria al abrir el archivo.
+(BASE_DIR / "logs").mkdir(exist_ok=True)
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

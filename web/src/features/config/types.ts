@@ -9,6 +9,8 @@ export interface UserData {
   group_name?: string | null;
   is_superuser: boolean;
   permissions: Record<string, boolean>;
+  /** Si quien mira tiene rango para tocar esta cuenta (no es la suya ni una con más permisos). */
+  editable: boolean;
 }
 
 export interface GroupData {
@@ -17,6 +19,8 @@ export interface GroupData {
   description: string;
   members_count: number;
   permissions: Record<string, boolean>;
+  /** Falso para el grupo propio de quien mira: editarlo sería concederse permisos. */
+  editable: boolean;
 }
 
 export interface NewUserForm {
@@ -29,6 +33,8 @@ export interface NewUserForm {
 
 export type EditableUser = Omit<UserData, 'group_id'> & {
   group_id: number | string | null;
+  /** La matriz al abrir el editor: lo que ya tenía se puede quitar aunque quien edita no lo tenga. */
+  previa?: Record<string, boolean>;
 };
 
 export interface PasswordForm {
@@ -42,6 +48,8 @@ export interface EditableGroup {
   name: string;
   description: string;
   permissions: Record<string, boolean>;
+  /** Ver `EditableUser.previa`. */
+  previa?: Record<string, boolean>;
 }
 
 /** Props Django passes to the user & group management page. */
@@ -49,4 +57,6 @@ export interface ConfigManagementProps {
   users: UserData[];
   groups: GroupData[];
   roles: [string, string][];
+  /** Los permisos que tiene quien mira: solo esos puede conceder. */
+  concedibles: Record<string, boolean>;
 }

@@ -111,5 +111,3 @@ export const ANALYTICS_METRICS = {
     round: 2,
   },
 } satisfies Record<string, AnalyticsMetricConfig>;
-
-export type AnalyticsMetricKey = keyof typeof ANALYTICS_METRICS;

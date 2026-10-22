@@ -10,5 +10,4 @@ export const apiClient = applyCsrf(axios.create({
   },
 }));
 
-export { extractApiError, getApiErrorMessage, JobCancelledError, JobFailedError } from '../http/errors';
-export type { ApiError, ApiErrorPayload } from '../http/errors';
+export { getApiErrorMessage } from '../http/errors';

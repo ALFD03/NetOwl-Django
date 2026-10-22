@@ -236,7 +236,7 @@ interface SidebarContentProps {
 
 function SidebarContent({ url, username, compact = false, onNavigate, onToggleCollapsed }: SidebarContentProps) {
   const { can } = usePermissions();
-  const canManageUsers = can(PERMISSIONS.MANAGE_USERS);
+  const canViewUsers = can(PERMISSIONS.VIEW_USERS);
   const { tema } = useTheme();
   const sufijo = tema === 'claro' ? '_light' : '';
 
@@ -313,7 +313,7 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
 
       <UserMenu
         username={username}
-        canManageUsers={canManageUsers}
+        canViewUsers={canViewUsers}
         isUsersPageActive={url.startsWith('/auth/users')}
         compact={compact}
         onNavigate={onNavigate}
