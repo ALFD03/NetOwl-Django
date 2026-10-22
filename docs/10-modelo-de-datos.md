@@ -7,7 +7,7 @@ Una única base de datos PostgreSQL, con **un esquema por entorno**
 |---|---|---|
 | **ORM de Django** | Migraciones (`migrate`, por esquema) | `DB_SCHEMA` |
 | **DDL explícito** | `ensure_*_schema` / `_ensure_tables_exist` en el código analítico | `DB_SCHEMA` |
-| **Dinámicas** | `DBConnector.save_historico` / `copy_dataframe` sobre la marcha | `DB_SCHEMA` |
+| **Dinámicas** | `DBConnector.save_historico` / `copiar` sobre la marcha | `DB_SCHEMA` |
 
 > **Las tablas dinámicas tienen todas sus columnas de tipo `text`.** Los lectores
 > convierten explícitamente (`int(row.get(...) or 0)`). Una métrica nueva

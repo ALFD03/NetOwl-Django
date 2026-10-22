@@ -6,7 +6,3 @@ export interface ApiMessageResponse {
   periodo_label?: string;
   dias_calculados?: number;
 }
-
-export interface ApiStatusResponse extends ApiMessageResponse {
-  status?: string;
-}

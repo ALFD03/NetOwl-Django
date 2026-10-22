@@ -172,11 +172,6 @@ def zonas() -> list[dict[str, Any]]:
     return list(_catalogo().zonas)
 
 
-def planes_disponibles() -> bool:
-    """Si hay algun plan registrado. Distingue "vacio" de "no configurado"."""
-    return bool(_catalogo().planes)
-
-
 def zonas_disponibles() -> bool:
     """Si hay alguna zona registrada. Distingue "vacio" de "no configurado"."""
     return bool(_catalogo().zonas)

@@ -15,7 +15,6 @@ import tokens from './design-tokens.json';
  * generated class (`bg-surface-primary`, `text-brand`) so themes stay swappable.
  */
 export const SURFACE = tokens.surface;
-export const BRAND = tokens.brand;
 
 /** Per-metric accent colours, keyed by the shared `MetricColor` union. */
 export const METRIC_COLOR = tokens.metric;
@@ -39,5 +38,3 @@ export const CHART_CHROME = tokens.chart;
  * `SURFACE` y `CHART_CHROME` con esto (`shared/charts/tema.ts`).
  */
 export const LIGHT = tokens.light;
-
-export type MetricColorToken = keyof typeof METRIC_COLOR;

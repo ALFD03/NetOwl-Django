@@ -2,15 +2,15 @@
 
 Panel interno de analitica para un Netcom Plus VE: churn, CRM, soporte y suscripciones.
 
-Calcula tasa de cancelacion, reactivaciones, ARPU, tiempos de vida
-(Kaplan-Meier), efectividad y tiempos del CRM, cohortes de tickets de soporte y
+Calcula tasa de cancelacion, reactivaciones, ARPU, cuanto duraron activas
+las bajas de cada mes, efectividad y tiempos del CRM, cohortes de tickets de soporte y
 el reporte mensual para la reguladora, sobre exports de Odoo cargados como CSV.
 
 ## Stack
 
 | Capa | Tecnologia |
 |------|-----------|
-| Analitica | Python 3.11 — pandas, numpy, psycopg2, lifelines |
+| Analitica | Python 3.11 — pandas, numpy, psycopg2 |
 | Web | Django 5 + Inertia.js (paginas renderizadas en servidor que hidratan a React) |
 | Interfaz | React 18 + TypeScript + Vite + Tailwind + Chart.js |
 | Base de datos | PostgreSQL 15+ (SSL, un esquema por entorno) |
@@ -169,11 +169,11 @@ docker run --env-file .env -e SKIP_COLLECTSTATIC=1 -e SKIP_MIGRATE=1 netowl \
 porque `settings.py` necesita Vault desde el momento en que se importa y durante
 el build no hay red hacia el.
 
-`docker-compose.yml` y `nginx.conf` son especificos de cada despliegue y estan
-en `.gitignore`, junto con `deploy/`: no viven en el repositorio.
-
-El despliegue son cuatro contenedores: Postgres, Redis, la app y el worker. Los
-dos ultimos usan la misma imagen y solo cambian el comando de arranque.
+El despliegue es el `docker-compose.yml` de la raiz: cuatro contenedores,
+Postgres, Redis, la app y el worker. Los dos ultimos usan la misma imagen y solo
+cambian el comando de arranque. `manage.py verificar_entorno` revisa, sin cambiar
+nada, lo que el codigo no puede arreglar (TLS de la base, privilegios del rol,
+Redis sin contrasena, DEBUG).
 
 ## Notas
 

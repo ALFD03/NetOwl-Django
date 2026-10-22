@@ -79,5 +79,3 @@ export const CRM_ETAPAS_CLAVE = [
 /** `etapa_5_gpi` -> `5 · GPI`, falling back to the raw key for a new stage. */
 export const crmEtapaLabel = (etapa: string): string =>
   CRM_ETAPA_LABELS[etapa as keyof typeof CRM_ETAPA_LABELS] ?? etapa;
-
-export const SUBSCRIPTION_DIMENSIONS = Object.entries(DIMENSION_LABELS).map(([key, label]) => ({ key, label }));

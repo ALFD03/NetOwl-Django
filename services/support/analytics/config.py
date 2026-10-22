@@ -187,15 +187,6 @@ SUPPORT_TIME_MEASURES = [medida for medida, _, _ in TIME_MEASURE_SPECS]
 TIME_STATS = ["medio", "mediana", "min", "p25", "p75", "max", "std"]
 
 
-def time_columns(medida: str) -> list[str]:
-    """Las nueve columnas escalares que una medida aporta al bloque."""
-    return [
-        *[f"tiempo_{stat}_{medida}_horas" for stat in TIME_STATS],
-        f"pct_excede_promedio_{medida}",
-        f"muestra_{medida}",
-    ]
-
-
 # --- Tasas ------------------------------------------------------------------
 #
 # Tres tasas, cada una con su denominador explícito:

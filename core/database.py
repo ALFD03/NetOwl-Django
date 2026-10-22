@@ -576,14 +576,3 @@ class DBConnector:
             fields=sql.SQL(", ").join(map(sql.Identifier, df.columns)),
         )
         cur.copy_expert(copy_query, output)
-
-    def copy_dataframe(self, df: pd.DataFrame, table_name: str):
-        """Carga masiva con `COPY` en una transaccion propia, sin crear ni truncar nada.
-
-        Para cargar sobre una tabla que se acaba de vaciar use `copiar` dentro de
-        la misma transaccion del vaciado.
-        """
-        with self.get_connection() as conn:
-            with conn.cursor() as cur:
-                self.copiar(cur, df, table_name)
-            conn.commit()

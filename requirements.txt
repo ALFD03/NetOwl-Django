@@ -31,7 +31,6 @@ hvac==2.4.0
 # rebote desaparece el dia que la indirecta cambie de arbol.
 requests==2.34.2
 pydantic==2.13.5
-lifelines==0.30.3
 django-ratelimit==4.1.0
 inertia-django==2.0.0
 celery==5.6.3

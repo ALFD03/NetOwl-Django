@@ -186,5 +186,5 @@ Concurrencia:
 | `web/templates/app.html` | La única plantilla Django |
 | `data/Planes.json`, `data/Zonas.json` | Semilla inicial de los catálogos (solo los lee `cargar_catalogos`) |
 | `scripts/dev.sh` | Arranque de desarrollo |
-| `deploy/`, `Dockerfile`, `entrypoint.sh` | Empaquetado y despliegue |
+| `docker-compose.yml`, `Dockerfile`, `entrypoint.sh` | Empaquetado y despliegue |
 | `graphify-out/` | Grafo de conocimiento del repositorio (generado) |

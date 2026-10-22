@@ -8,7 +8,7 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 |---|---|
 | **Orden** (`orden`, `orden_producto`) | La referencia de la suscripción en Odoo. Es la clave de todo el dominio |
 | **Periodo** | Un mes, o un corte dentro de él. Su etiqueta (`"2025-03-01 al 2025-03-31"`) es la clave `periodo_reporte` de casi todas las tablas |
-| **Cierre** | El corte al último día del mes. `Periodo.es_cierre_oficial()` lo distingue |
+| **Cierre** | El corte al último día del mes |
 | **Base activa** | Suscripciones cuyo último log hasta la fecha las deja en `3_progress` |
 | **Activos inicio / final** | La base al empezar (estrictamente antes de la fecha de inicio) y al cerrar el periodo |
 | **Nuevos** | Suscripciones con fecha de inicio dentro del periodo **y** con alguna actividad registrada |

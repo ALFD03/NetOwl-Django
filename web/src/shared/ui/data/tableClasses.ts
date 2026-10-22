@@ -16,8 +16,4 @@ export const READONLY_TABLE = 'w-full text-left text-xs';
 export const READONLY_TABLE_HEAD_STICKY =
   'sticky top-0 border-b border-slate-800 bg-slate-900/80 font-black uppercase text-slate-400 backdrop-blur-sm';
 
-/** Cabecera normal, para tablas que no scrollean. */
-export const READONLY_TABLE_HEAD =
-  'border-b border-slate-800 bg-slate-900/80 font-black uppercase text-slate-400';
-
 export const READONLY_TABLE_BODY = 'divide-y divide-slate-800/60';

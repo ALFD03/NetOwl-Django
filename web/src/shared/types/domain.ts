@@ -1,23 +1,5 @@
 /** Tipos transversales del dominio: periodos, dimensiones y métricas diarias. */
 
-export type ThemeColor = 'green' | 'red' | 'blue' | 'yellow' | 'slate' | 'brand' | 'emerald';
-
-export interface SelectedTrend {
-  title: string;
-  rateKey: string;
-  countKey: string;
-  unitLabel: string;
-  color: string;
-  bgColor: string;
-  theme?: ThemeColor;
-}
-
-export interface ApiResponse<T = unknown> {
-  data: T;
-  status?: string;
-  message?: string;
-}
-
 export interface DimensionVal {
   valor: string;
   activos_inicio?: number;
@@ -122,7 +104,3 @@ export interface Periodo {
   gratuitos_retornados?: number;
 }
 
-export interface MetricsHistoricItem {
-  periodo_reporte: string;
-  [key: string]: string | number | undefined;
-}

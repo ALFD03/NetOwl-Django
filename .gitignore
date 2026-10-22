@@ -1,25 +1,56 @@
+# --- Secretos y configuracion local ---
+# El .env real solo lleva el arranque de Vault, pero sigue siendo un secreto.
+# Cualquier variante (.env.local, .env.prod...) tambien; la plantilla, no.
 .env
-__pycache__
-staticfiles/
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# --- Python ---
+__pycache__/
+*.py[cod]
 .venv/
 venv/
-AGENTS.md
-DESIGN.md
-deploy/
-COMMITS.md
-logs.log
-nginx.conf
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+celerybeat-schedule
+
+# --- Frontend ---
 node_modules/
+# El bundle lo compila `npm run build` (o la etapa de frontend del Dockerfile).
+web/static/dist/
+
+# --- Salidas de la aplicacion ---
+# `collectstatic` escribe en staticfiles/; los registros, en logs/.
+staticfiles/
 logs/
+*.log
+
+# --- Respaldos y volcados ---
+*.dump
+*.backup
+*.bak
+*.zip
+
+# --- Editores y sistema ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# --- Asistentes de IA y sus notas locales ---
 .agents/
+.claude/
+.claudeignore
 .codex/
 .cursor/
 .github/
-.claude/
-*.zip
-.claudeignore
-CLAUDE.md
-web/static/dist/
 graphify-out/
-.vscode
 skills-lock.json
+CLAUDE.md
+AGENTS.md
+DESIGN.md
+COMMITS.md
