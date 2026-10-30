@@ -122,7 +122,10 @@ class VaultSettings:
         self._mount_path = os.getenv("VAULT_MOUNT_PATH")
         self._secret_path = os.getenv("VAULT_PATH")
 
-        raw_secrets = self._fetch_from_vault()
+        if os.getenv("CONFIG_SIN_VAULT") == "1":
+            raw_secrets = self._leer_de_entorno()
+        else:
+            raw_secrets = self._fetch_from_vault()
 
         try:
             validated = VaultDataStructure(**raw_secrets)
@@ -142,6 +145,29 @@ class VaultSettings:
 
         self.django = validated.DJANGOCONFIG
         self.db = validated.DBCONFIG
+
+    @staticmethod
+    def _leer_de_entorno() -> dict:
+        """Arma el secreto con variables de entorno, sin pasar por Vault.
+
+        Solo con `CONFIG_SIN_VAULT=1`, pensado para un entorno (p. ej. QA) cuyo
+        secreto aun no existe en Vault. Usa los mismos nombres que el secreto y
+        pasa por la misma validacion; una variable que falte no se rellena, para
+        que pydantic la reporte como requerida.
+        """
+        def tomar(*nombres: str) -> dict:
+            return {n: v for n in nombres if (v := os.getenv(n)) is not None}
+
+        return {
+            "DJANGOCONFIG": tomar(
+                "DJANGO_SECRET_KEY", "DJANGO_DEBUG", "DJANGO_SECURE_SSL",
+                "ALLOWED_HOSTS", "CSRF_TRUSTED_ORIGINS",
+            ),
+            "DBCONFIG": tomar(
+                "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT",
+                "DB_SSLMODE",
+            ),
+        }
 
     def _fetch_from_vault(self) -> dict:
         """Lee el secreto, reintentando el ciclo completo si Vault lo rechaza.
