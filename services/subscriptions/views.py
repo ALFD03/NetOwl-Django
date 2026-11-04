@@ -21,6 +21,7 @@ from services.config.periodos import (
     periodos_visibles,
     ve_todos_los_periodos,
 )
+from services.config.unidades import alcance_de
 from services.imports.jobs import lanzar_analisis
 from services.subscriptions.analytics import (
     get_analytics_data,
@@ -35,6 +36,7 @@ from services.subscriptions.analytics import (
     get_sales_report_data,
     get_zonas_config,
     limpiar_nodos,
+    restringir_unidades,
 )
 from services.subscriptions.analytics.lifetime import (
     get_lifetime_detalle,
@@ -177,14 +179,25 @@ def sales_report(request):
 @login_required
 @permission_required('can_view_subs_sales')
 def business_units(request):
-    """Reporte por coordinador, mas el resumen FTTH global y el bloque RF."""
+    """Reporte por coordinador, mas el resumen FTTH global y el bloque RF.
+
+    Quien no ve todas las unidades recibe solo las suyas, el bloque RF si lo
+    tiene y el consolidado FTTH ya sumado (`restringir_unidades`).
+    """
     periodo = periodo_visible(request, request.GET.get("period"), get_periodos)
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
     data = _recortar_selector(request, get_business_units_data(periodo, dia))
+    day_metrics = get_day_metrics((data.get("period") or "")[:7])
+    zonas_config = get_zonas_config()
+    alcance = alcance_de(request.user)
+    if alcance is not None:
+        data, day_metrics, zonas_config = restringir_unidades(
+            data, day_metrics, zonas_config, alcance.nombres(), alcance.rf,
+        )
     return render_inertia(request, "Subscriptions/BusinessUnits", {
         "buData": data,
-        "dayMetrics": get_day_metrics((data.get("period") or "")[:7]),
-        "zonasConfig": get_zonas_config(),
+        "dayMetrics": day_metrics,
+        "zonasConfig": zonas_config,
         "objetivos": get_objetivos_config(),
         "section": "business_units"
     })
@@ -319,7 +332,11 @@ def api_business_units_report(request):
     """El reporte por unidades de negocio de un periodo (y de un dia)."""
     periodo = periodo_visible(request, request.GET.get("period"), get_periodos)
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
-    return JsonResponse(_recortar_selector(request, get_business_units_data(periodo, dia)))
+    data = _recortar_selector(request, get_business_units_data(periodo, dia))
+    alcance = alcance_de(request.user)
+    if alcance is not None:
+        data, _, _ = restringir_unidades(data, {}, get_zonas_config(), alcance.nombres(), alcance.rf)
+    return JsonResponse(data)
 
 
 def _periodo_no_visible():

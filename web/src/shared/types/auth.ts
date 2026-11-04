@@ -1,5 +1,14 @@
 /** Tipos del usuario autenticado y del catálogo de permisos. */
 
+/**
+ * Las unidades de negocio que ve una cuenta o un grupo sin el permiso de verlas
+ * todas: ids de `Coordinador` y el bloque RF (ver `services/config/unidades.py`).
+ */
+export interface UnidadesSeleccion {
+  ids: number[];
+  rf: boolean;
+}
+
 export type Permission =
   | 'can_view_subscriptions'
   | 'can_view_crm'
@@ -23,6 +32,7 @@ export type Permission =
   | 'can_view_import_history'
   | 'can_view_comisiones'
   | 'can_view_all_periods'
+  | 'can_view_all_business_units'
   | 'can_view_users'
   | 'can_view_auditoria'
   | 'can_import_data'
@@ -71,6 +81,7 @@ export interface UserProfile {
   can_view_import_history: boolean;
   can_view_comisiones: boolean;
   can_view_all_periods: boolean;
+  can_view_all_business_units: boolean;
   can_view_users: boolean;
   can_view_auditoria: boolean;
   can_import_data: boolean;

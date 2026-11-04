@@ -27,6 +27,7 @@ from .queries import (
     get_periodos,
     get_sales_report_data,
     get_zonas_config,
+    restringir_unidades,
 )
 
 __all__ = [
@@ -34,7 +35,7 @@ __all__ = [
     "get_bajas_detalle", "limpiar_nodos",
     "get_cierre_churn", "get_dimensiones", "get_periodos",
     "get_dashboard_data", "get_analytics_data", "get_sales_report_data",
-    "get_business_units_data", "get_zonas_config", "get_objetivos_config", "import_subscriptions_csv", "import_logs_csv", "ETAReportManager",
+    "get_business_units_data", "get_zonas_config", "restringir_unidades", "get_objetivos_config", "import_subscriptions_csv", "import_logs_csv", "ETAReportManager",
     "CatalogoVacio", "ProductosSinCatalogo", "productos_fuera_de_catalogo", "campos_odoo_importacion",
     "import_gratis_csv", "load_free_subs", "summarize_detection",
     "import_facturas_csv", "FaltanColumnasFacturas",

@@ -524,3 +524,89 @@ def get_business_units_data(
             "status": "error",
             "message": "Error interno del servidor. Consulte el registro de la aplicación.",
         }
+
+
+def restringir_unidades(
+    bu_data: dict[str, Any],
+    day_metrics: dict[str, Any],
+    zonas_config: dict[str, Any],
+    unidades: frozenset[str],
+    rf: bool,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Unidades de negocio para quien no las ve todas (`services/config/unidades.py`).
+
+    Deja solo las unidades de `unidades` (por nombre de coordinador) y el bloque
+    RF si `rf`. El recorte es del servidor, no del selector: el cliente reagrupa
+    cada dia a partir de `day_metrics` y `zonas_config`, asi que esos dos se
+    recortan tambien a las zonas visibles, y `dims` (solo de Analytics) se quita.
+
+    El **consolidado FTTH se ve siempre**, y es el de toda la empresa. El
+    cliente lo suma de los nodos FTTH de todas las unidades, que ya no le
+    llegan; por eso viaja ya sumado en `ftth_consolidado`, un nodo por corte
+    (`cierre` y cada dia) con los cinco campos que suma `aggregateNodes`. Un
+    nodo con la suma da exactamente lo mismo que sumar los nodos, y su meta es
+    la general, que tampoco depende del reparto por zonas.
+    """
+    zonas = zonas_config.get("zonas", [])
+    coordinador_de = {z["name"].lower(): z["coordinador"] for z in zonas if z.get("coordinador")}
+    zonas_rf = {z["name"].lower() for z in zonas if str(z.get("type", "")).upper() == "RF"}
+    visibles = {zona for zona, c in coordinador_de.items() if c in unidades}
+    if rf:
+        visibles |= zonas_rf
+
+    def zona_de(valor: Any) -> str:
+        return str(valor).split(" - ")[0].strip().lower()
+
+    def consolidado(nodos: list[dict[str, Any]], reactivaciones: str) -> dict[str, int]:
+        suma = {
+            campo: sum(int(n.get(campo) or 0) for n in nodos)
+            for campo in ("activos_inicio", "activos_final", "nuevos", "bajas")
+        }
+        suma["reactivaciones"] = sum(int(n.get(reactivaciones) or 0) for n in nodos)
+        suma["total_nodos"] = len(nodos)
+        return suma
+
+    # Lo mismo que suma el cliente: los nodos FTTH de las unidades (no del
+    # bloque RF, que agrupa por tecnologia).
+    grupos = bu_data.get("data") or []
+    ftth_cierre = [
+        nodo for g in grupos if not g.get("is_rf")
+        for nodo in g.get("nodes", []) if nodo.get("type") == "FTTH"
+    ]
+    dias = (day_metrics or {}).get("dias") or {}
+    ftth_dias = {
+        dia: consolidado([
+            fila for fila in corte.get("dimensiones", [])
+            if zona_de(fila.get("valor")) in coordinador_de
+            and zona_de(fila.get("valor")) not in zonas_rf
+        ], "react_val")
+        for dia, corte in dias.items()
+    }
+
+    bu = dict(bu_data)
+    if "data" in bu:
+        bu["data"] = [
+            g for g in grupos
+            if (rf if g.get("is_rf") else g.get("coordinador") in unidades)
+        ]
+    bu["ftth_consolidado"] = {
+        "cierre": consolidado(ftth_cierre, "reactivaciones"),
+        "dias": ftth_dias,
+    }
+    bu["alcance"] = {"coordinadores": sorted(unidades), "rf": rf}
+
+    dm = dict(day_metrics or {})
+    if dias:
+        dm["dias"] = {
+            dia: {
+                "global": corte.get("global", {}),
+                "dimensiones": [
+                    fila for fila in corte.get("dimensiones", [])
+                    if zona_de(fila.get("valor")) in visibles
+                ],
+            }
+            for dia, corte in dias.items()
+        }
+
+    zc = {**zonas_config, "zonas": [z for z in zonas if z["name"].lower() in visibles]}
+    return bu, dm, zc

@@ -16,15 +16,20 @@ import { usePermissions } from '@/shared/hooks/usePermissions';
 import { UsersTable } from '@/features/config/components/management/UsersTable';
 import { GroupsGrid } from '@/features/config/components/management/GroupsGrid';
 import { PermissionEditor } from '@/features/config/components/management/PermissionEditor';
+import { UnidadesEditor } from '@/features/config/components/management/UnidadesEditor';
 import { CampoSelect, PieDeModal } from '@/features/config/components/management/FormControls';
 
-import type {
-  ConfigManagementProps, EditableGroup, EditableUser, NewUserForm, PasswordForm, UserData,
+import {
+  SIN_UNIDADES,
+  type ConfigManagementProps, type EditableGroup, type EditableUser, type NewUserForm, type PasswordForm,
+  type UserData,
 } from '@/features/config/types';
 
 const TODOS_LOS_PERMISOS = PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => permission.key));
 
-export function ManagementView({ users = [], groups = [], roles = [], concedibles = {} }: ConfigManagementProps) {
+export function ManagementView({
+  users = [], groups = [], roles = [], concedibles = {}, unidadesNegocio = [], unidadesConcedibles = null,
+}: ConfigManagementProps) {
   const { can } = usePermissions();
   const puedeCrear = can(PERMISSIONS.CREATE_USERS);
   const puedeEditar = can(PERMISSIONS.EDIT_USER_PERMISSIONS);
@@ -73,7 +78,8 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
         user_id: userToEdit.id,
         role: userToEdit.role,
         group_id: userToEdit.group_id ? Number(userToEdit.group_id) : null,
-        permissions: userToEdit.permissions
+        permissions: userToEdit.permissions,
+        unidades: userToEdit.unidades,
       });
       setUserToEdit(null);
       router.reload();
@@ -108,7 +114,8 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
         group_id: groupToEdit.id || null,
         name: groupToEdit.name,
         description: groupToEdit.description,
-        permissions: groupToEdit.permissions
+        permissions: groupToEdit.permissions,
+        unidades: groupToEdit.unidades,
       });
       setGroupToEdit(null);
       router.reload();
@@ -153,7 +160,8 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
   const nuevoGrupo = () => setGroupToEdit({
     name: '',
     description: '',
-    permissions: { ...DEFAULT_GROUP_PERMISSIONS }
+    permissions: { ...DEFAULT_GROUP_PERMISSIONS },
+    unidades: SIN_UNIDADES,
   });
 
   return (
@@ -197,7 +205,8 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
                   password: '',
                   role: 'viewer',
                   group_id: '',
-                  permissions: { ...DEFAULT_USER_PERMISSIONS }
+                  permissions: { ...DEFAULT_USER_PERMISSIONS },
+                  unidades: SIN_UNIDADES,
                 })}
               >
                 Nuevo usuario
@@ -215,7 +224,7 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
         <UsersTable
           users={filteredUsers}
           groups={groups}
-          onEdit={puedeEditar ? (user) => setUserToEdit({ ...user, previa: { ...user.permissions } }) : null}
+          onEdit={puedeEditar ? (user) => setUserToEdit({ ...user, previa: { ...user.permissions }, previaUnidades: user.unidades }) : null}
           onChangePassword={puedeCambiarClave
             ? (user) => setUserToChangePass({ user_id: user.id, username: user.username, password: '' })
             : null}
@@ -229,7 +238,7 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
           users={users}
           filtrando={Boolean(termino)}
           onCreate={puedeGrupos ? nuevoGrupo : null}
-          onEdit={puedeGrupos ? (group) => setGroupToEdit({ ...group, previa: { ...group.permissions } }) : null}
+          onEdit={puedeGrupos ? (group) => setGroupToEdit({ ...group, previa: { ...group.permissions }, previaUnidades: group.unidades }) : null}
           onDelete={puedeGrupos ? (group) => setDeletingItem({ type: 'group', id: group.id, name: group.name }) : null}
         />
       )}
@@ -301,11 +310,21 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
                 </span>
               </p>
             ) : (
-              <PermissionEditor
-                permissions={userToCreate.permissions}
-                onChange={(permissions) => setUserToCreate({ ...userToCreate, permissions })}
-                bloqueados={bloqueadosPara(DEFAULT_USER_PERMISSIONS)}
-              />
+              <>
+                <PermissionEditor
+                  permissions={userToCreate.permissions}
+                  onChange={(permissions) => setUserToCreate({ ...userToCreate, permissions })}
+                  bloqueados={bloqueadosPara(DEFAULT_USER_PERMISSIONS)}
+                />
+                <UnidadesEditor
+                  unidades={userToCreate.unidades}
+                  onChange={(unidades) => setUserToCreate({ ...userToCreate, unidades })}
+                  catalogo={unidadesNegocio}
+                  todas={Boolean(userToCreate.permissions[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS])}
+                  concedibles={unidadesConcedibles}
+                  previa={SIN_UNIDADES}
+                />
+              </>
             )}
 
             <PieDeModal
@@ -378,6 +397,15 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
               onChange={(permissions) => setUserToEdit({ ...userToEdit, permissions })}
               disabled={Boolean(userToEdit.group_id)}
               bloqueados={bloqueadosPara(userToEdit.previa ?? {})}
+            />
+            <UnidadesEditor
+              unidades={userToEdit.unidades}
+              onChange={(unidades) => setUserToEdit({ ...userToEdit, unidades })}
+              catalogo={unidadesNegocio}
+              todas={Boolean(userToEdit.permissions[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS])}
+              disabled={Boolean(userToEdit.group_id)}
+              concedibles={unidadesConcedibles}
+              previa={userToEdit.previaUnidades ?? SIN_UNIDADES}
             />
 
             <PieDeModal
@@ -468,6 +496,14 @@ export function ManagementView({ users = [], groups = [], roles = [], concedible
               permissions={groupToEdit.permissions}
               onChange={(permissions) => setGroupToEdit({ ...groupToEdit, permissions })}
               bloqueados={bloqueadosPara(groupToEdit.previa ?? {})}
+            />
+            <UnidadesEditor
+              unidades={groupToEdit.unidades}
+              onChange={(unidades) => setGroupToEdit({ ...groupToEdit, unidades })}
+              catalogo={unidadesNegocio}
+              todas={Boolean(groupToEdit.permissions[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS])}
+              concedibles={unidadesConcedibles}
+              previa={groupToEdit.previaUnidades ?? SIN_UNIDADES}
             />
 
             <PieDeModal

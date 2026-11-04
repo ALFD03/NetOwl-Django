@@ -41,6 +41,7 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_view_imports_subs` / `_crm` / `_support` / `can_view_import_history` | Una por pestaña de importaciones |
 | `can_view_comisiones` | El informe de comisiones |
 | `can_view_all_periods` | Todos los periodos evaluados de Suscripciones, CRM y Soporte. Sin él, solo el **último periodo calculado** de cada módulo (ver abajo). `config/0013` lo concedió a todas las cuentas existentes; una cuenta nueva nace sin él |
+| `can_view_all_business_units` | Todas las unidades de negocio. Sin él, la página Unidades de negocio enseña solo las de `unidades_negocio` y el bloque RF si `unidad_rf` (ver abajo). `config/0014` lo concedió a todas las cuentas existentes |
 | `can_view_users` | La pantalla de usuarios y grupos (solo verla) |
 | `can_view_auditoria` | El registro de auditoría (`/auditoria/`) |
 
@@ -58,6 +59,23 @@ se aplica en el servidor, no solo en el selector:
   con las mismas funciones de promedio que el análisis (`crm.analytics.metrics.promediar_cierres`,
   `support.analytics.metrics.average_blocks`), para que la forma del bloque no cambie.
 - El reporte ETA y Comisiones no se restringen: son de quien administra, no de lectura.
+
+### Unidades de negocio por cuenta (`services/config/unidades.py`)
+
+Una unidad de negocio es un `Coordinador` del catálogo, y el catálogo cambia, así que no hay un permiso por
+unidad: `can_view_all_business_units` es el interruptor y, sin él, `PermissionMatrix.unidades_negocio` (M2M a
+`Coordinador`, por id: renombrar no quita nada) más `unidad_rf` (el bloque RF, que no es un coordinador).
+`Profile.alcance_unidades()` lo resuelve como `has_permission`: superusuario y grupo incluidos;
+`sync_permissions_from_group` copia también la lista.
+
+- **Solo restringe la página Unidades de negocio** (y su `api/business-units/`). El Reporte de ventas, que
+  comparte `can_view_subs_sales`, no cambia.
+- El recorte es del servidor (`subscriptions.analytics.queries.restringir_unidades`): el cliente reagrupa cada
+  día desde `dayMetrics` y `zonasConfig`, así que los dos llegan recortados a las zonas visibles.
+- **El consolidado FTTH se ve siempre**, el de toda la empresa. Como sus nodos ya no llegan, viaja sumado en
+  `buData.ftth_consolidado` (un nodo por corte) y no sigue los filtros de sucursal, búsqueda o métrica.
+- El techo de la administración vale también aquí: nadie concede unidades que no ve
+  (`unidades_fuera_de_alcance`) ni toca una cuenta con unidades que no ve (`puede_actuar_sobre`).
 
 ### Permisos de acción (cerrados por defecto)
 

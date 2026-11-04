@@ -13,6 +13,10 @@
  * coordinador entero, sobre los totales de los nodos que los otros filtros
  * dejaron. El consolidado FTTH lo sigue: suma solo los nodos que lo cumplen, o
  * los de los coordinadores que lo cumplen.
+ *
+ * Quien no ve todas las unidades no recibe los nodos de las demás, así que su
+ * consolidado FTTH llega ya sumado (`ftthFijo`, de `restringir_unidades`) y
+ * no sigue los filtros: es siempre el de toda la empresa en ese corte.
  */
 
 import { useMemo } from 'react';
@@ -74,6 +78,18 @@ interface UseBusinessUnitsDataParams {
   proyeccion?: Proyeccion | null;
   /** El filtro por crecimiento, churn o proyección, por nodo o por coordinador. */
   filtroMetrica: FiltroMetrica;
+  /** El consolidado FTTH ya sumado, para quien no ve todas las unidades. */
+  ftthFijo?: FtthConsolidadoNodo | null;
+}
+
+/** Un nodo con la suma de los nodos FTTH de toda la empresa en un corte. */
+export interface FtthConsolidadoNodo {
+  activos_inicio: number;
+  activos_final: number;
+  nuevos: number;
+  reactivaciones: number;
+  bajas: number;
+  total_nodos: number;
 }
 
 export function useBusinessUnitsData({
@@ -85,6 +101,7 @@ export function useBusinessUnitsData({
   objetivos,
   proyeccion = null,
   filtroMetrica,
+  ftthFijo = null,
 }: UseBusinessUnitsDataParams) {
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const umbral = umbralFiltro(filtroMetrica, proyeccion);
@@ -142,7 +159,7 @@ export function useBusinessUnitsData({
   const dynamicFtthSummary = useMemo<FtthSummary>(() => {
     // Con el filtro por coordinador, solo cuentan los que lo cumplen.
     const coordinadores = filtraGrupos ? new Set(filteredData.map((group) => group.coordinador)) : null;
-    const ftthNodes = groups.flatMap((group) => {
+    const ftthNodes = ftthFijo ? [ftthFijo] : groups.flatMap((group) => {
       if (group.is_rf || (coordinadores && !coordinadores.has(group.coordinador))) return [];
       return group.nodes?.filter((node) => {
         const branchMatches = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
@@ -165,14 +182,14 @@ export function useBusinessUnitsData({
     return {
       ...totals,
       adiciones_brutas: totals.nuevos + totals.reactivaciones - totals.bajas,
-      total_nodos: ftthNodes.length,
+      total_nodos: ftthFijo ? ftthFijo.total_nodos : ftthNodes.length,
       meta,
       ...calcComercial(totals.activos_inicio, totals.activos_final, meta.metaCrecimiento, {
         nuevos: totals.nuevos,
         proyeccion,
       }),
     };
-  }, [groups, selectedBranch, normalizedSearch, period, objetivos, proyeccion, filteredData, filtroMetrica, umbral, filtraNodos, filtraGrupos]);
+  }, [groups, selectedBranch, normalizedSearch, period, objetivos, proyeccion, filteredData, filtroMetrica, umbral, filtraNodos, filtraGrupos, ftthFijo]);
 
   return { branchList, filteredData, dynamicFtthSummary };
 }

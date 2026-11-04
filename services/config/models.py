@@ -20,6 +20,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from core.config import DB_SCHEMA
+from services.config.unidades import alcance_guardado
 
 # --- CATALOGO UNICO DE PERMISOS ---
 # Profile y PermissionGroup comparten exactamente la misma matriz. Declararla
@@ -46,6 +47,8 @@ VIEW_PERMISSION_FIELDS = [
     'can_view_comisiones',
     # Profundidad historica: todos los periodos evaluados o solo el ultimo.
     'can_view_all_periods',
+    # Unidades de negocio: todas, o solo las de `unidades_negocio` (+ RF).
+    'can_view_all_business_units',
     # Administracion: ver la pantalla de cuentas y grupos, y el registro de
     # auditoria.
     'can_view_users', 'can_view_auditoria',
@@ -131,6 +134,21 @@ class PermissionMatrix(models.Model):
     # calculado (`services/config/periodos.py`). La migracion 0013 se lo dio a
     # todas las cuentas que ya existian; una cuenta nueva nace sin el.
     can_view_all_periods = models.BooleanField(default=False)
+
+    # --- Unidades de negocio ---
+    # Con `can_view_all_business_units`, la pagina Unidades de negocio entera.
+    # Sin el, solo las unidades marcadas en `unidades_negocio` y el bloque RF si
+    # `unidad_rf`; el consolidado FTTH se ve siempre. La lista es una relacion
+    # con el catalogo (`Coordinador`), no un permiso por unidad: las unidades
+    # cambian y la matriz no puede llevar un campo por cada una. Por id, asi que
+    # renombrar una unidad no se la quita a nadie. La migracion 0014 dio el
+    # interruptor a todas las cuentas existentes.
+    can_view_all_business_units = models.BooleanField(default=False)
+    unidades_negocio = models.ManyToManyField(
+        'subscriptions.Coordinador', blank=True, related_name='+',
+    )
+    # El bloque RF no es un coordinador: agrupa todas las zonas RF.
+    unidad_rf = models.BooleanField(default=False)
 
     # --- Comisiones ---
     # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar los
@@ -247,12 +265,24 @@ class Profile(PermissionMatrix):
             return getattr(self.group, perm_name, False)
         return getattr(self, perm_name, False)
 
+    def alcance_unidades(self):
+        """Las unidades de negocio que ve la cuenta, o None si las ve todas.
+
+        Como `has_permission`: los superusuarios lo ven todo y un perfil con
+        grupo pregunta al grupo.
+        """
+        if self.user.is_superuser:
+            return None
+        return alcance_guardado(self.group or self)
+
     def sync_permissions_from_group(self):
         """Copia al perfil la matriz de su grupo. Sin grupo no hace nada."""
         if self.group:
             for field in PERMISSION_FIELDS:
                 setattr(self, field, getattr(self.group, field, False))
+            self.unidad_rf = self.group.unidad_rf
             self.save()
+            self.unidades_negocio.set(self.group.unidades_negocio.all())
 
     def __str__(self):
         group_str = f" [{self.group.name}]" if self.group else ""

@@ -2,11 +2,12 @@
 
 import { apiClient } from './client';
 import type { ApiMessageResponse } from './types';
+import type { UnidadesSeleccion } from '@/shared/types/auth';
 
-export interface CreateUserRequest { username: string; password: string; role: string; group_id: number | string | null; permissions: Record<string, boolean>; }
-export interface UpdateUserPermissionsRequest { user_id: number; role: string; group_id: number | null; permissions: Record<string, boolean>; }
+export interface CreateUserRequest { username: string; password: string; role: string; group_id: number | string | null; permissions: Record<string, boolean>; unidades: UnidadesSeleccion; }
+export interface UpdateUserPermissionsRequest { user_id: number; role: string; group_id: number | null; permissions: Record<string, boolean>; unidades: UnidadesSeleccion; }
 export interface ChangePasswordRequest { user_id: number; password: string; }
-export interface SaveGroupRequest { group_id: number | null; name: string; description: string; permissions: Record<string, boolean>; }
+export interface SaveGroupRequest { group_id: number | null; name: string; description: string; permissions: Record<string, boolean>; unidades: UnidadesSeleccion; }
 
 export const configApi = {
   createUser: async (request: CreateUserRequest) => (await apiClient.post<ApiMessageResponse>('/auth/api/users/create/', request)).data,

@@ -4,6 +4,11 @@
  * Agrupa por coordinador. Ojo: calcula `tasaCumplimiento` **sin recortar a 100**,
  * a diferencia del Sales Report; es una discrepancia intencionada (ver
  * `features/subscriptions/lib/commercial.ts`).
+ *
+ * Quien no ve todas las unidades recibe `buData.alcance` y solo los datos de
+ * las suyas (`restringir_unidades` en el servidor). Al reagrupar un día, una
+ * zona RF visible puede colgar de otro coordinador, así que los grupos se
+ * vuelven a recortar aquí con el alcance.
  */
 
 import { useMemo, useState } from 'react';
@@ -19,10 +24,20 @@ import type { DayMetrics } from '@/shared/types/domain';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { BusinessUnitsView } from '@/features/subscriptions/components/reports/BusinessUnitsView';
 import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
-import { useBusinessUnitsData, type BusinessUnitGroup } from '@/features/subscriptions/hooks/useBusinessUnitsData';
+import {
+  useBusinessUnitsData, type BusinessUnitGroup, type FtthConsolidadoNodo,
+} from '@/features/subscriptions/hooks/useBusinessUnitsData';
 
 interface BusinessUnitsProps {
-  buData?: { data?: BusinessUnitGroup[]; periods?: string[]; period?: string; dia?: number | null };
+  buData?: {
+    data?: BusinessUnitGroup[];
+    periods?: string[];
+    period?: string;
+    dia?: number | null;
+    /** Solo para quien no ve todas las unidades. */
+    alcance?: { coordinadores: string[]; rf: boolean };
+    ftth_consolidado?: { cierre: FtthConsolidadoNodo; dias: Record<string, FtthConsolidadoNodo> };
+  };
   dayMetrics?: DayMetrics;
   zonasConfig?: ZonasConfig;
 }
@@ -37,10 +52,15 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
 
   // Mismo criterio que en Ventas: el dia se resuelve en cliente sobre el mes
   // que ya esta en los props; el cierre del mes es el respaldo.
-  const groups = useMemo(
-    () => (dayData ? buildBusinessUnitGroups(dayData.dimensiones, zonasConfig) : buData.data ?? []),
-    [dayData, zonasConfig, buData.data],
-  );
+  const { alcance, ftth_consolidado: ftthConsolidado } = buData;
+  const groups = useMemo(() => {
+    const todos = dayData ? buildBusinessUnitGroups(dayData.dimensiones, zonasConfig) : buData.data ?? [];
+    if (!alcance) return todos;
+    return todos.filter((group) => (group.is_rf ? alcance.rf : alcance.coordinadores.includes(group.coordinador)));
+  }, [dayData, zonasConfig, buData.data, alcance]);
+  const ftthFijo = ftthConsolidado
+    ? (dayData ? ftthConsolidado.dias[String(effectiveDay)] : ftthConsolidado.cierre) ?? null
+    : null;
 
   // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
   // site y estado pertenece cada zona, que es por donde se heredan.
@@ -55,6 +75,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
     objetivos,
     proyeccion,
     filtroMetrica,
+    ftthFijo,
   });
 
   const changePeriod = (period: string) => {

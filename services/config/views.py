@@ -32,9 +32,11 @@ from inertia import render as render_inertia
 from netowl_web.ratelimit import ip_cliente, usuario_login
 from services.auditoria.models import RegistroAuditoria
 from services.auditoria.registro import registrar
+from services.subscriptions.models import Coordinador
 
 from .decorators import permission_required, resolve_landing_url
 from .models import PERMISSION_FIELDS, PermissionGroup, Profile
+from .unidades import AlcanceUnidades, alcance_de, alcance_guardado
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +133,12 @@ def puede_actuar_sobre(actor, objetivo) -> bool:
     if objetivo.is_superuser:
         return False
     propios = matriz_efectiva(actor)
-    return all(propios[field] for field, valor in matriz_efectiva(objetivo).items() if valor)
+    if not all(propios[field] for field, valor in matriz_efectiva(objetivo).items() if valor):
+        return False
+    # Lo mismo con las unidades de negocio: sin verlas todas, solo una cuenta
+    # cuyas unidades sean un subconjunto de las propias.
+    alcance = alcance_de(actor)
+    return alcance is None or alcance.cubre(alcance_de(objetivo))
 
 
 def respuesta_sin_rango() -> JsonResponse:
@@ -145,6 +152,71 @@ def respuesta_sin_rango() -> JsonResponse:
         },
         status=403,
     )
+
+
+def leer_unidades(data, matriz: dict[str, bool]) -> AlcanceUnidades | None:
+    """Las unidades de negocio del payload, o None si la matriz las abre todas.
+
+    Llegan en `unidades: {ids, rf}`. Como la matriz, lo ausente vale vacio, y
+    un id que no esta en el catalogo se descarta.
+    """
+    if matriz.get('can_view_all_business_units'):
+        return None
+    crudo = data.get("unidades") or {}
+    if not isinstance(crudo, dict):
+        crudo = {}
+    pedidos = {i for i in (leer_id(v) for v in crudo.get("ids") or []) if i is not None}
+    ids = frozenset(Coordinador.objects.filter(id__in=pedidos).values_list('id', flat=True))
+    return AlcanceUnidades(ids=ids, rf=bool(crudo.get("rf")))
+
+
+def unidades_fuera_de_alcance(
+    actor, nueva: AlcanceUnidades | None, previa: AlcanceUnidades | None,
+) -> list[str]:
+    """Las unidades que `nueva` concede, que `previa` no tenia y que `actor` no ve.
+
+    El mismo techo que `permisos_fuera_de_alcance`, para la lista de unidades.
+    Abrirlas todas (`nueva` None) es el permiso `can_view_all_business_units`,
+    y lo comprueba aquella. `previa` None es que ya las veia todas.
+    """
+    propio = alcance_de(actor)
+    if propio is None or nueva is None or previa is None:
+        return []
+    nuevas = nueva.ids - previa.ids - propio.ids
+    fuera = sorted(Coordinador.objects.filter(id__in=nuevas).values_list('nombre', flat=True))
+    if nueva.rf and not previa.rf and not propio.rf:
+        fuera.append("RF")
+    return fuera
+
+
+def respuesta_unidades_fuera(nombres: list[str]) -> JsonResponse:
+    """403 que nombra las unidades que se intentaron conceder sin verlas."""
+    return JsonResponse(
+        {
+            "status": "error",
+            "message": "No puedes conceder unidades de negocio que tú no ves: " + ", ".join(nombres) + ".",
+        },
+        status=403,
+    )
+
+
+def guardar_unidades(target, alcance: AlcanceUnidades | None) -> None:
+    """Escribe la lista de unidades de un Profile o PermissionGroup ya guardado.
+
+    Con `alcance` None (las ve todas) la lista se vacia: no rige, y dejarla
+    escrita haria que quitar el interruptor devolviera unas unidades que nadie
+    eligio en ese momento.
+    """
+    target.unidad_rf = bool(alcance and alcance.rf)
+    target.save(update_fields=['unidad_rf'])
+    target.unidades_negocio.set(alcance.ids if alcance else [])
+
+
+def serialize_unidades(target) -> dict:
+    """La lista de unidades de un Profile/PermissionGroup, lista para React."""
+    if target is None:
+        return {"ids": [], "rf": False}
+    return {"ids": [c.id for c in target.unidades_negocio.all()], "rf": target.unidad_rf}
 
 
 def serialize_permissions(target):
@@ -308,8 +380,13 @@ def user_management_view(request):
     `puede_actuar_sobre`). La interfaz esconde las acciones de las que no; el
     servidor las rechaza igual.
     """
-    users = User.objects.all().select_related('profile', 'profile__group').order_by('username')
-    groups = PermissionGroup.objects.all().order_by('name')
+    users = (
+        User.objects.all()
+        .select_related('profile', 'profile__group')
+        .prefetch_related('profile__unidades_negocio')
+        .order_by('username')
+    )
+    groups = PermissionGroup.objects.all().prefetch_related('unidades_negocio').order_by('name')
 
     users_data = []
     for u in users:
@@ -323,6 +400,7 @@ def user_management_view(request):
             "group_id": prof.group_id if prof else None,
             "group_name": prof.group.name if (prof and prof.group) else None,
             "permissions": serialize_permissions(prof),
+            "unidades": serialize_unidades(prof),
             "editable": u.id != request.user.id and puede_actuar_sobre(request.user, u),
         })
 
@@ -335,6 +413,7 @@ def user_management_view(request):
             "description": g.description,
             "members_count": g.members.count(),
             "permissions": serialize_permissions(g),
+            "unidades": serialize_unidades(g),
             # El grupo propio no se edita salvo siendo superusuario: seria
             # concederse permisos a uno mismo.
             "editable": request.user.is_superuser or g.id != mi_grupo,
@@ -347,7 +426,15 @@ def user_management_view(request):
         "section": "management",
         # Lo que puede conceder quien mira: el editor apaga el resto.
         "concedibles": matriz_efectiva(request.user),
+        # El catalogo de unidades de negocio, y cuales puede conceder quien
+        # mira (null: todas).
+        "unidadesNegocio": list(Coordinador.objects.order_by('nombre').values('id', 'nombre')),
+        "unidadesConcedibles": _alcance_para_react(alcance_de(request.user)),
     })
+
+
+def _alcance_para_react(alcance: AlcanceUnidades | None) -> dict | None:
+    return None if alcance is None else {"ids": sorted(alcance.ids), "rf": alcance.rf}
 
 
 @login_required
@@ -380,11 +467,16 @@ def api_create_user(request):
             if grp is None:
                 return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
             matriz = matriz_de(grp)
+            unidades = alcance_guardado(grp)
         else:
             matriz = leer_matriz(data)
+            unidades = leer_unidades(data, matriz)
         fuera = permisos_fuera_de_alcance(request.user, matriz)
         if fuera:
             return respuesta_fuera_de_alcance(fuera)
+        fuera = unidades_fuera_de_alcance(request.user, unidades, AlcanceUnidades(frozenset(), False))
+        if fuera:
+            return respuesta_unidades_fuera(fuera)
 
         motivo = validar_clave(pas, User(username=usr))
         if motivo:
@@ -397,6 +489,7 @@ def api_create_user(request):
             profile.group = grp
             apply_permissions(profile, matriz)
             profile.save()
+            guardar_unidades(profile, unidades)
         logger.info("Cuenta creada: %r por %r", usr, request.user.username)
         return JsonResponse({"status": "success", "message": f"Usuario '{usr}' creado con éxito."})
     except Exception:
@@ -442,6 +535,7 @@ def api_update_user_permissions(request):
             return error
         profile = user.profile
         previa = matriz_efectiva(user)
+        previas_unidades = alcance_de(user)
 
         rol = data.get("role", profile.role)
         if rol not in dict(Profile.ROLE_CHOICES):
@@ -454,17 +548,24 @@ def api_update_user_permissions(request):
             if grp is None:
                 return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
             nueva = matriz_de(grp)
+            unidades = alcance_guardado(grp)
         else:
             nueva = leer_matriz(data)
+            unidades = leer_unidades(data, nueva)
 
         fuera = permisos_fuera_de_alcance(request.user, nueva, previa)
         if fuera:
             return respuesta_fuera_de_alcance(fuera)
+        fuera = unidades_fuera_de_alcance(request.user, unidades, previas_unidades)
+        if fuera:
+            return respuesta_unidades_fuera(fuera)
 
         profile.role = rol
         profile.group = grp
         apply_permissions(profile, nueva)
-        profile.save()
+        with transaction.atomic():
+            profile.save()
+            guardar_unidades(profile, unidades)
         logger.info("Permisos actualizados de %r por %r", user.username, request.user.username)
         return JsonResponse({"status": "success", "message": f"Permisos de '{user.username}' actualizados."})
     except Exception:
@@ -503,14 +604,20 @@ def api_save_permission_group(request):
                     status=403,
                 )
             previa = matriz_de(group)
+            previas_unidades = alcance_guardado(group)
         else:
             group = PermissionGroup()
             previa = {}
+            previas_unidades = AlcanceUnidades(frozenset(), False)
 
         nueva = leer_matriz(data)
+        unidades = leer_unidades(data, nueva)
         fuera = permisos_fuera_de_alcance(request.user, nueva, previa)
         if fuera:
             return respuesta_fuera_de_alcance(fuera)
+        fuera = unidades_fuera_de_alcance(request.user, unidades, previas_unidades)
+        if fuera:
+            return respuesta_unidades_fuera(fuera)
 
         group.name = name
         group.description = description
@@ -518,6 +625,7 @@ def api_save_permission_group(request):
 
         with transaction.atomic():
             group.save()
+            guardar_unidades(group, unidades)
             # Sincronizar todos los miembros del grupo
             for member in group.members.all():
                 member.sync_permissions_from_group()
@@ -577,6 +685,9 @@ def api_assign_user_group(request):
             fuera = permisos_fuera_de_alcance(request.user, matriz_de(group), matriz_efectiva(user))
             if fuera:
                 return respuesta_fuera_de_alcance(fuera)
+            fuera = unidades_fuera_de_alcance(request.user, alcance_guardado(group), alcance_de(user))
+            if fuera:
+                return respuesta_unidades_fuera(fuera)
             profile.group = group
             profile.sync_permissions_from_group()
             msg = f"Usuario '{user.username}' asignado al grupo '{group.name}'."
