@@ -21,6 +21,10 @@ dueño de las zonas): una misma persona puede llevar dos («German Cerruti» y
 «German Cerruti 2») y una puede estar «Vacante». Por eso es `Coordinador` el
 que apunta a la persona, y no al reves.
 
+Los equipos de ventas (`EquipoVentas`) son el cuarto literal: la columna
+`Equipo de ventas` del export, con el nombre con el que se presentan, su tipo
+y a quien pertenecen.
+
 Vive en el esquema del entorno, como los demas catalogos.
 """
 
@@ -127,3 +131,95 @@ class PersonaVentas(models.Model):
 
     def __str__(self):
         return f"{self.nombre_completo} ({self.get_cargo_display()})"
+
+
+TIPO_EQUIPO_CHOICES = [
+    ("oficina", "Oficina"),
+    ("externa", "Externa"),
+]
+
+# El unico tipo de equipo que responde ademas a un coordinador de unidad de
+# negocio: el de oficina es de la oficina y nada mas.
+TIPO_EQUIPO_CON_UN = "externa"
+
+
+class NombreEquipo(models.Model):
+    """Un nombre con el que se presenta un equipo de ventas.
+
+    Es una lista aparte, y no un texto del equipo, para que varios literales de
+    Odoo puedan presentarse como un mismo equipo y para que el nombre se escriba
+    siempre igual: tecleado libremente acaba escrito de tres formas y deja de
+    agrupar, como pasaba con los departamentos de soporte.
+    """
+
+    nombre = models.CharField(max_length=120)
+
+    class Meta:
+        db_table = "catalogo_nombres_equipo"
+        ordering = ["nombre"]
+        constraints = [
+            models.UniqueConstraint(Lower("nombre"), name="nombre_equipo_unico"),
+        ]
+        verbose_name = "nombre de equipo"
+        verbose_name_plural = "nombres de equipo"
+
+    def __str__(self):
+        return self.nombre
+
+
+class EquipoVentas(models.Model):
+    """Un equipo de ventas tal y como lo escribe Odoo en `Equipo de ventas`.
+
+    `nombre_odoo` es el literal del export, que se compara como los demas
+    (`clave_nombre`: sin mayusculas ni sufijo). `nombre_visualizacion` es como
+    se presenta, elegido de `NombreEquipo`.
+
+    Todo equipo es de una coordinadora de oficina. El externo responde ademas a
+    un coordinador de unidad de negocio, que puede quedar vacio; en uno de
+    oficina no se guarda aunque llegue.
+
+    Las dos personas van con `PROTECT`: borrar a alguien del directorio que
+    lleva un equipo lo dejaria sin a quien agruparse.
+    """
+
+    nombre_odoo = models.CharField(max_length=200)
+    nombre_visualizacion = models.ForeignKey(
+        NombreEquipo, on_delete=models.PROTECT, related_name="equipos",
+    )
+    tipo = models.CharField(max_length=10, choices=TIPO_EQUIPO_CHOICES, default="oficina")
+    coord_oficina = models.ForeignKey(
+        PersonaVentas,
+        on_delete=models.PROTECT,
+        related_name="equipos_oficina",
+        limit_choices_to={"cargo": "coord_oficina"},
+    )
+    coord_un = models.ForeignKey(
+        PersonaVentas,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="equipos_un",
+        limit_choices_to={"cargo": "coord_un"},
+    )
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_equipos_ventas"
+        ordering = ["nombre_odoo"]
+        constraints = [
+            models.UniqueConstraint(Lower("nombre_odoo"), name="equipo_ventas_nombre_odoo_unico"),
+        ]
+        verbose_name = "equipo de ventas"
+        verbose_name_plural = "equipos de ventas"
+
+    def save(self, *args, **kwargs):
+        """Normaliza el literal y descarta el coordinador de UN si no es externo."""
+        self.nombre_odoo = nombre_base(self.nombre_odoo)
+        if self.tipo != TIPO_EQUIPO_CON_UN:
+            self.coord_un = None
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.nombre_visualizacion} ({self.nombre_odoo})"

@@ -7,6 +7,8 @@ import type {
   AreaCatalogo,
   CargoVentas,
   CatalogoNombrado,
+  CatalogoEquipoVentas,
+  CatalogoNombreEquipo,
   CatalogoPersonaVentas,
   CatalogoUnidadNegocio,
   CatalogoObjetivo,
@@ -19,6 +21,7 @@ import type {
   CatalogoZona,
   NivelObjetivoCatalogo,
   SemaforoObjetivos,
+  TipoEquipo,
 } from '@/features/subscriptions/types';
 
 /** Una fila en edición. Sin `id` es un alta. */
@@ -36,6 +39,15 @@ export type SiteDraft = { id?: number; nombre: string; orden: number };
 export type NombreDraft = { id?: number; nombre: string; tipo: 'estados' };
 export type PersonaDraft = Omit<CatalogoPersonaVentas, 'id' | 'unidades'> & { id?: number };
 export type UnidadDraft = { id?: number; nombre: string; persona_id: number | null };
+export type EquipoDraft = {
+  id?: number;
+  nombre_odoo: string;
+  nombre_visualizacion_id: number | null;
+  tipo_equipo: TipoEquipo;
+  coord_oficina_id: number | null;
+  coord_un_id: number | null;
+};
+export type NombreEquipoDraft = { id?: number; nombre: string };
 export type IgnoradoDraft = { id?: number; nombre: string; nota: string; area: AreaCatalogo };
 
 /**
@@ -74,6 +86,8 @@ const comoTexto = (valor: number | null): string => (valor === null ? '' : Strin
 export type CatalogoVista =
   | CargoVentas
   | 'unidades'
+  | 'equipos'
+  | 'nombres_equipo'
   | 'pendientes'
   | 'planes'
   | 'zonas'
@@ -207,6 +221,8 @@ export function useCatalogos({
     () => (nuevaPersona?.literal ? personaDesde(nuevaPersona.literal, nuevaPersona.cargo) : null),
   );
   const [unidadDraft, setUnidadDraft] = useState<UnidadDraft | null>(null);
+  const [equipoDraft, setEquipoDraft] = useState<EquipoDraft | null>(null);
+  const [nombreEquipoDraft, setNombreEquipoDraft] = useState<NombreEquipoDraft | null>(null);
   const [nombreDraft, setNombreDraft] = useState<NombreDraft | null>(null);
   const [ignoradoDraft, setIgnoradoDraft] = useState<IgnoradoDraft | null>(null);
   const [objetivoDraft, setObjetivoDraft] = useState<ObjetivoDraft | null>(null);
@@ -267,6 +283,28 @@ export function useCatalogos({
   const editarUnidad = (fila: CatalogoUnidadNegocio) =>
     setUnidadDraft({ id: fila.id, nombre: fila.nombre, persona_id: fila.persona_id });
 
+  // El literal de «Equipo de ventas» se copia tal cual: es contra lo que se cruza.
+  const crearEquipoDesde = (nombreOdoo = '') =>
+    setEquipoDraft({
+      nombre_odoo: nombreOdoo,
+      nombre_visualizacion_id: null,
+      tipo_equipo: 'oficina',
+      coord_oficina_id: null,
+      coord_un_id: null,
+    });
+  const editarEquipo = (fila: CatalogoEquipoVentas) =>
+    setEquipoDraft({
+      id: fila.id,
+      nombre_odoo: fila.nombre_odoo,
+      nombre_visualizacion_id: fila.nombre_visualizacion_id,
+      tipo_equipo: fila.tipo_equipo,
+      coord_oficina_id: fila.coord_oficina_id,
+      coord_un_id: fila.coord_un_id,
+    });
+  const nuevoNombreEquipo = () => setNombreEquipoDraft({ nombre: '' });
+  const editarNombreEquipo = (fila: CatalogoNombreEquipo) =>
+    setNombreEquipoDraft({ id: fila.id, nombre: fila.nombre });
+
   const nuevoNombre = (tipo: NombreDraft['tipo']) => setNombreDraft({ nombre: '', tipo });
   const editarNombre = (tipo: NombreDraft['tipo'], fila: CatalogoNombrado) =>
     setNombreDraft({ id: fila.id, nombre: fila.nombre, tipo });
@@ -319,6 +357,8 @@ export function useCatalogos({
     setSiteDraft(null);
     setPersonaDraft(null);
     setUnidadDraft(null);
+    setEquipoDraft(null);
+    setNombreEquipoDraft(null);
     setNombreDraft(null);
     setIgnoradoDraft(null);
     setObjetivoDraft(null);
@@ -432,6 +472,8 @@ export function useCatalogos({
     siteDraft, setSiteDraft, nuevoSite, editarSite,
     personaDraft, setPersonaDraft, nuevaPersonaVacia, crearPersonaDesde, editarPersona,
     unidadDraft, setUnidadDraft, nuevaUnidad, editarUnidad,
+    equipoDraft, setEquipoDraft, crearEquipoDesde, editarEquipo,
+    nombreEquipoDraft, setNombreEquipoDraft, nuevoNombreEquipo, editarNombreEquipo,
     nombreDraft, setNombreDraft, nuevoNombre, editarNombre,
     ignoradoDraft, setIgnoradoDraft, nuevoIgnorado, editarIgnorado,
     objetivoDraft, setObjetivoDraft, nuevoObjetivo, editarObjetivo,

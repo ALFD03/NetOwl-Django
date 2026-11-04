@@ -96,6 +96,10 @@ SUBS_COLUMN_MAPPING = {
     "Medio": "medio",
     "Oportunidad/Administrador": "medio_supervisor",
     "Estado de la factura": "estado_factura",
+    # El equipo de ventas de la suscripcion, en texto libre como los otros
+    # tres: se cruza con `EquipoVentas.nombre_odoo` (Catalogos › Ventas).
+    # Opcional por lo mismo que `Medio`.
+    "Equipo de ventas": "equipo_ventas",
 }
 
 # Odoo no siempre exporta la cabecera con la misma capitalizacion.

@@ -35,6 +35,8 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
 | `catalogo_coordinadores` | `Coordinador` | Unidad de negocio: el grupo de zonas por el que agrupa Unidades de negocio. `persona` (FK nullable a `catalogo_personas_ventas`) es quien la lleva; una persona puede llevar varias |
 | `catalogo_personas_ventas` | `catalogos.PersonaVentas` | Directorio de ventas: nombre, apellido, `cargo` (`asesor`, `supervisor`, `coord_oficina`, `coord_un`), `medio` (el literal de `Medio`; único sin distinguir mayúsculas), `medio_supervisor` (el de `Oportunidad/Administrador` cuando Odoo lo escribe distinto; vacío es el mismo que `medio`; solo los cargos que supervisan; único sobre el literal que vale en esa columna) y `usuario_odoo` (el de `Vendedor`, con `(User)`; obligatorio solo en el coordinador de oficina) |
+| `catalogo_nombres_equipo` | `catalogos.NombreEquipo` | Los nombres con los que se presentan los equipos de ventas (único sin distinguir mayúsculas). Varios equipos de Odoo pueden presentarse con el mismo |
+| `catalogo_equipos_ventas` | `catalogos.EquipoVentas` | Equipo de ventas: `nombre_odoo` (el literal de `Equipo de ventas`; único sin distinguir mayúsculas), `nombre_visualizacion` (FK `PROTECT` a `catalogo_nombres_equipo`), `tipo` (`oficina`/`externa`), `coord_oficina` (FK `PROTECT` obligatoria a un `coord_oficina` del directorio) y `coord_un` (FK `PROTECT` nullable a un `coord_un`; solo en los externos) |
 | `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
@@ -224,6 +226,7 @@ servirlas.
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
 | `catalogo_*` (planes, zonas, sites…) | Módulo de Catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
 | `catalogo_personas_ventas` | Catálogos › Ventas | `personas_fuera_del_directorio` (Notificaciones), Comisiones |
+| `catalogo_equipos_ventas`, `catalogo_nombres_equipo` | Catálogos › Ventas | `equipos_fuera_del_catalogo` (Notificaciones) |
 | `comisiones_*` | Módulo de Comisiones | Módulo de Comisiones |
 | `catalogo_departamentos`, `catalogo_usuarios_soporte`, `catalogo_usuarios_soporte_historial` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio`, `tickets_tras_la_baja`, `anotar_departamentos` |
 | `analysis_jobs` | Vistas de lanzamiento y worker | Sondeo de la interfaz |

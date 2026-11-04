@@ -1,7 +1,7 @@
 /** Catálogos › Notificaciones: lo pendiente de cada área y lo que se decidió ignorar. */
 
 import { useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, BookMarked, Briefcase, EyeOff, Link2, Network, Plus, ShieldAlert, UserPlus, X } from 'lucide-react';
+import { AlertTriangle, BookMarked, Briefcase, EyeOff, Link2, Network, Plus, ShieldAlert, UserPlus, Users, X } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { Button, DataTable, EmptyState, Modal, NeonContainer, SelectMenu, type Column } from '@/shared/ui';
@@ -16,7 +16,7 @@ import type {
   ProductoPendiente,
 } from '@/features/subscriptions/types';
 import { IgnoradoForm, PlanForm, ZonaForm } from './CatalogoForms';
-import { PersonaForm } from './VentasForms';
+import { EquipoForm, PersonaForm } from './VentasForms';
 import { BarraCatalogo, ConfirmarBorrado, ErrorCatalogo, columnaAcciones, enviar } from './CatalogoComun';
 
 /**
@@ -131,7 +131,8 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
       return filas ? [{ area, filas, ...LISTAS[area] }] : [];
     });
   const totalPendientes = listas.reduce((total, lista) => total + lista.filas.length, 0)
-    + (pendientes.ventas?.length ?? 0);
+    + (pendientes.ventas?.length ?? 0)
+    + (pendientes.equipos?.length ?? 0);
   const etiquetaArea = (area: AreaCatalogo) => areas.find((a) => a.value === area)?.label ?? area;
 
   const columnasPendientes = (
@@ -158,6 +159,32 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
             variant="outline"
             icon={<EyeOff className="h-4 w-4" />}
             onClick={() => c.ignorar(area, row.nombre)}
+          >
+            Ignorar
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  // Los equipos se registran de uno en uno: cada uno pide su nombre de
+  // visualización y su oficina, que no se pueden suponer del literal.
+  const columnasEquipos: Column<ProductoPendiente>[] = [
+    { header: 'Equipo de ventas', accessor: 'nombre', sortKey: 'nombre' },
+    { header: 'Órdenes', accessor: 'ordenes', align: 'right', sortKey: 'ordenes' },
+    {
+      header: 'Acciones',
+      align: 'right',
+      accessor: (row) => (
+        <div className="flex justify-end gap-2">
+          <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => c.crearEquipoDesde(row.nombre)}>
+            Registrar equipo
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            icon={<EyeOff className="h-4 w-4" />}
+            onClick={() => c.ignorar('ventas', row.nombre)}
           >
             Ignorar
           </Button>
@@ -325,6 +352,31 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
               )}
             </NeonContainer>
           )}
+          {pendientes.equipos && (
+            <NeonContainer
+              title={`Equipos de ventas por registrar (${pendientes.equipos.length})`}
+              subtitle="Aparecen en «Equipo de ventas» y ningún equipo del catálogo los reconoce: no se sabe a qué oficina pertenecen"
+              icon={<Users className="h-5 w-5" />}
+              theme={pendientes.equipos.length ? 'yellow' : 'slate'}
+              noPadding
+            >
+              {pendientes.equipos.length === 0 ? (
+                <EmptyState
+                  title="Nada pendiente"
+                  description="Todos los equipos de las suscripciones están en el catálogo (o el export todavía no trae «Equipo de ventas»)."
+                  icon={<ShieldAlert />}
+                />
+              ) : (
+                <DataTable
+                  columns={columnasEquipos}
+                  data={pendientes.equipos}
+                  searchable
+                  searchPlaceholder="Buscar equipo..."
+                  scrollClassName={SCROLL_TABLA}
+                />
+              )}
+            </NeonContainer>
+          )}
           {listas.length === 0 && !pendientes.ventas && (
             <EmptyState
               title="Ninguna lista de pendientes"
@@ -434,6 +486,29 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
             saving={c.guardando}
             onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('personas', { ...c.personaDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.equipoDraft)}
+        onClose={c.cerrarFormularios}
+        title="Registrar equipo de ventas"
+        subtitle="Cómo se presenta y a quién pertenece"
+        icon={<Users className="h-5 w-5 text-emerald-400" />}
+        theme="green"
+      >
+        {c.equipoDraft && (
+          <EquipoForm
+            value={c.equipoDraft}
+            nombres={opciones.nombresEquipo}
+            tipos={opciones.tiposEquipo}
+            coordinadoresOficina={opciones.coordinadoresOficina}
+            coordinadoresUn={opciones.coordinadoresUn}
+            saving={c.guardando}
+            onChange={(patch) => c.setEquipoDraft({ ...c.equipoDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('equipos', { ...c.equipoDraft }))}
             onClose={c.cerrarFormularios}
           />
         )}

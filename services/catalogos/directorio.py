@@ -18,7 +18,7 @@ from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import ignorados
 from core.odoo_nombres import clave_nombre
-from services.catalogos.models import PersonaVentas
+from services.catalogos.models import EquipoVentas, PersonaVentas
 
 # Las columnas del export que nombran a una persona de ventas, con el cargo
 # que se le sugiere a quien aparece en cada una. El orden es el de la
@@ -101,3 +101,36 @@ def personas_fuera_del_directorio() -> list[dict[str, Any]]:
         entrada["cargo"] = COLUMNAS_VENTAS[primera]
         filas.append(entrada)
     return sorted(filas, key=lambda f: -max(f["ordenes"].values()))
+
+
+def equipos_fuera_del_catalogo() -> list[dict[str, Any]]:
+    """Los equipos de ventas de las suscripciones que el catalogo no reconoce.
+
+    Una fila por literal de `Equipo de ventas` (comparado como `clave_nombre`)
+    con cuantas ordenes lo llevan. Los ignorados son los del area de ventas,
+    como las personas. Vacia si el export todavia no trae la columna.
+    """
+    db = DBConnector()
+    if "equipo_ventas" not in db.columnas(TableNames.SUBSCRIPTIONS):
+        return []
+    df = db.query(
+        f"""
+        SELECT TRIM(equipo_ventas) AS nombre, COUNT(DISTINCT orden_producto) AS ordenes
+        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
+        WHERE equipo_ventas IS NOT NULL AND TRIM(equipo_ventas) <> ''
+        GROUP BY TRIM(equipo_ventas)
+        """
+    )
+    if df.empty:
+        return []
+
+    registrados = {clave_nombre(n) for n in EquipoVentas.objects.values_list("nombre_odoo", flat=True)}
+    callados = {clave_nombre(n) for n in ignorados("ventas")}
+    por_clave: dict[str, dict[str, Any]] = {}
+    for _, fila in df.iterrows():
+        clave = clave_nombre(str(fila["nombre"]))
+        if not clave or clave in registrados or clave in callados:
+            continue
+        entrada = por_clave.setdefault(clave, {"nombre": str(fila["nombre"]), "ordenes": 0})
+        entrada["ordenes"] += int(fila["ordenes"])
+    return sorted(por_clave.values(), key=lambda f: -f["ordenes"])
