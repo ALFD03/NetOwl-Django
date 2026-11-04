@@ -17,7 +17,8 @@ import {
 } from '@/shared/lib/excel';
 import { CLASIFICACION, TRAMO, aBs, formatoFecha, formatoMes, totalBs } from './formato';
 import {
-  armarNomina, motivoRecorte, rangoTramo, tramoAsesor, ventasPagadas, ventasValidadas, type GrupoSupervisor, type Nomina,
+  armarNomina, motivoRecorte, origenEstado, rangoTramo, tramoAsesor, ventasPagadas, ventasValidadas,
+  type GrupoSupervisor, type Nomina,
 } from './nomina';
 import type { CargoVentas, CondicionesComision, InformeComision, PagoComision, VentaComision } from '../types';
 
@@ -141,6 +142,7 @@ const observaciones = (nomina: Nomina, condiciones: CondicionesComision) => (p: 
   return [
     motivoRecorte(p, condiciones),
     fuera ? `+${fuera.ventas} ventas con ${fuera.donde} (incluidas)` : null,
+    p.estado_bono ? `Estado del bono: ${p.estado_bono.nombre} (${origenEstado(p.estado_bono)})` : null,
     ...p.avisos,
   ].filter(Boolean).join(' · ');
 };
@@ -187,6 +189,7 @@ function hojaResumen(informe: InformeComision, nomina: Nomina, tasa: number | nu
       null, null, null, null,
     ],
     [celda('Personas que cobran', etiqueta), dato(pagos.filter((p) => p.neto > 0).length, ENTERO)],
+    ...(informe.resumen.bonos_meta ? [[celda('Bonos por meta (incluidos)', etiqueta), dato(informe.resumen.bonos_meta, USD)]] : []),
     [celda('Ventas validadas', etiqueta), dato(informe.resumen.validas, ENTERO)],
     [
       celda('Cumplimiento general', etiqueta),
@@ -271,6 +274,14 @@ function hojaAsesores(nomina: Nomina, condiciones: CondicionesComision, tasa: nu
       },
     },
     { titulo: '$ por venta', ancho: 11, valor: (p) => p.detalle.monto_por_venta ?? null, formato: USD },
+    { titulo: 'Estado', ancho: 12, valor: (p) => p.estado_bono?.nombre ?? '' },
+    {
+      titulo: 'Bono por meta $',
+      ancho: 12,
+      valor: (p) => p.bono_meta || null,
+      formato: USD,
+      total: (f) => Math.round(sumar(f, (p) => p.bono_meta ?? 0) * 100) / 100 || null,
+    },
     ...pagoColumnas(tasa),
     { titulo: 'Observaciones', ancho: 52, valor: obs },
   ];

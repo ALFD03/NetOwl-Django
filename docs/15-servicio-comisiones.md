@@ -209,6 +209,30 @@ Las reglas viven en `reglas.calcular_pagos`; los montos y tramos, en
   | 21–25 | ventas × 7$ |
   | 26+ | ventas × 8$ |
 
+- **Bono por meta del asesor** (`CondicionesComision.bonos_meta`, `reglas.bono_meta`):
+  aparte de los tramos y sumado al neto, un monto único según cuántas ventas
+  residenciales válidas hizo (las mismas de su tramo, sin PYME) y el **estado en
+  que vende**. Una tabla por estado; cada tramo vale desde su inicio hasta el
+  siguiente, por debajo del primero no hay bono, y un estado sin tabla no paga
+  ninguno. `comisiones/0009` sembró los de la política:
+
+  | Ventas | Aragua | Carabobo |
+  |---|---|---|
+  | 15–19 | 50$ | — |
+  | 20–29 | 80$ | — |
+  | 30–39 | 120$ | 120$ |
+  | 40–49 | 200$ | 200$ |
+  | 50+ | 250$ | 250$ |
+
+  La política dice «más de 50» tras «40 a 49»: 50 exacto cobra el último tramo,
+  como el 1% del coordinador de UN. **El estado del asesor** es el fijado a mano en
+  Catálogos › Ventas (`PersonaVentas.estado_fijo`) o, si no tiene, el de **la zona
+  donde tiene más clientes** (clientes distintos de todas las suscripciones en que
+  es el `Medio`, no solo las del periodo; empate por nombre de zona; una zona fuera
+  del catálogo no cuenta) — `calculo._estados_asesores`. Cada pago lleva el estado
+  usado y de dónde salió (`estado_bono`), y el cierre lo congela con el resto. Un
+  asesor que con algún estado cobraría bono y no tiene ninguno sale con aviso.
+
 - **Supervisor** y **coordinador de oficina**: `monto_equipo` (2.5$) por cada
   venta residencial de su equipo y `monto_directa` (4$) por cada una propia
   (`Medio` es él). El total se multiplica por su **% de cumplimiento del
@@ -353,7 +377,7 @@ maquetadas celda a celda.
 |---|---|---|
 | `/comisiones/?periodo=` | El informe en cuatro pasos (revisión, indicadores, nómina por unidad, cierre), total a pagar y tasas, exportación a Excel. La revisión tiene cinco vistas: por decidir, días promocionales del mes anterior (qué se cobró allí; confirmación en el primer periodo), días promocionales del mes (quién adelantó el pago), agregadas a mano (con el formulario para agregar) y todas las ventas | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
 | `/comisiones/supervisores/` | A qué coordinador de UN responde cada supervisor (uno a uno o en bloque) | `can_manage_comisiones` |
-| `/comisiones/condiciones/` | Tramos, montos, día promocional, días de espera, día de corte de los adelantos y los % de los planes PYME. Se abre en lectura (quién cobra qué, tramos con sus saltos y un simulador, fechas de un periodo de ejemplo, última modificación y quién la hizo); «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_comisiones` |
+| `/comisiones/condiciones/` | Tramos, bonos por meta por estado, montos, día promocional, días de espera, día de corte de los adelantos y los % de los planes PYME. Se abre en lectura (quién cobra qué, tramos con sus saltos y un simulador, fechas de un periodo de ejemplo, última modificación y quién la hizo); «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_comisiones` |
 
 El detalle venta a venta no viaja en los props —un mes son miles de filas—: lo
 pide la página a `api/ventas/` la primera vez que hace falta (desglose de una

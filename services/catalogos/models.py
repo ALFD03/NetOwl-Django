@@ -64,6 +64,9 @@ class PersonaVentas(models.Model):
     habitual; solo lo llevan los cargos que supervisan
     (`CARGOS_QUE_SUPERVISAN`). `literal_supervisor` da el que vale.
 
+    `estado_fijo` solo lo lleva el asesor: el estado con que se le aplica el
+    bono por meta cuando el de sus clientes no es el que vale.
+
     `usuario_odoo` solo lo lleva el coordinador de oficina: es el literal de
     `Vendedor`, y se guarda siempre con el sufijo canonico, como el directorio
     de soporte.
@@ -79,6 +82,16 @@ class PersonaVentas(models.Model):
     medio = models.CharField(max_length=160)
     medio_supervisor = models.CharField(max_length=160, blank=True, default="")
     usuario_odoo = models.CharField(max_length=200, blank=True, default="")
+    # El estado con que se le aplica el bono por meta a un asesor, fijado a
+    # mano. Vacio: el de la zona donde tiene mas clientes (ver
+    # `comisiones.analytics.calculo._estados_asesores`). Solo lo lleva el asesor.
+    estado_fijo = models.ForeignKey(
+        "subscriptions.Estado",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="asesores_fijados",
+    )
 
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
@@ -118,6 +131,8 @@ class PersonaVentas(models.Model):
         if self.cargo not in CARGOS_QUE_SUPERVISAN or self.medio_supervisor.casefold() == self.medio.casefold():
             self.medio_supervisor = ""
         self.usuario_odoo = normalizar_nombre_odoo(self.usuario_odoo) if self.usuario_odoo else ""
+        if self.cargo != "asesor":
+            self.estado_fijo = None
         super().save(*args, **kwargs)
 
     @property

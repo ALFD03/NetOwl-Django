@@ -40,7 +40,14 @@ export function ResumenCargos({ condiciones: c }: { condiciones: CondicionesComi
     {
       cargo: 'asesor',
       columna: 'Medio',
-      propia: <>Según su tramo <span className="text-slate-500">· {entre(montosAsesor)}</span></>,
+      propia: (
+        <>
+          Según su tramo <span className="text-slate-500">· {entre(montosAsesor)}</span>
+          {(c.bonos_meta ?? []).some((b) => b.tramos.length) && (
+            <span className="block text-[11px] font-normal text-amber-400">+ bono por meta según su estado</span>
+          )}
+        </>
+      ),
       equipo: NADA,
       multiplica: <span className="text-slate-500">Nada</span>,
     },

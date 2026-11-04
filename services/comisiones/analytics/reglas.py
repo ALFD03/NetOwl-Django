@@ -19,6 +19,9 @@ La politica, en resumen:
 - **Coordinador de unidad de negocio**: por cada venta residencial de su
   equipo, el monto del tramo del crecimiento de sus unidades; 4$ por cada una
   propia. Sin objetivo.
+- **Bono por meta del asesor**: ademas de los tramos, un monto unico segun
+  cuantas ventas residenciales hizo y el estado en que vende (Aragua: de 15 a
+  19, 50$; ... Carabobo: desde 30). Un estado sin bonos no paga ninguno.
 
 Una venta propia de un supervisor no le cuenta ademas como venta de equipo:
 cobra 4$, no 6.5$. Si que cuenta como venta de equipo para quienes estan por
@@ -389,6 +392,77 @@ def monto_un(crecimiento: float, tramos: list[dict[str, float | None]]) -> float
     return monto
 
 
+def validar_bonos_meta(bonos: Any, estados: dict[int, str]) -> list[dict[str, Any]]:
+    """Los bonos por meta, comprobados: `[{"estado_id", "estado", "tramos"}]`.
+
+    `estados` es el catalogo (`id -> nombre`): un estado que no esta en el no
+    se acepta, ni dos entradas del mismo. Cada tramo vale desde `desde` ventas
+    (al menos 1) hasta el siguiente, con un `monto` no negativo; no puede haber
+    dos con el mismo inicio. Una entrada sin tramos no paga nada, y se acepta.
+    Se devuelven ordenados por estado y los tramos por su inicio.
+    """
+    if bonos in (None, ""):
+        return []
+    if not isinstance(bonos, list):
+        raise ValueError("Los bonos por meta tienen que ser una lista por estado.")
+    limpios = []
+    vistos: set[int] = set()
+    for bono in bonos:
+        try:
+            estado_id = int(bono["estado_id"])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("Cada bono por meta necesita el estado al que se aplica.") from None
+        nombre = estados.get(estado_id)
+        if nombre is None:
+            raise ValueError("Un bono por meta es de un estado que no está en el catálogo.")
+        if estado_id in vistos:
+            raise ValueError(f"{nombre} tiene dos tablas de bonos por meta.")
+        vistos.add(estado_id)
+        tramos = bono.get("tramos") or []
+        if not isinstance(tramos, list):
+            raise ValueError(f"Los tramos del bono de {nombre} tienen que ser una lista.")
+        filas = []
+        for tramo in tramos:
+            try:
+                desde = int(tramo["desde"])
+                monto = float(tramo["monto"])
+            except (KeyError, TypeError, ValueError):
+                raise ValueError(f"Cada tramo del bono de {nombre} necesita «desde» y «monto» numéricos.") from None
+            if desde < 1:
+                raise ValueError(f"Los tramos del bono de {nombre} empiezan en 1 venta o más.")
+            if monto < 0:
+                raise ValueError(f"Los montos del bono de {nombre} no pueden ser negativos.")
+            filas.append({"desde": desde, "monto": monto})
+        filas.sort(key=lambda t: t["desde"])
+        if len({t["desde"] for t in filas}) != len(filas):
+            raise ValueError(f"Dos tramos del bono de {nombre} empiezan en la misma cantidad de ventas.")
+        limpios.append({"estado_id": estado_id, "estado": nombre, "tramos": filas})
+    limpios.sort(key=lambda b: b["estado"])
+    return limpios
+
+
+def bono_meta(ventas: int, tramos: list[dict[str, float]]) -> tuple[dict[str, float] | None, float]:
+    """`(tramo, monto)` del bono por meta de un asesor con `ventas` residenciales.
+
+    El tramo es el ultimo que empieza en o antes de `ventas`; por debajo del
+    primero no hay bono (`None`, 0). La politica dice «mas de 50» despues de
+    «40 a 49»: aqui 50 ya cobra el ultimo, porque el tramo empieza en el.
+
+    >>> ARAGUA = [{"desde": 15, "monto": 50}, {"desde": 20, "monto": 80}, {"desde": 30, "monto": 120},
+    ...           {"desde": 40, "monto": 200}, {"desde": 50, "monto": 250}]
+    >>> [bono_meta(n, ARAGUA)[1] for n in (14, 15, 19, 20, 29, 30, 39, 40, 49, 50, 80)]
+    [0.0, 50.0, 50.0, 80.0, 80.0, 120.0, 120.0, 200.0, 200.0, 250.0, 250.0]
+    >>> CARABOBO = [{"desde": 30, "monto": 120}, {"desde": 40, "monto": 200}, {"desde": 50, "monto": 250}]
+    >>> [bono_meta(n, CARABOBO)[1] for n in (29, 30, 45, 51)]
+    [0.0, 120.0, 200.0, 250.0]
+    """
+    elegido = None
+    for tramo in sorted(tramos, key=lambda t: t["desde"]):
+        if tramo["desde"] <= ventas:
+            elegido = tramo
+    return elegido, round(float(elegido["monto"]), 2) if elegido else 0.0
+
+
 # --- Pagos -------------------------------------------------------------------------
 
 @dataclass
@@ -427,6 +501,8 @@ class Pago:
     # oficina): propias + equipo. La PYME queda fuera, es del vendedor directo.
     bruto: float = 0.0
     factor_pct: float | None = None
+    # El bono por meta del asesor: aparte de los tramos y sumado al neto.
+    bono_meta: float = 0.0
     neto: float = 0.0
     detalle: dict[str, Any] = field(default_factory=dict)
     avisos: list[str] = field(default_factory=list)
@@ -438,6 +514,7 @@ def calcular_pagos(
     condiciones: dict[str, Any],
     cumplimientos: dict[int, float | None],
     crecimientos: dict[int, float | None],
+    estados: dict[int, int | None] | None = None,
 ) -> dict[int, Pago]:
     """Lo que cobra cada persona por las ventas validas del periodo.
 
@@ -448,6 +525,8 @@ def calcular_pagos(
     - `crecimientos`: % de crecimiento de las unidades de cada coordinador de
       UN; nulo es "desconocido", y entonces sus ventas de equipo no se pagan
       hasta que se conozca.
+    - `estados`: el estado de cada asesor, para su bono por meta
+      (`condiciones["bonos_meta"]`); sin estado no hay bono.
 
     **Cada persona cobra una venta una sola vez, con la regla de su cargo**,
     ocupe las columnas que ocupe. Un coordinador de oficina o de UN puede ser
@@ -471,6 +550,16 @@ def calcular_pagos(
     >>> p = calcular_pagos([Venta("B", False, 0, None, 9, None, 9, None)], cargos, cond, {9: 100}, {})
     >>> p[9].ventas_propias, p[9].ventas_equipo, p[9].neto
     (1, 0, 4.0)
+
+    El bono por meta se suma al tramo del asesor, segun su estado:
+
+    >>> cond["bonos_meta"] = [{"estado_id": 1, "tramos": [{"desde": 2, "monto": 50}]}]
+    >>> dos = [Venta(o, False, 0, None, 1, None, None, None) for o in "XY"]
+    >>> p = calcular_pagos(dos, cargos, cond, {}, {}, {1: 1})
+    >>> p[1].monto_propias, p[1].bono_meta, p[1].neto
+    (10.0, 50.0, 60.0)
+    >>> calcular_pagos(dos, cargos, cond, {}, {}, {1: 2})[1].bono_meta
+    0.0
     """
     pagos: dict[int, Pago] = {}
 
@@ -500,6 +589,8 @@ def calcular_pagos(
     monto_equipo = float(condiciones["monto_equipo"])
     monto_directa = float(condiciones["monto_directa"])
     monto_directa_un = float(condiciones["monto_directa_un"])
+    bonos = {b["estado_id"]: b["tramos"] for b in condiciones.get("bonos_meta") or []}
+    estados = estados or {}
 
     for p in pagos.values():
         p.monto_pyme = round(p.monto_pyme, 2)
@@ -511,6 +602,12 @@ def calcular_pagos(
             p.monto_propias = monto
             p.bruto = monto
             p.detalle = {"tramo_desde": tramo["desde"], "monto_por_venta": tramo["monto"], "ventas_pagadas": pagadas}
+            estado = estados.get(p.persona_id)
+            # Solo se avisa si con algun estado le tocaria bono.
+            if estado is None and any(bono_meta(p.ventas_propias, t)[1] for t in bonos.values()):
+                p.avisos.append("Sin estado conocido: no se le aplica el bono por meta")
+            tramo_bono, p.bono_meta = bono_meta(p.ventas_propias, bonos.get(estado) or [])
+            p.detalle["bono_desde"] = tramo_bono["desde"] if tramo_bono else None
             if p.ventas_equipo:
                 p.avisos.append("Figura como superior de otras ventas, pero un asesor no cobra por equipo")
         elif p.cargo in ("supervisor", "coord_oficina"):
@@ -539,7 +636,7 @@ def calcular_pagos(
             p.avisos.append("Sin cargo conocido: no se le paga")
 
         factor = 1.0 if p.factor_pct is None else p.factor_pct / 100
-        p.neto = round(p.bruto * factor + p.monto_pyme, 2)
+        p.neto = round(p.bruto * factor + p.monto_pyme + p.bono_meta, 2)
 
     return pagos
 

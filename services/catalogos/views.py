@@ -223,6 +223,9 @@ def _persona(p: PersonaVentas) -> dict[str, Any]:
         "medio_supervisor": p.medio_supervisor,
         "usuario_odoo": p.usuario_odoo,
         "unidades": [u.nombre for u in p.unidades_negocio.all()],
+        # El estado del bono por meta, fijado a mano; nulo: el de sus clientes.
+        "estado_fijo_id": p.estado_fijo_id,
+        "estado_fijo": p.estado_fijo.nombre if p.estado_fijo_id else "",
     }
 
 
@@ -363,6 +366,13 @@ def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
         if not nombre_base(usuario):
             raise DatosInvalidos("El usuario de Odoo es obligatorio para un coordinador de oficina.")
     fila.usuario_odoo = usuario
+
+    # El estado del bono solo lo lleva el asesor. Si el cuerpo no lo trae se
+    # conserva: hay escrituras que solo tocan los literales.
+    if cargo != "asesor":
+        fila.estado_fijo = None
+    elif "estado_fijo_id" in data:
+        fila.estado_fijo = _relacion(Estado, data, "estado_fijo_id", obligatorio=False)
 
     otras = PersonaVentas.objects.exclude(pk=fila.pk)
     if otras.filter(medio__iexact=fila.medio).exists():
@@ -769,7 +779,7 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     elif nombre == "coordinadores":
         consulta = consulta.select_related("persona")
     elif nombre == "personas":
-        consulta = consulta.prefetch_related("unidades_negocio")
+        consulta = consulta.select_related("estado_fijo").prefetch_related("unidades_negocio")
     elif nombre == "equipos":
         consulta = consulta.select_related("nombre_visualizacion", "coord_oficina", "coord_un")
     elif nombre == "planes":

@@ -20,8 +20,9 @@
    es el del supervisor de la venta (`SupervisorUnidad`).
 4. **Pagos** (`reglas.calcular_pagos`), con el cumplimiento de los supervisores
    y coordinadores de oficina (el general del periodo, o el propio de quien lo
-   tenga) y el crecimiento de las unidades de cada coordinador
-   de UN, que sale de Unidades de negocio del mes.
+   tenga), el crecimiento de las unidades de cada coordinador
+   de UN, que sale de Unidades de negocio del mes, y el estado de cada asesor
+   para su bono por meta (`_estados_asesores`).
 
 Un borrador no guarda nada: esto se ejecuta cada vez que se abre.
 """
@@ -67,7 +68,7 @@ from services.subscriptions.analytics.queries import (
     get_business_units_data,
     get_periodos,
 )
-from services.subscriptions.models import Coordinador
+from services.subscriptions.models import Coordinador, Estado
 
 from .reglas import (
     CONTAR,
@@ -92,6 +93,7 @@ from .reglas import (
     pagada_hasta,
     primera_mensualidad,
     tramo,
+    validar_bonos_meta,
     validar_tramos_asesor,
     validar_tramos_un,
 )
@@ -203,14 +205,22 @@ def corte_de(periodo: ComisionPeriodo, dia_corte: int) -> date:
 # --- Condiciones ------------------------------------------------------------------
 
 def condiciones_vigentes() -> dict[str, Any]:
-    """Las condiciones actuales, con los tramos validados, como diccionario plano."""
+    """Las condiciones actuales, con los tramos validados, como diccionario plano.
+
+    Los bonos por meta llevan el nombre de su estado, para que la copia que
+    congela un cierre se explique sola. El de un estado que ya no esta en el
+    catalogo se descarta: no hay asesor al que aplicarselo.
+    """
     c = CondicionesComision.actual()
+    estados = dict(Estado.objects.values_list("id", "nombre"))
+    bonos = [b for b in c.bonos_meta or [] if isinstance(b, dict) and b.get("estado_id") in estados]
     return {
         "monto_equipo": float(c.monto_equipo),
         "monto_directa": float(c.monto_directa),
         "monto_directa_un": float(c.monto_directa_un),
         "tramos_asesor": validar_tramos_asesor(c.tramos_asesor),
         "tramos_un": validar_tramos_un(c.tramos_un),
+        "bonos_meta": validar_bonos_meta(bonos, estados),
         "dia_promocional": c.dia_promocional,
         "dias_espera": c.dias_espera,
         "dia_corte": c.dia_corte,
@@ -462,6 +472,60 @@ def _crecimientos(periodo: str, directorio: _Directorio, manuales: dict[int, flo
     return resultado
 
 
+def _estados_asesores(directorio: _Directorio) -> dict[int, dict[str, Any]]:
+    """El estado de cada asesor para su bono por meta, y de donde sale.
+
+    El fijado a mano en el directorio (`PersonaVentas.estado_fijo`) si lo
+    tiene; si no, el de **la zona donde tiene mas clientes**: los clientes
+    distintos de todas las suscripciones en que es el `Medio`, no solo las del
+    periodo, porque un mes flojo no lo cambia de estado. Un empate se resuelve
+    por el nombre de la zona, para que no dependa del orden de la consulta. Una
+    zona fuera del catalogo no cuenta: no se sabe de que estado es.
+    """
+    asesores = {pid: p for pid, p in directorio.personas.items() if p.cargo == "asesor"}
+    if not asesores:
+        return {}
+    estados = dict(Estado.objects.values_list("id", "nombre"))
+    por_nombre = {nombre: eid for eid, nombre in estados.items()}
+    zonas = fixtures.zonas_por_nombre()
+
+    clientes: dict[int, dict[str, int]] = {}
+    df = DBConnector().query(
+        f"""
+        SELECT medio, TRIM(zona) AS zona, COUNT(DISTINCT cliente) AS clientes
+        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
+        WHERE COALESCE(TRIM(medio), '') <> '' AND COALESCE(TRIM(zona), '') <> ''
+        GROUP BY medio, TRIM(zona)
+        """
+    )
+    for fila in df.itertuples(index=False):
+        persona = directorio.por_medio.get(clave_nombre(fila.medio))
+        zona = zonas.get(str(fila.zona).strip().lower())
+        if persona is None or persona.id not in asesores or zona is None:
+            continue
+        # Dos literales de `Medio` pueden ser la misma persona: se suman.
+        por_zona = clientes.setdefault(persona.id, {})
+        por_zona[zona["name"]] = por_zona.get(zona["name"], 0) + int(fila.clientes)
+    estado_de_zona = {z["name"]: z.get("Estado") for z in zonas.values()}
+
+    resultado: dict[int, dict[str, Any]] = {}
+    for pid, persona in asesores.items():
+        if persona.estado_fijo_id in estados:
+            resultado[pid] = {
+                "id": persona.estado_fijo_id, "nombre": estados[persona.estado_fijo_id],
+                "fuente": "fijado", "zona": "", "clientes": None,
+            }
+            continue
+        por_zona = clientes.get(pid)
+        if not por_zona:
+            continue
+        zona, n = min(por_zona.items(), key=lambda z: (-z[1], z[0]))
+        estado_id = por_nombre.get(estado_de_zona.get(zona) or "")
+        if estado_id is not None:
+            resultado[pid] = {"id": estado_id, "nombre": estados[estado_id], "fuente": "zona", "zona": zona, "clientes": n}
+    return resultado
+
+
 # --- El informe ------------------------------------------------------------------------
 
 def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -641,6 +705,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
     }
     manuales = {pid: float(i.crecimiento_pct) for pid, i in indicadores.items() if i.crecimiento_pct is not None}
     crecimientos = _crecimientos(clave, directorio, manuales)
+    estados_asesor = _estados_asesores(directorio)
 
     validas = [v for v in ventas if v["clasificacion"] == VALIDA]
     pagos = calcular_pagos(
@@ -656,6 +721,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         condiciones,
         cumplimientos,
         {pid: c["valor"] for pid, c in crecimientos.items()},
+        {pid: e["id"] for pid, e in estados_asesor.items()},
     )
 
     filas_pago = []
@@ -672,6 +738,8 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "crecimiento_calculado": crecimiento.get("calculado"),
             "crecimiento_fuente": crecimiento.get("fuente"),
             "unidades": crecimiento.get("unidades", []),
+            # El estado con que se le aplico el bono por meta; nulo si no es asesor o no se supo.
+            "estado_bono": estados_asesor.get(pago.persona_id),
         })
     filas_pago.sort(key=lambda f: (f["cargo"], f["nombre"]))
 
@@ -717,6 +785,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "promo_por_confirmar": sum(1 for v in ventas if v["por_confirmar"]),
             "promo_anterior_revisar": sum(1 for v in ventas if v["revisar_promo"]),
             "manuales": sum(1 for v in ventas if v["manual"]),
+            "bonos_meta": round(sum(p["bono_meta"] for p in filas_pago), 2),
             "total": round(sum(p["neto"] for p in filas_pago), 2),
         },
         "pagos": filas_pago,

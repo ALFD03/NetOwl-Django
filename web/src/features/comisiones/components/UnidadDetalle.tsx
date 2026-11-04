@@ -4,7 +4,7 @@ import { AlertTriangle, Pencil } from 'lucide-react';
 
 import { aBs, formatoBs, formatoMonto, formatoPct, totalBs } from '../lib/formato';
 import {
-  cortesCrecimiento, motivoRecorte, rangoTramo, siguienteTramo, tramoAsesor, ventasPagadas, ventasValidadas,
+  cortesCrecimiento, motivoRecorte, notaBono, rangoTramo, siguienteTramo, tramoAsesor, ventasPagadas, ventasValidadas,
   type GrupoSupervisor, type Nomina, type Unidad,
 } from '../lib/nomina';
 import type { CondicionesComision, PagoComision } from '../types';
@@ -37,11 +37,13 @@ export function EditarIndicador({ onClick }: { onClick: (() => void) | null }) {
 /** Lo que va bajo un nombre: por qué cobra menos y si tiene ventas en otro equipo. */
 function Notas({ p, nomina, condiciones }: { p: PagoComision; nomina: Nomina; condiciones: CondicionesComision }) {
   const motivo = motivoRecorte(p, condiciones);
+  const bono = notaBono(p);
   const fuera = nomina.fuera.get(p.persona_id);
-  if (!motivo && !fuera && !p.avisos.length) return null;
+  if (!motivo && !bono && !fuera && !p.avisos.length) return null;
   return (
     <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[11px] text-slate-500">
       {motivo && <span className={p.neto === 0 ? 'text-slate-400' : ''}>{motivo}</span>}
+      {bono && <span className="font-semibold text-amber-400">{bono}</span>}
       {fuera && <span>+{fuera.ventas} con {fuera.donde} (incluidas)</span>}
       {p.avisos.length > 0 && (
         <span className="inline-flex items-center gap-1 text-amber-400" title={p.avisos.join('\n')}>

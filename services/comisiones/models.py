@@ -76,6 +76,11 @@ def _tramos_un() -> list[dict]:
     ]
 
 
+def _bonos_meta() -> list[dict]:
+    """Sin bonos: los de la politica los siembra `comisiones/0009`, que conoce los estados."""
+    return []
+
+
 class CondicionesComision(models.Model):
     """Las tarifas y los tramos de pago. Fila unica (pk=1).
 
@@ -89,6 +94,11 @@ class CondicionesComision(models.Model):
       (`tramos_un`), y `monto_directa_un` por cada una propia. Sin objetivo.
     - **PYME**: el % del plan (`Plan.comision_pyme_pct`) a quien la vendio,
       y a nadie mas. No cuenta para ningun tramo.
+    - **Bono por meta del asesor** (`bonos_meta`): un monto unico, aparte de
+      los tramos, segun cuantas ventas residenciales hizo y el estado en que
+      vende. Una entrada por estado, `{"estado_id", "tramos": [{"desde",
+      "monto"}]}`; cada tramo vale desde `desde` ventas hasta el siguiente, y
+      por debajo del primero no hay bono. Un estado sin entrada no tiene bono.
 
     `dia_promocional` es el dia en que suelen empezar los dias promocionales,
     que es donde se corta cada periodo de comisiones; se propone al calcular
@@ -104,6 +114,7 @@ class CondicionesComision(models.Model):
     monto_directa_un = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("4"))
     tramos_asesor = models.JSONField(default=_tramos_asesor)
     tramos_un = models.JSONField(default=_tramos_un)
+    bonos_meta = models.JSONField(default=_bonos_meta)
     dia_promocional = models.PositiveSmallIntegerField(default=25)
     dias_espera = models.PositiveSmallIntegerField(default=15)
     dia_corte = models.PositiveSmallIntegerField(default=22)

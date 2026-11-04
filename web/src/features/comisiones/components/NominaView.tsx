@@ -176,6 +176,9 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
           <span className="font-mono text-sm font-bold tabular-nums text-emerald-300">
             {formatoBs(totalBs(informe.pagos.map((p) => p.neto), props.tasa))}
           </span>
+          {Boolean(informe.resumen.bonos_meta) && (
+            <span className="text-[11px] text-amber-400">incluye {formatoMonto(informe.resumen.bonos_meta ?? 0)} de bonos por meta</span>
+          )}
         </div>
       </aside>
 

@@ -37,7 +37,7 @@ export type ZonaDraft = {
 };
 export type SiteDraft = { id?: number; nombre: string; orden: number };
 export type NombreDraft = { id?: number; nombre: string; tipo: 'estados' };
-export type PersonaDraft = Omit<CatalogoPersonaVentas, 'id' | 'unidades'> & { id?: number };
+export type PersonaDraft = Omit<CatalogoPersonaVentas, 'id' | 'unidades' | 'estado_fijo'> & { id?: number };
 export type UnidadDraft = { id?: number; nombre: string; persona_id: number | null };
 export type EquipoDraft = {
   id?: number;
@@ -160,6 +160,7 @@ export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft 
       medio: [partes[0], partes[corte]].filter(Boolean).join(' '),
       medio_supervisor: '',
       usuario_odoo: literal ? `${base} (User)` : '',
+      estado_fijo_id: null,
     };
   }
   return {
@@ -169,6 +170,7 @@ export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft 
     medio: base,
     medio_supervisor: '',
     usuario_odoo: '',
+    estado_fijo_id: null,
   };
 }
 
@@ -277,6 +279,7 @@ export function useCatalogos({
       medio: fila.medio,
       medio_supervisor: fila.medio_supervisor,
       usuario_odoo: fila.usuario_odoo,
+      estado_fijo_id: fila.estado_fijo_id,
     });
 
   const nuevaUnidad = () => setUnidadDraft({ nombre: '', persona_id: null });

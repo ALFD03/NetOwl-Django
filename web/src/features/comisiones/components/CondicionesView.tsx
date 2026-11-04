@@ -17,6 +17,7 @@ import { Button, Panel, StatusMessage } from '@/shared/ui';
 import { cambiosPendientes, validarCondiciones, type Cambio } from '../lib/condiciones';
 import type { ActualizacionCondiciones, ComisionesCondicionesProps, CondicionesComision } from '../types';
 import { AsesoresCard } from './condiciones/AsesoresCard';
+import { BonosMetaCard } from './condiciones/BonosMetaCard';
 import { CoordinadorUnCard, SupervisoresCard } from './condiciones/EquiposCards';
 import { PeriodoCard } from './condiciones/PeriodoCard';
 import { PlanesPymeCard } from './condiciones/PlanesPymeCard';
@@ -64,7 +65,7 @@ function ListaCambios({ cambios }: { cambios: Cambio[] }) {
  * que usó, así que cambiarlas solo afecta a lo que se calcule después (los
  * borradores incluidos, que se recalculan al abrirlos).
  */
-export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeEditarPlanes }: ComisionesCondicionesProps) {
+export function CondicionesView({ condiciones, actualizacion, estados, planesPyme, puedeEditarPlanes }: ComisionesCondicionesProps) {
   const [draft, setDraft] = useState<CondicionesComision>(condiciones);
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -179,6 +180,15 @@ export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeE
           editando={editando}
           errores={validacion.asesor}
           onChange={(tramos_asesor) => cambiar({ tramos_asesor })}
+        />
+
+        <BonosMetaCard
+          bonos={draft.bonos_meta ?? []}
+          guardados={condiciones.bonos_meta ?? []}
+          estados={estados}
+          editando={editando}
+          errores={validacion.bonos}
+          onChange={(bonos_meta) => cambiar({ bonos_meta })}
         />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

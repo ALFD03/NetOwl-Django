@@ -18,7 +18,7 @@
 
 import { formatoMonto, formatoPct } from './formato';
 import type {
-  CondicionesComision, FilaEquipo, InformeComision, PagoComision, TramoAsesor, TramoUn,
+  CondicionesComision, EstadoBono, FilaEquipo, InformeComision, PagoComision, TramoAsesor, TramoUn,
 } from '../types';
 
 // --- Las cifras de una persona ------------------------------------------------------
@@ -88,6 +88,18 @@ export function motivoRecorte(p: PagoComision, condiciones: CondicionesComision)
     return `Cobra el ${formatoPct(p.factor_pct)} de ${formatoMonto(p.bruto)}${sinPorcentaje}`;
   }
   return sinPorcentaje ? sinPorcentaje.slice(3) : null;
+}
+
+/** De dónde sale el estado del bono de un asesor: `fijado a mano`, `zona Los Parques, 107 clientes`. */
+export function origenEstado(e: EstadoBono): string {
+  if (e.fuente === 'fijado') return 'fijado a mano';
+  return `zona ${e.zona}${e.clientes !== null ? `, ${e.clientes} ${e.clientes === 1 ? 'cliente' : 'clientes'}` : ''}`;
+}
+
+/** `Bono por meta (Aragua): +$80,00`; nulo si no cobra bono. */
+export function notaBono(p: PagoComision): string | null {
+  if (!p.bono_meta) return null;
+  return `Bono por meta${p.estado_bono ? ` (${p.estado_bono.nombre})` : ''}: +${formatoMonto(p.bono_meta)}`;
 }
 
 // --- La jerarquía -------------------------------------------------------------------

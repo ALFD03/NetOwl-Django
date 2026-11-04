@@ -2,15 +2,15 @@
  * Lo que la página de condiciones calcula para explicar las reglas mientras se
  * leen o se editan.
  *
- * Replica `reglas.pago_asesor`, `reglas.monto_un` y las comprobaciones de
- * `reglas.validar_tramos_*` y de `api_condiciones_guardar` solo para enseñar su
+ * Replica `reglas.pago_asesor`, `reglas.monto_un`, `reglas.bono_meta` y las
+ * comprobaciones de `reglas.validar_*` y de `api_condiciones_guardar` solo para enseñar su
  * efecto antes de guardar: la cifra que cuenta es la del servidor, que vuelve a
  * validarlo todo al recibirlo.
  */
 
 import { formatoMonto } from './formato';
 import { tramoAsesor } from './nomina';
-import type { CondicionesComision, TramoAsesor, TramoUn } from '../types';
+import type { BonoMetaEstado, CondicionesComision, TramoAsesor, TramoBono, TramoUn } from '../types';
 
 const PCT = new Intl.NumberFormat('es-VE', { maximumFractionDigits: 2 });
 
@@ -142,6 +142,25 @@ export function crecimientosDeMuestra(tramos: TramoUn[]): number[] {
   return [...muestra].sort((a, b) => a - b);
 }
 
+// --- Bono por meta del asesor -------------------------------------------------------
+
+export const ordenarTramosBono = (tramos: TramoBono[]): TramoBono[] => [...tramos].sort((a, b) => a.desde - b.desde);
+
+/** El tramo del bono con `ventas` y lo que paga: `reglas.bono_meta`. Por debajo del primero, ninguno. */
+export function bonoMeta(ventas: number, tramos: TramoBono[]): { tramo: TramoBono | null; monto: number } {
+  let tramo: TramoBono | null = null;
+  for (const t of ordenarTramosBono(tramos)) if (t.desde <= ventas) tramo = t;
+  return { tramo, monto: tramo?.monto ?? 0 };
+}
+
+/** `15 a 19`, `50 o más`: como `rangoVentas`, sobre los tramos del bono. */
+export function rangoBono(tramo: TramoBono, ordenados: TramoBono[]): string {
+  const siguiente = ordenados[ordenados.indexOf(tramo) + 1];
+  if (!siguiente) return `${tramo.desde} o más`;
+  const hasta = siguiente.desde - 1;
+  return hasta === tramo.desde ? String(tramo.desde) : `${tramo.desde} a ${hasta}`;
+}
+
 // --- Validación ----------------------------------------------------------------------
 
 /** Los errores de una tabla de tramos: los de cada fila (por su posición) y el de la tabla. */
@@ -184,6 +203,33 @@ export function erroresTramosUn(tramos: TramoUn[]): ErroresTramos {
   return { filas, general: siempre === -1 ? 'Un tramo tiene que valer para cualquier crecimiento.' : null };
 }
 
+/** Los errores de los bonos: los de cada tramo por estado (`estado_id` → fila → mensaje). */
+export interface ErroresBonos {
+  filas: Map<number, Map<number, string>>;
+  total: number;
+}
+
+/** Lo que `validar_bonos_meta` rechazaría, dicho en el tramo que lo causa. */
+export function erroresBonos(bonos: BonoMetaEstado[]): ErroresBonos {
+  const filas = new Map<number, Map<number, string>>();
+  let total = 0;
+  for (const bono of bonos) {
+    const delEstado = new Map<number, string>();
+    const vistos = new Set<number>();
+    bono.tramos.forEach((t, i) => {
+      if (![t.desde, t.monto].every(Number.isFinite)) delEstado.set(i, 'Hace falta un número en cada casilla.');
+      else if (!Number.isInteger(t.desde)) delEstado.set(i, 'Las ventas se cuentan enteras.');
+      else if (t.desde < 1) delEstado.set(i, 'Un bono empieza en 1 venta o más.');
+      else if (t.monto < 0) delEstado.set(i, 'El monto no puede ser negativo.');
+      else if (vistos.has(t.desde)) delEstado.set(i, `Ya hay un tramo que empieza en ${t.desde} ventas.`);
+      vistos.add(t.desde);
+    });
+    if (delEstado.size) filas.set(bono.estado_id, delEstado);
+    total += delEstado.size;
+  }
+  return { filas, total };
+}
+
 export type CampoSimple = 'monto_equipo' | 'monto_directa' | 'monto_directa_un' | 'dia_promocional' | 'dias_espera' | 'dia_corte';
 
 /** Lo que `api_condiciones_guardar` rechazaría de los campos sueltos. */
@@ -208,6 +254,7 @@ export function erroresCampos(c: CondicionesComision): Partial<Record<CampoSimpl
 export interface ValidacionCondiciones {
   asesor: ErroresTramos;
   un: ErroresTramos;
+  bonos: ErroresBonos;
   campos: Partial<Record<CampoSimple, string>>;
   total: number;
 }
@@ -215,10 +262,11 @@ export interface ValidacionCondiciones {
 export function validarCondiciones(c: CondicionesComision): ValidacionCondiciones {
   const asesor = erroresTramosAsesor(c.tramos_asesor);
   const un = erroresTramosUn(c.tramos_un);
+  const bonos = erroresBonos(c.bonos_meta ?? []);
   const campos = erroresCampos(c);
   const total = asesor.filas.size + (asesor.general ? 1 : 0) + un.filas.size + (un.general ? 1 : 0)
-    + Object.keys(campos).length;
-  return { asesor, un, campos, total };
+    + bonos.total + Object.keys(campos).length;
+  return { asesor, un, bonos, campos, total };
 }
 
 // --- Cambios sin guardar -------------------------------------------------------------
@@ -295,8 +343,38 @@ function cambiosUn(antes: TramoUn[], despues: TramoUn[]): Cambio[] {
   return cambios;
 }
 
+function cambiosBonos(antes: BonoMetaEstado[], despues: BonoMetaEstado[]): Cambio[] {
+  const previos = new Map(antes.map((b) => [b.estado_id, b]));
+  const nuevos = new Map(despues.map((b) => [b.estado_id, b]));
+  const bono = (t: TramoBono) => `bono de ${montoOVacio(t.monto)}`;
+  const cambios: Cambio[] = [];
+  for (const [id, b] of nuevos) {
+    const p = previos.get(id);
+    if (!p) {
+      cambios.push({ donde: `Bono por meta · ${b.estado}`, antes: null, despues: `${b.tramos.length} ${b.tramos.length === 1 ? 'tramo' : 'tramos'}` });
+      continue;
+    }
+    const tramosAntes = porInicio(p.tramos, (t) => t.desde);
+    const tramosDespues = porInicio(b.tramos, (t) => t.desde);
+    for (const [desde, t] of tramosDespues) {
+      const donde = `Bono por meta · ${b.estado} · desde ${desde} ventas`;
+      const previo = tramosAntes.get(desde);
+      if (!previo) cambios.push({ donde, antes: null, despues: bono(t) });
+      else if (previo.monto !== t.monto) cambios.push({ donde, antes: formatoMonto(previo.monto), despues: montoOVacio(t.monto) });
+    }
+    for (const [desde, t] of tramosAntes) {
+      if (!tramosDespues.has(desde)) cambios.push({ donde: `Bono por meta · ${b.estado} · desde ${desde} ventas`, antes: bono(t), despues: null });
+    }
+  }
+  for (const [id, p] of previos) {
+    if (!nuevos.has(id)) cambios.push({ donde: `Bono por meta · ${p.estado}`, antes: `${p.tramos.length} ${p.tramos.length === 1 ? 'tramo' : 'tramos'}`, despues: null });
+  }
+  return cambios;
+}
+
 export function cambiosPendientes(guardadas: CondicionesComision, borrador: CondicionesComision): Cambio[] {
   const cambios = cambiosAsesor(guardadas.tramos_asesor, borrador.tramos_asesor);
+  cambios.push(...cambiosBonos(guardadas.bonos_meta ?? [], borrador.bonos_meta ?? []));
   for (const campo of ['monto_equipo', 'monto_directa'] as const) {
     if (borrador[campo] !== guardadas[campo]) {
       cambios.push({ donde: CAMPOS[campo].donde, antes: CAMPOS[campo].valor(guardadas[campo]), despues: CAMPOS[campo].valor(borrador[campo]) });

@@ -30,9 +30,13 @@ export const CARGO_UI: Record<CargoVentas, { icon: ReactNode; corto: string; des
 };
 
 /** Alta o edición de una persona del directorio de ventas. */
+/** Valor del desplegable para el estado que sale de los clientes del asesor. */
+const ESTADO_AUTOMATICO = '';
+
 export function PersonaForm({
   value,
   cargos,
+  estados = [],
   saving,
   onChange,
   onSubmit,
@@ -40,6 +44,8 @@ export function PersonaForm({
 }: Acciones & {
   value: PersonaDraft;
   cargos: CatalogoOption[];
+  /** Los del catálogo, para fijar el del bono por meta de un asesor. Sin ellos no se ofrece. */
+  estados?: { id: number; nombre: string }[];
   onChange: (patch: Partial<PersonaDraft>) => void;
 }) {
   const conUsuario = value.cargo === 'coord_oficina';
@@ -131,6 +137,24 @@ export function PersonaForm({
             className={modalInputClass}
             value={value.usuario_odoo}
             onChange={(e) => onChange({ usuario_odoo: e.target.value })}
+          />
+        </Field>
+      )}
+
+      {value.cargo === 'asesor' && estados.length > 0 && (
+        <Field
+          label="Estado del bono por meta"
+          hint="Automático: el de la zona donde tiene más clientes. Fíjalo solo si ese no es el estado en que vende."
+        >
+          <SelectMenu
+            aria-label="Estado del bono por meta"
+            className={modalInputClass}
+            value={String(value.estado_fijo_id ?? ESTADO_AUTOMATICO)}
+            options={[
+              { value: ESTADO_AUTOMATICO, label: 'Automático (zona con más clientes)' },
+              ...estados.map((e) => ({ value: String(e.id), label: e.nombre })),
+            ]}
+            onChange={(id) => onChange({ estado_fijo_id: id ? Number(id) : null })}
           />
         </Field>
       )}

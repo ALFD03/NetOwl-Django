@@ -91,6 +91,15 @@ export function VentasView({
     ...(cargo === 'coord_un'
       ? [{ header: 'Unidades', accessor: (row) => row.unidades.join(', ') || '—' } as Column<CatalogoPersonaVentas>]
       : []),
+    ...(cargo === 'asesor'
+      ? [{
+        header: 'Estado del bono',
+        accessor: (row) => row.estado_fijo || <span className="text-slate-500">automático</span>,
+        sortKey: 'estado_fijo',
+        filterable: true,
+        filterValue: (row) => row.estado_fijo || 'Automático',
+      } as Column<CatalogoPersonaVentas>]
+      : []),
     columnaAcciones<CatalogoPersonaVentas>(c.editarPersona, (row) =>
       c.setBorrando({ tipo: 'personas', id: row.id, nombre: `${row.nombre} ${row.apellido}` })),
   ];
@@ -291,6 +300,7 @@ export function VentasView({
           <PersonaForm
             value={c.personaDraft}
             cargos={cargos}
+            estados={estados}
             saving={c.guardando}
             onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('personas', { ...c.personaDraft }))}

@@ -483,6 +483,7 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
           <PersonaForm
             value={c.personaDraft}
             cargos={opciones.cargos}
+            estados={opciones.estados}
             saving={c.guardando}
             onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('personas', { ...c.personaDraft }))}

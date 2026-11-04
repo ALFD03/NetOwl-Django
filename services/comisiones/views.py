@@ -45,6 +45,7 @@ from services.comisiones.analytics.reglas import (
     NORMAL,
     VALIDA,
     YA_PAGADA,
+    validar_bonos_meta,
     validar_tramos_asesor,
     validar_tramos_un,
 )
@@ -60,7 +61,7 @@ from services.comisiones.models import (
 )
 from services.config.decorators import permission_required
 from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_actual
-from services.subscriptions.models import Plan
+from services.subscriptions.models import Estado, Plan
 
 logger = logging.getLogger(__name__)
 
@@ -626,9 +627,11 @@ def _actualizacion() -> dict[str, Any]:
 @login_required
 @permission_required(PERMISO_GESTION)
 def condiciones_view(request):
-    """Las condiciones de pago: tramos, tarifas, dias promocionales, corte y los % PYME."""
+    """Las condiciones de pago: tramos, bonos por meta, tarifas, dias promocionales, corte y los % PYME."""
     return render_inertia(request, "Comisiones/Condiciones", clean_json_nullable({
         "condiciones": condiciones_vigentes(),
+        # Los estados a los que se les puede dar una tabla de bonos por meta.
+        "estados": [{"id": i, "nombre": n} for i, n in Estado.objects.values_list("id", "nombre")],
         "actualizacion": _actualizacion(),
         "planesPyme": _planes_pyme(),
         "puedeEditarPlanes": _puede(request, "can_manage_catalogo_operacional"),
@@ -653,6 +656,9 @@ def api_condiciones_guardar(request):
     try:
         c.tramos_asesor = validar_tramos_asesor(data.get("tramos_asesor"))
         c.tramos_un = validar_tramos_un(data.get("tramos_un"))
+        # Se guarda sin el nombre del estado: es del catalogo, y puede cambiar.
+        bonos = validar_bonos_meta(data.get("bonos_meta"), dict(Estado.objects.values_list("id", "nombre")))
+        c.bonos_meta = [{"estado_id": b["estado_id"], "tramos": b["tramos"]} for b in bonos]
     except ValueError as e:
         raise DatosInvalidos(str(e)) from None
     dia = _decimal(data.get("dia_promocional"), "dia_promocional", nulo=False)

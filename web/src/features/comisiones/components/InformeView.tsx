@@ -13,6 +13,7 @@ import {
 } from '@/shared/ui';
 import { useInformeComisiones } from '../hooks/useInformeComisiones';
 import { exportarInforme } from '../lib/exportar';
+import { origenEstado } from '../lib/nomina';
 import {
   aBs, diaAnterior, formatoBs, formatoFecha, formatoMes, formatoMonto, formatoTasa, mesSiguiente, nombreMes, totalBs,
 } from '../lib/formato';
@@ -605,6 +606,13 @@ export function InformeView({
           <div className="space-y-4">
             {desglose.avisos.length > 0 && (
               <StatusMessage status={{ type: 'warning', text: desglose.avisos.join(' · ') }} icon={<AlertTriangle />} />
+            )}
+            {desglose.estado_bono && (
+              <p className="text-xs text-slate-400">
+                Estado del bono por meta: <strong className="text-white">{desglose.estado_bono.nombre}</strong>{' '}
+                ({origenEstado(desglose.estado_bono)})
+                {desglose.bono_meta ? <> · <strong className="text-amber-400">+{formatoMonto(desglose.bono_meta)}</strong></> : ' · sin bono este mes'}
+              </p>
             )}
             {c.ventas ? <VentasTabla ventas={ventasDelDesglose} /> : <LoadingState message="Cargando ventas..." />}
           </div>

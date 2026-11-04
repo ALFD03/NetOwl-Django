@@ -49,6 +49,10 @@ export interface PagoComision {
   bruto: number;
   /** % de cumplimiento aplicado (tope 100); nulo en quien no lo usa. */
   factor_pct: number | null;
+  /** El bono por meta del asesor, sumado al neto (falta en periodos cerrados antes de existir). */
+  bono_meta?: number;
+  /** El estado con que se le aplicó el bono; nulo si no es asesor o no se supo. */
+  estado_bono?: EstadoBono | null;
   neto: number;
   /** El que se aplica: el propio si lo tiene, si no el general; nulo es "sin definir". */
   cumplimiento_pct: number | null;
@@ -58,9 +62,24 @@ export interface PagoComision {
   crecimiento_calculado: number | null;
   crecimiento_fuente: 'manual' | 'unidades de negocio' | null;
   unidades: string[];
-  /** Asesor: `tramo_desde`, `monto_por_venta`, `ventas_pagadas`. Coord. de UN: `monto_por_venta_equipo`. */
+  /**
+   * Asesor: `tramo_desde`, `monto_por_venta`, `ventas_pagadas` y `bono_desde` (el tramo del bono, nulo sin
+   * bono). Coord. de UN: `monto_por_venta_equipo`.
+   */
   detalle: Record<string, number | null>;
   avisos: string[];
+}
+
+/**
+ * De dónde sale el estado del bono de un asesor: `fijado` a mano en Catálogos ›
+ * Ventas, o el de la `zona` donde tiene más clientes (`clientes`).
+ */
+export interface EstadoBono {
+  id: number;
+  nombre: string;
+  fuente: 'fijado' | 'zona';
+  zona: string;
+  clientes: number | null;
 }
 
 /** Una venta candidata del periodo, clasificada y con sus personas. */
@@ -172,6 +191,8 @@ export interface InformeComision {
     promo_por_confirmar?: number;
     promo_anterior_revisar?: number;
     manuales?: number;
+    /** Lo que suman los bonos por meta de los asesores (incluido en `total`). */
+    bonos_meta?: number;
     total: number;
   };
   pagos: PagoComision[];
@@ -291,12 +312,28 @@ export interface TramoUn {
   monto: number;
 }
 
+/** Un tramo del bono por meta: vale desde `desde` ventas hasta el siguiente. */
+export interface TramoBono {
+  desde: number;
+  monto: number;
+}
+
+/** La tabla de bonos por meta de un estado. */
+export interface BonoMetaEstado {
+  estado_id: number;
+  /** El nombre del catálogo al calcular: lo que conserva la copia de un cierre. */
+  estado: string;
+  tramos: TramoBono[];
+}
+
 export interface CondicionesComision {
   monto_equipo: number;
   monto_directa: number;
   monto_directa_un: number;
   tramos_asesor: TramoAsesor[];
   tramos_un: TramoUn[];
+  /** Falta en las condiciones congeladas antes de existir los bonos. */
+  bonos_meta?: BonoMetaEstado[];
   dia_promocional: number;
   dias_espera: number;
   /** Día del mes siguiente hasta el que un pago adelantado cuenta en el periodo. */
@@ -319,6 +356,8 @@ export interface ActualizacionCondiciones {
 
 export interface ComisionesCondicionesProps {
   condiciones: CondicionesComision;
+  /** Los estados del catálogo: a los que se les puede dar una tabla de bonos. */
+  estados: { id: number; nombre: string }[];
   actualizacion: ActualizacionCondiciones;
   planesPyme: PlanPyme[];
   puedeEditarPlanes: boolean;

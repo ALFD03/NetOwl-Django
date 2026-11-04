@@ -583,6 +583,12 @@ export interface CatalogoPersonaVentas {
   usuario_odoo: string;
   /** Las unidades de negocio que lleva (solo el coordinador de UN). */
   unidades: string[];
+  /**
+   * El estado con que se le aplica el bono por meta, fijado a mano (solo el
+   * asesor). Nulo: el de la zona donde tiene más clientes.
+   */
+  estado_fijo_id: number | null;
+  estado_fijo: string;
 }
 
 /** Una unidad de negocio (el `Coordinador` de las zonas) y quién la lleva. */
