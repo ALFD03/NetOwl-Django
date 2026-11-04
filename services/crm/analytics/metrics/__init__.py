@@ -3,7 +3,7 @@
 Un modulo por familia, y `core` los compone en el bloque que se persiste.
 """
 
-from .core import compute_crm_metrics_for_period
+from .core import compute_crm_metrics_for_period, promediar_cierres
 from .efectividad import atribuir_perdidas, compute_efectividad
 from .probabilidad import (
     compute_distribucion_etapa8,
@@ -28,4 +28,5 @@ __all__ = [
     "compute_distribucion_etapa8",
     "compute_probabilidad_etapa8",
     "compute_crm_metrics_for_period",
+    "promediar_cierres",
 ]

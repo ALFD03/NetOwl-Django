@@ -138,3 +138,35 @@ def compute_crm_metrics_for_period(
     }
 
     return clean_json_props(metrics)
+
+
+# Las metricas del cierre que promedia el dashboard. Las primeras diez salen con
+# el sufijo `_promedio`; los tiempos conservan su nombre.
+_PROMEDIADAS_CON_SUFIJO = (
+    "total_oportunidades", "ganados", "perdidos", "pendientes",
+    "pct_instalacion", "pct_perdida", "pct_pendientes",
+    "count_devueltos_e8", "pct_devueltos_e8", "pct_devueltos_e8_bruto",
+)
+_PROMEDIADOS_TIEMPOS = (
+    "horas_promedio_inst", "horas_mediana_inst", "pct_excede_prom_inst",
+    "horas_promedio_perd", "horas_mediana_perd", "pct_excede_prom_perd",
+    "horas_promedio_cierre", "horas_mediana_cierre", "pct_excede_prom_cierre",
+)
+
+
+def promediar_cierres(cierres: list[dict[str, Any]]) -> dict[str, float]:
+    """El resumen del dashboard: la media simple de los cierres dados.
+
+    La usa el analisis sobre todos los periodos y la lectura del dashboard de
+    quien solo ve el ultimo (`services/config/periodos.py`), sobre ese uno. Los
+    cierres leidos de la base traen todo en `text`, de ahi el `to_numeric`.
+    """
+    df = pd.DataFrame(cierres)
+
+    def media(campo: str) -> float:
+        return round(float(pd.to_numeric(df[campo], errors="coerce").mean()), 2)
+
+    return {
+        **{f"{campo}_promedio": media(campo) for campo in _PROMEDIADAS_CON_SUFIJO},
+        **{campo: media(campo) for campo in _PROMEDIADOS_TIEMPOS},
+    }

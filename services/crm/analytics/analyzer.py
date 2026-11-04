@@ -15,13 +15,12 @@ import json
 import logging
 from collections.abc import Callable
 
-import pandas as pd
-
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 
 from .day_metrics import build_crm_day_metrics
 from .dimensions import build_crm_dimension_rows, save_crm_dimensiones_periodo
+from .metrics import promediar_cierres
 from .poblaciones import construir_poblaciones, preparar_datos
 
 logger = logging.getLogger(__name__)
@@ -160,35 +159,7 @@ def run_crm_analysis(
 
     # 4. Calcular promedio acumulado global
     if all_summaries:
-        df_sum = pd.DataFrame(list(all_summaries.values()))
-
-        resumen_global_avg = {
-            "total_oportunidades_promedio": round(float(df_sum["total_oportunidades"].mean()), 2),
-            "ganados_promedio": round(float(df_sum["ganados"].mean()), 2),
-            "perdidos_promedio": round(float(df_sum["perdidos"].mean()), 2),
-            "pendientes_promedio": round(float(df_sum["pendientes"].mean()), 2),
-            "pct_instalacion_promedio": round(float(df_sum["pct_instalacion"].mean()), 2),
-            "pct_perdida_promedio": round(float(df_sum["pct_perdida"].mean()), 2),
-            "pct_pendientes_promedio": round(float(df_sum["pct_pendientes"].mean()), 2),
-            "count_devueltos_e8_promedio": round(float(df_sum["count_devueltos_e8"].mean()), 2),
-            "pct_devueltos_e8_promedio": round(float(df_sum["pct_devueltos_e8"].mean()), 2),
-            "pct_devueltos_e8_bruto_promedio": round(float(df_sum["pct_devueltos_e8_bruto"].mean()), 2),
-
-            # Tiempos Instalación
-            "horas_promedio_inst": round(float(df_sum["horas_promedio_inst"].mean()), 2),
-            "horas_mediana_inst": round(float(df_sum["horas_mediana_inst"].mean()), 2),
-            "pct_excede_prom_inst": round(float(df_sum["pct_excede_prom_inst"].mean()), 2),
-
-            # Tiempos Pérdida
-            "horas_promedio_perd": round(float(df_sum["horas_promedio_perd"].mean()), 2),
-            "horas_mediana_perd": round(float(df_sum["horas_mediana_perd"].mean()), 2),
-            "pct_excede_prom_perd": round(float(df_sum["pct_excede_prom_perd"].mean()), 2),
-
-            # Tiempo de Cierre
-            "horas_promedio_cierre": round(float(df_sum["horas_promedio_cierre"].mean()), 2),
-            "horas_mediana_cierre": round(float(df_sum["horas_mediana_cierre"].mean()), 2),
-            "pct_excede_prom_cierre": round(float(df_sum["pct_excede_prom_cierre"].mean()), 2),
-        }
+        resumen_global_avg = promediar_cierres(list(all_summaries.values()))
 
         # Último conjunto de efectividad y tiempos por etapa
         ultimo_resumen = list(all_summaries.values())[0]

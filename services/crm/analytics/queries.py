@@ -14,6 +14,8 @@ from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.utils import parse_jsonb
 
+from .metrics import promediar_cierres
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,12 +66,19 @@ def get_crm_cierre_historico(periodos: list[str] | None = None) -> list[dict[str
         return []
 
 
-def get_crm_metric_totals(periodo: str | None = None) -> dict[str, Any]:
+def get_crm_metric_totals(
+    periodo: str | None = None, solo: str | None = None,
+) -> dict[str, Any]:
     """El dashboard: promedio global, tiempos, efectividad y la serie historica.
 
     La serie se sirve sin los dos JSONB por periodo, que ahi nadie lee y solo
     abultarian el payload.
+
+    Con `solo`, el mismo bloque construido con ese periodo y nada mas: es el
+    dashboard de quien no ve todos los periodos (`services/config/periodos.py`).
     """
+    if solo:
+        return _metric_totals_de_un_periodo(solo)
     db = DBConnector()
     try:
         df_mg = db.query(f"SELECT resumen_global, tiempo_por_etapa, efectividad FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
@@ -105,6 +114,26 @@ def get_crm_metric_totals(periodo: str | None = None) -> dict[str, Any]:
     except Exception:
         logger.exception("Error al consultar métricas globales de CRM")
         return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
+
+
+def _metric_totals_de_un_periodo(periodo: str) -> dict[str, Any]:
+    """`get_crm_metric_totals` sobre un solo cierre, con la misma forma.
+
+    El promedio de un periodo es el propio periodo, pero pasa por
+    `promediar_cierres` para que las claves sean exactamente las del global.
+    """
+    cierres = get_crm_cierre_historico([periodo])
+    if not cierres:
+        return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
+    cierre = cierres[0]
+    return {
+        "resumen_global": promediar_cierres(cierres),
+        "tiempo_por_etapa": cierre["tiempo_por_etapa"],
+        "efectividad": cierre["efectividad"],
+        "historico_tendencias": [
+            {k: v for k, v in cierre.items() if k not in ("efectividad", "tiempo_por_etapa")}
+        ],
+    }
 
 
 def get_crm_dimensiones(

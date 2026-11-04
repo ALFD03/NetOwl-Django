@@ -40,8 +40,24 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_view_support_analytics` / `can_view_support_results` | Páginas de soporte |
 | `can_view_imports_subs` / `_crm` / `_support` / `can_view_import_history` | Una por pestaña de importaciones |
 | `can_view_comisiones` | El informe de comisiones |
+| `can_view_all_periods` | Todos los periodos evaluados de Suscripciones, CRM y Soporte. Sin él, solo el **último periodo calculado** de cada módulo (ver abajo). `config/0013` lo concedió a todas las cuentas existentes; una cuenta nueva nace sin él |
 | `can_view_users` | La pantalla de usuarios y grupos (solo verla) |
 | `can_view_auditoria` | El registro de auditoría (`/auditoria/`) |
+
+### Periodos visibles (`services/config/periodos.py`)
+
+Sin `can_view_all_periods` una cuenta solo ve el último periodo calculado de cada módulo, y la restricción
+se aplica en el servidor, no solo en el selector:
+
+- Las páginas de varios periodos (dashboards, Analytics, Resultados, Reporte de ventas, Unidades de negocio,
+  Ciclo de vida) reciben la lista recortada al último (`periodos_visibles`, `acotar_pedidos`), y un
+  `?period=` antiguo se sustituye por el permitido (`periodo_visible`).
+- Los endpoints JSON de un periodo concreto (detalle de resultados, dimensiones, drill-down, cortes diarios,
+  tickets, detalle de lifetime) responden 403 si se pide otro (`periodo_denegado`, `mes_denegado`).
+- Los dashboards de CRM y Soporte, que promedian todos los periodos, se construyen con el último y nada más,
+  con las mismas funciones de promedio que el análisis (`crm.analytics.metrics.promediar_cierres`,
+  `support.analytics.metrics.average_blocks`), para que la forma del bloque no cambie.
+- El reporte ETA y Comisiones no se restringen: son de quien administra, no de lectura.
 
 ### Permisos de acción (cerrados por defecto)
 

@@ -44,6 +44,8 @@ VIEW_PERMISSION_FIELDS = [
     'can_view_imports_subs', 'can_view_imports_crm', 'can_view_imports_support',
     'can_view_import_history',
     'can_view_comisiones',
+    # Profundidad historica: todos los periodos evaluados o solo el ultimo.
+    'can_view_all_periods',
     # Administracion: ver la pantalla de cuentas y grupos, y el registro de
     # auditoria.
     'can_view_users', 'can_view_auditoria',
@@ -123,6 +125,12 @@ class PermissionMatrix(models.Model):
     can_view_imports_crm = models.BooleanField(default=False)
     can_view_imports_support = models.BooleanField(default=False)
     can_view_import_history = models.BooleanField(default=False)
+
+    # --- Periodos evaluados ---
+    # Sin el, Suscripciones, CRM y Soporte ensenan solo el ultimo periodo
+    # calculado (`services/config/periodos.py`). La migracion 0013 se lo dio a
+    # todas las cuentas que ya existian; una cuenta nueva nace sin el.
+    can_view_all_periods = models.BooleanField(default=False)
 
     # --- Comisiones ---
     # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar los

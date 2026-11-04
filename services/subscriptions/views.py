@@ -14,6 +14,13 @@ from inertia import render as render_inertia
 
 from core.utils import entero_de_peticion, limpiar_periodos
 from services.config.decorators import permission_required, permissions_all_required, primera_pagina
+from services.config.periodos import (
+    acotar_pedidos,
+    periodo_denegado,
+    periodo_visible,
+    periodos_visibles,
+    ve_todos_los_periodos,
+)
 from services.imports.jobs import lanzar_analisis
 from services.subscriptions.analytics import (
     get_analytics_data,
@@ -64,8 +71,9 @@ def index(request):
 @permissions_all_required('can_view_subscriptions', 'can_view_subs_dashboard')
 def dashboard(request):
     """Portada del modulo: los cierres de todos los periodos y las zonas."""
-    periodos_data = get_cierre_churn()
-    dims_data = get_dimensiones()
+    periodos = acotar_pedidos(request, None, get_periodos)
+    periodos_data = get_cierre_churn(periodos) if periodos != [] else []
+    dims_data = get_dimensiones(periodos) if periodos != [] else []
     
     # Extraer y aplanar todas las zonas de todos los períodos
     todas_las_zonas = []
@@ -94,11 +102,11 @@ def analytics(request):
     # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
     # por comas sin ningun tope y cada elemento se convierte en un marcador del
     # `IN (...)`, asi que una sola peticion podia pedir cien mil.
-    periodos = limpiar_periodos(request.GET.get("periods"))
-    data = get_analytics_data(periodos)
+    periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_periodos)
+    data = get_analytics_data(periodos) if periodos != [] else {}
     # El mes completo viaja en los props: seleccionar un dia en la barra es
     # una lectura de cliente, no un recalculo.
-    mes = (request.GET.get("period") or "")[:7]
+    mes = (request.GET.get("period") or "")[:7] if ve_todos_los_periodos(request) else ""
     if not mes:
         lista = data.get("periodos", [])
         mes = (lista[0].get("periodo_reporte", "")[:7] if lista else "")
@@ -114,7 +122,10 @@ def analytics(request):
 @permission_required('can_view_subs_results')
 def results(request, periodo=None):
     """Tabla de resultados por periodo, con detalle opcional de uno concreto."""
-    cierres = get_cierre_churn([periodo] if periodo else None)
+    periodos = acotar_pedidos(request, [periodo] if periodo else None, get_periodos)
+    cierres = get_cierre_churn(periodos) if periodos != [] else []
+    if periodo and periodos is not None and periodo not in periodos:
+        periodo = None
     return render_inertia(request, "Subscriptions/Results", {
         "periodos": cierres,
         "selected_periodo": periodo,
@@ -136,6 +147,7 @@ def lifetime(request):
     except Exception:
         logger.exception("Error leyendo los meses de lifetime")
         meses = []
+    meses = periodos_visibles(request, meses)
     periodo = request.GET.get("period")
     if periodo not in meses:
         periodo = meses[0] if meses else None
@@ -151,9 +163,9 @@ def lifetime(request):
 @permission_required('can_view_subs_sales')
 def sales_report(request):
     """Reporte de ventas: Site -> Tecnologia -> Nodos, con subtotales."""
-    periodo = request.GET.get("period")
+    periodo = periodo_visible(request, request.GET.get("period"), get_periodos)
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
-    data = get_sales_report_data(periodo, dia)
+    data = _recortar_selector(request, get_sales_report_data(periodo, dia))
     return render_inertia(request, "Subscriptions/SalesReport", {
         "reportData": data,
         "dayMetrics": get_day_metrics((data.get("period") or "")[:7]),
@@ -166,9 +178,9 @@ def sales_report(request):
 @permission_required('can_view_subs_sales')
 def business_units(request):
     """Reporte por coordinador, mas el resumen FTTH global y el bloque RF."""
-    periodo = request.GET.get("period")
+    periodo = periodo_visible(request, request.GET.get("period"), get_periodos)
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
-    data = get_business_units_data(periodo, dia)
+    data = _recortar_selector(request, get_business_units_data(periodo, dia))
     return render_inertia(request, "Subscriptions/BusinessUnits", {
         "buData": data,
         "dayMetrics": get_day_metrics((data.get("period") or "")[:7]),
@@ -176,6 +188,17 @@ def business_units(request):
         "objetivos": get_objetivos_config(),
         "section": "business_units"
     })
+
+
+def _recortar_selector(request, data: dict) -> dict:
+    """Deja en el selector de un reporte solo los periodos visibles.
+
+    Los reportes comerciales devuelven en `periods` todos los calculados, para
+    el selector; el periodo que ensenan ya llego acotado por `periodo_visible`.
+    """
+    if "periods" in data:
+        data["periods"] = periodos_visibles(request, data["periods"])
+    return data
 
 
 
@@ -186,7 +209,10 @@ def business_units(request):
 @permissions_all_required('can_view_subscriptions', 'can_view_subs_dashboard')
 def api_dashboard_data(request):
     """Los datos del dashboard en JSON."""
-    return JsonResponse(get_dashboard_data())
+    if ve_todos_los_periodos(request):
+        return JsonResponse(get_dashboard_data())
+    periodos = acotar_pedidos(request, None, get_periodos)
+    return JsonResponse({"periodos": get_cierre_churn(periodos) if periodos else []})
 
 @login_required
 @permission_required('can_view_subs_analytics')
@@ -195,25 +221,30 @@ def api_analytics_data(request):
     # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
     # por comas sin ningun tope y cada elemento se convierte en un marcador del
     # `IN (...)`, asi que una sola peticion podia pedir cien mil.
-    periodos = limpiar_periodos(request.GET.get("periods"))
+    periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_periodos)
+    if periodos == []:
+        return JsonResponse({"periodos": [], "dimensiones": []})
     return JsonResponse(get_analytics_data(periodos))
 
 @login_required
 @permission_required('can_view_subscriptions')
 def api_periods_list(request):
     """Los periodos con cierre calculado."""
-    return JsonResponse({"periods": get_periodos()})
+    return JsonResponse({"periods": periodos_visibles(request, get_periodos())})
 
 @login_required
 @permission_required('can_view_subs_results')
 def api_results_list(request):
     """Los cierres completos, para la tabla de resultados."""
-    return JsonResponse({"periods": get_cierre_churn()})
+    periodos = acotar_pedidos(request, None, get_periodos)
+    return JsonResponse({"periods": get_cierre_churn(periodos) if periodos != [] else []})
 
 @login_required
 @permission_required('can_view_subs_results')
 def api_results_detail(request, periodo):
     """El cierre y las dimensiones de un periodo concreto."""
+    if periodo_denegado(request, periodo, get_periodos):
+        return _periodo_no_visible()
     cierre = get_cierre_churn([periodo])
     dims = get_dimensiones([periodo])
     summary = cierre[0] if cierre else {}
@@ -229,15 +260,17 @@ def api_results_detail(request, periodo):
 def api_lifetime_detalle(request):
     """Las bajas de un mes con sus duraciones, una por orden, para exportar."""
     periodo = request.GET.get("period")
+    if periodo_denegado(request, periodo, get_meses_lifetime):
+        return _periodo_no_visible()
     return JsonResponse({"period": periodo, "bajas": get_lifetime_detalle(periodo)})
 
 @login_required
 @permission_required('can_view_subs_sales')
 def api_sales_report(request):
     """El reporte de ventas de un periodo (y opcionalmente de un dia)."""
-    periodo = request.GET.get("period")
+    periodo = periodo_visible(request, request.GET.get("period"), get_periodos)
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
-    return JsonResponse(get_sales_report_data(periodo, dia))
+    return JsonResponse(_recortar_selector(request, get_sales_report_data(periodo, dia)))
 
 @login_required
 @permission_required('can_view_subs_results', 'can_view_subs_sales')
@@ -256,7 +289,8 @@ def api_bajas_detalle(request):
     ordenes que los componen, asi que el detalle es siempre el del cierre del mes.
     """
     nodos = limpiar_nodos(request.GET.getlist("nodo"))
-    return JsonResponse(get_bajas_detalle(request.GET.get("period"), nodos))
+    periodo = periodo_visible(request, request.GET.get("period"), get_periodos)
+    return JsonResponse(get_bajas_detalle(periodo, nodos))
 
 
 
@@ -283,9 +317,14 @@ def api_lifecycle_run(request):
 @permission_required('can_view_subs_sales')
 def api_business_units_report(request):
     """El reporte por unidades de negocio de un periodo (y de un dia)."""
-    periodo = request.GET.get("period")
+    periodo = periodo_visible(request, request.GET.get("period"), get_periodos)
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
-    return JsonResponse(get_business_units_data(periodo, dia))
+    return JsonResponse(_recortar_selector(request, get_business_units_data(periodo, dia)))
 
 
-
+def _periodo_no_visible():
+    """El 403 de un periodo que la cuenta no puede ver."""
+    return JsonResponse(
+        {"status": "error", "message": "Acceso denegado. Solo puedes ver el último periodo evaluado."},
+        status=403,
+    )

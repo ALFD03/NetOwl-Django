@@ -29,7 +29,7 @@ from services.support.analytics.config import (
     SUPPORT_DIMENSION_COLUMNS,
     SUPPORT_DIMENSIONES,
 )
-from services.support.analytics.metrics import compute_metrics_for_period
+from services.support.analytics.metrics import average_blocks, compute_metrics_for_period
 from services.support.analytics.usuarios import anotar_departamentos
 
 logger = logging.getLogger(__name__)
@@ -89,8 +89,14 @@ def get_support_cierre_historico(periodos: list[str] | None = None) -> list[dict
         return []
 
 
-def get_support_metric_totals() -> dict:
-    """El dashboard de empresa: promedio de todos los periodos, más su serie."""
+def get_support_metric_totals(solo: str | None = None) -> dict:
+    """El dashboard de empresa: promedio de todos los periodos, más su serie.
+
+    Con `solo`, el mismo bloque construido con ese periodo y nada mas: es el
+    dashboard de quien no ve todos los periodos (`services/config/periodos.py`).
+    """
+    if solo:
+        return _metric_totals_de_un_periodo(solo)
     db = DBConnector()
     try:
         df = db.query(f"""
@@ -121,6 +127,32 @@ def get_support_metric_totals() -> dict:
             "periodos_evaluados": 0,
             "resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": [],
         }
+
+
+def _metric_totals_de_un_periodo(periodo: str) -> dict:
+    """`get_support_metric_totals` sobre un solo periodo, con la misma forma.
+
+    El total sale del cierre del periodo y cada grupo de su fila de la
+    dimension `grupo_trabajo`, ya persistida; los dos pasan por
+    `average_blocks` para que las claves sean exactamente las del global.
+    """
+    historico = get_support_cierre_historico([periodo])
+    if not historico:
+        return {
+            "periodos_evaluados": 0,
+            "resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": [],
+        }
+    bloque = {k: v for k, v in historico[0].items() if k != "periodo_reporte"}
+    por_grupo = {
+        fila["grupo_trabajo"]: average_blocks([fila["metricas"]])
+        for fila in get_support_dimension_metrics(periodo, dimension=DIM_GRUPO)
+    }
+    return {
+        "periodos_evaluados": 1,
+        "resumen_global": average_blocks([bloque]),
+        "por_grupo_trabajo": por_grupo,
+        "historico_tendencias": historico,
+    }
 
 
 def get_support_dimension_metrics(

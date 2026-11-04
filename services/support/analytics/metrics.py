@@ -16,6 +16,9 @@ import pandas as pd
 from core.utils import clean_json_props
 from services.support.analytics.cohorts import PeriodCohort
 from services.support.analytics.config import (
+    SUPPORT_RATE_FIELDS,
+    SUPPORT_TIME_MEASURES,
+    SUPPORT_VOLUME_FIELDS,
     TIME_MEASURE_SPECS,
     TIME_STATS,
 )
@@ -266,3 +269,49 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
         metrics.update(_prefixed(_compute_stats_for_series(serie), medida))
 
     return clean_json_props(metrics)
+
+
+# Cada medida de tiempo con la columna que dice cuántos tickets pudo medir.
+# Promediar un periodo sin ninguna duración medible metería un 0 en la media,
+# que es justo el sesgo que `_compute_stats_for_series` corrige a nivel de
+# ticket: los periodos con muestra 0 se excluyen de la media de esa medida.
+_TIME_MASKS = {medida: f"muestra_{medida}" for medida in SUPPORT_TIME_MEASURES}
+
+
+def _mean_of(df: pd.DataFrame, field: str, mask_field: str | None = None) -> float:
+    """Promedio de una columna, opcionalmente ignorando los periodos sin muestra."""
+    if field not in df.columns:
+        return 0.0
+
+    serie = pd.to_numeric(df[field], errors="coerce")
+    if mask_field and mask_field in df.columns:
+        serie = serie[pd.to_numeric(df[mask_field], errors="coerce").fillna(0) > 0]
+
+    serie = serie.dropna()
+    return round(float(serie.mean()), 2) if not serie.empty else 0.0
+
+
+def average_blocks(bloques: list[dict]) -> dict[str, Any]:
+    """
+    Promedia varios bloques de periodo en uno solo.
+
+    Los volúmenes quedan como promedio mensual y las tasas como promedio simple
+    de las tasas de cada periodo —no como la tasa del agregado—, para que un mes
+    de mucho volumen no aplaste a los demás al juzgar el desempeño típico.
+    """
+    if not bloques:
+        return {}
+
+    df = pd.DataFrame(bloques)
+    avg: dict[str, Any] = {field: _mean_of(df, field) for field in SUPPORT_VOLUME_FIELDS}
+    avg.update({field: _mean_of(df, field) for field in SUPPORT_RATE_FIELDS})
+
+    for medida, muestra in _TIME_MASKS.items():
+        for stat in TIME_STATS:
+            key = f"tiempo_{stat}_{medida}_horas"
+            avg[key] = _mean_of(df, key, muestra)
+        avg[f"pct_excede_promedio_{medida}"] = _mean_of(df, f"pct_excede_promedio_{medida}", muestra)
+        avg[muestra] = _mean_of(df, muestra)
+
+    avg["periodos_evaluados"] = len(bloques)
+    return avg

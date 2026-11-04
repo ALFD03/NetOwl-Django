@@ -12,6 +12,14 @@ from inertia import render as render_inertia
 
 from core.utils import clean_json_props, entero_de_peticion, limpiar_periodos
 from services.config.decorators import permission_required, permissions_all_required, primera_pagina
+from services.config.periodos import (
+    acotar_pedidos,
+    mes_denegado,
+    periodo_denegado,
+    periodo_visible,
+    periodos_visibles,
+    ve_todos_los_periodos,
+)
 from services.support.analytics.day_metrics import (
     get_support_day_payload,
     get_support_day_series,
@@ -47,9 +55,13 @@ def index(request):
 @login_required
 @permissions_all_required('can_view_support', 'can_view_support_dashboard')
 def dashboard(request):
-    """Portada: el promedio de todos los periodos evaluados."""
+    """Portada: el promedio de todos los periodos evaluados.
+
+    Quien no ve todos los periodos recibe el mismo bloque construido con el
+    ultimo y nada mas (`services/config/periodos.py`).
+    """
     return render_inertia(request, "Support/Dashboard", clean_json_props({
-        "metrics": get_support_metric_totals(),
+        "metrics": _metric_totals(request),
         "section": "dashboard",
     }))
 
@@ -74,8 +86,10 @@ def analytics(request):
     se pide por dia es el desglose por grupo, y va por `api/day-metrics/`, que el
     cliente cachea.
     """
-    periodos = get_support_periodos()
-    analytics_data = get_support_analytics_structured(request.GET.get("period"))
+    periodos = periodos_visibles(request, get_support_periodos())
+    analytics_data = get_support_analytics_structured(
+        periodo_visible(request, request.GET.get("period"), lambda: periodos)
+    )
     periodo = analytics_data.get("periodo", "")
 
     dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
@@ -111,10 +125,10 @@ def results(request):
     # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
     # por comas sin ningun tope y cada elemento se convierte en un marcador del
     # `IN (...)`, asi que una sola peticion podia pedir cien mil.
-    periodos = limpiar_periodos(request.GET.get("periods"))
+    periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_support_periodos)
 
     return render_inertia(request, "Support/Results", clean_json_props({
-        "historico": get_support_cierre_historico(periodos),
+        "historico": get_support_cierre_historico(periodos) if periodos != [] else [],
         "section": "results",
     }))
 
@@ -125,14 +139,27 @@ def results(request):
 @permission_required('can_view_support')
 def api_periods_list(request):
     """Los periodos con cierre calculado."""
-    return JsonResponse({"periods": get_support_periodos()})
+    return JsonResponse({"periods": periodos_visibles(request, get_support_periodos())})
 
 
 @login_required
 @permissions_all_required('can_view_support', 'can_view_support_dashboard')
 def api_global_metrics(request):
     """El promedio de todos los periodos, en JSON."""
-    return JsonResponse(clean_json_props(get_support_metric_totals()))
+    return JsonResponse(clean_json_props(_metric_totals(request)))
+
+
+def _metric_totals(request) -> dict:
+    """El dashboard: el global, o solo el ultimo periodo si no ve todos."""
+    if ve_todos_los_periodos(request):
+        return get_support_metric_totals()
+    periodo = periodo_visible(request, None, get_support_periodos)
+    if not periodo:
+        return {
+            "periodos_evaluados": 0,
+            "resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": [],
+        }
+    return get_support_metric_totals(solo=periodo)
 
 
 @login_required
@@ -142,7 +169,9 @@ def api_cierre_historico(request):
     # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
     # por comas sin ningun tope y cada elemento se convierte en un marcador del
     # `IN (...)`, asi que una sola peticion podia pedir cien mil.
-    periodos = limpiar_periodos(request.GET.get("periods"))
+    periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_support_periodos)
+    if periodos == []:
+        return JsonResponse({"historico": []})
     return JsonResponse({
         "historico": clean_json_props(get_support_cierre_historico(periodos))
     })
@@ -155,6 +184,8 @@ def api_dimension_metrics(request):
     periodo = request.GET.get("period")
     if not periodo:
         return JsonResponse({"status": "error", "message": "Falta el periodo."}, status=400)
+    if periodo_denegado(request, periodo, get_support_periodos):
+        return _periodo_no_visible()
 
     return JsonResponse({
         "dimensiones": clean_json_props(get_support_analytics_structured(periodo))
@@ -174,6 +205,8 @@ def api_breakdown(request):
             {"status": "error", "message": "Se requieren period, dimension y valor."},
             status=400,
         )
+    if periodo_denegado(request, periodo, get_support_periodos):
+        return _periodo_no_visible()
 
     return JsonResponse(clean_json_props(get_support_breakdown(
         periodo=periodo,
@@ -199,6 +232,8 @@ def api_day_metrics(request):
         return JsonResponse(
             {"status": "error", "message": "Se requieren period y dia."}, status=400
         )
+    if mes_denegado(request, periodo, get_support_periodos):
+        return _periodo_no_visible()
 
     corte = get_support_day_payload(periodo, dia)
     if corte is None:
@@ -210,9 +245,28 @@ def api_day_metrics(request):
 @login_required
 @permission_required('can_view_support_results')
 def api_tickets_list(request):
-    """Listado de tickets, con tope de 5.000."""
+    """Listado de tickets, con tope de 5.000.
+
+    Sin `?period=` lista tickets de cualquier mes, asi que quien no ve todos
+    los periodos tiene que pedir el mes del ultimo.
+    """
+    periodo = request.GET.get("period")
+    if mes_denegado(request, periodo, get_support_periodos):
+        return _periodo_no_visible()
+    if not ve_todos_los_periodos(request):
+        # `get_support_tickets_list` solo filtra un `YYYY-MM`: con la etiqueta
+        # completa no filtraria nada y saldrian tickets de todos los meses.
+        periodo = periodo[:7]
     return JsonResponse({"tickets": clean_json_props(get_support_tickets_list(
         limit=entero_de_peticion(request, "limit", por_defecto=500, minimo=1, maximo=5000),
         grupo=request.GET.get("grupo"),
-        periodo=request.GET.get("period"),
+        periodo=periodo,
     ))})
+
+
+def _periodo_no_visible():
+    """El 403 de un periodo que la cuenta no puede ver."""
+    return JsonResponse(
+        {"status": "error", "message": "Acceso denegado. Solo puedes ver el último periodo evaluado."},
+        status=403,
+    )

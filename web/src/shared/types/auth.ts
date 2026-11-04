@@ -22,6 +22,7 @@ export type Permission =
   | 'can_view_imports_support'
   | 'can_view_import_history'
   | 'can_view_comisiones'
+  | 'can_view_all_periods'
   | 'can_view_users'
   | 'can_view_auditoria'
   | 'can_import_data'
@@ -69,6 +70,7 @@ export interface UserProfile {
   can_view_imports_support: boolean;
   can_view_import_history: boolean;
   can_view_comisiones: boolean;
+  can_view_all_periods: boolean;
   can_view_users: boolean;
   can_view_auditoria: boolean;
   can_import_data: boolean;

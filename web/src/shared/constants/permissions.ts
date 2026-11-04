@@ -34,6 +34,7 @@ export const PERMISSIONS = {
   VIEW_IMPORTS_SUPPORT: 'can_view_imports_support',
   VIEW_IMPORT_HISTORY: 'can_view_import_history',
   VIEW_COMISIONES: 'can_view_comisiones',
+  VIEW_ALL_PERIODS: 'can_view_all_periods',
   VIEW_USERS: 'can_view_users',
   VIEW_AUDITORIA: 'can_view_auditoria',
   IMPORT_DATA: 'can_import_data',
@@ -218,6 +219,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     icon: KeyRound,
     tone: 'red',
     perms: [
+      { key: PERMISSIONS.VIEW_ALL_PERIODS, label: 'Ver todos los periodos evaluados (sin él, solo el último)', section: 'Ver' },
       { key: PERMISSIONS.IMPORT_DATA, label: 'Cargar cualquier CSV (comodín de los tres módulos)', section: 'Cargar y calcular' },
       { key: PERMISSIONS.RUN_CALCULATIONS, label: 'Ejecutar cualquier análisis (comodín de los tres módulos)', section: 'Cargar y calcular' },
     ],
