@@ -820,7 +820,7 @@ hecha desde la web.
 
 | Ruta | Página | Permiso |
 |---|---|---|
-| `/subscriptions/` y `/dashboard/` | `Subscriptions/Dashboard` | `can_view_subscriptions` |
+| `/dashboard/` (`/subscriptions/` redirige a la primera página visible) | `Subscriptions/Dashboard` | `can_view_subscriptions` y `can_view_subs_dashboard` |
 | `/analytics/` | `Subscriptions/Analytics` | `can_view_subs_analytics` |
 | `/results/` y `/results/<periodo>/` | `Subscriptions/Results` | `can_view_subs_results` |
 | `/lifetime/` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |

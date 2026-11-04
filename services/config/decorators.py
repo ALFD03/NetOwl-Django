@@ -21,9 +21,9 @@ from django.utils.html import escape
 # primera entrada que realmente pueda abrir, en vez de al dashboard de
 # Subscriptions (que quiza tampoco tenga permitido, provocando un rebote).
 LANDING_ROUTES = [
-    ('subscriptions:dashboard', ('can_view_subscriptions',)),
-    ('crm:dashboard', ('can_view_crm',)),
-    ('support:dashboard', ('can_view_support',)),
+    ('subscriptions:dashboard', ('can_view_subscriptions', 'can_view_subs_dashboard')),
+    ('crm:dashboard', ('can_view_crm', 'can_view_crm_dashboard')),
+    ('support:dashboard', ('can_view_support', 'can_view_support_dashboard')),
     ('subscriptions:analytics', ('can_view_subs_analytics',)),
     ('subscriptions:results', ('can_view_subs_results',)),
     ('subscriptions:lifetime', ('can_view_subs_lifetime',)),
@@ -86,6 +86,24 @@ def resolve_landing_url(request):
             if url != request.path:
                 return url
     return None
+
+
+def primera_pagina(request, paginas, message):
+    """Redirige a la primera de `paginas` que el usuario pueda abrir.
+
+    Es la raiz de un modulo (`/crm/`, `/imports/`...). Antes servia el
+    dashboard, pero ahora el dashboard tiene permiso propio, y quien solo tiene
+    otra pagina del modulo entraria, se le negaria y saldria expulsado sin
+    llegar nunca a la suya. `paginas` va en el orden del sidebar, con el mismo
+    formato que `LANDING_ROUTES`.
+    """
+    profile = getattr(request.user, 'profile', None)
+    for route_name, required in paginas:
+        if request.user.is_superuser or (
+            profile and all(profile.has_permission(perm) for perm in required)
+        ):
+            return redirect(route_name)
+    return deny(request, message)
 
 
 def deny(request, message):

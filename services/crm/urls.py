@@ -7,8 +7,8 @@ from services.crm import views
 app_name = "crm"
 
 urlpatterns = [
-    path("", views.dashboard, name="dashboard"),
-    path("dashboard/", views.dashboard),
+    path("", views.index, name="index"),
+    path("dashboard/", views.dashboard, name="dashboard"),
     path("analytics/", views.analytics, name="analytics"),
     path("results/", views.results, name="results"),
 

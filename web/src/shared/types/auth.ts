@@ -5,6 +5,9 @@ export type Permission =
   | 'can_view_crm'
   | 'can_view_imports'
   | 'can_view_support'
+  | 'can_view_subs_dashboard'
+  | 'can_view_crm_dashboard'
+  | 'can_view_support_dashboard'
   | 'can_view_subs_analytics'
   | 'can_view_subs_results'
   | 'can_view_subs_lifetime'
@@ -49,6 +52,9 @@ export interface UserProfile {
   can_view_crm: boolean;
   can_view_imports: boolean;
   can_view_support: boolean;
+  can_view_subs_dashboard: boolean;
+  can_view_crm_dashboard: boolean;
+  can_view_support_dashboard: boolean;
   can_view_subs_analytics: boolean;
   can_view_subs_results: boolean;
   can_view_subs_lifetime: boolean;

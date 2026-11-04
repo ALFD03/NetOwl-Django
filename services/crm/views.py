@@ -9,7 +9,7 @@ from django.http import JsonResponse
 from inertia import render as render_inertia
 
 from core.utils import clean_json_props, entero_de_peticion, limpiar_periodos
-from services.config.decorators import permission_required
+from services.config.decorators import permission_required, permissions_all_required, primera_pagina
 from services.crm.analytics import (
     get_crm_cierre_historico,
     get_crm_day_payload,
@@ -21,8 +21,24 @@ from services.crm.analytics import (
 
 # --- VISTAS INERTIA PROTEGIDAS ---
 
+# Las paginas del modulo en el orden del sidebar, con lo que exige cada una. La
+# usa `index` para elegir destino.
+PAGINAS = [
+    ('crm:dashboard', ('can_view_crm', 'can_view_crm_dashboard')),
+    ('crm:analytics', ('can_view_crm_analytics',)),
+    ('crm:results', ('can_view_crm_results',)),
+]
+
+
 @login_required
 @permission_required('can_view_crm')
+def index(request):
+    """Raiz del modulo: la primera pagina que el usuario si pueda ver."""
+    return primera_pagina(request, PAGINAS, "Acceso denegado. No tienes ninguna página de CRM asignada.")
+
+
+@login_required
+@permissions_all_required('can_view_crm', 'can_view_crm_dashboard')
 def dashboard(request):
     """Portada de CRM: el promedio global y su serie historica."""
     periodo = request.GET.get("period")
@@ -122,7 +138,7 @@ def api_periods_list(request):
 
 
 @login_required
-@permission_required('can_view_crm')
+@permissions_all_required('can_view_crm', 'can_view_crm_dashboard')
 def api_global_metrics(request):
     """El promedio global y la serie historica, en JSON."""
     periodo = request.GET.get("period")

@@ -11,7 +11,7 @@ from django.http import JsonResponse
 from inertia import render as render_inertia
 
 from core.utils import clean_json_props, entero_de_peticion, limpiar_periodos
-from services.config.decorators import permission_required
+from services.config.decorators import permission_required, permissions_all_required, primera_pagina
 from services.support.analytics.day_metrics import (
     get_support_day_payload,
     get_support_day_series,
@@ -27,8 +27,25 @@ from services.support.analytics.queries import (
 
 # --- VISTAS INERTIA PROTEGIDAS ---
 
+# Las paginas del modulo en el orden del sidebar, con lo que exige cada una. La
+# usa `index` para elegir destino.
+PAGINAS = [
+    ('support:dashboard', ('can_view_support', 'can_view_support_dashboard')),
+    ('support:analytics', ('can_view_support_analytics',)),
+    ('support:results', ('can_view_support_results',)),
+    ('support:usuarios', ('can_manage_support_users',)),
+]
+
+
 @login_required
 @permission_required('can_view_support')
+def index(request):
+    """Raiz del modulo: la primera pagina que el usuario si pueda ver."""
+    return primera_pagina(request, PAGINAS, "Acceso denegado. No tienes ninguna página de Soporte asignada.")
+
+
+@login_required
+@permissions_all_required('can_view_support', 'can_view_support_dashboard')
 def dashboard(request):
     """Portada: el promedio de todos los periodos evaluados."""
     return render_inertia(request, "Support/Dashboard", clean_json_props({
@@ -112,7 +129,7 @@ def api_periods_list(request):
 
 
 @login_required
-@permission_required('can_view_support')
+@permissions_all_required('can_view_support', 'can_view_support_dashboard')
 def api_global_metrics(request):
     """El promedio de todos los periodos, en JSON."""
     return JsonResponse(clean_json_props(get_support_metric_totals()))

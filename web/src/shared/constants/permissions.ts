@@ -17,6 +17,9 @@ export const PERMISSIONS = {
   VIEW_CRM: 'can_view_crm',
   VIEW_IMPORTS: 'can_view_imports',
   VIEW_SUPPORT: 'can_view_support',
+  VIEW_SUBS_DASHBOARD: 'can_view_subs_dashboard',
+  VIEW_CRM_DASHBOARD: 'can_view_crm_dashboard',
+  VIEW_SUPPORT_DASHBOARD: 'can_view_support_dashboard',
   VIEW_SUBS_ANALYTICS: 'can_view_subs_analytics',
   VIEW_SUBS_RESULTS: 'can_view_subs_results',
   VIEW_SUBS_LIFETIME: 'can_view_subs_lifetime',
@@ -79,7 +82,7 @@ export const DEFAULT_GROUP_PERMISSIONS = Object.fromEntries(
 
 /**
  * Matriz con la que se abre el formulario de "Nuevo Usuario": solo el modulo de
- * suscripciones, que es el que abre su dashboard.
+ * suscripciones y su dashboard.
  *
  * Es el espejo de `PERMISOS_INICIALES` en services/config/models.py, y hay que
  * mantener las dos listas de acuerdo (ver CLAUDE.md): el backend lo aplica a la
@@ -90,6 +93,7 @@ export const DEFAULT_GROUP_PERMISSIONS = Object.fromEntries(
 export const DEFAULT_USER_PERMISSIONS = {
   ...DEFAULT_GROUP_PERMISSIONS,
   [PERMISSIONS.VIEW_SUBSCRIPTIONS]: true,
+  [PERMISSIONS.VIEW_SUBS_DASHBOARD]: true,
 } as Record<Permission, boolean>;
 
 /**
@@ -132,6 +136,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     tone: 'blue',
     perms: [
       { key: PERMISSIONS.VIEW_SUBSCRIPTIONS, label: 'Entrar al módulo', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUBS_DASHBOARD, label: 'Dashboard', section: 'Ver' },
       { key: PERMISSIONS.VIEW_SUBS_ANALYTICS, label: 'Subscriptions Analytics', section: 'Ver' },
       { key: PERMISSIONS.VIEW_SUBS_RESULTS, label: 'Subscriptions Results', section: 'Ver' },
       { key: PERMISSIONS.VIEW_SUBS_LIFETIME, label: 'Life Time Cycle', section: 'Ver' },
@@ -162,6 +167,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     tone: 'purple',
     perms: [
       { key: PERMISSIONS.VIEW_CRM, label: 'Entrar al módulo', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_CRM_DASHBOARD, label: 'Dashboard', section: 'Ver' },
       { key: PERMISSIONS.VIEW_CRM_ANALYTICS, label: 'CRM Analytics', section: 'Ver' },
       { key: PERMISSIONS.VIEW_CRM_RESULTS, label: 'CRM Results', section: 'Ver' },
       { key: PERMISSIONS.VIEW_IMPORTS_CRM, label: 'Página de importación', section: 'Ver' },
@@ -176,6 +182,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     tone: 'green',
     perms: [
       { key: PERMISSIONS.VIEW_SUPPORT, label: 'Entrar al módulo', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUPPORT_DASHBOARD, label: 'Dashboard', section: 'Ver' },
       { key: PERMISSIONS.VIEW_SUPPORT_ANALYTICS, label: 'Support Analytics', section: 'Ver' },
       { key: PERMISSIONS.VIEW_SUPPORT_RESULTS, label: 'Support Results', section: 'Ver' },
       { key: PERMISSIONS.VIEW_IMPORTS_SUPPORT, label: 'Página de importación', section: 'Ver' },

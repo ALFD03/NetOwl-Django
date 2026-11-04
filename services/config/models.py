@@ -35,6 +35,8 @@ from core.config import DB_SCHEMA
 # True antes de que el nuevo valor por defecto pueda afectarlas.
 VIEW_PERMISSION_FIELDS = [
     'can_view_subscriptions', 'can_view_crm', 'can_view_imports', 'can_view_support',
+    # El dashboard de cada modulo, aparte de entrar en el (ver `PermissionMatrix`).
+    'can_view_subs_dashboard', 'can_view_crm_dashboard', 'can_view_support_dashboard',
     'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
     'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
     'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
@@ -66,16 +68,15 @@ ACTION_PERMISSION_FIELDS = [
 
 PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 
-# Con lo que nace una cuenta nueva. Solo el modulo de suscripciones, que es
-# justo lo que abre su dashboard: `services/subscriptions/views.py:dashboard`
-# esta detras de `can_view_subscriptions` y no tiene permiso propio; las demas
-# paginas del modulo (analytics, results, lifetime, sales, ETA) si lo tienen y
-# quedan cerradas. Lo demas se concede a mano desde `/auth/users/`.
+# Con lo que nace una cuenta nueva. Solo el modulo de suscripciones y su
+# dashboard: `services/subscriptions/views.py:dashboard` exige los dos. Las
+# demas paginas del modulo (analytics, results, lifetime, sales, ETA) quedan
+# cerradas. Lo demas se concede a mano desde `/auth/users/`.
 #
 # `web/src/shared/constants/permissions.ts` repite esta lista: es el espejo que
 # abre el formulario de "Nuevo Usuario", y el formulario manda la matriz entera,
 # asi que las dos tienen que decir lo mismo (ver CLAUDE.md).
-PERMISOS_INICIALES = ['can_view_subscriptions']
+PERMISOS_INICIALES = ['can_view_subscriptions', 'can_view_subs_dashboard']
 
 
 class PermissionMatrix(models.Model):
@@ -93,6 +94,16 @@ class PermissionMatrix(models.Model):
     can_view_crm = models.BooleanField(default=False)
     can_view_imports = models.BooleanField(default=False)
     can_view_support = models.BooleanField(default=False)
+
+    # --- Dashboards ---
+    # Entrar en un modulo ya no abre su dashboard: es una pagina mas, con su
+    # propio permiso, para poder dar a alguien una sola pagina concreta del
+    # modulo. El permiso del modulo sigue siendo la puerta (el dashboard exige
+    # los dos, como las pestanas de Importaciones). La migracion 0012 se lo
+    # concedio a quien ya entraba en el modulo, asi que nadie perdio nada.
+    can_view_subs_dashboard = models.BooleanField(default=False)
+    can_view_crm_dashboard = models.BooleanField(default=False)
+    can_view_support_dashboard = models.BooleanField(default=False)
 
     # --- Paginas de metricas ---
     can_view_subs_analytics = models.BooleanField(default=False)

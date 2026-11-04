@@ -33,7 +33,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     pathPrefix: '/subscriptions',
     permission: PERMISSIONS.VIEW_SUBSCRIPTIONS,
     pages: [
-      { id: 'dashboard', label: 'Dashboard', href: '/subscriptions/dashboard/', icon: Gauge },
+      { id: 'dashboard', label: 'Dashboard', href: '/subscriptions/dashboard/', icon: Gauge, permission: PERMISSIONS.VIEW_SUBS_DASHBOARD },
       { id: 'analytics', label: 'Analytics', href: '/subscriptions/analytics/', icon: BarChart3, permission: PERMISSIONS.VIEW_SUBS_ANALYTICS },
       { id: 'results', label: 'Resultados', href: '/subscriptions/results/', icon: Table, permission: PERMISSIONS.VIEW_SUBS_RESULTS },
       { id: 'lifetime', label: 'Ciclo de vida', href: '/subscriptions/lifetime/', icon: TrendingUp, permission: PERMISSIONS.VIEW_SUBS_LIFETIME, section: REPORTES },
@@ -49,7 +49,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     pathPrefix: '/crm',
     permission: PERMISSIONS.VIEW_CRM,
     pages: [
-      { id: 'dashboard', label: 'Dashboard', href: '/crm/dashboard/', icon: Gauge },
+      { id: 'dashboard', label: 'Dashboard', href: '/crm/dashboard/', icon: Gauge, permission: PERMISSIONS.VIEW_CRM_DASHBOARD },
       { id: 'analytics', label: 'Analytics', href: '/crm/analytics/', icon: BarChart3, permission: PERMISSIONS.VIEW_CRM_ANALYTICS },
       { id: 'results', label: 'Resultados', href: '/crm/results/', icon: Table, permission: PERMISSIONS.VIEW_CRM_RESULTS },
     ],
@@ -61,7 +61,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     pathPrefix: '/support',
     permission: PERMISSIONS.VIEW_SUPPORT,
     pages: [
-      { id: 'dashboard', label: 'Dashboard', href: '/support/dashboard/', icon: Gauge },
+      { id: 'dashboard', label: 'Dashboard', href: '/support/dashboard/', icon: Gauge, permission: PERMISSIONS.VIEW_SUPPORT_DASHBOARD },
       { id: 'analytics', label: 'Analytics', href: '/support/analytics/', icon: BarChart3, permission: PERMISSIONS.VIEW_SUPPORT_ANALYTICS },
       { id: 'results', label: 'Resultados', href: '/support/results/', icon: Table, permission: PERMISSIONS.VIEW_SUPPORT_RESULTS },
       { id: 'usuarios', label: 'Usuarios', href: '/support/users/', icon: Contact, permission: PERMISSIONS.MANAGE_SUPPORT_USERS, section: CONFIGURACION },
@@ -153,7 +153,7 @@ export interface NavigationLocation {
  * Gana la página cuyo `href` es el prefijo más largo de la ruta, así que las
  * subrutas cuelgan de su página (`eta-report/config/` es Reporte ETA,
  * `results/2026-08/` es Resultados). La raíz del módulo (`/crm/`) es su
- * primera página, que es lo que sirve el servidor ahí.
+ * primera página: el servidor redirige ahí a la primera que el usuario pueda ver.
  */
 export function resolveLocation(url: string): NavigationLocation | null {
   const path = url.split(/[?#]/)[0];

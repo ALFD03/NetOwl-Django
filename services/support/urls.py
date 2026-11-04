@@ -8,8 +8,8 @@ from services.support import views, views_usuarios
 app_name = "support"
 
 urlpatterns = [
-    path("", views.dashboard, name="dashboard"),
-    path("dashboard/", views.dashboard),
+    path("", views.index, name="index"),
+    path("dashboard/", views.dashboard, name="dashboard"),
     path("analytics/", views.analytics, name="analytics"),
     path("results/", views.results, name="results"),
     path("users/", views_usuarios.usuarios_view, name="usuarios"),

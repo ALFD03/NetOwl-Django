@@ -29,9 +29,10 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 
 | Permiso | Abre |
 |---|---|
-| `can_view_subscriptions` | Módulo de suscripciones y su dashboard |
-| `can_view_crm` | Módulo CRM y su dashboard |
-| `can_view_support` | Módulo de soporte y su dashboard |
+| `can_view_subscriptions` | Módulo de suscripciones (puerta exterior) |
+| `can_view_crm` | Módulo CRM (puerta exterior) |
+| `can_view_support` | Módulo de soporte (puerta exterior) |
+| `can_view_subs_dashboard` / `can_view_crm_dashboard` / `can_view_support_dashboard` | El dashboard de cada módulo. Exige además el permiso del módulo. Antes lo abría el del módulo; `config/0012` lo concedió a quien ya lo tenía. La raíz del módulo (`/crm/`…) redirige a la primera página que el usuario pueda ver (`primera_pagina`) |
 | `can_view_imports` | Módulo de importaciones (puerta exterior) |
 | `can_view_subs_analytics` / `..._results` / `..._lifetime` / `..._sales` | Páginas de suscripciones (Sales Report **y** Business Units usan `can_view_subs_sales`) |
 | `can_view_eta` | Reporte ETA |

@@ -286,7 +286,7 @@ selector de grupo es de cliente igual que el de dimensión.
 
 | Ruta | Página | Permiso |
 |---|---|---|
-| `/support/` y `/support/dashboard/` | `Support/Dashboard` | `can_view_support` |
+| `/support/dashboard/` (`/support/` redirige a la primera página visible) | `Support/Dashboard` | `can_view_support` y `can_view_support_dashboard` |
 | `/support/analytics/` | `Support/Analytics` | `can_view_support_analytics` |
 | `/support/results/` | `Support/Results` | `can_view_support_results` |
 | `/support/users/` | `Support/Users` | `can_manage_support_users` |

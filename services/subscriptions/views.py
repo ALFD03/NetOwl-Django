@@ -13,7 +13,7 @@ from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
 from core.utils import entero_de_peticion, limpiar_periodos
-from services.config.decorators import permission_required
+from services.config.decorators import permission_required, permissions_all_required, primera_pagina
 from services.imports.jobs import lanzar_analisis
 from services.subscriptions.analytics import (
     get_analytics_data,
@@ -40,8 +40,28 @@ logger = logging.getLogger(__name__)
 
 # --- VISTAS HTML PROTEGIDAS POR PERMISO GRANULAR ---
 
+# Las paginas del modulo en el orden del sidebar, con lo que exige cada una. La
+# usa `index` para elegir destino.
+PAGINAS = [
+    ('subscriptions:dashboard', ('can_view_subscriptions', 'can_view_subs_dashboard')),
+    ('subscriptions:analytics', ('can_view_subs_analytics',)),
+    ('subscriptions:results', ('can_view_subs_results',)),
+    ('subscriptions:lifetime', ('can_view_subs_lifetime',)),
+    ('subscriptions:sales_report', ('can_view_subs_sales',)),
+    ('subscriptions:business_units', ('can_view_subs_sales',)),
+    ('subscriptions:eta_report', ('can_view_eta',)),
+]
+
+
 @login_required
 @permission_required('can_view_subscriptions')
+def index(request):
+    """Raiz del modulo: la primera pagina que el usuario si pueda ver."""
+    return primera_pagina(request, PAGINAS, "Acceso denegado. No tienes ninguna página de Suscripciones asignada.")
+
+
+@login_required
+@permissions_all_required('can_view_subscriptions', 'can_view_subs_dashboard')
 def dashboard(request):
     """Portada del modulo: los cierres de todos los periodos y las zonas."""
     periodos_data = get_cierre_churn()
@@ -163,7 +183,7 @@ def business_units(request):
 # --- APIS DE LECTURA DE DATOS ---
 
 @login_required
-@permission_required('can_view_subscriptions')
+@permissions_all_required('can_view_subscriptions', 'can_view_subs_dashboard')
 def api_dashboard_data(request):
     """Los datos del dashboard en JSON."""
     return JsonResponse(get_dashboard_data())

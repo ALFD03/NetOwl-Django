@@ -61,7 +61,8 @@ Respuesta uniforme: `{"status": "success"|"error", "message": "..."}`.
 
 | Ruta | Componente | Permiso |
 |---|---|---|
-| `/subscriptions/`, `/subscriptions/dashboard/` | `Subscriptions/Dashboard` | `can_view_subscriptions` |
+| `/subscriptions/` | Redirige a la primera página visible del módulo | `can_view_subscriptions` |
+| `/subscriptions/dashboard/` | `Subscriptions/Dashboard` | `can_view_subscriptions` **y** `can_view_subs_dashboard` |
 | `/subscriptions/analytics/` | `Subscriptions/Analytics` | `can_view_subs_analytics` |
 | `/subscriptions/results/`, `/results/<periodo>/` | `Subscriptions/Results` | `can_view_subs_results` |
 | `/subscriptions/lifetime/?period=YYYY-MM` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |
@@ -79,7 +80,7 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 
 | Método | Ruta | Permiso | Devuelve |
 |---|---|---|---|
-| GET | `api/dashboard-data/` | `can_view_subscriptions` | `{periodos: [...]}` |
+| GET | `api/dashboard-data/` | `can_view_subscriptions` **y** `can_view_subs_dashboard` | `{periodos: [...]}` |
 | GET | `api/analytics-data/?periods=` | `can_view_subs_analytics` | `{periodos, dimensiones}` |
 | GET | `api/periods/` | `can_view_subscriptions` | `{periods: [...]}` |
 | GET | `api/results/` | `can_view_subs_results` | `{periods: [...]}` (cierres completos) |
@@ -150,11 +151,12 @@ es de esta app.
 
 | Método | Ruta | Permiso | Devuelve |
 |---|---|---|---|
-| GET | `/crm/`, `/crm/dashboard/` | `can_view_crm` | Página `CRM/Dashboard` |
+| GET | `/crm/` | `can_view_crm` | Redirige a la primera página visible del módulo |
+| GET | `/crm/dashboard/` | `can_view_crm` **y** `can_view_crm_dashboard` | Página `CRM/Dashboard` |
 | GET | `/crm/analytics/?period=&dia=` | `can_view_crm_analytics` | Página `CRM/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `crm_day_metrics`; sin él, el último calculado |
 | GET | `/crm/results/?periods=` | `can_view_crm_results` | Página `CRM/Results` |
 | GET | `api/periods/` | `can_view_crm` | `{periods}` |
-| GET | `api/global-metrics/?period=` | `can_view_crm` | Promedio global + tiempos + efectividad + serie |
+| GET | `api/global-metrics/?period=` | `can_view_crm` **y** `can_view_crm_dashboard` | Promedio global + tiempos + efectividad + serie |
 | GET | `api/cierre-historico/?periods=` | `can_view_crm_results` | `{historico}` |
 | GET | `api/dimension-metrics/?period=&dimension=` | `can_view_crm_analytics` **o** `can_view_crm_results` | `{dimensiones}` |
 | GET | `api/day-metrics/?period=&dia=` | `can_view_crm_analytics` | `{dia, global, dimensiones}` — el corte de un día de `crm_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
@@ -165,13 +167,14 @@ es de esta app.
 
 | Método | Ruta | Permiso | Devuelve |
 |---|---|---|---|
-| GET | `/support/`, `/support/dashboard/` | `can_view_support` | Página `Support/Dashboard` |
+| GET | `/support/` | `can_view_support` | Redirige a la primera página visible del módulo |
+| GET | `/support/dashboard/` | `can_view_support` **y** `can_view_support_dashboard` | Página `Support/Dashboard` |
 | GET | `/support/analytics/?period=&dia=` | `can_view_support_analytics` | Página `Support/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `support_day_metrics`; sin él, el último calculado |
 | GET | `/support/results/?periods=` | `can_view_support_results` | Página `Support/Results` |
 | GET | `/support/users/?nuevo_usuario=` | `can_manage_support_users` | Página `Support/Users`: directorio de usuarios, departamentos y los nombres de los tickets que el directorio no reconoce. `nuevo_usuario` abre el alta con ese nombre ya escrito |
 | GET | `api/periods/` | `can_view_support` | `{periods}` |
 | GET | `api/cierre-historico/?periods=` | `can_view_support` | `{historico}` aplanado |
-| GET | `api/global-metrics/` | `can_view_support` | Promedio de todos los periodos |
+| GET | `api/global-metrics/` | `can_view_support` **y** `can_view_support_dashboard` | Promedio de todos los periodos |
 | GET | `api/dimension-metrics/?period=` | `can_view_support_analytics` | `{dimensiones}`. **400** sin `period` |
 | GET | `api/day-metrics/?period=&dia=` | `can_view_support_analytics` | `{dia, global, grupos, incidencia_zonas}` — el corte de un día de `support_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
 | GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |

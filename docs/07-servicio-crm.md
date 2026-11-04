@@ -323,7 +323,7 @@ ejecución se corta, lo ya hecho queda guardado.
 
 | Ruta | Página | Permiso |
 |---|---|---|
-| `/crm/` y `/crm/dashboard/` | `CRM/Dashboard` | `can_view_crm` |
+| `/crm/dashboard/` (`/crm/` redirige a la primera página visible) | `CRM/Dashboard` | `can_view_crm` y `can_view_crm_dashboard` |
 | `/crm/analytics/` | `CRM/Analytics` | `can_view_crm_analytics` |
 | `/crm/results/` | `CRM/Results` | `can_view_crm_results` |
 
