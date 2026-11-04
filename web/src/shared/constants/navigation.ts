@@ -38,7 +38,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       { id: 'results', label: 'Resultados', href: '/subscriptions/results/', icon: Table, permission: PERMISSIONS.VIEW_SUBS_RESULTS },
       { id: 'lifetime', label: 'Ciclo de vida', href: '/subscriptions/lifetime/', icon: TrendingUp, permission: PERMISSIONS.VIEW_SUBS_LIFETIME, section: REPORTES },
       { id: 'sales', label: 'Reporte de ventas', href: '/subscriptions/sales-report/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_SUBS_SALES, section: REPORTES },
-      { id: 'business_units', label: 'Unidades de negocio', href: '/subscriptions/business-units/', icon: UserCheck, permission: PERMISSIONS.VIEW_SUBS_SALES, section: REPORTES },
+      { id: 'business_units', label: 'Unidades de negocio', href: '/subscriptions/business-units/', icon: UserCheck, permission: PERMISSIONS.VIEW_SUBS_BUSINESS_UNITS, section: REPORTES },
       { id: 'eta', label: 'Reporte ETA', href: '/subscriptions/eta-report/', icon: Lock, permission: PERMISSIONS.VIEW_ETA, section: REPORTES },
     ],
   },

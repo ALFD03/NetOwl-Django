@@ -36,7 +36,7 @@ from services.subscriptions.models import Coordinador
 
 from .decorators import permission_required, resolve_landing_url
 from .models import PERMISSION_FIELDS, PermissionGroup, Profile
-from .unidades import AlcanceUnidades, alcance_de, alcance_guardado
+from .unidades import AlcanceUnidades, alcance_de, lista_de
 
 logger = logging.getLogger(__name__)
 
@@ -154,14 +154,14 @@ def respuesta_sin_rango() -> JsonResponse:
     )
 
 
-def leer_unidades(data, matriz: dict[str, bool]) -> AlcanceUnidades | None:
-    """Las unidades de negocio del payload, o None si la matriz las abre todas.
+def leer_unidades(data) -> AlcanceUnidades:
+    """La lista de unidades de negocio del usuario que viene en el payload.
 
     Llegan en `unidades: {ids, rf}`. Como la matriz, lo ausente vale vacio, y
-    un id que no esta en el catalogo se descarta.
+    un id que no esta en el catalogo se descarta. Se lee tambien con grupo o
+    con el interruptor de todas: la lista es del usuario y se conserva aunque
+    no rija.
     """
-    if matriz.get('can_view_all_business_units'):
-        return None
     crudo = data.get("unidades") or {}
     if not isinstance(crudo, dict):
         crudo = {}
@@ -170,17 +170,17 @@ def leer_unidades(data, matriz: dict[str, bool]) -> AlcanceUnidades | None:
     return AlcanceUnidades(ids=ids, rf=bool(crudo.get("rf")))
 
 
-def unidades_fuera_de_alcance(
-    actor, nueva: AlcanceUnidades | None, previa: AlcanceUnidades | None,
-) -> list[str]:
-    """Las unidades que `nueva` concede, que `previa` no tenia y que `actor` no ve.
+def unidades_fuera_de_alcance(actor, nueva: AlcanceUnidades, previa: AlcanceUnidades) -> list[str]:
+    """Las unidades que la lista `nueva` anade a `previa` y que `actor` no ve.
 
     El mismo techo que `permisos_fuera_de_alcance`, para la lista de unidades.
-    Abrirlas todas (`nueva` None) es el permiso `can_view_all_business_units`,
-    y lo comprueba aquella. `previa` None es que ya las veia todas.
+    Se comparan las listas guardadas, rijan o no: una unidad escrita en la
+    lista de alguien con el interruptor de todas volveria a regir el dia que se
+    lo quitaran. Abrirlas todas es el permiso `can_view_all_business_units`, y
+    lo comprueba aquella.
     """
     propio = alcance_de(actor)
-    if propio is None or nueva is None or previa is None:
+    if propio is None:
         return []
     nuevas = nueva.ids - previa.ids - propio.ids
     fuera = sorted(Coordinador.objects.filter(id__in=nuevas).values_list('nombre', flat=True))
@@ -200,23 +200,18 @@ def respuesta_unidades_fuera(nombres: list[str]) -> JsonResponse:
     )
 
 
-def guardar_unidades(target, alcance: AlcanceUnidades | None) -> None:
-    """Escribe la lista de unidades de un Profile o PermissionGroup ya guardado.
-
-    Con `alcance` None (las ve todas) la lista se vacia: no rige, y dejarla
-    escrita haria que quitar el interruptor devolviera unas unidades que nadie
-    eligio en ese momento.
-    """
-    target.unidad_rf = bool(alcance and alcance.rf)
-    target.save(update_fields=['unidad_rf'])
-    target.unidades_negocio.set(alcance.ids if alcance else [])
+def guardar_unidades(profile: Profile, lista: AlcanceUnidades) -> None:
+    """Escribe la lista de unidades de un perfil ya guardado."""
+    profile.unidad_rf = lista.rf
+    profile.save(update_fields=['unidad_rf'])
+    profile.unidades_negocio.set(lista.ids)
 
 
-def serialize_unidades(target) -> dict:
-    """La lista de unidades de un Profile/PermissionGroup, lista para React."""
-    if target is None:
+def serialize_unidades(profile: Profile | None) -> dict:
+    """La lista de unidades de un perfil, lista para React."""
+    if profile is None:
         return {"ids": [], "rf": False}
-    return {"ids": [c.id for c in target.unidades_negocio.all()], "rf": target.unidad_rf}
+    return {"ids": [c.id for c in profile.unidades_negocio.all()], "rf": profile.unidad_rf}
 
 
 def serialize_permissions(target):
@@ -386,7 +381,7 @@ def user_management_view(request):
         .prefetch_related('profile__unidades_negocio')
         .order_by('username')
     )
-    groups = PermissionGroup.objects.all().prefetch_related('unidades_negocio').order_by('name')
+    groups = PermissionGroup.objects.all().order_by('name')
 
     users_data = []
     for u in users:
@@ -413,7 +408,6 @@ def user_management_view(request):
             "description": g.description,
             "members_count": g.members.count(),
             "permissions": serialize_permissions(g),
-            "unidades": serialize_unidades(g),
             # El grupo propio no se edita salvo siendo superusuario: seria
             # concederse permisos a uno mismo.
             "editable": request.user.is_superuser or g.id != mi_grupo,
@@ -467,10 +461,10 @@ def api_create_user(request):
             if grp is None:
                 return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
             matriz = matriz_de(grp)
-            unidades = alcance_guardado(grp)
         else:
             matriz = leer_matriz(data)
-            unidades = leer_unidades(data, matriz)
+        # La lista de unidades es del usuario: se lee tambien con grupo.
+        unidades = leer_unidades(data)
         fuera = permisos_fuera_de_alcance(request.user, matriz)
         if fuera:
             return respuesta_fuera_de_alcance(fuera)
@@ -535,7 +529,7 @@ def api_update_user_permissions(request):
             return error
         profile = user.profile
         previa = matriz_efectiva(user)
-        previas_unidades = alcance_de(user)
+        previas_unidades = lista_de(profile)
 
         rol = data.get("role", profile.role)
         if rol not in dict(Profile.ROLE_CHOICES):
@@ -548,10 +542,10 @@ def api_update_user_permissions(request):
             if grp is None:
                 return JsonResponse({"status": "error", "message": "Grupo no encontrado."}, status=404)
             nueva = matriz_de(grp)
-            unidades = alcance_guardado(grp)
         else:
             nueva = leer_matriz(data)
-            unidades = leer_unidades(data, nueva)
+        # La lista de unidades es del usuario: se lee tambien con grupo.
+        unidades = leer_unidades(data)
 
         fuera = permisos_fuera_de_alcance(request.user, nueva, previa)
         if fuera:
@@ -604,20 +598,14 @@ def api_save_permission_group(request):
                     status=403,
                 )
             previa = matriz_de(group)
-            previas_unidades = alcance_guardado(group)
         else:
             group = PermissionGroup()
             previa = {}
-            previas_unidades = AlcanceUnidades(frozenset(), False)
 
         nueva = leer_matriz(data)
-        unidades = leer_unidades(data, nueva)
         fuera = permisos_fuera_de_alcance(request.user, nueva, previa)
         if fuera:
             return respuesta_fuera_de_alcance(fuera)
-        fuera = unidades_fuera_de_alcance(request.user, unidades, previas_unidades)
-        if fuera:
-            return respuesta_unidades_fuera(fuera)
 
         group.name = name
         group.description = description
@@ -625,7 +613,6 @@ def api_save_permission_group(request):
 
         with transaction.atomic():
             group.save()
-            guardar_unidades(group, unidades)
             # Sincronizar todos los miembros del grupo
             for member in group.members.all():
                 member.sync_permissions_from_group()
@@ -685,9 +672,6 @@ def api_assign_user_group(request):
             fuera = permisos_fuera_de_alcance(request.user, matriz_de(group), matriz_efectiva(user))
             if fuera:
                 return respuesta_fuera_de_alcance(fuera)
-            fuera = unidades_fuera_de_alcance(request.user, alcance_guardado(group), alcance_de(user))
-            if fuera:
-                return respuesta_unidades_fuera(fuera)
             profile.group = group
             profile.sync_permissions_from_group()
             msg = f"Usuario '{user.username}' asignado al grupo '{group.name}'."

@@ -67,7 +67,7 @@ Respuesta uniforme: `{"status": "success"|"error", "message": "..."}`.
 | `/subscriptions/results/`, `/results/<periodo>/` | `Subscriptions/Results` | `can_view_subs_results` |
 | `/subscriptions/lifetime/?period=YYYY-MM` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |
 | `/subscriptions/sales-report/` | `Subscriptions/SalesReport` | `can_view_subs_sales` |
-| `/subscriptions/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_sales`; sin `can_view_all_business_units`, solo las unidades asignadas (+ RF) y el consolidado FTTH |
+| `/subscriptions/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_business_units`; sin `can_view_all_business_units`, solo las unidades asignadas (+ RF) y el consolidado FTTH |
 | `/subscriptions/eta-report/` | `Subscriptions/EtaReport` | `can_view_eta` |
 | `/subscriptions/eta-report/config/` | `Subscriptions/EtaManagement` | `can_manage_eta` |
 | `/subscriptions/config/` | — redirige a `/catalogos/` (con `?nuevo_plan=`, a Productos) | — |
@@ -87,8 +87,8 @@ Parámetros de query: `?period=YYYY-MM` (o la etiqueta completa en `results`),
 | GET | `api/results/<periodo>/` | `can_view_subs_results` | `{periodo, summary, dimensions}` |
 | GET | `api/lifetime/detalle/?period=YYYY-MM` | `can_view_subs_lifetime` | `{period, bajas: [...]}`: una fila por baja del mes con instalación, fecha de baja y días desde la instalación. Vacío si el mes no está calculado |
 | GET | `api/sales-report/?period=&dia=` | `can_view_subs_sales` | Site → Tecnología → Nodos |
-| GET | `api/business-units/?period=&dia=` | `can_view_subs_sales` | Coordinador → Nodos + resumen FTTH + bloque RF, recortado a las unidades de la cuenta |
-| GET | `api/bajas/detalle/?period=&nodo=&nodo=` | `can_view_subs_results` **o** `can_view_subs_sales` | `{status, period, periods, total, bajas: [...]}`. `nodo` repetido (`"Zona - Sucursal"`, como la dimensión) acota a esos nodos (máx. 300); sin él, el periodo entero. Filtra por el par, no por la zona sola, que puede estar repartida entre varias sucursales. No admite `dia`: el detalle nominal solo existe por cierre mensual |
+| GET | `api/business-units/?period=&dia=` | `can_view_subs_business_units` | Coordinador → Nodos + resumen FTTH + bloque RF, recortado a las unidades de la cuenta |
+| GET | `api/bajas/detalle/?period=&nodo=&nodo=` | `can_view_subs_results`, `can_view_subs_sales` **o** `can_view_subs_business_units` | `{status, period, periods, total, bajas: [...]}`. `nodo` repetido (`"Zona - Sucursal"`, como la dimensión) acota a esos nodos (máx. 300); sin él, el periodo entero. Filtra por el par, no por la zona sola, que puede estar repartida entre varias sucursales. No admite `dia`: el detalle nominal solo existe por cierre mensual |
 
 ### Escritura
 

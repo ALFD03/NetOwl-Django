@@ -34,7 +34,7 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_view_support` | Módulo de soporte (puerta exterior) |
 | `can_view_subs_dashboard` / `can_view_crm_dashboard` / `can_view_support_dashboard` | El dashboard de cada módulo. Exige además el permiso del módulo. Antes lo abría el del módulo; `config/0012` lo concedió a quien ya lo tenía. La raíz del módulo (`/crm/`…) redirige a la primera página que el usuario pueda ver (`primera_pagina`) |
 | `can_view_imports` | Módulo de importaciones (puerta exterior) |
-| `can_view_subs_analytics` / `..._results` / `..._lifetime` / `..._sales` | Páginas de suscripciones (Sales Report **y** Business Units usan `can_view_subs_sales`) |
+| `can_view_subs_analytics` / `..._results` / `..._lifetime` / `..._sales` / `..._business_units` | Páginas de suscripciones. Sales Report es `can_view_subs_sales` y Business Units `can_view_subs_business_units`: compartían el primero hasta `config/0015`, que concedió el nuevo a quien tenía el de ventas |
 | `can_view_eta` | Reporte ETA |
 | `can_view_crm_analytics` / `can_view_crm_results` | Páginas de CRM |
 | `can_view_support_analytics` / `can_view_support_results` | Páginas de soporte |
@@ -63,19 +63,23 @@ se aplica en el servidor, no solo en el selector:
 ### Unidades de negocio por cuenta (`services/config/unidades.py`)
 
 Una unidad de negocio es un `Coordinador` del catálogo, y el catálogo cambia, así que no hay un permiso por
-unidad: `can_view_all_business_units` es el interruptor y, sin él, `PermissionMatrix.unidades_negocio` (M2M a
-`Coordinador`, por id: renombrar no quita nada) más `unidad_rf` (el bloque RF, que no es un coordinador).
-`Profile.alcance_unidades()` lo resuelve como `has_permission`: superusuario y grupo incluidos;
-`sync_permissions_from_group` copia también la lista.
+unidad: `can_view_all_business_units` es el interruptor y, sin él, `Profile.unidades_negocio` (M2M a
+`Coordinador`, por id: renombrar no quita nada) más `Profile.unidad_rf` (el bloque RF, que no es un coordinador).
+
+**El interruptor es de la matriz, la lista es del usuario.** El interruptor puede venir del grupo, como cualquier
+permiso; la lista se elige siempre por persona y el grupo ni la lleva ni la sincroniza (`config/0016` la quitó de
+`PermissionGroup`). `Profile.alcance_unidades()` pregunta el interruptor con `has_permission` y, sin él, lee la
+lista del perfil. Con el interruptor la lista no rige, pero se conserva.
 
 - **Solo restringe la página Unidades de negocio** (y su `api/business-units/`). El Reporte de ventas, que
-  comparte `can_view_subs_sales`, no cambia.
+  tiene su propio permiso, no cambia.
 - El recorte es del servidor (`subscriptions.analytics.queries.restringir_unidades`): el cliente reagrupa cada
   día desde `dayMetrics` y `zonasConfig`, así que los dos llegan recortados a las zonas visibles.
 - **El consolidado FTTH se ve siempre**, el de toda la empresa. Como sus nodos ya no llegan, viaja sumado en
   `buData.ftth_consolidado` (un nodo por corte) y no sigue los filtros de sucursal, búsqueda o métrica.
-- El techo de la administración vale también aquí: nadie concede unidades que no ve
-  (`unidades_fuera_de_alcance`) ni toca una cuenta con unidades que no ve (`puede_actuar_sobre`).
+- El techo de la administración vale también aquí: nadie escribe en la lista de otro unidades que no ve
+  (`unidades_fuera_de_alcance`, que compara las listas guardadas aunque no rijan) ni toca una cuenta con
+  unidades que no ve (`puede_actuar_sobre`).
 
 ### Permisos de acción (cerrados por defecto)
 

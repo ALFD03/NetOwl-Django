@@ -30,7 +30,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `auth_user` | Django | Cuentas |
 | `config_profile` | `services.config.Profile` | Rol, grupo y matriz de permisos por usuario |
 | `config_permissiongroup` | `services.config.PermissionGroup` | Plantillas de permisos reutilizables |
-| `config_profile_unidades_negocio` / `config_permissiongroup_unidades_negocio` | M2M de `unidades_negocio` | Las unidades de negocio (`Coordinador`) que ve una cuenta o un grupo sin `can_view_all_business_units` |
+| `config_profile_unidades_negocio` | M2M `Profile.unidades_negocio` | Las unidades de negocio (`Coordinador`) que ve un usuario sin `can_view_all_business_units`. Solo del usuario: los grupos no la llevan (`config/0016`) |
 | `catalogo_estados` | `Estado` | Entidad federal |
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
 | `catalogo_coordinadores` | `Coordinador` | Unidad de negocio: el grupo de zonas por el que agrupa Unidades de negocio. `persona` (FK nullable a `catalogo_personas_ventas`) es quien la lleva; una persona puede llevar varias |

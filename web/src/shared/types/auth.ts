@@ -21,6 +21,7 @@ export type Permission =
   | 'can_view_subs_results'
   | 'can_view_subs_lifetime'
   | 'can_view_subs_sales'
+  | 'can_view_subs_business_units'
   | 'can_view_eta'
   | 'can_view_crm_analytics'
   | 'can_view_crm_results'
@@ -70,6 +71,7 @@ export interface UserProfile {
   can_view_subs_results: boolean;
   can_view_subs_lifetime: boolean;
   can_view_subs_sales: boolean;
+  can_view_subs_business_units: boolean;
   can_view_eta: boolean;
   can_view_crm_analytics: boolean;
   can_view_crm_results: boolean;

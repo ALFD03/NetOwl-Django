@@ -20,7 +20,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from core.config import DB_SCHEMA
-from services.config.unidades import alcance_guardado
+from services.config.unidades import lista_de
 
 # --- CATALOGO UNICO DE PERMISOS ---
 # Profile y PermissionGroup comparten exactamente la misma matriz. Declararla
@@ -39,7 +39,7 @@ VIEW_PERMISSION_FIELDS = [
     # El dashboard de cada modulo, aparte de entrar en el (ver `PermissionMatrix`).
     'can_view_subs_dashboard', 'can_view_crm_dashboard', 'can_view_support_dashboard',
     'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
-    'can_view_subs_sales', 'can_view_eta', 'can_view_crm_analytics',
+    'can_view_subs_sales', 'can_view_subs_business_units', 'can_view_eta', 'can_view_crm_analytics',
     'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
     # Paginas del modulo de Importaciones (una por pestana).
     'can_view_imports_subs', 'can_view_imports_crm', 'can_view_imports_support',
@@ -115,6 +115,10 @@ class PermissionMatrix(models.Model):
     can_view_subs_results = models.BooleanField(default=False)
     can_view_subs_lifetime = models.BooleanField(default=False)
     can_view_subs_sales = models.BooleanField(default=False)
+    # Unidades de negocio. Compartia `can_view_subs_sales` con el Reporte de
+    # ventas; se separo para poder dar una sin la otra. La migracion 0015 se lo
+    # concedio a quien tenia el de ventas.
+    can_view_subs_business_units = models.BooleanField(default=False)
     can_view_eta = models.BooleanField(default=False)
 
     can_view_crm_analytics = models.BooleanField(default=False)
@@ -137,18 +141,10 @@ class PermissionMatrix(models.Model):
 
     # --- Unidades de negocio ---
     # Con `can_view_all_business_units`, la pagina Unidades de negocio entera.
-    # Sin el, solo las unidades marcadas en `unidades_negocio` y el bloque RF si
-    # `unidad_rf`; el consolidado FTTH se ve siempre. La lista es una relacion
-    # con el catalogo (`Coordinador`), no un permiso por unidad: las unidades
-    # cambian y la matriz no puede llevar un campo por cada una. Por id, asi que
-    # renombrar una unidad no se la quita a nadie. La migracion 0014 dio el
+    # Sin el, solo las unidades de la lista del usuario (`Profile.unidades_negocio`)
+    # y el consolidado FTTH, que se ve siempre. La migracion 0014 dio el
     # interruptor a todas las cuentas existentes.
     can_view_all_business_units = models.BooleanField(default=False)
-    unidades_negocio = models.ManyToManyField(
-        'subscriptions.Coordinador', blank=True, related_name='+',
-    )
-    # El bloque RF no es un coordinador: agrupa todas las zonas RF.
-    unidad_rf = models.BooleanField(default=False)
 
     # --- Comisiones ---
     # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar los
@@ -253,6 +249,17 @@ class Profile(PermissionMatrix):
 
     group = models.ForeignKey(PermissionGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='members')
 
+    # Las unidades de negocio que ve sin `can_view_all_business_units`. Son del
+    # usuario y no de la matriz: un grupo no las lleva ni las sincroniza (ver
+    # `services/config/unidades.py`). Es una relacion con el catalogo y no un
+    # permiso por unidad, porque las unidades cambian; por id, asi que renombrar
+    # una no se la quita a nadie.
+    unidades_negocio = models.ManyToManyField(
+        'subscriptions.Coordinador', blank=True, related_name='+',
+    )
+    # El bloque RF no es un coordinador: agrupa todas las zonas RF.
+    unidad_rf = models.BooleanField(default=False)
+
     def has_permission(self, perm_name: str) -> bool:
         """Si esta cuenta tiene el permiso indicado.
 
@@ -268,21 +275,19 @@ class Profile(PermissionMatrix):
     def alcance_unidades(self):
         """Las unidades de negocio que ve la cuenta, o None si las ve todas.
 
-        Como `has_permission`: los superusuarios lo ven todo y un perfil con
-        grupo pregunta al grupo.
+        El interruptor se pregunta como cualquier permiso (superusuario y grupo
+        incluidos); la lista es siempre la del perfil.
         """
-        if self.user.is_superuser:
+        if self.has_permission('can_view_all_business_units'):
             return None
-        return alcance_guardado(self.group or self)
+        return lista_de(self)
 
     def sync_permissions_from_group(self):
         """Copia al perfil la matriz de su grupo. Sin grupo no hace nada."""
         if self.group:
             for field in PERMISSION_FIELDS:
                 setattr(self, field, getattr(self.group, field, False))
-            self.unidad_rf = self.group.unidad_rf
             self.save()
-            self.unidades_negocio.set(self.group.unidades_negocio.all())
 
     def __str__(self):
         group_str = f" [{self.group.name}]" if self.group else ""

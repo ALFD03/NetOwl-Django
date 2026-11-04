@@ -28,6 +28,7 @@ LANDING_ROUTES = [
     ('subscriptions:results', ('can_view_subs_results',)),
     ('subscriptions:lifetime', ('can_view_subs_lifetime',)),
     ('subscriptions:sales_report', ('can_view_subs_sales',)),
+    ('subscriptions:business_units', ('can_view_subs_business_units',)),
     ('subscriptions:eta_report', ('can_view_eta',)),
     ('crm:analytics', ('can_view_crm_analytics',)),
     ('crm:results', ('can_view_crm_results',)),

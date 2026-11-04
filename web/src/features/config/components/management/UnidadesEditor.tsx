@@ -1,6 +1,9 @@
 /**
- * Las unidades de negocio que ve una cuenta o un grupo sin el permiso de verlas
- * todas.
+ * Las unidades de negocio que ve un usuario sin el permiso de verlas todas.
+ *
+ * Son del usuario, no de su grupo: el grupo puede dar el interruptor de todas,
+ * pero la lista se elige siempre por persona. Con el interruptor la lista no
+ * rige, pero se conserva y se puede editar: es la que valdrá si se le quita.
  *
  * La lista sale del catálogo (Catálogos › Ventas), no de una constante: las
  * unidades cambian. Solo restringe la página Unidades de negocio, y el
@@ -17,9 +20,8 @@ interface Props {
   unidades: UnidadesSeleccion;
   onChange: (unidades: UnidadesSeleccion) => void;
   catalogo: readonly UnidadNegocio[];
-  /** La matriz concede todas las unidades: la lista no rige. */
+  /** La matriz (la suya o la de su grupo) concede todas las unidades: la lista no rige. */
   todas: boolean;
-  /** Heredado de un grupo: se ve, pero no se edita. */
   disabled?: boolean;
   /**
    * Lo que puede conceder quien edita (`null`: todas). Lo demás se ve apagado
@@ -32,7 +34,15 @@ interface Props {
 
 const ETIQUETA_RF = 'Nodos radiofrecuencia (RF)';
 
-export function UnidadesEditor({ unidades, onChange, catalogo, todas, disabled = false, concedibles, previa }: Props) {
+export function UnidadesEditor({
+  unidades,
+  onChange,
+  catalogo,
+  todas,
+  disabled = false,
+  concedibles,
+  previa,
+}: Props) {
   const bloqueada = (id: number) =>
     concedibles !== null && !concedibles.ids.includes(id) && !previa.ids.includes(id);
   const rfBloqueado = concedibles !== null && !concedibles.rf && !previa.rf;
@@ -50,7 +60,9 @@ export function UnidadesEditor({ unidades, onChange, catalogo, todas, disabled =
           <UserCheck className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-black uppercase tracking-wider text-white">Unidades de negocio</p>
+          <p className="text-[11px] font-black uppercase tracking-wider text-white">
+            Unidades de negocio
+          </p>
           <p className="mt-0.5 text-[10px] text-slate-500">
             Qué unidades ve en la página Unidades de negocio. El consolidado FTTH se ve siempre.
           </p>
@@ -58,43 +70,42 @@ export function UnidadesEditor({ unidades, onChange, catalogo, todas, disabled =
       </header>
 
       <div className="p-3">
-        {todas ? (
-          <p className="text-xs text-slate-400">
-            Ve <strong className="text-white">todas</strong> las unidades. Quita «Todas las unidades de negocio» en
-            Subscriptions para elegir unas concretas.
+        {todas && (
+          <p className="mb-3 text-xs text-slate-400">
+            Ve <strong className="text-white">todas</strong> las unidades por su matriz o su grupo.
+            La lista de abajo no rige mientras tanto, pero se conserva.
           </p>
-        ) : (
-          <>
-            {catalogo.length === 0 && (
-              <p className="mb-2 text-xs text-slate-500">No hay unidades en el catálogo.</p>
-            )}
-            <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
-              {catalogo.map((unidad) => (
-                <Switch
-                  key={unidad.id}
-                  checked={unidades.ids.includes(unidad.id)}
-                  onChange={(valor) => marcar(unidad.id, valor)}
-                  label={unidad.nombre}
-                  tone="blue"
-                  disabled={disabled || bloqueada(unidad.id)}
-                />
-              ))}
-              <Switch
-                checked={unidades.rf}
-                onChange={(rf) => !disabled && !(rf && rfBloqueado) && onChange({ ...unidades, rf })}
-                label={ETIQUETA_RF}
-                tone="blue"
-                disabled={disabled || rfBloqueado}
-              />
-            </div>
-            {!disabled && (concedibles !== null) && (
-              <p className="mt-2 flex items-start gap-2 text-[11px] text-slate-500">
-                <Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                <span>Las apagadas son unidades que tú no ves: no puedes concederlas.</span>
-              </p>
-            )}
-          </>
         )}
+        <div className={todas ? 'opacity-60' : undefined}>
+          {catalogo.length === 0 && (
+            <p className="mb-2 text-xs text-slate-500">No hay unidades en el catálogo.</p>
+          )}
+          <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
+            {catalogo.map((unidad) => (
+              <Switch
+                key={unidad.id}
+                checked={unidades.ids.includes(unidad.id)}
+                onChange={(valor) => marcar(unidad.id, valor)}
+                label={unidad.nombre}
+                tone="blue"
+                disabled={disabled || bloqueada(unidad.id)}
+              />
+            ))}
+            <Switch
+              checked={unidades.rf}
+              onChange={(rf) => !disabled && !(rf && rfBloqueado) && onChange({ ...unidades, rf })}
+              label={ETIQUETA_RF}
+              tone="blue"
+              disabled={disabled || rfBloqueado}
+            />
+          </div>
+          {!disabled && concedibles !== null && (
+            <p className="mt-2 flex items-start gap-2 text-[11px] text-slate-500">
+              <Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+              <span>Las apagadas son unidades que tú no ves: no puedes concederlas.</span>
+            </p>
+          )}
+        </div>
       </div>
     </section>
   );

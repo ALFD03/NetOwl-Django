@@ -44,6 +44,15 @@ export function ManagementView({
   const bloqueadosPara = (previa: Record<string, boolean>) =>
     new Set(TODOS_LOS_PERMISOS.filter((clave) => !concedibles[clave] && !previa[clave]));
 
+  /**
+   * Si la cuenta ve todas las unidades: el interruptor es de la matriz, así
+   * que con grupo lo dice el grupo (la lista sigue siendo del usuario).
+   */
+  const todasLasUnidades = (groupId: number | string | null, permisos: Record<string, boolean>) => {
+    const matriz = groupId ? groups.find((group) => group.id === Number(groupId))?.permissions : permisos;
+    return Boolean(matriz?.[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS]);
+  };
+
   const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users');
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -115,7 +124,6 @@ export function ManagementView({
         name: groupToEdit.name,
         description: groupToEdit.description,
         permissions: groupToEdit.permissions,
-        unidades: groupToEdit.unidades,
       });
       setGroupToEdit(null);
       router.reload();
@@ -161,7 +169,6 @@ export function ManagementView({
     name: '',
     description: '',
     permissions: { ...DEFAULT_GROUP_PERMISSIONS },
-    unidades: SIN_UNIDADES,
   });
 
   return (
@@ -238,7 +245,7 @@ export function ManagementView({
           users={users}
           filtrando={Boolean(termino)}
           onCreate={puedeGrupos ? nuevoGrupo : null}
-          onEdit={puedeGrupos ? (group) => setGroupToEdit({ ...group, previa: { ...group.permissions }, previaUnidades: group.unidades }) : null}
+          onEdit={puedeGrupos ? (group) => setGroupToEdit({ ...group, previa: { ...group.permissions } }) : null}
           onDelete={puedeGrupos ? (group) => setDeletingItem({ type: 'group', id: group.id, name: group.name }) : null}
         />
       )}
@@ -310,22 +317,22 @@ export function ManagementView({
                 </span>
               </p>
             ) : (
-              <>
-                <PermissionEditor
-                  permissions={userToCreate.permissions}
-                  onChange={(permissions) => setUserToCreate({ ...userToCreate, permissions })}
-                  bloqueados={bloqueadosPara(DEFAULT_USER_PERMISSIONS)}
-                />
-                <UnidadesEditor
-                  unidades={userToCreate.unidades}
-                  onChange={(unidades) => setUserToCreate({ ...userToCreate, unidades })}
-                  catalogo={unidadesNegocio}
-                  todas={Boolean(userToCreate.permissions[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS])}
-                  concedibles={unidadesConcedibles}
-                  previa={SIN_UNIDADES}
-                />
-              </>
+              <PermissionEditor
+                permissions={userToCreate.permissions}
+                onChange={(permissions) => setUserToCreate({ ...userToCreate, permissions })}
+                bloqueados={bloqueadosPara(DEFAULT_USER_PERMISSIONS)}
+              />
             )}
+
+            {/* Las unidades son del usuario, no del grupo: se eligen siempre aquí. */}
+            <UnidadesEditor
+              unidades={userToCreate.unidades}
+              onChange={(unidades) => setUserToCreate({ ...userToCreate, unidades })}
+              catalogo={unidadesNegocio}
+              todas={todasLasUnidades(userToCreate.group_id, userToCreate.permissions)}
+              concedibles={unidadesConcedibles}
+              previa={SIN_UNIDADES}
+            />
 
             <PieDeModal
               onCancel={() => setUserToCreate(null)}
@@ -398,19 +405,19 @@ export function ManagementView({
               disabled={Boolean(userToEdit.group_id)}
               bloqueados={bloqueadosPara(userToEdit.previa ?? {})}
             />
+            {/* Las unidades son del usuario, no del grupo: se editan aunque tenga uno. */}
             <UnidadesEditor
               unidades={userToEdit.unidades}
               onChange={(unidades) => setUserToEdit({ ...userToEdit, unidades })}
               catalogo={unidadesNegocio}
-              todas={Boolean(userToEdit.permissions[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS])}
-              disabled={Boolean(userToEdit.group_id)}
+              todas={todasLasUnidades(userToEdit.group_id, userToEdit.permissions)}
               concedibles={unidadesConcedibles}
               previa={userToEdit.previaUnidades ?? SIN_UNIDADES}
             />
 
             <PieDeModal
               onCancel={() => setUserToEdit(null)}
-              nota={userToEdit.group_id ? 'Solo se guardarán el rol y el grupo.' : 'Se guarda la matriz completa tal y como se ve.'}
+              nota={userToEdit.group_id ? 'Se guardarán el rol, el grupo y las unidades de negocio.' : 'Se guarda la matriz completa tal y como se ve.'}
             >
               <Button type="submit" isLoading={saving} icon={<ShieldCheck className="h-4 w-4" />} size="sm">
                 {saving ? 'Guardando...' : 'Guardar Cambios'}
@@ -496,14 +503,6 @@ export function ManagementView({
               permissions={groupToEdit.permissions}
               onChange={(permissions) => setGroupToEdit({ ...groupToEdit, permissions })}
               bloqueados={bloqueadosPara(groupToEdit.previa ?? {})}
-            />
-            <UnidadesEditor
-              unidades={groupToEdit.unidades}
-              onChange={(unidades) => setGroupToEdit({ ...groupToEdit, unidades })}
-              catalogo={unidadesNegocio}
-              todas={Boolean(groupToEdit.permissions[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS])}
-              concedibles={unidadesConcedibles}
-              previa={groupToEdit.previaUnidades ?? SIN_UNIDADES}
             />
 
             <PieDeModal

@@ -31,7 +31,6 @@ export interface GroupData {
   description: string;
   members_count: number;
   permissions: Record<string, boolean>;
-  unidades: UnidadesSeleccion;
   /** Falso para el grupo propio de quien mira: editarlo sería concederse permisos. */
   editable: boolean;
 }
@@ -64,10 +63,8 @@ export interface EditableGroup {
   name: string;
   description: string;
   permissions: Record<string, boolean>;
-  unidades: UnidadesSeleccion;
   /** Ver `EditableUser.previa`. */
   previa?: Record<string, boolean>;
-  previaUnidades?: UnidadesSeleccion;
 }
 
 /** Props Django passes to the user & group management page. */

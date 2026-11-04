@@ -57,7 +57,7 @@ PAGINAS = [
     ('subscriptions:results', ('can_view_subs_results',)),
     ('subscriptions:lifetime', ('can_view_subs_lifetime',)),
     ('subscriptions:sales_report', ('can_view_subs_sales',)),
-    ('subscriptions:business_units', ('can_view_subs_sales',)),
+    ('subscriptions:business_units', ('can_view_subs_business_units',)),
     ('subscriptions:eta_report', ('can_view_eta',)),
 ]
 
@@ -177,7 +177,7 @@ def sales_report(request):
     })
 
 @login_required
-@permission_required('can_view_subs_sales')
+@permission_required('can_view_subs_business_units')
 def business_units(request):
     """Reporte por coordinador, mas el resumen FTTH global y el bloque RF.
 
@@ -286,7 +286,7 @@ def api_sales_report(request):
     return JsonResponse(_recortar_selector(request, get_sales_report_data(periodo, dia)))
 
 @login_required
-@permission_required('can_view_subs_results', 'can_view_subs_sales')
+@permission_required('can_view_subs_results', 'can_view_subs_sales', 'can_view_subs_business_units')
 def api_bajas_detalle(request):
     """Las bajas de un periodo con la ficha de cada cliente, para exportar.
 
@@ -327,7 +327,7 @@ def api_lifecycle_run(request):
 
 
 @login_required
-@permission_required('can_view_subs_sales')
+@permission_required('can_view_subs_business_units')
 def api_business_units_report(request):
     """El reporte por unidades de negocio de un periodo (y de un dia)."""
     periodo = periodo_visible(request, request.GET.get("period"), get_periodos)

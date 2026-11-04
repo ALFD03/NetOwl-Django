@@ -825,7 +825,7 @@ hecha desde la web.
 | `/results/` y `/results/<periodo>/` | `Subscriptions/Results` | `can_view_subs_results` |
 | `/lifetime/` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |
 | `/sales-report/` | `Subscriptions/SalesReport` | `can_view_subs_sales` |
-| `/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_sales` |
+| `/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_business_units` |
 
 `analytics`, `sales_report` y `business_units` envían además `dayMetrics` (el mes
 completo) en los props: **seleccionar un día es una lectura de cliente**.

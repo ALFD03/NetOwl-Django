@@ -5,6 +5,10 @@ por eso no es un permiso por unidad sino un interruptor
 (`can_view_all_business_units`) y, sin el, una lista (`unidades_negocio`) mas el
 bloque RF (`unidad_rf`). Lo resuelve `Profile.alcance_unidades()`.
 
+El interruptor es un permiso de la matriz, asi que puede venir del grupo. **La
+lista no**: es siempre la del usuario, este o no en un grupo, porque que
+unidades ve cada uno es de cada persona y no de la plantilla.
+
 Solo restringe la pagina Unidades de negocio. El consolidado FTTH de la
 empresa se ve siempre (ver `subscriptions.analytics.queries.restringir_unidades`).
 """
@@ -42,11 +46,9 @@ def alcance_de(usuario) -> AlcanceUnidades | None:
     return profile.alcance_unidades()
 
 
-def alcance_guardado(objetivo) -> AlcanceUnidades | None:
-    """El alcance escrito en un Profile o PermissionGroup, sin delegar en el grupo."""
-    if objetivo.can_view_all_business_units:
-        return None
+def lista_de(profile) -> AlcanceUnidades:
+    """La lista guardada en el perfil, rija o no (con el interruptor no rige)."""
     return AlcanceUnidades(
-        ids=frozenset(objetivo.unidades_negocio.values_list('id', flat=True)),
-        rf=objetivo.unidad_rf,
+        ids=frozenset(profile.unidades_negocio.values_list('id', flat=True)),
+        rf=profile.unidad_rf,
     )
