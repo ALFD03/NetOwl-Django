@@ -1,6 +1,7 @@
 # backend/support/metrics.py
 """
-El bloque de métricas de una cohorte: siete medidas de tiempo y tres tasas.
+El bloque de métricas de una cohorte: ocho medidas de tiempo, las tasas y en qué
+se va el tiempo.
 
 Todo el módulo es una función pura de un `PeriodCohort` ya clasificado, así que
 el mismo código sirve para el total del periodo, para un grupo de trabajo, para
@@ -16,11 +17,14 @@ import pandas as pd
 from core.utils import clean_json_props
 from services.support.analytics.cohorts import PeriodCohort
 from services.support.analytics.config import (
+    POB_CERRADOS,
+    SUPPORT_COMPOSICION_FIELDS,
     SUPPORT_RATE_FIELDS,
     SUPPORT_TIME_MEASURES,
     SUPPORT_VOLUME_FIELDS,
     TIME_MEASURE_SPECS,
     TIME_STATS,
+    TIPOS_COMPOSICION,
 )
 
 
@@ -175,6 +179,11 @@ def _serie_de_formula(
     if formula == "creado_a_asignacion":
         return _serie_asignacion(df, corte)
 
+    # Hasta escalar: el escalamiento ES el cierre de la copia de ATC, y no
+    # exige asignación, porque escalar sin que nadie lo tomara también ocurre.
+    if formula == "creado_a_cierre":
+        return _hours_between(df, "dt_creacion", "dt_cierre")
+
     espera = _hours_between(df, "dt_creacion", "asignado_al_corte")
     gestion = _hours_between(df, "asignado_al_corte", "dt_cierre")
 
@@ -203,7 +212,12 @@ def _pct(parte: int, total: int) -> float:
 
 def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
     """
-    El bloque completo de una cohorte: volúmenes, tasas y las siete medidas.
+    El bloque completo de una cohorte: volúmenes, tasas, las ocho medidas y en
+    qué se fue el tiempo.
+
+    En ATC lo escalado es una forma de cerrar (ver `escalamiento.py`): cuenta en
+    `tickets_cerrados` y no en resueltos ni cancelados, de modo que resolución,
+    cancelación y escalamiento se reparten lo cerrado y suman 100 %.
 
     Cada cifra trae fijado su denominador, y son dos distintos:
 
@@ -220,13 +234,16 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
     if total == 0:
         conteos = dict.fromkeys(
             ["creados", "cerrados", "resueltos", "resueltos_periodo", "resueltos_arrastre",
-             "cancelados", "cancelados_periodo", "cancelados_arrastre", "rezagados"], 0
+             "cancelados", "cancelados_periodo", "cancelados_arrastre",
+             "escalados", "escalados_periodo", "escalados_arrastre",
+             "recibidos_escalados", "rezagados"], 0
         )
     else:
         nacido = df["nacido_en_periodo"]
         cerrado = df["cerrado_en_periodo"]
         resuelto = cerrado & df["es_resuelto"]
         cancelado = cerrado & df["es_cancelado"]
+        escalado = cerrado & _bandera(df, "es_escalado")
 
         conteos = {
             "creados": int(nacido.sum()),
@@ -237,6 +254,10 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
             "cancelados": int(cancelado.sum()),
             "cancelados_periodo": int((cancelado & nacido).sum()),
             "cancelados_arrastre": int((cancelado & ~nacido).sum()),
+            "escalados": int(escalado.sum()),
+            "escalados_periodo": int((escalado & nacido).sum()),
+            "escalados_arrastre": int((escalado & ~nacido).sum()),
+            "recibidos_escalados": int((nacido & _bandera(df, "llego_escalado")).sum()),
             "rezagados": int((nacido & df["es_rezagado"]).sum()),
         }
 
@@ -247,20 +268,18 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
         "total_tickets": total,
         "tickets_creados": creados,
         "tickets_cerrados": cerrados,
-        "tickets_resueltos": conteos["resueltos"],
-        "tickets_resueltos_periodo": conteos["resueltos_periodo"],
-        "tickets_resueltos_arrastre": conteos["resueltos_arrastre"],
-        "tickets_cancelados": conteos["cancelados"],
-        "tickets_cancelados_periodo": conteos["cancelados_periodo"],
-        "tickets_cancelados_arrastre": conteos["cancelados_arrastre"],
-        "tickets_rezagados": conteos["rezagados"],
-
-        "pct_resueltos": _pct(conteos["resueltos"], cerrados),
-        "pct_resueltos_periodo": _pct(conteos["resueltos_periodo"], cerrados),
-        "pct_resueltos_arrastre": _pct(conteos["resueltos_arrastre"], cerrados),
-        "pct_cancelados": _pct(conteos["cancelados"], cerrados),
-        "pct_cancelados_periodo": _pct(conteos["cancelados_periodo"], cerrados),
-        "pct_cancelados_arrastre": _pct(conteos["cancelados_arrastre"], cerrados),
+        **{f"tickets_{clave}": conteos[clave] for clave in (
+            "resueltos", "resueltos_periodo", "resueltos_arrastre",
+            "cancelados", "cancelados_periodo", "cancelados_arrastre",
+            "escalados", "escalados_periodo", "escalados_arrastre",
+            "recibidos_escalados", "rezagados",
+        )},
+        **{f"pct_{clave}": _pct(conteos[clave], cerrados) for clave in (
+            "resueltos", "resueltos_periodo", "resueltos_arrastre",
+            "cancelados", "cancelados_periodo", "cancelados_arrastre",
+            "escalados", "escalados_periodo", "escalados_arrastre",
+        )},
+        "pct_recibidos_escalados": _pct(conteos["recibidos_escalados"], creados),
         "pct_rezagados": _pct(conteos["rezagados"], creados),
     }
 
@@ -268,7 +287,36 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
         serie = _serie_de_formula(cohorte.poblacion(poblacion), formula, cohorte.corte)
         metrics.update(_prefixed(_compute_stats_for_series(serie), medida))
 
+    metrics.update(_composicion(cohorte.poblacion(POB_CERRADOS)))
+
     return clean_json_props(metrics)
+
+
+def _bandera(df: pd.DataFrame, columna: str) -> pd.Series:
+    """Una columna booleana de la cohorte, o toda en False si no existe."""
+    if columna not in df.columns:
+        return pd.Series(False, index=df.index)
+    return df[columna].fillna(False).astype(bool)
+
+
+def _composicion(cerrados: pd.DataFrame) -> dict[str, Any]:
+    """En qué se le fue el tiempo al equipo con lo que cerró en el periodo.
+
+    El promedio de horas en cola, pausa, gestión y etapas sin clasificar de los
+    cerrados con logs de etapa (ver `SUPPORT_COMPOSICION_FIELDS`). Son
+    promedios para que las cuatro partes sumen el tiempo medio.
+    """
+    con_logs = cerrados[_bandera(cerrados, "con_recorrido")] if not cerrados.empty else cerrados
+    n = len(con_logs)
+    bloque: dict[str, Any] = {"muestra_composicion": n}
+    for tipo, campo in zip(TIPOS_COMPOSICION, SUPPORT_COMPOSICION_FIELDS):
+        col = f"h_{tipo}"
+        if n == 0 or col not in con_logs.columns:
+            bloque[campo] = 0.0
+            continue
+        horas = pd.to_numeric(con_logs[col], errors="coerce").fillna(0.0).clip(lower=0)
+        bloque[campo] = round(float(horas.mean()), 2)
+    return bloque
 
 
 # Cada medida de tiempo con la columna que dice cuántos tickets pudo medir.
@@ -305,6 +353,10 @@ def average_blocks(bloques: list[dict]) -> dict[str, Any]:
     df = pd.DataFrame(bloques)
     avg: dict[str, Any] = {field: _mean_of(df, field) for field in SUPPORT_VOLUME_FIELDS}
     avg.update({field: _mean_of(df, field) for field in SUPPORT_RATE_FIELDS})
+
+    for campo in SUPPORT_COMPOSICION_FIELDS:
+        avg[campo] = _mean_of(df, campo, "muestra_composicion")
+    avg["muestra_composicion"] = _mean_of(df, "muestra_composicion")
 
     for medida, muestra in _TIME_MASKS.items():
         for stat in TIME_STATS:

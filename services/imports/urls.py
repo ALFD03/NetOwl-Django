@@ -28,6 +28,7 @@ urlpatterns = [
     path("api/run-crm-analysis/", views.api_run_crm_analysis, name="api_run_crm_analysis"), # <-- AGREGADO
     path("api/history/", views.api_history_list, name="api_history"),
     path("api/import-support/", views.api_import_support, name="api_import_support"),
+    path("api/import-support-logs/", views.api_import_support_logs, name="api_import_support_logs"),
     path("api/run-support-analysis/", views.api_run_support_analysis, name="api_run_support_analysis"),
 
     # Seguimiento de los analisis, que corren en el worker de Celery.

@@ -25,24 +25,34 @@ la que tiene sentido.
 
 | Población | Definición | Qué mide |
 |---|---|---|
-| `cerrados_periodo` | Etapa terminal **y** última actualización dentro del mes | El trabajo **despachado** en el mes |
-| `resueltos_periodo` / `cancelados_periodo` | Los cerrados, por desenlace | |
-| `creados_periodo` | Nació en el mes | La **demanda** que entró |
+| `cerrados_periodo` | Etapa terminal **y** última actualización dentro del mes; en ATC, también lo que escaló a Soporte en el mes | El trabajo **despachado** en el mes |
+| `resueltos_periodo` / `cancelados_periodo` / `escalados_periodo` | Los cerrados, por desenlace | |
+| `creados_periodo` | Nació en el mes; en Soporte, también lo que le llegó escalado en el mes | La **demanda** que entró |
 
 La cohorte de un periodo es la unión de las dos, y cada métrica recorta la suya.
+Lo escalado entra en las dos puntas del recorrido: ver «El escalamiento dentro
+de los grupos».
 
 Etapas terminales: `RESOLVED_STAGES = {"resuelto"}` y `CANCELED_STAGES`
 (`cancelado`, `anulado`, `rechazado`, y sus variantes de género e inglés).
 
 ### Medidas de tiempo
 
-Dos relojes de cierre y uno de asignación (`TIME_MEASURE_SPECS`):
+Dos relojes de cierre, uno de asignación y el tiempo hasta escalar
+(`TIME_MEASURE_SPECS`):
 
 | Medida | Tramo | Población |
 |---|---|---|
 | `cierre_creado_*` | Creación → cierre. Es `duracion_total_horas` de Odoo: el proceso completo, cola incluida | resueltos / cancelados / cerrados |
 | `cierre_asignado_*` | Primera asignación → cierre. Solo la gestión del técnico | resueltos / cancelados / cerrados |
 | `asignacion` | Creación → primera asignación, o → **el final del periodo** si todavía no la tiene | **creados**. No exige desenlace: la espera ya ocurrió, y medirla solo sobre lo asignado dejaría fuera justo a los que llevan más tiempo esperando |
+| `escalamiento` | Creación → paso a Soporte (`creado_a_cierre` sobre la copia de ATC, cuyo cierre es el escalamiento) | **escalados** en el mes. Solo ATC tiene muestra |
+
+En un ticket escalado cada grupo mide su parte: ATC de la creación al
+escalamiento, Soporte del escalamiento a su cierre (su `dt_creacion` es el día en
+que le llegó). Las horas en cola, pausa y gestión de la composición del tiempo
+(`composicion_<tipo>_horas`, sobre los cerrados con logs, `muestra_composicion`)
+salen de los logs de etapa del equipo dueño de cada fila.
 
 Cada medida aporta once columnas: siete estadísticos (`medio`, `mediana`, `min`,
 `p25`, `p75`, `max`, `std`), `pct_excede_promedio_<medida>` y
@@ -94,15 +104,21 @@ mal, y es lo que las medidas de cierre señalan por su lado.
 ### Tasas
 
 ```
-pct_resueltos  = resueltos en P  / cerrados en P
-pct_cancelados = cancelados en P / cerrados en P
-pct_rezagados  = creados en P sin cerrar en P / creados en P
+pct_resueltos           = resueltos en P  / cerrados en P
+pct_cancelados          = cancelados en P / cerrados en P
+pct_escalados           = escalados a Soporte en P / cerrados en P        (solo ATC)
+pct_rezagados           = creados en P sin cerrar ni escalar en P / creados en P
+pct_recibidos_escalados = llegados de ATC en P / creados en P             (solo Soporte)
 ```
 
-Las dos primeras se abren en dos sumandos **sobre el mismo denominador**, para
-que el desglose cierre exactamente con el total: del 89 % resuelto, cuánto nació
-y murió dentro del mes (`_periodo`) y cuánto venía de meses anteriores
-(`_arrastre`).
+Resueltos + cancelados + escalados son los cerrados, así que las tres primeras
+suman 100 %. Se abren en dos sumandos **sobre el mismo denominador**, para que el
+desglose cierre exactamente con el total: del 89 % resuelto, cuánto nació y murió
+dentro del mes (`_periodo`) y cuánto venía de meses anteriores (`_arrastre`).
+
+**El total de la empresa es la suma de los grupos**: un ticket escalado cuenta
+una vez como cierre de ATC y otra como ticket de Soporte. Es lo que se pidió:
+cada grupo trabajó ese ticket.
 
 ### Dimensiones
 
@@ -206,8 +222,11 @@ una de las cientos de sub-cohortes de un corte.
 
 1. `ensure_support_schema(db)` — idempotente, no pierde nada en una instalación
    con datos.
-2. Lee y clasifica los tickets.
-3. Para cada periodo objetivo: construye la cohorte, calcula el bloque con
+2. Si hay logs de etapa cargados, `flujo.run_flujo_analysis` rehace
+   `support_ticket_flujo` (ver «Logs de etapa y escalamiento»). Va **primero**
+   porque de él sale cuándo escaló cada ticket. Sin logs, lo dice y no hace nada.
+3. Lee, clasifica y reparte el escalamiento (`escalamiento.cargar_tickets`).
+4. Para cada periodo objetivo: construye la cohorte, calcula el bloque con
    `compute_metrics_for_period` y guarda:
    - `support_cierre_historico` — el bloque completo como JSONB, con *upsert*
      por `periodo_reporte`.
@@ -219,7 +238,7 @@ una de las cientos de sub-cohortes de un corte.
      Solo cuando se pidió un mes concreto: en una corrida global los cierres se
      recalculan todos, pero recorrer 31 días por cada mes del histórico no es lo
      que nadie espera de ese botón.
-4. **Recalcula el promedio acumulado sobre TODO lo que hay en
+5. **Recalcula el promedio acumulado sobre TODO lo que hay en
    `support_cierre_historico`**, no solo sobre los periodos recién procesados:
    analizar un mes suelto no debe borrar el histórico del dashboard de empresa.
 
@@ -288,12 +307,24 @@ selector de grupo es de cliente igual que el de dimensión.
 |---|---|---|
 | `/support/dashboard/` (`/support/` redirige a la primera página visible) | `Support/Dashboard` | `can_view_support` y `can_view_support_dashboard` |
 | `/support/analytics/` | `Support/Analytics` | `can_view_support_analytics` |
-| `/support/results/` | `Support/Results` | `can_view_support_results` |
+| `/support/results/?period=` | `Support/Results` | `can_view_support_results` |
 | `/support/users/` | `Support/Users` | `can_manage_support_users` |
+| `/support/etapas/` | `Support/Etapas` | `can_manage_support_users` |
 
 Todas las respuestas pasan por `clean_json_props`. El drill-down
 (`api/breakdown/`) exige `period`, `dimension` y `valor`, y acepta `grupo`
 opcional. `api/tickets/` limita a 5 000 registros como techo absoluto.
+
+**Analytics es de gráficos y Results de tablas.** Analytics enseña el grupo
+(tarjetas, composición, recorrido del mes, en qué se va el tiempo, líneas de
+tiempo) y cada eje como barras partidas por desenlace o como velas de la
+distribución del cierre; el tipo, la razón y la solución en anillos y la
+incidencia por zona en barras. **La cifra principal de un tiempo es siempre el
+promedio** —tarjetas, anillo, velas (la marca es el promedio), tickets
+abiertos—; la mediana queda como dato adicional al lado o en el tooltip. Results lleva el historial de cierres y el
+**detalle del mes** (`analyticsData` del cierre, sin barra de días): la tabla
+completa de cada eje, la de incidencia por zona y el mismo desglose al pulsar una
+fila, que por eso acepta los dos permisos.
 
 `analytics` acepta además `?dia=`, que sustituye `grupos` e `incidencia_zonas`
 por el corte acumulado de ese día leído de `support_day_metrics`; sin él se envía
@@ -400,3 +431,104 @@ vista por persona.
 Quien no está en el directorio cae en «Sin departamento». Un departamento no
 tiene desglose propio: pinchar su fila filtra la tabla de personas a su gente,
 que es donde el drill-down sí existe.
+
+---
+
+## Logs de etapa y escalamiento (`logs.py`, `flujo.py`)
+
+El export de tickets da un estado y una `duracion_total_horas`, que Odoo cuenta
+desde la creación también en un ticket escalado: suma el tiempo de ATC y el de
+Soporte y no dice de quién fue cada parte. Los «Registros de tiempo» —un log por cambio
+de etapa— sí, y de ellos sale todo lo de esta sección.
+
+### Importación por lotes (`logs.import_support_logs_csv`)
+
+El histórico completo (~500 k tickets × 12-15 logs) no se puede sacar de Odoo de
+una vez, así que **la tabla `support_ticket_logs` nunca se reemplaza**: cada
+lote se suma y `log_id` (el ID del registro, único entre todos los tickets) es
+la clave. Se sube mes a mes con dos filtros —los logs de los tickets creados en
+el mes y los de los tickets cuya última actualización de etapa cae en el mes—,
+que se solapan sin problema: lo repetido se descarta con
+`ON CONFLICT (log_id) DO NOTHING`. El archivo se lee en bloques, se copia a una
+tabla temporal y se inserta todo en una transacción; la respuesta dice cuántos
+logs eran nuevos y cuántos ya estaban. Las cabeceras se aceptan con o sin el
+prefijo `Registros de tiempo/`. La página de importación muestra los logs por
+mes, para ver qué lote falta.
+
+### El catálogo de etapas (`EtapaSoporte`, `/support/etapas/`)
+
+El sufijo `- Soporte Técnico` no basta para saber de quién es una etapa (hay
+pausas de Soporte sin sufijo), así que cada etapa declara su **equipo** (ATC,
+Soporte o *compartida*) y su **tipo** (cola, pausa, gestión). Una compartida
+—«En espera - Falla masiva»— es de ATC antes del escalamiento y de Soporte
+después; si el ticket nunca escaló, del equipo en que nació. Una etapa que no
+está en el catálogo se trata igual y su tiempo va a «sin clasificar»; la pestaña
+«Por clasificar» las lista y el análisis lo avisa. Las de cierre (`Resuelto`,
+`Cancelado`) son fijas y no van en el catálogo. Un cambio se ve al volver a
+ejecutar el análisis, en todos los meses.
+
+### Reglas
+
+- **Escalamiento**: el primer log que entra en `Nuevo - Soporte Técnico` viniendo
+  de una etapa que no es de Soporte. Un ticket creado ahí (etapa anterior vacía)
+  no está escalado. Hay como mucho uno por ticket.
+- **Tramo**: de un log al siguiente, medido con las fechas de los logs (no con la
+  `Duración (horas)` de Odoo). Cada tramo cuenta para su equipo y su tipo; el
+  último de un ticket abierto llega hasta el corte.
+- Solo cuentan los tickets con la secuencia completa (su primer log es la
+  creación): de los demás no se sabe qué pasó antes del primer log.
+- Ahora es la hora de Caracas (UTC-4).
+
+`_crear_tramos` arma los tramos con funciones de ventana en una tabla temporal y
+`_persistir_flujo` rehace `support_ticket_flujo`: una fila por ticket con su
+`escalado_el`, la salida de la cola de cada equipo y las horas `h_<equipo>_<tipo>`.
+No hay un bloque mensual aparte: lo que de esto importa entra en las cohortes de
+los grupos.
+
+### El escalamiento dentro de los grupos (`escalamiento.py`)
+
+El export de tickets solo conoce el grupo de hoy: un ticket que ATC escaló dice
+`Soporte Técnico Nivel 1`, con la fecha de creación de ATC, y ATC no lo ve en
+ninguna parte. `incorporar_escalamiento` lo parte en dos filas con los logs:
+
+| | Copia de ATC (`es_escalado`) | Fila de Soporte (`llego_escalado`) |
+|---|---|---|
+| Grupo | `Atención al cliente` (`GRUPO_ATC`) | el del export |
+| Creación | la del ticket | **el escalamiento** |
+| Asignación | la del export si es anterior al escalamiento; si no, la salida de la cola de ATC | la salida de la cola de Soporte; si no, la del export si es posterior al escalamiento |
+| Cierre | el escalamiento: **cerrado**, ni resuelto ni cancelado | el del export |
+| Duración (cierre total) | creación → escalamiento | **escalamiento → cierre** (la de Odoo cuenta desde la creación) |
+| Asignado / solución | `Escalado (sin asignado en ATC)` / `Escalado a Soporte` | los del export |
+| Horas por tipo | las de ATC | las de Soporte |
+
+- Para ATC escalar es cerrar: el ticket cuenta en sus tickets, creados y
+  cerrados, en `pct_escalados` y no en resueltos. Rezagado es lo que a fin de mes
+  no había cerrado **ni escalado**.
+- Para Soporte es un ticket que entra el día del escalamiento, y sus tiempos se
+  miden desde ahí.
+- Un ticket escalado en octubre y creado en septiembre es arrastre de ATC en
+  octubre (`escalados_arrastre`) y creado de Soporte en octubre.
+- Un ticket sin logs queda como dice el export: el análisis funciona igual sin
+  logs, solo que sin escalamiento.
+
+Lo usan el análisis (`cargar_tickets`), los cortes por día (sobre el mismo frame)
+y el drill-down (`queries._load_period_cohort`, que suma a los tickets del mes
+los escalados en él con `escalados_entre`).
+
+### Dónde se ve
+
+En las mismas tarjetas, composiciones y tiempos de cada grupo, en Dashboard,
+Analytics y Results: «% Escalados a Soporte» (o «% Llegados de ATC» en Soporte),
+escalados del mes y de arrastre en la composición, «Hasta escalar» como medida de
+tiempo con su línea de tiempo, y el recorrido del mes (de creados y arrastre a
+resueltos, cancelados, escalados y sin cerrar). «En qué se va el tiempo» reparte
+las horas promedio de lo cerrado en cola, pausa y gestión, con el promedio para
+escalar y qué parte de los escalados pasa de él.
+
+### Tickets abiertos (`get_tickets_abiertos`)
+
+Se calcula al leer, contra la hora actual, desde `support_ticket_flujo`: depende
+del último análisis y de los lotes cargados. Un ticket abierto según los logs y
+cerrado según el export de tickets le faltan sus últimos logs: no se cuenta y se
+dice cuántos son.
+

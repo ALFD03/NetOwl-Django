@@ -102,6 +102,14 @@ class TableNames:
     SUPPORT_DIMENSIONES_HISTORICO = "support_dimensiones_historico"
     SUPPORT_CIERRE_HISTORICO = "support_cierre_historico"
     SUPPORT_DAY_METRICS = "support_day_metrics"
+    # Los cambios de etapa de cada ticket ("Registros de tiempo" de Odoo). Es la
+    # unica tabla de importacion que NO se reemplaza: se carga por lotes
+    # mensuales y cada log entra una sola vez, por su id de Odoo.
+    SUPPORT_TICKET_LOGS = "support_ticket_logs"
+    # Una fila por ticket, derivada de sus logs en cada analisis (origen,
+    # escalamiento, horas por equipo y por tipo de etapa). Se rehace entera, y
+    # de ella sale el reparto de los escalados entre ATC y Soporte.
+    SUPPORT_TICKET_FLUJO = "support_ticket_flujo"
 
 
 # --- Columna `Activo` de los exports de Odoo ---------------------------------

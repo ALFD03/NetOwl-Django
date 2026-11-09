@@ -27,6 +27,7 @@ export type Permission =
   | 'can_view_crm_results'
   | 'can_view_support_analytics'
   | 'can_view_support_results'
+  | 'can_view_support_abiertos'
   | 'can_view_imports_subs'
   | 'can_view_imports_crm'
   | 'can_view_imports_support'
@@ -77,6 +78,7 @@ export interface UserProfile {
   can_view_crm_results: boolean;
   can_view_support_analytics: boolean;
   can_view_support_results: boolean;
+  can_view_support_abiertos: boolean;
   can_view_imports_subs: boolean;
   can_view_imports_crm: boolean;
   can_view_imports_support: boolean;

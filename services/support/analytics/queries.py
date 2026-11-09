@@ -29,6 +29,11 @@ from services.support.analytics.config import (
     SUPPORT_DIMENSION_COLUMNS,
     SUPPORT_DIMENSIONES,
 )
+from services.support.analytics.escalamiento import (
+    escalados_entre,
+    incorporar_escalamiento,
+    leer_recorridos,
+)
 from services.support.analytics.metrics import average_blocks, compute_metrics_for_period
 from services.support.analytics.usuarios import anotar_departamentos
 
@@ -215,16 +220,21 @@ def _load_period_cohort(db: DBConnector, periodo: str) -> PeriodCohort:
     # Primer instante del mes siguiente, sin dependencias extra.
     hasta = datetime(desde.year + desde.month // 12, desde.month % 12 + 1, 1)
 
+    # Más los escalados en el mes, que nacieron y cerraron fuera de él pero que
+    # ese mes ATC despachó y Soporte recibió (ver `escalamiento.py`).
+    escalados = escalados_entre(db, desde, hasta)
     df = db.query(f"""
         SELECT * FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
         WHERE (creado_el >= %s AND creado_el < %s)
            OR (ultima_actualizacion_etapa >= %s AND ultima_actualizacion_etapa < %s)
-    """, params=[desde, hasta, desde, hasta])
+           OR ticket_sequence = ANY(%s::text[])
+    """, params=[desde, hasta, desde, hasta, escalados])
 
     if df.empty:
         return PeriodCohort(periodo, df)
 
-    return build_cohort(classify_tickets(df), periodo)
+    recorridos = leer_recorridos(db, df["ticket_sequence"].astype(str).unique().tolist())
+    return build_cohort(incorporar_escalamiento(classify_tickets(df), recorridos), periodo)
 
 
 def get_support_breakdown(

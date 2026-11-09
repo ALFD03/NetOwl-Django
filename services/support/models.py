@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import date
 
 from django.db import models, transaction
+from django.db.models.functions import Lower
 
 # El sufijo y su normalizacion viven en `core`: los comparte el directorio de ventas.
 from core.odoo_nombres import normalizar_nombre_odoo
@@ -216,3 +217,58 @@ class HistorialDepartamento(models.Model):
 
     def __str__(self):
         return f"{self.usuario_id} -> {self.departamento_id} ({self.desde or 'ingreso'})"
+
+
+class EtapaSoporte(models.Model):
+    """Una etapa de los tickets: de que equipo es y que se hace en ella.
+
+    Los logs de etapa solo dicen "de A paso a B". Para repartir el tiempo de un
+    ticket entre ATC y Soporte, y dentro de cada uno entre cola, pausa y gestion,
+    hace falta saber que es cada etapa, y el nombre no basta: el sufijo
+    `- Soporte Técnico` no lo llevan todas las de Soporte («Volver a contactar»,
+    «Pausado - Final de mes») y alguna se usa en los dos equipos («En espera -
+    Falla masiva»). Esta tabla es esa clasificacion, mantenida a mano.
+
+    Una etapa `compartida` toma el equipo del momento: de ATC antes del
+    escalamiento, de Soporte despues. Las de cierre (Resuelto, Cancelado) no se
+    registran aqui: son fijas, las mismas que cierran un ticket en el resto del
+    modulo. El analisis lee la tabla al empezar, asi que reclasificar una etapa
+    se ve en cuanto se vuelve a ejecutar, en todos los meses.
+    """
+
+    EQUIPOS = [
+        ("atc", "Atención al cliente"),
+        ("soporte", "Soporte técnico"),
+        ("compartida", "Compartida"),
+    ]
+    TIPOS = [
+        ("cola", "Cola"),
+        ("pausa", "Pausa"),
+        ("gestion", "Gestión"),
+    ]
+
+    # El literal exacto de Odoo: es la clave contra la que se cruzan los logs.
+    nombre = models.CharField(max_length=200)
+    equipo = models.CharField(max_length=12, choices=EQUIPOS)
+    tipo = models.CharField(max_length=12, choices=TIPOS)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_etapas_soporte"
+        ordering = ["equipo", "nombre"]
+        verbose_name = "etapa de soporte"
+        verbose_name_plural = "etapas de soporte"
+        constraints = [
+            # Los logs se cruzan sin distinguir mayusculas: dos filas que solo
+            # difieren en la caja serian la misma etapa.
+            models.UniqueConstraint(Lower("nombre"), name="etapa_soporte_nombre_unico"),
+        ]
+
+    def __str__(self):
+        return self.nombre
+
+    def save(self, *args, **kwargs):
+        self.nombre = " ".join(str(self.nombre or "").split())
+        super().save(*args, **kwargs)

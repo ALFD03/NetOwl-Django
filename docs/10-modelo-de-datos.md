@@ -82,6 +82,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `crm_clients` | `import_crm_csv` | Una fila por oportunidad. `TRUNCATE` |
 | `crm_logs` | `import_crm_csv` | Un movimiento entre etapas por fila. `TRUNCATE` |
 | `support_tickets` | `import_support_csv` | Un ticket por fila. `DROP` + `CREATE` |
+| `support_ticket_logs` | `import_support_logs_csv` | Un cambio de etapa por fila («Registros de tiempo»). **No se reemplaza nunca**: cada lote se suma con `INSERT … ON CONFLICT (log_id) DO NOTHING` |
 
 Columnas principales de `subscriptions` / `subscriptions-b`: `orden_producto`,
 `producto`, `cliente`, `ci`, `sucursal`, `zona`, `municipio`, `tipo`, `estado`,
@@ -118,7 +119,15 @@ transición por oportunidad.
 `support_tickets`: `id` (PK), `ticket_sequence`, `cliente`, `etapa`,
 `grupo_trabajo`, `asignado_a`, `creado_por`, `sucursal`, `zona`, `tipo_solicitud`,
 `razon_falla`, `solucion_falla`, `creado_el`, `primera_fecha_asignada`,
-`ultima_actualizacion_etapa`, `duracion_total_horas`.
+`ultima_actualizacion_etapa`, `duracion_total_horas`. Es el export tal cual: lo
+que ATC escaló dice el grupo de Soporte, y el reparto entre los dos grupos se hace
+al leer (`escalamiento.incorporar_escalamiento`), no se guarda.
+
+`support_ticket_logs` (DDL explícito, `logs.ensure_logs_schema`): `log_id` (PK, el
+ID del registro en Odoo, único entre todos los tickets), `ticket_sequence`,
+`creado_el`, `etapa_anterior` (vacía en el log de creación), `etapa_nueva`,
+`duracion_horas` (la de Odoo; se guarda pero no se usa para medir) e
+`importado_en`. Índices por `(ticket_sequence, creado_el)` y por `creado_el`.
 
 ---
 
@@ -201,13 +210,19 @@ dimensiones.
 | `support_cierre_historico` | `periodo_reporte` (`YYYY-MM`, único) y **todo el bloque como un único JSONB `metricas`** |
 | `support_dimensiones_historico` | `periodo_reporte`, `grupo_trabajo`, `dimension`, `valor`, `metricas` (JSONB) |
 | `support_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `por_grupo_trabajo`, `periodos_evaluados` |
+| `support_ticket_flujo` | Una fila por ticket con logs, **rehecha entera** en cada análisis (`flujo._persistir_flujo`): `creado` (su primer log), `completa` (el primer log es la creación), `origen` (`atc`/`soporte`), `escalado_el`, `ultimo_log`, `etapa_actual`/`equipo_actual`/`tipo_actual`, `primer_cierre`, `reaperturas`, `transferencia_sin_escalar`, entrada y salida de la cola de cada equipo y `h_<equipo>_<tipo>`: horas en cola, pausa, gestión y sin clasificar de ATC y de Soporte. Lo leen las cohortes (de aquí sale cuándo escaló cada ticket) y los tickets abiertos |
+| `catalogo_etapas_soporte` | ORM (`EtapaSoporte`): `nombre` (único sin caja), `equipo` (`atc`/`soporte`/`compartida`), `tipo` (`cola`/`pausa`/`gestion`). Las de cierre no van aquí |
 | `support_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (JSON en texto). Cada día es `{"global": {...}, "global_grupos": {...}, "grupos": {...}, "incidencia_zonas": {...}}`: el corte acumulado del mes hasta ese día. `grupos` e `incidencia_zonas` tienen la forma del bloque del periodo; `global` (la cohorte completa) y `global_grupos` (la misma por equipo) se leen aparte de los 31 días a la vez para las tarjetas del día |
 
 Dentro del JSONB, las claves siguen `SUPPORT_VOLUME_FIELDS`,
 `SUPPORT_RATE_FIELDS` y, por cada medida de tiempo, once columnas
 (`tiempo_<stat>_<medida>_horas`, `pct_excede_promedio_<medida>`,
-`muestra_<medida>`). `queries.get_support_cierre_historico` las aplana antes de
-servirlas.
+`muestra_<medida>`), más la composición del tiempo
+(`composicion_<tipo>_horas` y `muestra_composicion`). Los volúmenes y tasas
+incluyen el escalamiento (`tickets_escalados[_periodo|_arrastre]`,
+`tickets_recibidos_escalados`, `pct_escalados*`, `pct_recibidos_escalados`) y las
+medidas de tiempo, `escalamiento`. `queries.get_support_cierre_historico` las
+aplana antes de servirlas.
 
 ---
 

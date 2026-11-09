@@ -47,6 +47,8 @@ export const importsApi = {
   importFacturas: (file: File) => upload('/imports/api/import-facturas/', file),
   importCrm: (file: File) => upload('/imports/api/import-crm/', file),
   importSupport: (file: File) => upload('/imports/api/import-support/', file),
+  /** Suma un lote de logs de etapa: no reemplaza, cada log entra una sola vez. */
+  importSupportLogs: (file: File) => upload('/imports/api/import-support-logs/', file),
   runSubscriptionsAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>
     run('/imports/api/run-analysis/', month, onProgress),
   runCrmAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>

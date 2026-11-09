@@ -143,10 +143,13 @@ CANCELED_STAGES = {
 #
 # La cohorte de un periodo es la unión de las dos, y cada métrica recorta la
 # suya. Así conviven en un mismo bloque sin necesidad de duplicarlo.
+#   ESCALADOS — de lo cerrado en el periodo, lo que ATC cerró escalándolo a
+#              Soporte. Es la población del tiempo hasta escalar.
 POB_CERRADOS = "cerrados_periodo"
 POB_RESUELTOS = "resueltos_periodo"
 POB_CANCELADOS = "cancelados_periodo"
 POB_CREADOS = "creados_periodo"
+POB_ESCALADOS = "escalados_periodo"
 
 
 # --- Medidas de tiempo ------------------------------------------------------
@@ -179,6 +182,10 @@ TIME_MEASURE_SPECS = [
     ("cierre_asignado_cerrados", "asignado_a_cierre", POB_CERRADOS),
 
     ("asignacion", "creado_a_asignacion", POB_CREADOS),
+
+    # Creación → escalamiento, sobre lo que ATC escaló en el mes. Sale de los
+    # logs de etapa: es el cierre de la copia de ATC (ver `escalamiento.py`).
+    ("escalamiento", "creado_a_cierre", POB_ESCALADOS),
 ]
 
 SUPPORT_TIME_MEASURES = [medida for medida, _, _ in TIME_MEASURE_SPECS]
@@ -189,28 +196,52 @@ TIME_STATS = ["medio", "mediana", "min", "p25", "p75", "max", "std"]
 
 # --- Tasas ------------------------------------------------------------------
 #
-# Tres tasas, cada una con su denominador explícito:
+# Cinco tasas, cada una con su denominador explícito:
 #
 #   pct_resueltos  = resueltos en el periodo / cerrados en el periodo
 #   pct_cancelados = cancelados en el periodo / cerrados en el periodo
+#   pct_escalados  = escalados en el periodo / cerrados en el periodo
 #   pct_rezagados  = creados en el periodo sin cerrar en él / creados en el periodo
+#   pct_recibidos_escalados = creados que llegaron escalados / creados
 #
-# Las dos primeras se abren en dos sumandos sobre el MISMO denominador, para
-# que el desglose cierre exactamente con el total: del 89 % resuelto, cuánto
-# nació y murió dentro del mes (`_periodo`) y cuánto venía de meses anteriores
-# (`_arrastre`).
+# Para ATC escalar es cerrar: resueltos + cancelados + escalados = cerrados, y
+# las tres primeras suman 100 %. En Soporte `escalados` es 0 y lo que cuenta es
+# `recibidos_escalados`: cuánto de lo que le entró venía de ATC.
+#
+# Resolución, cancelación y escalamiento se abren en dos sumandos sobre el
+# MISMO denominador, para que el desglose cierre exactamente con el total: del
+# 89 % resuelto, cuánto nació y murió dentro del mes (`_periodo`) y cuánto
+# venía de meses anteriores (`_arrastre`).
 SUPPORT_VOLUME_FIELDS = [
     "total_tickets", "tickets_creados", "tickets_cerrados",
     "tickets_resueltos", "tickets_resueltos_periodo", "tickets_resueltos_arrastre",
     "tickets_cancelados", "tickets_cancelados_periodo", "tickets_cancelados_arrastre",
+    "tickets_escalados", "tickets_escalados_periodo", "tickets_escalados_arrastre",
+    "tickets_recibidos_escalados",
     "tickets_rezagados",
 ]
 
 SUPPORT_RATE_FIELDS = [
     "pct_resueltos", "pct_resueltos_periodo", "pct_resueltos_arrastre",
     "pct_cancelados", "pct_cancelados_periodo", "pct_cancelados_arrastre",
+    "pct_escalados", "pct_escalados_periodo", "pct_escalados_arrastre",
+    "pct_recibidos_escalados",
     "pct_rezagados",
 ]
+
+# --- En qué se va el tiempo -------------------------------------------------
+#
+# El tiempo de cada ticket cerrado en el periodo, repartido por el tipo de las
+# etapas por las que pasó (catálogo `EtapaSoporte`): cola, pausa, gestión y lo
+# que pasó en etapas sin clasificar. Son **promedios**, no medianas, porque los
+# promedios se suman: las cuatro partes dan el tiempo medio del equipo.
+#
+# Cada fila cuenta sólo las horas de su equipo: la copia de ATC de un escalado,
+# las de ATC hasta el escalamiento; la fila de Soporte, las de Soporte desde
+# él. `muestra_composicion` son los cerrados con logs de etapa: sin logs no hay
+# reparto que hacer.
+TIPOS_COMPOSICION = ["cola", "pausa", "gestion", "sin_clasificar"]
+SUPPORT_COMPOSICION_FIELDS = [f"composicion_{t}_horas" for t in TIPOS_COMPOSICION]
 
 
 # --- Dimensiones ------------------------------------------------------------
@@ -244,3 +275,83 @@ SUPPORT_DIMENSIONES_PERSONA = ["asignado_a", "creado_por"]
 SUPPORT_DESGLOSES = ["tipo_solicitud", "razon_falla", "solucion_falla"]
 
 SUPPORT_DIMENSION_COLUMNS = [DIM_GRUPO, *SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES]
+
+
+# --- Logs de etapa ("Registros de tiempo") ---------------------------------
+#
+# Cada fila es un cambio de etapa de un ticket. El export sale del ticket o del
+# propio modelo de registros, asi que la cabecera puede llegar con el prefijo
+# `Registros de tiempo/` o sin el: `logs._resolver_columnas` lo quita antes de
+# comparar. `ID` es el del registro en Odoo, unico entre todos los logs de todos
+# los tickets: es la clave con la que cada log entra una sola vez aunque llegue
+# en dos lotes.
+LOGS_PREFIJO = "Registros de tiempo/"
+
+LOGS_CSV_COLUMN_MAP = {
+    "ID": "log_id",
+    "Ticket/Secuencia ID del ticket": "ticket_sequence",
+    "Creado el": "creado_el",
+    "Etapa anterior": "etapa_anterior",
+    "Nueva etapa": "etapa_nueva",
+    "Duración (horas)": "duracion_horas",
+}
+
+# Sin estas no hay secuencia que reconstruir. La duracion se guarda pero no se
+# usa para medir: los tramos salen de las fechas de los propios registros.
+LOGS_REQUIRED_COLUMNS = {
+    "log_id": "ID",
+    "ticket_sequence": "Ticket/Secuencia ID del ticket",
+    "creado_el": "Creado el",
+    "etapa_anterior": "Etapa anterior",
+    "etapa_nueva": "Nueva etapa",
+}
+
+LOGS_COLUMNS = ["log_id", "ticket_sequence", "creado_el", "etapa_anterior", "etapa_nueva", "duracion_horas"]
+
+# El escalamiento: entrar en esta etapa viniendo de una que no es de Soporte
+# (segun el catalogo de etapas). Un ticket que *nace* en ella -etapa anterior
+# vacia- no es un escalamiento: es un ticket de Soporte desde el principio.
+ETAPA_ESCALAMIENTO = "Nuevo - Soporte Técnico"
+
+# Los dos equipos de un tramo. Un tramo de una etapa `compartida` (o sin
+# clasificar) es de ATC antes del escalamiento y de Soporte despues; sin
+# escalamiento, del equipo en que nacio el ticket.
+EQUIPO_ATC = "atc"
+EQUIPO_SOPORTE = "soporte"
+EQUIPO_COMPARTIDA = "compartida"
+
+# Que se hace en una etapa. `cola`: nadie lo ha tomado. `pausa`: espera algo de
+# fuera (el cliente, un pago, una falla masiva). `gestion`: alguien trabaja en
+# el. Las etapas de cierre no van en el catalogo: son RESOLVED_STAGES y
+# CANCELED_STAGES, las mismas de los tickets.
+TIPO_COLA = "cola"
+TIPO_PAUSA = "pausa"
+TIPO_GESTION = "gestion"
+TIPO_CIERRE = "cierre"
+TIPO_SIN_CLASIFICAR = "sin_clasificar"
+
+# Los relojes de un ticket abierto se cierran contra la hora de Caracas: Odoo
+# exporta las fechas en la zona del usuario y se guardan sin zona.
+ZONA_HORARIA = "America/Caracas"
+
+# El grupo de trabajo desde el que se escala. El export dice el grupo que el
+# ticket tiene HOY, así que un escalado figura sólo en el de Soporte
+# («Soporte Técnico Nivel 1»): `escalamiento.incorporar_escalamiento` le
+# devuelve a ATC su parte. Si Odoo renombra el equipo, es aquí donde se cambia.
+GRUPO_ATC = "Atención al cliente"
+
+# Qué figura en la copia de ATC de un escalado en los dos campos que el export
+# sólo sabe de Soporte: quién lo atiende hoy y cómo se solucionó.
+ASIGNADO_ESCALADO = "Escalado (sin asignado en ATC)"
+SOLUCION_ESCALADO = "Escalado a Soporte"
+
+# Antiguedad de los tickets abiertos, en horas: [desde, hasta).
+TRAMOS_ANTIGUEDAD = [
+    ("< 1 día", 0, 24),
+    ("1–3 días", 24, 72),
+    ("3–7 días", 72, 168),
+    ("7–15 días", 168, 360),
+    ("15–30 días", 360, 720),
+    ("30–60 días", 720, 1440),
+    ("> 60 días", 1440, None),
+]

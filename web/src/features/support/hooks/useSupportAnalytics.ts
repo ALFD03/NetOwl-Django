@@ -169,6 +169,8 @@ export function useSupportAnalytics(
     periodo,
     groupOptions,
     activeGroupName,
+    /** El bloque del grupo activo, con sus desgloses por tipo, razón y solución. */
+    activeGroup,
     hasGroups: groupOptions.length > 0,
     stats,
     sharePct,

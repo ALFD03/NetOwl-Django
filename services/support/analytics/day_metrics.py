@@ -58,8 +58,9 @@ from core.day_metrics import (
 )
 from core.utils import clean_json_props
 
-from .cohorts import build_cohort, classify_tickets
+from .cohorts import build_cohort
 from .dimensions import build_dimension_rows
+from .escalamiento import cargar_tickets
 from .metrics import compute_metrics_for_period
 from .queries import (
     contexto_incidencia,
@@ -83,8 +84,8 @@ def build_support_day_metrics(
 ) -> dict[str, Any]:
     """Calcula y guarda el corte de cada dia del mes.
 
-    `df_all` permite reaprovechar los tickets que ya clasifico el analisis
-    mensual: leer y clasificar la tabla es el coste dominante, recortar treinta
+    `df_all` permite reaprovechar los tickets que ya clasifico -y repartio entre
+    ATC y Soporte- el analisis mensual: leer y clasificar la tabla es el coste dominante, recortar treinta
     y un cortes sobre ella no.
 
     `progreso(hechos, total, etiqueta)` se llama al cerrar cada dia: es lo que
@@ -92,7 +93,7 @@ def build_support_day_metrics(
     """
     db = db or DBConnector()
     if df_all is None:
-        df_all = classify_tickets(db.read_table(TableNames.SUPPORT_TICKETS))
+        df_all = cargar_tickets(db)
     if df_all.empty:
         return {"periodo_reporte": year_month, "dias_calculados": 0}
 

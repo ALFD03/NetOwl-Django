@@ -1,4 +1,4 @@
-/** Barril de los gráficos: los tres envoltorios, sus opciones y sus plugins. */
+/** Barril de los gráficos: los envoltorios, el diagrama de flujo, sus opciones y sus plugins. */
 
 import ChartDataLabels from 'chartjs-plugin-datalabels';
 import type { Plugin } from 'chart.js';
@@ -9,6 +9,8 @@ export { DayTrendChart } from './DayTrendChart';
 export type { DayTrendSeries } from './DayTrendChart';
 export { BarChart } from './BarChart';
 export { DoughnutChart } from './DoughnutChart';
+export { SankeyChart } from './SankeyChart';
+export type { SankeyEnlace, SankeyNodo } from './SankeyChart';
 export { centerTextPlugin };
 export * from './chartOptions';
 

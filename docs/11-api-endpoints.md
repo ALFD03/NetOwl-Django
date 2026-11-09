@@ -168,16 +168,19 @@ es de esta app.
 | Método | Ruta | Permiso | Devuelve |
 |---|---|---|---|
 | GET | `/support/` | `can_view_support` | Redirige a la primera página visible del módulo |
-| GET | `/support/dashboard/` | `can_view_support` **y** `can_view_support_dashboard` | Página `Support/Dashboard` |
-| GET | `/support/analytics/?period=&dia=` | `can_view_support_analytics` | Página `Support/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `support_day_metrics`; sin él, el último calculado |
-| GET | `/support/results/?periods=` | `can_view_support_results` | Página `Support/Results` |
+| GET | `/support/dashboard/` | `can_view_support` **y** `can_view_support_dashboard` | Página `Support/Dashboard`. Con `can_view_support_abiertos` trae además `abiertos` (los tickets abiertos ahora, hora de Caracas); sin el permiso, `null` |
+| GET | `/support/analytics/?period=&dia=` | `can_view_support_analytics` | Página `Support/Analytics`. `dia` (1-31) elige el corte acumulado del mes, leído de `support_day_metrics`; sin él, el último calculado. El escalamiento va dentro de las métricas de cada grupo |
+| GET | `/support/results/?period=` | `can_view_support_results` | Página `Support/Results`: `historico` (todos los cierres) y el detalle del mes `period` (`analyticsData`, `periods`, `selectedPeriod`; recortado por `can_view_all_periods`) |
+| GET | `/support/etapas/?nueva_etapa=` | `can_manage_support_users` | Página `Support/Etapas`: el catálogo de etapas y las que aparecen en los logs sin clasificar. `nueva_etapa` abre el alta con ese nombre |
+| POST | `api/etapas/guardar/` | `can_manage_support_users` | Alta o edición de una etapa (`id`, `nombre`, `equipo`, `tipo`). **400** si es una etapa de cierre o el equipo/tipo no existe; **409** si el nombre ya existe. `60/m` |
+| POST | `api/etapas/eliminar/` | `can_manage_support_users` | Borrado de una etapa. `60/m` |
 | GET | `/support/users/?nuevo_usuario=` | `can_manage_support_users` | Página `Support/Users`: directorio de usuarios, departamentos y los nombres de los tickets que el directorio no reconoce. `nuevo_usuario` abre el alta con ese nombre ya escrito |
 | GET | `api/periods/` | `can_view_support` | `{periods}` |
 | GET | `api/cierre-historico/?periods=` | `can_view_support` | `{historico}` aplanado |
 | GET | `api/global-metrics/` | `can_view_support` **y** `can_view_support_dashboard` | Promedio de todos los periodos |
 | GET | `api/dimension-metrics/?period=` | `can_view_support_analytics` | `{dimensiones}`. **400** sin `period` |
 | GET | `api/day-metrics/?period=&dia=` | `can_view_support_analytics` | `{dia, global, grupos, incidencia_zonas}` — el corte de un día de `support_day_metrics`. Lo pide y cachea la barra de días; 404 si ese día no está calculado |
-| GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |
+| GET | `api/breakdown/?period=&dimension=&valor=&grupo=` | `can_view_support_analytics` **o** `can_view_support_results` | Drill-down calculado al vuelo. **400** si falta alguno de los tres primeros |
 | GET | `api/tickets/?limit=&grupo=&period=` | `can_view_support_results` | Listado crudo; `limit` con techo de 5 000 |
 | POST | `api/usuarios/guardar/` | `can_manage_support_users` | Alta o edición de una fila de `usuarios` o `departamentos` (`tipo` en el cuerpo). **409** si el nombre ya existe. `60/m` |
 | POST | `api/usuarios/eliminar/` | `can_manage_support_users` | Borrado. **409** si el departamento tiene usuarios o aparece en algún historial (`PROTECT`). `60/m` |
@@ -210,6 +213,7 @@ Todos: `POST`, `multipart/form-data` con el campo **`csv_file`**, límite **5/m*
 | `api/import-facturas/` | `can_import_subs`, `can_import_data` | `subscriptions-facturas`. Las cabeceras se comprueban sin tildes ni mayúsculas en el importador (400 si falta alguna) |
 | `api/import-crm/` | `can_import_crm`, `can_import_data` | `crm_clients` + `crm_logs` |
 | `api/import-support/` | `can_import_support`, `can_import_data` | `support_tickets` |
+| `api/import-support-logs/` | `can_import_support`, `can_import_data` | `support_ticket_logs`. **Suma**, no reemplaza: responde `lote` (`filas`, `nuevos`, `repetidos`, `duplicados_en_archivo`, `tickets`, `desde`, `hasta`) y `cargados` (el resumen por mes). Las cabeceras se comprueban en el importador, con o sin el prefijo `Registros de tiempo/` (400 si falta alguna) |
 
 Respuestas:
 

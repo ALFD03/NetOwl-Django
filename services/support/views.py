@@ -24,6 +24,7 @@ from services.support.analytics.day_metrics import (
     get_support_day_payload,
     get_support_day_series,
 )
+from services.support.analytics.flujo import get_tickets_abiertos
 from services.support.analytics.queries import (
     get_support_analytics_structured,
     get_support_breakdown,
@@ -34,6 +35,14 @@ from services.support.analytics.queries import (
 )
 
 # --- VISTAS INERTIA PROTEGIDAS ---
+
+
+def _puede(request, permiso: str) -> bool:
+    """Si la cuenta tiene un permiso que recorta lo que una pagina muestra."""
+    if request.user.is_superuser:
+        return True
+    profile = getattr(request.user, "profile", None)
+    return bool(profile and profile.has_permission(permiso))
 
 # Las paginas del modulo en el orden del sidebar, con lo que exige cada una. La
 # usa `index` para elegir destino.
@@ -60,8 +69,13 @@ def dashboard(request):
     Quien no ve todos los periodos recibe el mismo bloque construido con el
     ultimo y nada mas (`services/config/periodos.py`).
     """
+    # Los abiertos de hoy salen de los logs de etapa y tienen su permiso: sin
+    # el, la portada simplemente no los trae.
+    abiertos = get_tickets_abiertos() if _puede(request, "can_view_support_abiertos") else None
+
     return render_inertia(request, "Support/Dashboard", clean_json_props({
         "metrics": _metric_totals(request),
+        "abiertos": abiertos,
         "section": "dashboard",
     }))
 
@@ -121,14 +135,28 @@ def analytics(request):
 @login_required
 @permission_required('can_view_support_results')
 def results(request):
-    """Tabla de cierres por periodo."""
+    """Las tablas de soporte: los cierres por periodo y el detalle de un mes.
+
+    Analytics ensena el mes en graficos; las tablas completas -cada valor de
+    cada eje con todas sus columnas, la incidencia de cada zona y el desglose de
+    un valor- viven aqui. El detalle es el mismo bloque estructurado que lee
+    Analytics para el cierre del mes (`?period=`), sin barra de dias.
+    """
     # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
     # por comas sin ningun tope y cada elemento se convierte en un marcador del
     # `IN (...)`, asi que una sola peticion podia pedir cien mil.
     periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_support_periodos)
 
+    visibles = periodos_visibles(request, get_support_periodos())
+    detalle = get_support_analytics_structured(
+        periodo_visible(request, request.GET.get("period"), lambda: visibles)
+    ) if visibles else {"periodo": "", "grupos": {}, "incidencia_zonas": {}}
+
     return render_inertia(request, "Support/Results", clean_json_props({
         "historico": get_support_cierre_historico(periodos) if periodos != [] else [],
+        "analyticsData": detalle,
+        "periods": visibles,
+        "selectedPeriod": detalle.get("periodo", ""),
         "section": "results",
     }))
 
@@ -193,7 +221,7 @@ def api_dimension_metrics(request):
 
 
 @login_required
-@permission_required('can_view_support_analytics')
+@permission_required('can_view_support_analytics', 'can_view_support_results')
 def api_breakdown(request):
     """El drill-down de un valor dimensional: sus tipos, razones y soluciones."""
     periodo = request.GET.get("period")

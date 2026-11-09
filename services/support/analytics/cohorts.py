@@ -40,6 +40,7 @@ from services.support.analytics.config import (
     POB_CANCELADOS,
     POB_CERRADOS,
     POB_CREADOS,
+    POB_ESCALADOS,
     POB_RESUELTOS,
     RESOLVED_STAGES,
 )
@@ -150,6 +151,10 @@ class PeriodCohort:
             return self.df[cerrado & self.df["es_cancelado"]]
         if clave == POB_CREADOS:
             return self.df[self.df["nacido_en_periodo"]]
+        if clave == POB_ESCALADOS:
+            if "es_escalado" not in self.df.columns:
+                return self.df.iloc[0:0]
+            return self.df[cerrado & self.df["es_escalado"]]
         raise ValueError(f"Población desconocida: {clave!r}")
 
 

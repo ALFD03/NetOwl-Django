@@ -208,6 +208,9 @@ it will read in the light one.
   So keep using the tokens in chart options — a raw hex would not be translated — and go
   through the wrappers rather than `react-chartjs-2` directly. Colours resolved at draw
   time (plugins, scriptable options) call `colorDelTema()`.
+- `SankeyChart` is the exception: it is SVG, not Chart.js, so its text and chrome are
+  Tailwind classes (`fill-current` on a `text-slate-*`) and follow the theme like any
+  markup. Only its node and band colours come in as values, and those are series colours.
 - The choice (`claro` / `oscuro` / `sistema`, the default, which follows
   `prefers-color-scheme` live) is per browser, in `localStorage` (`netowl-tema`), set from
   the sidebar footer. `shared/hooks/useTheme` owns it; an inline script in

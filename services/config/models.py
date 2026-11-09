@@ -41,6 +41,9 @@ VIEW_PERMISSION_FIELDS = [
     'can_view_subs_analytics', 'can_view_subs_results', 'can_view_subs_lifetime',
     'can_view_subs_sales', 'can_view_subs_business_units', 'can_view_eta', 'can_view_crm_analytics',
     'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
+    # Los tickets abiertos de hoy, de los logs de etapa. No abre pagina: recorta
+    # lo que ensena el Dashboard de soporte.
+    'can_view_support_abiertos',
     # Paginas del modulo de Importaciones (una por pestana).
     'can_view_imports_subs', 'can_view_imports_crm', 'can_view_imports_support',
     'can_view_import_history',
@@ -126,6 +129,9 @@ class PermissionMatrix(models.Model):
 
     can_view_support_analytics = models.BooleanField(default=False)
     can_view_support_results = models.BooleanField(default=False)
+    # El bloque de abiertos del Dashboard. La migracion 0017 se lo concedio a
+    # quien ya veia el dashboard o Analytics de soporte.
+    can_view_support_abiertos = models.BooleanField(default=False)
 
     # --- Paginas del modulo de Importaciones ---
     can_view_imports_subs = models.BooleanField(default=False)

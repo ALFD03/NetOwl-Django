@@ -43,15 +43,21 @@ const RATE_KEYS = [
   'total_tickets', 'tickets_creados', 'tickets_cerrados',
   'tickets_resueltos', 'tickets_resueltos_periodo', 'tickets_resueltos_arrastre',
   'tickets_cancelados', 'tickets_cancelados_periodo', 'tickets_cancelados_arrastre',
+  'tickets_escalados', 'tickets_escalados_periodo', 'tickets_escalados_arrastre',
+  'tickets_recibidos_escalados',
   'tickets_rezagados',
   'pct_resueltos', 'pct_resueltos_periodo', 'pct_resueltos_arrastre',
   'pct_cancelados', 'pct_cancelados_periodo', 'pct_cancelados_arrastre',
+  'pct_escalados', 'pct_escalados_periodo', 'pct_escalados_arrastre',
+  'pct_recibidos_escalados',
   'pct_rezagados',
+  'composicion_cola_horas', 'composicion_pausa_horas',
+  'composicion_gestion_horas', 'composicion_sin_clasificar_horas', 'muestra_composicion',
 ] as const satisfies ReadonlyArray<keyof SupportStats>;
 
 const ALL_KEYS: Array<keyof SupportStats> = [...TIME_STAT_KEYS, ...RATE_KEYS];
 
-/** Sixty-three time columns plus seventeen volume and rate ones. */
+/** Seventy-two time columns plus the volume, rate and composition ones. */
 export function emptyStats(): SupportStats {
   return Object.fromEntries(ALL_KEYS.map((key) => [key, 0])) as SupportStats;
 }
@@ -126,6 +132,8 @@ const VOLUME_KEYS = [
   'total_tickets', 'tickets_creados', 'tickets_cerrados',
   'tickets_resueltos', 'tickets_resueltos_periodo', 'tickets_resueltos_arrastre',
   'tickets_cancelados', 'tickets_cancelados_periodo', 'tickets_cancelados_arrastre',
+  'tickets_escalados', 'tickets_escalados_periodo', 'tickets_escalados_arrastre',
+  'tickets_recibidos_escalados',
   'tickets_rezagados',
 ] as const satisfies ReadonlyArray<keyof SupportStats>;
 
@@ -190,6 +198,10 @@ export function agruparPorDepartamento(
       row.pct_cancelados = share(toNumber(row.tickets_cancelados), cerrados);
       row.pct_cancelados_periodo = share(toNumber(row.tickets_cancelados_periodo), cerrados);
       row.pct_cancelados_arrastre = share(toNumber(row.tickets_cancelados_arrastre), cerrados);
+      row.pct_escalados = share(toNumber(row.tickets_escalados), cerrados);
+      row.pct_escalados_periodo = share(toNumber(row.tickets_escalados_periodo), cerrados);
+      row.pct_escalados_arrastre = share(toNumber(row.tickets_escalados_arrastre), cerrados);
+      row.pct_recibidos_escalados = share(toNumber(row.tickets_recibidos_escalados), creados);
       row.pct_rezagados = share(toNumber(row.tickets_rezagados), creados);
 
       row.pctDelPadre = share(toNumber(row.total_tickets), parentTotal);
@@ -313,11 +325,11 @@ export function dimensionLeaders(rows: SupportDimensionRow[]): SupportLeaderCard
 export interface TimeMeasureMeta {
   label: string;
   caption: string;
-  color: Extract<MetricColor, 'blue' | 'purple' | 'slate' | 'red' | 'green'>;
+  color: Extract<MetricColor, 'blue' | 'purple' | 'slate' | 'red' | 'green' | 'yellow'>;
 }
 
 /**
- * The seven measures with their reading. The colour encodes the formula, not
+ * The eight measures with their reading. The colour encodes the formula, not
  * the outcome: blue is the whole process, purple the technician's handling and
  * slate the queue — so the three families stay distinguishable at a glance
  * without needing seven different tokens.
@@ -337,12 +349,15 @@ export const TIME_MEASURE_META: Record<SupportTimeMeasure, TimeMeasureMeta> = {
   cierre_asignado_cerrados: { label: 'Gestión · Todos', caption: 'Asignación → cierre · cerrados en el mes', color: 'purple' },
 
   asignacion: { label: 'Tiempo de Asignación', caption: 'Creación → asignación (o → fin del periodo si sigue sin asignar) · creados en el mes', color: 'slate' },
+
+  escalamiento: { label: 'Hasta escalar', caption: 'Creación → paso a Soporte · escalados en el mes', color: 'yellow' },
 };
 
 /** The two clocks the summary panels lead with, one per formula. */
 export const CIERRE_TOTAL: SupportTimeMeasure = 'cierre_creado_cerrados';
 export const GESTION: SupportTimeMeasure = 'cierre_asignado_cerrados';
 export const ASIGNACION: SupportTimeMeasure = 'asignacion';
+export const ESCALAMIENTO: SupportTimeMeasure = 'escalamiento';
 
 /**
  * El nombre de cada eje. `asignado_a` y `creado_por` se etiquetan con el

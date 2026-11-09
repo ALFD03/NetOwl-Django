@@ -29,6 +29,8 @@ export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
   { header: 'Cerrados', accessor: (r) => <span className="text-sky-400">{int(r.tickets_cerrados)}</span>, align: 'right', sortKey: 'tickets_cerrados' },
   { header: 'Resueltos', accessor: (r) => <span className="text-emerald-400">{int(r.tickets_resueltos)}</span>, align: 'right', sortKey: 'tickets_resueltos' },
   { header: 'Cancelados', accessor: (r) => <span className="text-rose-400">{int(r.tickets_cancelados)}</span>, align: 'right', sortKey: 'tickets_cancelados' },
+  { header: 'Escalados', accessor: (r) => <span className="text-amber-300">{int(r.tickets_escalados)}</span>, align: 'right', sortKey: 'tickets_escalados' },
+  { header: 'Llegados de ATC', accessor: (r) => <span className="text-slate-400">{int(r.tickets_recibidos_escalados)}</span>, align: 'right', sortKey: 'tickets_recibidos_escalados' },
   { header: 'Rezagados', accessor: (r) => <span className="text-amber-400">{int(r.tickets_rezagados)}</span>, align: 'right', sortKey: 'tickets_rezagados' },
 
   // Resolución y cancelación se leen sobre los cerrados del mes; el rezago,
@@ -39,11 +41,12 @@ export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
   { header: '% Cancelados', accessor: (r) => <span className="font-bold text-rose-400">{dec(r.pct_cancelados)}%</span>, align: 'right', sortKey: 'pct_cancelados' },
   { header: '% Cancelados del Mes', accessor: (r) => <span className="text-rose-400">{dec(r.pct_cancelados_periodo)}%</span>, align: 'right', sortKey: 'pct_cancelados_periodo' },
   { header: '% Cancelados Arrastre', accessor: (r) => <span className="text-purple-400">{dec(r.pct_cancelados_arrastre)}%</span>, align: 'right', sortKey: 'pct_cancelados_arrastre' },
+  { header: '% Escalados', accessor: (r) => <span className="font-bold text-amber-300">{dec(r.pct_escalados)}%</span>, align: 'right', sortKey: 'pct_escalados' },
   { header: '% Rezago', accessor: (r) => <span className="font-bold text-amber-400">{dec(r.pct_rezagados)}%</span>, align: 'right', sortKey: 'pct_rezagados' },
 
   // Creación → cierre, sobre lo cerrado en el mes.
   { header: 'Cierre Total (h)', accessor: (r) => hrs(r.tiempo_medio_cierre_creado_cerrados_horas), align: 'right', sortKey: 'tiempo_medio_cierre_creado_cerrados_horas' },
-  { header: 'Cierre Total Med (h)', accessor: (r) => hrs(r.tiempo_mediana_cierre_creado_cerrados_horas), align: 'right', sortKey: 'tiempo_mediana_cierre_creado_cerrados_horas' },
+  { header: 'Cierre Total Mediana (h)', accessor: (r) => hrs(r.tiempo_mediana_cierre_creado_cerrados_horas), align: 'right', sortKey: 'tiempo_mediana_cierre_creado_cerrados_horas' },
   { header: 'Muestra Cierre', accessor: (r) => <span className="text-slate-500">{int(r.muestra_cierre_creado_cerrados)}</span>, align: 'right', sortKey: 'muestra_cierre_creado_cerrados' },
 
   // Asignación → cierre: sólo la gestión del técnico.
@@ -54,6 +57,9 @@ export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
   // aunque el ticket siga abierto.
   { header: 'Asignación (h)', accessor: (r) => hrs(r.tiempo_medio_asignacion_horas), align: 'right', sortKey: 'tiempo_medio_asignacion_horas' },
   { header: 'Muestra Asignación', accessor: (r) => <span className="text-slate-500">{int(r.muestra_asignacion)}</span>, align: 'right', sortKey: 'muestra_asignacion' },
+
+  { header: 'Hasta Escalar (h)', accessor: (r) => hrs(r.tiempo_medio_escalamiento_horas), align: 'right', sortKey: 'tiempo_medio_escalamiento_horas' },
+  { header: 'Hasta Escalar Mediana (h)', accessor: (r) => hrs(r.tiempo_mediana_escalamiento_horas), align: 'right', sortKey: 'tiempo_mediana_escalamiento_horas' },
 ];
 
 /**
@@ -71,7 +77,7 @@ export const SUPPORT_DEPARTAMENTO_COLUMNS: Column<SupportDepartamentoRow>[] = [
   { header: 'Departamento', accessor: (r) => <StickyLabel>{r.nombre}</StickyLabel>, sortKey: 'nombre', sticky: true },
   { header: 'Personas', accessor: (r) => int(r.personas), align: 'right', sortKey: 'personas' },
   ...SUPPORT_DIMENSION_COLUMNS.filter(
-    (col) => col.header !== 'Valor' && col.header !== 'Cierre Total Med (h)',
+    (col) => col.header !== 'Valor' && !col.header.includes('Mediana (h)'),
   ),
 ] as Column<SupportDepartamentoRow>[];
 

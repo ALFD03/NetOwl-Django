@@ -7,7 +7,7 @@
  */
 
 import {
-  BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitFork,
+  BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitBranch, GitFork,
   HandCoins, Headset, Layers, Lock, Network, Package, ScrollText, SlidersHorizontal, Table, TrendingUp,
   UserCheck, Users,
 } from 'lucide-react';
@@ -65,6 +65,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
       { id: 'analytics', label: 'Analytics', href: '/support/analytics/', icon: BarChart3, permission: PERMISSIONS.VIEW_SUPPORT_ANALYTICS },
       { id: 'results', label: 'Resultados', href: '/support/results/', icon: Table, permission: PERMISSIONS.VIEW_SUPPORT_RESULTS },
       { id: 'usuarios', label: 'Usuarios', href: '/support/users/', icon: Contact, permission: PERMISSIONS.MANAGE_SUPPORT_USERS, section: CONFIGURACION },
+      { id: 'etapas', label: 'Etapas', href: '/support/etapas/', icon: GitBranch, permission: PERMISSIONS.MANAGE_SUPPORT_USERS, section: CONFIGURACION },
     ],
   },
   {

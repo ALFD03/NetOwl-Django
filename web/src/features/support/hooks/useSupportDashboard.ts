@@ -58,6 +58,7 @@ const TREND_DEFS: Array<{
 }> = [
   { id: 'resueltos', title: 'Tasa Resolución', statKey: 'pct_resueltos', rateKey: 'pct_resueltos', countKey: 'tickets_resueltos', unitLabel: 'Tickets Resueltos', unit: 'tickets', color: 'green' },
   { id: 'cancelados', title: 'Tasa Cancelación', statKey: 'pct_cancelados', rateKey: 'pct_cancelados', countKey: 'tickets_cancelados', unitLabel: 'Tickets Cancelados', unit: 'tickets', color: 'red' },
+  { id: 'escalados', title: 'Tasa de Escalamiento', statKey: 'pct_escalados', rateKey: 'pct_escalados', countKey: 'tickets_escalados', unitLabel: 'Tickets Escalados a Soporte', unit: 'tickets', color: 'yellow' },
   { id: 'rezagados', title: 'Tasa de Rezago', statKey: 'pct_rezagados', rateKey: 'pct_rezagados', countKey: 'tickets_rezagados', unitLabel: 'Tickets Rezagados', unit: 'tickets', color: 'yellow' },
   { id: 'cierre_total', title: 'Cierre Total (h)', statKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, rateKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, countKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'blue' },
   { id: 'gestion', title: 'Gestión (h)', statKey: 'tiempo_medio_cierre_asignado_cerrados_horas', rateKey: 'tiempo_medio_cierre_asignado_cerrados_horas', countKey: 'tiempo_medio_cierre_asignado_cerrados_horas', unitLabel: 'Horas Asignación → Cierre', unit: 'horas', color: 'purple' },
@@ -130,6 +131,7 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
           pctResueltos: g.pct_resueltos,
           pctCancelados: g.pct_cancelados,
           pctRezagados: g.pct_rezagados,
+          pctEscalados: g.pct_escalados,
           mttr,
           mttrMediana: g[`tiempo_mediana_${CIERRE_TOTAL}_horas`],
           mttrColor: mttrColor(mttr, globalMttr),

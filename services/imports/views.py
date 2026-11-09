@@ -37,8 +37,14 @@ from services.subscriptions.analytics import (
 )
 from services.subscriptions.analytics.config import REQUIRED_LOGS_HEADERS, REQUIRED_SUBS_HEADERS
 from services.subscriptions.analytics.free_plans import REQUIRED_GRATIS_HEADERS
+from services.support.analytics import (
+    LogsInvalidos,
+    campos_odoo_logs,
+    import_support_csv,
+    import_support_logs_csv,
+    resumen_logs_cargados,
+)
 from services.support.analytics import campos_odoo_importacion as campos_odoo_support
-from services.support.analytics import import_support_csv
 from services.support.analytics.config import REQUIRED_SUPPORT_HEADERS
 
 from .history import register_import_log
@@ -143,6 +149,8 @@ def support_import_view(request):
     return render_inertia(request, "Imports/Support", {
         "section": "support",
         "camposOdoo": campos_odoo_support(),
+        "camposOdooLogs": campos_odoo_logs(),
+        "logsCargados": resumen_logs_cargados(),
     })
 
 @login_required
@@ -358,6 +366,49 @@ def api_import_support(request):
         # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
         logger.exception("Error al importar tickets de soporte")
         register_import_log(request.user, 'support', file_name, 0, 'error', "Fallo al importar tickets.", ERROR_GENERICO)
+        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
+    finally:
+        cleanup_tempfile(tmp_path)
+
+
+@login_required
+@permission_required('can_import_support', 'can_import_data')
+@ratelimit(key='ip', rate='5/m', block=True)
+@require_POST
+@sin_analisis_en_curso(*ANALISIS_DE_SOPORTE)
+def api_import_support_logs(request):
+    """Suma un lote de logs de etapa de los tickets ("Registros de tiempo").
+
+    No reemplaza nada: cada log entra una sola vez por su id, asi que subir el
+    mismo mes dos veces, o dos lotes que se solapan, no duplica. Las cabeceras
+    se comprueban en el importador, que acepta el prefijo `Registros de tiempo/`
+    con o sin el.
+    """
+    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
+    tmp_path, error = handle_csv_upload(request)
+    if error:
+        register_import_log(request.user, 'support', file_name, 0, 'error', 'Error al recibir el archivo de logs de soporte.')
+        return error
+    try:
+        r = import_support_logs_csv(tmp_path)
+        msg = (
+            f"Logs de soporte: {r['nuevos']} nuevos y {r['repetidos']} que ya estaban, "
+            f"de {r['tickets']} tickets ({r['desde']} a {r['hasta']})."
+        )
+        register_import_log(
+            request.user, 'support', file_name, r['nuevos'], 'success', msg,
+            f"Lote de logs: {r['filas']} filas leídas, {r['nuevos']} nuevas, {r['repetidos']} repetidas, "
+            f"{r['duplicados_en_archivo']} duplicadas dentro del archivo.",
+        )
+        return JsonResponse({"status": "success", "message": msg, "lote": r, "cargados": resumen_logs_cargados()})
+    except LogsInvalidos as e:
+        register_import_log(request.user, 'support', file_name, 0, 'error', str(e), str(e))
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    except Exception:
+        # El detalle va al log del servidor, no al cliente: una excepcion de
+        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
+        logger.exception("Error al importar logs de soporte")
+        register_import_log(request.user, 'support', file_name, 0, 'error', "Fallo al importar logs de soporte.", ERROR_GENERICO)
         return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
     finally:
         cleanup_tempfile(tmp_path)

@@ -63,6 +63,9 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, periodo
             <MetricCard label="Creados" value={formatInteger(stats.tickets_creados)} color="slate" />
             <MetricCard label="Cerrados" value={formatInteger(stats.tickets_cerrados)} color="purple" />
             <MetricCard label="% Resueltos" value={`${formatTwoDecimals(stats.pct_resueltos)}%`} caption="de los cerrados" color="green" />
+            {stats.tickets_escalados > 0 && (
+              <MetricCard label="% Escalados" value={`${formatTwoDecimals(stats.pct_escalados)}%`} caption="de los cerrados, a Soporte" color="yellow" />
+            )}
             <MetricCard label="% Rezagados" value={`${formatTwoDecimals(stats.pct_rezagados)}%`} caption="de los creados" color="yellow" />
             <MetricCard label="Cierre Total" value={`${formatOneDecimal(stats.tiempo_medio_cierre_creado_cerrados_horas)} h`} caption="creación → cierre" color="blue" />
             <MetricCard label="Asignación" value={`${formatOneDecimal(stats.tiempo_medio_asignacion_horas)} h`} caption="creación → asignación" color="slate" />

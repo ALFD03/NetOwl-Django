@@ -4,7 +4,7 @@ import type { MetricColor } from '@/shared/ui';
 import type { DayCuts, DaySeries } from '@/shared/types/domain';
 
 /**
- * The seven time measures, mirroring `TIME_MEASURE_SPECS` in
+ * The eight time measures, mirroring `TIME_MEASURE_SPECS` in
  * `backend/support/config.py`.
  *
  * There is no population selector: each measure carries the only population it
@@ -19,6 +19,9 @@ import type { DayCuts, DaySeries } from '@/shared/types/domain';
  * the period and not the time of the run, so a closed month always reports the
  * same figures however often it is re-analysed.
  *
+ * `escalamiento` is creation → escalation, on what ATC escalated in the period
+ * (from the stage logs); it is empty for every other group.
+ *
  * Nothing is dropped for being short: only a missing or out-of-order date
  * keeps a ticket out. `muestra_<measure>` is the coverage, and on the closing
  * clocks its distance from `tickets_cerrados` is the count of tickets closed
@@ -32,6 +35,7 @@ export const SUPPORT_TIME_MEASURES = [
   'cierre_asignado_cancelado',
   'cierre_asignado_cerrados',
   'asignacion',
+  'escalamiento',
 ] as const;
 
 export type SupportTimeMeasure = (typeof SUPPORT_TIME_MEASURES)[number];
@@ -76,6 +80,16 @@ export interface SupportRateMetrics {
   tickets_cancelados?: number;
   tickets_cancelados_periodo?: number;
   tickets_cancelados_arrastre?: number;
+  /**
+   * Lo que ATC cerró escalándolo a Soporte. Para ATC escalar es cerrar: cuenta
+   * en `tickets_cerrados` y no en resueltos ni cancelados, así que resueltos +
+   * cancelados + escalados = cerrados. En Soporte es 0.
+   */
+  tickets_escalados?: number;
+  tickets_escalados_periodo?: number;
+  tickets_escalados_arrastre?: number;
+  /** De lo creado en el mes, lo que llegó escalado de ATC (sólo Soporte). */
+  tickets_recibidos_escalados?: number;
   tickets_rezagados?: number;
 
   pct_resueltos?: number;
@@ -84,7 +98,24 @@ export interface SupportRateMetrics {
   pct_cancelados?: number;
   pct_cancelados_periodo?: number;
   pct_cancelados_arrastre?: number;
+  pct_escalados?: number;
+  pct_escalados_periodo?: number;
+  pct_escalados_arrastre?: number;
+  /** Sobre lo creado, no sobre lo cerrado. */
+  pct_recibidos_escalados?: number;
   pct_rezagados?: number;
+
+  /**
+   * En qué se va el tiempo: horas medias en cola, pausa, gestión y etapas sin
+   * clasificar de lo cerrado en el mes, contando sólo las del equipo del grupo.
+   * Son promedios para que las cuatro partes sumen el tiempo medio.
+   */
+  composicion_cola_horas?: number;
+  composicion_pausa_horas?: number;
+  composicion_gestion_horas?: number;
+  composicion_sin_clasificar_horas?: number;
+  /** Los cerrados con logs de etapa: sin logs no hay reparto. */
+  muestra_composicion?: number;
 }
 
 /** One `compute_metrics_for_period` block, as the backend serialises it. */
@@ -124,6 +155,8 @@ export interface SupportDashboardProps {
     por_grupo_trabajo?: Record<string, SupportMetrics>;
     historico_tendencias?: SupportHistoricoRow[];
   };
+  /** Los tickets abiertos ahora; `null` sin el permiso o sin logs analizados. */
+  abiertos?: TicketsAbiertos | null;
 }
 
 /** A clickable sparkline: the cross-period average plus its per-period series. */
@@ -153,6 +186,8 @@ export interface SupportGroupCard {
   pctResueltos: number;
   pctCancelados: number;
   pctRezagados: number;
+  /** Sólo el grupo que escala (ATC) lo tiene distinto de cero. */
+  pctEscalados: number;
   /** Mean hours from creation to closure, over resolved and cancelled alike. */
   mttr: number;
   mttrMediana: number;
@@ -336,6 +371,10 @@ export interface SupportBreakdownResponse {
 
 export interface SupportResultsProps {
   historico?: SupportHistoricoRow[];
+  /** El detalle del mes elegido: el mismo bloque que Analytics lee para el cierre. */
+  analyticsData?: SupportAnalyticsProps['analyticsData'];
+  periods?: string[];
+  selectedPeriod?: string;
 }
 
 // --- Directorio de usuarios -------------------------------------------------
@@ -410,4 +449,116 @@ export interface SupportUsersProps {
   sufijo: string;
   /** Nombre que llega en `?nuevo_usuario=`: abre el alta ya rellena. */
   nuevoUsuario: string;
+}
+
+// --- Logs de etapa: abiertos y catálogo de etapas --------------------------
+
+/** Equipo de un tramo: el de su etapa, o el del momento si es compartida. */
+export type EquipoFlujo = 'atc' | 'soporte';
+/** Qué se hace en una etapa. `cierre` y `sin_clasificar` no se editan en el catálogo. */
+export type TipoEtapa = 'cola' | 'pausa' | 'gestion' | 'cierre' | 'sin_clasificar';
+
+/** Los estadísticos de una serie de horas (los mismos de las demás medidas de soporte). */
+export interface EstadisticosHoras {
+  medio: number;
+  mediana: number;
+  min: number;
+  p25: number;
+  p75: number;
+  max: number;
+  std: number;
+  pct_excede_promedio: number;
+  muestra: number;
+}
+
+/** Un grupo de tickets abiertos (por etapa, grupo, asignado…). */
+export interface AbiertosGrupo {
+  etapa_actual?: string;
+  equipo_actual?: EquipoFlujo;
+  tipo_actual?: TipoEtapa;
+  grupo_trabajo?: string;
+  asignado_a?: string;
+  tipo_solicitud?: string;
+  zona?: string;
+  abiertos: number;
+  edad_media: number | null;
+  edad_mediana: number | null;
+  edad_max: number | null;
+  en_etapa_media: number | null;
+  en_etapa_mediana: number | null;
+  escalados: number;
+}
+
+export interface TicketAbierto {
+  ticket: string;
+  etapa: string;
+  equipo: EquipoFlujo;
+  tipo: TipoEtapa;
+  grupo_trabajo: string;
+  asignado_a: string;
+  tipo_solicitud: string;
+  zona: string;
+  creado: string | null;
+  escalado: boolean;
+  edad_h: number | null;
+  en_etapa_h: number | null;
+}
+
+export interface TicketsAbiertos {
+  ahora: string;
+  logs_hasta: string | null;
+  resumen: {
+    abiertos: number;
+    escalados: number;
+    en_atc: number;
+    en_soporte: number;
+    edad: EstadisticosHoras;
+    en_etapa: EstadisticosHoras;
+    en_soporte_desde_escalamiento: EstadisticosHoras;
+    /** Abiertos según los logs pero cerrados en el export de tickets: les faltan logs. */
+    desfasados: number;
+  };
+  antiguedad: { tramo: string; abiertos: number; pct: number }[];
+  por_etapa: AbiertosGrupo[];
+  por_grupo: AbiertosGrupo[];
+  por_asignado: AbiertosGrupo[];
+  por_tipo_solicitud: AbiertosGrupo[];
+  por_zona: AbiertosGrupo[];
+  lista: TicketAbierto[];
+  lista_limite: number;
+}
+
+/** Una etapa del catálogo. */
+export interface EtapaSoporte {
+  id: number;
+  nombre: string;
+  equipo: EquipoFlujo | 'compartida';
+  tipo: 'cola' | 'pausa' | 'gestion';
+  /** Logs que entran en ella. */
+  logs: number;
+  es_escalamiento: boolean;
+}
+
+/** Una etapa que aparece en los logs y que el catálogo no clasifica. */
+export interface EtapaPendiente {
+  etapa: string;
+  logs: number;
+  tickets: number;
+  ultimo: string | null;
+}
+
+export interface OpcionCatalogo {
+  value: string;
+  label: string;
+}
+
+export interface SupportEtapasProps {
+  etapas: EtapaSoporte[];
+  pendientes: EtapaPendiente[];
+  equipos: OpcionCatalogo[];
+  tipos: OpcionCatalogo[];
+  etapaEscalamiento: string;
+  etapasCierre: string[];
+  /** Nombre que llega en `?nueva_etapa=`: abre el alta ya rellena. */
+  nuevaEtapa: string;
 }

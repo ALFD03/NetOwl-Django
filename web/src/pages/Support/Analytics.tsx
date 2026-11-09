@@ -14,20 +14,33 @@
  *
  * El mes completo con desgloses no viaja porque un solo día ya lleva las
  * métricas de cada grupo de trabajo por sus seis ejes.
+ *
+ * Lo que ATC escala a Soporte está dentro de las cifras de cada grupo: para ATC
+ * es un cierre, para Soporte un ticket que le entra ese día. Por eso no hay un
+ * bloque aparte de escalamiento: sigue al grupo y al día como todo lo demás.
+ *
+ * Esta página es de gráficos; las tablas completas del mes están en Results.
  */
 
 import { useMemo, useState } from 'react';
 import { router } from '@inertiajs/react';
+import { CalendarDays, Layers } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import {
+  Seccion,
+  SeccionesNav,
   SUPPORT_DAY_CARDS,
   SUPPORT_DAY_CHARTS,
   SupportAnalyticsFilters,
   SupportAnalyticsView,
   useSupportAnalytics,
 } from '@/features/support';
-import type { SupportAnalyticsProps, SupportDayPayload, SupportDimension } from '@/features/support/types';
+import type {
+  SupportAnalyticsProps,
+  SupportDayPayload,
+  SupportDimension,
+} from '@/features/support/types';
 import { useDayCuts } from '@/shared/hooks/useDayCuts';
 import { useDayPayload } from '@/shared/hooks/useDayPayload';
 import { SUPPORT_DAY_METRICS_URL } from '@/shared/lib/api/support';
@@ -121,21 +134,51 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
         </>
       }
     >
-      <div className="space-y-6">
-        <DaySummary
-          serie={serieDelGrupo ?? dayMetrics?.serie}
-          dias={availableDays}
-          dia={selectedDay}
-          cards={SUPPORT_DAY_CARDS}
-          charts={SUPPORT_DAY_CHARTS}
-          subtitle={
-            serieDelGrupo
-              ? `${data.activeGroupName} · lo de ese día, lo que va del mes y cómo se compara con el día anterior`
-              : 'Todos los grupos · este mes se analizó antes de que la serie se abriera por equipo'
-          }
+      <div className="space-y-10">
+        <SeccionesNav
+          secciones={[
+            { id: 'dia', titulo: 'El día', icon: <CalendarDays /> },
+            { id: 'grupo', titulo: 'El grupo', icon: <Layers /> },
+          ]}
         />
 
-        <SupportAnalyticsView data={data} dimension={dimension} />
+        <Seccion
+          id="dia"
+          titulo="El día"
+          descripcion="Lo de ese día, lo que va del mes y cómo se compara con el día anterior. Muévete con la barra de días."
+          alcance={
+            data.activeGroupName ? `${data.activeGroupName} · día ${selectedDay || '—'}` : undefined
+          }
+          icon={<CalendarDays />}
+        >
+          <DaySummary
+            serie={serieDelGrupo ?? dayMetrics?.serie}
+            dias={availableDays}
+            dia={selectedDay}
+            cards={SUPPORT_DAY_CARDS}
+            charts={SUPPORT_DAY_CHARTS}
+            subtitle={
+              serieDelGrupo
+                ? `${data.activeGroupName} · lo de ese día, lo que va del mes y cómo se compara con el día anterior`
+                : 'Todos los grupos · este mes se analizó antes de que la serie se abriera por equipo'
+            }
+          />
+        </Seccion>
+
+        <Seccion
+          id="grupo"
+          titulo="El grupo"
+          descripcion="Cuánto entró y cómo terminó, en qué se fue el tiempo, dónde se concentra según la dimensión de la barra superior y qué lo empuja. Pulsa un valor para ver su desglose; las tablas completas están en Results."
+          alcance={
+            data.activeGroupName
+              ? `${data.activeGroupName} · al día ${selectedDay || '—'}`
+              : undefined
+          }
+          icon={<Layers />}
+        >
+          <SupportAnalyticsView data={data} dimension={dimension} />
+        </Seccion>
+
       </div>
     </AppLayout>
   );

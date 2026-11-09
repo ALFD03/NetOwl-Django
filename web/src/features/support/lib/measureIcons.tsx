@@ -1,6 +1,6 @@
 /** El icono de cada medida de tiempo. */
 
-import { CheckCircle2, Clock, Hourglass, Timer, XCircle } from 'lucide-react';
+import { ArrowRightLeft, CheckCircle2, Clock, Hourglass, Timer, XCircle } from 'lucide-react';
 
 import type { TimeMeasureMeta } from './supportMetrics';
 
@@ -15,4 +15,5 @@ export const MEASURE_ICONS: Record<TimeMeasureMeta['color'], JSX.Element> = {
   purple: <Timer className="h-4 w-4 text-purple-400" />,
   red: <XCircle className="h-4 w-4 text-rose-400" />,
   slate: <Hourglass className="h-4 w-4 text-slate-300" />,
+  yellow: <ArrowRightLeft className="h-4 w-4 text-amber-400" />,
 };

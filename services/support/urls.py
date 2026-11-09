@@ -3,7 +3,7 @@
 # frontend/support/urls.py
 from django.urls import path
 
-from services.support import views, views_usuarios
+from services.support import views, views_etapas, views_usuarios
 
 app_name = "support"
 
@@ -13,6 +13,7 @@ urlpatterns = [
     path("analytics/", views.analytics, name="analytics"),
     path("results/", views.results, name="results"),
     path("users/", views_usuarios.usuarios_view, name="usuarios"),
+    path("etapas/", views_etapas.etapas_view, name="etapas"),
 
     # APIs REST
     path("api/periods/", views.api_periods_list, name="api_periods_list"),
@@ -25,4 +26,6 @@ urlpatterns = [
     path("api/usuarios/guardar/", views_usuarios.api_usuario_guardar, name="api_usuario_guardar"),
     path("api/usuarios/eliminar/", views_usuarios.api_usuario_eliminar, name="api_usuario_eliminar"),
     path("api/usuarios/movimiento/", views_usuarios.api_usuario_movimiento, name="api_usuario_movimiento"),
+    path("api/etapas/guardar/", views_etapas.api_etapa_guardar, name="api_etapa_guardar"),
+    path("api/etapas/eliminar/", views_etapas.api_etapa_eliminar, name="api_etapa_eliminar"),
 ]

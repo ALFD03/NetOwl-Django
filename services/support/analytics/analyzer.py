@@ -12,13 +12,15 @@ import pandas as pd
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
-from services.support.analytics.cohorts import build_cohort, classify_tickets, periodos_disponibles
+from services.support.analytics.cohorts import build_cohort, periodos_disponibles
 from services.support.analytics.config import DIM_GRUPO
 from services.support.analytics.day_metrics import build_support_day_metrics
 from services.support.analytics.dimensions import (
     build_dimension_rows,
     save_support_dimensiones_periodo,
 )
+from services.support.analytics.escalamiento import cargar_tickets
+from services.support.analytics.flujo import run_flujo_analysis
 from services.support.analytics.loader import ensure_support_schema
 from services.support.analytics.metrics import average_blocks, compute_metrics_for_period
 
@@ -80,16 +82,21 @@ def run_support_analysis(
     periodo (`build_support_day_metrics`): leer y clasificar los tickets es el
     coste, recortar la cohorte treinta y un veces no. `progreso` es lo que
     alimenta la barra de la interfaz mientras los recorre.
+
+    Lo primero es rehacer el recorrido de cada ticket desde sus logs de etapa
+    (`run_flujo_analysis`): de él sale cuándo se escaló cada uno, y con eso
+    `cargar_tickets` le devuelve a ATC lo que escaló (ver `escalamiento.py`).
+    Sin logs cargados no hace nada y los tickets quedan como dice el export.
     """
     db = DBConnector()
     ensure_support_schema(db)
-    df_all = db.read_table(TableNames.SUPPORT_TICKETS)
+    run_flujo_analysis(db=db)
+
+    df_all = cargar_tickets(db)
 
     if df_all.empty:
         print("⚠️ No hay tickets de soporte para analizar.")
         return {"status": "empty", "message": "No hay tickets cargados."}
-
-    df_all = classify_tickets(df_all)
 
     un_solo_mes = bool(periodo_str and len(periodo_str) == 7)
     periodos_target = [periodo_str] if un_solo_mes else periodos_disponibles(df_all)
@@ -112,7 +119,8 @@ def run_support_analysis(
 
         resumenes[periodo] = metricas
         print(f"   · {periodo}: {metricas['tickets_creados']} creados, "
-              f"{metricas['tickets_cerrados']} cerrados")
+              f"{metricas['tickets_cerrados']} cerrados, "
+              f"{metricas['tickets_escalados']} escalados de ATC a Soporte")
 
     _recompute_global_average(db, df_all)
 

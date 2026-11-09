@@ -27,6 +27,8 @@ export const SUPPORT_DIMENSION_EXCEL_COLUMNS: ExcelColumn<SupportDimensionRow>[]
   { header: 'Cerrados', value: (r) => num(r.tickets_cerrados), format: INT },
   { header: 'Resueltos', value: (r) => num(r.tickets_resueltos), format: INT },
   { header: 'Cancelados', value: (r) => num(r.tickets_cancelados), format: INT },
+  { header: 'Escalados', value: (r) => num(r.tickets_escalados), format: INT },
+  { header: 'Llegados de ATC', value: (r) => num(r.tickets_recibidos_escalados), format: INT },
   { header: 'Rezagados', value: (r) => num(r.tickets_rezagados), format: INT },
 
   { header: '% Resueltos', value: (r) => num(r.pct_resueltos), format: DEC },
@@ -35,10 +37,11 @@ export const SUPPORT_DIMENSION_EXCEL_COLUMNS: ExcelColumn<SupportDimensionRow>[]
   { header: '% Cancelados', value: (r) => num(r.pct_cancelados), format: DEC },
   { header: '% Cancelados del Mes', value: (r) => num(r.pct_cancelados_periodo), format: DEC },
   { header: '% Cancelados Arrastre', value: (r) => num(r.pct_cancelados_arrastre), format: DEC },
+  { header: '% Escalados', value: (r) => num(r.pct_escalados), format: DEC },
   { header: '% Rezago', value: (r) => num(r.pct_rezagados), format: DEC },
 
   { header: 'Cierre Total (h)', value: (r) => num(r.tiempo_medio_cierre_creado_cerrados_horas), format: HRS },
-  { header: 'Cierre Total Med (h)', value: (r) => num(r.tiempo_mediana_cierre_creado_cerrados_horas), format: HRS },
+  { header: 'Cierre Total Mediana (h)', value: (r) => num(r.tiempo_mediana_cierre_creado_cerrados_horas), format: HRS },
   { header: 'Muestra Cierre', value: (r) => num(r.muestra_cierre_creado_cerrados), format: INT },
 
   { header: 'Gestión (h)', value: (r) => num(r.tiempo_medio_cierre_asignado_cerrados_horas), format: HRS },
@@ -46,6 +49,9 @@ export const SUPPORT_DIMENSION_EXCEL_COLUMNS: ExcelColumn<SupportDimensionRow>[]
 
   { header: 'Asignación (h)', value: (r) => num(r.tiempo_medio_asignacion_horas), format: HRS },
   { header: 'Muestra Asignación', value: (r) => num(r.muestra_asignacion), format: INT },
+
+  { header: 'Hasta Escalar (h)', value: (r) => num(r.tiempo_medio_escalamiento_horas), format: HRS },
+  { header: 'Muestra Hasta Escalar', value: (r) => num(r.muestra_escalamiento), format: INT },
 ];
 
 /**
@@ -69,6 +75,6 @@ export const SUPPORT_DEPARTAMENTO_EXCEL_COLUMNS: ExcelColumn<SupportDepartamento
   { header: 'Departamento', value: (r) => r.nombre, width: 34 },
   { header: 'Personas', value: (r) => num(r.personas), format: INT },
   ...SUPPORT_DIMENSION_EXCEL_COLUMNS.filter(
-    (col) => col.header !== 'Valor' && col.header !== 'Cierre Total Med (h)',
+    (col) => col.header !== 'Valor' && col.header !== 'Cierre Total Mediana (h)',
   ),
 ] as ExcelColumn<SupportDepartamentoRow>[];

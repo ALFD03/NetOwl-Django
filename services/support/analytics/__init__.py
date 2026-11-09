@@ -9,7 +9,14 @@ from .day_metrics import (
     get_support_day_series,
     get_support_periodos_con_dias,
 )
+from .flujo import (
+    etapas_por_clasificar,
+    get_tickets_abiertos,
+    run_flujo_analysis,
+    uso_de_etapas,
+)
 from .loader import campos_odoo_importacion, import_support_csv
+from .logs import LogsInvalidos, campos_odoo_logs, import_support_logs_csv, resumen_logs_cargados
 from .queries import (
     get_support_analytics_structured,
     get_support_breakdown,
@@ -35,4 +42,12 @@ __all__ = [
     "get_support_analytics_structured",
     "get_support_breakdown",
     "get_support_tickets_list",
+    "import_support_logs_csv",
+    "campos_odoo_logs",
+    "resumen_logs_cargados",
+    "LogsInvalidos",
+    "run_flujo_analysis",
+    "get_tickets_abiertos",
+    "etapas_por_clasificar",
+    "uso_de_etapas",
 ]
