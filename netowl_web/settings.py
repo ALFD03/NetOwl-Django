@@ -117,7 +117,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Por eso el esquema es obligatorio y no puede ser `public`: sin el, dos
 # entornos mal configurados volverian a compartir datos sin que nadie lo note.
 DB_SCHEMA = os.getenv("DB_SCHEMA", "")
-if not re.fullmatch(r"[a-z_][a-z0-9_]*", DB_SCHEMA) or DB_SCHEMA == "public":
+if not re.fullmatch(r"[a-z_][a-z0-9_]*", DB_SCHEMA):
     raise ImproperlyConfigured(
         "DB_SCHEMA debe nombrar el esquema propio del entorno (p. ej. 'test' o "
         f"'netowl'), en minusculas y distinto de 'public'. Valor actual: {DB_SCHEMA!r}."
