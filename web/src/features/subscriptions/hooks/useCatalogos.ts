@@ -7,8 +7,7 @@ import type {
   AreaCatalogo,
   CargoVentas,
   CatalogoNombrado,
-  CatalogoEquipoVentas,
-  CatalogoNombreEquipo,
+  CatalogoObjetivoOficina,
   CatalogoPersonaVentas,
   CatalogoUnidadNegocio,
   CatalogoObjetivo,
@@ -21,7 +20,6 @@ import type {
   CatalogoZona,
   NivelObjetivoCatalogo,
   SemaforoObjetivos,
-  TipoEquipo,
 } from '@/features/subscriptions/types';
 
 /** Una fila en edición. Sin `id` es un alta. */
@@ -37,17 +35,21 @@ export type ZonaDraft = {
 };
 export type SiteDraft = { id?: number; nombre: string; orden: number };
 export type NombreDraft = { id?: number; nombre: string; tipo: 'estados' };
-export type PersonaDraft = Omit<CatalogoPersonaVentas, 'id' | 'unidades' | 'estado_fijo'> & { id?: number };
+export type PersonaDraft = Omit<CatalogoPersonaVentas, 'id' | 'unidades' | 'estado_fijo' | 'site'> & { id?: number };
 export type UnidadDraft = { id?: number; nombre: string; persona_id: number | null };
-export type EquipoDraft = {
+/**
+ * Un tramo del objetivo de ventas de las oficinas. `persona_id` nulo es el
+ * general; las ventas van como texto para que el campo pueda quedar vacío.
+ */
+export type ObjetivoOficinaDraft = {
   id?: number;
-  nombre_odoo: string;
-  nombre_visualizacion_id: number | null;
-  tipo_equipo: TipoEquipo;
-  coord_oficina_id: number | null;
-  coord_un_id: number | null;
+  persona_id: number | null;
+  /** Quién lo tiene, para enseñarlo al editar (la persona no se cambia). */
+  etiqueta?: string;
+  desde: string;
+  ventas: string;
+  nota: string;
 };
-export type NombreEquipoDraft = { id?: number; nombre: string };
 export type IgnoradoDraft = { id?: number; nombre: string; nota: string; area: AreaCatalogo };
 
 /**
@@ -86,8 +88,6 @@ const comoTexto = (valor: number | null): string => (valor === null ? '' : Strin
 export type CatalogoVista =
   | CargoVentas
   | 'unidades'
-  | 'equipos'
-  | 'nombres_equipo'
   | 'pendientes'
   | 'planes'
   | 'zonas'
@@ -161,6 +161,7 @@ export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft 
       medio_supervisor: '',
       usuario_odoo: literal ? `${base} (User)` : '',
       estado_fijo_id: null,
+      site_id: null,
     };
   }
   return {
@@ -171,6 +172,7 @@ export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft 
     medio_supervisor: '',
     usuario_odoo: '',
     estado_fijo_id: null,
+    site_id: null,
   };
 }
 
@@ -223,8 +225,7 @@ export function useCatalogos({
     () => (nuevaPersona?.literal ? personaDesde(nuevaPersona.literal, nuevaPersona.cargo) : null),
   );
   const [unidadDraft, setUnidadDraft] = useState<UnidadDraft | null>(null);
-  const [equipoDraft, setEquipoDraft] = useState<EquipoDraft | null>(null);
-  const [nombreEquipoDraft, setNombreEquipoDraft] = useState<NombreEquipoDraft | null>(null);
+  const [objetivoOficinaDraft, setObjetivoOficinaDraft] = useState<ObjetivoOficinaDraft | null>(null);
   const [nombreDraft, setNombreDraft] = useState<NombreDraft | null>(null);
   const [ignoradoDraft, setIgnoradoDraft] = useState<IgnoradoDraft | null>(null);
   const [objetivoDraft, setObjetivoDraft] = useState<ObjetivoDraft | null>(null);
@@ -280,33 +281,24 @@ export function useCatalogos({
       medio_supervisor: fila.medio_supervisor,
       usuario_odoo: fila.usuario_odoo,
       estado_fijo_id: fila.estado_fijo_id,
+      site_id: fila.site_id,
     });
 
   const nuevaUnidad = () => setUnidadDraft({ nombre: '', persona_id: null });
   const editarUnidad = (fila: CatalogoUnidadNegocio) =>
     setUnidadDraft({ id: fila.id, nombre: fila.nombre, persona_id: fila.persona_id });
 
-  // El literal de «Equipo de ventas» se copia tal cual: es contra lo que se cruza.
-  const crearEquipoDesde = (nombreOdoo = '') =>
-    setEquipoDraft({
-      nombre_odoo: nombreOdoo,
-      nombre_visualizacion_id: null,
-      tipo_equipo: 'oficina',
-      coord_oficina_id: null,
-      coord_un_id: null,
-    });
-  const editarEquipo = (fila: CatalogoEquipoVentas) =>
-    setEquipoDraft({
+  const nuevoObjetivoOficina = (personaId: number | null = null) =>
+    setObjetivoOficinaDraft({ persona_id: personaId, desde: '', ventas: '', nota: '' });
+  const editarObjetivoOficina = (fila: CatalogoObjetivoOficina) =>
+    setObjetivoOficinaDraft({
       id: fila.id,
-      nombre_odoo: fila.nombre_odoo,
-      nombre_visualizacion_id: fila.nombre_visualizacion_id,
-      tipo_equipo: fila.tipo_equipo,
-      coord_oficina_id: fila.coord_oficina_id,
-      coord_un_id: fila.coord_un_id,
+      persona_id: fila.persona_id,
+      etiqueta: fila.persona || 'General (todas las coordinadoras)',
+      desde: fila.desde,
+      ventas: String(fila.ventas),
+      nota: fila.nota,
     });
-  const nuevoNombreEquipo = () => setNombreEquipoDraft({ nombre: '' });
-  const editarNombreEquipo = (fila: CatalogoNombreEquipo) =>
-    setNombreEquipoDraft({ id: fila.id, nombre: fila.nombre });
 
   const nuevoNombre = (tipo: NombreDraft['tipo']) => setNombreDraft({ nombre: '', tipo });
   const editarNombre = (tipo: NombreDraft['tipo'], fila: CatalogoNombrado) =>
@@ -360,8 +352,7 @@ export function useCatalogos({
     setSiteDraft(null);
     setPersonaDraft(null);
     setUnidadDraft(null);
-    setEquipoDraft(null);
-    setNombreEquipoDraft(null);
+    setObjetivoOficinaDraft(null);
     setNombreDraft(null);
     setIgnoradoDraft(null);
     setObjetivoDraft(null);
@@ -475,8 +466,7 @@ export function useCatalogos({
     siteDraft, setSiteDraft, nuevoSite, editarSite,
     personaDraft, setPersonaDraft, nuevaPersonaVacia, crearPersonaDesde, editarPersona,
     unidadDraft, setUnidadDraft, nuevaUnidad, editarUnidad,
-    equipoDraft, setEquipoDraft, crearEquipoDesde, editarEquipo,
-    nombreEquipoDraft, setNombreEquipoDraft, nuevoNombreEquipo, editarNombreEquipo,
+    objetivoOficinaDraft, setObjetivoOficinaDraft, nuevoObjetivoOficina, editarObjetivoOficina,
     nombreDraft, setNombreDraft, nuevoNombre, editarNombre,
     ignoradoDraft, setIgnoradoDraft, nuevoIgnorado, editarIgnorado,
     objetivoDraft, setObjetivoDraft, nuevoObjetivo, editarObjetivo,

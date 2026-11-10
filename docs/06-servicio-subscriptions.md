@@ -694,10 +694,10 @@ nadie. `/subscriptions/config/` sigue respondiendo con una redirección (con
 
 | Página | Contenido | Permiso |
 |---|---|---|
-| `/catalogos/notificaciones/` | Por registrar (productos, zonas, personas y equipos de ventas importados que el catálogo no reconoce) e Ignorados | cualquiera de los tres; cada área solo con el suyo |
+| `/catalogos/notificaciones/` | Por registrar (productos, zonas y personas importados que el catálogo no reconoce) e Ignorados | cualquiera de los tres; cada área solo con el suyo |
 | `/catalogos/productos/` | Planes y planes reguladores. `?nuevo_plan=` | `can_manage_catalogo_operacional` |
 | `/catalogos/estructura/` | Zonas, sites y estados. `?nueva_zona=` | `can_manage_catalogo_comercial` |
-| `/catalogos/ventas/` | Directorio de ventas, equipos de ventas y sus nombres, coordinadores de unidad de negocio y objetivos | `can_manage_catalogo_ventas` |
+| `/catalogos/ventas/` | Directorio de ventas (con el site de cada coordinadora de oficina), coordinadores de unidad de negocio y objetivos, también los de ventas de las oficinas | `can_manage_catalogo_ventas` |
 
 Las zonas por registrar (`zonas_fuera_de_catalogo`, en `analytics/imports.py`)
 **no bloquean nada**, a diferencia de los productos: sus órdenes se analizan
@@ -732,28 +732,29 @@ mismas pestañas con el nombre correcto.
   duplicado responde **409**.
 - `POST /catalogos/api/eliminar/` — baja. Un site, estado o coordinador **con
   zonas colgando no se borra**: la zona los referencia con `PROTECT` y se
-  responde 409 explicando cuál es el estorbo, en vez de un 500. Igual una
-  persona que lleva equipos de ventas, o un nombre de equipo en uso.
+  responde 409 explicando cuál es el estorbo, en vez de un 500. Igual un site
+  del que cuelga una coordinadora de oficina.
 
-### Los equipos de ventas
+### Las coordinadoras de oficina en el Sales Report
 
-La columna `Equipo de ventas` del export de suscripciones (`equipo_ventas`,
-opcional como `Medio`) nombra el equipo de cada suscripción en texto libre.
-`EquipoVentas` (Catálogos › Ventas › Equipos de ventas) es el vocabulario contra
-el que se cruza, con la misma regla que el directorio (`clave_nombre`):
+Los equipos de ventas (`EquipoVentas`, `NombreEquipo` y la columna `Equipo de
+ventas` del import) se quitaron a petición del usuario (`catalogos/0005`): ya no
+se agrupa por ellos. En su lugar, **cada coordinadora de oficina pertenece a un
+site** (`PersonaVentas.site`, solo en ese cargo; se elige en su ficha) y tiene un
+**objetivo de ventas**: una cantidad al mes (`ObjetivoVentasOficina`, Catálogos ›
+Ventas › Objetivos), general o individual, con vigencia por mes como los
+objetivos comerciales. Manda el individual vigente; si no tiene, el general.
 
-- `nombre_odoo`: el literal de la columna.
-- `nombre_visualizacion`: cómo se presenta, elegido de `NombreEquipo` (pestaña
-  Nombres de equipo). Es una lista y no un texto para que varios literales se
-  presenten como un mismo equipo y el nombre no se escriba de tres formas.
-- `tipo`: `oficina` o `externa`.
-- `coord_oficina`: la coordinadora de oficina a la que pertenece (obligatoria).
-- `coord_un`: el coordinador de unidad de negocio, solo en los externos y
-  opcional.
-
-Los literales sin registrar salen en Notificaciones
-(`directorio.equipos_fuera_del_catalogo`) y se registran o se ignoran desde su
-fila; los ignorados son los del área de ventas. No bloquea nada.
+El Sales Report abre el bloque de cada site con sus coordinadoras, como
+insignias bajo el título y antes del resumen —`nombre | Medio · Total |
+Objetivo · %`— (`analytics/coordinadoras_oficina.py`,
+`CoordinadorasOficinaBadges`): de cada una, las instalaciones del mes
+(`fecha_inicio`, sin Cotización ni Instalación) en que es el **`Medio`**
+(propias) y en que es el **`Vendedor`** (las de su oficina), con el cruce de
+siempre (`clave_nombre`). **El % Ventas se mide contra las propias**, a petición
+del usuario; las de la oficina solo se enseñan. Viajan por día de instalación y
+el cliente suma hasta el corte de la barra de días. Una coordinadora sin site no
+sale.
 
 **Toda escritura llama a `fixtures.reset_cache()`.** Sin eso, una edición
 tardaría hasta un minuto en verse, o no se vería nunca en el proceso que ya la

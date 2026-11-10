@@ -1,18 +1,21 @@
-/** Los formularios del grupo Ventas: personas del directorio, equipos de ventas y unidades de negocio. */
+/**
+ * Los formularios del grupo Ventas: personas del directorio, unidades de
+ * negocio y el objetivo de ventas de las coordinadoras de oficina.
+ */
 
 import type { FormEvent, ReactNode } from 'react';
-import { Briefcase, Building, Crown, Globe, Tag, UserCheck, Users } from 'lucide-react';
+import { Briefcase, Building, Crown, Target, UserCheck, Users, X } from 'lucide-react';
 
-import { SelectMenu } from '@/shared/ui';
+import { MonthPicker, SelectMenu } from '@/shared/ui';
 import {
   Field, FormBanner, FormColumns, FormFooter, ModalForm, OptionCard, OptionCardGroup, type FormTone,
 } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
 import type {
-  EquipoDraft, NombreEquipoDraft, PersonaDraft, UnidadDraft,
+  ObjetivoOficinaDraft, PersonaDraft, UnidadDraft,
 } from '@/features/subscriptions/hooks/useCatalogos';
 import type {
-  CargoVentas, CatalogoNombreEquipo, CatalogoOption, CatalogoPersonaVentas, TipoEquipo,
+  CargoVentas, CatalogoOption, CatalogoPersonaVentas,
 } from '@/features/subscriptions/types';
 
 interface Acciones {
@@ -25,18 +28,21 @@ interface Acciones {
 export const CARGO_UI: Record<CargoVentas, { icon: ReactNode; corto: string; description: string; tone: FormTone }> = {
   asesor: { icon: <Users />, corto: 'Asesores', description: 'Vende. Aparece en «Medio».', tone: 'blue' },
   supervisor: { icon: <UserCheck />, corto: 'Supervisores', description: 'Lleva un equipo de asesores. Aparece en «Oportunidad/Administrador».', tone: 'emerald' },
-  coord_oficina: { icon: <Building />, corto: 'Coord. de oficina', description: 'Lleva una oficina. Aparece en «Vendedor», como usuario de Odoo.', tone: 'purple' },
+  coord_oficina: { icon: <Building />, corto: 'Coord. de oficina', description: 'Lleva una oficina de un site. Aparece en «Vendedor», como usuario de Odoo.', tone: 'purple' },
   coord_un: { icon: <Crown />, corto: 'Coord. de UN', description: 'Lleva una o varias unidades de negocio. Cobra por su crecimiento.', tone: 'amber' },
 };
 
-/** Alta o edición de una persona del directorio de ventas. */
 /** Valor del desplegable para el estado que sale de los clientes del asesor. */
 const ESTADO_AUTOMATICO = '';
+/** Valor del desplegable para una coordinadora sin site. */
+const SIN_SITE = '';
 
+/** Alta o edición de una persona del directorio de ventas. */
 export function PersonaForm({
   value,
   cargos,
   estados = [],
+  sites = [],
   saving,
   onChange,
   onSubmit,
@@ -46,6 +52,8 @@ export function PersonaForm({
   cargos: CatalogoOption[];
   /** Los del catálogo, para fijar el del bono por meta de un asesor. Sin ellos no se ofrece. */
   estados?: { id: number; nombre: string }[];
+  /** Los del catálogo, para el site de una coordinadora de oficina. Sin ellos no se ofrece. */
+  sites?: { id: number; nombre: string }[];
   onChange: (patch: Partial<PersonaDraft>) => void;
 }) {
   const conUsuario = value.cargo === 'coord_oficina';
@@ -141,6 +149,24 @@ export function PersonaForm({
         </Field>
       )}
 
+      {conUsuario && sites.length > 0 && (
+        <Field
+          label="Site"
+          hint="El site del Sales Report bajo el que se la muestra, con sus ventas y su objetivo. Sin site no aparece allí."
+        >
+          <SelectMenu
+            aria-label="Site"
+            className={modalInputClass}
+            value={String(value.site_id ?? SIN_SITE)}
+            options={[
+              { value: SIN_SITE, label: 'Sin site' },
+              ...sites.map((site) => ({ value: String(site.id), label: site.nombre })),
+            ]}
+            onChange={(id) => onChange({ site_id: id ? Number(id) : null })}
+          />
+        </Field>
+      )}
+
       {value.cargo === 'asesor' && estados.length > 0 && (
         <Field
           label="Estado del bono por meta"
@@ -217,148 +243,91 @@ export function UnidadForm({
   );
 }
 
-/** Cómo se presenta cada tipo de equipo como tarjeta. Las etiquetas las manda el servidor. */
-export const TIPO_EQUIPO_UI: Record<TipoEquipo, { icon: ReactNode; description: string; tone: FormTone }> = {
-  oficina: { icon: <Building />, description: 'De la oficina y nada más.', tone: 'purple' },
-  externa: { icon: <Globe />, description: 'Responde además a un coordinador de unidad de negocio.', tone: 'amber' },
-};
+/** Valor del desplegable para el objetivo general (sin persona). */
+const GENERAL = '';
 
-const SIN_ELEGIR = '';
-
-const opcionesPersona = (personas: CatalogoPersonaVentas[], vacia: string) => [
-  { value: SIN_ELEGIR, label: vacia },
-  ...personas.map((p) => ({ value: String(p.id), label: `${p.nombre} ${p.apellido}` })),
-];
-
-/** Alta o edición de un equipo de ventas. */
-export function EquipoForm({
+/** Alta o edición de un tramo del objetivo de ventas de las coordinadoras de oficina. */
+export function ObjetivoOficinaForm({
   value,
-  nombres,
-  tipos,
-  coordinadoresOficina,
-  coordinadoresUn,
+  coordinadoras,
   saving,
   onChange,
   onSubmit,
   onClose,
 }: Acciones & {
-  value: EquipoDraft;
-  /** La lista de la que se elige cómo se presenta (Catálogos › Ventas › Nombres de equipo). */
-  nombres: CatalogoNombreEquipo[];
-  tipos: CatalogoOption[];
-  coordinadoresOficina: CatalogoPersonaVentas[];
-  coordinadoresUn: CatalogoPersonaVentas[];
-  onChange: (patch: Partial<EquipoDraft>) => void;
+  value: ObjetivoOficinaDraft;
+  /** Las coordinadoras de oficina del directorio: de quien puede ser uno individual. */
+  coordinadoras: CatalogoPersonaVentas[];
+  onChange: (patch: Partial<ObjetivoOficinaDraft>) => void;
 }) {
-  const externo = value.tipo_equipo === 'externa';
-
+  const desdeSiempre = !value.desde;
   return (
     <ModalForm onSubmit={onSubmit}>
       <FormBanner
-        title="Equipo de ventas"
-        description="El nombre en Odoo se compara contra «Equipo de ventas» sin distinguir mayúsculas: cópialo tal cual aparece en las suscripciones."
-        action={<Users className="h-8 w-8 flex-shrink-0 text-slate-600" />}
+        title="Objetivo de ventas de oficina"
+        description="Cuántas ventas al mes se esperan de una coordinadora. El Sales Report mide contra él las que vendió ella misma («Medio»). El individual manda sobre el general."
+        action={<Target className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
 
-      <Field label="Nombre en Odoo" hint="Tal y como aparece en «Equipo de ventas».">
-        <input
-          type="text"
-          required
-          className={modalInputClass}
-          value={value.nombre_odoo}
-          onChange={(e) => onChange({ nombre_odoo: e.target.value })}
-        />
-      </Field>
-
-      <Field
-        label="Nombre de visualización"
-        hint={nombres.length
-          ? 'Cómo se presenta. Varios equipos de Odoo pueden presentarse con el mismo nombre.'
-          : 'Todavía no hay nombres: créalos en Catálogos › Ventas › Nombres de equipo.'}
-      >
-        <SelectMenu
-          aria-label="Nombre de visualización"
-          className={modalInputClass}
-          value={String(value.nombre_visualizacion_id ?? SIN_ELEGIR)}
-          options={[
-            { value: SIN_ELEGIR, label: 'Elige un nombre' },
-            ...nombres.map((n) => ({ value: String(n.id), label: n.nombre })),
-          ]}
-          onChange={(id) => onChange({ nombre_visualizacion_id: id ? Number(id) : null })}
-        />
-      </Field>
-
-      <OptionCardGroup label="Tipo" columns="md:grid-cols-2">
-        {tipos.map((tipo) => {
-          const ui = TIPO_EQUIPO_UI[tipo.value as TipoEquipo];
-          return (
-            <OptionCard
-              key={tipo.value}
-              selected={value.tipo_equipo === tipo.value}
-              onSelect={() => onChange({ tipo_equipo: tipo.value as TipoEquipo })}
-              icon={ui.icon}
-              title={tipo.label}
-              description={ui.description}
-              tone={ui.tone}
-            />
-          );
-        })}
-      </OptionCardGroup>
-
-      <Field label="Coordinadora de oficina" hint="La oficina a la que pertenece el equipo.">
-        <SelectMenu
-          aria-label="Coordinadora de oficina"
-          className={modalInputClass}
-          value={String(value.coord_oficina_id ?? SIN_ELEGIR)}
-          options={opcionesPersona(coordinadoresOficina, 'Elige una coordinadora')}
-          onChange={(id) => onChange({ coord_oficina_id: id ? Number(id) : null })}
-        />
-      </Field>
-
-      {externo && (
-        <Field label="Coordinador de unidad de negocio" hint="Opcional: puede quedar vacío.">
+      {value.id ? (
+        <Field label="Para">
+          <div className="py-2 text-sm font-semibold text-white">{value.etiqueta}</div>
+        </Field>
+      ) : (
+        <Field label="Para" hint="General: el de todas las que no tengan uno propio.">
           <SelectMenu
-            aria-label="Coordinador de unidad de negocio"
+            aria-label="Para quién es el objetivo"
             className={modalInputClass}
-            value={String(value.coord_un_id ?? SIN_ELEGIR)}
-            options={opcionesPersona(coordinadoresUn, 'Sin coordinador de UN')}
-            onChange={(id) => onChange({ coord_un_id: id ? Number(id) : null })}
+            value={String(value.persona_id ?? GENERAL)}
+            options={[
+              { value: GENERAL, label: 'General (todas las coordinadoras)' },
+              ...coordinadoras.map((p) => ({ value: String(p.id), label: `${p.nombre} ${p.apellido}` })),
+            ]}
+            onChange={(id) => onChange({ persona_id: id ? Number(id) : null })}
           />
         </Field>
       )}
 
-      <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : 'Registrar'} />
-    </ModalForm>
-  );
-}
+      <FormColumns>
+        <Field label="Ventas al mes">
+          <input
+            type="number"
+            required
+            min={1}
+            step={1}
+            className={modalInputClass}
+            value={value.ventas}
+            onChange={(e) => onChange({ ventas: e.target.value })}
+          />
+        </Field>
+        <Field
+          label="Vigente desde"
+          hint="Vacío: desde siempre. Los meses anteriores conservan el objetivo que tenían."
+          action={
+            desdeSiempre ? undefined : (
+              <button
+                type="button"
+                onClick={() => onChange({ desde: '' })}
+                className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white"
+              >
+                <X className="h-3 w-3" /> Quitar fecha
+              </button>
+            )
+          }
+        >
+          <MonthPicker value={value.desde} onChange={(desde) => onChange({ desde })} placeholder="Desde siempre" />
+        </Field>
+      </FormColumns>
 
-/** Alta o edición de un nombre de equipo. */
-export function NombreEquipoForm({
-  value,
-  saving,
-  onChange,
-  onSubmit,
-  onClose,
-}: Acciones & {
-  value: NombreEquipoDraft;
-  onChange: (patch: Partial<NombreEquipoDraft>) => void;
-}) {
-  return (
-    <ModalForm onSubmit={onSubmit}>
-      <FormBanner
-        title="Nombre de equipo"
-        description="La lista de nombres con los que se presentan los equipos de ventas. Renombrarlo aquí lo cambia en todos los equipos que lo usan."
-        action={<Tag className="h-8 w-8 flex-shrink-0 text-slate-600" />}
-      />
-      <Field label="Nombre">
+      <Field label="Nota" hint="Opcional: por qué se fijó.">
         <input
           type="text"
-          required
           className={modalInputClass}
-          value={value.nombre}
-          onChange={(e) => onChange({ nombre: e.target.value })}
+          value={value.nota}
+          onChange={(e) => onChange({ nota: e.target.value })}
         />
       </Field>
+
       <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : 'Crear'} />
     </ModalForm>
   );

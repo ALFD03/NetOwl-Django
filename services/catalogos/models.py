@@ -21,9 +21,9 @@ dueño de las zonas): una misma persona puede llevar dos («German Cerruti» y
 «German Cerruti 2») y una puede estar «Vacante». Por eso es `Coordinador` el
 que apunta a la persona, y no al reves.
 
-Los equipos de ventas (`EquipoVentas`) son el cuarto literal: la columna
-`Equipo de ventas` del export, con el nombre con el que se presentan, su tipo
-y a quien pertenecen.
+La coordinadora de oficina pertenece a un site (`PersonaVentas.site`): es por
+donde el Sales Report la pone bajo su site, con sus ventas y su objetivo de
+ventas del mes (`ObjetivoVentasOficina`).
 
 Vive en el esquema del entorno, como los demas catalogos.
 """
@@ -69,7 +69,8 @@ class PersonaVentas(models.Model):
 
     `usuario_odoo` solo lo lleva el coordinador de oficina: es el literal de
     `Vendedor`, y se guarda siempre con el sufijo canonico, como el directorio
-    de soporte.
+    de soporte. `site` tambien es solo suyo: el site de los reportes bajo el que
+    se la muestra en el Sales Report.
 
     La comparacion contra el export no distingue mayusculas ni el sufijo
     (`core.odoo_nombres.clave_nombre`), y por eso las dos unicidades son sobre
@@ -91,6 +92,15 @@ class PersonaVentas(models.Model):
         null=True,
         blank=True,
         related_name="asesores_fijados",
+    )
+    # El site del Sales Report al que pertenece una coordinadora de oficina.
+    # `PROTECT`: borrar el site la dejaria fuera del reporte sin avisar.
+    site = models.ForeignKey(
+        "subscriptions.Site",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="coordinadoras_oficina",
     )
 
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -133,6 +143,8 @@ class PersonaVentas(models.Model):
         self.usuario_odoo = normalizar_nombre_odoo(self.usuario_odoo) if self.usuario_odoo else ""
         if self.cargo != "asesor":
             self.estado_fijo = None
+        if self.cargo != CARGO_CON_USUARIO:
+            self.site = None
         super().save(*args, **kwargs)
 
     @property
@@ -148,93 +160,43 @@ class PersonaVentas(models.Model):
         return f"{self.nombre_completo} ({self.get_cargo_display()})"
 
 
-TIPO_EQUIPO_CHOICES = [
-    ("oficina", "Oficina"),
-    ("externa", "Externa"),
-]
+class ObjetivoVentasOficina(models.Model):
+    """Un tramo del objetivo de ventas de las coordinadoras de oficina.
 
-# El unico tipo de equipo que responde ademas a un coordinador de unidad de
-# negocio: el de oficina es de la oficina y nada mas.
-TIPO_EQUIPO_CON_UN = "externa"
+    Es una cantidad de ventas al mes, no un %: contra ella se mide en el Sales
+    Report lo que vendio la coordinadora como `Medio`. `persona` nula es el
+    **general**, el de todas las que no tengan uno propio; con persona, el
+    **individual**, que manda sobre el general.
 
-
-class NombreEquipo(models.Model):
-    """Un nombre con el que se presenta un equipo de ventas.
-
-    Es una lista aparte, y no un texto del equipo, para que varios literales de
-    Odoo puedan presentarse como un mismo equipo y para que el nombre se escriba
-    siempre igual: tecleado libremente acaba escrito de tres formas y deja de
-    agrupar, como pasaba con los departamentos de soporte.
+    Mismo criterio de vigencia que `ObjetivoComercial`: el tramo vale desde su
+    mes (`desde`, `YYYY-MM`; nulo es "desde siempre") hasta que empieza el
+    siguiente de la misma persona —o del general—, asi que cambiar un objetivo
+    no reescribe los meses que ya pasaron. La unicidad de (persona, desde) la
+    comprueba la vista: Postgres trata los NULL como distintos en un UNIQUE.
     """
 
-    nombre = models.CharField(max_length=120)
-
-    class Meta:
-        db_table = "catalogo_nombres_equipo"
-        ordering = ["nombre"]
-        constraints = [
-            models.UniqueConstraint(Lower("nombre"), name="nombre_equipo_unico"),
-        ]
-        verbose_name = "nombre de equipo"
-        verbose_name_plural = "nombres de equipo"
-
-    def __str__(self):
-        return self.nombre
-
-
-class EquipoVentas(models.Model):
-    """Un equipo de ventas tal y como lo escribe Odoo en `Equipo de ventas`.
-
-    `nombre_odoo` es el literal del export, que se compara como los demas
-    (`clave_nombre`: sin mayusculas ni sufijo). `nombre_visualizacion` es como
-    se presenta, elegido de `NombreEquipo`.
-
-    Todo equipo es de una coordinadora de oficina. El externo responde ademas a
-    un coordinador de unidad de negocio, que puede quedar vacio; en uno de
-    oficina no se guarda aunque llegue.
-
-    Las dos personas van con `PROTECT`: borrar a alguien del directorio que
-    lleva un equipo lo dejaria sin a quien agruparse.
-    """
-
-    nombre_odoo = models.CharField(max_length=200)
-    nombre_visualizacion = models.ForeignKey(
-        NombreEquipo, on_delete=models.PROTECT, related_name="equipos",
-    )
-    tipo = models.CharField(max_length=10, choices=TIPO_EQUIPO_CHOICES, default="oficina")
-    coord_oficina = models.ForeignKey(
+    persona = models.ForeignKey(
         PersonaVentas,
-        on_delete=models.PROTECT,
-        related_name="equipos_oficina",
-        limit_choices_to={"cargo": "coord_oficina"},
-    )
-    coord_un = models.ForeignKey(
-        PersonaVentas,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
-        related_name="equipos_un",
-        limit_choices_to={"cargo": "coord_un"},
+        related_name="objetivos_ventas",
+        limit_choices_to={"cargo": CARGO_CON_USUARIO},
     )
-
-    creado_en = models.DateTimeField(auto_now_add=True)
+    desde = models.CharField(max_length=7, null=True, blank=True)
+    ventas = models.PositiveIntegerField()
+    nota = models.CharField(max_length=255, blank=True, default="")
+    actualizado_por = models.ForeignKey(
+        "auth.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
     actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "catalogo_equipos_ventas"
-        ordering = ["nombre_odoo"]
-        constraints = [
-            models.UniqueConstraint(Lower("nombre_odoo"), name="equipo_ventas_nombre_odoo_unico"),
-        ]
-        verbose_name = "equipo de ventas"
-        verbose_name_plural = "equipos de ventas"
-
-    def save(self, *args, **kwargs):
-        """Normaliza el literal y descarta el coordinador de UN si no es externo."""
-        self.nombre_odoo = nombre_base(self.nombre_odoo)
-        if self.tipo != TIPO_EQUIPO_CON_UN:
-            self.coord_un = None
-        super().save(*args, **kwargs)
+        db_table = "catalogo_objetivos_ventas_oficina"
+        ordering = [models.F("persona").asc(nulls_first=True), models.F("desde").asc(nulls_first=True), "id"]
+        verbose_name = "objetivo de ventas de oficina"
+        verbose_name_plural = "objetivos de ventas de oficina"
 
     def __str__(self):
-        return f"{self.nombre_visualizacion} ({self.nombre_odoo})"
+        quien = self.persona.nombre_completo if self.persona_id else "general"
+        return f"{quien} desde {self.desde or 'siempre'}: {self.ventas}"

@@ -7,8 +7,8 @@ propio porque los usan dos: Subscriptions y Comisiones.
 
 El modulo se reparte en grupos, una pagina cada uno y un permiso cada uno:
 **Productos** (planes y reguladores; el permiso operacional), **Estructura**
-(zonas, sites y estados; el comercial) y **Ventas** (directorio, equipos de
-ventas, coordinadores y objetivos; el de ventas). **Notificaciones** junta lo pendiente de cada area
+(zonas, sites y estados; el comercial) y **Ventas** (directorio, coordinadores
+y objetivos, tambien los de ventas de las oficinas; el de ventas). **Notificaciones** junta lo pendiente de cada area
 —lo que esta en los datos importados y nadie registro— y lo que se decidio
 ignorar; cada usuario ve ahi solo las areas que administra.
 
@@ -46,15 +46,12 @@ from inertia import render as render_inertia
 from core import fixtures
 from core.odoo_nombres import nombre_base, normalizar_nombre_odoo
 from core.utils import clean_json_props
-from services.catalogos.directorio import equipos_fuera_del_catalogo, personas_fuera_del_directorio
+from services.catalogos.directorio import personas_fuera_del_directorio
 from services.catalogos.models import (
     CARGO_CHOICES,
     CARGO_CON_USUARIO,
     CARGOS_QUE_SUPERVISAN,
-    TIPO_EQUIPO_CHOICES,
-    TIPO_EQUIPO_CON_UN,
-    EquipoVentas,
-    NombreEquipo,
+    ObjetivoVentasOficina,
     PersonaVentas,
 )
 from services.config.decorators import permission_required
@@ -226,28 +223,9 @@ def _persona(p: PersonaVentas) -> dict[str, Any]:
         # El estado del bono por meta, fijado a mano; nulo: el de sus clientes.
         "estado_fijo_id": p.estado_fijo_id,
         "estado_fijo": p.estado_fijo.nombre if p.estado_fijo_id else "",
-    }
-
-
-def _nombre_equipo(n: NombreEquipo) -> dict[str, Any]:
-    """Un nombre de equipo, con cuantos equipos se presentan con el."""
-    return {"id": n.id, "nombre": n.nombre, "equipos": n.equipos.count()}
-
-
-def _equipo(e: EquipoVentas) -> dict[str, Any]:
-    """Un equipo de ventas, con como se presenta y a quien pertenece."""
-    return {
-        "id": e.id,
-        "nombre_odoo": e.nombre_odoo,
-        "nombre_visualizacion_id": e.nombre_visualizacion_id,
-        "nombre_visualizacion": e.nombre_visualizacion.nombre,
-        # No `tipo`: es la clave con la que el cuerpo de una escritura dice que
-        # catalogo toca, y el campo del equipo la pisaria.
-        "tipo_equipo": e.tipo,
-        "coord_oficina_id": e.coord_oficina_id,
-        "coord_oficina": e.coord_oficina.nombre_completo,
-        "coord_un_id": e.coord_un_id,
-        "coord_un": e.coord_un.nombre_completo if e.coord_un_id else "",
+        # El site del Sales Report de una coordinadora de oficina.
+        "site_id": p.site_id,
+        "site": p.site.nombre if p.site_id else "",
     }
 
 
@@ -348,12 +326,9 @@ def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
         raise DatosInvalidos(
             "Lleva unidades de negocio: reasígnalas antes de cambiarle el cargo."
         )
-    if fila.pk and fila.cargo != cargo and (
-        (fila.cargo == "coord_oficina" and fila.equipos_oficina.exists())
-        or (fila.cargo == "coord_un" and fila.equipos_un.exists())
-    ):
+    if fila.pk and fila.cargo == CARGO_CON_USUARIO and cargo != CARGO_CON_USUARIO and fila.objetivos_ventas.exists():
         raise DatosInvalidos(
-            "Lleva equipos de ventas: reasígnalos antes de cambiarle el cargo."
+            "Tiene objetivos de ventas de oficina: bórralos antes de cambiarle el cargo."
         )
     fila.cargo = cargo
     fila.medio = nombre_base(_texto(data, "medio", obligatorio=True, maximo=160))
@@ -366,6 +341,13 @@ def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
         if not nombre_base(usuario):
             raise DatosInvalidos("El usuario de Odoo es obligatorio para un coordinador de oficina.")
     fila.usuario_odoo = usuario
+
+    # El site solo lo lleva la coordinadora de oficina; como el estado del
+    # asesor, si el cuerpo no lo trae se conserva.
+    if cargo != CARGO_CON_USUARIO:
+        fila.site = None
+    elif "site_id" in data:
+        fila.site = _relacion(Site, data, "site_id", obligatorio=False)
 
     # El estado del bono solo lo lleva el asesor. Si el cuerpo no lo trae se
     # conserva: hay escrituras que solo tocan los literales.
@@ -387,44 +369,6 @@ def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
         raise Duplicado(
             f"«{literal}» ya es como aparece {choque.nombre_completo} en «Oportunidad/Administrador»."
         )
-
-
-def _aplicar_nombre_equipo(fila: NombreEquipo, data: dict, request) -> None:
-    """Vuelca el cuerpo sobre un nombre de equipo."""
-    fila.nombre = " ".join(_texto(data, "nombre", obligatorio=True, maximo=120).split())
-    if NombreEquipo.objects.exclude(pk=fila.pk).filter(nombre__iexact=fila.nombre).exists():
-        raise Duplicado(f"Ya existe el nombre de equipo «{fila.nombre}».")
-
-
-def _aplicar_equipo(fila: EquipoVentas, data: dict, request) -> None:
-    """Vuelca el cuerpo sobre un equipo de ventas.
-
-    La coordinadora de oficina es obligatoria y tiene que tener ese cargo; el
-    coordinador de UN solo se guarda en un equipo externo, puede quedar vacio
-    y tiene que ser coordinador de UN.
-    """
-    fila.nombre_odoo = nombre_base(_texto(data, "nombre_odoo", obligatorio=True, maximo=200))
-    if not fila.nombre_odoo:
-        raise DatosInvalidos("El nombre en Odoo es obligatorio.")
-    if not data.get("nombre_visualizacion_id"):
-        raise DatosInvalidos("Elige el nombre con el que se presenta el equipo.")
-    fila.nombre_visualizacion = _relacion(NombreEquipo, data, "nombre_visualizacion_id", obligatorio=True)
-    fila.tipo = _opcion(data, "tipo_equipo", TIPO_EQUIPO_CHOICES, "oficina")
-
-    if not data.get("coord_oficina_id"):
-        raise DatosInvalidos("Elige la coordinadora de oficina del equipo.")
-    oficina = _relacion(PersonaVentas, data, "coord_oficina_id", obligatorio=True)
-    if oficina.cargo != "coord_oficina":
-        raise DatosInvalidos(f"{oficina.nombre_completo} no es coordinador de oficina.")
-    fila.coord_oficina = oficina
-
-    un = _relacion(PersonaVentas, data, "coord_un_id", obligatorio=False) if fila.tipo == TIPO_EQUIPO_CON_UN else None
-    if un is not None and un.cargo != "coord_un":
-        raise DatosInvalidos(f"{un.nombre_completo} no es coordinador de unidad de negocio.")
-    fila.coord_un = un
-
-    if EquipoVentas.objects.exclude(pk=fila.pk).filter(nombre_odoo__iexact=fila.nombre_odoo).exists():
-        raise Duplicado(f"Ya hay un equipo registrado como «{fila.nombre_odoo}».")
 
 
 def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:
@@ -644,6 +588,51 @@ def _aplicar_objetivo_mes(fila: ObjetivoMes, data: dict, request) -> None:
     fila.actualizado_por = request.user
 
 
+def _objetivo_oficina(o: ObjetivoVentasOficina) -> dict[str, Any]:
+    """Un tramo del objetivo de ventas de las oficinas; sin persona es el general."""
+    return {
+        "id": o.id,
+        "persona_id": o.persona_id,
+        "persona": o.persona.nombre_completo if o.persona_id else "",
+        "desde": o.desde or "",
+        "ventas": o.ventas,
+        "nota": o.nota,
+        "actualizado_por": o.actualizado_por.username if o.actualizado_por else "",
+        "actualizado_en": o.actualizado_en.strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def _aplicar_objetivo_oficina(fila: ObjetivoVentasOficina, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre un tramo del objetivo de ventas de las oficinas.
+
+    La persona solo se fija al crearlo, como la entidad de un objetivo
+    comercial: vacia es el general. Tiene que ser coordinadora de oficina. La
+    unicidad de (persona, desde) se comprueba aqui porque la BD no puede.
+    """
+    if fila.pk is None:
+        persona = _relacion(PersonaVentas, data, "persona_id", obligatorio=False)
+        if persona is not None and persona.cargo != CARGO_CON_USUARIO:
+            raise DatosInvalidos(f"{persona.nombre_completo} no es coordinador de oficina.")
+        fila.persona = persona
+    fila.desde = _mes(data, "desde", obligatorio=False)
+
+    bruto = data.get("ventas")
+    try:
+        ventas = float(bruto)
+    except (TypeError, ValueError):
+        raise DatosInvalidos("Indica cuántas ventas al mes se esperan.") from None
+    if ventas < 1 or ventas != int(ventas):
+        raise DatosInvalidos("El objetivo de ventas es un número entero de 1 o más.")
+    fila.ventas = int(ventas)
+
+    if ObjetivoVentasOficina.objects.filter(persona=fila.persona, desde=fila.desde).exclude(pk=fila.pk).exists():
+        cuando = f"desde {fila.desde}" if fila.desde else "desde siempre"
+        quien = fila.persona.nombre_completo if fila.persona else "el general"
+        raise Duplicado(f"Ya hay un objetivo de ventas {cuando} para {quien}: edítalo.")
+    fila.nota = _texto(data, "nota")
+    fila.actualizado_por = request.user
+
+
 def _aplicar_semaforo(fila: SemaforoObjetivos, data: dict, request) -> None:
     """Vuelca el cuerpo sobre los umbrales de color (valores directos, en %)."""
     campos = (
@@ -712,17 +701,16 @@ CATALOGOS: dict[str, dict[str, Any]] = {
     "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador", "permiso": PERMISO_OPERACIONAL},
     "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "nombre ignorado", "permiso": PERMISO_OPERACIONAL, "permiso_fila": _permiso_ignorado},
     "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "femenino": True, "permiso": PERMISO_COMERCIAL},
-    "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_COMERCIAL},
+    "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_COMERCIAL, "protegido": "tiene zonas o coordinadoras de oficina asociadas. Reasígnalas primero."},
     "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado", "permiso": PERMISO_COMERCIAL},
     "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_coordinador, "etiqueta": "unidad de negocio", "femenino": True, "permiso": PERMISO_VENTAS},
-    "personas": {"modelo": PersonaVentas, "serializar": _persona, "aplicar": _aplicar_persona, "etiqueta": "persona", "femenino": True, "permiso": PERMISO_VENTAS, "protegido": "lleva equipos de ventas. Reasígnalos primero."},
-    "equipos": {"modelo": EquipoVentas, "serializar": _equipo, "aplicar": _aplicar_equipo, "etiqueta": "equipo de ventas", "permiso": PERMISO_VENTAS},
-    "nombres_equipo": {"modelo": NombreEquipo, "serializar": _nombre_equipo, "aplicar": _aplicar_nombre_equipo, "etiqueta": "nombre de equipo", "permiso": PERMISO_VENTAS, "protegido": "hay equipos que se presentan con él. Cámbiales el nombre primero."},
+    "personas": {"modelo": PersonaVentas, "serializar": _persona, "aplicar": _aplicar_persona, "etiqueta": "persona", "femenino": True, "permiso": PERMISO_VENTAS},
     # Los objetivos van con ventas: quien organiza a los equipos de venta es
     # quien fija lo que se espera de cada parte de la red.
     # `borrable` responde por que no se puede borrar una fila concreta.
     "objetivos": {"modelo": ObjetivoComercial, "serializar": _objetivo, "aplicar": _aplicar_objetivo, "etiqueta": "objetivo", "permiso": PERMISO_VENTAS, "borrable": _borrar_objetivo},
     "objetivos_mes": {"modelo": ObjetivoMes, "serializar": _objetivo_mes, "aplicar": _aplicar_objetivo_mes, "etiqueta": "objetivo del mes", "permiso": PERMISO_VENTAS},
+    "objetivos_oficina": {"modelo": ObjetivoVentasOficina, "serializar": _objetivo_oficina, "aplicar": _aplicar_objetivo_oficina, "etiqueta": "objetivo de ventas", "permiso": PERMISO_VENTAS},
     # Fila unica: se edita siempre la misma y no se borra.
     "semaforo": {"modelo": SemaforoObjetivos, "serializar": _semaforo, "aplicar": _aplicar_semaforo, "etiqueta": "semáforo", "permiso": PERMISO_VENTAS, "unico": True},
 }
@@ -779,9 +767,9 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     elif nombre == "coordinadores":
         consulta = consulta.select_related("persona")
     elif nombre == "personas":
-        consulta = consulta.select_related("estado_fijo").prefetch_related("unidades_negocio")
-    elif nombre == "equipos":
-        consulta = consulta.select_related("nombre_visualizacion", "coord_oficina", "coord_un")
+        consulta = consulta.select_related("estado_fijo", "site").prefetch_related("unidades_negocio")
+    elif nombre == "objetivos_oficina":
+        consulta = consulta.select_related("persona", "actualizado_por")
     elif nombre == "planes":
         consulta = consulta.select_related("plan_regulador")
     elif nombre == "ignorados":
@@ -879,9 +867,6 @@ def notificaciones_view(request):
         "ventas": (
             _pendientes("personas", personas_fuera_del_directorio) if permisos["ventas"] else None
         ),
-        "equipos": (
-            _pendientes("equipos", equipos_fuera_del_catalogo) if permisos["ventas"] else None
-        ),
     }
     areas = [area for area, permiso in PERMISO_POR_AREA.items() if _puede(request, permiso)]
     ignorados = [fila for fila in _listado("ignorados") if fila["area"] in areas]
@@ -894,7 +879,8 @@ def notificaciones_view(request):
             "reguladores": _listado("reguladores") if permisos["operacional"] else [],
             "tiposPersona": _opciones(TIPO_PERSONA_CHOICES),
             "tecnologias": _opciones(TECNOLOGIA_CHOICES),
-            "sites": _listado("sites") if permisos["comercial"] else [],
+            # Tambien con ventas: el alta de una coordinadora de oficina pide su site.
+            "sites": _listado("sites") if permisos["comercial"] or permisos["ventas"] else [],
             "estados": _listado("estados") if permisos["comercial"] else [],
             "coordinadores": _listado("coordinadores") if permisos["comercial"] else [],
             "cargos": _opciones(CARGO_CHOICES),
@@ -902,18 +888,9 @@ def notificaciones_view(request):
             # registrado con otro: Odoo escribe distinto a la misma persona.
             "supervisores": [
                 _persona(p)
-                for p in PersonaVentas.objects.filter(cargo__in=CARGOS_QUE_SUPERVISAN).prefetch_related(
-                    "unidades_negocio"
-                )
-            ] if permisos["ventas"] else [],
-            # Lo que pide el alta de un equipo desde su fila de pendientes.
-            "nombresEquipo": _listado("nombres_equipo") if permisos["ventas"] else [],
-            "tiposEquipo": _opciones(TIPO_EQUIPO_CHOICES),
-            "coordinadoresOficina": [
-                _persona(p) for p in PersonaVentas.objects.filter(cargo="coord_oficina").prefetch_related("unidades_negocio")
-            ] if permisos["ventas"] else [],
-            "coordinadoresUn": [
-                _persona(p) for p in PersonaVentas.objects.filter(cargo="coord_un").prefetch_related("unidades_negocio")
+                for p in PersonaVentas.objects.filter(cargo__in=CARGOS_QUE_SUPERVISAN)
+                .select_related("estado_fijo", "site")
+                .prefetch_related("unidades_negocio")
             ] if permisos["ventas"] else [],
         },
     })
@@ -959,7 +936,7 @@ def estructura_view(request):
 @login_required
 @permission_required(PERMISO_VENTAS)
 def ventas_view(request):
-    """El directorio de ventas, los equipos, las unidades de negocio y los objetivos.
+    """El directorio de ventas, las unidades de negocio y los objetivos.
 
     `?nueva_persona=<literal>&cargo=<cargo>` abre el alta ya rellena: es a
     donde lleva «Registrar» desde Notificaciones. El literal va al usuario de
@@ -980,10 +957,8 @@ def ventas_view(request):
             "cargo": cargo if cargo in dict(CARGO_CHOICES) else "asesor",
         },
         "coordinadores": _listado("coordinadores"),
-        "equipos": _listado("equipos"),
-        "nombresEquipo": _listado("nombres_equipo"),
-        "tiposEquipo": _opciones(TIPO_EQUIPO_CHOICES),
         "objetivos": _listado("objetivos"),
+        "objetivosOficina": _listado("objetivos_oficina"),
         "objetivos_mes": _listado("objetivos_mes"),
         "semaforo": _semaforo(SemaforoObjetivos.actual()),
         "objetivosConfig": get_objetivos_config(),

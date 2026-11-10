@@ -1,20 +1,19 @@
-/** Catálogos › Ventas: el directorio de ventas, los equipos, las unidades de negocio y los objetivos. */
+/** Catálogos › Ventas: el directorio de ventas, las unidades de negocio y los objetivos. */
 
-import { Briefcase, Crown, Tag, Target, TrafficCone, Users } from 'lucide-react';
+import { Briefcase, Building, Crown, Plus, Target, TrafficCone } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
+import { Button, DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
 import { useCatalogos } from '@/features/subscriptions/hooks/useCatalogos';
 import type {
   CargoVentas,
-  CatalogoEquipoVentas,
-  CatalogoNombreEquipo,
+  CatalogoObjetivoOficina,
   CatalogoPersonaVentas,
   CatalogoUnidadNegocio,
   CatalogosVentasProps,
 } from '@/features/subscriptions/types';
 import { BarraCatalogo, ConfirmarBorrado, ErrorCatalogo, columnaAcciones, enviar } from './CatalogoComun';
-import { CARGO_UI, EquipoForm, NombreEquipoForm, PersonaForm, UnidadForm } from './VentasForms';
+import { CARGO_UI, ObjetivoOficinaForm, PersonaForm, UnidadForm } from './VentasForms';
 import { NIVEL_OBJETIVO_UI, ObjetivoForm, ObjetivoMesForm, SemaforoForm } from './ObjetivoForms';
 import { ObjetivosPanel } from './ObjetivosPanel';
 import { objetivoGeneral } from '../../lib/objetivos';
@@ -30,18 +29,27 @@ const CARGOS: CargoVentas[] = ['asesor', 'supervisor', 'coord_oficina', 'coord_u
  * agrupa Unidades de negocio: cada una es dueña de un conjunto de zonas (se
  * asignan en Estructura) y apunta a la persona que la lleva.
  *
- * Los equipos de ventas son el literal de «Equipo de ventas», cómo se
- * presentan (de la lista de nombres de equipo) y a quién pertenecen.
+ * Cada coordinadora de oficina pertenece a un site, y en Objetivos se le fija
+ * cuántas ventas al mes se esperan de ella: el Sales Report la enseña bajo su
+ * site con su cumplimiento.
  */
+
+/** Las ventas del tramo vigente en `mes`: el más reciente que ya empezó (`coordinadoras_oficina.objetivo_vigente`). */
+function objetivoVigente(tramos: CatalogoObjetivoOficina[], mes: string): CatalogoObjetivoOficina | null {
+  let mejor: CatalogoObjetivoOficina | null = null;
+  for (const t of tramos) {
+    if (t.desde && t.desde > mes) continue;
+    if (!mejor || (mejor.desde || '') <= (t.desde || '')) mejor = t;
+  }
+  return mejor;
+}
 export function VentasView({
   personas,
   cargos,
   nuevaPersona,
   coordinadores,
-  equipos,
-  nombresEquipo,
-  tiposEquipo,
   objetivos,
+  objetivosOficina,
   objetivos_mes: objetivosMes,
   semaforo,
   objetivosConfig,
@@ -72,7 +80,12 @@ export function VentasView({
   const porCargo = (cargo: CargoVentas) => personas.filter((p) => p.cargo === cargo);
   const coordinadoresUn = porCargo('coord_un');
   const coordinadoresOficina = porCargo('coord_oficina');
-  const etiquetaTipo = (tipo: string) => tiposEquipo.find((o) => o.value === tipo)?.label ?? tipo;
+
+  // El objetivo de ventas que rige este mes para cada coordinadora: el suyo o el general.
+  const mesActual = new Date().toISOString().slice(0, 7);
+  const generalOficina = objetivoVigente(objetivosOficina.filter((o) => o.persona_id === null), mesActual);
+  const vigenteDe = (persona: CatalogoPersonaVentas) =>
+    objetivoVigente(objetivosOficina.filter((o) => o.persona_id === persona.id), mesActual) ?? generalOficina;
 
   const columnasPersonas = (cargo: CargoVentas): Column<CatalogoPersonaVentas>[] => [
     { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
@@ -86,7 +99,25 @@ export function VentasView({
       } as Column<CatalogoPersonaVentas>]
       : []),
     ...(cargo === 'coord_oficina'
-      ? [{ header: 'Usuario de Odoo', accessor: 'usuario_odoo', sortKey: 'usuario_odoo' } as Column<CatalogoPersonaVentas>]
+      ? [
+        { header: 'Usuario de Odoo', accessor: 'usuario_odoo', sortKey: 'usuario_odoo' } as Column<CatalogoPersonaVentas>,
+        {
+          header: 'Site',
+          accessor: (row) => row.site || <span className="text-amber-400">sin site</span>,
+          sortKey: 'site',
+          filterable: true,
+          filterValue: (row) => row.site || 'Sin site',
+        } as Column<CatalogoPersonaVentas>,
+        {
+          header: `Objetivo ${mesActual}`,
+          accessor: (row) => {
+            const vigente = vigenteDe(row);
+            if (!vigente) return <span className="text-slate-500">sin objetivo</span>;
+            return `${vigente.ventas} ventas${vigente.persona_id === null ? ' (general)' : ''}`;
+          },
+          align: 'right',
+        } as Column<CatalogoPersonaVentas>,
+      ]
       : []),
     ...(cargo === 'coord_un'
       ? [{ header: 'Unidades', accessor: (row) => row.unidades.join(', ') || '—' } as Column<CatalogoPersonaVentas>]
@@ -118,43 +149,28 @@ export function VentasView({
       c.setBorrando({ tipo: 'coordinadores', id: row.id, nombre: row.nombre })),
   ];
 
-  const columnasEquipos: Column<CatalogoEquipoVentas>[] = [
-    { header: 'Nombre en Odoo', accessor: 'nombre_odoo', sortKey: 'nombre_odoo' },
+  const columnasObjetivosOficina: Column<CatalogoObjetivoOficina>[] = [
     {
-      header: 'Se presenta como',
-      accessor: 'nombre_visualizacion',
-      sortKey: 'nombre_visualizacion',
+      header: 'Para',
+      accessor: (row) => row.persona || <span className="font-semibold text-sky-300">General</span>,
+      sortKey: 'persona',
       filterable: true,
-      filterValue: (row) => row.nombre_visualizacion,
+      filterValue: (row) => row.persona || 'General',
     },
+    { header: 'Desde', accessor: (row) => row.desde || 'siempre', sortKey: 'desde' },
+    { header: 'Ventas al mes', accessor: 'ventas', align: 'right', sortKey: 'ventas' },
+    { header: 'Nota', accessor: (row) => row.nota || <span className="text-slate-600">—</span> },
     {
-      header: 'Tipo',
-      accessor: (row) => etiquetaTipo(row.tipo_equipo),
-      sortKey: 'tipo_equipo',
-      filterable: true,
-      filterValue: (row) => etiquetaTipo(row.tipo_equipo),
+      header: 'Actualizado',
+      accessor: (row) => `${row.actualizado_en}${row.actualizado_por ? ` · ${row.actualizado_por}` : ''}`,
+      sortKey: 'actualizado_en',
     },
-    {
-      header: 'Coord. de oficina',
-      accessor: 'coord_oficina',
-      sortKey: 'coord_oficina',
-      filterable: true,
-      filterValue: (row) => row.coord_oficina,
-    },
-    {
-      header: 'Coord. de UN',
-      accessor: (row) => (row.tipo_equipo === 'externa' ? row.coord_un || '— sin asignar' : <span className="text-slate-500">no aplica</span>),
-      sortKey: 'coord_un',
-    },
-    columnaAcciones<CatalogoEquipoVentas>(c.editarEquipo, (row) =>
-      c.setBorrando({ tipo: 'equipos', id: row.id, nombre: row.nombre_odoo })),
-  ];
-
-  const columnasNombresEquipo: Column<CatalogoNombreEquipo>[] = [
-    { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Equipos', accessor: 'equipos', align: 'right', sortKey: 'equipos' },
-    columnaAcciones<CatalogoNombreEquipo>(c.editarNombreEquipo, (row) =>
-      c.setBorrando({ tipo: 'nombres_equipo', id: row.id, nombre: row.nombre })),
+    columnaAcciones<CatalogoObjetivoOficina>(c.editarObjetivoOficina, (row) =>
+      c.setBorrando({
+        tipo: 'objetivos_oficina',
+        id: row.id,
+        nombre: `el objetivo de ventas ${row.persona ? `de ${row.persona}` : 'general'} ${row.desde ? `desde ${row.desde}` : 'desde siempre'}`,
+      })),
   ];
 
   const altas: Record<string, { label: string; onClick: () => void }> = {
@@ -163,8 +179,6 @@ export function VentasView({
       { label: `Registrar ${etiquetaCargo(cargo).toLowerCase()}`, onClick: () => c.nuevaPersonaVacia(cargo) },
     ])),
     unidades: { label: 'Nueva unidad', onClick: c.nuevaUnidad },
-    equipos: { label: 'Registrar equipo', onClick: () => c.crearEquipoDesde() },
-    nombres_equipo: { label: 'Nuevo nombre', onClick: c.nuevoNombreEquipo },
   };
   const cargoActivo = CARGOS.find((cargo) => cargo === c.vista);
 
@@ -181,8 +195,6 @@ export function VentasView({
               label: `${CARGO_UI[cargo].corto} (${porCargo(cargo).length})`,
               icon: Briefcase,
             })),
-            { key: 'equipos', label: `Equipos de ventas (${equipos.length})`, icon: Users },
-            { key: 'nombres_equipo', label: `Nombres de equipo (${nombresEquipo.length})`, icon: Tag },
             { key: 'unidades', label: `Unidades de negocio (${coordinadores.length})`, icon: Crown },
             { key: 'objetivos', label: 'Objetivos', icon: Target },
           ]}
@@ -212,46 +224,6 @@ export function VentasView({
               searchable
               searchPlaceholder="Buscar persona..."
             />
-          )}
-        </NeonContainer>
-      )}
-
-      {c.vista === 'equipos' && (
-        <NeonContainer
-          title="Equipos de ventas"
-          subtitle="Cómo aparecen en «Equipo de ventas», cómo se presentan y a qué oficina (y unidad, si son externos) pertenecen"
-          icon={<Users className="h-5 w-5" />}
-          theme="green"
-          noPadding
-        >
-          {equipos.length === 0 ? (
-            <EmptyState
-              title="Ningún equipo registrado"
-              description="Notificaciones lista los equipos de las suscripciones que el catálogo todavía no reconoce."
-              icon={<Users />}
-            />
-          ) : (
-            <DataTable columns={columnasEquipos} data={equipos} searchable searchPlaceholder="Buscar equipo..." />
-          )}
-        </NeonContainer>
-      )}
-
-      {c.vista === 'nombres_equipo' && (
-        <NeonContainer
-          title="Nombres de equipo"
-          subtitle="La lista de la que se elige cómo se presenta cada equipo de ventas"
-          icon={<Tag className="h-5 w-5" />}
-          theme="green"
-          noPadding
-        >
-          {nombresEquipo.length === 0 ? (
-            <EmptyState
-              title="Ningún nombre todavía"
-              description="Crea los nombres con los que se presentarán los equipos antes de registrarlos."
-              icon={<Tag />}
-            />
-          ) : (
-            <DataTable columns={columnasNombresEquipo} data={nombresEquipo} searchable searchPlaceholder="Buscar nombre..." />
           )}
         </NeonContainer>
       )}
@@ -288,6 +260,32 @@ export function VentasView({
         />
       )}
 
+      {c.vista === 'objetivos' && (
+        <NeonContainer
+          className="mt-8"
+          title="Objetivo de ventas de las coordinadoras de oficina"
+          subtitle="Cuántas ventas al mes se esperan de cada una. El Sales Report mide contra él las que vendió ella misma («Medio»); el individual manda sobre el general"
+          icon={<Building className="h-5 w-5" />}
+          theme="purple"
+          noPadding
+          headerAction={
+            <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => c.nuevoObjetivoOficina()}>
+              Nuevo objetivo de ventas
+            </Button>
+          }
+        >
+          {objetivosOficina.length === 0 ? (
+            <EmptyState
+              title="Ningún objetivo de ventas todavía"
+              description="Crea uno general para todas las coordinadoras y, si alguna tiene uno distinto, el suyo."
+              icon={<Target />}
+            />
+          ) : (
+            <DataTable columns={columnasObjetivosOficina} data={objetivosOficina} searchable searchPlaceholder="Buscar coordinadora..." />
+          )}
+        </NeonContainer>
+      )}
+
       <Modal
         isOpen={Boolean(c.personaDraft)}
         onClose={c.cerrarFormularios}
@@ -301,6 +299,7 @@ export function VentasView({
             value={c.personaDraft}
             cargos={cargos}
             estados={estados}
+            sites={sites}
             saving={c.guardando}
             onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('personas', { ...c.personaDraft }))}
@@ -310,43 +309,21 @@ export function VentasView({
       </Modal>
 
       <Modal
-        isOpen={Boolean(c.equipoDraft)}
+        isOpen={Boolean(c.objetivoOficinaDraft)}
         onClose={c.cerrarFormularios}
-        title={c.equipoDraft?.id ? 'Editar equipo de ventas' : 'Registrar equipo de ventas'}
-        subtitle="Cómo aparece en las suscripciones, cómo se presenta y a quién pertenece"
-        icon={<Users className="h-5 w-5 text-emerald-400" />}
-        theme="green"
-      >
-        {c.equipoDraft && (
-          <EquipoForm
-            value={c.equipoDraft}
-            nombres={nombresEquipo}
-            tipos={tiposEquipo}
-            coordinadoresOficina={coordinadoresOficina}
-            coordinadoresUn={coordinadoresUn}
-            saving={c.guardando}
-            onChange={(patch) => c.setEquipoDraft({ ...c.equipoDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('equipos', { ...c.equipoDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(c.nombreEquipoDraft)}
-        onClose={c.cerrarFormularios}
-        title={c.nombreEquipoDraft?.id ? 'Editar nombre de equipo' : 'Nuevo nombre de equipo'}
-        subtitle="Cómo se presenta un equipo de ventas"
-        icon={<Tag className="h-5 w-5 text-emerald-400" />}
-        theme="green"
+        title={c.objetivoOficinaDraft?.id ? 'Editar objetivo de ventas' : 'Nuevo objetivo de ventas'}
+        subtitle="Cuántas ventas al mes se esperan de una coordinadora de oficina"
+        icon={<Building className="h-5 w-5 text-purple-400" />}
+        theme="purple"
         size="md"
       >
-        {c.nombreEquipoDraft && (
-          <NombreEquipoForm
-            value={c.nombreEquipoDraft}
+        {c.objetivoOficinaDraft && (
+          <ObjetivoOficinaForm
+            value={c.objetivoOficinaDraft}
+            coordinadoras={coordinadoresOficina}
             saving={c.guardando}
-            onChange={(patch) => c.setNombreEquipoDraft({ ...c.nombreEquipoDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('nombres_equipo', { ...c.nombreEquipoDraft }))}
+            onChange={(patch) => c.setObjetivoOficinaDraft({ ...c.objetivoOficinaDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('objetivos_oficina', { ...c.objetivoOficinaDraft }))}
             onClose={c.cerrarFormularios}
           />
         )}

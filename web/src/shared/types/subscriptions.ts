@@ -399,8 +399,7 @@ export interface ObjetivosConfig {
 
 export type CatalogoTipo =
   | 'personas'
-  | 'equipos'
-  | 'nombres_equipo'
+  | 'objetivos_oficina'
   | 'planes'
   | 'zonas'
   | 'sites'
@@ -589,39 +588,31 @@ export interface CatalogoPersonaVentas {
    */
   estado_fijo_id: number | null;
   estado_fijo: string;
+  /** El site del Sales Report de una coordinadora de oficina (solo ese cargo). */
+  site_id: number | null;
+  site: string;
+}
+
+/**
+ * Un tramo del objetivo de ventas de las coordinadoras de oficina: cuántas
+ * ventas al mes. Sin persona es el general; con persona, el suyo, que manda.
+ */
+export interface CatalogoObjetivoOficina {
+  id: number;
+  persona_id: number | null;
+  persona: string;
+  /** `YYYY-MM`; vacío es "desde siempre". */
+  desde: string;
+  ventas: number;
+  nota: string;
+  actualizado_por: string;
+  actualizado_en: string;
 }
 
 /** Una unidad de negocio (el `Coordinador` de las zonas) y quién la lleva. */
 export interface CatalogoUnidadNegocio extends CatalogoNombrado {
   persona_id: number | null;
   persona: string;
-}
-
-/** Oficina o externa: solo el externo responde además a un coordinador de UN. */
-export type TipoEquipo = 'oficina' | 'externa';
-
-/** Un nombre con el que se presenta un equipo de ventas (la lista de la que se eligen). */
-export interface CatalogoNombreEquipo {
-  id: number;
-  nombre: string;
-  /** Cuántos equipos se presentan con él. */
-  equipos: number;
-}
-
-/** Un equipo de ventas, tal y como lo escribe Odoo en «Equipo de ventas». */
-export interface CatalogoEquipoVentas {
-  id: number;
-  /** El literal de «Equipo de ventas». */
-  nombre_odoo: string;
-  nombre_visualizacion_id: number;
-  nombre_visualizacion: string;
-  /** No `tipo`: es la clave con la que una escritura dice qué catálogo toca. */
-  tipo_equipo: TipoEquipo;
-  coord_oficina_id: number;
-  coord_oficina: string;
-  /** Solo en un equipo externo, y puede quedar vacío. */
-  coord_un_id: number | null;
-  coord_un: string;
 }
 
 /** Un nombre de las suscripciones que el directorio de ventas no reconoce. */
@@ -650,8 +641,6 @@ export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
     productos: ProductoPendiente[] | null;
     estructura: ProductoPendiente[] | null;
     ventas: PersonaPendiente[] | null;
-    /** Los literales de «Equipo de ventas» que ningún equipo del catálogo reconoce. */
-    equipos: ProductoPendiente[] | null;
   };
   ignorados: CatalogoProductoIgnorado[];
   /** Las áreas cuyos ignorados puede ver y deshacer. */
@@ -664,17 +653,13 @@ export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
     reguladores: CatalogoPlanRegulador[];
     tiposPersona: CatalogoOption[];
     tecnologias: CatalogoOption[];
+    /** También con el permiso de ventas: el alta de una coordinadora de oficina pide su site. */
     sites: CatalogoSite[];
     estados: CatalogoNombrado[];
     coordinadores: CatalogoNombrado[];
     cargos: CatalogoOption[];
     /** Quienes pueden aparecer en `Oportunidad/Administrador`, para vincularles un nombre. */
     supervisores: CatalogoPersonaVentas[];
-    /** Lo que pide el alta de un equipo de ventas. */
-    nombresEquipo: CatalogoNombreEquipo[];
-    tiposEquipo: CatalogoOption[];
-    coordinadoresOficina: CatalogoPersonaVentas[];
-    coordinadoresUn: CatalogoPersonaVentas[];
   };
 }
 
@@ -707,10 +692,9 @@ export interface CatalogosVentasProps extends CatalogosPaginaProps {
   /** `?nueva_persona=&cargo=` — abre el alta ya rellena con ese literal. */
   nuevaPersona: { literal: string; cargo: CargoVentas };
   coordinadores: CatalogoUnidadNegocio[];
-  equipos: CatalogoEquipoVentas[];
-  nombresEquipo: CatalogoNombreEquipo[];
-  tiposEquipo: CatalogoOption[];
   objetivos: CatalogoObjetivo[];
+  /** Los tramos del objetivo de ventas de las coordinadoras de oficina. */
+  objetivosOficina: CatalogoObjetivoOficina[];
   objetivos_mes: CatalogoObjetivoMes[];
   semaforo: CatalogoSemaforo;
   objetivosConfig: ObjetivosConfig;
