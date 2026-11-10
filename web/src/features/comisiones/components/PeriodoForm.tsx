@@ -25,7 +25,9 @@ function limitesDelMes(periodo: string): [string, string] {
  * del mes. Lo instalado en los días promocionales del mes paga su primera
  * mensualidad un mes más tarde y cuenta para el periodo siguiente, salvo que
  * el cliente la adelante: pagada hasta el corte (el 22 del mes siguiente, o el
- * día en que se saque el informe) cuenta en este. Como los días promocionales
+ * día en que se saque el informe) cuenta en este. El corte es además la
+ * ventana de pago de todo el periodo: sin la primera mensualidad pagada hasta
+ * ese día, ninguna venta se paga. Como los días promocionales
  * se adelantan o se retrasan, se confirman cada mes (el 25 es solo la propuesta).
  *
  * El inicio solo se pregunta si el mes anterior no tiene periodo: si lo
@@ -59,7 +61,8 @@ export function PeriodoForm({ propuesta, guardando, onGuardar, onCerrar }: Perio
           Cuenta lo instalado desde el inicio de los días promocionales del mes anterior hasta el fin de este mes.
           Lo instalado en los días promocionales de este mes paga su primera mensualidad un mes después, así que
           su comisión va al periodo siguiente, salvo que el cliente la adelante: pagada hasta el día de corte,
-          cuenta en este.
+          cuenta en este. El corte vale para todo el periodo: una venta sin la primera mensualidad pagada hasta
+          ese día no se paga, aunque después lleguen facturas pagadas.
         </p>
       </div>
 
@@ -87,8 +90,8 @@ export function PeriodoForm({ propuesta, guardando, onGuardar, onCerrar }: Perio
       />
 
       <DatePicker
-        label="Corte de los pagos adelantados"
-        hint={`Normalmente el 22 de ${nombreMes(siguiente)}, cuando se saca el informe. Lo pagado después ya cuenta en el periodo siguiente.`}
+        label="Corte de pagos"
+        hint={`Normalmente el 22 de ${nombreMes(siguiente)}, cuando se saca el informe. Solo cuenta la primera mensualidad pagada hasta este día; lo de los días promocionales pagado después va al periodo siguiente.`}
         value={corte}
         onChange={setCorte}
         min={inicioSiguiente}
@@ -98,7 +101,8 @@ export function PeriodoForm({ propuesta, guardando, onGuardar, onCerrar }: Perio
       {inicio && inicioPromo && (
         <p className="text-xs text-slate-400">
           Cuenta lo instalado del <strong className="text-white">{formatoFecha(inicio)}</strong> al{' '}
-          <strong className="text-white">{formatoFecha(diaAnterior(inicioPromo))}</strong>, y del{' '}
+          <strong className="text-white">{formatoFecha(diaAnterior(inicioPromo))}</strong> con la primera mensualidad
+          pagada hasta el corte, y del{' '}
           <strong className="text-white">{formatoFecha(inicioPromo)}</strong> al <strong className="text-white">{formatoFecha(finMes)}</strong>{' '}
           solo con la primera mensualidad pagada hasta el <strong className="text-white">{corte ? formatoFecha(corte) : '—'}</strong>.
         </p>

@@ -201,7 +201,7 @@ export function InformeView({
                 {informe.corte_adelantos && (
                   <>
                     {' '}· del {formatoFecha(informe.inicio_promo)} al {formatoFecha(informe.fin)}, solo si adelantaron el pago
-                    hasta el <strong className="text-slate-200">{formatoFecha(informe.corte_adelantos)}</strong>
+                    · corte de pagos: <strong className="text-slate-200">{formatoFecha(informe.corte_adelantos)}</strong>
                   </>
                 )}
               </span>
@@ -336,7 +336,7 @@ export function InformeView({
             <div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-5 py-3">
                 <p className="max-w-3xl text-xs text-slate-400">
-                  {vista === 'revision' && 'Lo que la primera mensualidad no resuelve: todas sus mensualidades están canceladas (¿exoneración?), no tiene ninguna, o pasó a plan gratuito con la mensualidad pagada. Cuéntala o no la cuentes; si no se cuenta, no se paga.'}
+                  {vista === 'revision' && 'Lo que la primera mensualidad no resuelve: pasó a plan gratuito con la mensualidad pagada, o todas sus mensualidades se cancelaron a menos de 20 días de emitidas. Cuéntala o no la cuentes; si no se cuenta, no se paga.'}
                   {vista === 'todas' && 'Cada venta instalada en el periodo, con su clasificación y quién cobra por ella.'}
                   {vista === 'promo_anterior' && `Lo instalado en los días promocionales de ${nombreMes(informe.anterior?.periodo ?? '')}: si ya se cobró allí o toca aquí.`}
                   {vista === 'promo' && `Lo instalado en los días promocionales de ${nombreMes(periodo)}: quién adelantó el pago y cuenta ya aquí.`}

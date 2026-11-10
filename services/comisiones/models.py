@@ -158,7 +158,9 @@ class ComisionPeriodo(models.Model):
     comision es del periodo siguiente, **salvo que el cliente adelante el
     pago**: si la primera mensualidad estaba pagada el dia `corte_adelantos`
     (el 22 del mes siguiente, o el que se escriba), cuenta en este y ya no en
-    el siguiente. Como los dias promocionales se adelantan o se retrasan, el
+    el siguiente. Ese corte es ademas la ventana de pago de **todo** el periodo:
+    una venta sin la primera mensualidad pagada hasta ese dia no se paga,
+    aunque despues lleguen facturas pagadas. Como los dias promocionales se adelantan o se retrasan, el
     inicio de los de cada mes se guarda aqui (`inicio_promo`) y el periodo
     siguiente arranca en el.
 
@@ -215,9 +217,9 @@ DECISION_REVISION_CHOICES = [
 class RevisionComision(models.Model):
     """La decision a mano sobre una venta: contarla en su periodo o no contarla.
 
-    Las que van a revision son las que las facturas no resuelven: la
-    suscripcion y su primera mensualidad se contradicen, la mensualidad se
-    cancelo (¿exoneracion?) o no hay ninguna. La decision manda sobre la
+    Las que van a revision son las que las facturas no resuelven: paso a plan
+    gratuito con la mensualidad pagada, o todas sus mensualidades se cancelaron
+    a menos de 20 dias de emitidas (o no se sabe cuando). La decision manda sobre la
     clasificacion, tambien si despues cambian los datos, hasta que se deshace.
     Una venta solo es candidata en el periodo de su instalacion (o en dos, si
     se instalo en dias promocionales), asi que no contarla es que no se paga.

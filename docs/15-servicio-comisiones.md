@@ -44,6 +44,16 @@ venta válida de un periodo cerrado). El corte es `ComisionPeriodo.corte_adelant
 propuesto el día `CondicionesComision.dia_corte` (22) del mes siguiente y
 editable por periodo; lo pagado después del corte ya va al siguiente.
 
+**El corte es la ventana de pago de todo el periodo, no solo de los días
+promocionales.** Una venta de `regular` o de `promo_anterior` que no tiene la
+primera mensualidad pagada hasta el corte es **no pagada**, aunque el export
+traiga facturas de los meses siguientes pagadas: las facturas creadas después
+del corte ni se miran (`primera_mensualidad(..., hasta=corte)`) y una pagada
+después del corte es como si no se hubiera pagado (`clasificar(..., corte=)`).
+Ejemplo: SUB119892, instalada el 25/08, con la mensualidad del 05/09 cancelada a
+los 25 días y otra del 01/11; para septiembre (corte 22/10) la del 01/11 no
+existe, así que queda excluida por la cancelación, se pague o no la de noviembre.
+
 **Cuándo se pagó** sale del export de facturas: la «Fecha del último pago». Si el
 export cargado no la trae, la «Última actualización el» (pagar la factura la
 actualiza, así que el pago no es posterior) y, si tampoco, el «Creado el», que es
@@ -105,7 +115,7 @@ proceso de pago** o **Pagado parcialmente**. Revertido y Sin pagar no; Borrador
 todavía no se emitió y Cancelado no cuenta. **Que la suscripción siga hoy en
 progreso no importa**: si la primera mensualidad está pagada, vale aunque hoy
 esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo
-último importado: lo que esté pagado el día del cierre es lo que cuenta.
+último importado, pero lo que cuenta es lo pagado **hasta el corte**, no hasta el día en que se cierra.
 
 `reglas.clasificar`, en este orden:
 
@@ -120,8 +130,9 @@ esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo
 | Registrada sin pagar (o pagada en parte, o revertida) | **no pagada** |
 | En borrador | **no pagada** |
 | «Nada que facturar» sin mensualidad pagada | excluida |
-| Todas sus mensualidades canceladas | **en revisión**: ¿exoneración? |
-| Sin factura de mensualidad, «Facturado por completo» o «Por facturar» | **en revisión** |
+| Todas sus mensualidades canceladas, la última a 20 días o más de emitida («Creado el» → «Última actualización el») | excluida: el cliente no pagó |
+| Todas sus mensualidades canceladas, la última a menos de 20 días de emitida, o sin una de las dos fechas | **en revisión** |
+| Sin factura de mensualidad, «Facturado por completo» o «Por facturar» | **no pagada**: sin factura no se paga |
 | Sin factura ni estado de factura | excluida |
 
 **Gratuita** es lo mismo que en el análisis mensual: archivada en el export

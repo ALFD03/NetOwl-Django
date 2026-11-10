@@ -17,9 +17,9 @@ interface RevisionTablaProps {
 }
 
 /**
- * Llegan aquí las que la primera mensualidad no resuelve: todas sus
- * mensualidades están canceladas (¿exoneración?), no tiene ninguna, o pasó a
- * plan gratuito con la mensualidad pagada. Se decide a mano: **contarla** en este periodo o **no contarla**,
+ * Llegan aquí las que la primera mensualidad no resuelve: pasó a plan
+ * gratuito con la mensualidad pagada, o todas sus mensualidades se cancelaron
+ * a menos de 20 días de emitidas (o no se sabe cuándo). Se decide a mano: **contarla** en este periodo o **no contarla**,
  * y la decisión manda aunque cambien los datos, hasta que se deshace. Una
  * venta solo es candidata en el periodo en que se instaló, así que no
  * contarla es que no se paga.

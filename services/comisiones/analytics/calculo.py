@@ -10,7 +10,9 @@
    cobrarse ya en el anterior, fuera del sistema.
 2. **Clasificacion** (`reglas.clasificar`): por su primera mensualidad —la
    primera factura con un plan, del export de facturas— y el estado de la
-   factura de la suscripcion. Se juzga con los datos de hoy, sea cual sea la
+   factura de la suscripcion. **Todo se mide al corte del periodo**: solo se
+   miran las facturas creadas hasta ese dia y solo cuenta lo pagado hasta el;
+   una factura de los meses siguientes, aunque este pagada, no rescata la venta. Se juzga con los datos de hoy, sea cual sea la
    fecha: hasta que se cierra, el informe se recalcula con lo ultimo importado.
    Por eso un periodo se congela al cerrarlo: las tablas de suscripciones y de
    facturas se reemplazan en cada importacion.
@@ -692,7 +694,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
                 f.get("fecha_pago", ""), f.get("actualizado_el", ""),
             )
             for f in de_la_orden
-        ])
+        ], hasta=corte)
         pago_dia, pago_fuente = fecha_del_pago(mensualidad)
         gratuita = orden in gratuitas
         cancelada_el = canceladas_el.get(orden)
@@ -707,7 +709,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         datos = (texto(fila.estado_factura), mensualidad, plan["name"] if plan else "", gratuita)
         estado_sub = texto(fila.estado)
         # Lo que dicen las facturas se guarda aparte: con una decision, es por que se reviso.
-        motivo_analisis = clasificar(*datos, estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes)[1]
+        motivo_analisis = clasificar(*datos, estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes, corte=corte)[1]
         if orden in pagadas:
             clasificacion, motivo = EXCLUIDA, f"Ya se pagó en {pagadas[orden]}"
             motivo_analisis = motivo
@@ -716,7 +718,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         else:
             clasificacion, motivo = clasificar(
                 *datos, decidido if decidido in (CONTAR, NO_CONTAR) else None,
-                estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes,
+                estado_suscripcion=estado_sub, cancelada_sin_mes=sin_mes, corte=corte,
             )
             if parte == PROMO:
                 # Su comision es del siguiente salvo que adelantara el pago.

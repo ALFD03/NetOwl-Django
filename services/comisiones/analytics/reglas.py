@@ -113,6 +113,11 @@ EN_BORRADOR = "borrador"
 CANCELADA = "cancelada"
 SIN_FACTURA = "sin_factura"
 
+# Una mensualidad cancelada a los 20 dias o mas de emitida, sin otra despues,
+# es un cliente que no pago: no cuenta. Antes de eso pudo ser un error de
+# facturacion o una exoneracion, y se revisa.
+DIAS_CANCELACION = 20
+
 MOTIVO_CAMBIO_PLAN = "Por facturar con cambio de plan: la primera mensualidad, de otro plan, está pagada"
 
 
@@ -143,13 +148,17 @@ def _revertida(factura: Factura) -> bool:
     return normalize_text(factura.estado_pago) == PAGO_REVERTIDO
 
 
-def primera_mensualidad(facturas: list[Factura]) -> Factura | None:
+def primera_mensualidad(facturas: list[Factura], hasta: date | None = None) -> Factura | None:
     """La factura que dice si se pago la primera mensualidad.
+
+    Con `hasta` (el corte del periodo) solo se miran las facturas creadas hasta
+    ese dia: lo que Odoo emitio despues no existia cuando se saco el informe y
+    no rescata una venta de este periodo.
 
     Es la primera factura con un plan, por `Creado el`, **sin contar las
     canceladas**: una cancelada no es una mensualidad, sea del mes que sea. Si
-    todas estan canceladas se devuelve la ultima, y la venta va a revision
-    (¿la campana exonero el mes?).
+    todas estan canceladas se devuelve la ultima, y `dias_hasta_cancelar`
+    decide si la venta se excluye o va a revision.
 
     Si a la elegida se le revirtio el pago y despues, **en el mismo mes**, se
     emitio otra, manda la nueva: un pago revertido suele ser uno que no llego
@@ -169,9 +178,14 @@ def primera_mensualidad(facturas: list[Factura]) -> Factura | None:
     'B'
     >>> primera_mensualidad([f("I", "2026-09-01", plan="")]) is None
     True
+    >>> primera_mensualidad([f("A", "2026-09-05", estado="Cancelado"), f("B", "2026-11-01")], hasta=date(2026, 10, 22)).numero
+    'A'
+    >>> primera_mensualidad([f("B", "2026-11-01")], hasta=date(2026, 10, 22)) is None
+    True
     """
+    limite = hasta.isoformat() if hasta else None
     mensualidades = sorted(
-        (f for f in facturas if f.plan),
+        (f for f in facturas if f.plan and not (limite and f.creado_el and f.creado_el[:10] > limite)),
         key=lambda f: (f.creado_el == "", f.creado_el, f.numero),
     )
     if not mensualidades:
@@ -186,6 +200,27 @@ def primera_mensualidad(facturas: list[Factura]) -> Factura | None:
             break
         elegida = siguiente
     return elegida
+
+
+def dias_hasta_cancelar(factura: Factura | None) -> int | None:
+    """Dias entre el `Creado el` de una factura y su «Última actualización el».
+
+    En una cancelada, la ultima actualizacion es la cancelacion. `None` si
+    falta alguna de las dos fechas: entonces no se puede medir.
+
+    >>> dias_hasta_cancelar(Factura("F", "Cancelado", "", "2026-09-05 10:00:00", "P", "", "2026-09-30 08:00:00"))
+    25
+    >>> dias_hasta_cancelar(Factura("F", "Cancelado", "", "2026-09-05", "P")) is None
+    True
+    """
+    if factura is None or not factura.creado_el or not factura.actualizado_el:
+        return None
+    try:
+        creada = date.fromisoformat(factura.creado_el[:10])
+        actualizada = date.fromisoformat(factura.actualizado_el[:10])
+    except ValueError:
+        return None
+    return (actualizada - creada).days
 
 
 def situacion(factura: Factura | None) -> str:
@@ -212,6 +247,7 @@ def clasificar(
     decision: str | None = None,
     estado_suscripcion: str = "",
     cancelada_sin_mes: bool = False,
+    corte: date | None = None,
 ) -> tuple[str, str]:
     """`(clasificacion, motivo)` de una venta del periodo.
 
@@ -226,29 +262,40 @@ def clasificar(
     - Una **decision** manual manda sobre todo lo demas hasta que se deshace.
     - Una suscripcion que **paso a plan gratuito** no paga; si aun asi tiene la
       mensualidad pagada, se revisa.
+    - Con `corte`, una mensualidad **pagada despues del corte** es como si no
+      se hubiera pagado: lo que interesa es que pagara en la ventana del periodo.
     - **Mensualidad pagada** (tambien en parte): valida, este como este la
       facturacion de la suscripcion: la factura ya se pago. Si la suscripcion dice «Por
       facturar» y la factura es de otro plan, se apunta como cambio de plan
       (Odoo factura el nuevo y deja la venta por facturar).
     - **Sin pagar** (o revertida) o **en borrador**: no pagada.
-    - **Todas sus mensualidades canceladas**, o **ninguna**: se revisa (¿la
-      campana exonero el mes?), salvo «Nada que facturar».
+    - **Todas sus mensualidades canceladas**: si la ultima se cancelo a los
+      `DIAS_CANCELACION` dias o mas de emitida, excluida (el cliente no pago);
+      antes de eso, o si no se puede medir, se revisa. Salvo «Nada que facturar».
+    - **Ninguna mensualidad**, con la suscripcion «Facturado por completo» o
+      «Por facturar»: no pagada. Sin factura no se paga.
 
-    >>> f = lambda pago="Pagado", estado="Registrado", plan="Plan A": Factura("F1", estado, pago, "2026-09-05", plan)
+    >>> f = lambda pago="Pagado", estado="Registrado", plan="Plan A", act="": Factura("F1", estado, pago, "2026-09-05", plan, "", act)
     >>> clasificar("Facturado por completo", f())[0]
     'valida'
     >>> clasificar("Facturado por completo", f("Pagado parcialmente"))[0]
     'valida'
     >>> clasificar("Facturado por completo", f("Sin pagar"))[0]
     'no_pagada'
+    >>> clasificar("Facturado por completo", f(estado="Cancelado", act="2026-09-25"))[0]
+    'excluida'
+    >>> clasificar("Facturado por completo", f(estado="Cancelado", act="2026-09-24"))[0]
+    'revision'
     >>> clasificar("Facturado por completo", f(estado="Cancelado"))[0]
     'revision'
+    >>> clasificar("Facturado por completo", None)[0]
+    'no_pagada'
     >>> clasificar("Por facturar", f(), "Plan A")[0]
     'valida'
     >>> clasificar("Por facturar", f(), "Plan B")[0]
     'valida'
     >>> clasificar("Por facturar", None)[0]
-    'revision'
+    'no_pagada'
     >>> clasificar("Por facturar", f(estado="Cancelado"), gratuita=True)[0]
     'excluida'
     >>> clasificar("Facturado por completo", f("Sin pagar"), decision="contar")[0]
@@ -259,6 +306,11 @@ def clasificar(
     'excluida'
     >>> clasificar("Facturado por completo", f(), cancelada_sin_mes=True)[0]
     'excluida'
+    >>> g = lambda pago: Factura("F1", "Registrado", "Pagado", "2026-09-05", "Plan A", pago)
+    >>> clasificar("Facturado por completo", g("2026-10-22"), corte=date(2026, 10, 22))[0]
+    'valida'
+    >>> clasificar("Facturado por completo", g("2026-10-23"), corte=date(2026, 10, 22))
+    ('no_pagada', 'Primera mensualidad pagada el 23/10/2026, después del corte del 22/10/2026')
     """
     if normalize_text(estado_suscripcion) in ESTADOS_SIN_SERVICIO:
         return EXCLUIDA, f"En «{estado_suscripcion}»: todavía no es un servicio"
@@ -271,6 +323,9 @@ def clasificar(
 
     pago = situacion(factura)
     estado = normalize_text(estado_factura)
+    pagada_tarde = pago == PAGADA and corte is not None and not pagada_hasta(factura, corte)
+    if pagada_tarde:
+        pago = IMPAGA
 
     if gratuita:
         if pago == PAGADA:
@@ -282,6 +337,10 @@ def clasificar(
         if estado == POR_FACTURAR and cambio_plan:
             return VALIDA, MOTIVO_CAMBIO_PLAN
         return VALIDA, "Primera mensualidad pagada"
+    if pagada_tarde:
+        dia = fecha_del_pago(factura)[0]
+        cuando = f" el {date.fromisoformat(dia).strftime('%d/%m/%Y')}" if dia else ""
+        return NO_PAGADA, f"Primera mensualidad pagada{cuando}, después del corte del {corte.strftime('%d/%m/%Y')}"
     if pago == IMPAGA:
         return NO_PAGADA, f"Primera mensualidad «{factura.estado_pago or 'sin estado de pago'}»"
     if pago == EN_BORRADOR:
@@ -290,11 +349,14 @@ def clasificar(
     if estado in NADA_POR_FACTURAR:
         return EXCLUIDA, "Nada que facturar"
     if pago == CANCELADA:
-        return REVISION, "Todas sus facturas de mensualidad están canceladas: ¿exoneración?"
-    if estado == FACTURADO:
-        return REVISION, "Facturado por completo, pero sin factura de mensualidad"
-    if estado == POR_FACTURAR:
-        return REVISION, "Por facturar y sin factura de mensualidad: ¿mes exonerado?"
+        dias = dias_hasta_cancelar(factura)
+        if dias is None:
+            return REVISION, "Todas sus mensualidades están canceladas y no se sabe cuándo se canceló la última"
+        if dias >= DIAS_CANCELACION:
+            return EXCLUIDA, f"Su mensualidad se canceló a los {dias} días de emitida y no tiene otra"
+        return REVISION, f"Su mensualidad se canceló a los {dias} días de emitida (menos de {DIAS_CANCELACION}) y no tiene otra"
+    if estado in (FACTURADO, POR_FACTURAR):
+        return NO_PAGADA, f"«{estado_factura}» sin factura de mensualidad: sin factura no se paga"
     return EXCLUIDA, "Sin estado de factura ni factura de mensualidad"
 
 
