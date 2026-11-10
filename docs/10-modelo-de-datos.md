@@ -42,6 +42,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `catalogo_productos_ignorados` | `ProductoIgnorado` | Nombres del export que no se registrarán, por `area` (`productos`, `estructura`, `ventas`); únicos por `(area, nombre)` |
 | `catalogo_objetivos` | `ObjetivoComercial` | Objetivos por nivel (general, sucursal, estado, site, coordinador, zona, zona-sucursal); `sucursal` es el texto del export en los niveles que la usan: `desde` (`YYYY-MM`, nulo = siempre; el general es una sola fila y siempre nulo), `crecimiento_pct` y `churn_pct` (nulo = se hereda). Lo escribe la pestaña Objetivos del catálogo; lo lee `analytics/objetivos.py` y lo aplica el cliente |
 | `catalogo_objetivos_mes` | `ObjetivoMes` | Excepción de un mes concreto al objetivo general |
+| `catalogo_zonas_sin_objetivo` | `ZonaSinObjetivo` | Zonas apartadas del cumplimiento (las nuevas): `zona` (uno a uno, `CASCADE`), `desde`/`hasta` (`YYYY-MM`, incluidos, nulos = sin límite), `nota`. Lo aplica el cliente al pintar (`lib/objetivos.ts`) |
 | `catalogo_objetivos_semaforo` | `SemaforoObjetivos` | Fila única con los umbrales de color, fijos: crecimiento y cumplimiento "verde desde", churn "verde hasta" |
 | `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
 | `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |

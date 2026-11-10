@@ -16,6 +16,7 @@ import { BarraCatalogo, ConfirmarBorrado, ErrorCatalogo, columnaAcciones, enviar
 import { CARGO_UI, ObjetivoOficinaForm, PersonaForm, UnidadForm } from './VentasForms';
 import { NIVEL_OBJETIVO_UI, ObjetivoForm, ObjetivoMesForm, SemaforoForm } from './ObjetivoForms';
 import { ObjetivosPanel } from './ObjetivosPanel';
+import { ZonasSinObjetivoPanel } from './ZonasSinObjetivo';
 import { objetivoGeneral } from '../../lib/objetivos';
 
 const CARGOS: CargoVentas[] = ['asesor', 'supervisor', 'coord_oficina', 'coord_un'];
@@ -50,6 +51,7 @@ export function VentasView({
   coordinadores,
   objetivos,
   objetivosOficina,
+  zonasSinObjetivo,
   objetivos_mes: objetivosMes,
   semaforo,
   objetivosConfig,
@@ -257,6 +259,18 @@ export function VentasView({
           onBorrarMes={(fila) =>
             c.setBorrando({ tipo: 'objetivos_mes', id: fila.id, nombre: `la excepción de ${fila.periodo}` })}
           onEditarSemaforo={() => c.editarSemaforo(semaforo)}
+        />
+      )}
+
+      {c.vista === 'objetivos' && (
+        <ZonasSinObjetivoPanel
+          filas={zonasSinObjetivo}
+          zonas={zonas}
+          onBorrar={(fila) => c.setBorrando({
+            tipo: 'zonas_sin_objetivo',
+            id: fila.id,
+            nombre: `el tramo sin objetivo de ${fila.zona} (vuelve a medirse en todos sus meses)`,
+          })}
         />
       )}
 

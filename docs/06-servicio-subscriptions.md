@@ -797,6 +797,19 @@ migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
   coordinador ni la zona lo mueven, porque un site reparte sus zonas entre varios
   coordinadores). Los totales globales —Analytics, Results, Dashboard,
   consolidado FTTH y bloque RF— usan el general del mes.
+- **Zonas sin objetivo** (`ZonaSinObjetivo`, Catálogos › Ventas › Objetivos,
+  varias a la vez). Para las zonas nuevas: sin base, su meta es cero, pero sus
+  instalaciones y su crecimiento entraban en las cifras de su site y de su
+  coordinador e inflaban el cumplimiento. Mientras su tramo (`desde`/`hasta`,
+  por mes, ambos incluidos) cubre el periodo, la zona **sigue en la tabla de su
+  grupo** —«Sin objetivo», cumplimientos «—»— pero **no entra en el resumen del
+  grupo**: ni en la meta, ni en la base, instalaciones, bajas, crecimiento,
+  churn o cumplimientos. Los hooks suman los totales con `nodosMedidos` y `meta`
+  la salta y la cuenta en `Meta.zonasSinObjetivo`, que el resumen enseña. El
+  consolidado FTTH de Business Units tampoco la suma (salvo el ya sumado que
+  recibe una cuenta restringida). Un tramo por zona: para volver a medirla se le
+  pone `hasta`, y los meses anteriores no cambian. Los totales globales
+  (Analytics, Results, Dashboard) no lo aplican (no tienen el desglose por zona).
 - **Un grupo tiene meta, no tasa**: la suma de la meta de cada zona resuelta
   desde el nivel del grupo. Si el grupo tiene objetivo propio eso es su base ×
   su tasa; si no, cada zona aporta la de su site o su estado.

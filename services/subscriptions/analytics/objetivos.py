@@ -27,6 +27,7 @@ from services.subscriptions.models import (
     ObjetivoComercial,
     ObjetivoMes,
     SemaforoObjetivos,
+    ZonaSinObjetivo,
 )
 
 # Lo que responde si la tabla estuviera vacia: el 6% / 3% que la aplicacion
@@ -74,6 +75,7 @@ def _config_por_defecto() -> dict[str, Any]:
         "zonas": {},
         "sucursales": {},
         "zonas_sucursal": {},
+        "zonas_sin_objetivo": {},
         "semaforo": serializar_semaforo(SemaforoObjetivos()),
     }
 
@@ -92,6 +94,7 @@ def get_objetivos_config() -> dict[str, Any]:
           "meses": {"YYYY-MM": {crecimiento, churn}},
           "estados" | "sites" | "coordinadores" | "zonas" | "sucursales": {nombre: [tramo, ...]},
           "zonas_sucursal": {"Zona - Sucursal": [tramo, ...]},
+          "zonas_sin_objetivo": {zona: {desde, hasta}},   # apartadas del cumplimiento
           "semaforo": {...},
         }
 
@@ -116,6 +119,7 @@ def _leer_objetivos() -> dict[str, Any]:
         "zonas": {},
         "sucursales": {},
         "zonas_sucursal": {},
+        "zonas_sin_objetivo": {},
     }
     por_nivel = {
         "estado": config["estados"],
@@ -148,6 +152,11 @@ def _leer_objetivos() -> dict[str, Any]:
             "crecimiento": _pct(fila.crecimiento_pct),
             "churn": _pct(fila.churn_pct),
         }
+
+    # Las zonas apartadas del cumplimiento, con su tramo: el cliente decide en
+    # cada periodo si rige (Results y el Dashboard pintan varios meses).
+    for fila in ZonaSinObjetivo.objects.select_related("zona"):
+        config["zonas_sin_objetivo"][fila.zona.nombre] = {"desde": fila.desde, "hasta": fila.hasta}
 
     config["semaforo"] = serializar_semaforo(SemaforoObjetivos.actual())
     return config

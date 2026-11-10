@@ -26,6 +26,12 @@
  * nada por encima lo anula), esa suma es exactamente su base × su tasa; si no,
  * cada zona aporta la de su site o su estado, y el grupo nunca contradice a sus
  * partes.
+ *
+ * **Una zona sin objetivo** (`zonas_sin_objetivo`, las nuevas) sale en la tabla
+ * de su grupo pero **no entra en su resumen**: ni en la meta ni en la base, las
+ * instalaciones, las bajas, el crecimiento o el churn del grupo. `meta` no le
+ * suma meta y cuenta cuántas se apartaron; los hooks de los reportes suman los
+ * totales sin ellas (`medidos`).
  */
 
 import type { MetricColor } from '@/shared/ui/theme/types';
@@ -50,6 +56,10 @@ export interface Meta {
   churnPct: number;
   /** Altas netas que hacen falta para cumplir: la meta absoluta de crecimiento. */
   metaCrecimiento: number;
+  /** Cuántas zonas (nodos) del conjunto se dejaron fuera por no tener objetivo. */
+  zonasSinObjetivo?: number;
+  /** Todas las zonas del conjunto están sin objetivo: no hay contra qué medir. */
+  sinObjetivo?: boolean;
 }
 
 /** Nivel desde el que se empieza a resolver: el de la fila o el del grupo. */
@@ -102,6 +112,7 @@ export const OBJETIVOS_POR_DEFECTO: ObjetivosConfig = {
   zonas: {},
   sucursales: {},
   zonas_sucursal: {},
+  zonas_sin_objetivo: {},
   semaforo: {
     cumpl_verde: 100,
     cumpl_amarillo: 60,
@@ -171,7 +182,12 @@ export interface ResolverObjetivos {
     metrica: Metrica,
     desde?: NivelObjetivo,
   ) => OrigenObjetivo;
-  /** La meta de un conjunto de nodos, cada uno resuelto desde `desde`. */
+  /** Si el nodo está apartado del cumplimiento en ese periodo (zona sin objetivo). */
+  sinObjetivo: (periodo: string, nodo: NodoObjetivo | string | undefined) => boolean;
+  /**
+   * La meta de un conjunto de nodos, cada uno resuelto desde `desde`. Los que
+   * están sin objetivo no aportan meta y se cuentan en `zonasSinObjetivo`.
+   */
   meta: (
     periodo: string,
     nodos: readonly (NodoObjetivo & { activos_inicio?: number })[],
@@ -221,6 +237,15 @@ export function crearResolver(
 
   const general = (periodo: string) => objetivoGeneral(cfg, periodo);
 
+  const apartadas = new Map(Object.entries(cfg.zonas_sin_objetivo ?? {}).map(([nombre, t]) => [clave(nombre), t]));
+  const sinObjetivo: ResolverObjetivos['sinObjetivo'] = (periodo, nodo) => {
+    const zona = typeof nodo === 'string' ? nodo : nodo?.zona;
+    const tramo = apartadas.get(clave(zona));
+    if (!tramo) return false;
+    const mes = mesDe(periodo);
+    return (!tramo.desde || tramo.desde <= mes) && (!tramo.hasta || mes <= tramo.hasta);
+  };
+
   const origen: ResolverObjetivos['origen'] = (periodo, nodo, metrica, desde = 'zona_sucursal') => {
     const base: OrigenObjetivo = { nivel: 'general', nombre: '', valor: general(periodo)[metrica] };
     if (desde === 'general') return base;
@@ -249,27 +274,51 @@ export function crearResolver(
     let base = 0;
     let metaCrecimiento = 0;
     let bajasPermitidas = 0;
+    let apartadas = 0;
     for (const nodo of nodos) {
       const inicio = Number(nodo.activos_inicio ?? 0);
+      if (sinObjetivo(periodo, nodo)) {
+        apartadas += 1;
+        continue;
+      }
       const objetivo = zona(periodo, nodo, desde);
       base += inicio;
       metaCrecimiento += (inicio * objetivo.crecimiento) / 100;
       bajasPermitidas += (inicio * objetivo.churn) / 100;
     }
+    const extra = {
+      ...(apartadas > 0 ? { zonasSinObjetivo: apartadas } : {}),
+      ...(apartadas > 0 && apartadas === nodos.length ? { sinObjetivo: true } : {}),
+    };
     // Sin base no hay ponderación posible: se informa el objetivo del nivel
     // tal cual, para que el rótulo no diga 0%.
     if (base <= 0) {
       const objetivo = nodos.length === 1 ? zona(periodo, nodos[0], desde) : general(periodo);
-      return { crecimientoPct: objetivo.crecimiento, churnPct: objetivo.churn, metaCrecimiento: 0 };
+      return { crecimientoPct: objetivo.crecimiento, churnPct: objetivo.churn, metaCrecimiento: 0, ...extra };
     }
     return {
       crecimientoPct: (metaCrecimiento / base) * 100,
       churnPct: (bajasPermitidas / base) * 100,
       metaCrecimiento,
+      ...extra,
     };
   };
 
-  return { semaforo: cfg.semaforo ?? OBJETIVOS_POR_DEFECTO.semaforo, general, zona, origen, meta };
+  return { semaforo: cfg.semaforo ?? OBJETIVOS_POR_DEFECTO.semaforo, general, zona, origen, sinObjetivo, meta };
+}
+
+/**
+ * Los nodos que cuentan para el resumen de un grupo: los que tienen objetivo.
+ *
+ * Las zonas sin objetivo siguen en la tabla del grupo, pero sus cifras no
+ * entran en sus totales. Si todas están sin objetivo, ninguno.
+ */
+export function nodosMedidos<T extends NodoObjetivo>(
+  resolver: ResolverObjetivos,
+  periodo: string,
+  nodos: readonly T[],
+): T[] {
+  return nodos.filter((nodo) => !resolver.sinObjetivo(periodo, nodo));
 }
 
 /** La meta de una base con un objetivo global (sin reparto por zonas). */

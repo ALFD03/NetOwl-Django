@@ -83,6 +83,7 @@ from services.subscriptions.models import (
     SemaforoObjetivos,
     Site,
     Zona,
+    ZonaSinObjetivo,
 )
 
 logger = logging.getLogger(__name__)
@@ -633,6 +634,41 @@ def _aplicar_objetivo_oficina(fila: ObjetivoVentasOficina, data: dict, request) 
     fila.actualizado_por = request.user
 
 
+def _zona_sin_objetivo(z: ZonaSinObjetivo) -> dict[str, Any]:
+    """Un tramo en que una zona no se mide contra ningun objetivo."""
+    return {
+        "id": z.id,
+        "zona_id": z.zona_id,
+        "zona": z.zona.nombre,
+        "site": z.zona.site.nombre,
+        "coordinador": z.zona.coordinador.nombre if z.zona.coordinador_id else "",
+        "desde": z.desde or "",
+        "hasta": z.hasta or "",
+        "nota": z.nota,
+        "actualizado_por": z.actualizado_por.username if z.actualizado_por else "",
+        "actualizado_en": z.actualizado_en.strftime("%Y-%m-%d %H:%M"),
+    }
+
+
+def _aplicar_zona_sin_objetivo(fila: ZonaSinObjetivo, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre el tramo sin objetivo de una zona.
+
+    La zona solo se fija al crearlo. Un tramo por zona: si ya tiene uno se
+    edita ese (se le cambia el `hasta`), no se crea otro.
+    """
+    if fila.pk is None:
+        zona = _relacion(Zona, data, "zona_id", obligatorio=True)
+        if ZonaSinObjetivo.objects.filter(zona=zona).exists():
+            raise Duplicado(f"{zona.nombre} ya está sin objetivo: edita su tramo.")
+        fila.zona = zona
+    fila.desde = _mes(data, "desde", obligatorio=False)
+    fila.hasta = _mes(data, "hasta", obligatorio=False)
+    if fila.desde and fila.hasta and fila.hasta < fila.desde:
+        raise DatosInvalidos("«Hasta» no puede ser anterior a «Desde».")
+    fila.nota = _texto(data, "nota")
+    fila.actualizado_por = request.user
+
+
 def _aplicar_semaforo(fila: SemaforoObjetivos, data: dict, request) -> None:
     """Vuelca el cuerpo sobre los umbrales de color (valores directos, en %)."""
     campos = (
@@ -710,6 +746,7 @@ CATALOGOS: dict[str, dict[str, Any]] = {
     # `borrable` responde por que no se puede borrar una fila concreta.
     "objetivos": {"modelo": ObjetivoComercial, "serializar": _objetivo, "aplicar": _aplicar_objetivo, "etiqueta": "objetivo", "permiso": PERMISO_VENTAS, "borrable": _borrar_objetivo},
     "objetivos_mes": {"modelo": ObjetivoMes, "serializar": _objetivo_mes, "aplicar": _aplicar_objetivo_mes, "etiqueta": "objetivo del mes", "permiso": PERMISO_VENTAS},
+    "zonas_sin_objetivo": {"modelo": ZonaSinObjetivo, "serializar": _zona_sin_objetivo, "aplicar": _aplicar_zona_sin_objetivo, "etiqueta": "zona sin objetivo", "femenino": True, "permiso": PERMISO_VENTAS},
     "objetivos_oficina": {"modelo": ObjetivoVentasOficina, "serializar": _objetivo_oficina, "aplicar": _aplicar_objetivo_oficina, "etiqueta": "objetivo de ventas", "permiso": PERMISO_VENTAS},
     # Fila unica: se edita siempre la misma y no se borra.
     "semaforo": {"modelo": SemaforoObjetivos, "serializar": _semaforo, "aplicar": _aplicar_semaforo, "etiqueta": "semáforo", "permiso": PERMISO_VENTAS, "unico": True},
@@ -770,6 +807,8 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
         consulta = consulta.select_related("estado_fijo", "site").prefetch_related("unidades_negocio")
     elif nombre == "objetivos_oficina":
         consulta = consulta.select_related("persona", "actualizado_por")
+    elif nombre == "zonas_sin_objetivo":
+        consulta = consulta.select_related("zona__site", "zona__coordinador", "actualizado_por")
     elif nombre == "planes":
         consulta = consulta.select_related("plan_regulador")
     elif nombre == "ignorados":
@@ -959,6 +998,7 @@ def ventas_view(request):
         "coordinadores": _listado("coordinadores"),
         "objetivos": _listado("objetivos"),
         "objetivosOficina": _listado("objetivos_oficina"),
+        "zonasSinObjetivo": _listado("zonas_sin_objetivo"),
         "objetivos_mes": _listado("objetivos_mes"),
         "semaforo": _semaforo(SemaforoObjetivos.actual()),
         "objetivosConfig": get_objetivos_config(),

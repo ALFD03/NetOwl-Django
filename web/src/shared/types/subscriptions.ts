@@ -394,12 +394,19 @@ export interface ObjetivosConfig {
   sucursales: Record<string, TramoObjetivo[]>;
   /** Por nodo, con la clave de la dimensión `zona_sucursal`: `"Guacara - NYC"`. */
   zonas_sucursal: Record<string, TramoObjetivo[]>;
+  /**
+   * Las zonas apartadas del cumplimiento, por nombre, con su tramo de meses
+   * (ambos extremos incluidos; nulo es sin límite). Opcional: una página
+   * servida antes de existir no lo trae.
+   */
+  zonas_sin_objetivo?: Record<string, { desde: string | null; hasta: string | null }>;
   semaforo: SemaforoObjetivos;
 }
 
 export type CatalogoTipo =
   | 'personas'
   | 'objetivos_oficina'
+  | 'zonas_sin_objetivo'
   | 'planes'
   | 'zonas'
   | 'sites'
@@ -458,6 +465,22 @@ export interface CatalogoPlanRegulador {
   notas: string;
   /** Cuántos planes comerciales se declaran con él. */
   planes: number;
+}
+
+/** Una zona apartada del cumplimiento durante un tramo de meses (`ZonaSinObjetivo`). */
+export interface CatalogoZonaSinObjetivo {
+  id: number;
+  zona_id: number;
+  zona: string;
+  site: string;
+  coordinador: string;
+  /** `YYYY-MM`; vacío es desde siempre. */
+  desde: string;
+  /** `YYYY-MM`, incluido; vacío es sin fin. */
+  hasta: string;
+  nota: string;
+  actualizado_por: string;
+  actualizado_en: string;
 }
 
 export interface CatalogoZona {
@@ -695,6 +718,7 @@ export interface CatalogosVentasProps extends CatalogosPaginaProps {
   objetivos: CatalogoObjetivo[];
   /** Los tramos del objetivo de ventas de las coordinadoras de oficina. */
   objetivosOficina: CatalogoObjetivoOficina[];
+  zonasSinObjetivo: CatalogoZonaSinObjetivo[];
   objetivos_mes: CatalogoObjetivoMes[];
   semaforo: CatalogoSemaforo;
   objetivosConfig: ObjetivosConfig;

@@ -520,6 +520,51 @@ class ObjetivoMes(models.Model):
         return self.periodo
 
 
+class ZonaSinObjetivo(models.Model):
+    """Una zona que no se mide contra ningun objetivo durante un tramo de meses.
+
+    Es para las zonas nuevas: sin base al empezar el mes, su meta es cero pero
+    sus instalaciones y su crecimiento si entraban en el total de su site o de
+    su coordinador, e inflaban el cumplimiento del grupo con ventas que nadie
+    esperaba. Mientras esta apartada, la zona sigue en la tabla de su grupo
+    (su fila dice «Sin objetivo») pero **no entra en el resumen del grupo**: ni
+    en la meta ni en la base, las instalaciones, las bajas, el crecimiento o el
+    churn.
+
+    Como los objetivos, no toca ningun analisis: se aplica al pintar
+    (`lib/objetivos.ts`), y cambiarlo no obliga a relanzar ningun mes. La
+    vigencia es por mes (`desde`/`hasta`, ambos incluidos y opcionales) para que
+    apartarla hoy no reescriba los meses en que si tenia objetivo. Un tramo por
+    zona: cuando vuelva a medirse se le pone `hasta`.
+    """
+
+    zona = models.OneToOneField(Zona, on_delete=models.CASCADE, related_name="sin_objetivo")
+    desde = models.CharField(max_length=7, null=True, blank=True)
+    hasta = models.CharField(max_length=7, null=True, blank=True)
+    nota = models.CharField(max_length=255, blank=True, default="")
+    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "catalogo_zonas_sin_objetivo"
+        ordering = ["zona__nombre"]
+        verbose_name = "zona sin objetivo"
+        verbose_name_plural = "zonas sin objetivo"
+
+    def vigente_en(self, mes: str) -> bool:
+        """Si el tramo cubre `mes` (`YYYY-MM`).
+
+        >>> ZonaSinObjetivo(desde="2026-10", hasta=None).vigente_en("2026-09")
+        False
+        >>> ZonaSinObjetivo(desde="2026-10", hasta="2026-12").vigente_en("2026-12")
+        True
+        """
+        return (not self.desde or self.desde <= mes) and (not self.hasta or mes <= self.hasta)
+
+    def __str__(self):
+        return f"{self.zona} sin objetivo ({self.desde or 'siempre'} a {self.hasta or 'sin fin'})"
+
+
 class SemaforoObjetivos(models.Model):
     """Los umbrales de color, fijos e iguales para todo el modulo. Fila unica (pk=1).
 
