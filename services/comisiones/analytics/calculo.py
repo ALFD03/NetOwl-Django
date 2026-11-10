@@ -932,8 +932,15 @@ def _equipos(ventas: list[dict[str, Any]], directorio: _Directorio) -> dict[str,
     ids = {i for clave in filas for i in clave if i is not None}
     return {
         "equipos": list(filas.values()),
+        # `coord_un_id`: la UN asignada al supervisor en Comisiones › Supervisores
+        # (nula sin asignar). La nomina lo coloca solo por ella, sin deducirla.
         "personas": {
-            str(i): {"nombre": directorio.nombre(i), "cargo": directorio.cargo(i)} for i in sorted(ids)
+            str(i): {
+                "nombre": directorio.nombre(i),
+                "cargo": directorio.cargo(i),
+                "coord_un_id": directorio.unidad.get(i) if directorio.cargo(i) == "supervisor" else None,
+            }
+            for i in sorted(ids)
         },
     }
 

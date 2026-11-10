@@ -148,14 +148,13 @@ const observaciones = (nomina: Nomina, condiciones: CondicionesComision) => (p: 
 };
 
 /**
- * Los equipos en el orden de la nómina: las unidades, las oficinas con su
- * equipo sin unidad y, al final, lo que no tiene ninguna de las dos.
+ * Los equipos en el orden de la nómina: las unidades y, al final, lo que no
+ * tiene unidad. Las oficinas no llevan equipo.
  */
 function equipos(nomina: Nomina): { titulo: string; grupos: GrupoSupervisor[] }[] {
   const aparte = nomina.unidades.filter((u) => u.id === null);
   return [
     ...nomina.unidades.filter((u) => u.id !== null).map((u) => ({ titulo: `Unidad de negocio · ${u.nombre}`, grupos: u.grupos })),
-    ...nomina.oficinas.map((o) => ({ titulo: `Coordinación de oficina · ${o.pago.nombre}`, grupos: o.grupos })),
     ...aparte.map((u) => ({ titulo: u.nombre, grupos: u.grupos })),
   ];
 }

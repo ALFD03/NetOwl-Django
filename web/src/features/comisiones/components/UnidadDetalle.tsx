@@ -236,13 +236,14 @@ export function UnidadDetalle({ unidad, nomina, ...props }: DetalleProps & { uni
 
       {unidad.id === null && (
         <p className="text-xs text-slate-400">
-          Ni unidad de negocio ni coordinación de oficina: supervisores sin coordinador de UN en Comisiones › Supervisores
-          que no cargaron ventas con ninguna oficina, y asesores sin supervisor ni Vendedor en sus ventas.
+          Supervisores sin coordinador de UN asignado en Comisiones › Supervisores, y los asesores cuyo supervisor principal
+          no tiene unidad (o no es un supervisor, o sus ventas no lo traen). No se deduce de qué oficina o site son: asígnales
+          su unidad de negocio para que salgan en ella.
         </p>
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Kpi label="Ventas validadas" nota={unidad.id === null ? 'sin unidad ni Vendedor' : 'las que pasaron por la unidad'}>{unidad.ventas}</Kpi>
+        <Kpi label="Ventas validadas" nota={unidad.id === null ? 'sin unidad de negocio' : 'las que pasaron por la unidad'}>{unidad.ventas}</Kpi>
         <Kpi label="Pagadas a asesores" nota={validadasAsesores > pagadasAsesores ? `${validadasAsesores - pagadasAsesores} bajo tramo` : 'todas'}>
           <span className={pagadasAsesores < validadasAsesores ? 'text-amber-300' : ''}>{pagadasAsesores}</span>
           <span className="text-sm font-bold text-slate-500"> / {validadasAsesores}</span>

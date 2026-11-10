@@ -337,21 +337,23 @@ cobra y un buscador de personas; a la derecha, la elegida (`lib/nomina.ts`,
 `NominaView`).
 
 - **La unidad la encabeza su coordinador de UN**; debajo, cada supervisor con
-  sus asesores. Un supervisor va a la unidad donde más supervisa; un asesor, con
-  el supervisor con quien más vende y en la unidad de ese supervisor.
+  sus asesores. Un supervisor va a la unidad que tiene **asignada** en
+  Comisiones › Supervisores; un asesor, con el supervisor con quien más vende y
+  en la unidad de ese supervisor.
 - **Las coordinadoras de oficina no son del equipo de un coordinador de UN**:
   van aparte, en su propia sección, y cada una enseña con qué unidades comparte
-  ventas. La unidad, a su vez, dice con qué oficinas comparte las suyas.
-- **Lo que no tiene unidad va con su oficina**, con la misma forma que una
-  unidad: el supervisor sin coordinador de UN, con la oficina con que cargó más
-  ventas; el asesor sin supervisor, con la oficina de más ventas suyas (y el
-  supervisado por una oficina, con esa oficina). Solo lo que no tiene ni unidad
-  ni oficina queda en **«Sin unidad ni oficina»**, al final: en la práctica, los
-  contratistas, que no traen supervisor ni `Vendedor`.
+  ventas. La unidad, a su vez, dice con qué oficinas comparte las suyas. **Una
+  oficina no lleva equipo**: en su sección solo está la coordinadora.
+- **Lo que no tiene unidad asignada va aparte**, en **«Sin unidad de
+  negocio»**, al final, agrupado por supervisor: el supervisor sin coordinador
+  de UN asignado y el asesor cuyo supervisor principal no tiene unidad (o es
+  una oficina, o sus ventas no traen supervisor). **No se deduce** de qué
+  oficina o site es nadie, a petición del usuario: para que salga en una unidad
+  hay que asignársela. Antes iban con la oficina con que más cargaron.
 - **Cada persona sale una sola vez**, con su pago entero: el tramo de un asesor
   depende de todas sus ventas y no se reparte. Si vendió también con otro
   supervisor, su fila lo dice («+2 con otro supervisor, incluidas»). Así las
-  unidades, las oficinas con su equipo y lo de aparte suman exactamente el
+  unidades, las oficinas y lo de aparte suman exactamente el
   total a pagar.
 - Las columnas son las del pago: **ventas pagadas / validadas** (en ámbar cuando
   no se pagan todas: el tramo de un asesor descuenta, o el crecimiento de un

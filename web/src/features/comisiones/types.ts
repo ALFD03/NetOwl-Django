@@ -230,7 +230,11 @@ export interface InformeComision {
   /** Quién vendió con quién en las ventas válidas (falta en periodos cerrados antes de existir). */
   equipos?: FilaEquipo[];
   /** Nombre y cargo de cada id de `equipos`, cobre o no. */
-  personas?: Record<string, { nombre: string; cargo: CargoVentas | '' }>;
+  /**
+   * Nombre y cargo de cada id de `equipos`; `coord_un_id` es la UN asignada a
+   * un supervisor (ausente en cierres anteriores a enviarla).
+   */
+  personas?: Record<string, { nombre: string; cargo: CargoVentas | ''; coord_un_id?: number | null }>;
   revision: VentaComision[];
   manuales?: VentaManual[];
   /** Lo que impide cerrar. Vacío: se puede cerrar. */

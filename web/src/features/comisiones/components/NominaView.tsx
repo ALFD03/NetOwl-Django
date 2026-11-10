@@ -20,8 +20,8 @@ interface NominaViewProps extends Omit<DetalleProps, 'resaltado'> {
  * Los % se escriben en el paso de Indicadores, nunca aquí.
  *
  * Cada persona sale una sola vez (ver `lib/nomina`), así que la suma de la
- * lista es el total a pagar. Lo que no tiene unidad va con su oficina; solo lo
- * que no tiene ninguna de las dos cierra la lista, aparte.
+ * lista es el total a pagar. Las oficinas van solas, y todo supervisor o asesor
+ * sin unidad de negocio asignada cierra la lista, aparte.
  */
 export function NominaView({ informe, ...props }: NominaViewProps) {
   const nomina = useMemo(() => armarNomina(informe), [informe]);
@@ -164,7 +164,7 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
         {aparte && (
           <>
             <p className="flex items-center gap-2 px-2 pb-1 pt-4 text-[10px] font-black uppercase tracking-wider text-amber-300">
-              <AlertTriangle className="h-3.5 w-3.5" /> Aparte
+              <AlertTriangle className="h-3.5 w-3.5" /> Por Asignar UN
             </p>
             {item(`u:${aparte.key}`, aparte.nombre, `${aparte.personas.length} personas`, aparte.usd, true)}
           </>
@@ -184,7 +184,7 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
 
       <div className="min-w-0 p-5">
         {unidad && <UnidadDetalle key={unidad.key} unidad={unidad} nomina={nomina} resaltado={resaltado} {...props} />}
-        {oficina && <OficinaDetalle key={oficina.pago.persona_id} oficina={oficina} nomina={nomina} resaltado={resaltado} {...props} />}
+        {oficina && <OficinaDetalle key={oficina.pago.persona_id} oficina={oficina} resaltado={resaltado} {...props} />}
         {props.tasa === null && (
           <p className="mt-4 text-[11px] text-amber-400">
             Los bolívares salen vacíos hasta que se conozca la tasa CONATEL del mes en que se paga.
