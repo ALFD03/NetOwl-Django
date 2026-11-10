@@ -64,7 +64,7 @@ ACTION_PERMISSION_FIELDS = [
     'can_manage_catalogo_comercial', 'can_manage_catalogo_operacional',
     'can_manage_catalogo_ventas',
     'can_manage_support_users',
-    'can_manage_comisiones', 'can_reopen_comisiones',
+    'can_manage_comisiones', 'can_reopen_comisiones', 'can_delete_comisiones',
     # Administracion de cuentas, un permiso por accion (antes `can_manage_users`).
     'can_create_users', 'can_edit_user_permissions', 'can_change_passwords',
     'can_delete_users', 'can_manage_groups',
@@ -160,6 +160,9 @@ class PermissionMatrix(models.Model):
     # deshace una nomina ya pagada: el cierre queda archivado
     # (`ComisionCierreArchivado`), pero la decision no es de quien calcula.
     can_reopen_comisiones = models.BooleanField(default=False)
+    # Borrar un informe en borrador con todo lo decidido en el (revisiones,
+    # ventas a mano, indicadores). Aparte de gestionar: no se deshace.
+    can_delete_comisiones = models.BooleanField(default=False)
 
     # --- Administracion de cuentas ---
     # `can_manage_users` era un solo interruptor para todo: ver, crear, borrar,

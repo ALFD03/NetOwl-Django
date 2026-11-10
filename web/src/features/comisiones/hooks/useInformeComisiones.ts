@@ -79,6 +79,22 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
     cerrar: () => escribir(() => comisionesApi.cerrar(periodo), 'No se pudo cerrar el periodo.'),
     reabrir: (motivo: string, confirmacion: string) =>
       escribir(() => comisionesApi.reabrir(periodo, motivo, confirmacion), 'No se pudo reabrir el periodo.'),
+    /** Tras borrarlo, el periodo ya no existe: se vuelve a la página sin él, no se recarga. */
+    borrar: async (confirmacion: string) => {
+      setGuardando(true);
+      setError(null);
+      try {
+        await comisionesApi.borrar(periodo, confirmacion);
+        setCache(null);
+        router.get('/comisiones/');
+        return true;
+      } catch (err: unknown) {
+        setError(getApiErrorMessage(err, 'No se pudo borrar el informe.'));
+        return false;
+      } finally {
+        setGuardando(false);
+      }
+    },
     decidir: (ordenes: string[], decision: '' | DecisionRevision) =>
       escribir(
         () => comisionesApi.guardarRevision({ periodo, ordenes, decision }),

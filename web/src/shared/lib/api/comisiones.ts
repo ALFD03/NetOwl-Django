@@ -55,6 +55,13 @@ export const comisionesApi = {
   tasaActual: async () =>
     (await apiClient.get<{ tasa: number; fuente: string }>('/comisiones/api/tasa-actual/')).data,
 
+  /**
+   * Borra un informe en borrador con lo decidido en él (revisiones, ventas a
+   * mano, indicadores). `confirmacion` es el periodo escrito a mano. El
+   * servidor lo rechaza si está cerrado o se cerró alguna vez.
+   */
+  borrar: async (periodo: string, confirmacion: string) =>
+    (await apiClient.post<Respuesta>('/comisiones/api/periodo/borrar/', { periodo, confirmacion })).data,
 
   /** El coordinador de UN de uno o varios supervisores; `null` se lo quita. */
   asignarUnidad: async (supervisor_ids: number[], coord_un_id: number | null) =>

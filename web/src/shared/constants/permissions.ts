@@ -50,6 +50,7 @@ export const PERMISSIONS = {
   MANAGE_SUPPORT_USERS: 'can_manage_support_users',
   MANAGE_COMISIONES: 'can_manage_comisiones',
   REOPEN_COMISIONES: 'can_reopen_comisiones',
+  DELETE_COMISIONES: 'can_delete_comisiones',
   CREATE_USERS: 'can_create_users',
   EDIT_USER_PERMISSIONS: 'can_edit_user_permissions',
   CHANGE_PASSWORDS: 'can_change_passwords',
@@ -207,6 +208,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
       { key: PERMISSIONS.VIEW_COMISIONES, label: 'Ver el informe de comisiones', section: 'Ver' },
       { key: PERMISSIONS.MANAGE_COMISIONES, label: 'Calcular, revisar y cerrar periodos; supervisores por UN y condiciones', section: 'Administrar' },
       { key: PERMISSIONS.REOPEN_COMISIONES, label: 'Reabrir un periodo cerrado (archiva el cierre)', section: 'Administrar' },
+      { key: PERMISSIONS.DELETE_COMISIONES, label: 'Borrar un informe en borrador (no se deshace)', section: 'Administrar' },
     ],
   },
   {

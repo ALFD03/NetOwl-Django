@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { router } from '@inertiajs/react';
 import {
   AlertTriangle, CalendarRange, Check, FileSpreadsheet, HandCoins, ListChecks, Lock, LockOpen, Percent, Receipt,
-  ShieldAlert,
+  ShieldAlert, Trash2,
 } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
@@ -59,7 +59,7 @@ function indicadoresPendientes(informe: InformeComision): number {
  * sus ventas válidas no vuelven a contar en otro.
  */
 export function InformeView({
-  periodo, periodos, informe, error, propuesta, condiciones, cargos, puedeGestionar, puedeReabrir, archivos,
+  periodo, periodos, informe, error, propuesta, condiciones, cargos, puedeGestionar, puedeReabrir, puedeBorrar, archivos,
 }: ComisionesInformeProps) {
   const c = useInformeComisiones(periodo, Boolean(informe));
   const editable = puedeGestionar && informe?.estado === 'borrador';
@@ -80,6 +80,11 @@ export function InformeView({
   const [confirmando, setConfirmando] = useState<'cerrar' | null>(null);
   // Reabrir pide motivo y el periodo escrito a mano (ver `api_periodo_reabrir`).
   const [reapertura, setReapertura] = useState<{ motivo: string; confirmacion: string } | null>(null);
+  // Borrar pide el periodo escrito a mano (ver `api_periodo_borrar`).
+  const [borrado, setBorrado] = useState<{ confirmacion: string } | null>(null);
+  // Solo un borrador que nunca se cerró: un cierre archivado es historial de lo pagado.
+  const existente = periodos.find((p) => p.periodo === periodo);
+  const borrable = existente?.estado === 'borrador' && archivos.length === 0;
   const [desglose, setDesglose] = useState<PagoComision | null>(null);
   const [exportando, setExportando] = useState(false);
 
@@ -214,6 +219,18 @@ export function InformeView({
             {editable && (
               <Button variant="outline" icon={<CalendarRange className="h-4 w-4" />} onClick={() => setEditandoPeriodo(true)}>
                 Días promocionales
+              </Button>
+            )}
+            {puedeBorrar && existente?.estado === 'borrador' && (
+              <Button
+                variant="danger"
+                icon={<Trash2 className="h-4 w-4" />}
+                onClick={() => {
+                  c.setError(null);
+                  setBorrado({ confirmacion: '' });
+                }}
+              >
+                Borrar informe
               </Button>
             )}
           </div>
@@ -581,6 +598,68 @@ export function InformeView({
                 disabled={reapertura.motivo.trim().length < 10 || reapertura.confirmacion.trim() !== periodo}
               >
                 Reabrir y archivar el cierre
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Borrar no se deshace: se lleva lo decidido en el periodo. Se pide el
+          periodo escrito a mano, que el servidor vuelve a comprobar. */}
+      <Modal
+        isOpen={Boolean(borrado)}
+        onClose={() => setBorrado(null)}
+        title={`Borrar el informe ${periodo}`}
+        subtitle="Esta acción no se puede deshacer"
+        icon={<Trash2 className="h-5 w-5 text-rose-400" />}
+        theme="red"
+        size="md"
+      >
+        {borrado && (
+          <form
+            className="space-y-5"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (await c.borrar(borrado.confirmacion.trim())) setBorrado(null);
+            }}
+          >
+            {borrable ? (
+              <StatusMessage
+                status={{
+                  type: 'error',
+                  text: `Se borra el periodo ${periodo} con todo lo decidido en él: las ventas revisadas, las confirmadas de los días promocionales, las agregadas a mano y los cumplimientos y crecimientos escritos. No queda copia: para volver a tenerlo habrá que crearlo y decidirlo todo de nuevo.`,
+                }}
+                icon={<ShieldAlert />}
+              />
+            ) : (
+              <StatusMessage
+                status={{
+                  type: 'warning',
+                  text: `El periodo ${periodo} se cerró antes y tiene cierres archivados: son el historial de lo que se pagó y no se pueden borrar.`,
+                }}
+                icon={<Lock />}
+              />
+            )}
+            <TextField
+              label={`Escribe ${periodo} para confirmar`}
+              required
+              autoComplete="off"
+              placeholder={periodo}
+              disabled={!borrable}
+              value={borrado.confirmacion}
+              onChange={(e) => setBorrado({ confirmacion: e.target.value })}
+            />
+            {c.error && <StatusMessage status={{ type: 'error', text: c.error }} icon={<AlertTriangle />} />}
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setBorrado(null)}>Cancelar</Button>
+              <Button
+                type="submit"
+                variant="danger"
+                icon={<Trash2 className="h-4 w-4" />}
+                isLoading={c.guardando}
+                disabled={!borrable || borrado.confirmacion.trim() !== periodo}
+              >
+                Borrar definitivamente
               </Button>
             </div>
           </form>

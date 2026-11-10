@@ -47,6 +47,7 @@ export type Permission =
   | 'can_manage_support_users'
   | 'can_manage_comisiones'
   | 'can_reopen_comisiones'
+  | 'can_delete_comisiones'
   | 'can_create_users'
   | 'can_edit_user_permissions'
   | 'can_change_passwords'
@@ -98,6 +99,7 @@ export interface UserProfile {
   can_manage_support_users: boolean;
   can_manage_comisiones: boolean;
   can_reopen_comisiones: boolean;
+  can_delete_comisiones: boolean;
   can_create_users: boolean;
   can_edit_user_permissions: boolean;
   can_change_passwords: boolean;

@@ -71,6 +71,7 @@ ACCIONES = {
     "api_periodo_guardar": "Guardar periodo de comisiones",
     "api_periodo_cerrar": "Cerrar periodo de comisiones",
     "api_periodo_reabrir": "Reabrir periodo de comisiones",
+    "api_periodo_borrar": "Borrar informe de comisiones",
     "api_revision_guardar": "Decidir revisión de comisiones",
     "api_manual_agregar": "Agregar venta manual",
     "api_manual_quitar": "Quitar venta manual",

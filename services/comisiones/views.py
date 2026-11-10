@@ -69,6 +69,8 @@ PERMISO_VER = "can_view_comisiones"
 PERMISO_GESTION = "can_manage_comisiones"
 # Reabrir deshace una nomina cerrada: va aparte de la gestion (ver config/models.py).
 PERMISO_REABRIR = "can_reopen_comisiones"
+# Borrar un periodo entero, con lo decidido en el: tambien aparte.
+PERMISO_BORRAR = "can_delete_comisiones"
 
 _MES = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -189,6 +191,7 @@ def informe_view(request):
         "cargos": [{"value": v, "label": t} for v, t in CARGO_CHOICES],
         "puedeGestionar": _puede(request, PERMISO_GESTION),
         "puedeReabrir": _puede(request, PERMISO_REABRIR),
+        "puedeBorrar": _puede(request, PERMISO_BORRAR),
         # Las versiones archivadas de sus cierres anteriores, sin la copia.
         "archivos": [_archivo(a) for a in periodo.archivos.all()] if periodo is not None else [],
         "section": "informe",
@@ -476,6 +479,56 @@ def api_periodo_reabrir(request):
         "status": "success",
         "message": f"Periodo {clave} reabierto. El cierre anterior quedó archivado como versión {archivo.version}.",
         "archivo": _archivo(archivo),
+    })
+
+
+@login_required
+@permission_required(PERMISO_BORRAR)
+@ratelimit(key="ip", rate="10/m", block=True)
+@require_POST
+@_escritura
+def api_periodo_borrar(request):
+    """Borra un informe de comisiones en borrador, con todo lo decidido en el.
+
+    Se lleva el periodo y lo que solo existe para el: las revisiones decididas,
+    las ventas agregadas a mano y los indicadores escritos. Exige la
+    `confirmacion` (el periodo escrito a mano), como reabrir.
+
+    **409** si el periodo esta cerrado (es una nomina pagada: se reabre antes,
+    y el cierre queda archivado) o si alguna vez se cerro: sus cierres
+    archivados son el historial de lo que se pago, y no se borran.
+    """
+    data = _cuerpo(request)
+    clave = _mes(data.get("periodo"))
+    if str(data.get("confirmacion") or "").strip() != clave:
+        raise DatosInvalidos(f"Para borrar, escribe el periodo exacto ({clave}) en la confirmación.")
+    periodo = ComisionPeriodo.objects.filter(periodo=clave).first()
+    if periodo is None:
+        raise DatosInvalidos(f"El periodo {clave} no existe.")
+    if periodo.cerrado:
+        raise NoSePuedeCerrar(f"El periodo {clave} está cerrado: es una nómina pagada. Reábrelo antes de borrarlo.")
+    archivados = periodo.archivos.count()
+    if archivados:
+        raise NoSePuedeCerrar(
+            f"El periodo {clave} se cerró {archivados} vez/veces: sus cierres archivados son el historial de lo"
+            " que se pagó y no se borran."
+        )
+
+    with transaction.atomic():
+        borrado = {
+            "revisiones": RevisionComision.objects.filter(periodo_origen=clave).delete()[0],
+            "ventas_manuales": VentaManual.objects.filter(periodo=clave).delete()[0],
+            "indicadores": IndicadorComision.objects.filter(periodo=clave).delete()[0],
+        }
+        periodo.delete()
+    # La auditoria la anota el middleware, con este mensaje: lo que se llevo.
+    return JsonResponse({
+        "status": "success",
+        "message": (
+            f"Informe {clave} borrado, con {borrado['revisiones']} revisión(es), "
+            f"{borrado['ventas_manuales']} venta(s) a mano y {borrado['indicadores']} indicador(es)."
+        ),
+        "borrado": borrado,
     })
 
 

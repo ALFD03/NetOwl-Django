@@ -292,6 +292,8 @@ export interface ComisionesInformeProps {
   puedeGestionar: boolean;
   /** `can_reopen_comisiones`: reabrir va aparte de gestionar. */
   puedeReabrir: boolean;
+  /** `can_delete_comisiones`: borrar un informe en borrador, con su propio permiso. */
+  puedeBorrar: boolean;
   /** Las versiones archivadas de los cierres anteriores del periodo, la más reciente primero. */
   archivos: CierreArchivado[];
 }

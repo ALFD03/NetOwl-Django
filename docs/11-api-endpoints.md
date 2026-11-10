@@ -135,6 +135,7 @@ es de esta app.
 | POST | `api/periodo/guardar/` | `can_manage_comisiones` | 30/m | `{periodo, inicio_promo, inicio?, corte_adelantos?}`. `inicio` solo si el mes anterior no tiene periodo; `corte_adelantos`, un día del mes siguiente (vacío: el habitual). **409** si el periodo o el siguiente están cerrados |
 | POST | `api/periodo/cerrar/` | `can_manage_comisiones` | 10/m | `{periodo}`. **409** con lo que falta si queda algo pendiente |
 | POST | `api/periodo/reabrir/` | `can_reopen_comisiones` | 10/m | `{periodo, motivo, confirmacion}`: motivo ≥ 10 caracteres y `confirmacion` = el periodo. Archiva el cierre antes de borrarlo. **409** si el siguiente está cerrado o falta el motivo |
+| POST | `api/periodo/borrar/` | `can_delete_comisiones` | 10/m | `{periodo, confirmacion}`: `confirmacion` = el periodo. Borra un borrador con sus revisiones, ventas a mano e indicadores. **409** si está cerrado o tiene cierres archivados |
 | GET | `api/archivo/<id>/` | `can_view_comisiones` | — | La copia completa de un cierre archivado |
 | POST | `api/revision/guardar/` | `can_manage_comisiones` | 60/m | `{periodo, orden | ordenes[], decision: contar|no_contar|ya_pagada|normal|'', nota?}`. Vacía deshace. `ya_pagada`/`normal` solo si el mes anterior no tiene periodo (**400** si lo tiene). Hasta 5 000 órdenes por petición |
 | POST | `api/manual/agregar/` | `can_manage_comisiones` | 30/m | `{periodo, ordenes[], nota}`, nota obligatoria. Todo o nada: **400** si alguna orden no está en suscripciones, ya estaba agregada o ya se pagó en otro periodo cerrado. Hasta 200 |

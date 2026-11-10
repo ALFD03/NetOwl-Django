@@ -302,6 +302,14 @@ fila del periodo bloqueada. Cada reapertura deja una versión más; las versione
 no se editan ni se borran (el modelo lo impide y la FK es `PROTECT`), y desde el
 paso de cierre se descarga cada una como el mismo Excel de la nómina.
 
+**Borrar un informe** (`api/periodo/borrar/`) tiene también permiso propio
+(`can_delete_comisiones`, cerrado para todos). Solo vale para un borrador que
+**nunca se cerró**: se lleva el periodo con sus revisiones, sus ventas a mano y
+sus indicadores, sin copia. El botón abre un modal que avisa de lo que se pierde
+y pide el periodo escrito a mano, que el servidor vuelve a comprobar. Un periodo
+cerrado se reabre antes; uno con cierres archivados no se borra nunca, porque
+esos cierres son el historial de lo que se pagó.
+
 ## Bolívares: la tasa CONATEL del mes siguiente
 
 Las comisiones se calculan en dólares y se pagan el mes siguiente (las de

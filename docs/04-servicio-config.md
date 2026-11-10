@@ -101,6 +101,7 @@ lista del perfil. Con el interruptor la lista no rige, pero se conserva.
 | `can_manage_catalogo_ventas` | Catálogos › Ventas: directorio de ventas, unidades de negocio y objetivos comerciales |
 | `can_manage_comisiones` | Comisiones: crear y cerrar periodos, revisar ventas, escribir cumplimientos; supervisores por UN y condiciones de pago |
 | `can_reopen_comisiones` | Reabrir un periodo de comisiones cerrado (archiva el cierre) |
+| `can_delete_comisiones` | Borrar un informe de comisiones en borrador, con lo decidido en él (no se deshace; `config/0019`, cerrado para todos) |
 
 ### Administración de cuentas: un permiso por acción y un techo
 
