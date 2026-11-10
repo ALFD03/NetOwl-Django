@@ -55,9 +55,6 @@ export const comisionesApi = {
   tasaActual: async () =>
     (await apiClient.get<{ tasa: number; fuente: string }>('/comisiones/api/tasa-actual/')).data,
 
-  /** El cumplimiento de todos los supervisores y coordinadores de oficina sin uno propio; `null` lo borra. */
-  guardarCumplimientoGeneral: async (periodo: string, cumplimiento_pct: number | null) =>
-    (await apiClient.post<Respuesta>('/comisiones/api/cumplimiento-general/', { periodo, cumplimiento_pct })).data,
 
   /** El coordinador de UN de uno o varios supervisores; `null` se lo quita. */
   asignarUnidad: async (supervisor_ids: number[], coord_un_id: number | null) =>

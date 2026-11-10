@@ -19,7 +19,6 @@ urlpatterns = [
     path("api/manual/agregar/", views.api_manual_agregar, name="api_manual_agregar"),
     path("api/manual/quitar/", views.api_manual_quitar, name="api_manual_quitar"),
     path("api/indicador/guardar/", views.api_indicador_guardar, name="api_indicador_guardar"),
-    path("api/cumplimiento-general/", views.api_cumplimiento_general, name="api_cumplimiento_general"),
     path("api/tasa-actual/", views.api_tasa_actual, name="api_tasa_actual"),
     path("api/supervisores/unidad/", views.api_supervisores_unidad, name="api_supervisores_unidad"),
     path("api/condiciones/guardar/", views.api_condiciones_guardar, name="api_condiciones_guardar"),

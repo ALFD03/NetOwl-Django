@@ -4,14 +4,13 @@ import type { ReactNode } from 'react';
 import { Building2, Network, Users } from 'lucide-react';
 
 import { Paginacion, usePaginacion } from '@/shared/ui';
-import { formatoMonto, formatoPct } from '../lib/formato';
+import { detalleCumplimiento, formatoMonto, formatoPct, origenCumplimiento } from '../lib/formato';
 import type { InformeComision, PagoComision } from '../types';
 import { ValorEditable } from './ValorEditable';
 
 interface IndicadoresPanelProps {
   informe: InformeComision;
   editable: boolean;
-  onGeneral: (valor: number | null) => void;
   onCumplimiento: (personaId: number, valor: number | null) => void;
   onCrecimiento: (personaId: number, valor: number | null) => void;
 }
@@ -66,9 +65,9 @@ function Columna({
   );
 }
 
-function Fila({ nombre, nota, children }: { nombre: string; nota?: ReactNode; children: ReactNode }) {
+function Fila({ nombre, nota, titulo, children }: { nombre: string; nota?: ReactNode; titulo?: string; children: ReactNode }) {
   return (
-    <div className={`flex ${ALTO_FILA} items-center justify-between gap-3 px-4`}>
+    <div className={`flex ${ALTO_FILA} items-center justify-between gap-3 px-4`} title={titulo}>
       <span className="min-w-0">
         <span className="block truncate text-sm text-white">{nombre}</span>
         {nota && <span className="block truncate text-[11px] text-slate-500">{nota}</span>}
@@ -79,47 +78,58 @@ function Fila({ nombre, nota, children }: { nombre: string; nota?: ReactNode; ch
 }
 
 /**
- * Los % que mueven el pago, en una sola pantalla: el cumplimiento general, el
- * propio de quien lo tenga distinto y el crecimiento de cada coordinador de UN.
- * Juntos se comparan entre sí, y un 9 que debía ser 90 salta a la vista.
+ * Los % que mueven el pago, en una sola pantalla: el cumplimiento de cada
+ * supervisor y coordinadora de oficina —calculado del % Ventas de su site, o
+ * escrito a mano para quien no tenga cálculo— y el crecimiento de cada
+ * coordinador de UN. No hay un cumplimiento general del periodo. Juntos se comparan entre sí, y un 9 que debía ser 90
+ * salta a la vista.
+ *
+ * Lo calculado sale como valor por defecto de cada fila; escribir uno lo
+ * sustituye para esa persona, y borrarlo vuelve al calculado.
  */
-export function IndicadoresPanel({ informe, editable, onGeneral, onCumplimiento, onCrecimiento }: IndicadoresPanelProps) {
-  const general = informe.cumplimiento_general_pct;
+export function IndicadoresPanel({ informe, editable, onCumplimiento, onCrecimiento }: IndicadoresPanelProps) {
   const de = (cargo: PagoComision['cargo']) => informe.pagos.filter((p) => p.cargo === cargo).sort(porNombre);
   const coordinadores = de('coord_un');
   const supervisores = de('supervisor');
   const oficinas = de('coord_oficina');
 
-  const cumplimiento = (p: PagoComision) => (
-    <Fila key={p.persona_id} nombre={p.nombre} nota={`${p.ventas_propias + p.ventas_equipo} ventas · ${formatoMonto(p.bruto)} antes del %`}>
-      <ValorEditable
-        key={`cump-${p.persona_id}-${p.cumplimiento_propio}`}
-        valor={p.cumplimiento_propio}
-        vacio={general === null ? 'sin definir' : `${formatoPct(general)} general`}
-        vacioPendiente={general === null}
-        editable={editable}
-        onGuardar={(v) => onCumplimiento(p.persona_id, v)}
-      />
-    </Fila>
-  );
+  const cumplimiento = (p: PagoComision) => {
+    const calculado = p.cumplimiento?.calculado ?? null;
+    const detalle = detalleCumplimiento(p);
+    // Lo que rige si no se escribe nada: el calculado.
+    const porDefecto = calculado !== null
+      ? `${formatoPct(calculado)} · ${p.cumplimiento?.fuente_calculo === 'unidad' && (p.cumplimiento?.sites.length ?? 0) > 1 ? 'promedio UN' : 'site'}`
+      : 'sin definir';
+    return (
+      <Fila
+        key={p.persona_id}
+        nombre={p.nombre}
+        nota={`${origenCumplimiento(p)} · ${p.ventas_propias + p.ventas_equipo} ventas · ${formatoMonto(p.bruto)} antes del %`}
+        titulo={detalle || undefined}
+      >
+        <ValorEditable
+          key={`cump-${p.persona_id}-${p.cumplimiento_propio}`}
+          valor={p.cumplimiento_propio}
+          vacio={porDefecto}
+          vacioPendiente={calculado === null}
+          editable={editable}
+          onGuardar={(v) => onCumplimiento(p.persona_id, v)}
+        />
+      </Fila>
+    );
+  };
   // Lo mismo que impide cerrar: quien cobra algo sin ningún % que aplicarle.
   const sinCumplimiento = (lista: PagoComision[]) =>
-    (general === null ? lista.filter((p) => p.cumplimiento_propio === null && p.bruto).length : 0);
+    lista.filter((p) => p.cumplimiento_pct === null && p.bruto).length;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-surface-primary/50 px-5 py-4">
-        <div className="max-w-2xl">
-          <p className="text-sm font-bold text-white">Cumplimiento general del periodo</p>
-          <p className="text-xs text-slate-400">
-            Vale para todos los supervisores y coordinadores de oficina. Quien tenga uno distinto lo lleva abajo; borrarlo lo devuelve al general.
-            Tope en 100 %.
-          </p>
-        </div>
-        <span className="rounded-xl border border-slate-700 bg-surface-primary px-3 py-2 text-base font-black">
-          <ValorEditable key={`general-${general}`} valor={general} vacio="sin definir" editable={editable} onGuardar={onGeneral} />
-        </span>
-      </div>
+      <p className="max-w-4xl rounded-2xl border border-slate-800 bg-surface-primary/50 px-5 py-4 text-xs text-slate-400">
+        Cada coordinadora de oficina toma el % Ventas de su site, y cada supervisor el de los sites de su coordinador de UN
+        (promediados si son varios); nada se deduce de las ventas. Quien no tenga site o UN asignada se escribe a mano en su fila;
+        lo escrito manda sobre lo calculado, y borrarlo vuelve al calculado. Pasa el ratón por una fila para ver el cálculo.
+        Tope en 100 %.
+      </p>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Columna

@@ -397,7 +397,6 @@ export function InformeView({
               <IndicadoresPanel
                 informe={informe}
                 editable={editable}
-                onGeneral={(valor) => void c.guardarCumplimientoGeneral(valor)}
                 onCumplimiento={(id, valor) => void c.guardarCumplimiento(id, valor)}
                 onCrecimiento={(id, valor) => void c.guardarCrecimiento(id, valor)}
               />

@@ -1,6 +1,6 @@
 /** Comisiones › Nómina: una coordinación de oficina, con el equipo sin unidad de negocio que cargó con ella. */
 
-import { aBs, formatoBs, formatoMonto, totalBs } from '../lib/formato';
+import { aBs, formatoBs, formatoMonto, formatoPct, origenCumplimiento, totalBs } from '../lib/formato';
 import { motivoRecorte, ventasPagadas, ventasValidadas, type Nomina, type Oficina } from '../lib/nomina';
 import { ChipCargo, Kpi, Medidor } from './piezas';
 import { COLUMNAS_PERSONA, EditarIndicador, Grupo, type DetalleProps } from './UnidadDetalle';
@@ -50,7 +50,13 @@ export function OficinaDetalle({ oficina, nomina, ...props }: DetalleProps & { o
             <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">Cumplimiento</span>
             <EditarIndicador onClick={props.onEditarIndicadores} />
           </div>
-          <Medidor pct={p.factor_pct} nota={p.cumplimiento_propio === null ? 'el general' : 'propio'} />
+          <Medidor pct={p.factor_pct} nota={origenCumplimiento(p)} />
+          {p.cumplimiento?.personal && (
+            <span className="text-[11px] text-slate-400" title="Sus ventas como «Medio» contra su objetivo de ventas. Solo informa: paga el % del site.">
+              Personal: {p.cumplimiento.personal.ventas}
+              {p.cumplimiento.personal.objetivo ? ` de ${p.cumplimiento.personal.objetivo} · ${formatoPct(p.cumplimiento.personal.pct)}` : ' · sin objetivo'}
+            </span>
+          )}
         </div>
         <Kpi label="A pagar $" nota={motivo ?? 'sin recorte'}>{formatoMonto(p.neto)}</Kpi>
         <Kpi label="A pagar Bs" tono="text-emerald-300" nota="a tasa CONATEL">

@@ -54,10 +54,12 @@ export interface PagoComision {
   /** El estado con que se le aplicó el bono; nulo si no es asesor o no se supo. */
   estado_bono?: EstadoBono | null;
   neto: number;
-  /** El que se aplica: el propio si lo tiene, si no el general; nulo es "sin definir". */
+  /** El que se aplica: el escrito a mano si lo tiene, si no el calculado; nulo es "sin definir". */
   cumplimiento_pct: number | null;
-  /** El escrito solo para esta persona; nulo es que vale el general. */
+  /** El escrito a mano solo para esta persona; nulo es que vale el calculado. */
   cumplimiento_propio: number | null;
+  /** De dónde sale el % aplicado (`calculo._cumplimientos`). Falta en cierres anteriores a existir. */
+  cumplimiento?: OrigenCumplimiento | null;
   crecimiento_pct: number | null;
   crecimiento_calculado: number | null;
   crecimiento_fuente: 'manual' | 'unidades de negocio' | null;
@@ -68,6 +70,37 @@ export interface PagoComision {
    */
   detalle: Record<string, number | null>;
   avisos: string[];
+}
+
+/** Un site y su % Ventas del mes; `pct` nulo si el mes no está analizado o el site no tiene meta. */
+export interface CumplimientoSite {
+  site: string;
+  pct: number | null;
+}
+
+/**
+ * El cumplimiento de un supervisor o una coordinadora de oficina, y de dónde sale.
+ *
+ * Manda el escrito a mano; si no, el calculado del % Ventas de los sites. No
+ * hay general: sin ninguno queda sin definir. `general` solo aparece en
+ * cierres hechos antes de quitarlo.
+ */
+export interface OrigenCumplimiento {
+  valor: number | null;
+  fuente: 'manual' | 'site' | 'unidad' | 'oficina' | 'general' | null;
+  calculado: number | null;
+  fuente_calculo: 'site' | 'unidad' | 'oficina' | null;
+  /** Coordinadora: su site. Supervisor: los sites de las zonas de su coordinador de UN. */
+  sites: CumplimientoSite[];
+  /** Supervisor: su coordinador de UN, si tiene. */
+  coord_un?: string;
+  /**
+   * Ya no se calcula: un supervisor sin UN no toma el site de su oficina (nada
+   * se deduce de las ventas). Solo puede venir en un cierre hecho antes.
+   */
+  oficina?: (CumplimientoSite & { coordinadora: string }) | null;
+  /** Coordinadora: sus ventas como «Medio» contra su objetivo de ventas. Solo informa. */
+  personal: { ventas: number; objetivo: number | null; pct: number | null } | null;
 }
 
 /**
@@ -170,8 +203,6 @@ export interface InformeComision {
    * la misma del reporte ETA. Nula si aún no se publicó o el servicio falló (`aviso`).
    */
   tasa_conatel: TasaBolivares & { mes: string; aviso: string };
-  /** El % de cumplimiento de todos los supervisores y coordinadores de oficina sin uno propio. */
-  cumplimiento_general_pct: number | null;
   resumen: {
     candidatas: number;
     validas: number;

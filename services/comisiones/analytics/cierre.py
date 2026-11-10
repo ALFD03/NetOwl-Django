@@ -82,8 +82,6 @@ def copia_del_cierre(periodo: ComisionPeriodo) -> dict:
             "inicio": _fecha_iso(periodo.inicio),
             "inicio_promo": _fecha_iso(periodo.inicio_promo),
             "corte_adelantos": _fecha_iso(periodo.corte_adelantos),
-            "cumplimiento_general_pct": str(periodo.cumplimiento_general_pct)
-            if periodo.cumplimiento_general_pct is not None else None,
             "tasa_conatel": str(periodo.tasa_conatel) if periodo.tasa_conatel is not None else None,
             "tasa_conatel_publicada": _fecha_iso(periodo.tasa_conatel_publicada),
             "cerrado_por": periodo.cerrado_por.username if periodo.cerrado_por else None,

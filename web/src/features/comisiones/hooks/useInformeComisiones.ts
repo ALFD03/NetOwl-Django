@@ -93,11 +93,6 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
         () => comisionesApi.guardarIndicador({ periodo, persona_id, cumplimiento_pct: valor }),
         'No se pudo guardar el cumplimiento.',
       ),
-    guardarCumplimientoGeneral: (valor: number | null) =>
-      escribir(
-        () => comisionesApi.guardarCumplimientoGeneral(periodo, valor),
-        'No se pudo guardar el cumplimiento general.',
-      ),
     guardarCrecimiento: (persona_id: number, valor: number | null) =>
       escribir(
         () => comisionesApi.guardarIndicador({ periodo, persona_id, crecimiento_pct: valor }),

@@ -17,7 +17,7 @@ interface ValorEditableProps {
 
 /**
  * Un porcentaje que se escribe en el sitio. Vacío lo borra: el cumplimiento
- * de una persona vuelve al general y el crecimiento al calculado.
+ * de una persona vuelve al calculado, y el crecimiento también.
  */
 export function ValorEditable({ valor, vacio, vacioPendiente = true, editable, onGuardar }: ValorEditableProps) {
   const [editando, setEditando] = useState(false);

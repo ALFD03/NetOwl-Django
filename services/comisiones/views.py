@@ -390,8 +390,8 @@ def api_manual_quitar(request):
 def api_indicador_guardar(request):
     """El % de cumplimiento (o el crecimiento a mano) de una persona en un periodo.
 
-    Vacio borra el valor: el cumplimiento vuelve al general del periodo y el
-    crecimiento al que da Unidades de negocio.
+    Vacio borra el valor: el cumplimiento vuelve al calculado del % Ventas de
+    su site y el crecimiento al que da Unidades de negocio.
     """
     data = _cuerpo(request)
     periodo = _periodo_abierto(_mes(data.get("periodo")))
@@ -435,27 +435,6 @@ def api_tasa_actual(request):
     except TasaNoDisponible as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=502)
     return JsonResponse({"status": "success", "tasa": tasa, "fuente": fuente})
-
-
-@login_required
-@permission_required(PERMISO_GESTION)
-@ratelimit(key="ip", rate="60/m", block=True)
-@require_POST
-@_escritura
-def api_cumplimiento_general(request):
-    """El % de cumplimiento de todos los supervisores y coordinadores de oficina del periodo.
-
-    Vale para quien no tenga uno propio (`api_indicador_guardar`). Vacio lo
-    borra: quien no tenga propio vuelve a "sin definir".
-    """
-    data = _cuerpo(request)
-    periodo = _periodo_abierto(_mes(data.get("periodo")))
-    valor = _decimal(data.get("cumplimiento_pct"), "cumplimiento_pct")
-    if valor is not None and valor < 0:
-        raise DatosInvalidos("El cumplimiento no puede ser negativo.")
-    periodo.cumplimiento_general_pct = valor
-    periodo.save(update_fields=["cumplimiento_general_pct"])
-    return JsonResponse({"status": "success", "message": "Cumplimiento general guardado."})
 
 
 @login_required

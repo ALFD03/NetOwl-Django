@@ -19,8 +19,8 @@
    no lo cobra nadie. El coordinador de unidad de negocio, que Odoo no tiene,
    es el del supervisor de la venta (`SupervisorUnidad`).
 4. **Pagos** (`reglas.calcular_pagos`), con el cumplimiento de los supervisores
-   y coordinadores de oficina (el general del periodo, o el propio de quien lo
-   tenga), el crecimiento de las unidades de cada coordinador
+   y coordinadores de oficina (`_cumplimientos`: el % Ventas del site que les
+   toca, o el escrito a mano), el crecimiento de las unidades de cada coordinador
    de UN, que sale de Unidades de negocio del mes, y el estado de cada asesor
    para su bono por meta (`_estados_asesores`).
 
@@ -30,6 +30,7 @@ Un borrador no guarda nada: esto se ejecuta cada vez que se abre.
 from __future__ import annotations
 
 import calendar
+import logging
 import re
 from dataclasses import asdict
 from datetime import date, timedelta
@@ -61,6 +62,8 @@ from services.comisiones.models import (
 )
 from services.subscriptions.analytics.analyzer.cleaner import parse_archivado
 from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_vigente_el
+from services.subscriptions.analytics.coordinadoras_oficina import get_coordinadoras_oficina
+from services.subscriptions.analytics.cumplimiento_sites import cumplimiento_ventas_sites
 from services.subscriptions.analytics.facturas import facturas_importadas_el, leer_facturas
 from services.subscriptions.analytics.free_plans import _is_free_tariff
 from services.subscriptions.analytics.queries import (
@@ -68,7 +71,7 @@ from services.subscriptions.analytics.queries import (
     get_business_units_data,
     get_periodos,
 )
-from services.subscriptions.models import Coordinador, Estado
+from services.subscriptions.models import Coordinador, Estado, Zona
 
 from .reglas import (
     CONTAR,
@@ -97,6 +100,8 @@ from .reglas import (
     validar_tramos_asesor,
     validar_tramos_un,
 )
+
+logger = logging.getLogger(__name__)
 
 # Las columnas del export sin las que no hay comisiones que calcular. La
 # importacion las acepta como opcionales; es aqui donde se exigen.
@@ -366,7 +371,7 @@ class _Directorio:
     """El directorio de ventas, indexado para resolver literales, y la UN de cada supervisor."""
 
     def __init__(self):
-        self.personas = {p.id: p for p in PersonaVentas.objects.all()}
+        self.personas = {p.id: p for p in PersonaVentas.objects.select_related("site")}
         self.por_medio = {clave_nombre(p.medio): p for p in self.personas.values()}
         # Odoo a veces escribe a la misma persona de otra forma como supervisor.
         self.por_supervisor = {clave_nombre(p.literal_supervisor): p for p in self.personas.values()}
@@ -471,6 +476,92 @@ def _crecimientos(periodo: str, directorio: _Directorio, manuales: dict[int, flo
             "valor": manual if manual is not None else calculado,
             "fuente": "manual" if manual is not None else ("unidades de negocio" if calculado is not None else None),
         }
+    return resultado
+
+
+def _sites_de_unidades(coord_un_id: int) -> list[str]:
+    """Los sites donde estan las zonas de las unidades que lleva un coordinador de UN."""
+    return sorted(set(
+        Zona.objects.filter(coordinador__persona_id=coord_un_id).values_list("site__nombre", flat=True)
+    ))
+
+
+def _cumplimientos(
+    clave: str,
+    directorio: _Directorio,
+    manuales: dict[int, float],
+) -> dict[int, dict[str, Any]]:
+    """El % de cumplimiento de cada supervisor y coordinadora de oficina, y de donde sale.
+
+    El que se aplica (`valor`) es, por orden:
+
+    1. **El escrito a mano** para esa persona (`IndicadorComision`): manda
+       siempre, igual que el crecimiento escrito de un coordinador de UN.
+    2. **El calculado**, el % Ventas del site del mes (`cumplimiento_ventas_sites`):
+       - coordinadora de oficina: el de su site (`PersonaVentas.site`);
+       - supervisor: el de los sites donde estan las zonas de su coordinador
+         de UN (`SupervisorUnidad`), **promediados** si son varios.
+    **Nada se deduce de las ventas**, a peticion del usuario: un supervisor sin
+    UN asignada no tiene calculo (antes tomaba el site de la oficina con que
+    mas vendia). No hay un general del periodo: sin calculo ni valor escrito
+    queda nulo, y el cierre lo pide. Ademas se informa, sin que pague, el
+    cumplimiento personal de una coordinadora (sus ventas como `Medio` contra
+    su objetivo de ventas, el del Sales Report).
+
+    Un mes sin analizar no tiene % de sites: todos caen al escrito.
+    """
+    try:
+        sites = cumplimiento_ventas_sites(clave)
+    except Exception:
+        logger.exception("No se pudo calcular el cumplimiento de los sites de %s", clave)
+        sites = None
+    pct_site = lambda nombre: (sites or {}).get(nombre, {}).get("pct") if nombre else None  # noqa: E731
+    personales = {}
+    if any(p.cargo == "coord_oficina" for p in directorio.personas.values()):
+        for c in get_coordinadoras_oficina(clave):
+            propias = sum(c["propias_dia"])
+            personales[c["id"]] = {
+                "ventas": propias,
+                "objetivo": c["objetivo"],
+                "pct": round(propias / c["objetivo"] * 100, 2) if c["objetivo"] else None,
+            }
+
+    def site_de(persona_id: int | None) -> dict[str, Any] | None:
+        persona = directorio.personas.get(persona_id) if persona_id else None
+        if persona is None or persona.site_id is None:
+            return None
+        nombre = persona.site.nombre
+        return {"site": nombre, "pct": pct_site(nombre)}
+
+    resultado: dict[int, dict[str, Any]] = {}
+    for pid, persona in directorio.personas.items():
+        if persona.cargo not in CARGOS_CON_CUMPLIMIENTO:
+            continue
+        fila: dict[str, Any] = {"calculado": None, "fuente_calculo": None, "sites": [], "personal": None}
+        if persona.cargo == "coord_oficina":
+            propio = site_de(pid)
+            if propio:
+                fila["sites"] = [{"site": propio["site"], "pct": propio["pct"]}]
+                if propio["pct"] is not None:
+                    fila.update(calculado=propio["pct"], fuente_calculo="site")
+            fila["personal"] = personales.get(pid)
+        else:
+            coord_un = directorio.unidad.get(pid)
+            if coord_un is not None:
+                fila["coord_un"] = directorio.nombre(coord_un)
+                fila["sites"] = [{"site": s, "pct": pct_site(s)} for s in _sites_de_unidades(coord_un)]
+                con_valor = [s["pct"] for s in fila["sites"] if s["pct"] is not None]
+                if con_valor:
+                    fila.update(calculado=round(sum(con_valor) / len(con_valor), 2), fuente_calculo="unidad")
+
+        manual = manuales.get(pid)
+        if manual is not None:
+            fila.update(valor=manual, fuente="manual")
+        elif fila["calculado"] is not None:
+            fila.update(valor=fila["calculado"], fuente=fila["fuente_calculo"])
+        else:
+            fila.update(valor=None, fuente=None)
+        resultado[pid] = fila
     return resultado
 
 
@@ -699,12 +790,8 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
     propios = {
         pid: float(i.cumplimiento_pct) for pid, i in indicadores.items() if i.cumplimiento_pct is not None
     }
-    general = float(periodo.cumplimiento_general_pct) if periodo.cumplimiento_general_pct is not None else None
-    cumplimientos = {
-        pid: propios.get(pid, general)
-        for pid, p in directorio.personas.items()
-        if p.cargo in CARGOS_CON_CUMPLIMIENTO and propios.get(pid, general) is not None
-    }
+    origen_cumplimiento = _cumplimientos(clave, directorio, propios)
+    cumplimientos = {pid: c["valor"] for pid, c in origen_cumplimiento.items() if c["valor"] is not None}
     manuales = {pid: float(i.crecimiento_pct) for pid, i in indicadores.items() if i.crecimiento_pct is not None}
     crecimientos = _crecimientos(clave, directorio, manuales)
     estados_asesor = _estados_asesores(directorio)
@@ -736,6 +823,8 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "medio": persona.medio if persona else "",
             "cumplimiento_pct": cumplimientos.get(pago.persona_id),
             "cumplimiento_propio": propios.get(pago.persona_id),
+            # De donde sale el % aplicado y lo que se calculo, aunque no se use.
+            "cumplimiento": origen_cumplimiento.get(pago.persona_id),
             "crecimiento_pct": crecimiento.get("valor"),
             "crecimiento_calculado": crecimiento.get("calculado"),
             "crecimiento_fuente": crecimiento.get("fuente"),
@@ -764,7 +853,6 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         "calculo_desde": calculo_desde.isoformat(),
         "antes_de_tiempo": hoy < calculo_desde,
         "facturas_importadas_el": importadas_el.isoformat(),
-        "cumplimiento_general_pct": general,
         # Va dentro del informe para que el cierre la congele con el resto.
         "tasa_conatel": tasa_conatel(periodo),
         "resumen": {
@@ -873,7 +961,10 @@ def _pendientes_cierre(
         if p["cargo"] in CARGOS_CON_CUMPLIMIENTO and p["cumplimiento_pct"] is None and p["bruto"]
     ]
     if sin_cumplimiento:
-        pendientes.append("Cumplimiento sin definir (escribe el general): " + ", ".join(sin_cumplimiento))
+        pendientes.append(
+            "Cumplimiento sin definir (sin site ni unidad con % calculado: escríbelo en Indicadores): "
+            + ", ".join(sin_cumplimiento)
+        )
     sin_crecimiento = [
         p["nombre"] for p in pagos
         if p["cargo"] == "coord_un" and p["crecimiento_pct"] is None and p["ventas_equipo"]

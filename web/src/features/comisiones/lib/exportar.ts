@@ -15,7 +15,7 @@
 import {
   downloadStyledWorkbook, type ExcelCell, type ExcelCellObject, type ExcelRow, type ExcelStyledSheet,
 } from '@/shared/lib/excel';
-import { CLASIFICACION, TRAMO, aBs, formatoFecha, formatoMes, totalBs } from './formato';
+import { CLASIFICACION, TRAMO, aBs, detalleCumplimiento, formatoFecha, formatoMes, origenCumplimiento, totalBs } from './formato';
 import {
   armarNomina, motivoRecorte, origenEstado, rangoTramo, tramoAsesor, ventasPagadas, ventasValidadas,
   type GrupoSupervisor, type Nomina,
@@ -191,12 +191,6 @@ function hojaResumen(informe: InformeComision, nomina: Nomina, tasa: number | nu
     [celda('Personas que cobran', etiqueta), dato(pagos.filter((p) => p.neto > 0).length, ENTERO)],
     ...(informe.resumen.bonos_meta ? [[celda('Bonos por meta (incluidos)', etiqueta), dato(informe.resumen.bonos_meta, USD)]] : []),
     [celda('Ventas validadas', etiqueta), dato(informe.resumen.validas, ENTERO)],
-    [
-      celda('Cumplimiento general', etiqueta),
-      dato(informe.cumplimiento_general_pct, PCT),
-      celda(informe.cumplimiento_general_pct === null ? 'sin definir' : 'para quien no tiene uno propio', { textColor: COLOR.suave, columnSpan: 5 }),
-      null, null, null, null,
-    ],
     vacia(),
   ];
 
@@ -323,7 +317,8 @@ function hojaSupervisores(nomina: Nomina, condiciones: CondicionesComision, tasa
       formato: PCT,
       color: (p) => (p.factor_pct !== null && p.factor_pct < 100 ? COLOR.ambar : undefined),
     },
-    { titulo: 'Origen', ancho: 10, valor: (p) => (p.cumplimiento_propio === null ? 'general' : 'propio') },
+    { titulo: 'Origen', ancho: 22, valor: (p) => origenCumplimiento(p) },
+    { titulo: 'Cálculo', ancho: 48, valor: (p) => detalleCumplimiento(p) },
     ...pagoColumnas(tasa),
     { titulo: 'Observaciones', ancho: 44, valor: obs },
   ];
@@ -380,7 +375,8 @@ function hojaOficinas(nomina: Nomina, condiciones: CondicionesComision, tasa: nu
       formato: PCT,
       color: (p) => (p.factor_pct !== null && p.factor_pct < 100 ? COLOR.ambar : undefined),
     },
-    { titulo: 'Origen', ancho: 10, valor: (p) => (p.cumplimiento_propio === null ? 'general' : 'propio') },
+    { titulo: 'Origen', ancho: 22, valor: (p) => origenCumplimiento(p) },
+    { titulo: 'Cálculo', ancho: 48, valor: (p) => detalleCumplimiento(p) },
     ...pagoColumnas(tasa),
     { titulo: 'Comparte ventas con', ancho: 40, valor: (p) => comparte.get(p.persona_id) ?? '' },
     { titulo: 'Observaciones', ancho: 40, valor: obs },

@@ -233,15 +233,35 @@ Las reglas viven en `reglas.calcular_pagos`; los montos y tramos, en
   usado y de dónde salió (`estado_bono`), y el cierre lo congela con el resto. Un
   asesor que con algún estado cobraría bono y no tiene ninguno sale con aviso.
 
-- **Supervisor** y **coordinador de oficina**: `monto_equipo` (2.5$) por cada
-  venta residencial de su equipo y `monto_directa` (4$) por cada una propia
-  (`Medio` es él). El total se multiplica por su **% de cumplimiento del
-  objetivo**, con tope en 100%. La política dice que vendrá de un campo de
-  suscripciones que aún no existe; hasta entonces se escribe en el informe un
-  **cumplimiento general** del periodo (`ComisionPeriodo.cumplimiento_general_pct`),
-  el mismo para todos. Quien tenga uno distinto lo lleva en su fila
-  (`IndicadorComision`), y borrarlo lo devuelve al general. Sin ninguno de los
-  dos paga como 100% y lo avisa, pero **no deja cerrar**. La PYME queda fuera de la multiplicación: es del vendedor
+- **Supervisor** y **coordinador de oficina**: un monto por cada venta
+  residencial de su equipo y otro por cada una propia (`Medio` es él), **con
+  tarifas separadas por cargo**: el supervisor `monto_equipo` (2.5$) y
+  `monto_directa` (4$); la oficina `monto_equipo_oficina` (2.5$) y
+  `monto_directa_oficina` (2.5$: la oficina cobra la propia igual que la de su
+  equipo). Se editan aparte en Condiciones; un cierre congelado antes de
+  separarlas solo trae las del supervisor, que entonces valían para los dos
+  (`comisiones/0010`). El total se multiplica por su **% de cumplimiento del
+  objetivo**, con tope en 100%, que es el **% Ventas del site** del mes
+  calendario (`calculo._cumplimientos`, con
+  `subscriptions/analytics/cumplimiento_sites.py`: instalaciones de las zonas
+  del site contra su meta, con la regla de objetivos del Sales Report y sin las
+  zonas sin objetivo):
+  - **Coordinadora de oficina**: el de su site (`PersonaVentas.site`). Se
+    enseña además su **cumplimiento personal** —sus ventas como `Medio` contra
+    su objetivo de ventas—, que no paga.
+  - **Supervisor**: el de los sites donde están las zonas de su coordinador de
+    UN (`SupervisorUnidad`), **promedio simple** si son varios. **No se deduce
+    nada de las ventas**: sin UN asignada no tiene cálculo y se escribe a mano
+    (antes tomaba el site de la oficina con que más vendía).
+  - Por orden manda: lo **escrito a mano** para la persona
+    (`IndicadorComision`) y luego lo calculado. **No hay un cumplimiento
+    general del periodo** (se quitó a petición del usuario, `comisiones/0011`):
+    quien no tenga cálculo (sin site, sin UN asignada, o el mes sin
+    analizar) se escribe a mano. Sin ninguno paga como 100% y lo avisa, pero
+    **no deja cerrar**.
+
+  Las ventas que no cayeron en su territorio se pagan igual: el % solo
+  multiplica, no decide qué ventas cuentan. La PYME queda fuera de la multiplicación: es del vendedor
   directo.
 - **Coordinador de unidad de negocio**: por cada venta residencial de su
   equipo, el monto del tramo de **crecimiento del mes de sus unidades** (por
@@ -304,8 +324,8 @@ se paga con ella.
 
 El informe se recorre en **cuatro pasos**, en el orden en que se prepara un
 pago, y abre en el primero que falte: **Revisar ventas** (las `Por facturar`
-por decidir, o todas las ventas), **Indicadores** (el cumplimiento general, el
-propio de quien lo tenga distinto y el crecimiento de cada coordinador de UN,
+por decidir, o todas las ventas), **Indicadores** (el cumplimiento de cada
+supervisor y coordinadora de oficina —el calculado, o el escrito a mano— y el crecimiento de cada coordinador de UN,
 todos en una pantalla para que un 9 que debía ser 90 salte a la vista),
 **Nómina** y **Cerrar** (lo que falta, enlazado a su paso). Encima, el total a
 pagar en $ y en Bs y la tasa CONATEL; la del día, solo como referencia. Los %

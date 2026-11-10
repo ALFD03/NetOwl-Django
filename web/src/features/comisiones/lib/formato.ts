@@ -1,6 +1,6 @@
 /** Cómo se presentan las cifras y las clasificaciones del informe de comisiones. */
 
-import type { Clasificacion, TramoVenta } from '../types';
+import type { Clasificacion, PagoComision, TramoVenta } from '../types';
 
 const MONEDA = new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -81,3 +81,44 @@ export const TRAMO: Record<TramoVenta, string> = {
 };
 
 
+
+/** De dónde sale el % de cumplimiento aplicado, en pocas palabras. */
+export function origenCumplimiento(p: PagoComision): string {
+  const c = p.cumplimiento;
+  // Un cierre anterior a calcularlo solo sabe si era propio o el general.
+  if (!c) return p.cumplimiento_propio === null ? 'el general' : 'propio';
+  switch (c.fuente) {
+    case 'manual': return 'escrito a mano';
+    case 'site': return `site ${c.sites[0]?.site ?? ''}`.trim();
+    case 'unidad': return c.sites.length > 1 ? `promedio de ${c.sites.length} sites de su UN` : `site ${c.sites[0]?.site ?? ''} de su UN`;
+    // Solo en cierres hechos cuando se deducía de las ventas.
+    case 'oficina': return `site ${c.oficina?.site ?? ''} de su oficina`;
+    case 'general': return 'el general';
+    default: return 'sin definir';
+  }
+}
+
+const pctSite = (s: { site: string; pct: number | null }) => `${s.site} ${s.pct === null ? 'sin %' : formatoPct(s.pct)}`;
+
+/** Todo lo calculado para el cumplimiento, se aplique o no: los sites y el personal. */
+export function detalleCumplimiento(p: PagoComision): string {
+  const c = p.cumplimiento;
+  if (!c) return '';
+  const partes: string[] = [];
+  if (p.cargo === 'coord_oficina') {
+    partes.push(c.sites.length ? `Site ${pctSite(c.sites[0])}` : 'Sin site asignado');
+    if (c.personal) {
+      partes.push(c.personal.objetivo
+        ? `Personal: ${c.personal.ventas} de ${c.personal.objetivo} ventas (${formatoPct(c.personal.pct)})`
+        : `Personal: ${c.personal.ventas} ventas, sin objetivo`);
+    }
+  } else {
+    if (c.coord_un) {
+      const sites = c.sites.map(pctSite).join(' · ');
+      partes.push(`UN ${c.coord_un}: ${sites || 'sin zonas'}${c.sites.length > 1 && c.fuente_calculo === 'unidad' ? ` → ${formatoPct(c.calculado)}` : ''}`);
+    } else {
+      partes.push('Sin coordinador de UN asignado: escríbelo a mano o asígnale su UN');
+    }
+  }
+  return partes.join(' · ');
+}

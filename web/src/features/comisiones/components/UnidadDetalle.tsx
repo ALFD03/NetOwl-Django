@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Pencil } from 'lucide-react';
 
-import { aBs, formatoBs, formatoMonto, formatoPct, totalBs } from '../lib/formato';
+import { aBs, formatoBs, formatoMonto, formatoPct, origenCumplimiento, totalBs } from '../lib/formato';
 import {
   cortesCrecimiento, motivoRecorte, notaBono, rangoTramo, siguienteTramo, tramoAsesor, ventasPagadas, ventasValidadas,
   type GrupoSupervisor, type Nomina, type Unidad,
@@ -142,7 +142,7 @@ export function Grupo({ g, nomina, ...props }: DetalleProps & { g: GrupoSupervis
           </div>
           <div className="flex items-center gap-1">
             <div className="min-w-0 flex-1">
-              <Medidor pct={s.factor_pct} nota={s.cumplimiento_propio === null ? 'cumplimiento general' : 'cumplimiento propio'} />
+              <Medidor pct={s.factor_pct} nota={origenCumplimiento(s)} />
             </div>
             <EditarIndicador onClick={props.onEditarIndicadores} />
           </div>

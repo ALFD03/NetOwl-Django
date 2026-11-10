@@ -175,9 +175,6 @@ class ComisionPeriodo(models.Model):
     # Nulo: el `dia_corte` de las condiciones, en el mes siguiente.
     corte_adelantos = models.DateField(null=True, blank=True)
     estado = models.CharField(max_length=10, choices=ESTADO_PERIODO_CHOICES, default="borrador")
-    # El % de cumplimiento de todos los supervisores y coordinadores de oficina
-    # del periodo, salvo quien tenga uno propio en `IndicadorComision`.
-    cumplimiento_general_pct = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     # La tasa CONATEL con que se paga: el bolivar oficial del dia 1 del mes
     # siguiente, y de que publicacion del BCV salio (la ultima antes, si ese
     # dia no hubo). Se consulta una vez: el valor de un dia pasado no cambia.
@@ -281,10 +278,9 @@ class IndicadorComision(models.Model):
     """Lo que de una persona en un periodo no sale de las suscripciones.
 
     - `cumplimiento_pct`: el % de objetivo de un supervisor o coordinador de
-      oficina, que multiplica su total (tope 100%). La politica dice que vendra
-      de un campo de suscripciones que aun no existe; hasta entonces se escribe
-      uno para todos (`ComisionPeriodo.cumplimiento_general_pct`) y este solo
-      hace falta para quien tenga uno distinto.
+      oficina, escrito a mano, que multiplica su total (tope 100%). Manda sobre
+      el calculado del % Ventas de su site (`calculo._cumplimientos`), y es lo
+      unico que vale para quien no tiene calculo. No hay uno general.
     - `crecimiento_pct`: corrige a mano el crecimiento de un coordinador de UN
       cuando Unidades de negocio no tiene el mes calculado.
     """
