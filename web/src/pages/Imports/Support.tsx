@@ -155,6 +155,7 @@ export default function ImportSupport({ camposOdoo = [], camposOdooLogs = [], lo
           monthPlaceholder="Mes de soporte..."
           pendingLog={() => 'Calculando métricas de Soporte Técnico...'}
           onRun={(month, onProgress) => importsApi.runSupportAnalysis(month, onProgress)}
+          onRunBatch={(months) => importsApi.runSupportAnalysisBatch(months)}
           successMessage={() => 'Análisis de soporte completado con éxito.'}
           errorMessage="Error al ejecutar análisis de soporte."
         />

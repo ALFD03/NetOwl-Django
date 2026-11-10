@@ -7,7 +7,7 @@
  */
 
 import { apiClient } from './client';
-import { startAndFollow, type AnalysisJob } from './jobs';
+import { startAndFollow, startBatch, type AnalysisJob } from './jobs';
 
 import type { ApiMessageResponse } from './types';
 
@@ -55,4 +55,8 @@ export const importsApi = {
     run('/imports/api/run-crm-analysis/', month, onProgress),
   runSupportAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>
     run('/imports/api/run-support-analysis/', month, onProgress),
+  /** Varios meses de una vez: un job por mes, encolados en un solo POST. */
+  runSubscriptionsAnalysisBatch: (months: string[]) => startBatch('/imports/api/run-analysis/', months),
+  runCrmAnalysisBatch: (months: string[]) => startBatch('/imports/api/run-crm-analysis/', months),
+  runSupportAnalysisBatch: (months: string[]) => startBatch('/imports/api/run-support-analysis/', months),
 };

@@ -5,15 +5,25 @@
  * se recarga la página se reengancha al que siga abierto. Cancelar no está aquí
  * sino en el aviso flotante (`AnalysisQueueAlert`), que es el único sitio que ve
  * toda la cola y está en todas las pantallas.
+ *
+ * Con `onRunBatch` ofrece además **varios meses**: un rango desde/hasta que se
+ * encola de una vez, un job por mes, y se sigue mes a mes en `LoteMeses`.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Play } from 'lucide-react';
+import { CalendarDays, CalendarRange, Play } from 'lucide-react';
 
 import { useAsyncAction, type ActionStatus } from '@/shared/hooks/useAsyncAction';
-import { followJob, jobsApi, type AnalysisJob, type JobModule } from '@/shared/lib/api/jobs';
-import { Button, ConsoleOutput, MonthPicker, Panel, ProgressBar, StatusMessage } from '@/shared/ui';
+import { getApiErrorMessage } from '@/shared/lib/api/client';
+import {
+  followJob, followJobs, jobsApi, type AnalysisJob, type JobModule, type LoteJobs,
+} from '@/shared/lib/api/jobs';
+import { Button, ConsoleOutput, MonthPicker, Panel, ProgressBar, StatusMessage, ToggleGroup } from '@/shared/ui';
 import type { ImportOperationResult } from '../types';
+import { LoteMeses, mesesEntre } from './LoteMeses';
+
+/** Lo mismo que `jobs.MAX_MESES_LOTE`: el servidor rechaza más. */
+const MAX_MESES_LOTE = 24;
 
 export interface AnalysisRunnerCardProps {
   title: string;
@@ -45,6 +55,11 @@ export interface AnalysisRunnerCardProps {
    * reloading must not look like the run was lost.
    */
   jobModule?: JobModule;
+  /**
+   * Encola el análisis de varios meses de una vez. Dado, la tarjeta ofrece el
+   * modo «Varios meses» con un rango desde/hasta.
+   */
+  onRunBatch?: (months: string[]) => Promise<LoteJobs>;
 }
 
 /**
@@ -66,8 +81,17 @@ export function AnalysisRunnerCard({
   requireMonth = false,
   missingMonthMessage = 'Por favor selecciona el mes de análisis en el calendario.',
   jobModule,
+  onRunBatch,
 }: AnalysisRunnerCardProps) {
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [modo, setModo] = useState<'uno' | 'varios'>('uno');
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
+  // Los jobs del lote en curso (o del último), y el que se mira en la consola.
+  const [lote, setLote] = useState<AnalysisJob[] | null>(null);
+  const [loteActivo, setLoteActivo] = useState(false);
+  const [mirando, setMirando] = useState<string | null>(null);
+  const meses = mesesEntre(desde, hasta);
   const [validation, setValidation] = useState<ActionStatus | null>(null);
   // Estado vivo del job: lo que llega en cada sondeo mientras el worker calcula.
   const [job, setJob] = useState<AnalysisJob | null>(null);
@@ -117,6 +141,49 @@ export function AnalysisRunnerCard({
     }
   };
 
+  const handleRunBatch = async () => {
+    if (!onRunBatch) return;
+    if (meses.length === 0) {
+      setValidation({ type: 'error', text: 'Elige el primer y el último mes del rango.' });
+      return;
+    }
+    if (meses.length > MAX_MESES_LOTE) {
+      setValidation({ type: 'error', text: `Como mucho ${MAX_MESES_LOTE} meses por lote; el rango tiene ${meses.length}.` });
+      return;
+    }
+    setValidation(null);
+    setEnviando(true);
+    let jobs: AnalysisJob[];
+    try {
+      const respuesta = await onRunBatch(meses);
+      jobs = [...respuesta.jobs, ...respuesta.omitidos].sort((a, b) => a.periodo.localeCompare(b.periodo));
+      setValidation({ type: 'info', text: respuesta.message });
+    } catch (error: unknown) {
+      setValidation({ type: 'error', text: getApiErrorMessage(error, errorMessage) });
+      return;
+    } finally {
+      setEnviando(false);
+    }
+
+    setMirando(null);
+    setLoteActivo(true);
+    try {
+      const finales = await followJobs(jobs, setLote);
+      const fallidos = finales.filter((j) => j.status === 'error').length;
+      const cancelados = finales.filter((j) => j.status === 'cancelled').length;
+      const listos = finales.length - fallidos - cancelados;
+      const resumen = [`${listos} de ${finales.length} meses calculados`];
+      if (fallidos) resumen.push(`${fallidos} con error`);
+      if (cancelados) resumen.push(`${cancelados} cancelados`);
+      setValidation({
+        type: fallidos ? 'error' : cancelados ? 'warning' : 'success',
+        text: `${resumen.join(' · ')}.`,
+      });
+    } finally {
+      setLoteActivo(false);
+    }
+  };
+
   // Reenganche: si al abrir la pagina ya hay un analisis de este modulo en
   // curso (lo lanzo otra pestana, u otro usuario), se sigue en vez de ofrecer
   // un boton que solo devolveria un 409.
@@ -155,28 +222,80 @@ export function AnalysisRunnerCard({
   const progress = job?.progress;
   const hasProgress = isPending && !!progress && progress.total > 1;
   // Mientras corre manda el log del job; al terminar, el que devolvio la accion.
-  const log = isPending ? (job?.log_output || analysis.log) : analysis.log;
+  // En un lote, el del mes elegido o, si no se eligió ninguno, el que calcula
+  // ahora (o el último que terminó).
+  const enLote = modo === 'varios' && lote !== null;
+  const jobLote = enLote
+    ? (lote.find((j) => j.id === mirando)
+      ?? lote.find((j) => j.status === 'running')
+      ?? [...lote].reverse().find((j) => j.status !== 'pending')
+      ?? null)
+    : null;
+  const progresoLote = jobLote?.status === 'running' && jobLote.progress.total > 1 ? jobLote.progress : null;
+  const log = enLote
+    ? (jobLote?.log_output || jobLote?.message || '')
+    : isPending ? (job?.log_output || analysis.log) : analysis.log;
 
   return (
     <Panel
       title={title}
       description={description}
       actions={
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <MonthPicker value={selectedMonth} onChange={setSelectedMonth} placeholder={monthPlaceholder} />
-          <Button
-            onClick={handleRun}
-            isLoading={enviando}
-            disabled={enviando || (requireMonth && !selectedMonth)}
-            icon={<Play className="h-4 w-4 fill-current" />}
-          >
-            {runLabel}
-          </Button>
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          {onRunBatch && (
+            <ToggleGroup
+              options={[
+                { key: 'uno', label: 'Un mes', icon: CalendarDays },
+                { key: 'varios', label: 'Varios meses', icon: CalendarRange },
+              ]}
+              activeKey={modo}
+              onChange={(key) => {
+                setModo(key as 'uno' | 'varios');
+                setValidation(null);
+              }}
+            />
+          )}
+          {modo === 'varios' && onRunBatch ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <MonthPicker value={desde} onChange={setDesde} placeholder="Desde..." />
+              <MonthPicker value={hasta} onChange={setHasta} placeholder="Hasta..." />
+              <Button
+                onClick={handleRunBatch}
+                isLoading={enviando}
+                disabled={enviando || loteActivo || meses.length === 0}
+                icon={<Play className="h-4 w-4 fill-current" />}
+              >
+                {meses.length > 1 ? `Analizar ${meses.length} meses` : runLabel}
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <MonthPicker value={selectedMonth} onChange={setSelectedMonth} placeholder={monthPlaceholder} />
+              <Button
+                onClick={handleRun}
+                isLoading={enviando}
+                disabled={enviando || (requireMonth && !selectedMonth)}
+                icon={<Play className="h-4 w-4 fill-current" />}
+              >
+                {runLabel}
+              </Button>
+            </div>
+          )}
         </div>
       }
     >
       <StatusMessage status={validation ?? analysis.status} className="mb-4" />
-      {hasProgress && (
+      {enLote && <LoteMeses jobs={lote} seleccionado={jobLote?.id ?? null} onSeleccionar={setMirando} />}
+      {progresoLote && jobLote && (
+        <div className="mb-4">
+          <ProgressBar
+            label={`${jobLote.periodo} · ${progresoLote.label || 'Calculando...'}`}
+            percent={(progresoLote.done / progresoLote.total) * 100}
+            valueLabel={`${progresoLote.done} / ${progresoLote.total}`}
+          />
+        </div>
+      )}
+      {!enLote && hasProgress && (
         <div className="mb-4">
           <ProgressBar
             label={progress.label || 'Calculando...'}

@@ -335,8 +335,67 @@ def marcar_fin(
 # Vive aqui y no en las vistas porque lo usan dos apps: `imports` (churn, CRM,
 # soporte) y `subscriptions` (ciclo de vida).
 
+# Cuantos meses admite un lote: dos anos. Cada mes es un analisis de minutos, y
+# un rango mal elegido (2016-2026) llenaria la cola durante horas.
+MAX_MESES_LOTE = 24
+
+
+def _lanzar_lote(request, module, meses) -> JsonResponse:
+    """Encola un analisis por cada mes de `meses`, del mas antiguo al mas nuevo.
+
+    Es un solo POST y no uno por mes porque los endpoints de calculo van a
+    `2/m`: lanzar un rango desde el cliente agotaria el limite al tercer mes.
+    Cada mes es un job propio, igual que si se pidiera suelto: se sigue, se
+    cancela y falla por separado, y el bloqueo del modulo los ejecuta de uno en
+    uno. Ningun analisis lee el resultado de otro mes, asi que el orden en que
+    el worker los vaya tomando no cambia nada.
+
+    Un mes que ya esta en la cola o corriendo no se duplica: se devuelve en
+    `omitidos` con su job, para que la interfaz lo siga igualmente.
+    """
+    if not isinstance(meses, list) or not meses:
+        return JsonResponse({"status": "error", "message": "Indica al menos un mes."}, status=400)
+    invalidos = [m for m in meses if not es_periodo(m)]
+    if invalidos:
+        return JsonResponse(
+            {"status": "error", "message": f"Periodo inválido (YYYY-MM): {invalidos[0]}"}, status=400
+        )
+    meses = sorted({m.strip() for m in meses})
+    if len(meses) > MAX_MESES_LOTE:
+        return JsonResponse({
+            "status": "error",
+            "message": f"Como mucho {MAX_MESES_LOTE} meses por lote; pediste {len(meses)}.",
+        }, status=400)
+
+    from .tasks import ejecutar_analisis
+
+    encolados, omitidos = [], []
+    for periodo in meses:
+        duplicado = job_duplicado(module, periodo)
+        if duplicado is not None:
+            omitidos.append(duplicado.to_dict())
+            continue
+        job = crear_job(request.user, module, periodo)
+        ejecutar_analisis.delay(str(job.id))
+        encolados.append(job.to_dict())
+
+    partes = [f"{len(encolados)} {'mes encolado' if len(encolados) == 1 else 'meses encolados'}"]
+    if omitidos:
+        partes.append(f"{len(omitidos)} ya {'estaba' if len(omitidos) == 1 else 'estaban'} en la cola")
+    return JsonResponse({
+        "status": "queued",
+        "message": " · ".join(partes) + ". Se calculan de uno en uno; el cálculo continúa aunque cierres esta página.",
+        "jobs": encolados,
+        "omitidos": omitidos,
+    }, status=202 if encolados else 409)
+
+
 def lanzar_analisis(request, module, requiere_periodo=True):
-    """Valida el mes, crea el job y lo encola. Devuelve la respuesta ya hecha."""
+    """Valida el mes, crea el job y lo encola. Devuelve la respuesta ya hecha.
+
+    Con `months` (una lista) en lugar de `month` encola uno por mes: ver
+    `_lanzar_lote`.
+    """
     periodo = ''
     if requiere_periodo:
         try:
@@ -344,6 +403,8 @@ def lanzar_analisis(request, module, requiere_periodo=True):
             periodo = data.get("month")
         except Exception:
             return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
+        if isinstance(data, dict) and "months" in data:
+            return _lanzar_lote(request, module, data.get("months"))
 
         # `len(periodo) != 7` dejaba pasar cualquier cadena de siete caracteres,
         # que acababa escrita como `periodo_reporte` en las tablas de

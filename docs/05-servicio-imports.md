@@ -249,6 +249,14 @@ La carga de suscripciones tiene dos respuestas especiales:
 | `GET api/jobs/queue/` | Todo lo que hay en la cola, para el aviso flotante. Sin límite y sin permiso de módulo |
 | `GET api/jobs/active/?module=…` | La ejecución abierta de un módulo, para reengancharse tras recargar |
 
+Los tres `run-*` aceptan `{"month": "YYYY-MM"}` o **`{"months": [...]}`** para
+varios meses de una vez (`jobs._lanzar_lote`, como mucho 24): se crea un job por
+mes, igual que si se pidieran sueltos, y el bloqueo del módulo los ejecuta de uno
+en uno. Va en un solo POST porque el límite de `2/m` cortaría un lote pedido mes
+a mes. Un mes que ya está en la cola o corriendo no se duplica: vuelve en
+`omitidos` con su job (409 si eran todos). La tarjeta lo ofrece como «Varios
+meses» y sigue cada mes en `LoteMeses`.
+
 `_job_visible(request, job)` decide qué ve cada uno: **quien lanzó el análisis,
 quien puede ver el historial de importaciones, y los superusuarios**.
 

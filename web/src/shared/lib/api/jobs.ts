@@ -155,3 +155,56 @@ function extractRunningJob(error: unknown): StartJobResponse | null {
   if (data?.status === 409 && data.data?.job) return data.data;
   return null;
 }
+
+/** Lo que responde el lanzamiento de un lote de meses (`jobs._lanzar_lote`). */
+export interface LoteJobs {
+  message: string;
+  /** Los jobs creados ahora, uno por mes. */
+  jobs: AnalysisJob[];
+  /** Los meses que ya estaban en la cola o corriendo, con su job, para seguirlos igual. */
+  omitidos: AnalysisJob[];
+}
+
+/**
+ * Encola un análisis por cada mes, en un solo POST.
+ *
+ * Uno por mes desde el cliente chocaría con el límite de `2/m` de los
+ * endpoints de cálculo. Si todos ya estaban en la cola el servidor responde
+ * 409 con ellos en `omitidos`, y se tratan igual: se siguen.
+ */
+export async function startBatch(path: string, months: string[]): Promise<LoteJobs> {
+  try {
+    const lote = (await apiClient.post<LoteJobs>(path, { months })).data;
+    notificarJobEncolado();
+    return lote;
+  } catch (error) {
+    const respuesta = (error as { response?: { status?: number; data?: LoteJobs } })?.response;
+    if (respuesta?.status === 409 && respuesta.data?.omitidos) {
+      notificarJobEncolado();
+      return respuesta.data;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Sondea varios jobs a la vez hasta que terminen todos, avisando de cada ronda.
+ *
+ * No lanza si alguno falla o se cancela: en un lote eso es el desenlace de un
+ * mes, no del lote, y la interfaz lo enseña en su fila.
+ */
+export async function followJobs(
+  jobs: AnalysisJob[],
+  onProgress: (jobs: AnalysisJob[]) => void,
+): Promise<AnalysisJob[]> {
+  let actuales = jobs;
+  onProgress(actuales);
+  while (actuales.some((job) => !isFinished(job))) {
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    actuales = await Promise.all(
+      actuales.map((job) => (isFinished(job) ? job : jobsApi.fetch(job.id).catch(() => job))),
+    );
+    onProgress(actuales);
+  }
+  return actuales;
+}
