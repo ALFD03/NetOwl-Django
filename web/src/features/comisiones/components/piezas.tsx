@@ -114,10 +114,11 @@ export function PagadaEl({ venta }: { venta: VentaComision }) {
   );
 }
 
-/** Pagado y En proceso de pago cuentan; lo demás no. */
+/** Pagado, En proceso de pago y Pagado parcialmente cuentan; lo demás no. */
 const PAGO_TONO: Record<string, string> = {
   Pagado: 'text-emerald-400',
   'En proceso de pago': 'text-emerald-400',
+  'Pagado parcialmente': 'text-emerald-400',
 };
 
 /**

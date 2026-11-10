@@ -61,8 +61,8 @@ export function ResumenCargos({ condiciones: c }: { condiciones: CondicionesComi
     {
       cargo: 'coord_oficina',
       columna: 'Vendedor',
-      propia: formatoMonto(c.monto_directa),
-      equipo: formatoMonto(c.monto_equipo),
+      propia: formatoMonto(c.monto_directa_oficina),
+      equipo: formatoMonto(c.monto_equipo_oficina),
       multiplica: CUMPLIMIENTO,
     },
     {
@@ -128,7 +128,7 @@ export function ResumenCargos({ condiciones: c }: { condiciones: CondicionesComi
 const PASOS: { cargo: CargoVentas; columna: string; regla: (c: CondicionesComision) => string }[] = [
   { cargo: 'asesor', columna: 'Medio', regla: () => 'Suma una venta para su tramo del mes' },
   { cargo: 'supervisor', columna: 'Oportunidad/Administrador', regla: (c) => `${formatoMonto(c.monto_equipo)} × su % de cumplimiento` },
-  { cargo: 'coord_oficina', columna: 'Vendedor', regla: (c) => `${formatoMonto(c.monto_equipo)} × su % de cumplimiento` },
+  { cargo: 'coord_oficina', columna: 'Vendedor', regla: (c) => `${formatoMonto(c.monto_equipo_oficina)} × su % de cumplimiento` },
   {
     cargo: 'coord_un',
     columna: 'La del supervisor',

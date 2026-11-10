@@ -18,7 +18,7 @@ import { cambiosPendientes, validarCondiciones, type Cambio } from '../lib/condi
 import type { ActualizacionCondiciones, ComisionesCondicionesProps, CondicionesComision } from '../types';
 import { AsesoresCard } from './condiciones/AsesoresCard';
 import { BonosMetaCard } from './condiciones/BonosMetaCard';
-import { CoordinadorUnCard, SupervisoresCard } from './condiciones/EquiposCards';
+import { CoordinadorUnCard, TarifasCard } from './condiciones/EquiposCards';
 import { PeriodoCard } from './condiciones/PeriodoCard';
 import { PlanesPymeCard } from './condiciones/PlanesPymeCard';
 import { RecorridoVenta, ResumenCargos } from './condiciones/ResumenCargos';
@@ -192,7 +192,11 @@ export function CondicionesView({ condiciones, actualizacion, estados, planesPym
         />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <SupervisoresCard borrador={draft} guardadas={condiciones} editando={editando} errores={validacion.campos} cambiar={cambiar} />
+          <TarifasCard cargo="supervisor" borrador={draft} guardadas={condiciones} editando={editando} errores={validacion.campos} cambiar={cambiar} />
+          <TarifasCard cargo="coord_oficina" borrador={draft} guardadas={condiciones} editando={editando} errores={validacion.campos} cambiar={cambiar} />
+        </div>
+
+        <div className="grid grid-cols-1 gap-6">
           <CoordinadorUnCard
             borrador={draft}
             guardadas={condiciones}

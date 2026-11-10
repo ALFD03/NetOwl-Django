@@ -100,8 +100,8 @@ manda la más nueva: un pago revertido suele ser uno que no llegó al banco y el
 cliente volvió a pagar. Una factura de otro mes ya es la mensualidad siguiente y
 no la sustituye.
 
-Solo cuenta como pagada una factura **Registrada** con el pago **Pagado** o **En
-proceso de pago**. Pagado parcialmente, Revertido y Sin pagar no; Borrador
+Solo cuenta como pagada una factura **Registrada** con el pago **Pagado**, **En
+proceso de pago** o **Pagado parcialmente**. Revertido y Sin pagar no; Borrador
 todavía no se emitió y Cancelado no cuenta. **Que la suscripción siga hoy en
 progreso no importa**: si la primera mensualidad está pagada, vale aunque hoy
 esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo

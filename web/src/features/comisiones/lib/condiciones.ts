@@ -230,12 +230,28 @@ export function erroresBonos(bonos: BonoMetaEstado[]): ErroresBonos {
   return { filas, total };
 }
 
-export type CampoSimple = 'monto_equipo' | 'monto_directa' | 'monto_directa_un' | 'dia_promocional' | 'dias_espera' | 'dia_corte';
+export type CampoMonto =
+  | 'monto_equipo' | 'monto_directa' | 'monto_equipo_oficina' | 'monto_directa_oficina' | 'monto_directa_un';
+export type CampoSimple = CampoMonto | 'dia_promocional' | 'dias_espera' | 'dia_corte';
+
+/** Los cargos que cobran por equipo y propias con tarifa fija, por su % de cumplimiento. */
+export type CargoConTarifas = 'supervisor' | 'coord_oficina';
+
+/** Qué campos guardan la tarifa de equipo y la de venta propia de cada cargo. */
+export const CAMPOS_TARIFA: Record<CargoConTarifas, { equipo: CampoMonto; propia: CampoMonto }> = {
+  supervisor: { equipo: 'monto_equipo', propia: 'monto_directa' },
+  coord_oficina: { equipo: 'monto_equipo_oficina', propia: 'monto_directa_oficina' },
+};
+
+/** Las dos tarifas de un cargo: lo que cobra por venta de su equipo y por venta propia. */
+export function tarifas(c: CondicionesComision, cargo: CargoConTarifas): { equipo: number; propia: number } {
+  return { equipo: c[CAMPOS_TARIFA[cargo].equipo], propia: c[CAMPOS_TARIFA[cargo].propia] };
+}
 
 /** Lo que `api_condiciones_guardar` rechazaría de los campos sueltos. */
 export function erroresCampos(c: CondicionesComision): Partial<Record<CampoSimple, string>> {
   const errores: Partial<Record<CampoSimple, string>> = {};
-  for (const campo of ['monto_equipo', 'monto_directa', 'monto_directa_un'] as const) {
+  for (const campo of ['monto_equipo', 'monto_directa', 'monto_equipo_oficina', 'monto_directa_oficina', 'monto_directa_un'] as const) {
     if (!Number.isFinite(c[campo])) errores[campo] = 'Hace falta un monto.';
     else if (c[campo] < 0) errores[campo] = 'No puede ser negativo.';
   }
@@ -279,8 +295,10 @@ export interface Cambio {
 }
 
 const CAMPOS: Record<CampoSimple, { donde: string; valor: (v: number) => string }> = {
-  monto_equipo: { donde: 'Supervisores y oficina · venta de su equipo', valor: montoOVacio },
-  monto_directa: { donde: 'Supervisores y oficina · venta propia', valor: montoOVacio },
+  monto_equipo: { donde: 'Supervisores · venta de su equipo', valor: montoOVacio },
+  monto_directa: { donde: 'Supervisores · venta propia', valor: montoOVacio },
+  monto_equipo_oficina: { donde: 'Coordinadores de oficina · venta de su equipo', valor: montoOVacio },
+  monto_directa_oficina: { donde: 'Coordinadores de oficina · venta propia', valor: montoOVacio },
   monto_directa_un: { donde: 'Coordinador de UN · venta propia', valor: montoOVacio },
   dia_promocional: { donde: 'Periodo · inicio de los días promocionales', valor: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
   dias_espera: { donde: 'Periodo · días de espera', valor: (v) => (Number.isFinite(v) ? `${v} días` : '—') },
@@ -375,7 +393,7 @@ function cambiosBonos(antes: BonoMetaEstado[], despues: BonoMetaEstado[]): Cambi
 export function cambiosPendientes(guardadas: CondicionesComision, borrador: CondicionesComision): Cambio[] {
   const cambios = cambiosAsesor(guardadas.tramos_asesor, borrador.tramos_asesor);
   cambios.push(...cambiosBonos(guardadas.bonos_meta ?? [], borrador.bonos_meta ?? []));
-  for (const campo of ['monto_equipo', 'monto_directa'] as const) {
+  for (const campo of ['monto_equipo', 'monto_directa', 'monto_equipo_oficina', 'monto_directa_oficina'] as const) {
     if (borrador[campo] !== guardadas[campo]) {
       cambios.push({ donde: CAMPOS[campo].donde, antes: CAMPOS[campo].valor(guardadas[campo]), despues: CAMPOS[campo].valor(borrador[campo]) });
     }

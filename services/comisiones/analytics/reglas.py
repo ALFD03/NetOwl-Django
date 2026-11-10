@@ -13,9 +13,11 @@ La politica, en resumen:
 - **Asesor**: por tramos de cuantas ventas residenciales hizo. Hasta 5, nada;
   de 6 a 19, 5$ cada una menos 5 ventas; 20, todas a 6$; de 21 a 25, a 7$;
   mas de 25, a 8$ (los montos son los de `CondicionesComision`).
-- **Supervisor y coordinador de oficina**: 2.5$ por cada venta residencial de
-  su equipo y 4$ por cada una propia, y el total por el % de cumplimiento de su
-  objetivo, con tope en 100%.
+- **Supervisor**: 2.5$ por cada venta residencial de su equipo y 4$ por cada
+  una propia, y el total por el % de cumplimiento de su objetivo, con tope en
+  100%.
+- **Coordinador de oficina**: la misma regla con sus propias tarifas: 2.5$ por
+  cada venta de su equipo y 2.5$ tambien por cada una propia.
 - **Coordinador de unidad de negocio**: por cada venta residencial de su
   equipo, el monto del tramo del crecimiento de sus unidades; 4$ por cada una
   propia. Sin objetivo.
@@ -55,7 +57,7 @@ NADA_POR_FACTURAR = frozenset({"nada que facturar", "nada por facturar"})
 FACTURA_BORRADOR = "borrador"
 FACTURA_CANCELADA = "cancelado"
 PAGO_REVERTIDO = "revertido"
-PAGOS_VALIDOS = frozenset({"pagado", "en proceso de pago"})
+PAGOS_VALIDOS = frozenset({"pagado", "en proceso de pago", "pagado parcialmente"})
 
 # `Estado de la Suscripción` de las que aun no son un servicio: una cotizacion
 # no se vendio y una instalacion no termino. No cuentan nunca.
@@ -189,8 +191,8 @@ def primera_mensualidad(facturas: list[Factura]) -> Factura | None:
 def situacion(factura: Factura | None) -> str:
     """`PAGADA`, `IMPAGA`, `EN_BORRADOR`, `CANCELADA` o `SIN_FACTURA`.
 
-    Solo cuenta como pagada una factura registrada con el pago «Pagado» o «En
-    proceso de pago»: «Pagado parcialmente», «Revertido» y «Sin pagar» no.
+    Solo cuenta como pagada una factura registrada con el pago «Pagado», «En
+    proceso de pago» o «Pagado parcialmente»: «Revertido» y «Sin pagar» no.
     """
     if factura is None:
         return SIN_FACTURA
@@ -224,11 +226,11 @@ def clasificar(
     - Una **decision** manual manda sobre todo lo demas hasta que se deshace.
     - Una suscripcion que **paso a plan gratuito** no paga; si aun asi tiene la
       mensualidad pagada, se revisa.
-    - **Mensualidad pagada**: valida, este como este la facturacion de la
-      suscripcion: la factura ya se pago. Si la suscripcion dice «Por
+    - **Mensualidad pagada** (tambien en parte): valida, este como este la
+      facturacion de la suscripcion: la factura ya se pago. Si la suscripcion dice «Por
       facturar» y la factura es de otro plan, se apunta como cambio de plan
       (Odoo factura el nuevo y deja la venta por facturar).
-    - **Sin pagar** (o pagada en parte, o revertida) o **en borrador**: no pagada.
+    - **Sin pagar** (o revertida) o **en borrador**: no pagada.
     - **Todas sus mensualidades canceladas**, o **ninguna**: se revisa (¿la
       campana exonero el mes?), salvo «Nada que facturar».
 
@@ -236,6 +238,8 @@ def clasificar(
     >>> clasificar("Facturado por completo", f())[0]
     'valida'
     >>> clasificar("Facturado por completo", f("Pagado parcialmente"))[0]
+    'valida'
+    >>> clasificar("Facturado por completo", f("Sin pagar"))[0]
     'no_pagada'
     >>> clasificar("Facturado por completo", f(estado="Cancelado"))[0]
     'revision'
@@ -535,6 +539,7 @@ def calcular_pagos(
     los demas, una venta de equipo cada uno.
 
     >>> cond = {"monto_equipo": 2.5, "monto_directa": 4, "monto_directa_un": 4,
+    ...         "monto_equipo_oficina": 2.5, "monto_directa_oficina": 2.5,
     ...         "tramos_asesor": validar_tramos_asesor([{"desde": 0, "monto": 5, "descontar": 0}]),
     ...         "tramos_un": validar_tramos_un([{"desde_pct": None, "monto": 2}])}
     >>> cargos = {1: "asesor", 7: "coord_un", 9: "coord_oficina"}
@@ -549,7 +554,13 @@ def calcular_pagos(
 
     >>> p = calcular_pagos([Venta("B", False, 0, None, 9, None, 9, None)], cargos, cond, {9: 100}, {})
     >>> p[9].ventas_propias, p[9].ventas_equipo, p[9].neto
-    (1, 0, 4.0)
+    (1, 0, 2.5)
+
+    El supervisor cobra la propia con su tarifa, no con la de la oficina:
+
+    >>> cargos[5] = "supervisor"
+    >>> calcular_pagos([Venta("C", False, 0, None, 5, 5, 9, None)], cargos, cond, {5: 100, 9: 100}, {})[5].neto
+    4.0
 
     El bono por meta se suma al tramo del asesor, segun su estado:
 
@@ -586,9 +597,17 @@ def calcular_pagos(
         for superior in superiores:
             pago(superior).ventas_equipo += 1
 
-    monto_equipo = float(condiciones["monto_equipo"])
-    monto_directa = float(condiciones["monto_directa"])
     monto_directa_un = float(condiciones["monto_directa_un"])
+    # Supervisor y oficina cobran con la misma regla y tarifas propias. Unas
+    # condiciones congeladas antes de separarlas solo traen las del supervisor,
+    # que entonces valian para los dos.
+    tarifas = {
+        "supervisor": (float(condiciones["monto_equipo"]), float(condiciones["monto_directa"])),
+        "coord_oficina": (
+            float(condiciones.get("monto_equipo_oficina", condiciones["monto_equipo"])),
+            float(condiciones.get("monto_directa_oficina", condiciones["monto_directa"])),
+        ),
+    }
     bonos = {b["estado_id"]: b["tramos"] for b in condiciones.get("bonos_meta") or []}
     estados = estados or {}
 
@@ -610,7 +629,8 @@ def calcular_pagos(
             p.detalle["bono_desde"] = tramo_bono["desde"] if tramo_bono else None
             if p.ventas_equipo:
                 p.avisos.append("Figura como superior de otras ventas, pero un asesor no cobra por equipo")
-        elif p.cargo in ("supervisor", "coord_oficina"):
+        elif p.cargo in tarifas:
+            monto_equipo, monto_directa = tarifas[p.cargo]
             p.monto_propias = round(p.ventas_propias * monto_directa, 2)
             p.monto_equipo = round(p.ventas_equipo * monto_equipo, 2)
             p.bruto = round(p.monto_propias + p.monto_equipo, 2)

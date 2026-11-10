@@ -648,7 +648,7 @@ def api_condiciones_guardar(request):
     """Guarda las condiciones enteras. Solo afectan a lo que se calcule despues."""
     data = _cuerpo(request)
     c = CondicionesComision.actual()
-    for campo in ("monto_equipo", "monto_directa", "monto_directa_un"):
+    for campo in ("monto_equipo", "monto_directa", "monto_equipo_oficina", "monto_directa_oficina", "monto_directa_un"):
         valor = _decimal(data.get(campo), campo, nulo=False)
         if valor < 0:
             raise DatosInvalidos(f"«{campo}» no puede ser negativo.")

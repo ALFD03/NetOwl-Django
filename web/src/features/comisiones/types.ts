@@ -328,7 +328,11 @@ export interface BonoMetaEstado {
 
 export interface CondicionesComision {
   monto_equipo: number;
+  /** Supervisor: por venta de su equipo y por venta propia. */
   monto_directa: number;
+  /** Coordinador de oficina: sus tarifas, aparte de las del supervisor. */
+  monto_equipo_oficina: number;
+  monto_directa_oficina: number;
   monto_directa_un: number;
   tramos_asesor: TramoAsesor[];
   tramos_un: TramoUn[];

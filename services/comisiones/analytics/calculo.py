@@ -217,6 +217,8 @@ def condiciones_vigentes() -> dict[str, Any]:
     return {
         "monto_equipo": float(c.monto_equipo),
         "monto_directa": float(c.monto_directa),
+        "monto_equipo_oficina": float(c.monto_equipo_oficina),
+        "monto_directa_oficina": float(c.monto_directa_oficina),
         "monto_directa_un": float(c.monto_directa_un),
         "tramos_asesor": validar_tramos_asesor(c.tramos_asesor),
         "tramos_un": validar_tramos_un(c.tramos_un),

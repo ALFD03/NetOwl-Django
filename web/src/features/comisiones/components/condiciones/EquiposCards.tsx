@@ -1,13 +1,13 @@
-/** Los que cobran por las ventas de su equipo: supervisores y oficinas, y el coordinador de UN. */
+/** Los que cobran por las ventas de su equipo: supervisores, oficinas y el coordinador de UN. */
 
-import { useState } from 'react';
-import { Crown, Plus, Store } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Crown, Plus, Store, Users } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
 import { Button, NeonContainer, StatTile, TextField } from '@/shared/ui';
 import {
-  crecimientosDeMuestra, montoUn, ordenarTramosUn, pctCorto, rangoCrecimiento,
-  type CampoSimple, type ErroresTramos,
+  CAMPOS_TARIFA, crecimientosDeMuestra, montoUn, ordenarTramosUn, pctCorto, rangoCrecimiento, tarifas,
+  type CampoMonto as CampoMontoNombre, type CampoSimple, type CargoConTarifas, type ErroresTramos,
 } from '../../lib/condiciones';
 import { formatoMonto } from '../../lib/formato';
 import type { CondicionesComision, TramoUn } from '../../types';
@@ -20,7 +20,7 @@ function CampoMonto({
   label, campo, borrador, guardadas, errores, cambiar,
 }: {
   label: string;
-  campo: 'monto_equipo' | 'monto_directa' | 'monto_directa_un';
+  campo: CampoMontoNombre;
   borrador: CondicionesComision;
   guardadas: CondicionesComision;
   errores: Partial<Record<CampoSimple, string>>;
@@ -47,37 +47,52 @@ function CampoMonto({
 
 /** El ejemplo de la política: un equipo de 40 ventas, 3 propias y un 80% de cumplimiento. */
 const EJEMPLO = { equipo: 40, propias: 3, cumplimiento: 80 };
-const pagoEjemplo = (c: CondicionesComision) =>
-  ((EJEMPLO.equipo * c.monto_equipo + EJEMPLO.propias * c.monto_directa) * EJEMPLO.cumplimiento) / 100;
+const pagoEjemplo = ({ equipo, propia }: { equipo: number; propia: number }) =>
+  ((EJEMPLO.equipo * equipo + EJEMPLO.propias * propia) * EJEMPLO.cumplimiento) / 100;
 
-export function SupervisoresCard({
-  borrador, guardadas, editando, errores, cambiar,
+const TARJETA: Record<CargoConTarifas, { title: string; subtitle: string; icon: ReactNode; theme: 'green' | 'blue' }> = {
+  supervisor: {
+    title: 'Supervisores',
+    subtitle: 'Por las ventas de su equipo y las propias, por su % de cumplimiento',
+    icon: <Users className="h-5 w-5" />,
+    theme: 'green',
+  },
+  coord_oficina: {
+    title: 'Coordinadores de oficina',
+    subtitle: 'La misma regla que el supervisor, con sus propias tarifas',
+    icon: <Store className="h-5 w-5" />,
+    theme: 'blue',
+  },
+};
+
+/** Las tarifas de un cargo que cobra por equipo y propias, multiplicadas por su cumplimiento. */
+export function TarifasCard({
+  cargo, borrador, guardadas, editando, errores, cambiar,
 }: {
+  cargo: CargoConTarifas;
   borrador: CondicionesComision;
   guardadas: CondicionesComision;
   editando: boolean;
   errores: Partial<Record<CampoSimple, string>>;
   cambiar: Cambiar;
 }) {
-  const ejemplo = pagoEjemplo(borrador);
-  const ejemploAntes = pagoEjemplo(guardadas);
+  const campos = CAMPOS_TARIFA[cargo];
+  const vigentes = tarifas(borrador, cargo);
+  const ejemplo = pagoEjemplo(vigentes);
+  const ejemploAntes = pagoEjemplo(tarifas(guardadas, cargo));
+  const tarjeta = TARJETA[cargo];
   return (
-    <NeonContainer
-      title="Supervisores y coordinadores de oficina"
-      subtitle="La misma regla para los dos cargos"
-      icon={<Store className="h-5 w-5" />}
-      theme="green"
-    >
+    <NeonContainer title={tarjeta.title} subtitle={tarjeta.subtitle} icon={tarjeta.icon} theme={tarjeta.theme}>
       <div className="flex flex-col gap-5">
         {editando ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <CampoMonto label="Por venta de su equipo ($)" campo="monto_equipo" borrador={borrador} guardadas={guardadas} errores={errores} cambiar={cambiar} />
-            <CampoMonto label="Por venta propia ($)" campo="monto_directa" borrador={borrador} guardadas={guardadas} errores={errores} cambiar={cambiar} />
+            <CampoMonto label="Por venta de su equipo ($)" campo={campos.equipo} borrador={borrador} guardadas={guardadas} errores={errores} cambiar={cambiar} />
+            <CampoMonto label="Por venta propia ($)" campo={campos.propia} borrador={borrador} guardadas={guardadas} errores={errores} cambiar={cambiar} />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            <StatTile variant="boxed" size="lg" mono label="Por venta de su equipo" value={formatoMonto(borrador.monto_equipo)} />
-            <StatTile variant="boxed" size="lg" mono label="Por venta propia" value={formatoMonto(borrador.monto_directa)} />
+            <StatTile variant="boxed" size="lg" mono label="Por venta de su equipo" value={formatoMonto(vigentes.equipo)} />
+            <StatTile variant="boxed" size="lg" mono label="Por venta propia" value={formatoMonto(vigentes.propia)} />
           </div>
         )}
         <div className="flex items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-xs text-slate-300">
@@ -95,7 +110,7 @@ export function SupervisoresCard({
             <strong className="text-white">{EJEMPLO.cumplimiento}%</strong>
             <br />
             <span className="text-slate-400">
-              ({EJEMPLO.equipo} × {formatoMonto(borrador.monto_equipo)} + {EJEMPLO.propias} × {formatoMonto(borrador.monto_directa)}) × {EJEMPLO.cumplimiento}% ={' '}
+              ({EJEMPLO.equipo} × {formatoMonto(vigentes.equipo)} + {EJEMPLO.propias} × {formatoMonto(vigentes.propia)}) × {EJEMPLO.cumplimiento}% ={' '}
             </span>
             <strong className="font-mono text-sm tabular-nums text-emerald-400">{Number.isFinite(ejemplo) ? formatoMonto(ejemplo) : '—'}</strong>
             {editando && ejemplo !== ejemploAntes && (

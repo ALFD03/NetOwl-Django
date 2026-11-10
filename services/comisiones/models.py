@@ -86,9 +86,12 @@ class CondicionesComision(models.Model):
 
     - **Asesor** (residencial, como `Medio`): por tramos de cantidad de ventas
       (`tramos_asesor`).
-    - **Supervisor y coordinador de oficina**: `monto_equipo` por cada venta
-      residencial de su equipo y `monto_directa` por cada una propia, y el
-      total por el % de cumplimiento de su objetivo (tope 100%).
+    - **Supervisor**: `monto_equipo` por cada venta residencial de su equipo y
+      `monto_directa` por cada una propia, y el total por el % de cumplimiento
+      de su objetivo (tope 100%).
+    - **Coordinador de oficina**: la misma regla con sus tarifas,
+      `monto_equipo_oficina` y `monto_directa_oficina`. Se separaron porque la
+      oficina cobra 2.5$ tambien por la venta propia, no 4$.
     - **Coordinador de unidad de negocio**: por cada venta residencial de su
       equipo, el monto del tramo de crecimiento de sus unidades
       (`tramos_un`), y `monto_directa_un` por cada una propia. Sin objetivo.
@@ -111,6 +114,8 @@ class CondicionesComision(models.Model):
 
     monto_equipo = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("2.5"))
     monto_directa = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("4"))
+    monto_equipo_oficina = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("2.5"))
+    monto_directa_oficina = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("2.5"))
     monto_directa_un = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("4"))
     tramos_asesor = models.JSONField(default=_tramos_asesor)
     tramos_un = models.JSONField(default=_tramos_un)
