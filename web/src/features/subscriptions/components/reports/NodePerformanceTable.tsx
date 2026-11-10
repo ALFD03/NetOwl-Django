@@ -34,8 +34,6 @@ export interface NodePerformanceTableProps<T extends CommercialNode> {
   renderBadge?: (node: T) => ReactNode;
   /** Tabular figures on every numeric cell. */
   mono?: boolean;
-  /** Clamp completion to [0, 100]. See `calcComercial`. */
-  clampCompletion?: boolean;
   /**
    * Acción al final de cada fila, p. ej. exportar las bajas de esa zona.
    *
@@ -61,13 +59,24 @@ function InsigniaObjetivo({
   origen,
   cierreEsperado,
   mono,
+  sinObjetivo = false,
 }: {
+  sinObjetivo?: boolean;
   porcentaje: number;
   meta: number;
   origen?: CommercialNode['origenObjetivo'];
   cierreEsperado: number;
   mono: boolean;
 }) {
+  if (sinObjetivo) {
+    return (
+      <div className="flex flex-col items-end" title="Zona sin objetivo: no cuenta para el cumplimiento de su grupo. Se cambia en Catálogos › Ventas › Objetivos.">
+        <span className="rounded border border-slate-600 bg-slate-800/60 px-1.5 py-px text-[9px] font-black uppercase text-slate-300">
+          Sin objetivo
+        </span>
+      </div>
+    );
+  }
   const ui = NIVEL_OBJETIVO_UI[origen?.nivel ?? 'general'];
   const contenido = (
     <>
@@ -91,10 +100,12 @@ function CeldaCumplimiento({
   semaforo,
   mono,
 }: {
-  valor: number;
+  /** Nulo: la fila no tiene contra qué medirse (zona sin objetivo). */
+  valor: number | null;
   semaforo: SemaforoObjetivos;
   mono: boolean;
 }) {
+  if (valor === null) return <td className="py-3 text-right text-slate-600">—</td>;
   return (
     <td className="py-3 text-right">
       <div className="flex flex-col items-end">
@@ -147,8 +158,7 @@ function CeldaProyeccion({
  * Per-node commercial performance table.
  *
  * `SalesReport` and `BusinessUnits` each carried a verbatim copy of this
- * table; they now differ only by `labelHeader`, `renderBadge`, `mono` and the
- * clamping rule.
+ * table; they now differ only by `labelHeader`, `renderBadge` and `mono`.
  *
  * Cada fila enseña su objetivo —la meta absoluta y el porcentaje que la
  * produce, que puede ser propio de la zona— y los tres cumplimientos contra
@@ -161,7 +171,6 @@ export function NodePerformanceTable<T extends CommercialNode>({
   labelHeader,
   renderBadge,
   mono = false,
-  clampCompletion = false,
   renderRowAction,
   proyeccion = null,
 }: NodePerformanceTableProps<T>) {
@@ -216,8 +225,8 @@ export function NodePerformanceTable<T extends CommercialNode>({
               const metrics = calcComercial(
                 inicio,
                 Number(node.activos_final ?? 0),
-                meta.metaCrecimiento,
-                { clamp: clampCompletion, nuevos: Number(node.nuevos ?? 0), proyeccion },
+                meta,
+                { nuevos: Number(node.nuevos ?? 0), proyeccion },
               );
               const growth = Number(node.crecimiento ?? 0);
               const churn = Number(node.churn_bruto_pct ?? 0);
@@ -261,12 +270,15 @@ export function NodePerformanceTable<T extends CommercialNode>({
                       origen={node.origenObjetivo}
                       cierreEsperado={metrics.cierreEsperado}
                       mono={mono}
+                      sinObjetivo={metrics.sinObjetivo}
                     />
                   </td>
-                  <td className={num('font-black text-amber-500/80')}>{formatInteger(metrics.faltante)}</td>
-                  <CeldaCumplimiento valor={metrics.tasaCumplimiento} semaforo={semaforo} mono={mono} />
-                  <CeldaCumplimiento valor={metrics.cumplimientoVentas} semaforo={semaforo} mono={mono} />
-                  <CeldaCumplimiento valor={metrics.cumplimientoCierre} semaforo={semaforo} mono={mono} />
+                  <td className={num('font-black text-amber-500/80')}>
+                    {metrics.sinObjetivo ? <span className="text-slate-600">—</span> : formatInteger(metrics.faltante)}
+                  </td>
+                  <CeldaCumplimiento valor={metrics.sinObjetivo ? null : metrics.tasaCumplimiento} semaforo={semaforo} mono={mono} />
+                  <CeldaCumplimiento valor={metrics.sinObjetivo ? null : metrics.cumplimientoVentas} semaforo={semaforo} mono={mono} />
+                  <CeldaCumplimiento valor={metrics.sinObjetivo ? null : metrics.cumplimientoCierre} semaforo={semaforo} mono={mono} />
                   <td className={cn('py-3 pr-2 text-right font-black text-white', mono && 'font-mono')}>
                     {formatInteger(node.activos_final)}
                   </td>

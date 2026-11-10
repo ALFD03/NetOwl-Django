@@ -1,4 +1,8 @@
-/** Sales Report: Site → Tecnología → Nodos, con subtotales por nivel. */
+/**
+ * Sales Report: Site → Tecnología → Nodos, con subtotales por nivel. Cada site
+ * abre con sus coordinadoras de oficina como insignias y un resumen sencillo del
+ * site entero (instalaciones, objetivo, % Ingresos, % Ventas, proyección).
+ */
 
 import { Building2, Search } from 'lucide-react';
 
@@ -6,7 +10,8 @@ import type { Proyeccion } from '@/shared/lib/proyeccion';
 import { EmptyState, NeonContainer } from '@/shared/ui';
 import { formatPeriodoLabel } from '@/shared/utils/formatters';
 import { BajasExportButton } from './BajasExportButton';
-import { CommercialSummaryStrip } from './CommercialSummaryStrip';
+import { CommercialSummaryStrip, ResumenSencillo } from './CommercialSummaryStrip';
+import { CoordinadorasOficinaBadges, type CoordinadoraOficina } from './CoordinadorasOficinaBadges';
 import { NodePerformanceTable } from './NodePerformanceTable';
 import { ObjetivoGrupo } from './ObjetivoGrupo';
 import { nodosDeGrupo } from '../../lib/bajasExport';
@@ -23,13 +28,21 @@ interface SalesReportViewProps {
   diaSeleccionado?: boolean;
   /** Los días laborables del corte elegido, para proyectar las instalaciones al cierre. */
   proyeccion?: Proyeccion | null;
+  /** Las coordinadoras de oficina con site; cada bloque enseña las suyas. */
+  coordinadoras?: CoordinadoraOficina[];
+  /** El día del corte, hasta el que se suman sus ventas; nulo es el mes entero. */
+  diaCorte?: number | null;
 }
+
+const claveSite = (nombre: string | undefined) => String(nombre ?? '').trim().toLowerCase();
 
 export function SalesReportView({
   sites,
   period,
   diaSeleccionado = false,
   proyeccion = null,
+  coordinadoras = [],
+  diaCorte = null,
 }: SalesReportViewProps) {
   if (sites.length === 0) {
     return (
@@ -67,6 +80,21 @@ export function SalesReportView({
           }
         >
           <div className="space-y-10">
+            <CoordinadorasOficinaBadges
+              coordinadoras={coordinadoras.filter((c) => claveSite(c.site) === claveSite(site.site))}
+              dia={diaCorte}
+              // Pegadas al resumen del site, no a diez de distancia.
+              className="-mb-6"
+            />
+            {site.totales && site.meta && (
+              <ResumenSencillo
+                activosInicio={site.totales.activos_inicio}
+                activosFinal={site.totales.activos_final}
+                nuevos={site.totales.nuevos}
+                meta={site.meta}
+                proyeccion={proyeccion}
+              />
+            )}
             {site.technologies?.map((tech: SalesReportTechnology) => {
               if (!tech.dynamic) return null;
 
@@ -83,7 +111,6 @@ export function SalesReportView({
                     meta={tech.dynamic.meta}
                     nuevos={tech.dynamic.nuevos}
                     proyeccion={proyeccion}
-                    clampCompletion
                   />
 
                   <div className="flex justify-end">
@@ -99,7 +126,6 @@ export function SalesReportView({
                   <NodePerformanceTable
                     nodes={tech.nodes ?? []}
                     labelHeader="Nodo / Zona"
-                    clampCompletion
                     proyeccion={proyeccion}
                     renderRowAction={(node) => (
                       <BajasExportButton

@@ -355,14 +355,19 @@ metas resolved from the group's level, so a group never contradicts its parts. T
 hooks (`useSalesReportData`, `useBusinessUnitsData`) attach a `meta` to every node and group;
 components only paint.
 
-## Careful: the two reports disagree on completion
+## Completion is never clamped
 
 `features/subscriptions/lib/commercial.ts` holds the single `calcComercial`. It receives the
-absolute growth meta (`Meta.metaCrecimiento`) and takes a
-`clamp` option because Sales Report and Business Units have always computed
-`tasaCumplimiento` differently — Sales Report clamps to `[0, 100]`, Business Units does
-not, which is what lets its "Meta Cumplida" badge fire above 100%. The node table shows the
+absolute growth meta (`Meta.metaCrecimiento`) and returns the real completions — over 100% and
+below 0 included — in both reports. Sales Report used to clamp them to `[0, 100]` (and
+`faltante` at 0) while Business Units did not; the user asked for the real value everywhere
+(November 2026), so the `clamp` option is gone. Don't bring it back. The node table shows the
 three completions — ingreso (net growth), ventas (installations) and cierre (final base against
-the expected one) — next to each row's objective, and the clamp applies to all three in Sales
-Report. Both behaviours are preserved intentionally. Unifying them changes displayed commercial KPIs, so treat it as
-a product decision, not a cleanup.
+the expected one) — next to each row's objective. `CommercialSummaryStrip`, the headline row of
+both reports, shows installations and two of them: «% Ingresos» (`tasaCumplimiento`) and
+«% Ventas» (`cumplimientoVentas`). Only the bars' *width* stops at 100%, the number does not.
+
+`calcComercial` takes the whole `Meta`. A zone without objective (`zonas_sin_objetivo`) stays in
+its group's node table but out of the group's summary: the hooks sum the totals with
+`nodosMedidos`, `objetivos.meta` skips it and counts it in `Meta.zonasSinObjetivo`, and its own
+row comes back with `metrics.sinObjetivo`, which paints its completions as «—».

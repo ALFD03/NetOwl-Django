@@ -8,8 +8,11 @@ export interface SummaryStripItem extends Omit<StatTileProps, 'variant' | 'size'
 
 export interface SummaryStripProps {
   items: SummaryStripItem[];
-  /** Columns from the `md` breakpoint up. Below it the strip is 2-up. */
-  columns?: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  /**
+   * Columns from the `md` breakpoint up. Below it the strip is 2-up. From 10
+   * on the full row only fits from `xl`: in between it wraps in two rows.
+   */
+  columns?: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
   /** Applies tabular figures to every value. */
   mono?: boolean;
   className?: string;
@@ -25,6 +28,8 @@ const COLUMNS: Record<NonNullable<SummaryStripProps['columns']>, string> = {
   7: 'md:grid-cols-7',
   8: 'md:grid-cols-8',
   9: 'md:grid-cols-9',
+  10: 'md:grid-cols-5 xl:grid-cols-10',
+  11: 'md:grid-cols-6 xl:grid-cols-11',
 };
 
 /**

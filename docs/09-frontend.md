@@ -259,11 +259,11 @@ Hooks: `useSubscriptionDashboard`, `useSubscriptionsAnalyticsData`,
 
 `lib/`:
 
-- **`commercial.ts`** — `calcComercial`, con una opción `clamp`. **Sales Report
-  y Business Units calculan `tasaCumplimiento` de forma distinta a propósito**:
-  Sales Report la recorta a `[0, 100]` y Business Units no, que es lo que
-  permite que su insignia «Meta Cumplida» supere el 100 %. Unificarlas cambia
-  KPIs comerciales mostrados: **es una decisión de producto, no una limpieza.**
+- **`commercial.ts`** — `calcComercial`. **Los cumplimientos no se recortan**:
+  Sales Report y Business Units enseñan el valor real, también por encima del
+  100 % y por debajo de 0 (y el faltante negativo, que es lo que sobra). Sales
+  Report los recortaba a `[0, 100]`; se quitó a petición del usuario. Solo el
+  ancho de las barras se detiene en 100 %.
 - `dayReports.ts` — reagrupa en cliente el payload del día elegido en
   `buildSalesSites` y `buildBusinessUnitGroups`, usando `zonasConfig`. Es lo que
   hace que mover la barra de días no dispare ninguna petición.

@@ -29,7 +29,7 @@ import type { Proyeccion } from '@/shared/lib/proyeccion';
 import {
   cumpleFiltro, umbralFiltro, valoresMetrica, type FiltroMetrica,
 } from '../lib/filtroMetrica';
-import type { Meta, ResolverObjetivos } from '../lib/objetivos';
+import { nodosMedidos, type Meta, type ResolverObjetivos } from '../lib/objetivos';
 
 export interface BusinessUnitNode extends CommercialNode {
   type?: 'FTTH' | 'RF' | string;
@@ -117,9 +117,8 @@ export function useBusinessUnitsData({
   }, [groups]);
 
   const filteredData = useMemo(() => {
-    // Unidades de Negocio no recorta los cumplimientos a 100 (ver `calcComercial`).
     const cumple = (cifras: Parameters<typeof valoresMetrica>[0], meta: Meta) =>
-      cumpleFiltro(valoresMetrica(cifras, meta, { clamp: false, proyeccion }), filtroMetrica, umbral);
+      cumpleFiltro(valoresMetrica(cifras, meta, { proyeccion }), filtroMetrica, umbral);
 
     return groups.flatMap((group) => {
       if (group.is_rf && selectedTech === 'FTTH') return [];
@@ -138,7 +137,8 @@ export function useBusinessUnitsData({
 
       if (filteredNodes.length === 0) return [];
 
-      const totals = aggregateNodes(filteredNodes);
+      // La tabla lleva todos los nodos; el resumen, solo los que tienen objetivo.
+      const totals = aggregateNodes(nodosMedidos(objetivos, period, filteredNodes));
       // El bloque RF no es un coordinador: agrupa por tecnología a través de
       // sites y coordinadores, así que se mide contra el general.
       const meta = objetivos.meta(period, filteredNodes, group.is_rf ? 'general' : 'coordinador');
@@ -170,13 +170,15 @@ export function useBusinessUnitsData({
         const valores = valoresMetrica(
           { ...node, churn: node.churn_bruto_pct },
           objetivos.meta(period, [node], 'zona_sucursal'),
-          { clamp: false, proyeccion },
+          { proyeccion },
         );
         return cumpleFiltro(valores, filtroMetrica, umbral);
       }) ?? [];
     });
 
-    const totals = aggregateNodes(ftthNodes);
+    // El consolidado tampoco suma las zonas sin objetivo. El ya sumado que
+    // recibe una cuenta restringida (`ftthFijo`) no se puede descomponer.
+    const totals = aggregateNodes(nodosMedidos(objetivos, period, ftthNodes));
     const meta = objetivos.meta(period, ftthNodes, 'general');
 
     return {
@@ -184,7 +186,7 @@ export function useBusinessUnitsData({
       adiciones_brutas: totals.nuevos + totals.reactivaciones - totals.bajas,
       total_nodos: ftthFijo ? ftthFijo.total_nodos : ftthNodes.length,
       meta,
-      ...calcComercial(totals.activos_inicio, totals.activos_final, meta.metaCrecimiento, {
+      ...calcComercial(totals.activos_inicio, totals.activos_final, meta, {
         nuevos: totals.nuevos,
         proyeccion,
       }),

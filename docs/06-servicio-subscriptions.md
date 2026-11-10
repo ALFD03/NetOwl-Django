@@ -19,6 +19,7 @@ services/subscriptions/
 │   ├── day_metrics.py      El corte acumulado de cada día del mes
 │   ├── lifetime/           Cuánto duraron activas las bajas de cada mes
 │   ├── eta_report.py       El reporte de la reguladora
+│   ├── coordinadoras_oficina.py  Ventas y objetivo de las coordinadoras de oficina (Sales Report)
 │   └── queries.py          Lectura de resultados + Sales Report + Business Units
 ├── models.py               Los catálogos de referencia
 ├── views.py                Dashboard, analytics, results, lifetime, reportes

@@ -17,6 +17,7 @@ import { FILTRO_METRICA_VACIO, type FiltroMetrica } from '@/features/subscriptio
 import type { DayMetrics } from '@/shared/types/domain';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { SalesReportView } from '@/features/subscriptions/components/reports/SalesReportView';
+import type { CoordinadoraOficina } from '@/features/subscriptions/components/reports/CoordinadorasOficinaBadges';
 import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
 import { useSalesReportData, type SalesReportSite } from '@/features/subscriptions/hooks/useSalesReportData';
 
@@ -24,9 +25,13 @@ interface SalesReportProps {
   reportData?: { data?: SalesReportSite[]; periods?: string[]; period?: string; dia?: number | null };
   dayMetrics?: DayMetrics;
   zonasConfig?: ZonasConfig;
+  /** Las coordinadoras de oficina de cada site, con sus ventas por día y su objetivo. */
+  coordinadorasOficina?: CoordinadoraOficina[];
 }
 
-export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }: SalesReportProps) {
+export default function SalesReport({
+  reportData = {}, dayMetrics, zonasConfig, coordinadorasOficina = [],
+}: SalesReportProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
@@ -63,7 +68,7 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
     router.get('/subscriptions/sales-report/', { period }, {
       preserveState: true,
       preserveScroll: true,
-      only: ['reportData', 'dayMetrics'],
+      only: ['reportData', 'dayMetrics', 'coordinadorasOficina'],
     });
   };
 
@@ -108,6 +113,9 @@ export default function SalesReport({ reportData = {}, dayMetrics, zonasConfig }
         period={currentPeriod}
         diaSeleccionado={Boolean(dayData)}
         proyeccion={proyeccion}
+        coordinadoras={coordinadorasOficina}
+        // Sin días calculados se pinta el cierre del mes, y sus ventas son las del mes entero.
+        diaCorte={dayData ? effectiveDay : null}
       />
     </AppLayout>
   );

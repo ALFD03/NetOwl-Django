@@ -20,7 +20,7 @@ import { aggregateNodes, type CommercialNode } from '../lib/commercial';
 import {
   cumpleFiltro, umbralFiltro, valoresMetrica, type FiltroMetrica,
 } from '../lib/filtroMetrica';
-import type { Meta, ResolverObjetivos } from '../lib/objetivos';
+import { nodosMedidos, type Meta, type ResolverObjetivos } from '../lib/objetivos';
 
 export type SalesReportNode = CommercialNode;
 
@@ -45,6 +45,8 @@ export interface SalesReportSite {
   technologies?: SalesReportTechnology[];
   /** Meta del site entero (todas sus tecnologías en pantalla), resuelta desde el site. */
   meta?: Meta;
+  /** Las cifras del site entero, solo de las zonas con objetivo: su resumen sencillo. */
+  totales?: { activos_inicio: number; activos_final: number; nuevos: number };
 }
 
 interface UseSalesReportDataParams {
@@ -89,9 +91,8 @@ export function useSalesReportData({
     const umbral = umbralFiltro(filtroMetrica, proyeccion);
     const filtraNodos = umbral !== null && filtroMetrica.nivel === 'zona';
     const filtraSites = umbral !== null && filtroMetrica.nivel === 'grupo';
-    // Ventas recorta los cumplimientos a 100; el filtro compara contra lo que se ve.
     const cumple = (cifras: Parameters<typeof valoresMetrica>[0], meta: Meta) =>
-      cumpleFiltro(valoresMetrica(cifras, meta, { clamp: true, proyeccion }), filtroMetrica, umbral);
+      cumpleFiltro(valoresMetrica(cifras, meta, { proyeccion }), filtroMetrica, umbral);
 
     return sites.flatMap((site) => {
       const siteMatchesSearch = String(site.site || '').toLowerCase().includes(normalizedSearch);
@@ -113,7 +114,8 @@ export function useSalesReportData({
 
         if (!nodes.length) return [];
 
-        const totals = aggregateNodes(nodes);
+        // La tabla lleva todos los nodos; el resumen, solo los que tienen objetivo.
+        const totals = aggregateNodes(nodosMedidos(objetivos, period, nodes));
         return [{
           ...tech,
           nodes,
@@ -135,11 +137,10 @@ export function useSalesReportData({
       // sobre los mismos nodos que la tabla tiene en pantalla.
       const nodosSite = technologies.flatMap((tech) => tech.nodes ?? []);
       const meta = objetivos.meta(period, nodosSite, 'site');
-      if (filtraSites) {
-        const totals = aggregateNodes(nodosSite);
-        if (!cumple({ ...totals, churn: totals.churn_rate }, meta)) return [];
-      }
-      return [{ ...site, technologies, meta }];
+      const totals = aggregateNodes(nodosMedidos(objetivos, period, nodosSite));
+      if (filtraSites && !cumple({ ...totals, churn: totals.churn_rate }, meta)) return [];
+      const totales = { activos_inicio: totals.activos_inicio, activos_final: totals.activos_final, nuevos: totals.nuevos };
+      return [{ ...site, technologies, meta, totales }];
     });
   }, [sites, normalizedSearch, selectedBranch, selectedTech, period, objetivos, filtroMetrica, proyeccion]);
 

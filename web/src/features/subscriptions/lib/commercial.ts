@@ -49,19 +49,11 @@ export interface CommercialMetrics {
   instalacionesProyectadas: number | null;
   /** El cumplimiento de ventas con esas instalaciones proyectadas, en %. */
   cumplimientoVentasProyectado: number | null;
+  /** Nada que medir: todas sus zonas están sin objetivo. Los cumplimientos se pintan «—». */
+  sinObjetivo: boolean;
 }
 
 export interface CalcCommercialOptions {
-  /**
-   * Clamp `faltante` at 0 and the three completions to [0, 100].
-   *
-   * The two reports disagree here and always have: Sales Report clamps, so an
-   * over-performing node reads as exactly 100%; Business Units does not, so it
-   * can report >100% and drive its "Meta Cumplida" badge. Both behaviours are
-   * preserved deliberately — do not change one without the other. The ventas
-   * and cierre completions follow the same rule as the report they are in.
-   */
-  clamp?: boolean;
   /** Instalaciones del nodo o del grupo, para el cumplimiento de ventas. */
   nuevos?: number;
   /** Los días laborables del corte, para proyectar las instalaciones al cierre. */
@@ -71,10 +63,14 @@ export interface CalcCommercialOptions {
 /**
  * Commercial performance of a node against its growth target.
  *
- * `metaCrecimiento` is the absolute net growth required (`Meta.metaCrecimiento`):
- * the node's own objective for a row, or the sum over its zones for a group.
- * It used to be a hardcoded 6% of `inicio`; the objective now comes from the
- * catalogue and is resolved in `lib/objetivos.ts`.
+ * `meta` is the node's or group's `Meta` (`lib/objetivos.ts`); its
+ * `metaCrecimiento` is the absolute net growth required. The zones without
+ * objective are already out of a group's `inicio`, `final` and `nuevos` (the
+ * hooks sum them with `nodosMedidos`); a row that is itself without objective
+ * comes back with `sinObjetivo`. A bare number is a plain meta.
+ *
+ * The completions are never clamped: over 100% and below 0 are shown as they
+ * are, in both reports (the user's choice; Sales Report used to clamp).
  *
  * Single implementation of what used to be two subtly different copies in
  * `useSalesReportData` and `useBusinessUnitsData`.
@@ -82,30 +78,36 @@ export interface CalcCommercialOptions {
 export function calcComercial(
   inicio: number,
   final: number,
-  metaCrecimiento: number,
-  { clamp = false, nuevos = 0, proyeccion = null }: CalcCommercialOptions = {},
+  meta: Meta | number,
+  { nuevos = 0, proyeccion = null }: CalcCommercialOptions = {},
 ): CommercialMetrics {
+  const { metaCrecimiento, sinObjetivo = false } = typeof meta === 'number'
+    ? { metaCrecimiento: meta, sinObjetivo: false }
+    : meta;
+
   const objetivo = metaCrecimiento;
   const cierreEsperado = inicio + objetivo;
   const rawFaltante = cierreEsperado - final;
   const rawTasa = objetivo > 0 ? 100 - (rawFaltante / objetivo) * 100 : 0;
   const rawVentas = objetivo > 0 ? (nuevos / objetivo) * 100 : 0;
   const rawCierre = cierreEsperado > 0 ? (final / cierreEsperado) * 100 : 0;
-  const recorte = (valor: number) => (clamp ? Math.min(100, Math.max(0, valor)) : valor);
   const instalacionesProyectadas = proyeccion ? proyectar(nuevos, proyeccion) : null;
-  const rawVentasProyectado = instalacionesProyectadas !== null && objetivo > 0
+  const rawVentasProyectado = instalacionesProyectadas !== null && objetivo > 0 && !sinObjetivo
     ? (instalacionesProyectadas / objetivo) * 100
     : null;
 
   return {
     cierreEsperado,
     objetivo,
-    faltante: clamp ? Math.max(rawFaltante, 0) : rawFaltante,
-    tasaCumplimiento: recorte(rawTasa),
-    cumplimientoVentas: recorte(rawVentas),
-    cumplimientoCierre: recorte(rawCierre),
+    faltante: rawFaltante,
+    // Sin recortar a [0, 100], en los dos reportes: a petición del usuario se
+    // enseña el valor real, también por encima del 100 % y por debajo de 0.
+    tasaCumplimiento: rawTasa,
+    cumplimientoVentas: rawVentas,
+    cumplimientoCierre: rawCierre,
     instalacionesProyectadas,
-    cumplimientoVentasProyectado: rawVentasProyectado === null ? null : recorte(rawVentasProyectado),
+    cumplimientoVentasProyectado: rawVentasProyectado,
+    sinObjetivo,
   };
 }
 

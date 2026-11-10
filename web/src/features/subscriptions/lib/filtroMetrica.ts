@@ -88,8 +88,7 @@ export function cumpleFiltro(valores: ValoresMetrica, filtro: FiltroMetrica, umb
 /**
  * Las tres métricas a partir de las cifras de una zona o de un grupo.
  *
- * `clamp` es el del reporte (ver `calcComercial`): Ventas recorta la proyección
- * a 100 y Unidades de Negocio no, y el filtro compara contra lo que se ve.
+ * El filtro compara contra lo que se ve: la proyección sin recortar.
  */
 export function valoresMetrica(
   cifras: {
@@ -100,13 +99,13 @@ export function valoresMetrica(
     churn?: number;
   },
   meta: Meta,
-  { clamp, proyeccion }: { clamp: boolean; proyeccion: Proyeccion | null },
+  { proyeccion }: { proyeccion: Proyeccion | null },
 ): ValoresMetrica {
   const { cumplimientoVentasProyectado } = calcComercial(
     Number(cifras.activos_inicio ?? 0),
     Number(cifras.activos_final ?? 0),
-    meta.metaCrecimiento,
-    { clamp, nuevos: Number(cifras.nuevos ?? 0), proyeccion },
+    meta,
+    { nuevos: Number(cifras.nuevos ?? 0), proyeccion },
   );
   return {
     crecimiento: Number(cifras.crecimiento ?? 0),

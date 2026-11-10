@@ -38,6 +38,7 @@ from services.subscriptions.analytics import (
     limpiar_nodos,
     restringir_unidades,
 )
+from services.subscriptions.analytics.coordinadoras_oficina import get_coordinadoras_oficina
 from services.subscriptions.analytics.lifetime import (
     get_lifetime_detalle,
     get_lifetime_mes,
@@ -171,6 +172,8 @@ def sales_report(request):
     return render_inertia(request, "Subscriptions/SalesReport", {
         "reportData": data,
         "dayMetrics": get_day_metrics((data.get("period") or "")[:7]),
+        # Bajo cada site, sus coordinadoras de oficina: ventas por dia y objetivo.
+        "coordinadorasOficina": get_coordinadoras_oficina(data.get("period")),
         "zonasConfig": get_zonas_config(),
         "objetivos": get_objetivos_config(),
         "section": "sales_report"
