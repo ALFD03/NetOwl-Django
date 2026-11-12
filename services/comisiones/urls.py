@@ -7,7 +7,6 @@ app_name = "comisiones"
 
 urlpatterns = [
     path("", views.informe_view, name="informe"),
-    path("supervisores/", views.supervisores_view, name="supervisores"),
     path("condiciones/", views.condiciones_view, name="condiciones"),
 
     path("api/ventas/", views.api_ventas, name="api_ventas"),
@@ -21,6 +20,5 @@ urlpatterns = [
     path("api/manual/quitar/", views.api_manual_quitar, name="api_manual_quitar"),
     path("api/indicador/guardar/", views.api_indicador_guardar, name="api_indicador_guardar"),
     path("api/tasa-actual/", views.api_tasa_actual, name="api_tasa_actual"),
-    path("api/supervisores/unidad/", views.api_supervisores_unidad, name="api_supervisores_unidad"),
     path("api/condiciones/guardar/", views.api_condiciones_guardar, name="api_condiciones_guardar"),
 ]

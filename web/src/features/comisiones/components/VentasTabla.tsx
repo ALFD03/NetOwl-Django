@@ -44,7 +44,7 @@ export function VentasTabla({ ventas }: { ventas: VentaComision[] }) {
     { header: 'Medio', accessor: (row) => row.medio || '—', sortKey: 'medio', filterable: true, filterValue: (row) => row.medio || 'Sin medio' },
     { header: 'Supervisor', accessor: (row) => row.medio_supervisor || '—', filterable: true, filterValue: (row) => row.medio_supervisor || 'Sin supervisor' },
     { header: 'Vendedor', accessor: (row) => row.vendedor || '—', filterable: true, filterValue: (row) => row.vendedor || 'Sin vendedor' },
-    { header: 'Coord. UN', accessor: (row) => row.coord_un || '—', filterable: true, filterValue: (row) => row.coord_un || 'Sin coordinador' },
+    { header: 'Unidades', accessor: (row) => row.unidades.join(', ') || '—', filterable: true, filterValue: (row) => row.unidades.join(', ') || 'Sin unidad' },
     {
       header: '',
       accessor: (row) => (row.avisos.length ? (

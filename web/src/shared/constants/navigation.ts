@@ -7,7 +7,7 @@
  */
 
 import {
-  BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitBranch, GitFork,
+  BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitBranch,
   HandCoins, Headset, Layers, Lock, Network, Package, ScrollText, SlidersHorizontal, Table, TrendingUp,
   UserCheck, Users,
 } from 'lucide-react';
@@ -89,8 +89,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     permission: [PERMISSIONS.VIEW_COMISIONES, PERMISSIONS.MANAGE_COMISIONES],
     pages: [
       { id: 'informe', label: 'Informe', href: '/comisiones/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_COMISIONES },
-      { id: 'supervisores', label: 'Supervisores por UN', href: '/comisiones/supervisores/', icon: GitFork, permission: PERMISSIONS.MANAGE_COMISIONES, section: CONFIGURACION },
-      { id: 'condiciones', label: 'Condiciones de pago', href: '/comisiones/condiciones/', icon: SlidersHorizontal, permission: PERMISSIONS.MANAGE_COMISIONES, section: CONFIGURACION },
+      { id: 'condiciones', label: 'Ventana de pago y PYME', href: '/comisiones/condiciones/', icon: SlidersHorizontal, permission: PERMISSIONS.MANAGE_COMISIONES, section: CONFIGURACION },
     ],
   },
   {

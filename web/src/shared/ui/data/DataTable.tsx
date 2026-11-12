@@ -59,6 +59,14 @@ export interface DataTableSelection<T> {
   rowKey: (row: T) => string;
   selected: ReadonlySet<string>;
   onChange: (next: Set<string>) => void;
+  /**
+   * Conserva lo marcado al buscar, filtrar o cambiar de página, aunque las filas
+   * queden fuera de la vista; la casilla de la cabecera marca (o desmarca) solo
+   * las filtradas y deja el resto como estaba. Por defecto no: la selección se
+   * vacía al cambiar la vista, para que una acción en bloque no toque filas que
+   * el filtro ya escondió. Quien lo activa debe decir cuántas lleva elegidas.
+   */
+  conservar?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -120,12 +128,12 @@ export function DataTable<T>({
   // a una columna de forma estable sin obligar a darle un id a mano.
   const [filters, setFilters] = useState<Record<string, string>>({});
 
-  // Cambiar lo que se busca o se filtra vuelve a la primera pagina y vacia la
-  // seleccion: lo seleccionado tiene que estar a la vista, o una accion en
-  // bloque tocaria filas que el filtro ya escondio.
+  // Cambiar lo que se busca o se filtra vuelve a la primera pagina y, salvo que
+  // la seleccion se conserve, la vacia: lo seleccionado tiene que estar a la
+  // vista, o una accion en bloque tocaria filas que el filtro ya escondio.
   const alCambiarVista = () => {
     paginacion.irA(0);
-    if (selection && selection.selected.size > 0) selection.onChange(new Set());
+    if (selection && !selection.conservar && selection.selected.size > 0) selection.onChange(new Set());
   };
   const buscar = (termino: string) => {
     setSearchTerm(termino);
@@ -237,7 +245,17 @@ export function DataTable<T>({
     : elegidasFiltradas === clavesFiltradas.length ? 'todas' : 'algunas';
   const alternarTodas = () => {
     if (!selection) return;
-    selection.onChange(estadoTodas === 'todas' ? new Set() : new Set(clavesFiltradas));
+    if (!selection.conservar) {
+      selection.onChange(estadoTodas === 'todas' ? new Set() : new Set(clavesFiltradas));
+      return;
+    }
+    // Se suma o se resta solo lo filtrado: lo marcado fuera de la vista se queda.
+    const siguiente = new Set(selection.selected);
+    for (const clave of clavesFiltradas) {
+      if (estadoTodas === 'todas') siguiente.delete(clave);
+      else siguiente.add(clave);
+    }
+    selection.onChange(siguiente);
   };
   const alternarFila = (row: T) => {
     if (!selection) return;

@@ -62,10 +62,14 @@ class Site(models.Model):
     `orden` no es decorativo: los sites no se presentan alfabeticamente sino
     por relevancia comercial. Antes ese orden era la lista `CUSTOM_SITE_ORDER`
     en el codigo; ahora es esta columna, y aquella solo sobrevive como semilla.
+
+    `equipos` son los equipos de ventas que trabajan en el site (se eligen en
+    Catalogos › Ventas › Estructura de ventas).
     """
 
     nombre = models.CharField(max_length=80, unique=True)
     orden = models.IntegerField(default=999)
+    equipos = models.ManyToManyField("catalogos.EquipoVentas", blank=True, related_name="sites")
 
     class Meta:
         db_table = "catalogo_sites"
@@ -78,24 +82,18 @@ class Site(models.Model):
 
 
 class Coordinador(models.Model):
-    """Unidad de negocio: un conjunto de zonas con su responsable comercial.
+    """Unidad de negocio: un conjunto de zonas llevado por un responsable comercial.
 
     `nombre` es como se presenta en Unidades de negocio, no una persona: una
     misma persona puede llevar dos unidades («German Cerruti» y «German
-    Cerruti 2») y una unidad puede estar «Vacante». Quien la lleva es `persona`,
-    del directorio de ventas, y es a ella a quien Comisiones le paga por el
-    crecimiento de sus unidades.
+    Cerruti 2») y una unidad puede estar «Vacante». Quien la lleva no se guarda
+    aqui sino en la membresia de equipo que la tiene en `unidades`
+    (`catalogos.MembresiaEquipo`): el coordinador de UN, y los jefes y gerentes
+    que cobran por ella. `equipos` son los equipos de ventas que la trabajan.
     """
 
     nombre = models.CharField(max_length=120, unique=True)
-    persona = models.ForeignKey(
-        "catalogos.PersonaVentas",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="unidades_negocio",
-        limit_choices_to={"cargo": "coord_un"},
-    )
+    equipos = models.ManyToManyField("catalogos.EquipoVentas", blank=True, related_name="unidades_negocio")
 
     class Meta:
         db_table = "catalogo_coordinadores"

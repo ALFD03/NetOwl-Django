@@ -7,8 +7,9 @@ propio porque los usan dos: Subscriptions y Comisiones.
 
 El modulo se reparte en grupos, una pagina cada uno y un permiso cada uno:
 **Productos** (planes y reguladores; el permiso operacional), **Estructura**
-(zonas, sites y estados; el comercial) y **Ventas** (directorio, coordinadores
-y objetivos, tambien los de ventas de las oficinas; el de ventas). **Notificaciones** junta lo pendiente de cada area
+(zonas y estados; el comercial) y **Ventas** (sites y unidades de negocio, los
+equipos de ventas con su gente y sus condiciones de pago, y los objetivos; el de
+ventas). **Notificaciones** junta lo pendiente de cada area
 —lo que esta en los datos importados y nadie registro— y lo que se decidio
 ignorar; cada usuario ve ahi solo las areas que administra.
 
@@ -34,7 +35,7 @@ from typing import Any
 
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.db.models import ProtectedError, Q
+from django.db.models import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -44,13 +45,25 @@ from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
 from core import fixtures
-from core.odoo_nombres import nombre_base, normalizar_nombre_odoo
+from core.odoo_nombres import clave_nombre, nombre_base, normalizar_nombre_odoo
 from core.utils import clean_json_props
 from services.catalogos.directorio import personas_fuera_del_directorio
+from services.catalogos.equipos import (
+    PIEZAS_POR_ROL,
+    ROLES,
+    ROLES_POR_EQUIPO,
+    SUPERIOR_DEL_SUPERVISOR,
+    etiqueta_rol,
+    parametros_defecto,
+    parametros_vigentes,
+    roles_del_equipo,
+    validar_parametros,
+)
 from services.catalogos.models import (
-    CARGO_CHOICES,
-    CARGO_CON_USUARIO,
-    CARGOS_QUE_SUPERVISAN,
+    AliasPersona,
+    CondicionesEquipo,
+    EquipoVentas,
+    MembresiaEquipo,
     ObjetivoVentasOficina,
     PersonaVentas,
 )
@@ -190,8 +203,18 @@ def _zona(z: Zona) -> dict[str, Any]:
 
 
 def _site(s: Site) -> dict[str, Any]:
-    """Un site, con cuantas zonas lo referencian."""
-    return {"id": s.id, "nombre": s.nombre, "orden": s.orden, "zonas": s.zonas.count()}
+    """Un site, con sus zonas y los equipos de ventas que lo trabajan."""
+    zonas = list(s.zonas.all())
+    equipos = list(s.equipos.all())
+    return {
+        "id": s.id,
+        "nombre": s.nombre,
+        "orden": s.orden,
+        "zonas": len(zonas),
+        "zona_ids": [z.id for z in zonas],
+        "equipo_ids": [e.id for e in equipos],
+        "equipos": [e.nombre for e in equipos],
+    }
 
 
 def _estado(e: Estado) -> dict[str, Any]:
@@ -200,33 +223,126 @@ def _estado(e: Estado) -> dict[str, Any]:
 
 
 def _coordinador(c: Coordinador) -> dict[str, Any]:
-    """Una unidad de negocio, con quien la lleva y cuantas zonas tiene."""
+    """Una unidad de negocio: sus zonas, los equipos que la trabajan y quien la lleva."""
+    zonas = list(c.zonas.all())
+    equipos = list(c.equipos.all())
     return {
         "id": c.id,
         "nombre": c.nombre,
-        "zonas": c.zonas.count(),
-        "persona_id": c.persona_id,
-        "persona": c.persona.nombre_completo if c.persona_id else "",
+        "zonas": len(zonas),
+        "zona_ids": [z.id for z in zonas],
+        "equipo_ids": [e.id for e in equipos],
+        "equipos": [e.nombre for e in equipos],
+        # Las membresias que la tienen en `unidades`: coordinador, jefes, gerentes.
+        "responsables": [
+            {"persona": m.persona.nombre_completo, "rol": m.rol, "etiqueta": etiqueta_rol(m.rol), "equipo": m.equipo.nombre}
+            for m in c.membresias.all()
+        ],
     }
 
 
+# Los otros nombres de una persona viajan como tres listas, una por columna del export.
+CLAVES_ALIAS = {"alias_medio": "medio", "alias_supervisor": "supervisor", "alias_usuario": "usuario"}
+MAX_ALIAS = 10
+
+
+def _alias_de(p: PersonaVentas) -> dict[str, list[str]]:
+    """Los otros nombres de una persona, por columna."""
+    return {clave: [a.literal for a in p.alias.all() if a.columna == columna] for clave, columna in CLAVES_ALIAS.items()}
+
+
 def _persona(p: PersonaVentas) -> dict[str, Any]:
-    """Una persona del directorio de ventas, con las unidades que lleva."""
+    """Una persona del directorio, con los equipos donde tiene un papel."""
     return {
         "id": p.id,
         "nombre": p.nombre,
         "apellido": p.apellido,
-        "cargo": p.cargo,
         "medio": p.medio,
         "medio_supervisor": p.medio_supervisor,
         "usuario_odoo": p.usuario_odoo,
-        "unidades": [u.nombre for u in p.unidades_negocio.all()],
-        # El estado del bono por meta, fijado a mano; nulo: el de sus clientes.
-        "estado_fijo_id": p.estado_fijo_id,
-        "estado_fijo": p.estado_fijo.nombre if p.estado_fijo_id else "",
-        # El site del Sales Report de una coordinadora de oficina.
-        "site_id": p.site_id,
-        "site": p.site.nombre if p.site_id else "",
+        **_alias_de(p),
+        "membresias": [
+            {"id": m.id, "equipo": m.equipo.slug, "rol": m.rol, "etiqueta": etiqueta_rol(m.rol)}
+            for m in p.membresias.all()
+        ],
+    }
+
+
+def _membresia(m: MembresiaEquipo) -> dict[str, Any]:
+    """El papel de una persona en un equipo, con sus literales y relaciones resueltos."""
+    unidades = list(m.unidades.all())
+    sites = list(m.sites.all())
+    return {
+        "id": m.id,
+        "persona_id": m.persona_id,
+        "nombre": m.persona.nombre,
+        "apellido": m.persona.apellido,
+        "medio": m.persona.medio,
+        "medio_supervisor": m.persona.medio_supervisor,
+        "usuario_odoo": m.persona.usuario_odoo,
+        **_alias_de(m.persona),
+        "equipo_id": m.equipo_id,
+        "equipo": m.equipo.slug,
+        "rol": m.rol,
+        "site_ids": [s.id for s in sites],
+        "sites": [s.nombre for s in sites],
+        "superior_id": m.superior_id,
+        "superior": m.superior.persona.nombre_completo if m.superior_id else "",
+        "unidad_ids": [u.id for u in unidades],
+        "unidades": [u.nombre for u in unidades],
+    }
+
+
+def _condicion_vista(equipo: EquipoVentas, rol: str, fila: CondicionesEquipo | None) -> dict[str, Any]:
+    """Las condiciones de un rol de un equipo: las que valen, y si alguien las cambio."""
+    return {
+        "id": fila.id if fila else None,
+        "equipo_id": equipo.id,
+        "equipo": equipo.slug,
+        "rol": rol,
+        "etiqueta": etiqueta_rol(rol),
+        "piezas": list(PIEZAS_POR_ROL[rol]),
+        "parametros": parametros_vigentes(equipo.slug, rol, fila.parametros if fila else None),
+        "defecto": parametros_defecto(equipo.slug, rol),
+        "personalizado": bool(fila and fila.parametros),
+    }
+
+
+def _condicion(fila: CondicionesEquipo) -> dict[str, Any]:
+    """Una fila de condiciones guardada, tal y como la consume la interfaz."""
+    return _condicion_vista(fila.equipo, fila.rol, fila)
+
+
+def _condiciones_todas() -> list[dict[str, Any]]:
+    """Las condiciones de todos los roles de todos los equipos, editadas o no."""
+    guardadas = {(f.equipo_id, f.rol): f for f in CondicionesEquipo.objects.select_related("equipo")}
+    return [
+        _condicion_vista(equipo, rol, guardadas.get((equipo.id, rol)))
+        for equipo in EquipoVentas.objects.all()
+        for rol in roles_del_equipo(equipo.slug)
+    ]
+
+
+def _equipo_vista(e: EquipoVentas) -> dict[str, Any]:
+    """Un equipo con la descripcion de sus roles: lo que cada uno exige y admite."""
+    return {
+        "id": e.id,
+        "slug": e.slug,
+        "nombre": e.nombre,
+        "roles": [
+            {
+                "rol": rol,
+                "etiqueta": ROLES[rol]["etiqueta"],
+                "medio": ROLES[rol]["medio"],
+                "supervisor": ROLES[rol]["supervisor"],
+                "usuario": ROLES[rol]["usuario"],
+                "site": bool(ROLES[rol].get("site")),
+                "unidades": ROLES[rol].get("unidades", ""),
+                "superior": SUPERIOR_DEL_SUPERVISOR.get(e.slug) if rol == "supervisor" else None,
+                "piezas": list(PIEZAS_POR_ROL[rol]),
+            }
+            for rol in ROLES_POR_EQUIPO.get(e.slug, [])
+        ],
     }
 
 
@@ -286,10 +402,53 @@ def _aplicar_zona(fila: Zona, data: dict, request) -> None:
     fila.coordinador = _relacion(Coordinador, data, "coordinador_id", obligatorio=False)
 
 
+def _ids(data: dict, clave: str, modelo, etiqueta: str) -> list[int] | None:
+    """Una lista de ids del cuerpo comprobada contra el catalogo; `None` si no viene.
+
+    Distingue «no la mando» (se conserva lo que hay) de «la mando vacia» (se
+    vacia), porque hay escrituras que solo tocan otros campos.
+    """
+    if clave not in data:
+        return None
+    bruto = data.get(clave)
+    if not isinstance(bruto, list):
+        raise DatosInvalidos(f"El campo «{clave}» tiene que ser una lista.")
+    try:
+        ids = sorted({int(i) for i in bruto})
+    except (TypeError, ValueError):
+        raise DatosInvalidos(f"El campo «{clave}» tiene que ser una lista de ids.") from None
+    existentes = set(modelo.objects.filter(pk__in=ids).values_list("pk", flat=True))
+    if existentes != set(ids):
+        raise DatosInvalidos(f"Algún {etiqueta} indicado en «{clave}» ya no existe.")
+    return ids
+
+
 def _aplicar_site(fila: Site, data: dict, request) -> None:
-    """Vuelca el cuerpo de la peticion sobre un site."""
+    """Vuelca el cuerpo sobre un site; sus zonas y equipos se escriben despues de guardarlo.
+
+    Una zona pertenece a un site siempre: elegirla aqui la mueve a este, pero
+    quitarla de la lista no tiene a donde mandarla, asi que se pide hacerlo
+    desde la propia zona (Estructura › Zonas).
+    """
     fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=80)
     fila.orden = int(_numero(data, "orden", 999))
+    fila._zona_ids = _ids(data, "zona_ids", Zona, "zona")
+    fila._equipo_ids = _ids(data, "equipo_ids", EquipoVentas, "equipo")
+    if fila.pk and fila._zona_ids is not None:
+        quitadas = set(fila.zonas.values_list("pk", flat=True)) - set(fila._zona_ids)
+        if quitadas:
+            nombres = ", ".join(Zona.objects.filter(pk__in=quitadas).values_list("nombre", flat=True)[:3])
+            raise DatosInvalidos(
+                f"Una zona no puede quedarse sin site ({nombres}…): cámbiala de site desde Estructura › Zonas."
+            )
+
+
+def _despues_site(fila: Site, data: dict, request) -> None:
+    """Escribe las zonas y los equipos del site, ya con `pk`."""
+    if fila._zona_ids is not None:
+        Zona.objects.filter(pk__in=fila._zona_ids).update(site=fila)
+    if fila._equipo_ids is not None:
+        fila.equipos.set(fila._equipo_ids)
 
 
 def _aplicar_nombre(fila, data: dict, request) -> None:
@@ -298,78 +457,296 @@ def _aplicar_nombre(fila, data: dict, request) -> None:
 
 
 def _aplicar_coordinador(fila: Coordinador, data: dict, request) -> None:
-    """Vuelca el cuerpo sobre una unidad de negocio y quien la lleva."""
+    """Vuelca el cuerpo sobre una unidad de negocio; zonas y equipos se escriben despues."""
     fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=120)
-    persona = _relacion(PersonaVentas, data, "persona_id", obligatorio=False)
-    if persona is not None and persona.cargo != "coord_un":
-        raise DatosInvalidos(
-            f"{persona.nombre_completo} no es coordinador de unidad de negocio."
-        )
-    fila.persona = persona
+    fila._zona_ids = _ids(data, "zona_ids", Zona, "zona")
+    fila._equipo_ids = _ids(data, "equipo_ids", EquipoVentas, "equipo")
+
+
+def _despues_coordinador(fila: Coordinador, data: dict, request) -> None:
+    """Asigna a la unidad las zonas elegidas y deja sin unidad las que se quitaron."""
+    if fila._zona_ids is not None:
+        fila.zonas.exclude(pk__in=fila._zona_ids).update(coordinador=None)
+        Zona.objects.filter(pk__in=fila._zona_ids).update(coordinador=fila)
+    if fila._equipo_ids is not None:
+        fila.equipos.set(fila._equipo_ids)
+
+
+def _volcar_persona(persona: PersonaVentas, data: dict, spec: dict[str, Any] | None) -> None:
+    """Vuelca nombre y literales sobre una persona y comprueba que no choquen con otra.
+
+    `spec` es lo que el rol pide (`equipos.ROLES`): el `medio` y el usuario de
+    Odoo se exigen si el rol los lleva, y un literal que el rol no lleva se
+    descarta aunque llegue. **Un literal que no viene en el cuerpo se conserva**:
+    la misma persona puede estar en dos equipos y un rol sin literales (gerente de
+    operaciones) no tiene por que borrar los que ya tenia.
+
+    La unicidad no distingue mayusculas, como el cruce con el export, asi que
+    se comprueba aqui con un mensaje claro en vez de dejar que la base de datos
+    responda con un choque generico. La del nombre como supervisor es sobre el
+    que vale en esa columna (`literal_supervisor`).
+    """
+    if "nombre" in data or persona.pk is None:
+        persona.nombre = _texto(data, "nombre", obligatorio=True, maximo=80)
+    if "apellido" in data or persona.pk is None:
+        persona.apellido = _texto(data, "apellido", obligatorio=True, maximo=80)
+
+    lleva_medio = spec is None or spec["medio"]
+    lleva_supervisor = spec is None or spec["supervisor"]
+    lleva_usuario = spec is None or spec["usuario"]
+    if lleva_medio and "medio" in data:
+        persona.medio = nombre_base(_texto(data, "medio", maximo=160))
+    if lleva_supervisor and "medio_supervisor" in data:
+        persona.medio_supervisor = nombre_base(_texto(data, "medio_supervisor", maximo=160))
+    if lleva_usuario and "usuario_odoo" in data:
+        usuario = _texto(data, "usuario_odoo", maximo=200)
+        persona.usuario_odoo = normalizar_nombre_odoo(usuario) if usuario else ""
+
+    if spec is not None:
+        if spec["medio"] and not persona.medio:
+            raise DatosInvalidos("El medio (como aparece en «Medio» en Odoo) es obligatorio para este rol.")
+        if spec["usuario"] and not nombre_base(persona.usuario_odoo):
+            raise DatosInvalidos("El usuario de Odoo es obligatorio para este rol.")
+    if persona.medio_supervisor.casefold() == persona.medio.casefold():
+        persona.medio_supervisor = ""
+
+    _leer_alias(persona, data, spec)
+    _comprobar_unicidad(persona)
+
+
+def _leer_alias(persona: PersonaVentas, data: dict, spec: dict | None) -> None:
+    """Los otros nombres que trae el cuerpo, normalizados, en `persona._alias` (columna → lista).
+
+    Lo que no viene se conserva, como los literales principales, y una columna que el
+    rol no lleva se descarta. Uno igual al principal de su columna, o repetido, se omite.
+    """
+    persona._alias = {}
+    for clave, columna in CLAVES_ALIAS.items():
+        if clave not in data or (spec is not None and not spec[columna]):
+            continue
+        bruto = data[clave]
+        if not isinstance(bruto, list) or not all(isinstance(x, str) for x in bruto):
+            raise DatosInvalidos(f"El campo «{clave}» tiene que ser una lista de nombres.")
+        principal = {"medio": persona.medio, "supervisor": persona.literal_supervisor, "usuario": persona.usuario_odoo}[columna]
+        vistos = {clave_nombre(principal)}
+        limpios: list[str] = []
+        for texto in bruto:
+            literal = nombre_base(texto)[:160]
+            if literal and clave_nombre(literal) not in vistos:
+                vistos.add(clave_nombre(literal))
+                limpios.append(normalizar_nombre_odoo(literal) if columna == "usuario" else literal)
+        if len(limpios) > MAX_ALIAS:
+            raise DatosInvalidos(f"Como mucho {MAX_ALIAS} nombres más por columna.")
+        persona._alias[columna] = limpios
+
+
+def _comprobar_unicidad(persona: PersonaVentas) -> None:
+    """Ningun nombre (principal o no) de una columna lo comparte otra persona.
+
+    No distingue mayusculas ni sufijo, como el cruce con el export, asi que se
+    comprueba aqui con un mensaje claro en vez de dejar que la base de datos
+    responda con un choque generico. Se compara lo que quedaria tras guardar.
+    """
+    otras = list(PersonaVentas.objects.exclude(pk=persona.pk).prefetch_related("alias"))
+
+    def otros(columna: str) -> list[str]:
+        """Sus otros nombres tras guardar: los que llegan, o los que ya tenia si la columna no vino."""
+        if columna in persona._alias:
+            return persona._alias[columna]
+        return [a.literal for a in persona.alias.all() if a.columna == columna] if persona.pk else []
+
+    propios = {
+        "medio": [persona.medio, *otros("medio")],
+        "usuario": [persona.usuario_odoo, *otros("usuario")],
+    }
+    base_supervisor = [persona.medio_supervisor] if persona.medio_supervisor else propios["medio"]
+    propios["supervisor"] = [*base_supervisor, *otros("supervisor")]
+    etiquetas = {"medio": "el medio", "supervisor": "«Oportunidad/Administrador»", "usuario": "el usuario"}
+    for columna, literales in propios.items():
+        claves: dict[str, str] = {}
+        for literal in literales:
+            if literal and clave_nombre(literal):
+                claves[clave_nombre(literal)] = literal
+        for otra in otras:
+            comun = claves.keys() & otra.claves(columna)
+            if comun:
+                raise Duplicado(f"«{claves[next(iter(comun))]}» ya es {etiquetas[columna]} de {otra.nombre_completo}.")
+
+
+def _guardar_alias(persona: PersonaVentas) -> None:
+    """Escribe los otros nombres de la persona, ya con `pk`: deja exactamente los que llegaron en cada columna."""
+    for columna, literales in (getattr(persona, "_alias", None) or {}).items():
+        existentes = {a.literal: a for a in persona.alias.filter(columna=columna)}
+        for literal in literales:
+            if literal not in existentes:
+                AliasPersona.objects.create(persona=persona, columna=columna, literal=literal)
+        for literal, fila in existentes.items():
+            if literal not in literales:
+                fila.delete()
+
+
+def _despues_persona(fila: PersonaVentas, data: dict, request) -> None:
+    """Escribe los otros nombres de la persona."""
+    _guardar_alias(fila)
 
 
 def _aplicar_persona(fila: PersonaVentas, data: dict, request) -> None:
-    """Vuelca el cuerpo sobre una persona del directorio de ventas.
+    """Vuelca el cuerpo sobre la identidad de una persona (sin tocar su papel en los equipos).
 
-    El usuario de Odoo solo se guarda en el coordinador de oficina, el unico
-    que aparece en `Vendedor`; en los demas cargos se descarta aunque llegue.
-    Igual el nombre como supervisor, que solo llevan los cargos que
-    supervisan. La unicidad de los tres literales no distingue mayusculas,
-    como el cruce con el export, asi que se comprueba aqui con un mensaje
-    claro en vez de dejar que la base de datos responda con un choque
-    generico. La del nombre como supervisor es sobre el que vale en esa
-    columna (`literal_supervisor`): el propio o, si no lo tiene, el medio.
+    Es lo que usa Notificaciones para vincular un nombre del export a quien ya
+    esta registrado con otro (como otro nombre suyo, sin tocar los principales). No deja sin
+    medio ni sin usuario a quien su rol los exige.
     """
-    fila.nombre = _texto(data, "nombre", obligatorio=True, maximo=80)
-    fila.apellido = _texto(data, "apellido", obligatorio=True, maximo=80)
-    cargo = _opcion(data, "cargo", CARGO_CHOICES, "asesor")
-    if fila.pk and fila.cargo == "coord_un" and cargo != "coord_un" and fila.unidades_negocio.exists():
-        raise DatosInvalidos(
-            "Lleva unidades de negocio: reasígnalas antes de cambiarle el cargo."
-        )
-    if fila.pk and fila.cargo == CARGO_CON_USUARIO and cargo != CARGO_CON_USUARIO and fila.objetivos_ventas.exists():
-        raise DatosInvalidos(
-            "Tiene objetivos de ventas de oficina: bórralos antes de cambiarle el cargo."
-        )
-    fila.cargo = cargo
-    fila.medio = nombre_base(_texto(data, "medio", obligatorio=True, maximo=160))
-    supervisa = nombre_base(_texto(data, "medio_supervisor", maximo=160)) if cargo in CARGOS_QUE_SUPERVISAN else ""
-    fila.medio_supervisor = "" if supervisa.casefold() == fila.medio.casefold() else supervisa
+    _volcar_persona(fila, data, None)
+    if fila.pk:
+        roles = list(fila.membresias.values_list("rol", flat=True))
+        if any(ROLES[r]["medio"] for r in roles) and not fila.medio:
+            raise DatosInvalidos("Su rol exige medio: no se puede dejar vacío.")
+        if any(ROLES[r]["usuario"] for r in roles) and not fila.usuario_odoo:
+            raise DatosInvalidos("Su rol exige usuario de Odoo: no se puede dejar vacío.")
 
-    usuario = ""
-    if cargo == CARGO_CON_USUARIO:
-        usuario = normalizar_nombre_odoo(_texto(data, "usuario_odoo", obligatorio=True, maximo=200))
-        if not nombre_base(usuario):
-            raise DatosInvalidos("El usuario de Odoo es obligatorio para un coordinador de oficina.")
-    fila.usuario_odoo = usuario
 
-    # El site solo lo lleva la coordinadora de oficina; como el estado del
-    # asesor, si el cuerpo no lo trae se conserva.
-    if cargo != CARGO_CON_USUARIO:
-        fila.site = None
-    elif "site_id" in data:
-        fila.site = _relacion(Site, data, "site_id", obligatorio=False)
+def _aplicar_membresia(fila: MembresiaEquipo, data: dict, request) -> None:
+    """Vuelca el cuerpo sobre el papel de una persona en un equipo.
 
-    # El estado del bono solo lo lleva el asesor. Si el cuerpo no lo trae se
-    # conserva: hay escrituras que solo tocan los literales.
-    if cargo != "asesor":
-        fila.estado_fijo = None
-    elif "estado_fijo_id" in data:
-        fila.estado_fijo = _relacion(Estado, data, "estado_fijo_id", obligatorio=False)
+    En el alta se elige equipo, rol y la persona: una existente (`persona_id`,
+    p. ej. el gerente de operaciones que lleva dos equipos) o una nueva con los
+    datos del cuerpo. Una membresia ya guardada puede **cambiar de equipo y de
+    puesto**: lo que el nuevo rol no lleva se suelta (sites, unidades, superior),
+    lo que exige y no trae el cuerpo se pide, y los supervisores que respondian a
+    ella se quedan sin superior, porque ya no lo es del equipo ni del rol que
+    ellos esperan. Los literales, el site, el superior y las unidades se comprueban
+    contra lo que el rol exige (`equipos.ROLES`). La persona se guarda aqui mismo,
+    asi que el endpoint envuelve todo en una transaccion.
+    """
+    rol_anterior = fila.rol if fila.pk else None
+    cambia = False
+    if fila.pk is None:
+        equipo = _relacion(EquipoVentas, data, "equipo_id", obligatorio=True)
+        rol = str(data.get("rol") or "")
+        if rol not in roles_del_equipo(equipo.slug):
+            raise DatosInvalidos(f"«{rol}» no es un rol del equipo {equipo.nombre}.")
+        fila.equipo, fila.rol = equipo, rol
+        persona = _relacion(PersonaVentas, data, "persona_id", obligatorio=False) or PersonaVentas()
+        if persona.pk and MembresiaEquipo.objects.filter(persona=persona, equipo=equipo).exists():
+            raise Duplicado(f"{persona.nombre_completo} ya tiene un papel en {equipo.nombre}.")
+    else:
+        persona = fila.persona
+        if "equipo_id" in data or "rol" in data:
+            equipo = _relacion(EquipoVentas, data, "equipo_id", obligatorio=True) if "equipo_id" in data else fila.equipo
+            rol = str(data.get("rol") or fila.rol)
+            if rol not in roles_del_equipo(equipo.slug):
+                raise DatosInvalidos(f"«{rol}» no es un rol del equipo {equipo.nombre}.")
+            cambia = (equipo.id, rol) != (fila.equipo_id, fila.rol)
+            if cambia:
+                if MembresiaEquipo.objects.filter(persona=persona, equipo=equipo).exclude(pk=fila.pk).exists():
+                    raise Duplicado(f"{persona.nombre_completo} ya tiene un papel en {equipo.nombre}.")
+                # Los supervisores que respondian a ella esperan otro equipo y otro rol: quedan sin asignar.
+                fila.subordinados.update(superior=None)
+                fila.equipo, fila.rol = equipo, rol
+    spec = ROLES[fila.rol]
+    spec_anterior = ROLES[rol_anterior] if rol_anterior else None
+    persona.save()
+    _guardar_alias(persona)
+    fila.persona = persona
 
-    otras = PersonaVentas.objects.exclude(pk=fila.pk)
-    if otras.filter(medio__iexact=fila.medio).exists():
-        raise Duplicado(f"Ya hay alguien registrado con el medio «{fila.medio}».")
-    if usuario and otras.filter(usuario_odoo__iexact=usuario).exists():
-        raise Duplicado(f"Ya hay alguien registrado con el usuario «{usuario}».")
-    literal = fila.literal_supervisor
-    choque = otras.filter(
-        Q(medio_supervisor__iexact=literal) | Q(medio_supervisor="", medio__iexact=literal)
-    ).first()
-    if choque is not None:
-        raise Duplicado(
-            f"«{literal}» ya es como aparece {choque.nombre_completo} en «Oportunidad/Administrador»."
-        )
+    fila._site_ids = None
+    if not spec.get("site"):
+        if fila.pk and fila.sites.exists():
+            fila._site_ids = []
+    else:
+        ids = _ids(data, "site_ids", Site, "site")
+        if ids is None and (fila.pk is None or not spec_anterior.get("site")):
+            ids = []
+        if ids is not None:
+            if not ids:
+                raise DatosInvalidos("Elige al menos un site.")
+            fila._site_ids = ids
+
+    if fila.rol == "supervisor":
+        esperado = SUPERIOR_DEL_SUPERVISOR.get(fila.equipo.slug)
+        if "superior_id" in data:
+            superior = _relacion(MembresiaEquipo, data, "superior_id", obligatorio=False)
+        else:
+            superior = None if cambia else fila.superior
+        if superior is not None and (superior.equipo_id != fila.equipo_id or superior.rol != esperado):
+            raise DatosInvalidos(f"El superior de un supervisor de {fila.equipo.nombre} tiene que ser {etiqueta_rol(esperado or '')}.")
+        fila.superior = superior
+
+    fila._unidad_ids = None
+    if not spec.get("unidades"):
+        if fila.pk and fila.unidades.exists():
+            fila._unidad_ids = []
+    else:
+        ids = _ids(data, "unidad_ids", Coordinador, "unidad de negocio")
+        if ids is None and (fila.pk is None or spec_anterior.get("unidades") != spec["unidades"]):
+            ids = []
+        elif ids is None and cambia:
+            # Mismo tipo de unidades en otro equipo: se llevan, pero se comprueba que nadie las tenga ya alli.
+            ids = [u.id for u in fila.unidades.all()]
+        if ids is not None:
+            if spec["unidades"] == "una" and len(ids) != 1:
+                raise DatosInvalidos("Un coordinador de unidad de negocio lleva exactamente una unidad.")
+            if spec["unidades"] == "varias" and not ids:
+                raise DatosInvalidos("Elige al menos una unidad de negocio.")
+            if spec["unidades"] == "una":
+                ocupada = (
+                    MembresiaEquipo.objects.filter(equipo=fila.equipo, rol=fila.rol, unidades__in=ids)
+                    .exclude(pk=fila.pk)
+                    .select_related("persona")
+                    .first()
+                )
+                if ocupada is not None:
+                    raise Duplicado(f"Esa unidad ya la lleva {ocupada.persona.nombre_completo} en {fila.equipo.nombre}.")
+            fila._unidad_ids = ids
+
+
+def _borrar_site(fila: Site) -> str | None:
+    """Un site que lleva alguna coordinadora de oficina no se borra: ella quedaria fuera del reporte."""
+    nombres = [m.persona.nombre_completo for m in fila.membresias.select_related("persona")[:3]]
+    if nombres:
+        return f"No se puede eliminar este site: lo llevan {', '.join(nombres)}. Quítaselo primero."
+    return None
+
+
+def _despues_membresia(fila: MembresiaEquipo, data: dict, request) -> None:
+    """Escribe las unidades y los sites de la membresia, ya con `pk`."""
+    if fila._unidad_ids is not None:
+        fila.unidades.set(fila._unidad_ids)
+    if fila._site_ids is not None:
+        fila.sites.set(fila._site_ids)
+
+
+def _tras_borrar_membresia(fila: MembresiaEquipo) -> None:
+    """Si la persona se queda sin ningun papel (ni objetivos), se borra tambien.
+
+    Una persona sin equipo no cobra y su literal ya no seria «pendiente» en
+    Notificaciones: se la dejaria registrada en un limbo. Con el papel borrado
+    y nada que la retenga, desaparece y su nombre vuelve a la lista de pendientes.
+    """
+    persona = fila.persona
+    if not persona.membresias.exists() and not persona.objetivos_ventas.exists():
+        persona.delete()
+
+
+def _buscar_condicion(data: dict) -> CondicionesEquipo | None:
+    """Las condiciones ya guardadas de (equipo, rol): editar es siempre sobre la misma fila."""
+    return CondicionesEquipo.objects.filter(equipo_id=data.get("equipo_id") or 0, rol=str(data.get("rol") or "")).first()
+
+
+def _aplicar_condiciones(fila: CondicionesEquipo, data: dict, request) -> None:
+    """Vuelca los parametros de pago de un rol de un equipo, validados contra el esquema del rol."""
+    if fila.pk is None:
+        equipo = _relacion(EquipoVentas, data, "equipo_id", obligatorio=True)
+        rol = str(data.get("rol") or "")
+        if rol not in roles_del_equipo(equipo.slug):
+            raise DatosInvalidos(f"«{rol}» no es un rol del equipo {equipo.nombre}.")
+        fila.equipo, fila.rol = equipo, rol
+    try:
+        fila.parametros = validar_parametros(fila.rol, data.get("parametros"))
+    except ValueError as e:
+        raise DatosInvalidos(str(e)) from None
+    fila.actualizado_por = request.user
 
 
 def _aplicar_ignorado(fila: ProductoIgnorado, data: dict, request) -> None:
@@ -612,8 +989,8 @@ def _aplicar_objetivo_oficina(fila: ObjetivoVentasOficina, data: dict, request) 
     """
     if fila.pk is None:
         persona = _relacion(PersonaVentas, data, "persona_id", obligatorio=False)
-        if persona is not None and persona.cargo != CARGO_CON_USUARIO:
-            raise DatosInvalidos(f"{persona.nombre_completo} no es coordinador de oficina.")
+        if persona is not None and not persona.membresias.filter(rol="coord_oficina").exists():
+            raise DatosInvalidos(f"{persona.nombre_completo} no es coordinadora de oficina.")
         fila.persona = persona
     fila.desde = _mes(data, "desde", obligatorio=False)
 
@@ -703,9 +1080,9 @@ def _aplicar_semaforo(fila: SemaforoObjetivos, data: dict, request) -> None:
 
 
 # Un permiso por grupo del modulo. Los nombres de los campos son anteriores al
-# modulo y se conservan: «comercial» es hoy la Estructura (zonas, sites,
-# estados) y «operacional» los Productos. Ventas —coordinadores, objetivos y, en
-# adelante, el directorio de vendedores— se separo de la estructura porque lo
+# modulo y se conservan: «comercial» es hoy la Estructura (zonas,
+# estados) y «operacional» los Productos. Ventas —sites, unidades de negocio, equipos,
+# objetivos y condiciones de pago— se separo de la estructura porque lo
 # lleva quien paga comisiones, no quien reparte la red.
 PERMISO_COMERCIAL = "can_manage_catalogo_comercial"
 PERMISO_OPERACIONAL = "can_manage_catalogo_operacional"
@@ -737,10 +1114,16 @@ CATALOGOS: dict[str, dict[str, Any]] = {
     "reguladores": {"modelo": PlanRegulador, "serializar": _plan_regulador, "aplicar": _aplicar_plan_regulador, "etiqueta": "plan regulador", "permiso": PERMISO_OPERACIONAL},
     "ignorados": {"modelo": ProductoIgnorado, "serializar": _ignorado, "aplicar": _aplicar_ignorado, "etiqueta": "nombre ignorado", "permiso": PERMISO_OPERACIONAL, "permiso_fila": _permiso_ignorado},
     "zonas": {"modelo": Zona, "serializar": _zona, "aplicar": _aplicar_zona, "etiqueta": "zona", "femenino": True, "permiso": PERMISO_COMERCIAL},
-    "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "etiqueta": "site", "permiso": PERMISO_COMERCIAL, "protegido": "tiene zonas o coordinadoras de oficina asociadas. Reasígnalas primero."},
+    # Sites y unidades de negocio se muestran en Ventas › Estructura de ventas, junto a
+    # los equipos que los trabajan, y los administra quien lleva el catalogo de ventas.
+    "sites": {"modelo": Site, "serializar": _site, "aplicar": _aplicar_site, "despues": _despues_site, "borrable": _borrar_site, "etiqueta": "site", "permiso": PERMISO_VENTAS, "protegido": "tiene zonas o coordinadoras de oficina asociadas. Reasígnalas primero."},
     "estados": {"modelo": Estado, "serializar": _estado, "aplicar": _aplicar_nombre, "etiqueta": "estado", "permiso": PERMISO_COMERCIAL},
-    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_coordinador, "etiqueta": "unidad de negocio", "femenino": True, "permiso": PERMISO_VENTAS},
-    "personas": {"modelo": PersonaVentas, "serializar": _persona, "aplicar": _aplicar_persona, "etiqueta": "persona", "femenino": True, "permiso": PERMISO_VENTAS},
+    "coordinadores": {"modelo": Coordinador, "serializar": _coordinador, "aplicar": _aplicar_coordinador, "despues": _despues_coordinador, "etiqueta": "unidad de negocio", "femenino": True, "permiso": PERMISO_VENTAS},
+    # La persona es la identidad (nombre y literales de Odoo); su papel en cada equipo es la membresia.
+    "personas": {"modelo": PersonaVentas, "serializar": _persona, "aplicar": _aplicar_persona, "despues": _despues_persona, "etiqueta": "persona", "femenino": True, "permiso": PERMISO_VENTAS},
+    "membresias": {"modelo": MembresiaEquipo, "serializar": _membresia, "aplicar": _aplicar_membresia, "despues": _despues_membresia, "tras_borrar": _tras_borrar_membresia, "etiqueta": "persona del equipo", "femenino": True, "permiso": PERMISO_VENTAS},
+    # Se edita siempre la fila de (equipo, rol), exista o no (`buscar`); borrarla restablece los valores de la politica.
+    "condiciones_equipo": {"modelo": CondicionesEquipo, "serializar": _condicion, "aplicar": _aplicar_condiciones, "buscar": _buscar_condicion, "etiqueta": "condición de pago", "femenino": True, "permiso": PERMISO_VENTAS},
     # Los objetivos van con ventas: quien organiza a los equipos de venta es
     # quien fija lo que se espera de cada parte de la red.
     # `borrable` responde por que no se puede borrar una fila concreta.
@@ -801,10 +1184,17 @@ def _listado(nombre: str) -> list[dict[str, Any]]:
     consulta = catalogo["modelo"].objects.all()
     if nombre == "zonas":
         consulta = consulta.select_related("site", "estado", "coordinador")
+    elif nombre == "sites":
+        consulta = consulta.prefetch_related("zonas", "equipos")
     elif nombre == "coordinadores":
-        consulta = consulta.select_related("persona")
+        consulta = consulta.prefetch_related("zonas", "equipos", "membresias__persona", "membresias__equipo")
     elif nombre == "personas":
-        consulta = consulta.select_related("estado_fijo", "site").prefetch_related("unidades_negocio")
+        consulta = consulta.prefetch_related("membresias__equipo", "alias")
+    elif nombre == "membresias":
+        consulta = consulta.select_related("persona", "equipo", "superior__persona").prefetch_related(
+            "unidades", "sites", "persona__alias")
+    elif nombre == "condiciones_equipo":
+        return _condiciones_todas()
     elif nombre == "objetivos_oficina":
         consulta = consulta.select_related("persona", "actualizado_por")
     elif nombre == "zonas_sin_objetivo":
@@ -921,16 +1311,10 @@ def notificaciones_view(request):
             # Tambien con ventas: el alta de una coordinadora de oficina pide su site.
             "sites": _listado("sites") if permisos["comercial"] or permisos["ventas"] else [],
             "estados": _listado("estados") if permisos["comercial"] else [],
-            "coordinadores": _listado("coordinadores") if permisos["comercial"] else [],
-            "cargos": _opciones(CARGO_CHOICES),
-            # Para vincular un nombre de `Oportunidad/Administrador` a quien ya esta
-            # registrado con otro: Odoo escribe distinto a la misma persona.
-            "supervisores": [
-                _persona(p)
-                for p in PersonaVentas.objects.filter(cargo__in=CARGOS_QUE_SUPERVISAN)
-                .select_related("estado_fijo", "site")
-                .prefetch_related("unidades_negocio")
-            ] if permisos["ventas"] else [],
+            "coordinadores": _listado("coordinadores") if permisos["comercial"] or permisos["ventas"] else [],
+            "equipos": [_equipo_vista(e) for e in EquipoVentas.objects.all()] if permisos["ventas"] else [],
+            "membresias": _listado("membresias") if permisos["ventas"] else [],
+            "personas": _listado("personas") if permisos["ventas"] else [],
         },
     })
 
@@ -956,10 +1340,11 @@ def productos_view(request):
 @login_required
 @permission_required(PERMISO_COMERCIAL)
 def estructura_view(request):
-    """Zonas, sites y estados: como se reparte la red.
+    """Zonas y estados: como se reparte la red.
 
-    Los coordinadores viajan aunque se administren en Ventas: el formulario de
-    zona los necesita para elegir a quien pertenece. `?nueva_zona=<nombre>`
+    Los sites y las unidades de negocio viajan aunque se administren en Ventas
+    › Estructura de ventas: el formulario de zona los necesita para elegir a cual
+    pertenece. `?nueva_zona=<nombre>`
     abre el alta ya rellena, como `?nuevo_plan=` en productos.
     """
     return _render(request, "Estructura", "estructura", {
@@ -975,25 +1360,26 @@ def estructura_view(request):
 @login_required
 @permission_required(PERMISO_VENTAS)
 def ventas_view(request):
-    """El directorio de ventas, las unidades de negocio y los objetivos.
+    """Estructura de ventas, equipos con su gente y condiciones, y objetivos.
 
-    `?nueva_persona=<literal>&cargo=<cargo>` abre el alta ya rellena: es a
-    donde lleva «Registrar» desde Notificaciones. El literal va al usuario de
-    Odoo si el cargo es coordinador de oficina (salio de `Vendedor`) y al medio
-    en los demas.
+    `?nueva_persona=<literal>&equipo=<slug>&rol=<rol>` abre el alta ya rellena:
+    es a donde lleva «Registrar» desde Notificaciones. El literal va al usuario
+    de Odoo si el rol es de los que salen en `Vendedor` y al medio en los demas.
 
     Lo que la pestana de objetivos necesita ademas de sus filas: el semaforo,
     la configuracion ya resuelta (para mostrar el objetivo efectivo de cada mes
     con la misma regla que los reportes), los meses calculados y las entidades
     a las que se les puede fijar un objetivo.
     """
-    cargo = request.GET.get("cargo") or "asesor"
     return _render(request, "Ventas", "ventas", {
+        "equipos": [_equipo_vista(e) for e in EquipoVentas.objects.all()],
+        "membresias": _listado("membresias"),
         "personas": _listado("personas"),
-        "cargos": _opciones(CARGO_CHOICES),
+        "condiciones": _listado("condiciones_equipo"),
         "nuevaPersona": {
             "literal": (request.GET.get("nueva_persona") or "").strip(),
-            "cargo": cargo if cargo in dict(CARGO_CHOICES) else "asesor",
+            "equipo": (request.GET.get("equipo") or "").strip(),
+            "rol": (request.GET.get("rol") or "").strip(),
         },
         "coordinadores": _listado("coordinadores"),
         "objetivos": _listado("objetivos"),
@@ -1040,6 +1426,8 @@ def api_catalogo_guardar(request):
     fila_id = data.get("id")
     if catalogo.get("unico"):
         fila = catalogo["modelo"].actual()
+    elif not fila_id and (buscar := catalogo.get("buscar")) and (existente := buscar(data)) is not None:
+        fila = existente
     elif fila_id:
         fila = catalogo["modelo"].objects.filter(pk=fila_id).first()
         if fila is None:
@@ -1052,8 +1440,13 @@ def api_catalogo_guardar(request):
         return rechazo
 
     try:
-        catalogo["aplicar"](fila, data, request)
-        fila.save()
+        # En una transaccion: un alta puede escribir mas de una fila (la persona y
+        # su papel) y las relaciones M2M, y no debe quedar a medias.
+        with transaction.atomic():
+            catalogo["aplicar"](fila, data, request)
+            fila.save()
+            if despues := catalogo.get("despues"):
+                despues(fila, data, request)
     except Duplicado as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=409)
     except DatosInvalidos as e:
@@ -1065,6 +1458,8 @@ def api_catalogo_guardar(request):
         )
 
     fixtures.reset_cache()
+    # Se vuelve a leer: las relaciones recien escritas no estan en la instancia.
+    fila = catalogo["modelo"].objects.get(pk=fila.pk)
     return JsonResponse({
         "status": "success",
         "message": f"{catalogo['etiqueta'].capitalize()} {_participio(catalogo, 'guardad')}.",
@@ -1126,13 +1521,15 @@ def api_catalogo_guardar_lote(request):
             with transaction.atomic():
                 catalogo["aplicar"](fila, cuerpo, request)
                 fila.save()
+                if despues := catalogo.get("despues"):
+                    despues(fila, cuerpo, request)
         except DatosInvalidos as e:
             errores.append({"nombre": etiqueta, "message": str(e)})
             continue
         except IntegrityError:
             errores.append({"nombre": etiqueta, "message": "Ya existe con ese nombre."})
             continue
-        registrados.append(catalogo["serializar"](fila))
+        registrados.append(catalogo["serializar"](catalogo["modelo"].objects.get(pk=fila.pk)))
 
     if registrados:
         fixtures.reset_cache()
@@ -1185,7 +1582,10 @@ def api_catalogo_eliminar(request):
             return JsonResponse({"status": "error", "message": motivo}, status=409)
 
     try:
-        fila.delete()
+        with transaction.atomic():
+            fila.delete()
+            if tras_borrar := catalogo.get("tras_borrar"):
+                tras_borrar(fila)
     except ProtectedError:
         return JsonResponse(
             {

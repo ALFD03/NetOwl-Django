@@ -738,12 +738,14 @@ mismas pestañas con el nombre correcto.
 
 ### Las coordinadoras de oficina en el Sales Report
 
-Los equipos de ventas (`EquipoVentas`, `NombreEquipo` y la columna `Equipo de
-ventas` del import) se quitaron a petición del usuario (`catalogos/0005`): ya no
-se agrupa por ellos. En su lugar, **cada coordinadora de oficina pertenece a un
-site** (`PersonaVentas.site`, solo en ese cargo; se elige en su ficha) y tiene un
+Los equipos de ventas volvieron, con otra forma: ya no son un nombre leído de la
+columna `Equipo de ventas` del import (eso se quitó en `catalogos/0005`), sino una
+**agrupación de roles con sus propias condiciones de pago** (`catalogos/0006`;
+ver el capítulo 15 §3). **Cada coordinadora de oficina pertenece a uno o
+varios sites** (`MembresiaEquipo.sites`, solo en ese rol; se eligen en su ficha del equipo; con varios sale en el bloque de
+cada uno con las mismas cifras, y su factor es el promedio simple de sus sites) y tiene un
 **objetivo de ventas**: una cantidad al mes (`ObjetivoVentasOficina`, Catálogos ›
-Ventas › Objetivos), general o individual, con vigencia por mes como los
+Ventas › Estructura de ventas › Objetivos), general o individual, con vigencia por mes como los
 objetivos comerciales. Manda el individual vigente; si no tiene, el general.
 
 El Sales Report abre el bloque de cada site con sus coordinadoras, como

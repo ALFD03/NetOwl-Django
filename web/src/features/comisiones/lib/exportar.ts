@@ -1,11 +1,11 @@
 /**
  * El libro de Excel del informe de comisiones, pensado para quien paga.
  *
- * - **Resumen**: el total en $ y en Bs, la tasa, y lo que se paga por cargo,
- *   por unidad de negocio y por oficina.
- * - Una hoja por cargo, ordenada como la nómina: los asesores y los
- *   supervisores agrupados por unidad (y los asesores por supervisor), con
- *   subtotales. Cada persona sale una vez, así que las hojas suman el total.
+ * - **Resumen**: el total en $ y en Bs, la tasa, y lo que se paga por equipo y,
+ *   dentro de cada uno, por rol.
+ * - Una hoja por equipo de ventas, ordenada como la nómina: los roles de
+ *   dirección, y los supervisores con sus asesores, con subtotales. Cada
+ *   persona sale una vez por equipo, así que las hojas suman el total.
  * - **Ventas**: el detalle venta a venta, para quien quiera comprobar.
  *
  * Los bolívares de cada fila se redondean a céntimos y los totales son la suma
@@ -15,12 +15,12 @@
 import {
   downloadStyledWorkbook, type ExcelCell, type ExcelCellObject, type ExcelRow, type ExcelStyledSheet,
 } from '@/shared/lib/excel';
-import { CLASIFICACION, TRAMO, aBs, detalleCumplimiento, formatoFecha, formatoMes, origenCumplimiento, totalBs } from './formato';
+import { CLASIFICACION, TRAMO, aBs, formatoFecha, formatoMes, origenCumplimiento, totalBs } from './formato';
 import {
-  armarNomina, motivoRecorte, origenEstado, rangoTramo, tramoAsesor, ventasPagadas, ventasValidadas,
-  type GrupoSupervisor, type Nomina,
+  armarNomina, clavePago, motivoRecorte, notasBono, ventasPagadas, ventasValidadas,
+  type EquipoNomina, type Nomina,
 } from './nomina';
-import type { CargoVentas, CondicionesComision, InformeComision, PagoComision, VentaComision } from '../types';
+import type { CondicionesComision, InformeComision, PagoComision, RolVentas, VentaComision } from '../types';
 
 // --- Estilo -------------------------------------------------------------------------
 
@@ -136,32 +136,20 @@ const ventasColumnas: Col<PagoComision>[] = [
   },
 ];
 
-/** Lo que explica una fila: el recorte, lo que vendió en otro equipo y los avisos. */
+/** Lo que explica una fila: el recorte, lo que vendió con otro supervisor, los bonos y los avisos. */
 const observaciones = (nomina: Nomina, condiciones: CondicionesComision) => (p: PagoComision): string => {
-  const fuera = nomina.fuera.get(p.persona_id);
+  const fuera = nomina.fuera.get(clavePago(p));
   return [
-    motivoRecorte(p, condiciones),
+    motivoRecorte(p, condiciones.equipos?.[p.equipo]?.[p.rol]?.tramos_asesor),
     fuera ? `+${fuera.ventas} ventas con ${fuera.donde} (incluidas)` : null,
-    p.estado_bono ? `Estado del bono: ${p.estado_bono.nombre} (${origenEstado(p.estado_bono)})` : null,
+    ...notasBono(p),
     ...p.avisos,
   ].filter(Boolean).join(' · ');
 };
 
-/**
- * Los equipos en el orden de la nómina: las unidades y, al final, lo que no
- * tiene unidad. Las oficinas no llevan equipo.
- */
-function equipos(nomina: Nomina): { titulo: string; grupos: GrupoSupervisor[] }[] {
-  const aparte = nomina.unidades.filter((u) => u.id === null);
-  return [
-    ...nomina.unidades.filter((u) => u.id !== null).map((u) => ({ titulo: `Unidad de negocio · ${u.nombre}`, grupos: u.grupos })),
-    ...aparte.map((u) => ({ titulo: u.nombre, grupos: u.grupos })),
-  ];
-}
-
 // --- Hojas ----------------------------------------------------------------------------
 
-function hojaResumen(informe: InformeComision, nomina: Nomina, tasa: number | null, etiquetaCargo: (c: CargoVentas) => string): ExcelStyledSheet {
+function hojaResumen(informe: InformeComision, nomina: Nomina, tasa: number | null, etiquetaCargo: (r: RolVentas) => string): ExcelStyledSheet {
   const N = 7;
   const pagos = informe.pagos;
   const etiqueta = { fontWeight: 'bold' as const, textColor: COLOR.tinta, height: 20, alignVertical: 'center' as const };
@@ -188,205 +176,83 @@ function hojaResumen(informe: InformeComision, nomina: Nomina, tasa: number | nu
       null, null, null, null,
     ],
     [celda('Personas que cobran', etiqueta), dato(pagos.filter((p) => p.neto > 0).length, ENTERO)],
-    ...(informe.resumen.bonos_meta ? [[celda('Bonos por meta (incluidos)', etiqueta), dato(informe.resumen.bonos_meta, USD)]] : []),
+    ...(informe.resumen.bonos ? [[celda('Bonos (incluidos)', etiqueta), dato(informe.resumen.bonos, USD)]] : []),
     [celda('Ventas validadas', etiqueta), dato(informe.resumen.validas, ENTERO)],
     vacia(),
   ];
 
-  // Por cargo
-  const porCargo: Col<{ cargo: CargoVentas; personas: PagoComision[] }>[] = [
-    { titulo: 'Cargo', ancho: 34, valor: (f) => etiquetaCargo(f.cargo) },
-    { titulo: 'Personas', ancho: 14, valor: (f) => f.personas.length, formato: ENTERO, total: (fs) => sumar(fs.flatMap((f) => f.personas), () => 1) },
-    { titulo: 'Cobran', ancho: 12, valor: (f) => f.personas.filter((p) => p.neto > 0).length, formato: ENTERO, total: (fs) => fs.flatMap((f) => f.personas).filter((p) => p.neto > 0).length },
-    { titulo: 'Ventas validadas', ancho: 14, valor: (f) => sumar(f.personas, ventasValidadas), formato: ENTERO },
-    { titulo: 'Ventas pagadas', ancho: 14, valor: (f) => sumar(f.personas, ventasPagadas), formato: ENTERO },
-    { titulo: 'A pagar $', ancho: 18, valor: (f) => sumaUsd(f.personas), formato: USD, total: (fs) => sumaUsd(fs.flatMap((f) => f.personas)) },
-    { titulo: 'A pagar Bs', ancho: 22, valor: (f) => totalBs(f.personas.map((p) => p.neto), tasa), formato: BS, total: (fs) => totalBs(fs.flatMap((f) => f.personas).map((p) => p.neto), tasa) },
-  ];
-  const cargos = (['coord_un', 'coord_oficina', 'supervisor', 'asesor'] as const).map((cargo) => ({ cargo, personas: pagos.filter((p) => p.cargo === cargo) }));
-  filas.push(banda('Por cargo', N, COLOR.supervisor, COLOR.tinta), cabecera(porCargo));
-  cargos.forEach((f, i) => filas.push(filaDe(porCargo, f, i)));
-  filas.push(totalDe(porCargo, cargos, 'Total', true), vacia());
-
-  // Por unidad de negocio, cada oficina con su equipo sin unidad, y lo que no
-  // tiene ninguna de las dos: entre todos, el total.
-  type Bloque = { nombre: string; crecimiento: number | null; personas: PagoComision[]; ventas: number | null };
-  const porUnidad: Col<Bloque>[] = [
-    { titulo: 'Unidad de negocio u oficina', ancho: 34, valor: (b) => b.nombre },
-    { titulo: 'Crecimiento', ancho: 14, valor: (b) => b.crecimiento, formato: PCT },
+  // Por equipo
+  type Bloque = { nombre: string; personas: PagoComision[]; ventas: number | null };
+  const porBloque: Col<Bloque>[] = [
+    { titulo: 'Equipo / rol', ancho: 34, valor: (b) => b.nombre },
     { titulo: 'Personas', ancho: 12, valor: (b) => b.personas.length, formato: ENTERO, total: (bs) => sumar(bs.flatMap((b) => b.personas), () => 1) },
-    { titulo: 'Ventas de la unidad', ancho: 14, valor: (b) => b.ventas, formato: ENTERO },
-    { titulo: '', ancho: 14, valor: () => null },
+    { titulo: 'Cobran', ancho: 12, valor: (b) => b.personas.filter((p) => p.neto > 0).length, formato: ENTERO, total: (bs) => bs.flatMap((b) => b.personas).filter((p) => p.neto > 0).length },
+    { titulo: 'Ventas validadas', ancho: 14, valor: (b) => b.ventas ?? sumar(b.personas, ventasValidadas), formato: ENTERO },
+    { titulo: 'Bonos $', ancho: 14, valor: (b) => sumaBonos(b.personas) || null, formato: USD, total: (bs) => sumaBonos(bs.flatMap((b) => b.personas)) || null },
     { titulo: 'A pagar $', ancho: 18, valor: (b) => sumaUsd(b.personas), formato: USD, total: (bs) => sumaUsd(bs.flatMap((b) => b.personas)) },
     { titulo: 'A pagar Bs', ancho: 22, valor: (b) => totalBs(b.personas.map((p) => p.neto), tasa), formato: BS, total: (bs) => totalBs(bs.flatMap((b) => b.personas).map((p) => p.neto), tasa) },
   ];
-  const deUnidad = (u: Nomina['unidades'][number]): Bloque => ({
-    nombre: u.nombre, crecimiento: u.coordinador?.crecimiento_pct ?? null, personas: u.personas, ventas: u.ventas,
-  });
-  const bloques: Bloque[] = [
-    ...nomina.unidades.filter((u) => u.id !== null).map(deUnidad),
-    ...nomina.oficinas.map((o) => ({ nombre: `Oficina · ${o.pago.nombre}`, crecimiento: null, personas: o.personas, ventas: null })),
-    ...nomina.unidades.filter((u) => u.id === null).map(deUnidad),
-  ];
-  filas.push(banda('Por unidad de negocio', N, COLOR.unidad, COLOR.unidadTexto), cabecera(porUnidad));
-  bloques.forEach((b, i) => filas.push(filaDe(porUnidad, b, i)));
-  filas.push(totalDe(porUnidad, bloques, 'Total a pagar', true), vacia());
-
-  // Las oficinas
-  const porOficina: Col<PagoComision>[] = [
-    { titulo: 'Coordinación de oficina', ancho: 34, valor: (p) => p.nombre },
-    { titulo: 'Cumplimiento', ancho: 14, valor: (p) => p.factor_pct, formato: PCT },
-    { titulo: '', ancho: 12, valor: () => null },
-    ...ventasColumnas,
-    ...pagoColumnas(tasa),
-  ];
-  const oficinas = nomina.oficinas.map((o) => o.pago);
-  if (oficinas.length) {
-    filas.push(banda('Coordinación de oficinas', N, COLOR.oficina, COLOR.oficinaTexto), cabecera(porOficina));
-    oficinas.forEach((p, i) => filas.push(filaDe(porOficina, p, i, p.neto === 0)));
-    filas.push(totalDe(porOficina, oficinas, 'Total oficinas', true));
+  const todos: Bloque[] = [];
+  for (const e of nomina.equipos) {
+    const delEquipo: Bloque = { nombre: e.nombre, personas: e.personas, ventas: e.ventas };
+    const roles = [...new Set(e.personas.map((p) => p.rol))].map((rol): Bloque => ({
+      nombre: `    ${etiquetaCargo(rol)}`, personas: e.personas.filter((p) => p.rol === rol), ventas: null,
+    }));
+    filas.push(banda(e.nombre, N, COLOR.unidad, COLOR.unidadTexto), cabecera(porBloque));
+    filas.push(filaDe(porBloque, delEquipo, 0, false));
+    roles.forEach((b, i) => filas.push(filaDe(porBloque, b, i + 1, false)));
+    filas.push(vacia());
+    todos.push(delEquipo);
   }
+  filas.push(totalDe(porBloque, todos, 'Total a pagar', true));
 
-  return { sheetName: 'Resumen', rows: filas, widths: porCargo.map((c) => c.ancho) };
+  return { sheetName: 'Resumen', rows: filas, widths: porBloque.map((c) => c.ancho) };
 }
 
-function hojaAsesores(nomina: Nomina, condiciones: CondicionesComision, tasa: number | null): ExcelStyledSheet {
-  const tramos = condiciones.tramos_asesor;
+const sumaBonos = (filas: PagoComision[]) => Math.round(sumar(filas, (p) => p.bono) * 100) / 100;
+
+/** Una hoja por equipo: sus roles de dirección y, por supervisor, sus asesores; como la nómina. */
+function hojaEquipo(e: EquipoNomina, nomina: Nomina, condiciones: CondicionesComision, tasa: number | null, etiquetaCargo: (r: RolVentas) => string): ExcelStyledSheet {
   const obs = observaciones(nomina, condiciones);
   const cols: Col<PagoComision>[] = [
-    { titulo: 'Asesor', ancho: 34, valor: (p) => p.nombre },
-    { titulo: 'Ventas resid.', ancho: 10, valor: (p) => p.ventas_propias, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_propias) },
+    { titulo: 'Persona', ancho: 34, valor: (p) => p.nombre },
+    { titulo: 'Rol', ancho: 22, valor: (p) => etiquetaCargo(p.rol) },
+    { titulo: 'Ventas propias', ancho: 10, valor: (p) => p.ventas_propias, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_propias) },
+    { titulo: 'Ventas de equipo', ancho: 10, valor: (p) => p.ventas_equipo, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_equipo) },
     { titulo: 'PYME', ancho: 8, valor: (p) => p.ventas_pyme || null, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_pyme) || null },
     ...ventasColumnas,
+    { titulo: 'Antes del %', ancho: 13, valor: (p) => p.bruto, formato: USD, total: (f) => Math.round(sumar(f, (p) => p.bruto) * 100) / 100 },
     {
-      titulo: 'Tramo',
-      ancho: 11,
-      valor: (p) => {
-        const t = tramoAsesor(p.ventas_propias, tramos);
-        return t.monto > 0 ? rangoTramo(t, tramos) : 'Sin tramo';
-      },
+      titulo: 'Cumplimiento',
+      ancho: 13,
+      valor: (p) => p.factor_pct,
+      formato: PCT,
+      color: (p) => (p.factor_pct !== null && p.factor_pct < 100 ? COLOR.ambar : undefined),
     },
-    { titulo: '$ por venta', ancho: 11, valor: (p) => p.detalle.monto_por_venta ?? null, formato: USD },
-    { titulo: 'Estado', ancho: 12, valor: (p) => p.estado_bono?.nombre ?? '' },
-    {
-      titulo: 'Bono por meta $',
-      ancho: 12,
-      valor: (p) => p.bono_meta || null,
-      formato: USD,
-      total: (f) => Math.round(sumar(f, (p) => p.bono_meta ?? 0) * 100) / 100 || null,
-    },
+    { titulo: 'Origen', ancho: 22, valor: (p) => (p.detalle.factor ? origenCumplimiento(p) : '') },
+    { titulo: 'Crecimiento', ancho: 12, valor: (p) => p.crecimiento_pct, formato: PCT },
+    { titulo: 'Bonos $', ancho: 12, valor: (p) => p.bono || null, formato: USD, total: (f) => sumaBonos(f) || null },
     ...pagoColumnas(tasa),
     { titulo: 'Observaciones', ancho: 52, valor: obs },
   ];
   const N = cols.length;
   const filas: ExcelRow[] = [cabecera(cols)];
-  const todos: PagoComision[] = [];
 
-  for (const e of equipos(nomina)) {
-    const asesores = e.grupos.flatMap((g) => g.asesores);
-    if (!asesores.length) continue;
-    filas.push(banda(e.titulo, N, COLOR.unidad, COLOR.unidadTexto));
-    for (const g of e.grupos) {
-      if (!g.asesores.length) continue;
-      const quien = g.pago ? `Supervisor · ${g.nombre}` : g.id === null ? 'Sin supervisor en la venta' : `Supervisa ${g.nombre}`;
-      filas.push(ancha(quien, N, { fontWeight: 'bold', backgroundColor: COLOR.supervisor, textColor: COLOR.tinta, indent: 1, height: 20, alignVertical: 'center' }));
-      g.asesores.forEach((p, i) => filas.push(filaDe(cols, p, i, p.neto === 0, 2)));
-    }
-    filas.push(totalDe(cols, asesores, `Total ${e.titulo.replace(/^.* · /, '')}`), vacia());
-    todos.push(...asesores);
+  for (const s of e.secciones) {
+    filas.push(banda(s.etiqueta, N, COLOR.oficina, COLOR.oficinaTexto));
+    s.pagos.forEach((p, i) => filas.push(filaDe(cols, p, i, p.neto === 0, 1)));
+    filas.push(totalDe(cols, s.pagos, `Total ${s.etiqueta.toLowerCase()}`), vacia());
   }
-  filas.push(totalDe(cols, todos, 'Total asesores', true));
-  return { sheetName: 'Asesores', rows: filas, widths: cols.map((c) => c.ancho), stickyRows: 1 };
-}
-
-function hojaSupervisores(nomina: Nomina, condiciones: CondicionesComision, tasa: number | null): ExcelStyledSheet {
-  const obs = observaciones(nomina, condiciones);
-  const asesoresDe = new Map(equipos(nomina).flatMap((e) => e.grupos).filter((g) => g.pago).map((g) => [g.pago!.persona_id, g.asesores.length]));
-  const cols: Col<PagoComision>[] = [
-    { titulo: 'Supervisor', ancho: 34, valor: (p) => p.nombre },
-    { titulo: 'Asesores', ancho: 9, valor: (p) => asesoresDe.get(p.persona_id) ?? 0, formato: ENTERO },
-    { titulo: 'Ventas propias', ancho: 10, valor: (p) => p.ventas_propias, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_propias) },
-    { titulo: 'Ventas de equipo', ancho: 10, valor: (p) => p.ventas_equipo, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_equipo) },
-    ...ventasColumnas,
-    { titulo: 'Antes del %', ancho: 13, valor: (p) => p.bruto, formato: USD, total: (f) => Math.round(sumar(f, (p) => p.bruto) * 100) / 100 },
-    {
-      titulo: 'Cumplimiento',
-      ancho: 13,
-      valor: (p) => p.factor_pct,
-      formato: PCT,
-      color: (p) => (p.factor_pct !== null && p.factor_pct < 100 ? COLOR.ambar : undefined),
-    },
-    { titulo: 'Origen', ancho: 22, valor: (p) => origenCumplimiento(p) },
-    { titulo: 'Cálculo', ancho: 48, valor: (p) => detalleCumplimiento(p) },
-    ...pagoColumnas(tasa),
-    { titulo: 'Observaciones', ancho: 44, valor: obs },
-  ];
-  const N = cols.length;
-  const filas: ExcelRow[] = [cabecera(cols)];
-  const todos: PagoComision[] = [];
-  for (const e of equipos(nomina)) {
-    const sup = e.grupos.flatMap((g) => (g.pago ? [g.pago] : []));
-    if (!sup.length) continue;
-    filas.push(banda(e.titulo, N, COLOR.unidad, COLOR.unidadTexto));
-    sup.forEach((p, i) => filas.push(filaDe(cols, p, i, p.neto === 0, 1)));
-    filas.push(totalDe(cols, sup, `Total ${e.titulo.replace(/^.* · /, '')}`), vacia());
-    todos.push(...sup);
+  for (const g of e.grupos) {
+    const personas = [...(g.pago ? [g.pago] : []), ...g.asesores];
+    filas.push(banda(g.pago ? `Supervisor · ${g.nombre}` : g.nombre, N, COLOR.unidad, COLOR.unidadTexto));
+    if (g.pago) filas.push(filaDe(cols, g.pago, 0, g.pago.neto === 0, 1));
+    g.asesores.forEach((p, i) => filas.push(filaDe(cols, p, i + 1, p.neto === 0, 2)));
+    filas.push(totalDe(cols, personas, `Total ${g.nombre}`), vacia());
   }
-  filas.push(totalDe(cols, todos, 'Total supervisores', true));
-  return { sheetName: 'Supervisores', rows: filas, widths: cols.map((c) => c.ancho), stickyRows: 1 };
-}
-
-function hojaCoordinadoresUn(nomina: Nomina, condiciones: CondicionesComision, tasa: number | null): ExcelStyledSheet {
-  const obs = observaciones(nomina, condiciones);
-  const cols: Col<PagoComision>[] = [
-    { titulo: 'Coordinador de UN', ancho: 34, valor: (p) => p.nombre },
-    { titulo: 'Ventas propias', ancho: 10, valor: (p) => p.ventas_propias, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_propias) },
-    { titulo: 'Ventas de equipo', ancho: 10, valor: (p) => p.ventas_equipo, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_equipo) },
-    ...ventasColumnas,
-    { titulo: 'Crecimiento', ancho: 13, valor: (p) => p.crecimiento_pct, formato: PCT },
-    { titulo: 'Origen', ancho: 14, valor: (p) => (p.crecimiento_fuente === 'manual' ? 'a mano' : p.crecimiento_fuente === null ? 'desconocido' : 'Unidades de negocio') },
-    { titulo: '$ por venta de equipo', ancho: 13, valor: (p) => p.detalle.monto_por_venta_equipo ?? null, formato: USD },
-    ...pagoColumnas(tasa),
-    { titulo: 'Observaciones', ancho: 44, valor: obs },
-  ];
-  const coords = nomina.unidades.flatMap((u) => (u.coordinador ? [u.coordinador] : []));
-  return {
-    sheetName: 'Coord. de UN',
-    rows: [cabecera(cols), ...coords.map((p, i) => filaDe(cols, p, i, p.neto === 0)), totalDe(cols, coords, 'Total coordinadores de UN', true)],
-    widths: cols.map((c) => c.ancho),
-    stickyRows: 1,
-  };
-}
-
-function hojaOficinas(nomina: Nomina, condiciones: CondicionesComision, tasa: number | null): ExcelStyledSheet {
-  const obs = observaciones(nomina, condiciones);
-  const comparte = new Map(nomina.oficinas.map((o) => [o.pago.persona_id, o.unidades.map((u) => `${u.nombre} (${u.ventas})`).join(', ')]));
-  const cols: Col<PagoComision>[] = [
-    { titulo: 'Coordinación de oficina', ancho: 34, valor: (p) => p.nombre },
-    { titulo: 'Ventas propias', ancho: 10, valor: (p) => p.ventas_propias, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_propias) },
-    { titulo: 'Con su Vendedor', ancho: 10, valor: (p) => p.ventas_equipo, formato: ENTERO, total: (f) => sumar(f, (p) => p.ventas_equipo) },
-    ...ventasColumnas,
-    { titulo: 'Antes del %', ancho: 13, valor: (p) => p.bruto, formato: USD, total: (f) => Math.round(sumar(f, (p) => p.bruto) * 100) / 100 },
-    {
-      titulo: 'Cumplimiento',
-      ancho: 13,
-      valor: (p) => p.factor_pct,
-      formato: PCT,
-      color: (p) => (p.factor_pct !== null && p.factor_pct < 100 ? COLOR.ambar : undefined),
-    },
-    { titulo: 'Origen', ancho: 22, valor: (p) => origenCumplimiento(p) },
-    { titulo: 'Cálculo', ancho: 48, valor: (p) => detalleCumplimiento(p) },
-    ...pagoColumnas(tasa),
-    { titulo: 'Comparte ventas con', ancho: 40, valor: (p) => comparte.get(p.persona_id) ?? '' },
-    { titulo: 'Observaciones', ancho: 40, valor: obs },
-  ];
-  const oficinas = nomina.oficinas.map((o) => o.pago);
-  return {
-    sheetName: 'Oficinas',
-    rows: [cabecera(cols), ...oficinas.map((p, i) => filaDe(cols, p, i, p.neto === 0)), totalDe(cols, oficinas, 'Total oficinas', true)],
-    widths: cols.map((c) => c.ancho),
-    stickyRows: 1,
-  };
+  filas.push(totalDe(cols, e.personas, `Total ${e.nombre}`, true));
+  // Los nombres de hoja de Excel: 31 caracteres como máximo, sin `/ \ ? * [ ]`.
+  return { sheetName: e.nombre.replace(/[/\\?*[\]]/g, ' ').slice(0, 31), rows: filas, widths: cols.map((c) => c.ancho), stickyRows: 1 };
 }
 
 function hojaVentas(ventas: VentaComision[]): ExcelStyledSheet {
@@ -415,7 +281,8 @@ function hojaVentas(ventas: VentaComision[]): ExcelStyledSheet {
     { titulo: 'Medio', ancho: 24, valor: (v) => v.medio },
     { titulo: 'Oportunidad/Administrador', ancho: 24, valor: (v) => v.medio_supervisor },
     { titulo: 'Vendedor', ancho: 30, valor: (v) => v.vendedor },
-    { titulo: 'Coordinador de UN', ancho: 24, valor: (v) => v.coord_un },
+    { titulo: 'Equipo', ancho: 16, valor: (v) => v.equipo },
+    { titulo: 'Unidades de negocio', ancho: 28, valor: (v) => v.unidades.join(', ') },
     { titulo: 'Avisos', ancho: 50, valor: (v) => v.avisos.join(' · ') },
   ];
   return {
@@ -426,24 +293,31 @@ function hojaVentas(ventas: VentaComision[]): ExcelStyledSheet {
   };
 }
 
-/** Descarga el libro del periodo: resumen, una hoja por cargo y el detalle de ventas. */
+/** Descarga el libro del periodo: resumen, una hoja por equipo y el detalle de ventas. */
 export async function exportarInforme(
   informe: InformeComision,
   ventas: VentaComision[],
   condiciones: CondicionesComision,
   tasa: number | null,
-  etiquetaCargo: (cargo: CargoVentas) => string,
+  etiquetaCargo: (rol: RolVentas) => string,
   /** Sin extensión. Por defecto `Comisiones <periodo>`; los cierres archivados llevan su versión. */
   nombre = `Comisiones ${informe.periodo}`,
+  /** Los equipos con sus roles, para nombrar y ordenar las hojas. */
+  equipos: { slug: string; nombre: string; roles: { rol: RolVentas; etiqueta: string }[] }[] = [],
 ): Promise<void> {
-  const nomina = armarNomina(informe);
+  const orden = equipos.length
+    ? equipos
+    : [...new Set(informe.pagos.map((p) => p.equipo))].map((slug) => ({
+      slug,
+      nombre: informe.pagos.find((p) => p.equipo === slug)?.equipo_nombre ?? slug,
+      roles: [...new Set(informe.pagos.filter((p) => p.equipo === slug).map((p) => p.rol))]
+        .map((rol) => ({ rol, etiqueta: etiquetaCargo(rol) })),
+    }));
+  const nomina = armarNomina(informe, orden);
   await downloadStyledWorkbook(
     [
       hojaResumen(informe, nomina, tasa, etiquetaCargo),
-      hojaCoordinadoresUn(nomina, condiciones, tasa),
-      hojaOficinas(nomina, condiciones, tasa),
-      hojaSupervisores(nomina, condiciones, tasa),
-      hojaAsesores(nomina, condiciones, tasa),
+      ...nomina.equipos.map((e) => hojaEquipo(e, nomina, condiciones, tasa, etiquetaCargo)),
       hojaVentas(ventas),
     ],
     nombre,

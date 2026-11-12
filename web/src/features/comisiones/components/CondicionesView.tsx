@@ -1,9 +1,10 @@
 /**
- * Comisiones › Condiciones de pago: tramos, tarifas, días promocionales y los % PYME.
+ * Comisiones › Condiciones: la ventana de pago (días promocionales, espera y corte) y los % PYME.
  *
- * Se abre en lectura, explicando cada regla con lo que paga; «Editar» pasa a
- * los formularios, con los cambios pendientes a la vista y los errores en la
- * fila que los causa antes de mandar nada al servidor.
+ * Cuánto cobra cada rol de cada equipo no se configura aquí sino en Catálogos ›
+ * Ventas. Se abre en lectura; «Editar» pasa al formulario, con los cambios
+ * pendientes a la vista y los errores en el campo que los causa antes de mandar
+ * nada al servidor.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -14,14 +15,10 @@ import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { comisionesApi } from '@/shared/lib/api/comisiones';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { Button, Panel, StatusMessage } from '@/shared/ui';
-import { cambiosPendientes, validarCondiciones, type Cambio } from '../lib/condiciones';
+import { cambiosPendientes, erroresCampos, type Cambio } from '../lib/condiciones';
 import type { ActualizacionCondiciones, ComisionesCondicionesProps, CondicionesComision } from '../types';
-import { AsesoresCard } from './condiciones/AsesoresCard';
-import { BonosMetaCard } from './condiciones/BonosMetaCard';
-import { CoordinadorUnCard, TarifasCard } from './condiciones/EquiposCards';
 import { PeriodoCard } from './condiciones/PeriodoCard';
 import { PlanesPymeCard } from './condiciones/PlanesPymeCard';
-import { RecorridoVenta, ResumenCargos } from './condiciones/ResumenCargos';
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
@@ -65,7 +62,7 @@ function ListaCambios({ cambios }: { cambios: Cambio[] }) {
  * que usó, así que cambiarlas solo afecta a lo que se calcule después (los
  * borradores incluidos, que se recalculan al abrirlos).
  */
-export function CondicionesView({ condiciones, actualizacion, estados, planesPyme, puedeEditarPlanes }: ComisionesCondicionesProps) {
+export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeEditarPlanes }: ComisionesCondicionesProps) {
   const [draft, setDraft] = useState<CondicionesComision>(condiciones);
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -80,7 +77,8 @@ export function CondicionesView({ condiciones, actualizacion, estados, planesPym
   }
 
   const cambios = useMemo(() => cambiosPendientes(condiciones, draft), [condiciones, draft]);
-  const validacion = useMemo(() => validarCondiciones(draft), [draft]);
+  const errores = useMemo(() => erroresCampos(draft), [draft]);
+  const totalErrores = Object.keys(errores).length;
   const sucio = editando && cambios.length > 0;
 
   // Salir con cambios sin guardar pregunta antes, cierre la pestaña o navegue por la app.
@@ -111,7 +109,9 @@ export function CondicionesView({ condiciones, actualizacion, estados, planesPym
     setGuardando(true);
     setEstado(null);
     try {
-      const respuesta = await comisionesApi.guardarCondiciones({ ...draft });
+      const respuesta = await comisionesApi.guardarCondiciones({
+        dia_promocional: draft.dia_promocional, dias_espera: draft.dias_espera, dia_corte: draft.dia_corte,
+      });
       setEditando(false);
       setEstado({ type: 'success', text: respuesta.message });
       router.reload({ only: ['condiciones', 'actualizacion'] });
@@ -129,7 +129,7 @@ export function CondicionesView({ condiciones, actualizacion, estados, planesPym
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-bold text-white">
             {cambios.length ? `${plural(cambios.length, 'cambio', 'cambios')} sin guardar` : 'Editando: todavía sin cambios'}
-            {validacion.total > 0 && <span className="text-rose-400"> · {plural(validacion.total, 'error', 'errores')} por corregir</span>}
+            {totalErrores > 0 && <span className="text-rose-400"> · {plural(totalErrores, 'error', 'errores')} por corregir</span>}
           </span>
           <span className="text-xs text-slate-400">
             Valdrán para lo que se calcule desde que guardes, borradores incluidos. Los periodos cerrados no cambian.
@@ -143,8 +143,8 @@ export function CondicionesView({ condiciones, actualizacion, estados, planesPym
         <Button
           icon={<Save className="h-4 w-4" />}
           isLoading={guardando}
-          disabled={!cambios.length || validacion.total > 0}
-          title={validacion.total > 0 ? 'Corrige los errores antes de guardar' : undefined}
+          disabled={!cambios.length || totalErrores > 0}
+          title={totalErrores > 0 ? 'Corrige los errores antes de guardar' : undefined}
           onClick={() => void guardar()}
         >
           Guardar condiciones
@@ -167,55 +167,15 @@ export function CondicionesView({ condiciones, actualizacion, estados, planesPym
       <div className="flex flex-col gap-6">
         {editando && cambios.length > 0 && <ListaCambios cambios={cambios} />}
 
-        {!editando && (
-          <>
-            <ResumenCargos condiciones={draft} />
-            <RecorridoVenta condiciones={draft} />
-          </>
-        )}
-
-        <AsesoresCard
-          tramos={draft.tramos_asesor}
-          guardados={condiciones.tramos_asesor}
-          editando={editando}
-          errores={validacion.asesor}
-          onChange={(tramos_asesor) => cambiar({ tramos_asesor })}
-        />
-
-        <BonosMetaCard
-          bonos={draft.bonos_meta ?? []}
-          guardados={condiciones.bonos_meta ?? []}
-          estados={estados}
-          editando={editando}
-          errores={validacion.bonos}
-          onChange={(bonos_meta) => cambiar({ bonos_meta })}
-        />
-
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <TarifasCard cargo="supervisor" borrador={draft} guardadas={condiciones} editando={editando} errores={validacion.campos} cambiar={cambiar} />
-          <TarifasCard cargo="coord_oficina" borrador={draft} guardadas={condiciones} editando={editando} errores={validacion.campos} cambiar={cambiar} />
-        </div>
-
-        <div className="grid grid-cols-1 gap-6">
-          <CoordinadorUnCard
-            borrador={draft}
-            guardadas={condiciones}
-            editando={editando}
-            errores={validacion.un}
-            erroresCampos={validacion.campos}
-            cambiar={cambiar}
-          />
-        </div>
-
         {editando ? (
           <>
-            <PeriodoCard borrador={draft} guardadas={condiciones} editando errores={validacion.campos} cambiar={cambiar} />
+            <PeriodoCard borrador={draft} guardadas={condiciones} editando errores={errores} cambiar={cambiar} />
             <PlanesPymeCard planes={planesPyme} puedeEditarPlanes={puedeEditarPlanes} compacto />
           </>
         ) : (
           <>
             <PlanesPymeCard planes={planesPyme} puedeEditarPlanes={puedeEditarPlanes} compacto={false} />
-            <PeriodoCard borrador={draft} guardadas={condiciones} editando={false} errores={validacion.campos} cambiar={cambiar} />
+            <PeriodoCard borrador={draft} guardadas={condiciones} editando={false} errores={errores} cambiar={cambiar} />
           </>
         )}
       </div>

@@ -5,7 +5,8 @@ import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { catalogosApi, type CatalogoPayload } from '@/shared/lib/api/catalogos';
 import type {
   AreaCatalogo,
-  CargoVentas,
+  CatalogoCondicionRol,
+  CatalogoMembresia,
   CatalogoNombrado,
   CatalogoObjetivoOficina,
   CatalogoPersonaVentas,
@@ -19,6 +20,8 @@ import type {
   CatalogoTipo,
   CatalogoZona,
   NivelObjetivoCatalogo,
+  ParametrosPago,
+  RolVentas,
   SemaforoObjetivos,
 } from '@/features/subscriptions/types';
 
@@ -33,10 +36,45 @@ export type ZonaDraft = {
   tecnologia: string;
   coordinador_id: number | null;
 };
-export type SiteDraft = { id?: number; nombre: string; orden: number };
+/** Un site en edición: sus zonas y los equipos que lo trabajan se eligen en el mismo formulario. */
+export type SiteDraft = { id?: number; nombre: string; orden: number; zona_ids: number[]; equipo_ids: number[] };
 export type NombreDraft = { id?: number; nombre: string; tipo: 'estados' };
-export type PersonaDraft = Omit<CatalogoPersonaVentas, 'id' | 'unidades' | 'estado_fijo' | 'site'> & { id?: number };
-export type UnidadDraft = { id?: number; nombre: string; persona_id: number | null };
+/**
+ * El papel de una persona en un equipo, en edición. En el alta se elige una
+ * persona que ya existe (`persona_id`) o se escribe una nueva; equipo y rol no
+ * cambian después.
+ */
+export type MembresiaDraft = {
+  id?: number;
+  equipo_id: number;
+  /** El slug del equipo, para saber qué roles y qué exige cada uno. */
+  equipo: string;
+  rol: RolVentas;
+  persona_id: number | null;
+  nombre: string;
+  apellido: string;
+  medio: string;
+  medio_supervisor: string;
+  usuario_odoo: string;
+  /** Otros nombres de la misma persona en cada columna del export. */
+  alias_medio: string[];
+  alias_supervisor: string[];
+  alias_usuario: string[];
+  site_ids: number[];
+  superior_id: number | null;
+  unidad_ids: number[];
+};
+export type UnidadDraft = { id?: number; nombre: string; zona_ids: number[]; equipo_ids: number[] };
+/** Las condiciones de un rol de un equipo en edición: se manda el objeto entero de parámetros. */
+export type CondicionDraft = {
+  equipo_id: number;
+  rol: RolVentas;
+  etiqueta: string;
+  equipo: string;
+  piezas: CatalogoCondicionRol['piezas'];
+  parametros: ParametrosPago;
+  defecto: ParametrosPago;
+};
 /**
  * Un tramo del objetivo de ventas de las oficinas. `persona_id` nulo es el
  * general; las ventas van como texto para que el campo pueda quedar vacío.
@@ -85,18 +123,12 @@ export type SemaforoDraft = SemaforoObjetivos;
 
 const comoTexto = (valor: number | null): string => (valor === null ? '' : String(valor));
 
-export type CatalogoVista =
-  | CargoVentas
-  | 'unidades'
-  | 'pendientes'
-  | 'planes'
-  | 'zonas'
-  | 'sites'
-  | 'estados'
-  | 'coordinadores'
-  | 'ignorados'
-  | 'reguladores'
-  | 'objetivos';
+/**
+ * La pestaña activa. Las de Productos, Estructura y Notificaciones son nombres
+ * fijos; las de Ventas llevan sección: `estructura/unidades`, `estructura/sites`,
+ * `estructura/objetivos` y, por equipo, `<slug>/<rol>` y `<slug>/condiciones`.
+ */
+export type CatalogoVista = string;
 
 const PLAN_VACIO: PlanDraft = {
   nombre: '',
@@ -133,47 +165,46 @@ interface Args {
   nuevoPlan?: string;
   /** Nombre que llega en `?nueva_zona=`: abre el alta de zona ya rellena. */
   nuevaZona?: string;
-  /** Literal y cargo de `?nueva_persona=&cargo=`: abre el alta de persona ya rellena. */
-  nuevaPersona?: { literal: string; cargo: CargoVentas };
+  /** Literal, equipo y rol de `?nueva_persona=&equipo=&rol=`: abre el alta de persona ya rellena. */
+  nuevaPersona?: { literal: string; equipo: string; rol: string };
+  /** Los equipos (id por slug), para resolver `nuevaPersona.equipo`. */
+  equipos?: { id: number; slug: string }[];
 }
 
+/** Los roles que aparecen en `Vendedor` (usuario de Odoo) y no en `Medio`. */
+const ROLES_CON_USUARIO: RolVentas[] = ['coord_oficina', 'administradora'];
+
 /**
- * Una persona en blanco del cargo indicado, rellena a partir del literal del
- * export si lo hay.
+ * Una membresía en blanco del rol y equipo indicados, rellena a partir del
+ * literal del export si lo hay.
  *
- * El literal de `Vendedor` (coordinador de oficina) es el nombre completo con
- * `(User)`: va entero al usuario de Odoo, y de él se adivinan nombre, apellido
- * y medio —dos nombres y dos apellidos es lo habitual—. Los de `Medio` son ya
- * nombre + apellido y van al medio. Todo queda editable: es una sugerencia.
+ * El literal de `Vendedor` (coordinadora de oficina, administradora) es el
+ * nombre completo con `(User)`: va entero al usuario de Odoo, y de él se
+ * adivinan nombre, apellido y medio —dos nombres y dos apellidos es lo
+ * habitual—. Los de `Medio` son ya nombre + apellido y van al medio. Todo
+ * queda editable: es una sugerencia.
  */
-export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft {
+export function membresiaDesde(
+  literal: string, rol: RolVentas, equipoId: number, equipo: string,
+): MembresiaDraft {
   const base = literal.replace(/\s*\(\s*users?\s*\)\s*$/i, '').trim();
   const partes = base.split(/\s+/).filter(Boolean);
-  if (cargo === 'coord_oficina') {
+  const vacia = {
+    equipo_id: equipoId, equipo, rol, persona_id: null, medio_supervisor: '', site_ids: [] as number[], superior_id: null,
+    alias_medio: [] as string[], alias_supervisor: [] as string[], alias_usuario: [] as string[],
+    unidad_ids: [] as number[],
+  };
+  if (ROLES_CON_USUARIO.includes(rol)) {
     const corte = partes.length >= 4 ? 2 : 1;
-    const nombre = partes.slice(0, corte).join(' ');
-    const apellido = partes.slice(corte).join(' ');
     return {
-      nombre,
-      apellido,
-      cargo,
-      medio: [partes[0], partes[corte]].filter(Boolean).join(' '),
-      medio_supervisor: '',
+      ...vacia,
+      nombre: partes.slice(0, corte).join(' '),
+      apellido: partes.slice(corte).join(' '),
+      medio: rol === 'coord_oficina' ? [partes[0], partes[corte]].filter(Boolean).join(' ') : '',
       usuario_odoo: literal ? `${base} (User)` : '',
-      estado_fijo_id: null,
-      site_id: null,
     };
   }
-  return {
-    nombre: partes[0] ?? '',
-    apellido: partes.slice(1).join(' '),
-    cargo,
-    medio: base,
-    medio_supervisor: '',
-    usuario_odoo: '',
-    estado_fijo_id: null,
-    site_id: null,
-  };
+  return { ...vacia, nombre: partes[0] ?? '', apellido: partes.slice(1).join(' '), medio: base, usuario_odoo: '' };
 }
 
 /**
@@ -191,7 +222,7 @@ export function personaDesde(literal: string, cargo: CargoVentas): PersonaDraft 
  * elegir una zona) y el servidor ya devuelve todo junto.
  */
 export function useCatalogos({
-  vistaInicial, sites = [], estados = [], nuevoPlan = '', nuevaZona = '', nuevaPersona,
+  vistaInicial, sites = [], estados = [], nuevoPlan = '', nuevaZona = '', nuevaPersona, equipos = [],
 }: Args) {
   const [vista, setVista] = useState<CatalogoVista>(vistaInicial);
   const [guardando, setGuardando] = useState(false);
@@ -221,9 +252,13 @@ export function useCatalogos({
     () => (nuevaZona ? zonaVacia(nuevaZona) : null),
   );
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
-  const [personaDraft, setPersonaDraft] = useState<PersonaDraft | null>(
-    () => (nuevaPersona?.literal ? personaDesde(nuevaPersona.literal, nuevaPersona.cargo) : null),
-  );
+  const [personaDraft, setPersonaDraft] = useState<MembresiaDraft | null>(() => {
+    const equipo = equipos.find((e) => e.slug === nuevaPersona?.equipo);
+    return nuevaPersona?.literal && equipo
+      ? membresiaDesde(nuevaPersona.literal, nuevaPersona.rol as RolVentas, equipo.id, equipo.slug)
+      : null;
+  });
+  const [condicionDraft, setCondicionDraft] = useState<CondicionDraft | null>(null);
   const [unidadDraft, setUnidadDraft] = useState<UnidadDraft | null>(null);
   const [objetivoOficinaDraft, setObjetivoOficinaDraft] = useState<ObjetivoOficinaDraft | null>(null);
   const [nombreDraft, setNombreDraft] = useState<NombreDraft | null>(null);
@@ -266,27 +301,50 @@ export function useCatalogos({
       coordinador_id: zona.coordinador_id,
     });
 
-  const nuevoSite = () => setSiteDraft({ nombre: '', orden: 999 });
-  const editarSite = (site: CatalogoSite) => setSiteDraft({ id: site.id, nombre: site.nombre, orden: site.orden });
+  const nuevoSite = () => setSiteDraft({ nombre: '', orden: 999, zona_ids: [], equipo_ids: [] });
+  const editarSite = (site: CatalogoSite) =>
+    setSiteDraft({
+      id: site.id, nombre: site.nombre, orden: site.orden, zona_ids: site.zona_ids, equipo_ids: site.equipo_ids,
+    });
 
-  const nuevaPersonaVacia = (cargo: CargoVentas) => setPersonaDraft(personaDesde('', cargo));
-  const crearPersonaDesde = (literal: string, cargo: CargoVentas) => setPersonaDraft(personaDesde(literal, cargo));
-  const editarPersona = (fila: CatalogoPersonaVentas) =>
+  const nuevaPersonaVacia = (rol: RolVentas, equipoId: number, equipo: string) =>
+    setPersonaDraft(membresiaDesde('', rol, equipoId, equipo));
+  const crearPersonaDesde = (literal: string, rol: RolVentas, equipoId: number, equipo: string) =>
+    setPersonaDraft(membresiaDesde(literal, rol, equipoId, equipo));
+  const editarPersona = (fila: CatalogoMembresia) =>
     setPersonaDraft({
       id: fila.id,
+      equipo_id: fila.equipo_id,
+      equipo: fila.equipo,
+      rol: fila.rol,
+      persona_id: fila.persona_id,
       nombre: fila.nombre,
       apellido: fila.apellido,
-      cargo: fila.cargo,
       medio: fila.medio,
       medio_supervisor: fila.medio_supervisor,
       usuario_odoo: fila.usuario_odoo,
-      estado_fijo_id: fila.estado_fijo_id,
-      site_id: fila.site_id,
+      alias_medio: fila.alias_medio,
+      alias_supervisor: fila.alias_supervisor,
+      alias_usuario: fila.alias_usuario,
+      site_ids: fila.site_ids,
+      superior_id: fila.superior_id,
+      unidad_ids: fila.unidad_ids,
     });
 
-  const nuevaUnidad = () => setUnidadDraft({ nombre: '', persona_id: null });
+  const editarCondicion = (fila: CatalogoCondicionRol) =>
+    setCondicionDraft({
+      equipo_id: fila.equipo_id,
+      equipo: fila.equipo,
+      rol: fila.rol,
+      etiqueta: fila.etiqueta,
+      piezas: fila.piezas,
+      parametros: structuredClone(fila.parametros),
+      defecto: fila.defecto,
+    });
+
+  const nuevaUnidad = () => setUnidadDraft({ nombre: '', zona_ids: [], equipo_ids: [] });
   const editarUnidad = (fila: CatalogoUnidadNegocio) =>
-    setUnidadDraft({ id: fila.id, nombre: fila.nombre, persona_id: fila.persona_id });
+    setUnidadDraft({ id: fila.id, nombre: fila.nombre, zona_ids: fila.zona_ids, equipo_ids: fila.equipo_ids });
 
   const nuevoObjetivoOficina = (personaId: number | null = null) =>
     setObjetivoOficinaDraft({ persona_id: personaId, desde: '', ventas: '', nota: '' });
@@ -351,6 +409,7 @@ export function useCatalogos({
     setZonaDraft(null);
     setSiteDraft(null);
     setPersonaDraft(null);
+    setCondicionDraft(null);
     setUnidadDraft(null);
     setObjetivoOficinaDraft(null);
     setNombreDraft(null);
@@ -389,22 +448,23 @@ export function useCatalogos({
   const ignorar = (area: AreaCatalogo, nombre: string) => guardar('ignorados', { nombre, nota: '', area });
 
   /**
-   * Registra de una vez varios nombres pendientes de ventas con el mismo cargo.
+   * Registra de una vez varios nombres pendientes de ventas con el mismo rol y equipo.
    *
-   * Cada persona sale de `personaDesde`, la misma sugerencia que rellena el
+   * Cada persona sale de `membresiaDesde`, la misma sugerencia que rellena el
    * formulario suelto: sin revisarla una a una, el nombre y el apellido son
    * una suposición que se corrige después en Catálogos › Ventas. El medio (y
    * el usuario de Odoo) es el literal del export, que es lo que cuenta para el
    * cruce. Lo que no entra se enumera con su motivo; lo demás queda guardado.
+   * Los roles que piden más (site, unidades) no se registran en bloque.
    */
-  const registrarPersonas = async (literales: string[], cargo: CargoVentas) => {
+  const registrarPersonas = async (literales: string[], rol: RolVentas, equipoId: number, equipo: string) => {
     setGuardando(true);
     setError(null);
     setAviso(null);
     try {
       const respuesta = await catalogosApi.guardarLote(
-        'personas',
-        literales.map((literal) => ({ ...personaDesde(literal, cargo) })),
+        'membresias',
+        literales.map((literal) => ({ ...membresiaDesde(literal, rol, equipoId, equipo) })),
       );
       if (respuesta.errores.length) {
         const MOSTRADOS = 5;
@@ -428,19 +488,22 @@ export function useCatalogos({
   };
 
   /**
-   * Vincula un nombre de `Oportunidad/Administrador` a quien ya está registrado: Odoo
-   * escribe a veces a la misma persona de otra forma como supervisor que como
-   * medio, y registrarla otra vez la partiría en dos.
+   * Vincula nombres del export a alguien ya registrado, como otros nombres suyos.
+   *
+   * La misma persona sale escrita de dos formas («Maria Campos» y «María
+   * Campos») y registrarla otra vez la partiría en dos. No toca sus nombres
+   * principales: añade `literal` a cada columna en la que aparecía.
    */
-  const vincularSupervisor = (persona: CatalogoPersonaVentas, literal: string) =>
+  const vincularNombre = (
+    persona: CatalogoPersonaVentas,
+    literal: string,
+    columnas: ('alias_medio' | 'alias_supervisor' | 'alias_usuario')[],
+  ) =>
     guardar('personas', {
       id: persona.id,
       nombre: persona.nombre,
       apellido: persona.apellido,
-      cargo: persona.cargo,
-      medio: persona.medio,
-      medio_supervisor: literal,
-      usuario_odoo: persona.usuario_odoo,
+      ...Object.fromEntries(columnas.map((c) => [c, [...persona[c], literal]])),
     });
 
   const confirmarBorrado = async () => {
@@ -465,6 +528,7 @@ export function useCatalogos({
     zonaDraft, setZonaDraft, nuevaZonaVacia, crearZonaDesde, editarZona,
     siteDraft, setSiteDraft, nuevoSite, editarSite,
     personaDraft, setPersonaDraft, nuevaPersonaVacia, crearPersonaDesde, editarPersona,
+    condicionDraft, setCondicionDraft, editarCondicion,
     unidadDraft, setUnidadDraft, nuevaUnidad, editarUnidad,
     objetivoOficinaDraft, setObjetivoOficinaDraft, nuevoObjetivoOficina, editarObjetivoOficina,
     nombreDraft, setNombreDraft, nuevoNombre, editarNombre,
@@ -473,6 +537,6 @@ export function useCatalogos({
     objetivoMesDraft, setObjetivoMesDraft, nuevoObjetivoMes, editarObjetivoMes,
     semaforoDraft, setSemaforoDraft, editarSemaforo,
     borrando, setBorrando, confirmarBorrado,
-    cerrarFormularios, guardar, ignorar, registrarPersonas, vincularSupervisor,
+    cerrarFormularios, guardar, ignorar, registrarPersonas, vincularNombre,
   };
 }

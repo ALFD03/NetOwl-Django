@@ -10,11 +10,11 @@ import { comisionesApi } from '@/shared/lib/api/comisiones';
 import { DataTable, ExportButton, SectionHeading, type Column, type ExportEstado } from '@/shared/ui';
 import { exportarInforme } from '../lib/exportar';
 import { formatoMonto } from '../lib/formato';
-import type { CargoVentas, CierreArchivado, CopiaCierre } from '../types';
+import type { CierreArchivado, CopiaCierre, RolVentas } from '../types';
 
 interface Props {
   archivos: CierreArchivado[];
-  etiquetaCargo: (cargo: CargoVentas) => string;
+  etiquetaCargo: (rol: RolVentas) => string;
 }
 
 export function CierresArchivados({ archivos, etiquetaCargo }: Props) {

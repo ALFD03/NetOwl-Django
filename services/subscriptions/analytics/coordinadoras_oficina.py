@@ -1,8 +1,9 @@
 """Las coordinadoras de oficina de cada site, con sus ventas del mes y su objetivo.
 
 Lo pinta el Sales Report bajo cada site. Una coordinadora de oficina
-(`PersonaVentas` con cargo `coord_oficina`) pertenece a un site por
-`PersonaVentas.site`; sin site no sale en el reporte.
+(la membresia de equipo con rol `coord_oficina`) pertenece a uno o varios sites por
+`MembresiaEquipo.sites`; sin site no sale en el reporte. Con varios, sale en el bloque
+de cada uno con las mismas cifras: las ventas son suyas, no de un site.
 
 De cada una se cuentan dos cosas del mes, por la fecha de instalacion
 (`fecha_inicio`) de las suscripciones:
@@ -113,11 +114,20 @@ def _ventas_por_dia(mes: str) -> dict[str, dict[str, list[int]]]:
     return vacio
 
 
+def _sumar_dias(por_clave: dict[str, list[int]], claves: set[str]) -> list[int]:
+    """Las ventas por dia de todas las formas en que Odoo escribe a la persona, sumadas."""
+    total = [0] * 31
+    for clave in claves:
+        for i, n in enumerate(por_clave.get(clave, ())):
+            total[i] += n
+    return total
+
+
 def get_coordinadoras_oficina(periodo: str | None) -> list[dict[str, Any]]:
     """Las coordinadoras de oficina con site, sus ventas por dia y su objetivo del mes.
 
     `periodo` es el del reporte (`"2026-10-01 al 2026-10-31"` o `"2026-10"`).
-    Una fila por coordinadora, ordenadas por site y nombre:
+    Una fila por coordinadora y site, ordenadas por site y nombre:
 
     - `site`: el nombre del site, para colgarla del bloque del reporte.
     - `propias_dia` / `oficina_dia`: instalaciones de cada dia como `Medio` y
@@ -128,18 +138,27 @@ def get_coordinadoras_oficina(periodo: str | None) -> list[dict[str, Any]]:
     Si la tabla de suscripciones no se puede leer se devuelven sin ventas: es
     una parte del reporte, y no merece romperlo entero.
     """
-    from services.catalogos.models import ObjetivoVentasOficina, PersonaVentas
+    from services.catalogos.models import MembresiaEquipo, ObjetivoVentasOficina
 
     mes = str(periodo or "")[:7]
     if not _MES.match(mes):
         return []
-    personas = list(
-        PersonaVentas.objects.filter(cargo="coord_oficina", site__isnull=False)
-        .select_related("site")
-        .order_by("site__orden", "site__nombre", "nombre", "apellido")
-    )
-    if not personas:
+    # Una fila por persona y site: la coordinadora que figurara en dos equipos con el
+    # mismo site saldria dos veces en su bloque.
+    vistas: set[tuple[int, int]] = set()
+    membresias = []
+    for m in (
+        MembresiaEquipo.objects.filter(rol="coord_oficina", sites__isnull=False)
+        .select_related("persona")
+        .prefetch_related("sites", "persona__alias")
+    ):
+        for site in m.sites.all():
+            if (m.persona_id, site.id) not in vistas:
+                vistas.add((m.persona_id, site.id))
+                membresias.append((site, m))
+    if not membresias:
         return []
+    membresias.sort(key=lambda t: (t[0].orden, t[0].nombre, t[1].persona.nombre, t[1].persona.apellido))
 
     general: list[tuple[str | None, int]] = []
     propios: dict[int, list[tuple[str | None, int]]] = {}
@@ -153,7 +172,8 @@ def get_coordinadoras_oficina(periodo: str | None) -> list[dict[str, Any]]:
         ventas = {"medio": {}, "vendedor": {}}
 
     filas = []
-    for p in personas:
+    for site, m in membresias:
+        p = m.persona
         objetivo = objetivo_vigente(propios.get(p.id, []), mes)
         origen = "individual" if objetivo is not None else None
         if objetivo is None:
@@ -162,9 +182,9 @@ def get_coordinadoras_oficina(periodo: str | None) -> list[dict[str, Any]]:
         filas.append({
             "id": p.id,
             "nombre": p.nombre_completo,
-            "site": p.site.nombre,
-            "propias_dia": ventas["medio"].get(clave_nombre(p.medio), [0] * 31),
-            "oficina_dia": ventas["vendedor"].get(clave_nombre(p.usuario_odoo), [0] * 31) if p.usuario_odoo else [0] * 31,
+            "site": site.nombre,
+            "propias_dia": _sumar_dias(ventas["medio"], p.claves("medio")),
+            "oficina_dia": _sumar_dias(ventas["vendedor"], p.claves("usuario")),
             "objetivo": objetivo,
             "origen_objetivo": origen,
         })

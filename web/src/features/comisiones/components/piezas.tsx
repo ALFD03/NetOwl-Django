@@ -4,19 +4,29 @@ import type { ReactNode } from 'react';
 
 import { formatoFecha, formatoPct } from '../lib/formato';
 import { minimoQuePaga } from '../lib/nomina';
-import type { CargoVentas, TramoAsesor, VentaComision } from '../types';
+import type { RolVentas, VentaComision } from '../types';
+import type { TramoPago } from '@/shared/types/subscriptions';
 
-export const CARGO_CHIP: Record<CargoVentas, { label: string; tono: string }> = {
-  coord_un: { label: 'Coord. de UN', tono: 'border-violet-500/30 bg-violet-500/10 text-violet-300' },
+const TONO_DIRECCION = 'border-violet-500/30 bg-violet-500/10 text-violet-300';
+
+/** Cómo se rotula cada rol en la nómina: nombre corto y color. */
+export const ROL_CHIP: Record<RolVentas, { label: string; tono: string }> = {
+  jefe: { label: 'Jefe', tono: TONO_DIRECCION },
+  jefe_un: { label: 'Jefe de UN', tono: TONO_DIRECCION },
+  coord_un: { label: 'Coord. de UN', tono: TONO_DIRECCION },
+  gerente_un: { label: 'Gerente de UN', tono: TONO_DIRECCION },
+  gerente_ops: { label: 'Gerente de operaciones', tono: 'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300' },
   coord_oficina: { label: 'Coord. de oficina', tono: 'border-sky-500/30 bg-sky-500/10 text-sky-300' },
   supervisor: { label: 'Supervisor', tono: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' },
   asesor: { label: 'Asesor', tono: 'border-slate-600/50 bg-slate-700/30 text-slate-300' },
+  administradora: { label: 'Administradora', tono: 'border-amber-500/30 bg-amber-500/10 text-amber-300' },
+  telemarketing: { label: 'Telemarketing', tono: 'border-slate-600/50 bg-slate-700/30 text-slate-300' },
 };
 
-export function ChipCargo({ cargo, children }: { cargo: CargoVentas; children?: ReactNode }) {
+export function ChipRol({ rol, children }: { rol: RolVentas; children?: ReactNode }) {
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${CARGO_CHIP[cargo].tono}`}>
-      {children ?? CARGO_CHIP[cargo].label}
+    <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${ROL_CHIP[rol].tono}`}>
+      {children ?? ROL_CHIP[rol].label}
     </span>
   );
 }
@@ -65,7 +75,7 @@ export function Medidor({ pct, nota }: { pct: number | null; nota: string }) {
 }
 
 /** Dónde caen las ventas de un asesor respecto a sus tramos, con una marca en cada inicio. */
-export function BarraTramo({ ventas, tramos }: { ventas: number; tramos: TramoAsesor[] }) {
+export function BarraTramo({ ventas, tramos }: { ventas: number; tramos: TramoPago[] }) {
   const cortes = tramos.map((t) => t.desde).filter((d) => d > 0);
   const tope = Math.max(ventas, (cortes[cortes.length - 1] ?? 10) + 4);
   const paga = ventas >= (minimoQuePaga(tramos) ?? Infinity);
@@ -114,11 +124,10 @@ export function PagadaEl({ venta }: { venta: VentaComision }) {
   );
 }
 
-/** Pagado, En proceso de pago y Pagado parcialmente cuentan; lo demás no. */
+/** Pagado y En proceso de pago cuentan; lo demás no (tampoco «Pagado parcialmente»). */
 const PAGO_TONO: Record<string, string> = {
   Pagado: 'text-emerald-400',
   'En proceso de pago': 'text-emerald-400',
-  'Pagado parcialmente': 'text-emerald-400',
 };
 
 /**

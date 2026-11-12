@@ -163,8 +163,8 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     tone: 'yellow',
     perms: [
       { key: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL, label: 'Productos (planes, reguladores y sus pendientes)', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Estructura (zonas, sites, estados y sus pendientes)', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_VENTAS, label: 'Ventas (coordinadores y objetivos comerciales)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Estructura (zonas, estados y sus pendientes)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_CATALOGO_VENTAS, label: 'Ventas (sites, unidades de negocio, equipos de ventas con sus condiciones de pago, y objetivos)', section: 'Administrar' },
     ],
   },
   {
@@ -206,7 +206,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     tone: 'green',
     perms: [
       { key: PERMISSIONS.VIEW_COMISIONES, label: 'Ver el informe de comisiones', section: 'Ver' },
-      { key: PERMISSIONS.MANAGE_COMISIONES, label: 'Calcular, revisar y cerrar periodos; supervisores por UN y condiciones', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_COMISIONES, label: 'Calcular, revisar y cerrar periodos; ventana de pago y PYME', section: 'Administrar' },
       { key: PERMISSIONS.REOPEN_COMISIONES, label: 'Reabrir un periodo cerrado (archiva el cierre)', section: 'Administrar' },
       { key: PERMISSIONS.DELETE_COMISIONES, label: 'Borrar un informe en borrador (no se deshace)', section: 'Administrar' },
     ],

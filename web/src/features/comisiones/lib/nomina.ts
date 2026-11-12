@@ -1,29 +1,23 @@
 /**
- * La nómina ordenada como se paga: las unidades de negocio, cada una con sus
- * supervisores y los asesores de cada supervisor; las oficinas, y aparte lo que
- * no tiene unidad.
+ * La nómina ordenada como se paga: un bloque por equipo de ventas y, dentro, los
+ * roles de dirección (jefes, coordinadores y gerentes, la administradora, las
+ * oficinas) y los supervisores con los asesores de cada uno.
  *
- * Las oficinas no son parte de ninguna unidad: cobran por las ventas que las
- * nombran como `Vendedor`, las cargue el supervisor que las cargue. Se dice con
- * qué unidades comparten ventas, pero nunca se meten dentro, y **no llevan
- * equipo**: en su sección solo está la coordinadora.
+ * **Cada persona sale una vez por equipo** y con su pago entero (el tramo de un
+ * asesor depende de todas sus ventas y no se reparte), así que la suma de los
+ * equipos es exactamente el total a pagar. Quien tiene papel en dos equipos (el
+ * gerente de operaciones) sale en cada uno con lo que cobra allí.
  *
- * **Lo que no tiene unidad asignada va aparte**, en «Sin unidad de negocio», a
- * petición del usuario: no se deduce de qué oficina o site es nadie. El
- * supervisor va a la UN que tiene asignada en Comisiones › Supervisores, y
- * sin ella, aparte. El asesor va con el supervisor con quien carga más ventas
- * y a donde vaya ese supervisor; si quien más le supervisa no tiene unidad, o
- * es una oficina, o sus ventas no traen supervisor, aparte.
- *
- * **Cada persona sale una sola vez** y con su pago entero (el tramo de un
- * asesor depende de todas sus ventas y no se reparte), así que la suma de las
- * unidades y las oficinas es exactamente el total a pagar.
+ * Un asesor va con el supervisor con quien carga más ventas; si le carga otro,
+ * se dice cuántas. Sin supervisor registrado, va a «Sin supervisor». Nada se
+ * deduce de la oficina o del site de nadie.
  */
 
 import { formatoMonto, formatoPct } from './formato';
 import type {
-  CondicionesComision, EstadoBono, FilaEquipo, InformeComision, PagoComision, TramoAsesor, TramoUn,
+  CondicionesComision, FilaEquipo, InformeComision, PagoComision, RolVentas, VentaComision,
 } from '../types';
+import type { TramoPago } from '@/shared/types/subscriptions';
 
 // --- Las cifras de una persona ------------------------------------------------------
 
@@ -33,307 +27,232 @@ export const ventasValidadas = (p: PagoComision): number => p.ventas_propias + p
 /**
  * De sus validadas, las que se pagan.
  *
- * Solo el asesor y el coordinador de UN sin crecimiento cobran menos ventas de
- * las que validaron. El supervisor y la oficina cobran todas: su cumplimiento
- * recorta el monto, no las ventas. La PYME de un plan sin % no se paga.
+ * Solo quien cobra por tramos (asesores, telemarketing) y el coordinador de UN
+ * sin crecimiento conocido cobran menos ventas de las que validaron. Los demás
+ * cobran todas: su cumplimiento recorta el monto, no las ventas. La PYME de un
+ * plan sin % no se paga.
  */
 export function ventasPagadas(p: PagoComision): number {
   const pyme = p.ventas_pyme - p.pyme_sin_porcentaje;
-  if (p.cargo === 'asesor') return (p.detalle.ventas_pagadas ?? 0) + pyme;
-  if (p.cargo === 'coord_un' && p.crecimiento_pct === null) return p.ventas_propias + pyme;
+  if (p.detalle.ventas_pagadas !== undefined) return p.detalle.ventas_pagadas + pyme;
+  if (p.rol === 'coord_un' && p.detalle.monto_por_venta_equipo === undefined) return p.ventas_propias + pyme;
   return p.ventas_propias + p.ventas_equipo + pyme;
 }
 
 /** El tramo en el que cae una cantidad de ventas: el último que empieza en o antes. */
-export function tramoAsesor(ventas: number, tramos: TramoAsesor[]): TramoAsesor {
+export function tramoAsesor(ventas: number, tramos: TramoPago[]): TramoPago {
   let elegido = tramos[0];
   for (const tramo of tramos) if (tramo.desde <= ventas) elegido = tramo;
   return elegido;
 }
 
 /** El siguiente tramo que paga más por venta; nulo en el último. */
-export const siguienteTramo = (ventas: number, tramos: TramoAsesor[]): TramoAsesor | null =>
+export const siguienteTramo = (ventas: number, tramos: TramoPago[]): TramoPago | null =>
   tramos.find((t) => t.desde > ventas) ?? null;
 
-/** Desde cuántas ventas empieza a cobrar un asesor. */
-export const minimoQuePaga = (tramos: TramoAsesor[]): number | null =>
+/** Desde cuántas ventas empieza a cobrar quien cobra por tramos. */
+export const minimoQuePaga = (tramos: TramoPago[]): number | null =>
   tramos.find((t) => t.monto > 0)?.desde ?? null;
 
 /** `6–19`, `20`, `26+`. */
-export function rangoTramo(tramo: TramoAsesor, tramos: TramoAsesor[]): string {
+export function rangoTramo(tramo: TramoPago, tramos: TramoPago[]): string {
   const siguiente = tramos[tramos.indexOf(tramo) + 1];
   if (!siguiente) return `${tramo.desde}+`;
   return siguiente.desde - 1 === tramo.desde ? String(tramo.desde) : `${tramo.desde}–${siguiente.desde - 1}`;
 }
-
-/** Los cortes de crecimiento a partir de los que cambia el monto por venta del coordinador de UN. */
-export const cortesCrecimiento = (tramos: TramoUn[]): number[] =>
-  tramos.map((t) => t.desde_pct).filter((d): d is number => d !== null);
 
 /**
  * Por qué cobra menos de lo que validó, o nada. Nulo si cobra todo.
  *
  * Es lo que acompaña a una fila atenuada: un $0 sin motivo se lee como un error.
  */
-export function motivoRecorte(p: PagoComision, condiciones: CondicionesComision): string | null {
+export function motivoRecorte(p: PagoComision, tramos: TramoPago[] | undefined): string | null {
   const sinPorcentaje = p.pyme_sin_porcentaje ? ` · ${p.pyme_sin_porcentaje} PYME sin % de comisión` : '';
-  if (p.cargo === 'asesor') {
-    const pagadas = p.detalle.ventas_pagadas ?? 0;
-    const minimo = minimoQuePaga(condiciones.tramos_asesor);
+  if (p.detalle.ventas_pagadas !== undefined) {
+    const pagadas = p.detalle.ventas_pagadas;
+    const minimo = tramos ? minimoQuePaga(tramos) : null;
     if (p.ventas_propias > 0 && !p.detalle.monto_por_venta) {
       return `${p.ventas_propias} ${p.ventas_propias === 1 ? 'venta' : 'ventas'}: no llega a ${minimo ?? 'el primer tramo'}${sinPorcentaje}`;
     }
     if (pagadas < p.ventas_propias) return `Su tramo descuenta ${p.ventas_propias - pagadas}${sinPorcentaje}`;
   }
-  if (p.cargo === 'coord_un' && p.crecimiento_pct === null && p.ventas_equipo) {
+  if (p.rol === 'coord_un' && p.detalle.monto_por_venta_equipo === undefined && p.ventas_equipo) {
     return `Crecimiento desconocido: las ${p.ventas_equipo} ventas de su equipo no se pagan${sinPorcentaje}`;
   }
-  if ((p.cargo === 'supervisor' || p.cargo === 'coord_oficina') && p.factor_pct !== null && p.factor_pct < 100) {
+  if (p.factor_pct !== null && p.factor_pct < 100) {
     return `Cobra el ${formatoPct(p.factor_pct)} de ${formatoMonto(p.bruto)}${sinPorcentaje}`;
   }
   return sinPorcentaje ? sinPorcentaje.slice(3) : null;
 }
 
-/** De dónde sale el estado del bono de un asesor: `fijado a mano`, `zona Los Parques, 107 clientes`. */
-export function origenEstado(e: EstadoBono): string {
-  if (e.fuente === 'fijado') return 'fijado a mano';
-  return `zona ${e.zona}${e.clientes !== null ? `, ${e.clientes} ${e.clientes === 1 ? 'cliente' : 'clientes'}` : ''}`;
-}
+/** Los bonos de un pago, uno por línea: `Meta de 30 ventas: +$120,00`. Vacío si no cobra ninguno. */
+export const notasBono = (p: PagoComision): string[] =>
+  (p.detalle.bonos ?? []).map((b) => `${b.concepto}: +${formatoMonto(b.monto)}`);
 
-/** `Bono por meta (Aragua): +$80,00`; nulo si no cobra bono. */
-export function notaBono(p: PagoComision): string | null {
-  if (!p.bono_meta) return null;
-  return `Bono por meta${p.estado_bono ? ` (${p.estado_bono.nombre})` : ''}: +${formatoMonto(p.bono_meta)}`;
+/**
+ * Las ventas válidas por las que cobra un pago: las que hizo él mismo y las de su
+ * alcance de equipo (`equipo.alcance` de sus condiciones), sin las de oficina si
+ * las excluye. Es lo mismo que decide `pagos.calcular_pagos` en el servidor.
+ */
+export function ventasDelPago(p: PagoComision, ventas: VentaComision[], condiciones: CondicionesComision): VentaComision[] {
+  const alcance = condiciones.equipos?.[p.equipo]?.[p.rol]?.equipo;
+  return ventas.filter((v) => {
+    if (v.clasificacion !== 'valida' || v.equipo !== p.equipo) return false;
+    if (v.medio_id === p.persona_id) return true;
+    if (v.pyme || !alcance) return false;
+    if (alcance.excluir_oficina && v.es_oficina) return false;
+    switch (alcance.alcance) {
+      case 'supervisados': return v.supervisor_id === p.persona_id;
+      case 'oficina': return v.coord_oficina_id === p.persona_id;
+      case 'unidades': return v.unidades.some((u) => p.unidades.includes(u));
+      case 'equipo_completo': return true;
+      default: return false;
+    }
+  });
 }
 
 // --- La jerarquía -------------------------------------------------------------------
 
+/** La clave de un pago en la nómina: una persona puede cobrar en dos equipos. */
+export const clavePago = (p: Pick<PagoComision, 'persona_id' | 'equipo'>): string => `${p.persona_id}:${p.equipo}`;
+
 const SIN = 'sin';
-const clave = (id: number | null) => (id === null ? SIN : String(id));
 
-/** Con quién comparte ventas una unidad o una oficina. */
-export interface Relacion {
-  id: number | null;
-  nombre: string;
-  ventas: number;
-}
-
-/** Los asesores que cargan sus ventas con un mismo supervisor, dentro de una unidad. */
+/** Los asesores que cargan sus ventas con un mismo supervisor. */
 export interface GrupoSupervisor {
   key: string;
   id: number | null;
   nombre: string;
-  /**
-   * Su pago si es un supervisor. Nulo si quien supervisa es el coordinador de
-   * la unidad o una oficina (cobran en su sitio) o si la venta no lo trae.
-   */
+  /** Su pago si es un supervisor del equipo; nulo si no lo es o la venta no lo trae. */
   pago: PagoComision | null;
-  /** Quién supervisa cuando no es un supervisor: `coord_un`, `coord_oficina` o nadie. */
-  supervisa: 'supervisor' | 'coord_un' | 'coord_oficina' | 'nadie';
   asesores: PagoComision[];
   usd: number;
 }
 
-export interface Unidad {
-  key: string;
-  id: number | null;
-  nombre: string;
-  /** Lo que cobra el coordinador de UN; nulo en «sin unidad» o si no cobra. */
-  coordinador: PagoComision | null;
-  grupos: GrupoSupervisor[];
-  /** Todos los que cobran en ella, cada uno una vez. */
-  personas: PagoComision[];
-  /** Las ventas válidas que pasaron por la unidad (en «sin unidad», las que no traen ninguna). */
-  ventas: number;
-  oficinas: Relacion[];
+/** Los pagos de un rol de dirección dentro de un equipo (jefe, coordinadores, gerentes, oficinas...). */
+export interface SeccionRol {
+  rol: RolVentas;
+  etiqueta: string;
+  pagos: PagoComision[];
   usd: number;
 }
 
-export interface Oficina {
-  pago: PagoComision;
-  unidades: Relacion[];
-  /** Solo la coordinadora: una oficina no lleva equipo. */
+export interface EquipoNomina {
+  slug: string;
+  nombre: string;
+  secciones: SeccionRol[];
+  grupos: GrupoSupervisor[];
+  /** Todos los que cobran en el equipo, cada uno una vez. */
   personas: PagoComision[];
+  /** Las ventas válidas del equipo. */
+  ventas: number;
   usd: number;
 }
 
 export interface Nomina {
-  /** Las unidades de negocio; la última puede ser «Sin unidad de negocio» (`id` nulo). */
-  unidades: Unidad[];
-  oficinas: Oficina[];
-  /** Ventas válidas de cada persona que quedaron en otro equipo (incluidas en su pago). */
-  fuera: Map<number, { ventas: number; donde: string }>;
-  /** Dónde quedó cada persona, para el buscador: `u:<unidad>` u `o:<oficina>`. */
-  ubicacion: Map<number, string>;
+  equipos: EquipoNomina[];
+  /** Ventas válidas de cada persona que quedaron con otro supervisor (incluidas en su pago), por `clavePago`. */
+  fuera: Map<string, { ventas: number; donde: string }>;
+  /** El equipo donde quedó cada pago, para el buscador. */
+  ubicacion: Map<string, string>;
 }
 
-const sumar = (m: Map<string, number>, k: string, n: number) => m.set(k, (m.get(k) ?? 0) + n);
-const anidado = <K>(m: Map<K, Map<string, number>>, k: K) => {
-  let interior = m.get(k);
-  if (!interior) {
-    interior = new Map();
-    m.set(k, interior);
-  }
-  return interior;
-};
+const total = (personas: PagoComision[]) => Math.round(personas.reduce((t, p) => t + p.neto, 0) * 100) / 100;
+const porNeto = (a: PagoComision, b: PagoComision) => b.neto - a.neto || a.nombre.localeCompare(b.nombre);
 /** La clave con más ventas; a igualdad, la menor, para que el reparto no dependa del orden. */
 const mayor = (m: Map<string, number> | undefined): string | null => {
   if (!m || m.size === 0) return null;
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
 };
-const total = (personas: PagoComision[]) => Math.round(personas.reduce((t, p) => t + p.neto, 0) * 100) / 100;
-const porNeto = (a: PagoComision, b: PagoComision) => b.neto - a.neto || a.nombre.localeCompare(b.nombre);
+
+/** Los roles que se presentan como grupos de supervisor con sus asesores. */
+const ROLES_EN_GRUPO: RolVentas[] = ['supervisor', 'asesor'];
 
 /**
  * Arma la nómina de un informe a partir de `equipos`: quién vendió con quién.
  *
- * - Cada coordinador de UN encabeza su unidad.
- * - Cada supervisor va a la UN que tiene asignada; sin ella, aparte.
- * - Cada asesor va con el supervisor con quien carga más ventas, y a donde vaya
- *   ese supervisor; si le carga otro, se dice cuántas. Si quien más le
- *   supervisa no es un supervisor con unidad ni un coordinador de UN, aparte.
- * - Cada oficina va a su sección, sola, con las unidades con que comparte ventas.
+ * - Cada equipo, en el orden de `orden`, con sus roles en el orden del equipo.
+ * - Supervisores y asesores van en grupos; el resto de roles, en secciones por rol.
+ * - Cada asesor va con el supervisor con quien carga más ventas.
  */
-export function armarNomina(informe: InformeComision): Nomina {
-  const filas: FilaEquipo[] = (informe.equipos ?? []).filter((f) => f.ventas + f.pyme > 0);
-  const pagos = new Map(informe.pagos.map((p) => [p.persona_id, p]));
-  const persona = (id: number) => informe.personas?.[String(id)];
-  const nombre = (id: number | null) =>
-    id === null ? '' : pagos.get(id)?.nombre || persona(id)?.nombre || '—';
-  const cargo = (id: number | null) =>
-    id === null ? null : pagos.get(id)?.cargo ?? (persona(id)?.cargo || null);
+export function armarNomina(
+  informe: InformeComision,
+  orden: { slug: string; nombre: string; roles: { rol: RolVentas; etiqueta: string }[] }[],
+): Nomina {
+  const filas: FilaEquipo[] = informe.equipos.filter((f) => f.ventas + f.pyme > 0);
+  const persona = (id: number) => informe.personas[String(id)];
 
-  const supervisaEn = new Map<number, Map<string, number>>(); // supervisor → unidad → ventas
-  const vendeCon = new Map<number, Map<string, number>>(); // quien vende → supervisor → ventas
-  const ventasUnidad = new Map<string, number>();
-  const unidadOficina = new Map<string, Map<string, number>>();
-  const oficinaUnidad = new Map<number, Map<string, number>>();
+  const fuera = new Map<string, { ventas: number; donde: string }>();
+  const ubicacion = new Map<string, string>();
 
-  for (const f of filas) {
-    const n = f.ventas + f.pyme;
-    const u = clave(f.coord_un_id);
-    sumar(ventasUnidad, u, n);
-    if (f.supervisor_id !== null) sumar(anidado(supervisaEn, f.supervisor_id), u, n);
-    if (f.medio_id !== null) sumar(anidado(vendeCon, f.medio_id), clave(f.supervisor_id), n);
-    sumar(anidado(unidadOficina, u), clave(f.coord_oficina_id), n);
-    if (f.coord_oficina_id !== null) sumar(anidado(oficinaUnidad, f.coord_oficina_id), u, n);
-  }
+  const equipos = orden.flatMap<EquipoNomina>((e) => {
+    const pagos = informe.pagos.filter((p) => p.equipo === e.slug);
+    if (pagos.length === 0) return [];
+    const delEquipo = filas.filter((f) => f.equipo === e.slug);
+    const porClave = new Map(pagos.map((p) => [p.persona_id, p]));
 
-  /**
-   * La unidad de quien supervisa, sin deducir nada: la suya si es coordinador
-   * de UN, la asignada si es supervisor. Un cierre anterior a enviar la
-   * asignación la toma de sus ventas, que la traen de esa misma asignación.
-   */
-  const unidadDeSupervisor = (id: number): string => {
-    const c = cargo(id);
-    if (c === 'coord_un') return String(id);
-    if (c !== 'supervisor') return SIN;
-    const datos = persona(id);
-    if (datos && 'coord_un_id' in datos) return clave(datos.coord_un_id ?? null);
-    return mayor(supervisaEn.get(id)) ?? SIN;
-  };
-
-  const oficinas: Oficina[] = informe.pagos
-    .filter((p) => p.cargo === 'coord_oficina')
-    .map((p) => ({
-      pago: p,
-      unidades: [...(oficinaUnidad.get(p.persona_id) ?? new Map<string, number>()).entries()]
-        .map(([k, ventas]) => ({ id: k === SIN ? null : Number(k), nombre: k === SIN ? 'Sin unidad de negocio' : nombre(Number(k)), ventas }))
-        .sort((a, b) => b.ventas - a.ventas),
-      personas: [p],
-      usd: total([p]),
-    }));
-
-  const unidades = new Map<string, Unidad>();
-  const unidad = (key: string): Unidad => {
-    let u = unidades.get(key);
-    if (!u) {
-      const id = key === SIN ? null : Number(key);
-      u = {
-        key, id, nombre: id === null ? 'Sin unidad de negocio' : nombre(id),
-        coordinador: null, grupos: [], personas: [], ventas: ventasUnidad.get(key) ?? 0, oficinas: [], usd: 0,
-      };
-      unidades.set(key, u);
+    // Con quién vende cada uno: quien vende → supervisor → ventas.
+    const vendeCon = new Map<number, Map<string, number>>();
+    for (const f of delEquipo) {
+      if (f.medio_id === null) continue;
+      const m = vendeCon.get(f.medio_id) ?? new Map<string, number>();
+      const k = f.supervisor_id === null ? SIN : String(f.supervisor_id);
+      m.set(k, (m.get(k) ?? 0) + f.ventas + f.pyme);
+      vendeCon.set(f.medio_id, m);
     }
-    return u;
-  };
-  const grupo = (u: Unidad, supKey: string): GrupoSupervisor => {
-    let g = u.grupos.find((x) => x.key === supKey);
-    if (!g) {
-      const id = supKey === SIN ? null : Number(supKey);
-      const c = cargo(id);
-      const pago = id !== null && c === 'supervisor' ? pagos.get(id) ?? null : null;
-      g = {
-        key: supKey, id, nombre: id === null ? 'Sin supervisor' : nombre(id), pago,
-        supervisa: id === null ? 'nadie' : c === 'coord_un' ? 'coord_un' : c === 'coord_oficina' ? 'coord_oficina' : 'supervisor',
-        asesores: [], usd: 0,
-      };
-      u.grupos.push(g);
-    }
-    return g;
-  };
 
-  const fuera = new Map<number, { ventas: number; donde: string }>();
-  const ubicacion = new Map<number, string>();
-  /** Las ventas de `m` fuera de la clave elegida: las que cargó en otro equipo. */
-  const resto = (m: Map<string, number> | undefined, elegida: string) =>
-    [...(m ?? new Map<string, number>()).entries()].reduce((t, [k, n]) => t + (k === elegida ? 0 : n), 0);
+    const secciones: SeccionRol[] = e.roles
+      .filter((r) => !ROLES_EN_GRUPO.includes(r.rol))
+      .map((r) => {
+        const delRol = pagos.filter((p) => p.rol === r.rol).sort(porNeto);
+        return { rol: r.rol, etiqueta: r.etiqueta, pagos: delRol, usd: total(delRol) };
+      })
+      .filter((s) => s.pagos.length > 0);
 
-  for (const p of informe.pagos) {
-    const id = p.persona_id;
-    if (p.cargo === 'coord_oficina') {
-      ubicacion.set(id, `o:${id}`);
-      continue;
-    }
-    if (p.cargo === 'coord_un') {
-      const u = unidad(String(id));
-      u.coordinador = p;
-      ubicacion.set(id, `u:${u.key}`);
-      continue;
-    }
-    if (p.cargo === 'supervisor') {
-      const key = unidadDeSupervisor(id);
-      grupo(unidad(key), String(id));
-      ubicacion.set(id, `u:${key}`);
-      continue;
-    }
-    // Asesor: con quien más le supervisa, y a donde vaya ese supervisor.
-    const supKey = mayor(vendeCon.get(id)) ?? SIN;
-    const supId = supKey === SIN ? null : Number(supKey);
-    const key = supId === null ? SIN : unidadDeSupervisor(supId);
-    // Aparte se agrupa por supervisor solo si lo es; una oficina o nadie, «Sin supervisor».
-    const grupoKey = key === SIN && cargo(supId) !== 'supervisor' ? SIN : supKey;
-    grupo(unidad(key), grupoKey).asesores.push(p);
-    ubicacion.set(id, `u:${key}`);
-    const conOtros = resto(vendeCon.get(id), supKey);
-    if (conOtros) fuera.set(id, { ventas: conOtros, donde: 'otro supervisor' });
-  }
+    const grupos = new Map<string, GrupoSupervisor>();
+    const grupo = (key: string): GrupoSupervisor => {
+      let g = grupos.get(key);
+      if (!g) {
+        const id = key === SIN ? null : Number(key);
+        const pago = id !== null && porClave.get(id)?.rol === 'supervisor' ? porClave.get(id) ?? null : null;
+        g = { key, id, nombre: id === null ? 'Sin supervisor' : pago?.nombre ?? persona(id)?.nombre ?? '—', pago, asesores: [], usd: 0 };
+        grupos.set(key, g);
+      }
+      return g;
+    };
 
-  for (const u of unidades.values()) {
-    for (const g of u.grupos) {
+    for (const p of pagos) {
+      ubicacion.set(clavePago(p), e.slug);
+      if (p.rol === 'supervisor') {
+        grupo(String(p.persona_id));
+      } else if (p.rol === 'asesor') {
+        const supKey = mayor(vendeCon.get(p.persona_id)) ?? SIN;
+        // Un supervisor sin pago en este equipo (o una oficina) no encabeza grupo: «Sin supervisor».
+        const key = supKey !== SIN && porClave.get(Number(supKey))?.rol === 'supervisor' ? supKey : SIN;
+        grupo(key).asesores.push(p);
+        const conOtros = [...(vendeCon.get(p.persona_id) ?? new Map<string, number>()).entries()]
+          .reduce((t, [k, n]) => t + (k === supKey ? 0 : n), 0);
+        if (conOtros) fuera.set(clavePago(p), { ventas: conOtros, donde: 'otro supervisor' });
+      }
+    }
+    for (const g of grupos.values()) {
       g.asesores.sort(porNeto);
       g.usd = total([...(g.pago ? [g.pago] : []), ...g.asesores]);
     }
-    // Primero lo que supervisa quien encabeza, luego por lo que cobra el
-    // equipo, y lo que no tiene supervisor al final.
-    u.grupos.sort((a, b) =>
-      Number(a.key === SIN) - Number(b.key === SIN)
-      || Number(b.key === u.key) - Number(a.key === u.key)
-      || b.usd - a.usd
-      || a.nombre.localeCompare(b.nombre));
-    u.personas = [...(u.coordinador ? [u.coordinador] : []), ...u.grupos.flatMap((g) => [...(g.pago ? [g.pago] : []), ...g.asesores])];
-    u.usd = total(u.personas);
-    if (u.key === SIN) continue;
-    u.oficinas = [...(unidadOficina.get(u.key) ?? new Map<string, number>()).entries()]
-      .filter(([k]) => k !== SIN)
-      .map(([k, ventas]) => ({ id: Number(k), nombre: nombre(Number(k)), ventas }))
-      .sort((a, b) => b.ventas - a.ventas);
-  }
+    const listaGrupos = [...grupos.values()].sort((a, b) =>
+      Number(a.key === SIN) - Number(b.key === SIN) || b.usd - a.usd || a.nombre.localeCompare(b.nombre));
 
-  return {
-    unidades: [...unidades.values()].sort((a, b) => Number(a.id === null) - Number(b.id === null) || b.usd - a.usd),
-    oficinas: oficinas.sort((a, b) => b.usd - a.usd || a.pago.nombre.localeCompare(b.pago.nombre)),
-    fuera,
-    ubicacion,
-  };
+    const personas = [...secciones.flatMap((s) => s.pagos), ...listaGrupos.flatMap((g) => [...(g.pago ? [g.pago] : []), ...g.asesores])];
+    return [{
+      slug: e.slug,
+      nombre: e.nombre,
+      secciones,
+      grupos: listaGrupos,
+      personas,
+      ventas: delEquipo.reduce((t, f) => t + f.ventas + f.pyme, 0),
+      usd: total(personas),
+    }];
+  });
+
+  return { equipos, fuera, ubicacion };
 }

@@ -1,15 +1,15 @@
-"""Configuracion de pago de comisiones: los supervisores de cada UN y las condiciones.
+"""Configuracion de comisiones: la ventana de pago y los periodos.
 
-Quien cobra por una venta sale de la propia suscripcion y de nada mas:
-`Medio` es quien vendio, `Oportunidad/Administrador` su supervisor y `Vendedor` el
-coordinador de oficina. Lo unico que Odoo no trae es el coordinador de unidad
-de negocio, y eso es lo que se configura aqui: a que coordinador de UN
-responde cada supervisor (`SupervisorUnidad`). La venta paga al de su
-supervisor; un supervisor sin coordinador de UN no le paga a ninguno.
+Quien cobra por una venta sale de la propia suscripcion y del directorio de
+equipos (`catalogos.MembresiaEquipo`): `Medio` es quien vendio,
+`Oportunidad/Administrador` su supervisor y `Vendedor` la coordinadora de
+oficina; el resto de la estructura (a quien responde un supervisor, que
+unidades lleva cada quien) la dicen las membresias.
 
-Las condiciones son las tarifas y los tramos. No se versionan: un periodo
-cerrado guarda una copia de las que uso (ver `ComisionPeriodo`), asi que
-cambiarlas solo afecta a lo que se calcule despues.
+Las tarifas, tramos y bonos ya no estan aqui: son las condiciones de cada rol
+de cada equipo (`catalogos.CondicionesEquipo`). Un periodo cerrado guarda copia
+de las que uso (ver `ComisionPeriodo`), asi que cambiarlas solo afecta a lo
+que se calcule despues.
 """
 
 from __future__ import annotations
@@ -22,86 +22,25 @@ from django.db import models
 from services.catalogos.models import PersonaVentas
 
 
-class SupervisorUnidad(models.Model):
-    """El coordinador de unidad de negocio al que responde un supervisor.
-
-    Una fila por supervisor; sin fila, sus ventas no pagan a ningun
-    coordinador de UN. Es independiente de la oficina para la que carga: un
-    mismo coordinador de UN tiene supervisores de oficinas distintas, y la
-    oficina de cada venta la dice su `Vendedor`. La vista comprueba los cargos
-    al guardar.
-    """
-
-    supervisor = models.OneToOneField(PersonaVentas, on_delete=models.CASCADE, related_name="unidad_comision")
-    coord_un = models.ForeignKey(PersonaVentas, on_delete=models.CASCADE, related_name="supervisores_comision")
-    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    actualizado_en = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "comisiones_supervisor_unidad"
-        verbose_name = "coordinador de UN de un supervisor"
-        verbose_name_plural = "supervisores por coordinador de UN"
-
-    def __str__(self):
-        return f"{self.supervisor} -> {self.coord_un}"
-
-
+# Valores por defecto de campos que ya no existen. Se conservan porque las
+# migraciones 0001 y 0009 los referencian por su ruta; no se usan para nada mas.
 def _tramos_asesor() -> list[dict]:
-    """Los tramos de la politica vigente cuando se escribio el modulo.
-
-    Cada tramo vale desde `desde` ventas hasta el siguiente. Se pagan
-    `(ventas - descontar) * monto`: de 6 a 19 se descuentan 5, de modo que 19
-    ventas cobran 14; desde 20 se pagan todas, y cada vez a mas.
-    """
-    return [
-        {"desde": 0, "monto": 0, "descontar": 0},
-        {"desde": 6, "monto": 5, "descontar": 5},
-        {"desde": 20, "monto": 6, "descontar": 0},
-        {"desde": 21, "monto": 7, "descontar": 0},
-        {"desde": 26, "monto": 8, "descontar": 0},
-    ]
+    return []
 
 
 def _tramos_un() -> list[dict]:
-    """Lo que cobra el coordinador de UN por venta de su equipo, segun el crecimiento.
-
-    Cada tramo vale desde `desde_pct` (nulo: desde siempre) hasta el
-    siguiente. La politica dice "mayor a 1% y menor a 2%" y "menor a 1%", y no
-    dice nada del 1% exacto: aqui cobra 1.5, porque el tramo empieza en el.
-    """
-    return [
-        {"desde_pct": None, "monto": 1},
-        {"desde_pct": 1, "monto": 1.5},
-        {"desde_pct": 2, "monto": 2},
-    ]
+    return []
 
 
 def _bonos_meta() -> list[dict]:
-    """Sin bonos: los de la politica los siembra `comisiones/0009`, que conoce los estados."""
     return []
 
 
 class CondicionesComision(models.Model):
-    """Las tarifas y los tramos de pago. Fila unica (pk=1).
+    """La ventana de pago de los periodos. Fila unica (pk=1).
 
-    - **Asesor** (residencial, como `Medio`): por tramos de cantidad de ventas
-      (`tramos_asesor`).
-    - **Supervisor**: `monto_equipo` por cada venta residencial de su equipo y
-      `monto_directa` por cada una propia, y el total por el % de cumplimiento
-      de su objetivo (tope 100%).
-    - **Coordinador de oficina**: la misma regla con sus tarifas,
-      `monto_equipo_oficina` y `monto_directa_oficina`. Se separaron porque la
-      oficina cobra 2.5$ tambien por la venta propia, no 4$.
-    - **Coordinador de unidad de negocio**: por cada venta residencial de su
-      equipo, el monto del tramo de crecimiento de sus unidades
-      (`tramos_un`), y `monto_directa_un` por cada una propia. Sin objetivo.
-    - **PYME**: el % del plan (`Plan.comision_pyme_pct`) a quien la vendio,
-      y a nadie mas. No cuenta para ningun tramo.
-    - **Bono por meta del asesor** (`bonos_meta`): un monto unico, aparte de
-      los tramos, segun cuantas ventas residenciales hizo y el estado en que
-      vende. Una entrada por estado, `{"estado_id", "tramos": [{"desde",
-      "monto"}]}`; cada tramo vale desde `desde` ventas hasta el siguiente, y
-      por debajo del primero no hay bono. Un estado sin entrada no tiene bono.
+    Es lo unico global de las condiciones: las reglas que deciden si una venta
+    cuenta son las mismas para todos los equipos.
 
     `dia_promocional` es el dia en que suelen empezar los dias promocionales,
     que es donde se corta cada periodo de comisiones; se propone al calcular
@@ -112,14 +51,6 @@ class CondicionesComision(models.Model):
     `ComisionPeriodo.corte_adelantos`); tambien se propone y se cambia por mes.
     """
 
-    monto_equipo = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("2.5"))
-    monto_directa = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("4"))
-    monto_equipo_oficina = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("2.5"))
-    monto_directa_oficina = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("2.5"))
-    monto_directa_un = models.DecimalField(max_digits=8, decimal_places=2, default=Decimal("4"))
-    tramos_asesor = models.JSONField(default=_tramos_asesor)
-    tramos_un = models.JSONField(default=_tramos_un)
-    bonos_meta = models.JSONField(default=_bonos_meta)
     dia_promocional = models.PositiveSmallIntegerField(default=25)
     dias_espera = models.PositiveSmallIntegerField(default=15)
     dia_corte = models.PositiveSmallIntegerField(default=22)

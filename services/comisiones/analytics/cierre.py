@@ -50,7 +50,7 @@ def cerrar_periodo(periodo: ComisionPeriodo, usuario) -> dict:
                 periodo=periodo,
                 persona_id=p["persona_id"],
                 nombre=p["nombre"][:170],
-                cargo=p["cargo"],
+                cargo=p["rol"],
                 neto=Decimal(str(p["neto"])),
                 datos=p,
             )

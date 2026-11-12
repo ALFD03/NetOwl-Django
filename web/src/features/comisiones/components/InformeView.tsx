@@ -13,16 +13,17 @@ import {
 } from '@/shared/ui';
 import { useInformeComisiones } from '../hooks/useInformeComisiones';
 import { exportarInforme } from '../lib/exportar';
-import { origenEstado } from '../lib/nomina';
+import { notasBono, ventasDelPago } from '../lib/nomina';
 import {
   aBs, diaAnterior, formatoBs, formatoFecha, formatoMes, formatoMonto, formatoTasa, mesSiguiente, nombreMes, totalBs,
 } from '../lib/formato';
-import type { CargoVentas, ComisionesInformeProps, InformeComision, PagoComision, TramoVenta } from '../types';
+import type { ComisionesInformeProps, InformeComision, PagoComision, RolVentas, TramoVenta } from '../types';
 import { CierresArchivados } from './CierresArchivados';
 import { IndicadoresPanel } from './IndicadoresPanel';
 import { ManualesPanel } from './ManualesPanel';
 import { NominaView } from './NominaView';
 import { PeriodoForm } from './PeriodoForm';
+import { ROL_CHIP } from './piezas';
 import { PromoAnteriorTabla } from './PromoAnteriorTabla';
 import { PromoMesTabla } from './PromoMesTabla';
 import { RevisionTabla } from './RevisionTabla';
@@ -41,10 +42,10 @@ const TRAMO_DE: Partial<Record<Vista, TramoVenta>> = { promo_anterior: 'promo_an
 
 /** Cuántos % faltan: lo mismo que el servidor exige para cerrar. */
 function indicadoresPendientes(informe: InformeComision): number {
-  const sinCumplimiento = informe.pagos.filter(
-    (p) => (p.cargo === 'supervisor' || p.cargo === 'coord_oficina') && p.cumplimiento_pct === null && p.bruto,
-  ).length;
-  const sinCrecimiento = informe.pagos.filter((p) => p.cargo === 'coord_un' && p.crecimiento_pct === null && p.ventas_equipo).length;
+  const pago = (f: { persona_id: number; equipo: string }) =>
+    informe.pagos.find((p) => p.persona_id === f.persona_id && p.equipo === f.equipo);
+  const sinCumplimiento = informe.indicadores.factores.filter((f) => f.valor === null && (pago(f)?.bruto ?? 0) > 0).length;
+  const sinCrecimiento = informe.indicadores.crecimientos.filter((c) => c.valor === null && (pago(c)?.ventas_equipo ?? 0) > 0).length;
   return sinCumplimiento + sinCrecimiento;
 }
 
@@ -59,7 +60,7 @@ function indicadoresPendientes(informe: InformeComision): number {
  * sus ventas válidas no vuelven a contar en otro.
  */
 export function InformeView({
-  periodo, periodos, informe, error, propuesta, condiciones, cargos, puedeGestionar, puedeReabrir, puedeBorrar, archivos,
+  periodo, periodos, informe, error, propuesta, condiciones, equipos, puedeGestionar, puedeReabrir, puedeBorrar, archivos,
 }: ComisionesInformeProps) {
   const c = useInformeComisiones(periodo, Boolean(informe));
   const editable = puedeGestionar && informe?.estado === 'borrador';
@@ -88,7 +89,7 @@ export function InformeView({
   const [desglose, setDesglose] = useState<PagoComision | null>(null);
   const [exportando, setExportando] = useState(false);
 
-  const etiquetaCargo = (cargo: CargoVentas) => cargos.find((o) => o.value === cargo)?.label ?? cargo;
+  const etiquetaCargo = (rol: RolVentas) => ROL_CHIP[rol].label;
   const irA = (mes: string) => router.get('/comisiones/', { periodo: mes }, { preserveScroll: true });
 
   const verDesglose = (pago: PagoComision) => {
@@ -112,10 +113,8 @@ export function InformeView({
 
   const ventasDelDesglose = useMemo(() => {
     if (!desglose || !c.ventas) return [];
-    const id = desglose.persona_id;
-    return c.ventas.filter((v) => v.clasificacion === 'valida'
-      && [v.medio_id, v.supervisor_id, v.coord_oficina_id, v.coord_un_id].includes(id));
-  }, [desglose, c.ventas]);
+    return ventasDelPago(desglose, c.ventas, condiciones);
+  }, [desglose, c.ventas, condiciones]);
 
   // La de pago es la de CONATEL del mes siguiente; la de hoy, solo una referencia.
   // `?.` por los periodos cerrados antes de que el informe llevara tasa.
@@ -126,7 +125,7 @@ export function InformeView({
     setExportando(true);
     try {
       const ventas = c.ventas ?? (await c.cargarVentas()) ?? [];
-      await exportarInforme(informe, ventas, condiciones, tasa, etiquetaCargo);
+      await exportarInforme(informe, ventas, condiciones, tasa, etiquetaCargo, undefined, equipos);
     } catch {
       c.setError('No se pudo generar el Excel del informe.');
     } finally {
@@ -423,6 +422,7 @@ export function InformeView({
           {paso === 'nomina' && (
             <NominaView
               informe={informe}
+              equipos={equipos}
               condiciones={condiciones}
               tasa={tasa}
               onVerPersona={verDesglose}
@@ -672,7 +672,7 @@ export function InformeView({
         title={desglose?.nombre ?? ''}
         subtitle={
           desglose
-            ? `${etiquetaCargo(desglose.cargo)} · ${desglose.ventas_propias + desglose.ventas_equipo + desglose.ventas_pyme} ventas validadas · ${formatoMonto(desglose.neto)}${
+            ? `${etiquetaCargo(desglose.rol)} · ${desglose.equipo_nombre} · ${desglose.ventas_propias + desglose.ventas_equipo + desglose.ventas_pyme} ventas validadas · ${formatoMonto(desglose.neto)}${
               tasa !== null ? ` · ${formatoBs(aBs(desglose.neto, tasa))}` : ''
             } a pagar`
             : ''
@@ -685,11 +685,9 @@ export function InformeView({
             {desglose.avisos.length > 0 && (
               <StatusMessage status={{ type: 'warning', text: desglose.avisos.join(' · ') }} icon={<AlertTriangle />} />
             )}
-            {desglose.estado_bono && (
+            {notasBono(desglose).length > 0 && (
               <p className="text-xs text-slate-400">
-                Estado del bono por meta: <strong className="text-white">{desglose.estado_bono.nombre}</strong>{' '}
-                ({origenEstado(desglose.estado_bono)})
-                {desglose.bono_meta ? <> · <strong className="text-amber-400">+{formatoMonto(desglose.bono_meta)}</strong></> : ' · sin bono este mes'}
+                Bonos: {notasBono(desglose).map((b) => <strong key={b} className="mr-3 text-amber-400">{b}</strong>)}
               </p>
             )}
             {c.ventas ? <VentasTabla ventas={ventasDelDesglose} /> : <LoadingState message="Cargando ventas..." />}

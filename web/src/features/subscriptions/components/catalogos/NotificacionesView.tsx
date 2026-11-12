@@ -8,15 +8,15 @@ import { Button, DataTable, EmptyState, Modal, NeonContainer, SelectMenu, type C
 import { useCatalogos } from '@/features/subscriptions/hooks/useCatalogos';
 import type {
   AreaCatalogo,
-  CargoVentas,
   CatalogoProductoIgnorado,
   CatalogosNotificacionesProps,
   ColumnaVentas,
   PersonaPendiente,
   ProductoPendiente,
+  RolVentas,
 } from '@/features/subscriptions/types';
 import { IgnoradoForm, PlanForm, ZonaForm } from './CatalogoForms';
-import { PersonaForm } from './VentasForms';
+import { MembresiaForm, ROL_UI } from './VentasForms';
 import { BarraCatalogo, ConfirmarBorrado, ErrorCatalogo, columnaAcciones, enviar } from './CatalogoComun';
 
 /**
@@ -61,13 +61,15 @@ const COLUMNA_VENTAS: Record<ColumnaVentas, string> = {
   medio: 'Medio',
 };
 
-/** Los cargos tal y como se sugieren al registrar. */
-const CARGO_SUGERIDO: Record<PersonaPendiente['cargo'], string> = {
-  asesor: 'Asesor',
-  supervisor: 'Supervisor',
-  coord_oficina: 'Coord. de oficina',
-  coord_un: 'Coord. de UN',
-};
+/** Dónde se guarda como otro nombre de la persona lo que aparece en cada columna del export. */
+const ALIAS_DE_COLUMNA = {
+  medio: 'alias_medio',
+  medio_supervisor: 'alias_supervisor',
+  vendedor: 'alias_usuario',
+} as const;
+
+/** El rol tal y como se sugiere al registrar. */
+const rolSugerido = (rol: PersonaPendiente['rol']) => ROL_UI[rol].corto;
 
 /**
  * La bandeja del módulo. «Por registrar» es lo que está en los datos y
@@ -90,36 +92,49 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
   // identifica entre recargas. Lo que ya no está en la lista (se registró o
   // se ignoró) se descarta al leerla, sin esperar a que nadie la limpie.
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
-  // `null` es "el sugerido": el que comparten las elegidas, si lo comparten.
-  const [cargoLote, setCargoLote] = useState<CargoVentas | null>(null);
+  // El equipo donde se registra y, en bloque, con qué rol. `null` es "el sugerido":
+  // el que comparten las elegidas, si lo comparten.
+  const [equipoSlug, setEquipoSlug] = useState<string>(opciones.equipos[0]?.slug ?? '');
+  const [rolLote, setRolLote] = useState<RolVentas | null>(null);
+  const equipoElegido = opciones.equipos.find((e) => e.slug === equipoSlug);
+  // El rol de un pendiente en el equipo elegido: el sugerido si el equipo lo tiene; si no, el de quien vende.
+  const rolEnEquipo = (sugerido: RolVentas): RolVentas | null => {
+    const roles = equipoElegido?.roles ?? [];
+    if (roles.some((r) => r.rol === sugerido)) return sugerido;
+    return (roles.find((r) => r.rol === 'asesor') ?? roles.find((r) => r.rol === 'telemarketing') ?? roles[0])?.rol ?? null;
+  };
+  // En bloque solo los roles que no piden más que el nombre y el medio.
+  const rolesEnBloque = (equipoElegido?.roles ?? []).filter((r) => r.medio && !r.site && !r.unidades && !r.usuario);
   const seleccionVigente = useMemo(() => {
     const presentes = new Set((pendientes.ventas ?? []).map((p) => p.nombre));
     return new Set([...seleccion].filter((nombre) => presentes.has(nombre)));
   }, [seleccion, pendientes.ventas]);
-  const cargoSugerido = useMemo(() => {
-    const cargos = new Set((pendientes.ventas ?? [])
+  const rolSugeridoLote = useMemo(() => {
+    const roles = new Set((pendientes.ventas ?? [])
       .filter((p) => seleccionVigente.has(p.nombre))
-      .map((p) => p.cargo));
-    return cargos.size === 1 ? [...cargos][0] : null;
+      .map((p) => p.rol));
+    return roles.size === 1 ? [...roles][0] : null;
   }, [seleccionVigente, pendientes.ventas]);
-  const cargoElegido = cargoLote ?? cargoSugerido;
+  const rolElegido = rolLote ?? (rolSugeridoLote && rolesEnBloque.some((r) => r.rol === rolSugeridoLote) ? rolSugeridoLote : null);
   const cambiarSeleccion = (siguiente: Set<string>) => {
     setSeleccion(siguiente);
-    if (siguiente.size === 0) setCargoLote(null);
+    if (siguiente.size === 0) setRolLote(null);
   };
-  // El nombre de «Oportunidad/Administrador» que se está vinculando a alguien ya
-  // registrado, y a quién.
-  const [vinculando, setVinculando] = useState<string | null>(null);
+  // El nombre pendiente que se está vinculando a alguien ya registrado, y a quién.
+  const [vinculando, setVinculando] = useState<PersonaPendiente | null>(null);
   const [vincularA, setVincularA] = useState('');
   const vincular = async () => {
-    const persona = opciones.supervisores.find((p) => String(p.id) === vincularA);
+    const persona = opciones.personas.find((p) => String(p.id) === vincularA);
     if (!persona || !vinculando) return;
-    if (await c.vincularSupervisor(persona, vinculando)) setVinculando(null);
+    const columnas = (Object.keys(ALIAS_DE_COLUMNA) as ColumnaVentas[])
+      .filter((col) => vinculando.ordenes[col])
+      .map((col) => ALIAS_DE_COLUMNA[col]);
+    if (await c.vincularNombre(persona, vinculando.nombre, columnas)) setVinculando(null);
   };
 
   const registrarSeleccion = async () => {
-    if (!cargoElegido || seleccionVigente.size === 0) return;
-    const registradas = await c.registrarPersonas([...seleccionVigente], cargoElegido);
+    if (!rolElegido || !equipoElegido || seleccionVigente.size === 0) return;
+    const registradas = await c.registrarPersonas([...seleccionVigente], rolElegido, equipoElegido.id, equipoElegido.slug);
     if (registradas > 0) cambiarSeleccion(new Set());
   };
   const registrar = (area: keyof typeof LISTAS, nombre: string) =>
@@ -178,10 +193,10 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
         .join(' · '),
     },
     {
-      header: 'Cargo sugerido',
-      accessor: (row) => CARGO_SUGERIDO[row.cargo],
+      header: 'Rol sugerido',
+      accessor: (row) => rolSugerido(row.rol),
       filterable: true,
-      filterValue: (row) => CARGO_SUGERIDO[row.cargo],
+      filterValue: (row) => rolSugerido(row.rol),
     },
     {
       header: 'Acciones',
@@ -191,20 +206,24 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
           <Button
             size="sm"
             icon={<Plus className="h-4 w-4" />}
-            onClick={() => c.crearPersonaDesde(row.nombre, row.cargo)}
+            disabled={!equipoElegido}
+            onClick={() => {
+              const rol = rolEnEquipo(row.rol);
+              if (equipoElegido && rol) c.crearPersonaDesde(row.nombre, rol, equipoElegido.id, equipoElegido.slug);
+            }}
           >
             Registrar
           </Button>
-          {Boolean(row.ordenes.medio_supervisor) && opciones.supervisores.length > 0 && (
+          {opciones.personas.length > 0 && (
             <Button
               size="sm"
               variant="secondary"
               icon={<Link2 className="h-4 w-4" />}
               onClick={() => {
-                setVinculando(row.nombre);
+                setVinculando(row);
                 setVincularA('');
               }}
-              title="Es alguien ya registrado, que Odoo escribe distinto como supervisor"
+              title="Es alguien ya registrado, que Odoo escribe de otra forma (con otra tilde, por ejemplo)"
             >
               Vincular
             </Button>
@@ -306,10 +325,13 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
                 <>
                   <BarraLote
                     seleccionadas={seleccionVigente.size}
-                    cargo={cargoElegido}
-                    cargos={opciones.cargos}
+                    equipo={equipoSlug}
+                    equipos={opciones.equipos.map((e) => ({ value: e.slug, label: e.nombre }))}
+                    onEquipo={(slug) => { setEquipoSlug(slug); setRolLote(null); }}
+                    rol={rolElegido}
+                    roles={rolesEnBloque.map((r) => ({ value: r.rol, label: r.etiqueta }))}
                     guardando={c.guardando}
-                    onCargo={(valor) => setCargoLote(valor as CargoVentas)}
+                    onRol={(valor) => setRolLote(valor as RolVentas)}
                     onRegistrar={registrarSeleccion}
                     onLimpiar={() => cambiarSeleccion(new Set())}
                   />
@@ -319,7 +341,7 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
                     searchable
                     searchPlaceholder="Buscar nombre..."
                     scrollClassName={SCROLL_TABLA}
-                    selection={{ rowKey: (row) => row.nombre, selected: seleccionVigente, onChange: cambiarSeleccion }}
+                    selection={{ rowKey: (row) => row.nombre, selected: seleccionVigente, onChange: cambiarSeleccion, conservar: true }}
                   />
                 </>
               )}
@@ -427,25 +449,33 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
         icon={<Briefcase className="h-5 w-5 text-emerald-400" />}
         theme="green"
       >
-        {c.personaDraft && (
-          <PersonaForm
-            value={c.personaDraft}
-            cargos={opciones.cargos}
-            estados={opciones.estados}
-            sites={opciones.sites}
-            saving={c.guardando}
-            onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('personas', { ...c.personaDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
+        {c.personaDraft && (() => {
+          const equipo = opciones.equipos.find((e) => e.slug === c.personaDraft!.equipo);
+          const rol = equipo?.roles.find((r) => r.rol === c.personaDraft!.rol);
+          return equipo && rol ? (
+            <MembresiaForm
+              value={c.personaDraft}
+              equipos={opciones.equipos}
+              equipo={equipo}
+              rol={rol}
+              personas={opciones.personas}
+              membresias={opciones.membresias}
+              sites={opciones.sites}
+              unidades={opciones.coordinadores}
+              saving={c.guardando}
+              onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
+              onSubmit={(e) => enviar(e, () => c.guardar('membresias', { ...c.personaDraft }))}
+              onClose={c.cerrarFormularios}
+            />
+          ) : null;
+        })()}
       </Modal>
 
       <Modal
         isOpen={vinculando !== null}
         onClose={() => setVinculando(null)}
-        title="Vincular nombre de supervisor"
-        subtitle="La misma persona, escrita distinto en «Oportunidad/Administrador»"
+        title="Vincular a una persona registrada"
+        subtitle="La misma persona, escrita de otra forma en las suscripciones"
         icon={<Link2 className="h-5 w-5 text-sky-400" />}
         theme="blue"
         size="md"
@@ -453,7 +483,12 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
         {vinculando !== null && (
           <div className="space-y-5">
             <p className="text-sm text-slate-300">
-              Las ventas con <strong className="text-white">«{vinculando}»</strong> como supervisor serán de:
+              Las ventas con <strong className="text-white">«{vinculando.nombre}»</strong> como{' '}
+              {(Object.keys(ALIAS_DE_COLUMNA) as ColumnaVentas[])
+                .filter((col) => vinculando.ordenes[col])
+                .map((col) => COLUMNA_VENTAS[col].toLowerCase())
+                .join(' y ')}{' '}
+              serán de:
             </p>
             <SelectMenu
               aria-label="Persona registrada"
@@ -461,14 +496,14 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
               searchable
               value={vincularA}
               placeholder="Elige a la persona"
-              options={opciones.supervisores.map((p) => ({
+              options={opciones.personas.map((p) => ({
                 value: String(p.id),
-                label: `${p.nombre} ${p.apellido} · ${CARGO_SUGERIDO[p.cargo]}${p.medio_supervisor ? ` · ya es «${p.medio_supervisor}»` : ''}`,
+                label: `${p.nombre} ${p.apellido} · ${p.membresias.map((m) => m.etiqueta).join(', ')}`,
               }))}
               onChange={setVincularA}
             />
             <p className="text-[11px] text-slate-500">
-              Se guarda como su nombre «como supervisor»: su medio no cambia. Si ya tenía otro, se sustituye.
+              Se añade como otro nombre suyo en esa columna: sus nombres principales no cambian y sus ventas se suman.
             </p>
             <div className="flex justify-end gap-3">
               <Button variant="outline" onClick={() => setVinculando(null)}>
@@ -489,28 +524,51 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
 
 interface BarraLoteProps {
   seleccionadas: number;
-  /** `null` cuando las elegidas no comparten cargo sugerido y nadie eligió uno. */
-  cargo: CargoVentas | null;
-  cargos: { value: string; label: string }[];
+  /** El equipo donde se registra. */
+  equipo: string;
+  equipos: { value: string; label: string }[];
+  onEquipo: (slug: string) => void;
+  /** `null` cuando las elegidas no comparten rol sugerido y nadie eligió uno. */
+  rol: RolVentas | null;
+  roles: { value: string; label: string }[];
   guardando: boolean;
-  onCargo: (valor: string) => void;
+  onRol: (valor: string) => void;
   onRegistrar: () => void;
   onLimpiar: () => void;
 }
 
 /**
- * El registro en bloque de las personas por registrar: se filtra por cargo
+ * El registro en bloque de las personas por registrar: se filtra por rol
  * sugerido, se marcan las casillas (la de la cabecera toma todas las
- * filtradas, no solo las de la página) y se registran de una vez con el cargo
- * elegido. Sin selección, solo explica cómo se usa.
+ * filtradas, no solo las de la página) y se registran de una vez en el equipo
+ * y con el rol elegidos. Los roles que piden más que el nombre (site, unidades,
+ * usuario de Odoo) se registran de uno en uno. Sin selección, solo explica cómo
+ * se usa; el equipo se elige siempre, también para «Registrar» una a una.
  */
-function BarraLote({ seleccionadas, cargo, cargos, guardando, onCargo, onRegistrar, onLimpiar }: BarraLoteProps) {
+function BarraLote({
+  seleccionadas, equipo, equipos, onEquipo, rol, roles, guardando, onRol, onRegistrar, onLimpiar,
+}: BarraLoteProps) {
+  const selectorEquipo = (
+    <>
+      <span className="text-xs text-slate-400">Registrar en el equipo</span>
+      <SelectMenu
+        aria-label="Equipo donde se registran"
+        className="min-w-[160px] rounded-xl border border-slate-700/50 bg-surface-secondary px-3 py-1.5 text-xs text-white"
+        value={equipo}
+        options={equipos}
+        onChange={onEquipo}
+      />
+    </>
+  );
   if (seleccionadas === 0) {
     return (
-      <p className="border-b border-slate-800 bg-surface-secondary/50 px-4 py-2 text-[11px] text-slate-500">
-        Para registrar varias a la vez, filtra por cargo sugerido y marca las casillas: la de la cabecera
-        selecciona todas las filtradas.
-      </p>
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-surface-secondary/50 px-4 py-2">
+        {selectorEquipo}
+        <p className="text-[11px] text-slate-500">
+          Para registrar varias a la vez, marca las casillas: la de la cabecera selecciona todas las filtradas.
+          Lo marcado se conserva al buscar o filtrar, así que puedes ir juntando personas de varias búsquedas.
+        </p>
+      </div>
     );
   }
   return (
@@ -518,30 +576,29 @@ function BarraLote({ seleccionadas, cargo, cargos, guardando, onCargo, onRegistr
       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
         {seleccionadas} seleccionada{seleccionadas === 1 ? '' : 's'}
       </span>
-      <span className="text-xs text-slate-400">Registrar como</span>
+      <span className="text-[11px] text-emerald-300/70">se conservan al buscar o filtrar</span>
+      {selectorEquipo}
+      <span className="text-xs text-slate-400">como</span>
       <SelectMenu
-        aria-label="Cargo con el que se registran"
+        aria-label="Rol con el que se registran"
         className="min-w-[180px] rounded-xl border border-slate-700/50 bg-surface-secondary px-3 py-1.5 text-xs text-white"
-        value={cargo ?? ''}
-        placeholder="Elige un cargo"
-        options={cargos}
-        onChange={onCargo}
+        value={rol ?? ''}
+        placeholder="Elige un rol"
+        options={roles}
+        onChange={onRol}
       />
       <Button
         size="sm"
         icon={<UserPlus className="h-4 w-4" />}
-        disabled={!cargo}
+        disabled={!rol}
         isLoading={guardando}
         onClick={onRegistrar}
       >
         Registrar {seleccionadas}
       </Button>
       <Button size="sm" variant="outline" icon={<X className="h-4 w-4" />} onClick={onLimpiar}>
-        Quitar selección
+        Limpiar
       </Button>
-      <span className="basis-full text-[11px] text-slate-500">
-        El nombre y el apellido se deducen del literal; corrígelos después en Catálogos › Ventas si hace falta.
-      </span>
     </div>
   );
 }

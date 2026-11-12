@@ -1,42 +1,39 @@
-/** Comisiones › Informe › Nómina: unidad por unidad, las oficinas con su equipo sin unidad, y lo que no tiene ninguna. */
+/** Comisiones › Informe › Nómina: equipo por equipo, con sus roles, sus supervisores y los asesores de cada uno. */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Building2, Network, Search, X } from 'lucide-react';
+import { Search, Users, X } from 'lucide-react';
 
-import { formatoBs, formatoMonto, formatoPct, totalBs } from '../lib/formato';
-import { armarNomina } from '../lib/nomina';
-import type { InformeComision } from '../types';
-import { CARGO_CHIP } from './piezas';
-import { OficinaDetalle } from './OficinaDetalle';
-import { UnidadDetalle, type DetalleProps } from './UnidadDetalle';
+import { formatoBs, formatoMonto, totalBs } from '../lib/formato';
+import { armarNomina, clavePago } from '../lib/nomina';
+import type { ComisionesInformeProps, InformeComision } from '../types';
+import { ROL_CHIP } from './piezas';
+import { EquipoDetalle, type DetalleProps } from './EquipoDetalle';
 
 interface NominaViewProps extends Omit<DetalleProps, 'resaltado'> {
   informe: InformeComision;
+  /** Los equipos con sus roles, para nombrar y ordenar la nómina. */
+  equipos: ComisionesInformeProps['equipos'];
 }
 
 /**
- * La nómina del periodo, de solo lectura: a la izquierda las unidades de
- * negocio y las oficinas con lo que cobra cada una, a la derecha la elegida.
- * Los % se escriben en el paso de Indicadores, nunca aquí.
+ * La nómina del periodo, de solo lectura: a la izquierda los equipos de ventas
+ * con lo que cobra cada uno, a la derecha el elegido. Los % se escriben en el
+ * paso de Indicadores, nunca aquí.
  *
- * Cada persona sale una sola vez (ver `lib/nomina`), así que la suma de la
- * lista es el total a pagar. Las oficinas van solas, y todo supervisor o asesor
- * sin unidad de negocio asignada cierra la lista, aparte.
+ * Cada persona sale una vez por equipo (ver `lib/nomina`), así que la suma de
+ * la lista es el total a pagar.
  */
-export function NominaView({ informe, ...props }: NominaViewProps) {
-  const nomina = useMemo(() => armarNomina(informe), [informe]);
-  const conUnidad = nomina.unidades.filter((u) => u.id !== null);
-  const aparte = nomina.unidades.find((u) => u.id === null);
-  const primera = nomina.unidades[0] ? `u:${nomina.unidades[0].key}` : nomina.oficinas[0] ? `o:${nomina.oficinas[0].pago.persona_id}` : '';
+export function NominaView({ informe, equipos, ...props }: NominaViewProps) {
+  const nomina = useMemo(() => armarNomina(informe, equipos), [informe, equipos]);
+  const primera = nomina.equipos[0]?.slug ?? '';
   const [elegida, setElegida] = useState(primera);
   const [busqueda, setBusqueda] = useState('');
-  const [resaltado, setResaltado] = useState<number | null>(null);
+  const [resaltado, setResaltado] = useState<string | null>(null);
   const detalleRef = useRef<HTMLDivElement>(null);
   const subir = useRef(false);
 
   // Al cambiar de periodo, lo elegido puede no existir.
-  const existe = nomina.unidades.some((u) => `u:${u.key}` === elegida) || nomina.oficinas.some((o) => `o:${o.pago.persona_id}` === elegida);
-  const actual = existe ? elegida : primera;
+  const actual = nomina.equipos.some((e) => e.slug === elegida) ? elegida : primera;
 
   // La lista es larga: lo elegido abajo no debe abrirse fuera de la vista. Va
   // tras pintar, porque el detalle nuevo puede ser más corto que el anterior.
@@ -56,11 +53,11 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
   const texto = busqueda.trim().toLowerCase();
   const encontrados = texto ? informe.pagos.filter((p) => p.nombre.toLowerCase().includes(texto)).slice(0, 12) : [];
 
-  const ir = (personaId: number) => {
-    const donde = nomina.ubicacion.get(personaId);
+  const ir = (clave: string) => {
+    const donde = nomina.ubicacion.get(clave);
     if (!donde) return;
     setElegida(donde);
-    setResaltado(personaId);
+    setResaltado(clave);
     setBusqueda('');
   };
 
@@ -68,32 +65,13 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
     return <p className="p-10 text-center text-sm text-slate-500">Nadie cobra en este periodo.</p>;
   }
 
-  const unidad = nomina.unidades.find((u) => `u:${u.key}` === actual);
-  const oficina = nomina.oficinas.find((o) => `o:${o.pago.persona_id}` === actual);
+  const equipo = nomina.equipos.find((e) => e.slug === actual);
   const totalUsd = Math.round(informe.pagos.reduce((t, p) => t + p.neto, 0) * 100) / 100;
-  const elegir = (key: string) => {
-    setElegida(key);
+  const elegir = (slug: string) => {
+    setElegida(slug);
     setResaltado(null);
     subir.current = true;
   };
-
-  const item = (key: string, titulo: string, linea: string, usd: number, aviso = false) => (
-    <button
-      key={key}
-      type="button"
-      onClick={() => elegir(key)}
-      aria-current={actual === key}
-      className={`flex w-full flex-col gap-0.5 rounded-xl border px-3 py-2.5 text-left transition ${
-        actual === key ? 'border-sky-500/40 bg-surface-tertiary' : 'border-transparent hover:bg-surface-secondary'
-      }`}
-    >
-      <span className={`truncate text-sm font-bold ${aviso ? 'text-amber-300' : 'text-white'}`}>{titulo}</span>
-      <span className="flex justify-between gap-2 text-[11px] text-slate-400">
-        <span className="truncate">{linea}</span>
-        <span className="shrink-0 font-mono tabular-nums text-slate-300">{formatoMonto(usd)}</span>
-      </span>
-    </button>
-  );
 
   return (
     <div ref={detalleRef} className="grid scroll-mt-40 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -119,14 +97,14 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
               {encontrados.length === 0 && <p className="px-3 py-2 text-xs text-slate-500">Nadie coincide.</p>}
               {encontrados.map((p) => (
                 <button
-                  key={p.persona_id}
+                  key={clavePago(p)}
                   type="button"
-                  onClick={() => ir(p.persona_id)}
+                  onClick={() => ir(clavePago(p))}
                   className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-tertiary"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-white">{p.nombre}</span>
-                    <span className="block text-[10px] text-slate-500">{CARGO_CHIP[p.cargo].label}</span>
+                    <span className="block text-[10px] text-slate-500">{ROL_CHIP[p.rol].label} · {p.equipo_nombre}</span>
                   </span>
                   <span className="shrink-0 font-mono text-xs tabular-nums text-slate-300">{formatoMonto(p.neto)}</span>
                 </button>
@@ -136,39 +114,25 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
         </div>
 
         <p className="flex items-center gap-2 px-2 pb-1 pt-2 text-[10px] font-black uppercase tracking-wider text-violet-300">
-          <Network className="h-3.5 w-3.5" /> Unidades de negocio
+          <Users className="h-3.5 w-3.5" /> Equipos de ventas
         </p>
-        {conUnidad.map((u) =>
-          item(
-            `u:${u.key}`,
-            u.nombre,
-            `${u.personas.length} personas${u.coordinador?.crecimiento_pct != null ? ` · crec. ${formatoPct(u.coordinador.crecimiento_pct)}` : ''}`,
-            u.usd,
-          ))}
-
-        {nomina.oficinas.length > 0 && (
-          <p className="flex items-center gap-2 px-2 pb-1 pt-4 text-[10px] font-black uppercase tracking-wider text-sky-300">
-            <Building2 className="h-3.5 w-3.5" /> Coordinación de oficinas
-          </p>
-        )}
-        {nomina.oficinas.map((o) =>
-          item(
-            `o:${o.pago.persona_id}`,
-            o.pago.nombre,
-            `${o.personas.length} ${o.personas.length === 1 ? 'persona' : 'personas'} · ${
-              o.pago.factor_pct === null ? 'cumpl. sin definir' : `cumpl. ${formatoPct(o.pago.factor_pct)}`
-            }`,
-            o.usd,
-          ))}
-
-        {aparte && (
-          <>
-            <p className="flex items-center gap-2 px-2 pb-1 pt-4 text-[10px] font-black uppercase tracking-wider text-amber-300">
-              <AlertTriangle className="h-3.5 w-3.5" /> Por Asignar UN
-            </p>
-            {item(`u:${aparte.key}`, aparte.nombre, `${aparte.personas.length} personas`, aparte.usd, true)}
-          </>
-        )}
+        {nomina.equipos.map((e) => (
+          <button
+            key={e.slug}
+            type="button"
+            onClick={() => elegir(e.slug)}
+            aria-current={actual === e.slug}
+            className={`flex w-full flex-col gap-0.5 rounded-xl border px-3 py-2.5 text-left transition ${
+              actual === e.slug ? 'border-sky-500/40 bg-surface-tertiary' : 'border-transparent hover:bg-surface-secondary'
+            }`}
+          >
+            <span className="truncate text-sm font-bold text-white">{e.nombre}</span>
+            <span className="flex justify-between gap-2 text-[11px] text-slate-400">
+              <span className="truncate">{e.personas.length} {e.personas.length === 1 ? 'persona' : 'personas'}</span>
+              <span className="shrink-0 font-mono tabular-nums text-slate-300">{formatoMonto(e.usd)}</span>
+            </span>
+          </button>
+        ))}
 
         <div className="mt-3 flex flex-col gap-0.5 border-t border-slate-800 px-2 pt-3">
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total a pagar</span>
@@ -176,15 +140,14 @@ export function NominaView({ informe, ...props }: NominaViewProps) {
           <span className="font-mono text-sm font-bold tabular-nums text-emerald-300">
             {formatoBs(totalBs(informe.pagos.map((p) => p.neto), props.tasa))}
           </span>
-          {Boolean(informe.resumen.bonos_meta) && (
-            <span className="text-[11px] text-amber-400">incluye {formatoMonto(informe.resumen.bonos_meta ?? 0)} de bonos por meta</span>
+          {Boolean(informe.resumen.bonos) && (
+            <span className="text-[11px] text-amber-400">incluye {formatoMonto(informe.resumen.bonos ?? 0)} de bonos</span>
           )}
         </div>
       </aside>
 
       <div className="min-w-0 p-5">
-        {unidad && <UnidadDetalle key={unidad.key} unidad={unidad} nomina={nomina} resaltado={resaltado} {...props} />}
-        {oficina && <OficinaDetalle key={oficina.pago.persona_id} oficina={oficina} resaltado={resaltado} {...props} />}
+        {equipo && <EquipoDetalle key={equipo.slug} equipo={equipo} nomina={nomina} resaltado={resaltado} {...props} />}
         {props.tasa === null && (
           <p className="mt-4 text-[11px] text-amber-400">
             Los bolívares salen vacíos hasta que se conozca la tasa CONATEL del mes en que se paga.

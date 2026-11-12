@@ -3,9 +3,10 @@
 - `/comisiones/` — el informe de un periodo. Lo ve `can_view_comisiones`;
   crear el periodo, decidir las revisiones, agregar ventas a mano, escribir
   cumplimientos y cerrar es `can_manage_comisiones`.
-- `/comisiones/supervisores/` y `/comisiones/condiciones/` — la configuracion
-  de pago (el coordinador de UN de cada supervisor, las tarifas), con
-  `can_manage_comisiones`.
+- `/comisiones/condiciones/` — la ventana de pago (dias promocionales, espera y
+  corte) y los % PYME, con `can_manage_comisiones`. Quien cobra y cuanto no se
+  configura aqui: son los equipos y las condiciones de cada rol, en Catalogos ›
+  Ventas.
 
 El informe de un borrador se calcula en la peticion: es un mes de
 instalaciones, no el historico, y no necesita el worker.
@@ -28,8 +29,9 @@ from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
-from core.utils import clean_json_nullable, clean_json_props
-from services.catalogos.models import CARGO_CHOICES, PersonaVentas
+from core.utils import clean_json_nullable
+from services.catalogos.equipos import ROLES, ROLES_POR_EQUIPO
+from services.catalogos.models import EquipoVentas, PersonaVentas
 from services.comisiones.analytics.calculo import (
     FaltanColumnas,
     condiciones_vigentes,
@@ -45,9 +47,6 @@ from services.comisiones.analytics.reglas import (
     NORMAL,
     VALIDA,
     YA_PAGADA,
-    validar_bonos_meta,
-    validar_tramos_asesor,
-    validar_tramos_un,
 )
 from services.comisiones.models import (
     ComisionCierreArchivado,
@@ -56,12 +55,11 @@ from services.comisiones.models import (
     CondicionesComision,
     IndicadorComision,
     RevisionComision,
-    SupervisorUnidad,
     VentaManual,
 )
 from services.config.decorators import permission_required
 from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_actual
-from services.subscriptions.models import Estado, Plan
+from services.subscriptions.models import Plan
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +186,14 @@ def informe_view(request):
         # Las del cierre si esta cerrado; si no, con las que se acaba de calcular.
         "condiciones": (periodo.condiciones if periodo is not None and periodo.cerrado and periodo.condiciones
                         else condiciones_vigentes()),
-        "cargos": [{"value": v, "label": t} for v, t in CARGO_CHOICES],
+        "equipos": [
+            {
+                "slug": e.slug,
+                "nombre": e.nombre,
+                "roles": [{"rol": r, "etiqueta": ROLES[r]["etiqueta"]} for r in ROLES_POR_EQUIPO.get(e.slug, [])],
+            }
+            for e in EquipoVentas.objects.all()
+        ],
         "puedeGestionar": _puede(request, PERMISO_GESTION),
         "puedeReabrir": _puede(request, PERMISO_REABRIR),
         "puedeBorrar": _puede(request, PERMISO_BORRAR),
@@ -393,8 +398,10 @@ def api_manual_quitar(request):
 def api_indicador_guardar(request):
     """El % de cumplimiento (o el crecimiento a mano) de una persona en un periodo.
 
-    Vacio borra el valor: el cumplimiento vuelve al calculado del % Ventas de
-    su site y el crecimiento al que da Unidades de negocio.
+    Vacio borra el valor: el cumplimiento vuelve al calculado (el % Ventas de su
+    site o de sus unidades) y el crecimiento al que da Unidades de negocio. Solo
+    lo admite quien tiene en sus condiciones un factor de cumplimiento o el
+    escalon de crecimiento; el resto de indicadores es solo calculado.
     """
     data = _cuerpo(request)
     periodo = _periodo_abierto(_mes(data.get("periodo")))
@@ -402,17 +409,21 @@ def api_indicador_guardar(request):
     if persona is None:
         raise DatosInvalidos("La persona no existe.")
 
+    piezas = [
+        condiciones_vigentes()["equipos"].get(m.equipo.slug, {}).get(m.rol, {})
+        for m in persona.membresias.select_related("equipo")
+    ]
     fila, _ = IndicadorComision.objects.get_or_create(periodo=periodo.periodo, persona=persona)
     if "cumplimiento_pct" in data:
-        if persona.cargo not in ("supervisor", "coord_oficina"):
-            raise DatosInvalidos("Solo supervisores y coordinadores de oficina tienen cumplimiento.")
+        if not any(p.get("factor") not in (None, "ninguno") for p in piezas):
+            raise DatosInvalidos("Su rol no cobra con un % de cumplimiento.")
         valor = _decimal(data.get("cumplimiento_pct"), "cumplimiento_pct")
         if valor is not None and valor < 0:
             raise DatosInvalidos("El cumplimiento no puede ser negativo.")
         fila.cumplimiento_pct = valor
     if "crecimiento_pct" in data:
-        if persona.cargo != "coord_un":
-            raise DatosInvalidos("Solo los coordinadores de UN cobran por crecimiento.")
+        if not any("escalon_crecimiento" in p for p in piezas):
+            raise DatosInvalidos("Su rol no cobra por el crecimiento de su unidad.")
         fila.crecimiento_pct = _decimal(data.get("crecimiento_pct"), "crecimiento_pct")
     fila.actualizado_por = request.user
 
@@ -558,79 +569,6 @@ def api_archivo(request, archivo_id: int):
     return JsonResponse(clean_json_nullable({**_archivo(archivo), "periodo": archivo.periodo.periodo, "copia": archivo.copia}))
 
 
-# --- Configuracion: los supervisores de cada UN --------------------------------------------
-
-def _supervisor(p: PersonaVentas, unidades: dict[int, int]) -> dict[str, Any]:
-    return {
-        "id": p.id,
-        "nombre": p.nombre,
-        "apellido": p.apellido,
-        "medio": p.medio,
-        "medio_supervisor": p.literal_supervisor,
-        "coord_un_id": unidades.get(p.id),
-    }
-
-
-@login_required
-@permission_required(PERMISO_GESTION)
-def supervisores_view(request):
-    """A que coordinador de UN responde cada supervisor: lo unico que Odoo no trae."""
-    unidades = dict(SupervisorUnidad.objects.values_list("supervisor_id", "coord_un_id"))
-    personas = PersonaVentas.objects.filter(cargo__in=["supervisor", "coord_un"]).order_by("nombre", "apellido")
-    return render_inertia(request, "Comisiones/Supervisores", clean_json_props({
-        "supervisores": [_supervisor(p, unidades) for p in personas if p.cargo == "supervisor"],
-        "coordinadores": [
-            {"id": p.id, "nombre": p.nombre_completo} for p in personas if p.cargo == "coord_un"
-        ],
-        "section": "supervisores",
-    }))
-
-
-@login_required
-@permission_required(PERMISO_GESTION)
-@ratelimit(key="ip", rate="60/m", block=True)
-@require_POST
-@_escritura
-def api_supervisores_unidad(request):
-    """Asigna (o quita, con `coord_un_id` vacio) el coordinador de UN de uno o varios supervisores.
-
-    `{supervisor_ids: [...], coord_un_id}`. Todo o nada: si alguno no es
-    supervisor, no se guarda ninguno.
-    """
-    data = _cuerpo(request)
-    ids = data.get("supervisor_ids")
-    if not isinstance(ids, list) or not ids:
-        raise DatosInvalidos("No llegó ningún supervisor.")
-    supervisores = list(PersonaVentas.objects.filter(pk__in=ids))
-    if len(supervisores) != len(set(ids)):
-        raise DatosInvalidos("Alguno de los supervisores ya no existe.")
-    otros = [p.nombre_completo for p in supervisores if p.cargo != "supervisor"]
-    if otros:
-        raise DatosInvalidos("No son supervisores: " + ", ".join(otros) + ".")
-
-    coord_un = None
-    if data.get("coord_un_id"):
-        coord_un = PersonaVentas.objects.filter(pk=data["coord_un_id"]).first()
-        if coord_un is None or coord_un.cargo != "coord_un":
-            raise DatosInvalidos("El coordinador elegido no es un coordinador de unidad de negocio.")
-
-    with transaction.atomic():
-        if coord_un is None:
-            SupervisorUnidad.objects.filter(supervisor__in=supervisores).delete()
-        else:
-            for supervisor in supervisores:
-                SupervisorUnidad.objects.update_or_create(
-                    supervisor=supervisor, defaults={"coord_un": coord_un, "actualizado_por": request.user}
-                )
-
-    n = len(supervisores)
-    destino = f"a {coord_un.nombre_completo}" if coord_un else "sin coordinador de UN"
-    return JsonResponse({
-        "status": "success",
-        "message": f"{n} supervisor{'es' if n != 1 else ''} {destino}.",
-    })
-
-
 # --- Configuracion: las condiciones ---------------------------------------------------------
 
 def _planes_pyme() -> list[dict[str, Any]]:
@@ -659,11 +597,10 @@ def _actualizacion() -> dict[str, Any]:
 @login_required
 @permission_required(PERMISO_GESTION)
 def condiciones_view(request):
-    """Las condiciones de pago: tramos, bonos por meta, tarifas, dias promocionales, corte y los % PYME."""
+    """La ventana de pago (dias promocionales, espera y corte) y los % PYME de cada plan."""
+    c = CondicionesComision.actual()
     return render_inertia(request, "Comisiones/Condiciones", clean_json_nullable({
-        "condiciones": condiciones_vigentes(),
-        # Los estados a los que se les puede dar una tabla de bonos por meta.
-        "estados": [{"id": i, "nombre": n} for i, n in Estado.objects.values_list("id", "nombre")],
+        "condiciones": {"dia_promocional": c.dia_promocional, "dias_espera": c.dias_espera, "dia_corte": c.dia_corte},
         "actualizacion": _actualizacion(),
         "planesPyme": _planes_pyme(),
         "puedeEditarPlanes": _puede(request, "can_manage_catalogo_operacional"),
@@ -677,22 +614,9 @@ def condiciones_view(request):
 @require_POST
 @_escritura
 def api_condiciones_guardar(request):
-    """Guarda las condiciones enteras. Solo afectan a lo que se calcule despues."""
+    """Guarda la ventana de pago. Solo afecta a lo que se calcule despues."""
     data = _cuerpo(request)
     c = CondicionesComision.actual()
-    for campo in ("monto_equipo", "monto_directa", "monto_equipo_oficina", "monto_directa_oficina", "monto_directa_un"):
-        valor = _decimal(data.get(campo), campo, nulo=False)
-        if valor < 0:
-            raise DatosInvalidos(f"«{campo}» no puede ser negativo.")
-        setattr(c, campo, valor)
-    try:
-        c.tramos_asesor = validar_tramos_asesor(data.get("tramos_asesor"))
-        c.tramos_un = validar_tramos_un(data.get("tramos_un"))
-        # Se guarda sin el nombre del estado: es del catalogo, y puede cambiar.
-        bonos = validar_bonos_meta(data.get("bonos_meta"), dict(Estado.objects.values_list("id", "nombre")))
-        c.bonos_meta = [{"estado_id": b["estado_id"], "tramos": b["tramos"]} for b in bonos]
-    except ValueError as e:
-        raise DatosInvalidos(str(e)) from None
     dia = _decimal(data.get("dia_promocional"), "dia_promocional", nulo=False)
     espera = _decimal(data.get("dias_espera"), "dias_espera", nulo=False)
     corte = _decimal(data.get("dia_corte"), "dia_corte", nulo=False)

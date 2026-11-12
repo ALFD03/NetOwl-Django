@@ -405,6 +405,8 @@ export interface ObjetivosConfig {
 
 export type CatalogoTipo =
   | 'personas'
+  | 'membresias'
+  | 'condiciones_equipo'
   | 'objetivos_oficina'
   | 'zonas_sin_objetivo'
   | 'planes'
@@ -501,6 +503,10 @@ export interface CatalogoSite {
   /** Orden de presentación comercial; lo consumen Sales Report y ETA. */
   orden: number;
   zonas: number;
+  /** Las zonas del site y los equipos de ventas que lo trabajan. */
+  zona_ids: number[];
+  equipo_ids: number[];
+  equipos: string[];
 }
 
 /** Estados y coordinadores: solo nombre y cuántas zonas dependen de ellos. */
@@ -582,38 +588,152 @@ export interface ProductoPendiente {
   ordenes: number;
 }
 
-/** El cargo de una persona del directorio de ventas. */
-export type CargoVentas = 'asesor' | 'supervisor' | 'coord_oficina' | 'coord_un';
+/** El rol de una persona en un equipo de ventas (`services/catalogos/equipos.py`). */
+export type RolVentas =
+  | 'jefe'
+  | 'jefe_un'
+  | 'coord_un'
+  | 'gerente_un'
+  | 'gerente_ops'
+  | 'coord_oficina'
+  | 'supervisor'
+  | 'asesor'
+  | 'administradora'
+  | 'telemarketing';
 
 /** Las columnas del export que nombran a una persona de ventas. */
 export type ColumnaVentas = 'vendedor' | 'medio_supervisor' | 'medio';
 
-/** Una persona del directorio de ventas, tal y como la escribe Odoo. */
+/** Lo que un rol exige y admite en un equipo: la interfaz construye sus formularios con esto. */
+export interface CatalogoRolEquipo {
+  rol: RolVentas;
+  etiqueta: string;
+  /** `medio` se exige; `supervisor` (el literal de `Oportunidad/Administrador`) es opcional; `usuario` se exige. */
+  medio: boolean;
+  supervisor: boolean;
+  usuario: boolean;
+  /** Si lleva un site (coordinadora de oficina). */
+  site: boolean;
+  /** Cuántas unidades de negocio lleva: una (coordinador de UN), varias (jefe, gerentes) o ninguna. */
+  unidades: '' | 'una' | 'varias';
+  /** El rol al que responde, si es supervisor y su equipo tiene uno. */
+  superior: RolVentas | null;
+  /** Las piezas de pago que admite (`PIEZAS_POR_ROL`). */
+  piezas: PiezaPago[];
+}
+
+export interface CatalogoEquipoVentas {
+  id: number;
+  slug: string;
+  nombre: string;
+  roles: CatalogoRolEquipo[];
+}
+
+/** Una persona del directorio de ventas, tal y como la escribe Odoo, con sus papeles en los equipos. */
 export interface CatalogoPersonaVentas {
   id: number;
   nombre: string;
   apellido: string;
-  cargo: CargoVentas;
   /** El literal de `Medio`. */
   medio: string;
   /**
    * El de `Oportunidad/Administrador`, cuando Odoo lo escribe distinto que en `Medio`.
-   * Vacío: el mismo que `medio`. Solo los cargos que supervisan.
+   * Vacío: el mismo que `medio`.
    */
   medio_supervisor: string;
-  /** El literal de `Vendedor`, con `(User)`. Solo el coordinador de oficina. */
+  /** El literal de `Vendedor`, con `(User)`. */
   usuario_odoo: string;
-  /** Las unidades de negocio que lleva (solo el coordinador de UN). */
+  /** Otros nombres con los que Odoo escribe a la misma persona, por columna (con otra tilde, por ejemplo). */
+  alias_medio: string[];
+  alias_supervisor: string[];
+  alias_usuario: string[];
+  membresias: { id: number; equipo: string; rol: RolVentas; etiqueta: string }[];
+}
+
+/** El papel de una persona en un equipo (`MembresiaEquipo`), con lo suyo ya resuelto. */
+export interface CatalogoMembresia {
+  id: number;
+  persona_id: number;
+  nombre: string;
+  apellido: string;
+  medio: string;
+  medio_supervisor: string;
+  usuario_odoo: string;
+  alias_medio: string[];
+  alias_supervisor: string[];
+  alias_usuario: string[];
+  equipo_id: number;
+  /** El slug del equipo. */
+  equipo: string;
+  rol: RolVentas;
+  /** Los sites de una coordinadora de oficina (uno o varios). */
+  site_ids: number[];
+  sites: string[];
+  /** La membresía a la que responde un supervisor. */
+  superior_id: number | null;
+  superior: string;
+  unidad_ids: number[];
   unidades: string[];
-  /**
-   * El estado con que se le aplica el bono por meta, fijado a mano (solo el
-   * asesor). Nulo: el de la zona donde tiene más clientes.
-   */
-  estado_fijo_id: number | null;
-  estado_fijo: string;
-  /** El site del Sales Report de una coordinadora de oficina (solo ese cargo). */
-  site_id: number | null;
-  site: string;
+}
+
+export type AlcanceEquipo = 'supervisados' | 'equipo_completo' | 'unidades' | 'oficina';
+export type FactorCumplimiento = 'ninguno' | 'site' | 'unidad';
+
+export type PiezaPago =
+  | 'propia'
+  | 'equipo'
+  | 'factor'
+  | 'tramos_asesor'
+  | 'bono_tramos'
+  | 'bono_por_asesor'
+  | 'bono_por_unidad'
+  | 'escalon_crecimiento'
+  | 'bono_churn'
+  | 'bono_empresa';
+
+export interface PiezaMonto {
+  /** `monto`: dólares por venta; `pct_plan`: un % del precio del plan. */
+  tipo: 'monto' | 'pct_plan';
+  valor: number;
+}
+
+export interface PiezaEquipo extends PiezaMonto {
+  alcance: AlcanceEquipo;
+  excluir_oficina: boolean;
+}
+
+export interface TramoPago {
+  desde: number;
+  monto: number;
+  descontar?: number;
+}
+
+/** Los valores de pago de un rol: solo las piezas que su rol admite. */
+export interface ParametrosPago {
+  propia?: PiezaMonto;
+  equipo?: PiezaEquipo;
+  factor?: FactorCumplimiento;
+  tramos_asesor?: TramoPago[];
+  bono_tramos?: TramoPago[];
+  bono_por_asesor?: TramoPago[];
+  bono_por_unidad?: { monto: number };
+  escalon_crecimiento?: { umbral_pct: number; alto: number; bajo: number };
+  bono_churn?: { max: number; monto: number }[];
+  bono_empresa?: { monto: number; excedente: number };
+}
+
+/** Las condiciones de pago de un rol de un equipo: las que valen y si alguien las cambió. */
+export interface CatalogoCondicionRol {
+  /** Nulo si nadie las editó (paga con las de por defecto). */
+  id: number | null;
+  equipo_id: number;
+  equipo: string;
+  rol: RolVentas;
+  etiqueta: string;
+  piezas: PiezaPago[];
+  parametros: ParametrosPago;
+  defecto: ParametrosPago;
+  personalizado: boolean;
 }
 
 /**
@@ -632,10 +752,12 @@ export interface CatalogoObjetivoOficina {
   actualizado_en: string;
 }
 
-/** Una unidad de negocio (el `Coordinador` de las zonas) y quién la lleva. */
+/** Una unidad de negocio (el `Coordinador` de las zonas), sus equipos y quienes la llevan. */
 export interface CatalogoUnidadNegocio extends CatalogoNombrado {
-  persona_id: number | null;
-  persona: string;
+  zona_ids: number[];
+  equipo_ids: number[];
+  equipos: string[];
+  responsables: { persona: string; rol: RolVentas; etiqueta: string; equipo: string }[];
 }
 
 /** Un nombre de las suscripciones que el directorio de ventas no reconoce. */
@@ -643,7 +765,8 @@ export interface PersonaPendiente {
   nombre: string;
   /** Órdenes por columna: no se suman, la venta directa de un supervisor está en dos. */
   ordenes: Partial<Record<ColumnaVentas, number>>;
-  cargo: CargoVentas;
+  /** El rol que se sugiere según la columna en que aparece. */
+  rol: RolVentas;
 }
 
 /** Qué grupos del módulo de Catálogos administra el usuario: uno por permiso. */
@@ -679,10 +802,10 @@ export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
     /** También con el permiso de ventas: el alta de una coordinadora de oficina pide su site. */
     sites: CatalogoSite[];
     estados: CatalogoNombrado[];
-    coordinadores: CatalogoNombrado[];
-    cargos: CatalogoOption[];
-    /** Quienes pueden aparecer en `Oportunidad/Administrador`, para vincularles un nombre. */
-    supervisores: CatalogoPersonaVentas[];
+    coordinadores: CatalogoUnidadNegocio[];
+    equipos: CatalogoEquipoVentas[];
+    membresias: CatalogoMembresia[];
+    personas: CatalogoPersonaVentas[];
   };
 }
 
@@ -696,24 +819,26 @@ export interface CatalogosProductosProps extends CatalogosPaginaProps {
   nuevoPlan: string;
 }
 
-/** `Catalogos/Estructura`: zonas, sites y estados. */
+/** `Catalogos/Estructura`: zonas y estados. */
 export interface CatalogosEstructuraProps extends CatalogosPaginaProps {
   zonas: CatalogoZona[];
+  /** Solo para elegir el de una zona: se administran en Ventas › Estructura de ventas. */
   sites: CatalogoSite[];
   estados: CatalogoNombrado[];
-  /** Solo para elegir el de una zona: se administran en Ventas. */
   coordinadores: CatalogoNombrado[];
   tecnologias: CatalogoOption[];
   /** `?nueva_zona=` — abre el formulario de zona ya relleno con ese nombre. */
   nuevaZona: string;
 }
 
-/** `Catalogos/Ventas`: el directorio de ventas, las unidades de negocio y los objetivos. */
+/** `Catalogos/Ventas`: la estructura de ventas, los equipos con su gente y condiciones, y los objetivos. */
 export interface CatalogosVentasProps extends CatalogosPaginaProps {
+  equipos: CatalogoEquipoVentas[];
+  membresias: CatalogoMembresia[];
   personas: CatalogoPersonaVentas[];
-  cargos: CatalogoOption[];
-  /** `?nueva_persona=&cargo=` — abre el alta ya rellena con ese literal. */
-  nuevaPersona: { literal: string; cargo: CargoVentas };
+  condiciones: CatalogoCondicionRol[];
+  /** `?nueva_persona=&equipo=&rol=` — abre el alta ya rellena con ese literal. */
+  nuevaPersona: { literal: string; equipo: string; rol: string };
   coordinadores: CatalogoUnidadNegocio[];
   objetivos: CatalogoObjetivo[];
   /** Los tramos del objetivo de ventas de las coordinadoras de oficina. */

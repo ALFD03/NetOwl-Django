@@ -39,7 +39,7 @@ coordinador de UN llega aqui sin `coord_un_id`.
 from __future__ import annotations
 
 import calendar
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -57,7 +57,8 @@ NADA_POR_FACTURAR = frozenset({"nada que facturar", "nada por facturar"})
 FACTURA_BORRADOR = "borrador"
 FACTURA_CANCELADA = "cancelado"
 PAGO_REVERTIDO = "revertido"
-PAGOS_VALIDOS = frozenset({"pagado", "en proceso de pago", "pagado parcialmente"})
+# «Pagado parcialmente» no cuenta: la mensualidad tiene que estar pagada entera.
+PAGOS_VALIDOS = frozenset({"pagado", "en proceso de pago"})
 
 # `Estado de la Suscripción` de las que aun no son un servicio: una cotizacion
 # no se vendio y una instalacion no termino. No cuentan nunca.
@@ -226,17 +227,28 @@ def dias_hasta_cancelar(factura: Factura | None) -> int | None:
 def situacion(factura: Factura | None) -> str:
     """`PAGADA`, `IMPAGA`, `EN_BORRADOR`, `CANCELADA` o `SIN_FACTURA`.
 
-    Solo cuenta como pagada una factura registrada con el pago «Pagado», «En
-    proceso de pago» o «Pagado parcialmente»: «Revertido» y «Sin pagar» no.
+    Solo cuenta como pagada una factura con el pago «Pagado» o «En proceso de
+    pago»: «Pagado parcialmente», «Revertido» y «Sin pagar» no. **Una factura en
+    borrador con uno de esos pagos tambien cuenta**: el pago manda sobre el
+    estado del documento (el cliente ya pago, aunque Odoo no la haya
+    registrado). En borrador y sin ese pago es `EN_BORRADOR`.
+
+    >>> f = lambda estado, pago: Factura("F", estado, pago, "2026-09-05", "Plan")
+    >>> situacion(f("Borrador", "Pagado")), situacion(f("Borrador", "En proceso de pago"))
+    ('pagada', 'pagada')
+    >>> situacion(f("Borrador", "Sin pagar")), situacion(f("Borrador", "Pagado parcialmente"))
+    ('borrador', 'borrador')
+    >>> situacion(f("Cancelado", "Pagado")), situacion(f("Registrado", "Pagado"))
+    ('cancelada', 'pagada')
     """
     if factura is None:
         return SIN_FACTURA
     estado = normalize_text(factura.estado)
     if estado == FACTURA_CANCELADA:
         return CANCELADA
-    if estado == FACTURA_BORRADOR:
-        return EN_BORRADOR
-    return PAGADA if normalize_text(factura.estado_pago) in PAGOS_VALIDOS else IMPAGA
+    if normalize_text(factura.estado_pago) in PAGOS_VALIDOS:
+        return PAGADA
+    return EN_BORRADOR if estado == FACTURA_BORRADOR else IMPAGA
 
 
 def clasificar(
@@ -264,7 +276,8 @@ def clasificar(
       mensualidad pagada, se revisa.
     - Con `corte`, una mensualidad **pagada despues del corte** es como si no
       se hubiera pagado: lo que interesa es que pagara en la ventana del periodo.
-    - **Mensualidad pagada** (tambien en parte): valida, este como este la
+    - **Mensualidad pagada** (entera; una factura **en borrador** con el pago
+      «Pagado» o «En proceso de pago» cuenta): valida, este como este la
       facturacion de la suscripcion: la factura ya se pago. Si la suscripcion dice «Por
       facturar» y la factura es de otro plan, se apunta como cambio de plan
       (Odoo factura el nuevo y deja la venta por facturar).
@@ -278,8 +291,12 @@ def clasificar(
     >>> f = lambda pago="Pagado", estado="Registrado", plan="Plan A", act="": Factura("F1", estado, pago, "2026-09-05", plan, "", act)
     >>> clasificar("Facturado por completo", f())[0]
     'valida'
+    >>> clasificar("Facturado por completo", f("Pagado", estado="Borrador"))
+    ('valida', 'Primera mensualidad pagada (la factura sigue en borrador)')
+    >>> clasificar("Facturado por completo", f("Sin pagar", estado="Borrador"))[0]
+    'no_pagada'
     >>> clasificar("Facturado por completo", f("Pagado parcialmente"))[0]
-    'valida'
+    'no_pagada'
     >>> clasificar("Facturado por completo", f("Sin pagar"))[0]
     'no_pagada'
     >>> clasificar("Facturado por completo", f(estado="Cancelado", act="2026-09-25"))[0]
@@ -336,6 +353,8 @@ def clasificar(
         cambio_plan = plan_suscripcion and normalize_text(plan_suscripcion) != normalize_text(factura.plan)
         if estado == POR_FACTURAR and cambio_plan:
             return VALIDA, MOTIVO_CAMBIO_PLAN
+        if normalize_text(factura.estado) == FACTURA_BORRADOR:
+            return VALIDA, "Primera mensualidad pagada (la factura sigue en borrador)"
         return VALIDA, "Primera mensualidad pagada"
     if pagada_tarde:
         dia = fecha_del_pago(factura)[0]
@@ -392,34 +411,6 @@ def validar_tramos_asesor(tramos: Any) -> list[dict[str, float]]:
     return limpios
 
 
-def validar_tramos_un(tramos: Any) -> list[dict[str, float | None]]:
-    """Los tramos de crecimiento del coordinador de UN, comprobados y ordenados.
-
-    El primero no tiene inicio (`desde_pct` nulo: cualquier crecimiento, hasta
-    negativo); los demas empiezan en un % creciente.
-    """
-    if not isinstance(tramos, list) or not tramos:
-        raise ValueError("Los tramos de crecimiento no pueden quedar vacíos.")
-    limpios = []
-    for tramo in tramos:
-        try:
-            bruto = tramo.get("desde_pct")
-            desde = None if bruto in (None, "") else float(bruto)
-            monto = float(tramo["monto"])
-        except (AttributeError, KeyError, TypeError, ValueError):
-            raise ValueError("Cada tramo de crecimiento necesita «desde_pct» y «monto» numéricos.") from None
-        if monto < 0:
-            raise ValueError("Los montos de los tramos de crecimiento no pueden ser negativos.")
-        limpios.append({"desde_pct": desde, "monto": monto})
-    sin_inicio = [t for t in limpios if t["desde_pct"] is None]
-    if len(sin_inicio) != 1:
-        raise ValueError("Exactamente un tramo de crecimiento tiene que valer «desde siempre».")
-    con_inicio = sorted((t for t in limpios if t["desde_pct"] is not None), key=lambda t: t["desde_pct"])
-    if len({t["desde_pct"] for t in con_inicio}) != len(con_inicio):
-        raise ValueError("Dos tramos de crecimiento empiezan en el mismo %.")
-    return sin_inicio + con_inicio
-
-
 def tramo_asesor(ventas: int, tramos: list[dict[str, float]]) -> dict[str, float]:
     """El tramo en el que cae una cantidad de ventas (el ultimo que empieza en o antes)."""
     elegido = tramos[0]
@@ -443,70 +434,6 @@ def pago_asesor(ventas: int, tramos: list[dict[str, float]]) -> tuple[dict[str, 
     return tramo, pagadas, round(pagadas * float(tramo["monto"]), 2)
 
 
-def monto_un(crecimiento: float, tramos: list[dict[str, float | None]]) -> float:
-    """Lo que cobra el coordinador de UN por venta de equipo con ese crecimiento (%).
-
-    >>> T = validar_tramos_un([{"desde_pct": None, "monto": 1},
-    ...     {"desde_pct": 1, "monto": 1.5}, {"desde_pct": 2, "monto": 2}])
-    >>> [monto_un(c, T) for c in (-3, 0.99, 1, 1.5, 2, 7)]
-    [1.0, 1.0, 1.5, 1.5, 2.0, 2.0]
-    """
-    monto = float(tramos[0]["monto"])
-    for tramo in tramos:
-        if tramo["desde_pct"] is not None and tramo["desde_pct"] <= crecimiento:
-            monto = float(tramo["monto"])
-    return monto
-
-
-def validar_bonos_meta(bonos: Any, estados: dict[int, str]) -> list[dict[str, Any]]:
-    """Los bonos por meta, comprobados: `[{"estado_id", "estado", "tramos"}]`.
-
-    `estados` es el catalogo (`id -> nombre`): un estado que no esta en el no
-    se acepta, ni dos entradas del mismo. Cada tramo vale desde `desde` ventas
-    (al menos 1) hasta el siguiente, con un `monto` no negativo; no puede haber
-    dos con el mismo inicio. Una entrada sin tramos no paga nada, y se acepta.
-    Se devuelven ordenados por estado y los tramos por su inicio.
-    """
-    if bonos in (None, ""):
-        return []
-    if not isinstance(bonos, list):
-        raise ValueError("Los bonos por meta tienen que ser una lista por estado.")
-    limpios = []
-    vistos: set[int] = set()
-    for bono in bonos:
-        try:
-            estado_id = int(bono["estado_id"])
-        except (KeyError, TypeError, ValueError):
-            raise ValueError("Cada bono por meta necesita el estado al que se aplica.") from None
-        nombre = estados.get(estado_id)
-        if nombre is None:
-            raise ValueError("Un bono por meta es de un estado que no está en el catálogo.")
-        if estado_id in vistos:
-            raise ValueError(f"{nombre} tiene dos tablas de bonos por meta.")
-        vistos.add(estado_id)
-        tramos = bono.get("tramos") or []
-        if not isinstance(tramos, list):
-            raise ValueError(f"Los tramos del bono de {nombre} tienen que ser una lista.")
-        filas = []
-        for tramo in tramos:
-            try:
-                desde = int(tramo["desde"])
-                monto = float(tramo["monto"])
-            except (KeyError, TypeError, ValueError):
-                raise ValueError(f"Cada tramo del bono de {nombre} necesita «desde» y «monto» numéricos.") from None
-            if desde < 1:
-                raise ValueError(f"Los tramos del bono de {nombre} empiezan en 1 venta o más.")
-            if monto < 0:
-                raise ValueError(f"Los montos del bono de {nombre} no pueden ser negativos.")
-            filas.append({"desde": desde, "monto": monto})
-        filas.sort(key=lambda t: t["desde"])
-        if len({t["desde"] for t in filas}) != len(filas):
-            raise ValueError(f"Dos tramos del bono de {nombre} empiezan en la misma cantidad de ventas.")
-        limpios.append({"estado_id": estado_id, "estado": nombre, "tramos": filas})
-    limpios.sort(key=lambda b: b["estado"])
-    return limpios
-
-
 def bono_meta(ventas: int, tramos: list[dict[str, float]]) -> tuple[dict[str, float] | None, float]:
     """`(tramo, monto)` del bono por meta de un asesor con `ventas` residenciales.
 
@@ -527,200 +454,6 @@ def bono_meta(ventas: int, tramos: list[dict[str, float]]) -> tuple[dict[str, fl
         if tramo["desde"] <= ventas:
             elegido = tramo
     return elegido, round(float(elegido["monto"]), 2) if elegido else 0.0
-
-
-# --- Pagos -------------------------------------------------------------------------
-
-@dataclass
-class Venta:
-    """Una venta del periodo con las personas que cobran por ella ya resueltas.
-
-    Los `*_id` son de `PersonaVentas`; nulos si la venta no trae la columna o
-    su literal no esta en el directorio (y, en el coordinador de UN, si el
-    supervisor no tiene uno asignado).
-    """
-
-    orden: str
-    pyme: bool
-    precio: float
-    pct_pyme: float | None
-    medio_id: int | None
-    supervisor_id: int | None
-    coord_oficina_id: int | None
-    coord_un_id: int | None
-
-
-@dataclass
-class Pago:
-    """Lo que cobra una persona en el periodo, con el desglose que lo explica."""
-
-    persona_id: int
-    cargo: str
-    ventas_propias: int = 0
-    ventas_equipo: int = 0
-    ventas_pyme: int = 0
-    monto_pyme: float = 0.0
-    pyme_sin_porcentaje: int = 0
-    monto_propias: float = 0.0
-    monto_equipo: float = 0.0
-    # Lo que se multiplica por el cumplimiento (supervisor y coordinador de
-    # oficina): propias + equipo. La PYME queda fuera, es del vendedor directo.
-    bruto: float = 0.0
-    factor_pct: float | None = None
-    # El bono por meta del asesor: aparte de los tramos y sumado al neto.
-    bono_meta: float = 0.0
-    neto: float = 0.0
-    detalle: dict[str, Any] = field(default_factory=dict)
-    avisos: list[str] = field(default_factory=list)
-
-
-def calcular_pagos(
-    ventas: list[Venta],
-    cargos: dict[int, str],
-    condiciones: dict[str, Any],
-    cumplimientos: dict[int, float | None],
-    crecimientos: dict[int, float | None],
-    estados: dict[int, int | None] | None = None,
-) -> dict[int, Pago]:
-    """Lo que cobra cada persona por las ventas validas del periodo.
-
-    - `cargos`: el cargo de cada persona del directorio.
-    - `condiciones`: tarifas y tramos ya validados (ver `CondicionesComision`).
-    - `cumplimientos`: % de objetivo de supervisores y coordinadores de
-      oficina; nulo es "sin definir", que paga como 100% y lo avisa.
-    - `crecimientos`: % de crecimiento de las unidades de cada coordinador de
-      UN; nulo es "desconocido", y entonces sus ventas de equipo no se pagan
-      hasta que se conozca.
-    - `estados`: el estado de cada asesor, para su bono por meta
-      (`condiciones["bonos_meta"]`); sin estado no hay bono.
-
-    **Cada persona cobra una venta una sola vez, con la regla de su cargo**,
-    ocupe las columnas que ocupe. Un coordinador de oficina o de UN puede ser
-    el `Medio` (venta propia) o el supervisor de la venta, y la oficina suele
-    ser a la vez `Medio` y `Vendedor`: quien vendio cobra la propia y nada mas;
-    los demas, una venta de equipo cada uno.
-
-    >>> cond = {"monto_equipo": 2.5, "monto_directa": 4, "monto_directa_un": 4,
-    ...         "monto_equipo_oficina": 2.5, "monto_directa_oficina": 2.5,
-    ...         "tramos_asesor": validar_tramos_asesor([{"desde": 0, "monto": 5, "descontar": 0}]),
-    ...         "tramos_un": validar_tramos_un([{"desde_pct": None, "monto": 2}])}
-    >>> cargos = {1: "asesor", 7: "coord_un", 9: "coord_oficina"}
-
-    El coordinador de UN como supervisor de la venta, y como su coordinador:
-
-    >>> p = calcular_pagos([Venta("A", False, 0, None, 1, 7, 9, 7)], cargos, cond, {}, {7: 1.0})
-    >>> p[1].ventas_propias, p[7].ventas_equipo, p[9].ventas_equipo
-    (1, 1, 1)
-
-    La oficina como `Medio` y `Vendedor`:
-
-    >>> p = calcular_pagos([Venta("B", False, 0, None, 9, None, 9, None)], cargos, cond, {9: 100}, {})
-    >>> p[9].ventas_propias, p[9].ventas_equipo, p[9].neto
-    (1, 0, 2.5)
-
-    El supervisor cobra la propia con su tarifa, no con la de la oficina:
-
-    >>> cargos[5] = "supervisor"
-    >>> calcular_pagos([Venta("C", False, 0, None, 5, 5, 9, None)], cargos, cond, {5: 100, 9: 100}, {})[5].neto
-    4.0
-
-    El bono por meta se suma al tramo del asesor, segun su estado:
-
-    >>> cond["bonos_meta"] = [{"estado_id": 1, "tramos": [{"desde": 2, "monto": 50}]}]
-    >>> dos = [Venta(o, False, 0, None, 1, None, None, None) for o in "XY"]
-    >>> p = calcular_pagos(dos, cargos, cond, {}, {}, {1: 1})
-    >>> p[1].monto_propias, p[1].bono_meta, p[1].neto
-    (10.0, 50.0, 60.0)
-    >>> calcular_pagos(dos, cargos, cond, {}, {}, {1: 2})[1].bono_meta
-    0.0
-    """
-    pagos: dict[int, Pago] = {}
-
-    def pago(persona_id: int) -> Pago:
-        if persona_id not in pagos:
-            pagos[persona_id] = Pago(persona_id=persona_id, cargo=cargos.get(persona_id, ""))
-        return pagos[persona_id]
-
-    for venta in ventas:
-        if venta.pyme:
-            if venta.medio_id is None:
-                continue
-            p = pago(venta.medio_id)
-            p.ventas_pyme += 1
-            if venta.pct_pyme is None:
-                p.pyme_sin_porcentaje += 1
-            else:
-                p.monto_pyme += venta.precio * venta.pct_pyme / 100
-            continue
-
-        if venta.medio_id is not None:
-            pago(venta.medio_id).ventas_propias += 1
-        superiores = {venta.supervisor_id, venta.coord_oficina_id, venta.coord_un_id} - {None, venta.medio_id}
-        for superior in superiores:
-            pago(superior).ventas_equipo += 1
-
-    monto_directa_un = float(condiciones["monto_directa_un"])
-    # Supervisor y oficina cobran con la misma regla y tarifas propias. Unas
-    # condiciones congeladas antes de separarlas solo traen las del supervisor,
-    # que entonces valian para los dos.
-    tarifas = {
-        "supervisor": (float(condiciones["monto_equipo"]), float(condiciones["monto_directa"])),
-        "coord_oficina": (
-            float(condiciones.get("monto_equipo_oficina", condiciones["monto_equipo"])),
-            float(condiciones.get("monto_directa_oficina", condiciones["monto_directa"])),
-        ),
-    }
-    bonos = {b["estado_id"]: b["tramos"] for b in condiciones.get("bonos_meta") or []}
-    estados = estados or {}
-
-    for p in pagos.values():
-        p.monto_pyme = round(p.monto_pyme, 2)
-        if p.pyme_sin_porcentaje:
-            p.avisos.append(f"{p.pyme_sin_porcentaje} venta(s) PYME de un plan sin % de comisión definido")
-
-        if p.cargo == "asesor":
-            tramo, pagadas, monto = pago_asesor(p.ventas_propias, condiciones["tramos_asesor"])
-            p.monto_propias = monto
-            p.bruto = monto
-            p.detalle = {"tramo_desde": tramo["desde"], "monto_por_venta": tramo["monto"], "ventas_pagadas": pagadas}
-            estado = estados.get(p.persona_id)
-            # Solo se avisa si con algun estado le tocaria bono.
-            if estado is None and any(bono_meta(p.ventas_propias, t)[1] for t in bonos.values()):
-                p.avisos.append("Sin estado conocido: no se le aplica el bono por meta")
-            tramo_bono, p.bono_meta = bono_meta(p.ventas_propias, bonos.get(estado) or [])
-            p.detalle["bono_desde"] = tramo_bono["desde"] if tramo_bono else None
-            if p.ventas_equipo:
-                p.avisos.append("Figura como superior de otras ventas, pero un asesor no cobra por equipo")
-        elif p.cargo in tarifas:
-            monto_equipo, monto_directa = tarifas[p.cargo]
-            p.monto_propias = round(p.ventas_propias * monto_directa, 2)
-            p.monto_equipo = round(p.ventas_equipo * monto_equipo, 2)
-            p.bruto = round(p.monto_propias + p.monto_equipo, 2)
-            cumplimiento = cumplimientos.get(p.persona_id)
-            if cumplimiento is None:
-                p.avisos.append("Cumplimiento del objetivo sin definir: se paga como 100%")
-                cumplimiento = 100.0
-            p.factor_pct = min(max(float(cumplimiento), 0.0), 100.0)
-            p.detalle = {"monto_equipo": monto_equipo, "monto_directa": monto_directa}
-        elif p.cargo == "coord_un":
-            p.monto_propias = round(p.ventas_propias * monto_directa_un, 2)
-            crecimiento = crecimientos.get(p.persona_id)
-            if crecimiento is None:
-                if p.ventas_equipo:
-                    p.avisos.append("Crecimiento de sus unidades desconocido: las ventas de equipo no se pagan")
-                por_venta = 0.0
-            else:
-                por_venta = monto_un(crecimiento, condiciones["tramos_un"])
-            p.monto_equipo = round(p.ventas_equipo * por_venta, 2)
-            p.bruto = round(p.monto_propias + p.monto_equipo, 2)
-            p.detalle = {"crecimiento_pct": crecimiento, "monto_por_venta_equipo": por_venta, "monto_directa": monto_directa_un}
-        else:
-            p.avisos.append("Sin cargo conocido: no se le paga")
-
-        factor = 1.0 if p.factor_pct is None else p.factor_pct / 100
-        p.neto = round(p.bruto * factor + p.monto_pyme + p.bono_meta, 2)
-
-    return pagos
 
 
 # --- El periodo ---------------------------------------------------------------------

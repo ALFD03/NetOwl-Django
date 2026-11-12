@@ -20,8 +20,8 @@ from core.fixtures import ignorados
 from core.odoo_nombres import clave_nombre
 from services.catalogos.models import PersonaVentas
 
-# Las columnas del export que nombran a una persona de ventas, con el cargo
-# que se le sugiere a quien aparece en cada una. El orden es el de la
+# Las columnas del export que nombran a una persona de ventas, con el rol
+# que se le sugiere a quien aparece en cada una (el equipo lo elige quien registra). El orden es el de la
 # sugerencia cuando un nombre sale en varias: quien figura como `Vendedor` es
 # coordinador de oficina aunque tambien haya vendido directamente.
 COLUMNAS_VENTAS = {
@@ -41,11 +41,10 @@ def claves_registradas() -> dict[str, set[str]]:
     pendiente es exactamente lo que alli no encuentra a nadie.
     """
     claves: dict[str, set[str]] = {columna: set() for columna in COLUMNAS_VENTAS}
-    for persona in PersonaVentas.objects.all():
-        claves["medio"].add(clave_nombre(persona.medio))
-        claves["medio_supervisor"].add(clave_nombre(persona.literal_supervisor))
-        if persona.usuario_odoo:
-            claves["vendedor"].add(clave_nombre(persona.usuario_odoo))
+    for persona in PersonaVentas.objects.prefetch_related("alias"):
+        claves["medio"] |= persona.claves("medio")
+        claves["medio_supervisor"] |= persona.claves("supervisor")
+        claves["vendedor"] |= persona.claves("usuario")
     return claves
 
 
@@ -98,7 +97,7 @@ def personas_fuera_del_directorio() -> list[dict[str, Any]]:
     filas = []
     for entrada in por_clave.values():
         primera = next(c for c in COLUMNAS_VENTAS if c in entrada["ordenes"])
-        entrada["cargo"] = COLUMNAS_VENTAS[primera]
+        entrada["rol"] = COLUMNAS_VENTAS[primera]
         filas.append(entrada)
     return sorted(filas, key=lambda f: -max(f["ordenes"].values()))
 

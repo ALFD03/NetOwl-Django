@@ -1,39 +1,42 @@
-/** Catálogos › Ventas: el directorio de ventas, las unidades de negocio y los objetivos. */
+/** Catálogos › Ventas: la estructura de ventas, los equipos con su gente y sus condiciones, y los objetivos. */
 
-import { Briefcase, Building, Crown, Plus, Target, TrafficCone } from 'lucide-react';
+import { Banknote, Briefcase, Building, Crown, MapPin, Plus, Target, TrafficCone, Users } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { Button, DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
 import { useCatalogos } from '@/features/subscriptions/hooks/useCatalogos';
 import type {
-  CargoVentas,
+  CatalogoEquipoVentas,
+  CatalogoMembresia,
   CatalogoObjetivoOficina,
   CatalogoPersonaVentas,
+  CatalogoSite,
   CatalogoUnidadNegocio,
   CatalogosVentasProps,
+  RolVentas,
 } from '@/features/subscriptions/types';
 import { BarraCatalogo, ConfirmarBorrado, ErrorCatalogo, columnaAcciones, enviar } from './CatalogoComun';
-import { CARGO_UI, ObjetivoOficinaForm, PersonaForm, UnidadForm } from './VentasForms';
+import { CondicionesForm, CondicionesRolCard } from './CondicionesRol';
+import { MembresiaForm, ObjetivoOficinaForm, ROL_UI, SiteForm, UnidadForm } from './VentasForms';
 import { NIVEL_OBJETIVO_UI, ObjetivoForm, ObjetivoMesForm, SemaforoForm } from './ObjetivoForms';
 import { ObjetivosPanel } from './ObjetivosPanel';
 import { ZonasSinObjetivoPanel } from './ZonasSinObjetivo';
 import { objetivoGeneral } from '../../lib/objetivos';
 
-const CARGOS: CargoVentas[] = ['asesor', 'supervisor', 'coord_oficina', 'coord_un'];
-
 /**
- * Quién vende y qué se espera de cada parte de la red.
+ * Quién vende, cómo cobra y qué se espera de cada parte de la red.
  *
- * Una pestaña por cargo del directorio de ventas —la misma tabla, filtrada—,
- * con cómo escribe Odoo a cada persona: es contra eso que Comisiones reparte
- * cada venta. Las unidades de negocio son los «coordinadores» por los que
- * agrupa Unidades de negocio: cada una es dueña de un conjunto de zonas (se
- * asignan en Estructura) y apunta a la persona que la lleva.
+ * Dos niveles de pestañas. **Estructura de ventas**: las unidades de negocio y
+ * los sites (con las zonas y los equipos que los trabajan) y los objetivos.
+ * Después, **un grupo por equipo de ventas** (Verticalización, Carabobo...): una
+ * pestaña por rol con su gente —cómo la escribe Odoo, contra lo que Comisiones
+ * reparte cada venta— y, a su derecha, las condiciones de pago de ese rol.
  *
- * Cada coordinadora de oficina pertenece a un site, y en Objetivos se le fija
- * cuántas ventas al mes se esperan de ella: el Sales Report la enseña bajo su
- * site con su cumplimiento.
+ * La pestaña activa viaja como `seccion/subpantalla` (`estructura/sites`,
+ * `carabobo/supervisor`, `aragua/asesor`).
  */
+
+const ESTRUCTURA = 'estructura';
 
 /** Las ventas del tramo vigente en `mes`: el más reciente que ya empezó (`coordinadoras_oficina.objetivo_vigente`). */
 function objetivoVigente(tramos: CatalogoObjetivoOficina[], mes: string): CatalogoObjetivoOficina | null {
@@ -44,9 +47,23 @@ function objetivoVigente(tramos: CatalogoObjetivoOficina[], mes: string): Catalo
   }
   return mejor;
 }
+
+/** El nombre principal y, en gris, los otros con los que Odoo escribe a la misma persona. */
+function conOtros(principal: string, otros: string[]) {
+  if (otros.length === 0) return principal;
+  return (
+    <>
+      {principal}
+      <span className="text-slate-500"> · también «{otros.join('», «')}»</span>
+    </>
+  );
+}
+
 export function VentasView({
+  equipos,
+  membresias,
   personas,
-  cargos,
+  condiciones,
   nuevaPersona,
   coordinadores,
   objetivos,
@@ -62,9 +79,13 @@ export function VentasView({
   estados,
 }: CatalogosVentasProps) {
   const c = useCatalogos({
-    vistaInicial: nuevaPersona.literal ? nuevaPersona.cargo : 'asesor',
+    vistaInicial: nuevaPersona.literal && nuevaPersona.equipo ? `${nuevaPersona.equipo}/${nuevaPersona.rol}` : `${ESTRUCTURA}/unidades`,
     nuevaPersona,
+    equipos,
+    sites,
   });
+  const [seccion, sub = ''] = c.vista.split('/');
+  const equipo = equipos.find((e) => e.slug === seccion);
 
   // El general que rige hoy, para decir en los formularios qué se hereda si
   // se deja un valor vacío. La excepción de un mes no cuenta como "heredado"
@@ -78,77 +99,85 @@ export function VentasView({
   const generalSinExcepcion = (periodo: string) =>
     objetivoGeneral({ ...objetivosConfig, meses: {} }, periodo || mesReferencia);
 
-  const etiquetaCargo = (cargo: CargoVentas) => cargos.find((o) => o.value === cargo)?.label ?? cargo;
-  const porCargo = (cargo: CargoVentas) => personas.filter((p) => p.cargo === cargo);
-  const coordinadoresUn = porCargo('coord_un');
-  const coordinadoresOficina = porCargo('coord_oficina');
-
   // El objetivo de ventas que rige este mes para cada coordinadora: el suyo o el general.
   const mesActual = new Date().toISOString().slice(0, 7);
   const generalOficina = objetivoVigente(objetivosOficina.filter((o) => o.persona_id === null), mesActual);
-  const vigenteDe = (persona: CatalogoPersonaVentas) =>
-    objetivoVigente(objetivosOficina.filter((o) => o.persona_id === persona.id), mesActual) ?? generalOficina;
+  const vigenteDe = (personaId: number) =>
+    objetivoVigente(objetivosOficina.filter((o) => o.persona_id === personaId), mesActual) ?? generalOficina;
+  const coordinadorasOficina: CatalogoPersonaVentas[] = personas.filter((p) =>
+    p.membresias.some((m) => m.rol === 'coord_oficina'));
 
-  const columnasPersonas = (cargo: CargoVentas): Column<CatalogoPersonaVentas>[] => [
-    { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Apellido', accessor: 'apellido', sortKey: 'apellido' },
-    { header: 'Medio', accessor: 'medio', sortKey: 'medio' },
-    ...(cargo !== 'asesor'
-      ? [{
+  const delRol = (e: CatalogoEquipoVentas, rol: RolVentas) =>
+    membresias.filter((m) => m.equipo === e.slug && m.rol === rol);
+
+  const columnasMembresias = (e: CatalogoEquipoVentas, rol: RolVentas): Column<CatalogoMembresia>[] => {
+    const spec = e.roles.find((r) => r.rol === rol)!;
+    const columnas: Column<CatalogoMembresia>[] = [
+      { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
+      { header: 'Apellido', accessor: 'apellido', sortKey: 'apellido' },
+    ];
+    if (spec.medio) columnas.push({ header: 'Medio', accessor: (row) => conOtros(row.medio, row.alias_medio), sortKey: 'medio' });
+    if (spec.supervisor) {
+      columnas.push({
         header: 'Como supervisor',
-        accessor: (row) => row.medio_supervisor || <span className="text-slate-500">= medio</span>,
+        accessor: (row) => conOtros(row.medio_supervisor || '', row.alias_supervisor) || <span className="text-slate-500">= medio</span>,
         sortKey: 'medio_supervisor',
-      } as Column<CatalogoPersonaVentas>]
-      : []),
-    ...(cargo === 'coord_oficina'
-      ? [
-        { header: 'Usuario de Odoo', accessor: 'usuario_odoo', sortKey: 'usuario_odoo' } as Column<CatalogoPersonaVentas>,
-        {
-          header: 'Site',
-          accessor: (row) => row.site || <span className="text-amber-400">sin site</span>,
-          sortKey: 'site',
-          filterable: true,
-          filterValue: (row) => row.site || 'Sin site',
-        } as Column<CatalogoPersonaVentas>,
-        {
-          header: `Objetivo ${mesActual}`,
-          accessor: (row) => {
-            const vigente = vigenteDe(row);
-            if (!vigente) return <span className="text-slate-500">sin objetivo</span>;
-            return `${vigente.ventas} ventas${vigente.persona_id === null ? ' (general)' : ''}`;
-          },
-          align: 'right',
-        } as Column<CatalogoPersonaVentas>,
-      ]
-      : []),
-    ...(cargo === 'coord_un'
-      ? [{ header: 'Unidades', accessor: (row) => row.unidades.join(', ') || '—' } as Column<CatalogoPersonaVentas>]
-      : []),
-    ...(cargo === 'asesor'
-      ? [{
-        header: 'Estado del bono',
-        accessor: (row) => row.estado_fijo || <span className="text-slate-500">automático</span>,
-        sortKey: 'estado_fijo',
+      });
+    }
+    if (spec.usuario) columnas.push({ header: 'Usuario de Odoo', accessor: (row) => conOtros(row.usuario_odoo, row.alias_usuario), sortKey: 'usuario_odoo' });
+    if (spec.site) {
+      columnas.push({
+        header: 'Sites',
+        accessor: (row) => row.sites.join(', ') || <span className="text-amber-400">sin site</span>,
         filterable: true,
-        filterValue: (row) => row.estado_fijo || 'Automático',
-      } as Column<CatalogoPersonaVentas>]
-      : []),
-    columnaAcciones<CatalogoPersonaVentas>(c.editarPersona, (row) =>
-      c.setBorrando({ tipo: 'personas', id: row.id, nombre: `${row.nombre} ${row.apellido}` })),
-  ];
+        filterValue: (row) => row.sites.join(', ') || 'Sin site',
+      });
+      columnas.push({
+        header: `Objetivo ${mesActual}`,
+        accessor: (row) => {
+          const vigente = vigenteDe(row.persona_id);
+          if (!vigente) return <span className="text-slate-500">sin objetivo</span>;
+          return `${vigente.ventas} ventas${vigente.persona_id === null ? ' (general)' : ''}`;
+        },
+        align: 'right',
+      });
+    }
+    if (spec.superior) {
+      columnas.push({
+        header: 'Responde a',
+        accessor: (row) => row.superior || <span className="text-amber-400">sin asignar</span>,
+        sortKey: 'superior',
+        filterable: true,
+        filterValue: (row) => row.superior || 'Sin asignar',
+      });
+    }
+    if (spec.unidades) columnas.push({ header: 'Unidades', accessor: (row) => row.unidades.join(', ') || '—' });
+    columnas.push(columnaAcciones<CatalogoMembresia>(c.editarPersona, (row) =>
+      c.setBorrando({ tipo: 'membresias', id: row.id, nombre: `${row.nombre} ${row.apellido} de ${e.nombre}` })));
+    return columnas;
+  };
 
   const columnasUnidades: Column<CatalogoUnidadNegocio>[] = [
     { header: 'Unidad', accessor: 'nombre', sortKey: 'nombre' },
+    { header: 'Equipos', accessor: (row) => row.equipos.join(', ') || '—', filterable: true, filterValue: (row) => row.equipos.join(', ') || 'Ninguno' },
     {
-      header: 'Coordinador',
-      accessor: (row) => row.persona || '— sin asignar',
-      sortKey: 'persona',
-      filterable: true,
-      filterValue: (row) => row.persona || 'Sin asignar',
+      header: 'Quién la lleva',
+      accessor: (row) => (row.responsables.length
+        ? row.responsables.map((r) => `${r.persona} (${r.etiqueta}, ${r.equipo})`).join(' · ')
+        : <span className="text-slate-500">— nadie</span>),
     },
     { header: 'Zonas', accessor: 'zonas', align: 'right', sortKey: 'zonas' },
     columnaAcciones<CatalogoUnidadNegocio>(c.editarUnidad, (row) =>
       c.setBorrando({ tipo: 'coordinadores', id: row.id, nombre: row.nombre })),
+  ];
+
+  const columnasSites: Column<CatalogoSite>[] = [
+    { header: 'Site', accessor: 'nombre', sortKey: 'nombre' },
+    { header: 'Orden', accessor: 'orden', align: 'right', sortKey: 'orden' },
+    { header: 'Equipos', accessor: (row) => row.equipos.join(', ') || '—' },
+    { header: 'Zonas', accessor: 'zonas', align: 'right', sortKey: 'zonas' },
+    columnaAcciones<CatalogoSite>(c.editarSite, (row) =>
+      c.setBorrando({ tipo: 'sites', id: row.id, nombre: row.nombre })),
   ];
 
   const columnasObjetivosOficina: Column<CatalogoObjetivoOficina>[] = [
@@ -175,148 +204,230 @@ export function VentasView({
       })),
   ];
 
-  const altas: Record<string, { label: string; onClick: () => void }> = {
-    ...Object.fromEntries(CARGOS.map((cargo) => [
-      cargo,
-      { label: `Registrar ${etiquetaCargo(cargo).toLowerCase()}`, onClick: () => c.nuevaPersonaVacia(cargo) },
-    ])),
-    unidades: { label: 'Nueva unidad', onClick: c.nuevaUnidad },
-  };
-  const cargoActivo = CARGOS.find((cargo) => cargo === c.vista);
+  // --- Pestañas y altas de la sección abierta ---
+  const pestanasEstructura = [
+    { key: `${ESTRUCTURA}/unidades`, label: `Unidades de negocio (${coordinadores.length})`, icon: Crown },
+    { key: `${ESTRUCTURA}/sites`, label: `Sites (${sites.length})`, icon: MapPin },
+    { key: `${ESTRUCTURA}/objetivos`, label: 'Objetivos', icon: Target },
+  ];
+  const pestanasEquipo = equipo
+    ? [
+      ...equipo.roles.map((r) => ({
+        key: `${equipo.slug}/${r.rol}`,
+        label: `${ROL_UI[r.rol].corto} (${delRol(equipo, r.rol).length})`,
+        icon: Briefcase,
+      })),
+    ]
+    : [];
+
+  const rolActivo = equipo?.roles.find((r) => r.rol === sub);
+  const alta = (() => {
+    if (seccion === ESTRUCTURA && sub === 'unidades') return { label: 'Nueva unidad', onClick: c.nuevaUnidad };
+    if (seccion === ESTRUCTURA && sub === 'sites') return { label: 'Nuevo site', onClick: c.nuevoSite };
+    if (equipo && rolActivo) {
+      return {
+        label: `Registrar ${rolActivo.etiqueta.toLowerCase()}`,
+        onClick: () => c.nuevaPersonaVacia(rolActivo.rol, equipo.id, equipo.slug),
+      };
+    }
+    return undefined;
+  })();
+
+  const primeraSubpantalla = (slug: string) =>
+    (slug === ESTRUCTURA ? 'unidades' : (equipos.find((e) => e.slug === slug)?.roles[0]?.rol ?? ''));
+
+  // Lo que pide el formulario de la persona abierta.
+  const equipoDraft = equipos.find((e) => e.slug === c.personaDraft?.equipo);
+  const rolDraft = equipoDraft?.roles.find((r) => r.rol === c.personaDraft?.rol);
 
   return (
     <AppLayout
       toolbar={
         <BarraCatalogo
-          activa={c.vista}
-          onChange={(key) => c.setVista(key as typeof c.vista)}
-          alta={altas[c.vista]}
+          activa={seccion}
+          onChange={(key) => c.setVista(`${key}/${primeraSubpantalla(key)}`)}
           pestanas={[
-            ...CARGOS.map((cargo) => ({
-              key: cargo,
-              label: `${CARGO_UI[cargo].corto} (${porCargo(cargo).length})`,
-              icon: Briefcase,
-            })),
-            { key: 'unidades', label: `Unidades de negocio (${coordinadores.length})`, icon: Crown },
-            { key: 'objetivos', label: 'Objetivos', icon: Target },
+            { key: ESTRUCTURA, label: 'Estructura de ventas', icon: Building },
+            ...equipos.map((e) => ({ key: e.slug, label: e.nombre, icon: Users })),
           ]}
         />
       }
     >
       <ErrorCatalogo c={c} />
 
-      {cargoActivo && (
-        <NeonContainer
-          title={etiquetaCargo(cargoActivo)}
-          subtitle={CARGO_UI[cargoActivo].description}
-          icon={<Briefcase className="h-5 w-5" />}
-          theme="green"
-          noPadding
-        >
-          {porCargo(cargoActivo).length === 0 ? (
-            <EmptyState
-              title="Nadie registrado con este cargo"
-              description="Notificaciones lista los nombres de las suscripciones que el directorio todavía no reconoce."
-              icon={<Briefcase />}
-            />
-          ) : (
-            <DataTable
-              columns={columnasPersonas(cargoActivo)}
-              data={porCargo(cargoActivo)}
-              searchable
-              searchPlaceholder="Buscar persona..."
-            />
-          )}
-        </NeonContainer>
-      )}
+      <BarraCatalogo
+        activa={c.vista}
+        onChange={c.setVista}
+        alta={alta}
+        pestanas={seccion === ESTRUCTURA ? pestanasEstructura : pestanasEquipo}
+      />
 
-      {c.vista === 'unidades' && (
-        <NeonContainer title="Unidades de negocio" subtitle="Los grupos de zonas de Unidades de negocio y la persona que lleva cada uno" icon={<Crown className="h-5 w-5" />} theme="green" noPadding>
+      {seccion === ESTRUCTURA && sub === 'unidades' && (
+        <NeonContainer title="Unidades de negocio" subtitle="Los grupos de zonas de Unidades de negocio, los equipos que los trabajan y quien los lleva" icon={<Crown className="h-5 w-5" />} theme="green" noPadding>
           <DataTable columns={columnasUnidades} data={coordinadores} searchable searchPlaceholder="Buscar unidad..." />
         </NeonContainer>
       )}
 
-      {c.vista === 'objetivos' && (
-        <ObjetivosPanel
-          objetivos={objetivos}
-          objetivosMes={objetivosMes}
-          semaforo={semaforo}
-          config={objetivosConfig}
-          periodos={periodosCalculados}
-          zonas={zonas}
-          nodos={nodosConocidos}
-          onEditarGeneral={c.editarObjetivo}
-          onNuevoObjetivo={() => c.nuevoObjetivo('zona')}
-          onEditarObjetivo={c.editarObjetivo}
-          onBorrarObjetivo={(fila) =>
-            c.setBorrando({
-              tipo: 'objetivos',
-              id: fila.id,
-              nombre: `el objetivo ${NIVEL_OBJETIVO_UI[fila.nivel].label.toLowerCase()} ${fila.entidad} ${fila.desde ? `desde ${fila.desde}` : 'desde siempre'}`.replace(/\s+/g, ' '),
-            })}
-          onExcepcionMes={(periodo, existente) =>
-            (existente ? c.editarObjetivoMes(existente) : c.nuevoObjetivoMes(periodo))}
-          onBorrarMes={(fila) =>
-            c.setBorrando({ tipo: 'objetivos_mes', id: fila.id, nombre: `la excepción de ${fila.periodo}` })}
-          onEditarSemaforo={() => c.editarSemaforo(semaforo)}
-        />
-      )}
-
-      {c.vista === 'objetivos' && (
-        <ZonasSinObjetivoPanel
-          filas={zonasSinObjetivo}
-          zonas={zonas}
-          onBorrar={(fila) => c.setBorrando({
-            tipo: 'zonas_sin_objetivo',
-            id: fila.id,
-            nombre: `el tramo sin objetivo de ${fila.zona} (vuelve a medirse en todos sus meses)`,
-          })}
-        />
-      )}
-
-      {c.vista === 'objetivos' && (
-        <NeonContainer
-          className="mt-8"
-          title="Objetivo de ventas de las coordinadoras de oficina"
-          subtitle="Cuántas ventas al mes se esperan de cada una. El Sales Report mide contra él las que vendió ella misma («Medio»); el individual manda sobre el general"
-          icon={<Building className="h-5 w-5" />}
-          theme="purple"
-          noPadding
-          headerAction={
-            <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => c.nuevoObjetivoOficina()}>
-              Nuevo objetivo de ventas
-            </Button>
-          }
-        >
-          {objetivosOficina.length === 0 ? (
-            <EmptyState
-              title="Ningún objetivo de ventas todavía"
-              description="Crea uno general para todas las coordinadoras y, si alguna tiene uno distinto, el suyo."
-              icon={<Target />}
-            />
-          ) : (
-            <DataTable columns={columnasObjetivosOficina} data={objetivosOficina} searchable searchPlaceholder="Buscar coordinadora..." />
-          )}
+      {seccion === ESTRUCTURA && sub === 'sites' && (
+        <NeonContainer title="Sites" subtitle="Sedes regionales: lo que muestra el Sales Report, con las zonas y los equipos que las trabajan" icon={<MapPin className="h-5 w-5" />} theme="slate" noPadding>
+          <DataTable columns={columnasSites} data={sites} searchable searchPlaceholder="Buscar site..." />
         </NeonContainer>
       )}
 
+      {equipo && rolActivo && (
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
+          <NeonContainer
+            title={`${rolActivo.etiqueta} · ${equipo.nombre}`}
+            subtitle={ROL_UI[rolActivo.rol].description}
+            icon={<Briefcase className="h-5 w-5" />}
+            theme="green"
+            noPadding
+          >
+            {delRol(equipo, rolActivo.rol).length === 0 ? (
+              <EmptyState
+                title="Nadie registrado con este rol"
+                description="Notificaciones lista los nombres de las suscripciones que el directorio todavía no reconoce."
+                icon={<Briefcase />}
+              />
+            ) : (
+              <DataTable
+                columns={columnasMembresias(equipo, rolActivo.rol)}
+                data={delRol(equipo, rolActivo.rol)}
+                searchable
+                searchPlaceholder="Buscar persona..."
+              />
+            )}
+          </NeonContainer>
+
+          <NeonContainer
+            title="Condiciones de pago"
+            subtitle={`Cómo cobra ${rolActivo.etiqueta.toLowerCase()} en ${equipo.nombre}`}
+            icon={<Banknote className="h-5 w-5" />}
+            theme="purple"
+            noPadding
+          >
+            <CondicionesRolCard
+              condicion={condiciones.find((x) => x.equipo === equipo.slug && x.rol === rolActivo.rol)}
+              onEditar={c.editarCondicion}
+              onRestablecer={(fila) => {
+                if (fila.id === null) {
+                  c.setError('Ese rol ya paga con las condiciones de la política.');
+                  return;
+                }
+                c.setBorrando({ tipo: 'condiciones_equipo', id: fila.id, nombre: `las condiciones editadas de ${fila.etiqueta} en ${equipo.nombre} (vuelve a la política)` });
+              }}
+            />
+          </NeonContainer>
+        </div>
+      )}
+
+      {seccion === ESTRUCTURA && sub === 'objetivos' && (
+        <>
+          <ObjetivosPanel
+            objetivos={objetivos}
+            objetivosMes={objetivosMes}
+            semaforo={semaforo}
+            config={objetivosConfig}
+            periodos={periodosCalculados}
+            zonas={zonas}
+            nodos={nodosConocidos}
+            onEditarGeneral={c.editarObjetivo}
+            onNuevoObjetivo={() => c.nuevoObjetivo('zona')}
+            onEditarObjetivo={c.editarObjetivo}
+            onBorrarObjetivo={(fila) =>
+              c.setBorrando({
+                tipo: 'objetivos',
+                id: fila.id,
+                nombre: `el objetivo ${NIVEL_OBJETIVO_UI[fila.nivel].label.toLowerCase()} ${fila.entidad} ${fila.desde ? `desde ${fila.desde}` : 'desde siempre'}`.replace(/\s+/g, ' '),
+              })}
+            onExcepcionMes={(periodo, existente) =>
+              (existente ? c.editarObjetivoMes(existente) : c.nuevoObjetivoMes(periodo))}
+            onBorrarMes={(fila) =>
+              c.setBorrando({ tipo: 'objetivos_mes', id: fila.id, nombre: `la excepción de ${fila.periodo}` })}
+            onEditarSemaforo={() => c.editarSemaforo(semaforo)}
+          />
+
+          <ZonasSinObjetivoPanel
+            filas={zonasSinObjetivo}
+            zonas={zonas}
+            onBorrar={(fila) => c.setBorrando({
+              tipo: 'zonas_sin_objetivo',
+              id: fila.id,
+              nombre: `el tramo sin objetivo de ${fila.zona} (vuelve a medirse en todos sus meses)`,
+            })}
+          />
+
+          <NeonContainer
+            className="mt-8"
+            title="Objetivo de ventas de las coordinadoras de oficina"
+            subtitle="Cuántas ventas al mes se esperan de cada una. Se mide contra él lo que vendió ella misma («Medio»); el individual manda sobre el general"
+            icon={<Building className="h-5 w-5" />}
+            theme="purple"
+            noPadding
+            headerAction={
+              <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => c.nuevoObjetivoOficina()}>
+                Nuevo objetivo de ventas
+              </Button>
+            }
+          >
+            {objetivosOficina.length === 0 ? (
+              <EmptyState
+                title="Ningún objetivo de ventas todavía"
+                description="Crea uno general para todas las coordinadoras y, si alguna tiene uno distinto, el suyo."
+                icon={<Target />}
+              />
+            ) : (
+              <DataTable columns={columnasObjetivosOficina} data={objetivosOficina} searchable searchPlaceholder="Buscar coordinadora..." />
+            )}
+          </NeonContainer>
+        </>
+      )}
+
       <Modal
-        isOpen={Boolean(c.personaDraft)}
+        isOpen={Boolean(c.personaDraft && equipoDraft && rolDraft)}
         onClose={c.cerrarFormularios}
-        title={c.personaDraft?.id ? 'Editar persona de ventas' : 'Registrar persona de ventas'}
+        title={c.personaDraft?.id ? 'Editar persona del equipo' : 'Registrar persona en el equipo'}
         subtitle="Cómo aparece en las suscripciones: es contra esto que Comisiones reparte cada venta"
         icon={<Briefcase className="h-5 w-5 text-emerald-400" />}
         theme="green"
       >
-        {c.personaDraft && (
-          <PersonaForm
+        {c.personaDraft && equipoDraft && rolDraft && (
+          <MembresiaForm
             value={c.personaDraft}
-            cargos={cargos}
-            estados={estados}
+            equipos={equipos}
+            equipo={equipoDraft}
+            rol={rolDraft}
+            personas={personas}
+            membresias={membresias}
             sites={sites}
+            unidades={coordinadores}
             saving={c.guardando}
             onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('personas', { ...c.personaDraft }))}
+            onSubmit={(e) => enviar(e, () => c.guardar('membresias', { ...c.personaDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.condicionDraft)}
+        onClose={c.cerrarFormularios}
+        title="Condiciones de pago"
+        subtitle="Solo afecta a lo que se calcule después"
+        icon={<Banknote className="h-5 w-5 text-purple-400" />}
+        theme="purple"
+      >
+        {c.condicionDraft && (
+          <CondicionesForm
+            value={c.condicionDraft}
+            saving={c.guardando}
+            onChange={(patch) => c.setCondicionDraft({ ...c.condicionDraft!, ...patch })}
+            onSubmit={(e) =>
+              enviar(e, () => c.guardar('condiciones_equipo', {
+                equipo_id: c.condicionDraft!.equipo_id,
+                rol: c.condicionDraft!.rol,
+                parametros: c.condicionDraft!.parametros,
+              }))}
             onClose={c.cerrarFormularios}
           />
         )}
@@ -334,7 +445,7 @@ export function VentasView({
         {c.objetivoOficinaDraft && (
           <ObjetivoOficinaForm
             value={c.objetivoOficinaDraft}
-            coordinadoras={coordinadoresOficina}
+            coordinadoras={coordinadorasOficina}
             saving={c.guardando}
             onChange={(patch) => c.setObjetivoOficinaDraft({ ...c.objetivoOficinaDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('objetivos_oficina', { ...c.objetivoOficinaDraft }))}
@@ -347,18 +458,39 @@ export function VentasView({
         isOpen={Boolean(c.unidadDraft)}
         onClose={c.cerrarFormularios}
         title={c.unidadDraft?.id ? 'Editar unidad de negocio' : 'Nueva unidad de negocio'}
-        subtitle="Un conjunto de zonas y la persona que lo lleva"
+        subtitle="Un conjunto de zonas y los equipos de ventas que lo trabajan"
         icon={<Crown className="h-5 w-5 text-emerald-400" />}
         theme="green"
-        size="md"
       >
         {c.unidadDraft && (
           <UnidadForm
             value={c.unidadDraft}
-            personas={coordinadoresUn}
+            zonas={zonas}
+            equipos={equipos}
             saving={c.guardando}
             onChange={(patch) => c.setUnidadDraft({ ...c.unidadDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('coordinadores', { ...c.unidadDraft }))}
+            onClose={c.cerrarFormularios}
+          />
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(c.siteDraft)}
+        onClose={c.cerrarFormularios}
+        title={c.siteDraft?.id ? 'Editar site' : 'Nuevo site'}
+        subtitle="Sede regional, sus zonas y los equipos que la trabajan"
+        icon={<MapPin className="h-5 w-5 text-slate-300" />}
+        theme="slate"
+      >
+        {c.siteDraft && (
+          <SiteForm
+            value={c.siteDraft}
+            zonas={zonas}
+            equipos={equipos}
+            saving={c.guardando}
+            onChange={(patch) => c.setSiteDraft({ ...c.siteDraft!, ...patch })}
+            onSubmit={(e) => enviar(e, () => c.guardar('sites', { ...c.siteDraft }))}
             onClose={c.cerrarFormularios}
           />
         )}

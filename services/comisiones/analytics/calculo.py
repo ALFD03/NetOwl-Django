@@ -18,13 +18,14 @@
    facturas se reemplazan en cada importacion.
 3. **Personas**: el `Medio`, el `Oportunidad/Administrador` y el `Vendedor` de cada venta
    contra el directorio de ventas, tal y como vienen: lo que la venta no trae
-   no lo cobra nadie. El coordinador de unidad de negocio, que Odoo no tiene,
-   es el del supervisor de la venta (`SupervisorUnidad`).
-4. **Pagos** (`reglas.calcular_pagos`), con el cumplimiento de los supervisores
-   y coordinadores de oficina (`_cumplimientos`: el % Ventas del site que les
-   toca, o el escrito a mano), el crecimiento de las unidades de cada coordinador
-   de UN, que sale de Unidades de negocio del mes, y el estado de cada asesor
-   para su bono por meta (`_estados_asesores`).
+   no lo cobra nadie. El equipo de la venta es el de su `Medio`; la unidad de
+   negocio, la de la cadena supervisor → su superior (`MembresiaEquipo.superior`).
+4. **Pagos** (`pagos.calcular_pagos`): cada persona cobra segun las condiciones
+   de su rol en el equipo de la venta, con los indicadores del mes
+   (`_indicadores`): los % de cumplimiento de sites y unidades de negocio, el
+   crecimiento, el churn y los % de ingresos, que salen del servidor
+   (`cumplimiento_sites.indicadores_del_mes`) o se escriben a mano cuando se
+   puede (`IndicadorComision`).
 
 Un borrador no guarda nada: esto se ejecuta cada vez que se abre.
 """
@@ -52,29 +53,30 @@ from core.config import (
 from core.database import DBConnector
 from core.odoo_nombres import clave_nombre
 from core.utils import normalize_text, parse_date
-from services.catalogos.models import PersonaVentas
+from services.catalogos.equipos import ROLES, ROLES_POR_EQUIPO, parametros_vigentes
+from services.catalogos.models import (
+    CondicionesEquipo,
+    EquipoVentas,
+    MembresiaEquipo,
+    PersonaVentas,
+)
 from services.comisiones.models import (
     ComisionPeriodo,
     ComisionVenta,
     CondicionesComision,
     IndicadorComision,
     RevisionComision,
-    SupervisorUnidad,
     VentaManual,
 )
 from services.subscriptions.analytics.analyzer.cleaner import parse_archivado
 from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_vigente_el
 from services.subscriptions.analytics.coordinadoras_oficina import get_coordinadoras_oficina
-from services.subscriptions.analytics.cumplimiento_sites import cumplimiento_ventas_sites
+from services.subscriptions.analytics.cumplimiento_sites import indicadores_del_mes
 from services.subscriptions.analytics.facturas import facturas_importadas_el, leer_facturas
 from services.subscriptions.analytics.free_plans import _is_free_tariff
-from services.subscriptions.analytics.queries import (
-    calculate_aggregation_totals,
-    get_business_units_data,
-    get_periodos,
-)
-from services.subscriptions.models import Coordinador, Estado, Zona
+from services.subscriptions.models import Coordinador
 
+from .pagos import Indicadores, Miembro, Venta, calcular_pagos
 from .reglas import (
     CONTAR,
     DIFERIDA,
@@ -90,17 +92,12 @@ from .reglas import (
     VALIDA,
     YA_PAGADA,
     Factura,
-    Venta,
-    calcular_pagos,
     cancelada_sin_cumplir_un_mes,
     clasificar,
     fecha_del_pago,
     pagada_hasta,
     primera_mensualidad,
     tramo,
-    validar_bonos_meta,
-    validar_tramos_asesor,
-    validar_tramos_un,
 )
 
 logger = logging.getLogger(__name__)
@@ -117,10 +114,6 @@ _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 # El estado interno de los logs de una suscripcion cancelada.
 CANCELADO_LOG = SUBS_STATE_TO_LOG_MAP["cancelado"]
-
-# Los cargos cuyo total multiplica el % de cumplimiento.
-CARGOS_CON_CUMPLIMIENTO = ("supervisor", "coord_oficina")
-
 
 class FaltanColumnas(RuntimeError):
     """Faltan datos sin los que no hay informe: columnas de suscripciones o las facturas."""
@@ -212,27 +205,23 @@ def corte_de(periodo: ComisionPeriodo, dia_corte: int) -> date:
 # --- Condiciones ------------------------------------------------------------------
 
 def condiciones_vigentes() -> dict[str, Any]:
-    """Las condiciones actuales, con los tramos validados, como diccionario plano.
+    """Las condiciones actuales: la ventana de pago y las de cada rol de cada equipo.
 
-    Los bonos por meta llevan el nombre de su estado, para que la copia que
-    congela un cierre se explique sola. El de un estado que ya no esta en el
-    catalogo se descarta: no hay asesor al que aplicarselo.
+    `equipos` es `{equipo: {rol: parametros}}`, con lo guardado completado con la
+    politica por defecto (`equipos.parametros_vigentes`); `nombres`, el nombre de
+    cada equipo, para que la copia que congela un cierre se explique sola.
     """
     c = CondicionesComision.actual()
-    estados = dict(Estado.objects.values_list("id", "nombre"))
-    bonos = [b for b in c.bonos_meta or [] if isinstance(b, dict) and b.get("estado_id") in estados]
+    guardadas = {(f.equipo.slug, f.rol): f.parametros for f in CondicionesEquipo.objects.select_related("equipo")}
     return {
-        "monto_equipo": float(c.monto_equipo),
-        "monto_directa": float(c.monto_directa),
-        "monto_equipo_oficina": float(c.monto_equipo_oficina),
-        "monto_directa_oficina": float(c.monto_directa_oficina),
-        "monto_directa_un": float(c.monto_directa_un),
-        "tramos_asesor": validar_tramos_asesor(c.tramos_asesor),
-        "tramos_un": validar_tramos_un(c.tramos_un),
-        "bonos_meta": validar_bonos_meta(bonos, estados),
         "dia_promocional": c.dia_promocional,
         "dias_espera": c.dias_espera,
         "dia_corte": c.dia_corte,
+        "equipos": {
+            slug: {rol: parametros_vigentes(slug, rol, guardadas.get((slug, rol))) for rol in roles}
+            for slug, roles in ROLES_POR_EQUIPO.items()
+        },
+        "nombres": dict(EquipoVentas.objects.values_list("slug", "nombre")),
     }
 
 
@@ -370,50 +359,85 @@ def _indice_planes() -> tuple[dict[tuple[str, str], dict], dict[str, dict]]:
 
 
 class _Directorio:
-    """El directorio de ventas, indexado para resolver literales, y la UN de cada supervisor."""
+    """El directorio de ventas y la estructura de los equipos, indexados para resolver cada venta."""
 
     def __init__(self):
-        self.personas = {p.id: p for p in PersonaVentas.objects.select_related("site")}
-        self.por_medio = {clave_nombre(p.medio): p for p in self.personas.values()}
-        # Odoo a veces escribe a la misma persona de otra forma como supervisor.
-        self.por_supervisor = {clave_nombre(p.literal_supervisor): p for p in self.personas.values()}
-        self.por_usuario = {
-            clave_nombre(p.usuario_odoo): p for p in self.personas.values() if p.usuario_odoo
-        }
-        self.unidad = dict(SupervisorUnidad.objects.values_list("supervisor_id", "coord_un_id"))
+        self.personas = {p.id: p for p in PersonaVentas.objects.prefetch_related("alias")}
+        self.membresias = list(
+            MembresiaEquipo.objects.select_related("persona", "equipo", "superior")
+            .prefetch_related("unidades", "sites")
+            .order_by("equipo__orden", "rol", "persona__nombre", "persona__apellido")
+        )
+        self.por_clave = {(m.persona_id, m.equipo.slug): m for m in self.membresias}
+        self.por_id = {m.id: m for m in self.membresias}
+        self.de_persona: dict[int, list[MembresiaEquipo]] = {}
+        for m in self.membresias:
+            self.de_persona.setdefault(m.persona_id, []).append(m)
+        # Una persona puede estar escrita de varias formas (con y sin tilde): cada una apunta a ella.
+        # Odoo a veces la escribe distinto como supervisor.
+        self.por_medio = {k: p for p in self.personas.values() for k in p.claves("medio")}
+        self.por_supervisor = {k: p for p in self.personas.values() for k in p.claves("supervisor")}
+        self.por_usuario = {k: p for p in self.personas.values() for k in p.claves("usuario")}
+        self.unidades = dict(Coordinador.objects.values_list("id", "nombre"))
 
     def nombre(self, persona_id: int | None) -> str:
         persona = self.personas.get(persona_id) if persona_id else None
         return persona.nombre_completo if persona else ""
 
-    def cargo(self, persona_id: int | None) -> str:
-        persona = self.personas.get(persona_id) if persona_id else None
-        return persona.cargo if persona else ""
+    def miembros(self) -> dict[tuple[int, str], Miembro]:
+        """Las membresias como las lee el motor de pagos."""
+        return {
+            clave: Miembro(m.persona_id, m.equipo.slug, m.rol, tuple(sorted(u.id for u in m.unidades.all())))
+            for clave, m in self.por_clave.items()
+        }
 
-    def unidad_de(self, persona_id: int | None) -> int | None:
-        """El coordinador de UN de lo que supervisa o vende `persona_id`."""
-        cargo = self.cargo(persona_id)
-        if cargo == "coord_un":
-            return persona_id
-        if cargo == "supervisor":
-            return self.unidad.get(persona_id)
-        return None
+    def unidades_de(self, m: MembresiaEquipo | None) -> tuple[int, ...]:
+        """Las unidades de negocio de una membresia: las que lleva, o las de su superior.
 
-    def resolver(self, medio: str, supervisor: str, vendedor: str) -> tuple[dict[str, int | None], list[str]]:
-        """Las personas de una venta y los avisos de lo que no se pudo resolver.
+        El coordinador de UN lleva una; el jefe y los gerentes, varias; un
+        supervisor no lleva ninguna y hereda las de a quien responde.
+        """
+        if m is None:
+            return ()
+        if ROLES[m.rol].get("unidades"):
+            return tuple(sorted(u.id for u in m.unidades.all()))
+        superior = self.por_id.get(m.superior_id) if m.superior_id is not None else None
+        return self.unidades_de(superior) if superior is not None and superior.id != m.id else ()
+
+    def _equipo_de(self, *personas: int | None) -> tuple[str, str | None]:
+        """El equipo de una venta, y un aviso si no esta claro.
+
+        Es el del `Medio`; si no esta registrado en ningun equipo, el de su
+        supervisor, y luego el de su `Vendedor`. Quien esta en varios (el
+        gerente de operaciones) se desempata con el equipo de los demas de la venta.
+        """
+        con_equipo = [
+            [m.equipo.slug for m in self.de_persona.get(pid, [])] for pid in personas if pid is not None
+        ]
+        con_equipo = [e for e in con_equipo if e]
+        if not con_equipo:
+            return "", None
+        primeros = con_equipo[0]
+        if len(primeros) == 1:
+            return primeros[0], None
+        comunes = [e for e in primeros if all(e in otros for otros in con_equipo[1:])]
+        if len(comunes) == 1:
+            return comunes[0], None
+        return (comunes or primeros)[0], "Quien vendió está en varios equipos y no se pudo saber de cuál es la venta"
+
+    def resolver(self, medio: str, supervisor: str, vendedor: str) -> tuple[dict[str, Any], list[str]]:
+        """Las personas de una venta, su equipo y sus unidades, y los avisos de lo que no se pudo resolver.
 
         Cada columna se busca en el directorio tal y como viene, sin rellenar
         nada: una venta sin `Vendedor` no paga a ninguna oficina. Un literal
         que no esta en el directorio es un problema de registro, y se avisa.
 
-        Cualquier cargo puede ocupar cualquier columna: un coordinador de
-        oficina o de UN tambien vende (`Medio`) y supervisa (`Oportunidad/Administrador`).
-
-        El coordinador de UN sale del supervisor de la venta: el que tenga
-        asignado si es un supervisor, el mismo si es un coordinador de UN, y
-        ninguno si es una oficina. Si la venta no trae supervisor, de quien
-        vendio con la misma regla. Un supervisor escrito pero sin registrar no
-        se sustituye por quien vendio: seria inventarle el equipo.
+        Cualquier rol puede ocupar cualquier columna: una coordinadora de
+        oficina o un coordinador de UN tambien vende (`Medio`) y supervisa
+        (`Oportunidad/Administrador`). Las unidades de negocio de la venta son las
+        de su supervisor (o de quien vendio, si no trae supervisor); un
+        supervisor escrito pero sin registrar no se sustituye por quien vendio:
+        seria inventarle el equipo.
         """
         avisos: list[str] = []
 
@@ -430,96 +454,73 @@ class _Directorio:
         supervisor_id = buscar(supervisor, self.por_supervisor, "Supervisor")
         oficina_id = buscar(vendedor, self.por_usuario, "Vendedor")
 
+        equipo, aviso = self._equipo_de(medio_id, supervisor_id, oficina_id)
+        if aviso:
+            avisos.append(aviso)
+        if not equipo and any(i is not None for i in (medio_id, supervisor_id, oficina_id)):
+            avisos.append("Ninguna de las personas de la venta tiene un papel en un equipo: no se paga")
+
+        def papel(persona_id: int | None) -> MembresiaEquipo | None:
+            return self.por_clave.get((persona_id, equipo)) if persona_id is not None and equipo else None
+
         if supervisor_id is not None:
-            coord_un_id = self.unidad_de(supervisor_id)
+            unidades = self.unidades_de(papel(supervisor_id))
         elif not supervisor:
-            coord_un_id = self.unidad_de(medio_id)
+            unidades = self.unidades_de(papel(medio_id))
         else:
-            coord_un_id = None
+            unidades = ()
+        quien = papel(medio_id)
+        for etiqueta, pid in (("Medio", medio_id), ("Supervisor", supervisor_id), ("Vendedor", oficina_id)):
+            if equipo and pid is not None and papel(pid) is None:
+                avisos.append(f"{etiqueta} «{self.nombre(pid)}» no tiene papel en el equipo de la venta")
         return {
             "medio_id": medio_id,
             "supervisor_id": supervisor_id,
             "coord_oficina_id": oficina_id,
-            "coord_un_id": coord_un_id,
+            "equipo": equipo,
+            "unidad_ids": list(unidades),
+            "es_oficina": bool(quien and quien.rol == "coord_oficina"),
         }, avisos
 
 
-def _crecimientos(periodo: str, directorio: _Directorio, manuales: dict[int, float]) -> dict[int, dict[str, Any]]:
-    """El crecimiento del mes de las unidades de cada coordinador de UN.
-
-    Sale de Unidades de negocio: los nodos de todas las unidades que lleva la
-    persona (una puede llevar varias), agregados con la misma formula que el
-    reporte usa para el total de un coordinador. Si el mes no esta calculado,
-    vale el que se haya escrito a mano en el informe.
-    """
-    etiqueta = next((p for p in get_periodos() if str(p).startswith(periodo)), None)
-    nodos_por_unidad: dict[str, list[dict]] = {}
-    if etiqueta:
-        datos = get_business_units_data(etiqueta)
-        for grupo in datos.get("data") or []:
-            if not grupo.get("is_rf"):
-                nodos_por_unidad[grupo["coordinador"]] = grupo.get("nodes") or []
-
-    unidades: dict[int, list[str]] = {}
-    for nombre, persona_id in Coordinador.objects.filter(persona__isnull=False).values_list("nombre", "persona_id"):
-        unidades.setdefault(persona_id, []).append(nombre)
-
-    resultado: dict[int, dict[str, Any]] = {}
-    for persona_id, persona in directorio.personas.items():
-        if persona.cargo != "coord_un":
-            continue
-        nombres = sorted(unidades.get(persona_id, []))
-        nodos = [n for u in nombres for n in nodos_por_unidad.get(u, [])]
-        calculado = calculate_aggregation_totals(nodos)["crecimiento"] if nodos else None
-        manual = manuales.get(persona_id)
-        resultado[persona_id] = {
-            "unidades": nombres,
-            "calculado": calculado,
-            "valor": manual if manual is not None else calculado,
-            "fuente": "manual" if manual is not None else ("unidades de negocio" if calculado is not None else None),
-        }
-    return resultado
-
-
-def _sites_de_unidades(coord_un_id: int) -> list[str]:
-    """Los sites donde estan las zonas de las unidades que lleva un coordinador de UN."""
-    return sorted(set(
-        Zona.objects.filter(coordinador__persona_id=coord_un_id).values_list("site__nombre", flat=True)
-    ))
-
-
-def _cumplimientos(
+def _indicadores(
     clave: str,
     directorio: _Directorio,
-    manuales: dict[int, float],
-) -> dict[int, dict[str, Any]]:
-    """El % de cumplimiento de cada supervisor y coordinadora de oficina, y de donde sale.
+    condiciones: dict[str, Any],
+    cumplimientos_manuales: dict[int, float],
+    crecimientos_manuales: dict[int, float],
+) -> tuple[Indicadores, dict[str, Any]]:
+    """Los % que condicionan el pago, y de donde sale cada uno.
 
-    El que se aplica (`valor`) es, por orden:
+    Devuelve `(Indicadores, detalle)`: lo primero es lo que consume el motor; lo
+    segundo, lo que pinta el paso Indicadores del informe.
 
-    1. **El escrito a mano** para esa persona (`IndicadorComision`): manda
-       siempre, igual que el crecimiento escrito de un coordinador de UN.
-    2. **El calculado**, el % Ventas del site del mes (`cumplimiento_ventas_sites`):
-       - coordinadora de oficina: el de su site (`PersonaVentas.site`);
-       - supervisor: el de los sites donde estan las zonas de su coordinador
-         de UN (`SupervisorUnidad`), **promediados** si son varios.
-    **Nada se deduce de las ventas**, a peticion del usuario: un supervisor sin
-    UN asignada no tiene calculo (antes tomaba el site de la oficina con que
-    mas vendia). No hay un general del periodo: sin calculo ni valor escrito
-    queda nulo, y el cierre lo pide. Ademas se informa, sin que pague, el
-    cumplimiento personal de una coordinadora (sus ventas como `Medio` contra
-    su objetivo de ventas, el del Sales Report).
+    - **Factor de cumplimiento** (`factor` del rol): el que se aplica es, por orden,
+      el **escrito a mano** para la persona (`IndicadorComision`), el
+      **calculado** —el % Ventas de su site, o el promedio simple de las unidades
+      de negocio que le tocan— o ninguno, que paga como 100 % y bloquea el cierre.
+      **Nada se deduce de las ventas**: un supervisor sin superior (sin unidad) no
+      tiene calculo y se escribe a mano.
+    - **Crecimiento** de la unidad de un coordinador de UN (`escalon_crecimiento`):
+      a mano, o el de Unidades de negocio del mes.
+    - **Churn bruto** de su unidad, **% de ingresos** de cada unidad (bono del jefe)
+      y **% de ventas de la empresa** (bono de la administradora): solo calculados.
 
-    Un mes sin analizar no tiene % de sites: todos caen al escrito.
+    Un mes sin analizar no tiene ninguno: todo cae a lo escrito, y lo demas queda
+    nulo. Ademas se informa, sin que pague, el cumplimiento personal de una
+    coordinadora (sus ventas como `Medio` contra su objetivo de ventas).
     """
     try:
-        sites = cumplimiento_ventas_sites(clave)
+        datos = indicadores_del_mes(clave)
     except Exception:
-        logger.exception("No se pudo calcular el cumplimiento de los sites de %s", clave)
-        sites = None
-    pct_site = lambda nombre: (sites or {}).get(nombre, {}).get("pct") if nombre else None  # noqa: E731
+        logger.exception("No se pudieron calcular los cumplimientos de %s", clave)
+        datos = None
+    sites = (datos or {}).get("sites", {})
+    por_unidad = (datos or {}).get("unidades", {})
+    nombre_unidad = directorio.unidades
+
     personales = {}
-    if any(p.cargo == "coord_oficina" for p in directorio.personas.values()):
+    if any(m.rol == "coord_oficina" for m in directorio.membresias):
         for c in get_coordinadoras_oficina(clave):
             propias = sum(c["propias_dia"])
             personales[c["id"]] = {
@@ -528,97 +529,64 @@ def _cumplimientos(
                 "pct": round(propias / c["objetivo"] * 100, 2) if c["objetivo"] else None,
             }
 
-    def site_de(persona_id: int | None) -> dict[str, Any] | None:
-        persona = directorio.personas.get(persona_id) if persona_id else None
-        if persona is None or persona.site_id is None:
-            return None
-        nombre = persona.site.nombre
-        return {"site": nombre, "pct": pct_site(nombre)}
+    ind = Indicadores(pct_empresa=((datos or {}).get("empresa") or {}).get("pct_ventas"))
+    factores, crecimientos, ingresos = [], [], []
 
-    resultado: dict[int, dict[str, Any]] = {}
-    for pid, persona in directorio.personas.items():
-        if persona.cargo not in CARGOS_CON_CUMPLIMIENTO:
-            continue
-        fila: dict[str, Any] = {"calculado": None, "fuente_calculo": None, "sites": [], "personal": None}
-        if persona.cargo == "coord_oficina":
-            propio = site_de(pid)
-            if propio:
-                fila["sites"] = [{"site": propio["site"], "pct": propio["pct"]}]
-                if propio["pct"] is not None:
-                    fila.update(calculado=propio["pct"], fuente_calculo="site")
-            fila["personal"] = personales.get(pid)
-        else:
-            coord_un = directorio.unidad.get(pid)
-            if coord_un is not None:
-                fila["coord_un"] = directorio.nombre(coord_un)
-                fila["sites"] = [{"site": s, "pct": pct_site(s)} for s in _sites_de_unidades(coord_un)]
-                con_valor = [s["pct"] for s in fila["sites"] if s["pct"] is not None]
-                if con_valor:
-                    fila.update(calculado=round(sum(con_valor) / len(con_valor), 2), fuente_calculo="unidad")
+    def piezas(m: MembresiaEquipo) -> dict[str, Any]:
+        return condiciones["equipos"].get(m.equipo.slug, {}).get(m.rol, {})
 
-        manual = manuales.get(pid)
-        if manual is not None:
-            fila.update(valor=manual, fuente="manual")
-        elif fila["calculado"] is not None:
-            fila.update(valor=fila["calculado"], fuente=fila["fuente_calculo"])
-        else:
-            fila.update(valor=None, fuente=None)
-        resultado[pid] = fila
-    return resultado
+    for m in directorio.membresias:
+        cond = piezas(m)
+        k = (m.persona_id, m.equipo.slug)
+        base = {"persona_id": m.persona_id, "equipo": m.equipo.slug, "rol": m.rol, "nombre": m.persona.nombre_completo}
 
+        tipo = cond.get("factor")
+        if tipo in ("site", "unidad"):
+            if tipo == "site":
+                fuentes = [{"nombre": s.nombre, "pct": sites.get(s.nombre, {}).get("pct_ventas")} for s in m.sites.all()]
+            else:
+                fuentes = [
+                    {"nombre": nombre_unidad.get(u, str(u)), "pct": por_unidad.get(nombre_unidad.get(u, ""), {}).get("pct_ventas")}
+                    for u in directorio.unidades_de(m)
+                ]
+            con_valor = [f["pct"] for f in fuentes if f["pct"] is not None]
+            calculado = round(sum(con_valor) / len(con_valor), 2) if con_valor else None
+            manual = cumplimientos_manuales.get(m.persona_id)
+            valor = manual if manual is not None else calculado
+            ind.factores[k] = valor
+            factores.append({
+                **base, "factor": tipo, "fuentes": fuentes, "calculado": calculado, "manual": manual, "valor": valor,
+                "fuente": "manual" if manual is not None else (tipo if calculado is not None else None),
+                "personal": personales.get(m.persona_id) if m.rol == "coord_oficina" else None,
+            })
 
-def _estados_asesores(directorio: _Directorio) -> dict[int, dict[str, Any]]:
-    """El estado de cada asesor para su bono por meta, y de donde sale.
+        if "escalon_crecimiento" in cond or "bono_churn" in cond:
+            unidades = directorio.unidades_de(m)
+            fila = por_unidad.get(nombre_unidad.get(unidades[0], ""), {}) if unidades else {}
+            calculado = fila.get("crecimiento")
+            manual = crecimientos_manuales.get(m.persona_id)
+            ind.crecimientos[k] = manual if manual is not None else calculado
+            ind.churns[k] = fila.get("churn_bruto")
+            crecimientos.append({
+                **base, "unidades": [nombre_unidad.get(u, str(u)) for u in unidades],
+                "calculado": calculado, "manual": manual, "valor": ind.crecimientos[k],
+                "fuente": "manual" if manual is not None else ("unidades de negocio" if calculado is not None else None),
+                "churn_bruto": ind.churns[k],
+            })
 
-    El fijado a mano en el directorio (`PersonaVentas.estado_fijo`) si lo
-    tiene; si no, el de **la zona donde tiene mas clientes**: los clientes
-    distintos de todas las suscripciones en que es el `Medio`, no solo las del
-    periodo, porque un mes flojo no lo cambia de estado. Un empate se resuelve
-    por el nombre de la zona, para que no dependa del orden de la consulta. Una
-    zona fuera del catalogo no cuenta: no se sabe de que estado es.
-    """
-    asesores = {pid: p for pid, p in directorio.personas.items() if p.cargo == "asesor"}
-    if not asesores:
-        return {}
-    estados = dict(Estado.objects.values_list("id", "nombre"))
-    por_nombre = {nombre: eid for eid, nombre in estados.items()}
-    zonas = fixtures.zonas_por_nombre()
+    for uid, nombre in sorted(nombre_unidad.items(), key=lambda kv: kv[1]):
+        fila = por_unidad.get(nombre)
+        if fila is not None:
+            ind.ingresos_unidad[uid] = fila["pct_ingresos"]
+            ingresos.append({"unidad_id": uid, "unidad": nombre, "pct_ingresos": fila["pct_ingresos"], "pct_ventas": fila["pct_ventas"]})
 
-    clientes: dict[int, dict[str, int]] = {}
-    df = DBConnector().query(
-        f"""
-        SELECT medio, TRIM(zona) AS zona, COUNT(DISTINCT cliente) AS clientes
-        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
-        WHERE COALESCE(TRIM(medio), '') <> '' AND COALESCE(TRIM(zona), '') <> ''
-        GROUP BY medio, TRIM(zona)
-        """
-    )
-    for fila in df.itertuples(index=False):
-        persona = directorio.por_medio.get(clave_nombre(fila.medio))
-        zona = zonas.get(str(fila.zona).strip().lower())
-        if persona is None or persona.id not in asesores or zona is None:
-            continue
-        # Dos literales de `Medio` pueden ser la misma persona: se suman.
-        por_zona = clientes.setdefault(persona.id, {})
-        por_zona[zona["name"]] = por_zona.get(zona["name"], 0) + int(fila.clientes)
-    estado_de_zona = {z["name"]: z.get("Estado") for z in zonas.values()}
-
-    resultado: dict[int, dict[str, Any]] = {}
-    for pid, persona in asesores.items():
-        if persona.estado_fijo_id in estados:
-            resultado[pid] = {
-                "id": persona.estado_fijo_id, "nombre": estados[persona.estado_fijo_id],
-                "fuente": "fijado", "zona": "", "clientes": None,
-            }
-            continue
-        por_zona = clientes.get(pid)
-        if not por_zona:
-            continue
-        zona, n = min(por_zona.items(), key=lambda z: (-z[1], z[0]))
-        estado_id = por_nombre.get(estado_de_zona.get(zona) or "")
-        if estado_id is not None:
-            resultado[pid] = {"id": estado_id, "nombre": estados[estado_id], "fuente": "zona", "zona": zona, "clientes": n}
-    return resultado
+    return ind, {
+        "analizado": datos is not None,
+        "factores": factores,
+        "crecimientos": crecimientos,
+        "ingresos_unidad": ingresos,
+        "empresa": (datos or {}).get("empresa"),
+    }
 
 
 # --- El informe ------------------------------------------------------------------------
@@ -784,57 +752,54 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "medio_supervisor": texto(fila.medio_supervisor),
             "vendedor": texto(fila.vendedor),
             **personas,
-            "coord_un": directorio.nombre(personas["coord_un_id"]),
+            "unidades": [directorio.unidades.get(u, str(u)) for u in personas["unidad_ids"]],
             "avisos": avisos,
         })
 
-    indicadores = {i.persona_id: i for i in IndicadorComision.objects.filter(periodo=clave)}
-    propios = {
-        pid: float(i.cumplimiento_pct) for pid, i in indicadores.items() if i.cumplimiento_pct is not None
-    }
-    origen_cumplimiento = _cumplimientos(clave, directorio, propios)
-    cumplimientos = {pid: c["valor"] for pid, c in origen_cumplimiento.items() if c["valor"] is not None}
-    manuales = {pid: float(i.crecimiento_pct) for pid, i in indicadores.items() if i.crecimiento_pct is not None}
-    crecimientos = _crecimientos(clave, directorio, manuales)
-    estados_asesor = _estados_asesores(directorio)
+    manuales_ind = {i.persona_id: i for i in IndicadorComision.objects.filter(periodo=clave)}
+    propios = {pid: float(i.cumplimiento_pct) for pid, i in manuales_ind.items() if i.cumplimiento_pct is not None}
+    manuales = {pid: float(i.crecimiento_pct) for pid, i in manuales_ind.items() if i.crecimiento_pct is not None}
+    ind, detalle_ind = _indicadores(clave, directorio, condiciones, propios, manuales)
+    factores = {(f["persona_id"], f["equipo"]): f for f in detalle_ind["factores"]}
+    crecimientos = {(c["persona_id"], c["equipo"]): c for c in detalle_ind["crecimientos"]}
 
     validas = [v for v in ventas if v["clasificacion"] == VALIDA]
     pagos = calcular_pagos(
         [
             Venta(
-                orden=v["orden"], pyme=v["pyme"], precio=v["precio"], pct_pyme=v["pct_pyme"],
-                medio_id=v["medio_id"], supervisor_id=v["supervisor_id"],
-                coord_oficina_id=v["coord_oficina_id"], coord_un_id=v["coord_un_id"],
+                orden=v["orden"], pyme=v["pyme"], precio=v["precio"], pct_pyme=v["pct_pyme"], equipo=v["equipo"],
+                medio_id=v["medio_id"], supervisor_id=v["supervisor_id"], coord_oficina_id=v["coord_oficina_id"],
+                unidad_ids=tuple(v["unidad_ids"]), es_oficina=v["es_oficina"],
             )
             for v in validas
         ],
-        {pid: p.cargo for pid, p in directorio.personas.items()},
-        condiciones,
-        cumplimientos,
-        {pid: c["valor"] for pid, c in crecimientos.items()},
-        {pid: e["id"] for pid, e in estados_asesor.items()},
+        directorio.miembros(),
+        condiciones["equipos"],
+        ind,
     )
 
     filas_pago = []
-    for pago in pagos.values():
+    for pago in pagos:
         persona = directorio.personas.get(pago.persona_id)
-        crecimiento = crecimientos.get(pago.persona_id, {})
+        miembro = directorio.por_clave[(pago.persona_id, pago.equipo)]
+        k = (pago.persona_id, pago.equipo)
+        factor, crecimiento = factores.get(k), crecimientos.get(k)
         filas_pago.append({
             **asdict(pago),
             "nombre": persona.nombre_completo if persona else "",
             "medio": persona.medio if persona else "",
-            "cumplimiento_pct": cumplimientos.get(pago.persona_id),
+            "equipo_nombre": miembro.equipo.nombre,
+            "cumplimiento_pct": ind.factores.get(k) if factor else None,
             "cumplimiento_propio": propios.get(pago.persona_id),
             # De donde sale el % aplicado y lo que se calculo, aunque no se use.
-            "cumplimiento": origen_cumplimiento.get(pago.persona_id),
-            "crecimiento_pct": crecimiento.get("valor"),
-            "crecimiento_calculado": crecimiento.get("calculado"),
-            "crecimiento_fuente": crecimiento.get("fuente"),
-            "unidades": crecimiento.get("unidades", []),
-            # El estado con que se le aplico el bono por meta; nulo si no es asesor o no se supo.
-            "estado_bono": estados_asesor.get(pago.persona_id),
+            "cumplimiento": factor,
+            "crecimiento_pct": crecimiento["valor"] if crecimiento else None,
+            "crecimiento_calculado": crecimiento["calculado"] if crecimiento else None,
+            "crecimiento_fuente": crecimiento["fuente"] if crecimiento else None,
+            "unidades": [directorio.unidades.get(u, str(u)) for u in directorio.unidades_de(miembro)],
+            "site": ", ".join(s.nombre for s in miembro.sites.all()),
         })
-    filas_pago.sort(key=lambda f: (f["cargo"], f["nombre"]))
+    filas_pago.sort(key=lambda f: (f["equipo"], f["rol"], f["nombre"]))
 
     conteo = lambda c: sum(1 for v in ventas if v["clasificacion"] == c)  # noqa: E731
     del_tramo = lambda t: [v for v in ventas if v["tramo"] == t]  # noqa: E731
@@ -867,6 +832,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "validas_pyme": sum(1 for v in validas if v["pyme"]),
             "validas_cambio_plan": sum(1 for v in validas if v["motivo"] == MOTIVO_CAMBIO_PLAN),
             "validas_sin_medio": sum(1 for v in validas if v["medio_id"] is None),
+            "validas_sin_equipo": sum(1 for v in validas if not v["equipo"]),
             "diferidas": conteo(DIFERIDA),
             "promo": len(promo),
             "adelantadas": sum(1 for v in promo if v["adelantada"]),
@@ -877,18 +843,19 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
             "promo_por_confirmar": sum(1 for v in ventas if v["por_confirmar"]),
             "promo_anterior_revisar": sum(1 for v in ventas if v["revisar_promo"]),
             "manuales": sum(1 for v in ventas if v["manual"]),
-            "bonos_meta": round(sum(p["bono_meta"] for p in filas_pago), 2),
+            "bonos": round(sum(p["bono"] for p in filas_pago), 2),
             "total": round(sum(p["neto"] for p in filas_pago), 2),
         },
         "pagos": filas_pago,
-        **_equipos(ventas, directorio),
+        "indicadores": detalle_ind,
+        **_equipos(ventas, filas_pago, directorio),
         # Las pendientes y las ya decididas, que se pueden deshacer.
         "revision": [
             v for v in ventas if v["clasificacion"] == REVISION or v["decision"] in (CONTAR, NO_CONTAR)
         ],
         # Son pocas: viajan enteras, con las que ya no estan en suscripciones.
         "manuales": _manuales(agregadas, ventas),
-        "pendientes_cierre": _pendientes_cierre(ventas, filas_pago, anterior),
+        "pendientes_cierre": _pendientes_cierre(ventas, filas_pago, anterior, detalle_ind),
     }
     return informe, ventas
 
@@ -909,38 +876,44 @@ def _manuales(manuales: dict[str, VentaManual], ventas: list[dict[str, Any]]) ->
     return filas
 
 
-def _equipos(ventas: list[dict[str, Any]], directorio: _Directorio) -> dict[str, Any]:
-    """Quien vendio con quien, para agrupar la nomina por equipos.
+def _equipos(ventas: list[dict[str, Any]], pagos: list[dict[str, Any]], directorio: _Directorio) -> dict[str, Any]:
+    """Quien vendio con quien, para agrupar la nomina por equipos y supervisores.
 
-    Una fila por combinacion de coordinador de UN, oficina, supervisor y quien
-    vendio, con sus ventas validas: `ventas` (residenciales) y `pyme`. Es lo que
-    permite ordenar la nomina por unidad, supervisor y oficina sin mandar las
-    miles de ventas: un mes son unos cientos de combinaciones. Un id nulo es que
-    la venta no trae esa columna o trae un nombre sin registrar.
+    Una fila por combinacion de equipo, oficina, supervisor y quien vendio, con
+    sus ventas validas: `ventas` (residenciales) y `pyme`. Es lo que permite
+    asignar cada asesor al supervisor con el que mas vende sin mandar las miles
+    de ventas: un mes son unos cientos de combinaciones. Un id nulo es que la
+    venta no trae esa columna o trae un nombre sin registrar.
 
-    `personas` da nombre y cargo a cada id, porque no todos cobran (un
-    coordinador sin pago no esta en `pagos`).
+    `personas` da nombre y papeles a cada id (con su superior y sus unidades),
+    porque no todos cobran: un supervisor sin pago no esta en `pagos`.
     """
     filas: dict[tuple, dict[str, Any]] = {}
     for v in ventas:
         if v["clasificacion"] != VALIDA:
             continue
-        clave = (v["coord_un_id"], v["coord_oficina_id"], v["supervisor_id"], v["medio_id"])
+        clave = (v["equipo"], v["coord_oficina_id"], v["supervisor_id"], v["medio_id"])
         fila = filas.setdefault(clave, {
-            "coord_un_id": clave[0], "coord_oficina_id": clave[1], "supervisor_id": clave[2], "medio_id": clave[3],
+            "equipo": clave[0], "coord_oficina_id": clave[1], "supervisor_id": clave[2], "medio_id": clave[3],
             "ventas": 0, "pyme": 0,
         })
         fila["pyme" if v["pyme"] else "ventas"] += 1
-    ids = {i for clave in filas for i in clave if i is not None}
+    ids = {i for clave in filas for i in clave[1:] if i is not None} | {p["persona_id"] for p in pagos}
     return {
         "equipos": list(filas.values()),
-        # `coord_un_id`: la UN asignada al supervisor en Comisiones › Supervisores
-        # (nula sin asignar). La nomina lo coloca solo por ella, sin deducirla.
         "personas": {
             str(i): {
                 "nombre": directorio.nombre(i),
-                "cargo": directorio.cargo(i),
-                "coord_un_id": directorio.unidad.get(i) if directorio.cargo(i) == "supervisor" else None,
+                "papeles": [
+                    {
+                        "equipo": m.equipo.slug,
+                        "rol": m.rol,
+                        "superior_id": directorio.por_id[m.superior_id].persona_id if m.superior_id in directorio.por_id else None,
+                        "unidades": [directorio.unidades.get(u, str(u)) for u in directorio.unidades_de(m)],
+                        "site": ", ".join(s.nombre for s in m.sites.all()),
+                    }
+                    for m in directorio.de_persona.get(i, [])
+                ],
             }
             for i in sorted(ids)
         },
@@ -949,6 +922,7 @@ def _equipos(ventas: list[dict[str, Any]], directorio: _Directorio) -> dict[str,
 
 def _pendientes_cierre(
     ventas: list[dict[str, Any]], pagos: list[dict[str, Any]], anterior: ComisionPeriodo | None,
+    indicadores: dict[str, Any],
 ) -> list[str]:
     """Lo que impide cerrar el periodo. Vacio: se puede cerrar."""
     pendientes = []
@@ -966,8 +940,8 @@ def _pendientes_cierre(
             f"{por_confirmar} instalación(es) de los días promocionales del mes anterior sin confirmar si ya se cobraron"
         )
     sin_cumplimiento = [
-        p["nombre"] for p in pagos
-        if p["cargo"] in CARGOS_CON_CUMPLIMIENTO and p["cumplimiento_pct"] is None and p["bruto"]
+        f"{p['nombre']} ({p['equipo_nombre']})" for p in pagos
+        if p["detalle"].get("factor") and p["cumplimiento_pct"] is None and p["bruto"]
     ]
     if sin_cumplimiento:
         pendientes.append(
@@ -975,9 +949,18 @@ def _pendientes_cierre(
             + ", ".join(sin_cumplimiento)
         )
     sin_crecimiento = [
-        p["nombre"] for p in pagos
-        if p["cargo"] == "coord_un" and p["crecimiento_pct"] is None and p["ventas_equipo"]
+        f"{p['nombre']} ({p['equipo_nombre']})" for p in pagos
+        if "monto_por_venta_equipo" not in p["detalle"] and p["rol"] == "coord_un" and p["ventas_equipo"]
     ]
     if sin_crecimiento:
         pendientes.append("Crecimiento desconocido: " + ", ".join(sin_crecimiento))
+    # Los que solo salen del analisis del mes: sin el, no hay a quien pagarle el bono.
+    faltan = ("Churn de su unidad desconocido", "de la empresa desconocido", "sin % de ingresos")
+    sin_analisis = [
+        f"{p['nombre']} ({p['equipo_nombre']})" for p in pagos if any(t in a for a in p["avisos"] for t in faltan)
+    ]
+    if sin_analisis:
+        pendientes.append(
+            "Faltan indicadores del mes para sus bonos (analiza el mes en Subscriptions): " + ", ".join(sin_analisis)
+        )
     return pendientes

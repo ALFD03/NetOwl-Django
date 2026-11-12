@@ -63,10 +63,6 @@ export const comisionesApi = {
   borrar: async (periodo: string, confirmacion: string) =>
     (await apiClient.post<Respuesta>('/comisiones/api/periodo/borrar/', { periodo, confirmacion })).data,
 
-  /** El coordinador de UN de uno o varios supervisores; `null` se lo quita. */
-  asignarUnidad: async (supervisor_ids: number[], coord_un_id: number | null) =>
-    (await apiClient.post<Respuesta>('/comisiones/api/supervisores/unidad/', { supervisor_ids, coord_un_id })).data,
-
   guardarCondiciones: async (body: Record<string, unknown>) =>
     (await apiClient.post<Respuesta>('/comisiones/api/condiciones/guardar/', body)).data,
 };

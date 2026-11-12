@@ -1,8 +1,8 @@
 /** Tipos del módulo de Comisiones: lo que mandan `services/comisiones/views.py` y `analytics/`. */
 
-import type { CargoVentas, CatalogoOption } from '@/shared/types/subscriptions';
+import type { ParametrosPago, RolVentas } from '@/shared/types/subscriptions';
 
-export type { CargoVentas };
+export type { RolVentas };
 
 /** `diferida`: instalada en los días promocionales del mes sin adelantar el pago; cuenta en el periodo siguiente. */
 export type Clasificacion = 'valida' | 'no_pagada' | 'revision' | 'excluida' | 'diferida';
@@ -33,12 +33,44 @@ export interface PeriodoComision {
   corte_adelantos: string;
 }
 
-/** Lo que cobra una persona en el periodo (`reglas.Pago` más su ficha). */
+/** Un bono de un pago, con el concepto que lo explica. */
+export interface BonoPago {
+  concepto: string;
+  monto: number;
+  /** Solo en el bono por unidad del jefe de UN. */
+  unidad_id?: number;
+}
+
+/**
+ * El desglose de un pago (`pagos.Pago.detalle`): lo que aplica a su rol.
+ * Asesor y telemarketing: `tramo_desde`, `monto_por_venta`, `ventas_pagadas`, `bono_desde`. Coord. de UN:
+ * `crecimiento_pct`, `monto_por_venta_equipo` y `churn_bruto_pct`. Supervisor: `asesores`.
+ */
+export interface DetallePago {
+  tramo_desde?: number;
+  monto_por_venta?: number;
+  ventas_pagadas?: number;
+  bono_desde?: number | null;
+  crecimiento_pct?: number | null;
+  monto_por_venta_equipo?: number;
+  churn_bruto_pct?: number | null;
+  pct_empresa?: number | null;
+  asesores?: number;
+  /** `site` o `unidad`: de dónde sale el % que multiplica. */
+  factor?: 'site' | 'unidad';
+  bonos: BonoPago[];
+}
+
+/** Lo que cobra una persona en un equipo en el periodo (`pagos.Pago` más su ficha). */
 export interface PagoComision {
   persona_id: number;
   nombre: string;
   medio: string;
-  cargo: CargoVentas;
+  /** El slug del equipo y su nombre; el rol que cumple en él. */
+  equipo: string;
+  equipo_nombre: string;
+  rol: RolVentas;
+  site: string;
   ventas_propias: number;
   ventas_equipo: number;
   ventas_pyme: number;
@@ -49,70 +81,75 @@ export interface PagoComision {
   bruto: number;
   /** % de cumplimiento aplicado (tope 100); nulo en quien no lo usa. */
   factor_pct: number | null;
-  /** El bono por meta del asesor, sumado al neto (falta en periodos cerrados antes de existir). */
-  bono_meta?: number;
-  /** El estado con que se le aplicó el bono; nulo si no es asesor o no se supo. */
-  estado_bono?: EstadoBono | null;
+  /** Los bonos sumados al neto; cada uno con su concepto en `detalle.bonos`. */
+  bono: number;
   neto: number;
   /** El que se aplica: el escrito a mano si lo tiene, si no el calculado; nulo es "sin definir". */
   cumplimiento_pct: number | null;
   /** El escrito a mano solo para esta persona; nulo es que vale el calculado. */
   cumplimiento_propio: number | null;
-  /** De dónde sale el % aplicado (`calculo._cumplimientos`). Falta en cierres anteriores a existir. */
-  cumplimiento?: OrigenCumplimiento | null;
+  /** De dónde sale el % aplicado (`calculo._indicadores`). */
+  cumplimiento?: FactorIndicador | null;
   crecimiento_pct: number | null;
   crecimiento_calculado: number | null;
   crecimiento_fuente: 'manual' | 'unidades de negocio' | null;
   unidades: string[];
-  /**
-   * Asesor: `tramo_desde`, `monto_por_venta`, `ventas_pagadas` y `bono_desde` (el tramo del bono, nulo sin
-   * bono). Coord. de UN: `monto_por_venta_equipo`.
-   */
-  detalle: Record<string, number | null>;
+  detalle: DetallePago;
   avisos: string[];
 }
 
-/** Un site y su % Ventas del mes; `pct` nulo si el mes no está analizado o el site no tiene meta. */
-export interface CumplimientoSite {
-  site: string;
+/** Un site o una unidad y su % Ventas del mes; `pct` nulo si el mes no está analizado o no tiene meta. */
+export interface FuenteCumplimiento {
+  nombre: string;
   pct: number | null;
 }
 
 /**
- * El cumplimiento de un supervisor o una coordinadora de oficina, y de dónde sale.
+ * El % de cumplimiento que multiplica el pago de una persona y de dónde sale.
  *
- * Manda el escrito a mano; si no, el calculado del % Ventas de los sites. No
- * hay general: sin ninguno queda sin definir. `general` solo aparece en
- * cierres hechos antes de quitarlo.
+ * Manda el escrito a mano; si no, el calculado: el % Ventas de su site, o el
+ * promedio simple de las unidades de negocio que le tocan (`fuentes`). Sin
+ * ninguno queda sin definir, y el cierre lo pide.
  */
-export interface OrigenCumplimiento {
-  valor: number | null;
-  fuente: 'manual' | 'site' | 'unidad' | 'oficina' | 'general' | null;
+export interface FactorIndicador {
+  persona_id: number;
+  equipo: string;
+  rol: RolVentas;
+  nombre: string;
+  factor: 'site' | 'unidad';
+  fuentes: FuenteCumplimiento[];
   calculado: number | null;
-  fuente_calculo: 'site' | 'unidad' | 'oficina' | null;
-  /** Coordinadora: su site. Supervisor: los sites de las zonas de su coordinador de UN. */
-  sites: CumplimientoSite[];
-  /** Supervisor: su coordinador de UN, si tiene. */
-  coord_un?: string;
-  /**
-   * Ya no se calcula: un supervisor sin UN no toma el site de su oficina (nada
-   * se deduce de las ventas). Solo puede venir en un cierre hecho antes.
-   */
-  oficina?: (CumplimientoSite & { coordinadora: string }) | null;
+  manual: number | null;
+  valor: number | null;
+  fuente: 'manual' | 'site' | 'unidad' | null;
   /** Coordinadora: sus ventas como «Medio» contra su objetivo de ventas. Solo informa. */
   personal: { ventas: number; objetivo: number | null; pct: number | null } | null;
 }
 
-/**
- * De dónde sale el estado del bono de un asesor: `fijado` a mano en Catálogos ›
- * Ventas, o el de la `zona` donde tiene más clientes (`clientes`).
- */
-export interface EstadoBono {
-  id: number;
+/** El crecimiento y el churn bruto de la unidad de un coordinador de UN. */
+export interface CrecimientoIndicador {
+  persona_id: number;
+  equipo: string;
+  rol: RolVentas;
   nombre: string;
-  fuente: 'fijado' | 'zona';
-  zona: string;
-  clientes: number | null;
+  unidades: string[];
+  calculado: number | null;
+  manual: number | null;
+  valor: number | null;
+  fuente: 'manual' | 'unidades de negocio' | null;
+  churn_bruto: number | null;
+}
+
+/** Los indicadores del mes que condicionan el pago (`calculo._indicadores`). */
+export interface IndicadoresInforme {
+  /** Falso si el mes no está analizado: nada se calcula y todo cae a lo escrito. */
+  analizado: boolean;
+  factores: FactorIndicador[];
+  crecimientos: CrecimientoIndicador[];
+  /** El % de ingresos de cada unidad: lo que mide el bono del jefe de UN. */
+  ingresos_unidad: { unidad_id: number; unidad: string; pct_ingresos: number | null; pct_ventas: number | null }[];
+  /** Toda la empresa: el bono de la administradora. */
+  empresa: { pct_ventas: number | null; pct_ingresos: number | null } | null;
 }
 
 /** Una venta candidata del periodo, clasificada y con sus personas. */
@@ -174,8 +211,13 @@ export interface VentaComision {
   medio_id: number | null;
   supervisor_id: number | null;
   coord_oficina_id: number | null;
-  coord_un_id: number | null;
-  coord_un: string;
+  /** El slug del equipo de la venta: el del `Medio`. Vacío si no se pudo saber. */
+  equipo: string;
+  /** Las unidades de negocio de la venta, por la cadena supervisor → su superior. */
+  unidad_ids: number[];
+  unidades: string[];
+  /** Quien vendió es una coordinadora de oficina. */
+  es_oficina: boolean;
   avisos: string[];
 }
 
@@ -213,6 +255,7 @@ export interface InformeComision {
     /** Por facturar con la primera mensualidad pagada de otro plan: valen sin revisión. */
     validas_cambio_plan: number;
     validas_sin_medio: number;
+    validas_sin_equipo?: number;
     /** Lo que sigue faltando en los periodos cerrados antes de los adelantos. */
     diferidas?: number;
     promo?: number;
@@ -222,19 +265,17 @@ export interface InformeComision {
     promo_por_confirmar?: number;
     promo_anterior_revisar?: number;
     manuales?: number;
-    /** Lo que suman los bonos por meta de los asesores (incluido en `total`). */
-    bonos_meta?: number;
+    /** Lo que suman todos los bonos (incluido en `total`). */
+    bonos?: number;
     total: number;
   };
   pagos: PagoComision[];
-  /** Quién vendió con quién en las ventas válidas (falta en periodos cerrados antes de existir). */
-  equipos?: FilaEquipo[];
-  /** Nombre y cargo de cada id de `equipos`, cobre o no. */
-  /**
-   * Nombre y cargo de cada id de `equipos`; `coord_un_id` es la UN asignada a
-   * un supervisor (ausente en cierres anteriores a enviarla).
-   */
-  personas?: Record<string, { nombre: string; cargo: CargoVentas | ''; coord_un_id?: number | null }>;
+  /** Los indicadores del mes que condicionan el pago. */
+  indicadores: IndicadoresInforme;
+  /** Quién vendió con quién en las ventas válidas. */
+  equipos: FilaEquipo[];
+  /** Nombre y papeles (equipo, rol, superior, unidades, site) de cada id de `equipos` y de `pagos`, cobre o no. */
+  personas: Record<string, { nombre: string; papeles: PapelPersona[] }>;
   revision: VentaComision[];
   manuales?: VentaManual[];
   /** Lo que impide cerrar. Vacío: se puede cerrar. */
@@ -251,9 +292,19 @@ export interface VentaManual {
   venta: VentaComision | null;
 }
 
-/** Una combinación de coord. de UN, oficina, supervisor y quien vendió, con sus ventas válidas. */
+/** El papel de una persona en un equipo, con lo que la nómina necesita para ordenarla. */
+export interface PapelPersona {
+  equipo: string;
+  rol: RolVentas;
+  /** La persona a la que responde un supervisor (coordinador o gerente de UN). */
+  superior_id: number | null;
+  unidades: string[];
+  site: string;
+}
+
+/** Una combinación de equipo, oficina, supervisor y quien vendió, con sus ventas válidas. */
 export interface FilaEquipo {
-  coord_un_id: number | null;
+  equipo: string;
   coord_oficina_id: number | null;
   supervisor_id: number | null;
   medio_id: number | null;
@@ -288,7 +339,8 @@ export interface ComisionesInformeProps {
   propuesta: PropuestaPeriodo;
   /** Las del cierre si el periodo está cerrado; si no, las vigentes, con las que se calculó. */
   condiciones: CondicionesComision;
-  cargos: CatalogoOption[];
+  /** Los equipos y sus roles, para nombrar y ordenar la nómina. */
+  equipos: { slug: string; nombre: string; roles: { rol: RolVentas; etiqueta: string }[] }[];
   puedeGestionar: boolean;
   /** `can_reopen_comisiones`: reabrir va aparte de gestionar. */
   puedeReabrir: boolean;
@@ -320,65 +372,18 @@ export interface CopiaCierre {
   ventas: { orden: string; clasificacion: string; datos: VentaComision }[];
 }
 
-/** Un supervisor y el coordinador de UN al que responde. */
-export interface SupervisorUnidad {
-  id: number;
-  nombre: string;
-  apellido: string;
-  medio: string;
-  /** Cómo aparece en `Oportunidad/Administrador` (el medio, si Odoo no lo escribe distinto). */
-  medio_supervisor: string;
-  /** Vacío: sus ventas no pagan a ningún coordinador de UN. */
-  coord_un_id: number | null;
-}
-
-export interface ComisionesSupervisoresProps {
-  supervisores: SupervisorUnidad[];
-  coordinadores: { id: number; nombre: string }[];
-}
-
-export interface TramoAsesor {
-  desde: number;
-  monto: number;
-  descontar: number;
-}
-
-export interface TramoUn {
-  /** Nulo: "desde siempre", el primer tramo. */
-  desde_pct: number | null;
-  monto: number;
-}
-
-/** Un tramo del bono por meta: vale desde `desde` ventas hasta el siguiente. */
-export interface TramoBono {
-  desde: number;
-  monto: number;
-}
-
-/** La tabla de bonos por meta de un estado. */
-export interface BonoMetaEstado {
-  estado_id: number;
-  /** El nombre del catálogo al calcular: lo que conserva la copia de un cierre. */
-  estado: string;
-  tramos: TramoBono[];
-}
-
+/**
+ * Las condiciones con que se calcula: la ventana de pago y, por equipo y rol, los
+ * valores de cada pieza (`catalogos.equipos`). Las de un cierre son la copia que se congeló.
+ */
 export interface CondicionesComision {
-  monto_equipo: number;
-  /** Supervisor: por venta de su equipo y por venta propia. */
-  monto_directa: number;
-  /** Coordinador de oficina: sus tarifas, aparte de las del supervisor. */
-  monto_equipo_oficina: number;
-  monto_directa_oficina: number;
-  monto_directa_un: number;
-  tramos_asesor: TramoAsesor[];
-  tramos_un: TramoUn[];
-  /** Falta en las condiciones congeladas antes de existir los bonos. */
-  bonos_meta?: BonoMetaEstado[];
   dia_promocional: number;
   dias_espera: number;
   /** Día del mes siguiente hasta el que un pago adelantado cuenta en el periodo. */
   dia_corte: number;
+  equipos?: Record<string, Record<string, ParametrosPago>>;
+  /** El nombre de cada equipo por su slug. */
+  nombres?: Record<string, string>;
 }
 
 export interface PlanPyme {
@@ -397,8 +402,6 @@ export interface ActualizacionCondiciones {
 
 export interface ComisionesCondicionesProps {
   condiciones: CondicionesComision;
-  /** Los estados del catálogo: a los que se les puede dar una tabla de bonos. */
-  estados: { id: number; nombre: string }[];
   actualizacion: ActualizacionCondiciones;
   planesPyme: PlanPyme[];
   puedeEditarPlanes: boolean;

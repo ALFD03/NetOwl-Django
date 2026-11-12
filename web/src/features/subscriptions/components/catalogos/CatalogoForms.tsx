@@ -2,7 +2,7 @@
 
 import type { FormEvent, ReactNode } from 'react';
 import {
-  Building2, Cable, EyeOff, Gauge, MapPin, Network, RadioTower,
+  Building2, Cable, EyeOff, Gauge, Network, RadioTower,
   ShieldCheck, Tv2, User, UserCheck, Zap,
 } from 'lucide-react';
 
@@ -13,7 +13,7 @@ import {
 } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
 import type {
-  IgnoradoDraft, NombreDraft, PlanDraft, ReguladorDraft, SiteDraft, ZonaDraft,
+  IgnoradoDraft, NombreDraft, PlanDraft, ReguladorDraft, ZonaDraft,
 } from '@/features/subscriptions/hooks/useCatalogos';
 import type {
   AreaCatalogo, CatalogoNombrado, CatalogoOption, CatalogoPlanRegulador, CatalogoSite,
@@ -498,51 +498,6 @@ export function ZonaForm({
       </FormColumns>
 
       <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : 'Crear zona'} />
-    </ModalForm>
-  );
-}
-
-export function SiteForm({
-  value,
-  saving,
-  onChange,
-  onSubmit,
-  onClose,
-}: Acciones & { value: SiteDraft; onChange: (patch: Partial<SiteDraft>) => void }) {
-  return (
-    <ModalForm onSubmit={onSubmit}>
-      <FormBanner
-        title="Sede regional"
-        description="Agrupa zonas en el Sales Report. Eliminarla exige que ninguna zona la referencie."
-        action={<MapPin className="h-8 w-8 flex-shrink-0 text-slate-600" />}
-      />
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Field label="Nombre del site">
-          <input
-            type="text"
-            required
-            className={modalInputClass}
-            value={value.nombre}
-            onChange={(e) => onChange({ nombre: e.target.value })}
-          />
-        </Field>
-
-        <Field
-          label="Orden de presentación"
-          hint="Menor número, más arriba. Los reportes no ordenan los sites alfabéticamente sino por relevancia comercial."
-        >
-          <input
-            type="number"
-            min="0"
-            className={modalInputClass}
-            value={value.orden}
-            onChange={(e) => onChange({ orden: Number(e.target.value) })}
-          />
-        </Field>
-      </div>
-
-      <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : 'Crear site'} />
     </ModalForm>
   );
 }
