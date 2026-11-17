@@ -26,8 +26,8 @@ cálculo terminado, con `module`, `file_name`, `rows_processed`, `status`
 (`success` / `error` / `warning`), `message` y `details` (la traza o el log de
 consola completo). Ordenado por fecha descendente.
 
-`to_dict()` es la forma en la que viaja al cliente; la vista Inertia y el
-endpoint JSON sirven el mismo diccionario para no tener dos copias que mantener.
+`to_dict()` es la forma en la que viaja al cliente: la sirven tanto el historial
+como el seguimiento de un job, para no tener dos copias que mantener.
 
 Módulos (`MODULE_CHOICES`, compartidos con `AnalysisJob`):
 `subs_subscriptions`, `subs_logs`, `subs_analysis`, `crm`, `crm_analysis`,
@@ -205,25 +205,23 @@ with bloqueo_modulo(job.module) as turno:
 
 ### Pantallas
 
-| Ruta | Página Inertia | Permisos |
+| Ruta de página | Datos | Permisos |
 |---|---|---|
 | `/imports/` | *(redirección)* | `can_view_imports` |
-| `/imports/subscriptions/` | `Imports/Subscriptions` | `can_view_imports` **y** `can_view_imports_subs` |
-| `/imports/crm/` | `Imports/Crm` | … **y** `can_view_imports_crm` |
-| `/imports/support/` | `Imports/Support` | … **y** `can_view_imports_support` |
-| `/imports/history/` | `Imports/History` | … **y** `can_view_import_history` (últimos 200 registros) |
+| `/imports/subscriptions/` | `/api/imports/subscriptions/` | `can_view_imports` **y** `can_view_imports_subs` |
+| `/imports/crm/` | `/api/imports/crm/` | … **y** `can_view_imports_crm` |
+| `/imports/support/` | `/api/imports/support/` | … **y** `can_view_imports_support` |
+| `/imports/history/` | `/api/imports/history/` | … **y** `can_view_import_history` (últimos 200 registros) |
 
-`imports_index_view` recorre `IMPORT_TABS` y **lleva a la primera pestaña que el
-usuario sí pueda ver**. Antes `/imports/` era un alias de la pestaña de
-Subscriptions, así que un usuario con acceso solo a otra pestaña entraba, se le
-negaba y se le expulsaba del módulo sin poder llegar nunca a la suya.
+`/imports/` (`module_root(PAGES)`) **lleva a la primera página que el usuario sí
+pueda ver**: quien solo tiene acceso a otra pestaña que Suscripciones llega a la suya.
 
 ### Cargas de CSV
 
-Las cinco (`subscriptions`, `logs`, `gratis`, `crm`, `support`) siguen el mismo
-patrón: `@ratelimit(5/m)`, `permission_required('can_import_<x>', 'can_import_data')`,
-`@require_POST`, `handle_csv_upload(...)` con las cabeceras obligatorias del
-dominio, y `cleanup_tempfile` en `finally`. Toda salida —buena o mala— queda en
+Todas (`/api/imports/<módulo>/…/upload/`) pasan por `_import(...)`: `@endpoint`
+con `5/m` y `can_import_<x>` **o** `can_import_data`, el cerrojo del módulo (409 si
+hay un análisis corriendo), `uploaded_csv(...)` con las cabeceras obligatorias del
+dominio, y el temporal borrado al salir. Toda salida —buena o mala— queda en
 `ImportActionLog`.
 
 > **Excepción deliberada de esta app:** los endpoints de mutación aceptan *o* el
@@ -242,14 +240,15 @@ La carga de suscripciones tiene dos respuestas especiales:
 
 | Endpoint | Qué hace |
 |---|---|
-| `POST api/run-analysis/` | `lanzar_analisis(request, 'subs_analysis')` — `2/m` |
-| `POST api/run-crm-analysis/` | `'crm_analysis'` — `2/m` |
-| `POST api/run-support-analysis/` | `'support_analysis'` — `2/m` |
-| `GET api/jobs/<uuid>/` | Estado vivo de una ejecución. **Sin `@ratelimit`**: el sondeo es cada pocos segundos y el límite de `2/m` lo cortaría |
-| `GET api/jobs/queue/` | Todo lo que hay en la cola, para el aviso flotante. Sin límite y sin permiso de módulo |
-| `GET api/jobs/active/?module=…` | La ejecución abierta de un módulo, para reengancharse tras recargar |
+| `POST /api/imports/subscriptions/run/` | `lanzar_analisis(request, 'subs_analysis')` — `2/m` |
+| `POST /api/imports/crm/run/` | `'crm_analysis'` — `2/m` |
+| `POST /api/imports/support/run/` | `'support_analysis'` — `2/m` |
+| `GET /api/imports/jobs/<uuid>/` | Estado vivo de una ejecución. **Sin límite**: el sondeo es cada pocos segundos y el `2/m` lo cortaría |
+| `POST /api/imports/jobs/<uuid>/cancel/` | Detiene una ejecución abierta — `10/m` |
+| `GET /api/imports/jobs/queue/` | Todo lo que hay en la cola, para el aviso flotante. Sin límite y sin permiso de módulo |
+| `GET /api/imports/jobs/active/?module=…` | La ejecución abierta de un módulo, para reengancharse tras recargar |
 
-Los tres `run-*` aceptan `{"month": "YYYY-MM"}` o **`{"months": [...]}`** para
+Los tres `run/` aceptan `{"month": "YYYY-MM"}` o **`{"months": [...]}`** para
 varios meses de una vez (`jobs._lanzar_lote`, como mucho 24): se crea un job por
 mes, igual que si se pidieran sueltos, y el bloqueo del módulo los ejecuta de uno
 en uno. Va en un solo POST porque el límite de `2/m` cortaría un lote pedido mes

@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Comisiones/Informe` (`/comisiones/`).
+ * Página `/comisiones/`.
  *
  * Lo que cobra cada persona de ventas en un periodo, con su revisión y su cierre.
  */

@@ -1,12 +1,12 @@
-"""Rutas del registro de auditoria, bajo `/auditoria/`."""
+"""Páginas de `/auditoria/`."""
 
 from django.urls import path
 
-from . import views
+from services.config.pages import page
 
 app_name = "auditoria"
 
 urlpatterns = [
-    path("", views.registro_view, name="registro"),
-    path("api/registro/<int:registro_id>/", views.api_registro_detalle, name="api_registro_detalle"),
+    path("", page("can_view_auditoria"), name="registro"),
+    path("monitoreo/", page("can_view_auditoria"), name="monitoreo"),
 ]

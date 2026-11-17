@@ -75,7 +75,7 @@ def get_crm_metric_totals(
     abultarian el payload.
 
     Con `solo`, el mismo bloque construido con ese periodo y nada mas: es el
-    dashboard de quien no ve todos los periodos (`services/config/periodos.py`).
+    dashboard de quien no ve todos los periodos (`services/config/periods.py`).
     """
     if solo:
         return _metric_totals_de_un_periodo(solo)

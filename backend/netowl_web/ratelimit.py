@@ -49,7 +49,7 @@ def usuario_login(group, request) -> str:
     """La cuenta que se intenta abrir, para contar los fallos por cuenta.
 
     Con `key='post:username'` la libreria lee `request.POST`, que llega vacio
-    cuando el formulario se envia como JSON -que es como lo envia Inertia-: la
+    cuando el formulario se envia como JSON -que es como lo envia la SPA-: la
     clave era la cadena vacia para todo el mundo, asi que los intentos de toda
     la empresa caian en un unico cubo. Cinco en cinco minutos, de quien fuera,
     dejaban sin poder entrar a todos, y el limite por cuenta no existia.

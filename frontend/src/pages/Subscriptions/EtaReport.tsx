@@ -1,7 +1,7 @@
-/** Página Inertia `Subscriptions/EtaReport` (`/subscriptions/eta-report/`): el reporte de la reguladora. */
+/** `/subscriptions/eta-report/`: el reporte de la reguladora. */
 
 import { useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
@@ -103,7 +103,7 @@ export default function EtaReport({ etaData }: EtaReportProps) {
         period={selectedPeriod}
         configLink={
           <Link
-            href={`/subscriptions/eta-report/config/?period=${selectedPeriod}`}
+            to={`/subscriptions/eta-report/config/?period=${selectedPeriod}`}
             className="flex items-center gap-2 rounded-2xl bg-amber-500 px-10 py-3.5 text-xs font-black uppercase tracking-widest text-surface-primary shadow-xl shadow-amber-500/30 transition-all hover:bg-amber-400"
           >
             Ir a Panel de Clasificación <ChevronRight className="h-4 w-4" />

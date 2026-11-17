@@ -25,7 +25,7 @@ export const catalogosApi = {
    * los campos del cuerpo, no la forma de la petición.
    */
   guardar: async (tipo: CatalogoTipo, payload: CatalogoPayload) =>
-    (await apiClient.post('/catalogos/api/guardar/', { tipo, ...payload })).data,
+    (await apiClient.post('/api/catalogs/save/', { tipo, ...payload })).data,
 
   /**
    * Alta de varias filas de un catálogo de una vez. Cada una se valida como un
@@ -33,8 +33,8 @@ export const catalogosApi = {
    * guardadas.
    */
   guardarLote: async (tipo: CatalogoTipo, filas: CatalogoPayload[]): Promise<ResultadoLote> =>
-    (await apiClient.post('/catalogos/api/guardar-lote/', { tipo, filas })).data,
+    (await apiClient.post('/api/catalogs/save-batch/', { tipo, filas })).data,
 
   eliminar: async (tipo: CatalogoTipo, id: number) =>
-    (await apiClient.post('/catalogos/api/eliminar/', { tipo, id })).data,
+    (await apiClient.post('/api/catalogs/delete/', { tipo, id })).data,
 };

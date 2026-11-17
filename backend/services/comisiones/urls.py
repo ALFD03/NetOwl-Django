@@ -1,24 +1,12 @@
-"""Enrutamiento URL para el modulo Comisiones."""
+"""Páginas de `/comisiones/`."""
+
 from django.urls import path
 
-from services.comisiones import views
+from services.config.pages import page
 
 app_name = "comisiones"
 
 urlpatterns = [
-    path("", views.informe_view, name="informe"),
-    path("condiciones/", views.condiciones_view, name="condiciones"),
-
-    path("api/ventas/", views.api_ventas, name="api_ventas"),
-    path("api/periodo/guardar/", views.api_periodo_guardar, name="api_periodo_guardar"),
-    path("api/periodo/cerrar/", views.api_periodo_cerrar, name="api_periodo_cerrar"),
-    path("api/periodo/reabrir/", views.api_periodo_reabrir, name="api_periodo_reabrir"),
-    path("api/periodo/borrar/", views.api_periodo_borrar, name="api_periodo_borrar"),
-    path("api/archivo/<int:archivo_id>/", views.api_archivo, name="api_archivo"),
-    path("api/revision/guardar/", views.api_revision_guardar, name="api_revision_guardar"),
-    path("api/manual/agregar/", views.api_manual_agregar, name="api_manual_agregar"),
-    path("api/manual/quitar/", views.api_manual_quitar, name="api_manual_quitar"),
-    path("api/indicador/guardar/", views.api_indicador_guardar, name="api_indicador_guardar"),
-    path("api/tasa-actual/", views.api_tasa_actual, name="api_tasa_actual"),
-    path("api/condiciones/guardar/", views.api_condiciones_guardar, name="api_condiciones_guardar"),
+    path("", page("can_view_comisiones"), name="informe"),
+    path("condiciones/", page("can_manage_comisiones"), name="condiciones"),
 ]

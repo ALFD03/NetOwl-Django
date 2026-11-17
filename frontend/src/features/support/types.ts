@@ -302,7 +302,7 @@ export interface SupportDayCuts extends DayCuts {
   serie_grupos?: Record<string, Record<string, DaySeries[string]>>;
 }
 
-/** El corte completo de un día, tal y como lo sirve `/support/api/day-metrics/`. */
+/** El corte completo de un día, tal y como lo sirve `/api/support/day-metrics/`. */
 export interface SupportDayPayload {
   grupos: Record<string, SupportGroup>;
   incidencia_zonas: Record<string, SupportZoneEntry[]>;

@@ -1,158 +1,59 @@
-"""Middlewares propios del proyecto.
-
-Uno corta las peticiones anonimas que intentan enviar algo mas que el
-formulario de entrada; otro traduce el corte por exceso de peticiones a una
-respuesta que el cliente sabe leer; el ultimo publica en React el usuario y sus
-permisos. `CSPMiddleware` pone la cabecera Content-Security-Policy.
-"""
+"""Middlewares propios: límite del cuerpo anónimo y Content-Security-Policy."""
 
 import secrets
 
-import inertia
 from django.conf import settings
 from django.http import JsonResponse
-from django.shortcuts import redirect
 from django.urls import reverse
-from django_ratelimit.exceptions import Ratelimited
 
-from services.config.models import PERMISSION_FIELDS
+WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
-class LimiteCuerpoAnonimoMiddleware:
-    """Una peticion sin sesion no puede subir nada: solo el formulario de entrada.
+class AnonymousBodyLimitMiddleware:
+    """Un anónimo solo escribe en el login y el logout, y con un cuerpo pequeño.
 
-    `DATA_UPLOAD_MAX_MEMORY_SIZE` es de 1 GB porque las importaciones lo
-    necesitan, y Django lo aplica a cualquier peticion, autenticada o no. El
-    login lee `request.body` antes de saber quien llama, asi que unos pocos
-    POST anonimos de casi 1 GB -con el token CSRF que la propia pagina de
-    entrada entrega- bastaban para llenar la memoria de los workers.
-
-    Aqui se decide **antes de leer un solo byte del cuerpo** (solo se mira la
-    cabecera `Content-Length`), y antes de que corran el CSRF y la vista:
-
-    * Un anonimo solo puede escribir (POST, PUT, PATCH, DELETE) en el login y
-      en el logout (una sesion caducada que pulsa "salir"). Cualquier otra
-      escritura se rechaza sin mas -401, o la pantalla de entrada si era una
-      visita de Inertia-: no hay ninguna que deba aceptar, y asi un token CSRF
-      obtenido sin sesion no sirve para nada mas.
-    * Incluso en el login, el cuerpo no puede pasar de
-      `ANON_MAX_BODY_SIZE` (por defecto 16 KB, que sobra para usuario y
-      contrasena).
-
-    Una peticion sin `Content-Length` (chunked) no es un riesgo: Django trata su
-    cuerpo como vacio.
-
-    Va despues de `AuthenticationMiddleware`, que es quien resuelve
-    `request.user`.
+    `DATA_UPLOAD_MAX_MEMORY_SIZE` es de 1 GB por las importaciones; sin esto,
+    unos pocos POST anónimos enormes llenaban la memoria de los workers. Se
+    decide por `Content-Length`, antes de leer el cuerpo y antes del CSRF.
     """
-
-    METODOS_DE_ESCRITURA = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
     def __init__(self, get_response):
         self.get_response = get_response
-        self.limite = getattr(settings, "ANON_MAX_BODY_SIZE", 16 * 1024)
-        self._rutas_abiertas = None
+        self.limit = getattr(settings, "ANON_MAX_BODY_SIZE", 16 * 1024)
+        self._open_paths = None
 
     @property
-    def rutas_abiertas(self) -> frozenset[str]:
-        # Perezoso: en __init__ el URLconf todavia puede no estar cargado.
-        if self._rutas_abiertas is None:
-            self._rutas_abiertas = frozenset({
-                reverse("config:logout"),
-                reverse("api:auth:login"), reverse("api:auth:logout"),
-            })
-        return self._rutas_abiertas
+    def open_paths(self) -> frozenset[str]:
+        # Perezoso: en __init__ el URLconf puede no estar cargado.
+        if self._open_paths is None:
+            self._open_paths = frozenset({reverse("api:auth:login"), reverse("api:auth:logout")})
+        return self._open_paths
 
     def __call__(self, request):
-        if request.method in self.METODOS_DE_ESCRITURA and not request.user.is_authenticated:
-            if request.path not in self.rutas_abiertas:
-                # Una visita de Inertia con la sesion caducada vuelve a la
-                # pantalla de entrada, como hacen los decoradores de permisos.
-                if request.headers.get("x-inertia") == "true":
-                    return redirect("config:login")
-                return JsonResponse(
-                    {"status": "error", "message": "Autenticación requerida."}, status=401
-                )
+        if request.method in WRITE_METHODS and not request.user.is_authenticated:
+            if request.path not in self.open_paths:
+                return JsonResponse({"error": {"message": "Autenticación requerida."}}, status=401)
             try:
-                largo = int(request.META.get("CONTENT_LENGTH") or 0)
+                length = int(request.META.get("CONTENT_LENGTH") or 0)
             except ValueError:
-                largo = 0
-            if largo > self.limite:
-                return JsonResponse(
-                    {"status": "error", "message": "Petición demasiado grande."}, status=413
-                )
+                length = 0
+            if length > self.limit:
+                return JsonResponse({"error": {"message": "Petición demasiado grande."}}, status=413)
         return self.get_response(request)
 
-
-
-class RateLimitMiddleware:
-    """Convierte el corte de `django_ratelimit` en un JSON 429 legible.
-
-    Sin el, un endpoint limitado devuelve la pagina de error de Django y el
-    cliente no tiene ningun mensaje que ensenar.
-    """
-
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        return self.get_response(request)
-
-    def process_exception(self, request, exception):
-        """Responde 429 a `Ratelimited`; deja pasar cualquier otra excepcion."""
-        if isinstance(exception, Ratelimited):
-            return JsonResponse({
-                "status": "error",
-                "message": "Demasiadas peticiones. Por favor, espera un momento antes de reintentar."
-            }, status=429)
-        return None
-
-
-class InertiaShareMiddleware:
-    """Comparte el usuario autenticado y su matriz de permisos con React/Inertia"""
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        if request.user.is_authenticated:
-            profile = getattr(request.user, 'profile', None)
-            inertia.share(
-                request,
-                auth={
-                    'user': {
-                        'id': request.user.id,
-                        'username': request.user.username,
-                        'is_superuser': request.user.is_superuser,
-                        # La matriz se recorre desde el catalogo unico de
-                        # services/config/models.py: agregar un permiso alli lo
-                        # publica automaticamente en React.
-                        'profile': {
-                            'role': profile.role,
-                            **{field: getattr(profile, field) for field in PERMISSION_FIELDS},
-                        } if profile else {}
-                    }
-                }
-            )
-        return self.get_response(request)
 
 class CSPMiddleware:
-    """Pone la cabecera Content-Security-Policy de `settings.CSP_POLITICA`.
-
-    Cada peticion recibe un nonce nuevo (`request.csp_nonce`); la plantilla lo
-    pone en sus `<script>` en linea (ver `context_processors.csp_nonce`) y la
-    cabecera solo autoriza los que lo llevan. Una respuesta que ya trae su
-    propia cabecera la conserva.
-    """
+    """Cabecera Content-Security-Policy de `settings.CSP_POLITICA` con un nonce por petición."""
 
     def __init__(self, get_response):
         self.get_response = get_response
-        self.politica = "; ".join(
-            f"{directiva} {' '.join(fuentes)}" for directiva, fuentes in settings.CSP_POLITICA.items()
+        self.policy = "; ".join(
+            f"{directive} {' '.join(sources)}" for directive, sources in settings.CSP_POLITICA.items()
         )
 
     def __call__(self, request):
         request.csp_nonce = secrets.token_urlsafe(16)
         response = self.get_response(request)
         if "Content-Security-Policy" not in response.headers:
-            response.headers["Content-Security-Policy"] = self.politica.replace("{nonce}", request.csp_nonce)
+            response.headers["Content-Security-Policy"] = self.policy.replace("{nonce}", request.csp_nonce)
         return response

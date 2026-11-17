@@ -7,7 +7,7 @@ export interface SupportAnalysisRequest { month: string | null; }
 export type SupportAnalysisResponse = ApiMessageResponse;
 
 /** Corte completo de un día; lo pide y cachea `useDayPayload`, no `supportApi`. */
-export const SUPPORT_DAY_METRICS_URL = '/support/api/day-metrics/';
+export const SUPPORT_DAY_METRICS_URL = '/api/support/day-metrics/';
 
 /**
  * Los dos catálogos del directorio de usuarios.
@@ -27,7 +27,7 @@ export type MovimientoUsuario = 'cambiar_departamento' | 'deshacer_cambio' | 'ba
 
 export const supportApi = {
   runAnalysis: async (request: SupportAnalysisRequest) =>
-    (await apiClient.post<SupportAnalysisResponse>('/imports/api/run-support-analysis/', request)).data,
+    (await apiClient.post<SupportAnalysisResponse>('/api/imports/support/run/', request)).data,
 
   /**
    * Alta o edición de un usuario del directorio o de un departamento.
@@ -36,10 +36,10 @@ export const supportApi = {
    * del cuerpo, no la forma de la petición.
    */
   saveDirectorio: async (tipo: DirectorioTipo, payload: DirectorioPayload) =>
-    (await apiClient.post('/support/api/usuarios/guardar/', { tipo, ...payload })).data,
+    (await apiClient.post('/api/support/users/save/', { tipo, ...payload })).data,
 
   deleteDirectorio: async (tipo: DirectorioTipo, id: number) =>
-    (await apiClient.post('/support/api/usuarios/eliminar/', { tipo, id })).data,
+    (await apiClient.post('/api/support/users/delete/', { tipo, id })).data,
 
   /**
    * Cambio de departamento, baja o reactivación. `fecha` la piden el cambio
@@ -49,12 +49,12 @@ export const supportApi = {
     accion: MovimientoUsuario,
     id: number,
     extra: { departamento_id?: number | null; fecha?: string } = {},
-  ) => (await apiClient.post('/support/api/usuarios/movimiento/', { accion, id, ...extra })).data,
+  ) => (await apiClient.post('/api/support/users/move/', { accion, id, ...extra })).data,
 
   /** Alta o edición de una etapa del catálogo. Sin `id` es un alta. */
   saveEtapa: async (payload: { id?: number; nombre: string; equipo: string; tipo: string }) =>
-    (await apiClient.post<ApiMessageResponse>('/support/api/etapas/guardar/', payload)).data,
+    (await apiClient.post<ApiMessageResponse>('/api/support/stages/save/', payload)).data,
 
   deleteEtapa: async (id: number) =>
-    (await apiClient.post<ApiMessageResponse>('/support/api/etapas/eliminar/', { id })).data,
+    (await apiClient.post<ApiMessageResponse>('/api/support/stages/delete/', { id })).data,
 };

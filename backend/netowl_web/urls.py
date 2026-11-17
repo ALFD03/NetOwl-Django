@@ -1,17 +1,9 @@
 """Rutas del proyecto: páginas por módulo y la API bajo `/api/<módulo>/<servicio>/`."""
 
-from django.shortcuts import redirect
 from django.urls import include, path, re_path
 
 from services.config.api import ApiError, endpoint
-from services.config.decorators import resolve_landing_url
-
-
-def root_redirect(request):
-    """Envía la portada a la primera página que el usuario puede abrir."""
-    if not request.user.is_authenticated:
-        return redirect("config:login")
-    return redirect(resolve_landing_url(request) or "subscriptions:dashboard")
+from services.config.pages import root
 
 
 @endpoint(login=False, methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
@@ -21,11 +13,18 @@ def api_not_found(request):
 
 api_patterns = [
     path("auth/", include("services.config.api.urls")),
+    path("audit/", include("services.audit.api_urls")),
+    path("subscriptions/", include("services.subscriptions.api_urls")),
+    path("crm/", include("services.crm.api_urls")),
+    path("support/", include("services.support.api_urls")),
+    path("imports/", include("services.imports.api_urls")),
+    path("catalogs/", include("services.catalogos.api_urls")),
+    path("commissions/", include("services.comisiones.api_urls")),
     re_path(r"^.*$", api_not_found, name="not_found"),
 ]
 
 urlpatterns = [
-    path("", root_redirect),
+    path("", root),
     path("api/", include((api_patterns, "api"))),
     path("subscriptions/", include("services.subscriptions.urls")),
     path("crm/", include("services.crm.urls")),

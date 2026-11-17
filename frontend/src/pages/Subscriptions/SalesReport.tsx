@@ -1,12 +1,11 @@
 /**
- * Página Inertia `Subscriptions/SalesReport` (`/subscriptions/sales-report/`).
+ * Página `/subscriptions/sales-report/`.
  *
  * Agrupa por Site → Tecnología → Nodos. El día seleccionado se reagrupa en
  * cliente con `buildSalesSites`, sobre los props que ya llegaron.
  */
 
 import { useMemo, useState } from 'react';
-import { router } from '@inertiajs/react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { DayProgressBar } from '@/shared/ui';
@@ -20,6 +19,7 @@ import { SalesReportView } from '@/features/subscriptions/components/reports/Sal
 import type { CoordinadoraOficina } from '@/features/subscriptions/components/reports/CoordinadorasOficinaBadges';
 import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
 import { useSalesReportData, type SalesReportSite } from '@/features/subscriptions/hooks/useSalesReportData';
+import { useVisit } from '@/shared/page/PageData';
 
 interface SalesReportProps {
   reportData?: { data?: SalesReportSite[]; periods?: string[]; period?: string; dia?: number | null };
@@ -32,6 +32,7 @@ interface SalesReportProps {
 export default function SalesReport({
   reportData = {}, dayMetrics, zonasConfig, coordinadorasOficina = [],
 }: SalesReportProps) {
+  const visit = useVisit();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
@@ -65,11 +66,7 @@ export default function SalesReport({
 
   const changePeriod = (period: string) => {
     setSelectedDay(0);
-    router.get('/subscriptions/sales-report/', { period }, {
-      preserveState: true,
-      preserveScroll: true,
-      only: ['reportData', 'dayMetrics', 'coordinadorasOficina'],
-    });
+    visit({ period });
   };
 
   return (

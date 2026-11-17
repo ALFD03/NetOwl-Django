@@ -1,29 +1,19 @@
-"""Vistas del modulo de soporte.
+"""`/api/support/`: datos de las páginas de soporte."""
 
-Los endpoints de importacion y de lanzamiento de analisis viven en la app
-`imports`, que es su unica duena.
-"""
+from __future__ import annotations
 
-# frontend/support/views.py
-
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from inertia import render as render_inertia
-
-from core.utils import clean_json_props, entero_de_peticion, limpiar_periodos
-from services.config.decorators import permission_required, permissions_all_required, primera_pagina
-from services.config.periodos import (
-    acotar_pedidos,
-    mes_denegado,
-    periodo_denegado,
-    periodo_visible,
-    periodos_visibles,
-    ve_todos_los_periodos,
+from core.utils import entero_de_peticion, limpiar_periodos
+from services.config.api import ApiError, endpoint
+from services.config.auth import has_permission
+from services.config.periods import (
+    clamp_requested,
+    month_denied,
+    period_denied,
+    sees_all_periods,
+    visible_period,
+    visible_periods,
 )
-from services.support.analytics.day_metrics import (
-    get_support_day_payload,
-    get_support_day_series,
-)
+from services.support.analytics.day_metrics import get_support_day_payload, get_support_day_series
 from services.support.analytics.flujo import get_tickets_abiertos
 from services.support.analytics.queries import (
     get_support_analytics_structured,
@@ -31,270 +21,99 @@ from services.support.analytics.queries import (
     get_support_cierre_historico,
     get_support_metric_totals,
     get_support_periodos,
-    get_support_tickets_list,
 )
 
-# --- VISTAS INERTIA PROTEGIDAS ---
-
-
-def _puede(request, permiso: str) -> bool:
-    """Si la cuenta tiene un permiso que recorta lo que una pagina muestra."""
-    if request.user.is_superuser:
-        return True
-    profile = getattr(request.user, "profile", None)
-    return bool(profile and profile.has_permission(permiso))
-
-# Las paginas del modulo en el orden del sidebar, con lo que exige cada una. La
-# usa `index` para elegir destino.
-PAGINAS = [
-    ('support:dashboard', ('can_view_support', 'can_view_support_dashboard')),
-    ('support:analytics', ('can_view_support_analytics',)),
-    ('support:results', ('can_view_support_results',)),
-    ('support:usuarios', ('can_manage_support_users',)),
-]
-
-
-@login_required
-@permission_required('can_view_support')
-def index(request):
-    """Raiz del modulo: la primera pagina que el usuario si pueda ver."""
-    return primera_pagina(request, PAGINAS, "Acceso denegado. No tienes ninguna página de Soporte asignada.")
-
-
-@login_required
-@permissions_all_required('can_view_support', 'can_view_support_dashboard')
-def dashboard(request):
-    """Portada: el promedio de todos los periodos evaluados.
-
-    Quien no ve todos los periodos recibe el mismo bloque construido con el
-    ultimo y nada mas (`services/config/periodos.py`).
-    """
-    # Los abiertos de hoy salen de los logs de etapa y tienen su permiso: sin
-    # el, la portada simplemente no los trae.
-    abiertos = get_tickets_abiertos() if _puede(request, "can_view_support_abiertos") else None
-
-    return render_inertia(request, "Support/Dashboard", clean_json_props({
-        "metrics": _metric_totals(request),
-        "abiertos": abiertos,
-        "section": "dashboard",
-    }))
-
-
-@login_required
-@permission_required('can_view_support_analytics')
-def analytics(request):
-    """Analytics de un periodo: grupos, dimensiones e incidencia por zona.
-
-    Las dimensiones llegan enteras porque el selector es de cliente; solo el
-    drill-down de un valor concreto pide datos nuevos.
-
-    `?dia=` cambia el bloque por el corte acumulado del mes hasta ese dia, ya
-    calculado en `support_day_metrics`. Sin el se ensena el ultimo corte, que en
-    un mes cerrado coincide con el cierre.
-
-    En los props viaja ademas la **serie ligera** del mes: el bloque global de
-    los treinta y un dias -el total y el de cada grupo de trabajo-, sin
-    desgloses. Con ella el cliente resuelve solo las tarjetas del dia, el
-    acumulado, la variacion contra el dia anterior y las lineas de tendencia, y
-    ademas sigue al selector de grupo sin ir al servidor. Lo unico que
-    se pide por dia es el desglose por grupo, y va por `api/day-metrics/`, que el
-    cliente cachea.
-    """
-    periodos = periodos_visibles(request, get_support_periodos())
-    analytics_data = get_support_analytics_structured(
-        periodo_visible(request, request.GET.get("period"), lambda: periodos)
-    )
-    periodo = analytics_data.get("periodo", "")
-
-    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
-    serie = get_support_day_series(periodo) if periodo else {}
-    disponibles = serie.get("dias_disponibles", [])
-    dia_activo = dia if dia in disponibles else (disponibles[-1] if disponibles else 0)
-
-    corte = get_support_day_payload(periodo, dia_activo) if dia_activo else None
-    if corte:
-        analytics_data = {**analytics_data, **corte}
-
-    return render_inertia(request, "Support/Analytics", clean_json_props({
-        "analyticsData": analytics_data,
-        "dayMetrics": {
-            "periodo_mes": serie.get("periodo_mes", periodo),
-            "dias_disponibles": disponibles,
-            "dia": dia_activo,
-            "serie": serie.get("serie", {}),
-            # Abierta por grupo de trabajo: la pagina esta filtrada por grupo y
-            # las tarjetas del dia tienen que seguir al selector.
-            "serie_grupos": serie.get("serie_grupos", {}),
-        },
-        "periods": periodos,
-        "selectedPeriod": periodo,
-        "section": "analytics",
-    }))
-
-
-@login_required
-@permission_required('can_view_support_results')
-def results(request):
-    """Las tablas de soporte: los cierres por periodo y el detalle de un mes.
-
-    Analytics ensena el mes en graficos; las tablas completas -cada valor de
-    cada eje con todas sus columnas, la incidencia de cada zona y el desglose de
-    un valor- viven aqui. El detalle es el mismo bloque estructurado que lee
-    Analytics para el cierre del mes (`?period=`), sin barra de dias.
-    """
-    # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
-    # por comas sin ningun tope y cada elemento se convierte en un marcador del
-    # `IN (...)`, asi que una sola peticion podia pedir cien mil.
-    periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_support_periodos)
-
-    visibles = periodos_visibles(request, get_support_periodos())
-    detalle = get_support_analytics_structured(
-        periodo_visible(request, request.GET.get("period"), lambda: visibles)
-    ) if visibles else {"periodo": "", "grupos": {}, "incidencia_zonas": {}}
-
-    return render_inertia(request, "Support/Results", clean_json_props({
-        "historico": get_support_cierre_historico(periodos) if periodos != [] else [],
-        "analyticsData": detalle,
-        "periods": visibles,
-        "selectedPeriod": detalle.get("periodo", ""),
-        "section": "results",
-    }))
-
-
-# --- ENDPOINTS API ---
-
-@login_required
-@permission_required('can_view_support')
-def api_periods_list(request):
-    """Los periodos con cierre calculado."""
-    return JsonResponse({"periods": periodos_visibles(request, get_support_periodos())})
-
-
-@login_required
-@permissions_all_required('can_view_support', 'can_view_support_dashboard')
-def api_global_metrics(request):
-    """El promedio de todos los periodos, en JSON."""
-    return JsonResponse(clean_json_props(_metric_totals(request)))
+PERIOD_DENIED = "Acceso denegado. Solo puedes ver el último periodo evaluado."
 
 
 def _metric_totals(request) -> dict:
-    """El dashboard: el global, o solo el ultimo periodo si no ve todos."""
-    if ve_todos_los_periodos(request):
+    """El global, o solo el último periodo si la cuenta no ve todos."""
+    if sees_all_periods(request):
         return get_support_metric_totals()
-    periodo = periodo_visible(request, None, get_support_periodos)
-    if not periodo:
-        return {
-            "periodos_evaluados": 0,
-            "resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": [],
-        }
-    return get_support_metric_totals(solo=periodo)
+    period = visible_period(request, None, get_support_periodos)
+    if not period:
+        return {"periodos_evaluados": 0, "resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": []}
+    return get_support_metric_totals(solo=period)
 
 
-@login_required
-@permission_required('can_view_support')
-def api_cierre_historico(request):
-    """Los cierres de los periodos pedidos."""
-    # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
-    # por comas sin ningun tope y cada elemento se convierte en un marcador del
-    # `IN (...)`, asi que una sola peticion podia pedir cien mil.
-    periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_support_periodos)
-    if periodos == []:
-        return JsonResponse({"historico": []})
-    return JsonResponse({
-        "historico": clean_json_props(get_support_cierre_historico(periodos))
-    })
+@endpoint(perms=["can_view_support", "can_view_support_dashboard"], require_all=True)
+def dashboard(request):
+    """El promedio de los periodos evaluados y, con su permiso, los tickets abiertos hoy."""
+    open_tickets = get_tickets_abiertos() if has_permission(request.user, "can_view_support_abiertos") else None
+    return {"metrics": _metric_totals(request), "abiertos": open_tickets}
 
 
-@login_required
-@permission_required('can_view_support_analytics')
-def api_dimension_metrics(request):
-    """Todo el bloque estructurado de un periodo."""
-    periodo = request.GET.get("period")
-    if not periodo:
-        return JsonResponse({"status": "error", "message": "Falta el periodo."}, status=400)
-    if periodo_denegado(request, periodo, get_support_periodos):
-        return _periodo_no_visible()
+@endpoint(perms=["can_view_support_analytics"])
+def analytics(request):
+    """El bloque de un periodo al corte `?dia=` (o al último) y la serie ligera del mes."""
+    periods = visible_periods(request, get_support_periodos())
+    data = get_support_analytics_structured(visible_period(request, request.GET.get("period"), lambda: periods))
+    period = data.get("periodo", "")
 
-    return JsonResponse({
-        "dimensiones": clean_json_props(get_support_analytics_structured(periodo))
-    })
+    day = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    series = get_support_day_series(period) if period else {}
+    available = series.get("dias_disponibles", [])
+    active_day = day if day in available else (available[-1] if available else 0)
+    cut = get_support_day_payload(period, active_day) if active_day else None
+    if cut:
+        data = {**data, **cut}
 
-
-@login_required
-@permission_required('can_view_support_analytics', 'can_view_support_results')
-def api_breakdown(request):
-    """El drill-down de un valor dimensional: sus tipos, razones y soluciones."""
-    periodo = request.GET.get("period")
-    dimension = request.GET.get("dimension")
-    valor = request.GET.get("valor")
-
-    if not (periodo and dimension and valor):
-        return JsonResponse(
-            {"status": "error", "message": "Se requieren period, dimension y valor."},
-            status=400,
-        )
-    if periodo_denegado(request, periodo, get_support_periodos):
-        return _periodo_no_visible()
-
-    return JsonResponse(clean_json_props(get_support_breakdown(
-        periodo=periodo,
-        dimension=dimension,
-        valor=valor,
-        grupo=request.GET.get("grupo") or None,
-    )))
+    return {
+        "analyticsData": data,
+        "dayMetrics": {
+            "periodo_mes": series.get("periodo_mes", period),
+            "dias_disponibles": available,
+            "dia": active_day,
+            "serie": series.get("serie", {}),
+            "serie_grupos": series.get("serie_grupos", {}),
+        },
+        "periods": periods,
+        "selectedPeriod": period,
+    }
 
 
-@login_required
-@permission_required('can_view_support_analytics')
-def api_day_metrics(request):
-    """El corte completo de un dia: `{global, grupos, incidencia_zonas}`.
-
-    Existe para que la barra de dias no pase por Inertia: el cliente pide el dia
-    que le falta, lo cachea y adelanta los vecinos, de modo que moverse por el
-    mes deja de esperar a la base. No calcula nada —lee una celda de
-    `support_day_metrics`, ya escrita por el analisis—.
-    """
-    periodo = request.GET.get("period")
-    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
-    if not periodo or not dia:
-        return JsonResponse(
-            {"status": "error", "message": "Se requieren period y dia."}, status=400
-        )
-    if mes_denegado(request, periodo, get_support_periodos):
-        return _periodo_no_visible()
-
-    corte = get_support_day_payload(periodo, dia)
-    if corte is None:
-        return JsonResponse({"status": "empty", "dia": dia}, status=404)
-
-    return JsonResponse(clean_json_props({"dia": dia, **corte}))
-
-
-@login_required
-@permission_required('can_view_support_results')
-def api_tickets_list(request):
-    """Listado de tickets, con tope de 5.000.
-
-    Sin `?period=` lista tickets de cualquier mes, asi que quien no ve todos
-    los periodos tiene que pedir el mes del ultimo.
-    """
-    periodo = request.GET.get("period")
-    if mes_denegado(request, periodo, get_support_periodos):
-        return _periodo_no_visible()
-    if not ve_todos_los_periodos(request):
-        # `get_support_tickets_list` solo filtra un `YYYY-MM`: con la etiqueta
-        # completa no filtraria nada y saldrian tickets de todos los meses.
-        periodo = periodo[:7]
-    return JsonResponse({"tickets": clean_json_props(get_support_tickets_list(
-        limit=entero_de_peticion(request, "limit", por_defecto=500, minimo=1, maximo=5000),
-        grupo=request.GET.get("grupo"),
-        periodo=periodo,
-    ))})
-
-
-def _periodo_no_visible():
-    """El 403 de un periodo que la cuenta no puede ver."""
-    return JsonResponse(
-        {"status": "error", "message": "Acceso denegado. Solo puedes ver el último periodo evaluado."},
-        status=403,
+@endpoint(perms=["can_view_support_results"])
+def results(request):
+    """Los cierres por periodo y el detalle estructurado de un mes (`?period=`)."""
+    periods = clamp_requested(request, limpiar_periodos(request.GET.get("periods")), get_support_periodos)
+    visible = visible_periods(request, get_support_periodos())
+    detail = (
+        get_support_analytics_structured(visible_period(request, request.GET.get("period"), lambda: visible))
+        if visible else {"periodo": "", "grupos": {}, "incidencia_zonas": {}}
     )
+    return {
+        "historico": get_support_cierre_historico(periods) if periods != [] else [],
+        "analyticsData": detail,
+        "periods": visible,
+        "selectedPeriod": detail.get("periodo", ""),
+    }
+
+
+@endpoint(perms=["can_view_support_analytics", "can_view_support_results"])
+def breakdown(request):
+    """El drill-down de un valor dimensional: sus tipos, razones y soluciones."""
+    period = request.GET.get("period")
+    dimension = request.GET.get("dimension")
+    value = request.GET.get("valor")
+    if not (period and dimension and value):
+        raise ApiError("Se requieren period, dimension y valor.")
+    if period_denied(request, period, get_support_periodos):
+        raise ApiError(PERIOD_DENIED, 403)
+    return get_support_breakdown(
+        periodo=period, dimension=dimension, valor=value, grupo=request.GET.get("grupo") or None,
+    )
+
+
+@endpoint(perms=["can_view_support_analytics"])
+def day_metrics(request):
+    """El corte completo de un día: `{global, grupos, incidencia_zonas}`."""
+    period = request.GET.get("period")
+    day = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    if not period or not day:
+        raise ApiError("Se requieren period y dia.")
+    if month_denied(request, period, get_support_periodos):
+        raise ApiError(PERIOD_DENIED, 403)
+    cut = get_support_day_payload(period, day)
+    if cut is None:
+        return {"status": "empty", "dia": day}, 404
+    return {"dia": day, **cut}

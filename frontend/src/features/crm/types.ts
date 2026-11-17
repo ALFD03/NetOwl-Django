@@ -97,7 +97,7 @@ export interface CrmAnalyticsProps {
   selectedPeriod?: string;
 }
 
-/** El corte completo de un día, tal y como lo sirve `/crm/api/day-metrics/`. */
+/** El corte completo de un día, tal y como lo sirve `/api/crm/day-metrics/`. */
 export interface CrmDayPayload {
   global: CrmHistoricoRow;
   dimensiones: CrmDimensionRow[];

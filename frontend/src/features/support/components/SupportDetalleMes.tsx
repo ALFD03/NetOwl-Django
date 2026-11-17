@@ -8,7 +8,6 @@
  */
 
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
 import { Layers } from 'lucide-react';
 
 import { EmptyState } from '@/shared/ui';
@@ -18,6 +17,7 @@ import { SupportAnalyticsFilters } from './analytics/SupportAnalyticsFilters';
 import { SupportBreakdownModal } from './analytics/SupportBreakdownModal';
 import { SupportDimensionPanel } from './analytics/SupportDimensionPanel';
 import { SupportIncidenceTable } from './analytics/SupportIncidenceTable';
+import { useVisit } from '@/shared/page/PageData';
 
 interface Props {
   analyticsData?: SupportAnalyticsProps['analyticsData'];
@@ -26,6 +26,7 @@ interface Props {
 }
 
 export function SupportDetalleMes({ analyticsData, periods, selectedPeriod }: Props) {
+  const visit = useVisit();
   const [selectedGroup, setSelectedGroup] = useState('');
   const [dimension, setDimension] = useState<SupportDimension>('zona');
 
@@ -34,7 +35,7 @@ export function SupportDetalleMes({ analyticsData, periods, selectedPeriod }: Pr
 
   // El histórico de arriba no cambia con el mes: sólo se pide el detalle.
   const cambiarMes = (period: string) =>
-    router.get('/support/results/', { period }, { preserveState: true, preserveScroll: true, only: ['analyticsData', 'selectedPeriod'] });
+    visit({ period });
 
   return (
     <div className="space-y-6">

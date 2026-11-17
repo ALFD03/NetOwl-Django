@@ -718,14 +718,14 @@ perdió acceso con el cambio. Aquella migración nombró las dos mitades al rev�
 `config/0007` intercambia los valores guardados para que cada cuenta conserve las
 mismas pestañas con el nombre correcto.
 
-- `GET /catalogos/<grupo>/` — las páginas. Productos acepta `?nuevo_plan=<nombre>`,
+- `GET /api/catalogs/notifications|products|structure|sales/` — los datos de las páginas. Productos acepta `?nuevo_plan=<nombre>`,
   que abre el formulario de plan ya relleno; es a donde lleva el aviso de la
   importación. Notificaciones incluye los pendientes de cada área, y si una
   consulta falla no rompe la página.
-- `POST /catalogos/api/guardar/` — alta o edición. Valida con `_texto`,
+- `POST /api/catalogs/save/` — alta o edición (`save-batch/` para varias filas). Valida con `_texto`,
   `_numero`, `_opcion` y `_relacion`, que levantan `DatosInvalidos` → 400. Un
   duplicado responde **409**.
-- `POST /catalogos/api/eliminar/` — baja. Un site, estado o coordinador **con
+- `POST /api/catalogs/delete/` — baja. Un site, estado o coordinador **con
   zonas colgando no se borra**: la zona los referencia con `PROTECT` y se
   responde 409 explicando cuál es el estorbo, en vez de un 500. Igual un site
   del que cuelga una coordinadora de oficina.

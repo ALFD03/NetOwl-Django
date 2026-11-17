@@ -1,5 +1,5 @@
 /**
- * Página Inertia `CRM/Analytics` (`/crm/analytics/`).
+ * Página `/crm/analytics/`.
  *
  * Recibe todas las dimensiones del periodo: el selector de dimensión es de
  * cliente y no debe costar una vuelta al servidor.
@@ -17,7 +17,6 @@
  */
 
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import {
@@ -34,8 +33,10 @@ import { useDayCuts } from '@/shared/hooks/useDayCuts';
 import { useDayPayload } from '@/shared/hooks/useDayPayload';
 import { CRM_DAY_METRICS_URL } from '@/shared/lib/api/crm';
 import { DayProgressBar, DaySummary } from '@/shared/ui';
+import { useVisit } from '@/shared/page/PageData';
 
 export default function CrmAnalytics(props: CrmAnalyticsProps) {
+  const visit = useVisit();
   const { periods = [], selectedPeriod = '', dayMetrics } = props;
   const [selectedDimension, setSelectedDimension] = useState<CrmDimensionKey>('sucursal');
 
@@ -74,7 +75,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
 
   /** Al cambiar de mes se suelta el día: el del mes anterior no significa nada aquí. */
   const handlePeriodChange = (period: string) =>
-    router.get('/crm/analytics/', { period }, { preserveState: true });
+    visit({ period });
 
   return (
     <AppLayout

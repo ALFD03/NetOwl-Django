@@ -1,7 +1,7 @@
 /** Barra del reporte ETA: periodo, tasas del BCV, exportación y bloqueo del mes. */
 
 import { useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle, Calendar, DollarSign, Loader2, Lock, RefreshCw, Settings, TrendingUp, Unlock,
 } from 'lucide-react';
@@ -219,7 +219,7 @@ export function EtaReportToolbar({
         />
 
         <Link
-          href={`/subscriptions/eta-report/config/?period=${period}`}
+          to={`/subscriptions/eta-report/config/?period=${period}`}
           className="flex items-center gap-2 rounded-2xl border border-slate-700/50 bg-surface-secondary px-5 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-300 shadow-2xl transition-colors hover:text-white"
         >
           <Settings className="h-4 w-4 text-brand" /> Gestionar Maestro

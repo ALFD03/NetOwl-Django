@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Catalogos/Productos` (`/catalogos/productos/`).
+ * Página `/catalogos/productos/`.
  *
  * Planes y planes reguladores.
  */

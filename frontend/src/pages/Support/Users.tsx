@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Support/Users` (`/support/users/`).
+ * Página `/support/users/`.
  *
  * Mantiene el directorio de quien puede crear o tener asignado un ticket y, en
  * su primera pestaña, quién falta: nombres que ya están en los tickets

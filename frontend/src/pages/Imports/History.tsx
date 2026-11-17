@@ -1,4 +1,4 @@
-/** Página Inertia `Imports/History` (`/imports/history/`): el historial permanente. */
+/** `/imports/history/`: el historial permanente. */
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { ImportHistoryView } from '@/features/imports/components/ImportHistoryView';

@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Catalogos/Estructura` (`/catalogos/estructura/`).
+ * Página `/catalogos/estructura/`.
  *
  * Zonas, sites y estados.
  */

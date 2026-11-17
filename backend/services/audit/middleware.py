@@ -13,13 +13,14 @@ logger = logging.getLogger(__name__)
 WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 # Las anotan las señales de autenticación, que saben si las credenciales valían.
-EXCLUDED = frozenset({("config", "logout"), ("auth", "login"), ("auth", "logout")})
+EXCLUDED = frozenset({("auth", "login"), ("auth", "logout")})
 
 # Lecturas que sí se anotan: las que sacan datos de clientes en bloque.
 AUDITED_READS = frozenset({
-    ("subscriptions", "api_lifetime_detalle"),
-    ("subscriptions", "api_bajas_detalle"),
-    ("comisiones", "api_ventas"),
+    ("subscriptions", "lifetime_detail"),
+    ("subscriptions", "churn_detail"),
+    ("commissions", "sales"),
+    ("commissions", "archive_detail"),
 })
 
 # Por encima de este tamaño la respuesta es un listado, no un mensaje.

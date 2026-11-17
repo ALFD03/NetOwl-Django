@@ -24,7 +24,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 from core.config import DB_SCHEMA
-from services.config.unidades import lista_de
+from services.config.units import saved_units
 
 # --- CATALOGO UNICO DE PERMISOS ---
 # Profile y PermissionGroup comparten exactamente la misma matriz. Declararla
@@ -149,7 +149,7 @@ class PermissionMatrix(models.Model):
 
     # --- Periodos evaluados ---
     # Sin el, Suscripciones, CRM y Soporte ensenan solo el ultimo periodo
-    # calculado (`services/config/periodos.py`). La migracion 0013 se lo dio a
+    # calculado (`services/config/periods.py`). La migracion 0013 se lo dio a
     # todas las cuentas que ya existian; una cuenta nueva nace sin el.
     can_view_all_periods = models.BooleanField(default=False)
 
@@ -274,7 +274,7 @@ class Profile(PermissionMatrix):
 
     # Las unidades de negocio que ve sin `can_view_all_business_units`. Son del
     # usuario y no de la matriz: un grupo no las lleva ni las sincroniza (ver
-    # `services/config/unidades.py`). Es una relacion con el catalogo y no un
+    # `services/config/units.py`). Es una relacion con el catalogo y no un
     # permiso por unidad, porque las unidades cambian; por id, asi que renombrar
     # una no se la quita a nadie.
     unidades_negocio = models.ManyToManyField(
@@ -295,15 +295,11 @@ class Profile(PermissionMatrix):
             return getattr(self.group, perm_name, False)
         return getattr(self, perm_name, False)
 
-    def alcance_unidades(self):
-        """Las unidades de negocio que ve la cuenta, o None si las ve todas.
-
-        El interruptor se pregunta como cualquier permiso (superusuario y grupo
-        incluidos); la lista es siempre la del perfil.
-        """
+    def unit_scope(self):
+        """Las unidades de negocio que ve la cuenta, o None si las ve todas."""
         if self.has_permission('can_view_all_business_units'):
             return None
-        return lista_de(self)
+        return saved_units(self)
 
     def sync_permissions_from_group(self):
         """Copia al perfil la matriz de su grupo. Sin grupo no hace nada."""

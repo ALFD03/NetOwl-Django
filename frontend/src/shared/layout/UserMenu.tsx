@@ -1,9 +1,10 @@
 /** Pie del sidebar: acceso a configuración, tema, usuario de la sesión y salida. */
 
-import { LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Sun } from 'lucide-react';
+import { KeyRound, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Link, router } from '@inertiajs/react';
+import { Link } from 'react-router-dom';
 
+import { useAuth } from '@/shared/auth/AuthContext';
 import { useTheme, type PreferenciaTema } from '@/shared/hooks/useTheme';
 import { cn } from '@/shared/lib/cn';
 
@@ -67,7 +68,10 @@ interface UserMenuProps {
   username: string;
   /** `can_view_users`: abre la pantalla de usuarios y grupos. */
   canViewUsers: boolean;
-  isUsersPageActive: boolean;
+  /** `can_manage_api_tokens`: abre la pantalla de tokens de API. */
+  canManageTokens: boolean;
+  /** La ruta actual, para marcar el enlace activo. */
+  url: string;
   /** Solo iconos, para el sidebar plegado. */
   compact?: boolean;
   onNavigate?: () => void;
@@ -78,16 +82,23 @@ interface UserMenuProps {
 export function UserMenu({
   username,
   canViewUsers,
-  isUsersPageActive,
+  canManageTokens,
+  url,
   compact = false,
   onNavigate,
   onToggleCollapsed,
 }: UserMenuProps) {
+  const { logout } = useAuth();
+  const isUsersPageActive = url.startsWith('/auth/users');
+  const salir = async () => {
+    await logout();
+    window.location.assign('/auth/login/');
+  };
   return (
     <div className="space-y-2 border-t border-slate-800 pt-4">
       {canViewUsers && (
         <Link
-          href="/auth/users/"
+          to="/auth/users/"
           onClick={onNavigate}
           title={compact ? 'Configuración' : undefined}
           aria-label={compact ? 'Configuración' : undefined}
@@ -102,6 +113,25 @@ export function UserMenu({
           {/* Activo, el fondo ya es `bg-brand`: el icono en `text-brand` desaparecía. */}
           <ShieldCheck className={cn('h-4 w-4', !isUsersPageActive && 'text-brand')} />
           {!compact && <span>Configuración</span>}
+        </Link>
+      )}
+
+      {canManageTokens && (
+        <Link
+          to="/auth/tokens/"
+          onClick={onNavigate}
+          title={compact ? 'Tokens de API' : undefined}
+          aria-label={compact ? 'Tokens de API' : undefined}
+          className={cn(
+            'flex items-center gap-3 rounded-lg border py-2 text-xs font-semibold transition-colors',
+            compact ? 'justify-center px-0' : 'px-3',
+            url.startsWith('/auth/tokens')
+              ? 'border-brand bg-brand text-white'
+              : 'border-slate-700 text-slate-300 hover:bg-surface-hover hover:text-white',
+          )}
+        >
+          <KeyRound className={cn('h-4 w-4', !url.startsWith('/auth/tokens') && 'text-brand')} />
+          {!compact && <span>Tokens de API</span>}
         </Link>
       )}
 
@@ -136,12 +166,10 @@ export function UserMenu({
           </div>
         )}
 
-        {/* POST y no enlace: por GET, cualquier `<img src="/auth/logout/">` en
-            una página ajena cerraba la sesión del visitante. El token CSRF lo
-            pone el interceptor de axios (shared/lib/http/csrf.ts). */}
+        {/* POST y no enlace: por GET, cualquier `<img>` ajena cerraría la sesión. */}
         <button
           type="button"
-          onClick={() => router.post('/auth/logout/')}
+          onClick={() => void salir()}
           className="rounded-md p-1.5 text-red-400 transition-colors hover:bg-red-500/20"
           title="Cerrar Sesión"
           aria-label="Cerrar Sesión"

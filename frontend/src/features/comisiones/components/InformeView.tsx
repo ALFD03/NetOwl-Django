@@ -1,7 +1,6 @@
 /** Comisiones › Informe: lo que cobra cada persona en un periodo. */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { router } from '@inertiajs/react';
 import {
   AlertTriangle, CalendarRange, Check, FileSpreadsheet, HandCoins, ListChecks, Lock, LockOpen, Percent, Receipt,
   ShieldAlert, Trash2,
@@ -28,6 +27,7 @@ import { PromoAnteriorTabla } from './PromoAnteriorTabla';
 import { PromoMesTabla } from './PromoMesTabla';
 import { RevisionTabla } from './RevisionTabla';
 import { VentasTabla } from './VentasTabla';
+import { useVisit } from '@/shared/page/PageData';
 
 type Paso = 'revision' | 'indicadores' | 'nomina' | 'cierre';
 
@@ -62,6 +62,7 @@ function indicadoresPendientes(informe: InformeComision): number {
 export function InformeView({
   periodo, periodos, informe, error, propuesta, condiciones, equipos, puedeGestionar, puedeReabrir, puedeBorrar, archivos,
 }: ComisionesInformeProps) {
+  const visit = useVisit();
   const c = useInformeComisiones(periodo, Boolean(informe));
   const editable = puedeGestionar && informe?.estado === 'borrador';
   const pendientesIndicadores = informe ? indicadoresPendientes(informe) : 0;
@@ -90,7 +91,7 @@ export function InformeView({
   const [exportando, setExportando] = useState(false);
 
   const etiquetaCargo = (rol: RolVentas) => ROL_CHIP[rol].label;
-  const irA = (mes: string) => router.get('/comisiones/', { periodo: mes }, { preserveScroll: true });
+  const irA = (mes: string) => visit({ periodo: mes });
 
   const verDesglose = (pago: PagoComision) => {
     setDesglose(pago);

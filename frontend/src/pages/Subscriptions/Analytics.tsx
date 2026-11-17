@@ -1,12 +1,11 @@
 /**
- * Página Inertia `Subscriptions/Analytics` (`/subscriptions/analytics/`).
+ * Página `/subscriptions/analytics/`.
  *
  * Recibe el mes completo de métricas diarias en los props, de modo que mover la
  * barra de días es una reagrupación en cliente y no una vuelta al servidor.
  */
 
 import { useMemo, useState } from 'react';
-import { router } from '@inertiajs/react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { useSubscriptionsAnalyticsData } from '@/features/subscriptions/hooks/useSubscriptionsAnalyticsData';
 import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, ProyeccionCierre, type DimensionKey } from '@/features/subscriptions/components/analytics';
@@ -18,6 +17,7 @@ import { cumplimientoDelPeriodo, tonoCumplimiento } from '@/features/subscriptio
 import { proyectar } from '@/shared/lib/proyeccion';
 import { DayProgressBar, DaySummary } from '@/shared/ui';
 import type { DayMetrics, DaySeries, DimensionGroup, Periodo } from '@/shared/types/domain';
+import { useVisit } from '@/shared/page/PageData';
 
 interface Props {
   periodos: Periodo[];
@@ -26,6 +26,7 @@ interface Props {
 }
 
 export default function SubscriptionsAnalytics({ periodos = [], dimensiones = [], dayMetrics }: Props) {
+  const visit = useVisit();
   const [selectedPeriod, setSelectedPeriod] = useState(periodos[0]?.periodo_reporte || '');
   const [selectedDim, setSelectedDim] = useState<DimensionKey>('zona');
   const [selectedDay, setSelectedDay] = useState(0);
@@ -87,11 +88,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   const handlePeriodChange = (period: string) => {
     setSelectedPeriod(period);
     setSelectedDay(0);
-    router.get('/subscriptions/analytics/', { period }, {
-      preserveState: true,
-      preserveScroll: true,
-      only: ['dayMetrics'],
-    });
+    visit({ period });
   };
 
   return (

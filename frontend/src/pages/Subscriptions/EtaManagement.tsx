@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Subscriptions/EtaManagement` (`/subscriptions/eta-report/config/`).
+ * Página `/subscriptions/eta-report/config/`.
  *
  * Parametriza las excepciones por suscripción. La clasificación de un plan se
  * edita en el catálogo, no aquí.

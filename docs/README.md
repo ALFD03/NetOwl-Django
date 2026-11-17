@@ -1,6 +1,6 @@
 # Documentación de NetOwl
 
-Documentación técnica completa del panel analítico de NetOwl (Django + Inertia +
+Documentación técnica completa del panel analítico de NetOwl (API Django + SPA de
 React sobre PostgreSQL, con Celery para los análisis largos).
 
 Esta carpeta describe **el código tal y como está hoy en el árbol de trabajo**.

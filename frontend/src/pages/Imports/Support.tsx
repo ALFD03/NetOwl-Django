@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Imports/Support` (`/imports/support/`).
+ * Página `/imports/support/`.
  *
  * Dos exports: los tickets, que reemplazan la tabla entera, y los logs de etapa,
  * que se **suman** por lotes mensuales (cada log entra una sola vez por su id).

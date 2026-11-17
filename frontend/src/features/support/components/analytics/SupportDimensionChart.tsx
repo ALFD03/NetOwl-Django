@@ -17,7 +17,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { Link } from 'react-router-dom';
 import { BarChart3, Building2, CandlestickChart, MousePointerClick, Table, Users } from 'lucide-react';
 
 import { BarChart } from '@/shared/charts';
@@ -149,7 +149,7 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
             </span>
             {resultsHref && (
               <Link
-                href={resultsHref}
+                to={resultsHref}
                 className="flex items-center gap-1.5 rounded-full border border-brand/40 px-3 py-1 font-semibold text-brand hover:bg-brand/10"
               >
                 <Table className="h-3.5 w-3.5" /> Tabla completa en Results

@@ -13,7 +13,7 @@ const daysInMonth = (periodoMes: string): number => {
  * El día ya no es un viaje al servidor —`useDayPayload` lo resuelve de su caché—,
  * pero la URL tiene que seguir describiendo lo que se está viendo: recargar o
  * compartir el enlace debe caer en el mismo día. `replaceState` hace justo eso y
- * nada más; un `router.get` volvería a montar la página.
+ * nada más; pedirlo con la página volvería a calcularla entera.
  */
 function anotarEnUrl(dia: number): void {
   if (typeof window === 'undefined') return;

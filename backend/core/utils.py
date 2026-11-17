@@ -203,7 +203,7 @@ def clean_json_props(obj: Any) -> Any:
     """Reemplaza NaN/Inf por 0.0 en cualquier estructura destinada a JSON.
 
     `json.dumps` los emite como `NaN`/`Infinity`, que `JSON.parse` rechaza: el
-    payload de Inertia llega roto y la página se renderiza vacía.
+    JSON llega roto al cliente.
     """
     return _clean_json(obj, 0.0)
 

@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Imports/Subscriptions` (`/imports/subscriptions/`).
+ * Página `/imports/subscriptions/`.
  *
  * Carga los exports del dominio y lanza el análisis mensual. Intercepta el
  * 409 de «producto sin catalogar» para enseñarlo como una decisión a tomar, no

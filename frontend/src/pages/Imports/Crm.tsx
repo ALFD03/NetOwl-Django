@@ -1,4 +1,4 @@
-/** Página Inertia `Imports/Crm` (`/imports/crm/`). */
+/** `/imports/crm/`. */
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { usePermissions } from '@/shared/hooks/usePermissions';

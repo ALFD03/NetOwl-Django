@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Comisiones/Condiciones` (`/comisiones/condiciones/`).
+ * Página `/comisiones/condiciones/`.
  *
  * Tramos, tarifas, días promocionales y los % de los planes PYME.
  */

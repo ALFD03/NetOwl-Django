@@ -47,7 +47,7 @@ export interface DeleteEtaSubRequest { orden: string; }
 
 export const subscriptionsApi = {
   getResultsDetails: async (period: string) =>
-    (await apiClient.get<SubscriptionResultsResponse>(`/subscriptions/api/results/${period}/`)).data,
+    (await apiClient.get<SubscriptionResultsResponse>(`/api/subscriptions/results/${period}/`)).data,
 
   /**
    * Las bajas de un periodo con la ficha de cada cliente.
@@ -62,17 +62,17 @@ export const subscriptionsApi = {
    * órdenes que los componen, así que el detalle es siempre el del cierre.
    */
   getBajasDetalle: async (period: string, nodos?: string[]) =>
-    (await apiClient.get<BajasDetalleResponse>('/subscriptions/api/bajas/detalle/', {
+    (await apiClient.get<BajasDetalleResponse>('/api/subscriptions/churn/detail/', {
       params: { period, nodo: nodos },
       // Axios serializa un array como `nodo[]=x`; Django lee `nodo=x&nodo=y`.
       paramsSerializer: { indexes: null },
     })).data,
 
   getEtaReport: async (period: string, force = false) =>
-    (await apiClient.get<EtaReportResponse>('/subscriptions/api/eta-report/data/', { params: { period, force } })).data,
+    (await apiClient.get<EtaReportResponse>('/api/subscriptions/eta-report/data/', { params: { period, force } })).data,
 
   lockEtaReport: async (request: EtaLockRequest) =>
-    (await apiClient.post('/subscriptions/api/eta-report/lock/', request)).data,
+    (await apiClient.post('/api/subscriptions/eta-report/lock/', request)).data,
 
   /**
    * Fija la tasa del BCV con que se declara la renta básica del periodo.
@@ -82,7 +82,7 @@ export const subscriptionsApi = {
    * conversión la hace el exportador, así que también vale en un mes bloqueado.
    */
   setEtaTasa: async (request: EtaTasaRequest) =>
-    (await apiClient.post<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/', request)).data,
+    (await apiClient.post<EtaTasaResponse>('/api/subscriptions/eta-report/rate/', request)).data,
 
   /**
    * Vuelve a pedirle al BCV la tasa del periodo, pisando la guardada.
@@ -92,7 +92,7 @@ export const subscriptionsApi = {
    * tasa a mano y quiere volver a la oficial.
    */
   consultarEtaTasa: async (period: string) =>
-    (await apiClient.post<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/consultar/', { period })).data,
+    (await apiClient.post<EtaTasaResponse>('/api/subscriptions/eta-report/rate/fetch/', { period })).data,
 
   /**
    * La última tasa publicada por el BCV, la de hoy.
@@ -102,13 +102,13 @@ export const subscriptionsApi = {
    * a día de hoy. Por eso es un GET y no pisa nada.
    */
   getEtaTasaActual: async () =>
-    (await apiClient.get<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/actual/')).data,
+    (await apiClient.get<EtaTasaResponse>('/api/subscriptions/eta-report/rate/current/')).data,
 
   saveEtaSubConfig: async (request: EtaSubConfigRequest) =>
-    (await apiClient.post('/subscriptions/api/eta-report/save-sub-config/', request)).data,
+    (await apiClient.post('/api/subscriptions/eta-report/orders/save/', request)).data,
 
   deleteEtaSubConfig: async (request: DeleteEtaSubRequest) =>
-    (await apiClient.post('/subscriptions/api/eta-report/delete-sub-config/', request)).data,
+    (await apiClient.post('/api/subscriptions/eta-report/orders/delete/', request)).data,
 
   /**
    * Recalcula en el worker el lifetime de todos los meses y espera a que termine.
@@ -117,11 +117,11 @@ export const subscriptionsApi = {
    * el mismo timeout y va por un job.
    */
   runLifetime: async (onProgress?: (job: AnalysisJob) => void) =>
-    startAndFollow('/subscriptions/api/lifecycle/run/', {}, onProgress),
+    startAndFollow('/api/subscriptions/lifetime/run/', {}, onProgress),
 
   /** Las bajas de un mes con sus duraciones, una por orden, para exportar. */
   getLifetimeDetalle: async (period: string) =>
-    (await apiClient.get<LifetimeDetalleResponse>('/subscriptions/api/lifetime/detalle/', {
+    (await apiClient.get<LifetimeDetalleResponse>('/api/subscriptions/lifetime/detail/', {
       params: { period },
     })).data,
 };

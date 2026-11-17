@@ -1,4 +1,4 @@
-/** Página Inertia `CRM/Results` (`/crm/results/`). */
+/** `/crm/results/`. */
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { CrmResultsView } from '@/features/crm';

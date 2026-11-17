@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
 
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { catalogosApi, type CatalogoPayload } from '@/shared/lib/api/catalogos';
@@ -24,6 +23,7 @@ import type {
   RolVentas,
   SemaforoObjetivos,
 } from '@/features/subscriptions/types';
+import { useReloadPage } from '@/shared/page/PageData';
 
 /** Una fila en edición. Sin `id` es un alta. */
 export type PlanDraft = Omit<CatalogoPlan, 'id'> & { id?: number };
@@ -224,6 +224,7 @@ export function membresiaDesde(
 export function useCatalogos({
   vistaInicial, sites = [], estados = [], nuevoPlan = '', nuevaZona = '', nuevaPersona, equipos = [],
 }: Args) {
+  const reloadPage = useReloadPage();
   const [vista, setVista] = useState<CatalogoVista>(vistaInicial);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -427,7 +428,7 @@ export function useCatalogos({
       const respuesta = await catalogosApi.guardar(tipo, payload);
       cerrarFormularios();
       setAviso(respuesta?.message ?? null);
-      router.reload();
+      void reloadPage();
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo guardar el registro.'));
@@ -477,7 +478,7 @@ export function useCatalogos({
       } else {
         setAviso(respuesta.message);
       }
-      if (respuesta.registrados.length) router.reload();
+      if (respuesta.registrados.length) void reloadPage();
       return respuesta.registrados.length;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo registrar el lote.'));
@@ -513,7 +514,7 @@ export function useCatalogos({
     try {
       await catalogosApi.eliminar(borrando.tipo, borrando.id);
       setBorrando(null);
-      router.reload();
+      void reloadPage();
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo eliminar el registro.'));
     } finally {

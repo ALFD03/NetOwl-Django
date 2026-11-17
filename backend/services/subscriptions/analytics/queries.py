@@ -148,11 +148,6 @@ def get_periodos() -> list[str]:
         logger.exception("Error getting periodos list")
         return []
 
-def get_dashboard_data() -> dict[str, Any]:
-    """Lo que necesita el dashboard: los cierres de todos los periodos."""
-    return {"periodos": get_cierre_churn()}
-
-
 def get_analytics_data(
     periodos: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -533,7 +528,7 @@ def restringir_unidades(
     unidades: frozenset[str],
     rf: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Unidades de negocio para quien no las ve todas (`services/config/unidades.py`).
+    """Unidades de negocio para quien no las ve todas (`services/config/units.py`).
 
     Deja solo las unidades de `unidades` (por nombre de coordinador) y el bloque
     RF si `rf`. El recorte es del servidor, no del selector: el cliente reagrupa

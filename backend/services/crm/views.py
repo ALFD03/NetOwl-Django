@@ -1,22 +1,16 @@
-"""Vistas del modulo CRM.
+"""`/api/crm/`: datos de las páginas de CRM."""
 
-Los endpoints de importacion y de lanzamiento de analisis viven en la app
-`imports`, que es su unica duena.
-"""
+from __future__ import annotations
 
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from inertia import render as render_inertia
-
-from core.utils import clean_json_props, entero_de_peticion, limpiar_periodos
-from services.config.decorators import permission_required, permissions_all_required, primera_pagina
-from services.config.periodos import (
-    acotar_pedidos,
-    mes_denegado,
-    periodo_denegado,
-    periodo_visible,
-    periodos_visibles,
-    ve_todos_los_periodos,
+from core.utils import entero_de_peticion, limpiar_periodos
+from services.config.api import ApiError, endpoint
+from services.config.periods import (
+    clamp_requested,
+    month_denied,
+    period_denied,
+    sees_all_periods,
+    visible_period,
+    visible_periods,
 )
 from services.crm.analytics import (
     get_crm_cierre_historico,
@@ -27,202 +21,98 @@ from services.crm.analytics import (
     get_crm_periodos,
 )
 
-# --- VISTAS INERTIA PROTEGIDAS ---
-
-# Las paginas del modulo en el orden del sidebar, con lo que exige cada una. La
-# usa `index` para elegir destino.
-PAGINAS = [
-    ('crm:dashboard', ('can_view_crm', 'can_view_crm_dashboard')),
-    ('crm:analytics', ('can_view_crm_analytics',)),
-    ('crm:results', ('can_view_crm_results',)),
-]
+PERIOD_DENIED = "Acceso denegado. Solo puedes ver el último periodo evaluado."
 
 
-@login_required
-@permission_required('can_view_crm')
-def index(request):
-    """Raiz del modulo: la primera pagina que el usuario si pueda ver."""
-    return primera_pagina(request, PAGINAS, "Acceso denegado. No tienes ninguna página de CRM asignada.")
+def _metric_totals(request, period: str | None) -> dict:
+    """El global, o solo el último periodo si la cuenta no ve todos."""
+    if sees_all_periods(request):
+        return get_crm_metric_totals(period)
+    if not period:
+        return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
+    return get_crm_metric_totals(solo=period)
 
 
-@login_required
-@permissions_all_required('can_view_crm', 'can_view_crm_dashboard')
+@endpoint(perms=["can_view_crm", "can_view_crm_dashboard"], require_all=True)
 def dashboard(request):
-    """Portada de CRM: el promedio global y su serie historica.
-
-    Quien no ve todos los periodos recibe el mismo bloque construido con el
-    ultimo y nada mas (`services/config/periodos.py`).
-    """
-    periodos = periodos_visibles(request, get_crm_periodos())
-    periodo = periodo_visible(request, request.GET.get("period"), get_crm_periodos)
-    metrics = _metric_totals(request, periodo)
-    return render_inertia(request, "CRM/Dashboard", {
-        "metrics": metrics,
-        "periods": periodos,
-        "selectedPeriod": periodo or (periodos[0] if periodos else ""),
-        "section": "dashboard"
-    })
+    """El promedio global y su serie histórica."""
+    periods = visible_periods(request, get_crm_periodos())
+    period = visible_period(request, request.GET.get("period"), get_crm_periodos)
+    return {
+        "metrics": _metric_totals(request, period),
+        "periods": periods,
+        "selectedPeriod": period or (periods[0] if periods else ""),
+    }
 
 
-@login_required
-@permission_required('can_view_crm_analytics')
+@endpoint(perms=["can_view_crm_analytics"])
 def analytics(request):
-    """Analytics: todas las dimensiones del periodo y su fila de cierre.
+    """Las dimensiones del periodo y su global, al corte `?dia=` o al último calculado.
 
-    Viajan enteras en los props porque el selector de dimension es de cliente:
-    cambiarlo no debe costar una vuelta al servidor.
-
-    `?dia=` elige un corte acumulado del mes en vez del cierre. Sale de
-    `crm_day_metrics`, ya calculado por el analisis, y trae las mismas dos
-    props, asi que la pagina no distingue una cosa de la otra. Sin `?dia=` se
-    ensena el ultimo corte calculado, que en un mes cerrado es el cierre y en el
-    mes en curso es la foto mas reciente.
-
-    En los props viaja ademas la **serie ligera** del mes: el bloque global de
-    los treinta y un dias, sin desgloses. Con ella el cliente resuelve solo las
-    tarjetas del dia, el acumulado, la variacion contra el dia anterior y las
-    lineas de tendencia, asi que mover la barra no espera a nadie. Lo unico que
-    se pide por dia es el desglose dimensional, y va por
-    `api/day-metrics/`, que el cliente cachea.
+    Trae además la serie ligera del mes (el global de cada día): mover la barra
+    de días solo pide el desglose a `day-metrics/`.
     """
-    periodos = periodos_visibles(request, get_crm_periodos())
-    periodo = periodo_visible(request, request.GET.get("period"), lambda: periodos)
-    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    periods = visible_periods(request, get_crm_periodos())
+    period = visible_period(request, request.GET.get("period"), lambda: periods)
+    day = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    target = period or (periods[0] if periods else None)
 
-    target_period = periodo or (periodos[0] if periodos else None)
+    series = get_crm_day_series(target) if target else {}
+    available = series.get("dias_disponibles", [])
+    active_day = day if day in available else (available[-1] if available else 0)
+    cut = get_crm_day_payload(target, active_day) if active_day else None
 
-    serie = get_crm_day_series(target_period) if target_period else {}
-    disponibles = serie.get("dias_disponibles", [])
-    # Sin `?dia=`, el ultimo corte: el mas reciente y el unico que se puede
-    # ensenar sin mentir.
-    dia_activo = dia if dia in disponibles else (disponibles[-1] if disponibles else 0)
-    corte = get_crm_day_payload(target_period, dia_activo) if dia_activo else None
-
-    if corte:
-        dimensions_data = corte.get("dimensiones", [])
-        global_data = corte.get("global", {})
+    if cut:
+        dimensions, global_data = cut.get("dimensiones", []), cut.get("global", {})
     else:
-        # Sin cortes diarios calculados, el cierre del mes: es lo que habia antes
-        # de que existiera la barra y sigue siendo la respuesta correcta.
-        dimensions_data = get_crm_dimensiones(
-            periodos=[target_period] if target_period else None
-        )
-        cierre = get_crm_cierre_historico([target_period]) if target_period else []
-        global_data = cierre[0] if cierre else {}
+        # Sin cortes diarios, el cierre del mes.
+        dimensions = get_crm_dimensiones(periodos=[target] if target else None)
+        closing = get_crm_cierre_historico([target]) if target else []
+        global_data = closing[0] if closing else {}
 
-    return render_inertia(request, "CRM/Analytics", clean_json_props({
-        "dimensionsData": dimensions_data,
+    return {
+        "dimensionsData": dimensions,
         "globalData": global_data,
         "dayMetrics": {
-            "periodo_mes": serie.get("periodo_mes", target_period or ""),
-            "dias_disponibles": disponibles,
-            "dia": dia_activo,
-            "serie": serie.get("serie", {}),
+            "periodo_mes": series.get("periodo_mes", target or ""),
+            "dias_disponibles": available,
+            "dia": active_day,
+            "serie": series.get("serie", {}),
         },
-        "periods": periodos,
-        "selectedPeriod": target_period or "",
-        "section": "analytics"
-    }))
+        "periods": periods,
+        "selectedPeriod": target or "",
+    }
 
 
-@login_required
-@permission_required('can_view_crm_results')
+@endpoint(perms=["can_view_crm_results"])
 def results(request):
-    """Tabla de cierres por periodo."""
-    # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
-    # por comas sin ningun tope y cada elemento se convierte en un marcador del
-    # `IN (...)`, asi que una sola peticion podia pedir cien mil.
-    periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_crm_periodos)
-    historico = get_crm_cierre_historico(periodos) if periodos != [] else []
-    return render_inertia(request, "CRM/Results", {
-        "historico": historico,
-        "section": "results"
-    })
+    """Los cierres de los periodos pedidos (`?periods=a,b`)."""
+    periods = clamp_requested(request, limpiar_periodos(request.GET.get("periods")), get_crm_periodos)
+    return {"historico": get_crm_cierre_historico(periods) if periods != [] else []}
 
 
-# --- ENDPOINTS API ---
-
-@login_required
-@permission_required('can_view_crm')
-def api_periods_list(request):
-    """Los periodos con cierre calculado."""
-    return JsonResponse({"periods": periodos_visibles(request, get_crm_periodos())})
-
-
-@login_required
-@permissions_all_required('can_view_crm', 'can_view_crm_dashboard')
-def api_global_metrics(request):
-    """El promedio global y la serie historica, en JSON."""
-    periodo = periodo_visible(request, request.GET.get("period"), get_crm_periodos)
-    return JsonResponse(_metric_totals(request, periodo))
+@endpoint(perms=["can_view_crm_analytics"])
+def day_metrics(request):
+    """El corte completo de un día: `{global, dimensiones}`. Lo escribe el análisis."""
+    period = request.GET.get("period")
+    day = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    if not period or not day:
+        raise ApiError("Se requieren period y dia.")
+    if month_denied(request, period, get_crm_periodos):
+        raise ApiError(PERIOD_DENIED, 403)
+    cut = get_crm_day_payload(period, day)
+    if cut is None:
+        return {"status": "empty", "dia": day}, 404
+    return {"dia": day, **cut}
 
 
-def _metric_totals(request, periodo: str | None) -> dict:
-    """El dashboard: el global, o solo el ultimo periodo si no ve todos."""
-    if ve_todos_los_periodos(request):
-        return get_crm_metric_totals(periodo)
-    if not periodo:
-        return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
-    return get_crm_metric_totals(solo=periodo)
-
-
-@login_required
-@permission_required('can_view_crm_results')
-def api_cierre_historico(request):
-    """Los cierres de los periodos pedidos."""
-    # `limpiar_periodos` valida la forma YYYY-MM y corta la lista: se partia
-    # por comas sin ningun tope y cada elemento se convierte en un marcador del
-    # `IN (...)`, asi que una sola peticion podia pedir cien mil.
-    periodos = acotar_pedidos(request, limpiar_periodos(request.GET.get("periods")), get_crm_periodos)
-    if periodos == []:
-        return JsonResponse({"historico": []})
-    return JsonResponse({"historico": get_crm_cierre_historico(periodos)})
-
-
-@login_required
-@permission_required('can_view_crm_analytics')
-def api_day_metrics(request):
-    """El corte completo de un dia: `{global, dimensiones}`.
-
-    Existe para que la barra de dias no pase por Inertia: el cliente pide el dia
-    que le falta, lo cachea y adelanta los vecinos, de modo que moverse por el
-    mes deja de esperar a la base. No calcula nada —lee una celda de
-    `crm_day_metrics`, ya escrita por el analisis—.
-    """
-    periodo = request.GET.get("period")
-    dia = entero_de_peticion(request, "dia", minimo=1, maximo=31)
-    if not periodo or not dia:
-        return JsonResponse(
-            {"status": "error", "message": "Se requieren period y dia."}, status=400
-        )
-    if mes_denegado(request, periodo, get_crm_periodos):
-        return _periodo_no_visible()
-
-    corte = get_crm_day_payload(periodo, dia)
-    if corte is None:
-        return JsonResponse({"status": "empty", "dia": dia}, status=404)
-
-    return JsonResponse(clean_json_props({"dia": dia, **corte}))
-
-
-@login_required
-@permission_required('can_view_crm_analytics', 'can_view_crm_results')
-def api_dimension_metrics(request):
-    """Las metricas de una dimension y un periodo."""
-    periodo = request.GET.get("period")
-    dimension = request.GET.get("dimension")
-    if periodo and periodo_denegado(request, periodo, get_crm_periodos):
-        return _periodo_no_visible()
-    target_period = acotar_pedidos(request, [periodo] if periodo else None, get_crm_periodos)
-    if target_period == []:
-        return JsonResponse({"dimensiones": []})
-    dimensiones = get_crm_dimensiones(periodos=target_period, dimension=dimension)
-    return JsonResponse({"dimensiones": clean_json_props(dimensiones)})
-
-
-def _periodo_no_visible():
-    """El 403 de un periodo que la cuenta no puede ver."""
-    return JsonResponse(
-        {"status": "error", "message": "Acceso denegado. Solo puedes ver el último periodo evaluado."},
-        status=403,
-    )
+@endpoint(perms=["can_view_crm_analytics", "can_view_crm_results"])
+def dimension_metrics(request):
+    """Las métricas de una dimensión y un periodo."""
+    period = request.GET.get("period")
+    if period and period_denied(request, period, get_crm_periodos):
+        raise ApiError(PERIOD_DENIED, 403)
+    periods = clamp_requested(request, [period] if period else None, get_crm_periodos)
+    if periods == []:
+        return {"dimensiones": []}
+    return {"dimensiones": get_crm_dimensiones(periodos=periods, dimension=request.GET.get("dimension"))}

@@ -14,11 +14,11 @@
 
 import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { usePage } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
+import { useAuth } from '@/shared/auth/AuthContext';
 import { resolveLocation } from '@/shared/constants/navigation';
-import type { AuthenticatedPageProps } from '@/shared/types/inertia';
 import { AnalysisQueueAlert } from './AnalysisQueueAlert';
 import { MobileNavDrawer, MobileTopBar, Sidebar } from './Sidebar';
 
@@ -55,11 +55,12 @@ function leerPlegado(): boolean {
 }
 
 export function AppLayout({ children, title, subpagina, toolbar }: Props) {
-  const { url, props } = usePage<AuthenticatedPageProps>();
-  const username = props.auth.user.username;
+  const { pathname, search } = useLocation();
+  const url = pathname + search;
+  const username = useAuth().user?.username ?? '';
 
-  // Cada página monta su propio AppLayout, así que el estado se relee al
-  // navegar; leerlo en el inicializador evita un parpadeo del sidebar ancho.
+  // Cada página monta su propio AppLayout: leerlo en el inicializador evita un
+  // parpadeo del sidebar ancho.
   const [plegado, setPlegado] = useState(leerPlegado);
   const [menuAbierto, setMenuAbierto] = useState(false);
 

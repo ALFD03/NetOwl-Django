@@ -12,7 +12,6 @@
  */
 
 import { useMemo, useState, type FormEvent } from 'react';
-import { router } from '@inertiajs/react';
 import { Check, MapPinOff, Plus, X } from 'lucide-react';
 
 import { Button, DataTable, EmptyState, Modal, MonthPicker, NeonContainer, SearchInput, type Column } from '@/shared/ui';
@@ -23,6 +22,7 @@ import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { cn } from '@/shared/lib/cn';
 import type { CatalogoZona, CatalogoZonaSinObjetivo } from '@/features/subscriptions/types';
 import { columnaAcciones } from './CatalogoComun';
+import { useReloadPage } from '@/shared/page/PageData';
 
 interface Borrador {
   id?: number;
@@ -50,6 +50,7 @@ export function ZonasSinObjetivoPanel({
   zonas: CatalogoZona[];
   onBorrar: (fila: CatalogoZonaSinObjetivo) => void;
 }) {
+  const reloadPage = useReloadPage();
   const [borrador, setBorrador] = useState<Borrador | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,12 +82,12 @@ export function ZonasSinObjetivoPanel({
         );
         if (respuesta.errores.length) {
           setError(`${respuesta.message} No entraron: ${respuesta.errores.map((e) => `${e.nombre}: ${e.message}`).join(' · ')}`);
-          if (respuesta.registrados.length) router.reload();
+          if (respuesta.registrados.length) void reloadPage();
           return;
         }
       }
       cerrar();
-      router.reload();
+      void reloadPage();
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo guardar.'));
     } finally {

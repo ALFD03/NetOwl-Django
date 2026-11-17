@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Catalogos/Ventas` (`/catalogos/ventas/`).
+ * Página `/catalogos/ventas/`.
  *
  * Coordinadores de unidad de negocio y objetivos comerciales.
  */

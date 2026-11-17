@@ -2,7 +2,7 @@
 
 /**
  * Las unidades de negocio que ve una cuenta o un grupo sin el permiso de verlas
- * todas: ids de `Coordinador` y el bloque RF (ver `services/config/unidades.py`).
+ * todas: ids de `Coordinador` y el bloque RF (ver `services/config/units.py`).
  */
 export interface UnidadesSeleccion {
   ids: number[];
@@ -61,72 +61,6 @@ export type Permission =
   | 'can_run_subs_analysis'
   | 'can_run_crm_analysis'
   | 'can_run_support_analysis';
-
-export interface UserProfile {
-  role: string;
-  can_view_subscriptions: boolean;
-  can_view_crm: boolean;
-  can_view_imports: boolean;
-  can_view_support: boolean;
-  can_view_subs_dashboard: boolean;
-  can_view_crm_dashboard: boolean;
-  can_view_support_dashboard: boolean;
-  can_view_subs_analytics: boolean;
-  can_view_subs_results: boolean;
-  can_view_subs_lifetime: boolean;
-  can_view_subs_sales: boolean;
-  can_view_subs_business_units: boolean;
-  can_view_eta: boolean;
-  can_view_crm_analytics: boolean;
-  can_view_crm_results: boolean;
-  can_view_support_analytics: boolean;
-  can_view_support_results: boolean;
-  can_view_support_abiertos: boolean;
-  can_view_imports_subs: boolean;
-  can_view_imports_crm: boolean;
-  can_view_imports_support: boolean;
-  can_view_import_history: boolean;
-  can_view_comisiones: boolean;
-  can_view_all_periods: boolean;
-  can_view_all_business_units: boolean;
-  can_view_users: boolean;
-  can_view_auditoria: boolean;
-  can_use_api: boolean;
-  can_import_data: boolean;
-  can_run_calculations: boolean;
-  can_run_lifetime: boolean;
-  can_manage_eta: boolean;
-  can_manage_catalogo_comercial: boolean;
-  can_manage_catalogo_operacional: boolean;
-  can_manage_catalogo_ventas: boolean;
-  can_manage_support_users: boolean;
-  can_manage_comisiones: boolean;
-  can_reopen_comisiones: boolean;
-  can_delete_comisiones: boolean;
-  can_create_users: boolean;
-  can_edit_user_permissions: boolean;
-  can_change_passwords: boolean;
-  can_delete_users: boolean;
-  can_manage_groups: boolean;
-  can_manage_api_tokens: boolean;
-  can_import_subs: boolean;
-  can_import_crm: boolean;
-  can_import_support: boolean;
-  can_run_subs_analysis: boolean;
-  can_run_crm_analysis: boolean;
-  can_run_support_analysis: boolean;
-}
-
-export interface AuthUser {
-  id: number;
-  username: string;
-  is_superuser: boolean;
-  profile: UserProfile;
-}
-
-export interface AuthProps {
-  user: AuthUser;
-}
 
 /** La cuenta actual tal y como la devuelve `GET /api/auth/me/`. */
 export interface CurrentUser {

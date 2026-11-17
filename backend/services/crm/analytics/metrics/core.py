@@ -158,7 +158,7 @@ def promediar_cierres(cierres: list[dict[str, Any]]) -> dict[str, float]:
     """El resumen del dashboard: la media simple de los cierres dados.
 
     La usa el analisis sobre todos los periodos y la lectura del dashboard de
-    quien solo ve el ultimo (`services/config/periodos.py`), sobre ese uno. Los
+    quien solo ve el ultimo (`services/config/periods.py`), sobre ese uno. Los
     cierres leidos de la base traen todo en `text`, de ahi el `to_numeric`.
     """
     df = pd.DataFrame(cierres)

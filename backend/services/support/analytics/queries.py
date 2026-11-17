@@ -15,8 +15,6 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
-import pandas as pd
-
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import zonas_por_nombre
@@ -98,7 +96,7 @@ def get_support_metric_totals(solo: str | None = None) -> dict:
     """El dashboard de empresa: promedio de todos los periodos, más su serie.
 
     Con `solo`, el mismo bloque construido con ese periodo y nada mas: es el
-    dashboard de quien no ve todos los periodos (`services/config/periodos.py`).
+    dashboard de quien no ve todos los periodos (`services/config/periods.py`).
     """
     if solo:
         return _metric_totals_de_un_periodo(solo)
@@ -479,48 +477,3 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
     except Exception:
         logger.exception("Error estructurando Analytics de Soporte")
         return {"periodo": periodo, "grupos": {}, "incidencia_zonas": {}}
-
-
-# --- Listado de tickets -----------------------------------------------------
-
-def get_support_tickets_list(
-    limit: int = 500, grupo: str | None = None, periodo: str | None = None
-) -> list[dict]:
-    """Listado crudo de tickets, opcionalmente de un grupo y un periodo."""
-    db = DBConnector()
-    try:
-        where = ["1=1"]
-        params: list[Any] = []
-
-        if grupo:
-            where.append("grupo_trabajo = %s")
-            params.append(grupo)
-        if periodo and len(periodo) == 7:
-            where.append("TO_CHAR(creado_el, 'YYYY-MM') = %s")
-            params.append(periodo)
-
-        df = db.query(f"""
-            SELECT ticket_sequence, cliente, etapa, grupo_trabajo, asignado_a,
-                   creado_por, sucursal, zona, tipo_solicitud, razon_falla,
-                   solucion_falla,
-                   creado_el, primera_fecha_asignada, ultima_actualizacion_etapa,
-                   duracion_total_horas
-            FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
-            WHERE {" AND ".join(where)}
-            ORDER BY creado_el DESC
-            LIMIT %s
-        """, params=[*params, int(limit)])
-
-        if df.empty:
-            return []
-
-        for col in ("creado_el", "primera_fecha_asignada", "ultima_actualizacion_etapa"):
-            df[col] = df[col].astype(str)
-        df["duracion_total_horas"] = pd.to_numeric(
-            df["duracion_total_horas"], errors="coerce"
-        ).round(2)
-
-        return df.where(pd.notna(df), None).to_dict(orient="records")
-    except Exception:
-        logger.exception("Error al consultar lista de tickets de soporte")
-        return []

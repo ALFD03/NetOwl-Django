@@ -1,8 +1,7 @@
 /**
  * La cuenta autenticada, para cualquier componente: `useAuth()`.
  *
- * `AuthProvider` la pide a `/api/auth/me/` (SPA). Las páginas Inertia la reciben
- * de sus props a través de `StaticAuthProvider` (ver `app/inertia.tsx`).
+ * `AuthProvider` la pide a `/api/auth/me/`; sin sesión, `user` es null.
  */
 
 import { createContext, useContext, useMemo } from 'react';
@@ -47,20 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [me.data, me.isPending, loginMutation, logoutMutation],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-/** Proveedor con una cuenta ya conocida (páginas Inertia). */
-export function StaticAuthProvider({ user, children }: { user: CurrentUser | null; children: ReactNode }) {
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      user,
-      isLoading: false,
-      login: () => Promise.reject(new Error('login no disponible en páginas Inertia')),
-      logout: () => authApi.logout(),
-    }),
-    [user],
-  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

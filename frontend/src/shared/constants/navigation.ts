@@ -7,7 +7,7 @@
  */
 
 import {
-  BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitBranch,
+  Activity, BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitBranch,
   HandCoins, Headset, Layers, Lock, Network, Package, ScrollText, SlidersHorizontal, Table, TrendingUp,
   UserCheck, Users,
 } from 'lucide-react';
@@ -113,6 +113,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     permission: PERMISSIONS.VIEW_AUDITORIA,
     pages: [
       { id: 'registro', label: 'Registro', href: '/auditoria/', icon: ScrollText },
+      { id: 'monitoreo', label: 'Monitoreo', href: '/auditoria/monitoreo/', icon: Activity },
     ],
   },
 ];

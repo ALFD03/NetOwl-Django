@@ -160,11 +160,13 @@ edición: sus `db_table` no llevan esquema y el `search_path` los resuelve.
 
 Middlewares propios (`netowl_web/middleware.py`):
 
-- `RateLimitMiddleware` — convierte la excepción `Ratelimited` en un JSON 429 con
-  mensaje legible en vez de una página de error.
-- `InertiaShareMiddleware` — comparte con React `auth.user` y su matriz de
-  permisos, recorriendo `PERMISSION_FIELDS`. **Añadir un permiso al catálogo de
-  `services/config/models.py` lo publica automáticamente en el frontend.**
+- `AnonymousBodyLimitMiddleware` — un anónimo solo escribe en login y logout, con
+  un cuerpo de como mucho `ANON_MAX_BODY_SIZE`; el resto recibe 401 JSON antes de
+  leer el cuerpo.
+- `CSPMiddleware` — la cabecera Content-Security-Policy.
+
+Los límites de peticiones (429) y la matriz que ve React (`/api/auth/me/`) los
+resuelve `@endpoint`; ver [11 · Endpoints](11-api-endpoints.md).
 
 ## Assets: `VITE_DEV_SERVER` no cuelga de `DEBUG`
 

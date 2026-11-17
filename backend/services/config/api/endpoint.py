@@ -80,6 +80,14 @@ def _query_data(request, model: type[BaseModel]) -> dict:
     }
 
 
+def json_body(request) -> dict:
+    """El cuerpo JSON como dict, para las vistas que leen campos sueltos. 400 si no lo es."""
+    data = _body_data(request)
+    if not isinstance(data, dict):
+        raise ApiError("El cuerpo debe ser un objeto JSON.")
+    return data
+
+
 def _body_data(request) -> Any:
     if request.content_type == "application/json":
         try:
@@ -110,29 +118,37 @@ def _to_response(result: Any, nullable: bool) -> HttpResponse:
     return JsonResponse(clean(result), status=status, safe=False, json_dumps_params={"ensure_ascii": False})
 
 
+BODY_METHODS = frozenset({"POST", "PUT", "PATCH"})
+
+
+def _per_method(value, method: str):
+    """`value` tal cual, o su entrada para `method` si es un dict por método."""
+    return value.get(method) if isinstance(value, dict) else value
+
+
 def endpoint(
     *,
     methods: Iterable[str] = ("GET",),
-    perms: Iterable[str] = (),
+    perms: Iterable[str] | dict[str, Iterable[str]] = (),
     require_all: bool = False,
     login: bool = True,
     session_only: bool = False,
-    rate: str | None = None,
+    rate: str | dict[str, str] | None = None,
     query: type[BaseModel] | None = None,
     body: type[BaseModel] | None = None,
     nullable: bool = False,
 ) -> Callable:
     """Declara una vista de la API.
 
-    - `perms`: basta uno, o todos con `require_all=True`.
+    - `perms`: basta uno, o todos con `require_all=True`. Un dict los da por método.
     - `login=False`: vista pública (solo el login).
     - `session_only`: rechaza tokens (gestión de tokens, cierre de sesión).
-    - `rate`: "2/m", "60/m"…, contado por token, usuario o IP.
+    - `rate`: "2/m", "60/m"…, contado por token, usuario o IP; un dict, por método.
     - `query` / `body`: modelos pydantic; la vista los recibe como `query=` y `body=`.
+      `body` solo se lee en POST, PUT y PATCH.
     - `nullable`: NaN → null en vez de 0 (ver `core.utils.clean_json_nullable`).
     """
     allowed = tuple(m.upper() for m in methods)
-    perms = tuple(perms)
 
     def decorator(view: Callable) -> Callable:
         group = f"api:{view.__module__}.{view.__name__}"
@@ -148,21 +164,23 @@ def endpoint(
                 return error_response("Autenticación requerida.", 401)
             if session_only and getattr(request, "api_token", None) is not None:
                 return error_response("Esta operación no admite token de API.", 403)
-            if perms:
+            needed = tuple(_per_method(perms, request.method) or ())
+            if needed:
                 combine = all if require_all else any
-                if not combine(has_permission(request.user, p) for p in perms):
+                if not combine(has_permission(request.user, p) for p in needed):
                     joiner = " y " if require_all else " o "
-                    return error_response(f"Acceso denegado. Se requiere: {joiner.join(perms)}.", 403)
+                    return error_response(f"Acceso denegado. Se requiere: {joiner.join(needed)}.", 403)
 
-            if rate and is_ratelimited(
-                request, group=group, key=_rate_key, rate=rate, increment=True
+            limit = _per_method(rate, request.method)
+            if limit and is_ratelimited(
+                request, group=f"{group}:{request.method}", key=_rate_key, rate=limit, increment=True
             ):
                 return error_response("Demasiadas peticiones. Espera un momento antes de reintentar.", 429)
 
             try:
                 if query is not None:
                     kwargs["query"] = query.model_validate(_query_data(request, query))
-                if body is not None:
+                if body is not None and request.method in BODY_METHODS:
                     kwargs["body"] = body.model_validate(_body_data(request))
                 return _to_response(view(request, *args, **kwargs), nullable)
             except ValidationError as exc:

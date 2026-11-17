@@ -8,7 +8,6 @@
  */
 
 import { useState, type FormEvent } from 'react';
-import { router } from '@inertiajs/react';
 import {
   AlertTriangle,
   Edit3,
@@ -38,6 +37,7 @@ import {
 import { formatInteger } from '@/shared/utils/formatters';
 import { ETIQUETA_EQUIPO, ETIQUETA_TIPO } from '../../lib/flujoFormat';
 import type { EtapaPendiente, EtapaSoporte, SupportEtapasProps } from '../../types';
+import { useReloadPage } from '@/shared/page/PageData';
 
 type Vista = 'pendientes' | 'catalogo';
 type Borrador = { id?: number; nombre: string; equipo: string; tipo: string };
@@ -51,6 +51,7 @@ export function SupportEtapasView({
   etapasCierre,
   nuevaEtapa,
 }: SupportEtapasProps) {
+  const reloadPage = useReloadPage();
   const vacio = (nombre = ''): Borrador => ({
     nombre,
     equipo: equipos[0]?.value ?? 'atc',
@@ -77,7 +78,7 @@ export function SupportEtapasView({
       setBorrador(null);
       setBorrando(null);
       setAviso(r.message ?? null);
-      router.reload();
+      void reloadPage();
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, fallo));
     } finally {

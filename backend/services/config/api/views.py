@@ -11,8 +11,8 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from pydantic import BaseModel, Field
 
 from services.config.auth import attempt_login, can_act_on, effective_permissions, has_permission
-from services.config.decorators import resolve_landing_url
 from services.config.models import ApiToken
+from services.config.pages import resolve_landing_url
 
 from .endpoint import ApiError, endpoint
 
@@ -82,6 +82,7 @@ def login(request, body: LoginBody):
 
 @endpoint(methods=["POST"], session_only=True)
 def logout_view(request):
+    """Cierra la sesión del navegador."""
     logout(request)
 
 
@@ -92,11 +93,14 @@ def me(request):
     return me_payload(request)
 
 
-@endpoint(methods=["GET", "POST"], perms=["can_manage_api_tokens"], session_only=True, rate="30/m", query=TokenQuery)
-def tokens(request, query: TokenQuery):
+@endpoint(
+    methods=["GET", "POST"], perms=["can_manage_api_tokens"], session_only=True,
+    rate={"POST": "30/m"}, query=TokenQuery, body=TokenCreateBody,
+)
+def tokens(request, query: TokenQuery, body: TokenCreateBody | None = None):
     """GET: lista de tokens (opcionalmente de una cuenta). POST: crea uno."""
     if request.method == "POST":
-        return _create_token(request, TokenCreateBody.model_validate_json(request.body or b"{}"))
+        return _create_token(request, body)
     qs = ApiToken.objects.select_related("user", "created_by")
     if query.user_id is not None:
         qs = qs.filter(user_id=query.user_id)
@@ -120,6 +124,7 @@ def _create_token(request, body: TokenCreateBody):
 
 @endpoint(methods=["POST"], perms=["can_manage_api_tokens"], session_only=True, rate="30/m")
 def revoke_token(request, token_id: int):
+    """Revoca un token: deja de valer al instante."""
     token = ApiToken.objects.select_related("user", "created_by").get(pk=token_id)
     if token.revoked_at is None:
         token.revoked_at = timezone.now()

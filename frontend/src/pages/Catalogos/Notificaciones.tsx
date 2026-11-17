@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Catalogos/Notificaciones` (`/catalogos/notificaciones/`).
+ * Página `/catalogos/notificaciones/`.
  *
  * Lo pendiente de cada área del catálogo y lo que se decidió ignorar.
  */

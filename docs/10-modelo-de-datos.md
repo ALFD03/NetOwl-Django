@@ -261,7 +261,7 @@ Tablas de origen  ──┐
 Tablas de resultado ──┐   DELETE del periodo + INSERT   ← recalcular un mes lo sustituye
                       │
                       ▼
-Vistas de lectura → props Inertia → React
+Endpoints de lectura (/api/) → React
 ```
 
 **Consecuencia a tener presente:** las tablas de origen no son un histórico. Se

@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Subscriptions/BusinessUnits` (`/subscriptions/business-units/`).
+ * Página `/subscriptions/business-units/`.
  *
  * Agrupa por coordinador. Ojo: calcula `tasaCumplimiento` **sin recortar a 100**,
  * a diferencia del Sales Report; es una discrepancia intencionada (ver
@@ -12,7 +12,6 @@
  */
 
 import { useMemo, useState } from 'react';
-import { router } from '@inertiajs/react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { DayProgressBar } from '@/shared/ui';
@@ -27,6 +26,7 @@ import { ProyeccionNota } from '@/features/subscriptions/components/reports/Proy
 import {
   useBusinessUnitsData, type BusinessUnitGroup, type FtthConsolidadoNodo,
 } from '@/features/subscriptions/hooks/useBusinessUnitsData';
+import { useVisit } from '@/shared/page/PageData';
 
 interface BusinessUnitsProps {
   buData?: {
@@ -43,6 +43,7 @@ interface BusinessUnitsProps {
 }
 
 export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: BusinessUnitsProps) {
+  const visit = useVisit();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
@@ -80,11 +81,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
 
   const changePeriod = (period: string) => {
     setSelectedDay(0);
-    router.get('/subscriptions/business-units/', { period }, {
-      preserveState: true,
-      preserveScroll: true,
-      only: ['buData', 'dayMetrics'],
-    });
+    visit({ period });
   };
 
   return (

@@ -7,77 +7,87 @@
 
 ## Stack
 
-React 18 + TypeScript + Vite + Tailwind + Chart.js. En migración de Inertia a una
-**SPA** (React Router + TanStack Query) que lee la API `/api/`. Mientras dure,
-conviven los dos modos en el mismo bundle: las páginas migradas son de la SPA y el
-resto sigue en Inertia.
+React 18 + TypeScript + Vite + Tailwind + Chart.js, como **SPA** (React Router +
+TanStack Query) sobre la API `/api/`.
 
-Dependencias notables: `react-router-dom`, `@tanstack/react-query`,
-`@inertiajs/react` (hasta terminar la migración), `axios`, `chart.js` +
-`react-chartjs-2` + `chartjs-plugin-datalabels`, `framer-motion`,
+Dependencias notables: `react-router-dom`, `@tanstack/react-query`, `axios`,
+`chart.js` + `react-chartjs-2` + `chartjs-plugin-datalabels`, `framer-motion`,
 `lucide-react`, `clsx` + `tailwind-merge`, `write-excel-file`.
 
 ## Arranque
 
 ```
-backend/templates/app.html   ← la única plantilla Django
+backend/templates/app.html   ← la única plantilla Django: <div id="app">
    ├─ meta csrf-token y csrf-cookie-name (el nombre de la cookie cambia por entorno)
    ├─ script en línea: pone `light`/`dark` en <html> antes de pintar (clave `netowl-tema`)
    ├─ dev:  http://localhost:5173/static/src/app/main.tsx  (+ react-refresh)
    └─ prod: {% static 'dist/assets/main.js' %} y main.css
              └─ frontend/src/app/main.tsx   (estilos globales y registro de Chart.js)
-                  ├─ con data-page → app/inertia.tsx (chunk aparte)
-                  │    ├─ import './csrf'      (cabecera X-CSRFToken en axios global)
-                  │    ├─ StaticAuthProvider   (la cuenta sale de los props de Inertia)
-                  │    └─ createInertiaApp     → glob de ../pages, sin las páginas migradas
-                  └─ sin data-page → app/spa.tsx (chunk aparte)
+                  └─ app/spa.tsx
+                       ├─ ThemeProvider
                        ├─ QueryClientProvider  (app/queryClient.ts)
                        ├─ AuthProvider         (GET /api/auth/me/)
                        └─ RouterProvider       (app/routes.tsx, una ruta lazy por página)
 ```
 
-Django sirve la SPA con `services/config/spa.py:spa_shell` (la misma plantilla, sin
-`data-page`). Una visita de Inertia a una ruta de la SPA recibe 409 +
-`X-Inertia-Location` y el navegador hace carga completa. Desde la SPA, una ruta que
-no está en `routes.tsx` se abre con carga completa (sigue en Inertia).
+Cada ruta de página de Django (`page(*perms)` en `services/config/pages.py`) sirve
+esa plantilla tras comprobar sesión y permiso; lo demás lo resuelve la SPA. Una
+ruta que no está en `routes.tsx` (`/`, la raíz de un módulo) se abre con carga
+completa y Django redirige a la primera página permitida.
 
-### Migrar una página a la SPA
+### Cómo llega el dato a una página
 
-1. En Django, la ruta de página apunta a `spa_shell` y los datos salen de un
-   endpoint `/api/<módulo>/<servicio>/` con `@endpoint`.
-2. En `app/routes.tsx`, la ruta con `lazy` a su página.
-3. En `app/inertia.tsx`, la página sale del glob.
+`apiPage(endpoint, cargar)` (`app/apiPage.tsx`) monta la página con lo que
+devuelve su endpoint como props, dentro de `AppLayout` mientras carga o si falla:
 
-### El contrato con Django
+- Los parámetros de la URL (`?period=`, `?dia=` y los de ruta como `:period`)
+  viajan tal cual al endpoint.
+- `useVisit()` cambia esos parámetros (cambiar de mes): se vuelve a pedir con
+  `keepPreviousData`, sin desmontar la página, que conserva su estado.
+- `useReloadPage()` vuelve a pedir los datos tras guardar algo.
+- `usePageProps()` lee los datos de la página desde cualquier componente (los
+  objetivos de Subscriptions, por ejemplo).
 
-La cadena que pasa la vista (`render_inertia(request, "CRM/Dashboard", …)`) es
-**la ruta del fichero** bajo `frontend/src/pages/`. Renombrar o mover una página
-rompe la vista en tiempo de ejecución, sin error de compilación.
+Un 401 fuera del login (sesión caducada) lleva a `/auth/login/?next=` desde el
+interceptor de `shared/lib/api/client.ts`.
 
-| Ruta Django | Componente | Fichero |
+### Añadir una página
+
+1. En Django, la ruta de página en el `urls.py` del módulo con `page(...)`, y el
+   endpoint de sus datos en su `api_urls.py` con `@endpoint`.
+2. En `app/routes.tsx`, la ruta con `apiPage('/api/…', () => import('@/pages/…'))`
+   (o `page(...)` si la página pide sus datos por su cuenta).
+3. En `shared/constants/navigation.ts`, su entrada en el menú.
+
+| Ruta | Endpoint de datos | Fichero |
 |---|---|---|
-| `/auth/setup/` | `Config/Setup` | `pages/Config/Setup.tsx` |
-| `/auth/users/` | `Config/Management` | `pages/Config/Management.tsx` |
-| `/subscriptions/` | `Subscriptions/Dashboard` | `pages/Subscriptions/Dashboard.tsx` |
-| `/subscriptions/analytics/` | `Subscriptions/Analytics` | `pages/Subscriptions/Analytics.tsx` |
-| `/subscriptions/results/` | `Subscriptions/Results` | `pages/Subscriptions/Results.tsx` |
-| `/subscriptions/lifetime/` | `Subscriptions/Lifetime` | `pages/Subscriptions/Lifetime.tsx` |
-| `/subscriptions/sales-report/` | `Subscriptions/SalesReport` | `pages/Subscriptions/SalesReport.tsx` |
-| `/subscriptions/business-units/` | `Subscriptions/BusinessUnits` | `pages/Subscriptions/BusinessUnits.tsx` |
-| `/subscriptions/eta-report/` | `Subscriptions/EtaReport` | `pages/Subscriptions/EtaReport.tsx` |
-| `/subscriptions/eta-report/config/` | `Subscriptions/EtaManagement` | `pages/Subscriptions/EtaManagement.tsx` |
-| `/catalogos/notificaciones|productos|estructura|ventas/` | `Catalogos/*` | `pages/Catalogos/*.tsx` |
-| `/comisiones/`, `/comisiones/condiciones/` | `Comisiones/Informe`, `Comisiones/Condiciones` | `pages/Comisiones/*.tsx` (feature `features/comisiones/`) |
-| `/crm/`, `/crm/analytics/`, `/crm/results/` | `CRM/Dashboard`, `CRM/Analytics`, `CRM/Results` | `pages/CRM/*.tsx` |
-| `/support/`, `/support/analytics/`, `/support/results/` | `Support/*` | `pages/Support/*.tsx` |
-| `/imports/subscriptions|crm|support|history/` | `Imports/*` | `pages/Imports/*.tsx` |
+| `/auth/login/` | — | `pages/Config/Login.tsx` |
+| `/auth/users/` | `/api/auth/users/` | `pages/Config/Management.tsx` |
+| `/auth/tokens/` | `/api/auth/tokens/` (en la vista) | `pages/Config/Tokens.tsx` |
+| `/subscriptions/dashboard/` | `/api/subscriptions/dashboard/` | `pages/Subscriptions/Dashboard.tsx` |
+| `/subscriptions/analytics/` | `/api/subscriptions/analytics/` | `pages/Subscriptions/Analytics.tsx` |
+| `/subscriptions/results/[<periodo>/]` | `/api/subscriptions/results/` | `pages/Subscriptions/Results.tsx` |
+| `/subscriptions/lifetime/` | `/api/subscriptions/lifetime/` | `pages/Subscriptions/Lifetime.tsx` |
+| `/subscriptions/sales-report/` | `/api/subscriptions/sales-report/` | `pages/Subscriptions/SalesReport.tsx` |
+| `/subscriptions/business-units/` | `/api/subscriptions/business-units/` | `pages/Subscriptions/BusinessUnits.tsx` |
+| `/subscriptions/eta-report/` | `/api/subscriptions/eta-report/` | `pages/Subscriptions/EtaReport.tsx` |
+| `/subscriptions/eta-report/config/` | `/api/subscriptions/eta-report/config/` | `pages/Subscriptions/EtaManagement.tsx` |
+| `/crm/dashboard|analytics|results/` | `/api/crm/…` | `pages/CRM/*.tsx` |
+| `/support/dashboard|analytics|results|users/` | `/api/support/…` | `pages/Support/*.tsx` |
+| `/support/etapas/` | `/api/support/stages/` | `pages/Support/Etapas.tsx` |
+| `/imports/subscriptions|crm|support|history/` | `/api/imports/…` | `pages/Imports/*.tsx` |
+| `/catalogos/notificaciones|productos|estructura|ventas/` | `/api/catalogs/notifications|products|structure|sales/` | `pages/Catalogos/*.tsx` |
+| `/comisiones/` | `/api/commissions/report/` | `pages/Comisiones/Informe.tsx` |
+| `/comisiones/condiciones/` | `/api/commissions/conditions/` | `pages/Comisiones/Condiciones.tsx` |
+| `/auditoria/` | `/api/audit/logs/` | `pages/Auditoria/Registro.tsx` |
+| `/auditoria/monitoreo/` | `/api/audit/health/` y `/api/audit/stats/` (en la vista) | `pages/Auditoria/Monitoreo.tsx` |
 
 ---
 
 ## Las tres reglas (resumen)
 
-1. **`pages/` es un contrato con Django** y no contiene lógica: elige layout,
-   cabecera y una vista de feature.
+1. **`pages/` son cascarones** sin lógica: reciben los datos del endpoint y eligen
+   layout, cabecera y una vista de feature.
 2. **La dependencia va en un solo sentido: `pages → features → shared`.**
    `shared/` nunca importa de `features/`; si necesita un tipo de un dominio, ese
    tipo pertenece a `shared/types`. Los features no se importan entre sí.
@@ -95,12 +105,11 @@ venir de un mapa escrito a mano porque **Tailwind no ve nombres interpolados**.
 
 | Fichero | Contenido |
 |---|---|
-| `main.tsx` | Elige modo (Inertia o SPA) y carga su chunk |
-| `spa.tsx` | Arranque de la SPA |
-| `routes.tsx` | Rutas de la SPA (`/auth/login/`) |
+| `main.tsx` | Estilos globales, registro de Chart.js y arranque |
+| `spa.tsx` | Proveedores y router |
+| `routes.tsx` | Rutas de la SPA, cada una con su endpoint de datos |
+| `apiPage.tsx` | `apiPage()` / `page()`: el `lazy` de cada ruta |
 | `queryClient.ts` | Caché de datos; no reintenta 4xx |
-| `inertia.tsx` | Arranque de Inertia para las páginas aún no migradas |
-| `csrf.ts` | Aplica `applyCsrf` a la instancia **global** de axios, que es la que usa Inertia |
 
 ---
 
@@ -260,7 +269,7 @@ de configuración distinto y se enseña como un error normal.
 El modal ofrece las dos respuestas que el servidor no puede distinguir:
 **registrar el producto como plan** (enlaza a
 `/catalogos/productos/?nuevo_plan=…`) o **marcarlo como ignorado** (POST a
-`/catalogos/api/guardar/` con tipo `ignorados` y `area: 'productos'`). Cuando aparece **no se escribió
+`/api/catalogs/save/` con tipo `ignorados` y `area: 'productos'`). Cuando aparece **no se escribió
 nada**: la comprobación corre antes del truncate.
 
 ### `subscriptions`
@@ -313,11 +322,12 @@ concentra la lectura de los bloques de métricas y las etiquetas de las medidas
 
 | Caso | Camino |
 |---|---|
-| Carga inicial de una página | Props Inertia ya calculados por la vista Django |
+| Carga inicial de una página | El GET de su endpoint (`apiPage`), con la URL de la página como parámetros |
 | Cambio de periodo / dimensión / día | **En cliente**, sobre los props que ya llegaron (`dayMetrics`, `dimensionsData`, `zonasConfig`) |
-| Drill-down puntual | `fetch` al endpoint `api/` correspondiente |
-| Lanzar un análisis | `startAndFollow` → 202 → sondeo de `api/jobs/<id>/` |
-| Cola de análisis | `useJobQueue` → `api/jobs/queue/` desde cualquier página |
+| Cambio de mes | `useVisit()`: nueva URL, nuevo GET del endpoint, la página sigue montada |
+| Drill-down puntual | Su endpoint de `/api/` desde `shared/lib/api` |
+| Lanzar un análisis | `startAndFollow` → 202 → sondeo de `/api/imports/jobs/<id>/` |
+| Cola de análisis | `useJobQueue` → `/api/imports/jobs/queue/` desde cualquier página |
 | Exportar | `.xlsx` generado en el navegador |
 
 ## Añadir un módulo
@@ -327,7 +337,7 @@ concentra la lectura de los bloques de métricas y las etiquetas de las medidas
    no hay nada más que registrar.
 2. Crear `features/<module>/` con `types.ts`, `hooks/`, `components/` e
    `index.ts`.
-3. Crear las páginas bajo `pages/<Module>/`, **con el nombre exacto que pasa la
-   vista Django**.
+3. Crear las páginas bajo `pages/<Module>/` y registrarlas en `app/routes.tsx`
+   con su endpoint (ver «Añadir una página»).
 4. Si trae permisos nuevos, añadirlos al backend (`services/config/models.py`) y
    al espejo `shared/constants/permissions.ts`.

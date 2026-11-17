@@ -1,21 +1,20 @@
-"""Rutas del modulo de CRM, bajo `/crm/`."""
+"""Páginas de `/crm/`."""
 
 from django.urls import path
 
-from services.crm import views
+from services.config.pages import module_root, page
 
 app_name = "crm"
 
-urlpatterns = [
-    path("", views.index, name="index"),
-    path("dashboard/", views.dashboard, name="dashboard"),
-    path("analytics/", views.analytics, name="analytics"),
-    path("results/", views.results, name="results"),
+PAGES = [
+    ("crm:dashboard", ("can_view_crm", "can_view_crm_dashboard")),
+    ("crm:analytics", ("can_view_crm_analytics",)),
+    ("crm:results", ("can_view_crm_results",)),
+]
 
-    # APIs REST
-    path("api/periods/", views.api_periods_list, name="api_periods_list"),
-    path("api/global-metrics/", views.api_global_metrics, name="api_global_metrics"),
-    path("api/cierre-historico/", views.api_cierre_historico, name="api_cierre_historico"),
-    path("api/dimension-metrics/", views.api_dimension_metrics, name="api_dimension_metrics"),
-    path("api/day-metrics/", views.api_day_metrics, name="api_day_metrics"),
+urlpatterns = [
+    path("", module_root(PAGES), name="index"),
+    path("dashboard/", page("can_view_crm", "can_view_crm_dashboard"), name="dashboard"),
+    path("analytics/", page("can_view_crm_analytics"), name="analytics"),
+    path("results/", page("can_view_crm_results"), name="results"),
 ]

@@ -13,9 +13,9 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Link } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Menu, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { cn } from '@/shared/lib/cn';
 import { usePermissions } from '@/shared/hooks/usePermissions';
@@ -82,7 +82,7 @@ function EnlacePagina({ page, active, onNavigate }: EnlacePaginaProps) {
   const Icon = page.icon;
   return (
     <Link
-      href={page.href}
+      to={page.href}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={cn(
@@ -194,7 +194,7 @@ function IconoModulo({ item, active, activeHref }: IconoModuloProps) {
       }}
     >
       <Link
-        href={item.pages[0].href}
+        to={item.pages[0].href}
         aria-label={item.name}
         aria-haspopup="true"
         aria-expanded={posicion !== null}
@@ -245,9 +245,8 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
   const moduloActivo = ubicacion?.item.module;
   const activeHref = ubicacion?.page.href;
 
-  // Cada página monta su propio AppLayout, así que esto se relee al navegar:
-  // el módulo de la página actual siempre llega desplegado, aunque se hubiera
-  // recogido antes, y los demás quedan como el usuario los dejó.
+  // Cada página monta su propio AppLayout: el módulo de la página actual
+  // siempre llega desplegado y los demás quedan como el usuario los dejó.
   const [abiertos, setAbiertos] = useState(() => {
     const iniciales = leerAbiertos();
     if (moduloActivo) iniciales.add(moduloActivo);
@@ -278,7 +277,7 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
             compact ? 'justify-center' : 'justify-start',
           )}
         >
-          <Link href="/" onClick={onNavigate} className={cn('flex items-center', !compact && 'w-full')}>
+          <Link to="/" onClick={onNavigate} className={cn('flex items-center', !compact && 'w-full')}>
             <img
               src={compact ? `/static/img/isotipo_sidebar${sufijo}.png` : `/static/img/logo_sidebar${sufijo}.png`}
               alt="NetOwl"
@@ -314,7 +313,8 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
       <UserMenu
         username={username}
         canViewUsers={canViewUsers}
-        isUsersPageActive={url.startsWith('/auth/users')}
+        canManageTokens={can(PERMISSIONS.MANAGE_API_TOKENS)}
+        url={url}
         compact={compact}
         onNavigate={onNavigate}
         onToggleCollapsed={onToggleCollapsed}
@@ -366,7 +366,7 @@ export function MobileTopBar({ onOpenMenu }: MobileTopBarProps) {
       >
         <Menu className="h-5 w-5" />
       </button>
-      <Link href="/" className="flex items-center">
+      <Link to="/" className="flex items-center">
         <img
           src={tema === 'claro' ? '/static/img/logo_sidebar_light.png' : '/static/img/logo_sidebar.png'}
           alt="NetOwl"

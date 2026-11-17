@@ -10,7 +10,6 @@
  */
 
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
 import { Activity, Calendar, Clock, Loader2, RefreshCw, Timer } from 'lucide-react';
 
 import { DIMENSION_CONFIG } from '@/shared/constants/labels';
@@ -24,6 +23,7 @@ import { colorTramo } from '../../charts/lifetimeChart';
 import type { LifetimeDimensionFila, LifetimeMes, LifetimeResumen } from '../../types';
 import { LifetimeExportButton } from './LifetimeExportButton';
 import { LifetimeTramosPanel } from './LifetimeTramosPanel';
+import { useVisit } from '@/shared/page/PageData';
 
 interface LifetimeViewProps {
   meses: string[];
@@ -106,6 +106,7 @@ function ResumenMedida({ resumen, color }: { resumen: LifetimeResumen; color: 'b
 }
 
 export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
+  const visit = useVisit();
   const [activeDimension, setActiveDimension] = useState('sucursal');
   const activeLabel = DIMENSION_CONFIG[activeDimension]?.label ?? activeDimension;
 
@@ -120,7 +121,7 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
   };
 
   const cambiarMes = (mes: string) =>
-    router.get('/subscriptions/lifetime/', { period: mes }, { preserveScroll: true, preserveState: true });
+    visit({ period: mes });
 
   const toolbar = (
     <div className="flex flex-wrap items-start gap-4">

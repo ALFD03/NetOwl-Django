@@ -8,7 +8,6 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
-import { router } from '@inertiajs/react';
 import { AlertTriangle, Pencil, Save, Undo2 } from 'lucide-react';
 
 import { getApiErrorMessage } from '@/shared/lib/api/client';
@@ -19,6 +18,8 @@ import { cambiosPendientes, erroresCampos, type Cambio } from '../lib/condicione
 import type { ActualizacionCondiciones, ComisionesCondicionesProps, CondicionesComision } from '../types';
 import { PeriodoCard } from './condiciones/PeriodoCard';
 import { PlanesPymeCard } from './condiciones/PlanesPymeCard';
+import { useReloadPage } from '@/shared/page/PageData';
+import { useBlocker } from 'react-router-dom';
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
@@ -63,6 +64,7 @@ function ListaCambios({ cambios }: { cambios: Cambio[] }) {
  * borradores incluidos, que se recalculan al abrirlos).
  */
 export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeEditarPlanes }: ComisionesCondicionesProps) {
+  const reloadPage = useReloadPage();
   const [draft, setDraft] = useState<CondicionesComision>(condiciones);
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -86,16 +88,14 @@ export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeE
     if (!sucio) return undefined;
     const alCerrar = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', alCerrar);
-    const quitar = router.on('before', (event) => {
-      // Las recargas parciales (la de después de guardar) no salen de la página.
-      if (event.detail.visit.only.length) return undefined;
-      return window.confirm('Hay cambios sin guardar en las condiciones. ¿Salir sin guardarlos?');
-    });
-    return () => {
-      window.removeEventListener('beforeunload', alCerrar);
-      quitar();
-    };
+    return () => window.removeEventListener('beforeunload', alCerrar);
   }, [sucio]);
+  const bloqueo = useBlocker(({ currentLocation, nextLocation }) => sucio && currentLocation.pathname !== nextLocation.pathname);
+  useEffect(() => {
+    if (bloqueo.state !== 'blocked') return;
+    if (window.confirm('Hay cambios sin guardar en las condiciones. ¿Salir sin guardarlos?')) bloqueo.proceed();
+    else bloqueo.reset();
+  }, [bloqueo]);
 
   const cambiar = (patch: Partial<CondicionesComision>) => setDraft((d) => ({ ...d, ...patch }));
 
@@ -114,7 +114,7 @@ export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeE
       });
       setEditando(false);
       setEstado({ type: 'success', text: respuesta.message });
-      router.reload({ only: ['condiciones', 'actualizacion'] });
+      void reloadPage();
     } catch (err: unknown) {
       setEstado({ type: 'error', text: getApiErrorMessage(err, 'No se pudieron guardar las condiciones.') });
     } finally {

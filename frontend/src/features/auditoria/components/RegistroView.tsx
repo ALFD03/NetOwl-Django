@@ -9,7 +9,6 @@
  */
 
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
 import { AlertTriangle, Filter, ScrollText, Search, ShieldCheck } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
@@ -23,6 +22,7 @@ import { formatInteger } from '@/shared/utils/formatters/number';
 import type {
   AuditoriaRegistroProps, FiltrosAuditoria, RegistroAuditoria, RegistroAuditoriaDetalle, ResultadoAuditoria,
 } from '../types';
+import { useVisit } from '@/shared/page/PageData';
 
 const TODOS = '__todos__';
 
@@ -58,6 +58,7 @@ const COLUMNAS: Column<RegistroAuditoria>[] = [
 ];
 
 export function RegistroView({ registros, total, limite, filtros, opciones }: AuditoriaRegistroProps) {
+  const visit = useVisit();
   const [borrador, setBorrador] = useState<FiltrosAuditoria>(filtros);
   const [abierto, setAbierto] = useState<RegistroAuditoriaDetalle | null>(null);
   const [cargando, setCargando] = useState(false);
@@ -65,8 +66,7 @@ export function RegistroView({ registros, total, limite, filtros, opciones }: Au
 
   const aplicar = (siguiente: FiltrosAuditoria) => {
     setBorrador(siguiente);
-    const params = Object.fromEntries(Object.entries(siguiente).filter(([, valor]) => valor));
-    router.get('/auditoria/', params, { preserveState: true, preserveScroll: true });
+    visit({ ...siguiente });
   };
   const cambiar = (campo: keyof FiltrosAuditoria, valor: string) =>
     aplicar({ ...borrador, [campo]: valor === TODOS ? '' : valor });

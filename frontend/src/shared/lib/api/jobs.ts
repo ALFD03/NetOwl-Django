@@ -72,13 +72,13 @@ export interface JobQueue {
 }
 
 export const jobsApi = {
-  fetch: async (id: string) => (await apiClient.get<AnalysisJob>(`/imports/api/jobs/${id}/`)).data,
+  fetch: async (id: string) => (await apiClient.get<AnalysisJob>(`/api/imports/jobs/${id}/`)).data,
 
-  queue: async () => (await apiClient.get<JobQueue>('/imports/api/jobs/queue/')).data,
+  queue: async () => (await apiClient.get<JobQueue>('/api/imports/jobs/queue/')).data,
 
   /** Open run of a module, so a reloaded page can re-attach to it. */
   active: async (module: JobModule) =>
-    (await apiClient.get<{ job: AnalysisJob | null }>('/imports/api/jobs/active/', { params: { module } }))
+    (await apiClient.get<{ job: AnalysisJob | null }>('/api/imports/jobs/active/', { params: { module } }))
       .data.job,
 
   /**
@@ -90,7 +90,7 @@ export const jobsApi = {
    */
   cancel: async (id: string) =>
     (await apiClient.post<{ status: string; message: string; job: AnalysisJob }>(
-      `/imports/api/jobs/${id}/cancel/`,
+      `/api/imports/jobs/${id}/cancel/`,
     )).data,
 };
 

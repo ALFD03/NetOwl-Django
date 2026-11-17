@@ -23,7 +23,7 @@ export async function fetchSupportBreakdown(
   request: SupportBreakdownRequest,
 ): Promise<SupportBreakdownResponse> {
   const { data } = await apiClient.get<SupportBreakdownResponse>(
-    '/support/api/breakdown/',
+    '/api/support/breakdown/',
     { params: request },
   );
   return data;

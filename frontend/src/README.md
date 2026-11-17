@@ -1,6 +1,6 @@
 # Frontend architecture
 
-React + TypeScript, migrating from Inertia to a SPA (React Router + TanStack Query) over `/api/`. Tailwind for styling, Chart.js for charts.
+React + TypeScript SPA (React Router + TanStack Query) over `/api/`. Tailwind for styling, Chart.js for charts.
 
 > El inventario de esta capa —paginas, features, kit compartido y como llega el
 > dato— esta en `docs/09-frontend.md`. Este documento sigue siendo el normativo:
@@ -10,10 +10,12 @@ React + TypeScript, migrating from Inertia to a SPA (React Router + TanStack Que
 
 ```
 src/
-├── app/          Bootstrap and routes: main.tsx, spa.tsx, routes.tsx, inertia.tsx
+├── app/          Bootstrap and routes: main.tsx, spa.tsx, routes.tsx, apiPage.tsx
 ├── shared/       Reusable across every module. Knows nothing about any feature.
 │   ├── ui/       The component kit, grouped by kind (see below)
 │   ├── layout/   AppLayout, Sidebar (the navigation tree), UserMenu
+│   ├── page/     PageData: usePageProps, useReloadPage, useVisit
+│   ├── auth/     AuthProvider / useAuth (the account from /api/auth/me/)
 │   ├── charts/   Chart.js wrappers, shared options, registration
 │   ├── lib/      cn(), colour helpers, api client, http error handling, daySeries
 │   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts, useDayPayload, useTheme
@@ -22,7 +24,7 @@ src/
 │   └── types/    cross-cutting types only
 ├── features/     Domain logic, one folder per module
 │   └── <module>/{components,hooks,types.ts,index.ts}
-└── pages/        Page shells (SPA routes or Inertia components) — nothing else
+└── pages/        Page shells, one per route — nothing else
 ```
 
 ## The day bar
@@ -60,9 +62,10 @@ analysis. `shared/ui/inputs/DayProgressBar` is the same component in all three.
 ## The three rules
 
 **1. `pages/` is only imported by `app/`.**
-SPA pages are registered in `app/routes.tsx`. Pages not migrated yet are still named by
-Django as a string (`render_inertia(request, "CRM/Dashboard")`) and resolved by the glob in
-`app/inertia.tsx`: renaming one of those breaks the backend silently, at runtime.
+Every page is registered in `app/routes.tsx` with the `/api/` endpoint that feeds it:
+`apiPage(endpoint, load)` fetches it with the URL's parameters and passes the JSON as
+props. Below the page, `usePageProps()` reads that data, `useVisit()` changes the URL's
+parameters (refetching without unmounting) and `useReloadPage()` refetches after a write.
 
 Pages hold no logic. A page picks a layout and a feature view. It has no title: the
 heading is the breadcrumb ("Module › Page"), derived from the URL, so the page declares
@@ -280,8 +283,9 @@ prefer `dvh` to `vh`/`h-screen`: on a phone `100vh` includes the address bar.
    A page's sub-routes (`eta-report/config/`) hang from the page whose `href` is their
    longest prefix.
 2. Create `features/<module>/` with `types.ts`, `hooks/`, `components/`, `index.ts`.
-3. Create the page shells under `pages/<Module>/`, matching the names the Django
-   views pass to `inertia_render`.
+3. Create the page shells under `pages/<Module>/` and register them in `app/routes.tsx`
+   with their endpoint; on the Django side, a `page(...)` route in the module's `urls.py`
+   and the endpoint in its `api_urls.py`.
 
 ## Async actions
 

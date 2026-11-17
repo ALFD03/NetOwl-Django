@@ -7,6 +7,5 @@
 export * from './auth';
 export * from './crm';
 export * from './domain';
-export * from './inertia';
 export * from './navigation';
 export * from './subscriptions';

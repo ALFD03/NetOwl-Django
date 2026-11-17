@@ -1,41 +1,30 @@
-"""Enrutamiento URL para el modulo Subscriptions."""
+"""Páginas de `/subscriptions/`."""
+
 from django.urls import path
 
-from services.catalogos.views import redirigir_config_antigua
-from services.subscriptions import views, views_eta
+from services.config.pages import module_root, page
 
 app_name = "subscriptions"
 
-urlpatterns = [
-    path("", views.index, name="index"),
-    path("dashboard/", views.dashboard, name="dashboard"),
-    path("analytics/", views.analytics, name="analytics"),
-    path("results/", views.results, name="results"),
-    path("results/<str:periodo>/", views.results, name="results_detail"),
-    path("lifetime/", views.lifetime, name="lifetime"),
-    path("sales-report/", views.sales_report, name="sales_report"),
-    path("eta-report/", views_eta.eta_report, name="eta_report"),
-    path("eta-report/config/", views_eta.eta_config_view, name="eta_config"),
-    # Los catalogos se mudaron a su propio modulo; la ruta vieja sigue
-    # respondiendo porque hay enlaces guardados y avisos que la usaban.
-    path("config/", redirigir_config_antigua),
-    path("business-units/", views.business_units, name="business_units"),
+PAGES = [
+    ("subscriptions:dashboard", ("can_view_subscriptions", "can_view_subs_dashboard")),
+    ("subscriptions:analytics", ("can_view_subs_analytics",)),
+    ("subscriptions:results", ("can_view_subs_results",)),
+    ("subscriptions:lifetime", ("can_view_subs_lifetime",)),
+    ("subscriptions:sales_report", ("can_view_subs_sales",)),
+    ("subscriptions:business_units", ("can_view_subs_business_units",)),
+    ("subscriptions:eta_report", ("can_view_eta",)),
+]
 
-    path("api/dashboard-data/", views.api_dashboard_data, name="api_dashboard_data"),
-    path("api/analytics-data/", views.api_analytics_data, name="api_analytics_data"),
-    path("api/periods/", views.api_periods_list, name="api_periods_list"),
-    path("api/results/", views.api_results_list, name="api_results_list"),
-    path("api/results/<str:periodo>/", views.api_results_detail, name="api_results_detail"),
-    path("api/lifecycle/run/", views.api_lifecycle_run, name="api_lifecycle_run"),
-    path("api/lifetime/detalle/", views.api_lifetime_detalle, name="api_lifetime_detalle"),
-    path("api/sales-report/", views.api_sales_report, name="api_sales_report"),
-    path("api/bajas/detalle/", views.api_bajas_detalle, name="api_bajas_detalle"),
-    path("api/eta-report/data/", views_eta.api_eta_report_data, name="api_eta_report_data"),
-    path("api/eta-report/lock/", views_eta.api_eta_report_lock, name="api_eta_report_lock"),
-    path("api/eta-report/tasa/", views_eta.api_eta_report_tasa, name="api_eta_report_tasa"),
-    path("api/eta-report/tasa/consultar/", views_eta.api_eta_report_tasa_consultar, name="api_eta_report_tasa_consultar"),
-    path("api/eta-report/tasa/actual/", views_eta.api_eta_report_tasa_actual, name="api_eta_report_tasa_actual"),
-    path("api/eta-report/save-sub-config/", views_eta.api_eta_report_save_sub_config, name="api_eta_report_save_sub_config"),
-    path("api/business-units/", views.api_business_units_report, name="api_business_units_report"),
-    path("api/eta-report/delete-sub-config/", views_eta.api_eta_report_delete_sub_config, name="api_eta_report_delete_sub_config"),
+urlpatterns = [
+    path("", module_root(PAGES), name="index"),
+    path("dashboard/", page("can_view_subscriptions", "can_view_subs_dashboard"), name="dashboard"),
+    path("analytics/", page("can_view_subs_analytics"), name="analytics"),
+    path("results/", page("can_view_subs_results"), name="results"),
+    path("results/<str:period>/", page("can_view_subs_results"), name="results_detail"),
+    path("lifetime/", page("can_view_subs_lifetime"), name="lifetime"),
+    path("sales-report/", page("can_view_subs_sales"), name="sales_report"),
+    path("business-units/", page("can_view_subs_business_units"), name="business_units"),
+    path("eta-report/", page("can_view_eta"), name="eta_report"),
+    path("eta-report/config/", page("can_manage_eta"), name="eta_config"),
 ]

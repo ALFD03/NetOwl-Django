@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Support/Analytics` (`/support/analytics/`).
+ * Página `/support/analytics/`.
  *
  * Moverse por los días no cuesta una consulta. Lo que cambia sale de dos sitios:
  *
@@ -23,7 +23,6 @@
  */
 
 import { useMemo, useState } from 'react';
-import { router } from '@inertiajs/react';
 import { CalendarDays, Layers } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
@@ -46,8 +45,10 @@ import { useDayPayload } from '@/shared/hooks/useDayPayload';
 import { SUPPORT_DAY_METRICS_URL } from '@/shared/lib/api/support';
 import type { DaySeries } from '@/shared/types/domain';
 import { DayProgressBar, DaySummary } from '@/shared/ui';
+import { useVisit } from '@/shared/page/PageData';
 
 export default function SupportAnalytics(props: SupportAnalyticsProps) {
+  const visit = useVisit();
   const { periods = [], selectedPeriod = '', dayMetrics } = props;
   const [selectedGroup, setSelectedGroup] = useState('');
   const [dimension, setDimension] = useState<SupportDimension>('zona');
@@ -88,7 +89,7 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
 
   /** The period is the only server-side filter; group and dimension are local. */
   const reload = (period: string) =>
-    router.get('/support/analytics/', { period }, { preserveState: true });
+    visit({ period });
 
   // Las tarjetas del día siguen al selector de grupo, como el resto de la página.
   // El mes trae la serie de cada equipo, así que cambiar de grupo no pide nada.

@@ -30,7 +30,7 @@ export function LoginForm() {
     setError('');
     try {
       const user = await login(username.trim(), password);
-      // Las páginas siguen en Inertia: recarga completa.
+      // Carga completa: la página de inicio y su permiso los resuelve Django.
       window.location.assign(safeNext() ?? user.landing ?? '/');
     } catch (err) {
       setError(getApiErrorMessage(err, 'No se pudo iniciar sesión.'));

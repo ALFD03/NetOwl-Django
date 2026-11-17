@@ -1,31 +1,23 @@
-"""Rutas del modulo de soporte, bajo `/support/`."""
+"""Páginas de `/support/`."""
 
-# frontend/support/urls.py
 from django.urls import path
 
-from services.support import views, views_etapas, views_usuarios
+from services.config.pages import module_root, page
 
 app_name = "support"
 
-urlpatterns = [
-    path("", views.index, name="index"),
-    path("dashboard/", views.dashboard, name="dashboard"),
-    path("analytics/", views.analytics, name="analytics"),
-    path("results/", views.results, name="results"),
-    path("users/", views_usuarios.usuarios_view, name="usuarios"),
-    path("etapas/", views_etapas.etapas_view, name="etapas"),
+PAGES = [
+    ("support:dashboard", ("can_view_support", "can_view_support_dashboard")),
+    ("support:analytics", ("can_view_support_analytics",)),
+    ("support:results", ("can_view_support_results",)),
+    ("support:usuarios", ("can_manage_support_users",)),
+]
 
-    # APIs REST
-    path("api/periods/", views.api_periods_list, name="api_periods_list"),
-    path("api/cierre-historico/", views.api_cierre_historico, name="api_cierre_historico"),
-    path("api/global-metrics/", views.api_global_metrics, name="api_global_metrics"),
-    path("api/dimension-metrics/", views.api_dimension_metrics, name="api_dimension_metrics"),
-    path("api/breakdown/", views.api_breakdown, name="api_breakdown"),
-    path("api/day-metrics/", views.api_day_metrics, name="api_day_metrics"),
-    path("api/tickets/", views.api_tickets_list, name="api_tickets_list"),
-    path("api/usuarios/guardar/", views_usuarios.api_usuario_guardar, name="api_usuario_guardar"),
-    path("api/usuarios/eliminar/", views_usuarios.api_usuario_eliminar, name="api_usuario_eliminar"),
-    path("api/usuarios/movimiento/", views_usuarios.api_usuario_movimiento, name="api_usuario_movimiento"),
-    path("api/etapas/guardar/", views_etapas.api_etapa_guardar, name="api_etapa_guardar"),
-    path("api/etapas/eliminar/", views_etapas.api_etapa_eliminar, name="api_etapa_eliminar"),
+urlpatterns = [
+    path("", module_root(PAGES), name="index"),
+    path("dashboard/", page("can_view_support", "can_view_support_dashboard"), name="dashboard"),
+    path("analytics/", page("can_view_support_analytics"), name="analytics"),
+    path("results/", page("can_view_support_results"), name="results"),
+    path("users/", page("can_manage_support_users"), name="usuarios"),
+    path("etapas/", page("can_manage_support_users"), name="etapas"),
 ]

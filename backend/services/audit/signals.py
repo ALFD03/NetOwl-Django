@@ -9,14 +9,14 @@ from .models import AuditLog
 
 @receiver(user_logged_in)
 def log_login(sender, request, user, **kwargs):
-    record(request, module="config", action="login", user=user, description="Inicio de sesión.")
+    record(request, module="auth", action="login", user=user, description="Inicio de sesión.")
 
 
 @receiver(user_logged_out)
 def log_logout(sender, request, user, **kwargs):
     if user is None:
         return
-    record(request, module="config", action="logout", user=user, description="Cierre de sesión.")
+    record(request, module="auth", action="logout", user=user, description="Cierre de sesión.")
 
 
 @receiver(user_login_failed)
@@ -25,7 +25,7 @@ def log_login_failed(sender, credentials, request=None, **kwargs):
     username = str(credentials.get("username") or "")[:150]
     record(
         request,
-        module="config",
+        module="auth",
         action="login_fallido",
         description="Credenciales incorrectas.",
         target=f"username={username}" if username else "",

@@ -41,22 +41,22 @@ async function run(
 }
 
 export const importsApi = {
-  importSubscriptions: (file: File) => upload('/imports/api/import-subscriptions/', file),
-  importLogs: (file: File) => upload('/imports/api/import-logs/', file),
-  importGratis: (file: File) => upload('/imports/api/import-gratis/', file),
-  importFacturas: (file: File) => upload('/imports/api/import-facturas/', file),
-  importCrm: (file: File) => upload('/imports/api/import-crm/', file),
-  importSupport: (file: File) => upload('/imports/api/import-support/', file),
+  importSubscriptions: (file: File) => upload('/api/imports/subscriptions/upload/', file),
+  importLogs: (file: File) => upload('/api/imports/subscriptions/logs/upload/', file),
+  importGratis: (file: File) => upload('/api/imports/subscriptions/free-plans/upload/', file),
+  importFacturas: (file: File) => upload('/api/imports/subscriptions/invoices/upload/', file),
+  importCrm: (file: File) => upload('/api/imports/crm/upload/', file),
+  importSupport: (file: File) => upload('/api/imports/support/upload/', file),
   /** Suma un lote de logs de etapa: no reemplaza, cada log entra una sola vez. */
-  importSupportLogs: (file: File) => upload('/imports/api/import-support-logs/', file),
+  importSupportLogs: (file: File) => upload('/api/imports/support/logs/upload/', file),
   runSubscriptionsAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>
-    run('/imports/api/run-analysis/', month, onProgress),
+    run('/api/imports/subscriptions/run/', month, onProgress),
   runCrmAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>
-    run('/imports/api/run-crm-analysis/', month, onProgress),
+    run('/api/imports/crm/run/', month, onProgress),
   runSupportAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>
-    run('/imports/api/run-support-analysis/', month, onProgress),
+    run('/api/imports/support/run/', month, onProgress),
   /** Varios meses de una vez: un job por mes, encolados en un solo POST. */
-  runSubscriptionsAnalysisBatch: (months: string[]) => startBatch('/imports/api/run-analysis/', months),
-  runCrmAnalysisBatch: (months: string[]) => startBatch('/imports/api/run-crm-analysis/', months),
-  runSupportAnalysisBatch: (months: string[]) => startBatch('/imports/api/run-support-analysis/', months),
+  runSubscriptionsAnalysisBatch: (months: string[]) => startBatch('/api/imports/subscriptions/run/', months),
+  runCrmAnalysisBatch: (months: string[]) => startBatch('/api/imports/crm/run/', months),
+  runSupportAnalysisBatch: (months: string[]) => startBatch('/api/imports/support/run/', months),
 };

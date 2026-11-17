@@ -1,4 +1,4 @@
-/** Página Inertia `Support/Results` (`/support/results/`). */
+/** `/support/results/`. */
 
 import { useEffect } from 'react';
 

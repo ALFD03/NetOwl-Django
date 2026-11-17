@@ -87,10 +87,8 @@ CSRF_FAILURE_VIEW = "services.config.api.endpoint.csrf_failure"
 SESSION_COOKIE_AGE = 8*60*60
 
 # --- Politica de contrasenas ---
-# No existia ninguna: Django aplica una lista vacia si no se define, de modo
-# que `create_user` aceptaba cualquier cosa. Los tres `len(clave) < 8` sueltos
-# que habia en services/config/views.py se sustituyeron por una llamada a
-# `validate_password`, que es lo que lee esta lista (ver `validar_clave`).
+# La lee `validate_password` al crear cuentas y cambiar contraseñas
+# (ver `services/config/api/users.py:check_password`).
 #
 # `min_length` 8 es el minimo del proyecto. Los otros tres validadores siguen
 # siendo los que hacen el trabajo: rechazan la contrasena parecida al nombre de
@@ -153,7 +151,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
 # entrada: usuario y contrasena caben de sobra. El 1 GB de arriba es para las
 # importaciones, que exigen sesion; sin este tope cualquiera podia mandar
 # cuerpos de 1 GB al login y llenar la memoria de los workers
-# (ver netowl_web/middleware.py:LimiteCuerpoAnonimoMiddleware).
+# (ver netowl_web/middleware.py:AnonymousBodyLimitMiddleware).
 ANON_MAX_BODY_SIZE = 16 * 1024
 
 # --- Aplicaciones instaladas ---
@@ -171,7 +169,6 @@ INSTALLED_APPS = [
     "services.comisiones",          # Comisiones de la fuerza de ventas
     "services.config",              # Autenticacion y permisos
     "services.audit",               # Auditoría (label `auditoria`)
-    "inertia",
 ]
 
 # --- Middleware ---
@@ -187,20 +184,15 @@ MIDDLEWARE = [
     # Token de API en `/api/`: sustituye a la sesión antes de que nadie mire request.user.
     "services.config.api.middleware.ApiTokenMiddleware",
     # Antes que el CSRF y que cualquier vista: un anonimo no sube nada (ver la clase).
-    "netowl_web.middleware.LimiteCuerpoAnonimoMiddleware",
+    "netowl_web.middleware.AnonymousBodyLimitMiddleware",
     # Antes del limitador, para anotar tambien los 429.
     "services.audit.middleware.AuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
     "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
-    "netowl_web.middleware.RateLimitMiddleware",
-    "inertia.middleware.InertiaMiddleware",
-    "netowl_web.middleware.InertiaShareMiddleware", 
 ]
 
 # módulo raíz de las URLs
 ROOT_URLCONF = "netowl_web.urls"
-
-INERTIA_LAYOUT = "app.html"
 
 # Servir los assets desde el dev-server de Vite en vez del bundle compilado.
 # Es una decision de flujo de trabajo, no de seguridad: por eso tiene su propia

@@ -1,28 +1,19 @@
-"""Pantallas y endpoints del modulo de importaciones.
+"""`/api/imports/`: carga de CSV, lanzamiento de análisis y su seguimiento.
 
-Dos cosas distintas conviven aqui: **la carga de CSV**, que ocurre dentro de la
-peticion, y **el lanzamiento de analisis**, que solo encola y responde al
-instante (el calculo lo hace el worker; ver `jobs.py` y `tasks.py`).
-
-Excepcion deliberada de esta app: los endpoints de mutacion aceptan el permiso
-granular **o** el global heredado (`can_import_data` / `can_run_calculations`),
-para que las cuentas que ya los tenian no pierdan acceso. Ese patron OR debe
-conservarse.
+La carga ocurre dentro de la petición; el análisis solo se encola (ver `jobs.py`).
+Las mutaciones aceptan el permiso granular **o** el global heredado
+(`can_import_data` / `can_run_calculations`).
 """
 
+from __future__ import annotations
+
 import logging
-from functools import wraps
+from collections.abc import Callable
 
-from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from django.shortcuts import redirect
-from django.views.decorators.http import require_POST
-from django_ratelimit.decorators import ratelimit
-from inertia import render as render_inertia
-
-from services.config.decorators import deny, permission_required, permissions_all_required
-from services.config.uploads import cleanup_tempfile, handle_csv_upload
-from services.crm.analytics import campos_odoo_importacion as campos_odoo_crm
+from services.config.api import ApiError, endpoint
+from services.config.auth import has_permission
+from services.config.uploads import uploaded_csv
+from services.crm.analytics import campos_odoo_importacion as crm_odoo_fields
 from services.crm.analytics import import_crm_csv
 from services.crm.analytics.config import REQUIRED_CRM_HEADERS
 from services.subscriptions.analytics import (
@@ -44,7 +35,7 @@ from services.support.analytics import (
     import_support_logs_csv,
     resumen_logs_cargados,
 )
-from services.support.analytics import campos_odoo_importacion as campos_odoo_support
+from services.support.analytics import campos_odoo_importacion as support_odoo_fields
 from services.support.analytics.config import REQUIRED_SUPPORT_HEADERS
 
 from .history import register_import_log
@@ -53,519 +44,315 @@ from .models import AnalysisJob, ImportActionLog
 
 logger = logging.getLogger(__name__)
 
-TEMPLATE_PREFIX = "imports/"
+INTERNAL_ERROR = "Error interno del servidor. Consulte el registro de la aplicación."
 
-ERROR_GENERICO = "Error interno del servidor. Consulte el registro de la aplicación."
+# Los análisis que leen lo que reemplaza cada importación: importar mientras uno
+# calcula le cambiaría los datos a mitad de camino.
+SUBS_ANALYSES = ("subs_analysis", "subs_lifetime")
+CRM_ANALYSES = ("crm_analysis",)
+SUPPORT_ANALYSES = ("support_analysis",)
 
-
-# Los analisis que leen lo que reemplaza cada importacion. Importar mientras uno
-# de ellos calcula le cambiaria los datos a mitad de camino; ver `bloqueo_modulos`.
-ANALISIS_DE_SUSCRIPCIONES = ('subs_analysis', 'subs_lifetime')
-ANALISIS_DE_CRM = ('crm_analysis',)
-ANALISIS_DE_SOPORTE = ('support_analysis',)
-
-ETIQUETAS_ANALISIS = {
-    'subs_analysis': 'churn',
-    'subs_lifetime': 'ciclo de vida',
-    'crm_analysis': 'CRM',
-    'support_analysis': 'soporte',
+ANALYSIS_LABELS = {
+    "subs_analysis": "churn",
+    "subs_lifetime": "ciclo de vida",
+    "crm_analysis": "CRM",
+    "support_analysis": "soporte",
 }
 
+SUBS_IMPORT = ["can_import_subs", "can_import_data"]
+CRM_IMPORT = ["can_import_crm", "can_import_data"]
+SUPPORT_IMPORT = ["can_import_support", "can_import_data"]
 
-def sin_analisis_en_curso(*modulos):
-    """Ejecuta la importacion con el turno de los analisis que leen sus tablas.
 
-    Si alguno esta calculando (o hay otra importacion de lo mismo en marcha)
-    responde 409 sin tocar nada: el usuario reintenta cuando termine, que es
-    mejor que un analisis con la mitad de los datos de un export y la mitad
-    del siguiente.
+class ImportRejected(Exception):
+    """El fichero no se puede cargar por una razón que el usuario debe leer."""
+
+    def __init__(self, message: str, status: int = 400, payload: dict | None = None):
+        super().__init__(message)
+        self.message, self.status, self.payload = message, status, payload or {}
+
+
+def _import(
+    request,
+    *,
+    log_module: str,
+    analyses: tuple[str, ...],
+    run: Callable[[str], tuple[int, str, str, dict]],
+    headers=None,
+    upload_error: str,
+    failure: str,
+):
+    """Recibe el CSV, lo carga con `run(path)` y deja el desenlace en el historial.
+
+    `run` devuelve `(filas, mensaje, detalle, extra)`. 409 si un análisis que lee
+    esas tablas está en curso.
     """
-    def decorador(vista):
-        @wraps(vista)
-        def envuelta(request, *args, **kwargs):
-            with bloqueo_modulos(modulos) as (turno, ocupado):
-                if turno is None:
-                    return JsonResponse({
-                        "status": "error",
-                        "message": (
-                            f"Hay un análisis de {ETIQUETAS_ANALISIS.get(ocupado, ocupado)} en curso "
-                            "(o una importación de los mismos datos). Espera a que termine e "
-                            "inténtalo de nuevo: importar ahora le cambiaría los datos a mitad de cálculo."
-                        ),
-                    }, status=409)
-                return vista(request, *args, **kwargs)
-        return envuelta
-    return decorador
+    upload = request.FILES.get("csv_file")
+    file_name = upload.name if upload else "Desconocido"
+    with bloqueo_modulos(analyses) as (turn, busy):
+        if turn is None:
+            raise ApiError(
+                f"Hay un análisis de {ANALYSIS_LABELS.get(busy, busy)} en curso (o una importación de los "
+                "mismos datos). Espera a que termine e inténtalo de nuevo: importar ahora le cambiaría los "
+                "datos a mitad de cálculo.",
+                409,
+            )
+        received = False
+        try:
+            with uploaded_csv(request, required_headers=headers) as path:
+                received = True
+                try:
+                    rows, message, detail, extra = run(path)
+                except ImportRejected as exc:
+                    status = "warning" if exc.status == 409 and exc.payload else "error"
+                    register_import_log(request.user, log_module, file_name, 0, status, exc.message, exc.message)
+                    if exc.payload:
+                        return {"status": "catalogo", "message": exc.message, **exc.payload}, exc.status
+                    raise ApiError(exc.message, exc.status) from exc
+                except Exception:
+                    # El detalle va al log del servidor: psycopg2 nombra esquema, tabla y columnas.
+                    logger.exception("Error al importar %s", log_module)
+                    register_import_log(request.user, log_module, file_name, 0, "error", failure, INTERNAL_ERROR)
+                    raise ApiError(INTERNAL_ERROR, 500) from None
+        except ApiError:
+            if not received:
+                register_import_log(request.user, log_module, file_name, 0, "error", upload_error)
+            raise
+    register_import_log(request.user, log_module, file_name, rows, "success", message, detail)
+    return {"status": "success", "message": message, **extra}
 
 
-# Pestanas del modulo en el orden en que aparecen en la cabecera, con el permiso
-# que exige cada una. La usa `imports_index_view` para elegir destino.
-IMPORT_TABS = [
-    ('imports:subscriptions', 'can_view_imports_subs'),
-    ('imports:crm', 'can_view_imports_crm'),
-    ('imports:support', 'can_view_imports_support'),
-    ('imports:history', 'can_view_import_history'),
-]
+@endpoint(perms=["can_view_imports", "can_view_imports_subs"], require_all=True)
+def subscriptions(request):
+    """Las columnas de Odoo que espera la carga de suscripciones."""
+    return {"camposOdoo": campos_odoo_importacion()}
 
 
-@login_required
-@permission_required('can_view_imports')
-def imports_index_view(request):
-    """Portada del modulo: lleva a la primera pestana que el usuario si pueda ver.
-
-    Antes `/imports/` era un alias de la pestana de Subscriptions, asi que un
-    usuario con acceso a una sola pestana distinta entraba, se le negaba y se le
-    expulsaba del modulo sin poder llegar nunca a la suya.
-    """
-    profile = getattr(request.user, 'profile', None)
-    for route_name, perm in IMPORT_TABS:
-        if request.user.is_superuser or (profile and profile.has_permission(perm)):
-            return redirect(route_name)
-    return deny(request, "Acceso denegado. No tienes ninguna pestaña de Importaciones asignada.")
+@endpoint(perms=["can_view_imports", "can_view_imports_crm"], require_all=True)
+def crm(request):
+    """Las columnas de Odoo que espera la carga de CRM."""
+    return {"camposOdoo": crm_odoo_fields()}
 
 
-@login_required
-@permissions_all_required('can_view_imports', 'can_view_imports_subs')
-def subscriptions_import_view(request):
-    """Pestana de importacion de suscripciones."""
-    return render_inertia(request, "Imports/Subscriptions", {
-        "section": "subscriptions",
-        "camposOdoo": campos_odoo_importacion(),
-    })
-
-@login_required
-@permissions_all_required('can_view_imports', 'can_view_imports_crm')
-def crm_import_view(request):
-    """Pestana de importacion de CRM."""
-    return render_inertia(request, "Imports/Crm", {
-        "section": "crm",
-        "camposOdoo": campos_odoo_crm(),
-    })
-
-@login_required
-@permissions_all_required('can_view_imports', 'can_view_imports_support')
-def support_import_view(request):
-    """Pestana de importacion de soporte."""
-    return render_inertia(request, "Imports/Support", {
-        "section": "support",
-        "camposOdoo": campos_odoo_support(),
+@endpoint(perms=["can_view_imports", "can_view_imports_support"], require_all=True)
+def support(request):
+    """Las columnas de Odoo de tickets y logs, y si ya hay logs cargados."""
+    return {
+        "camposOdoo": support_odoo_fields(),
         "camposOdooLogs": campos_odoo_logs(),
         "logsCargados": resumen_logs_cargados(),
-    })
-
-@login_required
-@permissions_all_required('can_view_imports', 'can_view_import_history')
-def history_view(request):
-    """Historial de acciones: las 200 ultimas importaciones y calculos."""
-    history_data = [log.to_dict() for log in ImportActionLog.objects.all()[:200]]
-    return render_inertia(request, "Imports/History", {
-        "history": history_data,
-        "section": "history"
-    })
+    }
 
 
-@login_required
-@permissions_all_required('can_view_imports', 'can_view_import_history')
-def api_history_list(request):
-    """El mismo historial, en JSON, para recargarlo sin cambiar de pagina."""
-    data = [log.to_dict() for log in ImportActionLog.objects.all()[:200]]
-    return JsonResponse({"history": data})
+@endpoint(perms=["can_view_imports", "can_view_import_history"], require_all=True)
+def history(request):
+    """Las 200 últimas importaciones y cálculos."""
+    return {"history": [log.to_dict() for log in ImportActionLog.objects.all()[:200]]}
 
 
-# --- ACCIONES Y PROCESAMIENTO CON REGISTRO DE HISTORIAL ---
-#
-# El orden de los decoradores importa: `@ratelimit` va **debajo** de
-# `@permission_required`, de modo que una peticion sin permiso se rechaza antes
-# de consumir cuota. Al reves, cualquier cuenta podia agotar el cubo de los
-# calculos (2/m) pidiendo algo que ni siquiera tiene permitido.
-
-@login_required
-@permission_required('can_import_subs', 'can_import_data')
-@ratelimit(key='ip', rate='5/m', block=True)
-@require_POST
-@sin_analisis_en_curso(*ANALISIS_DE_SUSCRIPCIONES)
-def api_import_subscriptions(request):
-    """Importa el export de suscripciones.
-
-    Dos respuestas 409 que no son un fallo del fichero:
-    `ProductosSinCatalogo` (hay productos que el catalogo no reconoce; **no se
-    escribio nada**, la comprobacion corre antes del truncate) y `CatalogoVacio`
-    (no hay ni un plan registrado, que es un problema de configuracion).
-    """
-    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
-    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_SUBS_HEADERS)
-    if error:
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', 'Error en la estructura del archivo CSV.')
-        return error
+def _subscriptions_file(path: str):
     try:
-        rows = import_subscriptions_csv(tmp_path)
-        msg = f"Suscripciones: {rows} filas importadas correctamente."
-        register_import_log(request.user, 'subs_subscriptions', file_name, rows, 'success', msg, f"Procesamiento exitoso de {rows} registros.")
-        return JsonResponse({"status": "success", "message": msg})
-    except ProductosSinCatalogo as e:
-        # No se escribio nada: la comprobacion corre antes del truncate. Se
-        # responde con los productos y las ordenes afectadas para que el
-        # cliente ofrezca crearlos en el catalogo o ignorarlos, en vez de
-        # obligar a volver a subir el fichero a ciegas.
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'warning', str(e), str(e))
-        return JsonResponse({
-            "status": "catalogo",
-            "message": str(e),
-            "productos": e.productos,
-            "ordenes": e.ordenes,
-        }, status=409)
-    except CatalogoVacio as e:
-        # Distinto del anterior a proposito: aqui no falla el fichero sino la
-        # configuracion, y confundirlos mandaba a revisar el export.
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', str(e), str(e))
-        return JsonResponse({"status": "error", "message": str(e)}, status=409)
-    except Exception:
-        # El detalle va al log del servidor, no al cliente: una excepcion de
-        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
-        logger.exception("Error al importar suscripciones")
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', "Fallo al importar.", ERROR_GENERICO)
-        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
-    finally:
-        cleanup_tempfile(tmp_path)
+        rows = import_subscriptions_csv(path)
+    except ProductosSinCatalogo as exc:
+        # No se escribió nada: el cliente ofrece crear los productos o ignorarlos.
+        raise ImportRejected(str(exc), 409, {"productos": exc.productos, "ordenes": exc.ordenes}) from exc
+    except CatalogoVacio as exc:
+        raise ImportRejected(str(exc), 409) from exc
+    message = f"Suscripciones: {rows} filas importadas correctamente."
+    return rows, message, f"Procesamiento exitoso de {rows} registros.", {}
 
 
-@login_required
-@permission_required('can_import_subs', 'can_import_data')
-@ratelimit(key='ip', rate='5/m', block=True)
-@require_POST
-@sin_analisis_en_curso(*ANALISIS_DE_SUSCRIPCIONES)
-def api_import_gratis(request):
-    """Importa el export de planes gratuitos y detecta desde cuando lo son."""
-    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
-    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_GRATIS_HEADERS)
-    if error:
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', 'Error en la estructura del archivo de planes gratuitos.')
-        return error
+@endpoint(methods=["POST"], perms=SUBS_IMPORT, rate="5/m")
+def import_subscriptions(request):
+    """El export de suscripciones. 409 `catalogo` si hay productos fuera del catálogo."""
+    return _import(
+        request, log_module="subs_subscriptions", analyses=SUBS_ANALYSES, run=_subscriptions_file,
+        headers=REQUIRED_SUBS_HEADERS, upload_error="Error en la estructura del archivo CSV.",
+        failure="Fallo al importar.",
+    )
+
+
+def _free_plans_file(path: str):
+    rows = import_gratis_csv(path)
+    return (rows, f"Planes gratuitos: {rows} suscripciones importadas y fechadas.",
+            f"Deteccion de inicio de plan gratuito sobre {rows} suscripciones.", {})
+
+
+@endpoint(methods=["POST"], perms=SUBS_IMPORT, rate="5/m")
+def import_free_plans(request):
+    """El export de planes gratuitos: detecta desde cuándo lo son."""
+    return _import(
+        request, log_module="subs_subscriptions", analyses=SUBS_ANALYSES, run=_free_plans_file,
+        headers=REQUIRED_GRATIS_HEADERS, upload_error="Error en la estructura del archivo de planes gratuitos.",
+        failure="Fallo al importar planes gratuitos.",
+    )
+
+
+def _invoices_file(path: str):
     try:
-        rows = import_gratis_csv(tmp_path)
-        msg = f"Planes gratuitos: {rows} suscripciones importadas y fechadas."
-        register_import_log(request.user, 'subs_subscriptions', file_name, rows, 'success', msg, f"Deteccion de inicio de plan gratuito sobre {rows} suscripciones.")
-        return JsonResponse({"status": "success", "message": msg})
-    except Exception:
-        # El detalle va al log del servidor, no al cliente: una excepcion de
-        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
-        logger.exception("Error al importar planes gratuitos")
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', "Fallo al importar planes gratuitos.", ERROR_GENERICO)
-        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
-    finally:
-        cleanup_tempfile(tmp_path)
+        invoices = import_facturas_csv(path)
+    except FaltanColumnasFacturas as exc:
+        raise ImportRejected(str(exc)) from exc
+    return invoices, f"Facturas: {invoices} facturas importadas.", f"Carga del export de facturas con {invoices} facturas.", {}
 
 
-@login_required
-@permission_required('can_import_subs', 'can_import_data')
-@ratelimit(key='ip', rate='5/m', block=True)
-@require_POST
-@sin_analisis_en_curso(*ANALISIS_DE_SUSCRIPCIONES)
-def api_import_facturas(request):
-    """Importa el export global de facturas de suscripciones (lo usa Comisiones).
+@endpoint(methods=["POST"], perms=SUBS_IMPORT, rate="5/m")
+def import_invoices(request):
+    """El export global de facturas (lo usa Comisiones). Las cabeceras las valida el importador."""
+    return _import(
+        request, log_module="subs_subscriptions", analyses=SUBS_ANALYSES, run=_invoices_file,
+        upload_error="Error al recibir el archivo de facturas.", failure="Fallo al importar facturas.",
+    )
 
-    Las cabeceras se comprueban en el importador y no en `handle_csv_upload`,
-    porque se aceptan con o sin tildes.
-    """
-    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
-    tmp_path, error = handle_csv_upload(request)
-    if error:
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', 'Error al recibir el archivo de facturas.')
-        return error
+
+def _subscription_logs_file(path: str):
+    rows = import_logs_csv(path)
+    return rows, f"Logs de Suscripciones: {rows} filas importadas.", f"Carga masiva de logs finalizada con {rows} filas.", {}
+
+
+@endpoint(methods=["POST"], perms=SUBS_IMPORT, rate="5/m")
+def import_subscription_logs(request):
+    """Carga el CSV de logs de suscripciones."""
+    return _import(
+        request, log_module="subs_logs", analyses=SUBS_ANALYSES, run=_subscription_logs_file,
+        headers=REQUIRED_LOGS_HEADERS, upload_error="Error en la estructura del archivo de Logs.",
+        failure="Fallo en carga de logs.",
+    )
+
+
+def _crm_file(path: str):
+    clients, logs = import_crm_csv(path)
+    return (clients, f"CRM: Importados {clients} clientes y {logs} logs exitosamente.",
+            f"Clientes: {clients} | Logs: {logs}", {})
+
+
+@endpoint(methods=["POST"], perms=CRM_IMPORT, rate="5/m")
+def import_crm(request):
+    """El export de CRM: oportunidades y movimientos."""
+    return _import(
+        request, log_module="crm", analyses=CRM_ANALYSES, run=_crm_file, headers=REQUIRED_CRM_HEADERS,
+        upload_error="Estructura inválida para Odoo CRM.", failure="Fallo en importación CRM.",
+    )
+
+
+def _support_file(path: str):
+    rows = import_support_csv(path)
+    return rows, f"Technical Support: {rows} tickets importados correctamente.", f"Carga realizada exitosamente con {rows} registros.", {}
+
+
+@endpoint(methods=["POST"], perms=SUPPORT_IMPORT, rate="5/m")
+def import_support(request):
+    """Carga el CSV de tickets de soporte."""
+    return _import(
+        request, log_module="support", analyses=SUPPORT_ANALYSES, run=_support_file,
+        headers=REQUIRED_SUPPORT_HEADERS, upload_error="Error en la estructura del CSV de Support.",
+        failure="Fallo al importar tickets.",
+    )
+
+
+def _support_logs_file(path: str):
     try:
-        facturas = import_facturas_csv(tmp_path)
-        msg = f"Facturas: {facturas} facturas importadas."
-        register_import_log(request.user, 'subs_subscriptions', file_name, facturas, 'success', msg, f"Carga del export de facturas con {facturas} facturas.")
-        return JsonResponse({"status": "success", "message": msg})
-    except FaltanColumnasFacturas as e:
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', str(e), str(e))
-        return JsonResponse({"status": "error", "message": str(e)}, status=400)
-    except Exception:
-        # El detalle va al log del servidor, no al cliente: una excepcion de
-        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
-        logger.exception("Error al importar facturas")
-        register_import_log(request.user, 'subs_subscriptions', file_name, 0, 'error', "Fallo al importar facturas.", ERROR_GENERICO)
-        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
-    finally:
-        cleanup_tempfile(tmp_path)
+        r = import_support_logs_csv(path)
+    except LogsInvalidos as exc:
+        raise ImportRejected(str(exc)) from exc
+    message = (
+        f"Logs de soporte: {r['nuevos']} nuevos y {r['repetidos']} que ya estaban, "
+        f"de {r['tickets']} tickets ({r['desde']} a {r['hasta']})."
+    )
+    detail = (
+        f"Lote de logs: {r['filas']} filas leídas, {r['nuevos']} nuevas, {r['repetidos']} repetidas, "
+        f"{r['duplicados_en_archivo']} duplicadas dentro del archivo."
+    )
+    return r["nuevos"], message, detail, {"lote": r, "cargados": resumen_logs_cargados()}
 
 
-@login_required
-@permission_required('can_import_subs', 'can_import_data')
-@ratelimit(key='ip', rate='5/m', block=True)
-@require_POST
-@sin_analisis_en_curso(*ANALISIS_DE_SUSCRIPCIONES)
-def api_import_logs(request):
-    """Importa el export de logs de suscripciones."""
-    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
-    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_LOGS_HEADERS)
-    if error:
-        register_import_log(request.user, 'subs_logs', file_name, 0, 'error', 'Error en la estructura del archivo de Logs.')
-        return error
-    try:
-        rows = import_logs_csv(tmp_path)
-        msg = f"Logs de Suscripciones: {rows} filas importadas."
-        register_import_log(request.user, 'subs_logs', file_name, rows, 'success', msg, f"Carga masiva de logs finalizada con {rows} filas.")
-        return JsonResponse({"status": "success", "message": msg})
-    except Exception:
-        # El detalle va al log del servidor, no al cliente: una excepcion de
-        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
-        logger.exception("Error al importar logs de suscripciones")
-        register_import_log(request.user, 'subs_logs', file_name, 0, 'error', "Fallo en carga de logs.", ERROR_GENERICO)
-        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
-    finally:
-        cleanup_tempfile(tmp_path)
+@endpoint(methods=["POST"], perms=SUPPORT_IMPORT, rate="5/m")
+def import_support_logs(request):
+    """Suma un lote de logs de etapa; cada log entra una sola vez por su id."""
+    return _import(
+        request, log_module="support", analyses=SUPPORT_ANALYSES, run=_support_logs_file,
+        upload_error="Error al recibir el archivo de logs de soporte.", failure="Fallo al importar logs de soporte.",
+    )
 
 
-@login_required
-@permission_required('can_import_crm', 'can_import_data')
-@ratelimit(key='ip', rate='5/m', block=True)
-@require_POST
-@sin_analisis_en_curso(*ANALISIS_DE_CRM)
-def api_import_crm(request):
-    """Importa el export de CRM, que se desdobla en oportunidades y movimientos."""
-    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
-    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_CRM_HEADERS)
-    if error:
-        register_import_log(request.user, 'crm', file_name, 0, 'error', 'Estructura inválida para Odoo CRM.')
-        return error
-    try:
-        rows_clients, rows_logs = import_crm_csv(tmp_path)
-        msg = f"CRM: Importados {rows_clients} clientes y {rows_logs} logs exitosamente."
-        register_import_log(request.user, 'crm', file_name, rows_clients, 'success', msg, f"Clientes: {rows_clients} | Logs: {rows_logs}")
-        return JsonResponse({"status": "success", "message": msg})
-    except Exception:
-        # El detalle va al log del servidor, no al cliente: una excepcion de
-        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
-        logger.exception("Error al importar el export de CRM")
-        register_import_log(request.user, 'crm', file_name, 0, 'error', "Fallo en importación CRM.", ERROR_GENERICO)
-        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
-    finally:
-        cleanup_tempfile(tmp_path)
+@endpoint(methods=["POST"], perms=["can_run_subs_analysis", "can_run_calculations"], rate="2/m")
+def run_subscriptions(request):
+    """Encola el análisis mensual de churn."""
+    return lanzar_analisis(request, "subs_analysis")
 
 
-@login_required
-@permission_required('can_import_support', 'can_import_data')
-@ratelimit(key='ip', rate='5/m', block=True)
-@require_POST
-@sin_analisis_en_curso(*ANALISIS_DE_SOPORTE)
-def api_import_support(request):
-    """Importa el export de tickets de soporte."""
-    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
-    tmp_path, error = handle_csv_upload(request, required_headers=REQUIRED_SUPPORT_HEADERS)
-    if error:
-        register_import_log(request.user, 'support', file_name, 0, 'error', 'Error en la estructura del CSV de Support.')
-        return error
-    try:
-        rows = import_support_csv(tmp_path)
-        msg = f"Technical Support: {rows} tickets importados correctamente."
-        register_import_log(request.user, 'support', file_name, rows, 'success', msg, f"Carga realizada exitosamente con {rows} registros.")
-        return JsonResponse({"status": "success", "message": msg})
-    except Exception:
-        # El detalle va al log del servidor, no al cliente: una excepcion de
-        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
-        logger.exception("Error al importar tickets de soporte")
-        register_import_log(request.user, 'support', file_name, 0, 'error', "Fallo al importar tickets.", ERROR_GENERICO)
-        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
-    finally:
-        cleanup_tempfile(tmp_path)
+@endpoint(methods=["POST"], perms=["can_run_crm_analysis", "can_run_calculations"], rate="2/m")
+def run_crm(request):
+    """Encola el análisis mensual de CRM."""
+    return lanzar_analisis(request, "crm_analysis")
 
 
-@login_required
-@permission_required('can_import_support', 'can_import_data')
-@ratelimit(key='ip', rate='5/m', block=True)
-@require_POST
-@sin_analisis_en_curso(*ANALISIS_DE_SOPORTE)
-def api_import_support_logs(request):
-    """Suma un lote de logs de etapa de los tickets ("Registros de tiempo").
-
-    No reemplaza nada: cada log entra una sola vez por su id, asi que subir el
-    mismo mes dos veces, o dos lotes que se solapan, no duplica. Las cabeceras
-    se comprueban en el importador, que acepta el prefijo `Registros de tiempo/`
-    con o sin el.
-    """
-    file_name = request.FILES.get("csv_file").name if "csv_file" in request.FILES else "Desconocido"
-    tmp_path, error = handle_csv_upload(request)
-    if error:
-        register_import_log(request.user, 'support', file_name, 0, 'error', 'Error al recibir el archivo de logs de soporte.')
-        return error
-    try:
-        r = import_support_logs_csv(tmp_path)
-        msg = (
-            f"Logs de soporte: {r['nuevos']} nuevos y {r['repetidos']} que ya estaban, "
-            f"de {r['tickets']} tickets ({r['desde']} a {r['hasta']})."
-        )
-        register_import_log(
-            request.user, 'support', file_name, r['nuevos'], 'success', msg,
-            f"Lote de logs: {r['filas']} filas leídas, {r['nuevos']} nuevas, {r['repetidos']} repetidas, "
-            f"{r['duplicados_en_archivo']} duplicadas dentro del archivo.",
-        )
-        return JsonResponse({"status": "success", "message": msg, "lote": r, "cargados": resumen_logs_cargados()})
-    except LogsInvalidos as e:
-        register_import_log(request.user, 'support', file_name, 0, 'error', str(e), str(e))
-        return JsonResponse({"status": "error", "message": str(e)}, status=400)
-    except Exception:
-        # El detalle va al log del servidor, no al cliente: una excepcion de
-        # psycopg2 nombra el esquema, la tabla y las columnas implicadas.
-        logger.exception("Error al importar logs de soporte")
-        register_import_log(request.user, 'support', file_name, 0, 'error', "Fallo al importar logs de soporte.", ERROR_GENERICO)
-        return JsonResponse({"status": "error", "message": ERROR_GENERICO}, status=500)
-    finally:
-        cleanup_tempfile(tmp_path)
+@endpoint(methods=["POST"], perms=["can_run_support_analysis", "can_run_calculations"], rate="2/m")
+def run_support(request):
+    """Encola el análisis mensual de soporte."""
+    return lanzar_analisis(request, "support_analysis")
 
 
-# --- LANZAMIENTO Y SEGUIMIENTO DE ANALISIS ---
-#
-# Los analisis no se ejecutan aqui: tardan minutos y morian contra el timeout
-# del proxy (504) o contra el de gunicorn, dejando el periodo a medio escribir.
-# La vista crea un AnalysisJob, lo encola en Redis y devuelve 202 con su id; el
-# worker lo ejecuta y va escribiendo log y progreso en esa fila, que el cliente
-# sondea con `api_job_detail`.
-
-def _job_visible(request, job):
-    """Quien lanzo el analisis, quien puede ver el historial, y los superusuarios."""
-    if request.user.is_superuser or job.user_id == request.user.id:
-        return True
-    profile = getattr(request.user, 'profile', None)
-    return bool(profile and profile.has_permission('can_view_import_history'))
+def _job_visible(request, job) -> bool:
+    """Quien lo lanzó, quien ve el historial y los superusuarios."""
+    return job.user_id == request.user.id or has_permission(request.user, "can_view_import_history")
 
 
-@login_required
-@permission_required('can_run_subs_analysis', 'can_run_calculations')
-@ratelimit(key='ip', rate='2/m', block=True)
-@require_POST
-def api_run_analysis(request):
-    """Encola el analisis mensual de churn de un mes."""
-    return lanzar_analisis(request, 'subs_analysis')
-
-
-@login_required
-@permission_required('can_run_crm_analysis', 'can_run_calculations')
-@ratelimit(key='ip', rate='2/m', block=True)
-@require_POST
-def api_run_crm_analysis(request):
-    """Encola el analisis de CRM de un mes."""
-    return lanzar_analisis(request, 'crm_analysis')
-
-
-@login_required
-@permission_required('can_run_support_analysis', 'can_run_calculations')
-@ratelimit(key='ip', rate='2/m', block=True)
-@require_POST
-def api_run_support_analysis(request):
-    """Encola el analisis de soporte de un mes."""
-    return lanzar_analisis(request, 'support_analysis')
-
-
-@login_required
-def api_job_detail(request, job_id):
-    """Estado vivo de una ejecucion. Lo sondea la consola de la interfaz.
-
-    Sin `@ratelimit` a proposito: el sondeo es cada pocos segundos durante todo
-    el analisis y el limite de las acciones de calculo (2/m) lo cortaria.
-    """
+def _visible_job(request, job_id) -> AnalysisJob:
     job = AnalysisJob.objects.filter(pk=job_id).first()
     if job is None or not _job_visible(request, job):
-        return JsonResponse(
-            {"status": "error", "message": "Ejecución no encontrada."}, status=404
-        )
-    return JsonResponse(job.to_dict())
+        raise ApiError("Ejecución no encontrada.", 404)
+    return job
 
 
-def _job_cancelable(request, job):
-    """Quien lanzo el analisis, quien puede lanzar analisis, y los superusuarios.
+@endpoint()
+def job_detail(request, job_id):
+    """Estado vivo de una ejecución. Se sondea cada pocos segundos: sin límite."""
+    return _visible_job(request, job_id).to_dict()
 
-    Cancelar es una accion, no una lectura: no basta con poder ver el job. Se
-    exige el permiso con el que se habrian podido lanzar (`can_run_calculations`,
-    el que ya agrupa esa capacidad), de modo que quien puede empezar un calculo
-    puede pararlo.
+
+@endpoint(methods=["POST"], rate="10/m")
+def job_cancel(request, job_id):
+    """Cancela una ejecución abierta; el worker se detiene en su siguiente punto de control.
+
+    Puede quien la lanzó o quien puede lanzar análisis (`can_run_calculations`).
     """
-    if request.user.is_superuser or job.user_id == request.user.id:
-        return True
-    profile = getattr(request.user, 'profile', None)
-    return bool(profile and profile.has_permission('can_run_calculations'))
-
-
-@login_required
-@ratelimit(key='ip', rate='10/m', block=True)
-@require_POST
-def api_job_cancel(request, job_id):
-    """Cancela una ejecucion encolada o en curso.
-
-    No manda nada a Celery: cerrar la fila basta. Si el analisis todavia esperaba
-    turno, la tarea lo descarta al recogerlo; si ya estaba calculando, su consola
-    lo ve en el siguiente punto de control -a lo sumo un par de segundos- y se
-    detiene. Matar el proceso del worker seria lo unico mas rapido, y dejaria a
-    medias el `COPY` o el `ALTER TABLE` que estuviera corriendo.
-
-    El limite es mas suelto que el de los endpoints de calculo (2/m): cancelar no
-    dispara trabajo, y cortar una cola de varios trabajos son varias llamadas
-    seguidas. Tampoco lleva `@permission_required` encima del limite como el
-    resto: aqui el permiso depende del job -su dueno tambien puede- y eso no se
-    puede decidir en un decorador.
-    """
-    job = AnalysisJob.objects.filter(pk=job_id).first()
-    if job is None or not _job_visible(request, job):
-        return JsonResponse(
-            {"status": "error", "message": "Ejecución no encontrada."}, status=404
-        )
-
-    if not _job_cancelable(request, job):
-        return JsonResponse(
-            {"status": "error", "message": "No tienes permiso para cancelar esta ejecución."},
-            status=403,
-        )
-
+    job = _visible_job(request, job_id)
+    if job.user_id != request.user.id and not has_permission(request.user, "can_run_calculations"):
+        raise ApiError("No tienes permiso para cancelar esta ejecución.", 403)
     if not job.esta_abierto:
-        return JsonResponse({
+        return {
             "status": "error",
             "message": f"La ejecución ya terminó ({job.get_status_display()}).",
             "job": job.to_dict(),
-        }, status=409)
-
+        }, 409
     cancelar_job(job, request.user.username)
-    return JsonResponse({
+    return {
         "status": "cancelled",
         "message": (
-            "Cancelación solicitada. El análisis se detiene en su próximo punto"
-            " de control."
-            if job.started_at else
-            "Análisis cancelado antes de empezar."
+            "Cancelación solicitada. El análisis se detiene en su próximo punto de control."
+            if job.started_at else "Análisis cancelado antes de empezar."
         ),
         "job": job.to_dict(),
-    })
+    }
 
 
-@login_required
-def api_jobs_queue(request):
-    """Todo lo que hay en la cola ahora mismo, para el aviso flotante.
-
-    Devuelve tanto lo que se esta calculando como lo que espera turno. Es un
-    endpoint de sondeo continuo desde cualquier pagina, asi que va sin
-    `@ratelimit` y sin permisos de modulo: solo enseña los trabajos que el
-    usuario ya podria ver de todas formas (los suyos, o todos si puede abrir el
-    historial de importaciones).
-    """
-    visibles = [job for job in jobs_abiertos() if _job_visible(request, job)]
-    return JsonResponse({
-        "jobs": [job.to_dict() for job in visibles],
-        "en_ejecucion": sum(1 for j in visibles if j.status == AnalysisJob.EN_CURSO),
-        "en_cola": sum(1 for j in visibles if j.status == AnalysisJob.PENDIENTE),
-    })
+@endpoint()
+def job_queue(request):
+    """Lo que calcula o espera turno, para el aviso flotante. Sin límite: se sondea."""
+    visible = [job for job in jobs_abiertos() if _job_visible(request, job)]
+    return {
+        "jobs": [job.to_dict() for job in visible],
+        "en_ejecucion": sum(1 for j in visible if j.status == AnalysisJob.EN_CURSO),
+        "en_cola": sum(1 for j in visible if j.status == AnalysisJob.PENDIENTE),
+    }
 
 
-@login_required
-def api_job_active(request):
-    """Ejecucion abierta de un modulo, para reengancharse tras recargar.
-
-    Un analisis dura minutos: si el usuario recarga o vuelve mas tarde, la
-    pagina necesita reencontrar el job en vez de dar la ejecucion por perdida.
-    """
-    module = request.GET.get("module") or ''
+@endpoint()
+def job_active(request):
+    """La ejecución abierta de un módulo, para reengancharse tras recargar."""
+    module = request.GET.get("module") or ""
     if module not in dict(ImportActionLog.MODULE_CHOICES):
-        return JsonResponse({"status": "error", "message": "Módulo inválido."}, status=400)
-
+        raise ApiError("Módulo inválido.")
     job = job_en_curso(module)
-    if job is None or not _job_visible(request, job):
-        return JsonResponse({"job": None})
-    return JsonResponse({"job": job.to_dict()})
+    return {"job": job.to_dict() if job is not None and _job_visible(request, job) else None}

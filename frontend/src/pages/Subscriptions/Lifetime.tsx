@@ -1,4 +1,4 @@
-/** Página Inertia `Subscriptions/Lifetime` (`/subscriptions/lifetime/`): cuánto duraron las bajas de un mes. */
+/** `/subscriptions/lifetime/`: cuánto duraron las bajas de un mes. */
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { LifetimeView } from '@/features/subscriptions/components/lifetime/LifetimeView';

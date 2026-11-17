@@ -1,13 +1,14 @@
 /**
  * Los objetivos comerciales de la página, listos para resolver.
  *
- * Llegan en el prop `objetivos` de las páginas de Subscriptions. Se leen de la
- * página y no por props, igual que `usePermissions`, porque los necesitan
+ * Llegan en el campo `objetivos` de los datos de las páginas de Subscriptions. Se
+ * leen del contexto de la página y no por props porque los necesitan
  * componentes que están varios niveles por debajo de la página.
  */
 
 import { useMemo } from 'react';
-import { usePage } from '@inertiajs/react';
+
+import { usePageProps } from '@/shared/page/PageData';
 
 import type { ZonaConfig } from '../lib/dayReports';
 import { OBJETIVOS_POR_DEFECTO, crearResolver, type ResolverObjetivos } from '../lib/objetivos';
@@ -20,8 +21,7 @@ interface PropsConObjetivos {
 
 /** La configuración cruda; los valores por defecto si la página no la trae. */
 export function useObjetivosConfig(): ObjetivosConfig {
-  const { props } = usePage<PropsConObjetivos>();
-  return props.objetivos ?? OBJETIVOS_POR_DEFECTO;
+  return usePageProps<PropsConObjetivos>().objetivos ?? OBJETIVOS_POR_DEFECTO;
 }
 
 /**

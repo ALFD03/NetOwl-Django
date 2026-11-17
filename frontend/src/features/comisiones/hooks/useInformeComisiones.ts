@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { router } from '@inertiajs/react';
 
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { comisionesApi } from '@/shared/lib/api/comisiones';
 import type { DecisionRevision, TasaBolivares, VentaComision } from '../types';
+import { useReloadPage, useVisit } from '@/shared/page/PageData';
 
 /**
  * Estado del informe de comisiones.
@@ -16,7 +16,9 @@ import type { DecisionRevision, TasaBolivares, VentaComision } from '../types';
  * recalcula en el servidor y cualquier decisión mueve los totales.
  */
 export function useInformeComisiones(periodo: string, existe: boolean) {
-  // Guardadas con su periodo: Inertia reutiliza el componente al cambiar de
+  const visit = useVisit();
+  const reloadPage = useReloadPage();
+  // Guardadas con su periodo: la página reutiliza el componente al cambiar de
   // mes, y el detalle de otro periodo no vale para este.
   const [cache, setCache] = useState<{ periodo: string; filas: VentaComision[] } | null>(null);
   const ventas = cache?.periodo === periodo ? cache.filas : null;
@@ -60,7 +62,7 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
     try {
       await accion();
       setCache(null);
-      router.reload();
+      void reloadPage();
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, mensaje));
@@ -86,7 +88,7 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
       try {
         await comisionesApi.borrar(periodo, confirmacion);
         setCache(null);
-        router.get('/comisiones/');
+        visit({});
         return true;
       } catch (err: unknown) {
         setError(getApiErrorMessage(err, 'No se pudo borrar el informe.'));

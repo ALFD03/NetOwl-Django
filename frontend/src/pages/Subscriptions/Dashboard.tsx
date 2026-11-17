@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Subscriptions/Dashboard`, que renderiza `subscriptions.views.dashboard` (`/subscriptions/`).
+ * Página `/subscriptions/dashboard/`.
  *
  * Las páginas son un contrato con Django: la vista nombra el componente por su
  * ruta bajo `pages/`, así que **renombrar o mover este fichero rompe la vista en

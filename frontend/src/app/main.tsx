@@ -1,20 +1,8 @@
-/**
- * Arranque. Mientras dure la migración conviven dos modos con el mismo bundle:
- *
- * - **Inertia**: la vista Django mandó `data-page` → `./inertia` (páginas aún no migradas).
- * - **SPA**: sin `data-page` → `./spa`, React Router contra la API.
- *
- * Cada modo es un chunk aparte: la SPA no carga las páginas de Inertia.
- */
+/** Arranque de la SPA: React Router + TanStack Query + la sesión de `/api/auth/me/`. */
 
 import '../styles/global.css';
 import '@/shared/charts/register';
 
-const root = document.getElementById('app');
-const inertiaPage = root?.dataset.page || document.querySelector('script[data-page="app"]')?.textContent;
+import { startSpa } from './spa';
 
-if (inertiaPage) {
-  void import('./inertia').then(({ startInertia }) => startInertia());
-} else {
-  void import('./spa').then(({ startSpa }) => startSpa());
-}
+startSpa();

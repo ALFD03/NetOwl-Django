@@ -15,7 +15,7 @@ from services.audit.log import record
 from services.audit.models import AuditLog
 
 from .models import PERMISSION_FIELDS
-from .unidades import alcance_de
+from .units import unit_scope
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def attempt_login(request, username: str, password: str) -> str | None:
         logger.warning("Acceso bloqueado por límite: usuario=%r ip=%s", username, ip_cliente(request))
         record(
             request,
-            module="config",
+            module="auth",
             action="login_bloqueado",
             description="Intento de acceso rechazado por exceso de intentos fallidos.",
             target=f"username={username}"[:255] if username else "",
@@ -102,5 +102,5 @@ def can_act_on(actor, target) -> bool:
     own = effective_permissions(actor)
     if not all(own[field] for field, value in effective_permissions(target).items() if value):
         return False
-    scope = alcance_de(actor)
-    return scope is None or scope.cubre(alcance_de(target))
+    scope = unit_scope(actor)
+    return scope is None or scope.covers(unit_scope(target))
