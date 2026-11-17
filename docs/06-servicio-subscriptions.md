@@ -450,9 +450,6 @@ demás se calcula al leer, sobre unas miles de filas:
 El detalle no viaja en la página: lo pide el botón de exportar a
 `api/lifetime/detalle/`.
 
-Las tablas `lifetime_periodos`, `lifetime_metricas` y `lifetime_dimensiones` son
-de la versión anterior (curvas de supervivencia) y ya no se escriben ni se leen.
-
 ## 6. El reporte ETA (`analytics/eta_report.py`)
 
 Las matrices que se declaran a la reguladora, calculadas sobre **los activos al
@@ -594,12 +591,9 @@ Las fórmulas que pide la reguladora, y que están en `eta_forms.py`:
 
 ### El catálogo es el único sitio donde se clasifica un plan
 
-El maestro de ETA llevaba una segunda copia —con prioridad— de tecnología,
-persona, TV y Mbps en `analyzer_eta_config_planes`: el mismo plan podía estar
-clasificado de dos formas y ganaba la que nadie miraba. **Esa capa ya no
-existe**; la tabla sigue en la base de datos, vacía y sin leer.
+Tecnología, persona, TV y Mbps de un plan viven solo en el catálogo.
 
-Lo único que aportaba y el JSON no tenía es `Plan.declarar_en_eta`, que hoy es un
+Lo que el JSON de semilla no tenía es `Plan.declarar_en_eta`, que es un
 campo del catálogo.
 
 El maestro conserva **solo sus excepciones por suscripción**

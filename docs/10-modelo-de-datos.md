@@ -165,7 +165,6 @@ Escritas con `metodo_calculo = "lifetime"`.
 | Tabla | Contenido |
 |---|---|
 | `lifetime_bajas_mes` | Una fila por baja del mes, `periodo_reporte = "YYYY-MM"`: `orden`, `f_ini`, `f_baja`, `estado_cierre`, `dias_desde_instalacion`, las dimensiones (sin producto), `mes_en_curso` y `fecha_corte` |
-| `lifetime_periodos`, `lifetime_metricas`, `lifetime_dimensiones` | Obsoletas: las curvas de supervivencia de la versión anterior. Ya no se escriben ni se leen |
 
 ### Reporte ETA
 
@@ -173,7 +172,6 @@ Escritas con `metodo_calculo = "lifetime"`.
 |---|---|---|
 | `analyzer_eta_config_subs_individual` | DDL explícito | Excepciones por orden: `orden` (PK), `cliente`, `producto`, `reportar`, `tecnologia`, `tipo_persona`, `tiene_tv`, `datas_mbps`, `es_transporte`, `es_dedicado`, `precio`, `updated_at`. `precio` es la renta con que se declara ese enlace: el catálogo comercial no la tiene |
 | `analyzer_eta_reporte_mensual` | DDL explícito | `periodo_reporte` (PK), `reporte_data` (JSONB), `esta_bloqueado`, `tasa_bcv`, `tasa_fuente`, `fecha_calculo`. `tasa_fuente` dice de dónde salió la cifra (el día que publicó el BCV, o «Escrita a mano»). La tasa vive **fuera** de `reporte_data`: los formularios guardan el precio en divisa y la conversión es del exportador, así que se corrige sin recalcular |
-| `analyzer_eta_config_planes` | — | **Obsoleta.** Guardaba una segunda copia, con prioridad, de la clasificación de cada plan. Sigue en la base de datos, **vacía y sin leer**; el nombre se conserva en `TableNames` solo para poder identificarla |
 
 ---
 

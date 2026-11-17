@@ -212,10 +212,8 @@ class Plan(models.Model):
     dos veces cuando cambiaba de tarifa (los de Puerto Cabello tienen otra
     velocidad de referencia). La pareja (nombre, tarifa) si lo es.
 
-    `declarar_en_eta` es el unico campo que el JSON no tenia: sustituye a la
-    tabla `analyzer_eta_config_planes`, que guardaba una segunda copia —con
-    prioridad— de tecnologia, persona, TV y Mbps. Un plan se clasifica en un
-    solo sitio, y es este.
+    `declarar_en_eta` es el unico campo que el JSON no tenia. Un plan se
+    clasifica en un solo sitio, y es este.
     """
 
     nombre = models.CharField(max_length=150)

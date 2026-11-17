@@ -9,10 +9,7 @@ La clasificacion de cada suscripcion se resuelve con esta prioridad:
 **excepcion individual -> plan del catalogo**. Lo que no resuelva sale como
 `unmapped_elements` para que alguien lo decida.
 
-El catalogo es la unica fuente de la clasificacion de un plan. Antes habia una
-segunda, `analyzer_eta_config_planes`, que pisaba a la primera: el mismo plan
-podia estar clasificado de dos formas y ganaba la que nadie miraba. Esa capa ya
-no existe.
+El catalogo es la unica fuente de la clasificacion de un plan.
 
 Ademas de las matrices, el reporte lleva los **formularios** que se declaran:
 una fila por producto declarado, con su velocidad, su renta y su consumo
@@ -168,10 +165,6 @@ class ETAReportManager:
 
     def _ensure_tables_exist(self):
         """Crea las tablas de persistencia para configuraciones globales e individuales."""
-        # `analyzer_eta_config_planes` ya no aparece aqui: guardaba una segunda
-        # copia —con prioridad— de la clasificacion de cada plan, y un plan se
-        # clasifica en un solo sitio, el catalogo. La tabla sigue en la base de
-        # datos, vacia y sin leer.
         statements = [
             f"""
             CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} (
@@ -381,11 +374,8 @@ class ETAReportManager:
     def _load_mappings(self) -> tuple[dict[str, dict], dict[str, str], dict[str, dict]]:
         """Planes del catalogo, zonas mapeadas y configuraciones individuales.
 
-        El catalogo es la unica fuente de la clasificacion de un plan. Antes
-        habia una segunda, `analyzer_eta_config_planes`, que pisaba a la
-        primera: el mismo plan podia estar clasificado de dos formas y ganaba
-        la que nadie miraba. Lo que el catalogo no tenia —si el plan se declara
-        o no a la reguladora— es hoy `Plan.declarar_en_eta`.
+        El catalogo es la unica fuente de la clasificacion de un plan; si se
+        declara a la reguladora lo dice `Plan.declarar_en_eta`.
         """
         zonas_map = {
             z["name"].strip().lower(): z.get("Estado", "Desconocido").strip()
