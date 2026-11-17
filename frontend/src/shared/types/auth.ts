@@ -127,3 +127,17 @@ export interface AuthUser {
 export interface AuthProps {
   user: AuthUser;
 }
+
+/** La cuenta actual tal y como la devuelve `GET /api/auth/me/`. */
+export interface CurrentUser {
+  id: number;
+  username: string;
+  is_superuser: boolean;
+  role: string | null;
+  group: string | null;
+  /** Matriz efectiva: la del grupo si tiene uno, todo para superusuarios. */
+  permissions: Record<Permission, boolean>;
+  /** Primera página que puede abrir, o null si no tiene ninguna. */
+  landing: string | null;
+  auth: 'session' | 'token';
+}

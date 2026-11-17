@@ -11,3 +11,4 @@ export * from './imports';
 export * from './jobs';
 export * from './config';
 export * from './auditoria';
+export * from './auth';

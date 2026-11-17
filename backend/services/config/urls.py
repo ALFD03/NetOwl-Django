@@ -7,12 +7,12 @@ No hay ruta de alta inicial: el primer administrador se crea con
 # --- START OF FILE NetOwl-Django/frontend/config/urls.py ---
 from django.urls import path
 
-from . import views
+from . import spa, views
 
 app_name = "config"
 
 urlpatterns = [
-    path("login/", views.login_view, name="login"),
+    path("login/", spa.login_page, name="login"),
     path("logout/", views.logout_view, name="logout"),
     path("users/", views.user_management_view, name="user_management"),
     

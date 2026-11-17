@@ -1,6 +1,6 @@
 # Frontend architecture
 
-React + TypeScript + Inertia, served by Django. Tailwind for styling, Chart.js for charts.
+React + TypeScript, migrating from Inertia to a SPA (React Router + TanStack Query) over `/api/`. Tailwind for styling, Chart.js for charts.
 
 > El inventario de esta capa —paginas, features, kit compartido y como llega el
 > dato— esta en `docs/09-frontend.md`. Este documento sigue siendo el normativo:
@@ -10,7 +10,7 @@ React + TypeScript + Inertia, served by Django. Tailwind for styling, Chart.js f
 
 ```
 src/
-├── app/          Bootstrap only: main.tsx, csrf
+├── app/          Bootstrap and routes: main.tsx, spa.tsx, routes.tsx, inertia.tsx
 ├── shared/       Reusable across every module. Knows nothing about any feature.
 │   ├── ui/       The component kit, grouped by kind (see below)
 │   ├── layout/   AppLayout, Sidebar (the navigation tree), UserMenu
@@ -22,7 +22,7 @@ src/
 │   └── types/    cross-cutting types only
 ├── features/     Domain logic, one folder per module
 │   └── <module>/{components,hooks,types.ts,index.ts}
-└── pages/        Inertia entry points — thin shells, nothing else
+└── pages/        Page shells (SPA routes or Inertia components) — nothing else
 ```
 
 ## The day bar
@@ -59,10 +59,10 @@ analysis. `shared/ui/inputs/DayProgressBar` is the same component in all three.
 
 ## The three rules
 
-**1. `pages/` is a contract with Django.**
-Django views name their component as a string (`inertia_render(request, "CRM/Dashboard")`),
-and `app/main.tsx` resolves it against `import.meta.glob('../pages/**/*.tsx')`. A page file's
-path is therefore fixed — renaming or moving one breaks the backend silently, at runtime.
+**1. `pages/` is only imported by `app/`.**
+SPA pages are registered in `app/routes.tsx`. Pages not migrated yet are still named by
+Django as a string (`render_inertia(request, "CRM/Dashboard")`) and resolved by the glob in
+`app/inertia.tsx`: renaming one of those breaks the backend silently, at runtime.
 
 Pages hold no logic. A page picks a layout and a feature view. It has no title: the
 heading is the breadcrumb ("Module › Page"), derived from the URL, so the page declares

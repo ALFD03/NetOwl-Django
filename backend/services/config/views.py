@@ -1,16 +1,7 @@
-"""Autenticacion y administracion de usuarios, grupos y permisos.
+"""Administración de usuarios, grupos y permisos, y el cierre de sesión.
 
-Son las unicas vistas sin dominio de negocio: entrar, salir y mantener la
-matriz de permisos de las demas cuentas.
-
-El alta del primer administrador ya no vive aqui: era una vista publica
-guardada solo por `User.objects.count() == 0`, con la carrera que eso implica
-y con la posibilidad de reabrirse si la tabla de usuarios quedaba vacia. Ahora
-es `manage.py crear_admin`, igual que `preparar_sesiones` y `preparar_imports`
-son comandos y no vistas.
+El primer administrador se crea con `manage.py crear_admin`.
 """
-
-# NetOwl-Django/frontend/config/views.py
 
 import json
 import logging
@@ -23,15 +14,14 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import redirect
-from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
 from services.subscriptions.models import Coordinador
 
-from .auth import attempt_login, can_act_on, effective_permissions
-from .decorators import permission_required, resolve_landing_url
+from .auth import can_act_on, effective_permissions
+from .decorators import permission_required
 from .models import PERMISSION_FIELDS, PermissionGroup, Profile
 from .unidades import AlcanceUnidades, alcance_de, lista_de
 
@@ -222,49 +212,6 @@ def leer_id(valor) -> int | None:
         return int(valor)
     except (TypeError, ValueError):
         return None
-
-
-def credenciales_del_cuerpo(request) -> tuple[str, str]:
-    """Usuario y contrasena, vengan en JSON (Inertia) o en formulario.
-
-    La contrasena **no** se recorta: un espacio al principio o al final es
-    parte de ella. Antes se aplicaba `.strip()` y una contrasena con espacios
-    se aceptaba tambien sin ellos.
-    """
-    if request.content_type == "application/json":
-        try:
-            body = json.loads(request.body)
-        except (ValueError, UnicodeDecodeError):
-            return "", ""
-        if not isinstance(body, dict):
-            return "", ""
-        return str(body.get("username") or "").strip(), str(body.get("password") or "")
-    return request.POST.get("username", "").strip(), request.POST.get("password", "")
-
-
-@ensure_csrf_cookie
-def login_view(request):
-    """Formulario de entrada. Acepta tanto JSON (React) como formulario.
-
-    Dos limites (ver `LIMITES_LOGIN`): por cuenta y por IP, y solo cuentan los
-    fallos. No se usa el decorador `@ratelimit`: su `key='post:username'` leia
-    `request.POST`, vacio en las peticiones JSON de Inertia, y todos los
-    intentos de la empresa caian en el mismo cubo (ver `usuario_login`).
-
-    El cuerpo de una peticion anonima no puede pasar de unos pocos KB: lo corta
-    `LimiteCuerpoAnonimoMiddleware` antes de llegar aqui.
-    """
-    if request.user.is_authenticated:
-        return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
-
-    error_message = None
-    if request.method == "POST":
-        usr, pas = credenciales_del_cuerpo(request)
-        error_message = attempt_login(request, usr, pas)
-        if error_message is None:
-            return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
-
-    return render_inertia(request, "Config/Login", {"errorMessage": error_message})
 
 
 @require_POST

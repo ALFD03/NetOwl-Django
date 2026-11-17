@@ -7,12 +7,13 @@
 
 ## Stack
 
-React 18 + TypeScript + Vite + Tailwind + Chart.js, servido por Django mediante
-Inertia. No hay REST separado ni SPA: **cada vista devuelve una respuesta Inertia
-con sus props ya calculados**, y los endpoints `api/` existen solo para lo que se
-pide después de cargar la página.
+React 18 + TypeScript + Vite + Tailwind + Chart.js. En migración de Inertia a una
+**SPA** (React Router + TanStack Query) que lee la API `/api/`. Mientras dure,
+conviven los dos modos en el mismo bundle: las páginas migradas son de la SPA y el
+resto sigue en Inertia.
 
-Dependencias notables: `@inertiajs/react`, `axios`, `chart.js` +
+Dependencias notables: `react-router-dom`, `@tanstack/react-query`,
+`@inertiajs/react` (hasta terminar la migración), `axios`, `chart.js` +
 `react-chartjs-2` + `chartjs-plugin-datalabels`, `framer-motion`,
 `lucide-react`, `clsx` + `tailwind-merge`, `write-excel-file`.
 
@@ -24,15 +25,28 @@ backend/templates/app.html   ← la única plantilla Django
    ├─ script en línea: pone `light`/`dark` en <html> antes de pintar (clave `netowl-tema`)
    ├─ dev:  http://localhost:5173/static/src/app/main.tsx  (+ react-refresh)
    └─ prod: {% static 'dist/assets/main.js' %} y main.css
-             └─ frontend/src/app/main.tsx
-                  ├─ import './csrf'                (cabecera X-CSRFToken en axios global)
-                  ├─ import '@/shared/charts/register'
-                  ├─ ThemeProvider                  (@/shared/hooks/useTheme: claro/oscuro/sistema)
-                  └─ createInertiaApp({ resolve })  → import.meta.glob('../pages/**/*.tsx')
+             └─ frontend/src/app/main.tsx   (estilos globales y registro de Chart.js)
+                  ├─ con data-page → app/inertia.tsx (chunk aparte)
+                  │    ├─ import './csrf'      (cabecera X-CSRFToken en axios global)
+                  │    ├─ StaticAuthProvider   (la cuenta sale de los props de Inertia)
+                  │    └─ createInertiaApp     → glob de ../pages, sin las páginas migradas
+                  └─ sin data-page → app/spa.tsx (chunk aparte)
+                       ├─ QueryClientProvider  (app/queryClient.ts)
+                       ├─ AuthProvider         (GET /api/auth/me/)
+                       └─ RouterProvider       (app/routes.tsx, una ruta lazy por página)
 ```
 
-`readInitialPage()` acepta las dos formas en que `inertia-django` puede entregar
-la página: el `<script data-page="app">` y el `data-page` del `<div id="app">`.
+Django sirve la SPA con `services/config/spa.py:spa_shell` (la misma plantilla, sin
+`data-page`). Una visita de Inertia a una ruta de la SPA recibe 409 +
+`X-Inertia-Location` y el navegador hace carga completa. Desde la SPA, una ruta que
+no está en `routes.tsx` se abre con carga completa (sigue en Inertia).
+
+### Migrar una página a la SPA
+
+1. En Django, la ruta de página apunta a `spa_shell` y los datos salen de un
+   endpoint `/api/<módulo>/<servicio>/` con `@endpoint`.
+2. En `app/routes.tsx`, la ruta con `lazy` a su página.
+3. En `app/inertia.tsx`, la página sale del glob.
 
 ### El contrato con Django
 
@@ -42,7 +56,6 @@ rompe la vista en tiempo de ejecución, sin error de compilación.
 
 | Ruta Django | Componente | Fichero |
 |---|---|---|
-| `/auth/login/` | `Config/Login` | `pages/Config/Login.tsx` |
 | `/auth/setup/` | `Config/Setup` | `pages/Config/Setup.tsx` |
 | `/auth/users/` | `Config/Management` | `pages/Config/Management.tsx` |
 | `/subscriptions/` | `Subscriptions/Dashboard` | `pages/Subscriptions/Dashboard.tsx` |
@@ -82,7 +95,11 @@ venir de un mapa escrito a mano porque **Tailwind no ve nombres interpolados**.
 
 | Fichero | Contenido |
 |---|---|
-| `main.tsx` | Bootstrap de Inertia y resolución de páginas |
+| `main.tsx` | Elige modo (Inertia o SPA) y carga su chunk |
+| `spa.tsx` | Arranque de la SPA |
+| `routes.tsx` | Rutas de la SPA (`/auth/login/`) |
+| `queryClient.ts` | Caché de datos; no reintenta 4xx |
+| `inertia.tsx` | Arranque de Inertia para las páginas aún no migradas |
 | `csrf.ts` | Aplica `applyCsrf` a la instancia **global** de axios, que es la que usa Inertia |
 
 ---
@@ -122,7 +139,8 @@ porque `shared` no puede depender de un feature; los features los reexportan.
 
 | Hook | Qué hace |
 |---|---|
-| `usePermissions()` | `can`, `canAny`, `canAll`, `isSuperuser`. **Los componentes nunca leen `user.profile.can_*` directamente** |
+| `useAuth()` (`shared/auth/AuthContext`) | La cuenta actual (`CurrentUser`, forma de `/api/auth/me/`), `login`, `logout` |
+| `usePermissions()` | `can`, `canAny`, `canAll`, `isSuperuser`, sobre `useAuth()`. **Los componentes nunca leen la matriz directamente** |
 | `useBreakpoint(bp)` | `true` si el viewport llega a ese breakpoint. Para lo que una clase no alcanza (opciones de Chart.js); para maquetar se usan las clases |
 | `useScrollLock(activo)` | Congela el scroll del body y de `<main data-app-scroll>` mientras un modal o el cajón del menú tapan la página |
 | `useTheme()` / `ThemeProvider` | Tema `claro`/`oscuro`/`sistema` por navegador (`localStorage`, `netowl-tema`); `sistema` sigue a `prefers-color-scheme`. Cómo cambian las clases y las gráficas: `frontend/src/README.md`, «Light and dark theme» |
