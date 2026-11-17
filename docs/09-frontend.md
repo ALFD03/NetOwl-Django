@@ -50,6 +50,10 @@ devuelve su endpoint como props, dentro de `AppLayout` mientras carga o si falla
   termina (en esta pestaña o en otra) avisan con `notifyDataChanged()`; la SPA
   invalida la caché y lo que está en pantalla se vuelve a pedir conservando su
   estado. `useDayPayload` vacía su caché de días con el mismo aviso.
+- El resultado de una escritura (error al guardar, aviso de éxito) se pinta con
+  `ActionMessage`: si hay un modal abierto aparece arriba de él, si no, en la
+  página. Nunca `alert()`. `useOnOpen(abierto, () => setError(null))` limpia el
+  error anterior al abrir un formulario.
 - `usePageProps()` lee los datos de la página desde cualquier componente (los
   objetivos de Subscriptions, por ejemplo).
 
@@ -213,7 +217,7 @@ Agrupado por tipo, todo se importa desde el barril `@/shared/ui`:
 | `data/` | `DataTable`, `StatGroup`, `SummaryStrip`, `MilestoneTimeline`, `StickyLabel`, `ExcelExportButton`, `tableClasses` |
 | `inputs/` | `TextField`, `SelectMenu`, `SearchInput`, `ToggleGroup`, `MonthPicker`, `PeriodSelector`, `DayProgressBar`, `FileUploadZone`, `useAnchoredPanel` |
 | `metrics/` | `MetricCard`, `StatTile`, `CompactMetric`, `MetricGroup`, `SparklineCard`, `MiniExceedRing`, `EquidistantTimeline` |
-| `feedback/` | `EmptyState`, `LoadingState`, `StatusMessage`, `ConsoleOutput` |
+| `feedback/` | `EmptyState`, `LoadingState`, `StatusMessage`, `ActionMessage`, `ConsoleOutput` |
 | `theme/` | `metricTheme` y las uniones a las que va indexado |
 
 `SelectMenu` es el único desplegable de la aplicación, y con siete opciones o más

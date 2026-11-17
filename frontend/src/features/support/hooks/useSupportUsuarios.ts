@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { useOnOpen } from '@/shared/hooks/useOnOpen';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import {
   supportApi,
@@ -87,6 +88,9 @@ export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
 
   const [cambioDraft, setCambioDraft] = useState<CambioDraft | null>(null);
   const [bajaDraft, setBajaDraft] = useState<BajaDraft | null>(null);
+  // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
+  const formularioAbierto = Boolean(usuarioDraft || departamentoDraft || cambioDraft || bajaDraft || borrando);
+  useOnOpen(formularioAbierto, () => setError(null));
 
   // Sin fecha de partida: hoy puede caer antes del último cambio, y un valor
   // ya puesto que el servidor rechaza confunde más que un campo vacío. El

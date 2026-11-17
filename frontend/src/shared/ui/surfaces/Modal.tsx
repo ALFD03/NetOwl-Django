@@ -1,8 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
 import { useScrollLock } from '@/shared/hooks/useScrollLock';
+
+import { registerModalSlot } from './modalSlot';
 
 export type ModalTheme = 'slate' | 'blue' | 'green' | 'red' | 'yellow' | 'purple';
 
@@ -37,6 +39,11 @@ export function Modal({
   });
 
   useScrollLock(isOpen);
+
+  // Hueco fijo bajo la cabecera donde `ActionMessage` pinta el resultado de la
+  // última acción (un error al guardar, por ejemplo) mientras el modal está arriba.
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
+  useEffect(() => (slot ? registerModalSlot(slot) : undefined), [slot]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -112,6 +119,8 @@ export function Modal({
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            <div ref={setSlot} className="flex-shrink-0 space-y-2 px-4 pt-4 empty:hidden sm:px-6" />
 
             {/* Body con Scroll Personalizado */}
             <div className="p-4 sm:p-6 overflow-y-auto flex-1 custom-scrollbar">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { useOnOpen } from '@/shared/hooks/useOnOpen';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { catalogosApi, type CatalogoPayload } from '@/shared/lib/api/catalogos';
 import type {
@@ -266,6 +267,9 @@ export function useCatalogos({
   const [objetivoMesDraft, setObjetivoMesDraft] = useState<ObjetivoMesDraft | null>(null);
   const [semaforoDraft, setSemaforoDraft] = useState<SemaforoDraft | null>(null);
   const [borrando, setBorrando] = useState<{ tipo: CatalogoTipo; id: number; nombre: string } | null>(null);
+  // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
+  const formularioAbierto = Boolean(planDraft || reguladorDraft || zonaDraft || siteDraft || personaDraft || condicionDraft || unidadDraft || objetivoOficinaDraft || nombreDraft || ignoradoDraft || objetivoDraft || objetivoMesDraft || semaforoDraft || borrando);
+  useOnOpen(formularioAbierto, () => setError(null));
 
   const nuevoPlanVacio = () => setPlanDraft({ ...PLAN_VACIO });
   const editarPlan = (plan: CatalogoPlan) => setPlanDraft({ ...plan });

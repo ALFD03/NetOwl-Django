@@ -14,7 +14,7 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Check, MapPinOff, Plus, X } from 'lucide-react';
 
-import { Button, DataTable, EmptyState, Modal, MonthPicker, NeonContainer, SearchInput, type Column } from '@/shared/ui';
+import { ActionMessage, Button, DataTable, EmptyState, Modal, MonthPicker, NeonContainer, SearchInput, type Column } from '@/shared/ui';
 import { Field, FormBanner, FormColumns, FormFooter, ModalForm } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
 import { catalogosApi } from '@/shared/lib/api/catalogos';
@@ -154,6 +154,7 @@ export function ZonasSinObjetivoPanel({
         theme="yellow"
         size="md"
       >
+        <ActionMessage status={error ? { type: 'error', text: error } : null} />
         {borrador && (
           <ModalForm onSubmit={guardar}>
             <FormBanner
@@ -204,7 +205,6 @@ export function ZonasSinObjetivoPanel({
               />
             </Field>
 
-            {error && <p className="text-sm font-semibold text-rose-400">{error}</p>}
 
             <FormFooter
               saving={guardando}

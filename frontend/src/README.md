@@ -110,7 +110,8 @@ Concretely, these already exist — do not re-inline them:
 | Accent-ruled section title | `SectionHeading` |
 | "Nothing to show" / blocking state | `EmptyState` (`tone="warning"`) |
 | Pending region | `LoadingState` |
-| Form/action result banner | `StatusMessage` |
+| Result banner of a load or export | `StatusMessage` |
+| Result of a user write (save, delete…): shows inside the open modal, or inline without one; never `alert()` | `ActionMessage` |
 | Server execution log | `ConsoleOutput` |
 | Labelled input with leading icon | `TextField` |
 | Segmented view switch | `ToggleGroup` |

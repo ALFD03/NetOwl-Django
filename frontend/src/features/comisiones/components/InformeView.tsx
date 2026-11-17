@@ -1,6 +1,7 @@
 /** Comisiones › Informe: lo que cobra cada persona en un periodo. */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useOnOpen } from '@/shared/hooks/useOnOpen';
 import {
   AlertTriangle, CalendarRange, Check, FileSpreadsheet, HandCoins, ListChecks, Lock, LockOpen, Percent, Receipt,
   ShieldAlert, Trash2,
@@ -8,7 +9,7 @@ import {
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import {
-  Button, EmptyState, ExportButton, LoadingState, Modal, MonthPicker, NeonContainer, SelectMenu, StatusMessage, TextField,
+  ActionMessage, Button, EmptyState, ExportButton, LoadingState, Modal, MonthPicker, NeonContainer, SelectMenu, StatusMessage, TextField,
 } from '@/shared/ui';
 import { useInformeComisiones } from '../hooks/useInformeComisiones';
 import { exportarInforme } from '../lib/exportar';
@@ -88,6 +89,9 @@ export function InformeView({
   const existente = periodos.find((p) => p.periodo === periodo);
   const borrable = existente?.estado === 'borrador' && archivos.length === 0;
   const [desglose, setDesglose] = useState<PagoComision | null>(null);
+  // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
+  const formularioAbierto = editandoPeriodo || Boolean(confirmando || reapertura || borrado);
+  useOnOpen(formularioAbierto, () => c.setError(null));
   const [exportando, setExportando] = useState(false);
 
   const etiquetaCargo = (rol: RolVentas) => ROL_CHIP[rol].label;
@@ -237,7 +241,7 @@ export function InformeView({
         </div>
       }
     >
-      <StatusMessage status={c.error ? { type: 'error', text: c.error } : null} className="mb-4" icon={<AlertTriangle />} />
+      <ActionMessage status={c.error ? { type: 'error', text: c.error } : null} className="mb-4" icon={<AlertTriangle />} />
       <StatusMessage status={error ? { type: 'error', text: error } : null} className="mb-4" icon={<AlertTriangle />} />
 
       {!informe && !error && (
@@ -589,7 +593,6 @@ export function InformeView({
               value={reapertura.confirmacion}
               onChange={(e) => setReapertura({ ...reapertura, confirmacion: e.target.value })}
             />
-            {c.error && <StatusMessage status={{ type: 'error', text: c.error }} icon={<AlertTriangle />} />}
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setReapertura(null)}>Cancelar</Button>
               <Button
@@ -650,7 +653,6 @@ export function InformeView({
               value={borrado.confirmacion}
               onChange={(e) => setBorrado({ confirmacion: e.target.value })}
             />
-            {c.error && <StatusMessage status={{ type: 'error', text: c.error }} icon={<AlertTriangle />} />}
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setBorrado(null)}>Cancelar</Button>
               <Button

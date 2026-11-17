@@ -8,6 +8,7 @@
  */
 
 import { useState, type FormEvent } from 'react';
+import { useOnOpen } from '@/shared/hooks/useOnOpen';
 import {
   AlertTriangle,
   Edit3,
@@ -23,13 +24,13 @@ import { AppLayout } from '@/shared/layout/AppLayout';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { supportApi } from '@/shared/lib/api/support';
 import {
+  ActionMessage,
   Button,
   DataTable,
   EmptyState,
   Modal,
   NeonContainer,
   SelectMenu,
-  StatusMessage,
   TextField,
   ToggleGroup,
   type Column,
@@ -67,6 +68,9 @@ export function SupportEtapasView({
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
+  const formularioAbierto = Boolean(borrador || borrando);
+  useOnOpen(formularioAbierto, () => setError(null));
 
   const ejecutar = async (accion: () => Promise<{ message?: string }>, fallo: string) => {
     setGuardando(true);
@@ -195,12 +199,12 @@ export function SupportEtapasView({
         </div>
       }
     >
-      <StatusMessage
+      <ActionMessage
         status={error ? { type: 'error', text: error } : null}
         className="mb-4"
         icon={<AlertTriangle />}
       />
-      <StatusMessage status={aviso ? { type: 'success', text: aviso } : null} className="mb-4" />
+      <ActionMessage status={aviso ? { type: 'success', text: aviso } : null} className="mb-4" />
 
       <NeonContainer
         title="Reglas fijas"

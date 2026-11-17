@@ -8,7 +8,7 @@ import {
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import {
-  Button, DataTable, EmptyState, Modal, NeonContainer, StatusMessage, ToggleGroup,
+  ActionMessage, Button, DataTable, EmptyState, Modal, NeonContainer, ToggleGroup,
   type Column,
 } from '@/shared/ui';
 import {
@@ -233,7 +233,7 @@ export function SupportUsuariosView({
         </>
       }
     >
-      <StatusMessage
+      <ActionMessage
         status={d.error ? { type: 'error', text: d.error } : null}
         className="mb-4"
         icon={<AlertTriangle />}

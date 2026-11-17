@@ -1,11 +1,11 @@
 /** Pantalla de parametrización ETA: pendientes y excepciones por suscripción. */
 
 import {
-  CheckCircle2, Edit3, EyeOff, Network, Plus, Settings2, ShieldAlert, Trash2,
+  AlertTriangle, CheckCircle2, Edit3, EyeOff, Network, Plus, Settings2, ShieldAlert, Trash2,
 } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
+import { ActionMessage, DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
 import { formatTwoDecimals } from '@/shared/utils/formatters';
 import { useEtaManagement } from '@/features/subscriptions/hooks/useEtaManagement';
 import type {
@@ -51,7 +51,7 @@ export function EtaManagementView({
   allKnownPlans = [],
 }: Props) {
   const {
-    isCustomProduct, setIsCustomProduct, isSaving, activeView, setActiveTab,
+    isCustomProduct, setIsCustomProduct, isSaving, error, activeView, setActiveTab,
     editingSub, setEditingSub, deletingItem, setDeletingItem,
     handleOpenEditSub, handleUpdateSub, handleQuickIgnoreSub, handleConfirmDelete,
     handleSelectPredefinedPlan,
@@ -197,6 +197,7 @@ export function EtaManagementView({
         </>
       }
     >
+      <ActionMessage status={error ? { type: 'error', text: error } : null} className="mb-4" icon={<AlertTriangle />} />
       {activeView === 'discovered_plans' && (
         <NeonContainer title="Planes detectados" subtitle="Productos encontrados en los datos que todavía no están en el catálogo" icon={<ShieldAlert className="w-5 h-5" />} theme="yellow">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">

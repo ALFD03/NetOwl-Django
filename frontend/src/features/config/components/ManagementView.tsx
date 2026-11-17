@@ -1,8 +1,9 @@
 /** La pantalla de usuarios, grupos y permisos. */
 
 import React, { useState, useMemo } from 'react';
+import { useOnOpen } from '@/shared/hooks/useOnOpen';
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { Button, Modal, TextField, ToggleGroup } from '@/shared/ui';
+import { ActionMessage, Button, Modal, TextField, ToggleGroup, type StatusTone } from '@/shared/ui';
 import {
   AlertTriangle, KeyRound, Lock, Plus, Search, Shield, ShieldCheck, User, UserPlus, Users,
 } from 'lucide-react';
@@ -62,86 +63,73 @@ export function ManagementView({
   const [groupToEdit, setGroupToEdit] = useState<EditableGroup | null>(null);
   const [deletingItem, setDeletingItem] = useState<{ type: 'user' | 'group'; id: number; name: string } | null>(null);
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!userToCreate) return;
+  const [status, setStatus] = useState<{ type: StatusTone; text: string } | null>(null);
+  // Abrir un formulario empieza de cero: el aviso que hubiera es de la acción anterior.
+  const formularioAbierto = Boolean(userToCreate || userToEdit || userToChangePass || groupToEdit || deletingItem);
+  useOnOpen(formularioAbierto, () => setStatus(null));
+
+  /** Ejecuta una escritura; si falla, el error queda en el modal abierto. */
+  const run = async (action: () => Promise<unknown>, fallo: string) => {
     setSaving(true);
+    setStatus(null);
     try {
-      await configApi.createUser(userToCreate);
-      setUserToCreate(null);
+      await action();
+      return true;
     } catch (err: unknown) {
-      alert(getApiErrorMessage(err, 'Error al crear usuario'));
+      setStatus({ type: 'error', text: getApiErrorMessage(err, fallo) });
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userToCreate) return;
+    if (await run(() => configApi.createUser(userToCreate), 'Error al crear usuario')) setUserToCreate(null);
   };
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userToEdit) return;
-    setSaving(true);
-    try {
-      await configApi.updateUserPermissions({
-        user_id: userToEdit.id,
-        role: userToEdit.role,
-        group_id: userToEdit.group_id ? Number(userToEdit.group_id) : null,
-        permissions: userToEdit.permissions,
-        unidades: userToEdit.unidades,
-      });
-      setUserToEdit(null);
-    } catch (err: unknown) {
-      alert(getApiErrorMessage(err, 'Error al actualizar usuario'));
-    } finally {
-      setSaving(false);
-    }
+    const ok = await run(() => configApi.updateUserPermissions({
+      user_id: userToEdit.id,
+      role: userToEdit.role,
+      group_id: userToEdit.group_id ? Number(userToEdit.group_id) : null,
+      permissions: userToEdit.permissions,
+      unidades: userToEdit.unidades,
+    }), 'Error al actualizar usuario');
+    if (ok) setUserToEdit(null);
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userToChangePass) return;
-    setSaving(true);
-    try {
-      await configApi.changePassword(userToChangePass);
+    if (await run(() => configApi.changePassword(userToChangePass), 'Error al cambiar contraseña')) {
       setUserToChangePass(null);
-      alert('Contraseña actualizada correctamente');
-    } catch (err: unknown) {
-      alert(getApiErrorMessage(err, 'Error al cambiar contraseña'));
-    } finally {
-      setSaving(false);
+      setStatus({ type: 'success', text: `Contraseña de ${userToChangePass.username} actualizada.` });
     }
   };
 
   const handleSaveGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!groupToEdit) return;
-    setSaving(true);
-    try {
-      await configApi.saveGroup({
-        group_id: groupToEdit.id || null,
-        name: groupToEdit.name,
-        description: groupToEdit.description,
-        permissions: groupToEdit.permissions,
-      });
-      setGroupToEdit(null);
-    } catch (err: unknown) {
-      alert(getApiErrorMessage(err, 'Error al guardar grupo'));
-    } finally {
-      setSaving(false);
-    }
+    const ok = await run(() => configApi.saveGroup({
+      group_id: groupToEdit.id || null,
+      name: groupToEdit.name,
+      description: groupToEdit.description,
+      permissions: groupToEdit.permissions,
+    }), 'Error al guardar grupo');
+    if (ok) setGroupToEdit(null);
   };
 
   const handleConfirmDelete = async () => {
     if (!deletingItem) return;
-    try {
-      if (deletingItem.type === 'user') {
-        await configApi.deleteUser(deletingItem.id);
-      } else {
-        await configApi.deleteGroup(deletingItem.id);
-      }
-      setDeletingItem(null);
-    } catch (err: unknown) {
-      alert(getApiErrorMessage(err, 'Error al eliminar'));
-    }
+    const ok = await run(
+      () => (deletingItem.type === 'user' ? configApi.deleteUser(deletingItem.id) : configApi.deleteGroup(deletingItem.id)),
+      'Error al eliminar',
+    );
+    if (ok) setDeletingItem(null);
   };
 
   // Una sola búsqueda para las dos vistas: en cuentas mira nombre, rol y
@@ -222,6 +210,7 @@ export function ManagementView({
         </div>
       }
     >
+      <ActionMessage status={status} className="mb-4" icon={status?.type === 'error' ? <AlertTriangle /> : <ShieldCheck />} />
       {activeTab === 'users' && (
         <UsersTable
           users={filteredUsers}
