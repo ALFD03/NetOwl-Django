@@ -81,7 +81,7 @@ def _ventas_por_dia(mes: str) -> dict[str, dict[str, list[int]]]:
     vacio: dict[str, dict[str, list[int]]] = {"medio": {}, "vendedor": {}}
 
     db = DBConnector()
-    columnas = db.columnas(TableNames.SUBSCRIPTIONS)
+    columnas = db.columns(TableNames.SUBSCRIPTIONS)
     nombres = [c for c in ("medio", "vendedor") if c in columnas]
     if "fecha_inicio" not in columnas or not nombres:
         return vacio
@@ -90,10 +90,9 @@ def _ventas_por_dia(mes: str) -> dict[str, dict[str, list[int]]]:
         f"""
         SELECT fecha_inicio, {", ".join(nombres)}{estado}
         FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
-        WHERE (fecha_inicio ~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}' AND LEFT(fecha_inicio, 10) BETWEEN %s AND %s)
-           OR (fecha_inicio IS NOT NULL AND fecha_inicio !~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}')
+        WHERE fecha_inicio BETWEEN %s AND %s
         """,
-        params=[inicio.isoformat(), fin.isoformat()],
+        params=[inicio, fin],
     )
     if df.empty:
         return vacio

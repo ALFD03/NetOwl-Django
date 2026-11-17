@@ -50,7 +50,7 @@ def get_meses_lifetime(db=None) -> list[str]:
     """Los meses calculados, del mas reciente al mas antiguo (`YYYY-MM`)."""
     if db is None:
         db = DBConnector()
-    if not db.tabla_existe(TableNames.LIFETIME_BAJAS_MES):
+    if not db.table_exists(TableNames.LIFETIME_BAJAS_MES):
         return []
     df = db.query(
         f'SELECT DISTINCT periodo_reporte FROM "{DB_SCHEMA}"."{TableNames.LIFETIME_BAJAS_MES}"'
@@ -138,7 +138,7 @@ def _bajas_del_reporte(db, mes: str) -> int | None:
     Sirve para avisar cuando los dos calculos se hicieron con datos distintos:
     el lifetime lee el log de hoy, y el cierre, el que habia al correrlo.
     """
-    if not db.tabla_existe(TableNames.ANALYZER_BAJAS_DETALLADAS):
+    if not db.table_exists(TableNames.ANALYZER_BAJAS_DETALLADAS):
         return None
     etiqueta = Periodo.build(f"{mes}-01").label()
     df = db.query(

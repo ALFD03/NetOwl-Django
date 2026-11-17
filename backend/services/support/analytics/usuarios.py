@@ -118,7 +118,7 @@ def usuarios_fuera_del_directorio() -> list[dict]:
     nada, y las tres son la misma persona.
     """
     db = DBConnector()
-    if not db.tabla_existe(TableNames.SUPPORT_TICKETS):
+    if not db.table_exists(TableNames.SUPPORT_TICKETS):
         return []
 
     try:
@@ -181,7 +181,7 @@ def tickets_tras_la_baja() -> list[dict]:
         return []
 
     db = DBConnector()
-    if not db.tabla_existe(TableNames.SUPPORT_TICKETS):
+    if not db.table_exists(TableNames.SUPPORT_TICKETS):
         return []
 
     # Se filtra en SQL por la baja mas antigua para no traerse la tabla

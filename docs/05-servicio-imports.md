@@ -72,8 +72,8 @@ eso es todo. De ahí salen las dos mitades solas:
 **No se le manda nada a Celery.** `revoke(terminate=True)` mata el proceso del
 worker a señal limpia, y en mitad de un `COPY` o de un `ALTER TABLE` eso deja la
 conexión y la tabla como caigan. Parar en un punto conocido cuesta como mucho un
-par de segundos más y no deja nada a medias: `save_historico` reescribe el
-periodo entero la próxima vez, y los volcados parciales de métricas diarias son
+par de segundos más y no deja nada a medias: cada periodo se guarda en una sola
+transacción y se reescribe entero la próxima vez, y los volcados parciales de métricas diarias son
 deliberadamente reanudables.
 
 Elegir el campo en vez de una columna nueva no es sólo economía: **añadir un
@@ -102,9 +102,9 @@ que haberla creado esquema por esquema; hoy cada esquema tiene la suya.)
 ### `bloqueo_modulo` — por qué existe
 
 Con el worker en paralelo pueden coincidir dos análisis, y dos del mismo módulo
-comparten tabla: además de reescribir filas, **`save_historico` crea y altera la
-tabla sobre la marcha, y dos DDL simultáneas sobre la misma tabla acaban en
-bloqueo mutuo**.
+comparten tabla: **los dos borrarían y reescribirían el mismo periodo, y la
+primera escritura de un proceso puede ajustar la tabla (`core.tables.ensure`):
+dos DDL simultáneas sobre la misma tabla acaban en bloqueo mutuo**.
 
 El cerrojo vive en Redis, con clave `netowl:analisis:<ENV_SUFFIX>:<module>` y
 caducidad `ANALYSIS_LOCK_TIMEOUT` (2 h): si el worker muere a la fuerza se
@@ -169,10 +169,10 @@ tarea.**
 
 | Runner | Qué ejecuta |
 |---|---|
-| `_correr_subscriptions` | Comprueba `productos_fuera_de_catalogo()` **antes de calcular**, luego `MetricsAnalyzer.run()` y `build_day_metrics()` reutilizando el mismo analyzer (una sola lectura de datos para el cierre y los 31 días) |
+| `_correr_subscriptions` | Comprueba `products_outside_catalog()` **antes de calcular**, luego `MetricsAnalyzer.run()` y `build_day_metrics()` reutilizando el mismo analyzer (una sola lectura de datos para el cierre y los 31 días) |
 | `_correr_crm` | `run_crm_analysis(job.periodo)` |
 | `_correr_support` | `run_support_analysis(job.periodo)` |
-| `_correr_lifetime` | `run_lifecycle_analysis()`: el lifetime de las bajas de todos los meses desde enero de 2026. En el job guarda el resumen (meses, bajas, fecha de corte); la página lee el mes elegido con `get_lifetime_mes` |
+| `_correr_lifetime` | `run_lifetime_analysis()`: el lifetime de las bajas de todos los meses desde enero de 2026. En el job guarda el resumen (meses, bajas, fecha de corte); la página lee el mes elegido con `get_lifetime_mes` |
 
 ### `ejecutar_analisis(job_id)`
 
@@ -229,12 +229,16 @@ dominio, y el temporal borrado al salir. Toda salida —buena o mala— queda en
 > `can_run_calculations`), para que las cuentas que ya los tenían no pierdan
 > acceso. **Ese patrón OR debe conservarse.**
 
+Las cabeceras las comprueba cada importador al leer el fichero (`core.exports`):
+un `InvalidExport` (faltan columnas obligatorias, fichero vacío o que no es CSV)
+sale como **400** con el mensaje del importador, que dice qué falta y qué trae.
+
 La carga de suscripciones tiene dos respuestas especiales:
 
 | Excepción | Respuesta | Significado |
 |---|---|---|
-| `ProductosSinCatalogo` | **409** con `status: "catalogo"`, la lista de productos y el número de órdenes afectadas | El export trae productos que el catálogo no reconoce. **No se escribió nada**: la comprobación corre antes del `TRUNCATE`. Queda registrado como `warning` |
-| `CatalogoVacio` | **409** con `status: "error"` | No hay ni un plan registrado. Es un problema de configuración, no del fichero; confundirlos mandaba a revisar el export |
+| `UncatalogedProducts` | **409** con `status: "catalogo"`, la lista de productos y el número de órdenes afectadas | El export trae productos que el catálogo no reconoce. **No se escribió nada**: la comprobación corre antes de tocar la base. Queda registrado como `warning` |
+| `EmptyCatalog` | **409** con `status: "error"` | No hay ni un plan registrado. Es un problema de configuración, no del fichero; confundirlos mandaba a revisar el export |
 
 ### Lanzamiento y seguimiento
 

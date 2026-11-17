@@ -124,7 +124,7 @@ MOTIVO_CAMBIO_PLAN = "Por facturar con cambio de plan: la primera mensualidad, d
 
 @dataclass(frozen=True)
 class Factura:
-    """Una factura de la suscripcion, tal y como la lee `facturas.leer_facturas`.
+    """Una factura de la suscripcion, tal y como la lee `invoices.read_invoices`.
 
     `plan` es el plan de catalogo de sus lineas; vacio si no factura ninguno
     (la de instalacion, la del router), y entonces no es una mensualidad.

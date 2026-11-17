@@ -31,10 +31,7 @@ from services.catalogos.registry import (
 )
 from services.config.api import ApiError, endpoint, json_body
 from services.config.auth import has_permission
-from services.subscriptions.analytics.imports import (
-    productos_fuera_de_catalogo,
-    zonas_fuera_de_catalogo,
-)
+from services.subscriptions.analytics.imports import products_outside_catalog, zones_outside_catalog
 from services.subscriptions.analytics.objetivos import get_objetivos_config, nodos_conocidos
 from services.subscriptions.analytics.queries import get_periodos
 from services.subscriptions.models import (
@@ -134,8 +131,8 @@ def notifications(request):
     """
     areas = _areas(request)
     pending = {
-        "productos": _pending("productos", productos_fuera_de_catalogo) if areas["operacional"] else None,
-        "estructura": _pending("zonas", zonas_fuera_de_catalogo) if areas["comercial"] else None,
+        "productos": _pending("productos", products_outside_catalog) if areas["operacional"] else None,
+        "estructura": _pending("zonas", zones_outside_catalog) if areas["comercial"] else None,
         "ventas": _pending("personas", personas_fuera_del_directorio) if areas["ventas"] else None,
     }
     own = [area for area, permission in PERMISO_POR_AREA.items() if has_permission(request.user, permission)]

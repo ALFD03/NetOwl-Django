@@ -11,15 +11,15 @@ mismo, y para eso no puede haber dos definiciones de que es una ganada.
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Callable
 
-from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
+from core.tables import upsert
 
+from . import tables
 from .day_metrics import build_crm_day_metrics
-from .dimensions import build_crm_dimension_rows, save_crm_dimensiones_periodo
+from .dimensions import build_crm_dimension_rows, save_dimensions
 from .metrics import promediar_cierres
 from .poblaciones import construir_poblaciones, preparar_datos
 
@@ -56,60 +56,26 @@ _COLUMNAS_CIERRE = (
 _COLUMNAS_CIERRE_JSON = ("efectividad", "tiempo_por_etapa")
 
 
-def _save_crm_cierre_historico(db: DBConnector, periodo: str, m: dict):
+def _save_close(db: DBConnector, periodo: str, m: dict) -> None:
     """Guarda (o actualiza) la fila de cierre de un periodo.
 
-    Las columnas se derivan de `_COLUMNAS_CIERRE`, declarada una sola vez. Se
-    indexa con `m[c]` y no con `.get`: una metrica declarada y no calculada debe
-    reventar, no escribir un NULL silencioso en el historico.
+    Se indexa con `m[c]` y no con `.get`: una métrica declarada y no calculada
+    debe reventar, no escribir un NULL silencioso en el histórico.
     """
-    columnas = ("periodo_reporte", *_COLUMNAS_CIERRE, *_COLUMNAS_CIERRE_JSON)
-    marcadores = ", ".join(["%s"] * len(columnas))
-    updates = ",\n                    ".join(
-        f"{c} = EXCLUDED.{c}" for c in columnas if c != "periodo_reporte"
-    )
-    valores = [
-        periodo,
-        # `m[c]`, no `.get`: una métrica que se declare aquí y no se calcule
-        # debe reventar, no escribir un NULL silencioso en el histórico.
-        *[m[c] for c in _COLUMNAS_CIERRE],
-        *[json.dumps(m.get(c, [])) for c in _COLUMNAS_CIERRE_JSON],
-    ]
-
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                INSERT INTO {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} (
-                    {", ".join(columnas)}, updated_at
-                )
-                VALUES ({marcadores}, NOW())
-                ON CONFLICT (periodo_reporte) DO UPDATE SET
-                    {updates},
-                    updated_at = NOW()
-                """,
-                valores,
-            )
-        conn.commit()
+    row = {
+        "periodo_reporte": periodo,
+        **{c: m[c] for c in _COLUMNAS_CIERRE},
+        **{c: m.get(c, []) for c in _COLUMNAS_CIERRE_JSON},
+    }
+    with db.transaction() as cur:
+        upsert(cur, tables.CLOSE_HISTORY, [row])
 
 
-def _save_global_crm_metrics(db: DBConnector, resumen_global: dict, tiempo_por_etapa: list, efectividad: list):
-    """Guarda la fila unica con el promedio de todos los periodos."""
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                INSERT INTO {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} (id, resumen_global, tiempo_por_etapa, efectividad, updated_at)
-                VALUES (1, %s, %s, %s, NOW())
-                ON CONFLICT (id) DO UPDATE SET
-                    resumen_global = EXCLUDED.resumen_global,
-                    tiempo_por_etapa = EXCLUDED.tiempo_por_etapa,
-                    efectividad = EXCLUDED.efectividad,
-                    updated_at = NOW()
-                """,
-                [json.dumps(resumen_global), json.dumps(tiempo_por_etapa), json.dumps(efectividad)]
-            )
-        conn.commit()
+def _save_global(db: DBConnector, resumen_global: dict, tiempo_por_etapa: list, efectividad: list) -> None:
+    """Guarda la fila única con el promedio de todos los periodos."""
+    row = {"id": 1, "resumen_global": resumen_global, "tiempo_por_etapa": tiempo_por_etapa, "efectividad": efectividad}
+    with db.transaction() as cur:
+        upsert(cur, tables.GLOBAL_METRICS, [row])
 
 
 def run_crm_analysis(
@@ -147,8 +113,8 @@ def run_crm_analysis(
 
         m = pob.metricas()
 
-        _save_crm_cierre_historico(db, p, m)
-        save_crm_dimensiones_periodo(db, p, build_crm_dimension_rows(pob))
+        _save_close(db, p, m)
+        save_dimensions(db, p, build_crm_dimension_rows(pob))
         # Solo del mes pedido: recorrer los dias de todo el historico son
         # treinta y un cortes por cada mes que haya, y nadie lanza un analisis
         # global esperando eso. El cierre de cada mes si se recalcula entero.
@@ -163,7 +129,7 @@ def run_crm_analysis(
 
         # Último conjunto de efectividad y tiempos por etapa
         ultimo_resumen = list(all_summaries.values())[0]
-        _save_global_crm_metrics(
+        _save_global(
             db,
             resumen_global_avg,
             ultimo_resumen.get("tiempo_por_etapa", []),

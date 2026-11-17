@@ -12,59 +12,33 @@ import pandas as pd
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
+from core.tables import ensure_tables, upsert
+from services.support.analytics import tables
 from services.support.analytics.cohorts import build_cohort, periodos_disponibles
 from services.support.analytics.config import DIM_GRUPO
 from services.support.analytics.day_metrics import build_support_day_metrics
 from services.support.analytics.dimensions import (
     build_dimension_rows,
-    save_support_dimensiones_periodo,
+    save_dimensions,
 )
 from services.support.analytics.escalamiento import cargar_tickets
 from services.support.analytics.flujo import run_flujo_analysis
-from services.support.analytics.loader import ensure_support_schema
 from services.support.analytics.metrics import average_blocks, compute_metrics_for_period
 
 logger = logging.getLogger(__name__)
 
 
-def _save_cierre_historico(db: DBConnector, periodo: str, metricas: dict) -> None:
-    """Guarda (o actualiza) el bloque de metricas de un periodo, como JSONB."""
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                INSERT INTO {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
-                    (periodo_reporte, metricas, updated_at)
-                VALUES (%s, %s, NOW())
-                ON CONFLICT (periodo_reporte) DO UPDATE SET
-                    metricas = EXCLUDED.metricas,
-                    updated_at = NOW()
-                """,
-                [periodo, json.dumps(metricas)],
-            )
-        conn.commit()
+def _save_close(db: DBConnector, periodo: str, metricas: dict) -> None:
+    """Guarda (o actualiza) el bloque de métricas de un periodo."""
+    with db.transaction() as cur:
+        upsert(cur, tables.CLOSE_HISTORY, [{"periodo_reporte": periodo, "metricas": metricas}])
 
 
-def _save_metricas_globales(
-    db: DBConnector, resumen: dict, por_grupo: dict, periodos: int
-) -> None:
-    """Guarda la fila unica del dashboard de empresa."""
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"""
-                INSERT INTO {DB_SCHEMA}.{TableNames.SUPPORT_METRICAS_GLOBALES}
-                    (id, resumen_global, por_grupo_trabajo, periodos_evaluados, updated_at)
-                VALUES (1, %s, %s, %s, NOW())
-                ON CONFLICT (id) DO UPDATE SET
-                    resumen_global = EXCLUDED.resumen_global,
-                    por_grupo_trabajo = EXCLUDED.por_grupo_trabajo,
-                    periodos_evaluados = EXCLUDED.periodos_evaluados,
-                    updated_at = NOW()
-                """,
-                [json.dumps(resumen), json.dumps(por_grupo), periodos],
-            )
-        conn.commit()
+def _save_global(db: DBConnector, resumen: dict, por_grupo: dict, periodos: int) -> None:
+    """Guarda la fila única del dashboard de empresa."""
+    row = {"id": 1, "resumen_global": resumen, "por_grupo_trabajo": por_grupo, "periodos_evaluados": periodos}
+    with db.transaction() as cur:
+        upsert(cur, tables.GLOBAL_METRICS, [row])
 
 
 def run_support_analysis(
@@ -89,7 +63,7 @@ def run_support_analysis(
     Sin logs cargados no hace nada y los tickets quedan como dice el export.
     """
     db = DBConnector()
-    ensure_support_schema(db)
+    ensure_tables(db, *tables.ALL)
     run_flujo_analysis(db=db)
 
     df_all = cargar_tickets(db)
@@ -109,8 +83,8 @@ def run_support_analysis(
         cohorte = build_cohort(df_all, periodo)
         metricas = compute_metrics_for_period(cohorte)
 
-        _save_cierre_historico(db, periodo, metricas)
-        save_support_dimensiones_periodo(db, periodo, build_dimension_rows(cohorte))
+        _save_close(db, periodo, metricas)
+        save_dimensions(db, periodo, build_dimension_rows(cohorte))
         # Solo del mes pedido: recorrer los dias de todo el historico son
         # treinta y un cortes por cada mes que haya, y nadie lanza un analisis
         # global esperando eso. El cierre de cada mes si se recalcula entero.
@@ -162,4 +136,4 @@ def _recompute_global_average(db: DBConnector, df_all: pd.DataFrame) -> None:
 
     por_grupo = {g: average_blocks(b) for g, b in acumulado.items()}
 
-    _save_metricas_globales(db, resumen, por_grupo, len(periodos))
+    _save_global(db, resumen, por_grupo, len(periodos))

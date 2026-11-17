@@ -11,6 +11,9 @@ from __future__ import annotations
 import pandas as pd
 
 from core.config import DIMS, TableNames
+from core.tables import replace
+
+from ..tables import CHURN_DIMENSIONS
 
 
 class DimsPreparadas:
@@ -252,7 +255,8 @@ def aggregate_dimensions(
     if not persist:
         # Usado por el calculo diario: devuelve las filas sin escribir en la base.
         return all_rows
-    db.save_historico(df_result, TableNames.ANALYZER_CHURN_DIMENSIONES, periodo_label)
+    with db.transaction() as cur:
+        replace(cur, CHURN_DIMENSIONS, df_result, periodo_reporte=periodo_label)
 
     dims_ok = [d for d in dims_pedidas if d.lower() in df_subs_dedup.columns]
     print(

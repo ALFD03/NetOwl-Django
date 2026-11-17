@@ -225,8 +225,8 @@ esquema y la tabla la crea la migración de `django.contrib.sessions`; ver
 
 ## `uploads.py` — recepción de CSV
 
-`uploaded_csv(request, required_headers=None, field="csv_file")` es un context
-manager: comprueba que venga el fichero, que la extensión sea `.csv` y que no
-exceda `MAX_UPLOAD_SIZE`, lo vuelca a un temporal por trozos, valida las
-cabeceras y entrega la ruta. Un problema lanza `ApiError` (400, o 500 si no se
+`uploaded_csv(request, field="csv_file")` es un context manager: comprueba que
+venga el fichero, que la extensión sea `.csv` y que no exceda `MAX_UPLOAD_SIZE`,
+lo vuelca a un temporal por trozos y entrega la ruta. Las cabeceras no se miran
+aquí: las comprueba el importador al leerlo (`core.exports`). Un problema lanza `ApiError` (400, o 500 si no se
 pudo escribir), y el temporal se borra siempre al salir del bloque.

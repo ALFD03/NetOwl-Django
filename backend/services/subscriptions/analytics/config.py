@@ -83,8 +83,8 @@ SUBS_COLUMN_MAPPING = {
     "Cliente/Phone 1": "phone",
     "Cliente/Phone 2": "phone2",
     "Vendedor": "vendedor",
-    # Las tres que necesita Comisiones. Opcionales —no estan en
-    # `REQUIRED_SUBS_HEADERS`— para no romper la importacion con el export de
+    # Las tres que necesita Comisiones. Opcionales -no son obligatorias en
+    # `imports.SUBSCRIPTIONS_EXPORT`- para no romper la importacion con el export de
     # siempre; es Comisiones quien se niega a calcular sin ellas.
     # `Vendedor` es el coordinador de oficina, `Medio` quien hizo la venta
     # (asesor, o venta directa de otro cargo) y `Oportunidad/Administrador` su
@@ -96,42 +96,4 @@ SUBS_COLUMN_MAPPING = {
     "Medio": "medio",
     "Oportunidad/Administrador": "medio_supervisor",
     "Estado de la factura": "estado_factura",
-}
-
-# Odoo no siempre exporta la cabecera con la misma capitalizacion.
-# false/0 = suscripcion archivada (cliente en plan gratuito).
-SUBS_ACTIVO_ALIASES = {
-    "Activo": "activo",
-    "activo": "activo",
-    "Active": "activo",
-}
-
-
-# --- Cabeceras minimas que debe traer cada CSV -------------------------------
-# Se validan contra el fichero crudo, antes de renombrar nada. Vivian en el
-# modulo de vistas, desde donde `frontend/imports` las importaba cruzando de
-# una app a otra; support y planes gratuitos ya las tenian aqui, en su dominio.
-
-REQUIRED_SUBS_HEADERS = {
-    "Líneas de la orden/Referencia de la orden": "orden_producto",
-    "Líneas de la orden/Producto/Nombre": "producto",
-    "Líneas de la orden/Cliente": "cliente",
-    "Líneas de la orden/Cliente/CI/RIF": "ci",
-    "Sucursal": "sucursal",
-    "Zona": "zona",
-    "Líneas de la orden/Cliente/Municipio": "municipio",
-    "Tipo de Servicio": "tipo",
-    "Estado de la Suscripción": "estado",
-    "Campaña": "campanna",
-    "Próxima Fecha de Factura": "fecha_factura",
-    "Fecha de inicio": "fecha_inicio",
-    "Tarifa": "tarifa",
-    "Subtotal": "total",
-}
-
-REQUIRED_LOGS_HEADERS = {
-    "Logs de Cambios/Suscripción": "orden",
-    "Logs de Cambios/Fecha de Cambio": "fecha_log",
-    "Logs de Cambios/Nota": "log",
-    "Logs de Cambios/Estado Interno de Suscripción": "estado",
 }

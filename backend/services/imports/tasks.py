@@ -63,17 +63,14 @@ def _correr_subscriptions(job: AnalysisJob, consola: ConsolaJob):
     el cierre y para los dias, de modo que toda la ejecucion hace una sola lectura
     de datos.
     """
-    from services.subscriptions.analytics import (
-        MetricsAnalyzer,
-        build_day_metrics,
-        productos_fuera_de_catalogo,
-    )
+    from services.subscriptions.analytics import MetricsAnalyzer, build_day_metrics
+    from services.subscriptions.analytics.imports import products_outside_catalog
 
     # La importacion garantiza que toda orden entra con un plan catalogado,
     # pero un plan se puede borrar despues, y los datos cargados antes de que
     # esa comprobacion existiera pueden no tener ninguno. Se mira aqui arriba,
     # antes de los minutos de calculo que darian una respuesta mala igualmente.
-    fuera = productos_fuera_de_catalogo()
+    fuera = products_outside_catalog()
     if fuera:
         detalle = ", ".join(f"{p['nombre']} ({p['ordenes']} órdenes)" for p in fuera[:10])
         if len(fuera) > 10:
@@ -139,9 +136,9 @@ def _correr_lifetime(job: AnalysisJob, consola: ConsolaJob):
     Calcula todos los meses de una vez; la pagina lee despues el que se elija
     con `get_lifetime_mes`. El job solo guarda el resumen escalar.
     """
-    from services.subscriptions.analytics.lifetime import run_lifecycle_analysis
+    from services.subscriptions.analytics.lifetime import run_lifetime_analysis
 
-    resumen = run_lifecycle_analysis()
+    resumen = run_lifetime_analysis()
     mensaje = (
         f"Lifetime calculado: {resumen['meses_calculados']} meses,"
         f" {resumen['bajas_totales']} bajas (datos al {resumen['fecha_corte']})."

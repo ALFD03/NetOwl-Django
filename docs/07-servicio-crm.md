@@ -47,33 +47,35 @@ Tres listas distinguen matices que el orden por sí solo no da:
 - `ETAPAS_CLAVE_VENTAS` — las que manda la venta; el reporte de tiempos las
   destaca.
 
-`map_stage_canonically` tolera cómo escribe Odoo: primero el mapa literal, luego
+`loader.canonical_stage` tolera cómo escribe Odoo: primero el mapa literal, luego
 el número inicial, y por último una comparación normalizada por palabras clave.
+Se aplica una vez por valor distinto, no por fila.
 
 ---
 
 ## Importación (`loader.py`)
 
 El export de Odoo viene **agrupado**: una fila por oportunidad y, debajo, sus
-movimientos con la referencia en blanco. `parse_odoo_chunk` arrastra el
-`client_id` hacia abajo y parte el CSV en dos tablas:
+movimientos con la referencia en blanco. `import_crm` lo lee con
+`core.exports.iter_export(…, CRM_EXPORT)` y `split_chunk` arrastra el
+`client_id` hacia abajo y parte cada bloque en dos tablas:
 
 - `crm_clients` — una fila por oportunidad (estado actual, motivos, fechas,
   dimensiones).
 - `crm_logs` — una fila por **movimiento** entre etapas.
 
 Se lee **por trozos de 50 000 filas** y se lleva el último `client_id` válido de
-un trozo al siguiente. La columna `Activo` usa el mismo vocabulario que el
+un trozo al siguiente. Vaciado y carga de todos los trozos van en una sola
+transacción (`core.tables.truncate` + `append`): un fallo a mitad deja las
+tablas como estaban. La columna `Activo` usa el mismo vocabulario que el
 loader de suscripciones (`ACTIVO_TRUE_TOKENS` / `ACTIVO_FALSE_TOKENS`), porque
 es el mismo export de Odoo; lo que no esté en ninguno de los dos queda como
 nulo.
 
-`_create_tables_if_not_exist` crea las cinco tablas del dominio con sus índices
-e incluye **migraciones en caliente** (`ADD COLUMN IF NOT EXISTS`) para las
-columnas que se fueron añadiendo: la efectividad y el tiempo por etapa del
-periodo, los tiempos de cierre combinados y el desglose del riesgo de devolución.
-`ensure_crm_schema(db)` es su puerta pública y se llama al principio de cada
-análisis.
+Las tablas del dominio, con sus tipos e índices, están declaradas en
+`analytics/tables.py`; `migrate` las pone al día y el análisis las asegura al
+empezar (`core.tables.ensure_tables`). El cierre y la fila global se guardan con
+`upsert`, y las dimensiones del periodo con `replace`.
 
 ---
 
@@ -85,7 +87,7 @@ módulo aparte porque **el corte del mes y el corte de un día son la misma
 operación con distinto `hasta`**, y no puede haber dos definiciones de qué es
 una oportunidad ganada.
 
-1. `ensure_crm_schema(db)`.
+1. `ensure_tables(db, *tables.ALL)`.
 2. Lee `crm_clients` y `crm_logs`. **Descarta oportunidades duplicadas por `id`**
    (avisando en el log): una repetida ensancharía todos los cruces con los logs
    y contaría cada movimiento tantas veces como copias tenga.

@@ -50,11 +50,12 @@ import pandas as pd
 from core.config import TableNames
 from core.database import DBConnector
 from core.day_metrics import (
-    fecha_corte,
-    leer_payload,
-    leer_serie,
-    periodos_con_dias,
-    ultimo_dia_a_calcular,
+    cutoff_date,
+    last_day_to_compute,
+    months_with_days,
+    read_day,
+    read_series,
+    save_days,
 )
 from core.utils import clean_json_props
 
@@ -67,6 +68,7 @@ from .queries import (
     estructurar_grupos,
     get_incidencia_por_zona,
 )
+from .tables import DAY_METRICS
 from .usuarios import anotar_departamentos
 
 logger = logging.getLogger(__name__)
@@ -97,7 +99,7 @@ def build_support_day_metrics(
     if df_all.empty:
         return {"periodo_reporte": year_month, "dias_calculados": 0}
 
-    tope = ultimo_dia_a_calcular(year_month, hasta_dia)
+    tope = last_day_to_compute(year_month, hasta_dia)
     # Las zonas y los activos del mes son los mismos para los treinta y un
     # cortes: se leen una vez y se comparten.
     zone_info, activos_map = contexto_incidencia(db, year_month)
@@ -106,7 +108,7 @@ def build_support_day_metrics(
     calculados = 0
 
     for dia in range(1, tope + 1):
-        cohorte = build_cohort(df_all, year_month, hasta=fecha_corte(year_month, dia))
+        cohorte = build_cohort(df_all, year_month, hasta=cutoff_date(year_month, dia))
         # Un dia sin un solo ticket no deja columna: la barra lo pinta como hueco
         # en vez de como un corte de ceros, que se leeria como un dato.
         if not cohorte.empty:
@@ -142,7 +144,7 @@ def build_support_day_metrics(
 
 def _guardar(db: DBConnector, label: str, dias: dict[str, Any]) -> None:
     """Vuelca los dias pendientes a `support_day_metrics`."""
-    db.save_day_metrics(label, dias, table=TableNames.SUPPORT_DAY_METRICS)
+    save_days(db, DAY_METRICS, label, dias)
 
 
 def get_support_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
@@ -155,16 +157,16 @@ def get_support_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
     guardado dentro del corte: asi un cambio en el directorio se ve en todos
     los dias ya calculados sin volver a analizar el mes.
     """
-    payload = leer_payload(TableNames.SUPPORT_DAY_METRICS, year_month, dia, clave=year_month)
+    payload = read_day(TableNames.SUPPORT_DAY_METRICS, year_month, dia, key=year_month)
     if payload:
-        anotar_departamentos(payload.get("grupos") or {}, fecha_corte(year_month, dia))
+        anotar_departamentos(payload.get("grupos") or {}, cutoff_date(year_month, dia))
     return payload
 
 
 def get_support_day_series(year_month: str) -> dict[str, Any]:
     """La serie ligera del mes: los bloques globales de cada dia, sin desgloses.
 
-    Devuelve lo de `leer_serie` mas `serie_grupos`, que es lo mismo abierto por
+    Devuelve lo de `read_series` mas `serie_grupos`, que es lo mismo abierto por
     grupo de trabajo. Las dos viajan a los props porque la pagina esta filtrada
     por grupo y las tarjetas tienen que seguir al selector; juntas son unos pocos
     kilobytes, frente a los megabytes de los desgloses.
@@ -172,14 +174,14 @@ def get_support_day_series(year_month: str) -> dict[str, Any]:
     Son dos lecturas de la misma fila y no una para no traerse el resto del JSON:
     el recorte lo sigue haciendo Postgres.
     """
-    serie = leer_serie(TableNames.SUPPORT_DAY_METRICS, year_month, clave=year_month)
-    por_grupo = leer_serie(
+    serie = read_series(TableNames.SUPPORT_DAY_METRICS, year_month, key=year_month)
+    por_grupo = read_series(
         TableNames.SUPPORT_DAY_METRICS, year_month,
-        clave=year_month, bloque="global_grupos",
+        key=year_month, block="global_grupos",
     )
     return {**serie, "serie_grupos": por_grupo.get("serie", {})}
 
 
 def get_support_periodos_con_dias() -> list[str]:
     """Meses (`YYYY-MM`) que ya tienen cortes diarios calculados."""
-    return periodos_con_dias(TableNames.SUPPORT_DAY_METRICS)
+    return months_with_days(TableNames.SUPPORT_DAY_METRICS)

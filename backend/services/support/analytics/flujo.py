@@ -39,6 +39,7 @@ from psycopg2.extras import execute_values
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
+from core.tables import ensure
 from services.support.analytics.config import (
     CANCELED_STAGES,
     EQUIPO_ATC,
@@ -53,8 +54,8 @@ from services.support.analytics.config import (
     TRAMOS_ANTIGUEDAD,
     ZONA_HORARIA,
 )
-from services.support.analytics.logs import ensure_logs_schema
 from services.support.analytics.metrics import _compute_stats_for_series as estadisticos
+from services.support.analytics.tables import TICKET_LOGS
 
 logger = logging.getLogger(__name__)
 
@@ -280,7 +281,7 @@ def run_flujo_analysis(db: DBConnector | None = None) -> dict:
 
     with db.get_connection() as conn:
         with conn.cursor() as cur:
-            ensure_logs_schema(cur)
+            ensure(cur, TICKET_LOGS)
             cur.execute(f"SELECT COUNT(*) FROM {LOGS}")
             if not cur.fetchone()[0]:
                 conn.commit()

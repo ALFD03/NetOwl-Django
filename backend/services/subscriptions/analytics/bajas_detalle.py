@@ -109,7 +109,7 @@ def _fichas(db: DBConnector, ordenes: list[str]) -> pd.DataFrame:
     vacio = pd.DataFrame(columns=_COLUMNAS_FICHA).set_index("orden_producto")
 
     def _leer(tabla: str, valores: list[str]) -> pd.DataFrame:
-        if not db.tabla_existe(tabla):
+        if not db.table_exists(tabla):
             return vacio
         columnas = _columnas_presentes(db, tabla)
         if "orden_producto" not in columnas:
@@ -162,7 +162,7 @@ def get_bajas_detalle(
 
         # La crea el analisis mensual la primera vez que termina: que no exista
         # todavia no es un fallo, es que nadie ha calculado nada.
-        if not db.tabla_existe(TableNames.ANALYZER_BAJAS_DETALLADAS):
+        if not db.table_exists(TableNames.ANALYZER_BAJAS_DETALLADAS):
             return {
                 "status": "empty",
                 "period": objetivo,

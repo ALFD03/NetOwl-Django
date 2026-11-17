@@ -19,7 +19,7 @@ from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import zonas_por_nombre
 from core.models import Periodo
-from core.utils import parse_jsonb
+from core.utils import parse_jsonb, zero_nulls
 from services.support.analytics.cohorts import PeriodCohort, build_cohort, classify_tickets
 from services.support.analytics.config import (
     DIM_GRUPO,
@@ -315,11 +315,11 @@ def _get_activos_por_zona(db: DBConnector, periodo: str | None) -> dict[str, int
     disponibles = df_periodos["periodo_reporte"].astype(str).tolist()
     target = periodo if periodo in disponibles else disponibles[0]
 
-    df = db.query(f"""
+    df = zero_nulls(db.query(f"""
         SELECT valor, activos_final
         FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
         WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
-    """, params=[target])
+    """, params=[target]))
 
     activos: dict[str, int] = {}
     for _, row in df.iterrows():

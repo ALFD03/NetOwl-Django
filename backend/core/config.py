@@ -56,10 +56,9 @@ SUBS_STATE_TO_LOG_MAP = {
 class TableNames:
     """Los nombres de todas las tablas de Postgres, en un solo sitio.
 
-    Es la lista canonica: ningun modulo escribe un literal de nombre de tabla. Las
-    que empiezan por `analyzer_`, `crm_`, `support_` o `lifetime_` las crea la
-    propia analitica sobre la marcha (`DBConnector.save_historico`); las de
-    `subscriptions*` las escribe la importacion.
+    Es la lista canonica: ningun modulo escribe un literal de nombre de tabla. La
+    forma de cada una (columnas, tipos, indices) se declara en el `tables.py` de
+    su dominio y la pone al dia `migrate` (ver `core.tables`).
     """
     CRM_CLIENTS = "crm_clients"
     CRM_LOGS = "crm_logs"

@@ -15,8 +15,6 @@ from .flujo import (
     run_flujo_analysis,
     uso_de_etapas,
 )
-from .loader import campos_odoo_importacion, import_support_csv
-from .logs import LogsInvalidos, campos_odoo_logs, import_support_logs_csv, resumen_logs_cargados
 from .queries import (
     get_support_analytics_structured,
     get_support_breakdown,
@@ -27,8 +25,6 @@ from .queries import (
 )
 
 __all__ = [
-    "import_support_csv",
-    "campos_odoo_importacion",
     "run_support_analysis",
     "build_support_day_metrics",
     "get_support_day_payload",
@@ -40,10 +36,6 @@ __all__ = [
     "get_support_dimension_metrics",
     "get_support_analytics_structured",
     "get_support_breakdown",
-    "import_support_logs_csv",
-    "campos_odoo_logs",
-    "resumen_logs_cargados",
-    "LogsInvalidos",
     "run_flujo_analysis",
     "get_tickets_abiertos",
     "etapas_por_clasificar",

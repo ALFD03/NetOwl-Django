@@ -15,14 +15,13 @@ periodo con estas mismas funciones.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from psycopg2.extras import execute_values
+import pandas as pd
 
-from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
+from core.tables import replace
 from services.support.analytics.cohorts import PeriodCohort
 from services.support.analytics.config import (
     DIM_GRUPO,
@@ -30,10 +29,9 @@ from services.support.analytics.config import (
     SUPPORT_DIMENSIONES,
 )
 from services.support.analytics.metrics import compute_metrics_for_period
+from services.support.analytics.tables import DIMENSION_HISTORY
 
 logger = logging.getLogger(__name__)
-
-_INSERT_COLUMNS = ["periodo_reporte", "grupo_trabajo", "dimension", "valor", "metricas"]
 
 
 def build_dimension_rows(cohorte: PeriodCohort) -> list[dict[str, Any]]:
@@ -63,38 +61,8 @@ def build_dimension_rows(cohorte: PeriodCohort) -> list[dict[str, Any]]:
     return rows
 
 
-def save_support_dimensiones_periodo(
-    db: DBConnector, periodo: str, rows: list[dict[str, Any]]
-) -> None:
-    """
-    Reemplaza las filas dimensionales del periodo por las recién calculadas.
-
-    Un periodo son varios cientos de filas —cada grupo por sus seis ejes—, así
-    que se insertan en una sola sentencia con `execute_values` en vez de dar
-    otras tantas vueltas a la base.
-    """
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"DELETE FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO} "
-                f"WHERE periodo_reporte = %s",
-                [periodo],
-            )
-            if rows:
-                execute_values(
-                    cur,
-                    f"""
-                    INSERT INTO {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
-                    ({", ".join(_INSERT_COLUMNS)}, updated_at)
-                    VALUES %s
-                    """,
-                    [
-                        (
-                            periodo, r["grupo_trabajo"], r["dimension"], r["valor"],
-                            json.dumps(r["metricas"]),
-                        )
-                        for r in rows
-                    ],
-                    template="(%s, %s, %s, %s, %s, NOW())",
-                )
-        conn.commit()
+def save_dimensions(db: DBConnector, periodo: str, rows: list[dict[str, Any]]) -> None:
+    """Reemplaza las filas dimensionales del periodo por las recién calculadas."""
+    df = pd.DataFrame(rows, columns=["grupo_trabajo", "dimension", "valor", "metricas"])
+    with db.transaction() as cur:
+        replace(cur, DIMENSION_HISTORY, df, periodo_reporte=periodo)

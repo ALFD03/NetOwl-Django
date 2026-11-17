@@ -154,17 +154,16 @@ Cada fallo era **silencioso**: la columna quedaba fuera del DataFrame y el
 relleno de `SUPPORT_TEXT_COLUMNS` la dejaba entera en «Sin Especificar»,
 colapsando la dimensión del técnico en una única fila sin que nada fallara.
 
-`_resolve_columns` compara por **clave normalizada** (sin BOM, sin acentos, sin
-caja) y solo después, si nada coincide, prueba el prefijo antes de la barra.
-Hay además un diccionario de alias explícitos (`SUPPORT_CSV_COLUMN_ALIASES`).
-Dos cabeceras que resuelvan al mismo destino: gana la primera, porque renombrar
-ambas dejaría dos columnas homónimas y `df[SUPPORT_TICKET_COLUMNS]` devolvería un
-DataFrame donde se espera una Serie.
+`loader.import_tickets` lee con `core.exports.read_export(…, TICKETS_EXPORT)`,
+que compara por **clave normalizada** (sin BOM, sin acentos, sin caja) y solo
+después, si nada coincide, prueba el prefijo antes de la barra. Hay además un
+diccionario de alias explícitos (`SUPPORT_CSV_COLUMN_ALIASES`). Dos cabeceras
+que resuelvan al mismo destino: gana la primera.
 
-Después de resolver, `SUPPORT_LOADER_REQUIRED_COLUMNS` exige `ticket_sequence`,
-`asignado_a` y `creado_por`; el mensaje de error **lista las cabeceras encontradas**, porque el
-fallo típico no es que la columna no exista sino que Odoo la nombró de otra
-forma.
+Son obligatorias la secuencia, la etapa, el equipo, `Asignado a`, `Creado por`
+y las dos fechas; el mensaje de error **lista las cabeceras encontradas**,
+porque el fallo típico no es que la columna no exista sino que Odoo la nombró de
+otra forma. `False` cuenta como vacío (así exporta Odoo un relacional sin valor).
 
 Otros detalles:
 
@@ -173,8 +172,7 @@ Otros detalles:
   del reporte.
 - `duracion_total_horas` **se conserva como `NULL`** cuando no viene: un 0 sería
   un cierre instantáneo falso.
-- `reset_support_tickets` hace `DROP` + `CREATE` de **solo** `support_tickets`.
-  Las tablas de resultados no se tocan: guardan los periodos ya evaluados y el
+- Se reemplaza **solo** `support_tickets`. Las tablas de resultados no se tocan: guardan los periodos ya evaluados y el
   analizador las reescribe periodo a periodo. Borrarlas en cada importación
   vaciaba el histórico completo aunque después solo se recalculara un mes.
 
@@ -220,8 +218,8 @@ una de las cientos de sub-cohortes de un corte.
 
 ## `run_support_analysis(periodo=None, progreso=None)`
 
-1. `ensure_support_schema(db)` — idempotente, no pierde nada en una instalación
-   con datos.
+1. `ensure_tables(db, *tables.ALL)` — idempotente, no pierde nada en una
+   instalación con datos.
 2. Si hay logs de etapa cargados, `flujo.run_flujo_analysis` rehace
    `support_ticket_flujo` (ver «Logs de etapa y escalamiento»). Va **primero**
    porque de él sale cuándo escaló cada ticket. Sin logs, lo dice y no hace nada.
@@ -441,7 +439,7 @@ desde la creación también en un ticket escalado: suma el tiempo de ATC y el de
 Soporte y no dice de quién fue cada parte. Los «Registros de tiempo» —un log por cambio
 de etapa— sí, y de ellos sale todo lo de esta sección.
 
-### Importación por lotes (`logs.import_support_logs_csv`)
+### Importación por lotes (`logs.import_ticket_logs`)
 
 El histórico completo (~500 k tickets × 12-15 logs) no se puede sacar de Odoo de
 una vez, así que **la tabla `support_ticket_logs` nunca se reemplaza**: cada

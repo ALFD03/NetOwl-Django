@@ -10,33 +10,16 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from core.exports import InvalidExport
 from services.config.api import ApiError, endpoint
 from services.config.auth import has_permission
 from services.config.uploads import uploaded_csv
-from services.crm.analytics import campos_odoo_importacion as crm_odoo_fields
-from services.crm.analytics import import_crm_csv
-from services.crm.analytics.config import REQUIRED_CRM_HEADERS
-from services.subscriptions.analytics import (
-    CatalogoVacio,
-    FaltanColumnasFacturas,
-    ProductosSinCatalogo,
-    campos_odoo_importacion,
-    import_facturas_csv,
-    import_gratis_csv,
-    import_logs_csv,
-    import_subscriptions_csv,
-)
-from services.subscriptions.analytics.config import REQUIRED_LOGS_HEADERS, REQUIRED_SUBS_HEADERS
-from services.subscriptions.analytics.free_plans import REQUIRED_GRATIS_HEADERS
-from services.support.analytics import (
-    LogsInvalidos,
-    campos_odoo_logs,
-    import_support_csv,
-    import_support_logs_csv,
-    resumen_logs_cargados,
-)
-from services.support.analytics import campos_odoo_importacion as support_odoo_fields
-from services.support.analytics.config import REQUIRED_SUPPORT_HEADERS
+from services.crm.analytics import loader as crm_loader
+from services.subscriptions.analytics import free_plans, invoices
+from services.subscriptions.analytics import imports as subs_imports
+from services.subscriptions.analytics.imports import EmptyCatalog, UncatalogedProducts
+from services.support.analytics import loader as support_loader
+from services.support.analytics import logs as support_logs
 
 from .history import register_import_log
 from .jobs import bloqueo_modulos, cancelar_job, job_en_curso, jobs_abiertos, lanzar_analisis
@@ -78,7 +61,6 @@ def _import(
     log_module: str,
     analyses: tuple[str, ...],
     run: Callable[[str], tuple[int, str, str, dict]],
-    headers=None,
     upload_error: str,
     failure: str,
 ):
@@ -99,10 +81,13 @@ def _import(
             )
         received = False
         try:
-            with uploaded_csv(request, required_headers=headers) as path:
+            with uploaded_csv(request) as path:
                 received = True
                 try:
-                    rows, message, detail, extra = run(path)
+                    try:
+                        rows, message, detail, extra = run(path)
+                    except InvalidExport as exc:
+                        raise ImportRejected(str(exc)) from exc
                 except ImportRejected as exc:
                     status = "warning" if exc.status == 409 and exc.payload else "error"
                     register_import_log(request.user, log_module, file_name, 0, status, exc.message, exc.message)
@@ -125,22 +110,22 @@ def _import(
 @endpoint(perms=["can_view_imports", "can_view_imports_subs"], require_all=True)
 def subscriptions(request):
     """Las columnas de Odoo que espera la carga de suscripciones."""
-    return {"camposOdoo": campos_odoo_importacion()}
+    return {"camposOdoo": subs_imports.odoo_fields()}
 
 
 @endpoint(perms=["can_view_imports", "can_view_imports_crm"], require_all=True)
 def crm(request):
     """Las columnas de Odoo que espera la carga de CRM."""
-    return {"camposOdoo": crm_odoo_fields()}
+    return {"camposOdoo": crm_loader.odoo_fields()}
 
 
 @endpoint(perms=["can_view_imports", "can_view_imports_support"], require_all=True)
 def support(request):
     """Las columnas de Odoo de tickets y logs, y si ya hay logs cargados."""
     return {
-        "camposOdoo": support_odoo_fields(),
-        "camposOdooLogs": campos_odoo_logs(),
-        "logsCargados": resumen_logs_cargados(),
+        "camposOdoo": support_loader.odoo_fields(),
+        "camposOdooLogs": support_logs.odoo_fields(),
+        "logsCargados": support_logs.loaded_logs_summary(),
     }
 
 
@@ -152,11 +137,11 @@ def history(request):
 
 def _subscriptions_file(path: str):
     try:
-        rows = import_subscriptions_csv(path)
-    except ProductosSinCatalogo as exc:
+        rows = subs_imports.import_subscriptions(path)
+    except UncatalogedProducts as exc:
         # No se escribió nada: el cliente ofrece crear los productos o ignorarlos.
-        raise ImportRejected(str(exc), 409, {"productos": exc.productos, "ordenes": exc.ordenes}) from exc
-    except CatalogoVacio as exc:
+        raise ImportRejected(str(exc), 409, {"productos": exc.products, "ordenes": exc.orders}) from exc
+    except EmptyCatalog as exc:
         raise ImportRejected(str(exc), 409) from exc
     message = f"Suscripciones: {rows} filas importadas correctamente."
     return rows, message, f"Procesamiento exitoso de {rows} registros.", {}
@@ -167,13 +152,13 @@ def import_subscriptions(request):
     """El export de suscripciones. 409 `catalogo` si hay productos fuera del catálogo."""
     return _import(
         request, log_module="subs_subscriptions", analyses=SUBS_ANALYSES, run=_subscriptions_file,
-        headers=REQUIRED_SUBS_HEADERS, upload_error="Error en la estructura del archivo CSV.",
+        upload_error="Error al recibir el archivo de suscripciones.",
         failure="Fallo al importar.",
     )
 
 
 def _free_plans_file(path: str):
-    rows = import_gratis_csv(path)
+    rows = free_plans.import_free_plans(path)
     return (rows, f"Planes gratuitos: {rows} suscripciones importadas y fechadas.",
             f"Deteccion de inicio de plan gratuito sobre {rows} suscripciones.", {})
 
@@ -183,22 +168,19 @@ def import_free_plans(request):
     """El export de planes gratuitos: detecta desde cuándo lo son."""
     return _import(
         request, log_module="subs_subscriptions", analyses=SUBS_ANALYSES, run=_free_plans_file,
-        headers=REQUIRED_GRATIS_HEADERS, upload_error="Error en la estructura del archivo de planes gratuitos.",
+        upload_error="Error al recibir el archivo de planes gratuitos.",
         failure="Fallo al importar planes gratuitos.",
     )
 
 
 def _invoices_file(path: str):
-    try:
-        invoices = import_facturas_csv(path)
-    except FaltanColumnasFacturas as exc:
-        raise ImportRejected(str(exc)) from exc
-    return invoices, f"Facturas: {invoices} facturas importadas.", f"Carga del export de facturas con {invoices} facturas.", {}
+    count = invoices.import_invoices(path)
+    return count, f"Facturas: {count} facturas importadas.", f"Carga del export de facturas con {count} facturas.", {}
 
 
 @endpoint(methods=["POST"], perms=SUBS_IMPORT, rate="5/m")
 def import_invoices(request):
-    """El export global de facturas (lo usa Comisiones). Las cabeceras las valida el importador."""
+    """El export global de facturas (lo usa Comisiones)."""
     return _import(
         request, log_module="subs_subscriptions", analyses=SUBS_ANALYSES, run=_invoices_file,
         upload_error="Error al recibir el archivo de facturas.", failure="Fallo al importar facturas.",
@@ -206,7 +188,7 @@ def import_invoices(request):
 
 
 def _subscription_logs_file(path: str):
-    rows = import_logs_csv(path)
+    rows = subs_imports.import_logs(path)
     return rows, f"Logs de Suscripciones: {rows} filas importadas.", f"Carga masiva de logs finalizada con {rows} filas.", {}
 
 
@@ -215,13 +197,13 @@ def import_subscription_logs(request):
     """Carga el CSV de logs de suscripciones."""
     return _import(
         request, log_module="subs_logs", analyses=SUBS_ANALYSES, run=_subscription_logs_file,
-        headers=REQUIRED_LOGS_HEADERS, upload_error="Error en la estructura del archivo de Logs.",
+        upload_error="Error al recibir el archivo de logs.",
         failure="Fallo en carga de logs.",
     )
 
 
 def _crm_file(path: str):
-    clients, logs = import_crm_csv(path)
+    clients, logs = crm_loader.import_crm(path)
     return (clients, f"CRM: Importados {clients} clientes y {logs} logs exitosamente.",
             f"Clientes: {clients} | Logs: {logs}", {})
 
@@ -230,13 +212,13 @@ def _crm_file(path: str):
 def import_crm(request):
     """El export de CRM: oportunidades y movimientos."""
     return _import(
-        request, log_module="crm", analyses=CRM_ANALYSES, run=_crm_file, headers=REQUIRED_CRM_HEADERS,
-        upload_error="Estructura inválida para Odoo CRM.", failure="Fallo en importación CRM.",
+        request, log_module="crm", analyses=CRM_ANALYSES, run=_crm_file,
+        upload_error="Error al recibir el archivo de CRM.", failure="Fallo en importación CRM.",
     )
 
 
 def _support_file(path: str):
-    rows = import_support_csv(path)
+    rows = support_loader.import_tickets(path)
     return rows, f"Technical Support: {rows} tickets importados correctamente.", f"Carga realizada exitosamente con {rows} registros.", {}
 
 
@@ -245,16 +227,13 @@ def import_support(request):
     """Carga el CSV de tickets de soporte."""
     return _import(
         request, log_module="support", analyses=SUPPORT_ANALYSES, run=_support_file,
-        headers=REQUIRED_SUPPORT_HEADERS, upload_error="Error en la estructura del CSV de Support.",
+        upload_error="Error al recibir el archivo de soporte.",
         failure="Fallo al importar tickets.",
     )
 
 
 def _support_logs_file(path: str):
-    try:
-        r = import_support_logs_csv(path)
-    except LogsInvalidos as exc:
-        raise ImportRejected(str(exc)) from exc
+    r = support_logs.import_ticket_logs(path)
     message = (
         f"Logs de soporte: {r['nuevos']} nuevos y {r['repetidos']} que ya estaban, "
         f"de {r['tickets']} tickets ({r['desde']} a {r['hasta']})."
@@ -263,7 +242,7 @@ def _support_logs_file(path: str):
         f"Lote de logs: {r['filas']} filas leídas, {r['nuevos']} nuevas, {r['repetidos']} repetidas, "
         f"{r['duplicados_en_archivo']} duplicadas dentro del archivo."
     )
-    return r["nuevos"], message, detail, {"lote": r, "cargados": resumen_logs_cargados()}
+    return r["nuevos"], message, detail, {"lote": r, "cargados": support_logs.loaded_logs_summary()}
 
 
 @endpoint(methods=["POST"], perms=SUPPORT_IMPORT, rate="5/m")

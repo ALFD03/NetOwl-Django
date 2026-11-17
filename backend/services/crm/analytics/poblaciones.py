@@ -38,9 +38,10 @@ import pandas as pd
 
 from core.config import TableNames
 from core.database import DBConnector
+from core.tables import ensure_tables
 
+from . import tables
 from .config import ETAPA8_KEY
-from .loader import ensure_crm_schema
 from .metrics.core import compute_crm_metrics_for_period
 from .metrics.tiempo import compute_permanencias_en_etapa
 
@@ -98,9 +99,8 @@ class DatosCrm:
 
 def preparar_datos(db: DBConnector) -> DatosCrm:
     """Carga y normaliza la base de CRM: oportunidades, movimientos y estancias."""
-    # El cierre guarda ahora la efectividad por etapa del periodo; en una base
-    # anterior a ese cambio la columna todavía no existe.
-    ensure_crm_schema(db)
+    # En una instalación nueva el análisis puede llegar antes que la primera importación.
+    ensure_tables(db, *tables.ALL)
 
     df_clients = db.read_table(TableNames.CRM_CLIENTS)
     df_logs = db.read_table(TableNames.CRM_LOGS)

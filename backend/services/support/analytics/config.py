@@ -65,27 +65,6 @@ SUPPORT_CSV_COLUMN_ALIASES = {
     "reportado por": "creado_por",
 }
 
-# Columnas que el loader exige DESPUÉS de resolver el mapa y los alias. Van
-# aquí y no en `REQUIRED_SUPPORT_HEADERS` —que valida el CSV crudo, antes de
-# normalizar— para poder aceptar cualquiera de las variantes de arriba y aun
-# así fallar de forma visible cuando no viene ninguna. El valor es la etiqueta
-# canónica, que es la que se le nombra al usuario en el mensaje de error.
-SUPPORT_LOADER_REQUIRED_COLUMNS = {
-    "ticket_sequence": "Secuencia ID del ticket",
-    "asignado_a": "Asignado a",
-    "creado_por": "Creado por",
-}
-
-# Cabeceras mínimas obligatorias para validar la estructura del CSV. Sin estas
-# cinco no hay ni cohorte ni desenlace que medir.
-REQUIRED_SUPPORT_HEADERS = {
-    "Secuencia ID del ticket": "ticket_sequence",
-    "Etapa": "etapa",
-    "Equipo de soporte al cliente": "grupo_trabajo",
-    "Creado el": "creado_el",
-    "Última actualización de la etapa": "ultima_actualizacion_etapa",
-}
-
 # Columnas de texto del ticket. Todas se normalizan a "Sin Especificar" cuando
 # Odoo las exporta vacías, porque son claves de agrupación: un NULL partiría la
 # misma zona o el mismo técnico en dos filas distintas del reporte.
@@ -276,37 +255,6 @@ SUPPORT_DESGLOSES = ["tipo_solicitud", "razon_falla", "solucion_falla"]
 
 SUPPORT_DIMENSION_COLUMNS = [DIM_GRUPO, *SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES]
 
-
-# --- Logs de etapa ("Registros de tiempo") ---------------------------------
-#
-# Cada fila es un cambio de etapa de un ticket. El export sale del ticket o del
-# propio modelo de registros, asi que la cabecera puede llegar con el prefijo
-# `Registros de tiempo/` o sin el: `logs._resolver_columnas` lo quita antes de
-# comparar. `ID` es el del registro en Odoo, unico entre todos los logs de todos
-# los tickets: es la clave con la que cada log entra una sola vez aunque llegue
-# en dos lotes.
-LOGS_PREFIJO = "Registros de tiempo/"
-
-LOGS_CSV_COLUMN_MAP = {
-    "ID": "log_id",
-    "Ticket/Secuencia ID del ticket": "ticket_sequence",
-    "Creado el": "creado_el",
-    "Etapa anterior": "etapa_anterior",
-    "Nueva etapa": "etapa_nueva",
-    "Duración (horas)": "duracion_horas",
-}
-
-# Sin estas no hay secuencia que reconstruir. La duracion se guarda pero no se
-# usa para medir: los tramos salen de las fechas de los propios registros.
-LOGS_REQUIRED_COLUMNS = {
-    "log_id": "ID",
-    "ticket_sequence": "Ticket/Secuencia ID del ticket",
-    "creado_el": "Creado el",
-    "etapa_anterior": "Etapa anterior",
-    "etapa_nueva": "Nueva etapa",
-}
-
-LOGS_COLUMNS = ["log_id", "ticket_sequence", "creado_el", "etapa_anterior", "etapa_nueva", "duracion_horas"]
 
 # El escalamiento: entrar en esta etapa viniendo de una que no es de Soporte
 # (segun el catalogo de etapas). Un ticket que *nace* en ella -etapa anterior

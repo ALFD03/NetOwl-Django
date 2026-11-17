@@ -24,16 +24,18 @@ from typing import Any
 from core.config import TableNames
 from core.database import DBConnector
 from core.day_metrics import (
-    leer_mes,
-    mes_bounds,
-    periodo_label_mes,
-    periodos_con_dias,
-    ultimo_dia_a_calcular,
+    last_day_to_compute,
+    month_bounds,
+    month_label,
+    months_with_days,
+    read_month,
+    save_days,
 )
 from core.models import Periodo
 
 from .analyzer import MetricsAnalyzer
 from .analyzer import dimensions as dim_mod
+from .tables import DAY_METRICS
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +96,8 @@ def build_day_metrics(
     dias es la parte larga y es la unica con pasos contables.
     """
     db = db or DBConnector()
-    anio, mes, _ = mes_bounds(year_month)
-    tope = ultimo_dia_a_calcular(year_month, hasta_dia)
+    anio, mes, _ = month_bounds(year_month)
+    tope = last_day_to_compute(year_month, hasta_dia)
 
     if analyzer is None:
         analyzer = MetricsAnalyzer(db, Periodo.build(f"{year_month}-01"))
@@ -105,7 +107,7 @@ def build_day_metrics(
 
     pendientes: dict[str, Any] = {}
     activos_inicio = 0
-    label = periodo_label_mes(year_month)
+    label = month_label(year_month)
 
     for dia in range(1, tope + 1):
         periodo = Periodo.build(
@@ -146,23 +148,14 @@ def build_day_metrics(
     return {"periodo_reporte": label, "dias_calculados": tope}
 
 
-def _guardar(
-    db: DBConnector, label: str, activos_inicio: int, dias: dict[str, Any]
-) -> None:
+def _guardar(db: DBConnector, label: str, activos_inicio: int, dias: dict[str, Any]) -> None:
     """Vuelca los dias pendientes a `analyzer_day_metrics`."""
-    db.save_day_metrics(
-        label,
-        dias,
-        table=TableNames.ANALYZER_DAY_METRICS,
-        escalares={"activos_inicio": activos_inicio},
-    )
+    save_days(db, DAY_METRICS, label, dias, activos_inicio=activos_inicio)
 
 
 def get_day_metrics(year_month: str) -> dict[str, Any]:
     """Devuelve el mes completo: {activos_inicio, dias: {1: {...}, ...}}."""
-    datos = leer_mes(
-        TableNames.ANALYZER_DAY_METRICS, year_month, escalares=("activos_inicio",)
-    )
+    datos = read_month(TableNames.ANALYZER_DAY_METRICS, year_month, scalars=("activos_inicio",))
     if not datos:
         return {}
     datos["activos_inicio"] = int(datos.get("activos_inicio") or 0)
@@ -171,4 +164,4 @@ def get_day_metrics(year_month: str) -> dict[str, Any]:
 
 def get_periodos_con_dias() -> list[str]:
     """Meses (YYYY-MM) que ya tienen metricas diarias calculadas."""
-    return periodos_con_dias(TableNames.ANALYZER_DAY_METRICS)
+    return months_with_days(TableNames.ANALYZER_DAY_METRICS)

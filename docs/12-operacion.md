@@ -187,7 +187,7 @@ primer mensaje). El log de un análisis concreto no está aquí sino en la colum
 | 403 al hacer POST | Token CSRF viejo. El cliente lee la cookie antes que el meta precisamente por esto; comprobar que el meta `csrf-cookie-name` coincide con el entorno |
 | Los tickets de soporte salen todos como «Sin Especificar» en una dimensión | Odoo nombró esa columna de otra forma. El error de carga lista las cabeceras encontradas; añadir el alias en `SUPPORT_CSV_COLUMN_ALIASES` |
 | La importación de suscripciones devuelve 409 | Hay productos sin catalogar. **No se escribió nada**: registrarlos o ignorarlos y volver a subir |
-| El análisis de churn falla nada más empezar | `productos_fuera_de_catalogo()` encontró productos ya importados que hoy no están en el catálogo |
+| El análisis de churn falla nada más empezar | `products_outside_catalog()` encontró productos ya importados que hoy no están en el catálogo |
 | Una edición del catálogo no se ve en el worker | La instantánea cachea 60 s; las escrituras llaman a `reset_cache()` y cada análisis también, así que solo debería pasar en mitad de una ejecución ya iniciada |
 
 ## Convención de idioma

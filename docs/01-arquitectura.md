@@ -61,9 +61,10 @@ Reglas que se mantienen en todo el repositorio:
 services/<dominio>/
 ├── analytics/
 │   ├── config.py       Constantes del dominio: cabeceras del CSV, vocabularios
-│   ├── loader.py       CSV o base de datos → DataFrame
+│   ├── tables.py       Las tablas del dominio, con sus tipos (core.tables)
+│   ├── loader.py       CSV (core.exports) o base de datos → DataFrame
 │   ├── dimensions.py   Desgloses por dimensión
-│   ├── analyzer.py     Calcula y persiste vía DBConnector.save_historico
+│   ├── analyzer.py     Calcula y persiste con core.tables.replace / upsert
 │   └── queries.py      Lo que leen las vistas de los resultados ya calculados
 ├── views.py            Capa HTTP
 └── urls.py
@@ -79,12 +80,13 @@ la disposición. `subscriptions` es el único que crece por encima de ese esquem
 |---|---|---|
 | **Quién lo usa** | Todo `services/*/analytics/` | Solo `services/config/models.py`, `services/imports/models.py` y `services/subscriptions/models.py` |
 | **Qué guarda** | Datos calculados y tablas cargadas del CSV | Usuarios, permisos, bitácora, trabajos de análisis, catálogos |
-| **Esquema** | Tablas creadas y alteradas al vuelo, **todas las columnas `text`** | Migraciones versionadas |
-| **Carga masiva** | `COPY` por encima de 1000 filas, `execute_values` por debajo | — |
+| **Esquema** | Tablas declaradas con tipos en `services/*/analytics/tables.py`; `migrate` las pone al día | Migraciones versionadas |
+| **Carga masiva** | `COPY` en la misma transacción que el borrado del periodo (`core.tables.replace`) | — |
 | **Esquema Postgres** | Cualificado con `DB_SCHEMA` | Depende del modelo (ver [02](02-configuracion.md)) |
 
 No es accidental: la analítica escribe tablas cuya forma cambia con cada métrica
-nueva, y modelarlas con el ORM obligaría a una migración por columna.
+nueva, y modelarlas con el ORM obligaría a una migración por columna. Con
+`core.tables` una métrica nueva es una línea en el `tables.py` del dominio.
 
 ## Ciclo de vida de una petición de lectura
 
@@ -145,8 +147,9 @@ Concurrencia:
 
 - Varios análisis **de módulos distintos** corren en paralelo
   (`CELERY_WORKER_CONCURRENCY`, por defecto 2).
-- Dos del **mismo módulo** nunca se solapan: comparten tabla y `save_historico`
-  la crea y altera sobre la marcha. El que llega segundo hace
+- Dos del **mismo módulo** nunca se solapan: comparten tabla, reescribirían el
+  mismo periodo y la primera escritura de un proceso puede ajustarla
+  (`core.tables.ensure`). El que llega segundo hace
   `self.retry(countdown=20)` y libera el hueco del worker, quedándose visible
   como `pending`.
 - Solo se rechaza (409) el **duplicado exacto**: mismo módulo y mismo periodo ya

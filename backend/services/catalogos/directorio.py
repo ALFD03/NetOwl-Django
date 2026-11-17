@@ -60,7 +60,7 @@ def personas_fuera_del_directorio() -> list[dict[str, Any]]:
     importado con `Medio` simplemente no tiene esa lista.
     """
     db = DBConnector()
-    presentes = db.columnas(TableNames.SUBSCRIPTIONS)
+    presentes = db.columns(TableNames.SUBSCRIPTIONS)
     columnas = [c for c in COLUMNAS_VENTAS if c in presentes]
     if not columnas:
         return []

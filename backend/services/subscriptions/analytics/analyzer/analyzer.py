@@ -12,10 +12,12 @@ from typing import Any
 
 import pandas as pd
 
-from core.config import ACTIVE_STATE, FREE_STATE, INACTIVE_STATES, TableNames
+from core.config import ACTIVE_STATE, FREE_STATE, INACTIVE_STATES
 from core.database import DBConnector
 from core.models import Periodo
+from core.tables import replace
 
+from .. import tables
 from . import cleaner, dimensions, loader, metrics_calc, rules
 
 
@@ -356,24 +358,26 @@ class MetricsAnalyzer:
         n_react_4_H = c["n_react_4_H"]
         n_react_unicas = c["n_react_unicas"]
 
-        self.db.save_historico(act_fin[["orden", "f_dt", "estado"]], TableNames.ANALYZER_ACTIVOS_CIERRE, periodo_label)
-        self.db.save_historico(df_react_all, TableNames.ANALYZER_REACTIVACIONES, periodo_label)
-        self.db.save_historico(df_bajas[["orden", "f_ini_dt", "estado"]], TableNames.ANALYZER_BAJAS_DETALLADAS, periodo_label)
-        self.db.save_historico(df_corte_impagado, TableNames.ANALYZER_CORTE_IMPAGADO, periodo_label)
-        if not free_fin.empty:
-            self.db.save_historico(
-                free_fin[["orden", "f_dt", "estado"]].rename(columns={"f_dt": "fecha_archivado"}),
-                TableNames.ANALYZER_CLIENTES_GRATUITOS,
-                periodo_label,
-            )
-
-        self.db.save_historico(pd.DataFrame([summary]), TableNames.ANALYZER_CIERRE_HISTORICO, periodo_label)
-
-        if not df_inactivos.empty:
-            detalle_inac = df_inactivos[["orden", "f_dt", "estado"]].rename(
-                columns={"f_dt": "fecha_evento", "estado": "estado_inactivo"}
-            )
-            self.db.save_historico(detalle_inac, TableNames.ANALYZER_INACTIVOS_DETALLADOS, periodo_label)
+        # Todo el periodo en una transacción: un fallo a mitad deja el cálculo anterior entero.
+        with self.db.transaction() as cur:
+            for table, df in (
+                (tables.ACTIVE_AT_CLOSE, act_fin[["orden", "f_dt", "estado"]]),
+                (tables.REACTIVATIONS, df_react_all),
+                (tables.CHURNED, df_bajas[["orden", "f_ini_dt", "estado"]]),
+                (tables.UNPAID_CUTS, df_corte_impagado),
+                (
+                    tables.FREE_CLIENTS,
+                    free_fin.reindex(columns=["orden", "f_dt", "estado"]).rename(columns={"f_dt": "fecha_archivado"}),
+                ),
+                (tables.CLOSE_HISTORY, pd.DataFrame([summary])),
+                (
+                    tables.INACTIVE,
+                    df_inactivos.reindex(columns=["orden", "f_dt", "estado"]).rename(
+                        columns={"f_dt": "fecha_evento", "estado": "estado_inactivo"}
+                    ),
+                ),
+            ):
+                replace(cur, table, df, periodo_reporte=periodo_label)
 
         print(f"\nANALISIS COMPLETADO | Periodo: {periodo_label}")
         print(f"Base Inicio: {len(act_ini)} | Nuevos: {len(set_nue)} | Base Final: {len(act_fin)}")

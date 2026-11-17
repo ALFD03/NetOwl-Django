@@ -18,6 +18,7 @@ from typing import Any
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import orden_sites, zonas, zonas_disponibles
+from core.utils import zero_nulls
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,11 @@ def get_cierre_churn(
 ) -> list[dict[str, Any]]:
     """Los cierres mensuales, del mas reciente al mas antiguo.
 
-    Convierte explicitamente cada columna porque en la base son todas `text`.
+    Las métricas que un cierre antiguo no calculaba llegan nulas y salen en 0.
     """
     db = DBConnector()
     try:
-        df = db.read_table_filtered(TableNames.ANALYZER_CIERRE_HISTORICO, "periodo_reporte", periodos)
+        df = zero_nulls(db.read_table_filtered(TableNames.ANALYZER_CIERRE_HISTORICO, "periodo_reporte", periodos))
         if df.empty:
             return []
         result: list[dict[str, Any]] = []
@@ -90,7 +91,7 @@ def get_dimensiones(
     """El desglose dimensional de cada periodo, agrupado por dimension."""
     db = DBConnector()
     try:
-        df = db.read_table_filtered(TableNames.ANALYZER_CHURN_DIMENSIONES, "periodo_reporte", periodos)
+        df = zero_nulls(db.read_table_filtered(TableNames.ANALYZER_CHURN_DIMENSIONES, "periodo_reporte", periodos))
         if df.empty:
             return []
 
@@ -202,13 +203,13 @@ def _dimension_df(db: DBConnector, target_period: str, dia: int | None):
             return pd.DataFrame()
         return pd.DataFrame(payload.get("dimensiones", []))
 
-    return db.query(f"""
+    return zero_nulls(db.query(f"""
         SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
                churn_neto_pct, churn_bruto_pct, react_val,
                adiciones_netas, adiciones_brutas, corte_impagado
         FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
         WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
-    """, params=[target_period])
+    """, params=[target_period]))
 
 def calculate_aggregation_totals(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     """

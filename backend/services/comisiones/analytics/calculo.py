@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import calendar
 import logging
-import re
 from dataclasses import asdict
 from datetime import date, timedelta
 from decimal import Decimal
@@ -68,12 +67,16 @@ from services.comisiones.models import (
     RevisionComision,
     VentaManual,
 )
-from services.subscriptions.analytics.analyzer.cleaner import parse_archivado
+from services.subscriptions.analytics.analyzer.cleaner import parse_archived
 from services.subscriptions.analytics.bcv import TasaNoDisponible, consultar_tasa_vigente_el
 from services.subscriptions.analytics.coordinadoras_oficina import get_coordinadoras_oficina
 from services.subscriptions.analytics.cumplimiento_sites import indicadores_del_mes
-from services.subscriptions.analytics.facturas import facturas_importadas_el, leer_facturas
 from services.subscriptions.analytics.free_plans import _is_free_tariff
+from services.subscriptions.analytics.invoices import (
+    invoices_have_payment_dates,
+    invoices_imported_at,
+    read_invoices,
+)
 from services.subscriptions.models import Coordinador
 
 from .pagos import Indicadores, Miembro, Venta, calcular_pagos
@@ -109,8 +112,6 @@ COLUMNAS_REQUERIDAS = {
     "medio_supervisor": "Oportunidad/Administrador",
     "estado_factura": "Estado de la factura",
 }
-
-_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 # El estado interno de los logs de una suscripcion cancelada.
 CANCELADO_LOG = SUBS_STATE_TO_LOG_MAP["cancelado"]
@@ -230,8 +231,12 @@ def condiciones_vigentes() -> dict[str, Any]:
 def _leer(donde: str, params: list) -> pd.DataFrame:
     """Las suscripciones que cumplen `donde`, con la fecha de instalacion leida en `fecha`."""
     db = DBConnector()
-    columnas = db.columnas(TableNames.SUBSCRIPTIONS)
-    faltan = [titulo for col, titulo in COLUMNAS_REQUERIDAS.items() if col not in columnas]
+    table = f'"{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"'
+    # Las columnas siempre existen; lo que dice si el export las traía es que tengan algún valor.
+    loaded = db.query(
+        "SELECT " + ", ".join(f"bool_or({c} IS NOT NULL) AS {c}" for c in COLUMNAS_REQUERIDAS) + f" FROM {table}"
+    ).iloc[0]
+    faltan = [titulo for col, titulo in COLUMNAS_REQUERIDAS.items() if loaded[col] is not None and not loaded[col]]
     if faltan:
         raise FaltanColumnas(
             "La tabla de suscripciones no trae "
@@ -239,40 +244,24 @@ def _leer(donde: str, params: list) -> pd.DataFrame:
             + ". Vuelve a importar las suscripciones con un export que incluya esas columnas."
         )
 
-    # `activo` llega solo con los exports nuevos: sin ella, nadie se da por archivado.
-    activo = ", activo" if "activo" in columnas else ""
     df = db.query(
         f"""
         SELECT orden_producto, cliente, sucursal, zona, estado, fecha_inicio,
-               producto, tarifa, total, vendedor, medio, medio_supervisor, estado_factura{activo}
-        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
+               producto, tarifa, total, vendedor, medio, medio_supervisor, estado_factura, activo
+        FROM {table}
         WHERE {donde}
         """,
         params=params,
     )
     if df.empty:
         return df
-    df["fecha"] = df["fecha_inicio"].map(lambda v: (parse_date(v) or pd.NaT) if v else pd.NaT)
-    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce").dt.date
+    df["fecha"] = pd.to_datetime(df["fecha_inicio"], errors="coerce").dt.date
     return df
 
 
 def _leer_candidatas(inicio: date, fin: date) -> pd.DataFrame:
-    """Las suscripciones instaladas en la ventana.
-
-    `fecha_inicio` es texto, como toda columna importada. Las fechas ISO se
-    filtran en SQL; las que vengan en otro formato (no deberia haberlas, pero
-    el export no lo garantiza) se traen y se resuelven con `parse_date`.
-    """
-    df = _leer(
-        """(fecha_inicio ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' AND LEFT(fecha_inicio, 10) BETWEEN %s AND %s)
-           OR (fecha_inicio IS NOT NULL AND fecha_inicio !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}')""",
-        [inicio.isoformat(), fin.isoformat()],
-    )
-    if df.empty:
-        return df
-    en_ventana = df["fecha"].map(lambda f: isinstance(f, date) and inicio <= f <= fin)
-    return df[en_ventana].copy()
+    """Las suscripciones instaladas en la ventana."""
+    return _leer("fecha_inicio BETWEEN %s AND %s", [inicio, fin])
 
 
 def leer_ordenes(ordenes: list[str]) -> pd.DataFrame:
@@ -292,9 +281,7 @@ def _gratuitas(df: pd.DataFrame) -> set[str]:
     if df.empty:
         return set()
     ordenes = df["orden_producto"].astype(str)
-    gratuita = df["tarifa"].map(_is_free_tariff)
-    if "activo" in df.columns:
-        gratuita |= parse_archivado(df["activo"])
+    gratuita = df["tarifa"].map(_is_free_tariff) | parse_archived(df["activo"])
     resultado = set(ordenes[gratuita.to_numpy()])
 
     logs = DBConnector().query(
@@ -625,7 +612,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         .values_list("orden", "periodo__periodo")
     )
 
-    importadas_el = facturas_importadas_el()
+    importadas_el = invoices_imported_at()
     if importadas_el is None:
         raise FaltanColumnas(
             "No hay facturas importadas. Carga el export de facturas en Importaciones › Suscripciones:"
@@ -638,7 +625,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
     if fuera:
         df = pd.concat([df, leer_ordenes(fuera)], ignore_index=True)
     ordenes = df["orden_producto"].astype(str).tolist() if not df.empty else []
-    facturas = leer_facturas(ordenes)
+    facturas = read_invoices(ordenes)
     gratuitas = _gratuitas(df)
     canceladas_el = _canceladas_el(df)
     planes_tarifa, planes_nombre = _indice_planes()
@@ -815,7 +802,7 @@ def construir_informe(periodo: ComisionPeriodo) -> tuple[dict[str, Any], list[di
         # Sin periodo anterior, lo de sus dias promocionales se confirma a mano.
         "anterior": {"periodo": mes_anterior(clave), "estado": anterior.estado if anterior else None},
         # Sin la fecha del pago en el export, los adelantos se fechan por la ultima actualizacion o la creacion.
-        "facturas_con_fecha_pago": "fecha_pago" in DBConnector().columnas(TableNames.SUBSCRIPTIONS_FACTURAS),
+        "facturas_con_fecha_pago": invoices_have_payment_dates(),
         "estado": periodo.estado,
         "calculo_desde": calculo_desde.isoformat(),
         "antes_de_tiempo": hoy < calculo_desde,

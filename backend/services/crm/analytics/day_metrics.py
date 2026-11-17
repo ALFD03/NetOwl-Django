@@ -37,11 +37,12 @@ from typing import Any
 from core.config import TableNames
 from core.database import DBConnector
 from core.day_metrics import (
-    fecha_corte,
-    leer_payload,
-    leer_serie,
-    periodos_con_dias,
-    ultimo_dia_a_calcular,
+    cutoff_date,
+    last_day_to_compute,
+    months_with_days,
+    read_day,
+    read_series,
+    save_days,
 )
 from core.utils import clean_json_props
 
@@ -52,6 +53,7 @@ from .poblaciones import (
     construir_poblaciones,
     preparar_datos,
 )
+from .tables import DAY_METRICS
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +94,7 @@ def build_crm_day_metrics(
     if datos.vacio:
         return {"periodo_reporte": year_month, "dias_calculados": 0}
 
-    tope = ultimo_dia_a_calcular(year_month, hasta_dia)
+    tope = last_day_to_compute(year_month, hasta_dia)
     # La clave de fila es el mes en `YYYY-MM`, la misma que usan el cierre y las
     # dimensiones de CRM. Suscripciones usa la etiqueta larga porque asi nacieron
     # sus tablas; mezclarlas aqui obligaria a traducir en cada lectura.
@@ -101,7 +103,7 @@ def build_crm_day_metrics(
     calculados = 0
 
     for dia in range(1, tope + 1):
-        pob = construir_poblaciones(datos, year_month, hasta=fecha_corte(year_month, dia))
+        pob = construir_poblaciones(datos, year_month, hasta=cutoff_date(year_month, dia))
         # Un dia sin nada creado todavia no deja columna: la barra lo pinta como
         # hueco en vez de como un corte de ceros, que se leeria como un dato.
         if pob is not None:
@@ -127,7 +129,7 @@ def build_crm_day_metrics(
 
 def _guardar(db: DBConnector, label: str, dias: dict[str, Any]) -> None:
     """Vuelca los dias pendientes a `crm_day_metrics`."""
-    db.save_day_metrics(label, dias, table=TableNames.CRM_DAY_METRICS)
+    save_days(db, DAY_METRICS, label, dias)
 
 
 def get_crm_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
@@ -136,7 +138,7 @@ def get_crm_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
     Es lo pesado —el bloque de cada vendedor, sucursal y campana— y por eso se
     pide de uno en uno. Los dias que hay calculados los dice `get_crm_day_series`.
     """
-    return leer_payload(TableNames.CRM_DAY_METRICS, year_month, dia, clave=year_month)
+    return read_day(TableNames.CRM_DAY_METRICS, year_month, dia, key=year_month)
 
 
 def get_crm_day_series(year_month: str) -> dict[str, Any]:
@@ -145,9 +147,9 @@ def get_crm_day_series(year_month: str) -> dict[str, Any]:
     Es lo que alimenta las tarjetas del dia y las lineas de tendencia sin que
     mover la barra cueste una consulta.
     """
-    return leer_serie(TableNames.CRM_DAY_METRICS, year_month, clave=year_month)
+    return read_series(TableNames.CRM_DAY_METRICS, year_month, key=year_month)
 
 
 def get_crm_periodos_con_dias() -> list[str]:
     """Meses (`YYYY-MM`) que ya tienen cortes diarios calculados."""
-    return periodos_con_dias(TableNames.CRM_DAY_METRICS)
+    return months_with_days(TableNames.CRM_DAY_METRICS)

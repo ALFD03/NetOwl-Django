@@ -34,27 +34,23 @@ services/subscriptions/
 
 Dos entradas independientes: el export de **suscripciones** y el de **logs**.
 
-### `import_subscriptions_csv(ruta)`
+### `import_subscriptions(ruta)`
 
-1. Lee con `dtype=str`, `keep_default_na=False`, `encoding="utf-8-sig"`.
-2. Renombra con `SUBS_COLUMN_MAPPING` + `SUBS_ACTIVO_ALIASES` (Odoo no siempre
-   exporta `Activo` con la misma capitalización).
-3. Descarta las filas en las que se repite la cabecera y las columnas que no
-   estén en el mapa.
-4. `_blank_to_nan` — convierte en `NaN` las celdas vacías o de solo espacios,
-   **columna a columna**. La versión anterior usaba `DataFrame.apply`, que
-   entrega Series completas y no celdas, así que nunca convertía nada: sin esto
-   el `ffill` por orden no rellena, el `dropna` no descarta las líneas sin
-   referencia y `groupby.first` se queda con la cadena vacía.
-5. Descarta las líneas sin referencia de orden: no pertenecen a ninguna
-   suscripción y agrupadas formarían una fila fantasma.
-6. `ffill` de los metadatos por orden y consolidación con `groupby(...).agg()`.
-7. **El producto de la orden lo elige `_first_matching_plan`**: el export trae
-   varias líneas por orden (el plan, el router, la instalación) y se queda con
-   la primera que esté en `nombres_reconocidos()`.
-8. **`_verificar_catalogo(df_local)` — antes de crear, truncar o copiar nada.**
-9. Crea las tablas si faltan, añade las columnas nuevas
-   (`ADD COLUMN IF NOT EXISTS`), hace `TRUNCATE` y carga con `COPY`:
+1. Lee con `read_export(ruta, SUBSCRIPTIONS_EXPORT)` (`core.exports`): cabeceras
+   tolerantes (caja, acentos, `Activo`/`Active`), obligatorias comprobadas,
+   vacíos como nulo y `fecha_inicio`/`fecha_factura` como fecha y `total` como
+   número.
+2. Descarta las filas en las que se repite la cabecera y las líneas sin
+   referencia de orden: no pertenecen a ninguna suscripción y agrupadas
+   formarían una fila fantasma.
+3. `ffill` de los metadatos por orden y consolidación con `groupby(...).first()`.
+4. **El producto de la orden es la primera de sus líneas que está en
+   `nombres_reconocidos()`**: el export trae varias líneas por orden (el plan,
+   el router, la instalación).
+5. **`_check_catalog(lines)` — antes de tocar la base.**
+6. `activo` pasa a booleano: vacío es archivada; un valor desconocido cuenta
+   como activa y se avisa; un export sin la columna no archiva a nadie.
+7. Reemplaza en una sola transacción (`core.tables.replace`):
    - `subscriptions-b` ← el detalle línea a línea.
    - `subscriptions` ← una fila por orden.
 
@@ -63,22 +59,21 @@ Devuelve el número de órdenes consolidadas.
 ### La verificación de catálogo
 
 ```
-¿hay algún plan en el catálogo?            no → CatalogoVacio
+¿hay algún plan en el catálogo?            no → EmptyCatalog
 para cada orden con líneas de producto:
     ¿alguna línea está en nombres_reconocidos()?   sí → correcta
     ¿el resto están en productos_ignorados()?      sí → no cuenta
     en otro caso                                   → candidata
-si hay candidatas → ProductosSinCatalogo(productos, órdenes)
+si hay candidatas → UncatalogedProducts(productos, órdenes)
 ```
 
-- Se comprueba **antes del `TRUNCATE`**: si levanta, no se escribió nada y la
-  tabla anterior sigue intacta.
+- Se comprueba **antes de escribir**: si levanta, la tabla anterior sigue intacta.
 - **Una orden sin ninguna línea de producto no se reporta**: no hay nombre que
   registrar, así que pasa como antes.
 - Antes, cuando ninguna línea estaba catalogada, la orden se guardaba **sin
   producto**, y la pérdida no se notaba hasta meses después, en el reporte de la
   reguladora.
-- `ProductosSinCatalogo` lleva encima lo que el cliente necesita para resolverlo
+- `UncatalogedProducts` lleva encima lo que el cliente necesita para resolverlo
   sin volver a subir el fichero a ciegas: qué productos son y cuántas órdenes
   arrastra cada uno.
 
@@ -90,14 +85,14 @@ comprobación no puede distinguir un plan nuevo de una línea que nunca lo será
 - **Ignorar** → registra el nombre en `ProductoIgnorado`.
 
 Un nombre ignorado deja de contar como candidato en las dos comprobaciones
-(`_verificar_catalogo` y `productos_fuera_de_catalogo`), que es lo que evita que
+(`_check_catalog` y `products_outside_catalog`), que es lo que evita que
 routers, instalaciones y servicios puntuales bloqueen cada importación para
 siempre. Es una pestaña aparte del catálogo para poder deshacer la decisión.
 
 > No confundir con `Plan.declarar_en_eta`: eso es un plan real excluido del
 > reporte de la reguladora, que sigue contando como plan en todas partes.
 
-### `productos_fuera_de_catalogo()`
+### `products_outside_catalog()`
 
 Mira lo **ya importado** que hoy no está en el catálogo. La importación
 garantiza que toda orden entra con un plan catalogado, pero un plan se puede
@@ -105,10 +100,11 @@ borrar después, y los datos cargados antes de que la comprobación existiera
 pueden no tener ninguno. Lo llama el análisis mensual **antes de los minutos de
 cálculo** y la pantalla de catálogos, que lo usa como primera pestaña.
 
-### `import_logs_csv(ruta)`
+### `import_logs(ruta)`
 
-Mucho más simple: renombra, exige las cuatro columnas (`orden`, `fecha_log`,
-`log`, `estado`), limpia, `TRUNCATE` y `COPY` sobre `subscriptions-logs`.
+Mucho más simple: `read_export` con las cuatro columnas obligatorias (`orden`,
+`fecha_log` como `timestamp`, `log`, `estado`) y `replace` de
+`subscriptions-logs`.
 
 ---
 
@@ -144,8 +140,8 @@ Detalles:
   gratuita antes de existir*. Se guarda también `fecha_evidencia`, la fecha
   cruda antes de ese recorte.
 
-`import_gratis_csv` reconstruye la tabla entera (`DROP` + `CREATE` + `COPY`):
-es propia y siempre se rehace desde el CSV. `summarize_detection` da el resumen
+`import_free_plans` reemplaza la tabla entera: es propia y siempre se rehace
+desde el CSV. `summarize_detection` da el resumen
 por método y confianza para revisión humana.
 
 ---
@@ -155,15 +151,13 @@ por método y confianza para revisión humana.
 ### 3.1 `loader.py`
 
 Lee **en paralelo** (cuatro hilos) `subscriptions`, `subscriptions-logs`,
-`subscriptions-logs-v15` y la tabla de gratuitos. La columna `activo` solo se
-pide si existe en la tabla (`information_schema`), porque solo la traen los
-exports nuevos.
+`subscriptions-logs-v15` y la tabla de gratuitos.
 
 ### 3.2 `cleaner.py`
 
-- `parse_archivado(serie)` — deriva la marca de archivado de la columna
-  `activo`. **Un valor fuera de los dos vocabularios conocidos NO se asume
-  archivado**: eso sacaría clientes de pago de la base activa sin dejar rastro.
+- `parse_archived(serie)` — deriva la marca de archivado de la columna
+  `activo` (vacía o `false` = archivada). **Un valor fuera de los dos
+  vocabularios conocidos NO se asume archivado**: eso sacaría clientes de pago de la base activa sin dejar rastro.
   Se avisa por consola (el log del cálculo lo recoge) y se cuenta como activo.
 - `_normalize_string_series` — normaliza mapeando **solo los valores únicos**,
   que es lo que lo hace rápido sobre cientos de miles de filas.
@@ -385,7 +379,7 @@ sin periodo: un solo job calcula todos los meses.
 |---|---|
 | `loader.py` | `load_data`: `analyzer.loader` + `cleaner` + `rules`, sin lectura propia. Devuelve suscripciones, el log limpio y las órdenes con actividad |
 | `bajas_mes.py` | `calcular_bajas_por_mes`: las bajas de cada mes con sus fechas y duraciones. `MES_INICIO`, `DIMS_BAJAS` |
-| `runner.py` | `run_lifecycle_analysis()`: carga una vez, calcula todos los meses y guarda cada uno |
+| `runner.py` | `run_lifetime_analysis()`: carga una vez, calcula todos los meses y guarda cada uno |
 | `queries.py` | `get_meses_lifetime`, `get_lifetime_mes` (resumen, tramos y desglose) y `get_lifetime_detalle` (una fila por baja, para exportar) |
 
 ### Las bajas del mes
@@ -694,7 +688,7 @@ nadie. `/subscriptions/config/` sigue respondiendo con una redirección (con
 | `/catalogos/estructura/` | Zonas, sites y estados. `?nueva_zona=` | `can_manage_catalogo_comercial` |
 | `/catalogos/ventas/` | Directorio de ventas (con el site de cada coordinadora de oficina), coordinadores de unidad de negocio y objetivos, también los de ventas de las oficinas | `can_manage_catalogo_ventas` |
 
-Las zonas por registrar (`zonas_fuera_de_catalogo`, en `analytics/imports.py`)
+Las zonas por registrar (`zones_outside_catalog`, en `analytics/imports.py`)
 **no bloquean nada**, a diferencia de los productos: sus órdenes se analizan
 igual, pero se quedan sin site, estado ni coordinador.
 

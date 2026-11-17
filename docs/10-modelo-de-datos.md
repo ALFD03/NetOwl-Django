@@ -1,17 +1,17 @@
 # 10 · Modelo de datos
 
 Una única base de datos PostgreSQL, con **un esquema por entorno**
-(`DB_SCHEMA`). Conviven tres familias de tablas:
+(`DB_SCHEMA`). Conviven dos familias de tablas:
 
 | Familia | Quién la crea | Dónde vive |
 |---|---|---|
 | **ORM de Django** | Migraciones (`migrate`, por esquema) | `DB_SCHEMA` |
-| **DDL explícito** | `ensure_*_schema` / `_ensure_tables_exist` en el código analítico | `DB_SCHEMA` |
-| **Dinámicas** | `DBConnector.save_historico` / `copiar` sobre la marcha | `DB_SCHEMA` |
+| **Analítica** | Declaradas en `services/<dominio>/analytics/tables.py`; las pone al día `migrate` (`core.tables.sync_all`) | `DB_SCHEMA` |
 
-> **Las tablas dinámicas tienen todas sus columnas de tipo `text`.** Los lectores
-> convierten explícitamente (`int(row.get(...) or 0)`). Una métrica nueva
-> aparece sin migración: `save_historico` hace `ADD COLUMN IF NOT EXISTS`.
+> **Las tablas de la analítica tienen tipos.** Cada columna se declara con el
+> suyo (`date`, `timestamp`, `bigint`, `numeric`, `boolean`, `jsonb`…) y lo que
+> no está declarado se borra al sincronizar. Una métrica nueva es una columna
+> más en su `tables.py`: `migrate` la añade. Ver [03 · Core](03-core.md).
 
 El catálogo canónico de nombres es `TableNames` en `core/config.py`. Todo el
 código lo usa; **no se escriben literales de nombre de tabla**.
@@ -77,39 +77,41 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 
 | Tabla | La escribe | Contenido |
 |---|---|---|
-| `subscriptions` | `import_subscriptions_csv` | **Una fila por orden**, consolidada. `TRUNCATE` + `COPY` en cada carga |
-| `subscriptions-b` | `import_subscriptions_csv` | El detalle línea a línea del mismo export. También se trunca |
-| `subscriptions-logs` | `import_logs_csv` | `orden`, `fecha_log`, `log`, `estado` |
+| `subscriptions` | `imports.import_subscriptions` | **Una fila por orden**, consolidada. Se reemplaza en cada carga |
+| `subscriptions-b` | `imports.import_subscriptions` | El detalle línea a línea del mismo export, en la misma transacción |
+| `subscriptions-logs` | `imports.import_logs` | `orden`, `fecha_log`, `log`, `estado` |
 | `subscriptions-logs-v15` | **nadie, a propósito** | Formato antiguo de logs (`orden`, `tipo`, `categoria`, `fecha`). Se **lee** en el análisis mensual y en el de ciclo de vida; se carga por fuera de la aplicación, una sola vez, porque es un histórico cerrado que ya no crece. El análisis mensual la exige —sin ella sus cifras históricas estarían incompletas— y el de ciclo de vida la envuelve en `try/except` |
-| `subscriptions_gratis` | `import_gratis_csv` | Desde cuándo es gratuita cada suscripción y con qué evidencia. `DROP` + `CREATE` + `COPY` |
-| `subscriptions-facturas` | `import_facturas_csv` | **Una fila por línea de factura**, con los datos de su factura repetidos. Export global: `TRUNCATE` + `COPY` en una sola transacción |
-| `crm_clients` | `import_crm_csv` | Una fila por oportunidad. `TRUNCATE` |
-| `crm_logs` | `import_crm_csv` | Un movimiento entre etapas por fila. `TRUNCATE` |
-| `support_tickets` | `import_support_csv` | Un ticket por fila. `DROP` + `CREATE` |
-| `support_ticket_logs` | `import_support_logs_csv` | Un cambio de etapa por fila («Registros de tiempo»). **No se reemplaza nunca**: cada lote se suma con `INSERT … ON CONFLICT (log_id) DO NOTHING` |
+| `subscriptions_gratis` | `free_plans.import_free_plans` | Desde cuándo es gratuita cada suscripción y con qué evidencia. Se reemplaza entera |
+| `subscriptions-facturas` | `invoices.import_invoices` | **Una fila por línea de factura**, con los datos de su factura repetidos. Export global: se reemplaza entera |
+| `crm_clients` | `loader.import_crm` | Una fila por oportunidad. Se reemplaza, por bloques, en una sola transacción |
+| `crm_logs` | `loader.import_crm` | Un movimiento entre etapas por fila. Igual |
+| `support_tickets` | `loader.import_tickets` | Un ticket por fila. Se reemplaza |
+| `support_ticket_logs` | `logs.import_ticket_logs` | Un cambio de etapa por fila («Registros de tiempo»). **No se reemplaza nunca**: cada lote se suma con `INSERT … ON CONFLICT (log_id) DO NOTHING` |
 
 Columnas principales de `subscriptions` / `subscriptions-b`: `orden_producto`,
 `producto`, `cliente`, `ci`, `sucursal`, `zona`, `municipio`, `tipo`, `estado`,
 `campanna`, `fecha_factura`, `fecha_inicio`, `tarifa`, `total`, `telefono`,
 `phone`, `phone2`, `vendedor`, `activo`, `medio`, `medio_supervisor`, `estado_factura`.
-Las tres últimas (para Comisiones) y `activo` solo existen si el export las trajo:
-la importación las añade a la tabla al encontrarlas.
+Las tres últimas (para Comisiones) y `activo` son opcionales en el export: si no
+vienen, la columna queda vacía. `fecha_inicio` y `fecha_factura` son `date`,
+`total` es `double precision` y `activo` es `boolean` (vacío en el export es
+`false`, archivada; un valor desconocido cuenta como activa y se avisa).
 
 `subscriptions-facturas`: `orden`, `numero`, `estado_factura_sub` (el estado de la
 factura de la suscripción, solo para contrastar), `estado` (Registrado, Borrador,
 Cancelado), `estado_pago`, `creado_el`, `fecha_pago` («Fecha del último pago») y
-`actualizado_el` («Última actualización el»), las tres en ISO para que ordenen
-como texto (las dos últimas, opcionales: vacías si el export no las trae),
+`actualizado_el` («Última actualización el»), las tres `timestamp` (las dos
+últimas, opcionales: vacías si el export no las trae),
 `producto` (tal cual, con la referencia `[...]` si la trae) e `importado_el`. Una
 factura se identifica por `orden` + `numero` + `creado_el`: los borradores pueden
 compartir número («/»). Qué línea es el plan se resuelve al leer
-(`facturas.leer_facturas`), contra el catálogo de ese momento.
+(`invoices.read_invoices`), contra el catálogo de ese momento.
 
 `subscriptions_gratis`: `orden_producto`, `cliente`, `fecha_inicio`, `tarifa`,
 `fecha_factura`, `fecha_gratuito`, `metodo`, `confianza`, `siempre_gratuito`,
 `fecha_evidencia`.
 
-`crm_clients` (DDL explícito): `id` (PK), `oportunidad`, `cliente`,
+`crm_clients`: `id` (PK), `oportunidad`, `cliente`,
 `cliente_municipio`, `campana`, `sucursal`, `vendedor`, `medio`,
 `medio_supervisor`, `equipo_ventas`, `etapa`, `etapa_actual`, `motivo_perdida`,
 `devolver_oportunidad`, `ganado`, `activo`, `creado_el`, `fecha_cierre`,
@@ -127,7 +129,7 @@ transición por oportunidad.
 que ATC escaló dice el grupo de Soporte, y el reparto entre los dos grupos se hace
 al leer (`escalamiento.incorporar_escalamiento`), no se guarda.
 
-`support_ticket_logs` (DDL explícito, `logs.ensure_logs_schema`): `log_id` (PK, el
+`support_ticket_logs`: `log_id` (PK, el
 ID del registro en Odoo, único entre todos los tickets), `ticket_sequence`,
 `creado_el`, `etapa_anterior` (vacía en el log de creación), `etapa_nueva`,
 `duracion_horas` (la de Odoo; se guarda pero no se usa para medir) e
@@ -135,10 +137,11 @@ ID del registro en Odoo, único entre todos los tickets), `ticket_sequence`,
 
 ---
 
-## 3. Resultados de suscripciones (dinámicas)
+## 3. Resultados de suscripciones
 
 Todas llevan `periodo_reporte` con la etiqueta `Periodo.label()`
-(`"2025-03-01 al 2025-03-31"`) y las escribe `MetricsAnalyzer.persist`.
+(`"2025-03-01 al 2025-03-31"`) y las escribe `MetricsAnalyzer.persist`, todas en
+una sola transacción con `core.tables.replace(..., periodo_reporte=…)`.
 
 | Tabla | Columnas propias |
 |---|---|
@@ -150,13 +153,12 @@ Todas llevan `periodo_reporte` con la etiqueta `Periodo.label()`
 | `analyzer_inactivos_detallados` | `orden`, `fecha_evento`, `estado_inactivo` |
 | `analyzer_clientes_gratuitos` | `orden`, `fecha_archivado`, `estado` |
 | `analyzer_churn_dimensiones` | `dimension`, `valor` y las mismas métricas del cierre |
-| `analyzer_day_metrics` | `periodo_reporte` (único), `activos_inicio`, `dia1`…`dia31` (JSON en texto) |
+| `analyzer_day_metrics` | `periodo_reporte` (único), `activos_inicio`, `dia1`…`dia31` (`jsonb`) |
 
-`analyzer_day_metrics` es la única de este bloque con un índice único explícito
-(`ix_day_metrics_periodo`) y con *upsert*: el resto se reescriben con
-`DELETE` + `INSERT` del periodo. `crm_day_metrics` y `support_day_metrics`
-siguen el mismo patrón (las tres las escribe `DBConnector.save_day_metrics`),
-con el índice nombrado a partir de la tabla.
+`analyzer_day_metrics` es la única de este bloque con clave única y *upsert*: el
+resto se reescriben enteras para su periodo. `crm_day_metrics` y
+`support_day_metrics` siguen el mismo patrón (las tres las escribe
+`core.day_metrics.save_days`).
 
 ### Ciclo de vida
 
@@ -170,19 +172,19 @@ Escritas con `metodo_calculo = "lifetime"`.
 
 | Tabla | Cómo se crea | Contenido |
 |---|---|---|
-| `analyzer_eta_config_subs_individual` | DDL explícito | Excepciones por orden: `orden` (PK), `cliente`, `producto`, `reportar`, `tecnologia`, `tipo_persona`, `tiene_tv`, `datas_mbps`, `es_transporte`, `es_dedicado`, `precio`, `updated_at`. `precio` es la renta con que se declara ese enlace: el catálogo comercial no la tiene |
-| `analyzer_eta_reporte_mensual` | DDL explícito | `periodo_reporte` (PK), `reporte_data` (JSONB), `esta_bloqueado`, `tasa_bcv`, `tasa_fuente`, `fecha_calculo`. `tasa_fuente` dice de dónde salió la cifra (el día que publicó el BCV, o «Escrita a mano»). La tasa vive **fuera** de `reporte_data`: los formularios guardan el precio en divisa y la conversión es del exportador, así que se corrige sin recalcular |
+| `analyzer_eta_config_subs_individual` | `tables.ETA_ORDER_CONFIG` | Excepciones por orden: `orden` (PK), `cliente`, `producto`, `reportar`, `tecnologia`, `tipo_persona`, `tiene_tv`, `datas_mbps`, `es_transporte`, `es_dedicado`, `precio`, `updated_at`. `precio` es la renta con que se declara ese enlace: el catálogo comercial no la tiene |
+| `analyzer_eta_reporte_mensual` | `tables.ETA_MONTHLY_REPORT` | `periodo_reporte` (PK), `reporte_data` (JSONB), `esta_bloqueado`, `tasa_bcv`, `tasa_fuente`, `fecha_calculo`. `tasa_fuente` dice de dónde salió la cifra (el día que publicó el BCV, o «Escrita a mano»). La tasa vive **fuera** de `reporte_data`: los formularios guardan el precio en divisa y la conversión es del exportador, así que se corrige sin recalcular |
 
 ---
 
-## 4. Resultados de CRM (DDL explícito)
+## 4. Resultados de CRM
 
 | Tabla | Contenido |
 |---|---|
 | `crm_cierre_historico` | Una fila por `periodo_reporte` (`YYYY-MM`, único) con los escalares declarados en `_COLUMNAS_CIERRE` más `efectividad` y `tiempo_por_etapa` como JSONB |
 | `crm_dimensiones_historico` | `periodo_reporte`, `dimension`, `valor`, `metricas` (JSONB), `efectividad` (JSONB) |
 | `crm_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `tiempo_por_etapa`, `efectividad` |
-| `crm_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (JSON en texto). Cada día es `{"global": {...}, "dimensiones": [...]}`: el corte acumulado del mes hasta ese día, con la misma forma que el cierre y sus dimensiones. `global` se lee aparte de los 31 días a la vez (`-> 'global'` en SQL) para la barra de días |
+| `crm_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (`jsonb`). Cada día es `{"global": {...}, "dimensiones": [...]}`: el corte acumulado del mes hasta ese día, con la misma forma que el cierre y sus dimensiones. `global` se lee aparte de los 31 días a la vez (`-> 'global'` en SQL) para la barra de días |
 
 Bloques de columnas de `crm_cierre_historico`:
 
@@ -195,9 +197,6 @@ Bloques de columnas de `crm_cierre_historico`:
 - **Tiempos**: los ocho estadísticos × tres sufijos (`_inst`, `_perd`,
   `_cierre`).
 
-Las columnas se fueron añadiendo con **migraciones en caliente**
-(`ADD COLUMN IF NOT EXISTS`) dentro de `_create_tables_if_not_exist`.
-
 Índices: sobre `crm_logs(client_id)`, `(created_at_log)`, `(nueva_etapa)`,
 `(etapa_anterior, nueva_etapa)`; sobre `crm_clients(etapa_actual)`, `(ganado)`,
 `(creado_el)`, `(campana, sucursal, vendedor)`; y sobre los periodos de cierre y
@@ -205,7 +204,7 @@ dimensiones.
 
 ---
 
-## 5. Resultados de soporte (DDL explícito)
+## 5. Resultados de soporte
 
 | Tabla | Contenido |
 |---|---|
@@ -214,7 +213,7 @@ dimensiones.
 | `support_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `por_grupo_trabajo`, `periodos_evaluados` |
 | `support_ticket_flujo` | Una fila por ticket con logs, **rehecha entera** en cada análisis (`flujo._persistir_flujo`): `creado` (su primer log), `completa` (el primer log es la creación), `origen` (`atc`/`soporte`), `escalado_el`, `ultimo_log`, `etapa_actual`/`equipo_actual`/`tipo_actual`, `primer_cierre`, `reaperturas`, `transferencia_sin_escalar`, entrada y salida de la cola de cada equipo y `h_<equipo>_<tipo>`: horas en cola, pausa, gestión y sin clasificar de ATC y de Soporte. Lo leen las cohortes (de aquí sale cuándo escaló cada ticket) y los tickets abiertos |
 | `catalogo_etapas_soporte` | ORM (`EtapaSoporte`): `nombre` (único sin caja), `equipo` (`atc`/`soporte`/`compartida`), `tipo` (`cola`/`pausa`/`gestion`). Las de cierre no van aquí |
-| `support_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (JSON en texto). Cada día es `{"global": {...}, "global_grupos": {...}, "grupos": {...}, "incidencia_zonas": {...}}`: el corte acumulado del mes hasta ese día. `grupos` e `incidencia_zonas` tienen la forma del bloque del periodo; `global` (la cohorte completa) y `global_grupos` (la misma por equipo) se leen aparte de los 31 días a la vez para las tarjetas del día |
+| `support_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (`jsonb`). Cada día es `{"global": {...}, "global_grupos": {...}, "grupos": {...}, "incidencia_zonas": {...}}`: el corte acumulado del mes hasta ese día. `grupos` e `incidencia_zonas` tienen la forma del bloque del periodo; `global` (la cohorte completa) y `global_grupos` (la misma por equipo) se leen aparte de los 31 días a la vez para las tarjetas del día |
 
 Dentro del JSONB, las claves siguen `SUPPORT_VOLUME_FIELDS`,
 `SUPPORT_RATE_FIELDS` y, por cada medida de tiempo, once columnas
@@ -237,7 +236,7 @@ aplana antes de servirlas.
 | `subscriptions_gratis` | Importación de gratuitos | Análisis mensual (solo si falta el log real) |
 | `subscriptions-facturas` | Importación de facturas | Comisiones (la primera mensualidad de cada venta) |
 | `analyzer_*` | `MetricsAnalyzer`, `build_day_metrics` | Dashboard, Analytics, Results, Sales Report, Business Units, ETA, **e incidencia por zona de soporte** |
-| `lifetime_bajas_mes` | `run_lifecycle_analysis` | Página Lifetime |
+| `lifetime_bajas_mes` | `run_lifetime_analysis` | Página Lifetime |
 | `analyzer_eta_*` | `ETAReportManager` | Reporte ETA y su pantalla de parametrización |
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |

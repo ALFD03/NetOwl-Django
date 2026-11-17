@@ -75,9 +75,10 @@ def bloqueo_modulo(module: str):
     """Toma el turno de escritura de un modulo, o cede si ya lo tiene otro.
 
     Con el worker en paralelo pueden coincidir dos analisis, y dos analisis del
-    mismo modulo comparten tabla: ademas de reescribir filas, `save_historico`
-    crea y altera la tabla sobre la marcha, y dos DDL simultaneas sobre la misma
-    tabla acaban en bloqueo mutuo. Este cerrojo deja que corran a la vez modulos
+    mismo modulo comparten tabla: los dos borrarian y reescribirian el mismo
+    periodo, y la primera escritura de un proceso puede ajustar la tabla
+    (`core.tables.ensure`), y dos DDL simultaneas sobre la misma tabla acaban en
+    bloqueo mutuo. Este cerrojo deja que corran a la vez modulos
     distintos -que es lo que se queria- y pone en fila los del mismo modulo.
 
     El cerrojo vive en Redis con caducidad: si el worker muere a la fuerza se
@@ -187,8 +188,8 @@ class ConsolaJob(io.StringIO):
     excepcion -todos narran su avance- y porque ya viene con su propio ritmo:
     no anade ni una consulta de mas por encima de las que ya hacia.
 
-    Detener a medias no deja nada inconsistente: `save_historico` reescribe el
-    periodo entero la proxima vez, y los volcados parciales de metricas diarias
+    Detener a medias no deja nada inconsistente: cada periodo se guarda en una
+    sola transaccion (`core.tables.replace`) y se reescribe entero la proxima vez, y los volcados parciales de metricas diarias
     son deliberadamente reanudables (ver `day_metrics`).
     """
 

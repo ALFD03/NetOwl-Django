@@ -8,34 +8,15 @@ from __future__ import annotations
 
 import concurrent.futures
 
-from core.config import DB_SCHEMA, TableNames
+from core.config import TableNames
 
 from ..free_plans import load_free_subs
 
-ACTIVE_FLAG_COL = "activo"
-
-
-def _table_columns(db, table_name):
-    """Las columnas que hoy tiene una tabla, segun `information_schema`."""
-    df = db.query(
-        "SELECT column_name FROM information_schema.columns"
-        " WHERE table_schema = %s AND table_name = %s",
-        [DB_SCHEMA, table_name],
-    )
-    return set(df["column_name"])
-
 
 def load_data(db):
-    """Suscripciones, los dos formatos de log y la base de planes gratuitos.
-
-    `activo` solo se pide si la tabla ya la tiene: es una columna que solo traen
-    los exports nuevos.
-    """
+    """Suscripciones, los dos formatos de log y la base de planes gratuitos."""
     print("Sincronizando con base de datos...")
-    subs_cols = ["orden_producto", "fecha_inicio", "total", "estado"]
-    # `activo` (false = suscripcion archivada) solo existe si el export ya lo trae.
-    if ACTIVE_FLAG_COL in _table_columns(db, TableNames.SUBSCRIPTIONS):
-        subs_cols.append(ACTIVE_FLAG_COL)
+    subs_cols = ["orden_producto", "fecha_inicio", "total", "estado", "activo"]
     logs_cols = ["orden", "fecha_log", "log", "estado"]
     logs_v15_cols = ["orden", "tipo", "categoria", "fecha"]
 

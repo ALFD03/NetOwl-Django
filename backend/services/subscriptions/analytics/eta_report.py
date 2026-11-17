@@ -32,6 +32,7 @@ from core.config import DB_SCHEMA, PLAN_CANCELADO, TableNames
 from core.database import DBConnector
 from core.fixtures import estados as estados_catalogo
 from core.fixtures import planes, planes_reguladores, zonas
+from core.tables import ensure
 
 from .bcv import TasaNoDisponible, consultar_tasa_del_mes
 from .config import (
@@ -45,6 +46,7 @@ from .config import (
 )
 from .eta_forms import construir_formularios, nombre_sintetizado
 from .queries import get_periodos
+from .tables import ETA_MONTHLY_REPORT, ETA_ORDER_CONFIG
 
 
 def normalize_tech(val: str) -> str:
@@ -164,55 +166,10 @@ class ETAReportManager:
         self._ensure_tables_exist()
 
     def _ensure_tables_exist(self):
-        """Crea las tablas de persistencia para configuraciones globales e individuales."""
-        statements = [
-            f"""
-            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} (
-                orden TEXT PRIMARY KEY,
-                cliente TEXT,
-                producto TEXT,
-                reportar BOOLEAN DEFAULT TRUE,
-                tecnologia TEXT,
-                tipo_persona TEXT,
-                tiene_tv BOOLEAN DEFAULT FALSE,
-                datas_mbps NUMERIC DEFAULT 0,
-                es_transporte BOOLEAN DEFAULT FALSE,
-                es_dedicado BOOLEAN DEFAULT FALSE,
-                precio NUMERIC DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-            """,
-            # `CREATE TABLE IF NOT EXISTS` no toca una tabla que ya existe, asi
-            # que las columnas anadidas despues hay que pedirlas aparte o los
-            # entornos que ya tenian la tabla se quedan sin ellas para siempre.
-            f"""
-            ALTER TABLE {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS}
-                ADD COLUMN IF NOT EXISTS precio NUMERIC DEFAULT 0
-            """,
-            f"""
-            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} (
-                periodo_reporte TEXT PRIMARY KEY,
-                reporte_data JSONB,
-                esta_bloqueado BOOLEAN DEFAULT FALSE,
-                tasa_bcv NUMERIC DEFAULT 0,
-                tasa_fuente TEXT DEFAULT '',
-                fecha_calculo TIMESTAMP DEFAULT NOW()
-            )
-            """,
-            f"""
-            ALTER TABLE {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL}
-                ADD COLUMN IF NOT EXISTS tasa_bcv NUMERIC DEFAULT 0
-            """,
-            f"""
-            ALTER TABLE {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL}
-                ADD COLUMN IF NOT EXISTS tasa_fuente TEXT DEFAULT ''
-            """,
-        ]
-        with self.db.get_connection() as conn:
-            with conn.cursor() as cur:
-                for stmt in statements:
-                    cur.execute(stmt)
-            conn.commit()
+        """Las tablas de configuración por orden y del reporte mensual, al día."""
+        with self.db.transaction() as cur:
+            ensure(cur, ETA_ORDER_CONFIG)
+            ensure(cur, ETA_MONTHLY_REPORT)
 
     def get_lock_status(self, periodo: str) -> bool:
         """Si el periodo esta bloqueado (congelado)."""
@@ -464,7 +421,7 @@ class ETAReportManager:
         # La tabla de cierres la crea el analisis mensual la primera vez que
         # termina: en un entorno recien estrenado no existe todavia, y eso no
         # es un fallo sino la misma respuesta que un cierre vacio.
-        if not self.db.tabla_existe(TableNames.ANALYZER_ACTIVOS_CIERRE):
+        if not self.db.table_exists(TableNames.ANALYZER_ACTIVOS_CIERRE):
             return {
                 "status": "empty",
                 "message": f"No hay cierre para {periodo}",

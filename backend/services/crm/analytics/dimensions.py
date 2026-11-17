@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from core.config import DB_SCHEMA, TableNames
+import pandas as pd
+
 from core.database import DBConnector
+from core.tables import replace
 
 from .config import DIMENSIONES
 from .poblaciones import PoblacionesCrm
+from .tables import DIMENSION_HISTORY
 
 logger = logging.getLogger(__name__)
 
@@ -44,29 +46,8 @@ def build_crm_dimension_rows(pob: PoblacionesCrm) -> list[dict[str, Any]]:
     return filas
 
 
-def save_crm_dimensiones_periodo(
-    db: DBConnector, periodo: str, filas: list[dict[str, Any]]
-) -> None:
-    """Reemplaza las filas dimensionales del periodo por las recien calculadas."""
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"DELETE FROM {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO} WHERE periodo_reporte = %s",
-                [periodo]
-            )
-            for fila in filas:
-                cur.execute(
-                    f"""
-                    INSERT INTO {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO}
-                    (periodo_reporte, dimension, valor, metricas, efectividad, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
-                    """,
-                    [
-                        periodo,
-                        fila["dimension"],
-                        fila["valor"],
-                        json.dumps(fila["metricas"]),
-                        json.dumps(fila["efectividad"]),
-                    ],
-                )
-        conn.commit()
+def save_dimensions(db: DBConnector, periodo: str, filas: list[dict[str, Any]]) -> None:
+    """Reemplaza las filas dimensionales del periodo por las recién calculadas."""
+    df = pd.DataFrame(filas, columns=["dimension", "valor", "metricas", "efectividad"])
+    with db.transaction() as cur:
+        replace(cur, DIMENSION_HISTORY, df, periodo_reporte=periodo)

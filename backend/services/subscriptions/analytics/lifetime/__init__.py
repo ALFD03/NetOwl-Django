@@ -5,10 +5,10 @@ cuenta el churn. Ver `bajas_mes`.
 """
 
 from .queries import get_lifetime_detalle, get_lifetime_mes, get_meses_lifetime
-from .runner import run_lifecycle_analysis
+from .runner import run_lifetime_analysis
 
 __all__ = [
-    "run_lifecycle_analysis",
+    "run_lifetime_analysis",
     "get_lifetime_detalle",
     "get_lifetime_mes",
     "get_meses_lifetime",
