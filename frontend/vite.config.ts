@@ -5,20 +5,20 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  root: './web',
+  root: '.',
   base: '/static/',
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './web/src'),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   build: {
-    // Compilar dentro de web/static/dist para que collectstatic lo encuentre
+    // Django recolecta frontend/static, así que el bundle va dentro.
     outDir: './static/dist',
     emptyOutDir: true,
     manifest: true,
     rollupOptions: {
-      input: './web/src/app/main.tsx',
+      input: './src/app/main.tsx',
       output: {
         entryFileNames: 'assets/main.js',
         chunkFileNames: 'assets/[name].js',
@@ -29,7 +29,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
-    // La plantilla (web/templates/app.html) apunta a localhost:5173 fijo, asi
+    // La plantilla (backend/templates/app.html) apunta a localhost:5173 fijo, asi
     // que si el puerto esta ocupado no sirve de nada arrancar en otro: los
     // assets darian 404 sin decir por que. Mejor fallar aqui y en voz alta.
     strictPort: true,

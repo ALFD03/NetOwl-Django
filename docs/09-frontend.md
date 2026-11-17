@@ -1,6 +1,6 @@
-# 09 · Frontend (`web/src`)
+# 09 · Frontend (`frontend/src`)
 
-> **`web/src/README.md` es la documentación normativa de esta capa** (reglas de
+> **`frontend/src/README.md` es la documentación normativa de esta capa** (reglas de
 > capas, catálogo de UI, tokens de diseño y la discrepancia intencionada del KPI
 > comercial). Este documento es el **inventario** y el **contrato con el
 > backend**: qué hay, dónde, y cómo llega el dato.
@@ -19,12 +19,12 @@ Dependencias notables: `@inertiajs/react`, `axios`, `chart.js` +
 ## Arranque
 
 ```
-web/templates/app.html   ← la única plantilla Django
+backend/templates/app.html   ← la única plantilla Django
    ├─ meta csrf-token y csrf-cookie-name (el nombre de la cookie cambia por entorno)
    ├─ script en línea: pone `light`/`dark` en <html> antes de pintar (clave `netowl-tema`)
    ├─ dev:  http://localhost:5173/static/src/app/main.tsx  (+ react-refresh)
    └─ prod: {% static 'dist/assets/main.js' %} y main.css
-             └─ web/src/app/main.tsx
+             └─ frontend/src/app/main.tsx
                   ├─ import './csrf'                (cabecera X-CSRFToken en axios global)
                   ├─ import '@/shared/charts/register'
                   ├─ ThemeProvider                  (@/shared/hooks/useTheme: claro/oscuro/sistema)
@@ -37,7 +37,7 @@ la página: el `<script data-page="app">` y el `data-page` del `<div id="app">`.
 ### El contrato con Django
 
 La cadena que pasa la vista (`render_inertia(request, "CRM/Dashboard", …)`) es
-**la ruta del fichero** bajo `web/src/pages/`. Renombrar o mover una página
+**la ruta del fichero** bajo `frontend/src/pages/`. Renombrar o mover una página
 rompe la vista en tiempo de ejecución, sin error de compilación.
 
 | Ruta Django | Componente | Fichero |
@@ -125,7 +125,7 @@ porque `shared` no puede depender de un feature; los features los reexportan.
 | `usePermissions()` | `can`, `canAny`, `canAll`, `isSuperuser`. **Los componentes nunca leen `user.profile.can_*` directamente** |
 | `useBreakpoint(bp)` | `true` si el viewport llega a ese breakpoint. Para lo que una clase no alcanza (opciones de Chart.js); para maquetar se usan las clases |
 | `useScrollLock(activo)` | Congela el scroll del body y de `<main data-app-scroll>` mientras un modal o el cajón del menú tapan la página |
-| `useTheme()` / `ThemeProvider` | Tema `claro`/`oscuro`/`sistema` por navegador (`localStorage`, `netowl-tema`); `sistema` sigue a `prefers-color-scheme`. Cómo cambian las clases y las gráficas: `web/src/README.md`, «Light and dark theme» |
+| `useTheme()` / `ThemeProvider` | Tema `claro`/`oscuro`/`sistema` por navegador (`localStorage`, `netowl-tema`); `sistema` sigue a `prefers-color-scheme`. Cómo cambian las clases y las gráficas: `frontend/src/README.md`, «Light and dark theme» |
 | `useAsyncAction(action, options)` | Sustituye el triplete `isLoading` / `message` / `consoleLog` y el *narrowing* de errores de axios que cada página de importación repetía |
 | `useJobQueue()` | Sondea la cola desde cualquier página: **4 s** si hay algo corriendo, **20 s** si no, y también 20 s con la pestaña en segundo plano. Detecta el final comparando los ids con el sondeo anterior y pide la ficha del que desapareció, para poder decir *cómo* terminó y no solo que «ya no está» |
 
@@ -137,7 +137,7 @@ porque `shared` no puede depender de un feature; los features los reexportan.
   sidebar fijo (plegable a iconos, recordado en `localStorage`) y `toolbar`
   pegajosa; por debajo, `MobileTopBar` con hamburguesa que abre
   `MobileNavDrawer` y la `toolbar` deja de ser fija. Las reglas de cada
-  breakpoint están en `web/src/README.md` («Phones and breakpoints»).
+  breakpoint están en `frontend/src/README.md` («Phones and breakpoints»).
 - **`Sidebar`** — **la única navegación de la app**: un árbol de módulos y sus
   páginas, agrupadas por `section` (Reportes, Configuración). Los módulos
   desplegados se recuerdan en `localStorage`, y el de la página actual llega

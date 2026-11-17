@@ -126,7 +126,7 @@ es la del servidor.
 > **Añadir un permiso** es añadir un campo booleano a `PermissionMatrix` y su
 > nombre a una de las dos listas. A partir de ahí aparece solo en la interfaz de
 > administración, en React (vía `InertiaShareMiddleware`) y en los decoradores.
-> El espejo del lado TypeScript está en `web/src/shared/constants/permissions.ts`
+> El espejo del lado TypeScript está en `frontend/src/shared/constants/permissions.ts`
 > y hay que mantenerlo en paso a mano.
 
 ### `Profile` y `PermissionGroup`

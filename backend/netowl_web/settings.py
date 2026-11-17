@@ -24,9 +24,9 @@ from core.vault import get_config
 # Configuración sensible (Django + base de datos) obtenida de Vault
 config = get_config()
 
-# Ruta base del proyecto: dos niveles arriba de este archivo
-# (netowl_web/settings.py → raíz del repo)
+# backend/ y la raíz del repo (que contiene frontend/, logs/ y staticfiles/).
 BASE_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = BASE_DIR.parent
 
 LOGIN_URL = "/auth/login/"
 LOGOUT_REDIRECT_URL = "/auth/login/"
@@ -232,15 +232,14 @@ CSP_POLITICA = {
 }
 # Django compara INTERNAL_IPS contra REMOTE_ADDR, asi que solo admite direcciones
 # IP: los hostnames que habia aqui nunca llegaron a coincidir. Esta lista decide
-# la variable `debug` de las plantillas (ver web/templates/app.html).
+# la variable `debug` de las plantillas (ver backend/templates/app.html).
 INTERNAL_IPS = ["127.0.0.1", "::1", "10.3.0.41"]
 
 # --- Configuración de plantillas ---
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        # Directorio donde se buscan las plantillas (web/templates/)
-        "DIRS": [BASE_DIR / "web" / "templates"],
+        "DIRS": [BASE_DIR / "templates"],
         # También buscar dentro de las carpetas templates de cada app
         "APP_DIRS": True,
         "OPTIONS": {
@@ -280,9 +279,9 @@ DATABASES = {
 # URL base para los archivos estáticos
 STATIC_URL = "static/"
 # Directorios adicionales donde Django buscará archivos estáticos
-STATICFILES_DIRS = [BASE_DIR / "web" / "static"]
+STATICFILES_DIRS = [ROOT_DIR / "frontend" / "static"]
 # Directorio donde se recolectan los estáticos para producción (collectstatic)
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATIC_ROOT = ROOT_DIR / "staticfiles"
 
 # --- Almacenamiento de archivos ---
 STORAGES = {
@@ -394,7 +393,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # --- Logging de requests ---
 # La carpeta no se versiona: se crea al arrancar si no existe (el contenedor ya la
 # trae de la imagen). Sin ella cada linea de log fallaria al abrir el archivo.
-(BASE_DIR / "logs").mkdir(exist_ok=True)
+LOG_DIR = ROOT_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -402,7 +402,7 @@ LOGGING = {
         "request_file": {
             "level": "INFO",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": BASE_DIR / "logs" / "requests.log",
+            "filename": LOG_DIR / "requests.log",
             "maxBytes": 10 * 1024 * 1024,
             "backupCount": 5,
             "formatter": "verbose",
@@ -414,7 +414,7 @@ LOGGING = {
         "app_file": {
             "level": "INFO",
             "class": "logging.handlers.RotatingFileHandler",
-            "filename": BASE_DIR / "logs" / "app.log",
+            "filename": LOG_DIR / "app.log",
             "maxBytes": 10 * 1024 * 1024,
             "backupCount": 5,
             "formatter": "verbose",

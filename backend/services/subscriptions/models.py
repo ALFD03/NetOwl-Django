@@ -334,7 +334,7 @@ class ProductoIgnorado(models.Model):
 # Las metas de crecimiento y de churn no alteran ningun analisis: solo deciden
 # la meta y el cumplimiento de cada fila. Por eso no se guardan junto a las
 # metricas calculadas sino aqui, y el cliente las aplica al pintar
-# (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un objetivo se ve
+# (`frontend/src/features/subscriptions/lib/objetivos.ts`). Cambiar un objetivo se ve
 # al recargar la pagina, sin relanzar ningun mes. El color lo decide aparte el
 # semaforo, con umbrales fijos (`SemaforoObjetivos`).
 #

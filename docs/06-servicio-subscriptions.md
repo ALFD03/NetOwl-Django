@@ -772,7 +772,7 @@ no se guardan con las métricas calculadas ni exigen relanzar nada: viven en tre
 tablas del catálogo (`ObjetivoComercial`, `ObjetivoMes`, `SemaforoObjetivos`),
 `analytics/objetivos.get_objetivos_config()` los sirve en los props de
 Dashboard, Analytics, Results, Sales Report y Business Units, y el cliente los
-aplica al pintar (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un
+aplica al pintar (`frontend/src/features/subscriptions/lib/objetivos.ts`). Cambiar un
 objetivo se ve al recargar la página. Si las tablas no existen (entorno sin
 migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
 

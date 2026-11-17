@@ -7,10 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint web/src",
-    "lint:fix": "eslint web/src --fix",
-    "format": "prettier --write web/src",
-    "format:check": "prettier --check web/src"
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src"
   },
   "dependencies": {
     "@inertiajs/react": "^1.2.0",

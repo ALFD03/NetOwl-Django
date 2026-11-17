@@ -168,8 +168,8 @@ Middlewares propios (`netowl_web/middleware.py`):
 
 ## Assets: `VITE_DEV_SERVER` no cuelga de `DEBUG`
 
-`USE_VITE_DEV_SERVER` decide si `web/templates/app.html` carga los módulos desde
-`http://localhost:5173` o el bundle de `web/static/dist`.
+`USE_VITE_DEV_SERVER` decide si `backend/templates/app.html` carga los módulos desde
+`http://localhost:5173` o el bundle de `frontend/static/dist`.
 
 Antes esa decisión colgaba de `{% if debug %}`, que Django solo pone a `True`
 cuando `DEBUG` está activo **y además** `REMOTE_ADDR` figura en `INTERNAL_IPS`:

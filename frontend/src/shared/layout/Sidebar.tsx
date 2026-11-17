@@ -268,7 +268,7 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
     <div className="flex h-full flex-col justify-between">
       <div>
         {/* Imágenes propias del sidebar, recortadas al contenido y reducidas
-            con Lanczos (ver `web/static/img/`): los PNG originales son lienzos
+            con Lanczos (ver `frontend/static/img/`): los PNG originales son lienzos
             de 1024px con mucho aire transparente, y el búho quedaba diminuto y
             con los bordes dentados al reducirlo el navegador. Las `_light` salen
             igual de `logo_light.png`: el texto blanco no se ve en el tema claro. */}

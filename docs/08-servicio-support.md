@@ -416,7 +416,7 @@ vea en todos los meses, también en los ya analizados, sin reejecutar nada.
 **La suma la hace el cliente, y solo porque es exacta.** Dentro de un grupo de
 trabajo cada ticket tiene un solo asignado y un solo creador, así que las
 personas parten el conjunto: `agruparPorDepartamento`
-(`web/src/features/support/lib/supportMetrics.ts`) suma los volúmenes sin contar
+(`frontend/src/features/support/lib/supportMetrics.ts`) suma los volúmenes sin contar
 nada dos veces, recalcula las tasas desde esas sumas —nunca promedia
 porcentajes, cada uno trae fijado su denominador— y pondera los tiempos medios
 por su `muestra_*`, que da exactamente la media del conjunto.

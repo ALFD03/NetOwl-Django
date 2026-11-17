@@ -81,7 +81,7 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 # demas paginas del modulo (analytics, results, lifetime, sales, ETA) quedan
 # cerradas. Lo demas se concede a mano desde `/auth/users/`.
 #
-# `web/src/shared/constants/permissions.ts` repite esta lista: es el espejo que
+# `frontend/src/shared/constants/permissions.ts` repite esta lista: es el espejo que
 # abre el formulario de "Nuevo Usuario", y el formulario manda la matriz entera,
 # asi que las dos tienen que decir lo mismo (ver CLAUDE.md).
 PERMISOS_INICIALES = ['can_view_subscriptions', 'can_view_subs_dashboard']

@@ -5,11 +5,11 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['web/static/dist', 'node_modules', 'staticfiles', 'graphify-out'] },
+  { ignores: ['static/dist', 'node_modules'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['web/src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2022,
       globals: {
@@ -43,7 +43,7 @@ export default tseslint.config(
       // sea una cascada de renders.
       'react-hooks/set-state-in-effect': 'warn',
 
-      // La regla de capas de web/src/README.md, hasta ahora sostenida solo por
+      // La regla de capas de src/README.md, hasta ahora sostenida solo por
       // disciplina. Un feature no importa otro feature, y `shared/` no sabe que
       // los features existen: lo comun se promueve, no se cruza.
       'no-restricted-imports': ['error', {
@@ -58,7 +58,7 @@ export default tseslint.config(
   },
   {
     // `shared/` es la capa de abajo: no puede conocer los features.
-    files: ['web/src/shared/**/*.{ts,tsx}'],
+    files: ['src/shared/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [{
@@ -70,7 +70,7 @@ export default tseslint.config(
   },
   ...['subscriptions', 'crm', 'support', 'imports', 'config'].map((dominio) => ({
     // Cada feature solo puede importar de si mismo y de shared/.
-    files: [`web/src/features/${dominio}/**/*.{ts,tsx}`],
+    files: [`src/features/${dominio}/**/*.{ts,tsx}`],
     rules: {
       'no-restricted-imports': ['error', {
         patterns: [{

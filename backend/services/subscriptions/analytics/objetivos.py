@@ -2,7 +2,7 @@
 
 Los objetivos no alteran ningun analisis: solo deciden la meta, el
 cumplimiento y el color con que se pinta cada cifra. Por eso no se aplican
-aqui sino en `web/src/features/subscriptions/lib/objetivos.ts`, y esta funcion
+aqui sino en `frontend/src/features/subscriptions/lib/objetivos.ts`, y esta funcion
 solo los sirve: unas decenas de filas que viajan en los props de las paginas
 de Subscriptions.
 

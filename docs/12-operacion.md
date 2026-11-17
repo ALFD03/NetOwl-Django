@@ -57,8 +57,8 @@ encolado. Para levantar el worker suelto: `make worker`.
 | `make worker` | Solo el worker de Celery, con su log en su terminal |
 | `make check` | `manage.py check` + `tsc --noEmit` + `ruff check` + `eslint`. **Es la puerta antes de dar algo por terminado** |
 | `make lint` | `ruff check .` + `npm run lint` |
-| `make format` | `ruff format .` + `prettier --write web/src` (**reescribe ficheros**) |
-| `make build` | `tsc && vite build` → `web/static/dist` |
+| `make format` | `ruff format .` + `prettier --write frontend/src` (**reescribe ficheros**) |
+| `make build` | `tsc && vite build` → `frontend/static/dist` |
 | `make migrate` | Aplica las migraciones versionadas |
 | `make makemigrations` | Genera migraciones. **Revisar el archivo antes de commitear**: en `services/imports` el `db_table` se calcula, no se escribe fijo |
 | `make collectstatic` | Recolecta estáticos (lo hace también el entrypoint) |

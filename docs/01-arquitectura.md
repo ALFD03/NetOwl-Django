@@ -21,9 +21,9 @@ Odoo cargados como CSV:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  web/src                React + TypeScript (Inertia)             │
+│  frontend/src                React + TypeScript (Inertia)             │
 │  pages/ → features/ → shared/     (la dependencia va en un solo  │
-│                                    sentido, ver web/src/README)  │
+│                                    sentido, ver frontend/src/README)  │
 └───────────────▲──────────────────────────────────────────────────┘
                 │ props Inertia (render) + fetch JSON (endpoints api/)
 ┌───────────────┴──────────────────────────────────────────────────┐
@@ -100,11 +100,11 @@ nueva, y modelarlas con el ORM obligaría a una migración por columna.
 6. `render_inertia(request, "Subscriptions/Analytics", props)` devuelve HTML con
    los props embebidos; `InertiaShareMiddleware` añade el usuario y su matriz de
    permisos.
-7. `web/src/app/main.tsx` resuelve la cadena `"Subscriptions/Analytics"` contra
+7. `frontend/src/app/main.tsx` resuelve la cadena `"Subscriptions/Analytics"` contra
    `import.meta.glob('../pages/**/*.tsx')` y monta React.
 
 > **Contrato frágil:** el nombre que pasa la vista es la ruta del fichero bajo
-> `web/src/pages/`. Renombrar o mover una página rompe la vista en tiempo de
+> `frontend/src/pages/`. Renombrar o mover una página rompe la vista en tiempo de
 > ejecución, sin error de compilación.
 
 ## Ciclo de vida de un análisis
@@ -182,8 +182,8 @@ Concurrencia:
 | `services/subscriptions/` | Churn, ciclo de vida, ETA y catálogos |
 | `services/crm/` | Embudo comercial |
 | `services/support/` | Tickets de soporte |
-| `web/src/` | React |
-| `web/templates/app.html` | La única plantilla Django |
+| `frontend/src/` | React |
+| `backend/templates/app.html` | La única plantilla Django |
 | `data/Planes.json`, `data/Zonas.json` | Semilla inicial de los catálogos (solo los lee `cargar_catalogos`) |
 | `scripts/dev.sh` | Arranque de desarrollo |
 | `docker-compose.yml`, `Dockerfile`, `entrypoint.sh` | Empaquetado y despliegue |

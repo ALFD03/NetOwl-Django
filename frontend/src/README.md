@@ -216,7 +216,7 @@ it will read in the light one.
   the sidebar footer. `shared/hooks/useTheme` owns it; an inline script in
   `templates/app.html` applies it before the first paint, so the two must agree on the key
   and the rule.
-- Images with white lettering have `_light` variants in `web/static/img/`
+- Images with white lettering have `_light` variants in `frontend/static/img/`
   (`logo_sidebar_light.png`, `isotipo_sidebar_light.png`), derived from `logo_light.png`
   the same way as the dark ones.
 

@@ -7,7 +7,7 @@ meta del grupo. Lo necesita Comisiones, que paga por esos cumplimientos, y el
 cierre se calcula en el servidor: no puede esperar a que un navegador resuelva
 los objetivos.
 
-Reproduce la regla del cliente (`web/src/features/subscriptions/lib/objetivos.ts`)
+Reproduce la regla del cliente (`frontend/src/features/subscriptions/lib/objetivos.ts`)
 para el total de un grupo, y **las dos tienen que decir lo mismo**. El nivel del
 grupo decide desde donde se resuelve el objetivo de cada nodo (`CADENA` del
 cliente, del nivel mas alto al del grupo: sucursal, estado, site y, en una unidad

@@ -6,7 +6,7 @@ import plugin from 'tailwindcss/plugin';
 // `@/shared/constants/theme`. Never hardcode these hex values in components:
 // use the Tailwind class (`bg-surface-primary`) or import the token (chart canvases).
 const tokens = JSON.parse(
-  readFileSync(new URL('./web/src/shared/constants/design-tokens.json', import.meta.url), 'utf8')
+  readFileSync(new URL('./src/shared/constants/design-tokens.json', import.meta.url), 'utf8')
 );
 
 // Tema claro/oscuro. La interfaz se escribió para oscuro (`text-white`,
@@ -57,8 +57,8 @@ for (const [nombre, valor] of Object.entries(tokens.surface)) {
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
-    './web/templates/**/*.html',
-    './web/src/**/*.{js,ts,jsx,tsx}',
+    '../backend/templates/**/*.html',
+    './src/**/*.{js,ts,jsx,tsx}',
   ],
   darkMode: 'class',
   theme: {

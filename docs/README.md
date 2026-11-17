@@ -10,7 +10,7 @@ repositorio:
 | Documento | Qué cubre |
 |---|---|
 | `README.md` (raíz) | Puesta en marcha, stack y despliegue. Es la puerta de entrada. |
-| `web/src/README.md` | Reglas de arquitectura de la capa React (capas, kit de UI, tokens). |
+| `frontend/src/README.md` | Reglas de arquitectura de la capa React (capas, kit de UI, tokens). |
 | `CLAUDE.md` | Notas de diseño y el porqué de cada decisión, para asistentes de IA. |
 
 ## Índice
