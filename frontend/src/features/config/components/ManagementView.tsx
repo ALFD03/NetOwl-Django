@@ -23,14 +23,12 @@ import {
   type ConfigManagementProps, type EditableGroup, type EditableUser, type NewUserForm, type PasswordForm,
   type UserData,
 } from '@/features/config/types';
-import { useReloadPage } from '@/shared/page/PageData';
 
 const TODOS_LOS_PERMISOS = PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => permission.key));
 
 export function ManagementView({
   users = [], groups = [], roles = [], concedibles = {}, unidadesNegocio = [], unidadesConcedibles = null,
 }: ConfigManagementProps) {
-  const reloadPage = useReloadPage();
   const { can } = usePermissions();
   const puedeCrear = can(PERMISSIONS.CREATE_USERS);
   const puedeEditar = can(PERMISSIONS.EDIT_USER_PERMISSIONS);
@@ -71,7 +69,6 @@ export function ManagementView({
     try {
       await configApi.createUser(userToCreate);
       setUserToCreate(null);
-      void reloadPage();
     } catch (err: unknown) {
       alert(getApiErrorMessage(err, 'Error al crear usuario'));
     } finally {
@@ -92,7 +89,6 @@ export function ManagementView({
         unidades: userToEdit.unidades,
       });
       setUserToEdit(null);
-      void reloadPage();
     } catch (err: unknown) {
       alert(getApiErrorMessage(err, 'Error al actualizar usuario'));
     } finally {
@@ -127,7 +123,6 @@ export function ManagementView({
         permissions: groupToEdit.permissions,
       });
       setGroupToEdit(null);
-      void reloadPage();
     } catch (err: unknown) {
       alert(getApiErrorMessage(err, 'Error al guardar grupo'));
     } finally {
@@ -144,7 +139,6 @@ export function ManagementView({
         await configApi.deleteGroup(deletingItem.id);
       }
       setDeletingItem(null);
-      void reloadPage();
     } catch (err: unknown) {
       alert(getApiErrorMessage(err, 'Error al eliminar'));
     }

@@ -8,7 +8,6 @@ import {
   type MovimientoUsuario,
 } from '@/shared/lib/api/support';
 import type { DepartamentoSoporte, UsuarioSoporte } from '@/features/support/types';
-import { useReloadPage } from '@/shared/page/PageData';
 
 /** Una fila en edición. Sin `id` es un alta. */
 export type UsuarioDraft = {
@@ -57,7 +56,6 @@ interface Args {
  * devuelve todo junto.
  */
 export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
-  const reloadPage = useReloadPage();
   const [vista, setVista] = useState<DirectorioVista>(() => (nuevoUsuario ? 'usuarios' : 'pendientes'));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +113,6 @@ export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
     try {
       await supportApi.saveDirectorio(tipo, payload);
       cerrarFormularios();
-      void reloadPage();
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo guardar el registro.'));
@@ -136,7 +133,6 @@ export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
     try {
       await supportApi.moverUsuario(accion, id, extra);
       cerrarFormularios();
-      void reloadPage();
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo registrar el movimiento.'));
@@ -153,7 +149,6 @@ export function useSupportUsuarios({ departamentos, nuevoUsuario }: Args) {
     try {
       await supportApi.deleteDirectorio(borrando.tipo, borrando.id);
       setBorrando(null);
-      void reloadPage();
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo eliminar el registro.'));
     } finally {

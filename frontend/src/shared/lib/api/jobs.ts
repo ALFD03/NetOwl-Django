@@ -6,7 +6,7 @@
  * que las páginas pueden esperar.
  */
 
-import { apiClient } from './client';
+import { apiClient, notifyDataChanged } from './client';
 import { JobCancelledError, JobFailedError } from '../http/errors';
 
 /** Modules that run their analysis through the Celery worker. */
@@ -119,6 +119,8 @@ export async function followJob(
     }
     onProgress?.(current);
   }
+  // Lo que escribió el worker (o la parte que llegó a escribir) ya está en la BD.
+  notifyDataChanged();
 
   if (current.status === 'cancelled') {
     throw new JobCancelledError(current.message, current.log_output);
@@ -206,5 +208,6 @@ export async function followJobs(
     );
     onProgress(actuales);
   }
+  notifyDataChanged();
   return actuales;
 }

@@ -9,6 +9,8 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import type { RouteObject } from 'react-router-dom';
 
+import { LoadingState } from '@/shared/ui';
+
 import { apiPage, page } from './apiPage';
 
 /** La URL con la que Django sirvió la SPA: si no tiene ruta aquí, no hay página. */
@@ -27,7 +29,7 @@ function ServerRoute() {
   return servedHere ? <p className="p-8 text-center text-slate-400">Página no encontrada.</p> : null;
 }
 
-export const routes: RouteObject[] = [
+const pages: RouteObject[] = [
   { path: '/auth/login/', lazy: page(() => import('@/pages/Config/Login')) },
   { path: '/auth/users/', lazy: apiPage('/api/auth/users/', () => import('@/pages/Config/Management')) },
   { path: '/auth/tokens/', lazy: page(() => import('@/pages/Config/Tokens')) },
@@ -69,4 +71,9 @@ export const routes: RouteObject[] = [
   { path: '/auditoria/monitoreo/', lazy: page(() => import('@/pages/Auditoria/Monitoreo')) },
 
   { path: '*', element: <ServerRoute /> },
+];
+
+/** Una raíz sin marcado: lo que se pinta mientras carga el código de la primera página. */
+export const routes: RouteObject[] = [
+  { HydrateFallback: () => <LoadingState message="Cargando…" />, children: pages },
 ];

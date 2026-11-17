@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { comisionesApi } from '@/shared/lib/api/comisiones';
 import type { DecisionRevision, TasaBolivares, VentaComision } from '../types';
-import { useReloadPage, useVisit } from '@/shared/page/PageData';
+import { useVisit } from '@/shared/page/PageData';
 
 /**
  * Estado del informe de comisiones.
@@ -17,7 +17,6 @@ import { useReloadPage, useVisit } from '@/shared/page/PageData';
  */
 export function useInformeComisiones(periodo: string, existe: boolean) {
   const visit = useVisit();
-  const reloadPage = useReloadPage();
   // Guardadas con su periodo: la página reutiliza el componente al cambiar de
   // mes, y el detalle de otro periodo no vale para este.
   const [cache, setCache] = useState<{ periodo: string; filas: VentaComision[] } | null>(null);
@@ -55,14 +54,13 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
     }
   }, [existe, ventas, cargandoVentas, periodo]);
 
-  /** Ejecuta una escritura y recarga el informe si sale bien. */
+  /** Ejecuta una escritura; si sale bien, el informe llega solo y el detalle se vuelve a pedir. */
   const escribir = async (accion: () => Promise<unknown>, mensaje: string) => {
     setGuardando(true);
     setError(null);
     try {
       await accion();
       setCache(null);
-      void reloadPage();
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, mensaje));
@@ -88,7 +86,7 @@ export function useInformeComisiones(periodo: string, existe: boolean) {
       try {
         await comisionesApi.borrar(periodo, confirmacion);
         setCache(null);
-        visit({});
+        visit({}, { remount: true });
         return true;
       } catch (err: unknown) {
         setError(getApiErrorMessage(err, 'No se pudo borrar el informe.'));

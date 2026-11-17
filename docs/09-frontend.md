@@ -44,7 +44,12 @@ devuelve su endpoint como props, dentro de `AppLayout` mientras carga o si falla
   viajan tal cual al endpoint.
 - `useVisit()` cambia esos parámetros (cambiar de mes): se vuelve a pedir con
   `keepPreviousData`, sin desmontar la página, que conserva su estado.
-- `useReloadPage()` vuelve a pedir los datos tras guardar algo.
+- `remount: true` en `useVisit()` monta la página de nuevo, sin su estado, cuando
+  llegan los datos (cambiar de periodo en Comisiones, volver tras borrar uno).
+- Nada se recarga a mano: toda escritura correcta a `/api/` y todo análisis que
+  termina (en esta pestaña o en otra) avisan con `notifyDataChanged()`; la SPA
+  invalida la caché y lo que está en pantalla se vuelve a pedir conservando su
+  estado. `useDayPayload` vacía su caché de días con el mismo aviso.
 - `usePageProps()` lee los datos de la página desde cualquier componente (los
   objetivos de Subscriptions, por ejemplo).
 

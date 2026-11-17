@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { notifyDataChanged } from '@/shared/lib/api/client';
 import { jobsApi, notificarJobEncolado, suscribirseAJobsEncolados, type AnalysisJob } from '@/shared/lib/api/jobs';
 
 /** Cadencia de sondeo: rápida mientras algo corre, lenta cuando no hay nada. */
@@ -90,6 +91,8 @@ export function useJobQueue(): JobQueueState {
         previosRef.current = actuales;
 
         if (desaparecidos.length > 0) {
+          // Terminó algo, también si lo lanzó otra pestaña u otra persona: hay datos nuevos.
+          notifyDataChanged();
           const terminado = await jobsApi.fetch(desaparecidos[0]).catch(() => null);
           if (vivo && terminado) {
             setFinished(terminado);

@@ -14,7 +14,7 @@ src/
 ├── shared/       Reusable across every module. Knows nothing about any feature.
 │   ├── ui/       The component kit, grouped by kind (see below)
 │   ├── layout/   AppLayout, Sidebar (the navigation tree), UserMenu
-│   ├── page/     PageData: usePageProps, useReloadPage, useVisit
+│   ├── page/     PageData: usePageProps, useVisit
 │   ├── auth/     AuthProvider / useAuth (the account from /api/auth/me/)
 │   ├── charts/   Chart.js wrappers, shared options, registration
 │   ├── lib/      cn(), colour helpers, api client, http error handling, daySeries
@@ -65,7 +65,10 @@ analysis. `shared/ui/inputs/DayProgressBar` is the same component in all three.
 Every page is registered in `app/routes.tsx` with the `/api/` endpoint that feeds it:
 `apiPage(endpoint, load)` fetches it with the URL's parameters and passes the JSON as
 props. Below the page, `usePageProps()` reads that data, `useVisit()` changes the URL's
-parameters (refetching without unmounting) and `useReloadPage()` refetches after a write.
+parameters (refetching without unmounting; `remount: true` starts the page afresh once
+the new data arrives). Nobody reloads by hand: every successful write, and every
+analysis that finishes, invalidates the query cache (`onDataChanged` in
+`shared/lib/api/client.ts`), so whatever is on screen refetches with its state kept.
 
 Pages hold no logic. A page picks a layout and a feature view. It has no title: the
 heading is the breadcrumb ("Module › Page"), derived from the URL, so the page declares

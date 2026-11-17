@@ -18,7 +18,6 @@ import { cambiosPendientes, erroresCampos, type Cambio } from '../lib/condicione
 import type { ActualizacionCondiciones, ComisionesCondicionesProps, CondicionesComision } from '../types';
 import { PeriodoCard } from './condiciones/PeriodoCard';
 import { PlanesPymeCard } from './condiciones/PlanesPymeCard';
-import { useReloadPage } from '@/shared/page/PageData';
 import { useBlocker } from 'react-router-dom';
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
@@ -64,7 +63,6 @@ function ListaCambios({ cambios }: { cambios: Cambio[] }) {
  * borradores incluidos, que se recalculan al abrirlos).
  */
 export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeEditarPlanes }: ComisionesCondicionesProps) {
-  const reloadPage = useReloadPage();
   const [draft, setDraft] = useState<CondicionesComision>(condiciones);
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -114,7 +112,6 @@ export function CondicionesView({ condiciones, actualizacion, planesPyme, puedeE
       });
       setEditando(false);
       setEstado({ type: 'success', text: respuesta.message });
-      void reloadPage();
     } catch (err: unknown) {
       setEstado({ type: 'error', text: getApiErrorMessage(err, 'No se pudieron guardar las condiciones.') });
     } finally {

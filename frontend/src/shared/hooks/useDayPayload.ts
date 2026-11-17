@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { apiClient } from '@/shared/lib/api';
+import { apiClient, onDataChanged } from '@/shared/lib/api';
 
 /**
  * Cuánto se espera antes de pedir un día que no está en caché.
@@ -97,7 +97,9 @@ function vecinosDe(dias: number[], dia: number): number[] {
  *   mueve una barra;
  * - mientras un día nuevo viaja se mantiene en pantalla el último resuelto, en
  *   vez de vaciar la página;
- * - la caché tiene techo, porque guardar el mes entero es el problema original.
+ * - la caché tiene techo, porque guardar el mes entero es el problema original;
+ * - un cambio en el servidor (un análisis que termina) la vacía y el día en
+ *   pantalla se vuelve a pedir.
  *
  * Las tarjetas y las líneas de tendencia no pasan por aquí: salen de la serie
  * ligera que ya viajó en los props, así que ésas son instantáneas siempre.
@@ -130,6 +132,8 @@ export function useDayPayload<T>({ url, period, dia, dias, inicial }: Opciones<T
   if (enCache !== undefined && ultimo?.dia !== dia) {
     setUltimo({ dia, payload: enCache });
   }
+
+  useEffect(() => onDataChanged(() => setCache((actual) => ({ mes: actual.mes, dias: new Map() }))), []);
 
   const pedir = useCallback(
     async (objetivo: number) => {

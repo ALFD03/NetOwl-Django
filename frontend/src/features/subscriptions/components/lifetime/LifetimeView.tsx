@@ -115,10 +115,8 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
     errorMessage: 'No se pudo recalcular el lifetime.',
   });
 
-  const handleRun = async () => {
-    const result = await recompute.run();
-    if (result !== undefined) window.location.reload();
-  };
+  // Al terminar el job los datos de la página se vuelven a pedir solos.
+  const handleRun = () => void recompute.run();
 
   const cambiarMes = (mes: string) =>
     visit({ period: mes });

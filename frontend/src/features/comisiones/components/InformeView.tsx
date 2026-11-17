@@ -91,7 +91,7 @@ export function InformeView({
   const [exportando, setExportando] = useState(false);
 
   const etiquetaCargo = (rol: RolVentas) => ROL_CHIP[rol].label;
-  const irA = (mes: string) => visit({ periodo: mes });
+  const irA = (mes: string) => visit({ periodo: mes }, { remount: true });
 
   const verDesglose = (pago: PagoComision) => {
     setDesglose(pago);
