@@ -13,11 +13,15 @@ entorno (DB_SCHEMA): una cuenta de desarrollo no existe en produccion, ni al
 reves.
 """
 
+import hashlib
+import secrets
+
 from django.contrib.auth.models import User
 from django.contrib.sessions.base_session import AbstractBaseSession
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils import timezone
 
 from core.config import DB_SCHEMA
 from services.config.unidades import lista_de
@@ -55,6 +59,8 @@ VIEW_PERMISSION_FIELDS = [
     # Administracion: ver la pantalla de cuentas y grupos, y el registro de
     # auditoria.
     'can_view_users', 'can_view_auditoria',
+    # Usar la API con un token propio.
+    'can_use_api',
 ]
 
 # Permisos de accion: por defecto cerrados (False), como los de lectura.
@@ -68,6 +74,8 @@ ACTION_PERMISSION_FIELDS = [
     # Administracion de cuentas, un permiso por accion (antes `can_manage_users`).
     'can_create_users', 'can_edit_user_permissions', 'can_change_passwords',
     'can_delete_users', 'can_manage_groups',
+    # Crear y revocar tokens de API de otras cuentas.
+    'can_manage_api_tokens',
     # Cargas de CSV, una por modulo de origen.
     'can_import_subs', 'can_import_crm', 'can_import_support',
     # Ejecucion de cada motor de analisis por separado.
@@ -169,7 +177,7 @@ class PermissionMatrix(models.Model):
     # cambiar contrasenas y editar matrices y grupos. Se parte por accion, de
     # menor a mayor riesgo. Ninguno de ellos deja conceder lo que quien actua
     # no tiene, ni tocar una cuenta con mas permisos que la suya (ver
-    # `services/config/views.py:puede_actuar_sobre`).
+    # `services/config/auth.py:can_act_on`).
     can_view_users = models.BooleanField(default=False)
     can_create_users = models.BooleanField(default=False)
     can_edit_user_permissions = models.BooleanField(default=False)
@@ -178,6 +186,12 @@ class PermissionMatrix(models.Model):
     can_manage_groups = models.BooleanField(default=False)
     # El registro de auditoria (`services/auditoria`): quien hizo que y cuando.
     can_view_auditoria = models.BooleanField(default=False)
+
+    # --- API ---
+    # `can_use_api`: el dueño de un token puede usarlo. `can_manage_api_tokens`:
+    # crear y revocar tokens para otras cuentas.
+    can_use_api = models.BooleanField(default=False)
+    can_manage_api_tokens = models.BooleanField(default=False)
 
     # --- Acciones globales ---
     can_import_data = models.BooleanField(default=False)
@@ -368,3 +382,53 @@ class SesionEntorno(AbstractBaseSession):
         from services.config.sessions import SessionStore
 
         return SessionStore
+
+
+class ApiToken(models.Model):
+    """Token de API de una cuenta. Actúa con los permisos vigentes de `user`.
+
+    Solo se guarda el hash SHA-256: el token en claro se muestra una vez al
+    crearlo. `prefix` lo identifica en pantalla y en auditoría. No se borra: se
+    revoca, para que la auditoría siga apuntando a él.
+    """
+
+    PREFIX = "nwl"
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="api_tokens")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="+")
+    name = models.CharField(max_length=80)
+    prefix = models.CharField(max_length=12, unique=True)
+    key_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    last_used_ip = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = "config_api_token"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.prefix} ({self.user.username})"
+
+    @staticmethod
+    def hash(raw: str) -> str:
+        return hashlib.sha256(raw.encode()).hexdigest()
+
+    @classmethod
+    def issue(cls, *, user: User, created_by: User, name: str, expires_at=None) -> tuple["ApiToken", str]:
+        """Crea un token y devuelve `(token, valor_en_claro)`."""
+        prefix = secrets.token_hex(4)
+        raw = f"{cls.PREFIX}_{prefix}_{secrets.token_urlsafe(32)}"
+        token = cls.objects.create(
+            user=user, created_by=created_by, name=name, prefix=prefix,
+            key_hash=cls.hash(raw), expires_at=expires_at,
+        )
+        return token, raw
+
+    @property
+    def is_active(self) -> bool:
+        if self.revoked_at is not None:
+            return False
+        return self.expires_at is None or self.expires_at > timezone.now()

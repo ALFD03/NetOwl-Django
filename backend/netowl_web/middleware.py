@@ -57,7 +57,10 @@ class LimiteCuerpoAnonimoMiddleware:
     def rutas_abiertas(self) -> frozenset[str]:
         # Perezoso: en __init__ el URLconf todavia puede no estar cargado.
         if self._rutas_abiertas is None:
-            self._rutas_abiertas = frozenset({reverse("config:login"), reverse("config:logout")})
+            self._rutas_abiertas = frozenset({
+                reverse("config:login"), reverse("config:logout"),
+                reverse("api:auth:login"), reverse("api:auth:logout"),
+            })
         return self._rutas_abiertas
 
     def __call__(self, request):

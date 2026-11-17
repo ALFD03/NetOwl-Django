@@ -37,6 +37,7 @@ export type Permission =
   | 'can_view_all_business_units'
   | 'can_view_users'
   | 'can_view_auditoria'
+  | 'can_use_api'
   | 'can_import_data'
   | 'can_run_calculations'
   | 'can_run_lifetime'
@@ -53,6 +54,7 @@ export type Permission =
   | 'can_change_passwords'
   | 'can_delete_users'
   | 'can_manage_groups'
+  | 'can_manage_api_tokens'
   | 'can_import_subs'
   | 'can_import_crm'
   | 'can_import_support'
@@ -89,6 +91,7 @@ export interface UserProfile {
   can_view_all_business_units: boolean;
   can_view_users: boolean;
   can_view_auditoria: boolean;
+  can_use_api: boolean;
   can_import_data: boolean;
   can_run_calculations: boolean;
   can_run_lifetime: boolean;
@@ -105,6 +108,7 @@ export interface UserProfile {
   can_change_passwords: boolean;
   can_delete_users: boolean;
   can_manage_groups: boolean;
+  can_manage_api_tokens: boolean;
   can_import_subs: boolean;
   can_import_crm: boolean;
   can_import_support: boolean;

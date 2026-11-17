@@ -81,6 +81,7 @@ SECURE_REFERRER_POLICY = "same-origin"
 # En Vault: cadena separada por comas o lista. Si no se define, se usan
 # los orígenes locales por defecto (ver DjangoModel en backend/vault.py).
 CSRF_TRUSTED_ORIGINS = config.django.CSRF_TRUSTED_ORIGINS
+CSRF_FAILURE_VIEW = "services.config.api.endpoint.csrf_failure"
 
 # Limite de tiempo se sesiones 
 SESSION_COOKIE_AGE = 8*60*60
@@ -169,7 +170,7 @@ INSTALLED_APPS = [
     "services.catalogos",           # Catalogos de referencia (vistas; modelos en subscriptions)
     "services.comisiones",          # Comisiones de la fuerza de ventas
     "services.config",              # Autenticacion y permisos
-    "services.auditoria",           # Registro de auditoria: quien hizo que
+    "services.audit",               # Auditoría (label `auditoria`)
     "inertia",
 ]
 
@@ -183,10 +184,12 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",                  # Varios (URL slashes, etc.)
     "django.middleware.csrf.CsrfViewMiddleware",                  # Protección CSRF
     "django.contrib.auth.middleware.AuthenticationMiddleware",    # Autenticación por sesión
+    # Token de API en `/api/`: sustituye a la sesión antes de que nadie mire request.user.
+    "services.config.api.middleware.ApiTokenMiddleware",
     # Antes que el CSRF y que cualquier vista: un anonimo no sube nada (ver la clase).
     "netowl_web.middleware.LimiteCuerpoAnonimoMiddleware",
-    # Antes del limitador, para anotar tambien los 429 (ver services/auditoria).
-    "services.auditoria.middleware.AuditoriaMiddleware",
+    # Antes del limitador, para anotar tambien los 429.
+    "services.audit.middleware.AuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
     "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
     "netowl_web.middleware.RateLimitMiddleware",

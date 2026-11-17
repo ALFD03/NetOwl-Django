@@ -19,7 +19,7 @@ from inertia import render as render_inertia
 
 from services.config.decorators import permission_required
 
-from .models import RegistroAuditoria
+from .models import AuditLog
 
 LIMITE = 1000
 
@@ -33,6 +33,7 @@ MODULOS = {
     "catalogos": "Catálogos",
     "comisiones": "Comisiones",
     "auditoria": "Auditoría",
+    "auth": "API: sesión y tokens",
     "analisis": "Análisis (worker)",
 }
 
@@ -111,44 +112,44 @@ def _filtrar(params) -> tuple:
     if hasta < desde:
         desde, hasta = hasta, desde
     zona = timezone.get_current_timezone()
-    qs = RegistroAuditoria.objects.filter(
-        fecha__gte=timezone.make_aware(datetime.combine(desde, time.min), zona),
-        fecha__lt=timezone.make_aware(datetime.combine(hasta + timedelta(days=1), time.min), zona),
+    qs = AuditLog.objects.filter(
+        created_at__gte=timezone.make_aware(datetime.combine(desde, time.min), zona),
+        created_at__lt=timezone.make_aware(datetime.combine(hasta + timedelta(days=1), time.min), zona),
     )
     filtros = {"desde": desde.isoformat(), "hasta": hasta.isoformat(), "modulo": "", "usuario": "", "resultado": "", "q": ""}
 
     if modulo := params.get("modulo"):
-        qs = qs.filter(modulo=modulo)
+        qs = qs.filter(module=modulo)
         filtros["modulo"] = modulo
     if usuario := params.get("usuario"):
         qs = qs.filter(username=usuario)
         filtros["usuario"] = usuario
     if resultado := params.get("resultado"):
-        qs = qs.filter(resultado=resultado)
+        qs = qs.filter(outcome=resultado)
         filtros["resultado"] = resultado
     if q := (params.get("q") or "").strip()[:100]:
         qs = qs.filter(
-            Q(descripcion__icontains=q) | Q(objeto__icontains=q) | Q(accion__icontains=q) | Q(username__icontains=q)
+            Q(description__icontains=q) | Q(target__icontains=q) | Q(action__icontains=q) | Q(username__icontains=q)
         )
         filtros["q"] = q
     return qs, filtros
 
 
-def _fila(r: RegistroAuditoria) -> dict:
+def _fila(r: AuditLog) -> dict:
     return {
         "id": r.id,
-        "fecha": timezone.localtime(r.fecha).strftime("%Y-%m-%d %H:%M:%S"),
+        "fecha": timezone.localtime(r.created_at).strftime("%Y-%m-%d %H:%M:%S"),
         "username": r.username or "—",
         "ip": r.ip or "",
-        "modulo": r.modulo,
-        "modulo_display": MODULOS.get(r.modulo, r.modulo),
-        "accion": r.accion,
-        "accion_display": etiqueta_accion(r.accion),
-        "resultado": r.resultado,
-        "resultado_display": r.get_resultado_display(),
-        "estado_http": r.estado_http,
-        "objeto": r.objeto,
-        "descripcion": r.descripcion,
+        "modulo": r.module,
+        "modulo_display": MODULOS.get(r.module, r.module),
+        "accion": r.action,
+        "accion_display": etiqueta_accion(r.action),
+        "resultado": r.outcome,
+        "resultado_display": r.get_outcome_display(),
+        "estado_http": r.status_code,
+        "objeto": r.target,
+        "descripcion": r.description,
     }
 
 
@@ -158,13 +159,13 @@ def registro_view(request):
     """El registro filtrado: los `LIMITE` mas recientes de lo que cumple los filtros."""
     qs, filtros = _filtrar(request.GET)
     total = qs.count()
-    registros = [_fila(r) for r in qs.order_by("-fecha", "-id")[:LIMITE]]
+    registros = [_fila(r) for r in qs.order_by("-created_at", "-id")[:LIMITE]]
 
     usuarios = (
-        RegistroAuditoria.objects.exclude(username="")
+        AuditLog.objects.exclude(username="")
         .order_by("username").values_list("username", flat=True).distinct()
     )
-    modulos = RegistroAuditoria.objects.order_by("modulo").values_list("modulo", flat=True).distinct()
+    modulos = AuditLog.objects.order_by("module").values_list("module", flat=True).distinct()
 
     return render_inertia(request, "Auditoria/Registro", {
         "registros": registros,
@@ -174,7 +175,7 @@ def registro_view(request):
         "opciones": {
             "modulos": [{"value": m, "label": MODULOS.get(m, m)} for m in modulos],
             "usuarios": list(usuarios),
-            "resultados": [{"value": v, "label": e} for v, e in RegistroAuditoria.RESULTADO_CHOICES],
+            "resultados": [{"value": v, "label": e} for v, e in AuditLog.OUTCOME_CHOICES],
         },
     })
 
@@ -183,12 +184,12 @@ def registro_view(request):
 @permission_required("can_view_auditoria")
 def api_registro_detalle(request, registro_id: int):
     """Un registro con su `detalle` (lo enviado, y el antes y el despues si los hay)."""
-    registro = RegistroAuditoria.objects.filter(pk=registro_id).first()
+    registro = AuditLog.objects.filter(pk=registro_id).first()
     if registro is None:
         return JsonResponse({"status": "error", "message": "Registro no encontrado."}, status=404)
     return JsonResponse({
         **_fila(registro),
-        "metodo": registro.metodo,
-        "ruta": registro.ruta,
-        "detalle": registro.detalle,
+        "metodo": registro.method,
+        "ruta": registro.path,
+        "detalle": registro.detail,
     })

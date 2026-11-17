@@ -1,5 +1,40 @@
 # 11 · Referencia de endpoints
 
+## API `/api/<módulo>/<servicio>/`
+
+La API nueva, pensada para la SPA y para cualquier otro cliente. Cada vista se
+declara con `@endpoint` (`services/config/api/endpoint.py`), que resuelve método,
+autenticación, permisos, límite de peticiones, validación con pydantic y errores.
+
+**Autenticación**, en los mismos endpoints:
+
+- **Sesión** (la SPA): cookie de sesión + cabecera `X-CSRFToken` en las escrituras.
+  `GET /api/auth/me/` entrega la cookie CSRF.
+- **Token** (otras apps): `Authorization: Bearer nwl_…`. Actúa con los permisos
+  vigentes de la cuenta dueña, que además necesita `can_use_api`. No usa CSRF.
+  Toda petición con token, también las lecturas, queda en auditoría (canal `api`,
+  token y duración); un token inválido, revocado o caducado responde 401 y también
+  se anota.
+
+**Respuestas**: éxito → el JSON de datos (200/201) o 204 sin cuerpo. Error →
+`{"error": {"message": "...", "details": ...}}` con 400 (parámetros), 401, 403,
+404, 405, 429 o 500. Una ruta inexistente bajo `/api/` responde 404 JSON.
+
+### `/api/auth/`
+
+| Método | Ruta | Permiso | Notas |
+|---|---|---|---|
+| POST | `/api/auth/login/` | — | Body `{username, password}`. Abre sesión y devuelve lo mismo que `me`. Límite de fallos por cuenta (5/5 min) y por IP (20/5 min). Solo sesión |
+| POST | `/api/auth/logout/` | sesión | 204. Solo sesión |
+| GET | `/api/auth/me/` | sesión o token | `id`, `username`, `is_superuser`, `role`, `group`, `permissions` (matriz efectiva), `landing`, `auth` (`session`/`token`), `token`. Anónimo → 401 con cookie CSRF |
+| GET | `/api/auth/tokens/` | `can_manage_api_tokens` | `?user_id=`. Nunca incluye el valor del token. Solo sesión |
+| POST | `/api/auth/tokens/` | `can_manage_api_tokens` | Body `{user_id, name, expires_in_days?}`. 201 con `token` en claro (única vez). La cuenta necesita `can_use_api` y quien lo crea, rango sobre ella (`can_act_on`). Solo sesión |
+| POST | `/api/auth/tokens/<id>/revoke/` | `can_manage_api_tokens` | Revoca; el token deja de valer al instante. Solo sesión |
+
+---
+
+## Rutas de página y API antigua
+
 Todas las rutas exigen sesión (`@login_required`). La columna **Permiso** indica
 lo que comprueba el decorador:
 
@@ -46,7 +81,7 @@ Respuesta uniforme: `{"status": "success"|"error", "message": "..."}`.
 
 ---
 
-## `/auditoria/` — `services.auditoria`
+## `/auditoria/` — `services.audit`
 
 | Método | Ruta | Vista | Permiso | Notas |
 |---|---|---|---|---|

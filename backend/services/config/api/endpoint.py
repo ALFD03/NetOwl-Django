@@ -1,0 +1,191 @@
+"""El decorador `@endpoint`: todo lo común de una vista de la API.
+
+Una vista decorada solo lee sus datos y los devuelve. El decorador se encarga de:
+
+* método HTTP (405),
+* autenticación por sesión o por token (401) y permisos (403),
+* límite de peticiones por token, usuario o IP (429),
+* validar `query` (GET) y `body` (JSON o formulario) con pydantic (400),
+* convertir el resultado en JSON (NaN de pandas incluidos) y cualquier error
+  en una respuesta uniforme: `{"error": {"message": ..., "details": ...}}`.
+
+La vista puede devolver un dict/list (200), `(datos, status)`, `None` (204) o
+cualquier `HttpResponse` (se devuelve tal cual).
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import types
+import typing
+from collections.abc import Callable, Iterable
+from functools import wraps
+from typing import Any
+
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.http import Http404, HttpResponse, JsonResponse
+from django_ratelimit.core import is_ratelimited
+from pydantic import BaseModel, ValidationError
+
+from core.utils import clean_json_nullable, clean_json_props
+from netowl_web.ratelimit import ip_cliente
+from services.config.auth import has_permission
+
+logger = logging.getLogger(__name__)
+
+INTERNAL_ERROR = "Error interno del servidor. Consulte el registro de la aplicación."
+
+
+class ApiError(Exception):
+    """Error esperado: su mensaje llega al cliente con el status indicado."""
+
+    def __init__(self, message: str, status: int = 400, details: Any = None):
+        super().__init__(message)
+        self.message = message
+        self.status = status
+        self.details = details
+
+
+def error_response(message: str, status: int, details: Any = None) -> JsonResponse:
+    error: dict[str, Any] = {"message": message}
+    if details is not None:
+        error["details"] = details
+    return JsonResponse({"error": error}, status=status)
+
+
+def _rate_key(group: str, request) -> str:
+    token = getattr(request, "api_token", None)
+    if token is not None:
+        return f"token:{token.pk}"
+    if request.user.is_authenticated:
+        return f"user:{request.user.pk}"
+    return f"ip:{ip_cliente(request)}"
+
+
+def _is_list_field(model: type[BaseModel], name: str) -> bool:
+    field = model.model_fields.get(name)
+    if field is None:
+        return False
+    annotation = field.annotation
+    if typing.get_origin(annotation) in (typing.Union, types.UnionType):
+        annotation = next((a for a in typing.get_args(annotation) if a is not type(None)), annotation)
+    return typing.get_origin(annotation) in (list, tuple, set)
+
+
+def _query_data(request, model: type[BaseModel]) -> dict:
+    return {
+        key: request.GET.getlist(key) if _is_list_field(model, key) else request.GET.get(key)
+        for key in request.GET
+    }
+
+
+def _body_data(request) -> Any:
+    if request.content_type == "application/json":
+        try:
+            return json.loads(request.body or b"{}")
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ApiError("El cuerpo no es un JSON válido.") from exc
+    return request.POST.dict()
+
+
+def _validation_details(exc: ValidationError) -> list[dict]:
+    return [
+        {"field": ".".join(str(p) for p in err["loc"]), "message": err["msg"]}
+        for err in exc.errors(include_url=False)
+    ]
+
+
+def _to_response(result: Any, nullable: bool) -> HttpResponse:
+    if isinstance(result, HttpResponse):
+        return result
+    status = 200
+    if isinstance(result, tuple):
+        result, status = result
+    if result is None:
+        return HttpResponse(status=204)
+    if isinstance(result, BaseModel):
+        result = result.model_dump(mode="json")
+    clean = clean_json_nullable if nullable else clean_json_props
+    return JsonResponse(clean(result), status=status, safe=False, json_dumps_params={"ensure_ascii": False})
+
+
+def endpoint(
+    *,
+    methods: Iterable[str] = ("GET",),
+    perms: Iterable[str] = (),
+    require_all: bool = False,
+    login: bool = True,
+    session_only: bool = False,
+    rate: str | None = None,
+    query: type[BaseModel] | None = None,
+    body: type[BaseModel] | None = None,
+    nullable: bool = False,
+) -> Callable:
+    """Declara una vista de la API.
+
+    - `perms`: basta uno, o todos con `require_all=True`.
+    - `login=False`: vista pública (solo el login).
+    - `session_only`: rechaza tokens (gestión de tokens, cierre de sesión).
+    - `rate`: "2/m", "60/m"…, contado por token, usuario o IP.
+    - `query` / `body`: modelos pydantic; la vista los recibe como `query=` y `body=`.
+    - `nullable`: NaN → null en vez de 0 (ver `core.utils.clean_json_nullable`).
+    """
+    allowed = tuple(m.upper() for m in methods)
+    perms = tuple(perms)
+
+    def decorator(view: Callable) -> Callable:
+        group = f"api:{view.__module__}.{view.__name__}"
+
+        @wraps(view)
+        def wrapped(request, *args, **kwargs):
+            if request.method not in allowed:
+                response = error_response("Método no permitido.", 405)
+                response["Allow"] = ", ".join(allowed)
+                return response
+
+            if login and not request.user.is_authenticated:
+                return error_response("Autenticación requerida.", 401)
+            if session_only and getattr(request, "api_token", None) is not None:
+                return error_response("Esta operación no admite token de API.", 403)
+            if perms:
+                combine = all if require_all else any
+                if not combine(has_permission(request.user, p) for p in perms):
+                    joiner = " y " if require_all else " o "
+                    return error_response(f"Acceso denegado. Se requiere: {joiner.join(perms)}.", 403)
+
+            if rate and is_ratelimited(
+                request, group=group, key=_rate_key, rate=rate, increment=True
+            ):
+                return error_response("Demasiadas peticiones. Espera un momento antes de reintentar.", 429)
+
+            try:
+                if query is not None:
+                    kwargs["query"] = query.model_validate(_query_data(request, query))
+                if body is not None:
+                    kwargs["body"] = body.model_validate(_body_data(request))
+                return _to_response(view(request, *args, **kwargs), nullable)
+            except ValidationError as exc:
+                return error_response("Parámetros inválidos.", 400, _validation_details(exc))
+            except ApiError as exc:
+                return error_response(exc.message, exc.status, exc.details)
+            except PermissionDenied as exc:
+                return error_response(str(exc) or "Acceso denegado.", 403)
+            except (Http404, ObjectDoesNotExist):
+                return error_response("No encontrado.", 404)
+            except Exception:
+                logger.exception("Error en %s %s", request.method, request.path)
+                return error_response(INTERNAL_ERROR, 500)
+
+        return wrapped
+
+    return decorator
+
+
+def csrf_failure(request, reason: str = ""):
+    """`CSRF_FAILURE_VIEW`: JSON en `/api/`, la página de Django en el resto."""
+    if request.path.startswith("/api/"):
+        return error_response("Token CSRF inválido o ausente.", 403)
+    from django.views.csrf import csrf_failure as default_failure
+
+    return default_failure(request, reason=reason)

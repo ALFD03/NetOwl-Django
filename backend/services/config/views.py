@@ -15,7 +15,7 @@ son comandos y no vistas.
 import json
 import logging
 
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
@@ -25,15 +25,12 @@ from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST
-from django_ratelimit.core import get_usage
 from django_ratelimit.decorators import ratelimit
 from inertia import render as render_inertia
 
-from netowl_web.ratelimit import ip_cliente, usuario_login
-from services.auditoria.models import RegistroAuditoria
-from services.auditoria.registro import registrar
 from services.subscriptions.models import Coordinador
 
+from .auth import attempt_login, can_act_on, effective_permissions
 from .decorators import permission_required, resolve_landing_url
 from .models import PERMISSION_FIELDS, PermissionGroup, Profile
 from .unidades import AlcanceUnidades, alcance_de, lista_de
@@ -75,17 +72,8 @@ def matriz_de(objetivo) -> dict[str, bool]:
 
 
 def matriz_efectiva(usuario) -> dict[str, bool]:
-    """Lo que de verdad rige para una cuenta.
-
-    Todo si es superusuario; la del grupo si pertenece a uno (el perfil le
-    delega cada comprobacion); la suya si no.
-    """
-    if usuario.is_superuser:
-        return {field: True for field in PERMISSION_FIELDS}
-    profile = getattr(usuario, 'profile', None)
-    if profile is None:
-        return {field: False for field in PERMISSION_FIELDS}
-    return {field: bool(profile.has_permission(field)) for field in PERMISSION_FIELDS}
+    """Lo que de verdad rige para una cuenta (ver `auth.effective_permissions`)."""
+    return effective_permissions(usuario)
 
 
 def permisos_fuera_de_alcance(actor, nueva: dict[str, bool], previa: dict[str, bool] | None = None) -> list[str]:
@@ -116,29 +104,6 @@ def respuesta_fuera_de_alcance(campos: list[str]) -> JsonResponse:
         },
         status=403,
     )
-
-
-def puede_actuar_sobre(actor, objetivo) -> bool:
-    """Si `actor` tiene rango para tocar la cuenta `objetivo`.
-
-    Dos reglas. Un superusuario solo lo toca otro superusuario: quien tuviera
-    permiso de cambiar contrasenas podia cambiarle la suya y entrar como el, y
-    el superusuario se salta toda la matriz (ver `decorators._authorize`). Y,
-    por la misma razon, nadie toca una cuenta **con permisos que el no tiene**:
-    cambiarle la contrasena, editarla o borrarla seria hacerse con ellos o
-    quitarselos a alguien de mas rango.
-    """
-    if actor.is_superuser:
-        return True
-    if objetivo.is_superuser:
-        return False
-    propios = matriz_efectiva(actor)
-    if not all(propios[field] for field, valor in matriz_efectiva(objetivo).items() if valor):
-        return False
-    # Lo mismo con las unidades de negocio: sin verlas todas, solo una cuenta
-    # cuyas unidades sean un subconjunto de las propias.
-    alcance = alcance_de(actor)
-    return alcance is None or alcance.cubre(alcance_de(objetivo))
 
 
 def respuesta_sin_rango() -> JsonResponse:
@@ -259,32 +224,6 @@ def leer_id(valor) -> int | None:
         return None
 
 
-# Los dos limites del formulario de entrada. Solo cuentan los intentos
-# **fallidos**: con el decorador contaban todos, asi que entrar y salir unas
-# cuantas veces seguidas bloqueaba a quien lo hacia.
-LIMITES_LOGIN = (
-    # Por cuenta: corta el ataque dirigido a un usuario concreto.
-    {"group": "login-usuario", "key": usuario_login, "rate": "5/5m"},
-    # Por IP: corta el rociado de una contrasena comun contra muchas cuentas.
-    {"group": "login-ip", "key": "ip", "rate": "20/5m"},
-)
-
-
-def login_bloqueado(request) -> bool:
-    """Si alguno de los dos limites ya esta agotado, sin contar este intento."""
-    for limite in LIMITES_LOGIN:
-        uso = get_usage(request, method="POST", increment=False, **limite)
-        if uso is not None and (uso["should_limit"] or uso["count"] >= uso["limit"]):
-            return True
-    return False
-
-
-def contar_fallo_login(request) -> None:
-    """Suma el intento fallido a los dos limites."""
-    for limite in LIMITES_LOGIN:
-        get_usage(request, method="POST", increment=True, **limite)
-
-
 def credenciales_del_cuerpo(request) -> tuple[str, str]:
     """Usuario y contrasena, vengan en JSON (Inertia) o en formulario.
 
@@ -321,37 +260,9 @@ def login_view(request):
     error_message = None
     if request.method == "POST":
         usr, pas = credenciales_del_cuerpo(request)
-
-        if login_bloqueado(request):
-            logger.warning(
-                "Intentos de acceso bloqueados por limite: usuario=%r ip=%s",
-                usr, ip_cliente(request),
-            )
-            registrar(
-                request,
-                modulo="config",
-                accion="login_bloqueado",
-                descripcion="Intento de acceso rechazado por exceso de intentos fallidos.",
-                objeto=f"username={usr}"[:255] if usr else "",
-                resultado=RegistroAuditoria.LIMITADO,
-            )
-            error_message = (
-                "Demasiados intentos fallidos. Espere unos minutos antes de reintentar."
-            )
-        else:
-            user = authenticate(request, username=usr, password=pas)
-            if user is not None:
-                logger.info("Acceso correcto: usuario=%r ip=%s", usr, ip_cliente(request))
-                login(request, user)
-                return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
-
-            contar_fallo_login(request)
-            # Sin esta linea un ataque de fuerza bruta no dejaba rastro en
-            # ningun sitio: el limite lo corta, pero nadie se entera.
-            logger.warning(
-                "Credenciales incorrectas: usuario=%r ip=%s", usr, ip_cliente(request)
-            )
-            error_message = "Credenciales incorrectas. Por favor intente de nuevo."
+        error_message = attempt_login(request, usr, pas)
+        if error_message is None:
+            return redirect(resolve_landing_url(request) or 'subscriptions:dashboard')
 
     return render_inertia(request, "Config/Login", {"errorMessage": error_message})
 
@@ -372,7 +283,7 @@ def user_management_view(request):
     """Pantalla de administracion: usuarios, grupos y roles.
 
     Cada cuenta lleva `editable`: si quien mira tiene rango para tocarla (ver
-    `puede_actuar_sobre`). La interfaz esconde las acciones de las que no; el
+    `auth.can_act_on`). La interfaz esconde las acciones de las que no; el
     servidor las rechaza igual.
     """
     users = (
@@ -396,7 +307,7 @@ def user_management_view(request):
             "group_name": prof.group.name if (prof and prof.group) else None,
             "permissions": serialize_permissions(prof),
             "unidades": serialize_unidades(prof),
-            "editable": u.id != request.user.id and puede_actuar_sobre(request.user, u),
+            "editable": u.id != request.user.id and can_act_on(request.user, u),
         })
 
     mi_grupo = getattr(getattr(request.user, 'profile', None), 'group_id', None)
@@ -502,7 +413,7 @@ def _cuenta_editable(request, uid) -> tuple[User | None, JsonResponse | None]:
     user = User.objects.select_related('profile').filter(pk=uid).first()
     if user is None:
         return None, JsonResponse({"status": "error", "message": "Usuario no encontrado."}, status=404)
-    if not puede_actuar_sobre(request.user, user):
+    if not can_act_on(request.user, user):
         return None, respuesta_sin_rango()
     return user, None
 

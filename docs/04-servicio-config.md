@@ -44,6 +44,7 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_view_all_business_units` | Todas las unidades de negocio. Sin él, la página Unidades de negocio enseña solo las de `unidades_negocio` y el bloque RF si `unidad_rf` (ver abajo). `config/0014` lo concedió a todas las cuentas existentes |
 | `can_view_users` | La pantalla de usuarios y grupos (solo verla) |
 | `can_view_auditoria` | El registro de auditoría (`/auditoria/`) |
+| `can_use_api` | Que los tokens de esta cuenta funcionen |
 
 ### Periodos visibles (`services/config/periodos.py`)
 
@@ -221,6 +222,19 @@ superusuario) ni borrar su propia cuenta. Asignar un grupo **descarta** los
 permisos individuales; quitarlo los vuelve a aceptar del payload.
 
 ---
+
+## API (`services/config/api/`)
+
+- `endpoint.py`: el decorador `@endpoint`, `ApiError` y el formato de error común.
+  Una vista solo lee y devuelve datos; ver [11 · Endpoints](11-api-endpoints.md).
+- `middleware.py`: `ApiTokenMiddleware` resuelve `Authorization: Bearer` en `/api/`.
+- `views.py` / `urls.py`: `/api/auth/` (login, logout, me, tokens).
+- `auth.py` (en `services/config/`): login con límite de fallos, matriz efectiva,
+  `has_permission` y `can_act_on`; lo comparten la API y las vistas de página.
+
+Un token lo crea alguien con `can_manage_api_tokens` **para otra cuenta**, y actúa
+con los permisos de esa cuenta. Solo la gestión de tokens y el logout rechazan
+tokens: un token filtrado no puede crear otros.
 
 ## Sesiones por entorno
 

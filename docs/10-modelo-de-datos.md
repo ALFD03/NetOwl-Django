@@ -59,7 +59,8 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`). Incluye las `diferida` (días promocionales sin adelanto), solo informativas |
 | `comisiones_pagos` | `ComisionPago` | Lo que cobró cada persona en un periodo cerrado, con nombre y rol copiados (el equipo, en `datos`) |
 | `comisiones_cierres_archivados` | `ComisionCierreArchivado` | La copia de un cierre, guardada al reabrir el periodo: quién cerró y reabrió, cuándo, el motivo y en `copia` el cierre entero. Única por `(periodo, version)`; solo se añade |
-| `auditoria_registro` | `RegistroAuditoria` | Quién hizo qué: cada escritura, los accesos (y los fallidos o bloqueados), algunas lecturas sensibles y el desenlace de cada análisis. Con usuario, IP, módulo, acción, resultado y `detalle` (lo enviado, sin contraseñas ni tokens). Solo se añade. Índices `ix_auditoria_modulo_fecha` e `ix_auditoria_usuario_fecha` |
+| `auditoria_registro` | `AuditLog` | Quién hizo qué: cada escritura, los accesos (y los fallidos o bloqueados), algunas lecturas sensibles, **toda petición con token de API** y el desenlace de cada análisis. Usuario, IP, módulo, acción, resultado, canal (`web`/`api`/`worker`), token, duración y `detalle` (sin contraseñas ni tokens). Solo se añade. Índices `ix_auditoria_modulo_fecha`, `ix_auditoria_usuario_fecha` e `ix_auditoria_token_fecha` |
+| `config_api_token` | `ApiToken` | Tokens de API: dueño, quién lo creó, nombre, `prefix` visible y hash SHA-256 (el valor en claro no se guarda). Caducidad, revocación y último uso. No se borran, se revocan |
 | `django_migrations` | Django | Propia de cada esquema |
 
 ### Sesiones e importaciones
