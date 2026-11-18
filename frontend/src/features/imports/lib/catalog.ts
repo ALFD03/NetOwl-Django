@@ -12,21 +12,21 @@ import type { ProductoPendiente } from '@/shared/types/subscriptions';
  */
 export interface CatalogBlock {
   message: string;
-  productos: ProductoPendiente[];
-  ordenes: number;
+  products: ProductoPendiente[];
+  orders: number;
 }
 
 interface CatalogBody {
   status?: string;
   message?: string;
-  productos?: ProductoPendiente[];
-  ordenes?: number;
+  products?: ProductoPendiente[];
+  orders?: number;
 }
 
 /**
  * Reconoce ese 409 dentro de lo que lanzó axios, o `null` si es otra cosa.
  *
- * Se mira el `status: 'catalogo'` del cuerpo y no solo el código HTTP: un 409
+ * Se mira el `status: 'catalog'` del cuerpo y no solo el código HTTP: un 409
  * también lo devuelve un catálogo vacío, que es un problema de configuración
  * distinto y se enseña como un error normal.
  */
@@ -34,11 +34,11 @@ export function extractCatalogBlock(error: unknown): CatalogBlock | null {
   if (!axios.isAxiosError<CatalogBody>(error)) return null;
 
   const data = error.response?.data;
-  if (data?.status !== 'catalogo' || !Array.isArray(data.productos)) return null;
+  if (data?.status !== 'catalog' || !Array.isArray(data.products)) return null;
 
   return {
     message: data.message ?? 'Hay productos que no están en el catálogo.',
-    productos: data.productos,
-    ordenes: data.ordenes ?? 0,
+    products: data.products,
+    orders: data.orders ?? 0,
   };
 }

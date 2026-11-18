@@ -5,14 +5,14 @@ import { MetricCard } from '@/shared/ui';
 import { tonoChurn, tonoCrecimiento } from '../../lib/targets';
 import type { TargetsTrafficLight } from '../../types';
 
-interface DashboardMetricsProps { data: { avgChurnNeto:number; avgChurnBruto:number; avgGrowth:number; avgContributionRate:number; avgReplacementIndex:number; avgSuspensiones:number; avgWinback:number; latest:{arpu:number}; semaforo: TargetsTrafficLight } }
+interface DashboardMetricsProps { data: { avgChurnNeto:number; avgChurnBruto:number; avgGrowth:number; avgContributionRate:number; avgReplacementIndex:number; avgSuspensiones:number; avgWinback:number; latest:{arpu:number}; thresholds: TargetsTrafficLight } }
 export function DashboardMetrics({ data }: DashboardMetricsProps) {
-  const { semaforo } = data;
+  const { thresholds } = data;
   return <>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-      <MetricCard label="Churn Rate Neto Promedio" value={`${data.avgChurnNeto.toFixed(2)}%`} color={tonoChurn(data.avgChurnNeto, semaforo)} subValue="Promedio global" icon={<TrendingDown className="w-4 h-4 text-emerald-400" />} />
-      <MetricCard label="Churn Rate Bruto Promedio" value={`${data.avgChurnBruto.toFixed(2)}%`} color={tonoChurn(data.avgChurnBruto, semaforo)} subValue="Promedio global" icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} />
-      <MetricCard label="Crecimiento Promedio" value={`${data.avgGrowth.toFixed(2)}%`} color={tonoCrecimiento(data.avgGrowth, semaforo)} subValue="Crecimiento neto" icon={<TrendingUp className="w-4 h-4 text-sky-400" />} />
+      <MetricCard label="Churn Rate Neto Promedio" value={`${data.avgChurnNeto.toFixed(2)}%`} color={tonoChurn(data.avgChurnNeto, thresholds)} subValue="Promedio global" icon={<TrendingDown className="w-4 h-4 text-emerald-400" />} />
+      <MetricCard label="Churn Rate Bruto Promedio" value={`${data.avgChurnBruto.toFixed(2)}%`} color={tonoChurn(data.avgChurnBruto, thresholds)} subValue="Promedio global" icon={<AlertTriangle className="w-4 h-4 text-rose-400" />} />
+      <MetricCard label="Crecimiento Promedio" value={`${data.avgGrowth.toFixed(2)}%`} color={tonoCrecimiento(data.avgGrowth, thresholds)} subValue="Crecimiento neto" icon={<TrendingUp className="w-4 h-4 text-sky-400" />} />
       <MetricCard label="ARPU Promedio" value={`$${data.latest.arpu}`} color="yellow" subValue="Ingreso medio mensual" icon={<DollarSign className="w-4 h-4 text-amber-400" />} />
     </div>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

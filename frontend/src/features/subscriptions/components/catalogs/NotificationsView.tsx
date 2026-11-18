@@ -56,20 +56,20 @@ const LISTAS: Record<Exclude<CatalogArea, 'ventas'>, {
 
 /** Cómo se llama en pantalla cada columna del export que nombra a alguien de ventas. */
 const SALES_COLUMN: Record<SalesColumn, string> = {
-  vendedor: 'Vendedor',
-  medio_supervisor: 'Supervisor',
-  medio: 'Medio',
+  seller: 'Vendedor',
+  supervisor_channel: 'Supervisor',
+  channel: 'Medio',
 };
 
 /** Dónde se guarda como otro nombre de la persona lo que aparece en cada columna del export. */
 const COLUMN_ALIASES = {
-  medio: 'alias_medio',
-  medio_supervisor: 'alias_supervisor',
-  vendedor: 'alias_usuario',
+  channel: 'channel_alias',
+  supervisor_channel: 'supervisor_alias',
+  seller: 'user_alias',
 } as const;
 
 /** El rol tal y como se sugiere al registrar. */
-const rolSugerido = (rol: PendingPerson['rol']) => ROL_UI[rol].corto;
+const rolSugerido = (rol: PendingPerson['role']) => ROL_UI[rol].corto;
 
 /**
  * La bandeja del módulo. «Por registrar» es lo que está en los datos y
@@ -85,8 +85,8 @@ const rolSugerido = (rol: PendingPerson['rol']) => ROL_UI[rol].corto;
  * recarga sin moverse: la fila desaparece de su lista y se sigue con la
  * siguiente. Ir a la página del grupo obligaba a volver después de cada una.
  */
-export function NotificacionesView({ pendientes, ignorados, areas, opciones }: CatalogsNotificationsProps) {
-  const c = useCatalogs({ initialView: 'pendientes', sites: opciones.sites, estados: opciones.estados });
+export function NotificacionesView({ pending, ignored, areas, options }: CatalogsNotificationsProps) {
+  const c = useCatalogs({ initialView: 'pendientes', sites: options.sites, states: options.states });
 
   // Selección de personas por registrar, por literal: es lo que las
   // identifica entre recargas. Lo que ya no está en la lista (se registró o
@@ -94,28 +94,28 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   // El equipo donde se registra y, en bloque, con qué rol. `null` es "el sugerido":
   // el que comparten las elegidas, si lo comparten.
-  const [teamSlug, setTeamSlug] = useState<string>(opciones.equipos[0]?.slug ?? '');
+  const [teamSlug, setTeamSlug] = useState<string>(options.teams[0]?.slug ?? '');
   const [batchRole, setBatchRole] = useState<SalesRole | null>(null);
-  const selectedTeam = opciones.equipos.find((e) => e.slug === teamSlug);
+  const selectedTeam = options.teams.find((e) => e.slug === teamSlug);
   // El rol de un pendiente en el equipo elegido: el sugerido si el equipo lo tiene; si no, el de quien vende.
   const roleInTeam = (sugerido: SalesRole): SalesRole | null => {
     const roles = selectedTeam?.roles ?? [];
-    if (roles.some((r) => r.rol === sugerido)) return sugerido;
-    return (roles.find((r) => r.rol === 'asesor') ?? roles.find((r) => r.rol === 'telemarketing') ?? roles[0])?.rol ?? null;
+    if (roles.some((r) => r.role === sugerido)) return sugerido;
+    return (roles.find((r) => r.role === 'asesor') ?? roles.find((r) => r.role === 'telemarketing') ?? roles[0])?.role ?? null;
   };
   // En bloque solo los roles que no piden más que el nombre y el medio.
-  const rolesInBlock = (selectedTeam?.roles ?? []).filter((r) => r.medio && !r.site && !r.unidades && !r.usuario);
+  const rolesInBlock = (selectedTeam?.roles ?? []).filter((r) => r.channel && !r.site && !r.units && !r.user);
   const currentSelection = useMemo(() => {
-    const presentes = new Set((pendientes.ventas ?? []).map((p) => p.nombre));
+    const presentes = new Set((pending.ventas ?? []).map((p) => p.name));
     return new Set([...seleccion].filter((nombre) => presentes.has(nombre)));
-  }, [seleccion, pendientes.ventas]);
+  }, [seleccion, pending.ventas]);
   const suggestedBatchRole = useMemo(() => {
-    const roles = new Set((pendientes.ventas ?? [])
-      .filter((p) => currentSelection.has(p.nombre))
-      .map((p) => p.rol));
+    const roles = new Set((pending.ventas ?? [])
+      .filter((p) => currentSelection.has(p.name))
+      .map((p) => p.role));
     return roles.size === 1 ? [...roles][0] : null;
-  }, [currentSelection, pendientes.ventas]);
-  const rolElegido = batchRole ?? (suggestedBatchRole && rolesInBlock.some((r) => r.rol === suggestedBatchRole) ? suggestedBatchRole : null);
+  }, [currentSelection, pending.ventas]);
+  const rolElegido = batchRole ?? (suggestedBatchRole && rolesInBlock.some((r) => r.role === suggestedBatchRole) ? suggestedBatchRole : null);
   const cambiarSeleccion = (next: Set<string>) => {
     setSeleccion(next);
     if (next.size === 0) setBatchRole(null);
@@ -124,12 +124,12 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
   const [vinculando, setVinculando] = useState<PendingPerson | null>(null);
   const [vincularA, setVincularA] = useState('');
   const vincular = async () => {
-    const persona = opciones.personas.find((p) => String(p.id) === vincularA);
+    const persona = options.people.find((p) => String(p.id) === vincularA);
     if (!persona || !vinculando) return;
     const columns = (Object.keys(COLUMN_ALIASES) as SalesColumn[])
-      .filter((col) => vinculando.ordenes[col])
+      .filter((col) => vinculando.orders[col])
       .map((col) => COLUMN_ALIASES[col]);
-    if (await c.vincularNombre(persona, vinculando.nombre, columns)) setVinculando(null);
+    if (await c.vincularNombre(persona, vinculando.name, columns)) setVinculando(null);
   };
 
   const registrarSeleccion = async () => {
@@ -142,11 +142,11 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
 
   const listas = (Object.keys(LISTAS) as (keyof typeof LISTAS)[])
     .flatMap((area) => {
-      const filas = pendientes[area];
+      const filas = pending[area];
       return filas ? [{ area, filas, ...LISTAS[area] }] : [];
     });
   const pendingTotal = listas.reduce((total, lista) => total + lista.filas.length, 0)
-    + (pendientes.ventas?.length ?? 0);
+    + (pending.ventas?.length ?? 0);
   const areaLabel = (area: CatalogArea) => areas.find((a) => a.value === area)?.label ?? area;
 
   const pendingColumns = (
@@ -154,8 +154,8 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
     columna: string,
     etiqueta: string,
   ): Column<ProductoPendiente>[] => [
-    { header: columna, accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Órdenes', accessor: 'ordenes', align: 'right', sortKey: 'ordenes' },
+    { header: columna, accessor: 'name', sortKey: 'name' },
+    { header: 'Órdenes', accessor: 'orders', align: 'right', sortKey: 'orders' },
     {
       header: 'Acciones',
       align: 'right',
@@ -164,7 +164,7 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
           <Button
             size="sm"
             icon={<Plus className="h-4 w-4" />}
-            onClick={() => registrar(area, row.nombre)}
+            onClick={() => registrar(area, row.name)}
           >
             {etiqueta}
           </Button>
@@ -172,7 +172,7 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
             size="sm"
             variant="outline"
             icon={<EyeOff className="h-4 w-4" />}
-            onClick={() => c.ignorar(area, row.nombre)}
+            onClick={() => c.ignorar(area, row.name)}
           >
             Ignorar
           </Button>
@@ -182,21 +182,21 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
   ];
 
   const salesColumns: Column<PendingPerson>[] = [
-    { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
+    { header: 'Nombre', accessor: 'name', sortKey: 'name' },
     {
       header: 'Aparece como',
       // Una cuenta por columna y no un total: la venta directa de un
       // supervisor está a la vez en «Medio» y en «Supervisor».
       accessor: (row) => (Object.keys(SALES_COLUMN) as SalesColumn[])
-        .filter((col) => row.ordenes[col])
-        .map((col) => `${SALES_COLUMN[col]}: ${row.ordenes[col]}`)
+        .filter((col) => row.orders[col])
+        .map((col) => `${SALES_COLUMN[col]}: ${row.orders[col]}`)
         .join(' · '),
     },
     {
       header: 'Rol sugerido',
-      accessor: (row) => rolSugerido(row.rol),
+      accessor: (row) => rolSugerido(row.role),
       filterable: true,
-      filterValue: (row) => rolSugerido(row.rol),
+      filterValue: (row) => rolSugerido(row.role),
     },
     {
       header: 'Acciones',
@@ -208,13 +208,13 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
             icon={<Plus className="h-4 w-4" />}
             disabled={!selectedTeam}
             onClick={() => {
-              const rol = roleInTeam(row.rol);
-              if (selectedTeam && rol) c.crearPersonaDesde(row.nombre, rol, selectedTeam.id, selectedTeam.slug);
+              const rol = roleInTeam(row.role);
+              if (selectedTeam && rol) c.crearPersonaDesde(row.name, rol, selectedTeam.id, selectedTeam.slug);
             }}
           >
             Registrar
           </Button>
-          {opciones.personas.length > 0 && (
+          {options.people.length > 0 && (
             <Button
               size="sm"
               variant="secondary"
@@ -232,7 +232,7 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
             size="sm"
             variant="outline"
             icon={<EyeOff className="h-4 w-4" />}
-            onClick={() => c.ignorar('ventas', row.nombre)}
+            onClick={() => c.ignorar('ventas', row.name)}
           >
             Ignorar
           </Button>
@@ -242,7 +242,7 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
   ];
 
   const ignoredColumns: Column<CatalogIgnoredProduct>[] = [
-    { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
+    { header: 'Nombre', accessor: 'name', sortKey: 'name' },
     {
       header: 'Lista',
       accessor: (row) => areaLabel(row.area),
@@ -250,16 +250,16 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
       filterable: true,
       filterValue: (row) => areaLabel(row.area),
     },
-    { header: 'Nota', accessor: (row) => row.nota || '—' },
+    { header: 'Nota', accessor: (row) => row.note || '—' },
     {
       header: 'Registrado por',
-      accessor: (row) => row.creado_por || '—',
+      accessor: (row) => row.created_by || '—',
       filterable: true,
-      filterValue: (row) => row.creado_por || 'Sin registrar',
+      filterValue: (row) => row.created_by || 'Sin registrar',
     },
-    { header: 'Fecha', accessor: 'creado_en', sortKey: 'creado_en' },
+    { header: 'Fecha', accessor: 'created_at', sortKey: 'created_at' },
     actionsColumn<CatalogIgnoredProduct>(c.editarIgnorado, (row) =>
-      c.setBorrando({ tipo: 'ignorados', id: row.id, nombre: row.nombre })),
+      c.setBorrando({ kind: 'ignorados', id: row.id, name: row.name })),
   ];
 
   const firstArea = (areas[0]?.value ?? 'productos') as CatalogArea;
@@ -276,7 +276,7 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
           alta={alta}
           pestanas={[
             { key: 'pendientes', label: `Por registrar (${pendingTotal})`, icon: AlertTriangle },
-            { key: 'ignorados', label: `Ignorados (${ignorados.length})`, icon: EyeOff },
+            { key: 'ignorados', label: `Ignorados (${ignored.length})`, icon: EyeOff },
           ]}
         />
       }
@@ -307,15 +307,15 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
               )}
             </NeonContainer>
           ))}
-          {pendientes.ventas && (
+          {pending.ventas && (
             <NeonContainer
-              title={`Personas de ventas por registrar (${pendientes.ventas.length})`}
+              title={`Personas de ventas por registrar (${pending.ventas.length})`}
               subtitle="Aparecen como Vendedor, Medio o Supervisor en las suscripciones y no están en el directorio: Comisiones no tiene a quién pagarles"
               icon={<Briefcase className="h-5 w-5" />}
-              theme={pendientes.ventas.length ? 'yellow' : 'slate'}
+              theme={pending.ventas.length ? 'yellow' : 'slate'}
               noPadding
             >
-              {pendientes.ventas.length === 0 ? (
+              {pending.ventas.length === 0 ? (
                 <EmptyState
                   title="Nada pendiente"
                   description="Todos los nombres de ventas de las suscripciones están en el directorio (o el export todavía no trae «Medio»)."
@@ -326,10 +326,10 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
                   <BatchBar
                     seleccionadas={currentSelection.size}
                     equipo={teamSlug}
-                    equipos={opciones.equipos.map((e) => ({ value: e.slug, label: e.nombre }))}
+                    teams={options.teams.map((e) => ({ value: e.slug, label: e.name }))}
                     onTeam={(slug) => { setTeamSlug(slug); setBatchRole(null); }}
-                    rol={rolElegido}
-                    roles={rolesInBlock.map((r) => ({ value: r.rol, label: r.etiqueta }))}
+                    role={rolElegido}
+                    roles={rolesInBlock.map((r) => ({ value: r.role, label: r.role_label }))}
                     guardando={c.guardando}
                     onRol={(valor) => setBatchRole(valor as SalesRole)}
                     onRegistrar={registrarSeleccion}
@@ -337,17 +337,17 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
                   />
                   <DataTable
                     columns={salesColumns}
-                    data={pendientes.ventas}
+                    data={pending.ventas}
                     searchable
                     searchPlaceholder="Buscar nombre..."
                     scrollClassName={TABLE_SCROLL}
-                    selection={{ rowKey: (row) => row.nombre, selected: currentSelection, onChange: cambiarSeleccion, conservar: true }}
+                    selection={{ rowKey: (row) => row.name, selected: currentSelection, onChange: cambiarSeleccion, conservar: true }}
                   />
                 </>
               )}
             </NeonContainer>
           )}
-          {listas.length === 0 && !pendientes.ventas && (
+          {listas.length === 0 && !pending.ventas && (
             <EmptyState
               title="Ninguna lista de pendientes"
               description="Las listas de pendientes son de Productos, Estructura y Ventas, y no administras ninguno de los tres."
@@ -367,7 +367,7 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
         >
           <DataTable
             columns={ignoredColumns}
-            data={ignorados}
+            data={ignored}
             searchable
             searchPlaceholder="Buscar nombre..."
             scrollClassName={TABLE_SCROLL}
@@ -407,9 +407,9 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
         {c.planDraft && (
           <PlanForm
             value={c.planDraft}
-            tecnologias={opciones.tecnologias}
-            tiposPersona={opciones.tiposPersona}
-            reguladores={opciones.reguladores}
+            technologies={options.technologies}
+            personTypes={options.personTypes}
+            regulators={options.regulators}
             saving={c.guardando}
             onChange={(patch) => c.setPlanDraft({ ...c.planDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('planes', { ...c.planDraft }))}
@@ -429,10 +429,10 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
         {c.zonaDraft && (
           <ZoneForm
             value={c.zonaDraft}
-            sites={opciones.sites}
-            estados={opciones.estados}
-            coordinadores={opciones.coordinadores}
-            tecnologias={opciones.tecnologias}
+            sites={options.sites}
+            states={options.states}
+            coordinators={options.coordinators}
+            technologies={options.technologies}
             saving={c.guardando}
             onChange={(patch) => c.setZonaDraft({ ...c.zonaDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('zonas', { ...c.zonaDraft }))}
@@ -450,18 +450,18 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
         theme="green"
       >
         {c.personaDraft && (() => {
-          const equipo = opciones.equipos.find((e) => e.slug === c.personaDraft!.equipo);
-          const rol = equipo?.roles.find((r) => r.rol === c.personaDraft!.rol);
+          const equipo = options.teams.find((e) => e.slug === c.personaDraft!.equipo);
+          const rol = equipo?.roles.find((r) => r.role === c.personaDraft!.role);
           return equipo && rol ? (
             <MembershipForm
               value={c.personaDraft}
-              equipos={opciones.equipos}
+              teams={options.teams}
               equipo={equipo}
-              rol={rol}
-              personas={opciones.personas}
-              membresias={opciones.membresias}
-              sites={opciones.sites}
-              unidades={opciones.coordinadores}
+              role={rol}
+              people={options.people}
+              memberships={options.memberships}
+              sites={options.sites}
+              units={options.coordinators}
               saving={c.guardando}
               onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
               onSubmit={(e) => enviar(e, () => c.guardar('membresias', { ...c.personaDraft }))}
@@ -483,9 +483,9 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
         {vinculando !== null && (
           <div className="space-y-5">
             <p className="text-sm text-slate-300">
-              Las ventas con <strong className="text-white">«{vinculando.nombre}»</strong> como{' '}
+              Las ventas con <strong className="text-white">«{vinculando.name}»</strong> como{' '}
               {(Object.keys(COLUMN_ALIASES) as SalesColumn[])
-                .filter((col) => vinculando.ordenes[col])
+                .filter((col) => vinculando.orders[col])
                 .map((col) => SALES_COLUMN[col].toLowerCase())
                 .join(' y ')}{' '}
               serán de:
@@ -496,9 +496,9 @@ export function NotificacionesView({ pendientes, ignorados, areas, opciones }: C
               searchable
               value={vincularA}
               placeholder="Elige a la persona"
-              options={opciones.personas.map((p) => ({
+              options={options.people.map((p) => ({
                 value: String(p.id),
-                label: `${p.nombre} ${p.apellido} · ${p.membresias.map((m) => m.etiqueta).join(', ')}`,
+                label: `${p.name} ${p.last_name} · ${p.memberships.map((m) => m.role_label).join(', ')}`,
               }))}
               onChange={setVincularA}
             />
@@ -526,10 +526,10 @@ interface BatchBarProps {
   seleccionadas: number;
   /** El equipo donde se registra. */
   equipo: string;
-  equipos: { value: string; label: string }[];
+  teams: { value: string; label: string }[];
   onTeam: (slug: string) => void;
   /** `null` cuando las elegidas no comparten rol sugerido y nadie eligió uno. */
-  rol: SalesRole | null;
+  role: SalesRole | null;
   roles: { value: string; label: string }[];
   guardando: boolean;
   onRol: (valor: string) => void;
@@ -546,7 +546,7 @@ interface BatchBarProps {
  * se usa; el equipo se elige siempre, también para «Registrar» una a una.
  */
 function BatchBar({
-  seleccionadas, equipo, equipos, onTeam: onEquipo, rol, roles, guardando, onRol, onRegistrar, onClear: onLimpiar,
+  seleccionadas, equipo, teams, onTeam: onEquipo, role, roles, guardando, onRol, onRegistrar, onClear: onLimpiar,
 }: BatchBarProps) {
   const teamSelector = (
     <>
@@ -555,7 +555,7 @@ function BatchBar({
         aria-label="Equipo donde se registran"
         className="min-w-[160px] rounded-xl border border-slate-700/50 bg-surface-secondary px-3 py-1.5 text-xs text-white"
         value={equipo}
-        options={equipos}
+        options={teams}
         onChange={onEquipo}
       />
     </>
@@ -582,7 +582,7 @@ function BatchBar({
       <SelectMenu
         aria-label="Rol con el que se registran"
         className="min-w-[180px] rounded-xl border border-slate-700/50 bg-surface-secondary px-3 py-1.5 text-xs text-white"
-        value={rol ?? ''}
+        value={role ?? ''}
         placeholder="Elige un rol"
         options={roles}
         onChange={onRol}
@@ -590,7 +590,7 @@ function BatchBar({
       <Button
         size="sm"
         icon={<UserPlus className="h-4 w-4" />}
-        disabled={!rol}
+        disabled={!role}
         isLoading={guardando}
         onClick={onRegistrar}
       >

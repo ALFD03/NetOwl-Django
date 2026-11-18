@@ -12,8 +12,8 @@ export function healthColor(pct: number): MetricColor {
 }
 
 /** `etapa_8_devuelto` -> `8 devuelto`, the label the cards show. */
-export function formatStageLabel(etapa: string): string {
-  return etapa.replace('etapa_', '').replace(/_/g, ' ');
+export function formatStageLabel(stageId: string): string {
+  return stageId.replace('etapa_', '').replace(/_/g, ' ');
 }
 
 /**
@@ -24,14 +24,14 @@ export function formatStageLabel(etapa: string): string {
  */
 export function buildHealthCards(rows: CrmEffectivenessRow[] = []): CrmHealthCard[] {
   return rows.map((row) => {
-    const total = toNumber(row.total_salidas);
-    const successCount = toNumber(row.exitosos);
-    const failCount = toNumber(row.fallidos);
-    const pct = toNumber(row.efectividad_pct);
+    const total = toNumber(row.total_exits);
+    const successCount = toNumber(row.successful);
+    const failCount = toNumber(row.failed);
+    const pct = toNumber(row.effectiveness_pct);
 
     return {
-      id: String(row.etapa ?? ''),
-      label: formatStageLabel(String(row.etapa ?? '')),
+      id: String(row.stage ?? ''),
+      label: formatStageLabel(String(row.stage ?? '')),
       pct,
       color: healthColor(pct),
       successCount,

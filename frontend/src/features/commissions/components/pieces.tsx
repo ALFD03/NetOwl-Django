@@ -23,23 +23,23 @@ export const ROL_CHIP: Record<SalesRole, { label: string; tono: string }> = {
   telemarketing: { label: 'Telemarketing', tono: 'border-slate-600/50 bg-slate-700/30 text-slate-300' },
 };
 
-export function ChipRol({ rol, children }: { rol: SalesRole; children?: ReactNode }) {
+export function ChipRol({ role, children }: { role: SalesRole; children?: ReactNode }) {
   return (
-    <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${ROL_CHIP[rol].tono}`}>
-      {children ?? ROL_CHIP[rol].label}
+    <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${ROL_CHIP[role].tono}`}>
+      {children ?? ROL_CHIP[role].label}
     </span>
   );
 }
 
 /** Una cifra con su etiqueta, en una tarjeta. */
 export function Kpi({
-  label, children, nota, tono = 'text-slate-400',
-}: { label: string; children: ReactNode; nota?: ReactNode; tono?: string }) {
+  label, children, note, tono = 'text-slate-400',
+}: { label: string; children: ReactNode; note?: ReactNode; tono?: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-2xl border border-slate-800 bg-surface-primary/60 px-4 py-3">
       <span className={`text-[10px] font-black uppercase tracking-wider ${tono}`}>{label}</span>
       <div className="font-mono text-xl font-black tabular-nums text-white">{children}</div>
-      {nota && <div className="text-[11px] text-slate-500">{nota}</div>}
+      {note && <div className="text-[11px] text-slate-500">{note}</div>}
     </div>
   );
 }
@@ -58,14 +58,14 @@ export function SalesCell({ validadas, pagadas }: { validadas: number; pagadas: 
 }
 
 /** Un % de cumplimiento con su barra: verde al 100, ámbar por debajo. */
-export function Medidor({ pct, nota }: { pct: number | null; nota: string }) {
+export function Medidor({ pct, note }: { pct: number | null; note: string }) {
   if (pct === null) return <span className="text-xs font-bold text-amber-400">Sin definir</span>;
   const lleno = pct >= 100;
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2">
         <span className={`font-mono text-sm font-bold tabular-nums ${lleno ? 'text-emerald-300' : 'text-amber-300'}`}>{formatPctValue(pct)}</span>
-        <span className="truncate text-[10px] text-slate-500">{nota}</span>
+        <span className="truncate text-[10px] text-slate-500">{note}</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
         <div className={`h-full rounded-full ${lleno ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
@@ -75,13 +75,13 @@ export function Medidor({ pct, nota }: { pct: number | null; nota: string }) {
 }
 
 /** Dónde caen las ventas de un asesor respecto a sus tramos, con una marca en cada inicio. */
-export function TierBar({ ventas, tramos }: { ventas: number; tramos: PaymentTier[] }) {
-  const cortes = tramos.map((t) => t.desde).filter((d) => d > 0);
-  const tope = Math.max(ventas, (cortes[cortes.length - 1] ?? 10) + 4);
-  const paga = ventas >= (minimoQuePaga(tramos) ?? Infinity);
+export function TierBar({ sales, tramos }: { sales: number; tramos: PaymentTier[] }) {
+  const cortes = tramos.map((t) => t.since).filter((d) => d > 0);
+  const tope = Math.max(sales, (cortes[cortes.length - 1] ?? 10) + 4);
+  const paga = sales >= (minimoQuePaga(tramos) ?? Infinity);
   return (
     <div className="relative mt-1 h-1.5 rounded-full bg-slate-800">
-      <div className={`absolute inset-y-0 left-0 rounded-full ${paga ? 'bg-sky-500' : 'bg-slate-600'}`} style={{ width: `${(ventas / tope) * 100}%` }} />
+      <div className={`absolute inset-y-0 left-0 rounded-full ${paga ? 'bg-sky-500' : 'bg-slate-600'}`} style={{ width: `${(sales / tope) * 100}%` }} />
       {cortes.map((c) => (
         <span key={c} className="absolute -top-0.5 h-2.5 w-px bg-slate-500" style={{ left: `${(c / tope) * 100}%` }} />
       ))}
@@ -113,12 +113,12 @@ const PAYMENT_SOURCE: Record<string, string> = {
  * Hasta cuándo se sabe que la primera mensualidad estaba pagada. Sin «Fecha del
  * último pago» en el export se lee de otra columna, y se dice cuál.
  */
-export function PaidOn({ venta }: { venta: CommissionSale }) {
-  if (!venta.pago_fecha) return <span className="text-slate-500">—</span>;
-  const fuente = venta.pago_fuente ? PAYMENT_SOURCE[venta.pago_fuente] : undefined;
+export function PaidOn({ sale }: { sale: CommissionSale }) {
+  if (!sale.paid_date) return <span className="text-slate-500">—</span>;
+  const fuente = sale.paid_source ? PAYMENT_SOURCE[sale.paid_source] : undefined;
   return (
     <span className="flex flex-col leading-tight">
-      <span className="font-mono text-xs text-slate-200">{formatDateValue(venta.pago_fecha)}</span>
+      <span className="font-mono text-xs text-slate-200">{formatDateValue(sale.paid_date)}</span>
       {fuente && <span className="text-[10px] text-slate-500">{fuente}</span>}
     </span>
   );
@@ -134,18 +134,18 @@ const PAYMENT_TONE: Record<string, string> = {
  * La primera mensualidad de una venta: número, fecha, plan y cómo está.
  * Una venta anterior a las facturas (periodo cerrado antes) no trae los campos.
  */
-export function FirstInstallment({ venta }: { venta: CommissionSale }) {
-  if (!venta.factura_numero) {
-    return <span className="text-slate-500">{venta.facturas ? `Sin mensualidad (${venta.facturas} facturas)` : 'Sin facturas'}</span>;
+export function FirstInstallment({ sale }: { sale: CommissionSale }) {
+  if (!sale.invoice_number) {
+    return <span className="text-slate-500">{sale.invoices ? `Sin mensualidad (${sale.invoices} facturas)` : 'Sin facturas'}</span>;
   }
-  const cancelled = venta.factura_estado === 'Cancelado' || venta.factura_estado === 'Borrador';
+  const cancelled = sale.invoice_status === 'Cancelado' || sale.invoice_status === 'Borrador';
   return (
-    <span className="flex flex-col leading-tight" title={venta.factura_plan}>
+    <span className="flex flex-col leading-tight" title={sale.invoice_plan}>
       <span className="font-mono text-xs text-slate-300">
-        {venta.factura_numero} · {formatDateValue(venta.factura_fecha)}
+        {sale.invoice_number} · {formatDateValue(sale.invoice_date)}
       </span>
-      <span className={`text-xs font-semibold ${cancelled ? 'text-rose-400' : PAYMENT_TONE[venta.factura_pago] ?? 'text-amber-400'}`}>
-        {cancelled ? venta.factura_estado : venta.factura_pago || 'Sin estado de pago'}
+      <span className={`text-xs font-semibold ${cancelled ? 'text-rose-400' : PAYMENT_TONE[sale.invoice_payment] ?? 'text-amber-400'}`}>
+        {cancelled ? sale.invoice_status : sale.invoice_payment || 'Sin estado de pago'}
       </span>
     </span>
   );

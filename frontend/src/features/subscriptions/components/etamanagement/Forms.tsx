@@ -13,11 +13,11 @@ import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
 type ServiceType = 'standard' | 'dedicated' | 'transport';
 
 function getServiceType(value: EtaSubscriptionConfig): ServiceType {
-  if (value.es_dedicado) {
+  if (value.is_dedicated) {
     return 'dedicated';
   }
 
-  if (value.es_transporte) {
+  if (value.is_transport) {
     return 'transport';
   }
 
@@ -56,8 +56,8 @@ export function SubscriptionForm({
 
   const handleServiceChange = (type: ServiceType) => {
     onChange({
-      es_dedicado: type === 'dedicated',
-      es_transporte: type === 'transport',
+      is_dedicated: type === 'dedicated',
+      is_transport: type === 'transport',
     });
   };
 
@@ -68,11 +68,11 @@ export function SubscriptionForm({
         description='Si seleccionas "No Declarar", se resolverá la alerta y el cliente no sumará en las matrices.'
         action={
           <TogglePill
-            active={Boolean(value.reportar)}
+            active={Boolean(value.report)}
             icon={<ShieldCheck />}
             activeLabel="Declarar en Reporte"
             inactiveLabel="No Declarar"
-            onToggle={() => onChange({ reportar: !value.reportar })}
+            onToggle={() => onChange({ report: !value.report })}
           />
         }
       />
@@ -113,8 +113,8 @@ export function SubscriptionForm({
               type="text"
               required
               className={modalInputClass}
-              value={value.orden}
-              onChange={(event) => onChange({ orden: event.target.value })}
+              value={value.order}
+              onChange={(event) => onChange({ order: event.target.value })}
             />
           </Field>
 
@@ -122,8 +122,8 @@ export function SubscriptionForm({
             <input
               type="text"
               className={modalInputClass}
-              value={value.cliente ?? ''}
-              onChange={(event) => onChange({ cliente: event.target.value })}
+              value={value.client ?? ''}
+              onChange={(event) => onChange({ client: event.target.value })}
             />
           </Field>
 
@@ -144,7 +144,7 @@ export function SubscriptionForm({
               <SelectMenu
                 aria-label="Plan"
                 className={modalInputClass}
-                value={value.producto ?? ''}
+                value={value.product ?? ''}
                 placeholder="-- Selecciona un plan del catálogo --"
                 options={[
                   { value: '', label: '-- Selecciona un plan del catálogo --' },
@@ -162,8 +162,8 @@ export function SubscriptionForm({
                   type="text"
                   required
                   className={modalInputClass}
-                  value={value.producto ?? ''}
-                  onChange={(event) => onChange({ producto: event.target.value })}
+                  value={value.product ?? ''}
+                  onChange={(event) => onChange({ product: event.target.value })}
                 />
 
                 <button
@@ -185,12 +185,12 @@ export function SubscriptionForm({
               <SelectMenu
                 aria-label="Tecnología"
                 className={modalInputClass}
-                value={value.tecnologia ?? 'FTTH'}
+                value={value.technology ?? 'FTTH'}
                 options={[
                   { value: 'FTTH', label: 'Alámbrico' },
                   { value: 'RF', label: 'Inalámbrico' },
                 ]}
-                onChange={(tecnologia) => onChange({ tecnologia })}
+                onChange={(tecnologia) => onChange({ technology: tecnologia })}
               />
             </Field>
 
@@ -198,12 +198,12 @@ export function SubscriptionForm({
               <SelectMenu
                 aria-label="Tipo de persona"
                 className={modalInputClass}
-                value={value.tipo_persona ?? 'pyme'}
+                value={value.person_type ?? 'pyme'}
                 options={[
                   { value: 'pyme', label: 'Jurídica' },
                   { value: 'nat', label: 'Natural' },
                 ]}
-                onChange={(tipo_persona) => onChange({ tipo_persona })}
+                onChange={(tipo_persona) => onChange({ person_type: tipo_persona })}
               />
             </Field>
           </div>
@@ -214,8 +214,8 @@ export function SubscriptionForm({
                 type="number"
                 min="0"
                 className={modalInputClass}
-                value={value.datas_mbps ?? 0}
-                onChange={(event) => onChange({ datas_mbps: Number(event.target.value) })}
+                value={value.data_mbps ?? 0}
+                onChange={(event) => onChange({ data_mbps: Number(event.target.value) })}
               />
             </Field>
 
@@ -228,8 +228,8 @@ export function SubscriptionForm({
                 min="0"
                 step="any"
                 className={modalInputClass}
-                value={value.precio ?? 0}
-                onChange={(event) => onChange({ precio: Number(event.target.value) })}
+                value={value.price ?? 0}
+                onChange={(event) => onChange({ price: Number(event.target.value) })}
               />
             </Field>
           </div>
@@ -240,8 +240,8 @@ export function SubscriptionForm({
             title="IPTV"
             description="El suscriptor tiene un plan con tv rastreable para la declaracion"
             tone="sky"
-            selected={Boolean(value.tiene_tv)}
-            onSelect={() => onChange({ tiene_tv: !value.tiene_tv })}
+            selected={Boolean(value.has_tv)}
+            onSelect={() => onChange({ has_tv: !value.has_tv })}
           />
         </div>
       </FormColumns>

@@ -23,13 +23,13 @@ interface Props {
   group: SupportGroup | undefined;
 }
 
-function Desglose({ group, desglose }: { group: SupportGroup | undefined; desglose: SupportDesglose }) {
-  const { data, total, partes, valores } = desgloseDonut(group?.[desglose]);
+function Desglose({ group, breakdown }: { group: SupportGroup | undefined; breakdown: SupportDesglose }) {
+  const { data, total, partes, valores } = desgloseDonut(group?.[breakdown]);
 
   return (
     <div className="flex min-w-0 flex-col">
       <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">
-        {SUPPORT_DESGLOSE_LABELS[desglose]}
+        {SUPPORT_DESGLOSE_LABELS[breakdown]}
       </h4>
       <p className="mb-3 text-[11px] text-slate-500">{formatInteger(valores)} valores distintos</p>
 
@@ -39,7 +39,7 @@ function Desglose({ group, desglose }: { group: SupportGroup | undefined; desglo
         <>
           <CenteredRing
             data={data}
-            centro={{ title: 'Tickets', value: formatInteger(total) }}
+            center={{ title: 'Tickets', value: formatInteger(total) }}
             onHover={(i) => ({
               title: partes[i]?.nombre ?? '',
               value: `${formatInteger(partes[i]?.tickets ?? 0)} · ${partes[i]?.pct ?? 0}%`,
@@ -75,7 +75,7 @@ export function SupportDriversPanel({ group }: Props) {
     >
       <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
         {SUPPORT_DESGLOSES.map((desglose) => (
-          <Desglose key={desglose} group={group} desglose={desglose} />
+          <Desglose key={desglose} group={group} breakdown={desglose} />
         ))}
       </div>
     </NeonContainer>

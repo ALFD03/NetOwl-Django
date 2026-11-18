@@ -19,9 +19,9 @@ import { toNumber, type NumericValue } from './formatters';
  * its own metric catalogue on top.
  */
 
-/** Any dimension row: whatever else it carries, it is named by `valor`. */
+/** Any dimension row: whatever else it carries, it is named by `value`. */
 export interface DimensionRow {
-  valor: string;
+  value: string;
 }
 
 export type MetricWeightMode = 'simple' | 'weighted' | 'ranking';
@@ -74,7 +74,7 @@ export function getSimpleDistribution<T extends DimensionRow>(
 ): DistributionItem[] {
   if (!globalValue) {
     return rows.map((row) => ({
-      label: row.valor,
+      label: row.value,
       value: read(row, key),
       weight: 0,
       plotted: 0,
@@ -86,7 +86,7 @@ export function getSimpleDistribution<T extends DimensionRow>(
       const value = read(row, key);
       const weight = (value / globalValue) * 100;
 
-      return { label: row.valor, value, weight, plotted: weight };
+      return { label: row.value, value, weight, plotted: weight };
     })
     .sort((a, b) => b.weight - a.weight);
 }
@@ -109,7 +109,7 @@ export function getWeightedDistribution<T extends DimensionRow>(
     const value = read(row, key);
 
     return {
-      label: row.valor,
+      label: row.value,
       value,
       weightedValue: value * read(row, populationKey),
     };
@@ -152,7 +152,7 @@ export function getRankingDistribution<T extends DimensionRow>(
   const items = rows.map((row) => {
     const value = read(row, key);
 
-    return { label: row.valor, value, weight: 0, plotted: value };
+    return { label: row.value, value, weight: 0, plotted: value };
   });
 
   const kept = excludeZero ? items.filter((item) => item.value !== 0) : items;

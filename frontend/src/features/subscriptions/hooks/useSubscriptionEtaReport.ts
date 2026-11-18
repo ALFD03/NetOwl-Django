@@ -39,7 +39,7 @@ export function useSubscriptionEtaReport(initialData: SubscriptionEtaReportRespo
   }, []);
 
   useEffect(() => {
-    if (!period || period === data.periodo) return;
+    if (!period || period === data.period) return;
 
     let activo = true;
     subscriptionsApi.getEtaReport(period, false)
@@ -47,8 +47,8 @@ export function useSubscriptionEtaReport(initialData: SubscriptionEtaReportRespo
       .catch(() => { if (activo) setFallido(period); });
 
     return () => { activo = false; };
-  }, [period, data.periodo]);
+  }, [period, data.period]);
 
-  const changingPeriod = Boolean(period) && period !== data.periodo && fallido !== period;
+  const changingPeriod = Boolean(period) && period !== data.period && fallido !== period;
   return { data, loading: forzando || changingPeriod, fetchReport, setData };
 }

@@ -28,13 +28,13 @@ export function buildPeriodColumns(semaforo: TargetsTrafficLight): Column<Subscr
     <span className={`font-semibold ${TONE_TEXT[complianceTone(valor, semaforo)]}`}>{dec(valor)} %</span>
   );
   return [
-    { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
-    { header: 'Inicio', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
-    { header: 'Final', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
-    { header: 'Instalaciones', accessor: (r) => <span className="font-semibold text-emerald-400">+{int(r.nuevos_mes)}</span>, align: 'right', sortKey: 'nuevos_mes' },
-    { header: 'Bajas', accessor: (r) => <span className="font-semibold text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
-    { header: 'Churn Rate', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.churn_bruto_pct, semaforo)]}`}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
-    { header: 'Crecimiento', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoCrecimiento(r.crecimiento, semaforo)]}`}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
+    { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodLabel(r.report_period)}</span>, sortKey: 'report_period' },
+    { header: 'Inicio', accessor: (r) => int(r.active_start), align: 'right', sortKey: 'active_start' },
+    { header: 'Final', accessor: (r) => int(r.active_end), align: 'right', sortKey: 'active_end' },
+    { header: 'Instalaciones', accessor: (r) => <span className="font-semibold text-emerald-400">+{int(r.new_in_month)}</span>, align: 'right', sortKey: 'new_in_month' },
+    { header: 'Bajas', accessor: (r) => <span className="font-semibold text-rose-400">-{int(r.churned)}</span>, align: 'right', sortKey: 'churned' },
+    { header: 'Churn Rate', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.gross_churn_pct, semaforo)]}`}>{dec(r.gross_churn_pct)}%</span>, align: 'right', sortKey: 'gross_churn_pct' },
+    { header: 'Crecimiento', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoCrecimiento(r.growth, semaforo)]}`}>{dec(r.growth)}%</span>, align: 'right', sortKey: 'growth' },
     { header: 'Cumpli. Ingresos', accessor: (r) => cumplimiento(r.cumplimiento_ingresos), align: 'right', sortKey: 'cumplimiento_ingresos' },
     { header: 'Cumpli. Ventas', accessor: (r) => cumplimiento(r.cumplimiento_ventas), align: 'right', sortKey: 'cumplimiento_ventas' },
     { header: 'Cumpli. Cierre', accessor: (r) => cumplimiento(r.cumplimiento_cierre), align: 'right', sortKey: 'cumplimiento_cierre' },
@@ -50,7 +50,7 @@ export function withComplianceData(
   objetivos: TargetsResolver,
 ): SubscriptionClose[] {
   return periodos.map((periodo) => {
-    const c = periodCompliance(periodo, objetivos.general(periodo.periodo_reporte));
+    const c = periodCompliance(periodo, objetivos.general(periodo.report_period));
     return {
       ...periodo,
       cumplimiento_ingresos: c.revenueCompliance,
@@ -62,30 +62,30 @@ export function withComplianceData(
 
 /** Full dimensional breakdown shown inside the period modal, con el semáforo en churn y crecimiento. */
 export const buildDimensionColumns = (s: TargetsTrafficLight): Column<SubscriptionResultDimensionRow>[] => [
-  { header: 'Etiqueta', accessor: (r) => <StickyLabel minWidth="160px">{r.valor}</StickyLabel>, sortKey: 'valor', sticky: true },
-  { header: 'Base Ini', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
-  { header: 'Base Fin', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
-  { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{int(r.nuevos)}</span>, align: 'right', sortKey: 'nuevos' },
-  { header: 'Adic. Net', accessor: (r) => <span className="text-emerald-500">{int(r.adiciones_netas)}</span>, align: 'right', sortKey: 'adiciones_netas' },
-  { header: 'Adic. Bru', accessor: (r) => <span className="text-emerald-500">{int(r.adiciones_brutas)}</span>, align: 'right', sortKey: 'adiciones_brutas' },
-  { header: 'Crec %', accessor: (r) => <span className={TONE_TEXT[tonoCrecimiento(r.crecimiento, s)]}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
-  { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
-  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.churn_neto_pct, s)]}`}>{dec(r.churn_neto_pct)}%</span>, align: 'right', sortKey: 'churn_neto_pct' },
-  { header: 'C. Bruto %', accessor: (r) => <span className={TONE_TEXT[tonoChurn(r.churn_bruto_pct, s)]}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
-  { header: 'Corte Imp', accessor: (r) => int(r.corte_impagado), align: 'right', sortKey: 'corte_impagado' },
-  { header: 'Susp %', accessor: (r) => `${dec(r.porcentaje_suspensiones)}%`, align: 'right', sortKey: 'porcentaje_suspensiones' },
-  { header: 'Gratuitos', accessor: (r) => <span className="text-purple-400">{int(r.clientes_gratuitos)}</span>, align: 'right', sortKey: 'clientes_gratuitos' },
-  { header: 'Inactivos', accessor: (r) => int(r.total_inactivos), align: 'right', sortKey: 'total_inactivos' },
-  { header: 'React Tot', accessor: (r) => int(r.reactivaciones), align: 'right', sortKey: 'reactivaciones' },
+  { header: 'Etiqueta', accessor: (r) => <StickyLabel minWidth="160px">{r.value}</StickyLabel>, sortKey: 'value', sticky: true },
+  { header: 'Base Ini', accessor: (r) => int(r.active_start), align: 'right', sortKey: 'active_start' },
+  { header: 'Base Fin', accessor: (r) => int(r.active_end), align: 'right', sortKey: 'active_end' },
+  { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{int(r.new_subs)}</span>, align: 'right', sortKey: 'new_subs' },
+  { header: 'Adic. Net', accessor: (r) => <span className="text-emerald-500">{int(r.net_adds)}</span>, align: 'right', sortKey: 'net_adds' },
+  { header: 'Adic. Bru', accessor: (r) => <span className="text-emerald-500">{int(r.gross_adds)}</span>, align: 'right', sortKey: 'gross_adds' },
+  { header: 'Crec %', accessor: (r) => <span className={TONE_TEXT[tonoCrecimiento(r.growth, s)]}>{dec(r.growth)}%</span>, align: 'right', sortKey: 'growth' },
+  { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{int(r.churned)}</span>, align: 'right', sortKey: 'churned' },
+  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.net_churn_pct, s)]}`}>{dec(r.net_churn_pct)}%</span>, align: 'right', sortKey: 'net_churn_pct' },
+  { header: 'C. Bruto %', accessor: (r) => <span className={TONE_TEXT[tonoChurn(r.gross_churn_pct, s)]}>{dec(r.gross_churn_pct)}%</span>, align: 'right', sortKey: 'gross_churn_pct' },
+  { header: 'Corte Imp', accessor: (r) => int(r.unpaid_cuts), align: 'right', sortKey: 'unpaid_cuts' },
+  { header: 'Susp %', accessor: (r) => `${dec(r.suspension_pct)}%`, align: 'right', sortKey: 'suspension_pct' },
+  { header: 'Gratuitos', accessor: (r) => <span className="text-purple-400">{int(r.free_clients)}</span>, align: 'right', sortKey: 'free_clients' },
+  { header: 'Inactivos', accessor: (r) => int(r.total_inactive), align: 'right', sortKey: 'total_inactive' },
+  { header: 'React Tot', accessor: (r) => int(r.reactivations), align: 'right', sortKey: 'reactivations' },
   { header: 'React Val', accessor: (r) => int(r.react_val), align: 'right', sortKey: 'react_val' },
   { header: 'W. Churn', accessor: (r) => int(r.react_6_churn), align: 'right', sortKey: 'react_6_churn' },
   { header: 'W. 30d', accessor: (r) => int(r.react_8_30days), align: 'right', sortKey: 'react_8_30days' },
   { header: 'W. Pausa', accessor: (r) => int(r.react_4_paused), align: 'right', sortKey: 'react_4_paused' },
   { header: 'R. 4P', accessor: (r) => int(r.react_4_P), align: 'right', sortKey: 'react_4_P' },
   { header: 'R. 4H', accessor: (r) => int(r.react_4_H), align: 'right', sortKey: 'react_4_H' },
-  { header: 'Recuperación %', accessor: (r) => <span className="text-blue-400">{dec(r.tasa_winback_pct)}%</span>, align: 'right', sortKey: 'tasa_winback_pct' },
-  { header: 'Aporte R%', accessor: (r) => `${dec(r.tasa_aporte_react_pct)}%`, align: 'right', sortKey: 'tasa_aporte_react_pct' },
-  { header: 'Reempl %', accessor: (r) => `${dec(r.indice_reemplazo_react_pct)}%`, align: 'right', sortKey: 'indice_reemplazo_react_pct' },
+  { header: 'Recuperación %', accessor: (r) => <span className="text-blue-400">{dec(r.winback_rate_pct)}%</span>, align: 'right', sortKey: 'winback_rate_pct' },
+  { header: 'Aporte R%', accessor: (r) => `${dec(r.react_contribution_pct)}%`, align: 'right', sortKey: 'react_contribution_pct' },
+  { header: 'Reempl %', accessor: (r) => `${dec(r.react_replacement_pct)}%`, align: 'right', sortKey: 'react_replacement_pct' },
   { header: 'ARPU', accessor: (r) => <span className="text-amber-400">${dec(r.arpu)}</span>, align: 'right', sortKey: 'arpu' },
   { header: 'Billing', accessor: (r) => <span className="text-blue-400">${dec(r.total_billing)}</span>, align: 'right', sortKey: 'total_billing' },
 ];

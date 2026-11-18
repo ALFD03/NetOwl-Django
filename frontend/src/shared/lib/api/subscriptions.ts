@@ -8,42 +8,42 @@ import type {
 
 export interface EtaReportResponse {
   status?: string;
-  periodo?: string;
+  period?: string;
   [key: string]: unknown;
 }
 
 export interface EtaLockRequest { period: string; lock: boolean; }
 
-export interface EtaRateRequest { period: string; tasa: number; }
+export interface EtaRateRequest { period: string; rate: number; }
 
 export interface EtaRateResponse {
   status: string;
-  tasa_bcv: number;
-  tasa_bcv_fuente: string;
+  bcv_rate: number;
+  bcv_rate_source: string;
   message?: string;
 }
 
 export interface EtaSubConfigRequest {
-  orden?: string;
-  cliente?: string;
-  producto?: string;
-  tecnologia?: string;
-  tipo_persona?: string;
-  datas_mbps?: number;
-  tiene_tv?: boolean;
-  reportar?: boolean;
-  es_transporte?: boolean;
-  es_dedicado?: boolean;
+  order?: string;
+  client?: string;
+  product?: string;
+  technology?: string;
+  person_type?: string;
+  data_mbps?: number;
+  has_tv?: boolean;
+  report?: boolean;
+  is_transport?: boolean;
+  is_dedicated?: boolean;
   /**
    * La renta de este contrato, en divisa.
    *
    * El catálogo comercial no puede darla: cada enlace dedicado negocia la
    * suya, y es el único dato con que se declara su renta básica.
    */
-  precio?: number;
+  price?: number;
 }
 
-export interface DeleteEtaSubRequest { orden: string; }
+export interface DeleteEtaSubRequest { order: string; }
 
 export const subscriptionsApi = {
   getResultsDetails: async (period: string) =>
@@ -63,8 +63,8 @@ export const subscriptionsApi = {
    */
   getBajasDetalle: async (period: string, nodos?: string[]) =>
     (await apiClient.get<ChurnDetailResponse>('/api/subscriptions/churn/detail/', {
-      params: { period, nodo: nodos },
-      // Axios serializa un array como `nodo[]=x`; Django lee `nodo=x&nodo=y`.
+      params: { period, node: nodos },
+      // Axios serializa un array como `node[]=x`; Django lee `node=x&node=y`.
       paramsSerializer: { indexes: null },
     })).data,
 

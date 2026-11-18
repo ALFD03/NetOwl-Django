@@ -80,7 +80,7 @@ si hay candidatas → UncatalogedProducts(productos, órdenes)
 La pantalla que lo recibe ofrece **las dos respuestas** por producto, porque la
 comprobación no puede distinguir un plan nuevo de una línea que nunca lo será:
 
-- **Crear plan** → `/catalogos/productos/?nuevo_plan=<nombre>`, que abre el
+- **Crear plan** → `/catalogos/productos/?new_plan=<nombre>`, que abre el
   formulario ya relleno.
 - **Ignorar** → registra el nombre en `ProductoIgnorado`.
 
@@ -679,13 +679,13 @@ propio, `services/catalogs/`, montado en `/catalogos/` con una página por
 grupo. **Los modelos no se mudaron**: siguen en `services/subscriptions/models.py`,
 sus tablas ya tienen nombre propio y mover las clases de app no le daba nada a
 nadie. `/subscriptions/config/` sigue respondiendo con una redirección (con
-`?nuevo_plan=` va a Productos con el formulario abierto).
+`?new_plan=` va a Productos con el formulario abierto).
 
 | Página | Contenido | Permiso |
 |---|---|---|
 | `/catalogos/notificaciones/` | Por registrar (productos, zonas y personas importados que el catálogo no reconoce) e Ignorados | cualquiera de los tres; cada área solo con el suyo |
-| `/catalogos/productos/` | Planes y planes reguladores. `?nuevo_plan=` | `can_manage_catalogo_operacional` |
-| `/catalogos/estructura/` | Zonas, sites y estados. `?nueva_zona=` | `can_manage_catalogo_comercial` |
+| `/catalogos/productos/` | Planes y planes reguladores. `?new_plan=` | `can_manage_catalogo_operacional` |
+| `/catalogos/estructura/` | Zonas, sites y estados. `?new_zone=` | `can_manage_catalogo_comercial` |
 | `/catalogos/ventas/` | Directorio de ventas (con el site de cada coordinadora de oficina), coordinadores de unidad de negocio y objetivos, también los de ventas de las oficinas | `can_manage_catalogo_ventas` |
 
 Las zonas por registrar (`zones_outside_catalog`, en `analytics/imports.py`)
@@ -712,7 +712,7 @@ perdió acceso con el cambio. Aquella migración nombró las dos mitades al rev�
 `config/0007` intercambia los valores guardados para que cada cuenta conserve las
 mismas pestañas con el nombre correcto.
 
-- `GET /api/catalogs/notifications|products|structure|sales/` — los datos de las páginas. Productos acepta `?nuevo_plan=<nombre>`,
+- `GET /api/catalogs/notifications|products|structure|sales/` — los datos de las páginas. Productos acepta `?new_plan=<nombre>`,
   que abre el formulario de plan ya relleno; es a donde lleva el aviso de la
   importación. Notificaciones incluye los pendientes de cada área, y si una
   consulta falla no rompe la página.

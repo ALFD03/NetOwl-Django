@@ -14,6 +14,7 @@ from services.config.api import ApiError, endpoint
 from services.config.auth import has_permission
 from services.subscriptions.analytics import ETAReportManager, get_periods
 from services.subscriptions.analytics.bcv import RateUnavailable, fetch_current_rate
+from services.subscriptions.api_keys import ETA_KEYS
 
 INVALID_PERIOD = "Periodo inválido (se espera YYYY-MM)."
 
@@ -34,25 +35,25 @@ class LockBody(PeriodBody):
 
 
 class RateBody(PeriodBody):
-    tasa: float = Field(ge=0)
+    rate: float = Field(ge=0)
 
 
 class OrderBody(BaseModel):
-    orden: str = Field(min_length=1)
+    order: str = Field(min_length=1)
 
 
 class OrderConfigBody(OrderBody):
-    cliente: str = ""
-    producto: str = ""
-    reportar: bool = True
-    tecnologia: str | None = None
-    tipo_persona: str | None = None
-    tiene_tv: bool = False
-    datas_mbps: float = 0
-    es_transporte: bool = False
-    es_dedicado: bool = False
+    client: str = ""
+    product: str = ""
+    report: bool = True
+    technology: str | None = None
+    person_type: str | None = None
+    has_tv: bool = False
+    data_mbps: float = 0
+    is_transport: bool = False
+    is_dedicated: bool = False
     # La renta del contrato: cada enlace dedicado negocia la suya.
-    precio: float = 0
+    price: float = 0
 
 
 def _manager() -> ETAReportManager:
@@ -63,7 +64,7 @@ def _months() -> list[str]:
     return sorted({p[:7] for p in get_periods()}, reverse=True)
 
 
-@endpoint(perms=["can_view_eta"])
+@endpoint(perms=["can_view_eta"], keys=ETA_KEYS)
 def eta_report(request):
     """El reporte de un periodo (`?period=YYYY-MM`, por defecto el último)."""
     months = _months()
@@ -76,13 +77,13 @@ def eta_report(request):
     return {"etaData": data}
 
 
-@endpoint(perms=["can_manage_eta"])
+@endpoint(perms=["can_manage_eta"], keys=ETA_KEYS)
 def eta_config(request):
     """La parametrización: excepciones individuales y pendientes."""
     return _manager().get_config_page_data(request.GET.get("period"))
 
 
-@endpoint(perms=["can_view_eta"], rate="30/m")
+@endpoint(perms=["can_view_eta"], rate="30/m", keys=ETA_KEYS)
 def eta_data(request):
     """Recarga del reporte. `?force=true` recalcula todo y exige `can_manage_eta`."""
     period = request.GET.get("period")
@@ -102,7 +103,7 @@ def eta_data(request):
     return data
 
 
-@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="5/m", body=LockBody)
+@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="5/m", body=LockBody, keys=ETA_KEYS)
 def eta_lock(request, body: LockBody):
     """Bloquea o desbloquea un periodo; al bloquear se recalcula una última vez."""
     manager = _manager()
@@ -112,29 +113,29 @@ def eta_lock(request, body: LockBody):
     return {"status": "success", "esta_bloqueado": body.lock, "message": f"Periodo {body.period} actualizado."}
 
 
-@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="30/m", body=OrderConfigBody)
+@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="30/m", body=OrderConfigBody, keys=ETA_KEYS)
 def eta_order_save(request, body: OrderConfigBody):
     """Guarda la excepción individual de una orden."""
-    _manager().save_sub_individual_config(body.orden, body.model_dump(exclude={"orden"}))
-    return {"status": "success", "message": f"Suscripción {body.orden} guardada."}
+    _manager().save_sub_individual_config(body.order, ETA_KEYS.back(body.model_dump(exclude={"order"})))
+    return {"status": "success", "message": f"Suscripción {body.order} guardada."}
 
 
-@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="30/m", body=OrderBody)
+@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="30/m", body=OrderBody, keys=ETA_KEYS)
 def eta_order_delete(request, body: OrderBody):
     """Borra la excepción de una orden: vuelve a clasificarse por su plan."""
-    _manager().delete_sub_individual_config(body.orden)
-    return {"status": "success", "message": f"Suscripción '{body.orden}' eliminada."}
+    _manager().delete_sub_individual_config(body.order)
+    return {"status": "success", "message": f"Suscripción '{body.order}' eliminada."}
 
 
-@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="30/m", body=RateBody)
+@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="30/m", body=RateBody, keys=ETA_KEYS)
 def eta_rate(request, body: RateBody):
     """Fija a mano la tasa del BCV del periodo (0 = sin fijar). No recalcula el reporte."""
     source = "Escrita a mano"
-    _manager().set_bcv_rate(body.period, body.tasa, source)
-    return {"status": "success", "tasa_bcv": body.tasa, "tasa_bcv_fuente": source}
+    _manager().set_bcv_rate(body.period, body.rate, source)
+    return {"status": "success", "tasa_bcv": body.rate, "tasa_bcv_fuente": source}
 
 
-@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="10/m", body=PeriodBody)
+@endpoint(methods=["POST"], perms=["can_manage_eta"], rate="10/m", body=PeriodBody, keys=ETA_KEYS)
 def eta_rate_fetch(request, body: PeriodBody):
     """Vuelve a pedirle al BCV la tasa del periodo y la guarda. 502 si el BCV falla."""
     try:
@@ -144,7 +145,7 @@ def eta_rate_fetch(request, body: PeriodBody):
     return {"status": "success", "tasa_bcv": rate, "tasa_bcv_fuente": source}
 
 
-@endpoint(perms=["can_view_eta"], rate="10/m")
+@endpoint(perms=["can_view_eta"], rate="10/m", keys=ETA_KEYS)
 def eta_rate_current(request):
     """La última tasa publicada por el BCV, sin guardarla: sirve para exportar a precio de hoy."""
     try:

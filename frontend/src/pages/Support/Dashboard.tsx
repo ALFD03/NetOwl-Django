@@ -14,7 +14,7 @@ export default function SupportDashboard(props: SupportDashboardProps) {
 
   return (
     <AppLayout>
-      <SupportDashboardView data={data} abiertos={props.abiertos} />
+      <SupportDashboardView data={data} open={props.open} />
     </AppLayout>
   );
 }

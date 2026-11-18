@@ -23,22 +23,22 @@ export type ReviewDecision = 'contar' | 'no_contar' | 'ya_pagada' | 'normal';
 
 /** Un periodo creado, con su ventana de instalación. */
 export interface CommissionPeriod {
-  periodo: string;
-  estado: 'borrador' | 'cerrado';
-  inicio: string;
+  period: string;
+  status: 'borrador' | 'cerrado';
+  start: string;
   /** Último día de instalación que puede contar: el fin del mes. */
-  fin: string;
+  end: string;
   /** Desde aquí, lo instalado solo cuenta si se adelantó el pago hasta `corte_adelantos`. */
-  inicio_promo: string;
-  corte_adelantos: string;
+  promo_start: string;
+  advance_cutoff: string;
 }
 
 /** Un bono de un pago, con el concepto que lo explica. */
 export interface PaymentBonus {
-  concepto: string;
-  monto: number;
+  concept: string;
+  amount: number;
   /** Solo en el bono por unidad del jefe de UN. */
-  unidad_id?: number;
+  unit_id?: number;
 }
 
 /**
@@ -47,60 +47,60 @@ export interface PaymentBonus {
  * `crecimiento_pct`, `monto_por_venta_equipo` y `churn_bruto_pct`. Supervisor: `asesores`.
  */
 export interface PaymentDetail {
-  tramo_desde?: number;
-  monto_por_venta?: number;
-  ventas_pagadas?: number;
-  bono_desde?: number | null;
-  crecimiento_pct?: number | null;
-  monto_por_venta_equipo?: number;
-  churn_bruto_pct?: number | null;
-  pct_empresa?: number | null;
-  asesores?: number;
+  tier_since?: number;
+  amount_per_sale?: number;
+  paid_sales?: number;
+  bonus_since?: number | null;
+  growth_pct?: number | null;
+  team_amount_per_sale?: number;
+  gross_churn_pct?: number | null;
+  company_pct?: number | null;
+  advisors?: number;
   /** `site` o `unidad`: de dónde sale el % que multiplica. */
   factor?: 'site' | 'unidad';
-  bonos: PaymentBonus[];
+  bonuses: PaymentBonus[];
 }
 
 /** Lo que cobra una persona en un equipo en el periodo (`pagos.Pago` más su ficha). */
 export interface CommissionPayment {
-  persona_id: number;
-  nombre: string;
-  medio: string;
+  person_id: number;
+  name: string;
+  channel: string;
   /** El slug del equipo y su nombre; el rol que cumple en él. */
   equipo: string;
-  equipo_nombre: string;
-  rol: SalesRole;
+  team_name: string;
+  role: SalesRole;
   site: string;
-  ventas_propias: number;
-  ventas_equipo: number;
-  ventas_pyme: number;
-  monto_pyme: number;
-  pyme_sin_porcentaje: number;
-  monto_propias: number;
-  monto_equipo: number;
-  bruto: number;
+  own_sales: number;
+  team_sales: number;
+  sme_sales: number;
+  sme_amount: number;
+  sme_without_pct: number;
+  own_amount: number;
+  team_amount: number;
+  gross: number;
   /** % de cumplimiento aplicado (tope 100); nulo en quien no lo usa. */
   factor_pct: number | null;
   /** Los bonos sumados al neto; cada uno con su concepto en `detalle.bonos`. */
-  bono: number;
-  neto: number;
+  bonus: number;
+  net: number;
   /** El que se aplica: el escrito a mano si lo tiene, si no el calculado; nulo es "sin definir". */
-  cumplimiento_pct: number | null;
+  compliance_pct: number | null;
   /** El escrito a mano solo para esta persona; nulo es que vale el calculado. */
-  cumplimiento_propio: number | null;
+  own_compliance: number | null;
   /** De dónde sale el % aplicado (`calculo._indicadores`). */
-  cumplimiento?: IndicatorFactor | null;
-  crecimiento_pct: number | null;
-  crecimiento_calculado: number | null;
-  crecimiento_fuente: 'manual' | 'unidades de negocio' | null;
-  unidades: string[];
-  detalle: PaymentDetail;
-  avisos: string[];
+  compliance?: IndicatorFactor | null;
+  growth_pct: number | null;
+  computed_growth: number | null;
+  growth_source: 'manual' | 'unidades de negocio' | null;
+  units: string[];
+  detail: PaymentDetail;
+  warnings: string[];
 }
 
 /** Un site o una unidad y su % Ventas del mes; `pct` nulo si el mes no está analizado o no tiene meta. */
 export interface ComplianceSource {
-  nombre: string;
+  name: string;
   pct: number | null;
 }
 
@@ -112,264 +112,264 @@ export interface ComplianceSource {
  * ninguno queda sin definir, y el cierre lo pide.
  */
 export interface IndicatorFactor {
-  persona_id: number;
+  person_id: number;
   equipo: string;
-  rol: SalesRole;
-  nombre: string;
+  role: SalesRole;
+  name: string;
   factor: 'site' | 'unidad';
-  fuentes: ComplianceSource[];
-  calculado: number | null;
+  sources: ComplianceSource[];
+  computed: number | null;
   manual: number | null;
-  valor: number | null;
-  fuente: 'manual' | 'site' | 'unidad' | null;
+  value: number | null;
+  source: 'manual' | 'site' | 'unidad' | null;
   /** Coordinadora: sus ventas como «Medio» contra su objetivo de ventas. Solo informa. */
-  personal: { ventas: number; objetivo: number | null; pct: number | null } | null;
+  personal: { sales: number; target: number | null; pct: number | null } | null;
 }
 
 /** El crecimiento y el churn bruto de la unidad de un coordinador de UN. */
 export interface IndicatorGrowth {
-  persona_id: number;
+  person_id: number;
   equipo: string;
-  rol: SalesRole;
-  nombre: string;
-  unidades: string[];
-  calculado: number | null;
+  role: SalesRole;
+  name: string;
+  units: string[];
+  computed: number | null;
   manual: number | null;
-  valor: number | null;
-  fuente: 'manual' | 'unidades de negocio' | null;
-  churn_bruto: number | null;
+  value: number | null;
+  source: 'manual' | 'unidades de negocio' | null;
+  gross_churn: number | null;
 }
 
 /** Los indicadores del mes que condicionan el pago (`calculo._indicadores`). */
 export interface ReportIndicators {
   /** Falso si el mes no está analizado: nada se calcula y todo cae a lo escrito. */
-  analizado: boolean;
-  factores: IndicatorFactor[];
-  crecimientos: IndicatorGrowth[];
+  analyzed: boolean;
+  factors: IndicatorFactor[];
+  growths: IndicatorGrowth[];
   /** El % de ingresos de cada unidad: lo que mide el bono del jefe de UN. */
-  ingresos_unidad: { unidad_id: number; unidad: string; pct_ingresos: number | null; pct_ventas: number | null }[];
+  unit_inflows: { unit_id: number; unit: string; inflows_pct: number | null; sales_pct: number | null }[];
   /** Toda la empresa: el bono de la administradora. */
-  empresa: { pct_ventas: number | null; pct_ingresos: number | null } | null;
+  company: { sales_pct: number | null; inflows_pct: number | null } | null;
 }
 
 /** Una venta candidata del periodo, clasificada y con sus personas. */
 export interface CommissionSale {
-  orden: string;
-  cliente: string;
-  fecha_inicio: string;
-  sucursal: string;
-  zona: string;
-  producto: string;
-  pyme: boolean;
-  precio: number;
-  pct_pyme: number | null;
-  estado: string;
-  estado_factura: string;
-  clasificacion: Classification;
-  motivo: string;
+  order: string;
+  client: string;
+  since_date: string;
+  branch: string;
+  zone: string;
+  product: string;
+  sme: boolean;
+  price: number;
+  sme_pct: number | null;
+  status: string;
+  billing_status: string;
+  classification: Classification;
+  reason: string;
   /** Lo que dicen las facturas, sin la decisión manual: por qué fue a revisión. */
-  motivo_analisis: string;
+  analysis_reason: string;
   decision: ReviewDecision | null;
-  nota_revision: string;
+  review_note: string;
   /** Falta en periodos cerrados antes de existir los días promocionales adelantados. */
-  tramo?: SaleTier;
+  tier?: SaleTier;
   manual?: boolean;
-  nota_manual?: string;
+  manual_note?: string;
   /** Días promocionales del mes con la primera mensualidad pagada hasta el corte: cuenta en este periodo. */
-  adelantada?: boolean;
+  is_advanced?: boolean;
   /**
    * Primer periodo, días promocionales del mes anterior: pagó la mensualidad antes
    * del corte de ese mes (pudo cobrarse allí), pagaría aquí y nadie confirmó todavía.
    */
-  por_confirmar?: boolean;
+  to_confirm?: boolean;
   /**
    * Se ve en «Días promocionales del mes anterior»: por confirmar, ya confirmada
    * allí, o (con el anterior cerrado) cobrada en él. Lo que otra regla resolvió no.
    */
-  revisar_promo?: boolean;
+  review_promo?: boolean;
   /** Hoy es gratuita (archivada, tarifa «Gratis» o archivada en los logs): no paga comisión. */
-  gratuita: boolean;
+  is_free: boolean;
   /** Día en que se canceló, si hoy está «Cancelado» y los logs lo fechan; vacío si no. */
-  cancelada_el: string;
+  cancelled_on: string;
   /** Cuántas facturas tiene la orden en el export de facturas. */
-  facturas: number;
+  invoices: number;
   /** La primera mensualidad: la que decide si se pagó. Vacíos si no tiene ninguna. */
-  factura_numero: string;
-  factura_fecha: string;
-  factura_estado: string;
-  factura_pago: string;
-  factura_plan: string;
+  invoice_number: string;
+  invoice_date: string;
+  invoice_status: string;
+  invoice_payment: string;
+  invoice_plan: string;
   /**
    * Hasta cuándo se sabe que estaba pagada: la «Fecha del último pago», si no la
    * «Última actualización el» y si no el «Creado el» (aproximado). Vacío sin pagar.
    */
-  pago_fecha?: string;
-  pago_fuente?: 'pago' | 'actualizacion' | 'creacion' | '';
-  medio: string;
-  medio_supervisor: string;
-  vendedor: string;
-  medio_id: number | null;
+  paid_date?: string;
+  paid_source?: 'pago' | 'actualizacion' | 'creacion' | '';
+  channel: string;
+  supervisor_channel: string;
+  seller: string;
+  channel_id: number | null;
   supervisor_id: number | null;
-  coord_oficina_id: number | null;
+  office_coord_id: number | null;
   /** El slug del equipo de la venta: el del `Medio`. Vacío si no se pudo saber. */
   equipo: string;
   /** Las unidades de negocio de la venta, por la cadena supervisor → su superior. */
-  unidad_ids: number[];
-  unidades: string[];
+  unit_ids: number[];
+  units: string[];
   /** Quien vendió es una coordinadora de oficina. */
-  es_oficina: boolean;
-  avisos: string[];
+  is_office: boolean;
+  warnings: string[];
 }
 
 export interface CommissionReport {
-  periodo: string;
-  inicio: string;
-  fin: string;
-  inicio_promo: string;
+  period: string;
+  start: string;
+  end: string;
+  promo_start: string;
   /** Hasta qué día un pago adelantado de los días promocionales cuenta aquí. */
-  corte_adelantos?: string;
+  advance_cutoff?: string;
   /** El corte del mes anterior: con él se sugiere qué se cobró ya allí. */
-  corte_anterior?: string;
+  previous_cutoff?: string;
   /** El periodo del mes anterior; `estado` nulo si no existe (y entonces se confirma a mano). */
-  anterior?: { periodo: string; estado: 'borrador' | 'cerrado' | null };
+  previous?: { period: string; status: 'borrador' | 'cerrado' | null };
   /** Si el export de facturas trae «Fecha del último pago». */
-  facturas_con_fecha_pago?: boolean;
-  estado: 'borrador' | 'cerrado';
+  invoices_with_paid_date?: boolean;
+  status: 'borrador' | 'cerrado';
   /** Desde cuándo tiene sentido calcular: las primeras facturas ya deberían estar pagadas. */
-  calculo_desde: string;
-  antes_de_tiempo: boolean;
+  compute_from: string;
+  too_early: boolean;
   /** Cuándo se cargó el export de facturas con que se clasificó (falta en periodos cerrados antes de existir). */
-  facturas_importadas_el?: string;
+  invoices_imported_at?: string;
   /**
    * La tasa en bolívares con que se paga: la de CONATEL del mes siguiente (`mes`),
    * la misma del reporte ETA. Nula si aún no se publicó o el servicio falló (`aviso`).
    */
-  tasa_conatel: BolivarRate & { mes: string; aviso: string };
-  resumen: {
-    candidatas: number;
-    validas: number;
-    no_pagadas: number;
-    revision: number;
-    excluidas: number;
-    validas_pyme: number;
+  conatel_rate: BolivarRate & { month: string; warning: string };
+  summary: {
+    candidates: number;
+    valid: number;
+    unpaid: number;
+    review: number;
+    excluded: number;
+    valid_sme: number;
     /** Por facturar con la primera mensualidad pagada de otro plan: valen sin revisión. */
-    validas_cambio_plan: number;
-    validas_sin_medio: number;
-    validas_sin_equipo?: number;
+    valid_plan_change: number;
+    valid_without_channel: number;
+    valid_without_team?: number;
     /** Lo que sigue faltando en los periodos cerrados antes de los adelantos. */
-    diferidas?: number;
+    deferred?: number;
     promo?: number;
-    adelantadas?: number;
-    promo_anterior?: number;
-    promo_anterior_cobradas?: number;
-    promo_por_confirmar?: number;
-    promo_anterior_revisar?: number;
-    manuales?: number;
+    advanced?: number;
+    previous_promo?: number;
+    previous_promo_paid?: number;
+    promo_to_confirm?: number;
+    previous_promo_review?: number;
+    manual_sales?: number;
     /** Lo que suman todos los bonos (incluido en `total`). */
-    bonos?: number;
+    bonuses?: number;
     total: number;
   };
-  pagos: CommissionPayment[];
+  payments: CommissionPayment[];
   /** Los indicadores del mes que condicionan el pago. */
-  indicadores: ReportIndicators;
+  indicators: ReportIndicators;
   /** Quién vendió con quién en las ventas válidas. */
-  equipos: TeamRow[];
+  teams: TeamRow[];
   /** Nombre y papeles (equipo, rol, superior, unidades, site) de cada id de `equipos` y de `pagos`, cobre o no. */
-  personas: Record<string, { nombre: string; papeles: PersonRole[] }>;
-  revision: CommissionSale[];
-  manuales?: ManualSale[];
+  people: Record<string, { name: string; positions: PersonRole[] }>;
+  review: CommissionSale[];
+  manual_sales?: ManualSale[];
   /** Lo que impide cerrar. Vacío: se puede cerrar. */
-  pendientes_cierre: string[];
+  close_blockers: string[];
 }
 
 /** Una venta agregada a mano al periodo. */
 export interface ManualSale {
-  orden: string;
-  nota: string;
-  agregado_por: string;
-  agregado_en: string;
+  order: string;
+  note: string;
+  added_by: string;
+  added_at: string;
   /** Nula si la orden ya no está en suscripciones. */
-  venta: CommissionSale | null;
+  sale: CommissionSale | null;
 }
 
 /** El papel de una persona en un equipo, con lo que la nómina necesita para ordenarla. */
 export interface PersonRole {
   equipo: string;
-  rol: SalesRole;
+  role: SalesRole;
   /** La persona a la que responde un supervisor (coordinador o gerente de UN). */
-  superior_id: number | null;
-  unidades: string[];
+  manager_id: number | null;
+  units: string[];
   site: string;
 }
 
 /** Una combinación de equipo, oficina, supervisor y quien vendió, con sus ventas válidas. */
 export interface TeamRow {
   equipo: string;
-  coord_oficina_id: number | null;
+  office_coord_id: number | null;
   supervisor_id: number | null;
-  medio_id: number | null;
+  channel_id: number | null;
   /** Válidas residenciales. */
-  ventas: number;
+  sales: number;
   /** Válidas PYME. */
-  pyme: number;
+  sme: number;
 }
 
 /** Una tasa del BCV en bolívares por dólar y de dónde salió. */
 export interface BolivarRate {
-  tasa: number | null;
-  fuente: string;
+  rate: number | null;
+  source: string;
 }
 
 /** Lo que propone el formulario del periodo. */
 export interface PeriodProposal {
-  periodo: string;
-  inicio: string;
+  period: string;
+  start: string;
   /** Falso si el mes anterior tiene periodo: el inicio sale de él. */
-  preguntar_inicio: boolean;
-  inicio_promo: string;
-  corte_adelantos: string;
+  ask_start: boolean;
+  promo_start: string;
+  advance_cutoff: string;
 }
 
 export interface CommissionsReportProps {
-  periodo: string;
-  periodos: CommissionPeriod[];
+  period: string;
+  periods: CommissionPeriod[];
   /** Nulo si el periodo todavía no existe (o si su cálculo falló: ver `error`). */
-  informe: CommissionReport | null;
+  report: CommissionReport | null;
   error: string | null;
-  propuesta: PeriodProposal;
+  proposal: PeriodProposal;
   /** Las del cierre si el periodo está cerrado; si no, las vigentes, con las que se calculó. */
-  condiciones: CommissionConditions;
+  conditions: CommissionConditions;
   /** Los equipos y sus roles, para nombrar y ordenar la nómina. */
-  equipos: { slug: string; nombre: string; roles: { rol: SalesRole; etiqueta: string }[] }[];
-  puedeGestionar: boolean;
+  teams: { slug: string; name: string; roles: { role: SalesRole; role_label: string }[] }[];
+  canManage: boolean;
   /** `can_reopen_comisiones`: reabrir va aparte de gestionar. */
-  puedeReabrir: boolean;
+  canReopen: boolean;
   /** `can_delete_comisiones`: borrar un informe en borrador, con su propio permiso. */
-  puedeBorrar: boolean;
+  canDelete: boolean;
   /** Las versiones archivadas de los cierres anteriores del periodo, la más reciente primero. */
-  archivos: ArchivedClose[];
+  archives: ArchivedClose[];
 }
 
 /** Un cierre guardado al reabrir el periodo (sin la copia, que se pide al descargarlo). */
 export interface ArchivedClose {
   id: number;
   version: number;
-  cerrado_por: string;
-  cerrado_en: string | null;
-  reabierto_por: string;
-  reabierto_en: string;
-  motivo: string;
-  total_neto: number;
-  pagos: number;
-  ventas: number;
+  closed_by: string;
+  closed_at: string | null;
+  reopened_by: string;
+  reopened_at: string;
+  reason: string;
+  net_total: number;
+  payments: number;
+  sales: number;
 }
 
 /** La copia completa de un cierre archivado: lo que había congelado al reabrirlo. */
 export interface CloseSnapshot {
-  periodo: { periodo: string; tasa_conatel: string | null; cerrado_por: string | null; cerrado_en: string | null };
-  condiciones: CommissionConditions;
-  resumen: CommissionReport;
-  ventas: { orden: string; clasificacion: string; datos: CommissionSale }[];
+  period: { period: string; conatel_rate: string | null; closed_by: string | null; closed_at: string | null };
+  conditions: CommissionConditions;
+  summary: CommissionReport;
+  sales: { order: string; classification: string; data: CommissionSale }[];
 }
 
 /**
@@ -377,32 +377,32 @@ export interface CloseSnapshot {
  * valores de cada pieza (`catalogos.equipos`). Las de un cierre son la copia que se congeló.
  */
 export interface CommissionConditions {
-  dia_promocional: number;
-  dias_espera: number;
+  promo_day: number;
+  wait_days: number;
   /** Día del mes siguiente hasta el que un pago adelantado cuenta en el periodo. */
-  dia_corte: number;
-  equipos?: Record<string, Record<string, PaymentParameters>>;
+  cutoff_day: number;
+  teams?: Record<string, Record<string, PaymentParameters>>;
   /** El nombre de cada equipo por su slug. */
-  nombres?: Record<string, string>;
+  names?: Record<string, string>;
 }
 
 export interface PlanPyme {
   id: number;
-  nombre: string;
-  tarifa: string;
-  precio: number;
-  comision_pyme_pct: number | null;
+  name: string;
+  tariff: string;
+  price: number;
+  sme_commission_pct: number | null;
 }
 
 /** La última vez que se guardaron las condiciones; nulos si nunca se guardaron desde la página. */
 export interface ConditionsUpdate {
-  en: string | null;
-  por: string | null;
+  at: string | null;
+  by: string | null;
 }
 
 export interface CommissionsConditionsProps {
-  condiciones: CommissionConditions;
-  actualizacion: ConditionsUpdate;
-  planesPyme: PlanPyme[];
-  puedeEditarPlanes: boolean;
+  conditions: CommissionConditions;
+  last_update: ConditionsUpdate;
+  smePlans: PlanPyme[];
+  canEditPlans: boolean;
 }

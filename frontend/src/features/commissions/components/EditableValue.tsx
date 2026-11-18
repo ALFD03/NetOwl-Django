@@ -6,7 +6,7 @@ import { Check, Pencil } from 'lucide-react';
 import { formatPctValue } from '../lib/format';
 
 interface EditableValueProps {
-  valor: number | null;
+  value: number | null;
   /** Lo que se ve cuando no hay valor escrito. */
   vacio: string;
   /** Si el vacío es un pendiente (en ámbar) o vale otro valor (en gris). */
@@ -19,15 +19,15 @@ interface EditableValueProps {
  * Un porcentaje que se escribe en el sitio. Vacío lo borra: el cumplimiento
  * de una persona vuelve al calculado, y el crecimiento también.
  */
-export function EditableValue({ valor, vacio, pendingEmpty: vacioPendiente = true, editable, onSave: onGuardar }: EditableValueProps) {
+export function EditableValue({ value, vacio, pendingEmpty: vacioPendiente = true, editable, onSave: onGuardar }: EditableValueProps) {
   const [editando, setEditando] = useState(false);
-  const [texto, setText] = useState(valor === null ? '' : String(valor));
+  const [texto, setText] = useState(value === null ? '' : String(value));
 
   if (!editando) {
     return (
       <span className="inline-flex items-center justify-end gap-2">
-        <span className={valor === null ? (vacioPendiente ? 'text-amber-400' : 'text-slate-400') : ''}>
-          {valor === null ? vacio : formatPctValue(valor)}
+        <span className={value === null ? (vacioPendiente ? 'text-amber-400' : 'text-slate-400') : ''}>
+          {value === null ? vacio : formatPctValue(value)}
         </span>
         {editable && (
           <button
@@ -36,7 +36,7 @@ export function EditableValue({ valor, vacio, pendingEmpty: vacioPendiente = tru
             className="rounded p-1 text-sky-400 hover:bg-sky-500/10"
             onClick={(e) => {
               e.stopPropagation();
-              setText(valor === null ? '' : String(valor));
+              setText(value === null ? '' : String(value));
               setEditando(true);
             }}
           >
@@ -50,7 +50,7 @@ export function EditableValue({ valor, vacio, pendingEmpty: vacioPendiente = tru
   const guardar = () => {
     setEditando(false);
     const newItem = texto.trim() === '' ? null : Number(texto);
-    if (newItem !== valor && (newItem === null || Number.isFinite(newItem))) onGuardar(newItem);
+    if (newItem !== value && (newItem === null || Number.isFinite(newItem))) onGuardar(newItem);
   };
 
   return (

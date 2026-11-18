@@ -13,8 +13,8 @@ export type TrafficLightMetric = 'crecimiento' | 'churn' | 'cumplimiento';
 
 interface Tier {
   tono: 'red' | 'yellow' | 'green';
-  desde: number;
-  hasta: number;
+  since: number;
+  until: number;
   texto: string;
 }
 
@@ -46,9 +46,9 @@ function tramos(metrica: TrafficLightMetric, verdeBruto: number, amarilloBruto: 
       hasta,
       marcas: [verde, amarillo],
       tramos: [
-        { tono: 'green', desde: 0, hasta: verde, texto: `≤ ${f(verde)}` },
-        { tono: 'yellow', desde: verde, hasta: amarillo, texto: `${f(verde)} – ${f(amarillo)}` },
-        { tono: 'red', desde: amarillo, hasta, texto: `> ${f(amarillo)}` },
+        { tono: 'green', since: 0, until: verde, texto: `≤ ${f(verde)}` },
+        { tono: 'yellow', since: verde, until: amarillo, texto: `${f(verde)} – ${f(amarillo)}` },
+        { tono: 'red', since: amarillo, until: hasta, texto: `> ${f(amarillo)}` },
       ] as Tier[],
     };
   }
@@ -62,9 +62,9 @@ function tramos(metrica: TrafficLightMetric, verdeBruto: number, amarilloBruto: 
     hasta,
     marcas: [amarillo, verde],
     tramos: [
-      { tono: 'red', desde, hasta: amarillo, texto: `< ${f(amarillo)}` },
-      { tono: 'yellow', desde: amarillo, hasta: verde, texto: `${f(amarillo)} – ${f(verde)}` },
-      { tono: 'green', desde: verde, hasta, texto: `≥ ${f(verde)}` },
+      { tono: 'red', since: desde, until: amarillo, texto: `< ${f(amarillo)}` },
+      { tono: 'yellow', since: amarillo, until: verde, texto: `${f(amarillo)} – ${f(verde)}` },
+      { tono: 'green', since: verde, until: hasta, texto: `≥ ${f(verde)}` },
     ] as Tier[],
   };
 }
@@ -103,7 +103,7 @@ export function TrafficLightScale({ metrica, verde, amarillo, className }: Traff
             <div
               key={tramo.tono}
               className={cn('h-full transition-all', TIER_COLOR[tramo.tono].barra)}
-              style={{ width: `${Math.max(0, posicion(tramo.hasta) - posicion(tramo.desde))}%` }}
+              style={{ width: `${Math.max(0, posicion(tramo.until) - posicion(tramo.since))}%` }}
             />
           ))}
         </div>

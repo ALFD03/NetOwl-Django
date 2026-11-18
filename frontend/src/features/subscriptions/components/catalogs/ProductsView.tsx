@@ -18,58 +18,58 @@ import { CatalogBar, ConfirmarBorrado, CatalogErrorView, actionsColumn, enviar }
  * de aquí la leen los análisis y el reporte ETA.
  *
  * Lo que está importado y ningún plan reconoce no se lista aquí sino en
- * Notificaciones, que enlaza de vuelta con `?nuevo_plan=`.
+ * Notificaciones, que enlaza de vuelta con `?new_plan=`.
  */
 export function ProductsView({
-  planes, reguladores, tecnologias, tiposPersona, nuevoPlan,
+  plans, regulators, technologies, personTypes, newPlan,
 }: CatalogsProductsProps) {
-  const c = useCatalogs({ initialView: 'planes', nuevoPlan });
+  const c = useCatalogs({ initialView: 'planes', newPlan });
 
   const planColumns: Column<CatalogPlan>[] = [
-    { header: 'Plan', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Tarifa', accessor: (row) => row.tarifa || '—', sortKey: 'tarifa' },
-    { header: 'Tecnología', accessor: 'tecnologia', sortKey: 'tecnologia', filterable: true },
-    { header: 'Persona', accessor: 'tipo_persona', sortKey: 'tipo_persona', filterable: true },
-    { header: 'Mbps', accessor: 'datas_mbps', align: 'right', sortKey: 'datas_mbps' },
-    { header: 'Precio', accessor: 'precio', align: 'right', sortKey: 'precio' },
+    { header: 'Plan', accessor: 'name', sortKey: 'name' },
+    { header: 'Tarifa', accessor: (row) => row.tariff || '—', sortKey: 'tariff' },
+    { header: 'Tecnología', accessor: 'technology', sortKey: 'technology', filterable: true },
+    { header: 'Persona', accessor: 'person_type', sortKey: 'person_type', filterable: true },
+    { header: 'Mbps', accessor: 'data_mbps', align: 'right', sortKey: 'data_mbps' },
+    { header: 'Precio', accessor: 'price', align: 'right', sortKey: 'price' },
     // El filtro va por la etiqueta que se ve, no por el booleano: nadie busca
     // «false» en un desplegable que en la tabla pone «—».
-    { header: 'TV', accessor: (row) => (row.tiene_tv ? 'Sí' : '—'), filterable: true, filterValue: (row) => (row.tiene_tv ? 'Sí' : 'No') },
+    { header: 'TV', accessor: (row) => (row.has_tv ? 'Sí' : '—'), filterable: true, filterValue: (row) => (row.has_tv ? 'Sí' : 'No') },
     {
       header: 'ETA',
-      accessor: (row) => (row.declarar_en_eta ? 'Declara' : 'No declara'),
+      accessor: (row) => (row.declare_in_eta ? 'Declara' : 'No declara'),
       filterable: true,
-      filterValue: (row) => (row.declarar_en_eta ? 'Declara' : 'No declara'),
+      filterValue: (row) => (row.declare_in_eta ? 'Declara' : 'No declara'),
     },
     {
       header: 'Plan regulador',
-      accessor: (row) => row.plan_regulador || '— sin asignar',
-      sortKey: 'plan_regulador',
+      accessor: (row) => row.regulator_plan || '— sin asignar',
+      sortKey: 'regulator_plan',
       filterable: true,
       // Los planes sin asignar son justo lo que hay que encontrar para poder
       // declararlos, así que necesitan su propia opción en el desplegable.
-      filterValue: (row) => row.plan_regulador || 'Sin asignar',
+      filterValue: (row) => row.regulator_plan || 'Sin asignar',
     },
     actionsColumn<CatalogPlan>(c.editarPlan, (row) =>
-      c.setBorrando({ tipo: 'planes', id: row.id, nombre: row.nombre })),
+      c.setBorrando({ kind: 'planes', id: row.id, name: row.name })),
   ];
 
   const regulatoryColumns: Column<CatalogRegulatoryPlan>[] = [
-    { header: 'Plan declarado', accessor: 'nombre', sortKey: 'nombre' },
+    { header: 'Plan declarado', accessor: 'name', sortKey: 'name' },
     {
       header: 'Hoja',
-      accessor: (row) => (row.es_transporte ? 'Transporte' : 'Internet'),
+      accessor: (row) => (row.is_transport ? 'Transporte' : 'Internet'),
       filterable: true,
-      filterValue: (row) => (row.es_transporte ? 'Transporte' : 'Internet'),
+      filterValue: (row) => (row.is_transport ? 'Transporte' : 'Internet'),
     },
-    { header: 'Tecnología', accessor: 'tecnologia', sortKey: 'tecnologia', filterable: true },
-    { header: 'Persona', accessor: 'tipo_persona', sortKey: 'tipo_persona', filterable: true },
-    { header: 'Mbps', accessor: 'datas_mbps', align: 'right', sortKey: 'datas_mbps' },
-    { header: 'Precio', accessor: 'precio', align: 'right', sortKey: 'precio' },
-    { header: 'TV', accessor: (row) => (row.tiene_tv ? 'Sí' : '—'), filterable: true, filterValue: (row) => (row.tiene_tv ? 'Sí' : 'No') },
-    { header: 'Planes', accessor: 'planes', align: 'right', sortKey: 'planes' },
+    { header: 'Tecnología', accessor: 'technology', sortKey: 'technology', filterable: true },
+    { header: 'Persona', accessor: 'person_type', sortKey: 'person_type', filterable: true },
+    { header: 'Mbps', accessor: 'data_mbps', align: 'right', sortKey: 'data_mbps' },
+    { header: 'Precio', accessor: 'price', align: 'right', sortKey: 'price' },
+    { header: 'TV', accessor: (row) => (row.has_tv ? 'Sí' : '—'), filterable: true, filterValue: (row) => (row.has_tv ? 'Sí' : 'No') },
+    { header: 'Planes', accessor: 'plans', align: 'right', sortKey: 'plans' },
     actionsColumn<CatalogRegulatoryPlan>(c.editarRegulador, (row) =>
-      c.setBorrando({ tipo: 'reguladores', id: row.id, nombre: row.nombre })),
+      c.setBorrando({ kind: 'reguladores', id: row.id, name: row.name })),
   ];
 
   const altas = {
@@ -85,8 +85,8 @@ export function ProductsView({
           onChange={(key) => c.setVista(key as typeof c.vista)}
           alta={altas[c.vista]}
           pestanas={[
-            { key: 'planes', label: `Planes (${planes.length})`, icon: BookMarked },
-            { key: 'reguladores', label: `Planes reguladores (${reguladores.length})`, icon: FileSpreadsheet },
+            { key: 'planes', label: `Planes (${plans.length})`, icon: BookMarked },
+            { key: 'reguladores', label: `Planes reguladores (${regulators.length})`, icon: FileSpreadsheet },
           ]}
         />
       }
@@ -95,7 +95,7 @@ export function ProductsView({
 
       {c.vista === 'planes' && (
         <NeonContainer title="Planes" subtitle="Vocabulario comercial: qué productos existen y cómo se clasifican" icon={<BookMarked className="h-5 w-5" />} theme="purple" noPadding>
-          <DataTable columns={planColumns} data={planes} searchable searchPlaceholder="Buscar plan..." />
+          <DataTable columns={planColumns} data={plans} searchable searchPlaceholder="Buscar plan..." />
         </NeonContainer>
       )}
 
@@ -107,7 +107,7 @@ export function ProductsView({
           theme="purple"
           noPadding
         >
-          {reguladores.length === 0 ? (
+          {regulators.length === 0 ? (
             <EmptyState
               title="Todavía no hay planes reguladores"
               description="Sin ellos el formulario sale vacío: cada plan comercial necesita saber con qué fila se declara."
@@ -116,7 +116,7 @@ export function ProductsView({
           ) : (
             <DataTable
               columns={regulatoryColumns}
-              data={reguladores}
+              data={regulators}
               searchable
               searchPlaceholder="Buscar plan declarado..."
             />
@@ -135,9 +135,9 @@ export function ProductsView({
         {c.planDraft && (
           <PlanForm
             value={c.planDraft}
-            tecnologias={tecnologias}
-            tiposPersona={tiposPersona}
-            reguladores={reguladores}
+            technologies={technologies}
+            personTypes={personTypes}
+            regulators={regulators}
             saving={c.guardando}
             onChange={(patch) => c.setPlanDraft({ ...c.planDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('planes', { ...c.planDraft }))}
@@ -157,8 +157,8 @@ export function ProductsView({
         {c.reguladorDraft && (
           <RegulatoryPlanForm
             value={c.reguladorDraft}
-            tecnologias={tecnologias}
-            tiposPersona={tiposPersona}
+            technologies={technologies}
+            personTypes={personTypes}
             saving={c.guardando}
             onChange={(patch) => c.setReguladorDraft({ ...c.reguladorDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('reguladores', { ...c.reguladorDraft }))}

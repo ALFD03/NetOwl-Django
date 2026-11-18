@@ -28,13 +28,13 @@ export interface SalesReportTechnology {
   technology?: string;
   nodes?: SalesReportNode[];
   dynamic?: {
-    activos_inicio: number;
-    activos_final: number;
-    nuevos: number;
-    reactivaciones: number;
-    bajas: number;
+    active_start: number;
+    active_end: number;
+    new_subs: number;
+    reactivations: number;
+    churned: number;
     churn_rate: number;
-    crecimiento: number;
+    growth: number;
     /** Meta del bloque, resuelta desde el site. */
     meta: Meta;
   };
@@ -46,7 +46,7 @@ export interface SalesReportSite {
   /** Meta del site entero (todas sus tecnologías en pantalla), resuelta desde el site. */
   meta?: Meta;
   /** Las cifras del site entero, solo de las zonas con objetivo: su resumen sencillo. */
-  totales?: { activos_inicio: number; activos_final: number; nuevos: number };
+  totales?: { active_start: number; active_end: number; new_subs: number };
 }
 
 interface UseSalesReportDataParams {
@@ -56,7 +56,7 @@ interface UseSalesReportDataParams {
   selectedTech: 'ALL' | 'FTTH' | 'RF';
   /** El periodo del reporte: decide qué tramo de objetivo está vigente. */
   period: string;
-  objetivos: TargetsResolver;
+  targets: TargetsResolver;
   /** El filtro por crecimiento, churn o proyección, por nodo o por site. */
   metricFilter: MetricFilter;
   /** Los días laborables del corte elegido; sin ellos no se filtra por proyección. */
@@ -69,7 +69,7 @@ export function useSalesReportData({
   selectedBranch,
   selectedTech,
   period,
-  objetivos,
+  targets,
   metricFilter: filtroMetrica,
   projection: proyeccion = null,
 }: UseSalesReportDataParams) {
@@ -89,8 +89,8 @@ export function useSalesReportData({
 
   const filteredData = useMemo(() => {
     const umbral = filterThreshold(filtroMetrica, proyeccion);
-    const filtersNodes = umbral !== null && filtroMetrica.nivel === 'zona';
-    const filtraSites = umbral !== null && filtroMetrica.nivel === 'grupo';
+    const filtersNodes = umbral !== null && filtroMetrica.level === 'zona';
+    const filtraSites = umbral !== null && filtroMetrica.level === 'grupo';
     const cumple = (cifras: Parameters<typeof metricValues>[0], meta: Meta) =>
       matchesFilter(metricValues(cifras, meta, { projection: proyeccion }), filtroMetrica, umbral);
 
@@ -108,26 +108,26 @@ export function useSalesReportData({
           return (siteMatchesSearch || nodeMatchesSearch) && branchMatches;
         }) ?? []).map((node) => ({
           ...node,
-          meta: objetivos.meta(period, [node], 'zona_sucursal'),
-          origenObjetivo: objetivos.origen(period, node, 'crecimiento'),
-        })).filter((node) => !filtersNodes || cumple({ ...node, churn: node.churn_bruto_pct }, node.meta));
+          meta: targets.meta(period, [node], 'zona_sucursal'),
+          targetSource: targets.origen(period, node, 'growth'),
+        })).filter((node) => !filtersNodes || cumple({ ...node, churn: node.gross_churn_pct }, node.meta));
 
         if (!nodes.length) return [];
 
         // La tabla lleva todos los nodos; el resumen, solo los que tienen objetivo.
-        const totals = aggregateNodes(measuredNodes(objetivos, period, nodes));
+        const totals = aggregateNodes(measuredNodes(targets, period, nodes));
         return [{
           ...tech,
           nodes,
           dynamic: {
-            activos_inicio: totals.activos_inicio,
-            activos_final: totals.activos_final,
-            nuevos: totals.nuevos,
-            bajas: totals.bajas,
-            reactivaciones: totals.reactivaciones,
+            active_start: totals.active_start,
+            active_end: totals.active_end,
+            new_subs: totals.new_subs,
+            churned: totals.churned,
+            reactivations: totals.reactivations,
             churn_rate: totals.churn_rate,
-            crecimiento: totals.crecimiento,
-            meta: objetivos.meta(period, nodes, 'site'),
+            growth: totals.growth,
+            meta: targets.meta(period, nodes, 'site'),
           },
         }];
       }) ?? [];
@@ -136,13 +136,13 @@ export function useSalesReportData({
       // La del site entero, para enseñarla junto a su botón de exportar bajas:
       // sobre los mismos nodos que la tabla tiene en pantalla.
       const siteNodes = technologies.flatMap((tech) => tech.nodes ?? []);
-      const meta = objetivos.meta(period, siteNodes, 'site');
-      const totals = aggregateNodes(measuredNodes(objetivos, period, siteNodes));
+      const meta = targets.meta(period, siteNodes, 'site');
+      const totals = aggregateNodes(measuredNodes(targets, period, siteNodes));
       if (filtraSites && !cumple({ ...totals, churn: totals.churn_rate }, meta)) return [];
-      const totales = { activos_inicio: totals.activos_inicio, activos_final: totals.activos_final, nuevos: totals.nuevos };
+      const totales = { active_start: totals.active_start, active_end: totals.active_end, new_subs: totals.new_subs };
       return [{ ...site, technologies, meta, totales }];
     });
-  }, [sites, normalizedSearch, selectedBranch, selectedTech, period, objetivos, filtroMetrica, proyeccion]);
+  }, [sites, normalizedSearch, selectedBranch, selectedTech, period, targets, filtroMetrica, proyeccion]);
 
   return { branchList, filteredData };
 }

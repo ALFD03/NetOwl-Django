@@ -13,12 +13,12 @@ import type { ProductoPendiente } from '@/shared/types/subscriptions';
 import type { CatalogBlock } from '../lib/catalog';
 
 export interface CatalogBlockModalProps {
-  bloqueo: CatalogBlock | null;
+  block: CatalogBlock | null;
   onClose: () => void;
   /** Marca el producto como "nunca será un plan". */
-  onIgnore: (nombre: string) => void;
+  onIgnore: (name: string) => void;
   /** Producto cuya petición de ignorar está en curso. */
-  ignorando: string | null;
+  ignoring: string | null;
   error: string | null;
 }
 
@@ -31,15 +31,15 @@ export interface CatalogBlockModalProps {
  * la lista sí lo sabe.
  */
 export function CatalogBlockModal({
-  bloqueo,
+  block,
   onClose,
   onIgnore,
-  ignorando,
+  ignoring,
   error,
 }: CatalogBlockModalProps) {
   const columns: Column<ProductoPendiente>[] = [
-    { header: 'Producto', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Órdenes', accessor: 'ordenes', align: 'right', sortKey: 'ordenes' },
+    { header: 'Producto', accessor: 'name', sortKey: 'name' },
+    { header: 'Órdenes', accessor: 'orders', align: 'right', sortKey: 'orders' },
     {
       header: 'Acciones',
       align: 'right',
@@ -49,7 +49,7 @@ export function CatalogBlockModal({
             size="sm"
             icon={<Plus className="h-4 w-4" />}
             onClick={() => {
-              window.location.href = `/catalogos/productos/?nuevo_plan=${encodeURIComponent(row.nombre)}`;
+              window.location.href = `/catalogos/productos/?new_plan=${encodeURIComponent(row.name)}`;
             }}
           >
             Crear plan
@@ -58,8 +58,8 @@ export function CatalogBlockModal({
             size="sm"
             variant="outline"
             icon={<EyeOff className="h-4 w-4" />}
-            isLoading={ignorando === row.nombre}
-            onClick={() => onIgnore(row.nombre)}
+            isLoading={ignoring === row.name}
+            onClick={() => onIgnore(row.name)}
           >
             Ignorar
           </Button>
@@ -70,7 +70,7 @@ export function CatalogBlockModal({
 
   return (
     <Modal
-      isOpen={Boolean(bloqueo)}
+      isOpen={Boolean(block)}
       onClose={onClose}
       title="Productos fuera del catálogo"
       subtitle="No se importó nada: los datos anteriores siguen intactos"
@@ -78,11 +78,11 @@ export function CatalogBlockModal({
       theme="yellow"
       size="wide"
     >
-      {bloqueo && (
+      {block && (
         <div className="space-y-4">
           <p className="text-sm text-slate-300">
-            {bloqueo.productos.length} producto(s) sin registrar afectan a{' '}
-            <strong className="text-white">{bloqueo.ordenes}</strong> orden(es). Regístralos
+            {block.products.length} producto(s) sin registrar afectan a{' '}
+            <strong className="text-white">{block.orders}</strong> orden(es). Regístralos
             como plan o márcalos como ignorados y vuelve a cargar el archivo.
           </p>
 
@@ -90,7 +90,7 @@ export function CatalogBlockModal({
 
           <DataTable
             columns={columns}
-            data={bloqueo.productos}
+            data={block.products}
             searchable
             searchPlaceholder="Buscar producto..."
           />

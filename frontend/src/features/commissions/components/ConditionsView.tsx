@@ -22,13 +22,13 @@ import { useBlocker } from 'react-router-dom';
 
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
 
-function Validity({ actualizacion }: { actualizacion: ConditionsUpdate }) {
-  const fecha = actualizacion.en ? new Date(actualizacion.en) : null;
+function Validity({ last_update }: { last_update: ConditionsUpdate }) {
+  const fecha = last_update.at ? new Date(last_update.at) : null;
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="text-sm font-semibold text-white">
         {fecha
-          ? `Vigentes · modificadas el ${fecha.toLocaleDateString('es-VE')} a las ${fecha.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}${actualizacion.por ? ` por ${actualizacion.por}` : ''}`
+          ? `Vigentes · modificadas el ${fecha.toLocaleDateString('es-VE')} a las ${fecha.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}${last_update.by ? ` por ${last_update.by}` : ''}`
           : 'Vigentes · las de la política, sin cambios desde entonces'}
       </span>
       <span className="text-xs text-slate-400">
@@ -62,21 +62,21 @@ function ChangeList({ cambios }: { cambios: Change[] }) {
  * que usó, así que cambiarlas solo afecta a lo que se calcule después (los
  * borradores incluidos, que se recalculan al abrirlos).
  */
-export function ConditionsView({ condiciones, actualizacion, planesPyme, puedeEditarPlanes }: CommissionsConditionsProps) {
-  const [draft, setDraft] = useState<CommissionConditions>(condiciones);
+export function ConditionsView({ conditions, last_update, smePlans, canEditPlans }: CommissionsConditionsProps) {
+  const [draft, setDraft] = useState<CommissionConditions>(conditions);
   const [editando, setEditando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [estado, setState] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Tras guardar, la recarga trae las condiciones como las dejó el servidor (tramos ordenados):
   // el borrador se reinicia con ellas en el mismo render, sin un efecto de por medio.
-  const [base, setBase] = useState(condiciones);
-  if (base !== condiciones) {
-    setBase(condiciones);
-    setDraft(condiciones);
+  const [base, setBase] = useState(conditions);
+  if (base !== conditions) {
+    setBase(conditions);
+    setDraft(conditions);
   }
 
-  const cambios = useMemo(() => pendingChanges(condiciones, draft), [condiciones, draft]);
+  const cambios = useMemo(() => pendingChanges(conditions, draft), [conditions, draft]);
   const errores = useMemo(() => fieldErrors(draft), [draft]);
   const errorCount = Object.keys(errores).length;
   const sucio = editando && cambios.length > 0;
@@ -98,7 +98,7 @@ export function ConditionsView({ condiciones, actualizacion, planesPyme, puedeEd
   const cambiar = (patch: Partial<CommissionConditions>) => setDraft((d) => ({ ...d, ...patch }));
 
   const descartar = () => {
-    setDraft(condiciones);
+    setDraft(conditions);
     setEditando(false);
     setState(null);
   };
@@ -108,7 +108,7 @@ export function ConditionsView({ condiciones, actualizacion, planesPyme, puedeEd
     setState(null);
     try {
       const response = await commissionsApi.guardarCondiciones({
-        dia_promocional: draft.dia_promocional, dias_espera: draft.dias_espera, dia_corte: draft.dia_corte,
+        promo_day: draft.promo_day, wait_days: draft.wait_days, cutoff_day: draft.cutoff_day,
       });
       setEditando(false);
       setState({ type: 'success', text: response.message });
@@ -150,7 +150,7 @@ export function ConditionsView({ condiciones, actualizacion, planesPyme, puedeEd
     </div>
   ) : (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
-      <Validity actualizacion={actualizacion} />
+      <Validity last_update={last_update} />
       <Button icon={<Pencil className="h-4 w-4" />} onClick={() => { setState(null); setEditando(true); }}>
         Editar condiciones
       </Button>
@@ -166,13 +166,13 @@ export function ConditionsView({ condiciones, actualizacion, planesPyme, puedeEd
 
         {editando ? (
           <>
-            <PeriodCard borrador={draft} guardadas={condiciones} editando errores={errores} cambiar={cambiar} />
-            <SmePlansCard planes={planesPyme} puedeEditarPlanes={puedeEditarPlanes} compacto />
+            <PeriodCard borrador={draft} guardadas={conditions} editando errores={errores} cambiar={cambiar} />
+            <SmePlansCard planes={smePlans} canEditPlans={canEditPlans} compacto />
           </>
         ) : (
           <>
-            <SmePlansCard planes={planesPyme} puedeEditarPlanes={puedeEditarPlanes} compacto={false} />
-            <PeriodCard borrador={draft} guardadas={condiciones} editando={false} errores={errores} cambiar={cambiar} />
+            <SmePlansCard planes={smePlans} canEditPlans={canEditPlans} compacto={false} />
+            <PeriodCard borrador={draft} guardadas={conditions} editando={false} errores={errores} cambiar={cambiar} />
           </>
         )}
       </div>

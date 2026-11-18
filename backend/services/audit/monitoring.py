@@ -144,12 +144,12 @@ def stats(hours: int) -> dict:
     recent_errors = [
         {
             "id": r.id,
-            "fecha": timezone.localtime(r.created_at).strftime("%Y-%m-%d %H:%M:%S"),
-            "modulo": r.module,
-            "accion": r.action,
+            "date": timezone.localtime(r.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+            "module": r.module,
+            "action": r.action,
             "username": r.username,
-            "estado_http": r.status_code,
-            "descripcion": r.description[:300],
+            "status_code": r.status_code,
+            "description": r.description[:300],
         }
         for r in logs.filter(outcome=AuditLog.ERROR).order_by("-created_at")[:20]
     ]

@@ -26,8 +26,8 @@ import { LifetimeTiersPanel } from './LifetimeTiersPanel';
 import { useVisit } from '@/shared/page/PageData';
 
 interface LifetimeViewProps {
-  meses: string[];
-  periodo: string | null;
+  months: string[];
+  period: string | null;
   lifetime: LifetimeMonth | null;
 }
 
@@ -62,19 +62,19 @@ const DIMENSION_COLUMNS: Column<LifetimeDimensionRow>[] = [
   {
     header: 'Etiqueta',
     accessor: (r) => (
-      <StickyLabel minWidth="140px">{r.valor}</StickyLabel>
+      <StickyLabel minWidth="140px">{r.value}</StickyLabel>
     ),
-    sortKey: 'valor',
+    sortKey: 'value',
     sticky: true,
   },
-  { header: 'Bajas', accessor: (r) => formatInteger(r.bajas), align: 'right', sortKey: 'bajas' },
+  { header: 'Bajas', accessor: (r) => formatInteger(r.churned), align: 'right', sortKey: 'churned' },
   {
     header: 'Mediana',
-    accessor: (r) => <span className="font-black text-amber-400">{formatDays(r.mediana)}</span>,
+    accessor: (r) => <span className="font-black text-amber-400">{formatDays(r.median)}</span>,
     align: 'right',
-    sortKey: 'mediana',
+    sortKey: 'median',
   },
-  { header: 'Promedio', accessor: (r) => formatDays(r.promedio), align: 'right', sortKey: 'promedio' },
+  { header: 'Promedio', accessor: (r) => formatDays(r.mean), align: 'right', sortKey: 'mean' },
   {
     header: 'P25 – P75',
     accessor: (r) => <span className="text-slate-400">{formatDays(r.p25)} – {formatDays(r.p75)}</span>,
@@ -85,27 +85,27 @@ const DIMENSION_COLUMNS: Column<LifetimeDimensionRow>[] = [
   { header: 'Se fueron ≤ 90 d', accessor: (r) => <PctTemprano pct={r.pct_90} />, align: 'right', sortKey: 'pct_90' },
 ];
 
-function MeasureSummary({ resumen, color }: { resumen: LifetimeSummary; color: 'blue' }) {
+function MeasureSummary({ summary, color }: { summary: LifetimeSummary; color: 'blue' }) {
   return (
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-      <MetricCard label="Promedio" value={formatDays(resumen.promedio)} color={color} />
-      <MetricCard label="Mediana" value={formatDays(resumen.mediana)} color={color} subValue="La mitad duró menos" />
+      <MetricCard label="Promedio" value={formatDays(summary.mean)} color={color} />
+      <MetricCard label="Mediana" value={formatDays(summary.median)} color={color} subValue="La mitad duró menos" />
       <MetricCard
         label="P25 – P75"
-        value={`${formatDays(resumen.p25)} – ${formatDays(resumen.p75)}`}
+        value={`${formatDays(summary.p25)} – ${formatDays(summary.p75)}`}
         color="slate"
         subValue="La mitad central"
       />
       <MetricCard
         label="Mínimo – Máximo"
-        value={`${formatDays(resumen.min)} – ${formatDays(resumen.max)}`}
+        value={`${formatDays(summary.min)} – ${formatDays(summary.max)}`}
         color="slate"
       />
     </div>
   );
 }
 
-export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
+export function LifetimeView({ months, period, lifetime }: LifetimeViewProps) {
   const visit = useVisit();
   const [activeDimension, setActiveDimension] = useState('sucursal');
   const activeLabel = DIMENSION_CONFIG[activeDimension]?.label ?? activeDimension;
@@ -126,11 +126,11 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
       <PeriodSelector
         label="Mes de las bajas"
         icon={<Calendar className="h-4 w-4 text-brand" />}
-        value={periodo ?? ''}
-        options={meses}
+        value={period ?? ''}
+        options={months}
         onChange={changeMonth}
       />
-      {lifetime && <LifetimeExportButton mes={lifetime.mes} />}
+      {lifetime && <LifetimeExportButton churn_month={lifetime.churn_month} />}
       <div className="flex flex-col items-start gap-2">
         <button
           type="button"
@@ -169,10 +169,10 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
       <NeonContainer
         theme="blue"
         title="Tiempo activo desde la instalación"
-        subtitle={`De la fecha de instalación a la baja, de las ${formatInteger(lifetime.bajas)} bajas instaladas desde ${lifetime.instaladas_desde}.`}
+        subtitle={`De la fecha de instalación a la baja, de las ${formatInteger(lifetime.churned)} bajas instaladas desde ${lifetime.installed_since}.`}
         icon={<Clock className="h-5 w-5" />}
       >
-        <MeasureSummary resumen={lifetime.resumen} color="blue" />
+        <MeasureSummary summary={lifetime.summary} color="blue" />
       </NeonContainer>
 
       <LifetimeTiersPanel lifetime={lifetime} />
@@ -190,7 +190,7 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
         noPadding
       >
         <div className="h-[450px]">
-          {(lifetime.por_dimension[activeDimension] ?? []).length === 0 ? (
+          {(lifetime.by_dimension[activeDimension] ?? []).length === 0 ? (
             <EmptyState
               title="Ninguna baja de este mes se instaló desde 2026"
               icon={<Activity />}
@@ -199,7 +199,7 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
           ) : (
             <DataTable
               columns={DIMENSION_COLUMNS}
-              data={lifetime.por_dimension[activeDimension] ?? []}
+              data={lifetime.by_dimension[activeDimension] ?? []}
               searchable
               searchPlaceholder={`Buscar en ${activeLabel}...`}
             />

@@ -3,9 +3,9 @@
 export interface ImportOperationResult {
   message: string;
   log_output?: string;
-  periodo_label?: string;
+  period_label?: string;
   /** Dias calculados por el runner de metricas diarias. */
-  dias_calculados?: number;
+  computed_days?: number;
 }
 
 /** One row in the import/calculation audit log. */
@@ -23,10 +23,10 @@ export interface ImportHistoryItem {
 }
 
 /** Una cabecera del export de Odoo que lee una importación. */
-export interface CampoOdoo {
-  nombre: string;
+export interface OdooField {
+  name: string;
   /** Se valida antes de cargar; sin ella el fichero se rechaza. */
-  requerido: boolean;
+  required: boolean;
   /** Otras formas en que Odoo escribe la misma columna y que también se aceptan. */
   alias?: string[];
 }
@@ -35,5 +35,5 @@ export interface CampoOdoo {
 export interface OdooFieldGroup {
   key: string;
   label: string;
-  campos: CampoOdoo[];
+  fields: OdooField[];
 }

@@ -48,7 +48,7 @@ _BATCH = Table("_logs_lote", {c: TICKET_LOGS.columns[c] for c in _COLUMNS}, sche
 def import_ticket_logs(csv_path: str) -> dict:
     """Suma un lote de logs a `support_ticket_logs`. Devuelve el resumen del lote.
 
-    `nuevos` son los que no estaban; `repetidos`, los que ya había cargado otro
+    `new` son los que no estaban; `repeated`, los que ya había cargado otro
     lote (o el mismo, si se sube dos veces). Un lote solo de repetidos no es un
     error: es lo que pasa al reexportar el mes en curso.
     """
@@ -82,13 +82,13 @@ def import_ticket_logs(csv_path: str) -> dict:
         new = cur.rowcount
 
     return {
-        "filas": read,
-        "nuevos": new,
-        "repetidos": distinct - new,
-        "duplicados_en_archivo": read - distinct,
+        "rows": read,
+        "new": new,
+        "repeated": distinct - new,
+        "duplicates_in_file": read - distinct,
         "tickets": tickets,
-        "desde": since.strftime("%Y-%m-%d") if since is not None else None,
-        "hasta": until.strftime("%Y-%m-%d") if until is not None else None,
+        "since": since.strftime("%Y-%m-%d") if since is not None else None,
+        "until": until.strftime("%Y-%m-%d") if until is not None else None,
     }
 
 
@@ -96,19 +96,19 @@ def loaded_logs_summary() -> dict:
     """Cuántos logs hay y de qué fechas: lo que muestra la pantalla de importación."""
     db = DBConnector()
     if not db.table_exists(TableNames.SUPPORT_TICKET_LOGS):
-        return {"logs": 0, "tickets": 0, "desde": None, "hasta": None, "por_mes": []}
+        return {"logs": 0, "tickets": 0, "since": None, "until": None, "by_month": []}
     table = f'"{DB_SCHEMA}"."{TableNames.SUPPORT_TICKET_LOGS}"'
     with db.get_connection() as conn, conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*), COUNT(DISTINCT ticket_sequence), MIN(creado_el), MAX(creado_el) FROM {table}")
         logs, tickets, since, until = cur.fetchone()
         cur.execute(f"SELECT to_char(creado_el, 'YYYY-MM') AS mes, COUNT(*) FROM {table} GROUP BY 1 ORDER BY 1")
-        by_month = [{"mes": month, "logs": n} for month, n in cur.fetchall()]
+        by_month = [{"month": month, "logs": n} for month, n in cur.fetchall()]
     return {
         "logs": logs,
         "tickets": tickets,
-        "desde": since.strftime("%Y-%m-%d %H:%M") if since else None,
-        "hasta": until.strftime("%Y-%m-%d %H:%M") if until else None,
-        "por_mes": by_month,
+        "since": since.strftime("%Y-%m-%d %H:%M") if since else None,
+        "until": until.strftime("%Y-%m-%d %H:%M") if until else None,
+        "by_month": by_month,
     }
 
 

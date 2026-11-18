@@ -17,7 +17,7 @@ export interface RequirementsCardProps {
    * Las cabeceras de Odoo que lee cada tipo de export. Llegan del servidor,
    * sacadas de los mismos mapeos que usa el importador.
    */
-  camposOdoo?: OdooFieldGroup[];
+  fieldGroups?: OdooFieldGroup[];
   /** Grupo de campos a mostrar; sigue al tipo de importación elegido. */
   activeGroup?: string;
   className?: string;
@@ -30,17 +30,17 @@ export interface RequirementsCardProps {
  * sigue a `activeGroup` cuando cambia: lo normal es querer ver los campos del
  * fichero que se va a subir.
  */
-function CamposOdoo({ grupos, activeGroup: grupoActivo }: { grupos: OdooFieldGroup[]; activeGroup?: string }) {
-  const [elegido, setElegido] = useState(grupoActivo ?? grupos[0]?.key);
-  const [seguido, setSeguido] = useState(grupoActivo);
-  if (grupoActivo !== seguido) {
-    setSeguido(grupoActivo);
-    if (grupoActivo) setElegido(grupoActivo);
+function FieldGroups({ groups, activeGroup: activeGroupKey }: { groups: OdooFieldGroup[]; activeGroup?: string }) {
+  const [chosen, setChosen] = useState(activeGroupKey ?? groups[0]?.key);
+  const [followed, setFollowed] = useState(activeGroupKey);
+  if (activeGroupKey !== followed) {
+    setFollowed(activeGroupKey);
+    if (activeGroupKey) setChosen(activeGroupKey);
   }
 
-  const grupo = grupos.find((g) => g.key === elegido) ?? grupos[0];
-  if (!grupo) return null;
-  const requeridos = grupo.campos.filter((c) => c.requerido).length;
+  const group = groups.find((g) => g.key === chosen) ?? groups[0];
+  if (!group) return null;
+  const requiredCount = group.fields.filter((c) => c.required).length;
 
   return (
     <div className="mt-5 border-t border-slate-800 pt-4">
@@ -52,39 +52,39 @@ function CamposOdoo({ grupos, activeGroup: grupoActivo }: { grupos: OdooFieldGro
         Cualquier otra columna se ignora.
       </p>
 
-      {grupos.length > 1 && (
+      {groups.length > 1 && (
         <ToggleGroup
           className="mt-3"
-          options={grupos.map((g) => ({ key: g.key, label: g.label }))}
-          activeKey={grupo.key}
-          onChange={setElegido}
+          options={groups.map((g) => ({ key: g.key, label: g.label }))}
+          activeKey={group.key}
+          onChange={setChosen}
         />
       )}
 
       <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-        {requeridos} requeridos · {grupo.campos.length - requeridos} opcionales
+        {requiredCount} requeridos · {group.fields.length - requiredCount} opcionales
       </p>
       <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto pr-1">
-        {grupo.campos.map((campo) => (
+        {group.fields.map((field) => (
           <li
-            key={campo.nombre}
+            key={field.name}
             className="flex items-center justify-between gap-3 rounded-md bg-surface-tertiary px-3 py-1.5"
           >
             <div className="min-w-0">
-              <code className={cn('break-all text-[11px]', campo.requerido ? 'text-slate-200' : 'text-slate-400')}>
-                {campo.nombre}
+              <code className={cn('break-all text-[11px]', field.required ? 'text-slate-200' : 'text-slate-400')}>
+                {field.name}
               </code>
-              {campo.alias && campo.alias.length > 0 && (
-                <p className="mt-0.5 text-[10px] text-slate-500">También: {campo.alias.join(', ')}</p>
+              {field.alias && field.alias.length > 0 && (
+                <p className="mt-0.5 text-[10px] text-slate-500">También: {field.alias.join(', ')}</p>
               )}
             </div>
             <span
               className={cn(
                 'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
-                campo.requerido ? 'bg-brand/15 text-brand' : 'text-slate-500',
+                field.required ? 'bg-brand/15 text-brand' : 'text-slate-500',
               )}
             >
-              {campo.requerido ? 'Requerido' : 'Opcional'}
+              {field.required ? 'Requerido' : 'Opcional'}
             </span>
           </li>
         ))}
@@ -98,11 +98,11 @@ export function RequirementsCard({
   title,
   requirements,
   note,
-  camposOdoo,
-  activeGroup: grupoActivo,
+  fieldGroups,
+  activeGroup: activeGroupKey,
   className,
 }: RequirementsCardProps) {
-  const groupsWithFields = camposOdoo?.filter((grupo) => grupo.campos.length > 0) ?? [];
+  const groupsWithFields = fieldGroups?.filter((group) => group.fields.length > 0) ?? [];
 
   return (
     <Panel title={title} stretch className={className}>
@@ -113,7 +113,7 @@ export function RequirementsCard({
       </ul>
 
       {groupsWithFields.length > 0 && (
-        <CamposOdoo grupos={groupsWithFields} activeGroup={grupoActivo} />
+        <FieldGroups groups={groupsWithFields} activeGroup={activeGroupKey} />
       )}
 
       {note && (

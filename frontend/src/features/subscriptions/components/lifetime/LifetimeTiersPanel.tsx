@@ -17,13 +17,13 @@ import type { LifetimeMonth, LifetimeTier } from '../../types';
 
 /** El % acumulado al cerrar el tramo que termina en `dias`, si se llegó a él. */
 const accumulatedUntil = (tramos: LifetimeTier[], dias: number): number | null =>
-  tramos.find((t) => t.hasta === dias)?.pct_acumulado ?? null;
+  tramos.find((t) => t.until === dias)?.cumulative_pct ?? null;
 
 const formatPct = (value: number | null): string => (value === null ? '—' : `${value}%`);
 
 /** Una fila por tramo: su barra, cuántas bajas y qué parte ya se había ido. */
-function TierDistribution({ tramos }: { tramos: LifetimeTier[] }) {
-  const maximo = Math.max(1, ...tramos.map((t) => t.pct));
+function TierDistribution({ buckets }: { buckets: LifetimeTier[] }) {
+  const maximo = Math.max(1, ...buckets.map((t) => t.pct));
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-[88px_1fr_64px_64px] gap-3 px-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
@@ -32,16 +32,16 @@ function TierDistribution({ tramos }: { tramos: LifetimeTier[] }) {
         <span className="text-right">%</span>
         <span className="text-right">Acum.</span>
       </div>
-      {tramos.map((t, i) => {
-        const color = tierColor(i, tramos.length);
+      {buckets.map((t, i) => {
+        const color = tierColor(i, buckets.length);
         return (
           <div
-            key={t.tramo}
+            key={t.bucket}
             className="grid grid-cols-[88px_1fr_64px_64px] items-center gap-3 rounded-xl bg-slate-900/40 px-1 py-2"
           >
             <span className="flex items-center gap-2 text-xs font-bold text-white">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
-              {t.tramo}
+              {t.bucket}
             </span>
             <div className="flex items-center gap-2">
               <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-800">
@@ -50,10 +50,10 @@ function TierDistribution({ tramos }: { tramos: LifetimeTier[] }) {
                   style={{ width: `${(t.pct / maximo) * 100}%`, backgroundColor: color }}
                 />
               </div>
-              <span className="w-12 text-right text-xs tabular-nums text-slate-300">{formatInteger(t.bajas)}</span>
+              <span className="w-12 text-right text-xs tabular-nums text-slate-300">{formatInteger(t.churned)}</span>
             </div>
             <span className="text-right text-xs font-black tabular-nums" style={{ color }}>{t.pct}%</span>
-            <span className="text-right text-xs tabular-nums text-slate-400">{t.pct_acumulado}%</span>
+            <span className="text-right text-xs tabular-nums text-slate-400">{t.cumulative_pct}%</span>
           </div>
         );
       })}
@@ -62,14 +62,14 @@ function TierDistribution({ tramos }: { tramos: LifetimeTier[] }) {
 }
 
 export function LifetimeTiersPanel({ lifetime }: { lifetime: LifetimeMonth }) {
-  const tramos = lifetime.tramos;
-  const total = lifetime.resumen.n;
+  const tramos = lifetime.buckets;
+  const total = lifetime.summary.n;
 
   const chartData = useMemo(() => buildTiersChartData(tramos), [tramos]);
   const chartOptions = useMemo(() => tiersChartOptions(tramos), [tramos]);
 
   const pico = tramos.reduce<LifetimeTier | null>(
-    (mayor, t) => (!mayor || t.bajas > mayor.bajas ? t : mayor),
+    (mayor, t) => (!mayor || t.churned > mayor.churned ? t : mayor),
     null,
   );
 
@@ -104,9 +104,9 @@ export function LifetimeTiersPanel({ lifetime }: { lifetime: LifetimeMonth }) {
             />
             <MetricCard
               label="Tramo con más bajas"
-              value={pico ? pico.tramo : '—'}
+              value={pico ? pico.bucket : '—'}
               color="blue"
-              subValue={pico ? `${formatInteger(pico.bajas)} bajas · ${pico.pct}%` : undefined}
+              subValue={pico ? `${formatInteger(pico.churned)} bajas · ${pico.pct}%` : undefined}
             />
           </div>
 
@@ -115,7 +115,7 @@ export function LifetimeTiersPanel({ lifetime }: { lifetime: LifetimeMonth }) {
               <BarChart data={chartData} options={chartOptions} className="h-80 w-full" />
             </div>
             <div className="xl:col-span-2">
-              <TierDistribution tramos={tramos} />
+              <TierDistribution buckets={tramos} />
             </div>
           </div>
         </div>

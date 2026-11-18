@@ -324,15 +324,15 @@ abiertos—; la mediana queda como dato adicional al lado o en el tooltip. Resul
 completa de cada eje, la de incidencia por zona y el mismo desglose al pulsar una
 fila, que por eso acepta los dos permisos.
 
-`analytics` acepta además `?dia=`, que sustituye `grupos` e `incidencia_zonas`
+`analytics` acepta además `?day=`, que sustituye `groups` y `zone_incidence`
 por el corte acumulado de ese día leído de `support_day_metrics`; sin él se envía
 el último corte calculado (en un mes cerrado, el cierre).
 
-`dayMetrics` lleva además la **serie ligera** del mes: `serie` es la cohorte
-completa de cada día y `serie_grupos` la misma abierta por equipo. Las dos viajan
+`dayMetrics` lleva además la **serie ligera** del mes: `series` es la cohorte
+completa de cada día y `group_series` la misma abierta por equipo. Las dos viajan
 porque **la página entera está filtrada por grupo** y el selector no tiene un
 «todos»: las tarjetas del día siguen al equipo elegido, y cambiarlo no cuesta una
-vuelta al servidor. `global_grupos` no añade cálculo —`build_dimension_rows` ya
+vuelta al servidor. `global_groups` no añade cálculo —`build_dimension_rows` ya
 mide cada grupo para su fila `grupo_trabajo`—.
 
 Soporte empezó a guardar esos bloques después que CRM, así que **un mes analizado
@@ -394,7 +394,7 @@ es una persona.
 A diferencia del catálogo de planes, **esto no bloquea nada**. Un técnico sin
 registrar no invalida el análisis, así que es una lista para repasar y no una
 verificación previa a escribir. El botón «Registrar» abre el alta con el nombre
-ya copiado (`?nuevo_usuario=`), que es lo que evita el error de tipeo en la
+ya copiado (`?new_user=`), que es lo que evita el error de tipeo en la
 única cadena que tiene que coincidir carácter por carácter.
 
 ## Agrupación por departamento

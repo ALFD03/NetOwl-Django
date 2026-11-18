@@ -42,19 +42,19 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
 
   const { availableDays, totalDays, selectedDay, selectDay } = useDayCuts(dayMetrics);
 
-  const { payload, diaResuelto } = useDayPayload<CrmDayPayload>({
+  const { payload, resolvedDay } = useDayPayload<CrmDayPayload>({
     url: CRM_DAY_METRICS_URL,
     period: selectedPeriod,
-    dia: selectedDay,
-    dias: availableDays,
+    day: selectedDay,
+    days: availableDays,
     // El día que la vista ya resolvió llega en los props: sembrarlo evita pedir
     // de vuelta lo que acaba de llegar.
-    inicial: dayMetrics?.dia
+    initial: dayMetrics?.day
       ? {
-          dia: dayMetrics.dia,
+          day: dayMetrics.day,
           payload: {
             global: props.globalData ?? {},
-            dimensiones: props.dimensionsData ?? [],
+            dimensions: props.dimensionsData ?? [],
           },
         }
       : null,
@@ -62,7 +62,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
 
   // Lo que está en pantalla: el último día resuelto, o el cierre si el mes no
   // tiene cortes.
-  const dimensionsData = payload?.dimensiones ?? props.dimensionsData ?? [];
+  const dimensionsData = payload?.dimensions ?? props.dimensionsData ?? [];
 
   const { rows, globalData, healthCards, rankingCards } = useCrmAnalytics(
     {
@@ -92,7 +92,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                monthPeriod={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.month}
                 daysInMonth={totalDays}
                 selectedDay={selectedDay}
                 onSelect={selectDay}
@@ -103,10 +103,10 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
       }
     >
       <div className="space-y-6">
-        <CampaignsExportButton dimensiones={dimensionsData} periodo={selectedPeriod} dia={payload ? diaResuelto : 0} />
+        <CampaignsExportButton dimensions={dimensionsData} period={selectedPeriod} day={payload ? resolvedDay : 0} />
 
         <DaySummary
-          serie={dayMetrics?.serie}
+          serie={dayMetrics?.series}
           dias={availableDays}
           dia={selectedDay}
           cards={CRM_DAY_CARDS}

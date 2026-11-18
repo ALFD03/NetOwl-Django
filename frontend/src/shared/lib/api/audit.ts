@@ -3,8 +3,8 @@
 import { apiClient } from './client';
 
 export const auditApi = {
-  /** Un registro con su `detalle`, que no viaja en la lista. */
-  detalle: async <T>(id: number) => (await apiClient.get<T>(`/api/audit/logs/${id}/`)).data,
+  /** Un registro con su `detail`, que no viaja en la lista. */
+  detail: async <T>(id: number) => (await apiClient.get<T>(`/api/audit/logs/${id}/`)).data,
 };
 
 export interface ServiceCheck {
@@ -39,12 +39,12 @@ export interface StatsResponse {
   tokens: { token__prefix: string; token__name: string; username: string; total: number; errors: number; last: string }[];
   recent_errors: {
     id: number;
-    fecha: string;
-    modulo: string;
-    accion: string;
+    date: string;
+    module: string;
+    action: string;
     username: string;
-    estado_http: number | null;
-    descripcion: string;
+    status_code: number | null;
+    description: string;
   }[];
 }
 

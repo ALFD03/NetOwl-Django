@@ -5,13 +5,13 @@ import { SubscriptionResultsView } from '@/features/subscriptions/components/res
 import type { SubscriptionClose } from '@/features/subscriptions/types';
 
 interface SubscriptionsResultsProps {
-  periodos?: SubscriptionClose[];
+  closings?: SubscriptionClose[];
 }
 
-export default function SubscriptionsResults({ periodos = [] }: SubscriptionsResultsProps) {
+export default function SubscriptionsResults({ closings = [] }: SubscriptionsResultsProps) {
   return (
     <AppLayout>
-      <SubscriptionResultsView periodos={periodos} />
+      <SubscriptionResultsView periodos={closings} />
     </AppLayout>
   );
 }

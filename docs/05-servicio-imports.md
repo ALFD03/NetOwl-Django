@@ -237,7 +237,7 @@ La carga de suscripciones tiene dos respuestas especiales:
 
 | Excepción | Respuesta | Significado |
 |---|---|---|
-| `UncatalogedProducts` | **409** con `status: "catalogo"`, la lista de productos y el número de órdenes afectadas | El export trae productos que el catálogo no reconoce. **No se escribió nada**: la comprobación corre antes de tocar la base. Queda registrado como `warning` |
+| `UncatalogedProducts` | **409** con `status: "catalog"`, la lista de productos y el número de órdenes afectadas | El export trae productos que el catálogo no reconoce. **No se escribió nada**: la comprobación corre antes de tocar la base. Queda registrado como `warning` |
 | `EmptyCatalog` | **409** con `status: "error"` | No hay ni un plan registrado. Es un problema de configuración, no del fichero; confundirlos mandaba a revisar el export |
 
 ### Lanzamiento y seguimiento
@@ -257,7 +257,7 @@ varios meses de una vez (`jobs._launch_batch`, como mucho 24): se crea un job po
 mes, igual que si se pidieran sueltos, y el bloqueo del módulo los ejecuta de uno
 en uno. Va en un solo POST porque el límite de `2/m` cortaría un lote pedido mes
 a mes. Un mes que ya está en la cola o corriendo no se duplica: vuelve en
-`omitidos` con su job (409 si eran todos). La tarjeta lo ofrece como «Varios
+`skipped` con su job (409 si eran todos). La tarjeta lo ofrece como «Varios
 meses» y sigue cada mes en `MonthBatch`.
 
 `_job_is_visible(request, job)` decide qué ve cada uno: **quien lanzó el análisis,

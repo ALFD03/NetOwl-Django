@@ -16,7 +16,7 @@ export * from '@/shared/types/subscriptions';
  * dimension value — hence the derivation rather than a second field list.
  */
 export type SubscriptionClose =
-  Omit<SubscriptionResultDimensionRow, 'valor' | 'nuevos'> & {
-    periodo_reporte: string;
-    nuevos_mes: number;
+  Omit<SubscriptionResultDimensionRow, 'value' | 'new_subs'> & {
+    report_period: string;
+    new_in_month: number;
   };

@@ -25,8 +25,8 @@ type Props = SubscriptionEtaManagementProps;
  * campo sino la combinación de dos banderas, así que se resuelve una vez aquí.
  */
 const tipoDeclaracion = (sub: EtaSubscriptionConfig): string => {
-  if (sub.es_transporte) return 'Transporte';
-  if (sub.es_dedicado) return 'Dedicado';
+  if (sub.is_transport) return 'Transporte';
+  if (sub.is_dedicated) return 'Dedicado';
   return 'Internet';
 };
 
@@ -60,17 +60,17 @@ export function EtaManagementView({
   const createSub = () => {
     setIsCustomProduct(false);
     setEditingSub({
-      orden: '',
-      cliente: '',
-      producto: allKnownPlans[0]?.name ?? allKnownPlans[0]?.plan_name ?? '',
-      tecnologia: 'FTTH',
-      tipo_persona: 'pyme',
-      datas_mbps: 100,
-      precio: 0,
-      reportar: true,
-      tiene_tv: false,
-      es_transporte: false,
-      es_dedicado: false,
+      order: '',
+      client: '',
+      product: allKnownPlans[0]?.name ?? allKnownPlans[0]?.plan_name ?? '',
+      technology: 'FTTH',
+      person_type: 'pyme',
+      data_mbps: 100,
+      price: 0,
+      report: true,
+      has_tv: false,
+      is_transport: false,
+      is_dedicated: false,
     });
   };
 
@@ -86,9 +86,9 @@ export function EtaManagementView({
   );
 
   const pendingColumns: Column<EtaDiscoveredSubscription>[] = [
-    { header: 'Orden', accessor: 'orden', sortKey: 'orden', className: 'font-bold text-white' },
-    { header: 'Cliente', accessor: (row) => textOrDash(row.cliente), sortKey: 'cliente' },
-    { header: 'Producto', accessor: (row) => textOrDash(row.producto), sortKey: 'producto', filterable: true },
+    { header: 'Orden', accessor: 'order', sortKey: 'order', className: 'font-bold text-white' },
+    { header: 'Cliente', accessor: (row) => textOrDash(row.client), sortKey: 'client' },
+    { header: 'Producto', accessor: (row) => textOrDash(row.product), sortKey: 'product', filterable: true },
     {
       header: 'Sucursal',
       accessor: (row) => textOrDash(row.sucursal),
@@ -116,42 +116,42 @@ export function EtaManagementView({
   ];
 
   const savedColumns: Column<EtaSubscriptionConfig>[] = [
-    { header: 'Orden', accessor: 'orden', sortKey: 'orden', className: 'font-bold text-white' },
-    { header: 'Cliente', accessor: (row) => textOrDash(row.cliente), sortKey: 'cliente' },
-    { header: 'Producto', accessor: (row) => textOrDash(row.producto), sortKey: 'producto', filterable: true },
+    { header: 'Orden', accessor: 'order', sortKey: 'order', className: 'font-bold text-white' },
+    { header: 'Cliente', accessor: (row) => textOrDash(row.client), sortKey: 'client' },
+    { header: 'Producto', accessor: (row) => textOrDash(row.product), sortKey: 'product', filterable: true },
     {
       header: 'Declaración',
       accessor: tipoDeclaracion,
       filterable: true,
       filterValue: tipoDeclaracion,
     },
-    { header: 'Tecnología', accessor: (row) => textOrDash(row.tecnologia), sortKey: 'tecnologia', filterable: true },
-    { header: 'Persona', accessor: (row) => textOrDash(row.tipo_persona), sortKey: 'tipo_persona', filterable: true },
-    { header: 'Mbps', accessor: 'datas_mbps', align: 'right', sortKey: 'datas_mbps' },
+    { header: 'Tecnología', accessor: (row) => textOrDash(row.technology), sortKey: 'technology', filterable: true },
+    { header: 'Persona', accessor: (row) => textOrDash(row.person_type), sortKey: 'person_type', filterable: true },
+    { header: 'Mbps', accessor: 'data_mbps', align: 'right', sortKey: 'data_mbps' },
     {
       // La renta con la que se declara este enlace. El catálogo comercial no
       // puede darla —cada dedicado negocia la suya—, así que es el único sitio
       // donde se ve si falta.
       header: 'Renta',
-      accessor: (row) => (row.precio ? formatTwoDecimals(row.precio) : '— sin fijar'),
+      accessor: (row) => (row.price ? formatTwoDecimals(row.price) : '— sin fijar'),
       align: 'right',
-      sortKey: 'precio',
+      sortKey: 'price',
       filterable: true,
-      filterValue: (row) => (row.precio ? 'Con renta' : 'Sin renta'),
+      filterValue: (row) => (row.price ? 'Con renta' : 'Sin renta'),
     },
     {
       header: 'TV',
-      accessor: (row) => (row.tiene_tv ? 'Sí' : '—'),
+      accessor: (row) => (row.has_tv ? 'Sí' : '—'),
       filterable: true,
-      filterValue: (row) => (row.tiene_tv ? 'Sí' : 'No'),
+      filterValue: (row) => (row.has_tv ? 'Sí' : 'No'),
     },
     {
       header: 'Reportar',
-      accessor: (row) => (row.reportar === false
+      accessor: (row) => (row.report === false
         ? <EyeOff className="h-4 w-4 text-slate-500" />
         : <CheckCircle2 className="h-4 w-4 text-emerald-400" />),
       filterable: true,
-      filterValue: (row) => (row.reportar === false ? 'No se reporta' : 'Se reporta'),
+      filterValue: (row) => (row.report === false ? 'No se reporta' : 'Se reporta'),
     },
     {
       header: 'Acciones',
@@ -159,7 +159,7 @@ export function EtaManagementView({
       accessor: (row) => (
         <div className="flex justify-end gap-2">
           {botonIcono(() => handleOpenEditSub(row), 'Editar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
-          {botonIcono(() => setDeletingItem({ type: 'sub', id: row.orden }), 'Eliminar', <Trash2 className="h-4 w-4" />, 'border-rose-500/30 text-rose-400 hover:bg-rose-500/10')}
+          {botonIcono(() => setDeletingItem({ type: 'sub', id: row.order }), 'Eliminar', <Trash2 className="h-4 w-4" />, 'border-rose-500/30 text-rose-400 hover:bg-rose-500/10')}
         </div>
       ),
     },
@@ -206,7 +206,7 @@ export function EtaManagementView({
                 <div><div className="font-bold text-white">{plan}</div><div className="text-[10px] uppercase text-slate-500">Sin registrar en el catálogo</div></div>
                 {/* Enlace y no formulario: el plan se da de alta en el catálogo,
                     que es de donde ETA lee su clasificación. */}
-                <a href={`/catalogos/productos/?nuevo_plan=${encodeURIComponent(plan)}`} className="rounded-xl border border-amber-500/30 p-2 text-amber-400 hover:bg-amber-500/10" title="Crear en el catálogo"><Settings2 className="w-4 h-4" /></a>
+                <a href={`/catalogos/productos/?new_plan=${encodeURIComponent(plan)}`} className="rounded-xl border border-amber-500/30 p-2 text-amber-400 hover:bg-amber-500/10" title="Crear en el catálogo"><Settings2 className="w-4 h-4" /></a>
               </div>
             ))}
             {discoveredPlans.length === 0 && <div className="col-span-full py-10 text-center text-slate-500">No hay planes pendientes.</div>}

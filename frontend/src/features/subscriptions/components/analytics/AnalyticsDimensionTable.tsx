@@ -23,8 +23,8 @@ export interface AnalyticsDimensionTableProps {
  */
 export function AnalyticsDimensionTable({ rows, dimension, period }: AnalyticsDimensionTableProps) {
   const label = DIMENSION_LABELS[dimension as keyof typeof DIMENSION_LABELS] ?? dimension;
-  const { semaforo } = useTargetsConfig();
-  const columns = useMemo(() => buildAnalyticsDimensionColumns(semaforo), [semaforo]);
+  const { thresholds } = useTargetsConfig();
+  const columns = useMemo(() => buildAnalyticsDimensionColumns(thresholds), [thresholds]);
 
   return (
     <NeonContainer

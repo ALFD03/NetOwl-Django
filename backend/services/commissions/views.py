@@ -30,6 +30,7 @@ from services.commissions.analytics.calculation import (
 from services.commissions.analytics.closing import CannotClose, close_period, reopen_period
 from services.commissions.analytics.queries import default_period, informe, periodos, propuesta
 from services.commissions.analytics.rules import ALREADY_PAID, COUNT, DONT_COUNT, NORMAL, VALID
+from services.commissions.api_keys import COMMISSION_KEYS
 from services.commissions.models import (
     ComisionCierreArchivado,
     ComisionPeriodo,
@@ -54,7 +55,7 @@ DELETE = ["can_delete_comisiones"]
 _MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
-def _month(value: Any, field: str = "periodo") -> str:
+def _month(value: Any, field: str = "period") -> str:
     text = str(value or "").strip()
     if not _MONTH.match(text):
         raise ApiError(f"«{field}» tiene que ser un mes YYYY-MM.")
@@ -133,15 +134,15 @@ def _archive(a: ComisionCierreArchivado) -> dict[str, Any]:
 
 # --- El informe ---
 
-@endpoint(perms=VIEW, nullable=True)
+@endpoint(perms=VIEW, nullable=True, keys=COMMISSION_KEYS)
 def report(request):
-    """El informe de un periodo (`?periodo=YYYY-MM`); sin él, el más reciente o el que toca crear.
+    """El informe de un periodo (`?period=YYYY-MM`); sin él, el más reciente o el que toca crear.
 
     El detalle venta a venta se pide aparte a `sales/`.
     """
     conditions = CondicionesComision.actual()
     existing = periodos(conditions.dia_corte)
-    requested = request.GET.get("periodo") or ""
+    requested = request.GET.get("period") or ""
     key = requested if _MONTH.match(requested) else (
         existing[0]["periodo"] if existing else default_period(conditions.dias_espera)
     )
@@ -182,10 +183,10 @@ def report(request):
     }
 
 
-@endpoint(perms=VIEW, nullable=True)
+@endpoint(perms=VIEW, nullable=True, keys=COMMISSION_KEYS)
 def sales(request):
     """El detalle venta a venta de un periodo, para el desglose y la exportación."""
-    key = request.GET.get("periodo") or ""
+    key = request.GET.get("period") or ""
     if not _MONTH.match(key):
         raise ApiError("Periodo invalido.")
     period = ComisionPeriodo.objects.filter(periodo=key).first()
@@ -198,20 +199,20 @@ def sales(request):
     return {"status": "success", "ventas": rows}
 
 
-@endpoint(methods=["POST"], perms=MANAGE, rate="30/m")
+@endpoint(methods=["POST"], perms=MANAGE, rate="30/m", keys=COMMISSION_KEYS)
 @_conflicts
 def period_save(request):
     """Crea un periodo en borrador o cambia sus días promocionales.
 
-    `inicio` solo se acepta si el mes anterior no tiene periodo; mover el
-    `inicio_promo` mueve el inicio del siguiente, que no puede estar cerrado.
+    `start` solo se acepta si el mes anterior no tiene periodo; mover el
+    `promo_start` mueve el inicio del siguiente, que no puede estar cerrado.
     """
-    data = json_body(request)
+    data = COMMISSION_KEYS.back(json_body(request))
     key = _month(data.get("periodo"))
-    promo_start = _date(data.get("inicio_promo"), "inicio_promo")
+    promo_start = _date(data.get("inicio_promo"), "promo_start")
     if promo_start.strftime("%Y-%m") != key:
         raise ApiError("Los días promocionales del periodo tienen que empezar dentro de su mes.")
-    cutoff = _date(data["corte_adelantos"], "corte_adelantos") if data.get("corte_adelantos") else None
+    cutoff = _date(data["corte_adelantos"], "advance_cutoff") if data.get("corte_adelantos") else None
     if cutoff and cutoff.strftime("%Y-%m") != next_month(key):
         raise ApiError("El corte de los pagos adelantados tiene que caer en el mes siguiente: es cuando se saca el informe.")
 
@@ -219,7 +220,7 @@ def period_save(request):
     if previous:
         start = previous.inicio_promo
     else:
-        start = _date(data.get("inicio"), "inicio")
+        start = _date(data.get("inicio"), "start")
         if start.strftime("%Y-%m") != previous_month(key):
             raise ApiError("El inicio tiene que caer en el mes anterior: es donde empezaron sus días promocionales.")
     if promo_start <= start:
@@ -245,14 +246,14 @@ def period_save(request):
     return {"status": "success", "message": f"Periodo {key} guardado."}
 
 
-@endpoint(methods=["POST"], perms=MANAGE, rate="60/m")
+@endpoint(methods=["POST"], perms=MANAGE, rate="60/m", keys=COMMISSION_KEYS)
 @_conflicts
 def review_save(request):
-    """Decide ventas por facturar; `decision` vacía deshace y `ordenes` decide varias.
+    """Decide ventas por facturar; `decision` vacía deshace y `orders` decide varias.
 
     `contar` o `no_contar`; en el primer periodo también `ya_pagada` o `normal`.
     """
-    data = json_body(request)
+    data = COMMISSION_KEYS.back(json_body(request))
     period = _open_period(_month(data.get("periodo")))
     orders = _orders(data, 5000)
     decision = str(data.get("decision") or "").strip()
@@ -278,11 +279,11 @@ def review_save(request):
     }
 
 
-@endpoint(methods=["POST"], perms=MANAGE, rate="30/m")
+@endpoint(methods=["POST"], perms=MANAGE, rate="30/m", keys=COMMISSION_KEYS)
 @_conflicts
 def manual_add(request):
-    """Agrega ventas a mano (`ordenes`, `nota` obligatoria). Todo o nada."""
-    data = json_body(request)
+    """Agrega ventas a mano (`orders`, `note` obligatoria). Todo o nada."""
+    data = COMMISSION_KEYS.back(json_body(request))
     period = _open_period(_month(data.get("periodo")))
     orders = _orders(data, 200)
     note = str(data.get("nota") or "").strip()[:255]
@@ -311,11 +312,11 @@ def manual_add(request):
     return {"status": "success", "message": f"{n} venta{'s' if n != 1 else ''} agregada{'s' if n != 1 else ''}."}
 
 
-@endpoint(methods=["POST"], perms=MANAGE, rate="30/m")
+@endpoint(methods=["POST"], perms=MANAGE, rate="30/m", keys=COMMISSION_KEYS)
 @_conflicts
 def manual_remove(request):
     """Quita una venta agregada a mano."""
-    data = json_body(request)
+    data = COMMISSION_KEYS.back(json_body(request))
     period = _open_period(_month(data.get("periodo")))
     order = str(data.get("orden") or "").strip()
     deleted, _ = VentaManual.objects.filter(periodo=period.periodo, orden=order).delete()
@@ -324,11 +325,11 @@ def manual_remove(request):
     return {"status": "success", "message": f"{order} quitada."}
 
 
-@endpoint(methods=["POST"], perms=MANAGE, rate="60/m")
+@endpoint(methods=["POST"], perms=MANAGE, rate="60/m", keys=COMMISSION_KEYS)
 @_conflicts
 def indicator_save(request):
     """El % de cumplimiento o de crecimiento a mano de una persona; vacío vuelve al calculado."""
-    data = json_body(request)
+    data = COMMISSION_KEYS.back(json_body(request))
     period = _open_period(_month(data.get("periodo")))
     person = PersonaVentas.objects.filter(pk=data.get("persona_id")).first()
     if person is None:
@@ -342,14 +343,14 @@ def indicator_save(request):
     if "cumplimiento_pct" in data:
         if not any(p.get("factor") not in (None, "ninguno") for p in pieces):
             raise ApiError("Su rol no cobra con un % de cumplimiento.")
-        value = _decimal(data.get("cumplimiento_pct"), "cumplimiento_pct")
+        value = _decimal(data.get("cumplimiento_pct"), "compliance_pct")
         if value is not None and value < 0:
             raise ApiError("El cumplimiento no puede ser negativo.")
         row.cumplimiento_pct = value
     if "crecimiento_pct" in data:
         if not any("escalon_crecimiento" in p for p in pieces):
             raise ApiError("Su rol no cobra por el crecimiento de su unidad.")
-        row.crecimiento_pct = _decimal(data.get("crecimiento_pct"), "crecimiento_pct")
+        row.crecimiento_pct = _decimal(data.get("crecimiento_pct"), "growth_pct")
     row.actualizado_por = request.user
 
     if row.cumplimiento_pct is None and row.crecimiento_pct is None:
@@ -359,7 +360,7 @@ def indicator_save(request):
     return {"status": "success", "message": "Guardado."}
 
 
-@endpoint(perms=VIEW, rate="30/m")
+@endpoint(perms=VIEW, rate="30/m", keys=COMMISSION_KEYS)
 def current_rate(request):
     """La tasa oficial del BCV de hoy, como referencia (no se guarda). 502 si falla."""
     try:
@@ -369,20 +370,20 @@ def current_rate(request):
     return {"status": "success", "tasa": rate, "fuente": source}
 
 
-@endpoint(methods=["POST"], perms=MANAGE, rate="10/m")
+@endpoint(methods=["POST"], perms=MANAGE, rate="10/m", keys=COMMISSION_KEYS)
 @_conflicts
 def period_close(request):
     """Cierra el periodo: congela ventas, pagos y condiciones. 409 si queda algo pendiente."""
-    period = _open_period(_month(json_body(request).get("periodo")))
+    period = _open_period(_month(COMMISSION_KEYS.back(json_body(request)).get("periodo")))
     close_period(period, request.user)
     return {"status": "success", "message": f"Periodo {period.periodo} cerrado."}
 
 
-@endpoint(methods=["POST"], perms=REOPEN, rate="10/m")
+@endpoint(methods=["POST"], perms=REOPEN, rate="10/m", keys=COMMISSION_KEYS)
 @_conflicts
 def period_reopen(request):
-    """Devuelve un periodo cerrado a borrador archivando su cierre. Exige `motivo` y `confirmacion`."""
-    data = json_body(request)
+    """Devuelve un periodo cerrado a borrador archivando su cierre. Exige `reason` y `confirmation`."""
+    data = COMMISSION_KEYS.back(json_body(request))
     key = _month(data.get("periodo"))
     if str(data.get("confirmacion") or "").strip() != key:
         raise ApiError(f"Para reabrir, escribe el periodo exacto ({key}) en la confirmación.")
@@ -399,11 +400,11 @@ def period_reopen(request):
     }
 
 
-@endpoint(methods=["POST"], perms=DELETE, rate="10/m")
+@endpoint(methods=["POST"], perms=DELETE, rate="10/m", keys=COMMISSION_KEYS)
 @_conflicts
 def period_delete(request):
     """Borra un informe en borrador con lo decidido en él. 409 si está o estuvo cerrado."""
-    data = json_body(request)
+    data = COMMISSION_KEYS.back(json_body(request))
     key = _month(data.get("periodo"))
     if str(data.get("confirmacion") or "").strip() != key:
         raise ApiError(f"Para borrar, escribe el periodo exacto ({key}) en la confirmación.")
@@ -421,7 +422,7 @@ def period_delete(request):
     with transaction.atomic():
         deleted = {
             "revisiones": RevisionComision.objects.filter(periodo_origen=key).delete()[0],
-            "ventas_manuales": VentaManual.objects.filter(periodo=key).delete()[0],
+            "manuales": VentaManual.objects.filter(periodo=key).delete()[0],
             "indicadores": IndicadorComision.objects.filter(periodo=key).delete()[0],
         }
         period.delete()
@@ -429,13 +430,13 @@ def period_delete(request):
         "status": "success",
         "message": (
             f"Informe {key} borrado, con {deleted['revisiones']} revisión(es), "
-            f"{deleted['ventas_manuales']} venta(s) a mano y {deleted['indicadores']} indicador(es)."
+            f"{deleted['manuales']} venta(s) a mano y {deleted['indicadores']} indicador(es)."
         ),
         "borrado": deleted,
     }
 
 
-@endpoint(perms=VIEW, nullable=True)
+@endpoint(perms=VIEW, nullable=True, keys=COMMISSION_KEYS)
 def archive_detail(request, archive_id: int):
     """La copia completa de un cierre archivado, para descargarla."""
     archive = ComisionCierreArchivado.objects.select_related("periodo").get(pk=archive_id)
@@ -457,7 +458,7 @@ def _pyme_plans() -> list[dict[str, Any]]:
     ]
 
 
-@endpoint(perms=MANAGE, nullable=True)
+@endpoint(perms=MANAGE, nullable=True, keys=COMMISSION_KEYS)
 def conditions(request):
     """La ventana de pago y los % PYME de cada plan."""
     c = CondicionesComision.actual()
@@ -473,14 +474,14 @@ def conditions(request):
     }
 
 
-@endpoint(methods=["POST"], perms=MANAGE, rate="30/m")
+@endpoint(methods=["POST"], perms=MANAGE, rate="30/m", keys=COMMISSION_KEYS)
 @_conflicts
 def conditions_save(request):
     """Guarda la ventana de pago. Solo afecta a lo que se calcule después."""
-    data = json_body(request)
-    day = _decimal(data.get("dia_promocional"), "dia_promocional", nullable=False)
-    wait = _decimal(data.get("dias_espera"), "dias_espera", nullable=False)
-    cutoff = _decimal(data.get("dia_corte"), "dia_corte", nullable=False)
+    data = COMMISSION_KEYS.back(json_body(request))
+    day = _decimal(data.get("dia_promocional"), "promo_day", nullable=False)
+    wait = _decimal(data.get("dias_espera"), "wait_days", nullable=False)
+    cutoff = _decimal(data.get("dia_corte"), "cutoff_day", nullable=False)
     if not 1 <= day <= 31 or day != int(day):
         raise ApiError("El día promocional es un día del mes, de 1 a 31.")
     if not 1 <= cutoff <= 31 or cutoff != int(cutoff):

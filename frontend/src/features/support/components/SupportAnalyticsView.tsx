@@ -70,7 +70,7 @@ export function SupportAnalyticsView({ data, dimension }: Props) {
         dimension={dimension}
         breakdown={breakdown}
         groupName={activeGroupName}
-        periodo={periodo}
+        period={periodo}
         onClose={closeBreakdown}
       />
     </div>

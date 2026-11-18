@@ -16,19 +16,19 @@ const NO_ROWS: CrmDimensionRow[] = [];
  * anterior, y el efecto no tiene que vaciar ni marcar nada a mano.
  */
 export function useCrmPeriodDimensions(period: string | null) {
-  const [resultado, setResultado] = useState<{ period: string; rows: CrmDimensionRow[] } | null>(null);
+  const [loaded, setResult] = useState<{ period: string; rows: CrmDimensionRow[] } | null>(null);
 
   useEffect(() => {
     if (!period) return;
 
     let active = true;
     crmApi.getDimensions(period)
-      .then((result) => { if (active) setResultado({ period, rows: result.dimensiones ?? [] }); })
-      .catch(() => { if (active) setResultado({ period, rows: [] }); });
+      .then((result) => { if (active) setResult({ period, rows: result.dimensions ?? [] }); })
+      .catch(() => { if (active) setResult({ period, rows: [] }); });
 
     return () => { active = false; };
   }, [period]);
 
-  const current = period && resultado?.period === period ? resultado : null;
+  const current = period && loaded?.period === period ? loaded : null;
   return { rows: current?.rows ?? NO_ROWS, loading: Boolean(period) && !current };
 }

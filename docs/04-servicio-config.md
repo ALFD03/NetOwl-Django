@@ -78,9 +78,9 @@ permiso; la lista se elige siempre por persona y el grupo ni la lleva ni la sinc
 - **Solo restringe la página Unidades de negocio** (y su `/api/subscriptions/business-units/`). El Reporte de ventas, que
   tiene su propio permiso, no cambia.
 - El recorte es del servidor (`subscriptions.analytics.queries.restrict_units`): el cliente reagrupa cada
-  día desde `dayMetrics` y `zonasConfig`, así que los dos llegan recortados a las zonas visibles.
+  día desde `dayMetrics` y `zonesConfig`, así que los dos llegan recortados a las zonas visibles.
 - **El consolidado FTTH se ve siempre**, el de toda la empresa. Como sus nodos ya no llegan, viaja sumado en
-  `buData.ftth_consolidado` (un nodo por corte) y no sigue los filtros de sucursal, búsqueda o métrica.
+  `buData.ftth_totals` (un nodo por corte) y no sigue los filtros de sucursal, búsqueda o métrica.
 - El techo de la administración vale también aquí: nadie escribe en la lista de otro unidades que no ve
   (`UnitScope.covers`, que compara las listas guardadas aunque no rijan) ni toca una cuenta con
   unidades que no ve (`can_act_on`).
@@ -118,12 +118,12 @@ lo tenía; `config/0011` lo quitó), y las vistas aplican además dos reglas:
   cuenta, editar su matriz o guardar un grupo con un permiso que quien lo hace
   no tiene responde 403 con la lista. Lo que la matriz ya traía se puede
   quitar. Al asignar un grupo cuenta la matriz del grupo.
-- **Nadie toca una cuenta con más permisos que la suya** (`puede_actuar_sobre`):
+- **Nadie toca una cuenta con más permisos que la suya** (`can_act_on`):
   la cuenta objetivo tiene que tener un subconjunto de los permisos de quien
   actúa; a un superusuario solo lo toca otro. La propia cuenta tampoco se
   edita, ni el propio grupo.
 
-La pantalla recibe `editable` por usuario y grupo y `concedibles` (la matriz de
+La pantalla recibe `editable` por usuario y grupo y `grantable` (la matriz de
 quien mira) para esconder lo que el servidor rechazaría; la comprobación real
 es la del servidor.
 
@@ -207,6 +207,13 @@ permisos individuales; quitarlo los vuelve a aceptar del cuerpo.
 
 - `endpoint.py`: el decorador `@endpoint`, `ApiError` y el formato de error común.
   Una vista solo lee y devuelve datos; ver [11 · Endpoints](11-api-endpoints.md).
+- `keys.py`: `KeyMap`, el mapa biyectivo español → inglés de las claves de la API.
+  `@endpoint(keys=...)` lo aplica a la respuesta (`out`) y la vista traduce el cuerpo
+  con `back()`. Solo renombra claves de dict que coinciden exactamente; los valores
+  no se tocan. Rechaza al importarse una clave con dos traducciones, dos claves con
+  la misma traducción y una clave que sea a la vez origen y destino. Los mapas viven
+  en `services/<dominio>/api_keys.py`; las condiciones de pago (`CONDITION_KEYS`) las
+  comparten Catálogos y Comisiones.
 - `middleware.py`: `ApiTokenMiddleware` resuelve `Authorization: Bearer` en `/api/`.
 - `views.py` / `users.py` / `urls.py`: `/api/auth/` (login, logout, me, tokens,
   usuarios y grupos).

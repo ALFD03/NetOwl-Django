@@ -84,21 +84,21 @@ export function AnalysisRunnerCard({
   onRunBatch,
 }: AnalysisRunnerCardProps) {
   const [selectedMonth, setSelectedMonth] = useState('');
-  const [modo, setModo] = useState<'uno' | 'varios'>('uno');
-  const [desde, setFrom] = useState('');
-  const [hasta, setUntil] = useState('');
+  const [mode, setMode] = useState<'uno' | 'varios'>('uno');
+  const [from, setFrom] = useState('');
+  const [until, setUntil] = useState('');
   // Los jobs del lote en curso (o del último), y el que se mira en la consola.
   const [batch, setBatch] = useState<AnalysisJob[] | null>(null);
   const [activeBatch, setActiveBatch] = useState(false);
-  const [mirando, setMirando] = useState<string | null>(null);
-  const meses = monthsBetween(desde, hasta);
+  const [watching, setWatching] = useState<string | null>(null);
+  const batchMonths = monthsBetween(from, until);
   const [validation, setValidation] = useState<ActionStatus | null>(null);
   // Estado vivo del job: lo que llega en cada sondeo mientras el worker calcula.
   const [job, setJob] = useState<AnalysisJob | null>(null);
   const [isAttached, setIsAttached] = useState(false);
   // Solo mientras se encola, no mientras se calcula: el boton vuelve a estar
   // disponible en cuanto el analisis tiene su sitio en la cola.
-  const [enviando, setEnviando] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const analysis = useAsyncAction(onRun, {
     successMessage: (result) => successMessage(result, selectedMonth),
@@ -115,10 +115,10 @@ export function AnalysisRunnerCard({
    * error: se escribe como aviso, y manda sobre el suyo porque `validation`
    * tiene preferencia.
    */
-  const onJobUpdate = useCallback((vivo: AnalysisJob) => {
-    setJob(vivo);
-    if (vivo.status === 'cancelled') {
-      setValidation({ type: 'warning', text: vivo.message || 'Análisis cancelado.' });
+  const onJobUpdate = useCallback((alive: AnalysisJob) => {
+    setJob(alive);
+    if (alive.status === 'cancelled') {
+      setValidation({ type: 'warning', text: alive.message || 'Análisis cancelado.' });
     }
   }, []);
 
@@ -129,55 +129,55 @@ export function AnalysisRunnerCard({
     }
     setValidation(null);
     setJob(null);
-    setEnviando(true);
+    setSending(true);
     try {
       // El primer sondeo con el job ya creado es la senal de que esta encolado.
-      await analysis.run(selectedMonth || null, (vivo) => {
-        setEnviando(false);
-        onJobUpdate(vivo);
+      await analysis.run(selectedMonth || null, (alive) => {
+        setSending(false);
+        onJobUpdate(alive);
       });
     } finally {
-      setEnviando(false);
+      setSending(false);
     }
   };
 
   const handleRunBatch = async () => {
     if (!onRunBatch) return;
-    if (meses.length === 0) {
+    if (batchMonths.length === 0) {
       setValidation({ type: 'error', text: 'Elige el primer y el último mes del rango.' });
       return;
     }
-    if (meses.length > MAX_BATCH_MONTHS) {
-      setValidation({ type: 'error', text: `Como mucho ${MAX_BATCH_MONTHS} meses por lote; el rango tiene ${meses.length}.` });
+    if (batchMonths.length > MAX_BATCH_MONTHS) {
+      setValidation({ type: 'error', text: `Como mucho ${MAX_BATCH_MONTHS} meses por lote; el rango tiene ${batchMonths.length}.` });
       return;
     }
     setValidation(null);
-    setEnviando(true);
+    setSending(true);
     let jobs: AnalysisJob[];
     try {
-      const response = await onRunBatch(meses);
-      jobs = [...response.jobs, ...response.omitidos].sort((a, b) => a.periodo.localeCompare(b.periodo));
+      const response = await onRunBatch(batchMonths);
+      jobs = [...response.jobs, ...response.skipped].sort((a, b) => a.period.localeCompare(b.period));
       setValidation({ type: 'info', text: response.message });
     } catch (error: unknown) {
       setValidation({ type: 'error', text: getApiErrorMessage(error, errorMessage) });
       return;
     } finally {
-      setEnviando(false);
+      setSending(false);
     }
 
-    setMirando(null);
+    setWatching(null);
     setActiveBatch(true);
     try {
-      const finales = await followJobs(jobs, setBatch);
-      const fallidos = finales.filter((j) => j.status === 'error').length;
-      const cancelados = finales.filter((j) => j.status === 'cancelled').length;
-      const listos = finales.length - fallidos - cancelados;
-      const resumen = [`${listos} de ${finales.length} meses calculados`];
-      if (fallidos) resumen.push(`${fallidos} con error`);
-      if (cancelados) resumen.push(`${cancelados} cancelados`);
+      const finished = await followJobs(jobs, setBatch);
+      const failed = finished.filter((j) => j.status === 'error').length;
+      const cancelled = finished.filter((j) => j.status === 'cancelled').length;
+      const succeeded = finished.length - failed - cancelled;
+      const summary = [`${succeeded} de ${finished.length} meses calculados`];
+      if (failed) summary.push(`${failed} con error`);
+      if (cancelled) summary.push(`${cancelled} cancelados`);
       setValidation({
-        type: fallidos ? 'error' : cancelados ? 'warning' : 'success',
-        text: `${resumen.join(' · ')}.`,
+        type: failed ? 'error' : cancelled ? 'warning' : 'success',
+        text: `${summary.join(' · ')}.`,
       });
     } finally {
       setActiveBatch(false);
@@ -224,9 +224,9 @@ export function AnalysisRunnerCard({
   // Mientras corre manda el log del job; al terminar, el que devolvio la accion.
   // En un lote, el del mes elegido o, si no se eligió ninguno, el que calcula
   // ahora (o el último que terminó).
-  const inBatch = modo === 'varios' && batch !== null;
+  const inBatch = mode === 'varios' && batch !== null;
   const batchJob = inBatch
-    ? (batch.find((j) => j.id === mirando)
+    ? (batch.find((j) => j.id === watching)
       ?? batch.find((j) => j.status === 'running')
       ?? [...batch].reverse().find((j) => j.status !== 'pending')
       ?? null)
@@ -248,24 +248,24 @@ export function AnalysisRunnerCard({
                 { key: 'uno', label: 'Un mes', icon: CalendarDays },
                 { key: 'varios', label: 'Varios meses', icon: CalendarRange },
               ]}
-              activeKey={modo}
+              activeKey={mode}
               onChange={(key) => {
-                setModo(key as 'uno' | 'varios');
+                setMode(key as 'uno' | 'varios');
                 setValidation(null);
               }}
             />
           )}
-          {modo === 'varios' && onRunBatch ? (
+          {mode === 'varios' && onRunBatch ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <MonthPicker value={desde} onChange={setFrom} placeholder="Desde..." />
-              <MonthPicker value={hasta} onChange={setUntil} placeholder="Hasta..." />
+              <MonthPicker value={from} onChange={setFrom} placeholder="Desde..." />
+              <MonthPicker value={until} onChange={setUntil} placeholder="Hasta..." />
               <Button
                 onClick={handleRunBatch}
-                isLoading={enviando}
-                disabled={enviando || activeBatch || meses.length === 0}
+                isLoading={sending}
+                disabled={sending || activeBatch || batchMonths.length === 0}
                 icon={<Play className="h-4 w-4 fill-current" />}
               >
-                {meses.length > 1 ? `Analizar ${meses.length} meses` : runLabel}
+                {batchMonths.length > 1 ? `Analizar ${batchMonths.length} meses` : runLabel}
               </Button>
             </div>
           ) : (
@@ -273,8 +273,8 @@ export function AnalysisRunnerCard({
               <MonthPicker value={selectedMonth} onChange={setSelectedMonth} placeholder={monthPlaceholder} />
               <Button
                 onClick={handleRun}
-                isLoading={enviando}
-                disabled={enviando || (requireMonth && !selectedMonth)}
+                isLoading={sending}
+                disabled={sending || (requireMonth && !selectedMonth)}
                 icon={<Play className="h-4 w-4 fill-current" />}
               >
                 {runLabel}
@@ -285,11 +285,11 @@ export function AnalysisRunnerCard({
       }
     >
       <StatusMessage status={validation ?? analysis.status} className="mb-4" />
-      {inBatch && <MonthBatch jobs={batch} seleccionado={batchJob?.id ?? null} onSeleccionar={setMirando} />}
+      {inBatch && <MonthBatch jobs={batch} selected={batchJob?.id ?? null} onSelect={setWatching} />}
       {batchProgress && batchJob && (
         <div className="mb-4">
           <ProgressBar
-            label={`${batchJob.periodo} · ${batchProgress.label || 'Calculando...'}`}
+            label={`${batchJob.period} · ${batchProgress.label || 'Calculando...'}`}
             percent={(batchProgress.done / batchProgress.total) * 100}
             valueLabel={`${batchProgress.done} / ${batchProgress.total}`}
           />

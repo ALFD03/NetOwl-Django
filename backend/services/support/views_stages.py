@@ -10,6 +10,7 @@ from django.db import IntegrityError
 from services.config.api import ApiError, endpoint, json_body
 from services.support.analytics.config import CANCELED_STAGES, ESCALATION_STAGE, RESOLVED_STAGES
 from services.support.analytics.flow import stage_usage, stages_to_classify
+from services.support.api_keys import SUPPORT_KEYS
 from services.support.models import EtapaSoporte
 
 TEAMS = dict(EtapaSoporte.EQUIPOS)
@@ -27,7 +28,7 @@ def _row(stage: EtapaSoporte, usage: dict[str, int]) -> dict:
     }
 
 
-@endpoint(perms=["can_manage_support_users"])
+@endpoint(perms=["can_manage_support_users"], keys=SUPPORT_KEYS)
 def stages(request):
     """El catálogo, lo que falta clasificar y las reglas fijas."""
     usage = stage_usage()
@@ -38,14 +39,14 @@ def stages(request):
         "tipos": [{"value": k, "label": v} for k, v in EtapaSoporte.TIPOS],
         "etapaEscalamiento": ESCALATION_STAGE,
         "etapasCierre": sorted({"Resuelto", "Cancelado"}),
-        "nuevaEtapa": str(request.GET.get("nueva_etapa") or "")[:200],
+        "nuevaEtapa": str(request.GET.get("new_stage") or "")[:200],
     }
 
 
 @endpoint(methods=["POST"], perms=["can_manage_support_users"], rate="60/m")
 def stage_save(request):
     """Alta o edición de una etapa (sin `id` es un alta)."""
-    data = json_body(request)
+    data = SUPPORT_KEYS.back(json_body(request))
     name = " ".join(str(data.get("nombre") or "").split())[:200]
     team = str(data.get("equipo") or "")
     kind = str(data.get("tipo") or "")

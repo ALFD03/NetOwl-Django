@@ -53,7 +53,7 @@ receives.
   neighbours are prefetched while the bar sits still, the last resolved day stays
   on screen while a new one travels, and the cache is capped because holding the
   whole month is the original problem. `shared/hooks/useDayCuts` owns the
-  selected day and writes `?dia=` into the URL with `replaceState`, so a reload
+  selected day and writes `?day=` into the URL with `replaceState`, so a reload
   lands where you were without costing a visit.
 
 Nothing on either half recomputes anything: every cut was written by the monthly
@@ -320,7 +320,7 @@ pages share (tab bar, action column, delete confirmation); `useCatalogs` serves 
 **Notificaciones** is not a catalogue but what is *missing*: names already imported
 that no row recognises, per area (products, zones), plus the ones someone decided to
 ignore. Each pending row offers the two answers the server cannot tell apart — register
-it (a link to the right page with `?nuevo_plan=` / `?nueva_zona=`), or ignore it in its
+it (a link to the right page with `?new_plan=` / `?new_zone=`), or ignore it in its
 area. Pending products block an import or an analysis; pending zones do not.
 
 The same pair of answers appears in `CatalogBlockModal`

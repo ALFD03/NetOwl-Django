@@ -38,14 +38,14 @@ import { DeactivateForm, DepartmentChangeForm, DepartmentForm, UserForm, shortDa
  * repasar.
  */
 export function SupportUsersView({
-  usuarios,
-  departamentos,
-  pendientes,
-  trasBaja,
-  sufijo,
-  nuevoUsuario,
+  users,
+  departments,
+  pending,
+  afterChurn,
+  suffix,
+  newUser,
 }: SupportUsersProps) {
-  const d = useSupportUsers({ departamentos, nuevoUsuario });
+  const d = useSupportUsers({ departments, newUser });
 
   const enviar = (event: FormEvent, accion: () => void) => {
     event.preventDefault();
@@ -79,8 +79,8 @@ export function SupportUsersView({
 
   const pendingColumns: Column<PendingUser>[] = [
     { header: 'Nombre en los tickets', accessor: 'literal', sortKey: 'literal' },
-    { header: 'Asignados', accessor: 'asignados', align: 'right', sortKey: 'asignados' },
-    { header: 'Creados', accessor: 'creados', align: 'right', sortKey: 'creados' },
+    { header: 'Asignados', accessor: 'assigned', align: 'right', sortKey: 'assigned' },
+    { header: 'Creados', accessor: 'created', align: 'right', sortKey: 'created' },
     {
       header: 'Acciones',
       align: 'right',
@@ -89,7 +89,7 @@ export function SupportUsersView({
           <Button
             size="sm"
             icon={<UserPlus className="h-4 w-4" />}
-            onClick={() => d.crearUsuarioDesde(row.nombre_odoo)}
+            onClick={() => d.crearUsuarioDesde(row.odoo_name)}
           >
             Registrar
           </Button>
@@ -101,34 +101,34 @@ export function SupportUsersView({
   const rowButton = 'rounded-lg border p-2';
 
   const userColumns: Column<SupportUser>[] = [
-    { header: 'Nombre en Odoo', accessor: 'nombre_odoo', sortKey: 'nombre_odoo' },
-    { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Apellido', accessor: (row) => row.apellido || '—', sortKey: 'apellido' },
+    { header: 'Nombre en Odoo', accessor: 'odoo_name', sortKey: 'odoo_name' },
+    { header: 'Nombre', accessor: 'name', sortKey: 'name' },
+    { header: 'Apellido', accessor: (row) => row.last_name || '—', sortKey: 'last_name' },
     {
       header: 'Departamento',
       accessor: (row) => (
         <span>
-          {row.departamento}
-          {row.historial.length > 1 && (
+          {row.department}
+          {row.timeline.length > 1 && (
             <span className="ml-2 text-[10px] text-slate-500" title="Departamentos por los que ha pasado">
-              ({row.historial.length})
+              ({row.timeline.length})
             </span>
           )}
         </span>
       ),
-      sortKey: 'departamento',
+      sortKey: 'department',
       filterable: true,
     },
-    { header: 'Ingreso', accessor: (row) => shortDate(row.fecha_ingreso), sortKey: 'fecha_ingreso' },
+    { header: 'Ingreso', accessor: (row) => shortDate(row.start_date), sortKey: 'start_date' },
     {
       header: 'Estado',
       accessor: (row) =>
-        row.activo ? (
+        row.active ? (
           <span className="text-emerald-400">Activo</span>
         ) : (
-          <span className="text-rose-400">Baja · {shortDate(row.fecha_egreso)}</span>
+          <span className="text-rose-400">Baja · {shortDate(row.end_date)}</span>
         ),
-      sortKey: 'activo',
+      sortKey: 'active',
     },
     {
       header: 'Acciones',
@@ -146,13 +146,13 @@ export function SupportUsersView({
           <button
             type="button"
             onClick={() => d.abrirCambio(row)}
-            disabled={!row.activo}
+            disabled={!row.active}
             className={`${rowButton} border-violet-500/30 text-violet-400 hover:bg-violet-500/10 disabled:opacity-30`}
-            title={row.activo ? 'Cambiar departamento' : 'Dado de baja: reactívalo antes de moverlo'}
+            title={row.active ? 'Cambiar departamento' : 'Dado de baja: reactívalo antes de moverlo'}
           >
             <ArrowRightLeft className="h-4 w-4" />
           </button>
-          {row.activo ? (
+          {row.active ? (
             <button
               type="button"
               onClick={() => d.abrirBaja(row)}
@@ -174,7 +174,7 @@ export function SupportUsersView({
           )}
           <button
             type="button"
-            onClick={() => d.setBorrando({ tipo: 'usuarios', id: row.id, nombre: row.nombre_odoo })}
+            onClick={() => d.setBorrando({ type: 'usuarios', id: row.id, name: row.odoo_name })}
             className={`${rowButton} border-rose-500/30 text-rose-400 hover:bg-rose-500/10`}
             title="Eliminar (solo para registros hechos por error; para una salida, dar de baja)"
           >
@@ -186,18 +186,18 @@ export function SupportUsersView({
   ];
 
   const afterChurnColumns: Column<UserAfterChurn>[] = [
-    { header: 'Usuario', accessor: 'nombre_odoo', sortKey: 'nombre_odoo' },
-    { header: 'Baja', accessor: (row) => shortDate(row.fecha_egreso), sortKey: 'fecha_egreso' },
-    { header: 'Asignados', accessor: 'asignados', align: 'right', sortKey: 'asignados' },
-    { header: 'Creados', accessor: 'creados', align: 'right', sortKey: 'creados' },
-    { header: 'Último ticket', accessor: (row) => shortDate(row.ultimo), sortKey: 'ultimo' },
+    { header: 'Usuario', accessor: 'odoo_name', sortKey: 'odoo_name' },
+    { header: 'Baja', accessor: (row) => shortDate(row.end_date), sortKey: 'end_date' },
+    { header: 'Asignados', accessor: 'assigned', align: 'right', sortKey: 'assigned' },
+    { header: 'Creados', accessor: 'created', align: 'right', sortKey: 'created' },
+    { header: 'Último ticket', accessor: (row) => shortDate(row.last), sortKey: 'last' },
   ];
 
   const departmentColumns: Column<SupportDepartment>[] = [
-    { header: 'Departamento', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Usuarios', accessor: 'usuarios', align: 'right', sortKey: 'usuarios' },
+    { header: 'Departamento', accessor: 'name', sortKey: 'name' },
+    { header: 'Usuarios', accessor: 'users', align: 'right', sortKey: 'users' },
     acciones<SupportDepartment>(d.editarDepartamento, (row) =>
-      d.setBorrando({ tipo: 'departamentos', id: row.id, nombre: row.nombre })),
+      d.setBorrando({ type: 'departamentos', id: row.id, name: row.name })),
   ];
 
   // La pestaña de pendientes no tiene alta propia: lo que hay ahí se resuelve
@@ -217,10 +217,10 @@ export function SupportUsersView({
               activeKey={d.vista}
               onChange={(key) => d.setVista(key as DirectoryView)}
               options={[
-                { key: 'pendientes', label: `Por registrar (${pendientes.length})`, icon: AlertTriangle },
-                { key: 'trasBaja', label: `Tras la baja (${trasBaja.length})`, icon: UserX },
-                { key: 'usuarios', label: `Usuarios (${usuarios.length})`, icon: Contact },
-                { key: 'departamentos', label: `Departamentos (${departamentos.length})`, icon: Building2 },
+                { key: 'pendientes', label: `Por registrar (${pending.length})`, icon: AlertTriangle },
+                { key: 'trasBaja', label: `Tras la baja (${afterChurn.length})`, icon: UserX },
+                { key: 'usuarios', label: `Usuarios (${users.length})`, icon: Contact },
+                { key: 'departamentos', label: `Departamentos (${departments.length})`, icon: Building2 },
               ]}
             />
 
@@ -247,7 +247,7 @@ export function SupportUsersView({
           theme="yellow"
           noPadding
         >
-          {pendientes.length === 0 ? (
+          {pending.length === 0 ? (
             <EmptyState
               title="Todo el mundo está registrado"
               description="Ningún nombre de los tickets importados falta en el directorio."
@@ -256,7 +256,7 @@ export function SupportUsersView({
           ) : (
             <DataTable
               columns={pendingColumns}
-              data={pendientes}
+              data={pending}
               searchable
               searchPlaceholder="Buscar nombre..."
             />
@@ -272,7 +272,7 @@ export function SupportUsersView({
           theme="red"
           noPadding
         >
-          {trasBaja.length === 0 ? (
+          {afterChurn.length === 0 ? (
             <EmptyState
               title="Ningún ticket tras una baja"
               description="Nadie dado de baja figura en tickets creados después de su fecha de egreso."
@@ -281,7 +281,7 @@ export function SupportUsersView({
           ) : (
             <DataTable
               columns={afterChurnColumns}
-              data={trasBaja}
+              data={afterChurn}
               searchable
               searchPlaceholder="Buscar usuario..."
             />
@@ -297,7 +297,7 @@ export function SupportUsersView({
           theme="blue"
           noPadding
         >
-          {usuarios.length === 0 ? (
+          {users.length === 0 ? (
             <EmptyState
               title="El directorio está vacío"
               description="Regístralos desde la pestaña de pendientes o dando de alta uno a mano."
@@ -306,7 +306,7 @@ export function SupportUsersView({
           ) : (
             <DataTable
               columns={userColumns}
-              data={usuarios}
+              data={users}
               searchable
               searchPlaceholder="Buscar usuario..."
             />
@@ -322,7 +322,7 @@ export function SupportUsersView({
           theme="slate"
           noPadding
         >
-          {departamentos.length === 0 ? (
+          {departments.length === 0 ? (
             <EmptyState
               title="Todavía no hay departamentos"
               description="Sin al menos uno no se puede registrar un usuario: el departamento es obligatorio."
@@ -331,7 +331,7 @@ export function SupportUsersView({
           ) : (
             <DataTable
               columns={departmentColumns}
-              data={departamentos}
+              data={departments}
               searchable
               searchPlaceholder="Buscar departamento..."
             />
@@ -351,8 +351,8 @@ export function SupportUsersView({
         {d.usuarioDraft && (
           <UserForm
             value={d.usuarioDraft}
-            departamentos={departamentos}
-            sufijo={sufijo}
+            departments={departments}
+            suffix={suffix}
             saving={d.guardando}
             onChange={(patch) => d.setUsuarioDraft({ ...d.usuarioDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => d.guardar('usuarios', { ...d.usuarioDraft }))}
@@ -385,7 +385,7 @@ export function SupportUsersView({
         isOpen={Boolean(d.cambioDraft)}
         onClose={d.cerrarFormularios}
         title="Cambiar departamento"
-        subtitle={d.cambioDraft?.usuario.nombre_odoo}
+        subtitle={d.cambioDraft?.user.odoo_name}
         icon={<ArrowRightLeft className="h-5 w-5 text-violet-400" />}
         theme="purple"
         size="lg"
@@ -393,18 +393,18 @@ export function SupportUsersView({
         {d.cambioDraft && (
           <DepartmentChangeForm
             value={d.cambioDraft}
-            departamentos={departamentos}
+            departments={departments}
             saving={d.guardando}
             onChange={(patch) => d.setCambioDraft({ ...d.cambioDraft!, ...patch })}
             onSubmit={(e) =>
               enviar(e, () =>
-                d.mover('cambiar_departamento', d.cambioDraft!.usuario.id, {
-                  departamento_id: d.cambioDraft!.departamento_id,
-                  fecha: d.cambioDraft!.fecha,
+                d.mover('cambiar_departamento', d.cambioDraft!.user.id, {
+                  department_id: d.cambioDraft!.department_id,
+                  date: d.cambioDraft!.date,
                 }),
               )
             }
-            onDeshacer={() => d.mover('deshacer_cambio', d.cambioDraft!.usuario.id)}
+            onUndo={() => d.mover('deshacer_cambio', d.cambioDraft!.user.id)}
             onClose={d.cerrarFormularios}
           />
         )}
@@ -425,7 +425,7 @@ export function SupportUsersView({
             saving={d.guardando}
             onChange={(patch) => d.setBajaDraft({ ...d.bajaDraft!, ...patch })}
             onSubmit={(e) =>
-              enviar(e, () => d.mover('baja', d.bajaDraft!.usuario.id, { fecha: d.bajaDraft!.fecha }))
+              enviar(e, () => d.mover('baja', d.bajaDraft!.user.id, { date: d.bajaDraft!.date }))
             }
             onClose={d.cerrarFormularios}
           />
@@ -443,7 +443,7 @@ export function SupportUsersView({
       >
         <div className="space-y-5">
           <p className="text-sm text-slate-300">
-            ¿Eliminar <strong className="text-white">{d.borrando?.nombre}</strong> del directorio?
+            ¿Eliminar <strong className="text-white">{d.borrando?.name}</strong> del directorio?
           </p>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => d.setBorrando(null)}>

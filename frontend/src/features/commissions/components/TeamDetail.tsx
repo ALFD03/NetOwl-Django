@@ -16,8 +16,8 @@ export const PERSON_COLUMNS = 'grid grid-cols-[minmax(220px,1fr)_220px_104px_128
 const NUM = 'text-right font-mono tabular-nums';
 
 export interface DetailProps {
-  condiciones: CommissionConditions;
-  tasa: number | null;
+  conditions: CommissionConditions;
+  rate: number | null;
   /** Pago encontrado con el buscador (`paymentKey`): su fila se marca. */
   resaltado: string | null;
   onViewPerson: (pago: CommissionPayment) => void;
@@ -37,23 +37,23 @@ export function EditIndicator({ onClick }: { onClick: (() => void) | null }) {
 
 /** Las condiciones de un pago: las del rol en su equipo. */
 const tiersOf = (p: CommissionPayment, condiciones: CommissionConditions) =>
-  condiciones.equipos?.[p.equipo]?.[p.rol]?.tramos_asesor;
+  condiciones.teams?.[p.equipo]?.[p.role]?.tramos_asesor;
 
 /** Lo que va bajo un nombre: por qué cobra menos, sus bonos y si tiene ventas con otro supervisor. */
-function Notes({ p, nomina, condiciones }: { p: CommissionPayment; nomina: Payroll; condiciones: CommissionConditions }) {
-  const motivo = trimReason(p, tiersOf(p, condiciones));
+function Notes({ p, nomina, conditions }: { p: CommissionPayment; nomina: Payroll; conditions: CommissionConditions }) {
+  const motivo = trimReason(p, tiersOf(p, conditions));
   const bonos = bonusNotes(p);
   const fuera = nomina.fuera.get(paymentKey(p));
-  if (!motivo && !bonos.length && !fuera && !p.avisos.length) return null;
+  if (!motivo && !bonos.length && !fuera && !p.warnings.length) return null;
   return (
     <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-[11px] text-slate-500">
-      {motivo && <span className={p.neto === 0 ? 'text-slate-400' : ''}>{motivo}</span>}
+      {motivo && <span className={p.net === 0 ? 'text-slate-400' : ''}>{motivo}</span>}
       {bonos.map((b) => <span key={b} className="font-semibold text-amber-400">{b}</span>)}
-      {fuera && <span>+{fuera.ventas} con {fuera.donde} (incluidas)</span>}
-      {p.avisos.length > 0 && (
-        <span className="inline-flex items-center gap-1 text-amber-400" title={p.avisos.join('\n')}>
+      {fuera && <span>+{fuera.sales} con {fuera.donde} (incluidas)</span>}
+      {p.warnings.length > 0 && (
+        <span className="inline-flex items-center gap-1 text-amber-400" title={p.warnings.join('\n')}>
           <AlertTriangle className="h-3 w-3" />
-          {p.avisos.length === 1 ? 'Un aviso' : `${p.avisos.length} avisos`}
+          {p.warnings.length === 1 ? 'Un aviso' : `${p.warnings.length} avisos`}
         </span>
       )}
     </div>
@@ -68,53 +68,53 @@ function Name({ p, onViewPerson: onVerPersona }: { p: CommissionPayment; onViewP
       title="Ver los clientes por los que cobra"
       className="truncate text-left text-sm font-semibold text-white hover:text-sky-300 hover:underline"
     >
-      {p.nombre}
+      {p.name}
     </button>
   );
 }
 
 /** El tramo de quien cobra por tramos, con la barra y lo que le falta para el siguiente. */
-function IndicatorTiers({ p, condiciones }: { p: CommissionPayment; condiciones: CommissionConditions }) {
-  const tramos = tiersOf(p, condiciones);
+function IndicatorTiers({ p, conditions }: { p: CommissionPayment; conditions: CommissionConditions }) {
+  const tramos = tiersOf(p, conditions);
   if (!tramos?.length) return <span />;
-  const tramo = advisorTier(p.ventas_propias, tramos);
-  const next = nextTier(p.ventas_propias, tramos);
+  const tramo = advisorTier(p.own_sales, tramos);
+  const next = nextTier(p.own_sales, tramos);
   return (
     <div className="min-w-0">
       <div className="flex items-baseline justify-between gap-2 text-xs">
-        <span className={tramo.monto > 0 ? 'font-semibold text-slate-200' : 'text-slate-500'}>
-          {tramo.monto > 0 ? `Tramo ${tierRange(tramo, tramos)} · ${formatAmount(tramo.monto)}` : 'Sin tramo'}
+        <span className={tramo.amount > 0 ? 'font-semibold text-slate-200' : 'text-slate-500'}>
+          {tramo.amount > 0 ? `Tramo ${tierRange(tramo, tramos)} · ${formatAmount(tramo.amount)}` : 'Sin tramo'}
         </span>
         <span className="truncate text-[10px] text-slate-500">
-          {next ? `faltan ${next.desde - p.ventas_propias} para ${formatAmount(next.monto)}` : 'tramo máximo'}
+          {next ? `faltan ${next.since - p.own_sales} para ${formatAmount(next.amount)}` : 'tramo máximo'}
         </span>
       </div>
-      <TierBar ventas={p.ventas_propias} tramos={tramos} />
+      <TierBar sales={p.own_sales} tramos={tramos} />
     </div>
   );
 }
 
 /** Lo que mide a cada rol, en la columna central de su fila. */
-function Indicator({ p, condiciones, onEditIndicators: onEditarIndicadores }: { p: CommissionPayment; condiciones: CommissionConditions; onEditIndicators: (() => void) | null }) {
-  if (p.detalle.ventas_pagadas !== undefined) return <IndicatorTiers p={p} condiciones={condiciones} />;
+function Indicator({ p, conditions, onEditIndicators: onEditarIndicadores }: { p: CommissionPayment; conditions: CommissionConditions; onEditIndicators: (() => void) | null }) {
+  if (p.detail.paid_sales !== undefined) return <IndicatorTiers p={p} conditions={conditions} />;
 
-  if (p.rol === 'coord_un') {
-    const step = condiciones.equipos?.[p.equipo]?.[p.rol]?.escalon_crecimiento;
-    const perSale = p.detalle.monto_por_venta_equipo ?? 0;
+  if (p.role === 'coord_un') {
+    const step = conditions.teams?.[p.equipo]?.[p.role]?.escalon_crecimiento;
+    const perSale = p.detail.team_amount_per_sale ?? 0;
     return (
       <div className="flex items-center gap-1">
         <div className="min-w-0 flex-1">
-          {p.crecimiento_pct === null ? (
+          {p.growth_pct === null ? (
             <span className="text-xs font-bold text-amber-400">Crecimiento desconocido</span>
           ) : (
             <>
               <div className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-sm font-bold tabular-nums text-violet-300">{formatPctValue(p.crecimiento_pct)}</span>
+                <span className="font-mono text-sm font-bold tabular-nums text-violet-300">{formatPctValue(p.growth_pct)}</span>
                 <span className="truncate text-[10px] text-slate-500">
-                  {p.crecimiento_fuente === 'manual' ? 'a mano' : 'crecimiento'} → {formatAmount(perSale)}/venta
+                  {p.growth_source === 'manual' ? 'a mano' : 'crecimiento'} → {formatAmount(perSale)}/venta
                 </span>
               </div>
-              <BarraCrecimiento pct={p.crecimiento_pct} cortes={step ? [step.umbral_pct] : []} />
+              <BarraCrecimiento pct={p.growth_pct} cortes={step ? [step.threshold_pct] : []} />
             </>
           )}
         </div>
@@ -123,16 +123,16 @@ function Indicator({ p, condiciones, onEditIndicators: onEditarIndicadores }: { 
     );
   }
 
-  if (p.detalle.factor) {
+  if (p.detail.factor) {
     return (
       <div className="flex items-center gap-1">
-        <div className="min-w-0 flex-1"><Medidor pct={p.factor_pct} nota={complianceSource(p)} /></div>
+        <div className="min-w-0 flex-1"><Medidor pct={p.factor_pct} note={complianceSource(p)} /></div>
         <EditIndicator onClick={onEditarIndicadores} />
       </div>
     );
   }
-  if (p.rol === 'administradora') {
-    return <span className="text-xs text-slate-300">Empresa al {formatPctValue(p.detalle.pct_empresa ?? null)}</span>;
+  if (p.role === 'administradora') {
+    return <span className="text-xs text-slate-300">Empresa al {formatPctValue(p.detail.company_pct ?? null)}</span>;
   }
   return <span />;
 }
@@ -140,10 +140,10 @@ function Indicator({ p, condiciones, onEditIndicators: onEditarIndicadores }: { 
 /** Lo que va bajo el nombre de quien dirige: cuántas ventas y de qué. */
 function Summary({ p }: { p: CommissionPayment }) {
   const partes = [
-    p.ventas_propias ? `${p.ventas_propias} propias` : '',
-    p.ventas_equipo ? `${p.ventas_equipo} de su equipo` : '',
-    p.detalle.asesores ? `${p.detalle.asesores} ${p.detalle.asesores === 1 ? 'asesor' : 'asesores'}` : '',
-    p.unidades.length ? p.unidades.join(', ') : '',
+    p.own_sales ? `${p.own_sales} propias` : '',
+    p.team_sales ? `${p.team_sales} de su equipo` : '',
+    p.detail.advisors ? `${p.detail.advisors} ${p.detail.advisors === 1 ? 'asesor' : 'asesores'}` : '',
+    p.units.length ? p.units.join(', ') : '',
     p.site ? `site ${p.site}` : '',
   ].filter(Boolean);
   return partes.length ? <div className="mt-0.5 text-[11px] text-slate-500">{partes.join(' · ')}</div> : null;
@@ -158,23 +158,23 @@ function PersonRow({
       id={`persona-${paymentKey(p)}`}
       className={`${PERSON_COLUMNS} px-4 py-2.5 transition ${destacada ? 'bg-surface-primary/70' : 'border-t border-slate-800/60'} ${
         resaltar ? 'bg-sky-500/10 ring-1 ring-inset ring-sky-500/40' : 'hover:bg-slate-800/30'
-      } ${p.neto === 0 ? 'opacity-60' : ''}`}
+      } ${p.net === 0 ? 'opacity-60' : ''}`}
     >
       <div className={`min-w-0 ${sangria ? 'pl-4' : ''}`}>
         <div className="flex min-w-0 items-center gap-2">
           <Name p={p} onViewPerson={props.onViewPerson} />
-          {p.rol !== 'asesor' && <ChipRol rol={p.rol} />}
+          {p.role !== 'asesor' && <ChipRol role={p.role} />}
         </div>
         {!sangria && <Summary p={p} />}
-        <Notes p={p} nomina={nomina} condiciones={props.condiciones} />
+        <Notes p={p} nomina={nomina} conditions={props.conditions} />
       </div>
-      <Indicator p={p} condiciones={props.condiciones} onEditIndicators={props.onEditIndicators} />
+      <Indicator p={p} conditions={props.conditions} onEditIndicators={props.onEditIndicators} />
       <div className="text-right"><SalesCell validadas={validatedSales(p)} pagadas={paidSales(p)} /></div>
       <span className={`${NUM} flex flex-col text-sm font-bold text-white`}>
-        {formatAmount(p.neto)}
-        {p.factor_pct !== null && p.factor_pct < 100 && <span className="text-[10px] font-normal text-slate-500">de {formatAmount(p.bruto)}</span>}
+        {formatAmount(p.net)}
+        {p.factor_pct !== null && p.factor_pct < 100 && <span className="text-[10px] font-normal text-slate-500">de {formatAmount(p.gross)}</span>}
       </span>
-      <span className={`${NUM} text-sm font-bold text-emerald-300`}>{formatBs(aBs(p.neto, props.tasa))}</span>
+      <span className={`${NUM} text-sm font-bold text-emerald-300`}>{formatBs(aBs(p.net, props.rate))}</span>
     </div>
   );
 }
@@ -208,8 +208,8 @@ function Plegador({ abierto, onToggle, children, derecha, tono = 'normal' }: {
 function Group({
   g, nomina, abierto, onToggle, ...props
 }: DetailProps & { g: SupervisorGroup; nomina: Payroll; abierto: boolean; onToggle: () => void }) {
-  const totalUsd = Math.round(g.asesores.reduce((t, a) => t + a.neto, 0) * 100) / 100;
-  const personas = `${g.asesores.length} ${g.asesores.length === 1 ? (g.pago ? 'asesor' : 'persona') : (g.pago ? 'asesores' : 'personas')}`;
+  const totalUsd = Math.round(g.advisors.reduce((t, a) => t + a.net, 0) * 100) / 100;
+  const personas = `${g.advisors.length} ${g.advisors.length === 1 ? (g.pago ? 'asesor' : 'persona') : (g.pago ? 'asesores' : 'personas')}`;
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-800 bg-surface-primary/40">
       {g.pago && <PersonRow p={g.pago} nomina={nomina} destacada {...props} />}
@@ -223,12 +223,12 @@ function Group({
           <span className="text-[11px] text-slate-400">{abierto ? 'Ocultar' : 'Mostrar'} {personas}</span>
         ) : (
           <>
-            <span className="truncate text-sm font-bold text-slate-200">{g.nombre}</span>
+            <span className="truncate text-sm font-bold text-slate-200">{g.name}</span>
             <span className="shrink-0 text-[11px] text-slate-500">{personas}</span>
           </>
         )}
       </Plegador>
-      {abierto && g.asesores.map((a) => <PersonRow key={paymentKey(a)} p={a} nomina={nomina} sangria {...props} />)}
+      {abierto && g.advisors.map((a) => <PersonRow key={paymentKey(a)} p={a} nomina={nomina} sangria {...props} />)}
     </div>
   );
 }
@@ -244,7 +244,7 @@ export function TeamDetail({ equipo, nomina, ...props }: DetailProps & { equipo:
       if (!next.delete(clave)) next.add(clave);
       return next;
     });
-  const keys = [...equipo.secciones.map((s) => `sec:${s.rol}`), ...equipo.grupos.map((g) => `grp:${g.key}`)];
+  const keys = [...equipo.secciones.map((s) => `sec:${s.role}`), ...equipo.grupos.map((g) => `grp:${g.key}`)];
   const todoPlegado = keys.every((k) => plegados.has(k));
 
   // Quien se busca está dentro de un bloque plegado: se abre y se lleva a la vista. Se ajusta al
@@ -255,8 +255,8 @@ export function TeamDetail({ equipo, nomina, ...props }: DetailProps & { equipo:
     setAtendido(resaltado);
     if (resaltado !== null) {
       const dentro = [
-        ...equipo.secciones.filter((s) => s.pagos.some((p) => paymentKey(p) === resaltado)).map((s) => `sec:${s.rol}`),
-        ...equipo.grupos.filter((g) => g.asesores.some((a) => paymentKey(a) === resaltado)).map((g) => `grp:${g.key}`),
+        ...equipo.secciones.filter((s) => s.payments.some((p) => paymentKey(p) === resaltado)).map((s) => `sec:${s.role}`),
+        ...equipo.grupos.filter((g) => g.advisors.some((a) => paymentKey(a) === resaltado)).map((g) => `grp:${g.key}`),
       ];
       if (dentro.some((k) => plegados.has(k))) setPlegados(new Set([...plegados].filter((k) => !dentro.includes(k))));
     }
@@ -268,19 +268,19 @@ export function TeamDetail({ equipo, nomina, ...props }: DetailProps & { equipo:
     return () => cancelAnimationFrame(id);
   }, [resaltado]);
 
-  const asesores = equipo.grupos.flatMap((g) => g.asesores);
+  const asesores = equipo.grupos.flatMap((g) => g.advisors);
   const validadasAsesores = asesores.reduce((t, p) => t + validatedSales(p), 0);
   const pagadasAsesores = asesores.reduce((t, p) => t + paidSales(p), 0);
-  const bonos = Math.round(equipo.personas.reduce((t, p) => t + p.bono, 0) * 100) / 100;
+  const bonos = Math.round(equipo.people.reduce((t, p) => t + p.bonus, 0) * 100) / 100;
   const supervisores = equipo.grupos.filter((g) => g.pago).length;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="truncate text-xl font-black text-white">{equipo.nombre}</h3>
+        <h3 className="truncate text-xl font-black text-white">{equipo.name}</h3>
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-slate-500">
-            {equipo.personas.length} {equipo.personas.length === 1 ? 'persona' : 'personas'}
+            {equipo.people.length} {equipo.people.length === 1 ? 'persona' : 'personas'}
             {supervisores > 0 && ` · ${supervisores} ${supervisores === 1 ? 'supervisor' : 'supervisores'}`}
           </span>
           <button
@@ -304,15 +304,15 @@ export function TeamDetail({ equipo, nomina, ...props }: DetailProps & { equipo:
 
       {!plegados.has('kpi') && (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Kpi label="Ventas validadas" nota="las del equipo">{equipo.ventas}</Kpi>
-        <Kpi label="Pagadas a asesores" nota={validadasAsesores > pagadasAsesores ? `${validadasAsesores - pagadasAsesores} bajo tramo` : 'todas'}>
+        <Kpi label="Ventas validadas" note="las del equipo">{equipo.sales}</Kpi>
+        <Kpi label="Pagadas a asesores" note={validadasAsesores > pagadasAsesores ? `${validadasAsesores - pagadasAsesores} bajo tramo` : 'todas'}>
           <span className={pagadasAsesores < validadasAsesores ? 'text-amber-300' : ''}>{pagadasAsesores}</span>
           <span className="text-sm font-bold text-slate-500"> / {validadasAsesores}</span>
         </Kpi>
-        <Kpi label="Bonos" tono="text-amber-300" nota="incluidos en lo que cobran">{formatAmount(bonos)}</Kpi>
-        <Kpi label="Equipo en $" nota="todo lo que cobran sus personas">{formatAmount(equipo.usd)}</Kpi>
-        <Kpi label="Equipo en Bs" tono="text-emerald-300" nota="a tasa CONATEL">
-          <span className="text-lg text-emerald-300">{formatBs(totalBs(equipo.personas.map((p) => p.neto), props.tasa))}</span>
+        <Kpi label="Bonos" tono="text-amber-300" note="incluidos en lo que cobran">{formatAmount(bonos)}</Kpi>
+        <Kpi label="Equipo en $" note="todo lo que cobran sus personas">{formatAmount(equipo.usd)}</Kpi>
+        <Kpi label="Equipo en Bs" tono="text-emerald-300" note="a tasa CONATEL">
+          <span className="text-lg text-emerald-300">{formatBs(totalBs(equipo.people.map((p) => p.net), props.rate))}</span>
         </Kpi>
       </div>
       )}
@@ -327,16 +327,16 @@ export function TeamDetail({ equipo, nomina, ...props }: DetailProps & { equipo:
             <span className="text-right">A pagar Bs · CONATEL</span>
           </div>
           {equipo.secciones.map((s) => (
-            <div key={s.rol} className="overflow-hidden rounded-2xl border border-slate-800 bg-surface-primary/40">
+            <div key={s.role} className="overflow-hidden rounded-2xl border border-slate-800 bg-surface-primary/40">
               <Plegador
-                abierto={!plegados.has(`sec:${s.rol}`)}
-                onToggle={() => alternar(`sec:${s.rol}`)}
+                abierto={!plegados.has(`sec:${s.role}`)}
+                onToggle={() => alternar(`sec:${s.role}`)}
                 derecha={<span className="shrink-0 font-mono text-xs tabular-nums text-slate-400">{formatAmount(s.usd)}</span>}
               >
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-300">{s.etiqueta}</span>
-                <span className="shrink-0 text-[11px] text-slate-500">{s.pagos.length} {s.pagos.length === 1 ? 'persona' : 'personas'}</span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-300">{s.role_label}</span>
+                <span className="shrink-0 text-[11px] text-slate-500">{s.payments.length} {s.payments.length === 1 ? 'persona' : 'personas'}</span>
               </Plegador>
-              {!plegados.has(`sec:${s.rol}`) && s.pagos.map((p) => <PersonRow key={paymentKey(p)} p={p} nomina={nomina} {...props} />)}
+              {!plegados.has(`sec:${s.role}`) && s.payments.map((p) => <PersonRow key={paymentKey(p)} p={p} nomina={nomina} {...props} />)}
             </div>
           ))}
           {equipo.grupos.map((g) => (

@@ -13,7 +13,7 @@ import { LIFETIME_COLUMNS, lifetimeFileName } from '../../lib/lifetimeExport';
  * Pide el detalle al pulsar: son unas miles de filas que la página no necesita
  * para mostrar el resumen, y cargarlas en cada cambio de mes pesaba casi 1 MB.
  */
-export function LifetimeExportButton({ mes }: { mes: string }) {
+export function LifetimeExportButton({ churn_month }: { churn_month: string }) {
   const [estado, setState] = useState<ExportState>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -21,15 +21,15 @@ export function LifetimeExportButton({ mes }: { mes: string }) {
     setState('busy');
     setError(null);
     try {
-      const data = await subscriptionsApi.getLifetimeDetalle(mes);
-      if (!data.bajas?.length) {
+      const data = await subscriptionsApi.getLifetimeDetalle(churn_month);
+      if (!data.churned?.length) {
         setState('empty');
         return;
       }
       await downloadRowsAsExcel({
-        rows: data.bajas,
+        rows: data.churned,
         columns: LIFETIME_COLUMNS,
-        fileName: lifetimeFileName(mes),
+        fileName: lifetimeFileName(churn_month),
         sheetName: 'Bajas',
       });
       setState('idle');
@@ -47,7 +47,7 @@ export function LifetimeExportButton({ mes }: { mes: string }) {
         estado={estado}
         label="Exportar bajas"
         labelEmpty="Sin bajas que exportar"
-        title={`Descargar las bajas de ${mes} con su instalación, última activación, fecha de baja y días.`}
+        title={`Descargar las bajas de ${churn_month} con su instalación, última activación, fecha de baja y días.`}
       />
       <StatusMessage
         status={error ? { type: 'error', text: error } : null}

@@ -8,9 +8,9 @@ import { previousDay, formatDateValue, nextMonth, monthName } from '../lib/forma
 import type { PeriodProposal } from '../types';
 
 interface PeriodFormProps {
-  propuesta: PeriodProposal;
+  proposal: PeriodProposal;
   guardando: boolean;
-  onSave: (body: { periodo: string; inicio_promo: string; inicio?: string; corte_adelantos: string }) => void;
+  onSave: (body: { period: string; promo_start: string; start?: string; advance_cutoff: string }) => void;
   onClose: () => void;
 }
 
@@ -33,24 +33,24 @@ function monthBounds(periodo: string): [string, string] {
  * El inicio solo se pregunta si el mes anterior no tiene periodo: si lo
  * tiene, es donde empezaron sus días promocionales.
  */
-export function PeriodForm({ propuesta, guardando, onSave: onGuardar, onClose: onCerrar }: PeriodFormProps) {
-  const [inicio, setStart] = useState(propuesta.inicio);
-  const [inicioPromo, setPromoStart] = useState(propuesta.inicio_promo);
-  const [corte, setCutoff] = useState(propuesta.corte_adelantos);
+export function PeriodForm({ proposal, guardando, onSave: onGuardar, onClose: onCerrar }: PeriodFormProps) {
+  const [inicio, setStart] = useState(proposal.start);
+  const [inicioPromo, setPromoStart] = useState(proposal.promo_start);
+  const [corte, setCutoff] = useState(proposal.advance_cutoff);
 
   const enviar = (event: FormEvent) => {
     event.preventDefault();
     onGuardar({
-      periodo: propuesta.periodo,
-      inicio_promo: inicioPromo,
-      corte_adelantos: corte,
-      ...(propuesta.preguntar_inicio ? { inicio } : {}),
+      period: proposal.period,
+      promo_start: inicioPromo,
+      advance_cutoff: corte,
+      ...(proposal.ask_start ? { start: inicio } : {}),
     });
   };
 
   // Los días promocionales de un mes empiezan dentro de ese mes, y el corte cae en el siguiente.
-  const [monthStart, monthEnd] = monthBounds(propuesta.periodo);
-  const next = nextMonth(propuesta.periodo);
+  const [monthStart, monthEnd] = monthBounds(proposal.period);
+  const next = nextMonth(proposal.period);
   const [nextStart, nextEnd] = monthBounds(next);
 
   return (
@@ -66,7 +66,7 @@ export function PeriodForm({ propuesta, guardando, onSave: onGuardar, onClose: o
         </p>
       </div>
 
-      {propuesta.preguntar_inicio ? (
+      {proposal.ask_start ? (
         <DatePicker
           label="Inicio de los días promocionales del mes anterior"
           hint="El mes anterior no tiene periodo de comisiones: indica dónde empezaron sus días promocionales. Es el primer día que cuenta."

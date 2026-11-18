@@ -9,13 +9,13 @@ export interface CommercialNode {
   /** Solo la zona, sin la sucursal: es la clave con la que se acota el export de bajas. */
   zona?: string;
   zona_sucursal?: string;
-  activos_inicio?: number;
-  activos_final?: number;
-  nuevos?: number;
-  reactivaciones?: number;
-  bajas?: number;
-  crecimiento?: number;
-  churn_bruto_pct?: number;
+  active_start?: number;
+  active_end?: number;
+  new_subs?: number;
+  reactivations?: number;
+  churned?: number;
+  growth?: number;
+  gross_churn_pct?: number;
   /**
    * Meta de la fila, resuelta al nivel de zona por el hook del reporte (ver
    * `lib/targets.ts`). Ausente solo si nadie la resolvió todavía.
@@ -29,7 +29,7 @@ export interface CommercialMetrics {
   /** Active base the node is expected to close the month at. */
   expectedClose: number;
   /** Net additions required to hit the target. */
-  objetivo: number;
+  target: number;
   /** Shortfall against `expectedClose`. */
   faltante: number;
   /**
@@ -55,7 +55,7 @@ export interface CommercialMetrics {
 
 export interface CalcCommercialOptions {
   /** Instalaciones del nodo o del grupo, para el cumplimiento de ventas. */
-  nuevos?: number;
+  new_subs?: number;
   /** Los días laborables del corte, para proyectar las instalaciones al cierre. */
   projection?: Proyeccion | null;
 }
@@ -79,7 +79,7 @@ export function calcCommercial(
   inicio: number,
   final: number,
   meta: Meta | number,
-  { nuevos = 0, projection: proyeccion = null }: CalcCommercialOptions = {},
+  { new_subs: nuevos = 0, projection: proyeccion = null }: CalcCommercialOptions = {},
 ): CommercialMetrics {
   const { growthGoal: metaCrecimiento, withoutTarget: sinObjetivo = false } = typeof meta === 'number'
     ? { growthGoal: meta, withoutTarget: false }
@@ -98,7 +98,7 @@ export function calcCommercial(
 
   return {
     expectedClose: cierreEsperado,
-    objetivo,
+    target: objetivo,
     faltante: rawFaltante,
     // Sin recortar a [0, 100], en los dos reportes: a petición del usuario se
     // enseña el valor real, también por encima del 100 % y por debajo de 0.
@@ -118,19 +118,19 @@ export function sumField<T extends CommercialNode>(nodes: T[], key: keyof T): nu
 
 /** Aggregate opening/closing figures for a set of nodes. */
 export function aggregateNodes<T extends CommercialNode>(nodes: T[]) {
-  const activosInicio = sumField(nodes, 'activos_inicio');
-  const activosFinal = sumField(nodes, 'activos_final');
-  const nuevos = sumField(nodes, 'nuevos');
-  const reactivaciones = sumField(nodes, 'reactivaciones');
-  const bajas = sumField(nodes, 'bajas');
+  const activosInicio = sumField(nodes, 'active_start');
+  const activosFinal = sumField(nodes, 'active_end');
+  const nuevos = sumField(nodes, 'new_subs');
+  const reactivaciones = sumField(nodes, 'reactivations');
+  const bajas = sumField(nodes, 'churned');
 
   return {
-    activos_inicio: activosInicio,
-    activos_final: activosFinal,
-    nuevos,
-    reactivaciones,
-    bajas,
-    crecimiento: activosInicio > 0 ? ((activosFinal - activosInicio) / activosInicio) * 100 : 0,
+    active_start: activosInicio,
+    active_end: activosFinal,
+    new_subs: nuevos,
+    reactivations: reactivaciones,
+    churned: bajas,
+    growth: activosInicio > 0 ? ((activosFinal - activosInicio) / activosInicio) * 100 : 0,
     churn_rate: activosInicio > 0 ? (bajas / activosInicio) * 100 : 0,
   };
 }

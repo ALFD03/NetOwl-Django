@@ -18,29 +18,29 @@ const dec = formatTwoDecimals;
  * del catálogo.
  */
 export const buildAnalyticsDimensionColumns = (s: TargetsTrafficLight): Column<DimensionVal>[] => [
-  { header: 'Valor', accessor: (r) => <StickyLabel>{r.valor}</StickyLabel>, sortKey: 'valor', sticky: true },
+  { header: 'Valor', accessor: (r) => <StickyLabel>{r.value}</StickyLabel>, sortKey: 'value', sticky: true },
 
-  { header: 'Base Ini', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
-  { header: 'Base Fin', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
+  { header: 'Base Ini', accessor: (r) => int(r.active_start), align: 'right', sortKey: 'active_start' },
+  { header: 'Base Fin', accessor: (r) => int(r.active_end), align: 'right', sortKey: 'active_end' },
 
-  { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{int(r.nuevos)}</span>, align: 'right', sortKey: 'nuevos' },
-  { header: 'Adic. Net', accessor: (r) => <span className="text-emerald-500">{int(r.adiciones_netas)}</span>, align: 'right', sortKey: 'adiciones_netas' },
-  { header: 'Adic. Bru', accessor: (r) => <span className="text-emerald-500">{int(r.adiciones_brutas)}</span>, align: 'right', sortKey: 'adiciones_brutas' },
-  { header: 'Crec %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoCrecimiento(r.crecimiento ?? 0, s)]}`}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
+  { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{int(r.new_subs)}</span>, align: 'right', sortKey: 'new_subs' },
+  { header: 'Adic. Net', accessor: (r) => <span className="text-emerald-500">{int(r.net_adds)}</span>, align: 'right', sortKey: 'net_adds' },
+  { header: 'Adic. Bru', accessor: (r) => <span className="text-emerald-500">{int(r.gross_adds)}</span>, align: 'right', sortKey: 'gross_adds' },
+  { header: 'Crec %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoCrecimiento(r.growth ?? 0, s)]}`}>{dec(r.growth)}%</span>, align: 'right', sortKey: 'growth' },
 
-  { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
-  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.churn_neto_pct ?? 0, s)]}`}>{dec(r.churn_neto_pct)}%</span>, align: 'right', sortKey: 'churn_neto_pct' },
-  { header: 'C. Bruto %', accessor: (r) => <span className={TONE_TEXT[tonoChurn(r.churn_bruto_pct ?? 0, s)]}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
-  { header: 'Corte Imp', accessor: (r) => int(r.corte_impagado), align: 'right', sortKey: 'corte_impagado' },
-  { header: 'Susp %', accessor: (r) => `${dec(r.porcentaje_suspensiones)}%`, align: 'right', sortKey: 'porcentaje_suspensiones' },
-  { header: 'Gratuitos', accessor: (r) => <span className="text-purple-400">{int(r.clientes_gratuitos)}</span>, align: 'right', sortKey: 'clientes_gratuitos' },
+  { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{int(r.churned)}</span>, align: 'right', sortKey: 'churned' },
+  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.net_churn_pct ?? 0, s)]}`}>{dec(r.net_churn_pct)}%</span>, align: 'right', sortKey: 'net_churn_pct' },
+  { header: 'C. Bruto %', accessor: (r) => <span className={TONE_TEXT[tonoChurn(r.gross_churn_pct ?? 0, s)]}>{dec(r.gross_churn_pct)}%</span>, align: 'right', sortKey: 'gross_churn_pct' },
+  { header: 'Corte Imp', accessor: (r) => int(r.unpaid_cuts), align: 'right', sortKey: 'unpaid_cuts' },
+  { header: 'Susp %', accessor: (r) => `${dec(r.suspension_pct)}%`, align: 'right', sortKey: 'suspension_pct' },
+  { header: 'Gratuitos', accessor: (r) => <span className="text-purple-400">{int(r.free_clients)}</span>, align: 'right', sortKey: 'free_clients' },
 
-  { header: 'React Tot', accessor: (r) => int(r.reactivaciones), align: 'right', sortKey: 'reactivaciones' },
+  { header: 'React Tot', accessor: (r) => int(r.reactivations), align: 'right', sortKey: 'reactivations' },
   { header: 'React Val', accessor: (r) => int(r.react_val), align: 'right', sortKey: 'react_val' },
   { header: 'R. 4P', accessor: (r) => int(r.react_4_P), align: 'right', sortKey: 'react_4_P' },
-  { header: 'Recuperación %', accessor: (r) => <span className="text-blue-400">{dec(r.tasa_winback_pct)}%</span>, align: 'right', sortKey: 'tasa_winback_pct' },
-  { header: 'Aporte R %', accessor: (r) => `${dec(r.tasa_aporte_react_pct)}%`, align: 'right', sortKey: 'tasa_aporte_react_pct' },
-  { header: 'Reempl %', accessor: (r) => `${dec(r.indice_reemplazo_react_pct)}%`, align: 'right', sortKey: 'indice_reemplazo_react_pct' },
+  { header: 'Recuperación %', accessor: (r) => <span className="text-blue-400">{dec(r.winback_rate_pct)}%</span>, align: 'right', sortKey: 'winback_rate_pct' },
+  { header: 'Aporte R %', accessor: (r) => `${dec(r.react_contribution_pct)}%`, align: 'right', sortKey: 'react_contribution_pct' },
+  { header: 'Reempl %', accessor: (r) => `${dec(r.react_replacement_pct)}%`, align: 'right', sortKey: 'react_replacement_pct' },
 
   { header: 'ARPU', accessor: (r) => <span className="text-amber-400">${dec(r.arpu)}</span>, align: 'right', sortKey: 'arpu' },
   { header: 'Billing', accessor: (r) => <span className="text-blue-400">${dec(r.total_billing)}</span>, align: 'right', sortKey: 'total_billing' },

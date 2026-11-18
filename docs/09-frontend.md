@@ -40,7 +40,7 @@ completa y Django redirige a la primera página permitida.
 `apiPage(endpoint, cargar)` (`app/apiPage.tsx`) monta la página con lo que
 devuelve su endpoint como props, dentro de `AppLayout` mientras carga o si falla:
 
-- Los parámetros de la URL (`?period=`, `?dia=` y los de ruta como `:period`)
+- Los parámetros de la URL (`?period=`, `?day=` y los de ruta como `:period`)
   viajan tal cual al endpoint.
 - `useVisit()` cambia esos parámetros (cambiar de mes): se vuelve a pedir con
   `keepPreviousData`, sin desmontar la página, que conserva su estado.
@@ -271,14 +271,14 @@ servidor y siempre coincide con lo que hay en pantalla. El escritor se carga con
 | `CatalogBlockModal` | Se abre cuando la subida devuelve 409 de catálogo |
 | `lib/catalog.ts` | `extractCatalogBlock(error)` |
 
-`extractCatalogBlock` mira **`status: 'catalogo'` en el cuerpo y no solo el
+`extractCatalogBlock` mira **`status: 'catalog'` en el cuerpo y no solo el
 código HTTP**: un 409 también lo devuelve un catálogo vacío, que es un problema
 de configuración distinto y se enseña como un error normal.
 
 El modal ofrece las dos respuestas que el servidor no puede distinguir:
 **registrar el producto como plan** (enlaza a
-`/catalogos/productos/?nuevo_plan=…`) o **marcarlo como ignorado** (POST a
-`/api/catalogs/save/` con tipo `ignorados` y `area: 'productos'`). Cuando aparece **no se escribió
+`/catalogos/productos/?new_plan=…`) o **marcarlo como ignorado** (POST a
+`/api/catalogs/save/` con `kind: 'ignorados'` y `area: 'productos'`). Cuando aparece **no se escribió
 nada**: la comprobación corre antes del truncate.
 
 ### `subscriptions`
@@ -301,7 +301,7 @@ Hooks: `useSubscriptionDashboard`, `useSubscriptionsAnalyticsData`,
   Report los recortaba a `[0, 100]`; se quitó a petición del usuario. Solo el
   ancho de las barras se detiene en 100 %.
 - `dayReports.ts` — reagrupa en cliente el payload del día elegido en
-  `buildSalesSites` y `buildBusinessUnitGroups`, usando `zonasConfig`. Es lo que
+  `buildSalesSites` y `buildBusinessUnitGroups`, usando `zonesConfig`. Es lo que
   hace que mover la barra de días no dispare ninguna petición.
 - `analyticsDistribution.ts`, `formClasses.ts`.
 
@@ -332,7 +332,7 @@ concentra la lectura de los bloques de métricas y las etiquetas de las medidas
 | Caso | Camino |
 |---|---|
 | Carga inicial de una página | El GET de su endpoint (`apiPage`), con la URL de la página como parámetros |
-| Cambio de periodo / dimensión / día | **En cliente**, sobre los props que ya llegaron (`dayMetrics`, `dimensionsData`, `zonasConfig`) |
+| Cambio de periodo / dimensión / día | **En cliente**, sobre los props que ya llegaron (`dayMetrics`, `dimensionsData`, `zonesConfig`) |
 | Cambio de mes | `useVisit()`: nueva URL, nuevo GET del endpoint, la página sigue montada |
 | Drill-down puntual | Su endpoint de `/api/` desde `shared/lib/api` |
 | Lanzar un análisis | `startAndFollow` → 202 → sondeo de `/api/imports/jobs/<id>/` |

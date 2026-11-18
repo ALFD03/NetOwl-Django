@@ -7,7 +7,7 @@ import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
 
 export interface CurrentBcvRate {
   /** `0` mientras no se haya podido leer. */
-  tasa: number;
+  rate: number;
   /** El día que la publicó, tal como lo devuelve el servicio. */
   fuente: string;
   cargando: boolean;
@@ -43,8 +43,8 @@ export function useCurrentBcvRate(): CurrentBcvRate {
     () =>
       subscriptionsApi.getEtaTasaActual()
         .then((response) => {
-          setRate(response.tasa_bcv);
-          setSource(response.tasa_bcv_fuente);
+          setRate(response.bcv_rate);
+          setSource(response.bcv_rate_source);
           setNotice('');
         })
         .catch((error: unknown) => {
@@ -61,5 +61,5 @@ export function useCurrentBcvRate(): CurrentBcvRate {
 
   useEffect(() => { void fetchData(); }, [fetchData]);
 
-  return { tasa, fuente, cargando, aviso, recargar };
+  return { rate: tasa, fuente, cargando, aviso, recargar };
 }

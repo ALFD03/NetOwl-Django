@@ -13,16 +13,16 @@ export const CLOSE_STATE_LABEL: Record<string, string> = {
 export const closeStateLabel = (estado: string): string => CLOSE_STATE_LABEL[estado] ?? estado;
 
 export const LIFETIME_COLUMNS: ExcelColumn<LifetimeChurn>[] = [
-  { header: 'Orden', value: (b) => b.orden, width: 16 },
+  { header: 'Orden', value: (b) => b.order, width: 16 },
   { header: 'Sucursal', value: (b) => b.sucursal ?? null, width: 14 },
   { header: 'Zona', value: (b) => b.zona ?? null, width: 22 },
   { header: 'Municipio', value: (b) => b.municipio ?? null, width: 20 },
   { header: 'Campaña', value: (b) => b.campanna ?? null, width: 26 },
-  { header: 'Instalación', value: (b) => b.f_ini, width: 13 },
-  { header: 'Fecha de baja', value: (b) => b.f_baja, width: 13 },
-  { header: 'Estado al cierre', value: (b) => closeStateLabel(b.estado_cierre), width: 24 },
+  { header: 'Instalación', value: (b) => b.start_date, width: 13 },
+  { header: 'Fecha de baja', value: (b) => b.churn_date, width: 13 },
+  { header: 'Estado al cierre', value: (b) => closeStateLabel(b.close_status), width: 24 },
   // Número, no texto: la hoja tiene que poder promediarlo y filtrarlo.
-  { header: 'Días desde la instalación', value: (b) => b.dias_desde_instalacion, format: '#,##0', width: 14 },
+  { header: 'Días desde la instalación', value: (b) => b.days_since_install, format: '#,##0', width: 14 },
 ];
 
 export const lifetimeFileName = (mes: string): string => `Lifetime bajas ${mes}`;

@@ -27,18 +27,18 @@ import type {
 
 /** Una fila en edición. Sin `id` es un alta. */
 export type PlanDraft = Omit<CatalogPlan, 'id'> & { id?: number };
-export type RegulatoryDraft = Omit<CatalogRegulatoryPlan, 'id' | 'planes'> & { id?: number };
+export type RegulatoryDraft = Omit<CatalogRegulatoryPlan, 'id' | 'plans'> & { id?: number };
 export type ZoneDraft = {
   id?: number;
-  nombre: string;
+  name: string;
   site_id: number | null;
-  estado_id: number | null;
-  tecnologia: string;
-  coordinador_id: number | null;
+  state_id: number | null;
+  technology: string;
+  coordinator_id: number | null;
 };
 /** Un site en edición: sus zonas y los equipos que lo trabajan se eligen en el mismo formulario. */
-export type SiteDraft = { id?: number; nombre: string; orden: number; zona_ids: number[]; equipo_ids: number[] };
-export type NameDraft = { id?: number; nombre: string; tipo: 'estados' };
+export type SiteDraft = { id?: number; name: string; order: number; zone_ids: number[]; team_ids: number[] };
+export type NameDraft = { id?: number; name: string; kind: 'estados' };
 /**
  * El papel de una persona en un equipo, en edición. En el alta se elige una
  * persona que ya existe (`persona_id`) o se escribe una nueva; equipo y rol no
@@ -46,34 +46,34 @@ export type NameDraft = { id?: number; nombre: string; tipo: 'estados' };
  */
 export type MembershipDraft = {
   id?: number;
-  equipo_id: number;
+  team_id: number;
   /** El slug del equipo, para saber qué roles y qué exige cada uno. */
   equipo: string;
-  rol: SalesRole;
-  persona_id: number | null;
-  nombre: string;
-  apellido: string;
-  medio: string;
-  medio_supervisor: string;
-  usuario_odoo: string;
+  role: SalesRole;
+  person_id: number | null;
+  name: string;
+  last_name: string;
+  channel: string;
+  supervisor_channel: string;
+  odoo_user: string;
   /** Otros nombres de la misma persona en cada columna del export. */
-  alias_medio: string[];
-  alias_supervisor: string[];
-  alias_usuario: string[];
+  channel_alias: string[];
+  supervisor_alias: string[];
+  user_alias: string[];
   site_ids: number[];
-  superior_id: number | null;
-  unidad_ids: number[];
+  manager_id: number | null;
+  unit_ids: number[];
 };
-export type UnidadDraft = { id?: number; nombre: string; zona_ids: number[]; equipo_ids: number[] };
+export type UnidadDraft = { id?: number; name: string; zone_ids: number[]; team_ids: number[] };
 /** Las condiciones de un rol de un equipo en edición: se manda el objeto entero de parámetros. */
 export type ConditionDraft = {
-  equipo_id: number;
-  rol: SalesRole;
-  etiqueta: string;
+  team_id: number;
+  role: SalesRole;
+  role_label: string;
   equipo: string;
-  piezas: CatalogRoleCondition['piezas'];
-  parametros: PaymentParameters;
-  defecto: PaymentParameters;
+  pieces: CatalogRoleCondition['pieces'];
+  params: PaymentParameters;
+  policy: PaymentParameters;
 };
 /**
  * Un tramo del objetivo de ventas de las oficinas. `persona_id` nulo es el
@@ -81,14 +81,14 @@ export type ConditionDraft = {
  */
 export type OfficeTargetDraft = {
   id?: number;
-  persona_id: number | null;
+  person_id: number | null;
   /** Quién lo tiene, para enseñarlo al editar (la persona no se cambia). */
-  etiqueta?: string;
-  desde: string;
+  role_label?: string;
+  since: string;
   ventas: string;
-  nota: string;
+  note: string;
 };
-export type IgnoredDraft = { id?: number; nombre: string; nota: string; area: CatalogArea };
+export type IgnoredDraft = { id?: number; name: string; note: string; area: CatalogArea };
 
 /**
  * Un tramo de objetivo en edición. Los porcentajes van como texto porque vacío
@@ -96,28 +96,28 @@ export type IgnoredDraft = { id?: number; nombre: string; nota: string; area: Ca
  */
 export type TargetDraft = {
   id?: number;
-  nivel: CatalogTargetLevel;
-  entidad_id: number | null;
+  level: CatalogTargetLevel;
+  entity_id: number | null;
   /** La zona de un nodo, por nombre: los nodos salen de los datos, no del catálogo. */
-  entidad_nombre?: string;
+  entity_name?: string;
   /** En los niveles `sucursal` y `zona_sucursal`. */
   sucursal: string;
   /** Cómo se llama lo que tiene el objetivo, para enseñarlo al editar. */
-  etiqueta?: string;
+  role_label?: string;
   /** `YYYY-MM`; vacío es "desde siempre". */
-  desde: string;
-  crecimiento_pct: string;
+  since: string;
+  growth_pct: string;
   churn_pct: string;
-  nota: string;
+  note: string;
   /** El objetivo general: uno solo, sin fecha ni valores vacíos. */
   esBase?: boolean;
 };
 export type MonthTargetDraft = {
   id?: number;
-  periodo: string;
-  crecimiento_pct: string;
+  period: string;
+  growth_pct: string;
   churn_pct: string;
-  nota: string;
+  note: string;
 };
 export type TrafficLightDraft = TargetsTrafficLight;
 
@@ -131,44 +131,44 @@ const asText = (valor: number | null): string => (valor === null ? '' : String(v
 export type CatalogView = string;
 
 const EMPTY_PLAN: PlanDraft = {
-  nombre: '',
-  tarifa: '',
-  tecnologia: 'FTTH',
-  tipo_persona: 'nat',
-  referencia: '',
-  tiene_tv: false,
-  datas_mbps: 0,
-  precio: 0,
-  declarar_en_eta: true,
-  comision_pyme_pct: null,
-  plan_regulador_id: null,
-  plan_regulador: '',
+  name: '',
+  tariff: '',
+  technology: 'FTTH',
+  person_type: 'nat',
+  reference: '',
+  has_tv: false,
+  data_mbps: 0,
+  price: 0,
+  declare_in_eta: true,
+  sme_commission_pct: null,
+  regulator_plan_id: null,
+  regulator_plan: '',
 };
 
 const EMPTY_REGULATORY: RegulatoryDraft = {
-  nombre: '',
-  tecnologia: 'FTTH',
-  tipo_persona: 'nat',
-  datas_mbps: 0,
-  precio: 0,
-  tiene_tv: false,
-  es_transporte: false,
-  notas: '',
+  name: '',
+  technology: 'FTTH',
+  person_type: 'nat',
+  data_mbps: 0,
+  price: 0,
+  has_tv: false,
+  is_transport: false,
+  notes: '',
 };
 
 interface Args {
   /** La pestaña con la que abre la página. */
   initialView: CatalogView;
   sites?: CatalogSite[];
-  estados?: CatalogNamed[];
-  /** Nombre que llega en `?nuevo_plan=`: abre el alta de plan ya rellena. */
-  nuevoPlan?: string;
-  /** Nombre que llega en `?nueva_zona=`: abre el alta de zona ya rellena. */
-  nuevaZona?: string;
-  /** Literal, equipo y rol de `?nueva_persona=&equipo=&rol=`: abre el alta de persona ya rellena. */
-  nuevaPersona?: { literal: string; equipo: string; rol: string };
+  states?: CatalogNamed[];
+  /** Nombre que llega en `?new_plan=`: abre el alta de plan ya rellena. */
+  newPlan?: string;
+  /** Nombre que llega en `?new_zone=`: abre el alta de zona ya rellena. */
+  newZone?: string;
+  /** Literal, equipo y rol de `?new_person=&team=&role=`: abre el alta de persona ya rellena. */
+  newPerson?: { literal: string; equipo: string; role: string };
   /** Los equipos (id por slug), para resolver `nuevaPersona.equipo`. */
-  equipos?: { id: number; slug: string }[];
+  teams?: { id: number; slug: string }[];
 }
 
 /** Los roles que aparecen en `Vendedor` (usuario de Odoo) y no en `Medio`. */
@@ -190,21 +190,21 @@ export function membershipSince(
   const base = literal.replace(/\s*\(\s*users?\s*\)\s*$/i, '').trim();
   const partes = base.split(/\s+/).filter(Boolean);
   const vacia = {
-    equipo_id: teamId, equipo, rol, persona_id: null, medio_supervisor: '', site_ids: [] as number[], superior_id: null,
-    alias_medio: [] as string[], alias_supervisor: [] as string[], alias_usuario: [] as string[],
-    unidad_ids: [] as number[],
+    team_id: teamId, equipo, role: rol, person_id: null, supervisor_channel: '', site_ids: [] as number[], manager_id: null,
+    channel_alias: [] as string[], supervisor_alias: [] as string[], user_alias: [] as string[],
+    unit_ids: [] as number[],
   };
   if (ROLES_WITH_USER.includes(rol)) {
     const corte = partes.length >= 4 ? 2 : 1;
     return {
       ...vacia,
-      nombre: partes.slice(0, corte).join(' '),
-      apellido: partes.slice(corte).join(' '),
-      medio: rol === 'coord_oficina' ? [partes[0], partes[corte]].filter(Boolean).join(' ') : '',
-      usuario_odoo: literal ? `${base} (User)` : '',
+      name: partes.slice(0, corte).join(' '),
+      last_name: partes.slice(corte).join(' '),
+      channel: rol === 'coord_oficina' ? [partes[0], partes[corte]].filter(Boolean).join(' ') : '',
+      odoo_user: literal ? `${base} (User)` : '',
     };
   }
-  return { ...vacia, nombre: partes[0] ?? '', apellido: partes.slice(1).join(' '), medio: base, usuario_odoo: '' };
+  return { ...vacia, name: partes[0] ?? '', last_name: partes.slice(1).join(' '), channel: base, odoo_user: '' };
 }
 
 /**
@@ -222,7 +222,7 @@ export function membershipSince(
  * elegir una zona) y el servidor ya devuelve todo junto.
  */
 export function useCatalogs({
-  initialView: vistaInicial, sites = [], estados = [], nuevoPlan = '', nuevaZona = '', nuevaPersona, equipos = [],
+  initialView: vistaInicial, sites = [], states = [], newPlan = '', newZone = '', newPerson, teams = [],
 }: Args) {
   const [vista, setVista] = useState<CatalogView>(vistaInicial);
   const [guardando, setGuardando] = useState(false);
@@ -232,30 +232,30 @@ export function useCatalogs({
   // es lo único que confirma que se guardó.
   const [aviso, setNotice] = useState<string | null>(null);
 
-  // `?nuevo_plan=` viene del aviso de la importación, de la pestaña de planes
+  // `?new_plan=` viene del aviso de la importación, de la pestaña de planes
   // por clasificar del ETA y de las notificaciones: el formulario abre con el
-  // nombre ya escrito para no obligar a copiarlo a mano. `?nueva_zona=`, igual
+  // nombre ya escrito para no obligar a copiarlo a mano. `?new_zone=`, igual
   // para las zonas. Estado inicial y no efecto: el valor llega con la primera
   // pintada y no vuelve a cambiar mientras la página viva.
   const [planDraft, setPlanDraft] = useState<PlanDraft | null>(
-    () => (nuevoPlan ? { ...EMPTY_PLAN, nombre: nuevoPlan } : null),
+    () => (newPlan ? { ...EMPTY_PLAN, name: newPlan } : null),
   );
   const [reguladorDraft, setReguladorDraft] = useState<RegulatoryDraft | null>(null);
   const emptyZone = (nombre = ''): ZoneDraft => ({
-    nombre,
+    name: nombre,
     site_id: sites[0]?.id ?? null,
-    estado_id: estados[0]?.id ?? null,
-    tecnologia: 'FTTH',
-    coordinador_id: null,
+    state_id: states[0]?.id ?? null,
+    technology: 'FTTH',
+    coordinator_id: null,
   });
   const [zonaDraft, setZonaDraft] = useState<ZoneDraft | null>(
-    () => (nuevaZona ? emptyZone(nuevaZona) : null),
+    () => (newZone ? emptyZone(newZone) : null),
   );
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
   const [personaDraft, setPersonaDraft] = useState<MembershipDraft | null>(() => {
-    const equipo = equipos.find((e) => e.slug === nuevaPersona?.equipo);
-    return nuevaPersona?.literal && equipo
-      ? membershipSince(nuevaPersona.literal, nuevaPersona.rol as SalesRole, equipo.id, equipo.slug)
+    const equipo = teams.find((e) => e.slug === newPerson?.equipo);
+    return newPerson?.literal && equipo
+      ? membershipSince(newPerson.literal, newPerson.role as SalesRole, equipo.id, equipo.slug)
       : null;
   });
   const [condicionDraft, setCondicionDraft] = useState<ConditionDraft | null>(null);
@@ -266,14 +266,14 @@ export function useCatalogs({
   const [objetivoDraft, setObjetivoDraft] = useState<TargetDraft | null>(null);
   const [objetivoMesDraft, setObjetivoMesDraft] = useState<MonthTargetDraft | null>(null);
   const [semaforoDraft, setSemaforoDraft] = useState<TrafficLightDraft | null>(null);
-  const [borrando, setBorrando] = useState<{ tipo: CatalogKind; id: number; nombre: string } | null>(null);
+  const [borrando, setBorrando] = useState<{ kind: CatalogKind; id: number; name: string } | null>(null);
   // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
   const formOpen = Boolean(planDraft || reguladorDraft || zonaDraft || siteDraft || personaDraft || condicionDraft || unidadDraft || objetivoOficinaDraft || nombreDraft || ignoradoDraft || objetivoDraft || objetivoMesDraft || semaforoDraft || borrando);
   useOnOpen(formOpen, () => setError(null));
 
   const nuevoPlanVacio = () => setPlanDraft({ ...EMPTY_PLAN });
   const editarPlan = (plan: CatalogPlan) => setPlanDraft({ ...plan });
-  const crearPlanDesde = (nombre: string) => setPlanDraft({ ...EMPTY_PLAN, nombre });
+  const crearPlanDesde = (name: string) => setPlanDraft({ ...EMPTY_PLAN, name });
 
   const nuevoRegulador = () => setReguladorDraft({ ...EMPTY_REGULATORY });
   // `planes` se queda fuera a propósito: es un conteo que calcula el servidor,
@@ -282,14 +282,14 @@ export function useCatalogs({
   const editarRegulador = (row: CatalogRegulatoryPlan) =>
     setReguladorDraft({
       id: row.id,
-      nombre: row.nombre,
-      tecnologia: row.tecnologia,
-      tipo_persona: row.tipo_persona,
-      datas_mbps: row.datas_mbps,
-      precio: row.precio,
-      tiene_tv: row.tiene_tv,
-      es_transporte: row.es_transporte,
-      notas: row.notas,
+      name: row.name,
+      technology: row.technology,
+      person_type: row.person_type,
+      data_mbps: row.data_mbps,
+      price: row.price,
+      has_tv: row.has_tv,
+      is_transport: row.is_transport,
+      notes: row.notes,
     });
 
   const nuevaZonaVacia = () => setZonaDraft(emptyZone());
@@ -297,17 +297,17 @@ export function useCatalogs({
   const editarZona = (zona: CatalogZone) =>
     setZonaDraft({
       id: zona.id,
-      nombre: zona.nombre,
+      name: zona.name,
       site_id: zona.site_id,
-      estado_id: zona.estado_id,
-      tecnologia: zona.tecnologia,
-      coordinador_id: zona.coordinador_id,
+      state_id: zona.state_id,
+      technology: zona.technology,
+      coordinator_id: zona.coordinator_id,
     });
 
-  const nuevoSite = () => setSiteDraft({ nombre: '', orden: 999, zona_ids: [], equipo_ids: [] });
+  const nuevoSite = () => setSiteDraft({ name: '', order: 999, zone_ids: [], team_ids: [] });
   const editarSite = (site: CatalogSite) =>
     setSiteDraft({
-      id: site.id, nombre: site.nombre, orden: site.orden, zona_ids: site.zona_ids, equipo_ids: site.equipo_ids,
+      id: site.id, name: site.name, order: site.order, zone_ids: site.zone_ids, team_ids: site.team_ids,
     });
 
   const nuevaPersonaVacia = (rol: SalesRole, teamId: number, equipo: string) =>
@@ -317,91 +317,91 @@ export function useCatalogs({
   const editarPersona = (row: CatalogMembership) =>
     setPersonaDraft({
       id: row.id,
-      equipo_id: row.equipo_id,
+      team_id: row.team_id,
       equipo: row.equipo,
-      rol: row.rol,
-      persona_id: row.persona_id,
-      nombre: row.nombre,
-      apellido: row.apellido,
-      medio: row.medio,
-      medio_supervisor: row.medio_supervisor,
-      usuario_odoo: row.usuario_odoo,
-      alias_medio: row.alias_medio,
-      alias_supervisor: row.alias_supervisor,
-      alias_usuario: row.alias_usuario,
+      role: row.role,
+      person_id: row.person_id,
+      name: row.name,
+      last_name: row.last_name,
+      channel: row.channel,
+      supervisor_channel: row.supervisor_channel,
+      odoo_user: row.odoo_user,
+      channel_alias: row.channel_alias,
+      supervisor_alias: row.supervisor_alias,
+      user_alias: row.user_alias,
       site_ids: row.site_ids,
-      superior_id: row.superior_id,
-      unidad_ids: row.unidad_ids,
+      manager_id: row.manager_id,
+      unit_ids: row.unit_ids,
     });
 
   const editarCondicion = (row: CatalogRoleCondition) =>
     setCondicionDraft({
-      equipo_id: row.equipo_id,
+      team_id: row.team_id,
       equipo: row.equipo,
-      rol: row.rol,
-      etiqueta: row.etiqueta,
-      piezas: row.piezas,
-      parametros: structuredClone(row.parametros),
-      defecto: row.defecto,
+      role: row.role,
+      role_label: row.role_label,
+      pieces: row.pieces,
+      params: structuredClone(row.params),
+      policy: row.policy,
     });
 
-  const nuevaUnidad = () => setUnidadDraft({ nombre: '', zona_ids: [], equipo_ids: [] });
+  const nuevaUnidad = () => setUnidadDraft({ name: '', zone_ids: [], team_ids: [] });
   const editarUnidad = (row: CatalogBusinessUnit) =>
-    setUnidadDraft({ id: row.id, nombre: row.nombre, zona_ids: row.zona_ids, equipo_ids: row.equipo_ids });
+    setUnidadDraft({ id: row.id, name: row.name, zone_ids: row.zone_ids, team_ids: row.team_ids });
 
   const nuevoObjetivoOficina = (personId: number | null = null) =>
-    setObjetivoOficinaDraft({ persona_id: personId, desde: '', ventas: '', nota: '' });
+    setObjetivoOficinaDraft({ person_id: personId, since: '', ventas: '', note: '' });
   const editarObjetivoOficina = (row: CatalogOfficeTarget) =>
     setObjetivoOficinaDraft({
       id: row.id,
-      persona_id: row.persona_id,
-      etiqueta: row.persona || 'General (todas las coordinadoras)',
-      desde: row.desde,
+      person_id: row.person_id,
+      role_label: row.person || 'General (todas las coordinadoras)',
+      since: row.since,
       ventas: String(row.ventas),
-      nota: row.nota,
+      note: row.note,
     });
 
-  const nuevoNombre = (tipo: NameDraft['tipo']) => setNombreDraft({ nombre: '', tipo });
-  const editarNombre = (tipo: NameDraft['tipo'], row: CatalogNamed) =>
-    setNombreDraft({ id: row.id, nombre: row.nombre, tipo });
+  const nuevoNombre = (tipo: NameDraft['kind']) => setNombreDraft({ name: '', kind: tipo });
+  const editarNombre = (tipo: NameDraft['kind'], row: CatalogNamed) =>
+    setNombreDraft({ id: row.id, name: row.name, kind: tipo });
 
-  const nuevoIgnorado = (area: CatalogArea) => setIgnoradoDraft({ nombre: '', nota: '', area });
+  const nuevoIgnorado = (area: CatalogArea) => setIgnoradoDraft({ name: '', note: '', area });
   const editarIgnorado = (row: CatalogIgnoredProduct) =>
-    setIgnoradoDraft({ id: row.id, nombre: row.nombre, nota: row.nota, area: row.area });
+    setIgnoradoDraft({ id: row.id, name: row.name, note: row.note, area: row.area });
 
   const nuevoObjetivo = (nivel: CatalogTargetLevel) =>
     setObjetivoDraft({
-      nivel,
-      entidad_id: null,
+      level: nivel,
+      entity_id: null,
       sucursal: '',
-      desde: '',
-      crecimiento_pct: '',
+      since: '',
+      growth_pct: '',
       churn_pct: '',
-      nota: '',
+      note: '',
     });
   const editarObjetivo = (row: CatalogTarget) =>
     setObjetivoDraft({
       id: row.id,
-      nivel: row.nivel,
-      entidad_id: row.entidad_id,
+      level: row.level,
+      entity_id: row.entity_id,
       sucursal: row.sucursal,
-      etiqueta: row.entidad,
-      desde: row.desde,
-      crecimiento_pct: asText(row.crecimiento_pct),
+      role_label: row.entity,
+      since: row.since,
+      growth_pct: asText(row.growth_pct),
       churn_pct: asText(row.churn_pct),
-      nota: row.nota,
-      esBase: row.nivel === 'general',
+      note: row.note,
+      esBase: row.level === 'general',
     });
 
   const nuevoObjetivoMes = (periodo = '') =>
-    setObjetivoMesDraft({ periodo, crecimiento_pct: '', churn_pct: '', nota: '' });
+    setObjetivoMesDraft({ period: periodo, growth_pct: '', churn_pct: '', note: '' });
   const editarObjetivoMes = (row: CatalogMonthTarget) =>
     setObjetivoMesDraft({
       id: row.id,
-      periodo: row.periodo,
-      crecimiento_pct: asText(row.crecimiento_pct),
+      period: row.period,
+      growth_pct: asText(row.growth_pct),
       churn_pct: asText(row.churn_pct),
-      nota: row.nota,
+      note: row.note,
     });
 
   const editarSemaforo = (semaforo: TargetsTrafficLight) => setSemaforoDraft({ ...semaforo });
@@ -447,7 +447,7 @@ export function useCatalogs({
    * zona nueva de una mal escrita, así que la decisión la toma quien mira la
    * lista.
    */
-  const ignorar = (area: CatalogArea, nombre: string) => guardar('ignorados', { nombre, nota: '', area });
+  const ignorar = (area: CatalogArea, nombre: string) => guardar('ignorados', { name: nombre, note: '', area });
 
   /**
    * Registra de una vez varios nombres pendientes de ventas con el mismo rol y equipo.
@@ -468,18 +468,18 @@ export function useCatalogs({
         'membresias',
         literals.map((literal) => ({ ...membershipSince(literal, rol, teamId, equipo) })),
       );
-      if (response.errores.length) {
+      if (response.errors.length) {
         const MOSTRADOS = 5;
-        const detalle = response.errores
+        const detalle = response.errors
           .slice(0, MOSTRADOS)
-          .map((e) => `${e.nombre}: ${e.message}`)
+          .map((e) => `${e.name}: ${e.message}`)
           .join(' · ');
-        const resto = response.errores.length - MOSTRADOS;
+        const resto = response.errors.length - MOSTRADOS;
         setError(`${response.message} No entraron: ${detalle}${resto > 0 ? ` · y ${resto} más` : ''}`);
       } else {
         setNotice(response.message);
       }
-      return response.registrados.length;
+      return response.saved.length;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo registrar el lote.'));
       return 0;
@@ -498,12 +498,12 @@ export function useCatalogs({
   const vincularNombre = (
     persona: CatalogSalesPerson,
     literal: string,
-    columns: ('alias_medio' | 'alias_supervisor' | 'alias_usuario')[],
+    columns: ('channel_alias' | 'supervisor_alias' | 'user_alias')[],
   ) =>
     guardar('personas', {
       id: persona.id,
-      nombre: persona.nombre,
-      apellido: persona.apellido,
+      name: persona.name,
+      last_name: persona.last_name,
       ...Object.fromEntries(columns.map((c) => [c, [...persona[c], literal]])),
     });
 
@@ -512,7 +512,7 @@ export function useCatalogs({
     setGuardando(true);
     setError(null);
     try {
-      await catalogsApi.eliminar(borrando.tipo, borrando.id);
+      await catalogsApi.eliminar(borrando.kind, borrando.id);
       setBorrando(null);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo eliminar el registro.'));

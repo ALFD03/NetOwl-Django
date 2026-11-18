@@ -48,11 +48,11 @@ export const supportApi = {
   moverUsuario: async (
     accion: UserMove,
     id: number,
-    extra: { departamento_id?: number | null; fecha?: string } = {},
+    extra: { department_id?: number | null; date?: string } = {},
   ) => (await apiClient.post('/api/support/users/move/', { accion, id, ...extra })).data,
 
   /** Alta o edición de una etapa del catálogo. Sin `id` es un alta. */
-  saveEtapa: async (payload: { id?: number; nombre: string; equipo: string; tipo: string }) =>
+  saveEtapa: async (payload: { id?: number; name: string; team: string; type: string }) =>
     (await apiClient.post<ApiMessageResponse>('/api/support/stages/save/', payload)).data,
 
   deleteEtapa: async (id: number) =>

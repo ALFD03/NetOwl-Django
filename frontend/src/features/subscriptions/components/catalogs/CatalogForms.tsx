@@ -59,19 +59,19 @@ const PERSON_UI: Record<string, { icon: ReactNode; description: string; tone: Fo
 };
 
 function TecnologiaCards({
-  opciones,
-  valor,
+  options,
+  value,
   onChange,
   label = 'Tecnología',
 }: {
-  opciones: CatalogOption[];
-  valor: string;
+  options: CatalogOption[];
+  value: string;
   onChange: (valor: string) => void;
   label?: string;
 }) {
   return (
     <OptionCardGroup label={label} columns="md:grid-cols-2">
-      {opciones.map((option) => {
+      {options.map((option) => {
         const ui = TECNOLOGIA_UI[option.value] ?? DEFAULT_TECHNOLOGY;
         return (
           <OptionCard
@@ -80,7 +80,7 @@ function TecnologiaCards({
             title={option.label}
             description={ui.description}
             tone={ui.tone}
-            selected={valor === option.value}
+            selected={value === option.value}
             onSelect={() => onChange(option.value)}
           />
         );
@@ -91,18 +91,18 @@ function TecnologiaCards({
 
 export function PlanForm({
   value,
-  tecnologias,
-  tiposPersona,
+  technologies,
+  personTypes,
   saving,
   onChange,
   onSubmit,
   onClose,
-  reguladores,
+  regulators,
 }: Acciones & {
   value: PlanDraft;
-  tecnologias: CatalogOption[];
-  tiposPersona: CatalogOption[];
-  reguladores: CatalogRegulatoryPlan[];
+  technologies: CatalogOption[];
+  personTypes: CatalogOption[];
+  regulators: CatalogRegulatoryPlan[];
   onChange: (patch: Partial<PlanDraft>) => void;
 }) {
   return (
@@ -112,23 +112,23 @@ export function PlanForm({
         description="Si eliges «No declarar», el plan sigue siendo un plan en todo lo demás pero no suma en las matrices del reporte ETA."
         action={
           <TogglePill
-            active={value.declarar_en_eta}
+            active={value.declare_in_eta}
             icon={<ShieldCheck />}
             activeLabel="Declarar en ETA"
             inactiveLabel="No declarar"
-            onToggle={() => onChange({ declarar_en_eta: !value.declarar_en_eta })}
+            onToggle={() => onChange({ declare_in_eta: !value.declare_in_eta })}
           />
         }
       />
 
       <TecnologiaCards
-        opciones={tecnologias}
-        valor={value.tecnologia}
-        onChange={(tecnologia) => onChange({ tecnologia })}
+        options={technologies}
+        value={value.technology}
+        onChange={(tecnologia) => onChange({ technology: tecnologia })}
       />
 
       <OptionCardGroup label="Tipo de suscriptor" columns="md:grid-cols-2">
-        {tiposPersona.map((option) => {
+        {personTypes.map((option) => {
           const ui = PERSON_UI[option.value] ?? DEFAULT_PERSON;
           return (
             <OptionCard
@@ -137,8 +137,8 @@ export function PlanForm({
               title={option.label}
               description={ui.description}
               tone={ui.tone}
-              selected={value.tipo_persona === option.value}
-              onSelect={() => onChange({ tipo_persona: option.value })}
+              selected={value.person_type === option.value}
+              onSelect={() => onChange({ person_type: option.value })}
             />
           );
         })}
@@ -154,8 +154,8 @@ export function PlanForm({
               type="text"
               required
               className={modalInputClass}
-              value={value.nombre}
-              onChange={(e) => onChange({ nombre: e.target.value })}
+              value={value.name}
+              onChange={(e) => onChange({ name: e.target.value })}
             />
           </Field>
 
@@ -166,8 +166,8 @@ export function PlanForm({
             <input
               type="text"
               className={modalInputClass}
-              value={value.tarifa}
-              onChange={(e) => onChange({ tarifa: e.target.value })}
+              value={value.tariff}
+              onChange={(e) => onChange({ tariff: e.target.value })}
             />
           </Field>
 
@@ -179,8 +179,8 @@ export function PlanForm({
               type="text"
               className={modalInputClass}
               placeholder="RESIDENCIAL FTTH HASTA 400 Mbps"
-              value={value.referencia}
-              onChange={(e) => onChange({ referencia: e.target.value })}
+              value={value.reference}
+              onChange={(e) => onChange({ reference: e.target.value })}
             />
           </Field>
         </div>
@@ -193,8 +193,8 @@ export function PlanForm({
                 min="0"
                 step="any"
                 className={modalInputClass}
-                value={value.datas_mbps}
-                onChange={(e) => onChange({ datas_mbps: Number(e.target.value) })}
+                value={value.data_mbps}
+                onChange={(e) => onChange({ data_mbps: Number(e.target.value) })}
               />
             </Field>
 
@@ -204,13 +204,13 @@ export function PlanForm({
                 min="0"
                 step="any"
                 className={modalInputClass}
-                value={value.precio}
-                onChange={(e) => onChange({ precio: Number(e.target.value) })}
+                value={value.price}
+                onChange={(e) => onChange({ price: Number(e.target.value) })}
               />
             </Field>
           </div>
 
-          {value.tipo_persona === 'PYME' && (
+          {value.person_type === 'PYME' && (
             <Field
               label="Comisión PYME (% del precio)"
               hint="Lo que cobra quien vende el plan, y solo esa persona. Vacío es «sin definir»: Comisiones avisa de esas ventas en vez de pagarlas a 0."
@@ -221,8 +221,8 @@ export function PlanForm({
                 max="100"
                 step="any"
                 className={modalInputClass}
-                value={value.comision_pyme_pct ?? ''}
-                onChange={(e) => onChange({ comision_pyme_pct: e.target.value === '' ? null : Number(e.target.value) })}
+                value={value.sme_commission_pct ?? ''}
+                onChange={(e) => onChange({ sme_commission_pct: e.target.value === '' ? null : Number(e.target.value) })}
               />
             </Field>
           )}
@@ -234,12 +234,12 @@ export function PlanForm({
             <SelectMenu
               aria-label="Plan regulador"
               className={modalInputClass}
-              value={String(value.plan_regulador_id ?? NO_REGULATORY)}
+              value={String(value.regulator_plan_id ?? NO_REGULATORY)}
               options={[
                 { value: NO_REGULATORY, label: 'Sin asignar — no se declara' },
-                ...reguladores.map((r) => ({ value: String(r.id), label: r.nombre })),
+                ...regulators.map((r) => ({ value: String(r.id), label: r.name })),
               ]}
-              onChange={(id) => onChange({ plan_regulador_id: id ? Number(id) : null })}
+              onChange={(id) => onChange({ regulator_plan_id: id ? Number(id) : null })}
             />
           </Field>
 
@@ -249,8 +249,8 @@ export function PlanForm({
             title="IPTV"
             description="El plan incluye televisión y suma en las matrices de TV del reporte."
             tone="sky"
-            selected={value.tiene_tv}
-            onSelect={() => onChange({ tiene_tv: !value.tiene_tv })}
+            selected={value.has_tv}
+            onSelect={() => onChange({ has_tv: !value.has_tv })}
           />
         </div>
       </FormColumns>
@@ -262,16 +262,16 @@ export function PlanForm({
 
 export function RegulatoryPlanForm({
   value,
-  tecnologias,
-  tiposPersona,
+  technologies,
+  personTypes,
   saving,
   onChange,
   onSubmit,
   onClose,
 }: Acciones & {
   value: RegulatoryDraft;
-  tecnologias: CatalogOption[];
-  tiposPersona: CatalogOption[];
+  technologies: CatalogOption[];
+  personTypes: CatalogOption[];
   onChange: (patch: Partial<RegulatoryDraft>) => void;
 }) {
   return (
@@ -281,24 +281,24 @@ export function RegulatoryPlanForm({
         description="El transporte de datos se declara en su propia hoja, con otras columnas: medio de transmisión y número de enlaces en vez de velocidades de subida y bajada."
         action={
           <TogglePill
-            active={value.es_transporte}
+            active={value.is_transport}
             icon={<Cable />}
             activeLabel="Transporte de datos"
             inactiveLabel="Internet"
-            onToggle={() => onChange({ es_transporte: !value.es_transporte })}
+            onToggle={() => onChange({ is_transport: !value.is_transport })}
           />
         }
       />
 
       <TecnologiaCards
-        opciones={tecnologias}
-        valor={value.tecnologia}
-        onChange={(tecnologia) => onChange({ tecnologia })}
+        options={technologies}
+        value={value.technology}
+        onChange={(tecnologia) => onChange({ technology: tecnologia })}
         label="Tecnología declarada"
       />
 
       <OptionCardGroup label="Tipo de suscriptor declarado" columns="md:grid-cols-2">
-        {tiposPersona.map((option) => {
+        {personTypes.map((option) => {
           const ui = PERSON_UI[option.value] ?? DEFAULT_PERSON;
           return (
             <OptionCard
@@ -307,8 +307,8 @@ export function RegulatoryPlanForm({
               title={option.label}
               description={ui.description}
               tone={ui.tone}
-              selected={value.tipo_persona === option.value}
-              onSelect={() => onChange({ tipo_persona: option.value })}
+              selected={value.person_type === option.value}
+              onSelect={() => onChange({ person_type: option.value })}
             />
           );
         })}
@@ -325,8 +325,8 @@ export function RegulatoryPlanForm({
               required
               className={modalInputClass}
               placeholder="Internet Fibra 100 Mbps"
-              value={value.nombre}
-              onChange={(e) => onChange({ nombre: e.target.value })}
+              value={value.name}
+              onChange={(e) => onChange({ name: e.target.value })}
             />
           </Field>
 
@@ -337,8 +337,8 @@ export function RegulatoryPlanForm({
             <input
               type="text"
               className={modalInputClass}
-              value={value.notas}
-              onChange={(e) => onChange({ notas: e.target.value })}
+              value={value.notes}
+              onChange={(e) => onChange({ notes: e.target.value })}
             />
           </Field>
         </div>
@@ -354,8 +354,8 @@ export function RegulatoryPlanForm({
                 min="0"
                 step="any"
                 className={modalInputClass}
-                value={value.datas_mbps}
-                onChange={(e) => onChange({ datas_mbps: Number(e.target.value) })}
+                value={value.data_mbps}
+                onChange={(e) => onChange({ data_mbps: Number(e.target.value) })}
               />
             </Field>
 
@@ -368,8 +368,8 @@ export function RegulatoryPlanForm({
                 min="0"
                 step="any"
                 className={modalInputClass}
-                value={value.precio}
-                onChange={(e) => onChange({ precio: Number(e.target.value) })}
+                value={value.price}
+                onChange={(e) => onChange({ price: Number(e.target.value) })}
               />
             </Field>
           </div>
@@ -380,8 +380,8 @@ export function RegulatoryPlanForm({
             title="IPTV"
             description="Además de su hoja, esta fila se declara en la de televisión con la parrilla de canales."
             tone="sky"
-            selected={value.tiene_tv}
-            onSelect={() => onChange({ tiene_tv: !value.tiene_tv })}
+            selected={value.has_tv}
+            onSelect={() => onChange({ has_tv: !value.has_tv })}
           />
         </div>
       </FormColumns>
@@ -398,9 +398,9 @@ export function RegulatoryPlanForm({
 export function ZoneForm({
   value,
   sites,
-  estados,
-  coordinadores,
-  tecnologias,
+  states,
+  coordinators,
+  technologies,
   saving,
   onChange,
   onSubmit,
@@ -408,12 +408,12 @@ export function ZoneForm({
 }: Acciones & {
   value: ZoneDraft;
   sites: CatalogSite[];
-  estados: CatalogNamed[];
-  coordinadores: CatalogNamed[];
-  tecnologias: CatalogOption[];
+  states: CatalogNamed[];
+  coordinators: CatalogNamed[];
+  technologies: CatalogOption[];
   onChange: (patch: Partial<ZoneDraft>) => void;
 }) {
-  const withCoordinator = value.coordinador_id !== null;
+  const withCoordinator = value.coordinator_id !== null;
 
   return (
     <ModalForm onSubmit={onSubmit}>
@@ -427,16 +427,16 @@ export function ZoneForm({
             activeLabel="Con coordinador"
             inactiveLabel="Sin coordinador"
             onToggle={() =>
-              onChange({ coordinador_id: withCoordinator ? null : (coordinadores[0]?.id ?? null) })
+              onChange({ coordinator_id: withCoordinator ? null : (coordinators[0]?.id ?? null) })
             }
           />
         }
       />
 
       <TecnologiaCards
-        opciones={tecnologias}
-        valor={value.tecnologia}
-        onChange={(tecnologia) => onChange({ tecnologia })}
+        options={technologies}
+        value={value.technology}
+        onChange={(tecnologia) => onChange({ technology: tecnologia })}
         label="Tecnología del nodo"
       />
 
@@ -450,8 +450,8 @@ export function ZoneForm({
               type="text"
               required
               className={modalInputClass}
-              value={value.nombre}
-              onChange={(e) => onChange({ nombre: e.target.value })}
+              value={value.name}
+              onChange={(e) => onChange({ name: e.target.value })}
             />
           </Field>
 
@@ -460,7 +460,7 @@ export function ZoneForm({
               aria-label="Site"
               className={modalInputClass}
               value={String(value.site_id ?? '')}
-              options={sites.map((site) => ({ value: String(site.id), label: site.nombre }))}
+              options={sites.map((site) => ({ value: String(site.id), label: site.name }))}
               onChange={(site_id) => onChange({ site_id: Number(site_id) })}
             />
           </Field>
@@ -471,9 +471,9 @@ export function ZoneForm({
             <SelectMenu
               aria-label="Estado"
               className={modalInputClass}
-              value={String(value.estado_id ?? '')}
-              options={estados.map((estado) => ({ value: String(estado.id), label: estado.nombre }))}
-              onChange={(estado_id) => onChange({ estado_id: Number(estado_id) })}
+              value={String(value.state_id ?? '')}
+              options={states.map((estado) => ({ value: String(estado.id), label: estado.name }))}
+              onChange={(estado_id) => onChange({ state_id: Number(estado_id) })}
             />
           </Field>
 
@@ -482,9 +482,9 @@ export function ZoneForm({
               <SelectMenu
                 aria-label="Coordinador"
                 className={modalInputClass}
-                value={String(value.coordinador_id ?? '')}
-                options={coordinadores.map((c) => ({ value: String(c.id), label: c.nombre }))}
-                onChange={(coordinador_id) => onChange({ coordinador_id: Number(coordinador_id) })}
+                value={String(value.coordinator_id ?? '')}
+                options={coordinators.map((c) => ({ value: String(c.id), label: c.name }))}
+                onChange={(coordinador_id) => onChange({ coordinator_id: Number(coordinador_id) })}
               />
             </Field>
           ) : (
@@ -525,8 +525,8 @@ export function NameForm({
           type="text"
           required
           className={modalInputClass}
-          value={value.nombre}
-          onChange={(e) => onChange({ nombre: e.target.value })}
+          value={value.name}
+          onChange={(e) => onChange({ name: e.target.value })}
         />
       </Field>
 
@@ -537,27 +537,27 @@ export function NameForm({
 
 /** Lo que cambia del formulario de ignorar según la lista de la que sale el nombre. */
 const IGNORED_TEXTS: Record<CatalogArea, {
-  titulo: string; descripcion: string; campo: string; nota: string; boton: string;
+  titulo: string; descripcion: string; campo: string; note: string; boton: string;
 }> = {
   productos: {
     titulo: 'Producto que nunca será un plan',
     descripcion: 'Routers, instalaciones y servicios puntuales. Dejará de bloquear importaciones y análisis sin entrar en el catálogo de planes.',
     campo: 'Producto',
-    nota: 'Por qué nunca será un plan. Ayuda a revisar la decisión más adelante.',
+    note: 'Por qué nunca será un plan. Ayuda a revisar la decisión más adelante.',
     boton: 'Ignorar producto',
   },
   estructura: {
     titulo: 'Zona que no se registrará',
     descripcion: 'Una zona mal escrita en Odoo o que no es un nodo de verdad. Dejará de aparecer en Notificaciones sin entrar en el catálogo.',
     campo: 'Zona',
-    nota: 'Por qué no se registra. Ayuda a revisar la decisión más adelante.',
+    note: 'Por qué no se registra. Ayuda a revisar la decisión más adelante.',
     boton: 'Ignorar zona',
   },
   ventas: {
     titulo: 'Vendedor que no se registrará',
     descripcion: 'Un canal o un usuario genérico que no es una persona de ventas. Dejará de aparecer en Notificaciones sin entrar en el directorio.',
     campo: 'Nombre',
-    nota: 'Por qué no se registra. Ayuda a revisar la decisión más adelante.',
+    note: 'Por qué no se registra. Ayuda a revisar la decisión más adelante.',
     boton: 'Ignorar nombre',
   },
 };
@@ -603,17 +603,17 @@ export function IgnoredForm({
             type="text"
             required
             className={modalInputClass}
-            value={value.nombre}
-            onChange={(e) => onChange({ nombre: e.target.value })}
+            value={value.name}
+            onChange={(e) => onChange({ name: e.target.value })}
           />
         </Field>
 
-        <Field label="Nota" hint={textos.nota}>
+        <Field label="Nota" hint={textos.note}>
           <input
             type="text"
             className={modalInputClass}
-            value={value.nota}
-            onChange={(e) => onChange({ nota: e.target.value })}
+            value={value.note}
+            onChange={(e) => onChange({ note: e.target.value })}
           />
         </Field>
       </div>

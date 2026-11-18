@@ -13,11 +13,11 @@ import type { SupportDepartment, SupportUser } from '@/features/support/types';
 /** Una fila en edición. Sin `id` es un alta. */
 export type UserDraft = {
   id?: number;
-  nombre_odoo: string;
-  nombre: string;
-  apellido: string;
-  departamento_id: number | null;
-  fecha_ingreso: string;
+  odoo_name: string;
+  name: string;
+  last_name: string;
+  department_id: number | null;
+  start_date: string;
   /**
    * Si el departamento todavía se puede elegir aquí: en el alta, o mientras el
    * usuario no haya cambiado nunca. Con cambios encima se usa «Cambiar
@@ -28,23 +28,23 @@ export type UserDraft = {
    * La última fecha de ingreso posible: el día antes del primer cambio de
    * departamento, o el egreso. Nula si nada la limita.
    */
-  maxIngreso: string | null;
+  maxStartDate: string | null;
 };
 
-export type DepartmentDraft = { id?: number; nombre: string };
+export type DepartmentDraft = { id?: number; name: string };
 
 /** El formulario de «Cambiar departamento»: a cuál, y desde cuándo. */
-export type ChangeDraft = { usuario: SupportUser; departamento_id: number | null; fecha: string };
+export type ChangeDraft = { user: SupportUser; department_id: number | null; date: string };
 
 /** El formulario de baja: solo la fecha de egreso. */
-export type DeactivateDraft = { usuario: SupportUser; fecha: string };
+export type DeactivateDraft = { user: SupportUser; date: string };
 
 export type DirectoryView = 'pendientes' | 'trasBaja' | 'usuarios' | 'departamentos';
 
 interface Args {
-  departamentos: SupportDepartment[];
-  /** Nombre que llega en `?nuevo_usuario=`: abre el alta ya rellena. */
-  nuevoUsuario: string;
+  departments: SupportDepartment[];
+  /** Nombre que llega en `?new_user=`: abre el alta ya rellena. */
+  newUser: string;
 }
 
 /**
@@ -56,34 +56,34 @@ interface Args {
  * departamento cambia lo que puede elegir un usuario— y el servidor ya
  * devuelve todo junto.
  */
-export function useSupportUsers({ departamentos, nuevoUsuario }: Args) {
-  const [vista, setVista] = useState<DirectoryView>(() => (nuevoUsuario ? 'usuarios' : 'pendientes'));
+export function useSupportUsers({ departments, newUser }: Args) {
+  const [vista, setVista] = useState<DirectoryView>(() => (newUser ? 'usuarios' : 'pendientes'));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // `?nuevo_usuario=` viene de la pestaña de pendientes: el formulario abre con
+  // `?new_user=` viene de la pestaña de pendientes: el formulario abre con
   // el literal ya escrito para no obligar a copiar a mano una cadena que tiene
   // que coincidir carácter por carácter. Estado inicial y no efecto: el valor
   // llega con la primera pintada y no vuelve a cambiar mientras la página viva.
   const [usuarioDraft, setUsuarioDraft] = useState<UserDraft | null>(
-    () => (nuevoUsuario ? { ...emptyUser(departamentos), nombre_odoo: nuevoUsuario } : null),
+    () => (newUser ? { ...emptyUser(departments), odoo_name: newUser } : null),
   );
   const [departamentoDraft, setDepartamentoDraft] = useState<DepartmentDraft | null>(null);
-  const [borrando, setBorrando] = useState<{ tipo: DirectoryKind; id: number; nombre: string } | null>(null);
+  const [borrando, setBorrando] = useState<{ type: DirectoryKind; id: number; name: string } | null>(null);
 
-  const nuevoUsuarioVacio = () => setUsuarioDraft(emptyUser(departamentos));
-  const crearUsuarioDesde = (nombre_odoo: string) =>
-    setUsuarioDraft({ ...emptyUser(departamentos), nombre_odoo });
+  const nuevoUsuarioVacio = () => setUsuarioDraft(emptyUser(departments));
+  const crearUsuarioDesde = (odoo_name: string) =>
+    setUsuarioDraft({ ...emptyUser(departments), odoo_name });
   const editarUsuario = (row: SupportUser) =>
     setUsuarioDraft({
       id: row.id,
-      nombre_odoo: row.nombre_odoo,
-      nombre: row.nombre,
-      apellido: row.apellido,
-      departamento_id: row.departamento_id,
-      fecha_ingreso: row.fecha_ingreso ?? '',
-      departmentEditable: row.historial.length <= 1,
-      maxIngreso: limiteIngreso(row),
+      odoo_name: row.odoo_name,
+      name: row.name,
+      last_name: row.last_name,
+      department_id: row.department_id,
+      start_date: row.start_date ?? '',
+      departmentEditable: row.timeline.length <= 1,
+      maxStartDate: limiteIngreso(row),
     });
 
   const [cambioDraft, setCambioDraft] = useState<ChangeDraft | null>(null);
@@ -95,14 +95,14 @@ export function useSupportUsers({ departamentos, nuevoUsuario }: Args) {
   // Sin fecha de partida: hoy puede caer antes del último cambio, y un valor
   // ya puesto que el servidor rechaza confunde más que un campo vacío. El
   // calendario ofrece «Hoy» a un clic cuando es válido.
-  const abrirCambio = (usuario: SupportUser) => setCambioDraft({ usuario, departamento_id: null, fecha: '' });
-  const abrirBaja = (usuario: SupportUser) => setBajaDraft({ usuario, fecha: '' });
+  const abrirCambio = (user: SupportUser) => setCambioDraft({ user, department_id: null, date: '' });
+  const abrirBaja = (user: SupportUser) => setBajaDraft({ user, date: '' });
 
-  const nuevoDepartamento = () => setDepartamentoDraft({ nombre: '' });
+  const nuevoDepartamento = () => setDepartamentoDraft({ name: '' });
   // `usuarios` se queda fuera a propósito: es un conteo que calcula el
   // servidor, no un campo del formulario.
   const editarDepartamento = (row: SupportDepartment) =>
-    setDepartamentoDraft({ id: row.id, nombre: row.nombre });
+    setDepartamentoDraft({ id: row.id, name: row.name });
 
   const cerrarFormularios = () => {
     setUsuarioDraft(null);
@@ -130,7 +130,7 @@ export function useSupportUsers({ departamentos, nuevoUsuario }: Args) {
   const mover = async (
     accion: UserMove,
     id: number,
-    extra: { departamento_id?: number | null; fecha?: string } = {},
+    extra: { department_id?: number | null; date?: string } = {},
   ) => {
     setGuardando(true);
     setError(null);
@@ -151,7 +151,7 @@ export function useSupportUsers({ departamentos, nuevoUsuario }: Args) {
     setGuardando(true);
     setError(null);
     try {
-      await supportApi.deleteDirectorio(borrando.tipo, borrando.id);
+      await supportApi.deleteDirectorio(borrando.type, borrando.id);
       setBorrando(null);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo eliminar el registro.'));
@@ -178,22 +178,22 @@ export function useSupportUsers({ departamentos, nuevoUsuario }: Args) {
  */
 function emptyUser(departamentos: SupportDepartment[]): UserDraft {
   return {
-    nombre_odoo: '',
-    nombre: '',
-    apellido: '',
-    departamento_id: departamentos[0]?.id ?? null,
-    fecha_ingreso: '',
+    odoo_name: '',
+    name: '',
+    last_name: '',
+    department_id: departamentos[0]?.id ?? null,
+    start_date: '',
     departmentEditable: true,
-    maxIngreso: null,
+    maxStartDate: null,
   };
 }
 
 /** El tope de `fecha_ingreso` que aplica el servidor, para no ofrecer días que rechazaría. */
 function limiteIngreso(row: SupportUser): string | null {
-  const firstChange = row.historial.find((p) => p.desde)?.desde;
+  const firstChange = row.timeline.find((p) => p.since)?.since;
   if (firstChange) {
     const [a, m, d] = firstChange.split('-').map(Number);
     return new Date(Date.UTC(a, m - 1, d - 1)).toISOString().slice(0, 10);
   }
-  return row.fecha_egreso;
+  return row.end_date;
 }

@@ -9,7 +9,7 @@ import { FirstInstallment } from './pieces';
 import type { CommissionSale } from '../types';
 
 interface ReviewTableProps {
-  ventas: CommissionSale[];
+  sales: CommissionSale[];
   editable: boolean;
   guardando: boolean;
   /** Resuelve a `true` si se guardó: entonces se vacía la selección. */
@@ -29,45 +29,45 @@ interface ReviewTableProps {
  * marcar ninguna, todas las pendientes —lo filtrado en la tabla no cuenta—.
  * Marcar una ya decidida y elegir la otra opción cambia su decisión.
  */
-export function ReviewTable({ ventas, editable, guardando, onDecidir }: ReviewTableProps) {
+export function ReviewTable({ sales, editable, guardando, onDecidir }: ReviewTableProps) {
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
-  const pendientes = ventas.filter((v) => !v.decision).map((v) => v.orden);
+  const pendientes = sales.filter((v) => !v.decision).map((v) => v.order);
   // Lo seleccionado que sigue en la lista (tras una recarga puede no estar).
-  const elegidas = ventas.filter((v) => seleccion.has(v.orden));
+  const elegidas = sales.filter((v) => seleccion.has(v.order));
   const elegidasDecididas = elegidas.filter((v) => v.decision).length;
 
   const decidirSeleccion = async (decision: '' | 'contar' | 'no_contar') => {
-    if (await onDecidir(elegidas.map((v) => v.orden), decision)) setSeleccion(new Set());
+    if (await onDecidir(elegidas.map((v) => v.order), decision)) setSeleccion(new Set());
   };
 
   const columns: Column<CommissionSale>[] = [
-    { header: 'Orden', accessor: 'orden', sortKey: 'orden', sticky: true },
-    { header: 'Cliente', accessor: 'cliente', sortKey: 'cliente' },
-    { header: 'Instalada', accessor: (row) => formatDateValue(row.fecha_inicio), sortKey: 'fecha_inicio' },
-    { header: 'Plan', accessor: 'producto', sortKey: 'producto' },
+    { header: 'Orden', accessor: 'order', sortKey: 'order', sticky: true },
+    { header: 'Cliente', accessor: 'client', sortKey: 'client' },
+    { header: 'Instalada', accessor: (row) => formatDateValue(row.since_date), sortKey: 'since_date' },
+    { header: 'Plan', accessor: 'product', sortKey: 'product' },
     {
       header: 'Estado actual',
       accessor: (row) => (
         <span className="flex flex-col leading-tight">
-          <span>{row.estado || '—'}</span>
-          {row.cancelada_el && <span className="text-xs text-slate-500">desde {formatDateValue(row.cancelada_el)}</span>}
+          <span>{row.status || '—'}</span>
+          {row.cancelled_on && <span className="text-xs text-slate-500">desde {formatDateValue(row.cancelled_on)}</span>}
         </span>
       ),
-      sortKey: 'estado',
+      sortKey: 'status',
       filterable: true,
-      filterValue: (row) => row.estado || 'Sin estado',
+      filterValue: (row) => row.status || 'Sin estado',
     },
-    { header: 'Estado de la factura', accessor: (row) => row.estado_factura || '—', sortKey: 'estado_factura', filterable: true, filterValue: (row) => row.estado_factura || 'Sin estado' },
+    { header: 'Estado de la factura', accessor: (row) => row.billing_status || '—', sortKey: 'billing_status', filterable: true, filterValue: (row) => row.billing_status || 'Sin estado' },
     // Se ordena por el estado del pago, que es lo que se lee de un vistazo.
-    { header: 'Primera mensualidad', accessor: (row) => <FirstInstallment venta={row} />, sortKey: 'factura_pago' },
+    { header: 'Primera mensualidad', accessor: (row) => <FirstInstallment sale={row} />, sortKey: 'invoice_payment' },
     {
       header: 'Por qué',
-      accessor: (row) => <span className="text-slate-300">{row.motivo_analisis}</span>,
-      sortKey: 'motivo_analisis',
+      accessor: (row) => <span className="text-slate-300">{row.analysis_reason}</span>,
+      sortKey: 'analysis_reason',
       filterable: true,
-      filterValue: (row) => row.motivo_analisis,
+      filterValue: (row) => row.analysis_reason,
     },
-    { header: 'Medio', accessor: (row) => row.medio || '—', sortKey: 'medio' },
+    { header: 'Medio', accessor: (row) => row.channel || '—', sortKey: 'channel' },
     {
       header: 'Situación',
       accessor: (row) => {
@@ -87,14 +87,14 @@ export function ReviewTable({ ventas, editable, guardando, onDecidir }: ReviewTa
         if (!editable) return null;
         if (row.decision) {
           return (
-            <Button size="sm" variant="outline" icon={<Undo2 className="h-4 w-4" />} disabled={guardando} onClick={() => void onDecidir([row.orden], '')}>
+            <Button size="sm" variant="outline" icon={<Undo2 className="h-4 w-4" />} disabled={guardando} onClick={() => void onDecidir([row.order], '')}>
               Deshacer
             </Button>
           );
         }
         return (
           <div className="flex items-center justify-end gap-2">
-            <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" />} disabled={guardando} onClick={() => void onDecidir([row.orden], 'contar')}>
+            <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" />} disabled={guardando} onClick={() => void onDecidir([row.order], 'contar')}>
               Contar
             </Button>
             <Button
@@ -102,7 +102,7 @@ export function ReviewTable({ ventas, editable, guardando, onDecidir }: ReviewTa
               variant="outline"
               icon={<Ban className="h-4 w-4" />}
               disabled={guardando}
-              onClick={() => void onDecidir([row.orden], 'no_contar')}
+              onClick={() => void onDecidir([row.order], 'no_contar')}
             >
               No contar
             </Button>
@@ -157,11 +157,11 @@ export function ReviewTable({ ventas, editable, guardando, onDecidir }: ReviewTa
       )}
       <DataTable
         columns={columns}
-        data={ventas}
+        data={sales}
         searchable
         searchPlaceholder="Buscar orden o cliente..."
         emptyMessage="No hay ventas que revisar: las facturas lo resuelven todo."
-        selection={editable ? { rowKey: (row) => row.orden, selected: seleccion, onChange: setSeleccion } : undefined}
+        selection={editable ? { rowKey: (row) => row.order, selected: seleccion, onChange: setSeleccion } : undefined}
       />
     </>
   );

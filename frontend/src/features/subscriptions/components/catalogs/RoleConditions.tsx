@@ -37,31 +37,31 @@ const FACTORES: Record<ComplianceFactor, string> = {
 };
 
 const dolares = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(2)} $`;
-const monto = (p: AmountPiece) => (p.tipo === 'pct_plan' ? `${p.valor} % del precio del plan` : `${dolares(p.valor)} por venta`);
+const monto = (p: AmountPiece) => (p.kind === 'pct_plan' ? `${p.value} % del precio del plan` : `${dolares(p.value)} por venta`);
 
 /** Las condiciones de un rol, en una línea por pieza, para la tabla. */
 export function describePieces(p: PaymentParameters): string[] {
   const lineas: string[] = [];
   if (p.tramos_asesor) {
     lineas.push(`Por ventas propias: ${p.tramos_asesor
-      .map((t) => `desde ${t.desde} → ${dolares(t.monto)}${t.descontar ? ` (−${t.descontar})` : ''}`)
+      .map((t) => `desde ${t.since} → ${dolares(t.amount)}${t.deduct ? ` (−${t.deduct})` : ''}`)
       .join(' · ')}`);
   }
   if (p.propia) lineas.push(`Venta propia: ${monto(p.propia)}`);
   if (p.equipo) {
-    lineas.push(`Por ${ALCANCES[p.equipo.alcance]}: ${p.escalon_crecimiento ? 'según crecimiento' : monto(p.equipo)}${p.equipo.excluir_oficina ? ' · sin las ventas de oficina' : ''}`);
+    lineas.push(`Por ${ALCANCES[p.equipo.scope]}: ${p.escalon_crecimiento ? 'según crecimiento' : monto(p.equipo)}${p.equipo.exclude_office ? ' · sin las ventas de oficina' : ''}`);
   }
   if (p.escalon_crecimiento) {
     const e = p.escalon_crecimiento;
-    lineas.push(`Crecimiento de su unidad ≥ ${e.umbral_pct} %: ${dolares(e.alto)} por venta; si no, ${dolares(e.bajo)}`);
+    lineas.push(`Crecimiento de su unidad ≥ ${e.threshold_pct} %: ${dolares(e.high)} por venta; si no, ${dolares(e.low)}`);
   }
   if (p.factor && p.factor !== 'ninguno') lineas.push(`Total × ${FACTORES[p.factor]} (máx. 100 %)`);
-  if (p.bono_tramos) lineas.push(`Bono por ventas: ${p.bono_tramos.map((t) => `≥ ${t.desde} → ${dolares(t.monto)}`).join(' · ')}`);
-  if (p.bono_por_asesor) lineas.push(`Bono por cada asesor: ${p.bono_por_asesor.map((t) => `≥ ${t.desde} → ${dolares(t.monto)}`).join(' · ')}`);
-  if (p.bono_por_unidad) lineas.push(`Bono de ${dolares(p.bono_por_unidad.monto)} por unidad, proporcional a su % de ingresos (máx. 100 %)`);
-  if (p.bono_churn) lineas.push(`Bono por churn bruto: ${p.bono_churn.map((t) => `≤ ${t.max} % → ${dolares(t.monto)}`).join(' · ')}`);
+  if (p.bono_tramos) lineas.push(`Bono por ventas: ${p.bono_tramos.map((t) => `≥ ${t.since} → ${dolares(t.amount)}`).join(' · ')}`);
+  if (p.bono_por_asesor) lineas.push(`Bono por cada asesor: ${p.bono_por_asesor.map((t) => `≥ ${t.since} → ${dolares(t.amount)}`).join(' · ')}`);
+  if (p.bono_por_unidad) lineas.push(`Bono de ${dolares(p.bono_por_unidad.amount)} por unidad, proporcional a su % de ingresos (máx. 100 %)`);
+  if (p.bono_churn) lineas.push(`Bono por churn bruto: ${p.bono_churn.map((t) => `≤ ${t.max} % → ${dolares(t.amount)}`).join(' · ')}`);
   if (p.bono_empresa) {
-    lineas.push(`Bono por ventas de la empresa: ${dolares(p.bono_empresa.monto)} al 100 % (proporcional por debajo), ${dolares(p.bono_empresa.excedente)} por encima`);
+    lineas.push(`Bono por ventas de la empresa: ${dolares(p.bono_empresa.amount)} al 100 % (proporcional por debajo), ${dolares(p.bono_empresa.surplus)} por encima`);
   }
   return lineas;
 }
@@ -79,19 +79,19 @@ export function RoleConditionsCard({
   if (!condicion) {
     return <EmptyState title="Sin condiciones" description="Este rol no tiene condiciones de pago." icon={<Banknote />} />;
   }
-  const lineas = describePieces(condicion.parametros);
+  const lineas = describePieces(condicion.params);
   return (
     <div className="flex flex-col gap-4 p-5">
       <div className="flex items-center justify-between gap-2">
         <span
           className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-            condicion.personalizado ? 'bg-amber-500/10 text-amber-300' : 'bg-slate-700/40 text-slate-400'
+            condicion.custom ? 'bg-amber-500/10 text-amber-300' : 'bg-slate-700/40 text-slate-400'
           }`}
         >
-          {condicion.personalizado ? 'Editadas' : 'De la política'}
+          {condicion.custom ? 'Editadas' : 'De la política'}
         </span>
         <div className="flex items-center gap-2">
-          {condicion.personalizado && (
+          {condicion.custom && (
             <Button type="button" variant="outline" size="sm" icon={<RotateCcw className="h-4 w-4" />} onClick={() => onRestablecer(condicion)}>
               Política
             </Button>
@@ -125,18 +125,18 @@ const number = (e: { target: { value: string } }) => (e.target.value === '' ? 0 
 function Tiers({
   titulo,
   hint,
-  tramos,
+  buckets,
   withDiscount: conDescuento = false,
   onChange,
 }: {
   titulo: string;
   hint?: string;
-  tramos: PaymentTier[];
+  buckets: PaymentTier[];
   withDiscount?: boolean;
   onChange: (tramos: PaymentTier[]) => void;
 }) {
   const cambiar = (i: number, patch: Partial<PaymentTier>) =>
-    onChange(tramos.map((t, k) => (k === i ? { ...t, ...patch } : t)));
+    onChange(buckets.map((t, k) => (k === i ? { ...t, ...patch } : t)));
   return (
     <Field
       label={titulo}
@@ -144,7 +144,7 @@ function Tiers({
       action={
         <button
           type="button"
-          onClick={() => onChange([...tramos, { desde: 0, monto: 0, ...(conDescuento ? { descontar: 0 } : {}) }])}
+          onClick={() => onChange([...buckets, { since: 0, amount: 0, ...(conDescuento ? { deduct: 0 } : {}) }])}
           className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-sky-300"
         >
           <Plus className="h-3 w-3" /> Añadir tramo
@@ -152,20 +152,20 @@ function Tiers({
       }
     >
       <div className="space-y-2">
-        {tramos.map((t, i) => (
+        {buckets.map((t, i) => (
           <div key={i} className="flex items-center gap-2">
             <span className="text-[10px] text-slate-400">desde</span>
-            <input type="number" min={0} className={modalInputClass} value={t.desde} onChange={(e) => cambiar(i, { desde: number(e) })} />
+            <input type="number" min={0} className={modalInputClass} value={t.since} onChange={(e) => cambiar(i, { since: number(e) })} />
             <span className="text-[10px] text-slate-400">ventas →</span>
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={t.monto} onChange={(e) => cambiar(i, { monto: number(e) })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={t.amount} onChange={(e) => cambiar(i, { amount: number(e) })} />
             <span className="text-[10px] text-slate-400">$</span>
             {conDescuento && (
               <>
                 <span className="text-[10px] text-slate-400">descuenta</span>
-                <input type="number" min={0} className={modalInputClass} value={t.descontar ?? 0} onChange={(e) => cambiar(i, { descontar: number(e) })} />
+                <input type="number" min={0} className={modalInputClass} value={t.deduct ?? 0} onChange={(e) => cambiar(i, { deduct: number(e) })} />
               </>
             )}
-            <button type="button" onClick={() => onChange(tramos.filter((_, k) => k !== i))} className="text-rose-400 hover:text-rose-300" title="Quitar tramo">
+            <button type="button" onClick={() => onChange(buckets.filter((_, k) => k !== i))} className="text-rose-400 hover:text-rose-300" title="Quitar tramo">
               <Trash2 className="h-4 w-4" />
             </button>
           </div>
@@ -176,8 +176,8 @@ function Tiers({
 }
 
 /** Un monto por venta: dólares fijos o un % del precio del plan. */
-function AmountEditor({ titulo, hint, valor, onChange }: {
-  titulo: string; hint?: string; valor: AmountPiece; onChange: (p: AmountPiece) => void;
+function AmountEditor({ titulo, hint, value, onChange }: {
+  titulo: string; hint?: string; value: AmountPiece; onChange: (p: AmountPiece) => void;
 }) {
   return (
     <Field label={titulo} hint={hint}>
@@ -185,11 +185,11 @@ function AmountEditor({ titulo, hint, valor, onChange }: {
         <SelectMenu
           aria-label={titulo}
           className={modalInputClass}
-          value={valor.tipo}
+          value={value.kind}
           options={[{ value: 'monto', label: 'Dólares por venta' }, { value: 'pct_plan', label: '% del precio del plan' }]}
-          onChange={(tipo) => onChange({ ...valor, tipo: tipo as AmountPiece['tipo'] })}
+          onChange={(tipo) => onChange({ ...value, kind: tipo as AmountPiece['kind'] })}
         />
-        <input type="number" min={0} step="0.01" className={modalInputClass} value={valor.valor} onChange={(e) => onChange({ ...valor, valor: number(e) })} />
+        <input type="number" min={0} step="0.01" className={modalInputClass} value={value.value} onChange={(e) => onChange({ ...value, value: number(e) })} />
       </div>
     </Field>
   );
@@ -209,14 +209,14 @@ export function ConditionsForm({
   onSubmit: (event: FormEvent) => void;
   onClose: () => void;
 }) {
-  const p = value.parametros;
-  const poner = (patch: Partial<PaymentParameters>) => onChange({ parametros: { ...p, ...patch } });
-  const tiene = (pieza: ConditionDraft['piezas'][number]) => value.piezas.includes(pieza);
+  const p = value.params;
+  const poner = (patch: Partial<PaymentParameters>) => onChange({ params: { ...p, ...patch } });
+  const tiene = (pieza: ConditionDraft['pieces'][number]) => value.pieces.includes(pieza);
 
   return (
     <ModalForm onSubmit={onSubmit}>
       <FormBanner
-        title={`${value.etiqueta} · cómo cobra`}
+        title={`${value.role_label} · cómo cobra`}
         description="Solo afecta a lo que se calcule después: un periodo cerrado conserva las condiciones con que se pagó."
         action={
           <Button
@@ -224,7 +224,7 @@ export function ConditionsForm({
             variant="outline"
             size="sm"
             icon={<RotateCcw className="h-4 w-4" />}
-            onClick={() => onChange({ parametros: structuredClone(value.defecto) })}
+            onClick={() => onChange({ params: structuredClone(value.policy) })}
           >
             Política
           </Button>
@@ -235,32 +235,32 @@ export function ConditionsForm({
         <Tiers
           titulo="Por ventas propias"
           hint="Cada tramo vale desde esa cantidad de ventas hasta el siguiente. «Descuenta»: ventas que no se pagan en ese tramo."
-          tramos={p.tramos_asesor}
+          buckets={p.tramos_asesor}
           withDiscount
           onChange={(t) => poner({ tramos_asesor: t })}
         />
       )}
       {tiene('propia') && p.propia && (
-        <AmountEditor titulo="Venta propia" hint="Lo que cobra por cada venta que hizo él mismo («Medio»)." valor={p.propia} onChange={(v) => poner({ propia: v })} />
+        <AmountEditor titulo="Venta propia" hint="Lo que cobra por cada venta que hizo él mismo («Medio»)." value={p.propia} onChange={(v) => poner({ propia: v })} />
       )}
       {tiene('equipo') && p.equipo && (
         <>
           <AmountEditor
             titulo="Venta de equipo"
             hint={tiene('escalon_crecimiento') ? 'Con el escalón de crecimiento de abajo este monto no se usa.' : undefined}
-            valor={p.equipo}
+            value={p.equipo}
             onChange={(v) => poner({ equipo: { ...p.equipo!, ...v } })}
           />
           <Field label="¿De qué ventas?">
             <SelectMenu
               aria-label="Alcance de la venta de equipo"
               className={modalInputClass}
-              value={p.equipo.alcance}
+              value={p.equipo.scope}
               options={(Object.keys(ALCANCES) as TeamScope[]).map((a) => ({ value: a, label: ALCANCES[a] }))}
-              onChange={(a) => poner({ equipo: { ...p.equipo!, alcance: a as TeamScope } as TeamPiece })}
+              onChange={(a) => poner({ equipo: { ...p.equipo!, scope: a as TeamScope } as TeamPiece })}
             />
             <label className="mt-2 flex items-center gap-2 text-xs text-slate-300">
-              <input type="checkbox" checked={p.equipo.excluir_oficina} onChange={(e) => poner({ equipo: { ...p.equipo!, excluir_oficina: e.target.checked } })} />
+              <input type="checkbox" checked={p.equipo.exclude_office} onChange={(e) => poner({ equipo: { ...p.equipo!, exclude_office: e.target.checked } })} />
               No contar las ventas de oficina (las que hizo una coordinadora de oficina)
             </label>
           </Field>
@@ -270,11 +270,11 @@ export function ConditionsForm({
         <Field label="Escalón de crecimiento" hint="Por venta de equipo: cobra el monto alto si el crecimiento de su unidad llega al umbral, y el bajo si no.">
           <div className="flex items-center gap-2 text-[10px] text-slate-400">
             umbral
-            <input type="number" step="0.1" className={modalInputClass} value={p.escalon_crecimiento.umbral_pct} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, umbral_pct: number(e) } })} />
+            <input type="number" step="0.1" className={modalInputClass} value={p.escalon_crecimiento.threshold_pct} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, threshold_pct: number(e) } })} />
             % · alto
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.escalon_crecimiento.alto} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, alto: number(e) } })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.escalon_crecimiento.high} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, high: number(e) } })} />
             $ · bajo
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.escalon_crecimiento.bajo} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, bajo: number(e) } })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.escalon_crecimiento.low} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, low: number(e) } })} />
             $
           </div>
         </Field>
@@ -291,14 +291,14 @@ export function ConditionsForm({
         </Field>
       )}
       {tiene('bono_tramos') && p.bono_tramos && (
-        <Tiers titulo="Bono por ventas propias" hint="Un monto único según cuántas ventas hizo en el mes; vale el último tramo alcanzado." tramos={p.bono_tramos} onChange={(t) => poner({ bono_tramos: t })} />
+        <Tiers titulo="Bono por ventas propias" hint="Un monto único según cuántas ventas hizo en el mes; vale el último tramo alcanzado." buckets={p.bono_tramos} onChange={(t) => poner({ bono_tramos: t })} />
       )}
       {tiene('bono_por_asesor') && p.bono_por_asesor && (
-        <Tiers titulo="Bono por cada asesor de su equipo" hint="Se paga por cada asesor suyo que llega al tramo (el que más vende con él)." tramos={p.bono_por_asesor} onChange={(t) => poner({ bono_por_asesor: t })} />
+        <Tiers titulo="Bono por cada asesor de su equipo" hint="Se paga por cada asesor suyo que llega al tramo (el que más vende con él)." buckets={p.bono_por_asesor} onChange={(t) => poner({ bono_por_asesor: t })} />
       )}
       {tiene('bono_por_unidad') && p.bono_por_unidad && (
         <Field label="Bono por unidad de negocio" hint="Por cada unidad que lleva: este monto × su % de ingresos, con tope del 100 %.">
-          <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_por_unidad.monto} onChange={(e) => poner({ bono_por_unidad: { monto: number(e) } })} />
+          <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_por_unidad.amount} onChange={(e) => poner({ bono_por_unidad: { amount: number(e) } })} />
         </Field>
       )}
       {tiene('bono_churn') && p.bono_churn && (
@@ -306,7 +306,7 @@ export function ConditionsForm({
           label="Bono por churn bruto"
           hint="Cobra el del tramo más exigente que cumple (churn bruto de su unidad ≤ máximo)."
           action={
-            <button type="button" onClick={() => poner({ bono_churn: [...p.bono_churn!, { max: 0, monto: 0 }] })} className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-sky-300">
+            <button type="button" onClick={() => poner({ bono_churn: [...p.bono_churn!, { max: 0, amount: 0 }] })} className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-sky-300">
               <Plus className="h-3 w-3" /> Añadir tramo
             </button>
           }
@@ -317,7 +317,7 @@ export function ConditionsForm({
                 ≤
                 <input type="number" step="0.1" className={modalInputClass} value={t.max} onChange={(e) => poner({ bono_churn: p.bono_churn!.map((x, k) => (k === i ? { ...x, max: number(e) } : x)) })} />
                 % →
-                <input type="number" min={0} step="0.01" className={modalInputClass} value={t.monto} onChange={(e) => poner({ bono_churn: p.bono_churn!.map((x, k) => (k === i ? { ...x, monto: number(e) } : x)) })} />
+                <input type="number" min={0} step="0.01" className={modalInputClass} value={t.amount} onChange={(e) => poner({ bono_churn: p.bono_churn!.map((x, k) => (k === i ? { ...x, amount: number(e) } : x)) })} />
                 $
                 <button type="button" onClick={() => poner({ bono_churn: p.bono_churn!.filter((_, k) => k !== i) })} className="text-rose-400 hover:text-rose-300" title="Quitar tramo">
                   <Trash2 className="h-4 w-4" />
@@ -331,9 +331,9 @@ export function ConditionsForm({
         <Field label="Bono por las ventas de la empresa" hint="Por debajo del 100 % cobra el monto proporcional (80 % → 80 $ si el monto es 100); al 100 %, el monto; por encima, el excedente.">
           <div className="flex items-center gap-2 text-[10px] text-slate-400">
             al 100 %
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_empresa.monto} onChange={(e) => poner({ bono_empresa: { ...p.bono_empresa!, monto: number(e) } })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_empresa.amount} onChange={(e) => poner({ bono_empresa: { ...p.bono_empresa!, amount: number(e) } })} />
             $ · por encima
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_empresa.excedente} onChange={(e) => poner({ bono_empresa: { ...p.bono_empresa!, excedente: number(e) } })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_empresa.surplus} onChange={(e) => poner({ bono_empresa: { ...p.bono_empresa!, surplus: number(e) } })} />
             $
           </div>
         </Field>

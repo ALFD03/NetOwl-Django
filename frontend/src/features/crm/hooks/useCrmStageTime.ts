@@ -23,49 +23,49 @@ const NO_STAGES: CrmStageTimeRow[] = [];
  * stage", which only means something inside one axis at a time.
  */
 export function useCrmStageTime(globalData: CrmHistoricoRow, rows: CrmDimensionValue[]) {
-  const [selectedStage, setSelectedEtapa] = useState<string>(CRM_KEY_STAGES[0]);
-  const [verTodas, setVerTodas] = useState(false);
+  const [pickedStage, setPickedStage] = useState<string>(CRM_KEY_STAGES[0]);
+  const [showAll, setShowAll] = useState(false);
 
-  const timeByStage = globalData.tiempo_por_etapa ?? NO_STAGES;
+  const timeByStage = globalData.time_by_stage ?? NO_STAGES;
 
   /**
-   * Which stages to show. `es_clave` comes from the analysis, so the full list
+   * Which stages to show. `is_key` comes from the analysis, so the full list
    * follows the order the backend produced (the funnel's own order) instead of
    * re-deriving it here.
    */
-  const etapas = useMemo<string[]>(() => {
-    if (!verTodas) return [...CRM_KEY_STAGES];
+  const stages = useMemo<string[]>(() => {
+    if (!showAll) return [...CRM_KEY_STAGES];
 
     const ofPeriod = timeByStage
-      .map((row) => row.etapa)
-      .filter((etapa): etapa is string => Boolean(etapa));
+      .map((row) => row.stage)
+      .filter((stage): stage is string => Boolean(stage));
 
     // The key stages stay listed even with no movement in the period: their
     // absence is itself the reading.
-    const faltantes = CRM_KEY_STAGES.filter((etapa) => !ofPeriod.includes(etapa));
-    return [...ofPeriod, ...faltantes];
-  }, [timeByStage, verTodas]);
+    const missing = CRM_KEY_STAGES.filter((stage) => !ofPeriod.includes(stage));
+    return [...ofPeriod, ...missing];
+  }, [timeByStage, showAll]);
 
   const cards = useMemo(
-    () => buildStageTimeCards(timeByStage, etapas),
-    [timeByStage, etapas],
+    () => buildStageTimeCards(timeByStage, stages),
+    [timeByStage, stages],
   );
 
   /**
    * Collapsing the list back to the key stages can strand the selection on a
    * stage no longer offered, so the active one is derived rather than synced.
    */
-  const selectedEtapa = etapas.includes(selectedStage) ? selectedStage : etapas[0] ?? CRM_KEY_STAGES[0];
+  const selectedStage = stages.includes(pickedStage) ? pickedStage : stages[0] ?? CRM_KEY_STAGES[0];
 
   /** The period's time in the selected stage — the 100 % of the variations. */
   const baseline = useMemo(
-    () => stageTime(findStageTime(timeByStage, selectedEtapa)),
-    [timeByStage, selectedEtapa],
+    () => stageTime(findStageTime(timeByStage, selectedStage)),
+    [timeByStage, selectedStage],
   );
 
   const dimensionRows = useMemo(
-    () => buildStageTimeDimensionRows(rows, selectedEtapa, baseline),
-    [rows, selectedEtapa, baseline],
+    () => buildStageTimeDimensionRows(rows, selectedStage, baseline),
+    [rows, selectedStage, baseline],
   );
 
   const leaders = useMemo(() => stageTimeLeaders(dimensionRows), [dimensionRows]);
@@ -75,20 +75,20 @@ export function useCrmStageTime(globalData: CrmHistoricoRow, rows: CrmDimensionV
    * no closing date are measured against the clock, so the figure moves between
    * runs and the reader needs to know which clock it was.
    */
-  const corte = useMemo(() => measurementCutoff(timeByStage), [timeByStage]);
+  const cut = useMemo(() => measurementCutoff(timeByStage), [timeByStage]);
 
   /** No stage of the period carries a measurement — the section has nothing to say. */
   const isEmpty = timeByStage.length === 0;
 
   return {
     cards,
-    corte,
-    etapas,
+    cut,
+    stages,
     isEmpty,
-    selectedEtapa,
-    setSelectedEtapa,
-    verTodas,
-    setVerTodas,
+    selectedStage,
+    setSelectedStage: setPickedStage,
+    showAll,
+    setShowAll,
     baseline,
     dimensionRows,
     leaders,

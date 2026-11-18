@@ -334,11 +334,11 @@ de dimensión es de cliente, así que cambiarlo no debe costar una vuelta al
 servidor. Envía también la fila de cierre del periodo, que es el denominador
 global de los pesos simples y la fuente de las tarjetas de cabecera.
 
-`?dia=` sustituye esas dos props por el corte acumulado de ese día, leído de
+`?day=` sustituye esas dos props por el corte acumulado de ese día, leído de
 `crm_day_metrics`; sin él se envía el último corte calculado (en un mes cerrado,
 el cierre).
 
-`dayMetrics` lleva además la **serie ligera** del mes (`serie`): el bloque global
+`dayMetrics` lleva además la **serie ligera** del mes (`series`): el bloque global
 de los treinta y un días. Con ella el cliente resuelve sin pedir nada las
 tarjetas del día, el acumulado, la variación contra el día anterior y las líneas
 de tendencia. Lo único que se pide por día es el desglose dimensional, y va por

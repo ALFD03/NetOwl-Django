@@ -26,7 +26,7 @@ interface Props {
   rows: SupportDimensionRow[];
   /** Sólo para nombrar el archivo exportado. */
   groupName: string;
-  periodo: string;
+  period: string;
   onSelect: (valor: string) => void;
 }
 
@@ -49,7 +49,7 @@ type PersonView = 'persona' | 'departamento';
  * Un departamento no tiene desglose propio: pinchar su fila filtra la tabla de
  * personas a su gente, que es donde el drill-down sí existe.
  */
-export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onSelect }: Props) {
+export function SupportDimensionPanel({ dimension, rows, groupName, period, onSelect }: Props) {
   const label = SUPPORT_DIMENSION_LABELS[dimension];
   const caption = SUPPORT_DIMENSION_CAPTIONS[dimension];
   const isPerson = isPersonDimension(dimension);
@@ -71,7 +71,7 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
   );
 
   const personas = useMemo(
-    () => (filtro === null ? rows : rows.filter((row) => (row.departamento || NO_DEPARTMENT) === filtro)),
+    () => (filtro === null ? rows : rows.filter((row) => (row.department || NO_DEPARTMENT) === filtro)),
     [rows, filtro],
   );
 
@@ -118,14 +118,14 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
             <ExcelExportButton
               rows={departamentos}
               columns={SUPPORT_DEPARTMENT_EXCEL_COLUMNS}
-              fileName={supportExportFileName([label, 'departamentos', groupName, periodo])}
+              fileName={supportExportFileName([label, 'departamentos', groupName, period])}
               sheetName="Departamentos"
             />
           ) : (
             <ExcelExportButton
               rows={personas}
               columns={SUPPORT_DIMENSION_EXCEL_COLUMNS}
-              fileName={supportExportFileName([label, groupName, periodo])}
+              fileName={supportExportFileName([label, groupName, period])}
               sheetName={label}
             />
           )}
@@ -181,9 +181,9 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
                 label={leader.label}
                 value={leader.value}
                 caption={leader.caption}
-                subValue={leader.nombre}
+                subValue={leader.name}
                 color={leader.color}
-                onClick={() => onSelect(leader.nombre)}
+                onClick={() => onSelect(leader.name)}
               />
             ))}
           </div>
@@ -195,7 +195,7 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
                 data={departamentos}
                 searchable
                 searchPlaceholder="Buscar departamento..."
-                onRowClick={(row) => pickDepartment(row.nombre)}
+                onRowClick={(row) => pickDepartment(row.name)}
               />
             ) : (
               <DataTable
@@ -203,7 +203,7 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
                 data={personas}
                 searchable
                 searchPlaceholder={`Buscar ${label.toLowerCase()}...`}
-                onRowClick={(row) => onSelect(row.nombre)}
+                onRowClick={(row) => onSelect(row.name)}
               />
             )}
           </div>

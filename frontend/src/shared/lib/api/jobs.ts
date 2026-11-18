@@ -18,13 +18,13 @@ export interface AnalysisJob {
   id: string;
   module: JobModule;
   module_display: string;
-  periodo: string;
+  period: string;
   status: JobStatus;
   status_display: string;
   message: string;
   log_output: string;
   progress: { done: number; total: number; label: string };
-  result: { periodo_label?: string; dias_calculados?: number };
+  result: { period_label?: string; computed_days?: number };
   created_at: string;
   finished_at: string | null;
 }
@@ -49,14 +49,14 @@ const POLL_INTERVAL_MS = 2000;
 type QueueListener = () => void;
 const queueListeners = new Set<QueueListener>();
 
-export function notificarJobEncolado(): void {
-  queueListeners.forEach((oyente) => oyente());
+export function notifyJobQueued(): void {
+  queueListeners.forEach((listener) => listener());
 }
 
-export function suscribirseAJobsEncolados(oyente: QueueListener): () => void {
-  queueListeners.add(oyente);
+export function subscribeToQueuedJobs(listener: QueueListener): () => void {
+  queueListeners.add(listener);
   return () => {
-    queueListeners.delete(oyente);
+    queueListeners.delete(listener);
   };
 }
 
@@ -67,8 +67,8 @@ const isFinished = (job: AnalysisJob) =>
 /** Everything the worker is running or has queued, for the floating indicator. */
 export interface JobQueue {
   jobs: AnalysisJob[];
-  en_ejecucion: number;
-  en_cola: number;
+  running: number;
+  queued: number;
 }
 
 export const jobsApi = {
@@ -145,10 +145,10 @@ export async function startAndFollow(
     // el usuario, es el mismo trabajo: nos enganchamos a el.
     const running = extractRunningJob(error);
     if (!running) throw error;
-    notificarJobEncolado();
+    notifyJobQueued();
     return followJob(running.job, onProgress);
   }
-  notificarJobEncolado();
+  notifyJobQueued();
   return followJob(started.job, onProgress);
 }
 
@@ -164,7 +164,7 @@ export interface BatchJobs {
   /** Los jobs creados ahora, uno por mes. */
   jobs: AnalysisJob[];
   /** Los meses que ya estaban en la cola o corriendo, con su job, para seguirlos igual. */
-  omitidos: AnalysisJob[];
+  skipped: AnalysisJob[];
 }
 
 /**
@@ -177,12 +177,12 @@ export interface BatchJobs {
 export async function startBatch(path: string, months: string[]): Promise<BatchJobs> {
   try {
     const batch = (await apiClient.post<BatchJobs>(path, { months })).data;
-    notificarJobEncolado();
+    notifyJobQueued();
     return batch;
   } catch (error) {
     const response = (error as { response?: { status?: number; data?: BatchJobs } })?.response;
-    if (response?.status === 409 && response.data?.omitidos) {
-      notificarJobEncolado();
+    if (response?.status === 409 && response.data?.skipped) {
+      notifyJobQueued();
       return response.data;
     }
     throw error;
@@ -199,15 +199,15 @@ export async function followJobs(
   jobs: AnalysisJob[],
   onProgress: (jobs: AnalysisJob[]) => void,
 ): Promise<AnalysisJob[]> {
-  let actuales = jobs;
-  onProgress(actuales);
-  while (actuales.some((job) => !isFinished(job))) {
+  let currentJobs = jobs;
+  onProgress(currentJobs);
+  while (currentJobs.some((job) => !isFinished(job))) {
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-    actuales = await Promise.all(
-      actuales.map((job) => (isFinished(job) ? job : jobsApi.fetch(job.id).catch(() => job))),
+    currentJobs = await Promise.all(
+      currentJobs.map((job) => (isFinished(job) ? job : jobsApi.fetch(job.id).catch(() => job))),
     );
-    onProgress(actuales);
+    onProgress(currentJobs);
   }
   notifyDataChanged();
-  return actuales;
+  return currentJobs;
 }

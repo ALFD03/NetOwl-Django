@@ -15,13 +15,13 @@ import { DEFAULT_TARGETS, createResolver, type TargetsResolver } from '../lib/ta
 import type { TargetsConfig } from '../types';
 
 interface PropsWithTargets {
-  objetivos?: TargetsConfig;
+  targets?: TargetsConfig;
   [key: string]: unknown;
 }
 
 /** La configuración cruda; los valores por defecto si la página no la trae. */
 export function useTargetsConfig(): TargetsConfig {
-  return usePageProps<PropsWithTargets>().objetivos ?? DEFAULT_TARGETS;
+  return usePageProps<PropsWithTargets>().targets ?? DEFAULT_TARGETS;
 }
 
 /**

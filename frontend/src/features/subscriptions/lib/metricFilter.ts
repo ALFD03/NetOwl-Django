@@ -14,7 +14,7 @@ import type { Proyeccion } from '@/shared/lib/projection';
 import { calcCommercial } from './commercial';
 import type { Meta } from './targets';
 
-export type FilterMetric = 'crecimiento' | 'churn' | 'proyeccion';
+export type FilterMetric = 'growth' | 'churn' | 'proyeccion';
 export type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=';
 /** `zona`: cada fila de la tabla. `grupo`: el site o el coordinador, por sus totales. */
 export type FilterLevel = 'zona' | 'grupo';
@@ -23,19 +23,19 @@ export interface MetricFilter {
   metrica: FilterMetric;
   operador: FilterOperator;
   /** Tal como se escribió: vacío es «sin filtro». */
-  valor: string;
-  nivel: FilterLevel;
+  value: string;
+  level: FilterLevel;
 }
 
 export const EMPTY_METRIC_FILTER: MetricFilter = {
-  metrica: 'crecimiento',
+  metrica: 'growth',
   operador: '>=',
-  valor: '',
-  nivel: 'zona',
+  value: '',
+  level: 'zona',
 };
 
 export const FILTER_METRICS: { value: FilterMetric; label: string }[] = [
-  { value: 'crecimiento', label: 'Crecimiento %' },
+  { value: 'growth', label: 'Crecimiento %' },
   { value: 'churn', label: 'Churn %' },
   { value: 'proyeccion', label: 'Proyección %' },
 ];
@@ -47,7 +47,7 @@ export const FILTER_VALUE_PATTERN = /^-?\d*([.,]\d*)?$/;
 
 /** Las tres métricas de una zona o de un grupo. `projection` es `null` sin un día de corte. */
 export interface MetricValues {
-  crecimiento: number;
+  growth: number;
   churn: number;
   /** El cumplimiento de ventas proyectado al cierre, en % del objetivo. */
   proyeccion: number | null;
@@ -60,7 +60,7 @@ export interface MetricValues {
  */
 export function filterThreshold(filtro: MetricFilter, proyeccion: Proyeccion | null): number | null {
   if (filtro.metrica === 'proyeccion' && !proyeccion) return null;
-  const texto = filtro.valor.trim().replace(',', '.');
+  const texto = filtro.value.trim().replace(',', '.');
   if (!/^-?\d+(\.\d+)?$/.test(texto)) return null;
   return Number(texto);
 }
@@ -92,23 +92,23 @@ export function matchesFilter(valores: MetricValues, filtro: MetricFilter, umbra
  */
 export function metricValues(
   cifras: {
-    activos_inicio?: number;
-    activos_final?: number;
-    nuevos?: number;
-    crecimiento?: number;
+    active_start?: number;
+    active_end?: number;
+    new_subs?: number;
+    growth?: number;
     churn?: number;
   },
   meta: Meta,
   { projection: proyeccion }: { projection: Proyeccion | null },
 ): MetricValues {
   const { projectedSalesCompliance: cumplimientoVentasProyectado } = calcCommercial(
-    Number(cifras.activos_inicio ?? 0),
-    Number(cifras.activos_final ?? 0),
+    Number(cifras.active_start ?? 0),
+    Number(cifras.active_end ?? 0),
     meta,
-    { nuevos: Number(cifras.nuevos ?? 0), projection: proyeccion },
+    { new_subs: Number(cifras.new_subs ?? 0), projection: proyeccion },
   );
   return {
-    crecimiento: Number(cifras.crecimiento ?? 0),
+    growth: Number(cifras.growth ?? 0),
     churn: Number(cifras.churn ?? 0),
     proyeccion: cumplimientoVentasProyectado,
   };

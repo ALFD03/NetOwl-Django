@@ -10,10 +10,10 @@ import { apiClient, onDataChanged } from '@/shared/lib/api';
  * está cacheado se pinta al instante igualmente — esta espera sólo retrasa la
  * petición, nunca la lectura.
  */
-const ESPERA_MS = 180;
+const DELAY_MS = 180;
 
 /** Cuántos días calculados a cada lado se adelantan cuando la barra se para. */
-const VECINOS = 2;
+const NEIGHBORS = 2;
 
 /**
  * Techo de la caché, en días.
@@ -22,30 +22,30 @@ const VECINOS = 2;
  * entero es justo lo que no cabe en el navegador. Con doce hay de sobra para
  * moverse por una quincena sin volver a pedir nada, y lo más viejo se suelta.
  */
-const TOPE_CACHE = 12;
+const CACHE_LIMIT = 12;
 
 interface Options<T> {
   /** Endpoint que devuelve el corte completo de un día. */
   url: string;
   /** Mes en `YYYY-MM`. Cambiarlo vacía la caché: son otros días. */
   period: string;
-  dia: number;
+  day: number;
   /** Los días con corte, para no adelantar huecos ni salirse del mes. */
-  dias: number[];
+  days: number[];
   /** El corte que ya llegó en los props, para no volver a pedirlo. */
-  inicial?: { dia: number; payload: T } | null;
+  initial?: { day: number; payload: T } | null;
 }
 
-interface Resultado<T> {
+interface Result<T> {
   /** El corte del día pedido, o el último que se pudo resolver. */
   payload: T | undefined;
   /**
    * El día al que pertenece `payload`, que mientras viaja el pedido es el
    * anterior y no `dia`. 0 si todavía no hay ninguno.
    */
-  diaResuelto: number;
+  resolvedDay: number;
   /** `true` mientras el día en pantalla todavía no está resuelto. */
-  cargando: boolean;
+  loading: boolean;
 }
 
 /**
@@ -55,32 +55,32 @@ interface Resultado<T> {
  * ya cambió, el día que traía no es de esta página.
  */
 interface Cache<T> {
-  mes: string;
-  dias: Map<number, T>;
+  month: string;
+  days: Map<number, T>;
 }
 
 /** La caché con el día nuevo dentro, soltando lo más viejo si se pasa del tope. */
-function withDay<T>(cache: Cache<T>, dia: number, valor: T): Cache<T> {
-  const dias = new Map(cache.dias);
+function withDay<T>(cache: Cache<T>, day: number, value: T): Cache<T> {
+  const days = new Map(cache.days);
   // `Map` conserva el orden de inserción: el primero es el menos reciente.
-  dias.delete(dia);
-  dias.set(dia, valor);
-  while (dias.size > TOPE_CACHE) {
-    const oldest = dias.keys().next().value;
+  days.delete(day);
+  days.set(day, value);
+  while (days.size > CACHE_LIMIT) {
+    const oldest = days.keys().next().value;
     if (oldest === undefined) break;
-    dias.delete(oldest);
+    days.delete(oldest);
   }
-  return { mes: cache.mes, dias };
+  return { month: cache.month, days };
 }
 
 /** Los `VECINOS` días calculados a cada lado del elegido, por orden de cercanía. */
-function neighborsOf(dias: number[], dia: number): number[] {
-  const idx = dias.indexOf(dia);
+function neighborsOf(available: number[], target: number): number[] {
+  const idx = available.indexOf(target);
   if (idx < 0) return [];
   const exit: number[] = [];
-  for (let salto = 1; salto <= VECINOS; salto += 1) {
-    if (dias[idx + salto] !== undefined) exit.push(dias[idx + salto]);
-    if (dias[idx - salto] !== undefined) exit.push(dias[idx - salto]);
+  for (let step = 1; step <= NEIGHBORS; step += 1) {
+    if (available[idx + step] !== undefined) exit.push(available[idx + step]);
+    if (available[idx - step] !== undefined) exit.push(available[idx - step]);
   }
   return exit;
 }
@@ -104,57 +104,57 @@ function neighborsOf(dias: number[], dia: number): number[] {
  * Las tarjetas y las líneas de tendencia no pasan por aquí: salen de la serie
  * ligera que ya viajó en los props, así que ésas son instantáneas siempre.
  */
-export function useDayPayload<T>({ url, period, dia, dias, inicial }: Options<T>): Resultado<T> {
-  const semilla = (): Cache<T> => ({
-    mes: period,
-    dias: inicial ? new Map([[inicial.dia, inicial.payload]]) : new Map(),
+export function useDayPayload<T>({ url, period, day, days, initial }: Options<T>): Result<T> {
+  const seed = (): Cache<T> => ({
+    month: period,
+    days: initial ? new Map([[initial.day, initial.payload]]) : new Map(),
   });
 
-  const [cache, setCache] = useState<Cache<T>>(semilla);
+  const [cache, setCache] = useState<Cache<T>>(seed);
   // El último día que sí se resolvió: es lo que se sigue pintando mientras viaja
   // el siguiente, para no vaciar la página en cada movimiento de la barra.
-  const [ultimo, setLast] = useState<{ dia: number; payload: T } | null>(
-    inicial ? { dia: inicial.dia, payload: inicial.payload } : null,
+  const [last, setLast] = useState<{ day: number; payload: T } | null>(
+    initial ? { day: initial.day, payload: initial.payload } : null,
   );
   // Clave `mes:dia`, para que un cambio de mes no confunda dos peticiones del
   // mismo número de día.
   const inFlight = useRef(new Set<string>());
-  const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ajustes en render (el patrón de React para reaccionar a un prop nuevo): otro
   // mes son otros días, y lo cacheado deja de valer.
-  if (cache.mes !== period) {
-    setCache(semilla());
-    setLast(inicial ? { dia: inicial.dia, payload: inicial.payload } : null);
+  if (cache.month !== period) {
+    setCache(seed());
+    setLast(initial ? { day: initial.day, payload: initial.payload } : null);
   }
 
-  const cached = cache.mes === period ? cache.dias.get(dia) : undefined;
-  if (cached !== undefined && ultimo?.dia !== dia) {
-    setLast({ dia, payload: cached });
+  const cached = cache.month === period ? cache.days.get(day) : undefined;
+  if (cached !== undefined && last?.day !== day) {
+    setLast({ day, payload: cached });
   }
 
-  useEffect(() => onDataChanged(() => setCache((current) => ({ mes: current.mes, dias: new Map() }))), []);
+  useEffect(() => onDataChanged(() => setCache((current) => ({ month: current.month, days: new Map() }))), []);
 
-  const pedir = useCallback(
-    async (objetivo: number) => {
-      if (!period || !objetivo) return;
-      const clave = `${period}:${objetivo}`;
-      if (inFlight.current.has(clave)) return;
+  const request = useCallback(
+    async (wanted: number) => {
+      if (!period || !wanted) return;
+      const key = `${period}:${wanted}`;
+      if (inFlight.current.has(key)) return;
 
-      inFlight.current.add(clave);
+      inFlight.current.add(key);
       try {
-        const { data } = await apiClient.get<T>(url, { params: { period, dia: objetivo } });
+        const { data } = await apiClient.get<T>(url, { params: { period, day: wanted } });
         setCache((current) =>
           // Llegó tarde y el mes ya cambió: ese día no es de esta página.
-          current.mes !== period || current.dias.has(objetivo)
+          current.month !== period || current.days.has(wanted)
             ? current
-            : withDay(current, objetivo, data),
+            : withDay(current, wanted, data),
         );
       } catch {
         // Un día que no responde no rompe la página: se queda el último resuelto
         // y el siguiente movimiento vuelve a intentarlo.
       } finally {
-        inFlight.current.delete(clave);
+        inFlight.current.delete(key);
       }
     },
     [period, url],
@@ -162,28 +162,28 @@ export function useDayPayload<T>({ url, period, dia, dias, inicial }: Options<T>
 
   useEffect(() => {
     if (cached !== undefined) return;
-    if (temporizador.current) clearTimeout(temporizador.current);
-    temporizador.current = setTimeout(() => void pedir(dia), ESPERA_MS);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void request(day), DELAY_MS);
     return () => {
-      if (temporizador.current) clearTimeout(temporizador.current);
+      if (timer.current) clearTimeout(timer.current);
     };
-  }, [dia, cached, pedir]);
+  }, [day, cached, request]);
 
   // Adelanto de vecinos: sólo con el día en pantalla ya resuelto, para no
   // competir con la petición que el usuario sí está esperando.
   useEffect(() => {
     if (cached === undefined) return;
     const id = setTimeout(() => {
-      for (const vecino of neighborsOf(dias, dia)) {
-        if (!cache.dias.has(vecino)) void pedir(vecino);
+      for (const neighbor of neighborsOf(days, day)) {
+        if (!cache.days.has(neighbor)) void request(neighbor);
       }
-    }, ESPERA_MS * 2);
+    }, DELAY_MS * 2);
     return () => clearTimeout(id);
-  }, [cache, dia, dias, cached, pedir]);
+  }, [cache, day, days, cached, request]);
 
   return {
-    payload: cached ?? ultimo?.payload,
-    diaResuelto: cached !== undefined ? dia : (ultimo?.dia ?? 0),
-    cargando: cached === undefined,
+    payload: cached ?? last?.payload,
+    resolvedDay: cached !== undefined ? day : (last?.day ?? 0),
+    loading: cached === undefined,
   };
 }

@@ -17,46 +17,46 @@ interface Props {
    * `data` es el bloque global de ese corte, que no trae `periodo_reporte`; el
    * objetivo es el del mes igualmente.
    */
-  periodo: string;
+  period: string;
 }
 
-export function AnalyticsMetrics({ data, periodo }: Props) {
+export function AnalyticsMetrics({ data, period }: Props) {
   const objetivos = useTargets();
-  const objetivo = objetivos.general(periodo);
-  const { semaforo } = objetivos;
+  const objetivo = objetivos.general(period);
+  const { thresholds } = objetivos;
   const {
     metaIngresos, salesGoal: metaVentas, closeGoal: metaCierre, revenueCompliance: cumplimientoIngresos, salesCompliance: cumplimientoVentas, closeCompliance: cumplimientoCierre,
   } = periodCompliance(data, objetivo);
 
-  const tonoIngresos = complianceTone(cumplimientoIngresos, semaforo);
-  const salesTone = complianceTone(cumplimientoVentas, semaforo);
-  const closeTone = complianceTone(cumplimientoCierre, semaforo);
-  const base = `Meta basada en el ${formatTarget(objetivo.crecimiento)}`;
+  const tonoIngresos = complianceTone(cumplimientoIngresos, thresholds);
+  const salesTone = complianceTone(cumplimientoVentas, thresholds);
+  const closeTone = complianceTone(cumplimientoCierre, thresholds);
+  const base = `Meta basada en el ${formatTarget(objetivo.growth)}`;
 
   return (
     <div className="space-y-8 mb-10">
       <MetricGroup title="Grupo Pérdida" icon={<TrendingDown className="w-4 h-4" />} tone="text-rose-400" columns='md:grid-cols-2 lg:grid-cols-5'>
-        <MetricCard label="Churn Neto" value={`${(data.churn_neto_pct || 0).toFixed(2)} %`} color={tonoChurn(data.churn_neto_pct || 0, semaforo)} />
+        <MetricCard label="Churn Neto" value={`${(data.net_churn_pct || 0).toFixed(2)} %`} color={tonoChurn(data.net_churn_pct || 0, thresholds)} />
         <MetricCard
           label="Churn Bruto"
-          value={`${(data.churn_bruto_pct || 0).toFixed(2)} %`}
+          value={`${(data.gross_churn_pct || 0).toFixed(2)} %`}
           subValue={`Objetivo ${formatTarget(objetivo.churn)}`}
-          color={tonoChurn(data.churn_bruto_pct || 0, semaforo)}
+          color={tonoChurn(data.gross_churn_pct || 0, thresholds)}
         />
-        <MetricCard label="Bajas" value={`${(data.bajas || 0)}`} color="red" />
-        <MetricCard label="Corte Impago" value={data.corte_impagado || 0} color="yellow" />
-        <MetricCard label="% Suspensiones" value={`${(data.porcentaje_suspensiones || 0).toFixed(2)} %`} color="yellow" />
+        <MetricCard label="Bajas" value={`${(data.churned || 0)}`} color="red" />
+        <MetricCard label="Corte Impago" value={data.unpaid_cuts || 0} color="yellow" />
+        <MetricCard label="% Suspensiones" value={`${(data.suspension_pct || 0).toFixed(2)} %`} color="yellow" />
       </MetricGroup>
 
       <MetricGroup title="Grupo Ingresos" icon={<TrendingUp className="w-4 h-4" />} tone="text-emerald-400">
-        <MetricCard label="Nuevos" value={data.nuevos_mes || 0} color="green" />
-        <MetricCard label="Adiciones Netas" value={data.adiciones_netas || 0} color="blue" />
-        <MetricCard label="Adiciones Brutas" value={data.adiciones_brutas || 0} color="blue" />
+        <MetricCard label="Nuevos" value={data.new_in_month || 0} color="green" />
+        <MetricCard label="Adiciones Netas" value={data.net_adds || 0} color="blue" />
+        <MetricCard label="Adiciones Brutas" value={data.gross_adds || 0} color="blue" />
         <MetricCard
           label="Crecimiento"
-          value={`${(data.crecimiento || 0).toFixed(2)} %`}
-          subValue={`Objetivo ${formatTarget(objetivo.crecimiento)}`}
-          color={tonoCrecimiento(data.crecimiento || 0, semaforo)}
+          value={`${(data.growth || 0).toFixed(2)} %`}
+          subValue={`Objetivo ${formatTarget(objetivo.growth)}`}
+          color={tonoCrecimiento(data.growth || 0, thresholds)}
         />
       </MetricGroup>
 
@@ -70,16 +70,16 @@ export function AnalyticsMetrics({ data, periodo }: Props) {
       </MetricGroup>
 
       <MetricGroup title="Grupo Retención" icon={<RefreshCw className="w-4 h-4" />} tone="text-blue-400" columns='md:grid-cols-2 lg:grid-cols-3'>
-        <MetricCard label="Reactivaciones" value={data.reactivaciones || 0} color="blue" />
+        <MetricCard label="Reactivaciones" value={data.reactivations || 0} color="blue" />
         <MetricCard label="Recuperaciones" value={data.react_4_P || 0} color="green" />
         <MetricCard label="React. Ingreso" value={data.react_val || 0} color="blue" subValue="Peso en crecimiento" />
-        <MetricCard label="Tasa de recuperación" value={`${(data.tasa_winback_pct || 0).toFixed(2)} %`} color="green" />
-        <MetricCard label="Indice Reemplazo" value={`${(data.indice_reemplazo_react_pct || 0).toFixed(2)} %`} color="yellow" />
+        <MetricCard label="Tasa de recuperación" value={`${(data.winback_rate_pct || 0).toFixed(2)} %`} color="green" />
+        <MetricCard label="Indice Reemplazo" value={`${(data.react_replacement_pct || 0).toFixed(2)} %`} color="yellow" />
         <MetricCard
           label="Clientes Gratuitos"
-          value={data.clientes_gratuitos || 0}
+          value={data.free_clients || 0}
           color="purple"
-          subValue={`${data.gratuitos_nuevos || 0} archivados en el periodo`}
+          subValue={`${data.free_new || 0} archivados en el periodo`}
           icon={<Gift className="w-4 h-4 text-purple-400" />}
         />
       </MetricGroup>

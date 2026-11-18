@@ -18,7 +18,7 @@ import { Panel } from '@/shared/ui';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
-import type { CampoOdoo, OdooFieldGroup } from '@/features/imports/types';
+import type { OdooField, OdooFieldGroup } from '@/features/imports/types';
 
 type SupportImportType = 'tickets' | 'logs';
 
@@ -27,42 +27,42 @@ const IMPORT_TYPES: { value: SupportImportType; label: string }[] = [
   { value: 'logs', label: 'Logs de etapa (por lotes)' },
 ];
 
-interface LogsCargados {
+interface LoadedLogs {
   logs: number;
   tickets: number;
-  desde: string | null;
-  hasta: string | null;
-  por_mes: { mes: string; logs: number }[];
+  since: string | null;
+  until: string | null;
+  by_month: { month: string; logs: number }[];
 }
 
 interface ImportSupportProps {
   /** Cabeceras del export de tickets de Odoo que lee la importación. */
-  camposOdoo?: CampoOdoo[];
+  odoo_fields?: OdooField[];
   /** Cabeceras del export de «Registros de tiempo». */
-  camposOdooLogs?: CampoOdoo[];
-  logsCargados?: LogsCargados;
+  odoo_log_fields?: OdooField[];
+  loaded_logs?: LoadedLogs;
 }
 
 /** Los meses de logs que ya hay: la carga es por lotes y lo que falta no avisa solo. */
-function LoadedLogsPanel({ cargados }: { cargados: LogsCargados }) {
-  const maximo = Math.max(1, ...cargados.por_mes.map((m) => m.logs));
+function LoadedLogsPanel({ loaded }: { loaded: LoadedLogs }) {
+  const maxLogs = Math.max(1, ...loaded.by_month.map((m) => m.logs));
   return (
     <Panel title="Logs de etapa cargados">
-      {cargados.logs === 0 ? (
+      {loaded.logs === 0 ? (
         <p className="text-xs text-slate-400">Todavía no se ha cargado ningún lote.</p>
       ) : (
         <div className="space-y-3">
           <p className="text-xs text-slate-300">
-            <strong className="text-white">{formatInteger(cargados.logs)}</strong> logs de{' '}
-            <strong className="text-white">{formatInteger(cargados.tickets)}</strong> tickets, del {cargados.desde} al{' '}
-            {cargados.hasta}. Un mes con muchos menos logs que sus vecinos suele ser un lote que falta.
+            <strong className="text-white">{formatInteger(loaded.logs)}</strong> logs de{' '}
+            <strong className="text-white">{formatInteger(loaded.tickets)}</strong> tickets, del {loaded.since} al{' '}
+            {loaded.until}. Un mes con muchos menos logs que sus vecinos suele ser un lote que falta.
           </p>
           <div className="space-y-1.5">
-            {cargados.por_mes.map((m) => (
-              <div key={m.mes} className="grid grid-cols-[64px_1fr_72px] items-center gap-3 text-xs">
-                <span className="font-bold text-slate-300">{m.mes}</span>
+            {loaded.by_month.map((m) => (
+              <div key={m.month} className="grid grid-cols-[64px_1fr_72px] items-center gap-3 text-xs">
+                <span className="font-bold text-slate-300">{m.month}</span>
                 <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                  <div className="h-full rounded-full bg-brand" style={{ width: `${(m.logs / maximo) * 100}%` }} />
+                  <div className="h-full rounded-full bg-brand" style={{ width: `${(m.logs / maxLogs) * 100}%` }} />
                 </div>
                 <span className="text-right tabular-nums text-slate-400">{formatInteger(m.logs)}</span>
               </div>
@@ -74,24 +74,24 @@ function LoadedLogsPanel({ cargados }: { cargados: LogsCargados }) {
   );
 }
 
-export default function ImportSupport({ camposOdoo = [], camposOdooLogs = [], logsCargados }: ImportSupportProps) {
+export default function ImportSupport({ odoo_fields = [], odoo_log_fields = [], loaded_logs }: ImportSupportProps) {
   const [importType, setImportType] = useState<SupportImportType>('tickets');
-  const [cargados, setCargados] = useState<LogsCargados | undefined>(logsCargados);
+  const [loaded, setLoaded] = useState<LoadedLogs | undefined>(loaded_logs);
   const { canAny } = usePermissions();
 
   const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.support);
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.support);
 
   const fieldGroups: OdooFieldGroup[] = [
-    { key: 'tickets', label: 'Tickets', campos: camposOdoo },
-    { key: 'logs', label: 'Logs de etapa', campos: camposOdooLogs },
+    { key: 'tickets', label: 'Tickets', fields: odoo_fields },
+    { key: 'logs', label: 'Logs de etapa', fields: odoo_log_fields },
   ];
 
-  const subir = async (file: File): Promise<ImportResponse> => {
+  const upload = async (file: File): Promise<ImportResponse> => {
     if (importType === 'tickets') return importsApi.importSupport(file);
     const response = await importsApi.importSupportLogs(file);
-    const nuevos = (response as ImportResponse & { cargados?: LogsCargados }).cargados;
-    if (nuevos) setCargados(nuevos);
+    const fresh = (response as ImportResponse & { loaded_logs?: LoadedLogs }).loaded_logs;
+    if (fresh) setLoaded(fresh);
     return response;
   };
 
@@ -103,7 +103,7 @@ export default function ImportSupport({ camposOdoo = [], camposOdooLogs = [], lo
             title="Cargar Archivo CSV Support (Odoo)"
             submitLabel={importType === 'tickets' ? 'Iniciar Carga Support' : 'Sumar Lote de Logs'}
             errorMessage={importType === 'tickets' ? 'Error al importar tickets de soporte.' : 'Error al importar los logs de soporte.'}
-            onUpload={subir}
+            onUpload={upload}
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {IMPORT_TYPES.map((option) => (
@@ -134,15 +134,15 @@ export default function ImportSupport({ camposOdoo = [], camposOdooLogs = [], lo
             <><strong>Tickets:</strong> Export de tickets de soporte de Odoo, una fila por ticket. Reemplaza los anteriores. Las cabeceras se comparan sin distinguir acentos ni mayúsculas.</>,
             <><strong>Logs de etapa:</strong> «Registros de tiempo» de los tickets, un log por fila. <strong>No reemplaza</strong>: cada lote se suma y un log que ya estaba no se duplica, así que se pueden subir mes a mes —los de los tickets creados en el mes y los de los que cambiaron de etapa por última vez en el mes— y repetir o solapar lotes sin miedo.</>,
           ]}
-          camposOdoo={fieldGroups}
+          fieldGroups={fieldGroups}
           activeGroup={importType}
           note="Tras importar, selecciona el mes en la sección inferior y ejecuta el análisis. Calcula también el corte de cada día del mes y, si hay logs cargados, reparte lo escalado entre ATC (como cerrado) y Soporte (como creado ese día)."
         />
       </div>
 
-      {cargados && (
+      {loaded && (
         <div className="mb-6">
-          <LoadedLogsPanel cargados={cargados} />
+          <LoadedLogsPanel loaded={loaded} />
         </div>
       )}
 

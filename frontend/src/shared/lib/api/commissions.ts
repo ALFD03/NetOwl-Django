@@ -11,9 +11,9 @@ interface ApiAnswer {
 export const commissionsApi = {
   /** El detalle venta a venta de un periodo: no viaja en los props por su tamaño. */
   ventas: async <T>(periodo: string) =>
-    (await apiClient.get<{ ventas: T[] }>('/api/commissions/sales/', { params: { periodo } })).data.ventas,
+    (await apiClient.get<{ sales: T[] }>('/api/commissions/sales/', { params: { period: periodo } })).data.sales,
 
-  guardarPeriodo: async (body: { periodo: string; inicio_promo: string; inicio?: string; corte_adelantos?: string }) =>
+  guardarPeriodo: async (body: { period: string; promo_start: string; start?: string; advance_cutoff?: string }) =>
     (await apiClient.post<ApiAnswer>('/api/commissions/periods/save/', body)).data,
 
   cerrar: async (periodo: string) =>
@@ -28,7 +28,7 @@ export const commissionsApi = {
 
   /** La copia completa de un cierre archivado. */
   archivo: async <T>(id: number) =>
-    (await apiClient.get<{ copia: T }>(`/api/commissions/archives/${id}/`)).data.copia,
+    (await apiClient.get<{ snapshot: T }>(`/api/commissions/archives/${id}/`)).data.snapshot,
 
   /**
    * Decide una o varias ventas de una vez. `decision` vacía deshace la
@@ -36,11 +36,11 @@ export const commissionsApi = {
    * en el primer periodo, para los días promocionales del mes anterior.
    */
   guardarRevision: async (body: {
-    periodo: string; ordenes: string[]; decision: '' | 'contar' | 'no_contar' | 'ya_pagada' | 'normal'; nota?: string;
+    period: string; orders: string[]; decision: '' | 'contar' | 'no_contar' | 'ya_pagada' | 'normal'; note?: string;
   }) => (await apiClient.post<ApiAnswer>('/api/commissions/reviews/save/', body)).data,
 
   /** Agrega ventas a mano al periodo: cuentan en él. La nota es obligatoria. */
-  agregarManual: async (body: { periodo: string; ordenes: string[]; nota: string }) =>
+  agregarManual: async (body: { period: string; orders: string[]; note: string }) =>
     (await apiClient.post<ApiAnswer>('/api/commissions/manual/add/', body)).data,
 
   quitarManual: async (periodo: string, orden: string) =>
@@ -48,12 +48,12 @@ export const commissionsApi = {
 
   /** Solo se manda el campo que cambia; vacío lo borra. */
   guardarIndicador: async (body: {
-    periodo: string; persona_id: number; cumplimiento_pct?: number | null; crecimiento_pct?: number | null;
+    period: string; person_id: number; compliance_pct?: number | null; growth_pct?: number | null;
   }) => (await apiClient.post<ApiAnswer>('/api/commissions/indicators/save/', body)).data,
 
   /** La tasa oficial del BCV de hoy: una referencia, no la de pago. */
   tasaActual: async () =>
-    (await apiClient.get<{ tasa: number; fuente: string }>('/api/commissions/current-rate/')).data,
+    (await apiClient.get<{ rate: number; source: string }>('/api/commissions/current-rate/')).data,
 
   /**
    * Borra un informe en borrador con lo decidido en él (revisiones, ventas a

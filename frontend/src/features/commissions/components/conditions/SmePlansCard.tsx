@@ -15,45 +15,45 @@ const columns: Column<PlanPyme>[] = [
     header: 'Plan',
     accessor: (row) => (
       <span className="flex items-center gap-2">
-        <span className={cn('h-2 w-2 shrink-0 rounded-full', row.comision_pyme_pct === null ? 'bg-amber-500' : 'bg-slate-700')} aria-hidden />
-        <span className="font-semibold text-white">{row.nombre}</span>
+        <span className={cn('h-2 w-2 shrink-0 rounded-full', row.sme_commission_pct === null ? 'bg-amber-500' : 'bg-slate-700')} aria-hidden />
+        <span className="font-semibold text-white">{row.name}</span>
       </span>
     ),
-    sortKey: 'nombre',
+    sortKey: 'name',
   },
-  { header: 'Tarifa', accessor: (row) => row.tarifa || '—' },
-  { header: 'Precio', accessor: (row) => formatAmount(row.precio), align: 'right', sortKey: 'precio' },
+  { header: 'Tarifa', accessor: (row) => row.tariff || '—' },
+  { header: 'Precio', accessor: (row) => formatAmount(row.price), align: 'right', sortKey: 'price' },
   {
     header: 'Comisión',
     align: 'right',
-    accessor: (row) => (row.comision_pyme_pct === null
+    accessor: (row) => (row.sme_commission_pct === null
       ? <span className="font-semibold text-amber-400">sin definir</span>
-      : formatPctValue(row.comision_pyme_pct)),
+      : formatPctValue(row.sme_commission_pct)),
   },
   {
     header: 'Por venta',
     align: 'right',
-    accessor: (row) => (row.comision_pyme_pct === null ? '—' : formatAmount((row.precio * row.comision_pyme_pct) / 100)),
+    accessor: (row) => (row.sme_commission_pct === null ? '—' : formatAmount((row.price * row.sme_commission_pct) / 100)),
   },
 ];
 
 export function SmePlansCard({
-  planes, puedeEditarPlanes, compacto,
+  planes, canEditPlans, compacto,
 }: {
   planes: PlanPyme[];
-  puedeEditarPlanes: boolean;
+  canEditPlans: boolean;
   /** En la edición de condiciones: solo un recordatorio de dónde se editan. */
   compacto: boolean;
 }) {
   const [filtro, setFilter] = useState<'todos' | 'sin'>('todos');
-  const withoutPct = planes.filter((p) => p.comision_pyme_pct === null).length;
+  const withoutPct = planes.filter((p) => p.sme_commission_pct === null).length;
   // Los que no cobran nada primero: son lo que hay que resolver.
   const ordenados = useMemo(
-    () => [...planes].sort((a, b) => Number(b.comision_pyme_pct === null) - Number(a.comision_pyme_pct === null) || a.nombre.localeCompare(b.nombre)),
+    () => [...planes].sort((a, b) => Number(b.sme_commission_pct === null) - Number(a.sme_commission_pct === null) || a.name.localeCompare(b.name)),
     [planes],
   );
-  const visibles = filtro === 'sin' ? ordenados.filter((p) => p.comision_pyme_pct === null) : ordenados;
-  const enlace = puedeEditarPlanes ? <a href={ENLACE} className="text-xs text-sky-400 hover:underline">Editar en Catálogos › Productos</a> : null;
+  const visibles = filtro === 'sin' ? ordenados.filter((p) => p.sme_commission_pct === null) : ordenados;
+  const enlace = canEditPlans ? <a href={ENLACE} className="text-xs text-sky-400 hover:underline">Editar en Catálogos › Productos</a> : null;
 
   if (compacto) {
     return (

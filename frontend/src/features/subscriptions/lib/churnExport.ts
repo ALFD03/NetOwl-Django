@@ -10,18 +10,18 @@ import type { ExcelColumn } from '@/shared/lib/excel';
 import type { ChurnDetail } from '@/shared/types/subscriptions';
 
 export const CHURN_COLUMNS: ExcelColumn<ChurnDetail>[] = [
-  { header: 'Orden', value: (b) => b.orden, width: 18 },
-  { header: 'Cliente', value: (b) => b.cliente, width: 34 },
-  { header: 'Cédula / RIF', value: (b) => b.cedula, width: 16 },
+  { header: 'Orden', value: (b) => b.order, width: 18 },
+  { header: 'Cliente', value: (b) => b.client, width: 34 },
+  { header: 'Cédula / RIF', value: (b) => b.id_number, width: 16 },
   { header: 'Sucursal', value: (b) => b.sucursal, width: 18 },
   { header: 'Zona', value: (b) => b.zona, width: 22 },
   { header: 'Campaña', value: (b) => b.campanna, width: 22 },
   { header: 'Producto', value: (b) => b.producto, width: 30 },
-  { header: 'Tipo de Servicio', value: (b) => b.tipo_servicio, width: 20 },
+  { header: 'Tipo de Servicio', value: (b) => b.service_type, width: 20 },
   // Número, no texto: la hoja tiene que poder sumar la facturación perdida.
   { header: 'Subtotal', value: (b) => b.subtotal, format: '#,##0.00', width: 14 },
-  { header: 'Fecha de Inicio', value: (b) => b.fecha_inicio, width: 18 },
-  { header: 'Estado de la Suscripción', value: (b) => b.estado_suscripcion, width: 24 },
+  { header: 'Fecha de Inicio', value: (b) => b.since_date, width: 18 },
+  { header: 'Estado de la Suscripción', value: (b) => b.subscription_status, width: 24 },
   { header: 'Teléfono 1', value: (b) => b.phone1, width: 16 },
   { header: 'Teléfono 2', value: (b) => b.phone2, width: 16 },
 ];

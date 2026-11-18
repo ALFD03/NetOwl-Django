@@ -22,6 +22,7 @@ from services.support.analytics.queries import (
     get_support_metric_totals,
     get_support_periods,
 )
+from services.support.api_keys import SUPPORT_KEYS
 
 PERIOD_DENIED = "Acceso denegado. Solo puedes ver el último periodo evaluado."
 
@@ -36,21 +37,21 @@ def _metric_totals(request) -> dict:
     return get_support_metric_totals(solo=period)
 
 
-@endpoint(perms=["can_view_support", "can_view_support_dashboard"], require_all=True)
+@endpoint(perms=["can_view_support", "can_view_support_dashboard"], require_all=True, keys=SUPPORT_KEYS)
 def dashboard(request):
     """El promedio de los periodos evaluados y, con su permiso, los tickets abiertos hoy."""
     open_tickets = get_open_tickets() if has_permission(request.user, "can_view_support_abiertos") else None
     return {"metrics": _metric_totals(request), "abiertos": open_tickets}
 
 
-@endpoint(perms=["can_view_support_analytics"])
+@endpoint(perms=["can_view_support_analytics"], keys=SUPPORT_KEYS)
 def analytics(request):
-    """El bloque de un periodo al corte `?dia=` (o al último) y la serie ligera del mes."""
+    """El bloque de un periodo al corte `?day=` (o al último) y la serie ligera del mes."""
     periods = visible_periods(request, get_support_periods())
     data = get_support_analytics_structured(visible_period(request, request.GET.get("period"), lambda: periods))
     period = data.get("periodo", "")
 
-    day = request_int(request, "dia", minimo=1, maximo=31)
+    day = request_int(request, "day", minimo=1, maximo=31)
     series = get_support_day_series(period) if period else {}
     available = series.get("dias_disponibles", [])
     active_day = day if day in available else (available[-1] if available else 0)
@@ -72,7 +73,7 @@ def analytics(request):
     }
 
 
-@endpoint(perms=["can_view_support_results"])
+@endpoint(perms=["can_view_support_results"], keys=SUPPORT_KEYS)
 def results(request):
     """Los cierres por periodo y el detalle estructurado de un mes (`?period=`)."""
     periods = clamp_requested(request, clean_periods(request.GET.get("periods")), get_support_periods)
@@ -89,28 +90,28 @@ def results(request):
     }
 
 
-@endpoint(perms=["can_view_support_analytics", "can_view_support_results"])
+@endpoint(perms=["can_view_support_analytics", "can_view_support_results"], keys=SUPPORT_KEYS)
 def breakdown(request):
     """El drill-down de un valor dimensional: sus tipos, razones y soluciones."""
     period = request.GET.get("period")
     dimension = request.GET.get("dimension")
-    value = request.GET.get("valor")
+    value = request.GET.get("value")
     if not (period and dimension and value):
-        raise ApiError("Se requieren period, dimension y valor.")
+        raise ApiError("Se requieren period, dimension y value.")
     if period_denied(request, period, get_support_periods):
         raise ApiError(PERIOD_DENIED, 403)
     return get_support_breakdown(
-        periodo=period, dimension=dimension, valor=value, grupo=request.GET.get("grupo") or None,
+        periodo=period, dimension=dimension, valor=value, grupo=request.GET.get("group") or None,
     )
 
 
-@endpoint(perms=["can_view_support_analytics"])
+@endpoint(perms=["can_view_support_analytics"], keys=SUPPORT_KEYS)
 def day_metrics(request):
-    """El corte completo de un día: `{global, grupos, incidencia_zonas}`."""
+    """El corte completo de un día: `{global, groups, zone_incidence}`."""
     period = request.GET.get("period")
-    day = request_int(request, "dia", minimo=1, maximo=31)
+    day = request_int(request, "day", minimo=1, maximo=31)
     if not period or not day:
-        raise ApiError("Se requieren period y dia.")
+        raise ApiError("Se requieren period y day.")
     if month_denied(request, period, get_support_periods):
         raise ApiError(PERIOD_DENIED, 403)
     cut = get_support_day_payload(period, day)

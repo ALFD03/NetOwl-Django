@@ -20,19 +20,19 @@ import type { DayMetrics, DaySeries, DimensionGroup, Period } from '@/shared/typ
 import { useVisit } from '@/shared/page/PageData';
 
 interface Props {
-  periodos: Period[];
-  dimensiones: DimensionGroup[];
+  closings: Period[];
+  dimensions: DimensionGroup[];
   dayMetrics?: DayMetrics;
 }
 
-export default function SubscriptionsAnalytics({ periodos = [], dimensiones = [], dayMetrics }: Props) {
+export default function SubscriptionsAnalytics({ closings = [], dimensions = [], dayMetrics }: Props) {
   const visit = useVisit();
-  const [selectedPeriod, setSelectedPeriod] = useState(periodos[0]?.periodo_reporte || '');
+  const [selectedPeriod, setSelectedPeriod] = useState(closings[0]?.report_period || '');
   const [selectedDim, setSelectedDim] = useState<DimensionKey>('zona');
   const [selectedDay, setSelectedDay] = useState(0);
 
   const { globalData: monthData, dimensionGroup: monthDimensions, currentDimensionData: monthDimensionData } =
-    useSubscriptionsAnalyticsData(periodos, dimensiones, selectedPeriod, selectedDim);
+    useSubscriptionsAnalyticsData(closings, dimensions, selectedPeriod, selectedDim);
 
   const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(
     dayMetrics,
@@ -41,15 +41,15 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
 
   // El churn del día se pinta con el semáforo del catálogo.
   const objetivos = useTargets();
-  const { semaforo } = objetivos;
-  const dayCards = useMemo(() => subsDayCards(semaforo), [semaforo]);
+  const { thresholds } = objetivos;
+  const dayCards = useMemo(() => subsDayCards(thresholds), [thresholds]);
 
   // La serie ligera que CRM y Soporte reciben aparte, aqui se saca del mes que
   // ya viajo entero: es el mismo bloque global, dia a dia.
   const serie = useMemo<DaySeries>(
     () =>
       Object.fromEntries(
-        Object.entries(dayMetrics?.dias ?? {}).map(([dia, payload]) => [
+        Object.entries(dayMetrics?.days ?? {}).map(([dia, payload]) => [
           dia,
           (payload.global ?? {}) as unknown as Record<string, number>,
         ]),
@@ -63,7 +63,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   const globalData = dayData?.global ?? monthData;
   // La proyección sale de las instalaciones acumuladas al corte elegido; un día
   // calculado antes de guardar el bloque global no tiene de dónde sacarlas.
-  const installedAtCutoff = dayData?.global?.nuevos_mes;
+  const installedAtCutoff = dayData?.global?.new_in_month;
   // El cumplimiento de ventas que darían las instalaciones proyectadas, contra
   // la misma meta y sin recorte, como la tarjeta de Cumplimiento de Ventas.
   // Sin base inicial no hay meta y la franja no habla del objetivo.
@@ -71,12 +71,12 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
     if (!proyeccion || installedAtCutoff === undefined) return null;
     const proyectadas = proyectar(Number(installedAtCutoff), proyeccion);
     const { salesGoal: metaVentas, salesCompliance: cumplimientoVentas } = periodCompliance(
-      { activos_inicio: globalData.activos_inicio, nuevos_mes: proyectadas },
+      { active_start: globalData.active_start, new_in_month: proyectadas },
       objetivos.general(selectedPeriod),
     );
     if (metaVentas <= 0) return null;
-    return { valor: cumplimientoVentas, objetivo: metaVentas, tono: complianceTone(cumplimientoVentas, semaforo) };
-  }, [proyeccion, installedAtCutoff, globalData.activos_inicio, objetivos, selectedPeriod, semaforo]);
+    return { value: cumplimientoVentas, target: metaVentas, tono: complianceTone(cumplimientoVentas, thresholds) };
+  }, [proyeccion, installedAtCutoff, globalData.active_start, objetivos, selectedPeriod, thresholds]);
   const currentDimensionData = dayData?.dims?.[selectedDim] ?? monthDimensionData;
   // El reporte de campañas sigue la misma regla, pero siempre sobre `campanna`;
   // si cae al cierre, el archivo no debe decir que es el corte de un día.
@@ -96,7 +96,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
       toolbar={
         <>
           <AnalyticsFilters
-            periods={periodos.map((period) => period.periodo_reporte)}
+            periods={closings.map((period) => period.report_period)}
             selectedPeriod={selectedPeriod}
             onPeriodChange={handlePeriodChange}
             selectedDimension={selectedDim}
@@ -106,7 +106,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                monthPeriod={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.month}
                 daysInMonth={totalDays}
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}
@@ -117,7 +117,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
       }
     >
       <div className="mb-6">
-        <CampannasExportButton filas={campannas} periodo={selectedPeriod} dia={dayCampaigns ? effectiveDay : 0} />
+        <CampannasExportButton rows={campannas} period={selectedPeriod} day={dayCampaigns ? effectiveDay : 0} />
       </div>
 
       <DaySummary
@@ -137,7 +137,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
       </DaySummary>
 
       <div className="mt-6">
-        <AnalyticsMetrics data={globalData} periodo={selectedPeriod} />
+        <AnalyticsMetrics data={globalData} period={selectedPeriod} />
       </div>
       <AnalyticsCharts
         globalData={globalData}

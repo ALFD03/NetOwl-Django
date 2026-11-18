@@ -22,11 +22,11 @@ interface EtaReportToolbarProps {
   isSaving: boolean;
   onToggleLock: () => void;
   /** Las tres hojas del formulario de la reguladora, si el periodo las trae. */
-  formularios?: EtaForms;
+  forms?: EtaForms;
   /** Planes que cuentan en el reporte pero todavía no se declaran. */
   withoutRegulatory?: string[];
   /** Tasa guardada para el periodo. `0` = todavía sin fijar. */
-  tasa: number;
+  rate: number;
   /** De dónde salió: el día que publicó el BCV, o «Escrita a mano». */
   rateSource?: string;
   /** Por qué no hay tasa, cuando la consulta automática falló. */
@@ -50,37 +50,37 @@ interface EtaReportToolbarProps {
  * de datos tres tasas que nadie quiso.
  */
 function BcvRateField({
-  tasa,
+  rate,
   rateSource: tasaFuente,
   onRateChange: onTasaChange,
   onRateFetch: onTasaConsultar,
 }: {
-  tasa: number;
+  rate: number;
   rateSource?: string;
   onRateChange: (tasa: number) => void;
   onRateFetch: () => Promise<void>;
 }) {
-  const [texto, setText] = useState(tasa ? String(tasa) : '');
+  const [texto, setText] = useState(rate ? String(rate) : '');
   const [consultando, setConsultando] = useState(false);
 
   // El periodo cambia y con él su tasa: el campo tiene que seguir al reporte,
   // no quedarse con lo que se tecleó para el mes anterior. Se ajusta durante
   // el renderizado y no en un efecto, que provocaría una pintada de más con el
   // valor viejo antes de corregirse.
-  const [viewedRate, setViewedRate] = useState(tasa);
-  if (tasa !== viewedRate) {
-    setViewedRate(tasa);
-    setText(tasa ? String(tasa) : '');
+  const [viewedRate, setViewedRate] = useState(rate);
+  if (rate !== viewedRate) {
+    setViewedRate(rate);
+    setText(rate ? String(rate) : '');
   }
 
   const confirmar = () => {
     // La coma es lo que se teclea en español y `Number` no la entiende.
     const valor = Number(texto.replace(',', '.'));
     if (!Number.isFinite(valor) || valor < 0) {
-      setText(tasa ? String(tasa) : '');
+      setText(rate ? String(rate) : '');
       return;
     }
-    if (valor !== tasa) onTasaChange(valor);
+    if (valor !== rate) onTasaChange(valor);
   };
 
   const fetchData = async () => {
@@ -136,12 +136,12 @@ function BcvRateField({
  * declaró, y exportar el formulario valorado a día de hoy.
  */
 function CurrentRateField({
-  tasa,
+  rate,
   fuente,
   cargando,
   onRecargar,
 }: {
-  tasa: number;
+  rate: number;
   fuente: string;
   cargando: boolean;
   onRecargar: () => Promise<void>;
@@ -157,7 +157,7 @@ function CurrentRateField({
       ].filter(Boolean).join(' ')}
     >
       <span className="flex-1 px-4 py-2.5 text-xs font-bold text-white sm:flex-none">
-        {tasa > 0 ? tasa.toLocaleString('es-VE', { maximumFractionDigits: 4 }) : '—'}
+        {rate > 0 ? rate.toLocaleString('es-VE', { maximumFractionDigits: 4 }) : '—'}
       </span>
       <button
         type="button"
@@ -181,9 +181,9 @@ export function EtaReportToolbar({
   isLocked,
   isSaving,
   onToggleLock,
-  formularios,
+  forms,
   withoutRegulatory: sinRegulador,
-  tasa,
+  rate,
   rateSource: tasaFuente,
   rateNotice: tasaAviso,
   onRateChange: onTasaChange,
@@ -205,14 +205,14 @@ export function EtaReportToolbar({
         />
 
         <BcvRateField
-          tasa={tasa}
+          rate={rate}
           rateSource={tasaFuente}
           onRateChange={onTasaChange}
           onRateFetch={onTasaConsultar}
         />
 
         <CurrentRateField
-          tasa={tasaActual.tasa}
+          rate={tasaActual.rate}
           fuente={tasaActual.fuente}
           cargando={tasaActual.cargando}
           onRecargar={tasaActual.recargar}
@@ -229,10 +229,10 @@ export function EtaReportToolbar({
       <div className="flex flex-wrap items-center gap-4">
         {showLockToggle && (
           <EtaFormsExportButton
-            formularios={formularios}
+            forms={forms}
             period={period}
-            tasa={tasa}
-            currentRate={tasaActual.tasa}
+            rate={rate}
+            currentRate={tasaActual.rate}
             currentRateSource={tasaActual.fuente}
             withoutRegulatory={sinRegulador}
           />

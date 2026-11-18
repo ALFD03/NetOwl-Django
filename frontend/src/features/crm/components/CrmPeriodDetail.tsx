@@ -38,14 +38,14 @@ interface SlaSection {
   tone: MetricColor;
   icon: ReactNode;
   keys: {
-    promedio: CrmNumericKey;
-    mediana: CrmNumericKey;
+    avg: CrmNumericKey;
+    median: CrmNumericKey;
     p25: CrmNumericKey;
     p75: CrmNumericKey;
     min: CrmNumericKey;
     max: CrmNumericKey;
     std: CrmNumericKey;
-    excedeProm: CrmNumericKey;
+    pctOverAvg: CrmNumericKey;
   };
 }
 
@@ -57,14 +57,14 @@ const SLA_SECTIONS: SlaSection[] = [
     tone: 'blue',
     icon: <Zap className="h-3.5 w-3.5" />,
     keys: {
-      promedio: 'horas_promedio_inst',
-      mediana: 'horas_mediana_inst',
-      p25: 'horas_p25_inst',
-      p75: 'horas_p75_inst',
-      min: 'horas_min_inst',
-      max: 'horas_max_inst',
-      std: 'horas_std_inst',
-      excedeProm: 'pct_excede_prom_inst',
+      avg: 'hours_avg_inst',
+      median: 'hours_median_inst',
+      p25: 'hours_p25_inst',
+      p75: 'hours_p75_inst',
+      min: 'hours_min_inst',
+      max: 'hours_max_inst',
+      std: 'hours_std_inst',
+      pctOverAvg: 'pct_over_avg_inst',
     },
   },
   {
@@ -74,14 +74,14 @@ const SLA_SECTIONS: SlaSection[] = [
     tone: 'red',
     icon: <Clock className="h-3.5 w-3.5" />,
     keys: {
-      promedio: 'horas_promedio_perd',
-      mediana: 'horas_mediana_perd',
-      p25: 'horas_p25_perd',
-      p75: 'horas_p75_perd',
-      min: 'horas_min_perd',
-      max: 'horas_max_perd',
-      std: 'horas_std_perd',
-      excedeProm: 'pct_excede_prom_perd',
+      avg: 'hours_avg_lost',
+      median: 'hours_median_lost',
+      p25: 'hours_p25_lost',
+      p75: 'hours_p75_lost',
+      min: 'hours_min_lost',
+      max: 'hours_max_lost',
+      std: 'hours_std_lost',
+      pctOverAvg: 'pct_over_avg_lost',
     },
   },
   {
@@ -92,40 +92,40 @@ const SLA_SECTIONS: SlaSection[] = [
     tone: 'yellow',
     icon: <Timer className="h-3.5 w-3.5" />,
     keys: {
-      promedio: 'horas_promedio_cierre',
-      mediana: 'horas_mediana_cierre',
-      p25: 'horas_p25_cierre',
-      p75: 'horas_p75_cierre',
-      min: 'horas_min_cierre',
-      max: 'horas_max_cierre',
-      std: 'horas_std_cierre',
-      excedeProm: 'pct_excede_prom_cierre',
+      avg: 'hours_avg_close',
+      median: 'hours_median_close',
+      p25: 'hours_p25_close',
+      p75: 'hours_p75_close',
+      min: 'hours_min_close',
+      max: 'hours_max_close',
+      std: 'hours_std_close',
+      pctOverAvg: 'pct_over_avg_close',
     },
   },
 ];
 
 /** Body of the Results modal: the executive summary for one closed cohort. */
 export function CrmPeriodDetail({ row }: CrmPeriodDetailProps) {
-  const totalClosed = toNumber(row.ganados) + toNumber(row.perdidos);
+  const totalClosed = toNumber(row.won) + toNumber(row.lost);
   // Las devoluciones no comparten denominador con el resto de la tira: ganados,
   // perdidos y pendientes son la cohorte de creación y la etapa 8 es el riesgo
   // del mes sobre todo lo que estuvo vivo. Por eso su caption dice contra qué se
   // mide, y por eso ya no se suma con la pérdida en un único "fuga": serían dos
   // porcentajes de bases distintas.
-  const e8Excepciones = toNumber(row.e8_devueltos_excepcion);
-  const e8Caption = `${row.pct_devueltos_e8}% de ${formatInteger(row.total_en_riesgo)} vivas`;
-  const e8BrutoCaption = e8Excepciones > 0
-    ? `${formatInteger(e8Excepciones)} ajenas excluidas`
+  const e8Exceptions = toNumber(row.e8_returned_exception);
+  const e8Caption = `${row.pct_returned_e8}% de ${formatInteger(row.total_at_risk)} vivas`;
+  const e8GrossCaption = e8Exceptions > 0
+    ? `${formatInteger(e8Exceptions)} ajenas excluidas`
     : 'Sin motivos ajenos';
-  const healthCards = buildHealthCards(row.efectividad);
+  const healthCards = buildHealthCards(row.effectiveness);
 
   const summary: SummaryStripItem[] = [
-    { id: 'oportunidades', label: 'Oportunidades', value: formatInteger(row.total_oportunidades), caption: 'Cohorte del periodo', tone: 'white' },
-    { id: 'ganados', label: 'Ganados', value: `+${formatInteger(row.ganados)}`, caption: `${row.pct_instalacion}% instalación`, tone: 'green' },
-    { id: 'perdidos', label: 'Perdidos', value: `-${formatInteger(row.perdidos)}`, caption: `${row.pct_perdida}% pérdida`, tone: 'red' },
-    { id: 'pendientes', label: 'Pendientes', value: formatInteger(row.pendientes), caption: `${row.pct_pendientes}% en curso`, tone: 'blue' },
-    { id: 'devueltos', label: 'Devueltos E8', value: formatInteger(row.count_devueltos_e8), caption: e8Caption, tone: 'yellow' },
-    { id: 'devueltos_bruto', label: 'Devueltos E8 (bruto)', value: formatInteger(row.count_devueltos_e8_bruto), caption: e8BrutoCaption, tone: 'red' },
+    { id: 'opportunities', label: 'Oportunidades', value: formatInteger(row.total_opportunities), caption: 'Cohorte del periodo', tone: 'white' },
+    { id: 'won', label: 'Ganados', value: `+${formatInteger(row.won)}`, caption: `${row.pct_installation}% instalación`, tone: 'green' },
+    { id: 'lost', label: 'Perdidos', value: `-${formatInteger(row.lost)}`, caption: `${row.pct_lost}% pérdida`, tone: 'red' },
+    { id: 'pending', label: 'Pendientes', value: formatInteger(row.pending), caption: `${row.pct_pending}% en curso`, tone: 'blue' },
+    { id: 'devueltos', label: 'Devueltos E8', value: formatInteger(row.count_returned_e8), caption: e8Caption, tone: 'yellow' },
+    { id: 'devueltos_bruto', label: 'Devueltos E8 (bruto)', value: formatInteger(row.count_returned_e8_gross), caption: e8GrossCaption, tone: 'red' },
     { id: 'cierres', label: 'Cierres Totales', value: formatInteger(totalClosed), caption: 'Ganados + perdidos', tone: 'slate' },
   ];
 
@@ -170,8 +170,8 @@ export function CrmPeriodDetail({ row }: CrmPeriodDetailProps) {
           {SLA_SECTIONS.map(({ id, wide, title, subtitle, tone, icon, keys }) => (
             <div key={id} className={wide ? 'md:col-span-2' : undefined}>
             <MetricGroup title={title} tone={tone} icon={icon} columns={3}>
-              <CompactMetric label="Promedio (μ)" value={`${formatOneDecimal(row[keys.promedio])} h`} color={tone} />
-              <CompactMetric label="Mediana (P50)" value={`${formatOneDecimal(row[keys.mediana])} h`} color="yellow" />
+              <CompactMetric label="Promedio (μ)" value={`${formatOneDecimal(row[keys.avg])} h`} color={tone} />
+              <CompactMetric label="Mediana (P50)" value={`${formatOneDecimal(row[keys.median])} h`} color="yellow" />
               <CompactMetric label="Desv. Std (σ)" value={`${formatOneDecimal(row[keys.std])} h`} color="purple" />
               <CompactMetric label="P25" value={`${formatOneDecimal(row[keys.p25])} h`} color={tone} />
               <CompactMetric label="P75" value={`${formatOneDecimal(row[keys.p75])} h`} color={tone} />
@@ -187,7 +187,7 @@ export function CrmPeriodDetail({ row }: CrmPeriodDetailProps) {
                 </p>
                 <MiniExceedRing
                   label="Excede Promedio"
-                  pct={row[keys.excedeProm]}
+                  pct={row[keys.pctOverAvg]}
                   color={METRIC_COLOR[tone]}
                 />
               </div>

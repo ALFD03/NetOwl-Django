@@ -26,10 +26,10 @@ const DIMENSION_OPTIONS = Object.entries(DIMENSION_CONFIG).map(([key, config]) =
 export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewProps) {
   const [selectedRow, setSelectedRow] = useState<SubscriptionClose | null>(null);
   const [activeDimension, setActiveDimension] = useState('zona');
-  const { data: details, loading } = useSubscriptionResults(selectedRow?.periodo_reporte ?? null);
+  const { data: details, loading } = useSubscriptionResults(selectedRow?.report_period ?? null);
   const objetivos = useTargets();
-  const columns = useMemo(() => buildPeriodColumns(objetivos.semaforo), [objetivos]);
-  const dimensionColumns = useMemo(() => buildDimensionColumns(objetivos.semaforo), [objetivos]);
+  const columns = useMemo(() => buildPeriodColumns(objetivos.thresholds), [objetivos]);
+  const dimensionColumns = useMemo(() => buildDimensionColumns(objetivos.thresholds), [objetivos]);
   const filas = useMemo(() => withComplianceData(periodos, objetivos), [periodos, objetivos]);
 
   const activeLabel = DIMENSION_CONFIG[activeDimension]?.label ?? activeDimension;
@@ -51,18 +51,18 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
       <Modal
         isOpen={Boolean(selectedRow)}
         onClose={() => setSelectedRow(null)}
-        title={`Detalle de Periodo: ${selectedRow?.periodo_reporte ?? ''}`}
+        title={`Detalle de Periodo: ${selectedRow?.report_period ?? ''}`}
         size="wide"
       >
         {selectedRow && (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                {formatInteger(selectedRow.bajas)} bajas en el periodo
+                {formatInteger(selectedRow.churned)} bajas en el periodo
               </p>
               <ChurnExportButton
-                period={selectedRow.periodo_reporte}
-                alcance="del periodo"
+                period={selectedRow.report_period}
+                scope="del periodo"
                 label="Exportar bajas del periodo"
               />
             </div>

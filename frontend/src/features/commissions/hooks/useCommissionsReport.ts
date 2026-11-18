@@ -19,8 +19,8 @@ export function useCommissionsReport(periodo: string, exists: boolean) {
   const visit = useVisit();
   // Guardadas con su periodo: la página reutiliza el componente al cambiar de
   // mes, y el detalle de otro periodo no vale para este.
-  const [cache, setCache] = useState<{ periodo: string; filas: CommissionSale[] } | null>(null);
-  const ventas = cache?.periodo === periodo ? cache.filas : null;
+  const [cache, setCache] = useState<{ period: string; filas: CommissionSale[] } | null>(null);
+  const ventas = cache?.period === periodo ? cache.filas : null;
   const [cargandoVentas, setLoadingSales] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +32,8 @@ export function useCommissionsReport(periodo: string, exists: boolean) {
     let current = true;
     commissionsApi
       .tasaActual()
-      .then((r) => current && setTodayRate({ tasa: r.tasa, fuente: r.fuente }))
-      .catch((err: unknown) => current && setTodayRate({ tasa: null, fuente: getApiErrorMessage(err, 'No se pudo consultar.') }));
+      .then((r) => current && setTodayRate({ rate: r.rate, source: r.source }))
+      .catch((err: unknown) => current && setTodayRate({ rate: null, source: getApiErrorMessage(err, 'No se pudo consultar.') }));
     return () => {
       current = false;
     };
@@ -44,7 +44,7 @@ export function useCommissionsReport(periodo: string, exists: boolean) {
     setLoadingSales(true);
     try {
       const filas = await commissionsApi.ventas<CommissionSale>(periodo);
-      setCache({ periodo, filas });
+      setCache({ period: periodo, filas });
       return filas;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo cargar el detalle de ventas.'));
@@ -74,7 +74,7 @@ export function useCommissionsReport(periodo: string, exists: boolean) {
     ventas, cargandoVentas, cargarVentas,
     tasaHoy,
     guardando, error, setError,
-    guardarPeriodo: (body: { periodo: string; inicio_promo: string; inicio?: string; corte_adelantos?: string }) =>
+    guardarPeriodo: (body: { period: string; promo_start: string; start?: string; advance_cutoff?: string }) =>
       escribir(() => commissionsApi.guardarPeriodo(body), 'No se pudo guardar el periodo.'),
     cerrar: () => escribir(() => commissionsApi.cerrar(periodo), 'No se pudo cerrar el periodo.'),
     reabrir: (motivo: string, confirmacion: string) =>
@@ -97,21 +97,21 @@ export function useCommissionsReport(periodo: string, exists: boolean) {
     },
     decidir: (ordenes: string[], decision: '' | ReviewDecision) =>
       escribir(
-        () => commissionsApi.guardarRevision({ periodo, ordenes, decision }),
+        () => commissionsApi.guardarRevision({ period: periodo, orders: ordenes, decision }),
         'No se pudo guardar la decisión.',
       ),
     agregarManual: (ordenes: string[], nota: string) =>
-      escribir(() => commissionsApi.agregarManual({ periodo, ordenes, nota }), 'No se pudo agregar la venta.'),
+      escribir(() => commissionsApi.agregarManual({ period: periodo, orders: ordenes, note: nota }), 'No se pudo agregar la venta.'),
     quitarManual: (orden: string) =>
       escribir(() => commissionsApi.quitarManual(periodo, orden), 'No se pudo quitar la venta.'),
-    guardarCumplimiento: (persona_id: number, valor: number | null) =>
+    guardarCumplimiento: (personId: number, valor: number | null) =>
       escribir(
-        () => commissionsApi.guardarIndicador({ periodo, persona_id, cumplimiento_pct: valor }),
+        () => commissionsApi.guardarIndicador({ period: periodo, person_id: personId, compliance_pct: valor }),
         'No se pudo guardar el cumplimiento.',
       ),
-    guardarCrecimiento: (persona_id: number, valor: number | null) =>
+    guardarCrecimiento: (personId: number, valor: number | null) =>
       escribir(
-        () => commissionsApi.guardarIndicador({ periodo, persona_id, crecimiento_pct: valor }),
+        () => commissionsApi.guardarIndicador({ period: periodo, person_id: personId, growth_pct: valor }),
         'No se pudo guardar el crecimiento.',
       ),
   };

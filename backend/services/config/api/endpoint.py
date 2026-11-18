@@ -7,7 +7,8 @@ Una vista decorada solo lee sus datos y los devuelve. El decorador se encarga de
 * límite de peticiones por token, usuario o IP (429),
 * validar `query` (GET) y `body` (JSON o formulario) con pydantic (400),
 * convertir el resultado en JSON (NaN de pandas incluidos) y cualquier error
-  en una respuesta uniforme: `{"error": {"message": ..., "details": ...}}`.
+  en una respuesta uniforme: `{"error": {"message": ..., "details": ...}}`,
+* con `keys`, traducir las claves al inglés (ver `keys.py`).
 
 La vista puede devolver un dict/list (200), `(datos, status)`, `None` (204) o
 cualquier `HttpResponse` (se devuelve tal cual).
@@ -31,6 +32,8 @@ from pydantic import BaseModel, ValidationError
 from core.utils import clean_json_nullable, clean_json_props
 from netowl_web.ratelimit import ip_cliente
 from services.config.auth import has_permission
+
+from .keys import KeyMap
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +107,7 @@ def _validation_details(exc: ValidationError) -> list[dict]:
     ]
 
 
-def _to_response(result: Any, nullable: bool) -> HttpResponse:
+def _to_response(result: Any, nullable: bool, keys: KeyMap | None = None) -> HttpResponse:
     if isinstance(result, HttpResponse):
         return result
     status = 200
@@ -114,6 +117,8 @@ def _to_response(result: Any, nullable: bool) -> HttpResponse:
         return HttpResponse(status=204)
     if isinstance(result, BaseModel):
         result = result.model_dump(mode="json")
+    if keys is not None:
+        result = keys.out(result)
     clean = clean_json_nullable if nullable else clean_json_props
     return JsonResponse(clean(result), status=status, safe=False, json_dumps_params={"ensure_ascii": False})
 
@@ -137,6 +142,7 @@ def endpoint(
     query: type[BaseModel] | None = None,
     body: type[BaseModel] | None = None,
     nullable: bool = False,
+    keys: KeyMap | None = None,
 ) -> Callable:
     """Declara una vista de la API.
 
@@ -147,6 +153,7 @@ def endpoint(
     - `query` / `body`: modelos pydantic; la vista los recibe como `query=` y `body=`.
       `body` solo se lee en POST, PUT y PATCH.
     - `nullable`: NaN → null en vez de 0 (ver `core.utils.clean_json_nullable`).
+    - `keys`: traduce al inglés las claves de la respuesta (ver `keys.py`).
     """
     allowed = tuple(m.upper() for m in methods)
 
@@ -182,7 +189,7 @@ def endpoint(
                     kwargs["query"] = query.model_validate(_query_data(request, query))
                 if body is not None and request.method in BODY_METHODS:
                     kwargs["body"] = body.model_validate(_body_data(request))
-                return _to_response(view(request, *args, **kwargs), nullable)
+                return _to_response(view(request, *args, **kwargs), nullable, keys)
             except ValidationError as exc:
                 return error_response("Parámetros inválidos.", 400, _validation_details(exc))
             except ApiError as exc:

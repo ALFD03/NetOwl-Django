@@ -15,6 +15,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 
 from core import fixtures
+from services.catalogs.api_keys import CATALOG_KEYS
 from services.catalogs.directory import people_outside_directory
 from services.catalogs.models import EquipoVentas
 from services.catalogs.registry import (
@@ -123,7 +124,7 @@ def _allowed_catalog(request, data: dict, row=None) -> dict[str, Any]:
     return catalog
 
 
-@endpoint(perms=CATALOG_PERMISSIONS)
+@endpoint(perms=CATALOG_PERMISSIONS, keys=CATALOG_KEYS)
 def notifications(request):
     """Lo que falta en cada área administrada, lo ignorado y las opciones para registrarlo aquí.
 
@@ -155,36 +156,36 @@ def notifications(request):
     })
 
 
-@endpoint(perms=[OPERATIONAL_PERMISSION])
+@endpoint(perms=[OPERATIONAL_PERMISSION], keys=CATALOG_KEYS)
 def products(request):
-    """Planes y planes reguladores. `?nuevo_plan=` abre el alta ya rellena."""
+    """Planes y planes reguladores. `?new_plan=` abre el alta ya rellena."""
     return _page(request, {
         "planes": _listing("planes"),
         "reguladores": _listing("reguladores"),
         "tecnologias": _options(TECNOLOGIA_CHOICES),
         "tiposPersona": _options(PERSON_KIND_CHOICES),
-        "nuevoPlan": (request.GET.get("nuevo_plan") or "").strip(),
+        "nuevoPlan": (request.GET.get("new_plan") or "").strip(),
     })
 
 
-@endpoint(perms=[COMMERCIAL_PERMISSION])
+@endpoint(perms=[COMMERCIAL_PERMISSION], keys=CATALOG_KEYS)
 def structure(request):
-    """Zonas y estados (con sites y unidades para el formulario). `?nueva_zona=` abre el alta."""
+    """Zonas y estados (con sites y unidades para el formulario). `?new_zone=` abre el alta."""
     return _page(request, {
         "zonas": _listing("zonas"),
         "sites": _listing("sites"),
         "estados": _listing("estados"),
         "coordinadores": _listing("coordinadores"),
         "tecnologias": _options(TECNOLOGIA_CHOICES),
-        "nuevaZona": (request.GET.get("nueva_zona") or "").strip(),
+        "nuevaZona": (request.GET.get("new_zone") or "").strip(),
     })
 
 
-@endpoint(perms=[SALES_PERMISSION])
+@endpoint(perms=[SALES_PERMISSION], keys=CATALOG_KEYS)
 def sales(request):
     """Estructura de ventas, equipos con su gente y condiciones, y objetivos.
 
-    `?nueva_persona=&equipo=&rol=` abre el alta ya rellena desde Notificaciones.
+    `?new_person=&team=&role=` abre el alta ya rellena desde Notificaciones.
     """
     return _page(request, {
         "equipos": [_team_view(e) for e in EquipoVentas.objects.all()],
@@ -192,9 +193,9 @@ def sales(request):
         "personas": _listing("personas"),
         "condiciones": _listing("condiciones_equipo"),
         "nuevaPersona": {
-            "literal": (request.GET.get("nueva_persona") or "").strip(),
-            "equipo": (request.GET.get("equipo") or "").strip(),
-            "rol": (request.GET.get("rol") or "").strip(),
+            "literal": (request.GET.get("new_person") or "").strip(),
+            "equipo": (request.GET.get("team") or "").strip(),
+            "rol": (request.GET.get("role") or "").strip(),
         },
         "coordinadores": _listing("coordinadores"),
         "objetivos": _listing("objetivos"),
@@ -211,10 +212,10 @@ def sales(request):
     })
 
 
-@endpoint(methods=["POST"], perms=CATALOG_PERMISSIONS, rate="60/m")
+@endpoint(methods=["POST"], perms=CATALOG_PERMISSIONS, rate="60/m", keys=CATALOG_KEYS)
 def save(request):
     """Alta o edición de una fila de cualquier catálogo."""
-    data = json_body(request)
+    data = CATALOG_KEYS.back(json_body(request))
     catalog = _allowed_catalog(request, data)
 
     row_id = data.get("id")
@@ -254,13 +255,13 @@ def save(request):
     }
 
 
-@endpoint(methods=["POST"], perms=CATALOG_PERMISSIONS, rate="20/m")
+@endpoint(methods=["POST"], perms=CATALOG_PERMISSIONS, rate="20/m", keys=CATALOG_KEYS)
 def save_batch(request):
     """Alta de varias filas de un catálogo; cada una en su savepoint.
 
-    Una fila que choca no se lleva a las demás: vuelve en `errores` con su motivo.
+    Una fila que choca no se lleva a las demás: vuelve en `errors` con su motivo.
     """
-    data = json_body(request)
+    data = CATALOG_KEYS.back(json_body(request))
     catalog = _allowed_catalog(request, data)
     if catalog.get("unico"):
         raise ApiError("Este catálogo no admite altas en bloque.")
@@ -305,10 +306,10 @@ def save_batch(request):
     }
 
 
-@endpoint(methods=["POST"], perms=CATALOG_PERMISSIONS, rate="60/m")
+@endpoint(methods=["POST"], perms=CATALOG_PERMISSIONS, rate="60/m", keys=CATALOG_KEYS)
 def delete(request):
     """Baja de una fila. Lo que otra fila referencia con `PROTECT` responde 409 con el motivo."""
-    data = json_body(request)
+    data = CATALOG_KEYS.back(json_body(request))
     catalog = _allowed_catalog(request, data)
     if catalog.get("unico"):
         raise ApiError(f"El {catalog['etiqueta']} no se elimina: edítalo.")

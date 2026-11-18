@@ -29,9 +29,9 @@ interface ChartDefinition {
 }
 
 const CHARTS: ChartDefinition[] = [
-  { title: 'Concentración de Oportunidades', metric: 'oportunidades', type: 'doughnut', theme: 'blue' },
-  { title: 'Concentración de Instalados', metric: 'instalados', type: 'doughnut', theme: 'green' },
-  { title: 'Instalación Más Rápida (horas)', metric: 'tiempoInstalacion', type: 'bar', theme: 'purple' },
+  { title: 'Concentración de Oportunidades', metric: 'opportunities', type: 'doughnut', theme: 'blue' },
+  { title: 'Concentración de Instalados', metric: 'installed', type: 'doughnut', theme: 'green' },
+  { title: 'Instalación Más Rápida (horas)', metric: 'installTime', type: 'bar', theme: 'purple' },
 ];
 
 interface Props {

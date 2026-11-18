@@ -22,21 +22,21 @@ import { useSalesReportData, type SalesReportSite } from '@/features/subscriptio
 import { useVisit } from '@/shared/page/PageData';
 
 interface SalesReportProps {
-  reportData?: { data?: SalesReportSite[]; periods?: string[]; period?: string; dia?: number | null };
+  reportData?: { data?: SalesReportSite[]; periods?: string[]; period?: string; day?: number | null };
   dayMetrics?: DayMetrics;
-  zonasConfig?: ZonesConfig;
+  zonesConfig?: ZonesConfig;
   /** Las coordinadoras de oficina de cada site, con sus ventas por día y su objetivo. */
-  coordinadorasOficina?: OfficeCoordinator[];
+  officeCoordinators?: OfficeCoordinator[];
 }
 
 export default function SalesReport({
-  reportData = {}, dayMetrics, zonasConfig, coordinadorasOficina = [],
+  reportData = {}, dayMetrics, zonesConfig, officeCoordinators = [],
 }: SalesReportProps) {
   const visit = useVisit();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
-  const [selectedDay, setSelectedDay] = useState(reportData.dia ?? 0);
+  const [selectedDay, setSelectedDay] = useState(reportData.day ?? 0);
   const [filtroMetrica, setMetricFilter] = useState<MetricFilter>(EMPTY_METRIC_FILTER);
   const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
 
@@ -45,13 +45,13 @@ export default function SalesReport({
   // El mes entero ya viaja en los props: elegir un dia solo reagrupa en memoria,
   // sin pedir nada al servidor. Sin dias calculados se usa el cierre del mes.
   const sites = useMemo(
-    () => (dayData ? buildSalesSites(dayData.dimensiones, zonasConfig) : reportData.data ?? []),
-    [dayData, zonasConfig, reportData.data],
+    () => (dayData ? buildSalesSites(dayData.dimensions, zonesConfig) : reportData.data ?? []),
+    [dayData, zonesConfig, reportData.data],
   );
 
   // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
   // site y estado pertenece cada zona, que es por donde se heredan.
-  const objetivos = useTargets(zonasConfig?.zonas);
+  const objetivos = useTargets(zonesConfig?.zones);
 
   const { branchList, filteredData } = useSalesReportData({
     sites,
@@ -59,7 +59,7 @@ export default function SalesReport({
     selectedBranch,
     selectedTech,
     period: currentPeriod,
-    objetivos,
+    targets: objetivos,
     metricFilter: filtroMetrica,
     projection: proyeccion,
   });
@@ -94,7 +94,7 @@ export default function SalesReport({
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                monthPeriod={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.month}
                 daysInMonth={totalDays}
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}
@@ -110,7 +110,7 @@ export default function SalesReport({
         period={currentPeriod}
         diaSeleccionado={Boolean(dayData)}
         projection={proyeccion}
-        coordinadoras={coordinadorasOficina}
+        coordinadoras={officeCoordinators}
         // Sin días calculados se pinta el cierre del mes, y sus ventas son las del mes entero.
         cutoffDay={dayData ? effectiveDay : null}
       />

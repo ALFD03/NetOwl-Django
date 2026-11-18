@@ -39,7 +39,7 @@ export interface AnalyticsMetricConfig extends RankingOptions {
  * Subscriptions weights a rate by the size of the base it was measured on: a
  * 40% churn over 12 clients must not outweigh a 4% churn over 3.000.
  */
-const POPULATION_KEY: keyof DimensionVal = 'activos_inicio';
+const POPULATION_KEY: keyof DimensionVal = 'active_start';
 
 /**
  * Obtiene la distribución correspondiente al tipo de cálculo definido para una

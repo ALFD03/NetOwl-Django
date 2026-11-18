@@ -56,19 +56,19 @@ const TREND_DEFS: Array<{
   unit: SupportTrendCard['unit'];
   color: MetricColor;
 }> = [
-  { id: 'resueltos', title: 'Tasa Resolución', statKey: 'pct_resueltos', rateKey: 'pct_resueltos', countKey: 'tickets_resueltos', unitLabel: 'Tickets Resueltos', unit: 'tickets', color: 'green' },
-  { id: 'cancelados', title: 'Tasa Cancelación', statKey: 'pct_cancelados', rateKey: 'pct_cancelados', countKey: 'tickets_cancelados', unitLabel: 'Tickets Cancelados', unit: 'tickets', color: 'red' },
-  { id: 'escalados', title: 'Tasa de Escalamiento', statKey: 'pct_escalados', rateKey: 'pct_escalados', countKey: 'tickets_escalados', unitLabel: 'Tickets Escalados a Soporte', unit: 'tickets', color: 'yellow' },
-  { id: 'rezagados', title: 'Tasa de Rezago', statKey: 'pct_rezagados', rateKey: 'pct_rezagados', countKey: 'tickets_rezagados', unitLabel: 'Tickets Rezagados', unit: 'tickets', color: 'yellow' },
-  { id: 'cierre_total', title: 'Cierre Total (h)', statKey: `tiempo_medio_${CLOSE_TOTAL}_horas`, rateKey: `tiempo_medio_${CLOSE_TOTAL}_horas`, countKey: `tiempo_medio_${CLOSE_TOTAL}_horas`, unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'blue' },
-  { id: 'gestion', title: 'Gestión (h)', statKey: 'tiempo_medio_cierre_asignado_cerrados_horas', rateKey: 'tiempo_medio_cierre_asignado_cerrados_horas', countKey: 'tiempo_medio_cierre_asignado_cerrados_horas', unitLabel: 'Horas Asignación → Cierre', unit: 'horas', color: 'purple' },
-  { id: 'asignacion', title: 'Asignación (h)', statKey: `tiempo_medio_${ASIGNACION}_horas`, rateKey: `tiempo_medio_${ASIGNACION}_horas`, countKey: `tiempo_medio_${ASIGNACION}_horas`, unitLabel: 'Horas Creación → Asignación', unit: 'horas', color: 'slate' },
+  { id: 'resueltos', title: 'Tasa Resolución', statKey: 'pct_resolved', rateKey: 'pct_resolved', countKey: 'tickets_resolved', unitLabel: 'Tickets Resueltos', unit: 'tickets', color: 'green' },
+  { id: 'cancelados', title: 'Tasa Cancelación', statKey: 'pct_cancelled', rateKey: 'pct_cancelled', countKey: 'tickets_cancelled', unitLabel: 'Tickets Cancelados', unit: 'tickets', color: 'red' },
+  { id: 'escalados', title: 'Tasa de Escalamiento', statKey: 'pct_escalated', rateKey: 'pct_escalated', countKey: 'tickets_escalated', unitLabel: 'Tickets Escalados a Soporte', unit: 'tickets', color: 'yellow' },
+  { id: 'rezagados', title: 'Tasa de Rezago', statKey: 'pct_lagging', rateKey: 'pct_lagging', countKey: 'tickets_lagging', unitLabel: 'Tickets Rezagados', unit: 'tickets', color: 'yellow' },
+  { id: 'cierre_total', title: 'Cierre Total (h)', statKey: `time_mean_${CLOSE_TOTAL}_hours`, rateKey: `time_mean_${CLOSE_TOTAL}_hours`, countKey: `time_mean_${CLOSE_TOTAL}_hours`, unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'blue' },
+  { id: 'gestion', title: 'Gestión (h)', statKey: 'time_mean_close_assigned_closed_hours', rateKey: 'time_mean_close_assigned_closed_hours', countKey: 'time_mean_close_assigned_closed_hours', unitLabel: 'Horas Asignación → Cierre', unit: 'horas', color: 'purple' },
+  { id: 'assignment', title: 'Asignación (h)', statKey: `time_mean_${ASIGNACION}_hours`, rateKey: `time_mean_${ASIGNACION}_hours`, countKey: `time_mean_${ASIGNACION}_hours`, unitLabel: 'Horas Creación → Asignación', unit: 'horas', color: 'slate' },
 ];
 
 export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
-  const historico = useMemo(() => metrics.historico_tendencias ?? [], [metrics]);
-  const summary = useMemo(() => metrics.resumen_global ?? {}, [metrics]);
-  const grupos = useMemo(() => metrics.por_grupo_trabajo ?? {}, [metrics]);
+  const historico = useMemo(() => metrics.trend_history ?? [], [metrics]);
+  const summary = useMemo(() => metrics.global_summary ?? {}, [metrics]);
+  const grupos = useMemo(() => metrics.by_work_group ?? {}, [metrics]);
   const [selectedTrend, setSelectedTrend] = useState<SupportTrendCard | null>(null);
 
   /**
@@ -91,7 +91,7 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
   }, [summary, historico]);
 
   const labels = useMemo(
-    () => historico.map((row) => formatPeriodLabel(String(row.periodo_reporte ?? ''))),
+    () => historico.map((row) => formatPeriodLabel(String(row.report_period ?? ''))),
     [historico],
   );
 
@@ -115,29 +115,29 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
   const groupCards = useMemo<SupportGroupCard[]>(() => {
     const entries = Object.entries(grupos);
     const totalVolume = entries.reduce((acc, [, g]) => acc + toNumber(g.total_tickets), 0);
-    const globalMttr = stats[`tiempo_medio_${CLOSE_TOTAL}_horas`];
+    const globalMttr = stats[`time_mean_${CLOSE_TOTAL}_hours`];
 
     return entries
       .map(([name, raw]) => {
         const g = resolveStats(raw);
-        const mttr = g[`tiempo_medio_${CLOSE_TOTAL}_horas`];
+        const mttr = g[`time_mean_${CLOSE_TOTAL}_hours`];
 
         return {
           id: name,
           label: name,
-          color: resolutionColor(g.pct_resueltos),
+          color: resolutionColor(g.pct_resolved),
           totalTickets: g.total_tickets,
           sharePct: share(g.total_tickets, totalVolume),
-          pctResolved: g.pct_resueltos,
-          pctCancelled: g.pct_cancelados,
-          pctRezagados: g.pct_rezagados,
-          pctEscalated: g.pct_escalados,
+          pctResolved: g.pct_resolved,
+          pctCancelled: g.pct_cancelled,
+          pctRezagados: g.pct_lagging,
+          pctEscalated: g.pct_escalated,
           mttr,
-          mttrMediana: g[`tiempo_mediana_${CLOSE_TOTAL}_horas`],
+          mttrMediana: g[`time_median_${CLOSE_TOTAL}_hours`],
           mttrColor: mttrColor(mttr, globalMttr),
           mttrDelta: Number((mttr - globalMttr).toFixed(2)),
-          espera: g[`tiempo_medio_${ASIGNACION}_horas`],
-          pctExcedeProm: g[`pct_excede_promedio_${CLOSE_TOTAL}`],
+          espera: g[`time_mean_${ASIGNACION}_hours`],
+          pctExcedeProm: g[`pct_over_avg_${CLOSE_TOTAL}`],
         };
       })
       .sort((a, b) => b.totalTickets - a.totalTickets);
@@ -205,7 +205,7 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
   }, [selectedTrend]);
 
   return {
-    periodosEvaluados: metrics.periodos_evaluados ?? historico.length,
+    periodosEvaluados: metrics.evaluated_periods ?? historico.length,
     historico,
     stats,
     trendCards,

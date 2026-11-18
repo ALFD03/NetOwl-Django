@@ -35,6 +35,7 @@ from services.subscriptions.analytics.lifetime import (
     get_lifetime_months,
 )
 from services.subscriptions.analytics.office_coordinators import get_office_coordinators
+from services.subscriptions.api_keys import SUBS_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ PERIOD_DENIED = "Acceso denegado. Solo puedes ver el último periodo evaluado."
 
 
 def _day(request) -> int | None:
-    return request_int(request, "dia", minimo=1, maximo=31)
+    return request_int(request, "day", minimo=1, maximo=31)
 
 
 def _visible_selector(request, data: dict) -> dict:
@@ -52,17 +53,17 @@ def _visible_selector(request, data: dict) -> dict:
     return data
 
 
-@endpoint(perms=["can_view_subscriptions", "can_view_subs_dashboard"], require_all=True)
+@endpoint(perms=["can_view_subscriptions", "can_view_subs_dashboard"], require_all=True, keys=SUBS_KEYS)
 def dashboard(request):
     """Los cierres de todos los periodos visibles y sus zonas."""
     periods = clamp_requested(request, None, get_periods)
     closings = get_churn_close(periods) if periods != [] else []
     dims = get_dimensiones(periods) if periods != [] else []
     zones = [zone for period in dims for zone in period.get("dimensiones", {}).get("zona", [])]
-    return {"periodos": closings, "dimensiones": {"zona": zones}, "objetivos": get_targets_config()}
+    return {"closings": closings, "dimensiones": {"zona": zones}, "objetivos": get_targets_config()}
 
 
-@endpoint(perms=["can_view_subs_analytics"])
+@endpoint(perms=["can_view_subs_analytics"], keys=SUBS_KEYS)
 def analytics(request):
     """Cierres, dimensiones y el mes completo de métricas diarias (`?period=YYYY-MM`)."""
     periods = clamp_requested(request, clean_periods(request.GET.get("periods")), get_periods)
@@ -72,14 +73,14 @@ def analytics(request):
         listed = data.get("periodos", [])
         month = listed[0].get("periodo_reporte", "")[:7] if listed else ""
     return {
-        "periodos": data.get("periodos", []),
+        "closings": data.get("periodos", []),
         "dimensiones": data.get("dimensiones", []),
         "dayMetrics": get_day_metrics(month),
         "objetivos": get_targets_config(),
     }
 
 
-@endpoint(perms=["can_view_subs_results"])
+@endpoint(perms=["can_view_subs_results"], keys=SUBS_KEYS)
 def results(request):
     """Los cierres para la tabla de resultados; `?period=` preselecciona uno."""
     period = request.GET.get("period") or None
@@ -87,13 +88,13 @@ def results(request):
     if period and periods is not None and period not in periods:
         period = None
     return {
-        "periodos": get_churn_close(periods) if periods != [] else [],
-        "selected_periodo": period,
+        "closings": get_churn_close(periods) if periods != [] else [],
+        "selected_period": period,
         "objetivos": get_targets_config(),
     }
 
 
-@endpoint(perms=["can_view_subs_results"])
+@endpoint(perms=["can_view_subs_results"], keys=SUBS_KEYS)
 def result_detail(request, period: str):
     """El cierre y las dimensiones de un periodo."""
     if period_denied(request, period, get_periods):
@@ -101,13 +102,13 @@ def result_detail(request, period: str):
     closing = get_churn_close([period])
     dims = get_dimensiones([period])
     return {
-        "periodo": period,
+        "period": period,
         "summary": closing[0] if closing else {},
         "dimensions": dims[0]["dimensiones"] if dims else {},
     }
 
 
-@endpoint(perms=["can_view_subs_lifetime"])
+@endpoint(perms=["can_view_subs_lifetime"], keys=SUBS_KEYS)
 def lifetime(request):
     """Cuánto duraron activas las bajas de un mes (`?period=`, por defecto el último)."""
     try:
@@ -122,7 +123,7 @@ def lifetime(request):
     return {"meses": months, "periodo": period, "lifetime": get_lifetime_month(period)}
 
 
-@endpoint(perms=["can_view_subs_lifetime"])
+@endpoint(perms=["can_view_subs_lifetime"], keys=SUBS_KEYS)
 def lifetime_detail(request):
     """Las bajas de un mes con sus duraciones, una por orden, para exportar."""
     period = request.GET.get("period")
@@ -137,7 +138,7 @@ def lifetime_run(request):
     return launch_analysis(request, "subs_lifetime", needs_period=False)
 
 
-@endpoint(perms=["can_view_subs_sales"])
+@endpoint(perms=["can_view_subs_sales"], keys=SUBS_KEYS)
 def sales_report(request):
     """Reporte de ventas: site → tecnología → nodos, con las coordinadoras de oficina."""
     period = visible_period(request, request.GET.get("period"), get_periods)
@@ -151,7 +152,7 @@ def sales_report(request):
     }
 
 
-@endpoint(perms=["can_view_subs_business_units"])
+@endpoint(perms=["can_view_subs_business_units"], keys=SUBS_KEYS)
 def business_units(request):
     """Reporte por coordinador; quien no ve todas las unidades recibe solo las suyas."""
     period = visible_period(request, request.GET.get("period"), get_periods)
@@ -164,13 +165,13 @@ def business_units(request):
     return {"buData": data, "dayMetrics": day_metrics, "zonasConfig": zones, "objetivos": get_targets_config()}
 
 
-@endpoint(perms=["can_view_subs_results", "can_view_subs_sales", "can_view_subs_business_units"])
+@endpoint(perms=["can_view_subs_results", "can_view_subs_sales", "can_view_subs_business_units"], keys=SUBS_KEYS)
 def churn_detail(request):
     """Las bajas de un periodo con la ficha de cada cliente, para exportar.
 
-    `?nodo=` repetido acota a esos nodos `"Zona - Sucursal"`. Siempre es el
+    `?node=` repetido acota a esos nodos `"Zona - Sucursal"`. Siempre es el
     detalle del cierre: los cortes diarios guardan agregados, no órdenes.
     """
-    nodes = clean_nodes(request.GET.getlist("nodo"))
+    nodes = clean_nodes(request.GET.getlist("node"))
     period = visible_period(request, request.GET.get("period"), get_periods)
     return get_churn_detail(period, nodes)

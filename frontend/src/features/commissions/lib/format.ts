@@ -84,34 +84,34 @@ export const TIER: Record<SaleTier, string> = {
 
 /** De dónde sale el % de cumplimiento aplicado, en pocas palabras. */
 export function complianceSource(p: CommissionPayment): string {
-  const f = p.cumplimiento;
+  const f = p.compliance;
   if (!f) return 'sin definir';
-  switch (f.fuente) {
+  switch (f.source) {
     case 'manual': return 'escrito a mano';
-    case 'site': return `site ${f.fuentes[0]?.nombre ?? ''}`.trim();
+    case 'site': return `site ${f.sources[0]?.name ?? ''}`.trim();
     case 'unidad':
-      return f.fuentes.length > 1 ? `promedio de ${f.fuentes.length} unidades` : `unidad ${f.fuentes[0]?.nombre ?? ''}`.trim();
+      return f.sources.length > 1 ? `promedio de ${f.sources.length} unidades` : `unidad ${f.sources[0]?.name ?? ''}`.trim();
     default: return 'sin definir';
   }
 }
 
-const pctSource = (s: { nombre: string; pct: number | null }) => `${s.nombre} ${s.pct === null ? 'sin %' : formatPctValue(s.pct)}`;
+const pctSource = (s: { name: string; pct: number | null }) => `${s.name} ${s.pct === null ? 'sin %' : formatPctValue(s.pct)}`;
 
 /** Todo lo calculado para el cumplimiento, se aplique o no: los sites o unidades y lo personal. */
 export function complianceDetail(p: CommissionPayment): string {
-  const f = p.cumplimiento;
+  const f = p.compliance;
   if (!f) return '';
   const partes: string[] = [];
-  if (f.fuentes.length) {
+  if (f.sources.length) {
     const etiqueta = f.factor === 'site' ? 'Site' : 'Unidades';
-    partes.push(`${etiqueta}: ${f.fuentes.map(pctSource).join(' · ')}${f.fuentes.length > 1 && f.calculado !== null ? ` → ${formatPctValue(f.calculado)}` : ''}`);
+    partes.push(`${etiqueta}: ${f.sources.map(pctSource).join(' · ')}${f.sources.length > 1 && f.computed !== null ? ` → ${formatPctValue(f.computed)}` : ''}`);
   } else {
     partes.push(f.factor === 'site' ? 'Sin site asignado' : 'Sin unidad de negocio: escríbelo a mano o asígnale su superior');
   }
   if (f.personal) {
-    partes.push(f.personal.objetivo
-      ? `Personal: ${f.personal.ventas} de ${f.personal.objetivo} ventas (${formatPctValue(f.personal.pct)})`
-      : `Personal: ${f.personal.ventas} ventas, sin objetivo`);
+    partes.push(f.personal.target
+      ? `Personal: ${f.personal.sales} de ${f.personal.target} ventas (${formatPctValue(f.personal.pct)})`
+      : `Personal: ${f.personal.sales} ventas, sin objetivo`);
   }
   return partes.join(' · ');
 }

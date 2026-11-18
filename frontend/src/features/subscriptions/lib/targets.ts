@@ -44,7 +44,7 @@ import type { ZoneConfig } from './dayReports';
 
 /** Un objetivo ya resuelto, en porcentaje. */
 export interface TargetSpec {
-  crecimiento: number;
+  growth: number;
   churn: number;
 }
 
@@ -57,7 +57,7 @@ export interface Meta {
   /** Altas netas que hacen falta para cumplir: la meta absoluta de crecimiento. */
   growthGoal: number;
   /** Cuántas zonas (nodos) del conjunto se dejaron fuera por no tener objetivo. */
-  zonasSinObjetivo?: number;
+  zonesWithoutTarget?: number;
   /** Todas las zonas del conjunto están sin objetivo: no hay contra qué medir. */
   withoutTarget?: boolean;
 }
@@ -93,10 +93,10 @@ export interface TargetNode {
 
 /** De dónde sale un objetivo resuelto: el nivel que lo fija y su nombre. */
 export interface TargetSource {
-  nivel: TargetLevel;
+  level: TargetLevel;
   /** Nombre de la zona, coordinador, site o estado; vacío en el general. */
-  nombre: string;
-  valor: number;
+  name: string;
+  value: number;
 }
 
 /**
@@ -104,22 +104,22 @@ export interface TargetSource {
  * los props (una página que no los recibe, o un entorno sin migrar).
  */
 export const DEFAULT_TARGETS: TargetsConfig = {
-  general: { crecimiento: 6, churn: 3 },
-  meses: {},
-  estados: {},
+  general: { growth: 6, churn: 3 },
+  months: {},
+  states: {},
   sites: {},
-  coordinadores: {},
-  zonas: {},
-  sucursales: {},
-  zonas_sucursal: {},
-  zonas_sin_objetivo: {},
-  semaforo: {
-    cumpl_verde: 100,
-    cumpl_amarillo: 60,
-    crec_verde: 4,
-    crec_amarillo: 0,
-    churn_verde: 3,
-    churn_amarillo: 4,
+  coordinators: {},
+  zones: {},
+  branches: {},
+  zone_branches: {},
+  zones_without_target: {},
+  thresholds: {
+    compliance_green: 100,
+    compliance_yellow: 60,
+    growth_green: 4,
+    growth_yellow: 0,
+    churn_green: 3,
+    churn_yellow: 4,
   },
 };
 
@@ -141,18 +141,18 @@ export function currentValue(
   let mejor: TargetTier | undefined;
   for (const tramo of tramos ?? []) {
     if (tramo[metrica] === null || tramo[metrica] === undefined) continue;
-    if (tramo.desde !== null && tramo.desde > mes) continue;
-    if (!mejor || (mejor.desde ?? '') <= (tramo.desde ?? '')) mejor = tramo;
+    if (tramo.since !== null && tramo.since > mes) continue;
+    if (!mejor || (mejor.since ?? '') <= (tramo.since ?? '')) mejor = tramo;
   }
   return mejor ? (mejor[metrica] as number) : null;
 }
 
 /** El objetivo general de un periodo: su excepción de mes, o el general. */
 export function overallTarget(cfg: TargetsConfig, periodo: string): TargetSpec {
-  const excepcion = cfg.meses[monthOf(periodo)];
+  const excepcion = cfg.months[monthOf(periodo)];
   const resolve = (metrica: Metrica): number =>
     excepcion?.[metrica] ?? cfg.general?.[metrica] ?? DEFAULT_TARGETS.general[metrica];
-  return { crecimiento: resolve('crecimiento'), churn: resolve('churn') };
+  return { growth: resolve('growth'), churn: resolve('churn') };
 }
 
 /** Dónde está un nodo: el nombre que tiene en cada nivel de la cadena. */
@@ -166,7 +166,7 @@ function indexar(table: Record<string, TargetTier[]>): Map<string, TargetTier[]>
 }
 
 export interface TargetsResolver {
-  semaforo: TargetsTrafficLight;
+  thresholds: TargetsTrafficLight;
   /** El objetivo general del periodo (excepción del mes o tramo vigente). */
   general: (periodo: string) => TargetSpec;
   /**
@@ -190,7 +190,7 @@ export interface TargetsResolver {
    */
   meta: (
     periodo: string,
-    nodos: readonly (TargetNode & { activos_inicio?: number })[],
+    nodos: readonly (TargetNode & { active_start?: number })[],
     desde: TargetLevel,
   ) => Meta;
 }
@@ -207,17 +207,17 @@ export function createResolver(
   zonas: readonly ZoneConfig[] = [],
 ): TargetsResolver {
   const tablas: Record<EntityLevel, Map<string, TargetTier[]>> = {
-    zona_sucursal: indexar(cfg.zonas_sucursal),
-    zona: indexar(cfg.zonas),
-    coordinador: indexar(cfg.coordinadores),
+    zona_sucursal: indexar(cfg.zone_branches),
+    zona: indexar(cfg.zones),
+    coordinador: indexar(cfg.coordinators),
     site: indexar(cfg.sites),
-    estado: indexar(cfg.estados),
-    sucursal: indexar(cfg.sucursales),
+    estado: indexar(cfg.states),
+    sucursal: indexar(cfg.branches),
   };
   const catalogZones = new Map<string, Ubicacion>(
     zonas.map((z) => [
       clave(z.name),
-      { zona: z.name, coordinador: z.coordinador || undefined, site: z.site, estado: z.estado || undefined },
+      { zona: z.name, coordinador: z.coordinator || undefined, site: z.site, estado: z.state || undefined },
     ]),
   );
 
@@ -237,17 +237,17 @@ export function createResolver(
 
   const general = (periodo: string) => overallTarget(cfg, periodo);
 
-  const apartadas = new Map(Object.entries(cfg.zonas_sin_objetivo ?? {}).map(([nombre, t]) => [clave(nombre), t]));
+  const apartadas = new Map(Object.entries(cfg.zones_without_target ?? {}).map(([nombre, t]) => [clave(nombre), t]));
   const sinObjetivo: TargetsResolver['withoutTarget'] = (periodo, nodo) => {
     const zona = typeof nodo === 'string' ? nodo : nodo?.zona;
     const tramo = apartadas.get(clave(zona));
     if (!tramo) return false;
     const mes = monthOf(periodo);
-    return (!tramo.desde || tramo.desde <= mes) && (!tramo.hasta || mes <= tramo.hasta);
+    return (!tramo.since || tramo.since <= mes) && (!tramo.until || mes <= tramo.until);
   };
 
   const origen: TargetsResolver['origen'] = (periodo, nodo, metrica, desde = 'zona_sucursal') => {
-    const base: TargetSource = { nivel: 'general', nombre: '', valor: general(periodo)[metrica] };
+    const base: TargetSource = { level: 'general', name: '', value: general(periodo)[metrica] };
     if (desde === 'general') return base;
 
     const mes = monthOf(periodo);
@@ -260,14 +260,14 @@ export function createResolver(
       const levelName = ubicacion[nivel];
       if (!levelName) continue;
       const valor = currentValue(tablas[nivel].get(clave(levelName)), mes, metrica);
-      if (valor !== null) return { nivel, nombre: levelName, valor };
+      if (valor !== null) return { level: nivel, name: levelName, value: valor };
     }
     return base;
   };
 
   const zona: TargetsResolver['zona'] = (periodo, nodo, desde = 'zona_sucursal') => ({
-    crecimiento: origen(periodo, nodo, 'crecimiento', desde).valor,
-    churn: origen(periodo, nodo, 'churn', desde).valor,
+    growth: origen(periodo, nodo, 'growth', desde).value,
+    churn: origen(periodo, nodo, 'churn', desde).value,
   });
 
   const meta: TargetsResolver['meta'] = (periodo, nodos, desde) => {
@@ -276,14 +276,14 @@ export function createResolver(
     let churnAllowed = 0;
     let apartadas = 0;
     for (const nodo of nodos) {
-      const inicio = Number(nodo.activos_inicio ?? 0);
+      const inicio = Number(nodo.active_start ?? 0);
       if (sinObjetivo(periodo, nodo)) {
         apartadas += 1;
         continue;
       }
       const objetivo = zona(periodo, nodo, desde);
       base += inicio;
-      metaCrecimiento += (inicio * objetivo.crecimiento) / 100;
+      metaCrecimiento += (inicio * objetivo.growth) / 100;
       churnAllowed += (inicio * objetivo.churn) / 100;
     }
     const extra = {
@@ -294,7 +294,7 @@ export function createResolver(
     // tal cual, para que el rótulo no diga 0%.
     if (base <= 0) {
       const objetivo = nodos.length === 1 ? zona(periodo, nodos[0], desde) : general(periodo);
-      return { growthPct: objetivo.crecimiento, churnPct: objetivo.churn, growthGoal: 0, ...extra };
+      return { growthPct: objetivo.growth, churnPct: objetivo.churn, growthGoal: 0, ...extra };
     }
     return {
       growthPct: (metaCrecimiento / base) * 100,
@@ -304,7 +304,7 @@ export function createResolver(
     };
   };
 
-  return { semaforo: cfg.semaforo ?? DEFAULT_TARGETS.semaforo, general, zona, origen, withoutTarget: sinObjetivo, meta };
+  return { thresholds: cfg.thresholds ?? DEFAULT_TARGETS.thresholds, general, zona, origen, withoutTarget: sinObjetivo, meta };
 }
 
 /**
@@ -324,9 +324,9 @@ export function measuredNodes<T extends TargetNode>(
 /** La meta de una base con un objetivo global (sin reparto por zonas). */
 export function baseGoal(activosInicio: number, objetivo: TargetSpec): Meta {
   return {
-    growthPct: objetivo.crecimiento,
+    growthPct: objetivo.growth,
     churnPct: objetivo.churn,
-    growthGoal: (Number(activosInicio || 0) * objetivo.crecimiento) / 100,
+    growthGoal: (Number(activosInicio || 0) * objetivo.growth) / 100,
   };
 }
 
@@ -348,11 +348,11 @@ export interface PeriodCompliance {
  * inicial más esa meta. Sin base, el cumplimiento es 0 y no `Infinity`.
  */
 export function periodCompliance(
-  periodo: { activos_inicio?: number; activos_final?: number; adiciones_brutas?: number; nuevos_mes?: number },
+  periodo: { active_start?: number; active_end?: number; gross_adds?: number; new_in_month?: number },
   objetivo: TargetSpec,
 ): PeriodCompliance {
-  const inicio = Number(periodo.activos_inicio || 0);
-  const metaIngresos = (inicio * objetivo.crecimiento) / 100;
+  const inicio = Number(periodo.active_start || 0);
+  const metaIngresos = (inicio * objetivo.growth) / 100;
   const metaVentas = metaIngresos;
   const metaCierre = inicio + metaIngresos;
   const ratio = (valor: number | undefined, meta: number) => (meta > 0 ? (Number(valor || 0) / meta) * 100 : 0);
@@ -360,9 +360,9 @@ export function periodCompliance(
     metaIngresos,
     salesGoal: metaVentas,
     closeGoal: metaCierre,
-    revenueCompliance: ratio(periodo.adiciones_brutas, metaIngresos),
-    salesCompliance: ratio(periodo.nuevos_mes, metaVentas),
-    closeCompliance: ratio(periodo.activos_final, metaCierre),
+    revenueCompliance: ratio(periodo.gross_adds, metaIngresos),
+    salesCompliance: ratio(periodo.new_in_month, metaVentas),
+    closeCompliance: ratio(periodo.active_end, metaCierre),
   };
 }
 
@@ -375,22 +375,22 @@ export type Tono = Extract<MetricColor, 'green' | 'yellow' | 'red'>;
 
 /** Cumplimiento (% de la meta): verde desde `cumpl_verde`, amarillo desde `cumpl_amarillo`. */
 export function complianceTone(cumplimiento: number, s: TargetsTrafficLight): Tono {
-  if (cumplimiento >= s.cumpl_verde) return 'green';
-  if (cumplimiento >= s.cumpl_amarillo) return 'yellow';
+  if (cumplimiento >= s.compliance_green) return 'green';
+  if (cumplimiento >= s.compliance_yellow) return 'yellow';
   return 'red';
 }
 
 /** Crecimiento (%), más es mejor: verde desde `crec_verde`, amarillo desde `crec_amarillo`. */
 export function tonoCrecimiento(crecimiento: number, s: TargetsTrafficLight): Tono {
-  if (crecimiento >= s.crec_verde) return 'green';
-  if (crecimiento >= s.crec_amarillo) return 'yellow';
+  if (crecimiento >= s.growth_green) return 'green';
+  if (crecimiento >= s.growth_yellow) return 'yellow';
   return 'red';
 }
 
 /** Churn (%), menos es mejor: verde hasta `churn_verde`, amarillo hasta `churn_amarillo`. */
 export function tonoChurn(churn: number, s: TargetsTrafficLight): Tono {
-  if (churn <= s.churn_verde) return 'green';
-  if (churn <= s.churn_amarillo) return 'yellow';
+  if (churn <= s.churn_green) return 'green';
+  if (churn <= s.churn_yellow) return 'yellow';
   return 'red';
 }
 

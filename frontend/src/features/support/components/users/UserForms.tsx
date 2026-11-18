@@ -31,7 +31,7 @@ function addDays(iso: string, n: number): string {
  * pueden caer antes; es la misma regla que aplica el modelo.
  */
 function lastBusyDate(usuario: SupportUser): string | undefined {
-  const dates = [usuario.fecha_ingreso, ...usuario.historial.map((p) => p.desde)].filter(
+  const dates = [usuario.start_date, ...usuario.timeline.map((p) => p.since)].filter(
     (f): f is string => Boolean(f),
   );
   return dates.sort().at(-1);
@@ -65,50 +65,50 @@ function Pie({
 
 export function UserForm({
   value,
-  departamentos,
-  sufijo,
+  departments,
+  suffix,
   saving,
   onChange,
   onSubmit,
   onClose,
 }: Acciones & {
   value: UserDraft;
-  departamentos: SupportDepartment[];
-  sufijo: string;
+  departments: SupportDepartment[];
+  suffix: string;
   onChange: (patch: Partial<UserDraft>) => void;
 }) {
-  const withoutDepartments = departamentos.length === 0;
+  const withoutDepartments = departments.length === 0;
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <TextField
         label="Nombre exacto en Odoo"
         icon={<AtSign />}
-        value={value.nombre_odoo}
-        onChange={(e) => onChange({ nombre_odoo: e.target.value })}
-        placeholder={`Juan Pérez ${sufijo}`}
+        value={value.odoo_name}
+        onChange={(e) => onChange({ odoo_name: e.target.value })}
+        placeholder={`Juan Pérez ${suffix}`}
         autoFocus
       />
       {/* El sufijo lo pone el servidor, así que avisarlo aquí evita que alguien
           lo escriba a mano mal y crea que el registro no casó por otra razón. */}
       <p className="-mt-4 text-[10px] leading-tight text-slate-500">
         Tiene que coincidir carácter por carácter con las columnas «Asignado a» y «Creado por» del
-        export. Si no escribes <strong className="text-slate-400">{sufijo}</strong>, se añade solo.
+        export. Si no escribes <strong className="text-slate-400">{suffix}</strong>, se añade solo.
       </p>
 
       <div className="grid grid-cols-1 gap-6 border-t border-slate-800 pt-6 md:grid-cols-2">
         <TextField
           label="Nombre"
           icon={<User />}
-          value={value.nombre}
-          onChange={(e) => onChange({ nombre: e.target.value })}
+          value={value.name}
+          onChange={(e) => onChange({ name: e.target.value })}
           placeholder="Juan"
         />
         <TextField
           label="Apellido"
           icon={<User />}
-          value={value.apellido}
-          onChange={(e) => onChange({ apellido: e.target.value })}
+          value={value.last_name}
+          onChange={(e) => onChange({ last_name: e.target.value })}
           placeholder="Pérez"
         />
       </div>
@@ -116,9 +116,9 @@ export function UserForm({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <DatePicker
           label="Fecha de ingreso"
-          value={value.fecha_ingreso}
-          onChange={(fecha_ingreso) => onChange({ fecha_ingreso })}
-          max={value.maxIngreso ?? undefined}
+          value={value.start_date}
+          onChange={(start_date) => onChange({ start_date })}
+          max={value.maxStartDate ?? undefined}
           // Borrarla solo tiene sentido al editar: en el alta es obligatoria.
           clearable={Boolean(value.id)}
           hint="Desde aquí cuenta su primer departamento."
@@ -131,9 +131,9 @@ export function UserForm({
             {value.id ? 'Departamento de ingreso' : 'Departamento'}
           </label>
           <SelectMenu
-            value={value.departamento_id ? String(value.departamento_id) : ''}
-            options={departamentos.map((d) => ({ value: String(d.id), label: d.nombre }))}
-            onChange={(v) => onChange({ departamento_id: v ? Number(v) : null })}
+            value={value.department_id ? String(value.department_id) : ''}
+            options={departments.map((d) => ({ value: String(d.id), label: d.name }))}
+            onChange={(v) => onChange({ department_id: v ? Number(v) : null })}
             placeholder={withoutDepartments ? 'No hay departamentos todavía' : 'Seleccionar...'}
             disabled={withoutDepartments}
             aria-label="Departamento"
@@ -156,7 +156,7 @@ export function UserForm({
         saving={saving}
         onClose={onClose}
         submitLabel={value.id ? 'Guardar cambios' : 'Registrar usuario'}
-        disabled={!value.id && !value.fecha_ingreso}
+        disabled={!value.id && !value.start_date}
       />
     </form>
   );
@@ -177,8 +177,8 @@ export function DepartmentForm({
       <TextField
         label="Departamento"
         icon={<Building2 />}
-        value={value.nombre}
-        onChange={(e) => onChange({ nombre: e.target.value })}
+        value={value.name}
+        onChange={(e) => onChange({ name: e.target.value })}
         placeholder="Soporte Técnico"
         autoFocus
       />
@@ -196,44 +196,44 @@ export function DepartmentForm({
  */
 export function DepartmentChangeForm({
   value,
-  departamentos,
+  departments,
   saving,
   onChange,
   onSubmit,
   onClose,
-  onDeshacer,
+  onUndo,
 }: Acciones & {
   value: ChangeDraft;
-  departamentos: SupportDepartment[];
+  departments: SupportDepartment[];
   onChange: (patch: Partial<ChangeDraft>) => void;
-  onDeshacer: () => void;
+  onUndo: () => void;
 }) {
-  const { usuario } = value;
-  const ocupada = lastBusyDate(usuario);
-  const opciones = departamentos.filter((d) => d.id !== usuario.departamento_id);
-  const ultimo = usuario.historial.length - 1;
+  const { user } = value;
+  const ocupada = lastBusyDate(user);
+  const opciones = departments.filter((d) => d.id !== user.department_id);
+  const ultimo = user.timeline.length - 1;
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div className="space-y-2">
         <label className="text-[10px] font-bold uppercase text-slate-400">Historial</label>
         <ol className="space-y-2">
-          {usuario.historial.map((paso, i) => (
+          {user.timeline.map((paso, i) => (
             <li
               key={paso.id}
               className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-surface-tertiary/50 px-3 py-2 text-xs"
             >
               <span className="text-slate-300">
-                <strong className="text-white">{paso.departamento}</strong>
+                <strong className="text-white">{paso.department}</strong>
                 <span className="ml-2 text-slate-500">
-                  desde {paso.desde ? shortDate(paso.desde) : `el ingreso (${shortDate(usuario.fecha_ingreso)})`}
+                  desde {paso.since ? shortDate(paso.since) : `el ingreso (${shortDate(user.start_date)})`}
                 </span>
                 {i === ultimo && <span className="ml-2 text-emerald-400">· vigente</span>}
               </span>
               {i === ultimo && i > 0 && (
                 <button
                   type="button"
-                  onClick={onDeshacer}
+                  onClick={onUndo}
                   disabled={saving}
                   className="flex items-center gap-1 rounded-lg border border-amber-500/30 px-2 py-1 text-[10px] text-amber-400 hover:bg-amber-500/10"
                   title="Borra este cambio y lo devuelve al departamento anterior"
@@ -250,9 +250,9 @@ export function DepartmentChangeForm({
         <div className="space-y-1">
           <label className="text-[10px] font-bold uppercase text-slate-400">Nuevo departamento</label>
           <SelectMenu
-            value={value.departamento_id ? String(value.departamento_id) : ''}
-            options={opciones.map((d) => ({ value: String(d.id), label: d.nombre }))}
-            onChange={(v) => onChange({ departamento_id: v ? Number(v) : null })}
+            value={value.department_id ? String(value.department_id) : ''}
+            options={opciones.map((d) => ({ value: String(d.id), label: d.name }))}
+            onChange={(v) => onChange({ department_id: v ? Number(v) : null })}
             placeholder={opciones.length ? 'Seleccionar...' : 'No hay otro departamento'}
             disabled={opciones.length === 0}
             aria-label="Nuevo departamento"
@@ -260,8 +260,8 @@ export function DepartmentChangeForm({
         </div>
         <DatePicker
           label="Fecha del cambio (ascenso)"
-          value={value.fecha}
-          onChange={(fecha) => onChange({ fecha })}
+          value={value.date}
+          onChange={(date) => onChange({ date })}
           min={ocupada ? addDays(ocupada, 1) : undefined}
         />
       </div>
@@ -277,7 +277,7 @@ export function DepartmentChangeForm({
         <Button
           type="submit"
           isLoading={saving}
-          disabled={!value.departamento_id || !value.fecha}
+          disabled={!value.department_id || !value.date}
           icon={<ArrowRightLeft className="h-4 w-4" />}
         >
           Cambiar departamento
@@ -306,17 +306,17 @@ export function DeactivateForm({
     <form onSubmit={onSubmit} className="space-y-6">
       <p className="text-sm text-slate-300">
         <UserX className="mr-2 inline h-4 w-4 text-rose-400" />
-        <strong className="text-white">{value.usuario.nombre_odoo}</strong> se conserva en el directorio
+        <strong className="text-white">{value.user.odoo_name}</strong> se conserva en el directorio
         con sus tickets y su historial, pero queda marcado como dado de baja. Los tickets que entren a su
         nombre después de esta fecha aparecerán en la pestaña «Tras la baja».
       </p>
       <DatePicker
         label="Fecha de egreso"
-        value={value.fecha}
-        onChange={(fecha) => onChange({ fecha })}
-        min={lastBusyDate(value.usuario)}
+        value={value.date}
+        onChange={(date) => onChange({ date })}
+        min={lastBusyDate(value.user)}
       />
-      <Pie saving={saving} onClose={onClose} submitLabel="Dar de baja" variant="danger" disabled={!value.fecha} />
+      <Pie saving={saving} onClose={onClose} submitLabel="Dar de baja" variant="danger" disabled={!value.date} />
     </form>
   );
 }

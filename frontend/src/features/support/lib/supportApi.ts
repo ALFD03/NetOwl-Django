@@ -6,8 +6,8 @@ import type { SupportBreakdownResponse } from '../types';
 export interface SupportBreakdownRequest {
   period: string;
   dimension: string;
-  valor: string;
-  grupo?: string;
+  value: string;
+  group?: string;
 }
 
 /**

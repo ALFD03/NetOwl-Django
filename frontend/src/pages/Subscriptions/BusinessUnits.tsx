@@ -33,39 +33,39 @@ interface BusinessUnitsProps {
     data?: BusinessUnitGroup[];
     periods?: string[];
     period?: string;
-    dia?: number | null;
+    day?: number | null;
     /** Solo para quien no ve todas las unidades. */
-    alcance?: { coordinadores: string[]; rf: boolean };
-    ftth_consolidado?: { cierre: FtthNodeTotals; dias: Record<string, FtthNodeTotals> };
+    scope?: { coordinators: string[]; rf: boolean };
+    ftth_totals?: { close: FtthNodeTotals; days: Record<string, FtthNodeTotals> };
   };
   dayMetrics?: DayMetrics;
-  zonasConfig?: ZonesConfig;
+  zonesConfig?: ZonesConfig;
 }
 
-export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: BusinessUnitsProps) {
+export default function BusinessUnits({ buData = {}, dayMetrics, zonesConfig }: BusinessUnitsProps) {
   const visit = useVisit();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
-  const [selectedDay, setSelectedDay] = useState(buData.dia ?? 0);
+  const [selectedDay, setSelectedDay] = useState(buData.day ?? 0);
   const [filtroMetrica, setMetricFilter] = useState<MetricFilter>(EMPTY_METRIC_FILTER);
   const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
 
   // Mismo criterio que en Ventas: el dia se resuelve en cliente sobre el mes
   // que ya esta en los props; el cierre del mes es el respaldo.
-  const { alcance, ftth_consolidado: ftthConsolidado } = buData;
+  const { scope, ftth_totals: ftthConsolidado } = buData;
   const groups = useMemo(() => {
-    const todos = dayData ? buildBusinessUnitGroups(dayData.dimensiones, zonasConfig) : buData.data ?? [];
-    if (!alcance) return todos;
-    return todos.filter((group) => (group.is_rf ? alcance.rf : alcance.coordinadores.includes(group.coordinador)));
-  }, [dayData, zonasConfig, buData.data, alcance]);
+    const todos = dayData ? buildBusinessUnitGroups(dayData.dimensions, zonesConfig) : buData.data ?? [];
+    if (!scope) return todos;
+    return todos.filter((group) => (group.is_rf ? scope.rf : scope.coordinators.includes(group.coordinator)));
+  }, [dayData, zonesConfig, buData.data, scope]);
   const ftthFijo = ftthConsolidado
-    ? (dayData ? ftthConsolidado.dias[String(effectiveDay)] : ftthConsolidado.cierre) ?? null
+    ? (dayData ? ftthConsolidado.days[String(effectiveDay)] : ftthConsolidado.close) ?? null
     : null;
 
   // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
   // site y estado pertenece cada zona, que es por donde se heredan.
-  const objetivos = useTargets(zonasConfig?.zonas);
+  const objetivos = useTargets(zonesConfig?.zones);
 
   const { branchList, filteredData, dynamicFtthSummary } = useBusinessUnitsData({
     groups,
@@ -73,7 +73,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
     selectedBranch,
     selectedTech,
     period: buData.period ?? '',
-    objetivos,
+    targets: objetivos,
     projection: proyeccion,
     metricFilter: filtroMetrica,
     ftthFijo,
@@ -109,7 +109,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                monthPeriod={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.month}
                 daysInMonth={totalDays}
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}

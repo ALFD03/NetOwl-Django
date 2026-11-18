@@ -77,7 +77,7 @@ function TargetBadge({
       </div>
     );
   }
-  const ui = TARGET_LEVEL_UI[origen?.nivel ?? 'general'];
+  const ui = TARGET_LEVEL_UI[origen?.level ?? 'general'];
   const contenido = (
     <>
       <span className="flex items-baseline gap-1.5">
@@ -85,37 +85,37 @@ function TargetBadge({
         <span className={cn('text-[10px] font-bold text-slate-400', mono && 'font-mono')}>+{formatInteger(meta)}</span>
       </span>
       <span className={cn('mt-0.5 max-w-[140px] truncate rounded border px-1.5 py-px text-[9px] font-black uppercase', ui.chip)}>
-        {ui.corto}{origen?.nombre && origen.nivel !== 'zona_sucursal' ? ` ${origen.nombre}` : ''}
+        {ui.corto}{origen?.name && origen.level !== 'zona_sucursal' ? ` ${origen.name}` : ''}
       </span>
     </>
   );
-  const titulo = `Objetivo ${formatTarget(porcentaje)} (${ui.label.toLowerCase()}${origen?.nombre ? ` ${origen.nombre}` : ''}) · cierre esperado ${formatInteger(cierreEsperado)}`;
+  const titulo = `Objetivo ${formatTarget(porcentaje)} (${ui.label.toLowerCase()}${origen?.name ? ` ${origen.name}` : ''}) · cierre esperado ${formatInteger(cierreEsperado)}`;
 
   return <div className="flex flex-col items-end" title={titulo}>{contenido}</div>;
 }
 
 /** Un cumplimiento: el porcentaje con el color del semáforo y una barra de progreso. */
 function ComplianceCell({
-  valor,
-  semaforo,
+  value,
+  thresholds,
   mono,
 }: {
   /** Nulo: la fila no tiene contra qué medirse (zona sin objetivo). */
-  valor: number | null;
-  semaforo: TargetsTrafficLight;
+  value: number | null;
+  thresholds: TargetsTrafficLight;
   mono: boolean;
 }) {
-  if (valor === null) return <td className="py-3 text-right text-slate-600">—</td>;
+  if (value === null) return <td className="py-3 text-right text-slate-600">—</td>;
   return (
     <td className="py-3 text-right">
       <div className="flex flex-col items-end">
-        <span className={cn('font-black', mono && 'font-mono', completionTone(valor, semaforo))}>
-          {formatTwoDecimals(valor)}%
+        <span className={cn('font-black', mono && 'font-mono', completionTone(value, thresholds))}>
+          {formatTwoDecimals(value)}%
         </span>
         <div className="mt-1 h-1 w-12 overflow-hidden rounded-full bg-slate-800">
           <div
-            className={cn('h-full', completionBar(valor, semaforo))}
-            style={{ width: `${Math.min(Math.max(valor, 0), 100)}%` }}
+            className={cn('h-full', completionBar(value, thresholds))}
+            style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
           />
         </div>
       </div>
@@ -127,12 +127,12 @@ function ComplianceCell({
 function CeldaProyeccion({
   instalaciones,
   cumplimiento,
-  semaforo,
+  thresholds,
   mono,
 }: {
   instalaciones: number | null;
   cumplimiento: number | null;
-  semaforo: TargetsTrafficLight;
+  thresholds: TargetsTrafficLight;
   mono: boolean;
 }) {
   if (instalaciones === null) return <td className="py-3 text-right text-slate-600">—</td>;
@@ -143,7 +143,7 @@ function CeldaProyeccion({
         <span className={cn('font-black text-cyan-300', mono && 'font-mono')}>{formatInteger(instalaciones)}</span>
         {cumplimiento !== null && (
           <span
-            className={cn('text-[10px] font-bold', mono && 'font-mono', completionTone(cumplimiento, semaforo))}
+            className={cn('text-[10px] font-bold', mono && 'font-mono', completionTone(cumplimiento, thresholds))}
             title="Cumplimiento de ventas proyectado al cierre"
           >
             {formatTwoDecimals(cumplimiento)}% obj.
@@ -174,7 +174,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
   renderRowAction,
   projection: proyeccion = null,
 }: NodePerformanceTableProps<T>) {
-  const { semaforo } = useTargetsConfig();
+  const { thresholds } = useTargetsConfig();
   const num = (extra?: string) => cn('py-3 text-right', mono && 'font-mono', extra);
   const paginacion = usePaginacion(nodes);
 
@@ -217,19 +217,19 @@ export function NodePerformanceTable<T extends CommercialNode>({
           </thead>
           <tbody className="divide-y divide-slate-800/50 text-xs font-bold">
             {paginacion.visibles.map((node, idx) => {
-              const inicio = Number(node.activos_inicio ?? 0);
+              const inicio = Number(node.active_start ?? 0);
               // Los hooks de los reportes resuelven la meta de cada nodo; el
               // respaldo solo cubre un uso que no pase por ellos.
               const meta = node.meta
                 ?? baseGoal(inicio, overallTarget(DEFAULT_TARGETS, ''));
               const metrics = calcCommercial(
                 inicio,
-                Number(node.activos_final ?? 0),
+                Number(node.active_end ?? 0),
                 meta,
-                { nuevos: Number(node.nuevos ?? 0), projection: proyeccion },
+                { new_subs: Number(node.new_subs ?? 0), projection: proyeccion },
               );
-              const growth = Number(node.crecimiento ?? 0);
-              const churn = Number(node.churn_bruto_pct ?? 0);
+              const growth = Number(node.growth ?? 0);
+              const churn = Number(node.gross_churn_pct ?? 0);
 
               return (
                 <tr key={idx} className="group transition-colors hover:bg-white/5">
@@ -239,34 +239,34 @@ export function NodePerformanceTable<T extends CommercialNode>({
                       <span>{node.zona_sucursal}</span>
                     </div>
                   </td>
-                  <td className={num('text-slate-400')}>{formatInteger(node.activos_inicio)}</td>
-                  <td className={num('text-emerald-400')}>+{formatInteger(node.nuevos)}</td>
+                  <td className={num('text-slate-400')}>{formatInteger(node.active_start)}</td>
+                  <td className={num('text-emerald-400')}>+{formatInteger(node.new_subs)}</td>
                   {proyeccion && (
                     <CeldaProyeccion
                       instalaciones={metrics.instalacionesProyectadas}
                       cumplimiento={metrics.projectedSalesCompliance}
-                      semaforo={semaforo}
+                      thresholds={thresholds}
                       mono={mono}
                     />
                   )}
-                  <td className={num('text-blue-400')}>{formatInteger(node.reactivaciones)}</td>
-                  <td className={num('text-rose-500')}>-{formatInteger(node.bajas)}</td>
+                  <td className={num('text-blue-400')}>{formatInteger(node.reactivations)}</td>
+                  <td className={num('text-rose-500')}>-{formatInteger(node.churned)}</td>
                   <td
-                    className={num(TONE_TEXT[tonoChurn(churn, semaforo)])}
+                    className={num(TONE_TEXT[tonoChurn(churn, thresholds)])}
                     title={`Objetivo de churn: ${formatTwoDecimals(meta.churnPct)}%`}
                   >
-                    {formatTwoDecimals(node.churn_bruto_pct)}%
+                    {formatTwoDecimals(node.gross_churn_pct)}%
                   </td>
                   <td
-                    className={num(TONE_TEXT[tonoCrecimiento(growth, semaforo)])}
+                    className={num(TONE_TEXT[tonoCrecimiento(growth, thresholds)])}
                     title={`Objetivo de crecimiento: ${formatTwoDecimals(meta.growthPct)}%`}
                   >
-                    {formatTwoDecimals(node.crecimiento)}%
+                    {formatTwoDecimals(node.growth)}%
                   </td>
                   <td className="py-2 text-right">
                     <TargetBadge
                       porcentaje={meta.growthPct}
-                      meta={metrics.objetivo}
+                      meta={metrics.target}
                       origen={node.targetSource}
                       expectedClose={metrics.expectedClose}
                       mono={mono}
@@ -276,11 +276,11 @@ export function NodePerformanceTable<T extends CommercialNode>({
                   <td className={num('font-black text-amber-500/80')}>
                     {metrics.withoutTarget ? <span className="text-slate-600">—</span> : formatInteger(metrics.faltante)}
                   </td>
-                  <ComplianceCell valor={metrics.withoutTarget ? null : metrics.complianceRate} semaforo={semaforo} mono={mono} />
-                  <ComplianceCell valor={metrics.withoutTarget ? null : metrics.salesCompliance} semaforo={semaforo} mono={mono} />
-                  <ComplianceCell valor={metrics.withoutTarget ? null : metrics.closeCompliance} semaforo={semaforo} mono={mono} />
+                  <ComplianceCell value={metrics.withoutTarget ? null : metrics.complianceRate} thresholds={thresholds} mono={mono} />
+                  <ComplianceCell value={metrics.withoutTarget ? null : metrics.salesCompliance} thresholds={thresholds} mono={mono} />
+                  <ComplianceCell value={metrics.withoutTarget ? null : metrics.closeCompliance} thresholds={thresholds} mono={mono} />
                   <td className={cn('py-3 pr-2 text-right font-black text-white', mono && 'font-mono')}>
-                    {formatInteger(node.activos_final)}
+                    {formatInteger(node.active_end)}
                   </td>
                   {renderRowAction && (
                     <td className="py-3 pr-2 text-right">{renderRowAction(node)}</td>

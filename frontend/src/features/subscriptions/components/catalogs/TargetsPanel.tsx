@@ -32,14 +32,14 @@ import { TrafficLightScale } from './TrafficLightScale';
 import { TARGET_LEVEL_UI } from '../targets/levels';
 
 export interface TargetsPanelProps {
-  objetivos: CatalogTarget[];
+  targets: CatalogTarget[];
   monthTargets: CatalogMonthTarget[];
-  semaforo: CatalogTrafficLight | null;
+  thresholds: CatalogTrafficLight | null;
   config: TargetsConfig | null;
   /** Meses con cierre calculado, `YYYY-MM`. */
   periodos: string[];
   /** El catálogo de zonas: dice a qué coordinador, site y estado pertenece cada una. */
-  zonas: CatalogZone[];
+  zones: CatalogZone[];
   /** Los nodos de los datos: a cuáles alcanza cada objetivo. */
   nodos: KnownNode[];
   onEditarGeneral: (row: CatalogTarget) => void;
@@ -56,9 +56,9 @@ const valor = (pct: number | null): ReactNode =>
   pct === null ? <span className="text-slate-500">hereda</span> : formatTarget(pct);
 
 interface MonthRow {
-  periodo: string;
-  calculado: boolean;
-  excepcion?: CatalogMonthTarget;
+  period: string;
+  computed: boolean;
+  exception?: CatalogMonthTarget;
 }
 
 function BotonIcono({
@@ -75,12 +75,12 @@ function BotonIcono({
 }
 
 export function TargetsPanel({
-  objetivos,
+  targets,
   monthTargets: objetivosMes,
-  semaforo,
+  thresholds,
   config,
   periodos,
-  zonas,
+  zones,
   nodos,
   onEditarGeneral,
   onNewTarget: onNuevoObjetivo,
@@ -91,16 +91,16 @@ export function TargetsPanel({
   onEditTrafficLight: onEditarSemaforo,
 }: TargetsPanelProps) {
   const cfg = config ?? DEFAULT_TARGETS;
-  const s = semaforo ?? DEFAULT_TARGETS.semaforo;
+  const s = thresholds ?? DEFAULT_TARGETS.thresholds;
 
   // Con la misma resolución que los reportes, para decir de cada objetivo en
   // qué nodos rige y en cuáles lo anula un nivel superior. Se mide en el mes
   // más reciente calculado.
   const referenceMonth = periodos[0] ?? new Date().toISOString().slice(0, 7);
-  const zoneOf = new Map(zonas.map((z) => [z.nombre.toLowerCase(), z]));
+  const zoneOf = new Map(zones.map((z) => [z.name.toLowerCase(), z]));
   const resolve = createResolver(
     cfg,
-    zonas.map((z) => ({ name: z.nombre, site: z.site, type: z.tecnologia, coordinador: z.coordinador, estado: z.estado })),
+    zones.map((z) => ({ name: z.name, site: z.site, type: z.technology, coordinator: z.coordinator, state: z.state })),
   );
 
   /** Los nodos de los datos a los que alcanza un objetivo. */
@@ -108,13 +108,13 @@ export function TargetsPanel({
     const igual = (a: string | undefined, b: string) => (a ?? '').toLowerCase() === b.toLowerCase();
     return nodos.filter((n) => {
       const zona = zoneOf.get(n.zona.toLowerCase());
-      switch (row.nivel) {
-        case 'zona_sucursal': return igual(n.nodo, row.entidad);
-        case 'zona': return igual(n.zona, row.entidad);
-        case 'sucursal': return igual(n.sucursal, row.entidad);
-        case 'coordinador': return igual(zona?.coordinador, row.entidad);
-        case 'site': return igual(zona?.site, row.entidad);
-        case 'estado': return igual(zona?.estado, row.entidad);
+      switch (row.level) {
+        case 'zona_sucursal': return igual(n.node, row.entity);
+        case 'zona': return igual(n.zona, row.entity);
+        case 'sucursal': return igual(n.sucursal, row.entity);
+        case 'coordinador': return igual(zona?.coordinator, row.entity);
+        case 'site': return igual(zona?.site, row.entity);
+        case 'estado': return igual(zona?.state, row.entity);
         default: return false;
       }
     });
@@ -125,18 +125,18 @@ export function TargetsPanel({
     const alcance = nodesOf(row);
     if (alcance.length === 0) return <span className="text-slate-600">Sin nodos en los datos</span>;
 
-    const lineas = (['crecimiento', 'churn'] as const)
+    const lineas = (['growth', 'churn'] as const)
       .filter((metrica) => row[`${metrica}_pct`] !== null)
       .flatMap((metrica) => {
         const anulados = alcance
           .map((n) => resolve.origen(referenceMonth, n, metrica))
-          .filter((origen) => origen.nivel !== row.nivel);
+          .filter((origen) => origen.level !== row.level);
         if (anulados.length === 0) return [];
         const quien = anulados[0]!;
         const donde = anulados.length === alcance.length ? '' : ` en ${anulados.length} de ${alcance.length} nodos`;
         return [{
           metrica,
-          texto: `${metrica === 'crecimiento' ? 'Crec.' : 'Churn'}${donde}: manda ${TARGET_LEVEL_UI[quien.nivel].label.toLowerCase()}${quien.nombre ? ` ${quien.nombre}` : ''} (${formatTarget(quien.valor)})`,
+          texto: `${metrica === 'growth' ? 'Crec.' : 'Churn'}${donde}: manda ${TARGET_LEVEL_UI[quien.level].label.toLowerCase()}${quien.name ? ` ${quien.name}` : ''} (${formatTarget(quien.value)})`,
         }];
       });
 
@@ -155,19 +155,19 @@ export function TargetsPanel({
   };
 
   // El general es una sola fila: se enseña como métrica, no como tabla.
-  const general = objetivos.find((other) => other.nivel === 'general');
-  const byEntity = objetivos.filter((other) => other.nivel !== 'general');
+  const general = targets.find((other) => other.level === 'general');
+  const byEntity = targets.filter((other) => other.level !== 'general');
 
   // Los meses calculados y, además, los que tengan excepción sin estar
   // calculados todavía (un mes futuro que ya se sabe que será distinto).
-  const excepciones = new Map(objetivosMes.map((row) => [row.periodo, row]));
+  const excepciones = new Map(objetivosMes.map((row) => [row.period, row]));
   const monthRows: MonthRow[] = [...new Set([...periodos.map(monthOf), ...excepciones.keys()])]
     .sort()
     .reverse()
     .map((periodo) => ({
-      periodo,
-      calculado: periodos.includes(periodo),
-      excepcion: excepciones.get(periodo),
+      period: periodo,
+      computed: periodos.includes(periodo),
+      exception: excepciones.get(periodo),
     }));
 
   const tierActions: Column<CatalogTarget> = {
@@ -188,21 +188,21 @@ export function TargetsPanel({
   const entityColumns: Column<CatalogTarget>[] = [
     {
       header: 'Nivel',
-      accessor: (row) => TARGET_LEVEL_UI[row.nivel].label,
+      accessor: (row) => TARGET_LEVEL_UI[row.level].label,
       filterable: true,
-      filterValue: (row) => TARGET_LEVEL_UI[row.nivel].label,
-      sortKey: 'nivel',
+      filterValue: (row) => TARGET_LEVEL_UI[row.level].label,
+      sortKey: 'level',
     },
-    { header: 'Entidad', accessor: (row) => <span className="font-bold text-white">{row.entidad}</span>, sortKey: 'entidad' },
+    { header: 'Entidad', accessor: (row) => <span className="font-bold text-white">{row.entity}</span>, sortKey: 'entity' },
     {
       header: 'Vigente desde',
-      accessor: (row) => (row.desde ? formatPeriodLabel(row.desde) : 'Siempre'),
-      sortKey: 'desde',
+      accessor: (row) => (row.since ? formatPeriodLabel(row.since) : 'Siempre'),
+      sortKey: 'since',
     },
-    { header: 'Crecimiento', accessor: (row) => valor(row.crecimiento_pct), align: 'right' },
+    { header: 'Crecimiento', accessor: (row) => valor(row.growth_pct), align: 'right' },
     { header: 'Churn máx.', accessor: (row) => valor(row.churn_pct), align: 'right' },
     { header: 'Rige hoy', accessor: effectiveToday },
-    { header: 'Nota', accessor: (row) => row.nota || '—' },
+    { header: 'Nota', accessor: (row) => row.note || '—' },
     tierActions,
   ];
 
@@ -211,46 +211,46 @@ export function TargetsPanel({
       header: 'Mes',
       accessor: (row) => (
         <span className="font-bold text-white">
-          {formatPeriodLabel(row.periodo)}
-          {!row.calculado && <span className="ml-2 text-[10px] font-normal text-slate-500">sin calcular</span>}
+          {formatPeriodLabel(row.period)}
+          {!row.computed && <span className="ml-2 text-[10px] font-normal text-slate-500">sin calcular</span>}
         </span>
       ),
-      sortKey: 'periodo',
+      sortKey: 'period',
     },
     {
       header: 'Crecimiento',
-      accessor: (row) => formatTarget(overallTarget(cfg, row.periodo).crecimiento),
+      accessor: (row) => formatTarget(overallTarget(cfg, row.period).growth),
       align: 'right',
     },
     {
       header: 'Churn máx.',
-      accessor: (row) => formatTarget(overallTarget(cfg, row.periodo).churn),
+      accessor: (row) => formatTarget(overallTarget(cfg, row.period).churn),
       align: 'right',
     },
     {
       header: 'Origen',
-      accessor: (row) => (row.excepcion
+      accessor: (row) => (row.exception
         ? <span className="font-bold text-amber-400">Excepción del mes</span>
         : <span className="text-slate-400">General</span>),
       filterable: true,
-      filterValue: (row) => (row.excepcion ? 'Excepción del mes' : 'General'),
+      filterValue: (row) => (row.exception ? 'Excepción del mes' : 'General'),
     },
     {
       header: 'Acciones',
       align: 'right',
       accessor: (row) => (
         <div className="flex justify-end gap-2">
-          {row.excepcion ? (
+          {row.exception ? (
             <>
-              <BotonIcono onClick={() => onExcepcionMes(row.periodo, row.excepcion)} title="Editar excepción" tone="sky">
+              <BotonIcono onClick={() => onExcepcionMes(row.period, row.exception)} title="Editar excepción" tone="sky">
                 <Edit3 className="h-4 w-4" />
               </BotonIcono>
-              <BotonIcono onClick={() => onBorrarMes(row.excepcion!)} title="Quitar excepción" tone="rose">
+              <BotonIcono onClick={() => onBorrarMes(row.exception!)} title="Quitar excepción" tone="rose">
                 <Trash2 className="h-4 w-4" />
               </BotonIcono>
             </>
           ) : (
-            <Button size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => onExcepcionMes(row.periodo)}>
+            <Button size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => onExcepcionMes(row.period)}>
               Excepción
             </Button>
           )}
@@ -282,7 +282,7 @@ export function TargetsPanel({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <MetricCard
               label="Crecimiento objetivo"
-              value={formatTarget(cfg.general.crecimiento)}
+              value={formatTarget(cfg.general.growth)}
               subValue="Sobre la base inicial"
               color="green"
               icon={<Target className="h-4 w-4 text-emerald-400" />}
@@ -297,9 +297,9 @@ export function TargetsPanel({
           </div>
           {general && (
             <p className="mt-4 text-[10px] text-slate-500">
-              {general.nota ? `${general.nota} · ` : ''}
-              Actualizado {general.actualizado_en}
-              {general.actualizado_por ? ` por ${general.actualizado_por}` : ''}
+              {general.note ? `${general.note} · ` : ''}
+              Actualizado {general.updated_at}
+              {general.updated_by ? ` por ${general.updated_by}` : ''}
             </p>
           )}
         </NeonContainer>
@@ -316,7 +316,7 @@ export function TargetsPanel({
               variant="outline"
               icon={<Edit3 className="h-4 w-4" />}
               onClick={onEditarSemaforo}
-              disabled={!semaforo}
+              disabled={!thresholds}
             >
               Editar semáforo
             </Button>
@@ -324,9 +324,9 @@ export function TargetsPanel({
         >
           <div className="space-y-5">
             {([
-              ['Crecimiento', 'crecimiento', s.crec_verde, s.crec_amarillo],
-              ['Churn', 'churn', s.churn_verde, s.churn_amarillo],
-              ['Cumplimiento de la meta', 'cumplimiento', s.cumpl_verde, s.cumpl_amarillo],
+              ['Crecimiento', 'crecimiento', s.growth_green, s.growth_yellow],
+              ['Churn', 'churn', s.churn_green, s.churn_yellow],
+              ['Cumplimiento de la meta', 'cumplimiento', s.compliance_green, s.compliance_yellow],
             ] as const).map(([titulo, metrica, verde, amarillo]) => (
               <div key={metrica}>
                 <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-300">{titulo}</p>

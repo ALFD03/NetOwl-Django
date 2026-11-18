@@ -7,16 +7,16 @@
  */
 
 export interface CrmHistoricoRow {
-  periodo_reporte?: string;
-  total_oportunidades?: number;
-  ganados?: number;
-  perdidos?: number;
-  pendientes?: number;
-  count_devueltos_e8?: number;
-  pct_instalacion?: number;
-  pct_perdida?: number;
-  pct_pendientes?: number;
-  pct_devueltos_e8?: number;
+  report_period?: string;
+  total_opportunities?: number;
+  won?: number;
+  lost?: number;
+  pending?: number;
+  count_returned_e8?: number;
+  pct_installation?: number;
+  pct_lost?: number;
+  pct_pending?: number;
+  pct_returned_e8?: number;
   /**
    * Desglose del riesgo de devolución. `pct_devueltos_e8` son las transiciones
    * a la etapa 8 del mes sobre `total_en_riesgo` —todo lo que tuvo vida en el
@@ -26,44 +26,44 @@ export interface CrmHistoricoRow {
    * parte imputada a las devoluciones cuyo motivo ya no es legible:
    * estimación, no dato.
    */
-  total_en_riesgo?: number;
-  count_devueltos_e8_bruto?: number;
-  pct_devueltos_e8_bruto?: number;
-  e8_devueltos_excepcion?: number;
-  e8_devueltos_con_motivo?: number;
-  e8_devueltos_sin_motivo?: number;
-  e8_devueltos_estimados?: number;
+  total_at_risk?: number;
+  count_returned_e8_gross?: number;
+  pct_returned_e8_gross?: number;
+  e8_returned_exception?: number;
+  e8_returned_with_reason?: number;
+  e8_returned_without_reason?: number;
+  e8_returned_estimated?: number;
   /** Oportunidades distintas detrás de las transiciones, y cuántas repitieron. */
-  e8_clientes_devueltos?: number;
-  e8_reincidentes?: number;
-  horas_promedio_inst?: number;
-  horas_mediana_inst?: number;
-  horas_p25_inst?: number;
-  horas_p75_inst?: number;
-  horas_min_inst?: number;
-  horas_max_inst?: number;
-  horas_std_inst?: number;
-  pct_excede_prom_inst?: number;
-  horas_promedio_perd?: number;
-  horas_mediana_perd?: number;
-  horas_p25_perd?: number;
-  horas_p75_perd?: number;
-  horas_min_perd?: number;
-  horas_max_perd?: number;
-  horas_std_perd?: number;
-  pct_excede_prom_perd?: number;
-  horas_promedio_cierre?: number;
-  horas_mediana_cierre?: number;
-  horas_p25_cierre?: number;
-  horas_p75_cierre?: number;
-  horas_min_cierre?: number;
-  horas_max_cierre?: number;
-  horas_std_cierre?: number;
-  pct_excede_prom_cierre?: number;
+  e8_returned_clients?: number;
+  e8_repeat?: number;
+  hours_avg_inst?: number;
+  hours_median_inst?: number;
+  hours_p25_inst?: number;
+  hours_p75_inst?: number;
+  hours_min_inst?: number;
+  hours_max_inst?: number;
+  hours_std_inst?: number;
+  pct_over_avg_inst?: number;
+  hours_avg_lost?: number;
+  hours_median_lost?: number;
+  hours_p25_lost?: number;
+  hours_p75_lost?: number;
+  hours_min_lost?: number;
+  hours_max_lost?: number;
+  hours_std_lost?: number;
+  pct_over_avg_lost?: number;
+  hours_avg_close?: number;
+  hours_median_close?: number;
+  hours_p25_close?: number;
+  hours_p75_close?: number;
+  hours_min_close?: number;
+  hours_max_close?: number;
+  hours_std_close?: number;
+  pct_over_avg_close?: number;
   /** Per-stage effectiveness of the period, stored as JSONB on the cierre row. */
-  efectividad?: CrmEffectivenessRow[];
+  effectiveness?: CrmEffectivenessRow[];
   /** Per-stage dwell time of the period, stored as JSONB on the cierre row. */
-  tiempo_por_etapa?: CrmStageTimeRow[];
+  time_by_stage?: CrmStageTimeRow[];
 }
 
 /**
@@ -74,11 +74,11 @@ export interface CrmHistoricoRow {
  * stage total: an exit to stage 9, 10 or `perdido` is none of the three.
  */
 export interface CrmStageTimeOutcome {
-  movimientos?: number;
+  movements?: number;
   /** Share of the stage's exits, already in percent. */
   pct?: number;
-  promedio_horas?: number;
-  mediana_horas?: number;
+  avg_hours?: number;
+  median_hours?: number;
 }
 
 /**
@@ -89,13 +89,13 @@ export interface CrmStageTimeOutcome {
  */
 export interface CrmStageTimeStay {
   total?: number;
-  abiertas?: number;
-  cerradas_en_etapa?: number;
-  promedio_horas?: number;
-  promedio_ajustado_horas?: number;
-  mediana_horas?: number;
-  p75_horas?: number;
-  max_horas?: number;
+  open?: number;
+  closed_in_stage?: number;
+  avg_hours?: number;
+  adjusted_avg_hours?: number;
+  median_hours?: number;
+  p75_hours?: number;
+  max_hours?: number;
 }
 
 /**
@@ -104,59 +104,59 @@ export interface CrmStageTimeStay {
  */
 export interface CrmStageTimeCombined {
   total?: number;
-  promedio_horas?: number;
-  promedio_ajustado_horas?: number;
-  mediana_horas?: number;
-  p75_horas?: number;
+  avg_hours?: number;
+  adjusted_avg_hours?: number;
+  median_hours?: number;
+  p75_hours?: number;
   /** Share of the figure coming from opportunities that have not left yet. */
-  pct_sin_salida?: number;
+  pct_no_exit?: number;
   /** ISO instant the open stays were measured against. */
-  corte?: string;
+  cut?: string;
 }
 
 /** A row of `tiempo_por_etapa`: one stage's dwell-time distribution. */
 export interface CrmStageTimeRow {
-  etapa?: string;
+  stage?: string;
   /** Set by the analysis for the stages sales steers by (1, 2, 3, 5 and 8). */
-  es_clave?: boolean;
-  total_movimientos?: number;
+  is_key?: boolean;
+  total_movements?: number;
   /** Distinct opportunities behind those moves — a stage can be re-entered. */
-  total_oportunidades?: number;
-  movimientos_por_oportunidad?: number;
+  total_opportunities?: number;
+  movements_per_opportunity?: number;
   /** False when the stage has too few exits for its time to be read. */
-  muestra_suficiente?: boolean;
+  enough_sample?: boolean;
 
   /** Raw arithmetic mean — kept to show how far the tail drags it. */
   /** Sum of the exit durations — the numerator of `tiempo_promedio_horas`. */
-  tiempo_total_horas?: number;
-  tiempo_promedio_horas?: number;
+  time_total_hours?: number;
+  time_avg_hours?: number;
   /** Mean with the top tail winsorized: the figure to read as "the stage". */
-  tiempo_promedio_ajustado_horas?: number;
-  tiempo_corte_outlier_horas?: number;
+  time_adjusted_avg_hours?: number;
+  outlier_cutoff_hours?: number;
   total_outliers?: number;
   pct_outliers?: number;
 
-  tiempo_mediana_horas?: number;
-  tiempo_p25_horas?: number;
-  tiempo_p75_horas?: number;
-  tiempo_min_horas?: number;
-  tiempo_max_horas?: number;
-  tiempo_std_horas?: number;
-  pct_excede_promedio?: number;
+  time_median_hours?: number;
+  time_p25_hours?: number;
+  time_p75_hours?: number;
+  time_min_hours?: number;
+  time_max_hours?: number;
+  time_std_hours?: number;
+  pct_over_avg?: number;
 
-  movimientos_instantaneos?: number;
-  pct_instantaneos?: number;
+  instant_movements?: number;
+  pct_instant?: number;
   /** Moves of exactly zero duration, left out of the mean on both sides. */
-  movimientos_nulos?: number;
+  null_movements?: number;
 
-  avance?: CrmStageTimeOutcome;
-  retorno?: CrmStageTimeOutcome;
-  devolucion?: CrmStageTimeOutcome;
+  progress?: CrmStageTimeOutcome;
+  comeback?: CrmStageTimeOutcome;
+  returns?: CrmStageTimeOutcome;
 
   /** Stays still open, or ended by the opportunity closing inside the stage. */
-  permanencia?: CrmStageTimeStay;
+  tenure?: CrmStageTimeStay;
   /** The unbiased figure: exits plus open stays. Read this one. */
-  combinado?: CrmStageTimeCombined;
+  combined?: CrmStageTimeCombined;
 }
 
 /**
@@ -166,11 +166,11 @@ export interface CrmStageTimeRow {
 export type CrmClose = Required<CrmHistoricoRow>;
 
 export interface CrmEffectivenessRow {
-  etapa?: string;
-  efectividad_pct?: number;
-  exitosos?: number;
-  fallidos?: number;
-  total_salidas?: number;
+  stage?: string;
+  effectiveness_pct?: number;
+  successful?: number;
+  failed?: number;
+  total_exits?: number;
 }
 
 /**
@@ -179,15 +179,15 @@ export interface CrmEffectivenessRow {
  * branch / campaign / seller — so it carries the same measures, minus the
  * period itself.
  */
-export type CrmMetrics = Omit<CrmHistoricoRow, 'periodo_reporte'>;
+export type CrmMetrics = Omit<CrmHistoricoRow, 'report_period'>;
 
 /** A row of `crm_dimensiones_historico`, as the analytics endpoint sends it. */
 export interface CrmDimensionRow {
-  periodo_reporte: string;
+  report_period: string;
   dimension: string;
-  valor: string;
-  metricas: CrmMetrics;
-  efectividad: CrmEffectivenessRow[];
+  value: string;
+  metrics: CrmMetrics;
+  effectiveness: CrmEffectivenessRow[];
 }
 
 /**
@@ -195,11 +195,11 @@ export interface CrmDimensionRow {
  * charts and the detail table read, so neither has to reach through `metricas`.
  */
 export type CrmDimensionValue = CrmMetrics & {
-  valor: string;
-  efectividad: CrmEffectivenessRow[];
+  value: string;
+  effectiveness: CrmEffectivenessRow[];
 };
 
 /** Payload of `GET /crm/api/dimension-metrics/`. */
 export interface CrmDimensionsResponse {
-  dimensiones: CrmDimensionRow[];
+  dimensions: CrmDimensionRow[];
 }

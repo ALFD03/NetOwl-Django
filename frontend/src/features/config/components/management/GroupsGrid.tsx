@@ -17,14 +17,14 @@ interface Props {
   onDelete: ((group: GroupData) => void) | null;
   onCreate: (() => void) | null;
   /** Hay un filtro de búsqueda activo: la lista vacía no significa que no haya grupos. */
-  filtrando: boolean;
+  filtering: boolean;
 }
 
 /** Cuántos avatares se pintan antes de resumir el resto en «+N». */
-const MAX_AVATARES = 5;
+const MAX_AVATARS = 5;
 
-export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrando }: Props) {
-  if (!groups.length && filtrando) {
+export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtering }: Props) {
+  if (!groups.length && filtering) {
     return (
       <EmptyState
         bordered
@@ -38,10 +38,10 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {groups.map((group) => {
-        const concedidos = countPermissions(group.permissions);
-        const porcentaje = Math.round((concedidos / TOTAL_PERMISSIONS) * 100);
+        const grantedCount = countPermissions(group.permissions);
+        const percent = Math.round((grantedCount / TOTAL_PERMISSIONS) * 100);
         const members = users.filter((user) => user.group_id === group.id);
-        const sobrantes = group.members_count - Math.min(members.length, MAX_AVATARES);
+        const extra = group.members_count - Math.min(members.length, MAX_AVATARS);
 
         return (
           <article
@@ -85,18 +85,18 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
             {/* `flex-1`: empuja el pie al fondo, así las tarjetas de una fila
                 alinean sus miembros aunque las descripciones midan distinto. */}
             <div className="mt-4 flex-1">
-              <ModulesWithAccess permisos={group.permissions} withLabel />
+              <ModulesWithAccess permissions={group.permissions} withLabel />
             </div>
 
             <div className="mt-4">
               <div className="mb-1 flex justify-between text-[11px] font-semibold">
                 <span className="text-slate-500">Permisos concedidos</span>
                 <span className="tabular-nums text-slate-300">
-                  {concedidos} de {TOTAL_PERMISSIONS}
+                  {grantedCount} de {TOTAL_PERMISSIONS}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-surface-primary">
-                <div className="h-full rounded-full bg-brand" style={{ width: `${porcentaje}%` }} />
+                <div className="h-full rounded-full bg-brand" style={{ width: `${percent}%` }} />
               </div>
             </div>
 
@@ -104,14 +104,14 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
               {group.members_count ? (
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
-                    {members.slice(0, MAX_AVATARES).map((user) => (
+                    {members.slice(0, MAX_AVATARS).map((user) => (
                       <span key={user.id} title={user.username}>
-                        <Avatar nombre={user.username} size="sm" />
+                        <Avatar name={user.username} size="sm" />
                       </span>
                     ))}
                   </div>
                   <span className="text-xs text-slate-400">
-                    {sobrantes > 0 && `+${sobrantes} · `}
+                    {extra > 0 && `+${extra} · `}
                     {group.members_count} {group.members_count === 1 ? 'miembro' : 'miembros'}
                   </span>
                 </div>
@@ -125,7 +125,7 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
 
       {/* Solo sin filtro: con una búsqueda activa, una tarjeta de «crear» en
           medio de los resultados se leería como uno más. */}
-      {!filtrando && onCreate && (
+      {!filtering && onCreate && (
         <button
           type="button"
           onClick={onCreate}

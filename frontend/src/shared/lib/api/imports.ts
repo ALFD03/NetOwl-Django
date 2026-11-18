@@ -35,16 +35,16 @@ async function run(
   return {
     message: job.message,
     log_output: job.log_output,
-    periodo_label: job.result.periodo_label,
-    dias_calculados: job.result.dias_calculados,
+    period_label: job.result.period_label,
+    computed_days: job.result.computed_days,
   };
 }
 
 export const importsApi = {
   importSubscriptions: (file: File) => upload('/api/imports/subscriptions/upload/', file),
   importLogs: (file: File) => upload('/api/imports/subscriptions/logs/upload/', file),
-  importGratis: (file: File) => upload('/api/imports/subscriptions/free-plans/upload/', file),
-  importFacturas: (file: File) => upload('/api/imports/subscriptions/invoices/upload/', file),
+  importFreePlans: (file: File) => upload('/api/imports/subscriptions/free-plans/upload/', file),
+  importInvoices: (file: File) => upload('/api/imports/subscriptions/invoices/upload/', file),
   importCrm: (file: File) => upload('/api/imports/crm/upload/', file),
   importSupport: (file: File) => upload('/api/imports/support/upload/', file),
   /** Suma un lote de logs de etapa: no reemplaza, cada log entra una sola vez. */

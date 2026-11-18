@@ -54,21 +54,21 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
   const [dimension, setDimension] = useState<SupportDimension>('zona');
 
   const { availableDays, totalDays, selectedDay, selectDay } = useDayCuts(dayMetrics);
-  const periodo = selectedPeriod || props.analyticsData?.periodo || '';
+  const periodo = selectedPeriod || props.analyticsData?.period || '';
 
   const { payload } = useDayPayload<SupportDayPayload>({
     url: SUPPORT_DAY_METRICS_URL,
     period: periodo,
-    dia: selectedDay,
-    dias: availableDays,
+    day: selectedDay,
+    days: availableDays,
     // El día que la vista ya resolvió llega dentro de `analyticsData`: sembrarlo
     // evita pedir de vuelta lo que acaba de llegar.
-    inicial: dayMetrics?.dia
+    initial: dayMetrics?.day
       ? {
-          dia: dayMetrics.dia,
+          day: dayMetrics.day,
           payload: {
-            grupos: props.analyticsData?.grupos ?? {},
-            incidencia_zonas: props.analyticsData?.incidencia_zonas ?? {},
+            groups: props.analyticsData?.groups ?? {},
+            zone_incidence: props.analyticsData?.zone_incidence ?? {},
           },
         }
       : null,
@@ -79,8 +79,8 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
       ...props,
       analyticsData: {
         ...props.analyticsData,
-        grupos: payload?.grupos ?? props.analyticsData?.grupos,
-        incidencia_zonas: payload?.incidencia_zonas ?? props.analyticsData?.incidencia_zonas,
+        groups: payload?.groups ?? props.analyticsData?.groups,
+        zone_incidence: payload?.zone_incidence ?? props.analyticsData?.zone_incidence,
       },
     },
     selectedGroup,
@@ -94,7 +94,7 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
   // Las tarjetas del día siguen al selector de grupo, como el resto de la página.
   // El mes trae la serie de cada equipo, así que cambiar de grupo no pide nada.
   const groupSeries = useMemo<DaySeries | undefined>(() => {
-    const byDay = dayMetrics?.serie_grupos;
+    const byDay = dayMetrics?.group_series;
     if (!byDay || !data.activeGroupName) return undefined;
 
     const exit: DaySeries = {};
@@ -125,7 +125,7 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                monthPeriod={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.month}
                 daysInMonth={totalDays}
                 selectedDay={selectedDay}
                 onSelect={selectDay}
@@ -137,23 +137,23 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
     >
       <div className="space-y-10">
         <SeccionesNav
-          secciones={[
-            { id: 'dia', titulo: 'El día', icon: <CalendarDays /> },
-            { id: 'grupo', titulo: 'El grupo', icon: <Layers /> },
+          sections={[
+            { id: 'dia', title: 'El día', icon: <CalendarDays /> },
+            { id: 'grupo', title: 'El grupo', icon: <Layers /> },
           ]}
         />
 
         <Seccion
           id="dia"
-          titulo="El día"
-          descripcion="Lo de ese día, lo que va del mes y cómo se compara con el día anterior. Muévete con la barra de días."
-          alcance={
+          title="El día"
+          description="Lo de ese día, lo que va del mes y cómo se compara con el día anterior. Muévete con la barra de días."
+          scope={
             data.activeGroupName ? `${data.activeGroupName} · día ${selectedDay || '—'}` : undefined
           }
           icon={<CalendarDays />}
         >
           <DaySummary
-            serie={groupSeries ?? dayMetrics?.serie}
+            serie={groupSeries ?? dayMetrics?.series}
             dias={availableDays}
             dia={selectedDay}
             cards={SUPPORT_DAY_CARDS}
@@ -168,9 +168,9 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
 
         <Seccion
           id="grupo"
-          titulo="El grupo"
-          descripcion="Cuánto entró y cómo terminó, en qué se fue el tiempo, dónde se concentra según la dimensión de la barra superior y qué lo empuja. Pulsa un valor para ver su desglose; las tablas completas están en Results."
-          alcance={
+          title="El grupo"
+          description="Cuánto entró y cómo terminó, en qué se fue el tiempo, dónde se concentra según la dimensión de la barra superior y qué lo empuja. Pulsa un valor para ver su desglose; las tablas completas están en Results."
+          scope={
             data.activeGroupName
               ? `${data.activeGroupName} · al día ${selectedDay || '—'}`
               : undefined

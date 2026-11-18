@@ -20,7 +20,7 @@ export interface CenterText {
 
 interface Props {
   data: ChartData<'doughnut'>;
-  centro: CenterText;
+  center: CenterText;
   onHover: (index: number) => CenterText;
   /** Las franjas por debajo de este valor no llevan etiqueta (se solaparían). */
   minLabelValue?: number;
@@ -30,11 +30,11 @@ interface Props {
 /** El hueco del anillo es estrecho: un nombre largo se corta antes de encogerse ilegible. */
 const recortar = (texto: string, max = 22) => (texto.length > max ? `${texto.slice(0, max - 1)}…` : texto);
 
-export function CenteredRing({ data, centro, onHover: alPasar, minLabelValue = 6, className }: Props) {
+export function CenteredRing({ data, center, onHover: alPasar, minLabelValue = 6, className }: Props) {
   const [activo, setActive] = useState<number | null>(null);
 
   const options = useMemo(() => {
-    const texto = activo === null ? centro : alPasar(activo);
+    const texto = activo === null ? center : alPasar(activo);
     const base = getDoughnutOptions(
       { title: recortar(texto.title), value: texto.value },
       (_evento: ChartEvent, elementos: ActiveElement[]) => {
@@ -44,7 +44,7 @@ export function CenteredRing({ data, centro, onHover: alPasar, minLabelValue = 6
       { valueSuffix: '%', minLabelValue },
     );
     return { ...base, plugins: { ...base.plugins, legend: { display: false } } };
-  }, [activo, centro, alPasar, minLabelValue]);
+  }, [activo, center, alPasar, minLabelValue]);
 
   return <DoughnutChart data={data} options={options} className={className} />;
 }

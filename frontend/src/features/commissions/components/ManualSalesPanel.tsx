@@ -8,7 +8,7 @@ import { CLASSIFICATION, formatDateValue } from '../lib/format';
 import type { ManualSale } from '../types';
 
 interface ManualSalesPanelProps {
-  manuales: ManualSale[];
+  manual_sales: ManualSale[];
   editable: boolean;
   guardando: boolean;
   onAgregar: (ordenes: string[], nota: string) => Promise<boolean>;
@@ -22,7 +22,7 @@ interface ManualSalesPanelProps {
  * orden tiene que estar en suscripciones; y no se puede agregar si ya se pagó
  * en otro periodo cerrado. La nota es obligatoria: queda con la venta.
  */
-export function ManualSalesPanel({ manuales, editable, guardando, onAgregar, onQuitar }: ManualSalesPanelProps) {
+export function ManualSalesPanel({ manual_sales, editable, guardando, onAgregar, onQuitar }: ManualSalesPanelProps) {
   const [ordenes, setOrders] = useState('');
   const [nota, setNote] = useState('');
   const lista = ordenes.split(/[\s,;]+/).map((other) => other.trim()).filter(Boolean);
@@ -36,33 +36,33 @@ export function ManualSalesPanel({ manuales, editable, guardando, onAgregar, onQ
   };
 
   const columns: Column<ManualSale>[] = [
-    { header: 'Orden', accessor: 'orden', sortKey: 'orden', sticky: true },
-    { header: 'Cliente', accessor: (row) => row.venta?.cliente || '—' },
-    { header: 'Instalada', accessor: (row) => (row.venta ? formatDateValue(row.venta.fecha_inicio) : '—') },
+    { header: 'Orden', accessor: 'order', sortKey: 'order', sticky: true },
+    { header: 'Cliente', accessor: (row) => row.sale?.client || '—' },
+    { header: 'Instalada', accessor: (row) => (row.sale ? formatDateValue(row.sale.since_date) : '—') },
     {
       header: 'Situación',
-      accessor: (row) => (row.venta
-        ? <span className={CLASSIFICATION[row.venta.clasificacion].tone} title={row.venta.motivo}>{CLASSIFICATION[row.venta.clasificacion].label}</span>
+      accessor: (row) => (row.sale
+        ? <span className={CLASSIFICATION[row.sale.classification].tone} title={row.sale.reason}>{CLASSIFICATION[row.sale.classification].label}</span>
         : <span className="text-rose-400">Ya no está en suscripciones</span>),
-      sortValue: (row) => (row.venta ? CLASSIFICATION[row.venta.clasificacion].label : 'Ya no está en suscripciones'),
+      sortValue: (row) => (row.sale ? CLASSIFICATION[row.sale.classification].label : 'Ya no está en suscripciones'),
     },
-    { header: 'Medio', accessor: (row) => row.venta?.medio || '—' },
-    { header: 'Por qué', accessor: (row) => <span className="text-slate-300">{row.nota}</span> },
+    { header: 'Medio', accessor: (row) => row.sale?.channel || '—' },
+    { header: 'Por qué', accessor: (row) => <span className="text-slate-300">{row.note}</span> },
     {
       header: 'Agregada',
       accessor: (row) => (
         <span className="flex flex-col leading-tight">
-          <span>{row.agregado_por || '—'}</span>
-          <span className="text-xs text-slate-500">{formatDateValue(row.agregado_en)}</span>
+          <span>{row.added_by || '—'}</span>
+          <span className="text-xs text-slate-500">{formatDateValue(row.added_at)}</span>
         </span>
       ),
-      sortKey: 'agregado_en',
+      sortKey: 'added_at',
     },
     {
       header: '',
       align: 'right',
       accessor: (row) => (editable ? (
-        <Button size="sm" variant="outline" icon={<Trash2 className="h-4 w-4" />} disabled={guardando} onClick={() => onQuitar(row.orden)}>
+        <Button size="sm" variant="outline" icon={<Trash2 className="h-4 w-4" />} disabled={guardando} onClick={() => onQuitar(row.order)}>
           Quitar
         </Button>
       ) : null),
@@ -100,7 +100,7 @@ export function ManualSalesPanel({ manuales, editable, guardando, onAgregar, onQ
       </div>
       <DataTable
         columns={columns}
-        data={manuales}
+        data={manual_sales}
         searchable
         searchPlaceholder="Buscar orden..."
         emptyMessage="No hay ventas agregadas a mano en este periodo."

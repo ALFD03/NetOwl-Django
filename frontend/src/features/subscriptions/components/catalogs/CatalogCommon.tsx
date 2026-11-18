@@ -107,7 +107,7 @@ export function ConfirmarBorrado({ c, children }: { c: CatalogsState; children?:
     >
       <div className="space-y-5">
         <p className="text-sm text-slate-300">
-          ¿Eliminar <strong className="text-white">{c.borrando?.nombre}</strong> del catálogo?
+          ¿Eliminar <strong className="text-white">{c.borrando?.name}</strong> del catálogo?
         </p>
         {children}
         <div className="flex justify-end gap-3">

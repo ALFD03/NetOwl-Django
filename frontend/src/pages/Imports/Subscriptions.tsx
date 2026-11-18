@@ -19,7 +19,7 @@ import { CatalogBlockModal } from '@/features/imports/components/CatalogBlockMod
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
 import { extractCatalogBlock, type CatalogBlock } from '@/features/imports/lib/catalog';
-import type { CampoOdoo, OdooFieldGroup } from '@/features/imports/types';
+import type { OdooField, OdooFieldGroup } from '@/features/imports/types';
 
 type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis' | 'facturas';
 
@@ -33,29 +33,29 @@ const IMPORT_TYPES: { value: SubscriptionImportType; label: string }[] = [
 const UPLOADERS: Record<SubscriptionImportType, (file: File) => Promise<ImportResponse>> = {
   subscriptions: (file) => importsApi.importSubscriptions(file),
   logs: (file) => importsApi.importLogs(file),
-  gratis: (file) => importsApi.importGratis(file),
-  facturas: (file) => importsApi.importFacturas(file),
+  gratis: (file) => importsApi.importFreePlans(file),
+  facturas: (file) => importsApi.importInvoices(file),
 };
 
 interface ImportSubscriptionsProps {
   /** Cabeceras de Odoo que lee cada importación, por tipo de export. */
-  camposOdoo?: Partial<Record<SubscriptionImportType, CampoOdoo[]>>;
+  odoo_fields?: Partial<Record<SubscriptionImportType, OdooField[]>>;
 }
 
-export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscriptionsProps) {
+export default function ImportSubscriptions({ odoo_fields = {} }: ImportSubscriptionsProps) {
   const [importType, setImportType] = useState<SubscriptionImportType>('subscriptions');
-  const [bloqueo, setBloqueo] = useState<CatalogBlock | null>(null);
-  const [ignorando, setIgnorando] = useState<string | null>(null);
+  const [pendingBlock, setBlock] = useState<CatalogBlock | null>(null);
+  const [ignoringName, setIgnoring] = useState<string | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const { canAny } = usePermissions();
 
   const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.subs);
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.subs);
 
-  const fieldGroups: OdooFieldGroup[] = IMPORT_TYPES.map((tipo) => ({
-    key: tipo.value,
-    label: tipo.label,
-    campos: camposOdoo[tipo.value] ?? [],
+  const fieldGroups: OdooFieldGroup[] = IMPORT_TYPES.map((importKind) => ({
+    key: importKind.value,
+    label: importKind.label,
+    fields: odoo_fields[importKind.value] ?? [],
   }));
 
   /**
@@ -70,27 +70,27 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
       const found = extractCatalogBlock(error);
       if (found) {
         setCatalogError(null);
-        setBloqueo(found);
+        setBlock(found);
       }
       throw error;
     }
   };
 
   /** Saca un producto de la lista de bloqueo declarando que nunca será un plan. */
-  const ignorarProducto = async (nombre: string) => {
-    setIgnorando(nombre);
+  const ignoreProduct = async (productName: string) => {
+    setIgnoring(productName);
     setCatalogError(null);
     try {
-      await catalogsApi.guardar('ignorados', { nombre, nota: '', area: 'productos' });
-      setBloqueo((previo) =>
-        previo
-          ? { ...previo, productos: previo.productos.filter((p) => p.nombre !== nombre) }
-          : previo,
+      await catalogsApi.guardar('ignorados', { productName, nota: '', area: 'productos' });
+      setBlock((prev) =>
+        prev
+          ? { ...prev, products: prev.products.filter((p) => p.name !== productName) }
+          : prev,
       );
     } catch (error: unknown) {
       setCatalogError(getApiErrorMessage(error, 'No se pudo ignorar el producto.'));
     } finally {
-      setIgnorando(null);
+      setIgnoring(null);
     }
   };
 
@@ -135,7 +135,7 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
             <><strong>Planes Gratuitos:</strong> Export con tarifa, próxima fecha de factura y mensajes del chatter; detecta desde cuándo cada suscripción es gratuita.</>,
             <><strong>Facturas:</strong> Export global de facturas con su número, estado, estado del pago, fecha de creación y productos. Reemplaza las anteriores; Comisiones lo usa para saber qué primeras mensualidades se pagaron.</>,
           ]}
-          camposOdoo={fieldGroups}
+          fieldGroups={fieldGroups}
           activeGroup={importType}
           note="Tras cargar ambos archivos, selecciona el mes correspondiente y ejecuta el análisis en la sección inferior. El análisis calcula también las métricas de cada día del mes."
         />
@@ -155,17 +155,17 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
           onRun={(month, onProgress) => importsApi.runSubscriptionsAnalysis(month, onProgress)}
           onRunBatch={(months) => importsApi.runSubscriptionsAnalysisBatch(months)}
           successMessage={(result, month) =>
-            `Análisis de Churn completado exitosamente para ${result.periodo_label || month}` +
-            (result.dias_calculados ? ` (${result.dias_calculados} días calculados).` : '.')}
+            `Análisis de Churn completado exitosamente para ${result.period_label || month}` +
+            (result.computed_days ? ` (${result.computed_days} días calculados).` : '.')}
           errorMessage="Error al ejecutar el análisis de Churn."
         />
       )}
 
       <CatalogBlockModal
-        bloqueo={bloqueo}
-        onClose={() => setBloqueo(null)}
-        onIgnore={ignorarProducto}
-        ignorando={ignorando}
+        block={pendingBlock}
+        onClose={() => setBlock(null)}
+        onIgnore={ignoreProduct}
+        ignoring={ignoringName}
         error={catalogError}
       />
     </AppLayout>

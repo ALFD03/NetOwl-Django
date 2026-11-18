@@ -92,7 +92,7 @@ def _import(
                     status = "warning" if exc.status == 409 and exc.payload else "error"
                     register_import_log(request.user, log_module, file_name, 0, status, exc.message, exc.message)
                     if exc.payload:
-                        return {"status": "catalogo", "message": exc.message, **exc.payload}, exc.status
+                        return {"status": "catalog", "message": exc.message, **exc.payload}, exc.status
                     raise ApiError(exc.message, exc.status) from exc
                 except Exception:
                     # El detalle va al log del servidor: psycopg2 nombra esquema, tabla y columnas.
@@ -110,22 +110,22 @@ def _import(
 @endpoint(perms=["can_view_imports", "can_view_imports_subs"], require_all=True)
 def subscriptions(request):
     """Las columnas de Odoo que espera la carga de suscripciones."""
-    return {"camposOdoo": subs_imports.odoo_fields()}
+    return {"odoo_fields": subs_imports.odoo_fields()}
 
 
 @endpoint(perms=["can_view_imports", "can_view_imports_crm"], require_all=True)
 def crm(request):
     """Las columnas de Odoo que espera la carga de CRM."""
-    return {"camposOdoo": crm_loader.odoo_fields()}
+    return {"odoo_fields": crm_loader.odoo_fields()}
 
 
 @endpoint(perms=["can_view_imports", "can_view_imports_support"], require_all=True)
 def support(request):
     """Las columnas de Odoo de tickets y logs, y si ya hay logs cargados."""
     return {
-        "camposOdoo": support_loader.odoo_fields(),
-        "camposOdooLogs": support_logs.odoo_fields(),
-        "logsCargados": support_logs.loaded_logs_summary(),
+        "odoo_fields": support_loader.odoo_fields(),
+        "odoo_log_fields": support_logs.odoo_fields(),
+        "loaded_logs": support_logs.loaded_logs_summary(),
     }
 
 
@@ -140,7 +140,7 @@ def _subscriptions_file(path: str):
         rows = subs_imports.import_subscriptions(path)
     except UncatalogedProducts as exc:
         # No se escribió nada: el cliente ofrece crear los productos o ignorarlos.
-        raise ImportRejected(str(exc), 409, {"productos": exc.products, "ordenes": exc.orders}) from exc
+        raise ImportRejected(str(exc), 409, {"products": exc.products, "orders": exc.orders}) from exc
     except EmptyCatalog as exc:
         raise ImportRejected(str(exc), 409) from exc
     message = f"Suscripciones: {rows} filas importadas correctamente."
@@ -149,7 +149,7 @@ def _subscriptions_file(path: str):
 
 @endpoint(methods=["POST"], perms=SUBS_IMPORT, rate="5/m")
 def import_subscriptions(request):
-    """El export de suscripciones. 409 `catalogo` si hay productos fuera del catálogo."""
+    """El export de suscripciones. 409 `catalog` si hay productos fuera del catálogo."""
     return _import(
         request, log_module="subs_subscriptions", analyses=SUBS_ANALYSES, run=_subscriptions_file,
         upload_error="Error al recibir el archivo de suscripciones.",
@@ -235,14 +235,14 @@ def import_support(request):
 def _support_logs_file(path: str):
     r = support_logs.import_ticket_logs(path)
     message = (
-        f"Logs de soporte: {r['nuevos']} nuevos y {r['repetidos']} que ya estaban, "
-        f"de {r['tickets']} tickets ({r['desde']} a {r['hasta']})."
+        f"Logs de soporte: {r['new']} nuevos y {r['repeated']} que ya estaban, "
+        f"de {r['tickets']} tickets ({r['since']} a {r['until']})."
     )
     detail = (
-        f"Lote de logs: {r['filas']} filas leídas, {r['nuevos']} nuevas, {r['repetidos']} repetidas, "
-        f"{r['duplicados_en_archivo']} duplicadas dentro del archivo."
+        f"Lote de logs: {r['rows']} filas leídas, {r['new']} nuevas, {r['repeated']} repetidas, "
+        f"{r['duplicates_in_file']} duplicadas dentro del archivo."
     )
-    return r["nuevos"], message, detail, {"lote": r, "cargados": support_logs.loaded_logs_summary()}
+    return r["new"], message, detail, {"batch": r, "loaded_logs": support_logs.loaded_logs_summary()}
 
 
 @endpoint(methods=["POST"], perms=SUPPORT_IMPORT, rate="5/m")
@@ -322,8 +322,8 @@ def job_queue(request):
     visible = [job for job in open_jobs() if _job_is_visible(request, job)]
     return {
         "jobs": [job.to_dict() for job in visible],
-        "en_ejecucion": sum(1 for j in visible if j.status == AnalysisJob.RUNNING),
-        "en_cola": sum(1 for j in visible if j.status == AnalysisJob.PENDIENTE),
+        "running": sum(1 for j in visible if j.status == AnalysisJob.RUNNING),
+        "queued": sum(1 for j in visible if j.status == AnalysisJob.PENDIENTE),
     }
 
 

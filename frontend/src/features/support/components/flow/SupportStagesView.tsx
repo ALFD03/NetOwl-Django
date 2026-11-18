@@ -40,29 +40,29 @@ import { TEAM_LABEL, KIND_LABEL } from '../../lib/flowFormat';
 import type { PendingStage, SupportStage, SupportStagesProps } from '../../types';
 
 type View = 'pendientes' | 'catalogo';
-type Borrador = { id?: number; nombre: string; equipo: string; tipo: string };
+type Borrador = { id?: number; name: string; team: string; type: string };
 
 export function SupportStagesView({
-  etapas,
-  pendientes,
-  equipos,
-  tipos,
-  etapaEscalamiento,
-  etapasCierre,
-  nuevaEtapa,
+  stages,
+  pending,
+  teams,
+  types,
+  escalationStage,
+  closeStages,
+  newStage,
 }: SupportStagesProps) {
-  const vacio = (nombre = ''): Borrador => ({
-    nombre,
-    equipo: equipos[0]?.value ?? 'atc',
-    tipo: tipos[0]?.value ?? 'cola',
+  const vacio = (name = ''): Borrador => ({
+    name,
+    team: teams[0]?.value ?? 'atc',
+    type: types[0]?.value ?? 'cola',
   });
 
   const [vista, setVista] = useState<View>(() =>
-    pendientes.length && !nuevaEtapa ? 'pendientes' : 'catalogo',
+    pending.length && !newStage ? 'pendientes' : 'catalogo',
   );
-  // `?nueva_etapa=` abre el alta con el literal copiado: tiene que coincidir con el de Odoo.
+  // `?new_stage=` abre el alta con el literal copiado: tiene que coincidir con el de Odoo.
   const [borrador, setBorrador] = useState<Borrador | null>(() =>
-    nuevaEtapa ? vacio(nuevaEtapa) : null,
+    newStage ? vacio(newStage) : null,
   );
   const [borrando, setBorrando] = useState<SupportStage | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -93,7 +93,7 @@ export function SupportStagesView({
   };
 
   const pendingColumns: Column<PendingStage>[] = [
-    { header: 'Etapa en los logs', accessor: 'etapa', sortKey: 'etapa' },
+    { header: 'Etapa en los logs', accessor: 'stage', sortKey: 'stage' },
     { header: 'Logs', accessor: (r) => formatInteger(r.logs), align: 'right', sortKey: 'logs' },
     {
       header: 'Tickets',
@@ -101,7 +101,7 @@ export function SupportStagesView({
       align: 'right',
       sortKey: 'tickets',
     },
-    { header: 'Último', accessor: (r) => r.ultimo ?? '—', align: 'right', sortKey: 'ultimo' },
+    { header: 'Último', accessor: (r) => r.last ?? '—', align: 'right', sortKey: 'last' },
     {
       header: 'Acciones',
       align: 'right',
@@ -110,7 +110,7 @@ export function SupportStagesView({
           <Button
             size="sm"
             icon={<Plus className="h-4 w-4" />}
-            onClick={() => setBorrador(vacio(r.etapa))}
+            onClick={() => setBorrador(vacio(r.stage))}
           >
             Clasificar
           </Button>
@@ -124,29 +124,29 @@ export function SupportStagesView({
       header: 'Etapa',
       accessor: (r) => (
         <span>
-          {r.nombre}
-          {r.es_escalamiento && (
+          {r.name}
+          {r.is_escalation && (
             <span className="ml-2 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-300">
               escalamiento
             </span>
           )}
         </span>
       ),
-      sortKey: 'nombre',
+      sortKey: 'name',
     },
     {
       header: 'Equipo',
-      accessor: (r) => TEAM_LABEL[r.equipo],
-      sortKey: 'equipo',
+      accessor: (r) => TEAM_LABEL[r.team],
+      sortKey: 'team',
       filterable: true,
-      filterValue: (r) => TEAM_LABEL[r.equipo],
+      filterValue: (r) => TEAM_LABEL[r.team],
     },
     {
       header: 'Tipo',
-      accessor: (r) => KIND_LABEL[r.tipo],
-      sortKey: 'tipo',
+      accessor: (r) => KIND_LABEL[r.type],
+      sortKey: 'type',
       filterable: true,
-      filterValue: (r) => KIND_LABEL[r.tipo],
+      filterValue: (r) => KIND_LABEL[r.type],
     },
     { header: 'Logs', accessor: (r) => formatInteger(r.logs), align: 'right', sortKey: 'logs' },
     {
@@ -157,7 +157,7 @@ export function SupportStagesView({
           <button
             type="button"
             onClick={() =>
-              setBorrador({ id: r.id, nombre: r.nombre, equipo: r.equipo, tipo: r.tipo })
+              setBorrador({ id: r.id, name: r.name, team: r.team, type: r.type })
             }
             className="rounded-lg border border-sky-500/30 p-2 text-sky-400 hover:bg-sky-500/10"
             title="Editar"
@@ -187,10 +187,10 @@ export function SupportStagesView({
             options={[
               {
                 key: 'pendientes',
-                label: `Por clasificar (${pendientes.length})`,
+                label: `Por clasificar (${pending.length})`,
                 icon: AlertTriangle,
               },
-              { key: 'catalogo', label: `Etapas (${etapas.length})`, icon: ListChecks },
+              { key: 'catalogo', label: `Etapas (${stages.length})`, icon: ListChecks },
             ]}
           />
           <Button icon={<Plus className="h-4 w-4" />} onClick={() => setBorrador(vacio())}>
@@ -215,11 +215,11 @@ export function SupportStagesView({
       >
         <ul className="space-y-2 text-xs text-slate-300">
           <li>
-            <strong className="text-white">Escalamiento:</strong> entrar en «{etapaEscalamiento}»
+            <strong className="text-white">Escalamiento:</strong> entrar en «{escalationStage}»
             viniendo de una etapa que no es de Soporte. Un ticket que nace en ella no está escalado.
           </li>
           <li>
-            <strong className="text-white">Cierre:</strong> {etapasCierre.join(' y ')}. Son fijas,
+            <strong className="text-white">Cierre:</strong> {closeStages.join(' y ')}. Son fijas,
             como en el resto del módulo, y cuentan para el equipo que tenía el ticket.
           </li>
           <li>
@@ -247,7 +247,7 @@ export function SupportStagesView({
           theme="yellow"
           noPadding
         >
-          {pendientes.length === 0 ? (
+          {pending.length === 0 ? (
             <EmptyState
               title="Todas las etapas están clasificadas"
               description="Ninguna etapa de los logs cargados falta en el catálogo."
@@ -256,7 +256,7 @@ export function SupportStagesView({
           ) : (
             <DataTable
               columns={pendingColumns}
-              data={pendientes}
+              data={pending}
               searchable
               searchPlaceholder="Buscar etapa..."
             />
@@ -272,7 +272,7 @@ export function SupportStagesView({
           theme="blue"
           noPadding
         >
-          {etapas.length === 0 ? (
+          {stages.length === 0 ? (
             <EmptyState
               title="El catálogo está vacío"
               description="Clasifica las etapas desde la pestaña de pendientes."
@@ -281,7 +281,7 @@ export function SupportStagesView({
           ) : (
             <DataTable
               columns={catalogColumns}
-              data={etapas}
+              data={stages}
               searchable
               searchPlaceholder="Buscar etapa..."
             />
@@ -303,8 +303,8 @@ export function SupportStagesView({
             <TextField
               label="Etapa"
               icon={<GitBranch />}
-              value={borrador.nombre}
-              onChange={(e) => setBorrador({ ...borrador, nombre: e.target.value })}
+              value={borrador.name}
+              onChange={(e) => setBorrador({ ...borrador, name: e.target.value })}
               placeholder="En Progreso - Soporte Técnico"
               autoFocus
             />
@@ -312,18 +312,18 @@ export function SupportStagesView({
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-slate-400">Equipo</label>
                 <SelectMenu
-                  value={borrador.equipo}
-                  options={equipos}
-                  onChange={(equipo) => setBorrador({ ...borrador, equipo })}
+                  value={borrador.team}
+                  options={teams}
+                  onChange={(team) => setBorrador({ ...borrador, team })}
                   aria-label="Equipo"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-slate-400">Tipo</label>
                 <SelectMenu
-                  value={borrador.tipo}
-                  options={tipos}
-                  onChange={(tipo) => setBorrador({ ...borrador, tipo })}
+                  value={borrador.type}
+                  options={types}
+                  onChange={(type) => setBorrador({ ...borrador, type })}
                   aria-label="Tipo"
                 />
               </div>
@@ -351,7 +351,7 @@ export function SupportStagesView({
       >
         <div className="space-y-5">
           <p className="text-sm text-slate-300">
-            ¿Eliminar <strong className="text-white">{borrando?.nombre}</strong> del catálogo?
+            ¿Eliminar <strong className="text-white">{borrando?.name}</strong> del catálogo?
           </p>
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setBorrando(null)}>

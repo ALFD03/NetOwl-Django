@@ -14,7 +14,7 @@ const TOOLTIP = {
 
 /** Abiertos hoy por antigüedad: barras con su % encima. */
 export function antiguedadChartData(
-  tramos: { tramo: string; abiertos: number }[],
+  tramos: { bucket: string; open: number }[],
 ): ChartData<'bar'> {
   const n = tramos.length;
   // De verde (recientes) a rojo (los más viejos): el color dice qué preocupa.
@@ -30,11 +30,11 @@ export function antiguedadChartData(
   const color = (i: number) =>
     rampa[Math.min(rampa.length - 1, Math.round((i * (rampa.length - 1)) / Math.max(1, n - 1)))];
   return {
-    labels: tramos.map((t) => t.tramo),
+    labels: tramos.map((t) => t.bucket),
     datasets: [
       {
         label: 'Abiertos',
-        data: tramos.map((t) => t.abiertos),
+        data: tramos.map((t) => t.open),
         backgroundColor: tramos.map((_, i) => `${color(i)}CC`),
         borderColor: tramos.map((_, i) => color(i)),
         borderWidth: 1,

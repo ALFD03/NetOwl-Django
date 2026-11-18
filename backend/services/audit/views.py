@@ -22,11 +22,11 @@ LIMIT = 1000
 
 
 class LogQuery(BaseModel):
-    desde: date | None = None
-    hasta: date | None = None
-    modulo: str = ""
-    usuario: str = ""
-    resultado: str = ""
+    since: date | None = None
+    until: date | None = None
+    module: str = ""
+    user: str = ""
+    outcome: str = ""
     q: str = Field(default="", max_length=100)
 
 
@@ -36,8 +36,8 @@ class StatsQuery(BaseModel):
 
 def _filter(query: LogQuery):
     today = timezone.localdate()
-    since = query.desde or today - timedelta(days=30)
-    until = query.hasta or today
+    since = query.since or today - timedelta(days=30)
+    until = query.until or today
     if until < since:
         since, until = until, since
     zone = timezone.get_current_timezone()
@@ -45,12 +45,12 @@ def _filter(query: LogQuery):
         created_at__gte=timezone.make_aware(datetime.combine(since, time.min), zone),
         created_at__lt=timezone.make_aware(datetime.combine(until + timedelta(days=1), time.min), zone),
     )
-    if query.modulo:
-        logs = logs.filter(module=query.modulo)
-    if query.usuario:
-        logs = logs.filter(username=query.usuario)
-    if query.resultado:
-        logs = logs.filter(outcome=query.resultado)
+    if query.module:
+        logs = logs.filter(module=query.module)
+    if query.user:
+        logs = logs.filter(username=query.user)
+    if query.outcome:
+        logs = logs.filter(outcome=query.outcome)
     text = query.q.strip()
     if text:
         logs = logs.filter(
@@ -58,8 +58,8 @@ def _filter(query: LogQuery):
             | Q(action__icontains=text) | Q(username__icontains=text)
         )
     filters = {
-        "desde": since.isoformat(), "hasta": until.isoformat(), "modulo": query.modulo,
-        "usuario": query.usuario, "resultado": query.resultado, "q": text,
+        "since": since.isoformat(), "until": until.isoformat(), "module": query.module,
+        "user": query.user, "outcome": query.outcome, "q": text,
     }
     return logs, filters
 
@@ -67,20 +67,20 @@ def _filter(query: LogQuery):
 def _row(r: AuditLog) -> dict:
     return {
         "id": r.id,
-        "fecha": timezone.localtime(r.created_at).strftime("%Y-%m-%d %H:%M:%S"),
+        "date": timezone.localtime(r.created_at).strftime("%Y-%m-%d %H:%M:%S"),
         "username": r.username or "—",
         "ip": r.ip or "",
-        "modulo": r.module,
-        "modulo_display": MODULES.get(r.module, r.module),
-        "accion": r.action,
-        "accion_display": action_label(r.action),
-        "resultado": r.outcome,
-        "resultado_display": r.get_outcome_display(),
-        "estado_http": r.status_code,
-        "canal": r.channel,
-        "duracion_ms": r.duration_ms,
-        "objeto": r.target,
-        "descripcion": r.description,
+        "module": r.module,
+        "module_label": MODULES.get(r.module, r.module),
+        "action": r.action,
+        "action_label": action_label(r.action),
+        "outcome": r.outcome,
+        "outcome_label": r.get_outcome_display(),
+        "status_code": r.status_code,
+        "channel": r.channel,
+        "duration_ms": r.duration_ms,
+        "target": r.target,
+        "description": r.description,
     }
 
 
@@ -91,23 +91,23 @@ def logs(request, query: LogQuery):
     users = AuditLog.objects.exclude(username="").order_by("username").values_list("username", flat=True).distinct()
     modules = AuditLog.objects.order_by("module").values_list("module", flat=True).distinct()
     return {
-        "registros": [_row(r) for r in filtered.order_by("-created_at", "-id")[:LIMIT]],
+        "logs": [_row(r) for r in filtered.order_by("-created_at", "-id")[:LIMIT]],
         "total": filtered.count(),
-        "limite": LIMIT,
-        "filtros": filters,
-        "opciones": {
-            "modulos": [{"value": m, "label": MODULES.get(m, m)} for m in modules],
-            "usuarios": list(users),
-            "resultados": [{"value": v, "label": label} for v, label in AuditLog.OUTCOME_CHOICES],
+        "limit": LIMIT,
+        "filters": filters,
+        "options": {
+            "modules": [{"value": m, "label": MODULES.get(m, m)} for m in modules],
+            "users": list(users),
+            "outcomes": [{"value": v, "label": label} for v, label in AuditLog.OUTCOME_CHOICES],
         },
     }
 
 
 @endpoint(perms=["can_view_auditoria"])
 def log_detail(request, log_id: int):
-    """Un registro con su `detalle`."""
+    """Un registro con su `detail`."""
     r = AuditLog.objects.get(pk=log_id)
-    return {**_row(r), "metodo": r.method, "ruta": r.path, "detalle": r.detail}
+    return {**_row(r), "method": r.method, "path": r.path, "detail": r.detail}
 
 
 @endpoint(perms=["can_view_auditoria"])

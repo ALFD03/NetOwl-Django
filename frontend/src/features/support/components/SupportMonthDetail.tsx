@@ -66,7 +66,7 @@ export function SupportMonthDetail({ analyticsData, periods, selectedPeriod }: P
             dimension={dimension}
             rows={dimensionRows}
             groupName={activeGroupName}
-            periodo={periodo}
+            period={periodo}
             onSelect={openBreakdown}
           />
 
@@ -76,7 +76,7 @@ export function SupportMonthDetail({ analyticsData, periods, selectedPeriod }: P
             dimension={dimension}
             breakdown={breakdown}
             groupName={activeGroupName}
-            periodo={periodo}
+            period={periodo}
             onClose={closeBreakdown}
           />
         </>

@@ -16,33 +16,33 @@
 import type { DayCardSpec, DayChartSpec } from '@/shared/ui';
 
 export const CRM_DAY_CARDS: DayCardSpec[] = [
-  { key: 'total_oportunidades', label: 'Oportunidades', kind: 'flujo', color: 'slate', subValue: 'Creadas' },
-  { key: 'ganados', label: 'Instalados', kind: 'flujo', color: 'green', subValue: 'Cerrados en etapa 7' },
-  { key: 'perdidos', label: 'Perdidos', kind: 'flujo', color: 'red', subValue: 'Cerrados como pérdida', trendGoodWhen: 'down' },
-  { key: 'pendientes', label: 'Pendientes', kind: 'stock', color: 'blue', subValue: 'Abiertos a esa fecha' },
-  { key: 'pct_instalacion', label: 'Tasa Instal', kind: 'tasa', color: 'green', subValue: 'Ganados / creados' },
-  { key: 'pct_perdida', label: 'Tasa Perdida', kind: 'tasa', color: 'red', subValue: 'Perdidos / creados', trendGoodWhen: 'down' },
-  { key: 'pct_devueltos_e8', label: 'Devueltos E8', kind: 'tasa', color: 'yellow', subValue: 'Riesgo de devolución', trendGoodWhen: 'down' },
+  { key: 'total_opportunities', label: 'Oportunidades', kind: 'flujo', color: 'slate', subValue: 'Creadas' },
+  { key: 'won', label: 'Instalados', kind: 'flujo', color: 'green', subValue: 'Cerrados en etapa 7' },
+  { key: 'lost', label: 'Perdidos', kind: 'flujo', color: 'red', subValue: 'Cerrados como pérdida', trendGoodWhen: 'down' },
+  { key: 'pending', label: 'Pendientes', kind: 'stock', color: 'blue', subValue: 'Abiertos a esa fecha' },
+  { key: 'pct_installation', label: 'Tasa Instal', kind: 'tasa', color: 'green', subValue: 'Ganados / creados' },
+  { key: 'pct_lost', label: 'Tasa Perdida', kind: 'tasa', color: 'red', subValue: 'Perdidos / creados', trendGoodWhen: 'down' },
+  { key: 'pct_returned_e8', label: 'Devueltos E8', kind: 'tasa', color: 'yellow', subValue: 'Riesgo de devolución', trendGoodWhen: 'down' },
 ];
 
 export const CRM_DAY_CHARTS: DayChartSpec[] = [
   {
     title: 'Oportunidades por día',
     subtitle: 'Cuántas entraron cada día del mes',
-    series: [{ key: 'total_oportunidades', label: 'Creadas', kind: 'flujo', color: 'slate' }],
+    series: [{ key: 'total_opportunities', label: 'Creadas', kind: 'flujo', color: 'slate' }],
   },
   {
     title: 'Desenlaces por día',
     subtitle: 'Lo que se cerró cada día, a favor y en contra',
     series: [
-      { key: 'ganados', label: 'Instalados', kind: 'flujo', color: 'green' },
-      { key: 'perdidos', label: 'Perdidos', kind: 'flujo', color: 'red', trendGoodWhen: 'down' },
+      { key: 'won', label: 'Instalados', kind: 'flujo', color: 'green' },
+      { key: 'lost', label: 'Perdidos', kind: 'flujo', color: 'red', trendGoodWhen: 'down' },
     ],
   },
   {
     title: 'Tasa de instalación acumulada',
     subtitle: 'Cómo se asienta el mes corte a corte',
     isRate: true,
-    series: [{ key: 'pct_instalacion', label: 'Instalación', kind: 'tasa', color: 'green' }],
+    series: [{ key: 'pct_installation', label: 'Instalación', kind: 'tasa', color: 'green' }],
   },
 ];

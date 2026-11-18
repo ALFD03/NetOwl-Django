@@ -16,10 +16,10 @@ import type { EtaForms } from '@/shared/types/subscriptions';
 
 interface EtaFormsExportButtonProps {
   /** Las tres hojas ya calculadas. Ausentes hasta que el periodo se recalcule. */
-  formularios?: EtaForms;
+  forms?: EtaForms;
   period: string;
   /** Tasa del BCV del periodo. `0` = sin fijar: las rentas salen vacías. */
-  tasa: number;
+  rate: number;
   /** Última tasa publicada. `0` cuando no se pudo leer: no se ofrece. */
   currentRate?: number;
   /** De qué día es esa tasa, para poder elegir a ciegas. */
@@ -54,9 +54,9 @@ type RateSource = 'mes' | 'actual';
  *   pero no tienen fila con la que declararse.
  */
 export function EtaFormsExportButton({
-  formularios,
+  forms,
   period,
-  tasa,
+  rate,
   currentRate: tasaActual = 0,
   currentRateSource: tasaActualFuente,
   withoutRegulatory: sinRegulador = [],
@@ -72,15 +72,15 @@ export function EtaFormsExportButton({
   // cero sin decirlo; mientras no haya tasa vigente, la elección no existe.
   const puedeElegir = tasaActual > 0;
   const usesCurrent = puedeElegir && origen === 'actual';
-  const usedRate = usesCurrent ? tasaActual : tasa;
+  const usedRate = usesCurrent ? tasaActual : rate;
 
-  const filas = formRowCount(formularios);
+  const filas = formRowCount(forms);
   // Un periodo bloqueado antes de que existieran los formularios sirve el JSON
   // que se guardó entonces, y ese no los trae: hay que recalcularlo.
-  const notComputed = !formularios;
+  const notComputed = !forms;
 
   const handleClick = async () => {
-    if (!formularios || filas === 0) {
+    if (!forms || filas === 0) {
       setState('empty');
       return;
     }
@@ -88,7 +88,7 @@ export function EtaFormsExportButton({
     setError(null);
     try {
       await downloadSheetsAsExcel(
-        hojasFormularioEta(formularios, usedRate),
+        hojasFormularioEta(forms, usedRate),
         formularioEtaFileName(period, usesCurrent ? 'tasa de hoy' : ''),
       );
       setState('idle');

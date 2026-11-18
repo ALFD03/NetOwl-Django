@@ -5,13 +5,13 @@ import { CrmResultsView } from '@/features/crm';
 import type { CrmClose } from '@/features/crm/types';
 
 interface CrmResultsProps {
-  historico?: CrmClose[];
+  history?: CrmClose[];
 }
 
-export default function CrmResults({ historico = [] }: CrmResultsProps) {
+export default function CrmResults({ history = [] }: CrmResultsProps) {
   return (
     <AppLayout>
-      <CrmResultsView historico={historico} />
+      <CrmResultsView history={history} />
     </AppLayout>
   );
 }

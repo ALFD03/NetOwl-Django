@@ -10,7 +10,7 @@ import { ROL_CHIP } from './pieces';
 import { EditableValue } from './EditableValue';
 
 interface IndicatorsPanelProps {
-  informe: CommissionReport;
+  report: CommissionReport;
   editable: boolean;
   onCompliance: (personId: number, valor: number | null) => void;
   onGrowth: (personId: number, valor: number | null) => void;
@@ -64,12 +64,12 @@ function Column({
   );
 }
 
-function Row({ nombre, nota, titulo, children }: { nombre: string; nota?: ReactNode; titulo?: string; children: ReactNode }) {
+function Row({ name, note, titulo, children }: { name: string; note?: ReactNode; titulo?: string; children: ReactNode }) {
   return (
     <div className={`flex ${ROW_HEIGHT} items-center justify-between gap-3 px-4`} title={titulo}>
       <span className="min-w-0">
-        <span className="block truncate text-sm text-white">{nombre}</span>
-        {nota && <span className="block truncate text-[11px] text-slate-500">{nota}</span>}
+        <span className="block truncate text-sm text-white">{name}</span>
+        {note && <span className="block truncate text-[11px] text-slate-500">{note}</span>}
       </span>
       <span className="shrink-0 text-sm font-semibold tabular-nums text-white">{children}</span>
     </div>
@@ -77,7 +77,7 @@ function Row({ nombre, nota, titulo, children }: { nombre: string; nota?: ReactN
 }
 
 const teamOf = (informe: CommissionReport, slug: string) =>
-  informe.pagos.find((p) => p.equipo === slug)?.equipo_nombre ?? slug;
+  informe.payments.find((p) => p.equipo === slug)?.team_name ?? slug;
 
 /**
  * Los % que mueven el pago, en una sola pantalla.
@@ -93,77 +93,77 @@ const teamOf = (informe: CommissionReport, slug: string) =>
  * Lo calculado es el valor por defecto de cada fila; escribir uno lo sustituye
  * para esa persona, y borrarlo vuelve al calculado. Tope en 100 %.
  */
-export function IndicatorsPanel({ informe, editable, onCompliance: onCumplimiento, onGrowth: onCrecimiento }: IndicatorsPanelProps) {
-  const ind = informe.indicadores;
-  const pago = (f: { persona_id: number; equipo: string }) =>
-    informe.pagos.find((p) => p.persona_id === f.persona_id && p.equipo === f.equipo);
+export function IndicatorsPanel({ report, editable, onCompliance: onCumplimiento, onGrowth: onCrecimiento }: IndicatorsPanelProps) {
+  const ind = report.indicators;
+  const pago = (f: { person_id: number; equipo: string }) =>
+    report.payments.find((p) => p.person_id === f.person_id && p.equipo === f.equipo);
 
   const cumplimiento = (f: IndicatorFactor) => {
     const p = pago(f);
-    const fallback = f.calculado !== null
-      ? `${formatPctValue(f.calculado)} · ${f.factor === 'unidad' && f.fuentes.length > 1 ? 'promedio' : f.factor}`
+    const fallback = f.computed !== null
+      ? `${formatPctValue(f.computed)} · ${f.factor === 'unidad' && f.sources.length > 1 ? 'promedio' : f.factor}`
       : 'sin definir';
-    const detalle = f.fuentes.map((s) => `${s.nombre} ${s.pct === null ? 'sin %' : formatPctValue(s.pct)}`).join(' · ')
-      + (f.personal ? ` · Personal: ${f.personal.ventas}${f.personal.objetivo ? ` de ${f.personal.objetivo} ventas (${formatPctValue(f.personal.pct)})` : ' ventas, sin objetivo'}` : '');
+    const detalle = f.sources.map((s) => `${s.name} ${s.pct === null ? 'sin %' : formatPctValue(s.pct)}`).join(' · ')
+      + (f.personal ? ` · Personal: ${f.personal.sales}${f.personal.target ? ` de ${f.personal.target} ventas (${formatPctValue(f.personal.pct)})` : ' ventas, sin objetivo'}` : '');
     return (
       <Row
-        key={`${f.persona_id}:${f.equipo}`}
-        nombre={f.nombre}
-        nota={`${ROL_CHIP[f.rol].label} · ${teamOf(informe, f.equipo)}${p ? ` · ${p.ventas_propias + p.ventas_equipo} ventas` : ''}`}
+        key={`${f.person_id}:${f.equipo}`}
+        name={f.name}
+        note={`${ROL_CHIP[f.role].label} · ${teamOf(report, f.equipo)}${p ? ` · ${p.own_sales + p.team_sales} ventas` : ''}`}
         titulo={detalle || undefined}
       >
         <EditableValue
-          key={`cump-${f.persona_id}-${f.manual}`}
-          valor={f.manual}
+          key={`cump-${f.person_id}-${f.manual}`}
+          value={f.manual}
           vacio={fallback}
-          pendingEmpty={f.calculado === null}
+          pendingEmpty={f.computed === null}
           editable={editable}
-          onSave={(v) => onCumplimiento(f.persona_id, v)}
+          onSave={(v) => onCumplimiento(f.person_id, v)}
         />
       </Row>
     );
   };
   // Lo mismo que impide cerrar: quien cobra algo sin ningún % que aplicarle.
-  const withoutCompliance = ind.factores.filter((f) => f.valor === null && (pago(f)?.bruto ?? 0) > 0).length;
+  const withoutCompliance = ind.factors.filter((f) => f.value === null && (pago(f)?.gross ?? 0) > 0).length;
 
   const crecimiento = (c: IndicatorGrowth) => {
     const p = pago(c);
     return (
       <Row
-        key={`${c.persona_id}:${c.equipo}`}
-        nombre={c.nombre}
-        nota={
-          c.fuente === 'manual'
-            ? `escrito a mano${c.calculado !== null ? ` · calculado ${formatPctValue(c.calculado)}` : ''}`
-            : c.fuente === 'unidades de negocio'
-              ? `${c.unidades.join(', ')}${c.churn_bruto !== null ? ` · churn bruto ${formatPctValue(c.churn_bruto)}` : ''}`
+        key={`${c.person_id}:${c.equipo}`}
+        name={c.name}
+        note={
+          c.source === 'manual'
+            ? `escrito a mano${c.computed !== null ? ` · calculado ${formatPctValue(c.computed)}` : ''}`
+            : c.source === 'unidades de negocio'
+              ? `${c.units.join(', ')}${c.gross_churn !== null ? ` · churn bruto ${formatPctValue(c.gross_churn)}` : ''}`
               : 'el mes no está analizado: escríbelo'
         }
-        titulo={p ? `${teamOf(informe, c.equipo)}` : undefined}
+        titulo={p ? `${teamOf(report, c.equipo)}` : undefined}
       >
         <EditableValue
-          key={`crec-${c.persona_id}-${c.manual}`}
-          valor={c.manual}
-          vacio={c.calculado !== null ? `${formatPctValue(c.calculado)} · calculado` : 'desconocido'}
-          pendingEmpty={c.calculado === null}
+          key={`crec-${c.person_id}-${c.manual}`}
+          value={c.manual}
+          vacio={c.computed !== null ? `${formatPctValue(c.computed)} · calculado` : 'desconocido'}
+          pendingEmpty={c.computed === null}
           editable={editable}
-          onSave={(v) => onCrecimiento(c.persona_id, v)}
+          onSave={(v) => onCrecimiento(c.person_id, v)}
         />
       </Row>
     );
   };
-  const withoutGrowth = ind.crecimientos.filter((c) => c.valor === null && (pago(c)?.ventas_equipo ?? 0) > 0).length;
+  const withoutGrowth = ind.growths.filter((c) => c.value === null && (pago(c)?.team_sales ?? 0) > 0).length;
 
   const ingresos = [
-    ...ind.ingresos_unidad.map((u) => (
-      <Row key={`u-${u.unidad_id}`} nombre={u.unidad} nota={`ventas ${formatPctValue(u.pct_ventas)}`}>
-        <span className="font-mono">{formatPctValue(u.pct_ingresos)}</span>
+    ...ind.unit_inflows.map((u) => (
+      <Row key={`u-${u.unit_id}`} name={u.unit} note={`ventas ${formatPctValue(u.sales_pct)}`}>
+        <span className="font-mono">{formatPctValue(u.inflows_pct)}</span>
       </Row>
     )),
-    ...(ind.empresa
+    ...(ind.company
       ? [(
-        <Row key="empresa" nombre="Toda la empresa" nota={`ingresos ${formatPctValue(ind.empresa.pct_ingresos)} · bono de la administradora`}>
-          <span className="font-mono">{formatPctValue(ind.empresa.pct_ventas)}</span>
+        <Row key="empresa" name="Toda la empresa" note={`ingresos ${formatPctValue(ind.company.inflows_pct)} · bono de la administradora`}>
+          <span className="font-mono">{formatPctValue(ind.company.sales_pct)}</span>
         </Row>
       )]
       : []),
@@ -171,7 +171,7 @@ export function IndicatorsPanel({ informe, editable, onCompliance: onCumplimient
 
   return (
     <div className="space-y-5">
-      {!ind.analizado && (
+      {!ind.analyzed && (
         <p className="max-w-4xl rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-xs text-amber-200">
           El mes no está analizado en Subscriptions: ningún % se calcula. Lo que admite valor a mano se escribe aquí; el
           churn, los ingresos y el cumplimiento de la empresa solo salen del análisis, y sin ellos los bonos que dependen
@@ -192,7 +192,7 @@ export function IndicatorsPanel({ informe, editable, onCompliance: onCumplimient
           pendientes={withoutCompliance}
           vacio="Nadie cobra con un % de cumplimiento este periodo."
         >
-          {ind.factores.map(cumplimiento)}
+          {ind.factors.map(cumplimiento)}
         </Column>
         <Column
           titulo="Crecimiento · coord. de UN"
@@ -201,7 +201,7 @@ export function IndicatorsPanel({ informe, editable, onCompliance: onCumplimient
           pendientes={withoutGrowth}
           vacio="Ningún coordinador de UN cobra este periodo."
         >
-          {ind.crecimientos.map(crecimiento)}
+          {ind.growths.map(crecimiento)}
         </Column>
         <Column
           titulo="Ingresos y empresa"

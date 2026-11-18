@@ -18,13 +18,13 @@ interface EtaReportProps {
 
 export default function EtaReport({ etaData }: EtaReportProps) {
   const [saving, setSaving] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState(etaData?.periodo ?? '');
+  const [selectedPeriod, setSelectedPeriod] = useState(etaData?.period ?? '');
   const { data, loading, fetchReport, setData } = useSubscriptionEtaReport(etaData ?? null, selectedPeriod);
 
   const toggleLock = async () => {
     setSaving(true);
     try {
-      await subscriptionsApi.lockEtaReport({ period: selectedPeriod, lock: !data.esta_bloqueado });
+      await subscriptionsApi.lockEtaReport({ period: selectedPeriod, lock: !data.is_locked });
       fetchReport(selectedPeriod, true);
     } finally {
       setSaving(false);
@@ -40,12 +40,12 @@ export default function EtaReport({ etaData }: EtaReportProps) {
    * en un mes sin bloquear es el pipeline completo.
    */
   const changeRate = async (tasa: number) => {
-    const response = await subscriptionsApi.setEtaTasa({ period: selectedPeriod, tasa });
+    const response = await subscriptionsApi.setEtaTasa({ period: selectedPeriod, rate: tasa });
     setData({
       ...data,
-      tasa_bcv: response.tasa_bcv,
-      tasa_bcv_fuente: response.tasa_bcv_fuente,
-      tasa_bcv_aviso: '',
+      bcv_rate: response.bcv_rate,
+      bcv_rate_source: response.bcv_rate_source,
+      bcv_rate_warning: '',
     });
   };
 
@@ -62,14 +62,14 @@ export default function EtaReport({ etaData }: EtaReportProps) {
       const response = await subscriptionsApi.consultarEtaTasa(selectedPeriod);
       setData({
         ...data,
-        tasa_bcv: response.tasa_bcv,
-        tasa_bcv_fuente: response.tasa_bcv_fuente,
-        tasa_bcv_aviso: '',
+        bcv_rate: response.bcv_rate,
+        bcv_rate_source: response.bcv_rate_source,
+        bcv_rate_warning: '',
       });
     } catch (error) {
       setData({
         ...data,
-        tasa_bcv_aviso: getApiErrorMessage(error, 'No se pudo consultar la tasa del BCV.'),
+        bcv_rate_warning: getApiErrorMessage(error, 'No se pudo consultar la tasa del BCV.'),
       });
     }
   };
@@ -83,14 +83,14 @@ export default function EtaReport({ etaData }: EtaReportProps) {
             periods={data.periods ?? []}
             onPeriodChange={setSelectedPeriod}
             showLockToggle={data.status === 'success'}
-            isLocked={Boolean(data.esta_bloqueado)}
+            isLocked={Boolean(data.is_locked)}
             isSaving={saving}
             onToggleLock={toggleLock}
-            formularios={data.formularios}
-            withoutRegulatory={data.planes_sin_regulador}
-            tasa={data.tasa_bcv ?? 0}
-            rateSource={data.tasa_bcv_fuente}
-            rateNotice={data.tasa_bcv_aviso}
+            forms={data.forms}
+            withoutRegulatory={data.plans_without_regulator}
+            rate={data.bcv_rate ?? 0}
+            rateSource={data.bcv_rate_source}
+            rateNotice={data.bcv_rate_warning}
             onRateChange={changeRate}
             onRateFetch={fetchRate}
           />

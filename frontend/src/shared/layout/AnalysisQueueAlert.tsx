@@ -22,7 +22,7 @@ function porcentaje(job: AnalysisJob): number | null {
 }
 
 function subtitulo(job: AnalysisJob): string {
-  return job.periodo ? `${job.module_display} · ${job.periodo}` : job.module_display;
+  return job.period ? `${job.module_display} · ${job.period}` : job.module_display;
 }
 
 interface AccionCancelar {

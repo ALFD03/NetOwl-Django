@@ -28,14 +28,14 @@ import type { DayCuts, DaySeries } from '@/shared/types/domain';
  * without ever having been assigned.
  */
 export const SUPPORT_TIME_MEASURES = [
-  'cierre_creado_resuelto',
-  'cierre_creado_cancelado',
-  'cierre_creado_cerrados',
-  'cierre_asignado_resuelto',
-  'cierre_asignado_cancelado',
-  'cierre_asignado_cerrados',
-  'asignacion',
-  'escalamiento',
+  'close_created_resolved',
+  'close_created_cancelled',
+  'close_created_closed',
+  'close_assigned_resolved',
+  'close_assigned_cancelled',
+  'close_assigned_closed',
+  'assignment',
+  'escalation',
 ] as const;
 
 export type SupportTimeMeasure = (typeof SUPPORT_TIME_MEASURES)[number];
@@ -46,9 +46,9 @@ export type SupportTimeMeasure = (typeof SUPPORT_TIME_MEASURES)[number];
  * from having to be re-typed by hand in every interface below.
  */
 type SupportTimeStatKey<M extends string> =
-  | `tiempo_${'medio' | 'mediana' | 'min' | 'p25' | 'p75' | 'max' | 'std'}_${M}_horas`
-  | `pct_excede_promedio_${M}`
-  | `muestra_${M}`;
+  | `time_${'mean' | 'median' | 'min' | 'p25' | 'p75' | 'max' | 'std'}_${M}_hours`
+  | `pct_over_avg_${M}`
+  | `sample_${M}`;
 
 /** Every time column, optional — what the backend may or may not have stored. */
 export type SupportTimeMetrics = { [K in SupportTimeStatKey<SupportTimeMeasure>]?: number };
@@ -72,56 +72,56 @@ export type SupportTimeStats = { [K in SupportTimeStatKey<SupportTimeMeasure>]: 
 export interface SupportRateMetrics {
   /** The period's cohort: raised in it or closed in it. Used for weighting. */
   total_tickets?: number;
-  tickets_creados?: number;
-  tickets_cerrados?: number;
-  tickets_resueltos?: number;
-  tickets_resueltos_periodo?: number;
-  tickets_resueltos_arrastre?: number;
-  tickets_cancelados?: number;
-  tickets_cancelados_periodo?: number;
-  tickets_cancelados_arrastre?: number;
+  tickets_created?: number;
+  tickets_closed?: number;
+  tickets_resolved?: number;
+  tickets_resolved_in_period?: number;
+  tickets_resolved_carryover?: number;
+  tickets_cancelled?: number;
+  tickets_cancelled_in_period?: number;
+  tickets_cancelled_carryover?: number;
   /**
    * Lo que ATC cerró escalándolo a Soporte. Para ATC escalar es cerrar: cuenta
    * en `tickets_cerrados` y no en resueltos ni cancelados, así que resueltos +
    * cancelados + escalados = cerrados. En Soporte es 0.
    */
-  tickets_escalados?: number;
-  tickets_escalados_periodo?: number;
-  tickets_escalados_arrastre?: number;
+  tickets_escalated?: number;
+  tickets_escalated_in_period?: number;
+  tickets_escalated_carryover?: number;
   /** De lo creado en el mes, lo que llegó escalado de ATC (sólo Soporte). */
-  tickets_recibidos_escalados?: number;
-  tickets_rezagados?: number;
+  tickets_received_escalated?: number;
+  tickets_lagging?: number;
 
-  pct_resueltos?: number;
-  pct_resueltos_periodo?: number;
-  pct_resueltos_arrastre?: number;
-  pct_cancelados?: number;
-  pct_cancelados_periodo?: number;
-  pct_cancelados_arrastre?: number;
-  pct_escalados?: number;
-  pct_escalados_periodo?: number;
-  pct_escalados_arrastre?: number;
+  pct_resolved?: number;
+  pct_resolved_in_period?: number;
+  pct_resolved_carryover?: number;
+  pct_cancelled?: number;
+  pct_cancelled_in_period?: number;
+  pct_cancelled_carryover?: number;
+  pct_escalated?: number;
+  pct_escalated_in_period?: number;
+  pct_escalated_carryover?: number;
   /** Sobre lo creado, no sobre lo cerrado. */
-  pct_recibidos_escalados?: number;
-  pct_rezagados?: number;
+  pct_received_escalated?: number;
+  pct_lagging?: number;
 
   /**
    * En qué se va el tiempo: horas medias en cola, pausa, gestión y etapas sin
    * clasificar de lo cerrado en el mes, contando sólo las del equipo del grupo.
    * Son promedios para que las cuatro partes sumen el tiempo medio.
    */
-  composicion_cola_horas?: number;
-  composicion_pausa_horas?: number;
-  composicion_gestion_horas?: number;
-  composicion_sin_clasificar_horas?: number;
+  queue_hours?: number;
+  pause_hours?: number;
+  handling_hours?: number;
+  unclassified_hours?: number;
   /** Los cerrados con logs de etapa: sin logs no hay reparto. */
-  muestra_composicion?: number;
+  composition_sample?: number;
 }
 
 /** One `compute_metrics_for_period` block, as the backend serialises it. */
 export interface SupportMetrics extends SupportTimeMetrics, SupportRateMetrics {
   /** Only on cross-period averages: how many periods went into the mean. */
-  periodos_evaluados?: number;
+  evaluated_periods?: number;
 }
 
 /** The same block with every optional resolved, ready to render. */
@@ -129,13 +129,13 @@ export type SupportStats = SupportTimeStats & Required<SupportRateMetrics>;
 
 /** One period of `support_cierre_historico`, flattened by the query layer. */
 export interface SupportHistoricoRow extends SupportMetrics {
-  periodo_reporte: string;
+  report_period: string;
 }
 
 /** A distribution of hours, resolved from one `_compute_stats_for_series` block. */
 export interface SupportTimeDistribution {
   promedio: number;
-  mediana: number;
+  median: number;
   min: number;
   p25: number;
   p75: number;
@@ -143,20 +143,20 @@ export interface SupportTimeDistribution {
   std: number;
   pctExcedeProm: number;
   /** Tickets that could actually be measured; 0 means there is nothing to draw. */
-  muestra: number;
+  sample: number;
 }
 
 // --- Dashboard --------------------------------------------------------------
 
 export interface SupportDashboardProps {
   metrics?: {
-    periodos_evaluados?: number;
-    resumen_global?: SupportMetrics;
-    por_grupo_trabajo?: Record<string, SupportMetrics>;
-    historico_tendencias?: SupportHistoricoRow[];
+    evaluated_periods?: number;
+    global_summary?: SupportMetrics;
+    by_work_group?: Record<string, SupportMetrics>;
+    trend_history?: SupportHistoricoRow[];
   };
   /** Los tickets abiertos ahora; `null` sin el permiso o sin logs analizados. */
-  abiertos?: OpenTickets | null;
+  open?: OpenTickets | null;
 }
 
 /** A clickable sparkline: the cross-period average plus its per-period series. */
@@ -235,8 +235,8 @@ export type SupportDesglose = (typeof SUPPORT_DESGLOSES)[number];
 
 /** One value of any axis — a zone, a technician, a failure reason. */
 export interface SupportDimensionEntry {
-  nombre: string;
-  metricas?: SupportMetrics;
+  name: string;
+  metrics?: SupportMetrics;
   /**
    * Departamento de esa persona, sólo en los ejes `asignado_a` y `creado_por`.
    *
@@ -245,11 +245,11 @@ export interface SupportDimensionEntry {
    * quién pertenece alguien se ve en todos los meses sin reanalizar. Cadena
    * vacía = no está en el directorio.
    */
-  departamento?: string;
+  department?: string;
 }
 
 /** One work group with its own block and every axis already grouped. */
-export type SupportGroup = { metricas?: SupportMetrics } & Partial<
+export type SupportGroup = { metrics?: SupportMetrics } & Partial<
   Record<SupportDimension | SupportDesglose, SupportDimensionEntry[]>
 >;
 
@@ -264,20 +264,20 @@ export type SupportGroup = { metricas?: SupportMetrics } & Partial<
 export interface SupportZoneEntry {
   zona: string;
   site: string;
-  tecnologia?: string;
+  technology?: string;
   total_tickets?: number;
-  total_suscriptores?: number;
-  tasa_incidencia_pct?: number;
-  mttr_promedio?: number;
-  pct_resueltos?: number;
+  total_subscribers?: number;
+  incidence_rate_pct?: number;
+  mttr_avg?: number;
+  pct_resolved?: number;
 }
 
 export interface SupportAnalyticsProps {
   analyticsData?: {
-    periodo?: string;
-    grupos?: Record<string, SupportGroup>;
+    period?: string;
+    groups?: Record<string, SupportGroup>;
     /** Keyed by work group; the selector picks one client-side. */
-    incidencia_zonas?: Record<string, SupportZoneEntry[]>;
+    zone_incidence?: Record<string, SupportZoneEntry[]>;
   };
   /**
    * Which days of the month have a cut computed, and which one is on screen,
@@ -299,13 +299,13 @@ export interface SupportAnalyticsProps {
  */
 export interface SupportDayCuts extends DayCuts {
   /** `{ día: { grupo: métricas } }`. Ausente en meses analizados antes. */
-  serie_grupos?: Record<string, Record<string, DaySeries[string]>>;
+  group_series?: Record<string, Record<string, DaySeries[string]>>;
 }
 
 /** El corte completo de un día, tal y como lo sirve `/api/support/day-metrics/`. */
 export interface SupportDayPayload {
-  grupos: Record<string, SupportGroup>;
-  incidencia_zonas: Record<string, SupportZoneEntry[]>;
+  groups: Record<string, SupportGroup>;
+  zone_incidence: Record<string, SupportZoneEntry[]>;
 }
 
 /** One entry of the group selector, ordered by volume. */
@@ -317,11 +317,11 @@ export interface SupportGroupOption {
 
 /** A dimension or breakdown value flattened so tables read a single level. */
 export interface SupportDimensionRow extends SupportMetrics {
-  nombre: string;
+  name: string;
   /** Share of the parent's ticket volume. */
   pctOfParent: number;
   /** Vacío salvo en los dos ejes de persona; ver `SupportDimensionEntry`. */
-  departamento: string;
+  department: string;
 }
 
 /**
@@ -334,7 +334,7 @@ export interface SupportDimensionRow extends SupportMetrics {
  * la media ponderada por su muestra, que es exactamente la media del conjunto.
  *
  * Lo que **no** se puede reconstruir desde los bloques ya calculados son las
- * medianas, los percentiles, la desviación y el `pct_excede_promedio`: hacen
+ * medianas, los percentiles, la desviación y el `pct_over_avg`: hacen
  * falta los tickets uno a uno. Salen en cero y la tabla de departamentos no los
  * enseña, en vez de inventar un promedio de medianas.
  */
@@ -347,7 +347,7 @@ export interface SupportDepartmentRow extends SupportDimensionRow {
 export interface SupportZoneRow {
   zona: string;
   site: string;
-  tecnologia: string;
+  technology: string;
   totalTickets: number;
   totalSuscriptores: number;
   incidenceRate: number;
@@ -359,18 +359,18 @@ export interface SupportZoneRow {
 
 /** What `GET /support/api/breakdown/` returns for one dimension value. */
 export interface SupportBreakdownResponse {
-  periodo?: string;
+  period?: string;
   grupo_trabajo?: string;
   dimension?: string;
-  valor?: string;
-  metricas?: SupportMetrics;
-  desgloses?: Partial<Record<SupportDesglose, SupportDimensionEntry[]>>;
+  value?: string;
+  metrics?: SupportMetrics;
+  breakdowns?: Partial<Record<SupportDesglose, SupportDimensionEntry[]>>;
 }
 
 // --- Results ----------------------------------------------------------------
 
 export interface SupportResultsProps {
-  historico?: SupportHistoricoRow[];
+  history?: SupportHistoricoRow[];
   /** El detalle del mes elegido: el mismo bloque que Analytics lee para el cierre. */
   analyticsData?: SupportAnalyticsProps['analyticsData'];
   periods?: string[];
@@ -385,70 +385,70 @@ export interface SupportResultsProps {
 
 export interface SupportUser {
   id: number;
-  nombre_odoo: string;
-  nombre: string;
-  apellido: string;
-  nombre_completo: string;
+  odoo_name: string;
+  name: string;
+  last_name: string;
+  full_name: string;
   /** El departamento vigente: la última fila de `historial`. */
-  departamento_id: number;
-  departamento: string;
+  department_id: number;
+  department: string;
   /** `YYYY-MM-DD`. Nula en quien se registró antes de que existiera el campo. */
-  fecha_ingreso: string | null;
+  start_date: string | null;
   /** `YYYY-MM-DD`. Con fecha, el usuario está dado de baja pero no borrado. */
-  fecha_egreso: string | null;
-  activo: boolean;
+  end_date: string | null;
+  active: boolean;
   /** Los departamentos por los que ha pasado, del ingreso a hoy. */
-  historial: DepartmentStep[];
+  timeline: DepartmentStep[];
 }
 
 /** Un tramo de la historia: «a partir de `desde`, en `departamento`». */
 export interface DepartmentStep {
   id: number;
-  departamento_id: number;
-  departamento: string;
+  department_id: number;
+  department: string;
   /** Nula en el tramo inicial: significa «desde el ingreso». */
-  desde: string | null;
+  since: string | null;
 }
 
 /** Un usuario dado de baja a cuyo nombre siguen entrando tickets. */
 export interface UserAfterChurn {
   id: number;
-  nombre_odoo: string;
-  fecha_egreso: string;
+  odoo_name: string;
+  end_date: string;
   /** Tickets creados después de la baja que lo tienen asignado. */
-  asignados: number;
+  assigned: number;
   /** Tickets creados después de la baja que figuran como creados por él. */
-  creados: number;
+  created: number;
   /** El día del ticket más reciente. */
-  ultimo: string;
+  last: string;
 }
 
 export interface SupportDepartment {
   id: number;
-  nombre: string;
+  name: string;
   /** Cuánta gente lo referencia: un departamento con usuarios no se borra. */
-  usuarios: number;
+  users: number;
 }
 
 /** Un nombre que ya firma o atiende tickets y que el directorio no reconoce. */
 export interface PendingUser {
   /** Ya normalizado, con el sufijo puesto: es lo que se guardaría. */
-  nombre_odoo: string;
+  odoo_name: string;
   /** Tal y como lo escribe el export, por si difiere del normalizado. */
   literal: string;
-  asignados: number;
-  creados: number;
+  assigned: number;
+  created: number;
 }
 
 export interface SupportUsersProps {
-  usuarios: SupportUser[];
-  departamentos: SupportDepartment[];
-  pendientes: PendingUser[];
-  trasBaja: UserAfterChurn[];
+  users: SupportUser[];
+  departments: SupportDepartment[];
+  pending: PendingUser[];
+  afterChurn: UserAfterChurn[];
   /** El sufijo que el servidor añade solo; se enseña como pista en el formulario. */
-  sufijo: string;
-  /** Nombre que llega en `?nuevo_usuario=`: abre el alta ya rellena. */
-  nuevoUsuario: string;
+  suffix: string;
+  /** Nombre que llega en `?new_user=`: abre el alta ya rellena. */
+  newUser: string;
 }
 
 // --- Logs de etapa: abiertos y catálogo de etapas --------------------------
@@ -460,91 +460,91 @@ export type StageKind = 'cola' | 'pausa' | 'gestion' | 'cierre' | 'sin_clasifica
 
 /** Los estadísticos de una serie de horas (los mismos de las demás medidas de soporte). */
 export interface HourStats {
-  medio: number;
-  mediana: number;
+  mean: number;
+  median: number;
   min: number;
   p25: number;
   p75: number;
   max: number;
   std: number;
-  pct_excede_promedio: number;
-  muestra: number;
+  pct_over_avg: number;
+  sample: number;
 }
 
 /** Un grupo de tickets abiertos (por etapa, grupo, asignado…). */
 export interface OpenGroup {
-  etapa_actual?: string;
-  equipo_actual?: FlowTeam;
-  tipo_actual?: StageKind;
+  current_stage?: string;
+  current_team?: FlowTeam;
+  current_type?: StageKind;
   grupo_trabajo?: string;
   asignado_a?: string;
   tipo_solicitud?: string;
   zona?: string;
-  abiertos: number;
-  edad_media: number | null;
-  edad_mediana: number | null;
-  edad_max: number | null;
-  en_etapa_media: number | null;
-  en_etapa_mediana: number | null;
-  escalados: number;
+  open: number;
+  age_mean: number | null;
+  age_median: number | null;
+  age_max: number | null;
+  in_stage_mean: number | null;
+  in_stage_median: number | null;
+  escalated: number;
 }
 
 export interface OpenTicket {
   ticket: string;
-  etapa: string;
-  equipo: FlowTeam;
-  tipo: StageKind;
+  stage: string;
+  team: FlowTeam;
+  type: StageKind;
   grupo_trabajo: string;
   asignado_a: string;
   tipo_solicitud: string;
   zona: string;
-  creado: string | null;
-  escalado: boolean;
-  edad_h: number | null;
-  en_etapa_h: number | null;
+  opened_at: string | null;
+  is_escalated: boolean;
+  age_h: number | null;
+  in_stage_h: number | null;
 }
 
 export interface OpenTickets {
-  ahora: string;
-  logs_hasta: string | null;
-  resumen: {
-    abiertos: number;
-    escalados: number;
-    en_atc: number;
-    en_soporte: number;
-    edad: HourStats;
-    en_etapa: HourStats;
-    en_soporte_desde_escalamiento: HourStats;
+  now: string;
+  logs_until: string | null;
+  summary: {
+    open: number;
+    escalated: number;
+    in_atc: number;
+    in_support: number;
+    age: HourStats;
+    in_stage: HourStats;
+    in_support_since_escalation: HourStats;
     /** Abiertos según los logs pero cerrados en el export de tickets: les faltan logs. */
-    desfasados: number;
+    stale: number;
   };
-  antiguedad: { tramo: string; abiertos: number; pct: number }[];
-  por_etapa: OpenGroup[];
-  por_grupo: OpenGroup[];
-  por_asignado: OpenGroup[];
-  por_tipo_solicitud: OpenGroup[];
-  por_zona: OpenGroup[];
-  lista: OpenTicket[];
-  lista_limite: number;
+  aging: { bucket: string; open: number; pct: number }[];
+  by_stage: OpenGroup[];
+  by_group: OpenGroup[];
+  by_assignee: OpenGroup[];
+  by_request_type: OpenGroup[];
+  by_zone: OpenGroup[];
+  items: OpenTicket[];
+  items_limit: number;
 }
 
 /** Una etapa del catálogo. */
 export interface SupportStage {
   id: number;
-  nombre: string;
-  equipo: FlowTeam | 'compartida';
-  tipo: 'cola' | 'pausa' | 'gestion';
+  name: string;
+  team: FlowTeam | 'compartida';
+  type: 'cola' | 'pausa' | 'gestion';
   /** Logs que entran en ella. */
   logs: number;
-  es_escalamiento: boolean;
+  is_escalation: boolean;
 }
 
 /** Una etapa que aparece en los logs y que el catálogo no clasifica. */
 export interface PendingStage {
-  etapa: string;
+  stage: string;
   logs: number;
   tickets: number;
-  ultimo: string | null;
+  last: string | null;
 }
 
 export interface CatalogChoice {
@@ -553,12 +553,12 @@ export interface CatalogChoice {
 }
 
 export interface SupportStagesProps {
-  etapas: SupportStage[];
-  pendientes: PendingStage[];
-  equipos: CatalogChoice[];
-  tipos: CatalogChoice[];
-  etapaEscalamiento: string;
-  etapasCierre: string[];
-  /** Nombre que llega en `?nueva_etapa=`: abre el alta ya rellena. */
-  nuevaEtapa: string;
+  stages: SupportStage[];
+  pending: PendingStage[];
+  teams: CatalogChoice[];
+  types: CatalogChoice[];
+  escalationStage: string;
+  closeStages: string[];
+  /** Nombre que llega en `?new_stage=`: abre el alta ya rellena. */
+  newStage: string;
 }

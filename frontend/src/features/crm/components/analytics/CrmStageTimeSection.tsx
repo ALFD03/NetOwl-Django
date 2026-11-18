@@ -22,8 +22,8 @@ import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import { useCrmStageTime } from '../../hooks/useCrmStageTime';
 import {
   formatHours,
-  formatVariacion,
-  variacionColor,
+  formatChange,
+  changeColor,
   type CrmStageTimeCard,
   type CrmStageTimeDimensionRow,
 } from '../../lib/crmStageTime';
@@ -41,7 +41,7 @@ const VIEW_OPTIONS = [
 ];
 
 /** Text colour per variation tone. Explicit, since Tailwind cannot see a build-up. */
-const VARIACION_TEXT: Record<ReturnType<typeof variacionColor>, string> = {
+const CHANGE_TEXT: Record<ReturnType<typeof changeColor>, string> = {
   green: 'text-emerald-400',
   red: 'text-rose-400',
   slate: 'text-slate-300',
@@ -61,12 +61,12 @@ const VARIACION_TEXT: Record<ReturnType<typeof variacionColor>, string> = {
 export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Props) {
   const {
     cards,
-    corte,
+    cut,
     isEmpty,
-    selectedEtapa,
-    setSelectedEtapa,
-    verTodas,
-    setVerTodas,
+    selectedStage,
+    setSelectedStage,
+    showAll,
+    setShowAll,
     baseline,
     dimensionRows,
     leaders,
@@ -77,8 +77,8 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
     selectedDimension;
 
   const stageOptions = cards.map((card) => ({
-    key: card.etapa,
-    label: CRM_STAGE_SHORT_LABELS[card.etapa] ?? card.label,
+    key: card.stage,
+    label: CRM_STAGE_SHORT_LABELS[card.stage] ?? card.label,
   }));
 
   return (
@@ -87,16 +87,16 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
         theme="cyan"
         title="Tiempo por Etapa"
         subtitle={
-          corte
-            ? `Suma de horas ÷ transiciones que salieron de la etapa · lo atascado se lista aparte, medido hasta ${formatCutoff(corte)}`
+          cut
+            ? `Suma de horas ÷ transiciones que salieron de la etapa · lo atascado se lista aparte, medido hasta ${formatCutoff(cut)}`
             : 'Suma de horas ÷ transiciones que salieron de la etapa'
         }
         icon={<Hourglass className="h-5 w-5" />}
         headerAction={
           <ToggleGroup
             options={VIEW_OPTIONS}
-            activeKey={verTodas ? 'todas' : 'clave'}
-            onChange={(key) => setVerTodas(key === 'todas')}
+            activeKey={showAll ? 'todas' : 'clave'}
+            onChange={(key) => setShowAll(key === 'todas')}
           />
         }
       >
@@ -108,7 +108,7 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
         ) : (
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             {cards.map((card) => (
-              <StageTimeCard key={card.etapa} card={card} />
+              <StageTimeCard key={card.stage} card={card} />
             ))}
           </div>
         )}
@@ -117,15 +117,15 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
       {!isEmpty && (
         <NeonContainer
           theme="purple"
-          title={`${crmStageLabel(selectedEtapa)} por ${dimensionLabel}`}
+          title={`${crmStageLabel(selectedStage)} por ${dimensionLabel}`}
           subtitle={`Referencia del periodo: ${formatHours(baseline)} · la variación se mide contra ella · cada oportunidad va a su dimensión por Iniciativa/ID`}
           icon={<Gauge className="h-5 w-5" />}
           headerAction={
             <ToggleGroup
               className="lg:justify-end"
               options={stageOptions}
-              activeKey={selectedEtapa}
-              onChange={setSelectedEtapa}
+              activeKey={selectedStage}
+              onChange={setSelectedStage}
             />
           }
         >
@@ -137,15 +137,15 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
                   ? `${dimensionLabel} más rápida`
                   : `Única ${dimensionLabel.toLowerCase()} con muestra`
               }
-              row={leaders.rapida}
+              row={leaders.fast}
               emptyMessage="Ningún valor alcanza la muestra mínima"
             />
             <LeaderTile
               icon={<Snail className="h-4 w-4 text-rose-400" />}
               label={`${dimensionLabel} más lenta`}
-              row={leaders.lenta}
+              row={leaders.slow}
               emptyMessage={
-                leaders.rapida
+                leaders.fast
                   ? 'Un solo valor alcanza la muestra mínima: no hay con qué contrastarlo'
                   : 'Ningún valor alcanza la muestra mínima'
               }
@@ -169,10 +169,10 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
 
 /** `2026-08-28T12:00` -> `28/08 12:00`, enough to date the open stays. */
 function formatCutoff(iso: string): string {
-  const fecha = new Date(iso);
-  if (Number.isNaN(fecha.getTime())) return iso;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
 
-  return fecha.toLocaleString('es-VE', {
+  return date.toLocaleString('es-VE', {
     day: '2-digit',
     month: '2-digit',
     hour: '2-digit',
@@ -188,7 +188,7 @@ function formatCutoff(iso: string): string {
  * different base and are labelled as such rather than stacked with the first.
  */
 function StageTimeCard({ card }: { card: CrmStageTimeCard }) {
-  if (card.muestra === 0) {
+  if (card.sample === 0) {
     return (
       <MetricCard
         label={card.label}
@@ -197,8 +197,8 @@ function StageTimeCard({ card }: { card: CrmStageTimeCard }) {
         // A stage whose every move was written and undone in the same instant
         // did have activity; what it did not have is a stay to measure.
         subValue={
-          card.nulos > 0
-            ? `${formatInteger(card.nulos)} movimientos de duración cero`
+          card.nulls > 0
+            ? `${formatInteger(card.nulls)} movimientos de duración cero`
             : 'Sin actividad en el periodo'
         }
       />
@@ -208,15 +208,15 @@ function StageTimeCard({ card }: { card: CrmStageTimeCard }) {
   return (
     <MetricCard
       label={card.label}
-      value={formatHours(card.promedio)}
+      value={formatHours(card.avg)}
       color={card.accent}
-      subValue={`Mediana ${formatHours(card.mediana)} · P75 ${formatHours(card.p75)}`}
+      subValue={`Mediana ${formatHours(card.median)} · P75 ${formatHours(card.p75)}`}
       caption={
-        card.fiable
-          ? `${formatHours(card.hoursTotal)} ÷ ${formatInteger(card.muestra)} salidas`
-          : `Muestra corta: ${formatInteger(card.muestra)} salidas`
+        card.reliable
+          ? `${formatHours(card.hoursTotal)} ÷ ${formatInteger(card.sample)} salidas`
+          : `Muestra corta: ${formatInteger(card.sample)} salidas`
       }
-      indicator={card.fiable}
+      indicator={card.reliable}
     >
       {card.noExit > 0 && (
         <>
@@ -234,20 +234,20 @@ function StageTimeCard({ card }: { card: CrmStageTimeCard }) {
       <p className="pt-1 text-[9px] font-bold uppercase text-slate-500">Destino de las salidas</p>
       <ProgressBar
         label={`Avanzaron (${formatHours(card.advanceHours)})`}
-        percent={card.pctAvance}
-        valueLabel={`${formatTwoDecimals(card.pctAvance)}%`}
+        percent={card.pctProgress}
+        valueLabel={`${formatTwoDecimals(card.pctProgress)}%`}
         color="green"
       />
       <ProgressBar
         label={`Devueltos a E8 (${formatHours(card.returnHours)})`}
-        percent={card.pctDevolucion}
-        valueLabel={`${formatTwoDecimals(card.pctDevolucion)}%`}
+        percent={card.pctReturns}
+        valueLabel={`${formatTwoDecimals(card.pctReturns)}%`}
         color="red"
       />
       <ProgressBar
         label="Retornaron a una etapa anterior"
-        percent={card.pctRetorno}
-        valueLabel={`${formatTwoDecimals(card.pctRetorno)}%`}
+        percent={card.pctComeback}
+        valueLabel={`${formatTwoDecimals(card.pctComeback)}%`}
         color="purple"
       />
     </MetricCard>
@@ -270,10 +270,10 @@ function LeaderTile({
       <div className="shrink-0">{icon}</div>
       <StatTile
         label={label}
-        value={row ? row.valor : '—'}
+        value={row ? row.value : '—'}
         caption={
           row
-            ? `${formatHours(row.promedio)} · ${formatVariacion(row.variacionPct)} vs. el periodo · ${formatInteger(row.muestra)} medidas`
+            ? `${formatHours(row.avg)} · ${formatChange(row.changePct)} vs. el periodo · ${formatInteger(row.sample)} medidas`
             : emptyMessage
         }
         size="md"
@@ -291,29 +291,29 @@ const STAGE_TIME_COLUMNS: Column<CrmStageTimeDimensionRow>[] = [
   {
     header: 'Valor',
     accessor: (r) => (
-      <span className={r.fiable ? 'font-bold text-white' : 'text-slate-500'} title={r.valor}>
-        {r.valor}
+      <span className={r.reliable ? 'font-bold text-white' : 'text-slate-500'} title={r.value}>
+        {r.value}
       </span>
     ),
-    sortKey: 'valor',
+    sortKey: 'value',
   },
   {
     header: 'Promedio',
-    accessor: (r) => <span className="font-bold text-white">{formatHours(r.promedio)}</span>,
+    accessor: (r) => <span className="font-bold text-white">{formatHours(r.avg)}</span>,
     align: 'right',
-    sortKey: 'promedio',
+    sortKey: 'avg',
   },
   {
     header: 'vs. Periodo',
     accessor: (r) => (
-      <span className={`font-bold ${VARIACION_TEXT[variacionColor(r.variacionPct)]}`}>
-        {formatVariacion(r.variacionPct)}
+      <span className={`font-bold ${CHANGE_TEXT[changeColor(r.changePct)]}`}>
+        {formatChange(r.changePct)}
       </span>
     ),
     align: 'right',
-    sortKey: 'variacionPct',
+    sortKey: 'changePct',
   },
-  { header: 'Mediana', accessor: (r) => formatHours(r.mediana), align: 'right', sortKey: 'mediana' },
+  { header: 'Mediana', accessor: (r) => formatHours(r.median), align: 'right', sortKey: 'median' },
   { header: 'P75', accessor: (r) => formatHours(r.p75), align: 'right', sortKey: 'p75' },
   {
     header: 'Horas totales',
@@ -323,9 +323,9 @@ const STAGE_TIME_COLUMNS: Column<CrmStageTimeDimensionRow>[] = [
   },
   {
     header: 'Salidas',
-    accessor: (r) => formatInteger(r.movimientos),
+    accessor: (r) => formatInteger(r.movements),
     align: 'right',
-    sortKey: 'movimientos',
+    sortKey: 'movements',
   },
   {
     header: 'Sin salir (fuera)',
@@ -343,15 +343,15 @@ const STAGE_TIME_COLUMNS: Column<CrmStageTimeDimensionRow>[] = [
   // header carries it: read against `Medidas` they do not add up to anything.
   {
     header: 'Avance % (salidas)',
-    accessor: (r) => <span className="text-emerald-400">{formatTwoDecimals(r.pctAvance)}%</span>,
+    accessor: (r) => <span className="text-emerald-400">{formatTwoDecimals(r.pctProgress)}%</span>,
     align: 'right',
-    sortKey: 'pctAvance',
+    sortKey: 'pctProgress',
   },
   {
     header: 'Dev. E8 % (salidas)',
-    accessor: (r) => <span className="text-rose-400">{formatTwoDecimals(r.pctDevolucion)}%</span>,
+    accessor: (r) => <span className="text-rose-400">{formatTwoDecimals(r.pctReturns)}%</span>,
     align: 'right',
-    sortKey: 'pctDevolucion',
+    sortKey: 'pctReturns',
   },
   {
     header: 'Otras % (salidas)',

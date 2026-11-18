@@ -7,14 +7,14 @@ import { importsApi } from '@/shared/lib/api/imports';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
-import type { CampoOdoo } from '@/features/imports/types';
+import type { OdooField } from '@/features/imports/types';
 
 interface ImportCrmProps {
   /** Cabeceras de Odoo CRM que lee la importación. */
-  camposOdoo?: CampoOdoo[];
+  odoo_fields?: OdooField[];
 }
 
-export default function ImportCrm({ camposOdoo = [] }: ImportCrmProps) {
+export default function ImportCrm({ odoo_fields = [] }: ImportCrmProps) {
   const { canAny } = usePermissions();
 
   const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.crm);
@@ -40,7 +40,7 @@ export default function ImportCrm({ camposOdoo = [] }: ImportCrmProps) {
             <>Separador de campos: <strong>Comas (,)</strong></>,
             <><strong>Oportunidades:</strong> Export de Odoo CRM con una fila por oportunidad y sus líneas de <strong>Entradas de Tiempo</strong> debajo, para seguir las horas por etapa.</>,
           ]}
-          camposOdoo={[{ key: 'crm', label: 'Oportunidades CRM', campos: camposOdoo }]}
+          fieldGroups={[{ key: 'crm', label: 'Oportunidades CRM', fields: odoo_fields }]}
           note="Tras importar el archivo, selecciona el mes a procesar en la sección inferior para calcular las cohortes."
         />
       </div>
@@ -58,7 +58,7 @@ export default function ImportCrm({ camposOdoo = [] }: ImportCrmProps) {
           onRun={(month, onProgress) => importsApi.runCrmAnalysis(month ?? '', onProgress)}
           onRunBatch={(months) => importsApi.runCrmAnalysisBatch(months)}
           successMessage={(result, month) =>
-            `Análisis de CRM completado exitosamente para ${result.periodo_label || month}.`}
+            `Análisis de CRM completado exitosamente para ${result.period_label || month}.`}
           errorMessage="Error al ejecutar el análisis CRM."
         />
       )}

@@ -4,7 +4,7 @@
  *
  * Los filtros de fecha, módulo, usuario, resultado y texto se aplican en el
  * servidor (la tabla crece sin límite); dentro de lo que llega, la búsqueda, el
- * orden y la paginación son de la tabla. El `detalle` se pide al abrir un
+ * orden y la paginación son de la tabla. El `detail` se pide al abrir un
  * registro.
  */
 
@@ -24,9 +24,9 @@ import type {
 } from '../types';
 import { useVisit } from '@/shared/page/PageData';
 
-const TODOS = '__todos__';
+const ALL = '__all__';
 
-const TONO_RESULTADO: Record<AuditResult, string> = {
+const OUTCOME_TONE: Record<AuditResult, string> = {
   ok: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400',
   rechazado: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
   denegado: 'border-rose-500/30 bg-rose-500/10 text-rose-400',
@@ -35,71 +35,71 @@ const TONO_RESULTADO: Record<AuditResult, string> = {
 };
 
 const COLUMNS: Column<AuditEntry>[] = [
-  { header: 'Fecha y hora', accessor: (r) => <span className="tabular-nums">{r.fecha}</span>, sortKey: 'fecha' },
+  { header: 'Fecha y hora', accessor: (r) => <span className="tabular-nums">{r.date}</span>, sortKey: 'date' },
   { header: 'Usuario', accessor: (r) => <span className="font-semibold text-white">{r.username}</span>, sortKey: 'username' },
-  { header: 'Módulo', accessor: (r) => <span className="font-bold text-brand">{r.modulo_display}</span>, sortKey: 'modulo_display' },
-  { header: 'Acción', accessor: 'accion_display', sortKey: 'accion_display' },
+  { header: 'Módulo', accessor: (r) => <span className="font-bold text-brand">{r.module_label}</span>, sortKey: 'module_label' },
+  { header: 'Acción', accessor: 'action_label', sortKey: 'action_label' },
   {
     header: 'Sobre',
-    accessor: (r) => <span className="block max-w-[18rem] truncate text-slate-400" title={r.objeto}>{r.objeto || '—'}</span>,
-    sortKey: 'objeto',
+    accessor: (r) => <span className="block max-w-[18rem] truncate text-slate-400" title={r.target}>{r.target || '—'}</span>,
+    sortKey: 'target',
   },
   {
     header: 'Resultado',
     align: 'center',
-    sortKey: 'resultado',
+    sortKey: 'outcome',
     accessor: (r) => (
-      <span className={cn('rounded-full border px-3 py-1 text-[10px] font-black uppercase', TONO_RESULTADO[r.resultado])}>
-        {r.resultado_display}
+      <span className={cn('rounded-full border px-3 py-1 text-[10px] font-black uppercase', OUTCOME_TONE[r.outcome])}>
+        {r.outcome_label}
       </span>
     ),
   },
   { header: 'IP', accessor: (r) => <span className="tabular-nums text-slate-400">{r.ip || '—'}</span>, sortKey: 'ip' },
 ];
 
-export function LogView({ registros, total, limite, filtros, opciones }: AuditLogPageProps) {
+export function LogView({ logs, total, limit, filters, options }: AuditLogPageProps) {
   const visit = useVisit();
-  const [borrador, setBorrador] = useState<AuditFilters>(filtros);
-  const [abierto, setOpen] = useState<AuditEntryDetail | null>(null);
-  const [cargando, setCargando] = useState(false);
+  const [draft, setDraft] = useState<AuditFilters>(filters);
+  const [opened, setOpen] = useState<AuditEntryDetail | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const apply = (next: AuditFilters) => {
-    setBorrador(next);
+    setDraft(next);
     visit({ ...next });
   };
-  const cambiar = (campo: keyof AuditFilters, valor: string) =>
-    apply({ ...borrador, [campo]: valor === TODOS ? '' : valor });
+  const change = (field: keyof AuditFilters, value: string) =>
+    apply({ ...draft, [field]: value === ALL ? '' : value });
 
-  const abrir = async (row: AuditEntry) => {
+  const openEntry = async (row: AuditEntry) => {
     setError(null);
-    setCargando(true);
-    setOpen({ ...row, metodo: '', ruta: '', detalle: null });
+    setLoading(true);
+    setOpen({ ...row, method: '', path: '', detail: null });
     try {
-      setOpen(await auditApi.detalle<AuditEntryDetail>(row.id));
+      setOpen(await auditApi.detail<AuditEntryDetail>(row.id));
     } catch {
       setError('No se pudo cargar el detalle del registro.');
     } finally {
-      setCargando(false);
+      setLoading(false);
     }
   };
 
-  const recortado = total > registros.length;
+  const truncated = total > logs.length;
 
   return (
     <AppLayout title="Auditoría">
       <div className="space-y-4">
         <div className="flex flex-wrap items-end gap-3">
-          <DatePicker label="Desde" value={borrador.desde} max={borrador.hasta} onChange={(v) => cambiar('desde', v)} />
-          <DatePicker label="Hasta" value={borrador.hasta} min={borrador.desde} onChange={(v) => cambiar('hasta', v)} />
+          <DatePicker label="Desde" value={draft.since} max={draft.until} onChange={(v) => change('since', v)} />
+          <DatePicker label="Hasta" value={draft.until} min={draft.since} onChange={(v) => change('until', v)} />
           <FilterField label="Módulo" icon={<Filter className="h-4 w-4 text-brand" />}>
             <SelectMenu
               aria-label="Filtrar por módulo"
               className={FILTER_TRIGGER_CLASS}
               panelWidth={240}
-              value={borrador.modulo || TODOS}
-              options={[{ value: TODOS, label: 'Todos' }, ...opciones.modulos]}
-              onChange={(v) => cambiar('modulo', v)}
+              value={draft.module || ALL}
+              options={[{ value: ALL, label: 'Todos' }, ...options.modules]}
+              onChange={(v) => change('module', v)}
             />
           </FilterField>
           <FilterField label="Usuario" icon={<Filter className="h-4 w-4 text-brand" />}>
@@ -107,9 +107,9 @@ export function LogView({ registros, total, limite, filtros, opciones }: AuditLo
               aria-label="Filtrar por usuario"
               className={FILTER_TRIGGER_CLASS}
               panelWidth={240}
-              value={borrador.usuario || TODOS}
-              options={[{ value: TODOS, label: 'Todos' }, ...opciones.usuarios.map((u) => ({ value: u, label: u }))]}
-              onChange={(v) => cambiar('usuario', v)}
+              value={draft.user || ALL}
+              options={[{ value: ALL, label: 'Todos' }, ...options.users.map((u) => ({ value: u, label: u }))]}
+              onChange={(v) => change('user', v)}
             />
           </FilterField>
           <FilterField label="Resultado" icon={<Filter className="h-4 w-4 text-brand" />}>
@@ -117,9 +117,9 @@ export function LogView({ registros, total, limite, filtros, opciones }: AuditLo
               aria-label="Filtrar por resultado"
               className={FILTER_TRIGGER_CLASS}
               panelWidth={200}
-              value={borrador.resultado || TODOS}
-              options={[{ value: TODOS, label: 'Todos' }, ...opciones.resultados]}
-              onChange={(v) => cambiar('resultado', v)}
+              value={draft.outcome || ALL}
+              options={[{ value: ALL, label: 'Todos' }, ...options.outcomes]}
+              onChange={(v) => change('outcome', v)}
             />
           </FilterField>
           {/* El texto va al servidor al pulsar Buscar: busca en todo el rango,
@@ -128,14 +128,14 @@ export function LogView({ registros, total, limite, filtros, opciones }: AuditLo
             className="flex min-w-[16rem] flex-1 items-center gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              apply(borrador);
+              apply(draft);
             }}
           >
             <FilterField grow icon={<Search className="h-4 w-4" />} title="Busca en la descripción, el objeto, la acción y el usuario">
               <SearchInput
-                value={borrador.q}
+                value={draft.q}
                 placeholder="Buscar en el registro..."
-                onChange={(q) => setBorrador({ ...borrador, q })}
+                onChange={(q) => setDraft({ ...draft, q })}
                 className="w-full bg-transparent px-0"
               />
             </FilterField>
@@ -143,11 +143,11 @@ export function LogView({ registros, total, limite, filtros, opciones }: AuditLo
           </form>
         </div>
 
-        {recortado && (
+        {truncated && (
           <StatusMessage
             status={{
               type: 'warning',
-              text: `${formatInteger(total)} registros cumplen los filtros; se muestran los ${formatInteger(limite)} más recientes. Acota las fechas o filtra para ver el resto.`,
+              text: `${formatInteger(total)} registros cumplen los filtros; se muestran los ${formatInteger(limit)} más recientes. Acota las fechas o filtra para ver el resto.`,
             }}
             icon={<AlertTriangle />}
           />
@@ -156,52 +156,52 @@ export function LogView({ registros, total, limite, filtros, opciones }: AuditLo
         <NeonContainer
           theme="slate"
           title="Registro de auditoría"
-          subtitle={`${formatInteger(total)} registros entre ${filtros.desde} y ${filtros.hasta}. Haz clic en una fila para ver el detalle.`}
+          subtitle={`${formatInteger(total)} registros entre ${filters.since} y ${filters.until}. Haz clic en una fila para ver el detalle.`}
           icon={<ScrollText className="h-5 w-5" />}
           noPadding
         >
           <div className="h-[600px]">
             <DataTable
               columns={COLUMNS}
-              data={registros}
+              data={logs}
               searchable
               searchPlaceholder="Filtrar lo cargado..."
               emptyMessage="Nada registrado con estos filtros."
-              onRowClick={(row) => void abrir(row)}
+              onRowClick={(row) => void openEntry(row)}
             />
           </div>
         </NeonContainer>
       </div>
 
       <Modal
-        isOpen={Boolean(abierto)}
+        isOpen={Boolean(opened)}
         onClose={() => setOpen(null)}
-        title={abierto?.accion_display ?? ''}
-        subtitle={abierto ? `${abierto.username} · ${abierto.fecha} · ${abierto.ip || 'sin IP'}` : ''}
-        theme={abierto?.resultado === 'ok' ? 'green' : abierto?.resultado === 'rechazado' ? 'yellow' : 'red'}
+        title={opened?.action_label ?? ''}
+        subtitle={opened ? `${opened.username} · ${opened.date} · ${opened.ip || 'sin IP'}` : ''}
+        theme={opened?.outcome === 'ok' ? 'green' : opened?.outcome === 'rechazado' ? 'yellow' : 'red'}
         icon={<ShieldCheck className="h-5 w-5" />}
         size="lg"
       >
-        {abierto && (
+        {opened && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <StatTile label="Módulo" value={abierto.modulo_display} variant="boxed" size="sm" />
+              <StatTile label="Módulo" value={opened.module_label} variant="boxed" size="sm" />
               <StatTile
                 label="Resultado"
-                value={`${abierto.resultado_display}${abierto.estado_http ? ` (${abierto.estado_http})` : ''}`}
+                value={`${opened.outcome_label}${opened.status_code ? ` (${opened.status_code})` : ''}`}
                 variant="boxed"
                 size="sm"
               />
-              <StatTile label="Sobre" value={abierto.objeto || '—'} variant="boxed" size="sm" />
+              <StatTile label="Sobre" value={opened.target || '—'} variant="boxed" size="sm" />
             </div>
-            {abierto.descripcion && <StatTile label="Descripción" value={abierto.descripcion} variant="boxed" size="sm" />}
+            {opened.description && <StatTile label="Descripción" value={opened.description} variant="boxed" size="sm" />}
             {error && <StatusMessage status={{ type: 'error', text: error }} icon={<AlertTriangle />} />}
-            {cargando ? (
+            {loading ? (
               <LoadingState message="Cargando detalle..." />
             ) : (
               <ConsoleOutput
-                title={abierto.ruta ? `${abierto.metodo} ${abierto.ruta}` : 'Detalle'}
-                output={abierto.detalle ? JSON.stringify(abierto.detalle, null, 2) : ''}
+                title={opened.path ? `${opened.method} ${opened.path}` : 'Detalle'}
+                output={opened.detail ? JSON.stringify(opened.detail, null, 2) : ''}
                 emptyText="Sin detalle adicional."
                 maxHeight="max-h-80"
               />

@@ -31,9 +31,17 @@ Los endpoints que se sondean (jobs) van sin límite a propósito.
 404, 405, 409 (conflicto de negocio), 429, 500 o 502 (BCV caído). Una ruta
 inexistente bajo `/api/` responde 404 JSON.
 
-Los GET de página devuelven exactamente lo que pinta la página de la SPA (por
-eso sus claves siguen en español: `periodos`, `dayMetrics`…); los parámetros de
-la URL de la página (`?period=`, `?dia=`) viajan tal cual al endpoint.
+Los GET de página devuelven exactamente lo que pinta la página de la SPA; los
+parámetros de la URL de la página (`?period=`, `?day=`) viajan tal cual al endpoint.
+
+**Claves en inglés**: toda la API habla en inglés (claves del JSON, parámetros de
+la query y campos de los cuerpos), aunque la analítica trabaje con sus columnas y
+estructuras guardadas en español. Cada módulo declara un `KeyMap` en su
+`api_keys.py` y `@endpoint(keys=...)` traduce la respuesta; un cuerpo con esa
+misma estructura vuelve al español con `KEYS.back()` en la vista. No se traducen
+las claves que también son valores guardados: dimensiones (`zona`, `sucursal`,
+`municipio`, `campanna`, `producto`, `zona_sucursal`), métricas `react_*`, roles,
+slugs de equipo, áreas y piezas de pago (`propia`, `equipo`, `factor`, `bono_*`…).
 
 ### `/api/auth/`
 
@@ -59,7 +67,7 @@ la URL de la página (`?period=`, `?dia=`) viajan tal cual al endpoint.
 | Método | Ruta | Permiso | Límite | Qué hace |
 |---|---|---|---|---|
 | GET | `/api/audit/logs/` | `can_view_auditoria` | — | El registro filtrado: los `LIMIT` más recientes de lo que cumple los filtros. |
-| GET | `/api/audit/logs/<log_id>/` | `can_view_auditoria` | — | Un registro con su `detalle`. |
+| GET | `/api/audit/logs/<log_id>/` | `can_view_auditoria` | — | Un registro con su `detail`. |
 | GET | `/api/audit/health/` | `can_view_auditoria` | — | Estado de web, Postgres, Redis, worker de Celery y análisis. |
 | GET | `/api/audit/stats/` | `can_view_auditoria` | — | Actividad, errores y latencia por endpoint de las últimas horas. |
 
@@ -92,7 +100,7 @@ la URL de la página (`?period=`, `?dia=`) viajan tal cual al endpoint.
 | Método | Ruta | Permiso | Límite | Qué hace |
 |---|---|---|---|---|
 | GET | `/api/crm/dashboard/` | `can_view_crm` y `can_view_crm_dashboard` | — | El promedio global y su serie histórica. |
-| GET | `/api/crm/analytics/` | `can_view_crm_analytics` | — | Las dimensiones del periodo y su global, al corte `?dia=` o al último calculado. |
+| GET | `/api/crm/analytics/` | `can_view_crm_analytics` | — | Las dimensiones del periodo y su global, al corte `?day=` o al último calculado. |
 | GET | `/api/crm/results/` | `can_view_crm_results` | — | Los cierres de los periodos pedidos (`?periods=a,b`). |
 | GET | `/api/crm/day-metrics/` | `can_view_crm_analytics` | — | El corte completo de un día: `{global, dimensiones}`. Lo escribe el análisis. |
 | GET | `/api/crm/dimension-metrics/` | `can_view_crm_analytics` o `can_view_crm_results` | — | Las métricas de una dimensión y un periodo. |
@@ -102,7 +110,7 @@ la URL de la página (`?period=`, `?dia=`) viajan tal cual al endpoint.
 | Método | Ruta | Permiso | Límite | Qué hace |
 |---|---|---|---|---|
 | GET | `/api/support/dashboard/` | `can_view_support` y `can_view_support_dashboard` | — | El promedio de los periodos evaluados y, con su permiso, los tickets abiertos hoy. |
-| GET | `/api/support/analytics/` | `can_view_support_analytics` | — | El bloque de un periodo al corte `?dia=` (o al último) y la serie ligera del mes. |
+| GET | `/api/support/analytics/` | `can_view_support_analytics` | — | El bloque de un periodo al corte `?day=` (o al último) y la serie ligera del mes. |
 | GET | `/api/support/results/` | `can_view_support_results` | — | Los cierres por periodo y el detalle estructurado de un mes (`?period=`). |
 | GET | `/api/support/breakdown/` | `can_view_support_analytics` o `can_view_support_results` | — | El drill-down de un valor dimensional: sus tipos, razones y soluciones. |
 | GET | `/api/support/day-metrics/` | `can_view_support_analytics` | — | El corte completo de un día: `{global, grupos, incidencia_zonas}`. |
@@ -122,7 +130,7 @@ la URL de la página (`?period=`, `?dia=`) viajan tal cual al endpoint.
 | GET | `/api/imports/crm/` | `can_view_imports` y `can_view_imports_crm` | — | Las columnas de Odoo que espera la carga de CRM. |
 | GET | `/api/imports/support/` | `can_view_imports` y `can_view_imports_support` | — | Las columnas de Odoo de tickets y logs, y si ya hay logs cargados. |
 | GET | `/api/imports/history/` | `can_view_imports` y `can_view_import_history` | — | Las 200 últimas importaciones y cálculos. |
-| POST | `/api/imports/subscriptions/upload/` | `can_import_subs` o `can_import_data` | 5/m | El export de suscripciones. 409 `catalogo` si hay productos fuera del catálogo. |
+| POST | `/api/imports/subscriptions/upload/` | `can_import_subs` o `can_import_data` | 5/m | El export de suscripciones. 409 `catalog` si hay productos fuera del catálogo. |
 | POST | `/api/imports/subscriptions/logs/upload/` | `can_import_subs` o `can_import_data` | 5/m | Carga el CSV de logs de suscripciones. |
 | POST | `/api/imports/subscriptions/free-plans/upload/` | `can_import_subs` o `can_import_data` | 5/m | El export de planes gratuitos: detecta desde cuándo lo son. |
 | POST | `/api/imports/subscriptions/invoices/upload/` | `can_import_subs` o `can_import_data` | 5/m | El export global de facturas (lo usa Comisiones). Las cabeceras las valida el importador. |
@@ -142,8 +150,8 @@ la URL de la página (`?period=`, `?dia=`) viajan tal cual al endpoint.
 | Método | Ruta | Permiso | Límite | Qué hace |
 |---|---|---|---|---|
 | GET | `/api/catalogs/notifications/` | `can_manage_catalogo_operacional` o `can_manage_catalogo_comercial` o `can_manage_catalogo_ventas` | — | Lo que falta en cada área administrada, lo ignorado y las opciones para registrarlo aquí. |
-| GET | `/api/catalogs/products/` | `can_manage_catalogo_operacional` | — | Planes y planes reguladores. `?nuevo_plan=` abre el alta ya rellena. |
-| GET | `/api/catalogs/structure/` | `can_manage_catalogo_comercial` | — | Zonas y estados (con sites y unidades para el formulario). `?nueva_zona=` abre el alta. |
+| GET | `/api/catalogs/products/` | `can_manage_catalogo_operacional` | — | Planes y planes reguladores. `?new_plan=` abre el alta ya rellena. |
+| GET | `/api/catalogs/structure/` | `can_manage_catalogo_comercial` | — | Zonas y estados (con sites y unidades para el formulario). `?new_zone=` abre el alta. |
 | GET | `/api/catalogs/sales/` | `can_manage_catalogo_ventas` | — | Estructura de ventas, equipos con su gente y condiciones, y objetivos. |
 | POST | `/api/catalogs/save/` | `can_manage_catalogo_operacional` o `can_manage_catalogo_comercial` o `can_manage_catalogo_ventas` | 60/m | Alta o edición de una fila de cualquier catálogo. |
 | POST | `/api/catalogs/save-batch/` | `can_manage_catalogo_operacional` o `can_manage_catalogo_comercial` o `can_manage_catalogo_ventas` | 20/m | Alta de varias filas de un catálogo; cada una en su savepoint. |
@@ -153,15 +161,15 @@ la URL de la página (`?period=`, `?dia=`) viajan tal cual al endpoint.
 
 | Método | Ruta | Permiso | Límite | Qué hace |
 |---|---|---|---|---|
-| GET | `/api/commissions/report/` | `can_view_comisiones` | — | El informe de un periodo (`?periodo=YYYY-MM`); sin él, el más reciente o el que toca crear. |
+| GET | `/api/commissions/report/` | `can_view_comisiones` | — | El informe de un periodo (`?period=YYYY-MM`); sin él, el más reciente o el que toca crear. |
 | GET | `/api/commissions/sales/` | `can_view_comisiones` | — | El detalle venta a venta de un periodo, para el desglose y la exportación. |
 | POST | `/api/commissions/periods/save/` | `can_manage_comisiones` | 30/m | Crea un periodo en borrador o cambia sus días promocionales. |
 | POST | `/api/commissions/periods/close/` | `can_manage_comisiones` | 10/m | Cierra el periodo: congela ventas, pagos y condiciones. 409 si queda algo pendiente. |
-| POST | `/api/commissions/periods/reopen/` | `can_reopen_comisiones` | 10/m | Devuelve un periodo cerrado a borrador archivando su cierre. Exige `motivo` y `confirmacion`. |
+| POST | `/api/commissions/periods/reopen/` | `can_reopen_comisiones` | 10/m | Devuelve un periodo cerrado a borrador archivando su cierre. Exige `reason` y `confirmation`. |
 | POST | `/api/commissions/periods/delete/` | `can_delete_comisiones` | 10/m | Borra un informe en borrador con lo decidido en él. 409 si está o estuvo cerrado. |
 | GET | `/api/commissions/archives/<archive_id>/` | `can_view_comisiones` | — | La copia completa de un cierre archivado, para descargarla. |
-| POST | `/api/commissions/reviews/save/` | `can_manage_comisiones` | 60/m | Decide ventas por facturar; `decision` vacía deshace y `ordenes` decide varias. |
-| POST | `/api/commissions/manual/add/` | `can_manage_comisiones` | 30/m | Agrega ventas a mano (`ordenes`, `nota` obligatoria). Todo o nada. |
+| POST | `/api/commissions/reviews/save/` | `can_manage_comisiones` | 60/m | Decide ventas por facturar; `decision` vacía deshace y `orders` decide varias. |
+| POST | `/api/commissions/manual/add/` | `can_manage_comisiones` | 30/m | Agrega ventas a mano (`orders`, `note` obligatoria). Todo o nada. |
 | POST | `/api/commissions/manual/remove/` | `can_manage_comisiones` | 30/m | Quita una venta agregada a mano. |
 | POST | `/api/commissions/indicators/save/` | `can_manage_comisiones` | 60/m | El % de cumplimiento o de crecimiento a mano de una persona; vacío vuelve al calculado. |
 | GET | `/api/commissions/current-rate/` | `can_view_comisiones` | 30/m | La tasa oficial del BCV de hoy, como referencia (no se guarda). 502 si falla. |

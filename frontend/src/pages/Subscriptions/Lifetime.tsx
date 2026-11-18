@@ -5,15 +5,15 @@ import { LifetimeView } from '@/features/subscriptions/components/lifetime/Lifet
 import type { LifetimeMonth } from '@/features/subscriptions/types';
 
 interface SubscriptionsLifetimeProps {
-  meses?: string[];
-  periodo?: string | null;
+  months?: string[];
+  period?: string | null;
   lifetime?: LifetimeMonth | null;
 }
 
-export default function SubscriptionsLifetime({ meses = [], periodo = null, lifetime = null }: SubscriptionsLifetimeProps) {
+export default function SubscriptionsLifetime({ months = [], period = null, lifetime = null }: SubscriptionsLifetimeProps) {
   return (
     <AppLayout>
-      <LifetimeView meses={meses} periodo={periodo} lifetime={lifetime} />
+      <LifetimeView months={months} period={period} lifetime={lifetime} />
     </AppLayout>
   );
 }

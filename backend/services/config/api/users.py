@@ -35,7 +35,7 @@ class UserBody(BaseModel):
     role: str = "viewer"
     group_id: int | None = None
     permissions: dict[str, bool] = {}
-    unidades: UnitsBody = UnitsBody()
+    units: UnitsBody = UnitsBody()
 
 
 class CreateUserBody(UserBody):
@@ -172,11 +172,11 @@ def management_payload(request) -> dict:
                 "username": u.username,
                 "is_superuser": u.is_superuser,
                 "role": u.profile.role if hasattr(u, "profile") else "viewer",
-                "role_display": u.profile.get_role_display() if hasattr(u, "profile") else ROLES["viewer"],
+                "role_label": u.profile.get_role_display() if hasattr(u, "profile") else ROLES["viewer"],
                 "group_id": u.profile.group_id if hasattr(u, "profile") else None,
                 "group_name": u.profile.group.name if hasattr(u, "profile") and u.profile.group else None,
                 "permissions": serialize_permissions(getattr(u, "profile", None)),
-                "unidades": serialize_units(getattr(u, "profile", None)),
+                "units": serialize_units(getattr(u, "profile", None)),
                 "editable": u.id != request.user.id and can_act_on(request.user, u),
             }
             for u in users
@@ -194,9 +194,9 @@ def management_payload(request) -> dict:
             for g in PermissionGroup.objects.order_by("name")
         ],
         "roles": Profile.ROLE_CHOICES,
-        "concedibles": effective_permissions(request.user),
-        "unidadesNegocio": list(Coordinador.objects.order_by("nombre").values("id", "nombre")),
-        "unidadesConcedibles": None if scope is None else {"ids": sorted(scope.ids), "rf": scope.rf},
+        "grantable": effective_permissions(request.user),
+        "business_units": [{"id": c["id"], "name": c["nombre"]} for c in Coordinador.objects.order_by("nombre").values("id", "nombre")],
+        "grantable_units": None if scope is None else {"ids": sorted(scope.ids), "rf": scope.rf},
     }
 
 
@@ -217,7 +217,7 @@ def users(request, body: CreateUserBody | None = None):
 
     group = get_group(body.group_id) if body.group_id else None
     matrix = matrix_of(group) if group else read_matrix(body.permissions)
-    units = read_units(body.unidades)
+    units = read_units(body.units)
     check_grant(request.user, matrix)
     check_units(request.user, units, EMPTY_SCOPE)
     check_password(body.password, User(username=username))
@@ -245,7 +245,7 @@ def user_permissions(request, user_id: int, body: UserBody):
 
     group = get_group(body.group_id) if body.group_id else None
     matrix = matrix_of(group) if group else read_matrix(body.permissions)
-    units = read_units(body.unidades)
+    units = read_units(body.units)
     check_grant(request.user, matrix, effective_permissions(user))
     check_units(request.user, units, saved_units(profile))
 

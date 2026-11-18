@@ -13,7 +13,7 @@ interface Props {
    * calculado por quien llama (que decide si se recorta a 100). Sin él, la
    * franja no habla del objetivo.
    */
-  cumplimiento?: { valor: number; objetivo: number; tono: StatTileTone } | null;
+  cumplimiento?: { value: number; target: number; tono: StatTileTone } | null;
 }
 
 /**
@@ -25,8 +25,8 @@ export function CloseProjection({ instalaciones, projection: proyeccion, cumplim
   const complianceCell: SummaryStripItem[] = cumplimiento ? [{
     id: 'cumplimiento',
     label: 'Cumpl. Ventas Proyectado',
-    value: `${formatTwoDecimals(cumplimiento.valor)}%`,
-    caption: `Sobre un objetivo de +${formatInteger(cumplimiento.objetivo)}`,
+    value: `${formatTwoDecimals(cumplimiento.value)}%`,
+    caption: `Sobre un objetivo de +${formatInteger(cumplimiento.target)}`,
     tone: cumplimiento.tono,
   }] : [];
 

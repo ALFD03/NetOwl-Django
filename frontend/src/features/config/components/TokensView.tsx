@@ -18,35 +18,35 @@ import type { StatusTone } from '@/shared/ui';
 
 const TOKENS_KEY = ['auth', 'tokens'] as const;
 
-const VIGENCIAS = [
+const VALIDITIES = [
   { value: '', label: 'Sin caducidad' },
   { value: '30', label: '30 días' },
   { value: '90', label: '90 días' },
   { value: '365', label: '1 año' },
 ];
 
-function fecha(valor: string | null): string {
-  return valor ? new Date(valor).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+function formatDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 }
 
-function estado(token: ApiTokenRow): { texto: string; clase: string } {
-  if (token.revoked_at) return { texto: 'Revocado', clase: 'text-rose-400' };
-  if (!token.active) return { texto: 'Caducado', clase: 'text-amber-400' };
-  return { texto: 'Activo', clase: 'text-emerald-400' };
+function tokenState(token: ApiTokenRow): { text: string; tone: string } {
+  if (token.revoked_at) return { text: 'Revocado', tone: 'text-rose-400' };
+  if (!token.active) return { text: 'Caducado', tone: 'text-amber-400' };
+  return { text: 'Activo', tone: 'text-emerald-400' };
 }
 
-interface Cuenta {
+interface Account {
   id: number;
   username: string;
 }
 
 /** Las cuentas a las que se puede dar un token, si quien mira puede verlas. */
-function useCuentas(habilitado: boolean) {
+function useAccounts(isEnabled: boolean) {
   return useQuery({
     queryKey: ['auth', 'users', 'options'],
-    enabled: habilitado,
+    enabled: isEnabled,
     queryFn: async () =>
-      (await apiClient.get<{ users: (Cuenta & { permissions: Record<string, boolean>; is_superuser: boolean })[] }>(
+      (await apiClient.get<{ users: (Account & { permissions: Record<string, boolean>; is_superuser: boolean })[] }>(
         '/api/auth/users/',
       )).data.users.filter((u) => u.is_superuser || u.permissions.can_use_api),
   });
@@ -55,41 +55,41 @@ function useCuentas(habilitado: boolean) {
 function NewToken({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const { can } = usePermissions();
-  const cuentas = useCuentas(can('can_view_users'));
-  const [cuenta, setCuenta] = useState('');
-  const [nombre, setName] = useState('');
+  const accounts = useAccounts(can('can_view_users'));
+  const [account, setAccount] = useState('');
+  const [tokenName, setName] = useState('');
   const [validity, setValidity] = useState('90');
-  const [creado, setCreated] = useState<string | null>(null);
-  const [copiado, setCopiado] = useState(false);
+  const [created, setCreated] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const create = useMutation({
     mutationFn: () =>
-      tokensApi.create({ user_id: Number(cuenta), name: nombre.trim(), expires_in_days: validity ? Number(validity) : null }),
+      tokensApi.create({ user_id: Number(account), name: tokenName.trim(), expires_in_days: validity ? Number(validity) : null }),
     onSuccess: (token) => {
       setCreated(token.token);
       void queryClient.invalidateQueries({ queryKey: TOKENS_KEY });
     },
   });
 
-  const copiar = async () => {
-    if (!creado) return;
-    await navigator.clipboard.writeText(creado);
-    setCopiado(true);
+  const copy = async () => {
+    if (!created) return;
+    await navigator.clipboard.writeText(created);
+    setCopied(true);
   };
 
   return (
     <Modal isOpen onClose={onClose} title="Nuevo token de API" icon={<KeyRound className="h-5 w-5" />} size="md">
-      {creado ? (
+      {created ? (
         <div className="space-y-4">
           <StatusMessage
             status={{ type: 'warning', text: 'Cópialo ahora: no se vuelve a mostrar. Si se pierde, revócalo y crea otro.' }}
           />
           <code className="block break-all rounded-lg border border-slate-700 bg-surface-tertiary p-3 font-mono text-xs text-white">
-            {creado}
+            {created}
           </code>
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" icon={<Copy className="h-4 w-4" />} onClick={() => void copiar()}>
-              {copiado ? 'Copiado' : 'Copiar'}
+            <Button variant="secondary" icon={<Copy className="h-4 w-4" />} onClick={() => void copy()}>
+              {copied ? 'Copiado' : 'Copiar'}
             </Button>
             <Button onClick={onClose}>Listo</Button>
           </div>
@@ -104,22 +104,22 @@ function NewToken({ onClose }: { onClose: () => void }) {
         >
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-slate-300">Cuenta</p>
-            {cuentas.isError || !can('can_view_users') ? (
+            {accounts.isError || !can('can_view_users') ? (
               <TextField
                 label="Id de la cuenta"
                 type="number"
                 min={1}
-                value={cuenta}
-                onChange={(e) => setCuenta(e.target.value)}
+                value={account}
+                onChange={(e) => setAccount(e.target.value)}
                 required
               />
             ) : (
               <SelectMenu
-                value={cuenta}
-                onChange={setCuenta}
-                placeholder={cuentas.isPending ? 'Cargando…' : 'Elige la cuenta'}
+                value={account}
+                onChange={setAccount}
+                placeholder={accounts.isPending ? 'Cargando…' : 'Elige la cuenta'}
                 searchable
-                options={(cuentas.data ?? []).map((u) => ({ value: String(u.id), label: u.username }))}
+                options={(accounts.data ?? []).map((u) => ({ value: String(u.id), label: u.username }))}
               />
             )}
             <p className="text-[11px] text-slate-500">El token actúa con sus permisos. Solo aparecen las que tienen «Usar la API».</p>
@@ -128,13 +128,13 @@ function NewToken({ onClose }: { onClose: () => void }) {
             label="Nombre"
             placeholder="Para qué aplicación es"
             maxLength={80}
-            value={nombre}
+            value={tokenName}
             onChange={(e) => setName(e.target.value)}
             required
           />
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-slate-300">Caducidad</p>
-            <SelectMenu value={validity} onChange={setValidity} options={VIGENCIAS} />
+            <SelectMenu value={validity} onChange={setValidity} options={VALIDITIES} />
           </div>
           {create.isError && (
             <StatusMessage status={{ type: 'error', text: getApiErrorMessage(create.error, 'No se pudo crear el token.') }} />
@@ -143,7 +143,7 @@ function NewToken({ onClose }: { onClose: () => void }) {
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" isLoading={create.isPending} disabled={!cuenta || !nombre.trim()}>
+            <Button type="submit" isLoading={create.isPending} disabled={!account || !tokenName.trim()}>
               Crear token
             </Button>
           </div>
@@ -155,11 +155,11 @@ function NewToken({ onClose }: { onClose: () => void }) {
 
 export function TokensView() {
   const queryClient = useQueryClient();
-  const [creando, setCreando] = useState(false);
-  const [aviso, setNotice] = useState<{ type: StatusTone; text: string } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [notice, setNotice] = useState<{ type: StatusTone; text: string } | null>(null);
   const tokens = useQuery({ queryKey: TOKENS_KEY, queryFn: tokensApi.list });
 
-  const revocar = useMutation({
+  const revokeToken = useMutation({
     mutationFn: tokensApi.revoke,
     onSuccess: (token) => {
       setNotice({ type: 'success', text: `Token «${token.name}» revocado.` });
@@ -171,12 +171,12 @@ export function TokensView() {
   return (
     <AppLayout title="Tokens de API">
       <div className="space-y-4">
-        <StatusMessage status={aviso} />
+        <StatusMessage status={notice} />
         <Panel
           title="Tokens"
           description="Otras aplicaciones usan la API con «Authorization: Bearer <token>». Todo lo que hacen queda en Auditoría."
           actions={
-            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreando(true)}>
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>
               Nuevo token
             </Button>
           }
@@ -199,20 +199,20 @@ export function TokensView() {
                 </thead>
                 <tbody className={READONLY_TABLE_BODY}>
                   {tokens.data.map((token) => {
-                    const { texto, clase } = estado(token);
+                    const { text, tone } = tokenState(token);
                     return (
                       <tr key={token.id} className="text-slate-300">
                         <td className="px-3 py-2 font-semibold text-white">{token.name}</td>
                         <td className="px-3 py-2 font-mono">{token.prefix}…</td>
                         <td className="px-3 py-2">{token.user.username}</td>
-                        <td className={`px-3 py-2 font-semibold ${clase}`}>{texto}</td>
+                        <td className={`px-3 py-2 font-semibold ${tone}`}>{text}</td>
                         <td className="px-3 py-2">
-                          {fecha(token.created_at)}
+                          {formatDate(token.created_at)}
                           {token.created_by && <span className="block text-[10px] text-slate-500">por {token.created_by}</span>}
                         </td>
-                        <td className="px-3 py-2">{fecha(token.expires_at)}</td>
+                        <td className="px-3 py-2">{formatDate(token.expires_at)}</td>
                         <td className="px-3 py-2">
-                          {fecha(token.last_used_at)}
+                          {formatDate(token.last_used_at)}
                           {token.last_used_ip && <span className="block text-[10px] text-slate-500">{token.last_used_ip}</span>}
                         </td>
                         <td className="px-3 py-2 text-right">
@@ -221,8 +221,8 @@ export function TokensView() {
                               size="sm"
                               variant="outline"
                               icon={<Ban className="h-3.5 w-3.5" />}
-                              isLoading={revocar.isPending && revocar.variables === token.id}
-                              onClick={() => revocar.mutate(token.id)}
+                              isLoading={revokeToken.isPending && revokeToken.variables === token.id}
+                              onClick={() => revokeToken.mutate(token.id)}
                             >
                               Revocar
                             </Button>
@@ -237,7 +237,7 @@ export function TokensView() {
           )}
         </Panel>
       </div>
-      {creando && <NewToken onClose={() => setCreando(false)} />}
+      {creating && <NewToken onClose={() => setCreating(false)} />}
     </AppLayout>
   );
 }

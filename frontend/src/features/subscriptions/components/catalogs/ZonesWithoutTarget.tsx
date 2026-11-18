@@ -26,27 +26,27 @@ import { actionsColumn } from './CatalogCommon';
 interface Borrador {
   id?: number;
   /** Solo al crear: las zonas elegidas. */
-  zonas: number[];
+  zones: number[];
   /** Al editar: el nombre de la zona, que ya no cambia. */
-  etiqueta?: string;
-  desde: string;
-  hasta: string;
-  nota: string;
+  role_label?: string;
+  since: string;
+  until: string;
+  note: string;
 }
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 /** Si el tramo rige en `mes`. */
 const current = (row: CatalogZoneWithoutTarget, mes: string) =>
-  (!row.desde || row.desde <= mes) && (!row.hasta || mes <= row.hasta);
+  (!row.since || row.since <= mes) && (!row.until || mes <= row.until);
 
 export function ZonesWithoutTargetPanel({
-  filas,
-  zonas,
+  rows,
+  zones,
   onDelete: onBorrar,
 }: {
-  filas: CatalogZoneWithoutTarget[];
-  zonas: CatalogZone[];
+  rows: CatalogZoneWithoutTarget[];
+  zones: CatalogZone[];
   onDelete: (row: CatalogZoneWithoutTarget) => void;
 }) {
   const [borrador, setBorrador] = useState<Borrador | null>(null);
@@ -62,24 +62,24 @@ export function ZonesWithoutTargetPanel({
   const guardar = async (event: FormEvent) => {
     event.preventDefault();
     if (!borrador) return;
-    const { desde, hasta, nota } = borrador;
+    const { since, until, note } = borrador;
     setGuardando(true);
     setError(null);
     try {
       if (borrador.id) {
-        await catalogsApi.guardar('zonas_sin_objetivo', { id: borrador.id, desde, hasta, nota });
+        await catalogsApi.guardar('zonas_sin_objetivo', { id: borrador.id, since, until, note });
       } else {
-        if (borrador.zonas.length === 0) {
+        if (borrador.zones.length === 0) {
           setError('Elige al menos una zona.');
           return;
         }
-        const byId = new Map(zonas.map((z) => [z.id, z.nombre]));
+        const byId = new Map(zones.map((z) => [z.id, z.name]));
         const response = await catalogsApi.guardarLote(
           'zonas_sin_objetivo',
-          borrador.zonas.map((id) => ({ zona_id: id, nombre: byId.get(id) ?? '', desde, hasta, nota })),
+          borrador.zones.map((id) => ({ zone_id: id, name: byId.get(id) ?? '', since, until, note })),
         );
-        if (response.errores.length) {
-          setError(`${response.message} No entraron: ${response.errores.map((e) => `${e.nombre}: ${e.message}`).join(' · ')}`);
+        if (response.errors.length) {
+          setError(`${response.message} No entraron: ${response.errors.map((e) => `${e.name}: ${e.message}`).join(' · ')}`);
           return;
         }
       }
@@ -94,23 +94,23 @@ export function ZonesWithoutTargetPanel({
   const columns: Column<CatalogZoneWithoutTarget>[] = [
     { header: 'Zona', accessor: 'zona', sortKey: 'zona' },
     { header: 'Site', accessor: 'site', sortKey: 'site', filterable: true },
-    { header: 'Unidad de negocio', accessor: (row) => row.coordinador || <span className="text-slate-600">—</span>, sortKey: 'coordinador' },
-    { header: 'Desde', accessor: (row) => row.desde || 'siempre', sortKey: 'desde' },
-    { header: 'Hasta', accessor: (row) => row.hasta || 'sin fin', sortKey: 'hasta' },
+    { header: 'Unidad de negocio', accessor: (row) => row.coordinator || <span className="text-slate-600">—</span>, sortKey: 'coordinator' },
+    { header: 'Desde', accessor: (row) => row.since || 'siempre', sortKey: 'since' },
+    { header: 'Hasta', accessor: (row) => row.until || 'sin fin', sortKey: 'until' },
     {
       header: `Rige ${today}`,
       accessor: (row) => (current(row, today)
         ? <span className="font-semibold text-amber-300">Sin objetivo</span>
         : <span className="text-slate-500">No: se mide</span>),
     },
-    { header: 'Nota', accessor: (row) => row.nota || <span className="text-slate-600">—</span> },
+    { header: 'Nota', accessor: (row) => row.note || <span className="text-slate-600">—</span> },
     {
       header: 'Actualizado',
-      accessor: (row) => `${row.actualizado_en}${row.actualizado_por ? ` · ${row.actualizado_por}` : ''}`,
-      sortKey: 'actualizado_en',
+      accessor: (row) => `${row.updated_at}${row.updated_by ? ` · ${row.updated_by}` : ''}`,
+      sortKey: 'updated_at',
     },
     actionsColumn<CatalogZoneWithoutTarget>(
-      (row) => setBorrador({ id: row.id, zonas: [row.zona_id], etiqueta: row.zona, desde: row.desde, hasta: row.hasta, nota: row.nota }),
+      (row) => setBorrador({ id: row.id, zones: [row.zone_id], role_label: row.zona, since: row.since, until: row.until, note: row.note }),
       onBorrar,
     ),
   ];
@@ -128,20 +128,20 @@ export function ZonesWithoutTargetPanel({
           <Button
             size="sm"
             icon={<Plus className="h-4 w-4" />}
-            onClick={() => setBorrador({ zonas: [], desde: today, hasta: '', nota: '' })}
+            onClick={() => setBorrador({ zones: [], since: today, until: '', note: '' })}
           >
             Apartar zonas
           </Button>
         }
       >
-        {filas.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState
             title="Todas las zonas se miden"
             description="Aparta aquí las zonas nuevas para que no muevan el cumplimiento de su grupo hasta que tengan base."
             icon={<MapPinOff />}
           />
         ) : (
-          <DataTable columns={columns} data={filas} searchable searchPlaceholder="Buscar zona..." />
+          <DataTable columns={columns} data={rows} searchable searchPlaceholder="Buscar zona..." />
         )}
       </NeonContainer>
 
@@ -165,34 +165,34 @@ export function ZonesWithoutTargetPanel({
 
             {borrador.id ? (
               <Field label="Zona">
-                <div className="py-2 text-sm font-semibold text-white">{borrador.etiqueta}</div>
+                <div className="py-2 text-sm font-semibold text-white">{borrador.role_label}</div>
               </Field>
             ) : (
               <ZoneSelector
-                zonas={zonas.filter((z) => !filas.some((f) => f.zona_id === z.id))}
-                elegidas={borrador.zonas}
-                onChange={(ids) => setBorrador({ ...borrador, zonas: ids })}
+                zones={zones.filter((z) => !rows.some((f) => f.zone_id === z.id))}
+                elegidas={borrador.zones}
+                onChange={(ids) => setBorrador({ ...borrador, zones: ids })}
               />
             )}
 
             <FormColumns>
               <Field label="Desde" hint="Vacío: desde siempre.">
-                <MonthPicker value={borrador.desde} onChange={(desde) => setBorrador({ ...borrador, desde })} placeholder="Desde siempre" />
+                <MonthPicker value={borrador.since} onChange={(desde) => setBorrador({ ...borrador, since: desde })} placeholder="Desde siempre" />
               </Field>
               <Field
                 label="Hasta (incluido)"
                 hint="Vacío: hasta que se le ponga fin."
-                action={borrador.hasta ? (
+                action={borrador.until ? (
                   <button
                     type="button"
-                    onClick={() => setBorrador({ ...borrador, hasta: '' })}
+                    onClick={() => setBorrador({ ...borrador, until: '' })}
                     className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white"
                   >
                     <X className="h-3 w-3" /> Quitar
                   </button>
                 ) : undefined}
               >
-                <MonthPicker value={borrador.hasta} onChange={(hasta) => setBorrador({ ...borrador, hasta })} placeholder="Sin fin" />
+                <MonthPicker value={borrador.until} onChange={(hasta) => setBorrador({ ...borrador, until: hasta })} placeholder="Sin fin" />
               </Field>
             </FormColumns>
 
@@ -200,8 +200,8 @@ export function ZonesWithoutTargetPanel({
               <input
                 type="text"
                 className={modalInputClass}
-                value={borrador.nota}
-                onChange={(e) => setBorrador({ ...borrador, nota: e.target.value })}
+                value={borrador.note}
+                onChange={(e) => setBorrador({ ...borrador, note: e.target.value })}
               />
             </Field>
 
@@ -211,7 +211,7 @@ export function ZonesWithoutTargetPanel({
               onClose={cerrar}
               submitLabel={borrador.id
                 ? 'Guardar cambios'
-                : `Apartar ${borrador.zonas.length || ''} ${borrador.zonas.length === 1 ? 'zona' : 'zonas'}`.replace(/\s+/g, ' ')}
+                : `Apartar ${borrador.zones.length || ''} ${borrador.zones.length === 1 ? 'zona' : 'zonas'}`.replace(/\s+/g, ' ')}
             />
           </ModalForm>
         )}
@@ -222,19 +222,19 @@ export function ZonesWithoutTargetPanel({
 
 /** Lista con búsqueda para marcar varias zonas; las ya apartadas no salen. */
 function ZoneSelector({
-  zonas,
+  zones,
   elegidas,
   onChange,
 }: {
-  zonas: CatalogZone[];
+  zones: CatalogZone[];
   elegidas: number[];
   onChange: (ids: number[]) => void;
 }) {
   const [busqueda, setBusqueda] = useState('');
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return zonas.filter((z) => !q || `${z.nombre} ${z.site} ${z.coordinador}`.toLowerCase().includes(q));
-  }, [zonas, busqueda]);
+    return zones.filter((z) => !q || `${z.name} ${z.site} ${z.coordinator}`.toLowerCase().includes(q));
+  }, [zones, busqueda]);
   const marcadas = new Set(elegidas);
   const alternar = (id: number) =>
     onChange(marcadas.has(id) ? elegidas.filter((e) => e !== id) : [...elegidas, id]);
@@ -265,8 +265,8 @@ function ZoneSelector({
                 )}>
                   {marcada && <Check className="h-3 w-3" />}
                 </span>
-                <span className="font-semibold text-white">{z.nombre}</span>
-                <span className="ml-auto text-slate-500">{z.site}{z.coordinador ? ` · ${z.coordinador}` : ''}</span>
+                <span className="font-semibold text-white">{z.name}</span>
+                <span className="ml-auto text-slate-500">{z.site}{z.coordinator ? ` · ${z.coordinator}` : ''}</span>
               </button>
             );
           })}

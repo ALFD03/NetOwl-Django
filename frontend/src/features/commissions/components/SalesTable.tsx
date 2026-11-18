@@ -8,50 +8,50 @@ import type { CommissionSale } from '../types';
 import { FirstInstallment } from './pieces';
 
 /** Las ventas con su clasificación, su motivo y las personas que cobran por ellas. */
-export function SalesTable({ ventas }: { ventas: CommissionSale[] }) {
+export function SalesTable({ sales }: { sales: CommissionSale[] }) {
   const columns: Column<CommissionSale>[] = [
-    { header: 'Orden', accessor: 'orden', sortKey: 'orden', sticky: true },
-    { header: 'Cliente', accessor: 'cliente', sortKey: 'cliente' },
-    { header: 'Instalada', accessor: (row) => formatDateValue(row.fecha_inicio), sortKey: 'fecha_inicio' },
-    { header: 'Plan', accessor: 'producto', sortKey: 'producto', filterable: true },
+    { header: 'Orden', accessor: 'order', sortKey: 'order', sticky: true },
+    { header: 'Cliente', accessor: 'client', sortKey: 'client' },
+    { header: 'Instalada', accessor: (row) => formatDateValue(row.since_date), sortKey: 'since_date' },
+    { header: 'Plan', accessor: 'product', sortKey: 'product', filterable: true },
     {
       header: 'Tipo',
-      accessor: (row) => (row.pyme ? 'PYME' : 'Residencial'),
+      accessor: (row) => (row.sme ? 'PYME' : 'Residencial'),
       filterable: true,
-      filterValue: (row) => (row.pyme ? 'PYME' : 'Residencial'),
+      filterValue: (row) => (row.sme ? 'PYME' : 'Residencial'),
     },
-    { header: 'Precio', accessor: (row) => formatAmount(row.precio), align: 'right', sortKey: 'precio' },
+    { header: 'Precio', accessor: (row) => formatAmount(row.price), align: 'right', sortKey: 'price' },
     {
       header: 'Estado actual',
-      accessor: (row) => (row.cancelada_el ? `${row.estado} · ${formatDateValue(row.cancelada_el)}` : row.estado),
-      sortKey: 'estado',
+      accessor: (row) => (row.cancelled_on ? `${row.status} · ${formatDateValue(row.cancelled_on)}` : row.status),
+      sortKey: 'status',
       filterable: true,
-      filterValue: (row) => row.estado || 'Sin estado',
+      filterValue: (row) => row.status || 'Sin estado',
     },
-    { header: 'Factura', accessor: (row) => row.estado_factura || '—', filterable: true, filterValue: (row) => row.estado_factura || 'Sin estado' },
+    { header: 'Factura', accessor: (row) => row.billing_status || '—', filterable: true, filterValue: (row) => row.billing_status || 'Sin estado' },
     {
       header: 'Primera mensualidad',
-      accessor: (row) => <FirstInstallment venta={row} />,
+      accessor: (row) => <FirstInstallment sale={row} />,
       filterable: true,
-      filterValue: (row) => (row.factura_numero ? row.factura_pago || row.factura_estado || 'Sin estado' : 'Sin factura'),
+      filterValue: (row) => (row.invoice_number ? row.invoice_payment || row.invoice_status || 'Sin estado' : 'Sin factura'),
     },
     {
       header: 'Clasificación',
-      accessor: (row) => <span className={CLASSIFICATION[row.clasificacion].tone} title={row.motivo}>{CLASSIFICATION[row.clasificacion].label}</span>,
+      accessor: (row) => <span className={CLASSIFICATION[row.classification].tone} title={row.reason}>{CLASSIFICATION[row.classification].label}</span>,
       filterable: true,
-      filterValue: (row) => CLASSIFICATION[row.clasificacion].label,
+      filterValue: (row) => CLASSIFICATION[row.classification].label,
     },
-    { header: 'Medio', accessor: (row) => row.medio || '—', sortKey: 'medio', filterable: true, filterValue: (row) => row.medio || 'Sin medio' },
-    { header: 'Supervisor', accessor: (row) => row.medio_supervisor || '—', filterable: true, filterValue: (row) => row.medio_supervisor || 'Sin supervisor' },
-    { header: 'Vendedor', accessor: (row) => row.vendedor || '—', filterable: true, filterValue: (row) => row.vendedor || 'Sin vendedor' },
-    { header: 'Unidades', accessor: (row) => row.unidades.join(', ') || '—', filterable: true, filterValue: (row) => row.unidades.join(', ') || 'Sin unidad' },
+    { header: 'Medio', accessor: (row) => row.channel || '—', sortKey: 'channel', filterable: true, filterValue: (row) => row.channel || 'Sin medio' },
+    { header: 'Supervisor', accessor: (row) => row.supervisor_channel || '—', filterable: true, filterValue: (row) => row.supervisor_channel || 'Sin supervisor' },
+    { header: 'Vendedor', accessor: (row) => row.seller || '—', filterable: true, filterValue: (row) => row.seller || 'Sin vendedor' },
+    { header: 'Unidades', accessor: (row) => row.units.join(', ') || '—', filterable: true, filterValue: (row) => row.units.join(', ') || 'Sin unidad' },
     {
       header: '',
-      accessor: (row) => (row.avisos.length ? (
-        <span title={row.avisos.join('\n')} className="text-amber-400"><AlertTriangle className="h-4 w-4" /></span>
+      accessor: (row) => (row.warnings.length ? (
+        <span title={row.warnings.join('\n')} className="text-amber-400"><AlertTriangle className="h-4 w-4" /></span>
       ) : null),
     },
   ];
 
-  return <DataTable columns={columns} data={ventas} searchable searchPlaceholder="Buscar orden, cliente o medio..." />;
+  return <DataTable columns={columns} data={sales} searchable searchPlaceholder="Buscar orden, cliente o medio..." />;
 }

@@ -77,7 +77,7 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
     if (activeView === 'volumen') {
       return {
         data: volumeByValueData(filas),
-        options: volumeByValueOptions(filas, seleccionar ? (i) => seleccionar(filas[i].nombre) : undefined),
+        options: volumeByValueOptions(filas, seleccionar ? (i) => seleccionar(filas[i].name) : undefined),
       };
     }
     return { data: velasData(filas, CLOSE_TOTAL), options: velasOptions(filas, CLOSE_TOTAL, seleccionar) };

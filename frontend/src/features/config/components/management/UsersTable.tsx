@@ -26,10 +26,10 @@ interface Props {
 }
 
 /** Botón de fila: discreto en reposo, con el color de su acción al pasar por encima. */
-const ACCION = 'rounded-lg p-2 text-slate-500 transition-colors hover:bg-surface-hover';
+const ACTION = 'rounded-lg p-2 text-slate-500 transition-colors hover:bg-surface-hover';
 
 export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }: Props) {
-  const paginacion = usePaginacion(users);
+  const pagination = usePaginacion(users);
   if (!users.length) {
     return (
       <EmptyState
@@ -43,7 +43,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-800 bg-surface-secondary shadow-xl">
-      <Paginacion estado={paginacion} posicion="arriba" />
+      <Paginacion estado={pagination} posicion="arriba" />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead>
@@ -58,13 +58,13 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/70">
-            {paginacion.visibles.map((user) => {
-              const permisos = effectivePermissions(user, groups);
+            {pagination.visibles.map((user) => {
+              const granted = effectivePermissions(user, groups);
               return (
                 <tr key={user.id} className="group transition-colors hover:bg-white/[0.03]">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <Avatar nombre={user.username} />
+                      <Avatar name={user.username} />
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-white">{user.username}</p>
                         {user.is_superuser && (
@@ -78,7 +78,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
 
                   <td className="px-5 py-3">
                     <span className="rounded-md bg-surface-tertiary px-2 py-1 text-xs font-medium text-slate-300">
-                      {user.role_display}
+                      {user.role_label}
                     </span>
                   </td>
 
@@ -95,12 +95,12 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
                       </span>
                     )}
                     <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
-                      {countPermissions(permisos)} de {TOTAL_PERMISSIONS}
+                      {countPermissions(granted)} de {TOTAL_PERMISSIONS}
                     </p>
                   </td>
 
                   <td className="px-5 py-3">
-                    <ModulesWithAccess permisos={permisos} />
+                    <ModulesWithAccess permissions={granted} />
                   </td>
 
                   <td className="px-5 py-3">
@@ -110,7 +110,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
                         <button
                           type="button"
                           onClick={() => onEdit(user)}
-                          className={cn(ACCION, 'hover:text-brand-light')}
+                          className={cn(ACTION, 'hover:text-brand-light')}
                           title="Editar rol, grupo y permisos"
                           aria-label={`Editar ${user.username}`}
                         >
@@ -123,7 +123,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
                         <button
                           type="button"
                           onClick={() => onChangePassword(user)}
-                          className={cn(ACCION, 'hover:text-amber-300')}
+                          className={cn(ACTION, 'hover:text-amber-300')}
                           title="Cambiar contraseña"
                           aria-label={`Cambiar la contraseña de ${user.username}`}
                         >
@@ -139,7 +139,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
                         <button
                           type="button"
                           onClick={() => onDelete(user)}
-                          className={cn(ACCION, 'hover:text-rose-400')}
+                          className={cn(ACTION, 'hover:text-rose-400')}
                           title="Eliminar cuenta"
                           aria-label={`Eliminar ${user.username}`}
                         >
@@ -154,7 +154,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
           </tbody>
         </table>
       </div>
-      <Paginacion estado={paginacion} />
+      <Paginacion estado={pagination} />
     </div>
   );
 }

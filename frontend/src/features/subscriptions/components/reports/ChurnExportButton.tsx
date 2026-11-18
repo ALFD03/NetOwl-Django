@@ -19,7 +19,7 @@ interface ChurnExportButtonProps {
    */
   nodos?: string[];
   /** Qué se está exportando; va en el nombre del archivo. */
-  alcance: string;
+  scope: string;
   /**
    * El corte visible es un día y no el cierre del mes.
    *
@@ -44,7 +44,7 @@ interface ChurnExportButtonProps {
 export function ChurnExportButton({
   period,
   nodos,
-  alcance,
+  scope,
   dayNotice: avisoDia = false,
   label = 'Exportar bajas',
   iconOnly = false,
@@ -58,14 +58,14 @@ export function ChurnExportButton({
     setError(null);
     try {
       const data = await subscriptionsApi.getBajasDetalle(period, nodos);
-      if (!data.bajas?.length) {
+      if (!data.churned?.length) {
         setState('empty');
         return;
       }
       await downloadRowsAsExcel({
-        rows: data.bajas,
+        rows: data.churned,
         columns: CHURN_COLUMNS,
-        fileName: churnFileName(data.period ?? period, alcance),
+        fileName: churnFileName(data.period ?? period, scope),
         sheetName: 'Bajas',
       });
       setState('idle');
@@ -81,7 +81,7 @@ export function ChurnExportButton({
   };
 
   const titulo = [
-    `Descargar el detalle de las bajas de ${alcance} (${period}).`,
+    `Descargar el detalle de las bajas de ${scope} (${period}).`,
     avisoDia ? 'El detalle nominal solo existe por cierre mensual: se exporta el mes completo, no el día seleccionado.' : '',
   ].filter(Boolean).join(' ');
 

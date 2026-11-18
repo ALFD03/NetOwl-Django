@@ -9,8 +9,8 @@ import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters/numb
 
 export function buildChurnData(periodos: PeriodData[], labels: string[]): ChartData<'line'> {
   return { labels, datasets: [
-    { label: 'Churn Neto %', data: periodos.map((p) => Number(p.churn_neto_pct.toFixed(2))), borderColor: CHART_PALETTE[4], borderWidth: 3, fill: false, tension: 0.35 },
-    { label: 'Churn Bruto %', data: periodos.map((p) => Number(p.churn_bruto_pct.toFixed(2))), borderColor: CHART_PALETTE[0], borderDash: [5, 5], borderWidth: 2.5, fill: false, tension: 0.35 },
+    { label: 'Churn Neto %', data: periodos.map((p) => Number(p.net_churn_pct.toFixed(2))), borderColor: CHART_PALETTE[4], borderWidth: 3, fill: false, tension: 0.35 },
+    { label: 'Churn Bruto %', data: periodos.map((p) => Number(p.gross_churn_pct.toFixed(2))), borderColor: CHART_PALETTE[0], borderDash: [5, 5], borderWidth: 2.5, fill: false, tension: 0.35 },
   ] };
 }
 
@@ -22,11 +22,11 @@ export function buildChurnData(periodos: PeriodData[], labels: string[]): ChartD
  * pila (el crecimiento); el reparto se lee por altura y en el tooltip.
  */
 export function buildGrowthData(periodos: PeriodData[], labels: string[]): ChartData<'bar'> {
-  const crecimiento = periodos.map((p) => (p.activos_inicio > 0 ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 : 0));
+  const crecimiento = periodos.map((p) => (p.active_start > 0 ? ((p.active_end - p.active_start) / p.active_start) * 100 : 0));
   /** Parte del crecimiento que aporta cada origen, proporcional a sus altas. */
   const aporte = (i: number, origen: 'nuevos' | 'react') => {
     const p = periodos[i];
-    const total = (p.nuevos_mes || 0) + (p.react_val || 0);
+    const total = (p.new_in_month || 0) + (p.react_val || 0);
     const cuota = total > 0 ? (p.react_val || 0) / total : 0;
     return Number((crecimiento[i] * (origen === 'react' ? cuota : 1 - cuota)).toFixed(2));
   };
@@ -81,8 +81,8 @@ export const growthChartOptions: ChartOptions<'bar'> = getHorizontalBarOptions(u
  * antes del cambio de fórmula guardan ahí la definición vieja.
  */
 function periodBalance(p: PeriodData) {
-  const base = p.activos_inicio || 0;
-  const cortes = p.corte_impagado || 0;
+  const base = p.active_start || 0;
+  const cortes = p.unpaid_cuts || 0;
   const recuperados = p.react_4_P || 0;
   return {
     cortes,

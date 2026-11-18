@@ -72,7 +72,7 @@ export function SalesReportView({
                 // Los nodos que el site tiene en pantalla, no los del catálogo:
                 // los filtros de tecnología y sucursal ya recortaron la tabla.
                 nodos={groupNodes(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
-                alcance={String(site.site ?? '')}
+                scope={String(site.site ?? '')}
                 dayNotice={diaSeleccionado}
                 label="Exportar bajas del site"
               />
@@ -82,15 +82,15 @@ export function SalesReportView({
           <div className="space-y-10">
             <OfficeCoordinatorBadges
               coordinadoras={coordinadoras.filter((c) => siteKey(c.site) === siteKey(site.site))}
-              dia={diaCorte}
+              day={diaCorte}
               // Pegadas al resumen del site, no a diez de distancia.
               className="-mb-6"
             />
             {site.totales && site.meta && (
               <SimpleSummary
-                activeAtStart={site.totales.activos_inicio}
-                activeAtEnd={site.totales.activos_final}
-                nuevos={site.totales.nuevos}
+                activeAtStart={site.totales.active_start}
+                activeAtEnd={site.totales.active_end}
+                new_subs={site.totales.new_subs}
                 meta={site.meta}
                 projection={proyeccion}
               />
@@ -103,13 +103,13 @@ export function SalesReportView({
                   <CommercialSummaryStrip
                     leadLabel="Tecnología"
                     leadValue={String(tech.technology ?? '')}
-                    activeAtStart={tech.dynamic.activos_inicio}
-                    activeAtEnd={tech.dynamic.activos_final}
-                    bajas={tech.dynamic.bajas}
-                    crecimiento={tech.dynamic.crecimiento}
+                    activeAtStart={tech.dynamic.active_start}
+                    activeAtEnd={tech.dynamic.active_end}
+                    churned={tech.dynamic.churned}
+                    growth={tech.dynamic.growth}
                     churnRate={tech.dynamic.churn_rate}
                     meta={tech.dynamic.meta}
-                    nuevos={tech.dynamic.nuevos}
+                    new_subs={tech.dynamic.new_subs}
                     projection={proyeccion}
                   />
 
@@ -117,7 +117,7 @@ export function SalesReportView({
                     <ChurnExportButton
                       period={period}
                       nodos={groupNodes(tech.nodes)}
-                      alcance={`${site.site ?? ''} ${tech.technology ?? ''}`}
+                      scope={`${site.site ?? ''} ${tech.technology ?? ''}`}
                       dayNotice={diaSeleccionado}
                       label={`Exportar bajas ${tech.technology ?? ''}`}
                     />
@@ -131,7 +131,7 @@ export function SalesReportView({
                       <ChurnExportButton
                         period={period}
                         nodos={groupNodes([node])}
-                        alcance={node.zona_sucursal ?? node.zona ?? ''}
+                        scope={node.zona_sucursal ?? node.zona ?? ''}
                         dayNotice={diaSeleccionado}
                         iconOnly
                       />

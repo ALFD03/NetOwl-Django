@@ -25,34 +25,34 @@ import {
 /** The nine scalar keys the backend stores for one measure. */
 function timeStatKeys(medida: SupportTimeMeasure): Array<keyof SupportTimeStats> {
   return [
-    `tiempo_medio_${medida}_horas`,
-    `tiempo_mediana_${medida}_horas`,
-    `tiempo_min_${medida}_horas`,
-    `tiempo_p25_${medida}_horas`,
-    `tiempo_p75_${medida}_horas`,
-    `tiempo_max_${medida}_horas`,
-    `tiempo_std_${medida}_horas`,
-    `pct_excede_promedio_${medida}`,
-    `muestra_${medida}`,
+    `time_mean_${medida}_hours`,
+    `time_median_${medida}_hours`,
+    `time_min_${medida}_hours`,
+    `time_p25_${medida}_hours`,
+    `time_p75_${medida}_hours`,
+    `time_max_${medida}_hours`,
+    `time_std_${medida}_hours`,
+    `pct_over_avg_${medida}`,
+    `sample_${medida}`,
   ];
 }
 
 const TIME_STAT_KEYS: Array<keyof SupportTimeStats> = SUPPORT_TIME_MEASURES.flatMap(timeStatKeys);
 
 const RATE_KEYS = [
-  'total_tickets', 'tickets_creados', 'tickets_cerrados',
-  'tickets_resueltos', 'tickets_resueltos_periodo', 'tickets_resueltos_arrastre',
-  'tickets_cancelados', 'tickets_cancelados_periodo', 'tickets_cancelados_arrastre',
-  'tickets_escalados', 'tickets_escalados_periodo', 'tickets_escalados_arrastre',
-  'tickets_recibidos_escalados',
-  'tickets_rezagados',
-  'pct_resueltos', 'pct_resueltos_periodo', 'pct_resueltos_arrastre',
-  'pct_cancelados', 'pct_cancelados_periodo', 'pct_cancelados_arrastre',
-  'pct_escalados', 'pct_escalados_periodo', 'pct_escalados_arrastre',
-  'pct_recibidos_escalados',
-  'pct_rezagados',
-  'composicion_cola_horas', 'composicion_pausa_horas',
-  'composicion_gestion_horas', 'composicion_sin_clasificar_horas', 'muestra_composicion',
+  'total_tickets', 'tickets_created', 'tickets_closed',
+  'tickets_resolved', 'tickets_resolved_in_period', 'tickets_resolved_carryover',
+  'tickets_cancelled', 'tickets_cancelled_in_period', 'tickets_cancelled_carryover',
+  'tickets_escalated', 'tickets_escalated_in_period', 'tickets_escalated_carryover',
+  'tickets_received_escalated',
+  'tickets_lagging',
+  'pct_resolved', 'pct_resolved_in_period', 'pct_resolved_carryover',
+  'pct_cancelled', 'pct_cancelled_in_period', 'pct_cancelled_carryover',
+  'pct_escalated', 'pct_escalated_in_period', 'pct_escalated_carryover',
+  'pct_received_escalated',
+  'pct_lagging',
+  'queue_hours', 'pause_hours',
+  'handling_hours', 'unclassified_hours', 'composition_sample',
 ] as const satisfies ReadonlyArray<keyof SupportStats>;
 
 const ALL_KEYS: Array<keyof SupportStats> = [...TIME_STAT_KEYS, ...RATE_KEYS];
@@ -77,15 +77,15 @@ export function distribution(
   const num = (key: string) => toNumber(source[key]);
 
   return {
-    promedio: num(`tiempo_medio_${medida}_horas`),
-    mediana: num(`tiempo_mediana_${medida}_horas`),
-    min: num(`tiempo_min_${medida}_horas`),
-    p25: num(`tiempo_p25_${medida}_horas`),
-    p75: num(`tiempo_p75_${medida}_horas`),
-    max: num(`tiempo_max_${medida}_horas`),
-    std: num(`tiempo_std_${medida}_horas`),
-    pctExcedeProm: num(`pct_excede_promedio_${medida}`),
-    muestra: num(`muestra_${medida}`),
+    promedio: num(`time_mean_${medida}_hours`),
+    median: num(`time_median_${medida}_hours`),
+    min: num(`time_min_${medida}_hours`),
+    p25: num(`time_p25_${medida}_hours`),
+    p75: num(`time_p75_${medida}_hours`),
+    max: num(`time_max_${medida}_hours`),
+    std: num(`time_std_${medida}_hours`),
+    pctExcedeProm: num(`pct_over_avg_${medida}`),
+    sample: num(`sample_${medida}`),
   };
 }
 
@@ -114,10 +114,10 @@ export function flattenEntries(
 ): SupportDimensionRow[] {
   return (entries ?? [])
     .map((entry) => ({
-      ...(entry.metricas ?? {}),
-      nombre: entry.nombre,
-      pctOfParent: share(toNumber(entry.metricas?.total_tickets), parentTotal),
-      departamento: entry.departamento ?? '',
+      ...(entry.metrics ?? {}),
+      name: entry.name,
+      pctOfParent: share(toNumber(entry.metrics?.total_tickets), parentTotal),
+      department: entry.department ?? '',
     }))
     .sort((a, b) => toNumber(b.total_tickets) - toNumber(a.total_tickets));
 }
@@ -129,12 +129,12 @@ export const NO_DEPARTMENT = 'Sin departamento';
 
 /** Los volúmenes: se suman sin más, porque las personas parten los tickets. */
 const VOLUME_KEYS = [
-  'total_tickets', 'tickets_creados', 'tickets_cerrados',
-  'tickets_resueltos', 'tickets_resueltos_periodo', 'tickets_resueltos_arrastre',
-  'tickets_cancelados', 'tickets_cancelados_periodo', 'tickets_cancelados_arrastre',
-  'tickets_escalados', 'tickets_escalados_periodo', 'tickets_escalados_arrastre',
-  'tickets_recibidos_escalados',
-  'tickets_rezagados',
+  'total_tickets', 'tickets_created', 'tickets_closed',
+  'tickets_resolved', 'tickets_resolved_in_period', 'tickets_resolved_carryover',
+  'tickets_cancelled', 'tickets_cancelled_in_period', 'tickets_cancelled_carryover',
+  'tickets_escalated', 'tickets_escalated_in_period', 'tickets_escalated_carryover',
+  'tickets_received_escalated',
+  'tickets_lagging',
 ] as const satisfies ReadonlyArray<keyof SupportStats>;
 
 /**
@@ -148,15 +148,15 @@ export function groupByDepartment(
   rows: SupportDimensionRow[],
   parentTotal: number,
 ): SupportDepartmentRow[] {
-  const acumulado = new Map<string, { row: SupportDepartmentRow; pesos: Map<string, number> }>();
+  const acumulado = new Map<string, { row: SupportDepartmentRow; weights: Map<string, number> }>();
 
   for (const row of rows) {
-    const nombre = row.departamento || NO_DEPARTMENT;
+    const nombre = row.department || NO_DEPARTMENT;
     let entry = acumulado.get(nombre);
     if (entry === undefined) {
       entry = {
-        row: { ...emptyStats(), nombre, pctOfParent: 0, departamento: nombre, personas: 0 },
-        pesos: new Map(),
+        row: { ...emptyStats(), name: nombre, pctOfParent: 0, department: nombre, personas: 0 },
+        weights: new Map(),
       };
       acumulado.set(nombre, entry);
     }
@@ -170,39 +170,39 @@ export function groupByDepartment(
     // muestra, y se divide al final. La media de las medias sin ponderar daría
     // el mismo peso a quien cerró tres tickets que a quien cerró trescientos.
     for (const medida of SUPPORT_TIME_MEASURES) {
-      const muestra = toNumber(row[`muestra_${medida}`]);
+      const muestra = toNumber(row[`sample_${medida}`]);
       if (muestra <= 0) continue;
-      const clave = `tiempo_medio_${medida}_horas` as const;
+      const clave = `time_mean_${medida}_hours` as const;
       entry.row[clave] = toNumber(entry.row[clave]) + toNumber(row[clave]) * muestra;
-      entry.pesos.set(medida, (entry.pesos.get(medida) ?? 0) + muestra);
+      entry.weights.set(medida, (entry.weights.get(medida) ?? 0) + muestra);
     }
   }
 
   return [...acumulado.values()]
-    .map(({ row, pesos }) => {
+    .map(({ row, weights }) => {
       for (const medida of SUPPORT_TIME_MEASURES) {
-        const muestra = pesos.get(medida) ?? 0;
-        const clave = `tiempo_medio_${medida}_horas` as const;
-        row[`muestra_${medida}`] = muestra;
+        const muestra = weights.get(medida) ?? 0;
+        const clave = `time_mean_${medida}_hours` as const;
+        row[`sample_${medida}`] = muestra;
         row[clave] = muestra > 0 ? Number((toNumber(row[clave]) / muestra).toFixed(2)) : 0;
       }
 
       // Las tasas se recalculan desde las sumas, nunca se promedian: cada una
       // trae fijado su denominador —lo cerrado en el mes, o lo creado— y
       // promediar porcentajes de personas con cargas distintas no da ninguno.
-      const closedItems = toNumber(row.tickets_cerrados);
-      const creados = toNumber(row.tickets_creados);
-      row.pct_resueltos = share(toNumber(row.tickets_resueltos), closedItems);
-      row.pct_resueltos_periodo = share(toNumber(row.tickets_resueltos_periodo), closedItems);
-      row.pct_resueltos_arrastre = share(toNumber(row.tickets_resueltos_arrastre), closedItems);
-      row.pct_cancelados = share(toNumber(row.tickets_cancelados), closedItems);
-      row.pct_cancelados_periodo = share(toNumber(row.tickets_cancelados_periodo), closedItems);
-      row.pct_cancelados_arrastre = share(toNumber(row.tickets_cancelados_arrastre), closedItems);
-      row.pct_escalados = share(toNumber(row.tickets_escalados), closedItems);
-      row.pct_escalados_periodo = share(toNumber(row.tickets_escalados_periodo), closedItems);
-      row.pct_escalados_arrastre = share(toNumber(row.tickets_escalados_arrastre), closedItems);
-      row.pct_recibidos_escalados = share(toNumber(row.tickets_recibidos_escalados), creados);
-      row.pct_rezagados = share(toNumber(row.tickets_rezagados), creados);
+      const closedItems = toNumber(row.tickets_closed);
+      const creados = toNumber(row.tickets_created);
+      row.pct_resolved = share(toNumber(row.tickets_resolved), closedItems);
+      row.pct_resolved_in_period = share(toNumber(row.tickets_resolved_in_period), closedItems);
+      row.pct_resolved_carryover = share(toNumber(row.tickets_resolved_carryover), closedItems);
+      row.pct_cancelled = share(toNumber(row.tickets_cancelled), closedItems);
+      row.pct_cancelled_in_period = share(toNumber(row.tickets_cancelled_in_period), closedItems);
+      row.pct_cancelled_carryover = share(toNumber(row.tickets_cancelled_carryover), closedItems);
+      row.pct_escalated = share(toNumber(row.tickets_escalated), closedItems);
+      row.pct_escalated_in_period = share(toNumber(row.tickets_escalated_in_period), closedItems);
+      row.pct_escalated_carryover = share(toNumber(row.tickets_escalated_carryover), closedItems);
+      row.pct_received_escalated = share(toNumber(row.tickets_received_escalated), creados);
+      row.pct_lagging = share(toNumber(row.tickets_lagging), creados);
 
       row.pctOfParent = share(toNumber(row.total_tickets), parentTotal);
       return row;
@@ -218,7 +218,7 @@ export interface SupportLeaderCard {
   /** El criterio, no el valor: es lo que va en el encabezado de la tarjeta. */
   label: string;
   /** El valor de la dimensión que encabeza ese criterio. */
-  nombre: string;
+  name: string;
   value: string;
   /** El denominador con el que se calculó la cifra. */
   caption: string;
@@ -257,33 +257,33 @@ const LEADER_SPECS: LeaderSpec[] = [
     id: 'resueltos',
     label: 'Tasa de resueltos más alta',
     color: 'green',
-    pick: (r) => r.pct_resueltos,
+    pick: (r) => r.pct_resolved,
     format: (v) => `${formatTwoDecimals(v)}%`,
-    caption: (r) => `sobre ${formatInteger(toNumber(r.tickets_cerrados))} cerrados`,
+    caption: (r) => `sobre ${formatInteger(toNumber(r.tickets_closed))} cerrados`,
   },
   {
     id: 'cancelados',
     label: 'Tasa de cancelados más alta',
     color: 'red',
-    pick: (r) => r.pct_cancelados,
+    pick: (r) => r.pct_cancelled,
     format: (v) => `${formatTwoDecimals(v)}%`,
-    caption: (r) => `sobre ${formatInteger(toNumber(r.tickets_cerrados))} cerrados`,
+    caption: (r) => `sobre ${formatInteger(toNumber(r.tickets_closed))} cerrados`,
   },
   {
     id: 'rezagados',
     label: 'Tasa de rezago más alta',
     color: 'yellow',
-    pick: (r) => r.pct_rezagados,
+    pick: (r) => r.pct_lagging,
     format: (v) => `${formatTwoDecimals(v)}%`,
-    caption: (r) => `sobre ${formatInteger(toNumber(r.tickets_creados))} creados`,
+    caption: (r) => `sobre ${formatInteger(toNumber(r.tickets_created))} creados`,
   },
   {
     id: 'cierre',
     label: 'Tiempo de cierre más alto',
     color: 'purple',
-    pick: (r) => r.tiempo_medio_cierre_creado_cerrados_horas,
+    pick: (r) => r.time_mean_close_created_closed_hours,
     format: (v) => `${formatOneDecimal(v)} h`,
-    caption: (r) => `muestra ${formatInteger(toNumber(r.muestra_cierre_creado_cerrados))}`,
+    caption: (r) => `muestra ${formatInteger(toNumber(r.sample_close_created_closed))}`,
   },
 ];
 
@@ -299,21 +299,21 @@ const LEADER_SPECS: LeaderSpec[] = [
  */
 export function dimensionLeaders(rows: SupportDimensionRow[]): SupportLeaderCard[] {
   return LEADER_SPECS.flatMap((spec) => {
-    const best = rows.reduce<{ row: SupportDimensionRow; valor: number } | null>(
+    const best = rows.reduce<{ row: SupportDimensionRow; value: number } | null>(
       (top, row) => {
-        const valor = toNumber(spec.pick(row));
-        return top === null || valor > top.valor ? { row, valor } : top;
+        const value = toNumber(spec.pick(row));
+        return top === null || value > top.value ? { row, value } : top;
       },
       null,
     );
 
-    if (best === null || best.valor <= 0) return [];
+    if (best === null || best.value <= 0) return [];
 
     return [{
       id: spec.id,
       label: spec.label,
-      nombre: best.row.nombre,
-      value: spec.format(best.valor),
+      name: best.row.name,
+      value: spec.format(best.value),
       caption: spec.caption(best.row),
       color: spec.color,
     }];
@@ -340,24 +340,24 @@ export interface TimeMeasureMeta {
  * fixed per measure instead of being a control the reader has to operate.
  */
 export const TIME_MEASURE_META: Record<SupportTimeMeasure, TimeMeasureMeta> = {
-  cierre_creado_resuelto: { label: 'Cierre total · Resueltos', caption: 'Creación → cierre · cerrados en el mes', color: 'green' },
-  cierre_creado_cancelado: { label: 'Cierre total · Cancelados', caption: 'Creación → cierre · cerrados en el mes', color: 'red' },
-  cierre_creado_cerrados: { label: 'Cierre total · Todos', caption: 'Creación → cierre · cerrados en el mes', color: 'blue' },
+  close_created_resolved: { label: 'Cierre total · Resueltos', caption: 'Creación → cierre · cerrados en el mes', color: 'green' },
+  close_created_cancelled: { label: 'Cierre total · Cancelados', caption: 'Creación → cierre · cerrados en el mes', color: 'red' },
+  close_created_closed: { label: 'Cierre total · Todos', caption: 'Creación → cierre · cerrados en el mes', color: 'blue' },
 
-  cierre_asignado_resuelto: { label: 'Gestión · Resueltos', caption: 'Asignación → cierre · cerrados en el mes', color: 'green' },
-  cierre_asignado_cancelado: { label: 'Gestión · Cancelados', caption: 'Asignación → cierre · cerrados en el mes', color: 'red' },
-  cierre_asignado_cerrados: { label: 'Gestión · Todos', caption: 'Asignación → cierre · cerrados en el mes', color: 'purple' },
+  close_assigned_resolved: { label: 'Gestión · Resueltos', caption: 'Asignación → cierre · cerrados en el mes', color: 'green' },
+  close_assigned_cancelled: { label: 'Gestión · Cancelados', caption: 'Asignación → cierre · cerrados en el mes', color: 'red' },
+  close_assigned_closed: { label: 'Gestión · Todos', caption: 'Asignación → cierre · cerrados en el mes', color: 'purple' },
 
-  asignacion: { label: 'Tiempo de Asignación', caption: 'Creación → asignación (o → fin del periodo si sigue sin asignar) · creados en el mes', color: 'slate' },
+  assignment: { label: 'Tiempo de Asignación', caption: 'Creación → asignación (o → fin del periodo si sigue sin asignar) · creados en el mes', color: 'slate' },
 
-  escalamiento: { label: 'Hasta escalar', caption: 'Creación → paso a Soporte · escalados en el mes', color: 'yellow' },
+  escalation: { label: 'Hasta escalar', caption: 'Creación → paso a Soporte · escalados en el mes', color: 'yellow' },
 };
 
 /** The two clocks the summary panels lead with, one per formula. */
-export const CLOSE_TOTAL: SupportTimeMeasure = 'cierre_creado_cerrados';
-export const HANDLING: SupportTimeMeasure = 'cierre_asignado_cerrados';
-export const ASIGNACION: SupportTimeMeasure = 'asignacion';
-export const ESCALATION: SupportTimeMeasure = 'escalamiento';
+export const CLOSE_TOTAL: SupportTimeMeasure = 'close_created_closed';
+export const HANDLING: SupportTimeMeasure = 'close_assigned_closed';
+export const ASIGNACION: SupportTimeMeasure = 'assignment';
+export const ESCALATION: SupportTimeMeasure = 'escalation';
 
 /**
  * El nombre de cada eje. `asignado_a` y `creado_por` se etiquetan con el

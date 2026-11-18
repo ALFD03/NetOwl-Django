@@ -41,9 +41,9 @@ export function NumberCell({
 }
 
 /** Lo que valía un campo editado, debajo de él. */
-export function Antes({ valor }: { valor: string | null }) {
-  if (valor === null) return null;
-  return <span className="mt-1 block text-[10px] font-semibold text-amber-400">antes {valor}</span>;
+export function Antes({ value }: { value: string | null }) {
+  if (value === null) return null;
+  return <span className="mt-1 block text-[10px] font-semibold text-amber-400">antes {value}</span>;
 }
 
 export function RowError({ children }: { children: ReactNode }) {

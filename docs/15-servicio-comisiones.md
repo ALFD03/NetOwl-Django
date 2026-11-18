@@ -310,7 +310,7 @@ maquetadas celda a celda.
 
 | Página | Contenido | Permiso |
 |---|---|---|
-| `/comisiones/?periodo=` | El informe en cuatro pasos (revisión, indicadores, nómina por equipo, cierre), total a pagar y tasas, exportación a Excel. La revisión tiene cinco vistas: por decidir, días promocionales del mes anterior (qué se cobró allí; confirmación en el primer periodo), días promocionales del mes (quién adelantó el pago), agregadas a mano (con el formulario para agregar) y todas las ventas | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
+| `/comisiones/?period=` | El informe en cuatro pasos (revisión, indicadores, nómina por equipo, cierre), total a pagar y tasas, exportación a Excel. La revisión tiene cinco vistas: por decidir, días promocionales del mes anterior (qué se cobró allí; confirmación en el primer periodo), días promocionales del mes (quién adelantó el pago), agregadas a mano (con el formulario para agregar) y todas las ventas | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
 | `/comisiones/condiciones/` | Solo la ventana de pago (día promocional, días de espera, día de corte de los adelantos) y los % de los planes PYME. Cuánto cobra cada rol de cada equipo se edita en **Catálogos › Ventas**. Se abre en lectura; «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_comisiones` |
 
 El detalle venta a venta no viaja en los props —un mes son miles de filas—: lo

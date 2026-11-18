@@ -387,7 +387,7 @@ def _launch_batch(request, module, meses) -> JsonResponse:
         "status": "queued",
         "message": " · ".join(partes) + ". Se calculan de uno en uno; el cálculo continúa aunque cierres esta página.",
         "jobs": encolados,
-        "omitidos": omitidos,
+        "skipped": omitidos,
     }, status=202 if encolados else 409)
 
 

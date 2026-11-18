@@ -14,43 +14,43 @@
 import { Lock, UserCheck } from 'lucide-react';
 
 import { Switch } from '@/shared/ui';
-import type { UnidadNegocio, UnitsSelection } from '@/features/config/types';
+import type { BusinessUnit, UnitsSelection } from '@/features/config/types';
 
 interface Props {
-  unidades: UnitsSelection;
-  onChange: (unidades: UnitsSelection) => void;
-  catalogo: readonly UnidadNegocio[];
+  units: UnitsSelection;
+  onChange: (units: UnitsSelection) => void;
+  catalog: readonly BusinessUnit[];
   /** La matriz (la suya o la de su grupo) concede todas las unidades: la lista no rige. */
-  todas: boolean;
+  allUnits: boolean;
   disabled?: boolean;
   /**
    * Lo que puede conceder quien edita (`null`: todas). Lo demás se ve apagado
    * salvo que ya estuviera en `previa`; el servidor lo rechaza igual (ver
    * `unidades_fuera_de_alcance`).
    */
-  concedibles: UnitsSelection | null;
-  previa: UnitsSelection;
+  grantable: UnitsSelection | null;
+  previous: UnitsSelection;
 }
 
 const RF_LABEL = 'Nodos radiofrecuencia (RF)';
 
 export function UnitsEditor({
-  unidades,
+  units,
   onChange,
-  catalogo,
-  todas,
+  catalog,
+  allUnits,
   disabled = false,
-  concedibles,
-  previa,
+  grantable,
+  previous,
 }: Props) {
-  const bloqueada = (id: number) =>
-    concedibles !== null && !concedibles.ids.includes(id) && !previa.ids.includes(id);
-  const rfBloqueado = concedibles !== null && !concedibles.rf && !previa.rf;
+  const locked = (id: number) =>
+    grantable !== null && !grantable.ids.includes(id) && !previous.ids.includes(id);
+  const rfLocked = grantable !== null && !grantable.rf && !previous.rf;
 
-  const mark = (id: number, valor: boolean) => {
-    if (disabled || (valor && bloqueada(id))) return;
-    const ids = valor ? [...unidades.ids, id] : unidades.ids.filter((current) => current !== id);
-    onChange({ ...unidades, ids });
+  const mark = (id: number, value: boolean) => {
+    if (disabled || (value && locked(id))) return;
+    const ids = value ? [...units.ids, id] : units.ids.filter((current) => current !== id);
+    onChange({ ...units, ids });
   };
 
   return (
@@ -70,36 +70,36 @@ export function UnitsEditor({
       </header>
 
       <div className="p-3">
-        {todas && (
+        {allUnits && (
           <p className="mb-3 text-xs text-slate-400">
             Ve <strong className="text-white">todas</strong> las unidades por su matriz o su grupo.
             La lista de abajo no rige mientras tanto, pero se conserva.
           </p>
         )}
-        <div className={todas ? 'opacity-60' : undefined}>
-          {catalogo.length === 0 && (
+        <div className={allUnits ? 'opacity-60' : undefined}>
+          {catalog.length === 0 && (
             <p className="mb-2 text-xs text-slate-500">No hay unidades en el catálogo.</p>
           )}
           <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
-            {catalogo.map((unidad) => (
+            {catalog.map((unit) => (
               <Switch
-                key={unidad.id}
-                checked={unidades.ids.includes(unidad.id)}
-                onChange={(valor) => mark(unidad.id, valor)}
-                label={unidad.nombre}
+                key={unit.id}
+                checked={units.ids.includes(unit.id)}
+                onChange={(value) => mark(unit.id, value)}
+                label={unit.name}
                 tone="blue"
-                disabled={disabled || bloqueada(unidad.id)}
+                disabled={disabled || locked(unit.id)}
               />
             ))}
             <Switch
-              checked={unidades.rf}
-              onChange={(rf) => !disabled && !(rf && rfBloqueado) && onChange({ ...unidades, rf })}
+              checked={units.rf}
+              onChange={(rf) => !disabled && !(rf && rfLocked) && onChange({ ...units, rf })}
               label={RF_LABEL}
               tone="blue"
-              disabled={disabled || rfBloqueado}
+              disabled={disabled || rfLocked}
             />
           </div>
-          {!disabled && concedibles !== null && (
+          {!disabled && grantable !== null && (
             <p className="mt-2 flex items-start gap-2 text-[11px] text-slate-500">
               <Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
               <span>Las apagadas son unidades que tú no ves: no puedes concederlas.</span>

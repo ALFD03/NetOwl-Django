@@ -10,19 +10,19 @@
 
 import type { CommissionConditions } from '../types';
 
-export type CampoSimple = 'dia_promocional' | 'dias_espera' | 'dia_corte';
+export type CampoSimple = 'promo_day' | 'wait_days' | 'cutoff_day';
 
 /** Lo que `api_condiciones_guardar` rechazaría de los campos sueltos. */
 export function fieldErrors(c: CommissionConditions): Partial<Record<CampoSimple, string>> {
   const errores: Partial<Record<CampoSimple, string>> = {};
-  if (!Number.isInteger(c.dia_promocional) || c.dia_promocional < 1 || c.dia_promocional > 31) {
-    errores.dia_promocional = 'Un día del mes, de 1 a 31.';
+  if (!Number.isInteger(c.promo_day) || c.promo_day < 1 || c.promo_day > 31) {
+    errores.promo_day = 'Un día del mes, de 1 a 31.';
   }
-  if (!Number.isInteger(c.dias_espera) || c.dias_espera < 0 || c.dias_espera > 60) {
-    errores.dias_espera = 'De 0 a 60 días.';
+  if (!Number.isInteger(c.wait_days) || c.wait_days < 0 || c.wait_days > 60) {
+    errores.wait_days = 'De 0 a 60 días.';
   }
-  if (!Number.isInteger(c.dia_corte) || c.dia_corte < 1 || c.dia_corte > 31) {
-    errores.dia_corte = 'Un día del mes, de 1 a 31.';
+  if (!Number.isInteger(c.cutoff_day) || c.cutoff_day < 1 || c.cutoff_day > 31) {
+    errores.cutoff_day = 'Un día del mes, de 1 a 31.';
   }
   return errores;
 }
@@ -36,17 +36,17 @@ export interface Change {
   despues: string | null;
 }
 
-const CAMPOS: Record<CampoSimple, { donde: string; valor: (v: number) => string }> = {
-  dia_promocional: { donde: 'Periodo · inicio de los días promocionales', valor: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
-  dias_espera: { donde: 'Periodo · días de espera', valor: (v) => (Number.isFinite(v) ? `${v} días` : '—') },
-  dia_corte: { donde: 'Periodo · corte de los pagos adelantados', valor: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
+const CAMPOS: Record<CampoSimple, { donde: string; value: (v: number) => string }> = {
+  promo_day: { donde: 'Periodo · inicio de los días promocionales', value: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
+  wait_days: { donde: 'Periodo · días de espera', value: (v) => (Number.isFinite(v) ? `${v} días` : '—') },
+  cutoff_day: { donde: 'Periodo · corte de los pagos adelantados', value: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
 };
 
 export function pendingChanges(guardadas: CommissionConditions, borrador: CommissionConditions): Change[] {
   const cambios: Change[] = [];
-  for (const campo of ['dia_promocional', 'dias_espera', 'dia_corte'] as const) {
+  for (const campo of ['promo_day', 'wait_days', 'cutoff_day'] as const) {
     if (borrador[campo] !== guardadas[campo]) {
-      cambios.push({ donde: CAMPOS[campo].donde, antes: CAMPOS[campo].valor(guardadas[campo]), despues: CAMPOS[campo].valor(borrador[campo]) });
+      cambios.push({ donde: CAMPOS[campo].donde, antes: CAMPOS[campo].value(guardadas[campo]), despues: CAMPOS[campo].value(borrador[campo]) });
     }
   }
   return cambios;
@@ -62,10 +62,10 @@ function dayOfMonth(anio: number, mes: number, dia: number): Date {
 
 export interface ExamplePeriod {
   /** `octubre de 2026`. */
-  nombre: string;
-  inicio: Date;
+  name: string;
+  start: Date;
   /** El último día que cuenta sin condiciones: el anterior a los días promocionales. */
-  fin: Date;
+  end: Date;
   promoStart: Date;
   monthEndDate: Date;
   calculo: Date;
@@ -93,9 +93,9 @@ export function examplePeriod(
   const calculo = new Date(finDeMes);
   calculo.setDate(calculo.getDate() + waitDays);
   return {
-    nombre: new Intl.DateTimeFormat('es-VE', { month: 'long', year: 'numeric' }).format(new Date(anio, mes, 1)),
-    inicio: dayOfMonth(anio, mes - 1, promoDay),
-    fin,
+    name: new Intl.DateTimeFormat('es-VE', { month: 'long', year: 'numeric' }).format(new Date(anio, mes, 1)),
+    start: dayOfMonth(anio, mes - 1, promoDay),
+    end: fin,
     promoStart: inicioPromo,
     monthEndDate: finDeMes,
     calculo,

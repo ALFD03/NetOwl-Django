@@ -16,9 +16,9 @@ export function useEtaManagement({ allKnownPlans = [], discoveredPlans = [], dis
   const [deletingItem, setDeletingItem] = useState<{ type: 'sub'; id: string } | null>(null);
 
   const handleOpenEditSub = (config: EtaSubscriptionConfig) => {
-    const isKnown = allKnownPlans.some((plan) => plan.name === config.producto);
-    setIsCustomProduct(!isKnown && Boolean(config.producto));
-    setEditingSub({ orden: config.orden || '', cliente: config.cliente || '', producto: config.producto || '', tecnologia: config.tecnologia || 'FTTH', tipo_persona: config.tipo_persona || 'pyme', datas_mbps: config.datas_mbps || 0, precio: config.precio || 0, tiene_tv: Boolean(config.tiene_tv), reportar: config.reportar !== undefined ? Boolean(config.reportar) : true, es_transporte: Boolean(config.es_transporte), es_dedicado: Boolean(config.es_dedicado) });
+    const isKnown = allKnownPlans.some((plan) => plan.name === config.product);
+    setIsCustomProduct(!isKnown && Boolean(config.product));
+    setEditingSub({ order: config.order || '', client: config.client || '', product: config.product || '', technology: config.technology || 'FTTH', person_type: config.person_type || 'pyme', data_mbps: config.data_mbps || 0, price: config.price || 0, has_tv: Boolean(config.has_tv), report: config.report !== undefined ? Boolean(config.report) : true, is_transport: Boolean(config.is_transport), is_dedicated: Boolean(config.is_dedicated) });
   };
   const [error, setError] = useState<string | null>(null);
   // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
@@ -46,16 +46,16 @@ export function useEtaManagement({ allKnownPlans = [], discoveredPlans = [], dis
     if (await run(() => subscriptionsApi.saveEtaSubConfig(editingSub), 'No se pudo guardar la suscripción.')) setEditingSub(null);
   };
   const handleQuickIgnoreSub = (sub: EtaDiscoveredSubscription) =>
-    run(() => subscriptionsApi.saveEtaSubConfig({ orden: sub.orden, cliente: sub.cliente || '', producto: sub.producto || 'Servicio Excluido', reportar: false, tecnologia: 'FTTH', tipo_persona: 'pyme', datas_mbps: 0, precio: 0, es_transporte: false, es_dedicado: false }), 'No se pudo descartar la suscripción.');
+    run(() => subscriptionsApi.saveEtaSubConfig({ order: sub.order, client: sub.client || '', product: sub.product || 'Servicio Excluido', report: false, technology: 'FTTH', person_type: 'pyme', data_mbps: 0, price: 0, is_transport: false, is_dedicated: false }), 'No se pudo descartar la suscripción.');
   const handleConfirmDelete = async () => {
     if (!deletingItem) return;
-    if (await run(() => subscriptionsApi.deleteEtaSubConfig({ orden: deletingItem.id }), 'No se pudo eliminar el registro.')) setDeletingItem(null);
+    if (await run(() => subscriptionsApi.deleteEtaSubConfig({ order: deletingItem.id }), 'No se pudo eliminar el registro.')) setDeletingItem(null);
   };
   const handleSelectPredefinedPlan = (planName: string) => {
-    if (planName === '__CUSTOM__') { setIsCustomProduct(true); setEditingSub((prev) => prev ? { ...prev, producto: '' } : prev); return; }
+    if (planName === '__CUSTOM__') { setIsCustomProduct(true); setEditingSub((prev) => prev ? { ...prev, product: '' } : prev); return; }
     setIsCustomProduct(false);
     const found = allKnownPlans.find((plan) => plan.name === planName);
-    setEditingSub((prev) => prev ? { ...prev, producto: found?.name || planName, ...(found ? { tecnologia: found.tecnologia || 'FTTH', tipo_persona: found.tipo_persona || 'nat', datas_mbps: found.datas_mbps || 0, tiene_tv: Boolean(found.tiene_tv), es_transporte: Boolean(found.es_transporte), es_dedicado: Boolean(found.es_dedicado) } : {}) } : prev);
+    setEditingSub((prev) => prev ? { ...prev, product: found?.name || planName, ...(found ? { technology: found.technology || 'FTTH', person_type: found.person_type || 'nat', data_mbps: found.data_mbps || 0, has_tv: Boolean(found.has_tv), is_transport: Boolean(found.is_transport), is_dedicated: Boolean(found.is_dedicated) } : {}) } : prev);
   };
   return { isCustomProduct, setIsCustomProduct, isSaving, error, activeView, setActiveTab, editingSub, setEditingSub, deletingItem, setDeletingItem, handleOpenEditSub, handleUpdateSub, handleQuickIgnoreSub, handleConfirmDelete, handleSelectPredefinedPlan };
 }

@@ -12,9 +12,9 @@ export interface CatalogPayload extends Record<string, unknown> {
 export interface BatchResult {
   status: 'success' | 'error';
   message: string;
-  registrados: Record<string, unknown>[];
+  saved: Record<string, unknown>[];
   /** Las filas que no entraron, con el motivo. */
-  errores: { nombre: string; message: string }[];
+  errors: { name: string; message: string }[];
 }
 
 export const catalogsApi = {

@@ -13,11 +13,11 @@ import { formatAmount } from '../lib/format';
 import type { ArchivedClose, CloseSnapshot, SalesRole } from '../types';
 
 interface Props {
-  archivos: ArchivedClose[];
+  archives: ArchivedClose[];
   roleLabel: (rol: SalesRole) => string;
 }
 
-export function ArchivedCloses({ archivos, roleLabel: etiquetaCargo }: Props) {
+export function ArchivedCloses({ archives, roleLabel: etiquetaCargo }: Props) {
   const [estados, setStates] = useState<Record<number, ExportState>>({});
 
   /** La nómina del cierre archivado, en el mismo Excel que el informe vivo. */
@@ -25,15 +25,15 @@ export function ArchivedCloses({ archivos, roleLabel: etiquetaCargo }: Props) {
     setStates((previos) => ({ ...previos, [archivo.id]: 'busy' }));
     try {
       const copia = await commissionsApi.archivo<CloseSnapshot>(archivo.id);
-      const tasa = copia.resumen.tasa_conatel?.tasa
-        ?? (copia.periodo.tasa_conatel !== null ? Number(copia.periodo.tasa_conatel) : null);
+      const tasa = copia.summary.conatel_rate?.rate
+        ?? (copia.period.conatel_rate !== null ? Number(copia.period.conatel_rate) : null);
       await exportReport(
-        copia.resumen,
-        copia.ventas.map((venta) => venta.datos),
-        copia.condiciones,
+        copia.summary,
+        copia.sales.map((venta) => venta.data),
+        copia.conditions,
         tasa,
         etiquetaCargo,
-        `Comisiones ${copia.periodo.periodo} - cierre archivado v${archivo.version}`,
+        `Comisiones ${copia.period.period} - cierre archivado v${archivo.version}`,
       );
       setStates((previos) => ({ ...previos, [archivo.id]: 'idle' }));
     } catch (err) {
@@ -42,15 +42,15 @@ export function ArchivedCloses({ archivos, roleLabel: etiquetaCargo }: Props) {
     }
   };
 
-  if (!archivos.length) return null;
+  if (!archives.length) return null;
 
   const columns: Column<ArchivedClose>[] = [
     { header: 'Versión', accessor: (a) => <span className="font-bold text-white">v{a.version}</span>, sortKey: 'version' },
-    { header: 'Cerrado', accessor: (a) => `${a.cerrado_en ?? '—'} · ${a.cerrado_por || '—'}`, sortKey: 'cerrado_en' },
-    { header: 'Reabierto', accessor: (a) => `${a.reabierto_en} · ${a.reabierto_por || '—'}`, sortKey: 'reabierto_en' },
-    { header: 'Motivo', accessor: (a) => <span className="whitespace-normal text-slate-300">{a.motivo}</span> },
-    { header: 'Pagado', accessor: (a) => formatAmount(a.total_neto), align: 'right', sortKey: 'total_neto' },
-    { header: 'Personas', accessor: 'pagos', align: 'right', sortKey: 'pagos' },
+    { header: 'Cerrado', accessor: (a) => `${a.closed_at ?? '—'} · ${a.closed_by || '—'}`, sortKey: 'closed_at' },
+    { header: 'Reabierto', accessor: (a) => `${a.reopened_at} · ${a.reopened_by || '—'}`, sortKey: 'reopened_at' },
+    { header: 'Motivo', accessor: (a) => <span className="whitespace-normal text-slate-300">{a.reason}</span> },
+    { header: 'Pagado', accessor: (a) => formatAmount(a.net_total), align: 'right', sortKey: 'net_total' },
+    { header: 'Personas', accessor: 'payments', align: 'right', sortKey: 'payments' },
     {
       header: 'Excel',
       align: 'center',
@@ -74,7 +74,7 @@ export function ArchivedCloses({ archivos, roleLabel: etiquetaCargo }: Props) {
         icon={<Archive />}
         accent="yellow"
       />
-      <DataTable columns={columns} data={archivos} pageSize={0} />
+      <DataTable columns={columns} data={archives} pageSize={0} />
     </section>
   );
 }

@@ -15,15 +15,15 @@
 import type { DayCardSpec, DayChartSpec } from '@/shared/ui';
 
 export const SUPPORT_DAY_CARDS: DayCardSpec[] = [
-  { key: 'tickets_creados', label: 'Creados', kind: 'flujo', color: 'slate', subValue: 'Entraron ese día' },
-  { key: 'tickets_cerrados', label: 'Cerrados', kind: 'flujo', color: 'purple', subValue: 'Resueltos + cancelados + escalados' },
-  { key: 'tickets_resueltos', label: 'Resueltos', kind: 'flujo', color: 'green', subValue: 'Cerrados con solución' },
-  { key: 'tickets_cancelados', label: 'Cancelados', kind: 'flujo', color: 'red', subValue: 'Cerrados sin solución', trendGoodWhen: 'down' },
-  { key: 'tickets_escalados', label: 'Escalados', kind: 'flujo', color: 'yellow', subValue: 'Pasaron de ATC a Soporte', trendGoodWhen: 'down' },
-  { key: 'tickets_rezagados', label: 'Rezagados', kind: 'stock', color: 'yellow', subValue: 'No cerrados dentro del mes', trendGoodWhen: 'down' },
-  { key: 'pct_resueltos', label: 'Tasa Resol', kind: 'tasa', color: 'green', subValue: 'Resueltos / cerrados' },
-  { key: 'pct_cancelados', label: 'Tasa Cancel', kind: 'tasa', color: 'red', subValue: 'Cancelados / cerrados', trendGoodWhen: 'down' },
-  { key: 'pct_escalados', label: 'Tasa Escal', kind: 'tasa', color: 'yellow', subValue: 'Escalados / cerrados', trendGoodWhen: 'down' },
+  { key: 'tickets_created', label: 'Creados', kind: 'flujo', color: 'slate', subValue: 'Entraron ese día' },
+  { key: 'tickets_closed', label: 'Cerrados', kind: 'flujo', color: 'purple', subValue: 'Resueltos + cancelados + escalados' },
+  { key: 'tickets_resolved', label: 'Resueltos', kind: 'flujo', color: 'green', subValue: 'Cerrados con solución' },
+  { key: 'tickets_cancelled', label: 'Cancelados', kind: 'flujo', color: 'red', subValue: 'Cerrados sin solución', trendGoodWhen: 'down' },
+  { key: 'tickets_escalated', label: 'Escalados', kind: 'flujo', color: 'yellow', subValue: 'Pasaron de ATC a Soporte', trendGoodWhen: 'down' },
+  { key: 'tickets_lagging', label: 'Rezagados', kind: 'stock', color: 'yellow', subValue: 'No cerrados dentro del mes', trendGoodWhen: 'down' },
+  { key: 'pct_resolved', label: 'Tasa Resol', kind: 'tasa', color: 'green', subValue: 'Resueltos / cerrados' },
+  { key: 'pct_cancelled', label: 'Tasa Cancel', kind: 'tasa', color: 'red', subValue: 'Cancelados / cerrados', trendGoodWhen: 'down' },
+  { key: 'pct_escalated', label: 'Tasa Escal', kind: 'tasa', color: 'yellow', subValue: 'Escalados / cerrados', trendGoodWhen: 'down' },
 ];
 
 export const SUPPORT_DAY_CHARTS: DayChartSpec[] = [
@@ -31,19 +31,19 @@ export const SUPPORT_DAY_CHARTS: DayChartSpec[] = [
     title: 'Entrada y salida por día',
     subtitle: 'Si el equipo despacha al ritmo al que le entra trabajo',
     series: [
-      { key: 'tickets_creados', label: 'Creados', kind: 'flujo', color: 'blue' },
-      { key: 'tickets_cerrados', label: 'Cerrados', kind: 'flujo', color: 'green' },
+      { key: 'tickets_created', label: 'Creados', kind: 'flujo', color: 'blue' },
+      { key: 'tickets_closed', label: 'Cerrados', kind: 'flujo', color: 'green' },
     ],
   },
   {
     title: 'Rezago acumulado',
     subtitle: 'De lo creado hasta esa fecha, lo que no cerró dentro del mes',
-    series: [{ key: 'tickets_rezagados', label: 'Rezagados', kind: 'stock', color: 'yellow', trendGoodWhen: 'down' }],
+    series: [{ key: 'tickets_lagging', label: 'Rezagados', kind: 'stock', color: 'yellow', trendGoodWhen: 'down' }],
   },
   {
     title: 'Tasa de resolución acumulada',
     subtitle: 'Cómo se asienta el mes corte a corte',
     isRate: true,
-    series: [{ key: 'pct_resueltos', label: 'Resolución', kind: 'tasa', color: 'green' }],
+    series: [{ key: 'pct_resolved', label: 'Resolución', kind: 'tasa', color: 'green' }],
   },
 ];

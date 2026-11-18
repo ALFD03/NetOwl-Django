@@ -10,9 +10,9 @@ import { ROL_CHIP } from './pieces';
 import { TeamDetail, type DetailProps } from './TeamDetail';
 
 interface PayrollViewProps extends Omit<DetailProps, 'resaltado'> {
-  informe: CommissionReport;
+  report: CommissionReport;
   /** Los equipos con sus roles, para nombrar y ordenar la nómina. */
-  equipos: CommissionsReportProps['equipos'];
+  teams: CommissionsReportProps['teams'];
 }
 
 /**
@@ -23,9 +23,9 @@ interface PayrollViewProps extends Omit<DetailProps, 'resaltado'> {
  * Cada persona sale una vez por equipo (ver `lib/nomina`), así que la suma de
  * la lista es el total a pagar.
  */
-export function PayrollView({ informe, equipos, ...props }: PayrollViewProps) {
-  const nomina = useMemo(() => buildPayroll(informe, equipos), [informe, equipos]);
-  const first = nomina.equipos[0]?.slug ?? '';
+export function PayrollView({ report, teams, ...props }: PayrollViewProps) {
+  const nomina = useMemo(() => buildPayroll(report, teams), [report, teams]);
+  const first = nomina.teams[0]?.slug ?? '';
   const [elegida, setElegida] = useState(first);
   const [busqueda, setBusqueda] = useState('');
   const [resaltado, setResaltado] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export function PayrollView({ informe, equipos, ...props }: PayrollViewProps) {
   const subir = useRef(false);
 
   // Al cambiar de periodo, lo elegido puede no existir.
-  const current = nomina.equipos.some((e) => e.slug === elegida) ? elegida : first;
+  const current = nomina.teams.some((e) => e.slug === elegida) ? elegida : first;
 
   // La lista es larga: lo elegido abajo no debe abrirse fuera de la vista. Va
   // tras pintar, porque el detalle nuevo puede ser más corto que el anterior.
@@ -51,7 +51,7 @@ export function PayrollView({ informe, equipos, ...props }: PayrollViewProps) {
   }, [resaltado, current]);
 
   const texto = busqueda.trim().toLowerCase();
-  const foundItems = texto ? informe.pagos.filter((p) => p.nombre.toLowerCase().includes(texto)).slice(0, 12) : [];
+  const foundItems = texto ? report.payments.filter((p) => p.name.toLowerCase().includes(texto)).slice(0, 12) : [];
 
   const ir = (clave: string) => {
     const donde = nomina.ubicacion.get(clave);
@@ -61,12 +61,12 @@ export function PayrollView({ informe, equipos, ...props }: PayrollViewProps) {
     setBusqueda('');
   };
 
-  if (informe.pagos.length === 0) {
+  if (report.payments.length === 0) {
     return <p className="p-10 text-center text-sm text-slate-500">Nadie cobra en este periodo.</p>;
   }
 
-  const equipo = nomina.equipos.find((e) => e.slug === current);
-  const totalUsd = Math.round(informe.pagos.reduce((t, p) => t + p.neto, 0) * 100) / 100;
+  const equipo = nomina.teams.find((e) => e.slug === current);
+  const totalUsd = Math.round(report.payments.reduce((t, p) => t + p.net, 0) * 100) / 100;
   const elegir = (slug: string) => {
     setElegida(slug);
     setResaltado(null);
@@ -103,10 +103,10 @@ export function PayrollView({ informe, equipos, ...props }: PayrollViewProps) {
                   className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left hover:bg-surface-tertiary"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-sm text-white">{p.nombre}</span>
-                    <span className="block text-[10px] text-slate-500">{ROL_CHIP[p.rol].label} · {p.equipo_nombre}</span>
+                    <span className="block truncate text-sm text-white">{p.name}</span>
+                    <span className="block text-[10px] text-slate-500">{ROL_CHIP[p.role].label} · {p.team_name}</span>
                   </span>
-                  <span className="shrink-0 font-mono text-xs tabular-nums text-slate-300">{formatAmount(p.neto)}</span>
+                  <span className="shrink-0 font-mono text-xs tabular-nums text-slate-300">{formatAmount(p.net)}</span>
                 </button>
               ))}
             </div>
@@ -116,7 +116,7 @@ export function PayrollView({ informe, equipos, ...props }: PayrollViewProps) {
         <p className="flex items-center gap-2 px-2 pb-1 pt-2 text-[10px] font-black uppercase tracking-wider text-violet-300">
           <Users className="h-3.5 w-3.5" /> Equipos de ventas
         </p>
-        {nomina.equipos.map((e) => (
+        {nomina.teams.map((e) => (
           <button
             key={e.slug}
             type="button"
@@ -126,9 +126,9 @@ export function PayrollView({ informe, equipos, ...props }: PayrollViewProps) {
               current === e.slug ? 'border-sky-500/40 bg-surface-tertiary' : 'border-transparent hover:bg-surface-secondary'
             }`}
           >
-            <span className="truncate text-sm font-bold text-white">{e.nombre}</span>
+            <span className="truncate text-sm font-bold text-white">{e.name}</span>
             <span className="flex justify-between gap-2 text-[11px] text-slate-400">
-              <span className="truncate">{e.personas.length} {e.personas.length === 1 ? 'persona' : 'personas'}</span>
+              <span className="truncate">{e.people.length} {e.people.length === 1 ? 'persona' : 'personas'}</span>
               <span className="shrink-0 font-mono tabular-nums text-slate-300">{formatAmount(e.usd)}</span>
             </span>
           </button>
@@ -138,17 +138,17 @@ export function PayrollView({ informe, equipos, ...props }: PayrollViewProps) {
           <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total a pagar</span>
           <span className="font-mono text-lg font-black tabular-nums text-white">{formatAmount(totalUsd)}</span>
           <span className="font-mono text-sm font-bold tabular-nums text-emerald-300">
-            {formatBs(totalBs(informe.pagos.map((p) => p.neto), props.tasa))}
+            {formatBs(totalBs(report.payments.map((p) => p.net), props.rate))}
           </span>
-          {Boolean(informe.resumen.bonos) && (
-            <span className="text-[11px] text-amber-400">incluye {formatAmount(informe.resumen.bonos ?? 0)} de bonos</span>
+          {Boolean(report.summary.bonuses) && (
+            <span className="text-[11px] text-amber-400">incluye {formatAmount(report.summary.bonuses ?? 0)} de bonos</span>
           )}
         </div>
       </aside>
 
       <div className="min-w-0 p-5">
         {equipo && <TeamDetail key={equipo.slug} equipo={equipo} nomina={nomina} resaltado={resaltado} {...props} />}
-        {props.tasa === null && (
+        {props.rate === null && (
           <p className="mt-4 text-[11px] text-amber-400">
             Los bolívares salen vacíos hasta que se conozca la tasa CONATEL del mes en que se paga.
           </p>

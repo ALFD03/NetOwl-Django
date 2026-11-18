@@ -49,56 +49,56 @@ const rent = (precio: number, tasa: number): number | null =>
   tasa > 0 ? Math.round(precio * tasa * 100) / 100 : null;
 
 const internetColumns = (tasa: number): ExcelColumn<EtaFormularioInternet>[] => [
-  { header: 'Nombre del Plan', value: (r) => r.nombre, width: 38 },
+  { header: 'Nombre del Plan', value: (r) => r.name, width: 38 },
   { header: 'Estatus del Plan', value: () => OPEN_STATUS, width: 16 },
   { header: 'Modalidad de pago', value: () => PAYMENT_MODE, width: 18 },
-  { header: 'Tipo de Suscriptor', value: (r) => r.tipo_suscriptor, width: 20 },
-  { header: 'Entidad Federal', value: (r) => r.entidades, width: 40 },
-  { header: 'Número de Suscriptores por Plan', value: (r) => r.suscriptores, format: INTEGER, width: 18 },
-  { header: 'Renta básica en Bs. (sin IVA)', value: (r) => rent(r.precio, tasa), format: BOLIVARES, width: 22 },
-  { header: 'Tipo de Servicio', value: (r) => r.tipo_servicio, width: 16 },
+  { header: 'Tipo de Suscriptor', value: (r) => r.subscriber_type, width: 20 },
+  { header: 'Entidad Federal', value: (r) => r.entities, width: 40 },
+  { header: 'Número de Suscriptores por Plan', value: (r) => r.subscribers, format: INTEGER, width: 18 },
+  { header: 'Renta básica en Bs. (sin IVA)', value: (r) => rent(r.price, tasa), format: BOLIVARES, width: 22 },
+  { header: 'Tipo de Servicio', value: (r) => r.service_type, width: 16 },
   { header: 'Características del tipo de Acceso', value: () => ACCESO_DEDICADO, width: 26 },
   { header: 'MB Incluidos', value: () => NO_APLICA, width: 14 },
   { header: 'Velocidad Máxima de Subida (Uplink) (Kbps)', value: (r) => r.uplink_kbps, format: INTEGER, width: 22 },
   { header: 'Velocidad Máxima de Bajada (Downlink) (Kbps)', value: (r) => r.downlink_kbps, format: INTEGER, width: 22 },
   { header: 'Precio MB Adicional', value: () => NO_APLICA, width: 18 },
   { header: 'Precio por Hora Adicional', value: () => NO_APLICA, width: 20 },
-  { header: 'Tecnología de Acceso al Terminal del Usuario', value: (r) => r.tipo_servicio, width: 28 },
-  { header: 'Velocidad Promedio Teórica por Plan (Kbps)', value: (r) => r.velocidad_promedio_kbps, format: INTEGER, width: 22 },
-  { header: 'Promedio de Consumo del Plan en MB', value: (r) => r.consumo_promedio_mb, format: INTEGER, width: 24 },
+  { header: 'Tecnología de Acceso al Terminal del Usuario', value: (r) => r.service_type, width: 28 },
+  { header: 'Velocidad Promedio Teórica por Plan (Kbps)', value: (r) => r.avg_speed_kbps, format: INTEGER, width: 22 },
+  { header: 'Promedio de Consumo del Plan en MB', value: (r) => r.avg_usage_mb, format: INTEGER, width: 24 },
 ];
 
 const transportColumns = (tasa: number): ExcelColumn<EtaFormularioTransporte>[] => [
-  { header: 'Nombre del Plan', value: (r) => r.nombre, width: 38 },
+  { header: 'Nombre del Plan', value: (r) => r.name, width: 38 },
   { header: 'Estatus del Plan', value: () => OPEN_STATUS, width: 16 },
   { header: 'Modalidad de Pago', value: () => PAYMENT_MODE, width: 18 },
   // El transporte de datos no se contrata a título personal: siempre es una
   // empresa, y por eso aquí no se lee del plan como en la hoja de internet.
   { header: 'Tipo de Suscriptor', value: () => LEGAL_ENTITY, width: 20 },
   { header: 'Medio de Transmisión', value: () => TRANSMISSION_MEDIUM, width: 20 },
-  { header: 'Renta básica en Bs. (sin IVA)', value: (r) => rent(r.precio, tasa), format: BOLIVARES, width: 22 },
-  { header: 'Número de Suscriptores / Tipo de Enlace', value: (r) => r.suscriptores, format: INTEGER, width: 22 },
-  { header: 'Velocidad Máxima de Transmisión de Datos (Kbps)', value: (r) => r.velocidad_kbps, format: INTEGER, width: 24 },
+  { header: 'Renta básica en Bs. (sin IVA)', value: (r) => rent(r.price, tasa), format: BOLIVARES, width: 22 },
+  { header: 'Número de Suscriptores / Tipo de Enlace', value: (r) => r.subscribers, format: INTEGER, width: 22 },
+  { header: 'Velocidad Máxima de Transmisión de Datos (Kbps)', value: (r) => r.speed_kbps, format: INTEGER, width: 24 },
   // Un enlace por suscriptor: cada contrato de transporte es un enlace, así
   // que la reguladora recibe el mismo número por las dos columnas.
-  { header: 'Número de Enlaces', value: (r) => r.suscriptores, format: INTEGER, width: 18 },
+  { header: 'Número de Enlaces', value: (r) => r.subscribers, format: INTEGER, width: 18 },
 ];
 
 const televisionColumns = (tasa: number): ExcelColumn<EtaFormularioTelevision>[] => [
-  { header: 'Nombre del Plan', value: (r) => r.nombre, width: 38 },
-  { header: 'Tipo de suscriptor', value: (r) => r.tipo_suscriptor, width: 20 },
-  { header: 'Entidad Federal', value: (r) => r.entidades, width: 40 },
+  { header: 'Nombre del Plan', value: (r) => r.name, width: 38 },
+  { header: 'Tipo de suscriptor', value: (r) => r.subscriber_type, width: 20 },
+  { header: 'Entidad Federal', value: (r) => r.entities, width: 40 },
   { header: 'Modalidad de Prestación', value: () => MODALIDAD_TV, width: 20 },
   // Todo el parque es previo pago. La columna de post pago va vacía y no a
   // cero: cero declararía que existen contratos post pago sin suscriptores.
-  { header: 'Nº de Suscriptores — Previo Pago', value: (r) => r.suscriptores, format: INTEGER, width: 20 },
+  { header: 'Nº de Suscriptores — Previo Pago', value: (r) => r.subscribers, format: INTEGER, width: 20 },
   { header: 'Nº de Suscriptores — Post Pago', value: () => null, width: 20 },
-  { header: 'Número total de Suscriptores de acuerdo al Plan', value: (r) => r.suscriptores, format: INTEGER, width: 24 },
+  { header: 'Número total de Suscriptores de acuerdo al Plan', value: (r) => r.subscribers, format: INTEGER, width: 24 },
   { header: 'Canales que Incluye', value: () => CANALES_TV, width: 60 },
   { header: 'Número de Canales', value: () => CHANNEL_COUNT, format: INTEGER, width: 16 },
-  { header: 'Renta básica Bs. — Cliente Nuevo / Previo Pago', value: (r) => rent(r.precio, tasa), format: BOLIVARES, width: 24 },
+  { header: 'Renta básica Bs. — Cliente Nuevo / Previo Pago', value: (r) => rent(r.price, tasa), format: BOLIVARES, width: 24 },
   { header: 'Renta básica Bs. — Cliente Nuevo / Post Pago', value: () => null, width: 24 },
-  { header: 'Renta básica Bs. — Cliente Existente / Previo Pago', value: (r) => rent(r.precio, tasa), format: BOLIVARES, width: 24 },
+  { header: 'Renta básica Bs. — Cliente Existente / Previo Pago', value: (r) => rent(r.price, tasa), format: BOLIVARES, width: 24 },
   { header: 'Renta básica Bs. — Cliente Existente / Post Pago', value: () => null, width: 24 },
   { header: 'Estatus de Comercialización del Plan', value: () => OPEN_STATUS, width: 26 },
 ];
@@ -121,7 +121,7 @@ export const hojasFormularioEta = (
     sheetName: 'Internet',
   },
   {
-    rows: formularios.transporte ?? [],
+    rows: formularios.transport ?? [],
     columns: transportColumns(tasa),
     sheetName: 'Transporte de Datos',
   },
@@ -146,5 +146,5 @@ export const formularioEtaFileName = (periodo: string, rateSuffix = ''): string 
 /** Cuántas filas tiene el libro. Con cero no hay nada que declarar. */
 export const formRowCount = (formularios: EtaForms | undefined): number =>
   (formularios?.internet?.length ?? 0)
-  + (formularios?.transporte?.length ?? 0)
+  + (formularios?.transport?.length ?? 0)
   + (formularios?.television?.length ?? 0);

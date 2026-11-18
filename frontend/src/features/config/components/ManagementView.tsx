@@ -17,7 +17,7 @@ import { UsersTable } from '@/features/config/components/management/UsersTable';
 import { GroupsGrid } from '@/features/config/components/management/GroupsGrid';
 import { PermissionEditor } from '@/features/config/components/management/PermissionEditor';
 import { UnitsEditor } from '@/features/config/components/management/UnitsEditor';
-import { CampoSelect, ModalFooter } from '@/features/config/components/management/FormControls';
+import { SelectField, ModalFooter } from '@/features/config/components/management/FormControls';
 
 import {
   NO_UNITS,
@@ -28,29 +28,29 @@ import {
 const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => permission.key));
 
 export function ManagementView({
-  users = [], groups = [], roles = [], concedibles = {}, unidadesNegocio = [], unidadesConcedibles = null,
+  users = [], groups = [], roles = [], grantable = {}, business_units = [], grantable_units = null,
 }: ConfigManagementProps) {
   const { can } = usePermissions();
   const canCreate = can(PERMISSIONS.CREATE_USERS);
-  const puedeEditar = can(PERMISSIONS.EDIT_USER_PERMISSIONS);
+  const canEdit = can(PERMISSIONS.EDIT_USER_PERMISSIONS);
   const canChangeKey = can(PERMISSIONS.CHANGE_PASSWORDS);
-  const puedeEliminar = can(PERMISSIONS.DELETE_USERS);
+  const canDelete = can(PERMISSIONS.DELETE_USERS);
   const canGroups = can(PERMISSIONS.MANAGE_GROUPS);
 
   /**
    * Lo que quien mira no tiene y la matriz editada no traía: no lo puede
    * conceder. Lo que ya estaba concedido sí se puede quitar.
    */
-  const blockedFor = (previa: Record<string, boolean>) =>
-    new Set(ALL_PERMISSIONS.filter((clave) => !concedibles[clave] && !previa[clave]));
+  const blockedFor = (prior: Record<string, boolean>) =>
+    new Set(ALL_PERMISSIONS.filter((permKey) => !grantable[permKey] && !prior[permKey]));
 
   /**
    * Si la cuenta ve todas las unidades: el interruptor es de la matriz, así
    * que con grupo lo dice el grupo (la lista sigue siendo del usuario).
    */
-  const allUnits = (groupId: number | string | null, permisos: Record<string, boolean>) => {
-    const matriz = groupId ? groups.find((group) => group.id === Number(groupId))?.permissions : permisos;
-    return Boolean(matriz?.[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS]);
+  const allUnits = (groupId: number | string | null, granted: Record<string, boolean>) => {
+    const matrix = groupId ? groups.find((group) => group.id === Number(groupId))?.permissions : granted;
+    return Boolean(matrix?.[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS]);
   };
 
   const [activeTab, setActiveTab] = useState<'users' | 'groups'>('users');
@@ -69,14 +69,14 @@ export function ManagementView({
   useOnOpen(formOpen, () => setStatus(null));
 
   /** Ejecuta una escritura; si falla, el error queda en el modal abierto. */
-  const run = async (action: () => Promise<unknown>, fallo: string) => {
+  const run = async (action: () => Promise<unknown>, failure: string) => {
     setSaving(true);
     setStatus(null);
     try {
       await action();
       return true;
     } catch (err: unknown) {
-      setStatus({ type: 'error', text: getApiErrorMessage(err, fallo) });
+      setStatus({ type: 'error', text: getApiErrorMessage(err, failure) });
       return false;
     } finally {
       setSaving(false);
@@ -97,7 +97,7 @@ export function ManagementView({
       role: userToEdit.role,
       group_id: userToEdit.group_id ? Number(userToEdit.group_id) : null,
       permissions: userToEdit.permissions,
-      unidades: userToEdit.unidades,
+      units: userToEdit.units,
     }), 'Error al actualizar usuario');
     if (ok) setUserToEdit(null);
   };
@@ -134,19 +134,19 @@ export function ManagementView({
 
   // Una sola búsqueda para las dos vistas: en cuentas mira nombre, rol y
   // grupo; en grupos, nombre y descripción.
-  const termino = search.trim().toLowerCase();
+  const term = search.trim().toLowerCase();
   const filteredUsers = useMemo(() => {
-    if (!termino) return users;
+    if (!term) return users;
     return users.filter((u: UserData) =>
-      [u.username, u.role_display, u.group_name ?? 'individuales'].some((campo) =>
-        campo.toLowerCase().includes(termino),
+      [u.username, u.role_label, u.group_name ?? 'individuales'].some((field) =>
+        field.toLowerCase().includes(term),
       ),
     );
-  }, [users, termino]);
+  }, [users, term]);
   const filteredGroups = useMemo(() => {
-    if (!termino) return groups;
-    return groups.filter((g) => [g.name, g.description].some((campo) => campo.toLowerCase().includes(termino)));
-  }, [groups, termino]);
+    if (!term) return groups;
+    return groups.filter((g) => [g.name, g.description].some((field) => field.toLowerCase().includes(term)));
+  }, [groups, term]);
 
   const newGroup = () => setGroupToEdit({
     name: '',
@@ -196,7 +196,7 @@ export function ManagementView({
                   role: 'viewer',
                   group_id: '',
                   permissions: { ...DEFAULT_USER_PERMISSIONS },
-                  unidades: NO_UNITS,
+                  units: NO_UNITS,
                 })}
               >
                 Nuevo usuario
@@ -215,11 +215,11 @@ export function ManagementView({
         <UsersTable
           users={filteredUsers}
           groups={groups}
-          onEdit={puedeEditar ? (user) => setUserToEdit({ ...user, previa: { ...user.permissions }, previousUnits: user.unidades }) : null}
+          onEdit={canEdit ? (user) => setUserToEdit({ ...user, previous: { ...user.permissions }, previousUnits: user.units }) : null}
           onChangePassword={canChangeKey
             ? (user) => setUserToChangePass({ user_id: user.id, username: user.username, password: '' })
             : null}
-          onDelete={puedeEliminar ? (user) => setDeletingItem({ type: 'user', id: user.id, name: user.username }) : null}
+          onDelete={canDelete ? (user) => setDeletingItem({ type: 'user', id: user.id, name: user.username }) : null}
         />
       )}
 
@@ -227,9 +227,9 @@ export function ManagementView({
         <GroupsGrid
           groups={filteredGroups}
           users={users}
-          filtrando={Boolean(termino)}
+          filtering={Boolean(term)}
           onCreate={canGroups ? newGroup : null}
-          onEdit={canGroups ? (group) => setGroupToEdit({ ...group, previa: { ...group.permissions } }) : null}
+          onEdit={canGroups ? (group) => setGroupToEdit({ ...group, previous: { ...group.permissions } }) : null}
           onDelete={canGroups ? (group) => setDeletingItem({ type: 'group', id: group.id, name: group.name }) : null}
         />
       )}
@@ -273,13 +273,13 @@ export function ManagementView({
                   value={userToCreate.password}
                   onChange={(e) => setUserToCreate({ ...userToCreate, password: e.target.value })}
                 />
-                <CampoSelect
+                <SelectField
                   label="Rol"
                   value={userToCreate.role}
                   options={roles.map(([value, label]) => ({ value, label }))}
                   onChange={(role) => setUserToCreate({ ...userToCreate, role })}
                 />
-                <CampoSelect
+                <SelectField
                   label="Grupo"
                   value={String(userToCreate.group_id ?? '')}
                   options={[
@@ -304,23 +304,23 @@ export function ManagementView({
               <PermissionEditor
                 permissions={userToCreate.permissions}
                 onChange={(permissions) => setUserToCreate({ ...userToCreate, permissions })}
-                bloqueados={blockedFor(DEFAULT_USER_PERMISSIONS)}
+                blocked={blockedFor(DEFAULT_USER_PERMISSIONS)}
               />
             )}
 
             {/* Las unidades son del usuario, no del grupo: se eligen siempre aquí. */}
             <UnitsEditor
-              unidades={userToCreate.unidades}
-              onChange={(unidades) => setUserToCreate({ ...userToCreate, unidades })}
-              catalogo={unidadesNegocio}
-              todas={allUnits(userToCreate.group_id, userToCreate.permissions)}
-              concedibles={unidadesConcedibles}
-              previa={NO_UNITS}
+              units={userToCreate.units}
+              onChange={(units) => setUserToCreate({ ...userToCreate, units })}
+              catalog={business_units}
+              allUnits={allUnits(userToCreate.group_id, userToCreate.permissions)}
+              grantable={grantable_units}
+              previous={NO_UNITS}
             />
 
             <ModalFooter
               onCancel={() => setUserToCreate(null)}
-              nota="La contraseña se valida contra la política del servidor."
+              note="La contraseña se valida contra la política del servidor."
             >
               <Button type="submit" isLoading={saving} icon={<UserPlus className="h-4 w-4" />} size="sm">
                 {saving ? 'Creando...' : 'Crear Usuario'}
@@ -355,13 +355,13 @@ export function ManagementView({
                   disabled
                   title="El nombre de la cuenta no se cambia"
                 />
-                <CampoSelect
+                <SelectField
                   label="Rol en el sistema"
                   value={userToEdit.role}
                   options={roles.map(([value, label]) => ({ value, label }))}
                   onChange={(role) => setUserToEdit({ ...userToEdit, role })}
                 />
-                <CampoSelect
+                <SelectField
                   label="Grupo de permisos"
                   value={String(userToEdit.group_id ?? '')}
                   options={[
@@ -387,21 +387,21 @@ export function ManagementView({
               permissions={userToEdit.permissions}
               onChange={(permissions) => setUserToEdit({ ...userToEdit, permissions })}
               disabled={Boolean(userToEdit.group_id)}
-              bloqueados={blockedFor(userToEdit.previa ?? {})}
+              blocked={blockedFor(userToEdit.previous ?? {})}
             />
             {/* Las unidades son del usuario, no del grupo: se editan aunque tenga uno. */}
             <UnitsEditor
-              unidades={userToEdit.unidades}
-              onChange={(unidades) => setUserToEdit({ ...userToEdit, unidades })}
-              catalogo={unidadesNegocio}
-              todas={allUnits(userToEdit.group_id, userToEdit.permissions)}
-              concedibles={unidadesConcedibles}
-              previa={userToEdit.previousUnits ?? NO_UNITS}
+              units={userToEdit.units}
+              onChange={(units) => setUserToEdit({ ...userToEdit, units })}
+              catalog={business_units}
+              allUnits={allUnits(userToEdit.group_id, userToEdit.permissions)}
+              grantable={grantable_units}
+              previous={userToEdit.previousUnits ?? NO_UNITS}
             />
 
             <ModalFooter
               onCancel={() => setUserToEdit(null)}
-              nota={userToEdit.group_id ? 'Se guardarán el rol, el grupo y las unidades de negocio.' : 'Se guarda la matriz completa tal y como se ve.'}
+              note={userToEdit.group_id ? 'Se guardarán el rol, el grupo y las unidades de negocio.' : 'Se guarda la matriz completa tal y como se ve.'}
             >
               <Button type="submit" isLoading={saving} icon={<ShieldCheck className="h-4 w-4" />} size="sm">
                 {saving ? 'Guardando...' : 'Guardar Cambios'}
@@ -486,12 +486,12 @@ export function ManagementView({
             <PermissionEditor
               permissions={groupToEdit.permissions}
               onChange={(permissions) => setGroupToEdit({ ...groupToEdit, permissions })}
-              bloqueados={blockedFor(groupToEdit.previa ?? {})}
+              blocked={blockedFor(groupToEdit.previous ?? {})}
             />
 
             <ModalFooter
               onCancel={() => setGroupToEdit(null)}
-              nota="Cada cuenta del grupo recibe esta matriz."
+              note="Cada cuenta del grupo recibe esta matriz."
             >
               <Button type="submit" isLoading={saving} icon={<Shield className="h-4 w-4" />} size="sm">
                 {saving ? 'Guardando...' : 'Guardar Grupo'}

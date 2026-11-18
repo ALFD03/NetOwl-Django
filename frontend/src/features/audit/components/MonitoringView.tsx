@@ -16,21 +16,21 @@ import { cn } from '@/shared/lib/cn';
 import { READONLY_TABLE, READONLY_TABLE_BODY, READONLY_TABLE_HEAD_STICKY } from '@/shared/ui/data/tableClasses';
 import { Button, EmptyState, LoadingState, Panel, StatTile, StatusMessage, ToggleGroup } from '@/shared/ui';
 
-const SERVICIOS: { clave: 'web' | 'postgres' | 'redis' | 'worker' | 'jobs'; nombre: string }[] = [
-  { clave: 'web', nombre: 'Web (Django)' },
-  { clave: 'postgres', nombre: 'PostgreSQL' },
-  { clave: 'redis', nombre: 'Redis' },
-  { clave: 'worker', nombre: 'Worker de Celery' },
-  { clave: 'jobs', nombre: 'Análisis' },
+const SERVICES: { id: 'web' | 'postgres' | 'redis' | 'worker' | 'jobs'; label: string }[] = [
+  { id: 'web', label: 'Web (Django)' },
+  { id: 'postgres', label: 'PostgreSQL' },
+  { id: 'redis', label: 'Redis' },
+  { id: 'worker', label: 'Worker de Celery' },
+  { id: 'jobs', label: 'Análisis' },
 ];
 
-const VENTANAS = [
+const WINDOWS = [
   { key: '1', label: '1 h' },
   { key: '24', label: '24 h' },
   { key: '168', label: '7 días' },
 ];
 
-const CANALES: Record<string, string> = { web: 'Navegador', api: 'API (token)' };
+const CHANNELS: Record<string, string> = { web: 'Navegador', api: 'API (token)' };
 const RESULTS: Record<string, string> = {
   ok: 'Correctos',
   error: 'Errores',
@@ -39,9 +39,9 @@ const RESULTS: Record<string, string> = {
 };
 
 /** Los datos que interesan de cada servicio, en una línea. */
-function detalle(clave: string, check: ServiceCheck): string {
+function summary(id: string, check: ServiceCheck): string {
   if (!check.ok) return check.error ?? 'Sin respuesta';
-  switch (clave) {
+  switch (id) {
     case 'web':
       return `Esquema ${String(check.schema)}`;
     case 'postgres':
@@ -52,43 +52,43 @@ function detalle(clave: string, check: ServiceCheck): string {
       return (check.workers as string[]).join(', ');
     case 'jobs': {
       const count = (check.last_24h ?? {}) as Record<string, number>;
-      const partes = Object.entries(count).map(([estado, n]) => `${n} ${estado}`);
-      return partes.length ? `24 h: ${partes.join(' · ')}` : 'Sin análisis en 24 h';
+      const parts = Object.entries(count).map(([status, n]) => `${n} ${status}`);
+      return parts.length ? `24 h: ${parts.join(' · ')}` : 'Sin análisis en 24 h';
     }
     default:
       return '';
   }
 }
 
-function Salud() {
-  const salud = useQuery({ queryKey: ['audit', 'health'], queryFn: monitoringApi.health, refetchInterval: 30_000 });
+function HealthPanel() {
+  const health = useQuery({ queryKey: ['audit', 'health'], queryFn: monitoringApi.health, refetchInterval: 30_000 });
 
   return (
     <Panel
       title="Servicios"
-      description={salud.data ? `Comprobado ${new Date(salud.data.checked_at).toLocaleTimeString('es-VE')}` : undefined}
+      description={health.data ? `Comprobado ${new Date(health.data.checked_at).toLocaleTimeString('es-VE')}` : undefined}
       actions={
         <Button
           size="sm"
           variant="secondary"
-          icon={<RefreshCw className={cn('h-3.5 w-3.5', salud.isFetching && 'animate-spin')} />}
-          onClick={() => void salud.refetch()}
+          icon={<RefreshCw className={cn('h-3.5 w-3.5', health.isFetching && 'animate-spin')} />}
+          onClick={() => void health.refetch()}
         >
           Comprobar
         </Button>
       }
     >
-      {salud.isPending ? (
+      {health.isPending ? (
         <LoadingState message="Comprobando servicios" />
-      ) : salud.isError ? (
-        <StatusMessage status={{ type: 'error', text: getApiErrorMessage(salud.error, 'No se pudo comprobar el estado.') }} />
+      ) : health.isError ? (
+        <StatusMessage status={{ type: 'error', text: getApiErrorMessage(health.error, 'No se pudo comprobar el estado.') }} />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {SERVICIOS.map(({ clave, nombre }) => {
-            const check = salud.data.services[clave];
+          {SERVICES.map(({ id, label }) => {
+            const check = health.data.services[id];
             return (
               <div
-                key={clave}
+                key={id}
                 className={cn(
                   'rounded-lg border p-3',
                   check.ok ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/40 bg-rose-500/10',
@@ -100,10 +100,10 @@ function Salud() {
                   ) : (
                     <XCircle className="h-4 w-4 text-rose-400" />
                   )}
-                  <span className="text-sm font-semibold text-white">{nombre}</span>
+                  <span className="text-sm font-semibold text-white">{label}</span>
                   <span className="ml-auto font-mono text-[10px] text-slate-500">{check.ms} ms</span>
                 </div>
-                <p className="mt-1.5 break-words text-xs text-slate-400">{detalle(clave, check)}</p>
+                <p className="mt-1.5 break-words text-xs text-slate-400">{summary(id, check)}</p>
               </div>
             );
           })}
@@ -113,24 +113,24 @@ function Salud() {
   );
 }
 
-function ms(valor: number | null): string {
-  return valor === null ? '—' : `${valor.toLocaleString('es-VE')} ms`;
+function ms(value: number | null): string {
+  return value === null ? '—' : `${value.toLocaleString('es-VE')} ms`;
 }
 
-function Actividad() {
-  const [horas, setHours] = useState('24');
+function ActivityPanels() {
+  const [hours, setHours] = useState('24');
   const stats = useQuery({
-    queryKey: ['audit', 'stats', horas],
-    queryFn: () => monitoringApi.stats(Number(horas)),
+    queryKey: ['audit', 'stats', hours],
+    queryFn: () => monitoringApi.stats(Number(hours)),
     refetchInterval: 60_000,
   });
 
-  const ventana = <ToggleGroup activeKey={horas} onChange={setHours} options={VENTANAS} />;
+  const windowToggle = <ToggleGroup activeKey={hours} onChange={setHours} options={WINDOWS} />;
 
-  if (stats.isPending) return <Panel title="Actividad" actions={ventana}><LoadingState message="Leyendo la bitácora" /></Panel>;
+  if (stats.isPending) return <Panel title="Actividad" actions={windowToggle}><LoadingState message="Leyendo la bitácora" /></Panel>;
   if (stats.isError) {
     return (
-      <Panel title="Actividad" actions={ventana}>
+      <Panel title="Actividad" actions={windowToggle}>
         <StatusMessage status={{ type: 'error', text: getApiErrorMessage(stats.error, 'No se pudo leer la actividad.') }} />
       </Panel>
     );
@@ -140,19 +140,19 @@ function Actividad() {
 
   return (
     <>
-      <Panel title="Actividad" description="Peticiones anotadas en la bitácora." actions={ventana}>
+      <Panel title="Actividad" description="Peticiones anotadas en la bitácora." actions={windowToggle}>
         <div className="flex flex-wrap gap-6">
           <StatTile label="Peticiones" value={total.toLocaleString('es-VE')} mono />
-          {Object.entries(by_channel).map(([canal, n]) => (
-            <StatTile key={canal} label={CANALES[canal] ?? canal} value={n.toLocaleString('es-VE')} mono tone="blue" />
+          {Object.entries(by_channel).map(([channel, n]) => (
+            <StatTile key={channel} label={CHANNELS[channel] ?? channel} value={n.toLocaleString('es-VE')} mono tone="blue" />
           ))}
-          {Object.entries(by_outcome).map(([resultado, n]) => (
+          {Object.entries(by_outcome).map(([outcome, n]) => (
             <StatTile
-              key={resultado}
-              label={RESULTS[resultado] ?? resultado}
+              key={outcome}
+              label={RESULTS[outcome] ?? outcome}
               value={n.toLocaleString('es-VE')}
               mono
-              tone={resultado === 'ok' ? 'green' : resultado === 'error' ? 'red' : 'yellow'}
+              tone={outcome === 'ok' ? 'green' : outcome === 'error' ? 'red' : 'yellow'}
             />
           ))}
         </div>
@@ -231,12 +231,12 @@ function Actividad() {
                 <li key={r.id} className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5 text-xs">
                   <div className="flex flex-wrap items-center gap-2 text-slate-400">
                     <AlertTriangle className="h-3.5 w-3.5 text-rose-400" />
-                    <span className="font-mono">{r.fecha}</span>
-                    <span className="font-semibold text-slate-200">{r.modulo} · {r.accion}</span>
-                    {r.estado_http && <span className="font-mono text-rose-400">{r.estado_http}</span>}
+                    <span className="font-mono">{r.date}</span>
+                    <span className="font-semibold text-slate-200">{r.module} · {r.action}</span>
+                    {r.status_code && <span className="font-mono text-rose-400">{r.status_code}</span>}
                     <span className="ml-auto">{r.username}</span>
                   </div>
-                  {r.descripcion && <p className="mt-1 text-slate-300">{r.descripcion}</p>}
+                  {r.description && <p className="mt-1 text-slate-300">{r.description}</p>}
                 </li>
               ))}
             </ul>
@@ -247,12 +247,12 @@ function Actividad() {
   );
 }
 
-export function MonitoreoView() {
+export function MonitoringView() {
   return (
     <AppLayout>
       <div className="space-y-4">
-        <Salud />
-        <Actividad />
+        <HealthPanel />
+        <ActivityPanels />
       </div>
     </AppLayout>
   );

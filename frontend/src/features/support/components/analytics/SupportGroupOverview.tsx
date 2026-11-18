@@ -68,20 +68,20 @@ const pct = (v: number) => `${formatTwoDecimals(v)}%`;
  * a row of zeros that reads like a real, very fast distribution.
  */
 function TimingPanel({
-  medida,
+  measure,
   theme,
   icon,
   dist,
 }: {
-  medida: SupportTimeMeasure;
+  measure: SupportTimeMeasure;
   theme: NeonTheme;
   icon: JSX.Element;
   dist: SupportTimeDistribution;
 }) {
-  const { label, caption } = TIME_MEASURE_META[medida];
-  const subtitle = `${caption} · ${formatInteger(dist.muestra)} medidos`;
+  const { label, caption } = TIME_MEASURE_META[measure];
+  const subtitle = `${caption} · ${formatInteger(dist.sample)} medidos`;
 
-  if (dist.muestra === 0) {
+  if (dist.sample === 0) {
     return (
       <NeonContainer theme="slate" title={label} subtitle={subtitle} icon={icon}>
         <EmptyState
@@ -101,7 +101,7 @@ function TimingPanel({
       theme={theme}
       min={dist.min}
       p25={dist.p25}
-      mediana={dist.mediana}
+      mediana={dist.median}
       promedio={dist.promedio}
       p75={dist.p75}
       max={dist.max}
@@ -122,20 +122,20 @@ function TimingPanel({
  */
 function MonthPath({ groupName, stats }: { groupName: string; stats: SupportStats }) {
   const ofMonth = {
-    resueltos: stats.tickets_resueltos_periodo,
-    cancelados: stats.tickets_cancelados_periodo,
-    escalados: stats.tickets_escalados_periodo,
+    resueltos: stats.tickets_resolved_in_period,
+    cancelados: stats.tickets_cancelled_in_period,
+    escalados: stats.tickets_escalated_in_period,
   };
   const arrastre = {
-    resueltos: stats.tickets_resueltos_arrastre,
-    cancelados: stats.tickets_cancelados_arrastre,
-    escalados: stats.tickets_escalados_arrastre,
+    resueltos: stats.tickets_resolved_carryover,
+    cancelados: stats.tickets_cancelled_carryover,
+    escalados: stats.tickets_escalated_carryover,
   };
   const notClosed = Math.max(
     0,
-    stats.tickets_creados - ofMonth.resueltos - ofMonth.cancelados - ofMonth.escalados,
+    stats.tickets_created - ofMonth.resueltos - ofMonth.cancelados - ofMonth.escalados,
   );
-  const recibidos = stats.tickets_recibidos_escalados;
+  const recibidos = stats.tickets_received_escalated;
 
   const origenes: SankeyNode[] = [
     {
@@ -186,9 +186,9 @@ function MonthPath({ groupName, stats }: { groupName: string; stats: SupportStat
  * tarda en decidir que un ticket no es suyo.
  */
 function WhereTimeGoes({ stats }: { stats: SupportStats }) {
-  const { partes, total } = timeParts(stats);
+  const { parts, total } = timeParts(stats);
   const escalar = distribution(stats, ESCALATION);
-  const muestra = stats.muestra_composicion;
+  const muestra = stats.composition_sample;
 
   return (
     <NeonContainer
@@ -211,38 +211,38 @@ function WhereTimeGoes({ stats }: { stats: SupportStats }) {
       ) : (
         <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <CenteredRing
-            data={timeDonutData(partes)}
-            centro={{ title: 'Promedio', value: formatDuration(total) }}
+            data={timeDonutData(parts)}
+            center={{ title: 'Promedio', value: formatDuration(total) }}
             onHover={(i) => ({
-              title: partes[i]?.label ?? '',
-              value: `${formatDuration(partes[i]?.horas ?? 0)} · ${partes[i]?.pct ?? 0}%`,
+              title: parts[i]?.label ?? '',
+              value: `${formatDuration(parts[i]?.hours ?? 0)} · ${parts[i]?.pct ?? 0}%`,
             })}
             className="mx-auto aspect-square w-full max-w-[20rem]"
           />
 
           <div className="space-y-3">
-            {partes.map((p) => (
-              <div key={p.tipo} className="flex items-center gap-3">
+            {parts.map((p) => (
+              <div key={p.type} className="flex items-center gap-3">
                 <span className="h-9 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-bold text-white">{p.label}</span>
                     <span className="font-mono text-sm font-black text-white">
-                      {formatDuration(p.horas)}
+                      {formatDuration(p.hours)}
                       <span className="ml-2 text-xs font-semibold text-slate-400">{p.pct}%</span>
                     </span>
                   </div>
-                  <p className="truncate text-[11px] text-slate-500">{QUE_ES_TIPO[p.tipo]}</p>
+                  <p className="truncate text-[11px] text-slate-500">{QUE_ES_TIPO[p.type]}</p>
                 </div>
               </div>
             ))}
 
-            {escalar.muestra > 0 && (
+            {escalar.sample > 0 && (
               <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-800 pt-4">
                 <StatTile
                   label="Promedio para escalar"
                   value={formatDuration(escalar.promedio)}
-                  caption={`${formatInteger(escalar.muestra)} escalados · mediana ${formatDuration(escalar.mediana)}`}
+                  caption={`${formatInteger(escalar.sample)} escalados · mediana ${formatDuration(escalar.median)}`}
                   tone="yellow"
                   variant="boxed"
                   mono
@@ -272,8 +272,8 @@ function WhereTimeGoes({ stats }: { stats: SupportStats }) {
  * variants stay as means in the card row.
  */
 export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
-  const escala = stats.tickets_escalados > 0 || stats.muestra_escalamiento > 0;
-  const recibe = stats.tickets_recibidos_escalados > 0;
+  const escala = stats.tickets_escalated > 0 || stats.sample_escalation > 0;
+  const recibe = stats.tickets_received_escalated > 0;
   const medidas = SUPPORT_TIME_MEASURES.filter((m) => m !== ESCALATION || escala);
 
   return (
@@ -288,46 +288,46 @@ export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
         />
         <MetricCard
           label="Creados"
-          value={formatInteger(stats.tickets_creados)}
-          caption={recibe ? `entraron en el mes · ${formatInteger(stats.tickets_recibidos_escalados)} llegaron de ATC` : 'entraron en el mes'}
+          value={formatInteger(stats.tickets_created)}
+          caption={recibe ? `entraron en el mes · ${formatInteger(stats.tickets_received_escalated)} llegaron de ATC` : 'entraron en el mes'}
           color="slate"
           icon={<Users className="h-4 w-4 text-slate-300" />}
         />
         <MetricCard
           label="Cerrados"
-          value={formatInteger(stats.tickets_cerrados)}
+          value={formatInteger(stats.tickets_closed)}
           caption={escala ? 'resueltos + cancelados + escalados' : 'se despacharon en el mes'}
           color="blue"
           icon={<Layers className="h-4 w-4 text-sky-400" />}
         />
         <MetricCard
           label="% Resueltos"
-          value={pct(stats.pct_resueltos)}
-          caption={`${formatInteger(stats.tickets_resueltos)} de los cerrados`}
+          value={pct(stats.pct_resolved)}
+          caption={`${formatInteger(stats.tickets_resolved)} de los cerrados`}
           color="green"
           icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />}
         />
         {recibe && !escala ? (
           <MetricCard
             label="% Llegados de ATC"
-            value={pct(stats.pct_recibidos_escalados)}
-            caption={`${formatInteger(stats.tickets_recibidos_escalados)} de los creados`}
+            value={pct(stats.pct_received_escalated)}
+            caption={`${formatInteger(stats.tickets_received_escalated)} de los creados`}
             color="yellow"
             icon={<ArrowRightLeft className="h-4 w-4 text-amber-400" />}
           />
         ) : (
           <MetricCard
             label="% Escalados a Soporte"
-            value={pct(stats.pct_escalados)}
-            caption={`${formatInteger(stats.tickets_escalados)} de los cerrados`}
+            value={pct(stats.pct_escalated)}
+            caption={`${formatInteger(stats.tickets_escalated)} de los cerrados`}
             color="yellow"
             icon={<ArrowRightLeft className="h-4 w-4 text-amber-400" />}
           />
         )}
         <MetricCard
           label="% Rezagados"
-          value={pct(stats.pct_rezagados)}
-          caption={escala ? `${formatInteger(stats.tickets_rezagados)} sin cerrar ni escalar en su mes` : `${formatInteger(stats.tickets_rezagados)} de los creados`}
+          value={pct(stats.pct_lagging)}
+          caption={escala ? `${formatInteger(stats.tickets_lagging)} sin cerrar ni escalar en su mes` : `${formatInteger(stats.tickets_lagging)} de los creados`}
           color="yellow"
           icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
         />
@@ -344,27 +344,27 @@ export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
         icon={<Layers className="h-5 w-5" />}
       >
         <div className={`mb-5 grid grid-cols-2 gap-3 ${escala ? 'lg:grid-cols-3 2xl:grid-cols-6' : 'lg:grid-cols-4'}`}>
-          <MetricCard label="Resueltos del mes" subValue={`${formatInteger(stats.tickets_resueltos_periodo)} creados y resueltos en el mes`} value={pct(stats.pct_resueltos_periodo)} color="green" />
-          <MetricCard label="Resueltos arrastre" subValue={`${formatInteger(stats.tickets_resueltos_arrastre)} de meses anteriores`} value={pct(stats.pct_resueltos_arrastre)} color="purple" />
-          <MetricCard label="Cancelados del mes" subValue={formatInteger(stats.tickets_cancelados_periodo)} value={pct(stats.pct_cancelados_periodo)} color="red" />
-          <MetricCard label="Cancelados arrastre" subValue={formatInteger(stats.tickets_cancelados_arrastre)} value={pct(stats.pct_cancelados_arrastre)} color="yellow" />
+          <MetricCard label="Resueltos del mes" subValue={`${formatInteger(stats.tickets_resolved_in_period)} creados y resueltos en el mes`} value={pct(stats.pct_resolved_in_period)} color="green" />
+          <MetricCard label="Resueltos arrastre" subValue={`${formatInteger(stats.tickets_resolved_carryover)} de meses anteriores`} value={pct(stats.pct_resolved_carryover)} color="purple" />
+          <MetricCard label="Cancelados del mes" subValue={formatInteger(stats.tickets_cancelled_in_period)} value={pct(stats.pct_cancelled_in_period)} color="red" />
+          <MetricCard label="Cancelados arrastre" subValue={formatInteger(stats.tickets_cancelled_carryover)} value={pct(stats.pct_cancelled_carryover)} color="yellow" />
           {escala && (
             <>
-              <MetricCard label="Escalados del mes" subValue={`${formatInteger(stats.tickets_escalados_periodo)} creados y escalados en el mes`} value={pct(stats.pct_escalados_periodo)} color="yellow" />
-              <MetricCard label="Escalados arrastre" subValue={`${formatInteger(stats.tickets_escalados_arrastre)} de meses anteriores`} value={pct(stats.pct_escalados_arrastre)} color="slate" />
+              <MetricCard label="Escalados del mes" subValue={`${formatInteger(stats.tickets_escalated_in_period)} creados y escalados en el mes`} value={pct(stats.pct_escalated_in_period)} color="yellow" />
+              <MetricCard label="Escalados arrastre" subValue={`${formatInteger(stats.tickets_escalated_carryover)} de meses anteriores`} value={pct(stats.pct_escalated_carryover)} color="slate" />
             </>
           )}
         </div>
 
         <div className="grid grid-cols-1 gap-x-8 gap-y-3 lg:grid-cols-2">
-          <ProgressBar label="Resueltos del mes" percent={stats.pct_resueltos_periodo} valueLabel={pct(stats.pct_resueltos_periodo)} color="green" />
-          <ProgressBar label="Resueltos de meses anteriores" percent={stats.pct_resueltos_arrastre} valueLabel={pct(stats.pct_resueltos_arrastre)} color="purple" />
-          <ProgressBar label="Cancelados del mes" percent={stats.pct_cancelados_periodo} valueLabel={pct(stats.pct_cancelados_periodo)} color="red" />
-          <ProgressBar label="Cancelados de meses anteriores" percent={stats.pct_cancelados_arrastre} valueLabel={pct(stats.pct_cancelados_arrastre)} color="yellow" />
+          <ProgressBar label="Resueltos del mes" percent={stats.pct_resolved_in_period} valueLabel={pct(stats.pct_resolved_in_period)} color="green" />
+          <ProgressBar label="Resueltos de meses anteriores" percent={stats.pct_resolved_carryover} valueLabel={pct(stats.pct_resolved_carryover)} color="purple" />
+          <ProgressBar label="Cancelados del mes" percent={stats.pct_cancelled_in_period} valueLabel={pct(stats.pct_cancelled_in_period)} color="red" />
+          <ProgressBar label="Cancelados de meses anteriores" percent={stats.pct_cancelled_carryover} valueLabel={pct(stats.pct_cancelled_carryover)} color="yellow" />
           {escala && (
             <>
-              <ProgressBar label="Escalados a Soporte del mes" percent={stats.pct_escalados_periodo} valueLabel={pct(stats.pct_escalados_periodo)} color="yellow" />
-              <ProgressBar label="Escalados de meses anteriores" percent={stats.pct_escalados_arrastre} valueLabel={pct(stats.pct_escalados_arrastre)} color="slate" />
+              <ProgressBar label="Escalados a Soporte del mes" percent={stats.pct_escalated_in_period} valueLabel={pct(stats.pct_escalated_in_period)} color="yellow" />
+              <ProgressBar label="Escalados de meses anteriores" percent={stats.pct_escalated_carryover} valueLabel={pct(stats.pct_escalated_carryover)} color="slate" />
             </>
           )}
         </div>
@@ -378,17 +378,17 @@ export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
       <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 ${medidas.length > 7 ? '2xl:grid-cols-8' : '2xl:grid-cols-7'}`}>
         {medidas.map((medida) => {
           const meta = TIME_MEASURE_META[medida];
-          const muestraMedida = stats[`muestra_${medida}`];
+          const muestraMedida = stats[`sample_${medida}`];
 
           return (
             <MetricCard
               key={medida}
               label={meta.label}
-              value={formatDuration(stats[`tiempo_medio_${medida}_horas`])}
+              value={formatDuration(stats[`time_mean_${medida}_hours`])}
               color={meta.color}
               subValue={
                 muestraMedida > 0
-                  ? `promedio de ${formatInteger(muestraMedida)} · mediana ${formatDuration(stats[`tiempo_mediana_${medida}_horas`])}`
+                  ? `promedio de ${formatInteger(muestraMedida)} · mediana ${formatDuration(stats[`time_median_${medida}_hours`])}`
                   : 'sin tickets medidos'
               }
               icon={MEASURE_ICONS[meta.color]}
@@ -398,13 +398,13 @@ export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <TimingPanel medida={CLOSE_TOTAL} theme="blue" icon={<Clock className="h-5 w-5" />} dist={distribution(stats, CLOSE_TOTAL)} />
-        <TimingPanel medida={HANDLING} theme="purple" icon={<Timer className="h-5 w-5" />} dist={distribution(stats, HANDLING)} />
+        <TimingPanel measure={CLOSE_TOTAL} theme="blue" icon={<Clock className="h-5 w-5" />} dist={distribution(stats, CLOSE_TOTAL)} />
+        <TimingPanel measure={HANDLING} theme="purple" icon={<Timer className="h-5 w-5" />} dist={distribution(stats, HANDLING)} />
         <div className={escala ? '' : 'lg:col-span-2'}>
-          <TimingPanel medida={ASIGNACION} theme="slate" icon={<Hourglass className="h-5 w-5" />} dist={distribution(stats, ASIGNACION)} />
+          <TimingPanel measure={ASIGNACION} theme="slate" icon={<Hourglass className="h-5 w-5" />} dist={distribution(stats, ASIGNACION)} />
         </div>
         {escala && (
-          <TimingPanel medida={ESCALATION} theme="yellow" icon={<ArrowRightLeft className="h-5 w-5" />} dist={distribution(stats, ESCALATION)} />
+          <TimingPanel measure={ESCALATION} theme="yellow" icon={<ArrowRightLeft className="h-5 w-5" />} dist={distribution(stats, ESCALATION)} />
         )}
       </div>
     </>

@@ -19,32 +19,32 @@ import { CatalogBar, ConfirmarBorrado, CatalogErrorView, actionsColumn, enviar }
  * ventas; aquí solo se elige a cuáles pertenece cada zona.
  */
 export function EstructuraView({
-  zonas, sites, estados, coordinadores, tecnologias, nuevaZona,
+  zones, sites, states, coordinators, technologies, newZone,
 }: CatalogsStructureProps) {
-  const c = useCatalogs({ initialView: 'zonas', sites, estados, nuevaZona });
+  const c = useCatalogs({ initialView: 'zonas', sites, states, newZone });
 
   const zoneColumns: Column<CatalogZone>[] = [
-    { header: 'Zona', accessor: 'nombre', sortKey: 'nombre' },
+    { header: 'Zona', accessor: 'name', sortKey: 'name' },
     { header: 'Site', accessor: 'site', sortKey: 'site', filterable: true },
-    { header: 'Estado', accessor: 'estado', sortKey: 'estado', filterable: true },
-    { header: 'Tecnología', accessor: 'tecnologia', sortKey: 'tecnologia', filterable: true },
+    { header: 'Estado', accessor: 'state', sortKey: 'state', filterable: true },
+    { header: 'Tecnología', accessor: 'technology', sortKey: 'technology', filterable: true },
     {
       header: 'Unidad de negocio',
-      accessor: (row) => row.coordinador || '—',
-      sortKey: 'coordinador',
+      accessor: (row) => row.coordinator || '—',
+      sortKey: 'coordinator',
       filterable: true,
-      filterValue: (row) => row.coordinador || 'Sin coordinador',
+      filterValue: (row) => row.coordinator || 'Sin coordinador',
     },
     actionsColumn<CatalogZone>(c.editarZona, (row) =>
-      c.setBorrando({ tipo: 'zonas', id: row.id, nombre: row.nombre })),
+      c.setBorrando({ kind: 'zonas', id: row.id, name: row.name })),
   ];
 
   const stateColumns: Column<CatalogNamed>[] = [
-    { header: 'Nombre', accessor: 'nombre', sortKey: 'nombre' },
-    { header: 'Zonas', accessor: 'zonas', align: 'right', sortKey: 'zonas' },
+    { header: 'Nombre', accessor: 'name', sortKey: 'name' },
+    { header: 'Zonas', accessor: 'zones', align: 'right', sortKey: 'zones' },
     actionsColumn<CatalogNamed>(
       (row) => c.editarNombre('estados', row),
-      (row) => c.setBorrando({ tipo: 'estados', id: row.id, nombre: row.nombre }),
+      (row) => c.setBorrando({ kind: 'estados', id: row.id, name: row.name }),
     ),
   ];
 
@@ -61,8 +61,8 @@ export function EstructuraView({
           onChange={(key) => c.setVista(key as typeof c.vista)}
           alta={altas[c.vista]}
           pestanas={[
-            { key: 'zonas', label: `Zonas (${zonas.length})`, icon: Network },
-            { key: 'estados', label: `Estados (${estados.length})`, icon: MapPin },
+            { key: 'zonas', label: `Zonas (${zones.length})`, icon: Network },
+            { key: 'estados', label: `Estados (${states.length})`, icon: MapPin },
           ]}
         />
       }
@@ -71,13 +71,13 @@ export function EstructuraView({
 
       {c.vista === 'zonas' && (
         <NeonContainer title="Zonas" subtitle="Nodos de red, con su site, su estado y su unidad de negocio" icon={<Network className="h-5 w-5" />} theme="blue" noPadding>
-          <DataTable columns={zoneColumns} data={zonas} searchable searchPlaceholder="Buscar zona..." />
+          <DataTable columns={zoneColumns} data={zones} searchable searchPlaceholder="Buscar zona..." />
         </NeonContainer>
       )}
 
       {c.vista === 'estados' && (
         <NeonContainer title="Estados" subtitle="Entidades federales. El reporte ETA agrupa por aquí" icon={<MapPin className="h-5 w-5" />} theme="slate" noPadding>
-          <DataTable columns={stateColumns} data={estados} searchable searchPlaceholder="Buscar estado..." />
+          <DataTable columns={stateColumns} data={states} searchable searchPlaceholder="Buscar estado..." />
         </NeonContainer>
       )}
 
@@ -93,9 +93,9 @@ export function EstructuraView({
           <ZoneForm
             value={c.zonaDraft}
             sites={sites}
-            estados={estados}
-            coordinadores={coordinadores}
-            tecnologias={tecnologias}
+            states={states}
+            coordinators={coordinators}
+            technologies={technologies}
             saving={c.guardando}
             onChange={(patch) => c.setZonaDraft({ ...c.zonaDraft!, ...patch })}
             onSubmit={(e) => enviar(e, () => c.guardar('zonas', { ...c.zonaDraft }))}
@@ -119,7 +119,7 @@ export function EstructuraView({
             saving={c.guardando}
             onChange={(patch) => c.setNombreDraft({ ...c.nombreDraft!, ...patch })}
             onSubmit={(e) =>
-              enviar(e, () => c.guardar(c.nombreDraft!.tipo, { id: c.nombreDraft!.id, nombre: c.nombreDraft!.nombre }))
+              enviar(e, () => c.guardar(c.nombreDraft!.kind, { id: c.nombreDraft!.id, name: c.nombreDraft!.name }))
             }
             onClose={c.cerrarFormularios}
           />

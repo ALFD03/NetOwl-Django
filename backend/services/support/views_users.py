@@ -17,6 +17,7 @@ from django.db.models import ProtectedError
 from core.odoo_names import USERS_SUFFIX, normalize_odoo_name
 from services.config.api import ApiError, endpoint, json_body
 from services.support.analytics.users import tickets_after_churn, users_outside_directory
+from services.support.api_keys import SUPPORT_KEYS
 from services.support.models import Departamento, MovimientoInvalido, UsuarioSoporte
 
 logger = logging.getLogger(__name__)
@@ -150,17 +151,17 @@ def _catalog(data: dict) -> dict[str, Any]:
     return catalog
 
 
-@endpoint(perms=PERM)
+@endpoint(perms=PERM, keys=SUPPORT_KEYS)
 def users(request):
     """El directorio, los nombres de los tickets que no reconoce y los tickets tras una baja.
 
-    `?nuevo_usuario=` abre el alta ya rellena con ese nombre.
+    `?new_user=` abre el alta ya rellena con ese nombre.
     """
     data = {
         "usuarios": _listing("usuarios"),
         "departamentos": _listing("departamentos"),
         "sufijo": USERS_SUFFIX,
-        "nuevoUsuario": (request.GET.get("nuevo_usuario") or "").strip(),
+        "nuevoUsuario": (request.GET.get("new_user") or "").strip(),
     }
     # Sin tickets cargados todavía la pantalla sigue sirviendo para dar de alta.
     try:
@@ -176,10 +177,10 @@ def users(request):
     return data
 
 
-@endpoint(methods=["POST"], perms=PERM, rate="60/m")
+@endpoint(methods=["POST"], perms=PERM, rate="60/m", keys=SUPPORT_KEYS)
 def user_save(request):
     """Alta o edición de un usuario o un departamento."""
-    data = json_body(request)
+    data = SUPPORT_KEYS.back(json_body(request))
     catalog = _catalog(data)
     if data.get("id"):
         row = catalog["model"].objects.filter(pk=data.get("id")).first()
@@ -202,10 +203,10 @@ def user_save(request):
     }
 
 
-@endpoint(methods=["POST"], perms=PERM, rate="60/m")
+@endpoint(methods=["POST"], perms=PERM, rate="60/m", keys=SUPPORT_KEYS)
 def user_delete(request):
     """Baja de una fila. Un departamento referenciado no se borra (409)."""
-    data = json_body(request)
+    data = SUPPORT_KEYS.back(json_body(request))
     catalog = _catalog(data)
     row = catalog["model"].objects.filter(pk=data.get("id")).first()
     if row is None:
@@ -251,10 +252,10 @@ MOVES = {
 }
 
 
-@endpoint(methods=["POST"], perms=PERM, rate="60/m")
+@endpoint(methods=["POST"], perms=PERM, rate="60/m", keys=SUPPORT_KEYS)
 def user_move(request):
     """Cambio de departamento, baja o reactivación; las reglas viven en el modelo."""
-    data = json_body(request)
+    data = SUPPORT_KEYS.back(json_body(request))
     move = MOVES.get(str(data.get("accion") or ""))
     if move is None:
         raise ApiError("Acción desconocida.")

@@ -29,12 +29,12 @@ export const ACCUMULATED_COLOR = CHART_PALETTE[9];
  */
 export function buildTiersChartData(tramos: LifetimeTier[]): ChartData<'bar'> {
   const data: ChartData<'bar' | 'line'> = {
-    labels: tramos.map((t) => t.tramo),
+    labels: tramos.map((t) => t.bucket),
     datasets: [
       {
         type: 'line',
         label: '% acumulado',
-        data: tramos.map((t) => t.pct_acumulado),
+        data: tramos.map((t) => t.cumulative_pct),
         yAxisID: 'acumulado',
         borderColor: ACCUMULATED_COLOR,
         backgroundColor: ACCUMULATED_COLOR,
@@ -47,7 +47,7 @@ export function buildTiersChartData(tramos: LifetimeTier[]): ChartData<'bar'> {
       {
         type: 'bar',
         label: 'Bajas',
-        data: tramos.map((t) => t.bajas),
+        data: tramos.map((t) => t.churned),
         yAxisID: 'bajas',
         backgroundColor: tramos.map((_, i) => `${tierColor(i, tramos.length)}CC`),
         borderColor: tramos.map((_, i) => tierColor(i, tramos.length)),
@@ -73,7 +73,7 @@ export function tiersChartOptions(tramos: LifetimeTier[]): ChartOptions<'bar'> {
       },
       datalabels: {
         // Solo en las barras: el % del tramo encima de cada una.
-        display: (ctx) => ctx.datasetIndex === 1 && tramos[ctx.dataIndex]?.bajas > 0,
+        display: (ctx) => ctx.datasetIndex === 1 && tramos[ctx.dataIndex]?.churned > 0,
         anchor: 'end',
         align: 'top',
         font: { size: 10, weight: 'bold' },
@@ -89,8 +89,8 @@ export function tiersChartOptions(tramos: LifetimeTier[]): ChartOptions<'bar'> {
           label: (ctx: TooltipItem<'bar'>) => {
             const tramo = tramos[ctx.dataIndex];
             return ctx.datasetIndex === 1
-              ? `Bajas: ${tramo.bajas.toLocaleString('en-US')} (${tramo.pct}%)`
-              : `Acumulado: ${tramo.pct_acumulado}% ya se había ido`;
+              ? `Bajas: ${tramo.churned.toLocaleString('en-US')} (${tramo.pct}%)`
+              : `Acumulado: ${tramo.cumulative_pct}% ya se había ido`;
           },
         },
       },

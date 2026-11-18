@@ -8,6 +8,7 @@
 
 import type { DimensionVal } from '@/shared/types/domain';
 
+import type { CommercialNode } from './commercial';
 import type { SalesReportSite, SalesReportNode } from '../hooks/useSalesReportData';
 import type { BusinessUnitGroup, BusinessUnitNode } from '../hooks/useBusinessUnitsData';
 
@@ -16,13 +17,13 @@ export interface ZoneConfig {
   name: string;
   site: string;
   type: string;
-  coordinador?: string;
+  coordinator?: string;
   /** Para la herencia de objetivos (ver `lib/targets.ts`). */
-  estado?: string;
+  state?: string;
 }
 
 export interface ZonesConfig {
-  zonas: ZoneConfig[];
+  zones: ZoneConfig[];
   /** Orden de presentacion de los sites; el backend es la unica fuente. */
   siteOrder: string[];
 }
@@ -56,29 +57,25 @@ const splitValue = (valor: string): { zona: string; sucursal: string } => {
 const num = (value: number | undefined): number => Number(value ?? 0);
 
 const baseNode = (row: DimensionVal) => {
-  const valor = String(row.valor ?? '');
+  const valor = String(row.value ?? '');
   const { zona, sucursal } = splitValue(valor);
   return {
     zona_sucursal: valor,
     zona,
     sucursal,
-    activos_inicio: num(row.activos_inicio),
-    activos_final: num(row.activos_final),
-    nuevos: num(row.nuevos),
-    bajas: num(row.bajas),
-    crecimiento: num(row.crecimiento),
-    churn_neto_pct: num(row.churn_neto_pct),
-    churn_bruto_pct: num(row.churn_bruto_pct),
+    active_start: num(row.active_start),
+    active_end: num(row.active_end),
+    new_subs: num(row.new_subs),
+    churned: num(row.churned),
+    growth: num(row.growth),
+    gross_churn_pct: num(row.gross_churn_pct),
     // El backend expone la reactivacion valida como `react_val`.
-    reactivaciones: num(row.react_val),
-    adiciones_netas: num(row.adiciones_netas),
-    adiciones_brutas: num(row.adiciones_brutas),
-    corte_impagado: num(row.corte_impagado),
-  };
+    reactivations: num(row.react_val),
+  } satisfies CommercialNode;
 };
 
-const byActiveAtEnd = <T extends { activos_final?: number }>(a: T, b: T): number =>
-  num(b.activos_final) - num(a.activos_final);
+const byActiveAtEnd = <T extends { active_end?: number }>(a: T, b: T): number =>
+  num(b.active_end) - num(a.active_end);
 
 /** Ventas: site -> tecnologia -> nodos. */
 export function buildSalesSites(
@@ -88,7 +85,7 @@ export function buildSalesSites(
   if (!rows.length) return [];
 
   const zoneInfo = new Map<string, { site: string; type: string }>();
-  config?.zonas.forEach((zona) =>
+  config?.zones.forEach((zona) =>
     zoneInfo.set(zona.name.toLowerCase(), { site: zona.site, type: zona.type }),
   );
 
@@ -135,9 +132,9 @@ export function buildBusinessUnitGroups(
   const coordMap = new Map<string, string>();
   const rfZones = new Set<string>();
 
-  config?.zonas.forEach((zona) => {
+  config?.zones.forEach((zona) => {
     const key = zona.name.toLowerCase();
-    if (zona.coordinador) coordMap.set(key, zona.coordinador);
+    if (zona.coordinator) coordMap.set(key, zona.coordinator);
     if (zona.type.toUpperCase() === 'RF') rfZones.add(key);
   });
 
@@ -162,14 +159,14 @@ export function buildBusinessUnitGroups(
   const groups: BusinessUnitGroup[] = [...coordGroups.keys()]
     .sort()
     .map((coordinador) => ({
-      coordinador,
+      coordinator: coordinador,
       nodes: [...(coordGroups.get(coordinador) ?? [])].sort(byActiveAtEnd),
       is_rf: false,
     }));
 
   if (rfNodes.length) {
     groups.push({
-      coordinador: RF_GROUP,
+      coordinator: RF_GROUP,
       nodes: [...rfNodes].sort(byActiveAtEnd),
       is_rf: true,
     });

@@ -10,12 +10,12 @@ export function useSubscriptionsAnalyticsData(
   selectedDim: string,
 ) {
   const globalData = useMemo(
-    () => periodos.find((period) => period.periodo_reporte === selectedPeriod) ?? { periodo_reporte: selectedPeriod },
+    () => periodos.find((period) => period.report_period === selectedPeriod) ?? { report_period: selectedPeriod },
     [periodos, selectedPeriod],
   );
 
   const dimensionGroup = useMemo(
-    () => dimensiones.find((group) => group.periodo_reporte === selectedPeriod)?.dimensiones ?? {},
+    () => dimensiones.find((group) => group.report_period === selectedPeriod)?.dimensions ?? {},
     [dimensiones, selectedPeriod],
   );
 

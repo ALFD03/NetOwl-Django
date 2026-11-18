@@ -61,7 +61,7 @@ def request_int(
 ) -> int | None:
     """Lee un entero de la query string sin reventar si no lo es.
 
-    `int(request.GET.get(...))` a pelo devolvia un 500 ante `?dia=abc`, y un
+    `int(request.GET.get(...))` a pelo devolvia un 500 ante `?day=abc`, y un
     `?limit=-1` llegaba hasta Postgres como `LIMIT -1`. Las vistas HTML ya lo
     hacian bien; eran sus gemelas JSON las que no.
     """

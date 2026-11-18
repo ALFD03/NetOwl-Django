@@ -34,28 +34,28 @@ import {
 } from '../../lib/flowFormat';
 import type { OpenGroup, OpenTicket, OpenTickets } from '../../types';
 
-type Agrupacion = 'por_etapa' | 'por_grupo' | 'por_asignado' | 'por_tipo_solicitud' | 'por_zona';
+type Agrupacion = 'by_stage' | 'by_group' | 'by_assignee' | 'by_request_type' | 'by_zone';
 
-const AGRUPACIONES: { key: Agrupacion; label: string; campo: keyof OpenGroup }[] = [
-  { key: 'por_etapa', label: 'Etapa', campo: 'etapa_actual' },
-  { key: 'por_grupo', label: 'Grupo de trabajo', campo: 'grupo_trabajo' },
-  { key: 'por_asignado', label: 'Asignado a', campo: 'asignado_a' },
-  { key: 'por_tipo_solicitud', label: 'Tipo', campo: 'tipo_solicitud' },
-  { key: 'por_zona', label: 'Zona', campo: 'zona' },
+const AGRUPACIONES: { key: Agrupacion; label: string; field: keyof OpenGroup }[] = [
+  { key: 'by_stage', label: 'Etapa', field: 'current_stage' },
+  { key: 'by_group', label: 'Grupo de trabajo', field: 'grupo_trabajo' },
+  { key: 'by_assignee', label: 'Asignado a', field: 'asignado_a' },
+  { key: 'by_request_type', label: 'Tipo', field: 'tipo_solicitud' },
+  { key: 'by_zone', label: 'Zona', field: 'zona' },
 ];
 
 const Duration = ({
-  horas,
-  fuerte = false,
+  hours,
+  strong = false,
 }: {
-  horas: number | null | undefined;
-  fuerte?: boolean;
+  hours: number | null | undefined;
+  strong?: boolean;
 }) => (
   <span
-    title={formatExactHours(horas)}
-    className={fuerte ? 'font-black text-amber-400' : undefined}
+    title={formatExactHours(hours)}
+    className={strong ? 'font-black text-amber-400' : undefined}
   >
-    {formatDuration(horas)}
+    {formatDuration(hours)}
   </span>
 );
 
@@ -68,66 +68,66 @@ function groupColumns(campo: keyof OpenGroup, etiqueta: string): Column<OpenGrou
       sticky: true,
     },
   ];
-  if (campo === 'etapa_actual') {
+  if (campo === 'current_stage') {
     columns.push(
       {
         header: 'Equipo',
-        accessor: (r) => (r.equipo_actual ? TEAM_LABEL[r.equipo_actual] : '—'),
-        sortKey: 'equipo_actual',
+        accessor: (r) => (r.current_team ? TEAM_LABEL[r.current_team] : '—'),
+        sortKey: 'current_team',
         filterable: true,
-        filterValue: (r) => (r.equipo_actual ? TEAM_LABEL[r.equipo_actual] : '—'),
+        filterValue: (r) => (r.current_team ? TEAM_LABEL[r.current_team] : '—'),
       },
       {
         header: 'Tipo',
-        accessor: (r) => (r.tipo_actual ? KIND_LABEL[r.tipo_actual] : '—'),
-        sortKey: 'tipo_actual',
+        accessor: (r) => (r.current_type ? KIND_LABEL[r.current_type] : '—'),
+        sortKey: 'current_type',
         filterable: true,
-        filterValue: (r) => (r.tipo_actual ? KIND_LABEL[r.tipo_actual] : '—'),
+        filterValue: (r) => (r.current_type ? KIND_LABEL[r.current_type] : '—'),
       },
     );
   }
   columns.push(
     {
       header: 'Abiertos',
-      accessor: (r) => formatInteger(r.abiertos),
+      accessor: (r) => formatInteger(r.open),
       align: 'right',
-      sortKey: 'abiertos',
+      sortKey: 'open',
     },
     {
       header: 'Escalados',
-      accessor: (r) => formatInteger(r.escalados),
+      accessor: (r) => formatInteger(r.escalated),
       align: 'right',
-      sortKey: 'escalados',
+      sortKey: 'escalated',
     },
     {
       header: 'Abierto hace (prom.)',
-      accessor: (r) => <Duration horas={r.edad_media} fuerte />,
+      accessor: (r) => <Duration hours={r.age_mean} strong />,
       align: 'right',
-      sortKey: 'edad_media',
+      sortKey: 'age_mean',
     },
     {
       header: 'Abierto hace (mediana)',
-      accessor: (r) => <Duration horas={r.edad_mediana} />,
+      accessor: (r) => <Duration hours={r.age_median} />,
       align: 'right',
-      sortKey: 'edad_mediana',
+      sortKey: 'age_median',
     },
     {
       header: 'El más viejo',
-      accessor: (r) => <Duration horas={r.edad_max} />,
+      accessor: (r) => <Duration hours={r.age_max} />,
       align: 'right',
-      sortKey: 'edad_max',
+      sortKey: 'age_max',
     },
     {
       header: 'En su etapa (prom.)',
-      accessor: (r) => <Duration horas={r.en_etapa_media} />,
+      accessor: (r) => <Duration hours={r.in_stage_mean} />,
       align: 'right',
-      sortKey: 'en_etapa_media',
+      sortKey: 'in_stage_mean',
     },
     {
       header: 'En su etapa (mediana)',
-      accessor: (r) => <Duration horas={r.en_etapa_mediana} />,
+      accessor: (r) => <Duration hours={r.in_stage_median} />,
       align: 'right',
-      sortKey: 'en_etapa_mediana',
+      sortKey: 'in_stage_median',
     },
   );
   return columns;
@@ -140,129 +140,129 @@ const LIST_COLUMNS: Column<OpenTicket>[] = [
     sortKey: 'ticket',
     sticky: true,
   },
-  { header: 'Etapa', accessor: 'etapa', sortKey: 'etapa', filterable: true },
+  { header: 'Etapa', accessor: 'stage', sortKey: 'stage', filterable: true },
   {
     header: 'Equipo',
-    accessor: (r) => TEAM_LABEL[r.equipo],
-    sortKey: 'equipo',
+    accessor: (r) => TEAM_LABEL[r.team],
+    sortKey: 'team',
     filterable: true,
-    filterValue: (r) => TEAM_LABEL[r.equipo],
+    filterValue: (r) => TEAM_LABEL[r.team],
   },
   { header: 'Grupo', accessor: 'grupo_trabajo', sortKey: 'grupo_trabajo', filterable: true },
   { header: 'Asignado a', accessor: 'asignado_a', sortKey: 'asignado_a' },
   {
     header: 'Escalado',
-    accessor: (r) => (r.escalado ? 'Sí' : '—'),
-    sortKey: 'escalado',
+    accessor: (r) => (r.is_escalated ? 'Sí' : '—'),
+    sortKey: 'is_escalated',
     filterable: true,
-    filterValue: (r) => (r.escalado ? 'Sí' : 'No'),
+    filterValue: (r) => (r.is_escalated ? 'Sí' : 'No'),
   },
   {
     header: 'Creado',
-    accessor: (r) => (r.creado ? r.creado.replace('T', ' ').slice(0, 16) : '—'),
-    sortKey: 'creado',
+    accessor: (r) => (r.opened_at ? r.opened_at.replace('T', ' ').slice(0, 16) : '—'),
+    sortKey: 'opened_at',
   },
   {
     header: 'Abierto hace',
-    accessor: (r) => <Duration horas={r.edad_h} fuerte />,
+    accessor: (r) => <Duration hours={r.age_h} strong />,
     align: 'right',
-    sortKey: 'edad_h',
+    sortKey: 'age_h',
   },
   {
     header: 'En su etapa',
-    accessor: (r) => <Duration horas={r.en_etapa_h} />,
+    accessor: (r) => <Duration hours={r.in_stage_h} />,
     align: 'right',
-    sortKey: 'en_etapa_h',
+    sortKey: 'in_stage_h',
   },
 ];
 
 const EXCEL_LIST = [
   { header: 'Ticket', value: (r: OpenTicket) => r.ticket, width: 14 },
-  { header: 'Etapa', value: (r: OpenTicket) => r.etapa, width: 30 },
-  { header: 'Equipo', value: (r: OpenTicket) => TEAM_LABEL[r.equipo], width: 10 },
-  { header: 'Tipo de etapa', value: (r: OpenTicket) => KIND_LABEL[r.tipo], width: 14 },
+  { header: 'Etapa', value: (r: OpenTicket) => r.stage, width: 30 },
+  { header: 'Equipo', value: (r: OpenTicket) => TEAM_LABEL[r.team], width: 10 },
+  { header: 'Tipo de etapa', value: (r: OpenTicket) => KIND_LABEL[r.type], width: 14 },
   { header: 'Grupo de trabajo', value: (r: OpenTicket) => r.grupo_trabajo, width: 26 },
   { header: 'Asignado a', value: (r: OpenTicket) => r.asignado_a, width: 26 },
   { header: 'Tipo', value: (r: OpenTicket) => r.tipo_solicitud, width: 18 },
   { header: 'Zona', value: (r: OpenTicket) => r.zona, width: 18 },
-  { header: 'Escalado', value: (r: OpenTicket) => (r.escalado ? 'Sí' : 'No'), width: 10 },
+  { header: 'Escalado', value: (r: OpenTicket) => (r.is_escalated ? 'Sí' : 'No'), width: 10 },
   {
     header: 'Creado',
-    value: (r: OpenTicket) => r.creado?.replace('T', ' ').slice(0, 16) ?? '',
+    value: (r: OpenTicket) => r.opened_at?.replace('T', ' ').slice(0, 16) ?? '',
     width: 18,
   },
-  { header: 'Horas abierto', value: (r: OpenTicket) => r.edad_h, format: '0.00', width: 14 },
+  { header: 'Horas abierto', value: (r: OpenTicket) => r.age_h, format: '0.00', width: 14 },
   {
     header: 'Horas en su etapa',
-    value: (r: OpenTicket) => r.en_etapa_h,
+    value: (r: OpenTicket) => r.in_stage_h,
     format: '0.00',
     width: 16,
   },
 ];
 
-function Summary({ datos }: { datos: OpenTickets }) {
-  const { resumen } = datos;
+function Summary({ data }: { data: OpenTickets }) {
+  const { summary } = data;
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
       <MetricCard
         label="Abiertos"
-        value={formatInteger(resumen.abiertos)}
+        value={formatInteger(summary.open)}
         color="slate"
-        subValue={`ATC ${formatInteger(resumen.en_atc)} · Soporte ${formatInteger(resumen.en_soporte)}`}
+        subValue={`ATC ${formatInteger(summary.in_atc)} · Soporte ${formatInteger(summary.in_support)}`}
       />
       <MetricCard
         label="Escalados abiertos"
-        value={formatInteger(resumen.escalados)}
+        value={formatInteger(summary.escalated)}
         color="purple"
-        subValue={`En Soporte desde el escalamiento: ${formatDuration(resumen.en_soporte_desde_escalamiento.muestra ? resumen.en_soporte_desde_escalamiento.medio : null)} (prom.)`}
+        subValue={`En Soporte desde el escalamiento: ${formatDuration(summary.in_support_since_escalation.sample ? summary.in_support_since_escalation.mean : null)} (prom.)`}
       />
       <MetricCard
         label="Abierto hace (promedio)"
-        value={formatDuration(resumen.edad.muestra ? resumen.edad.medio : null)}
+        value={formatDuration(summary.age.sample ? summary.age.mean : null)}
         color="yellow"
-        subValue={`Mediana ${formatDuration(resumen.edad.mediana)}`}
+        subValue={`Mediana ${formatDuration(summary.age.median)}`}
       />
       <MetricCard
         label="La cuarta parte más vieja"
-        value={`> ${formatDuration(resumen.edad.p75)}`}
+        value={`> ${formatDuration(summary.age.p75)}`}
         color="red"
-        subValue={`El más viejo: ${formatDuration(resumen.edad.max)}`}
+        subValue={`El más viejo: ${formatDuration(summary.age.max)}`}
       />
       <MetricCard
         label="En su etapa actual (prom.)"
-        value={formatDuration(resumen.en_etapa.muestra ? resumen.en_etapa.medio : null)}
+        value={formatDuration(summary.in_stage.sample ? summary.in_stage.mean : null)}
         color="blue"
-        subValue={`Mediana ${formatDuration(resumen.en_etapa.mediana)}`}
+        subValue={`Mediana ${formatDuration(summary.in_stage.median)}`}
       />
       <MetricCard
         label="Logs cargados hasta"
-        value={datos.logs_hasta ? datos.logs_hasta.slice(0, 10) : '—'}
+        value={data.logs_until ? data.logs_until.slice(0, 10) : '—'}
         color="slate"
-        subValue={`Reloj: ${datos.ahora.replace('T', ' ').slice(0, 16)} (Caracas)`}
+        subValue={`Reloj: ${data.now.replace('T', ' ').slice(0, 16)} (Caracas)`}
       />
     </div>
   );
 }
 
 /** Dónde están hoy: las etapas con más abiertos, con su parte del total. */
-function DondeEstan({ datos }: { datos: OpenTickets }) {
-  const total = datos.resumen.abiertos;
-  const etapas = [...datos.por_etapa].sort((a, b) => b.abiertos - a.abiertos).slice(0, 7);
+function DondeEstan({ data }: { data: OpenTickets }) {
+  const total = data.summary.open;
+  const etapas = [...data.by_stage].sort((a, b) => b.open - a.open).slice(0, 7);
   return (
     <div className="space-y-3">
       {etapas.map((e) => {
-        const parte = total > 0 ? Math.round((e.abiertos / total) * 1000) / 10 : 0;
+        const parte = total > 0 ? Math.round((e.open / total) * 1000) / 10 : 0;
         return (
           <ProgressBar
-            key={e.etapa_actual ?? '—'}
-            label={`${e.etapa_actual ?? '—'} · ${formatInteger(e.abiertos)}${e.equipo_actual ? ` · ${TEAM_LABEL[e.equipo_actual]}` : ''}`}
+            key={e.current_stage ?? '—'}
+            label={`${e.current_stage ?? '—'} · ${formatInteger(e.open)}${e.current_team ? ` · ${TEAM_LABEL[e.current_team]}` : ''}`}
             percent={parte}
-            valueLabel={`${parte}% · ${formatDuration(e.edad_media)}`}
-            color={e.equipo_actual === 'soporte' ? 'purple' : 'blue'}
+            valueLabel={`${parte}% · ${formatDuration(e.age_mean)}`}
+            color={e.current_team === 'soporte' ? 'purple' : 'blue'}
           />
         );
       })}
-      {datos.por_etapa.length > etapas.length && (
+      {data.by_stage.length > etapas.length && (
         <p className="text-[11px] text-slate-500">Las demás etapas, en la tabla de abajo.</p>
       )}
     </div>
@@ -273,14 +273,14 @@ function DondeEstan({ datos }: { datos: OpenTickets }) {
  * Los tickets abiertos ahora (hora de Caracas), con los logs del último análisis.
  * Es la sección del Dashboard: no tiene mes.
  */
-export function OpenTicketsPanel({ abiertos }: { abiertos: OpenTickets | null }) {
-  const [agrupacion, setAgrupacion] = useState<Agrupacion>('por_etapa');
+export function OpenTicketsPanel({ open }: { open: OpenTickets | null }) {
+  const [agrupacion, setAgrupacion] = useState<Agrupacion>('by_stage');
   const chart = useMemo(
-    () => (abiertos ? antiguedadChartData(abiertos.antiguedad) : null),
-    [abiertos],
+    () => (open ? antiguedadChartData(open.aging) : null),
+    [open],
   );
 
-  if (!abiertos) {
+  if (!open) {
     return (
       <EmptyState
         title="Todavía no hay recorrido de tickets"
@@ -293,21 +293,21 @@ export function OpenTicketsPanel({ abiertos }: { abiertos: OpenTickets | null })
   }
 
   const activa = AGRUPACIONES.find((a) => a.key === agrupacion) ?? AGRUPACIONES[0];
-  const vacio = abiertos.resumen.abiertos === 0;
+  const vacio = open.summary.open === 0;
 
   return (
     <div className="space-y-6">
-      {abiertos.resumen.desfasados > 0 && (
+      {open.summary.stale > 0 && (
         <StatusMessage
           icon={<AlertTriangle />}
           status={{
             type: 'warning',
-            text: `${formatInteger(abiertos.resumen.desfasados)} tickets siguen abiertos según los logs pero el export de tickets ya los da por cerrados: no se cuentan. Carga el lote de logs más reciente y vuelve a ejecutar el análisis.`,
+            text: `${formatInteger(open.summary.stale)} tickets siguen abiertos según los logs pero el export de tickets ya los da por cerrados: no se cuentan. Carga el lote de logs más reciente y vuelve a ejecutar el análisis.`,
           }}
         />
       )}
 
-      <Summary datos={abiertos} />
+      <Summary data={open} />
 
       {vacio || !chart ? (
         <EmptyState title="No hay tickets abiertos" icon={<FolderOpen />} size="md" bordered />
@@ -330,7 +330,7 @@ export function OpenTicketsPanel({ abiertos }: { abiertos: OpenTickets | null })
               icon={<Hourglass className="h-5 w-5" />}
               className="xl:col-span-2"
             >
-              <DondeEstan datos={abiertos} />
+              <DondeEstan data={open} />
             </NeonContainer>
           </div>
 
@@ -351,8 +351,8 @@ export function OpenTicketsPanel({ abiertos }: { abiertos: OpenTickets | null })
             noPadding
           >
             <DataTable
-              columns={groupColumns(activa.campo, activa.label)}
-              data={abiertos[agrupacion]}
+              columns={groupColumns(activa.field, activa.label)}
+              data={open[agrupacion]}
               searchable
               searchPlaceholder="Buscar..."
               emptyMessage="No hay tickets abiertos."
@@ -362,11 +362,11 @@ export function OpenTicketsPanel({ abiertos }: { abiertos: OpenTickets | null })
           <NeonContainer
             theme="red"
             title="Los más antiguos"
-            subtitle={`Los ${formatInteger(abiertos.lista.length)} abiertos hace más tiempo${abiertos.resumen.abiertos > abiertos.lista_limite ? ` (de ${formatInteger(abiertos.resumen.abiertos)})` : ''}`}
+            subtitle={`Los ${formatInteger(open.items.length)} abiertos hace más tiempo${open.summary.open > open.items_limit ? ` (de ${formatInteger(open.summary.open)})` : ''}`}
             icon={<ListOrdered className="h-5 w-5" />}
             headerAction={
               <ExcelExportButton
-                rows={abiertos.lista}
+                rows={open.items}
                 columns={EXCEL_LIST}
                 fileName="tickets-abiertos"
                 sheetName="Abiertos"
@@ -376,7 +376,7 @@ export function OpenTicketsPanel({ abiertos }: { abiertos: OpenTickets | null })
           >
             <DataTable
               columns={LIST_COLUMNS}
-              data={abiertos.lista}
+              data={open.items}
               searchable
               searchPlaceholder="Buscar ticket, asignado..."
             />

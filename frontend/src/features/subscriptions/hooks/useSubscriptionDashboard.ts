@@ -13,39 +13,39 @@ import { buildBalanzaRecuperacionData, buildBalanzaRecuperacionOptions, buildChu
 import type { SubscriptionDashboardProps } from '@/features/subscriptions/types';
 import { useTargets } from '@/features/subscriptions/hooks/useTargets';
 
-export function useSubscriptionDashboard({ periodos, dimensiones = {} }: SubscriptionDashboardProps) {
+export function useSubscriptionDashboard({ closings, dimensions = {} }: SubscriptionDashboardProps) {
   const [hoveredChurnZone, setHoveredChurnZone] = useState<DoughnutHoverValue | null>(null);
   const [hoveredCrecimientoZone, setHoveredCrecimientoZone] = useState<DoughnutHoverValue | null>(null);
-  const reversed = useMemo(() => [...periodos].reverse(), [periodos]);
-  const labels = useMemo(() => reversed.map((p) => formatPeriodLabel(p.periodo_reporte)), [reversed]);
-  const latest = periodos[0] ?? { arpu: 0, activos_inicio: 1, activos_final: 1, bajas: 0, nuevos_mes: 0, churn_neto_pct: 0, churn_bruto_pct: 0, react_4_P: 0, react_val: 0, tasa_winback_pct: 0, tasa_aporte_react_pct: 0, indice_reemplazo_react_pct: 0, porcentaje_suspensiones: 0, corte_impagado: 0, reactivaciones: 0 };
-  const average = (selector: (p: typeof latest) => number) => periodos.length ? periodos.reduce((sum, p) => sum + (selector(p) || 0), 0) / periodos.length : 0;
-  const avgChurnNeto = average((p) => p.churn_neto_pct);
-  const avgChurnBruto = average((p) => p.churn_bruto_pct);
-  const avgGrowth = average((p) => p.activos_inicio > 0 ? ((p.activos_final - p.activos_inicio) / p.activos_inicio) * 100 : 0);
-  const avgContributionRate = average((p) => p.tasa_aporte_react_pct);
-  const avgReplacementIndex = average((p) => p.indice_reemplazo_react_pct);
-  const avgSuspensiones = average((p) => p.porcentaje_suspensiones);
-  const avgWinback = average((p) => p.tasa_winback_pct);
+  const reversed = useMemo(() => [...closings].reverse(), [closings]);
+  const labels = useMemo(() => reversed.map((p) => formatPeriodLabel(p.report_period)), [reversed]);
+  const latest = closings[0] ?? { arpu: 0, active_start: 1, active_end: 1, churned: 0, new_in_month: 0, net_churn_pct: 0, gross_churn_pct: 0, react_4_P: 0, react_val: 0, winback_rate_pct: 0, react_contribution_pct: 0, react_replacement_pct: 0, suspension_pct: 0, unpaid_cuts: 0, reactivations: 0 };
+  const average = (selector: (p: typeof latest) => number) => closings.length ? closings.reduce((sum, p) => sum + (selector(p) || 0), 0) / closings.length : 0;
+  const avgChurnNeto = average((p) => p.net_churn_pct);
+  const avgChurnBruto = average((p) => p.gross_churn_pct);
+  const avgGrowth = average((p) => p.active_start > 0 ? ((p.active_end - p.active_start) / p.active_start) * 100 : 0);
+  const avgContributionRate = average((p) => p.react_contribution_pct);
+  const avgReplacementIndex = average((p) => p.react_replacement_pct);
+  const avgSuspensiones = average((p) => p.suspension_pct);
+  const avgWinback = average((p) => p.winback_rate_pct);
 
   // El semáforo tiene umbrales fijos: los promedios se pintan igual que
   // cualquier otro churn o crecimiento del módulo.
-  const { semaforo } = useTargets();
+  const { thresholds } = useTargets();
 
-  const churnRaw = useMemo(() => (dimensiones.zona ?? []).map((z) => ({ label: z.valor, original: z.churn_bruto_pct })), [dimensiones.zona]);
-  const growthRaw = useMemo(() => (dimensiones.zona ?? []).map((z) => ({ label: z.valor, original: z.crecimiento })), [dimensiones.zona]);
+  const churnRaw = useMemo(() => (dimensions.zona ?? []).map((z) => ({ label: z.value, original: z.gross_churn_pct })), [dimensions.zona]);
+  const growthRaw = useMemo(() => (dimensions.zona ?? []).map((z) => ({ label: z.value, original: z.growth })), [dimensions.zona]);
   const churnValues = useMemo(() => {
-    const grouped = new Map<string, { churn: number; activos: number; bajas: number; count: number }>();
-    (dimensiones.zona ?? []).forEach((z) => { const v = grouped.get(z.valor) ?? { churn: 0, activos: 0, bajas: 0, count: 0 }; v.churn += z.churn_bruto_pct || 0; v.activos += z.activos_inicio || 0; v.bajas += z.bajas || 0; v.count += 1; grouped.set(z.valor, v); });
-    const totalActive = latest.activos_inicio || 1;
-    return [...grouped.entries()].map(([zona, v]) => ({ zona, share: ((v.churn / Math.max(v.count, 1)) / Math.max(latest.churn_bruto_pct || 1, 1)) * ((v.activos / Math.max(v.count, 1)) / totalActive) * 100, churn: v.churn / Math.max(v.count, 1) })).sort((a,b) => b.share-a.share);
-  }, [dimensiones.zona, latest.activos_inicio, latest.churn_bruto_pct]);
+    const grouped = new Map<string, { churn: number; activos: number; churned: number; count: number }>();
+    (dimensions.zona ?? []).forEach((z) => { const v = grouped.get(z.value) ?? { churn: 0, activos: 0, churned: 0, count: 0 }; v.churn += z.gross_churn_pct || 0; v.activos += z.active_start || 0; v.churned += z.churned || 0; v.count += 1; grouped.set(z.value, v); });
+    const totalActive = latest.active_start || 1;
+    return [...grouped.entries()].map(([zona, v]) => ({ zona, share: ((v.churn / Math.max(v.count, 1)) / Math.max(latest.gross_churn_pct || 1, 1)) * ((v.activos / Math.max(v.count, 1)) / totalActive) * 100, churn: v.churn / Math.max(v.count, 1) })).sort((a,b) => b.share-a.share);
+  }, [dimensions.zona, latest.active_start, latest.gross_churn_pct]);
   const growthValues = useMemo(() => {
-    const grouped = new Map<string, { growth: number; nuevos: number; count: number }>();
-    (dimensiones.zona ?? []).forEach((z) => { const v = grouped.get(z.valor) ?? { growth: 0, nuevos: 0, count: 0 }; v.growth += z.crecimiento || 0; v.nuevos += z.nuevos || 0; v.count += 1; grouped.set(z.valor, v); });
-    const total = [...grouped.values()].reduce((sum, v) => sum + v.nuevos, 0);
-    return [...grouped.entries()].map(([zona, v]) => ({ zona, growth: v.growth / Math.max(v.count, 1), share: total ? (v.nuevos / total) * 100 : 0 })).sort((a,b) => b.share-a.share);
-  }, [dimensiones.zona]);
+    const grouped = new Map<string, { growth: number; new_subs: number; count: number }>();
+    (dimensions.zona ?? []).forEach((z) => { const v = grouped.get(z.value) ?? { growth: 0, new_subs: 0, count: 0 }; v.growth += z.growth || 0; v.new_subs += z.new_subs || 0; v.count += 1; grouped.set(z.value, v); });
+    const total = [...grouped.values()].reduce((sum, v) => sum + v.new_subs, 0);
+    return [...grouped.entries()].map(([zona, v]) => ({ zona, growth: v.growth / Math.max(v.count, 1), share: total ? (v.new_subs / total) * 100 : 0 })).sort((a,b) => b.share-a.share);
+  }, [dimensions.zona]);
   const churnMajor = churnValues.filter((z) => z.share >= 2.5);
   const churnOther = churnValues.filter((z) => z.share < 2.5).reduce((sum,z) => sum + z.share, 0);
   const growthMajor = growthValues.filter((z) => z.share >= 2.5);
@@ -56,10 +56,10 @@ export function useSubscriptionDashboard({ periodos, dimensiones = {} }: Subscri
   const growthDonutOptions = useMemo(() => getDoughnutOptions({ title: hoveredCrecimientoZone ? `Crec. ${hoveredCrecimientoZone.name}` : 'Crec. Prom. Global', value: hoveredCrecimientoZone?.val ?? `${avgGrowth > 0 ? '+' : ''}${avgGrowth.toFixed(2)}%`, color: CHART_PALETTE[4] }, handleHover(setHoveredCrecimientoZone, growthDonutData), { valueSuffix: ' %' }), [hoveredCrecimientoZone, avgGrowth, growthDonutData]);
 
   const aporteReemplazoData = { labels, datasets: [
-    { label: 'Tasa Aporte Reactivación %', data: reversed.map((p) => Number(p.tasa_aporte_react_pct.toFixed(2)) || 0), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6 },
-    { label: 'Índice Reemplazo %', data: reversed.map((p) => Number(p.indice_reemplazo_react_pct.toFixed(2)) || 0), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6 },
+    { label: 'Tasa Aporte Reactivación %', data: reversed.map((p) => Number(p.react_contribution_pct.toFixed(2)) || 0), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6 },
+    { label: 'Índice Reemplazo %', data: reversed.map((p) => Number(p.react_replacement_pct.toFixed(2)) || 0), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6 },
   ] };
   const suspensionWinbackData = useMemo(() => buildBalanzaRecuperacionData(reversed, labels), [reversed, labels]);
   const suspensionWinbackOptions = useMemo(() => buildBalanzaRecuperacionOptions(reversed), [reversed]);
-  return { latest, semaforo, avgChurnNeto, avgChurnBruto, avgGrowth, avgContributionRate, avgReplacementIndex, avgSuspensiones, avgWinback, labels, reversed, churnChartData: buildChurnData(reversed, labels), growthChartData: buildGrowthData(reversed, labels), aporteReemplazoData, suspensionWinbackData, suspensionWinbackOptions, churnDonutData, growthDonutData, churnDonutOptions, growthDonutOptions };
+  return { latest, thresholds, avgChurnNeto, avgChurnBruto, avgGrowth, avgContributionRate, avgReplacementIndex, avgSuspensiones, avgWinback, labels, reversed, churnChartData: buildChurnData(reversed, labels), growthChartData: buildGrowthData(reversed, labels), aporteReemplazoData, suspensionWinbackData, suspensionWinbackOptions, churnDonutData, growthDonutData, churnDonutOptions, growthDonutOptions };
 }

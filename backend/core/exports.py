@@ -74,8 +74,8 @@ class ExportSpec:
             aliases.setdefault(target, []).append(alias.capitalize())
         return [
             {
-                "nombre": f"{self.prefix}{header}",
-                "requerido": header in self.required,
+                "name": f"{self.prefix}{header}",
+                "required": header in self.required,
                 # Con prefijo de modelo, la cabecera sin él también vale.
                 "alias": ([header] if self.prefix else []) + aliases.get(target, []),
             }

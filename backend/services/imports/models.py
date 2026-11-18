@@ -82,6 +82,10 @@ class ImportActionLog(models.Model):
         }
 
 
+# Claves guardadas en `AnalysisJob.result` → claves de la API.
+RESULT_KEYS = {"periodo_label": "period_label", "dias_calculados": "computed_days"}
+
+
 class AnalysisJob(models.Model):
     """Una ejecucion de analisis encolada en Celery.
 
@@ -177,12 +181,15 @@ class AnalysisJob(models.Model):
         return (timezone.now() - self.updated_at).total_seconds() > margen
 
     def to_dict(self):
-        """Forma en la que el job viaja al cliente durante el sondeo."""
+        """Forma en la que el job viaja al cliente durante el sondeo.
+
+        `result` se guarda con claves en español; aquí salen en inglés.
+        """
         return {
             "id": str(self.id),
             "module": self.module,
             "module_display": self.get_module_display(),
-            "periodo": self.periodo,
+            "period": self.periodo,
             "status": self.status,
             "status_display": self.get_status_display(),
             "message": self.message,
@@ -192,7 +199,7 @@ class AnalysisJob(models.Model):
                 "total": self.progress_total,
                 "label": self.progress_label,
             },
-            "result": self.result or {},
+            "result": {RESULT_KEYS.get(k, k): v for k, v in (self.result or {}).items()},
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "finished_at": self.finished_at.strftime("%Y-%m-%d %H:%M:%S") if self.finished_at else None,
         }

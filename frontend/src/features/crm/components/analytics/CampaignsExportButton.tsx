@@ -9,10 +9,10 @@ import type { CrmDimensionRow } from '../../types';
 
 interface Props {
   /** Todas las dimensiones del corte; de ahí se toman las de `campana`. */
-  dimensiones: CrmDimensionRow[];
-  periodo: string;
+  dimensions: CrmDimensionRow[];
+  period: string;
   /** El día del corte, para el nombre del archivo. 0 si el mes no tiene cortes. */
-  dia: number;
+  day: number;
 }
 
 /**
@@ -20,16 +20,16 @@ interface Props {
  * siempre de campañas, y obligar a cambiar el selector para descargarlo
  * cambiaría también lo que se está mirando.
  */
-export function CampaignsExportButton({ dimensiones, periodo, dia }: Props) {
-  const filas = useMemo(() => sortCampaigns(selectCrmDimension(dimensiones, 'campana')), [dimensiones]);
+export function CampaignsExportButton({ dimensions, period, day }: Props) {
+  const campaignRows = useMemo(() => sortCampaigns(selectCrmDimension(dimensions, 'campana')), [dimensions]);
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
-      <p className="text-xs text-slate-400">{filas.length} campañas</p>
+      <p className="text-xs text-slate-400">{campaignRows.length} campañas</p>
       <ExcelExportButton
-        rows={filas}
+        rows={campaignRows}
         columns={CAMPAIGNS_EXCEL_COLUMNS}
-        fileName={campaignsFileName(periodo, dia)}
+        fileName={campaignsFileName(period, day)}
         sheetName="Campañas"
         label="Reporte de campañas"
       />

@@ -31,7 +31,7 @@ interface Props {
 export function SupportIncidenceChart({ rows, groupName, resultsHref }: Props) {
   const visibles = zonesWithRate(rows);
   const sinPoblacion = rows.filter((r) => r.withoutPopulation).length;
-  const tecnologias = [...new Set(visibles.map((z) => z.tecnologia))];
+  const tecnologias = [...new Set(visibles.map((z) => z.technology))];
   const withRate = rows.length - sinPoblacion;
 
   return (

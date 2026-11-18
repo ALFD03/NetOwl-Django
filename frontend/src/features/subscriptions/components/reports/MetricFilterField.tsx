@@ -66,26 +66,26 @@ export function MetricFilterField({ filtro, onChange, niveles, projectionAvailab
         type="text"
         inputMode="decimal"
         aria-label="Valor del filtro"
-        value={filtro.valor}
+        value={filtro.value}
         disabled={withoutProjection}
         placeholder={withoutProjection ? 'Elige un día' : 'Valor %'}
         onChange={(event) => {
-          if (FILTER_VALUE_PATTERN.test(event.target.value)) set({ valor: event.target.value });
+          if (FILTER_VALUE_PATTERN.test(event.target.value)) set({ value: event.target.value });
         }}
         className="w-20 min-w-0 shrink-0 border-r border-slate-700/50 bg-transparent px-3 py-2.5 text-xs font-bold text-white placeholder-slate-500 outline-none disabled:opacity-50 sm:w-24"
       />
       <SelectMenu
         aria-label="Aplicar el filtro a"
-        value={filtro.nivel}
+        value={filtro.level}
         options={[
           { value: 'zona', label: niveles.zona },
           { value: 'grupo', label: niveles.grupo },
         ]}
-        onChange={(v) => set({ nivel: v as FilterLevel })}
+        onChange={(v) => set({ level: v as FilterLevel })}
         panelWidth={170}
         className={cn(SELECTOR_CLASS, 'flex-1 border-r-0 sm:min-w-[120px] sm:flex-none')}
       />
-      {filtro.valor && (
+      {filtro.value && (
         <button
           type="button"
           onClick={() => onChange(EMPTY_METRIC_FILTER)}

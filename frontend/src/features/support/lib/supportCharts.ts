@@ -54,10 +54,18 @@ const corto = (texto: string, max = 34) => (texto.length > max ? `${texto.slice(
 export const TIME_KINDS = ['cola', 'pausa', 'gestion', 'sin_clasificar'] as const;
 export type TimeKind = (typeof TIME_KINDS)[number];
 
+/** La clave de horas medias de cada tipo de etapa en el bloque de métricas. */
+const HOURS_KEY = {
+  cola: 'queue_hours',
+  pausa: 'pause_hours',
+  gestion: 'handling_hours',
+  sin_clasificar: 'unclassified_hours',
+} as const satisfies Record<TimeKind, keyof SupportStats>;
+
 export interface TimePart {
-  tipo: TimeKind;
+  type: TimeKind;
   label: string;
-  horas: number;
+  hours: number;
   pct: number;
   color: string;
 }
@@ -71,17 +79,17 @@ export const QUE_ES_TIPO: Record<TimeKind, string> = {
 };
 
 /** Las cuatro partes del tiempo medio del grupo, de lo cerrado con logs. */
-export function timeParts(stats: SupportStats): { partes: TimePart[]; total: number } {
-  const horas = (tipo: TimeKind) => toNumber(stats[`composicion_${tipo}_horas`]);
-  const total = TIME_KINDS.reduce((acc, tipo) => acc + horas(tipo), 0);
-  const partes = TIME_KINDS.map((tipo) => ({
-    tipo,
-    label: KIND_LABEL[tipo],
-    horas: horas(tipo),
-    pct: total > 0 ? Number(((horas(tipo) / total) * 100).toFixed(1)) : 0,
-    color: COLOR_TIPO[tipo],
-  })).filter((p) => p.horas > 0 || p.tipo !== 'sin_clasificar');
-  return { partes, total };
+export function timeParts(stats: SupportStats): { parts: TimePart[]; total: number } {
+  const hoursOf = (kind: TimeKind) => toNumber(stats[HOURS_KEY[kind]]);
+  const total = TIME_KINDS.reduce((acc, kind) => acc + hoursOf(kind), 0);
+  const parts = TIME_KINDS.map((kind) => ({
+    type: kind,
+    label: KIND_LABEL[kind],
+    hours: hoursOf(kind),
+    pct: total > 0 ? Number(((hoursOf(kind) / total) * 100).toFixed(1)) : 0,
+    color: COLOR_TIPO[kind],
+  })).filter((p) => p.hours > 0 || p.type !== 'sin_clasificar');
+  return { parts, total };
 }
 
 export function timeDonutData(partes: TimePart[]): ChartData<'doughnut'> {
@@ -118,18 +126,18 @@ export function volumeByValueData(rows: SupportDimensionRow[]): ChartData<'bar'>
     stack: 'tickets',
     maxBarThickness: 22,
   });
-  const hasEscalated = visibles.some((r) => toNumber(r.tickets_escalados) > 0);
+  const hasEscalated = visibles.some((r) => toNumber(r.tickets_escalated) > 0);
 
   return {
-    labels: visibles.map((r) => corto(r.nombre)),
+    labels: visibles.map((r) => corto(r.name)),
     datasets: [
-      serie('Resueltos', METRIC_COLOR.green, (r) => toNumber(r.tickets_resueltos)),
-      serie('Cancelados', METRIC_COLOR.red, (r) => toNumber(r.tickets_cancelados)),
+      serie('Resueltos', METRIC_COLOR.green, (r) => toNumber(r.tickets_resolved)),
+      serie('Cancelados', METRIC_COLOR.red, (r) => toNumber(r.tickets_cancelled)),
       ...(hasEscalated
-        ? [serie('Escalados a Soporte', METRIC_COLOR.yellow, (r) => toNumber(r.tickets_escalados))]
+        ? [serie('Escalados a Soporte', METRIC_COLOR.yellow, (r) => toNumber(r.tickets_escalated))]
         : []),
       serie('Sin cerrar', METRIC_COLOR.slate, (r) =>
-        Math.max(0, toNumber(r.total_tickets) - toNumber(r.tickets_cerrados)),
+        Math.max(0, toNumber(r.total_tickets) - toNumber(r.tickets_closed)),
       ),
     ],
   };
@@ -157,14 +165,14 @@ export function volumeByValueOptions(
       tooltip: {
         ...TOOLTIP,
         callbacks: {
-          title: (items) => rows[items[0]?.dataIndex ?? 0]?.nombre ?? '',
+          title: (items) => rows[items[0]?.dataIndex ?? 0]?.name ?? '',
           label: (ctx: TooltipItem<'bar'>) => ` ${ctx.dataset.label}: ${formatInteger(Number(ctx.raw))}`,
           footer: (items) => {
             const r = rows[items[0]?.dataIndex ?? 0];
             if (!r) return '';
             return [
               `${formatInteger(toNumber(r.total_tickets))} tickets · ${formatTwoDecimals(r.pctOfParent)}% del grupo`,
-              `Resueltos ${formatTwoDecimals(toNumber(r.pct_resueltos))}% de lo cerrado`,
+              `Resueltos ${formatTwoDecimals(toNumber(r.pct_resolved))}% de lo cerrado`,
             ];
           },
         },
@@ -185,30 +193,30 @@ export function volumeByValueOptions(
 // --- Velas: cómo se reparte el tiempo de cada valor -------------------------
 
 interface Vela {
-  nombre: string;
+  name: string;
   min: number;
   p25: number;
-  mediana: number;
+  median: number;
   promedio: number;
   p75: number;
   max: number;
-  muestra: number;
+  sample: number;
 }
 
 function velas(rows: SupportDimensionRow[], medida: SupportTimeMeasure): Vela[] {
   return rows
     .slice(0, VALUES_CAP)
     .map((r) => ({
-      nombre: r.nombre,
-      min: toNumber(r[`tiempo_min_${medida}_horas`]),
-      p25: toNumber(r[`tiempo_p25_${medida}_horas`]),
-      mediana: toNumber(r[`tiempo_mediana_${medida}_horas`]),
-      promedio: toNumber(r[`tiempo_medio_${medida}_horas`]),
-      p75: toNumber(r[`tiempo_p75_${medida}_horas`]),
-      max: toNumber(r[`tiempo_max_${medida}_horas`]),
-      muestra: toNumber(r[`muestra_${medida}`]),
+      name: r.name,
+      min: toNumber(r[`time_min_${medida}_hours`]),
+      p25: toNumber(r[`time_p25_${medida}_hours`]),
+      median: toNumber(r[`time_median_${medida}_hours`]),
+      promedio: toNumber(r[`time_mean_${medida}_hours`]),
+      p75: toNumber(r[`time_p75_${medida}_hours`]),
+      max: toNumber(r[`time_max_${medida}_hours`]),
+      sample: toNumber(r[`sample_${medida}`]),
     }))
-    .filter((v) => v.muestra > 0);
+    .filter((v) => v.sample > 0);
 }
 
 /**
@@ -234,7 +242,7 @@ export function velasData(rows: SupportDimensionRow[], medida: SupportTimeMeasur
   const tope = topeVelas(lista);
   const grosor = tope * 0.004;
   return {
-    labels: lista.map((v) => corto(v.nombre)),
+    labels: lista.map((v) => corto(v.name)),
     datasets: [
       {
         label: 'Mínimo – máximo',
@@ -282,7 +290,7 @@ export function velasOptions(
     maintainAspectRatio: false,
     onClick: (_evento, elementos) => {
       const v = elementos.length ? lista[elementos[0].index] : undefined;
-      if (onSelect && v) onSelect(v.nombre);
+      if (onSelect && v) onSelect(v.name);
     },
     onHover: (evento, elementos) => {
       const canvas = evento.native?.target as HTMLCanvasElement | undefined;
@@ -295,16 +303,16 @@ export function velasOptions(
       tooltip: {
         ...TOOLTIP,
         callbacks: {
-          title: (items) => lista[items[0]?.dataIndex ?? 0]?.nombre ?? '',
+          title: (items) => lista[items[0]?.dataIndex ?? 0]?.name ?? '',
           label: () => '',
           afterBody: (items) => {
             const v = lista[items[0]?.dataIndex ?? 0];
             if (!v) return [];
             return [
-              `Promedio ${formatDuration(v.promedio)} · mediana ${formatDuration(v.mediana)}`,
+              `Promedio ${formatDuration(v.promedio)} · mediana ${formatDuration(v.median)}`,
               `La mitad central: ${formatDuration(v.p25)} – ${formatDuration(v.p75)}`,
               `Del más rápido al más lento: ${formatDuration(v.min)} – ${formatDuration(v.max)}`,
-              `${formatInteger(v.muestra)} tickets medidos`,
+              `${formatInteger(v.sample)} tickets medidos`,
             ];
           },
         },
@@ -337,7 +345,7 @@ const COLORES_DESGLOSE = [2, 3, 6, 1, 5, 9, 7, 4, 8].map((i) => CHART_PALETTE[i]
 /** Los valores más grandes de un desglose y el resto sumado en «Otros». */
 export function desgloseDonut(entries: SupportDimensionEntry[] | undefined, tope = 6) {
   const filas = (entries ?? [])
-    .map((e) => ({ nombre: e.nombre, tickets: toNumber(e.metricas?.total_tickets) }))
+    .map((e) => ({ nombre: e.name, tickets: toNumber(e.metrics?.total_tickets) }))
     .filter((f) => f.tickets > 0)
     .sort((a, b) => b.tickets - a.tickets);
   const total = filas.reduce((acc, f) => acc + f.tickets, 0);
@@ -392,8 +400,8 @@ export function incidenciaData(zonas: SupportZoneRow[]): ChartData<'bar'> {
       {
         label: 'Tickets por cada 100 clientes',
         data: visibles.map((z) => z.incidenceRate),
-        backgroundColor: visibles.map((z) => `${colorTecnologia(z.tecnologia)}CC`),
-        borderColor: visibles.map((z) => colorTecnologia(z.tecnologia)),
+        backgroundColor: visibles.map((z) => `${colorTecnologia(z.technology)}CC`),
+        borderColor: visibles.map((z) => colorTecnologia(z.technology)),
         borderWidth: 1,
         borderRadius: 4,
         maxBarThickness: 22,
@@ -422,7 +430,7 @@ export function incidenciaOptions(zonas: SupportZoneRow[]): ChartOptions<'bar'> 
         callbacks: {
           title: (items) => {
             const z = visibles[items[0]?.dataIndex ?? 0];
-            return z ? `${z.zona} · ${z.site} · ${z.tecnologia}` : '';
+            return z ? `${z.zona} · ${z.site} · ${z.technology}` : '';
           },
           label: (ctx: TooltipItem<'bar'>) => ` ${formatTwoDecimals(Number(ctx.raw))} tickets por cada 100 clientes`,
           afterBody: (items) => {

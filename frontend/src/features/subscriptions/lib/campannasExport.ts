@@ -21,12 +21,12 @@ export interface CampaignReport {
   startBase: number;
   aporte: number;
   instalaciones: number;
-  reactivaciones: number;
+  reactivations: number;
   ingresosNetos: number;
-  bajas: number;
+  churned: number;
   ingresosBrutos: number;
   churn: number;
-  crecimiento: number;
+  growth: number;
   meta: number;
   salesCompliance: number;
   revenueCompliance: number;
@@ -58,37 +58,37 @@ export function buildCampaignReport(
   filas: DimensionVal[],
   objetivo: TargetSpec,
 ): CampaignReport[] {
-  const totalInstallations = filas.reduce((total, row) => total + toNumber(row.nuevos), 0);
+  const totalInstallations = filas.reduce((total, row) => total + toNumber(row.new_subs), 0);
 
   return filas
     .map((row) => {
-      const instalaciones = toNumber(row.nuevos);
+      const instalaciones = toNumber(row.new_subs);
       const reactivaciones = toNumber(row.react_val);
-      const suspensiones = toNumber(row.corte_impagado);
+      const suspensiones = toNumber(row.unpaid_cuts);
       const recuperaciones = toNumber(row.react_4_P);
-      const cumplimiento = periodCompliance({ ...row, nuevos_mes: row.nuevos }, objetivo);
+      const cumplimiento = periodCompliance({ ...row, new_in_month: row.new_subs }, objetivo);
 
       return {
-        campanna: row.valor,
-        startBase: toNumber(row.activos_inicio),
+        campanna: row.value,
+        startBase: toNumber(row.active_start),
         aporte: tasa(instalaciones, totalInstallations),
         instalaciones,
-        reactivaciones,
+        reactivations: reactivaciones,
         ingresosNetos: instalaciones + reactivaciones,
-        bajas: toNumber(row.bajas),
-        ingresosBrutos: toNumber(row.adiciones_brutas),
-        churn: toNumber(row.churn_bruto_pct),
-        crecimiento: toNumber(row.crecimiento),
+        churned: toNumber(row.churned),
+        ingresosBrutos: toNumber(row.gross_adds),
+        churn: toNumber(row.gross_churn_pct),
+        growth: toNumber(row.growth),
         meta: cumplimiento.metaIngresos,
         salesCompliance: cumplimiento.salesCompliance,
         revenueCompliance: cumplimiento.revenueCompliance,
         closeCompliance: cumplimiento.closeCompliance,
         suspensiones,
-        suspensionRate: toNumber(row.porcentaje_suspensiones),
+        suspensionRate: toNumber(row.suspension_pct),
         recuperaciones,
         recoveryRate: tasa(recuperaciones, suspensiones),
         arpu: toNumber(row.arpu),
-        baseFinal: toNumber(row.activos_final),
+        baseFinal: toNumber(row.active_end),
       };
     })
     .sort((a, b) => b.instalaciones - a.instalaciones || a.campanna.localeCompare(b.campanna));
@@ -105,12 +105,12 @@ export const CAMPANNAS_EXCEL_COLUMNS: ExcelColumn<CampaignReport>[] = [
   { header: 'Base Inicio', value: (r) => r.startBase, format: INT },
   { header: 'Aporte %', value: (r) => r.aporte, format: DEC },
   { header: 'Instalaciones', value: (r) => r.instalaciones, format: INT },
-  { header: 'Reactivaciones', value: (r) => r.reactivaciones, format: INT },
+  { header: 'Reactivaciones', value: (r) => r.reactivations, format: INT },
   { header: 'Ingresos Netos', value: (r) => r.ingresosNetos, format: INT },
-  { header: 'Bajas', value: (r) => r.bajas, format: INT },
+  { header: 'Bajas', value: (r) => r.churned, format: INT },
   { header: 'Ingresos Brutos', value: (r) => r.ingresosBrutos, format: INT },
   { header: 'Churn %', value: (r) => r.churn, format: DEC },
-  { header: 'Crecimiento %', value: (r) => r.crecimiento, format: DEC },
+  { header: 'Crecimiento %', value: (r) => r.growth, format: DEC },
   { header: 'Meta', value: (r) => r.meta, format: DEC },
   { header: 'Cumpl. Ventas %', value: (r) => r.salesCompliance, format: DEC },
   { header: 'Cumpl. Ingresos %', value: (r) => r.revenueCompliance, format: DEC },
