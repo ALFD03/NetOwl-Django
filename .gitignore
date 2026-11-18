@@ -21,7 +21,7 @@ celerybeat-schedule
 # --- Frontend ---
 node_modules/
 # El bundle lo compila `npm run build` (o la etapa de frontend del Dockerfile).
-web/static/dist/
+frontend/static/dist/
 
 # --- Salidas de la aplicacion ---
 # `collectstatic` escribe en staticfiles/; los registros, en logs/.

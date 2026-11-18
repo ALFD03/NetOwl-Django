@@ -1,0 +1,255 @@
+"""
+Carga de configuración sensible desde HashiCorp Vault (KV v2).
+
+Sustituye al antiguo archivo `.env` como fuente de secretos. La app se
+autentica contra Vault mediante AppRole (role_id / secret_id) y lee un
+único secreto con la estructura::
+
+    {
+      "DJANGOCONFIG": {...},
+      "DBCONFIG": {...}
+    }
+
+El `.env` sigue existiendo, pero solo con los datos de arranque
+(VAULT_URL, VAULT_ROLE_ID, VAULT_SECRET_ID, VAULT_MOUNT_PATH, VAULT_PATH).
+
+Este módulo vive en `core/` porque lo consumen tanto la configuración de
+Django (netowl_web/settings.py) como el conector de base de datos
+(core/database.py): no pertenece a ningún dominio de negocio.
+
+Dependencias:
+    - hvac (cliente de Vault)
+    - pydantic (validación y conversión de tipos)
+    - python-dotenv (carga de las variables VAULT_* de arranque)
+"""
+
+from __future__ import annotations
+
+import os
+import time
+
+import hvac
+from dotenv import load_dotenv
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+)
+
+# Carga las variables VAULT_* del .env (si existe) antes de leerlas
+load_dotenv()
+
+
+class VaultConfigError(RuntimeError):
+    """Error al obtener o validar la configuración almacenada en Vault."""
+
+
+# --- Modelos de configuración ---
+
+class DjangoModel(BaseModel):
+    """Los ajustes de Django que viven en Vault.
+
+    `ALLOWED_HOSTS` va sin esquema y `CSRF_TRUSTED_ORIGINS` con el
+    (`https://ejemplo.com`); ambos admiten lista o cadena separada por comas.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    SECRET_KEY: str = Field(alias="DJANGO_SECRET_KEY")
+    DEBUG: bool = Field(alias="DJANGO_DEBUG", default=False)
+    # Sin `default` a proposito, al contrario que DEBUG: de esta clave cuelgan
+    # la redireccion a HTTPS, HSTS y el flag Secure de las cookies de sesion y
+    # CSRF (ver netowl_web/settings.py). Con un default de False, olvidarla en
+    # el secreto de Vault degradaba la seguridad de produccion en silencio;
+    # ahora la aplicacion no arranca hasta que este declarada.
+    SECURE_SSL: bool = Field(alias="DJANGO_SECURE_SSL")
+    ALLOWED_HOSTS: list[str]
+    # Orígenes de confianza para CSRF. Ojo: aquí cada valor lleva esquema
+    # (https://ejemplo.com), a diferencia de ALLOWED_HOSTS.
+    CSRF_TRUSTED_ORIGINS: list[str]
+
+    @field_validator("ALLOWED_HOSTS", "CSRF_TRUSTED_ORIGINS", mode="before")
+    @classmethod
+    def split_hosts(cls, v):
+        """Acepta tanto una lista como una cadena separada por comas."""
+        if isinstance(v, str):
+            return [h.strip() for h in v.split(",") if h.strip()]
+        return v
+
+
+class DBConfigModel(BaseModel):
+    # El esquema NO está aquí: vive en el .env (DB_SCHEMA), porque no es
+    # un secreto y cambia según el entorno al que apunte el despliegue.
+    """Credenciales de Postgres.
+
+    El esquema no esta aqui: vive en el `.env` (`DB_SCHEMA`), porque no es un
+    secreto y cambia segun el entorno al que apunte el despliegue.
+    """
+
+    DB_NAME: str
+    DB_USER: str
+    DB_PASSWORD: str
+    DB_HOST: str
+    DB_PORT: int = 5432
+    # `require` y no `prefer`: `prefer` intenta TLS y acepta texto plano sin
+    # error si el servidor lo rechaza, asi que una regresion en la
+    # configuracion de Postgres pondria las credenciales y todos los datos de
+    # clientes en claro sin que nadie se entere.
+    DB_SSLMODE: str = "require"
+
+
+class VaultDataStructure(BaseModel):
+    """Estructura exacta del JSON almacenado en el secreto de Vault."""
+
+    DJANGOCONFIG: DjangoModel
+    DBCONFIG: DBConfigModel
+
+
+# --- Orquestador ---
+
+class VaultSettings:
+    """Autentica contra Vault, lee el secreto y expone la configuración validada."""
+
+    MAX_ATTEMPTS = 3
+    RETRY_WAIT = 0.5  # segundos, se multiplica por el nº de intento
+
+    def __init__(self):
+        self._vault_url = os.getenv("VAULT_URL")
+        self._role_id = os.getenv("VAULT_ROLE_ID")
+        self._secret_id = os.getenv("VAULT_SECRET_ID")
+        self._mount_path = os.getenv("VAULT_MOUNT_PATH")
+        self._secret_path = os.getenv("VAULT_PATH")
+
+        if os.getenv("CONFIG_SIN_VAULT") == "1":
+            raw_secrets = self._read_from_env()
+        else:
+            raw_secrets = self._fetch_from_vault()
+
+        try:
+            validated = VaultDataStructure(**raw_secrets)
+        except ValidationError as e:
+            # Solo se reportan la ruta del campo y el motivo. El mensaje que
+            # genera pydantic incluye el valor recibido (`input_value`), así
+            # que nunca debe propagarse: acabaría en el log de gunicorn.
+            # El `from None` corta el encadenado por el mismo motivo.
+            detail = "; ".join(
+                f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}"
+                for err in e.errors()
+            )
+            raise VaultConfigError(
+                "Los secretos leídos de Vault no tienen la estructura esperada "
+                f"(se esperan las claves DJANGOCONFIG y DBCONFIG) -> {detail}"
+            ) from None
+
+        self.django = validated.DJANGOCONFIG
+        self.db = validated.DBCONFIG
+
+    @staticmethod
+    def _read_from_env() -> dict:
+        """Arma el secreto con variables de entorno, sin pasar por Vault.
+
+        Solo con `CONFIG_SIN_VAULT=1`, pensado para un entorno (p. ej. QA) cuyo
+        secreto aun no existe en Vault. Usa los mismos nombres que el secreto y
+        pasa por la misma validacion; una variable que falte no se rellena, para
+        que pydantic la reporte como requerida.
+        """
+        def take(*names: str) -> dict:
+            return {n: v for n in names if (v := os.getenv(n)) is not None}
+
+        return {
+            "DJANGOCONFIG": take(
+                "DJANGO_SECRET_KEY", "DJANGO_DEBUG", "DJANGO_SECURE_SSL",
+                "ALLOWED_HOSTS", "CSRF_TRUSTED_ORIGINS",
+            ),
+            "DBCONFIG": take(
+                "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT",
+                "DB_SSLMODE",
+            ),
+        }
+
+    def _fetch_from_vault(self) -> dict:
+        """Lee el secreto, reintentando el ciclo completo si Vault lo rechaza.
+
+        Comprueba primero que esten las cinco variables de arranque. El reintento no
+        es decorativo: en un Vault en HA el token que emite un nodo puede tardar en
+        propagarse y la lectura inmediata lo rechaza con "invalid token".
+        """
+        missing = [
+            name
+            for name, value in (
+                ("VAULT_URL", self._vault_url),
+                ("VAULT_ROLE_ID", self._role_id),
+                ("VAULT_SECRET_ID", self._secret_id),
+                ("VAULT_MOUNT_PATH", self._mount_path),
+                ("VAULT_PATH", self._secret_path),
+            )
+            if not value
+        ]
+        if missing:
+            raise VaultConfigError(
+                "Faltan variables de entorno para conectar con Vault: "
+                f"{', '.join(missing)}. Revise el archivo .env (ver .env.example)."
+            )
+
+        # Se reintenta el ciclo completo (login + lectura) porque en un Vault
+        # en HA el token emitido por un nodo puede tardar en propagarse, y la
+        # lectura inmediata lo rechaza con "invalid token". Sin reintento, un
+        # arranque de cada ocho fallaba por este motivo.
+        for attempt in range(1, self.MAX_ATTEMPTS + 1):
+            last = attempt == self.MAX_ATTEMPTS
+            try:
+                return self._login_and_read()
+            except VaultConfigError:
+                if last:
+                    raise
+                time.sleep(self.RETRY_WAIT * attempt)
+
+    def _login_and_read(self) -> dict:
+        """Un intento: autenticar por AppRole y leer el secreto KV v2.
+
+        Cada fallo se envuelve en `VaultConfigError` diciendo en cual de los dos
+        pasos ocurrio, que es lo que distingue "credenciales malas" de "la ruta del
+        secreto no existe".
+        """
+        try:
+            client = hvac.Client(url=self._vault_url)
+            client.auth.approle.login(
+                role_id=self._role_id, secret_id=self._secret_id
+            )
+        except Exception as e:
+            raise VaultConfigError(
+                f"No se pudo autenticar con Vault en {self._vault_url} "
+                f"usando AppRole: {e}"
+            ) from e
+
+        try:
+            secret = client.secrets.kv.v2.read_secret_version(
+                path=self._secret_path,
+                mount_point=self._mount_path,
+                raise_on_deleted_version=True,
+            )
+            return secret["data"]["data"]
+        except Exception as e:
+            raise VaultConfigError(
+                f"No se pudo leer el secreto '{self._mount_path}/{self._secret_path}' "
+                f"de Vault: {e}"
+            ) from e
+
+
+# --- Singleton: una sola lectura de Vault por proceso ---
+
+_config: VaultSettings | None = None
+
+
+def get_config() -> VaultSettings:
+    """La configuracion de Vault, leida una sola vez por proceso.
+
+    La llaman `netowl_web/settings.py` y `core/database.py` en el momento de
+    importarse, asi que sin acceso a Vault la aplicacion no arranca.
+    """
+    global _config
+    if _config is None:
+        _config = VaultSettings()
+    return _config

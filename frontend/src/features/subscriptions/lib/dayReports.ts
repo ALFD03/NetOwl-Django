@@ -1,0 +1,176 @@
+/**
+ * Reagrupa en cliente el corte de un día para los dos reportes comerciales.
+ *
+ * Es lo que permite que mover la barra de días no dispare ninguna petición: el
+ * mes entero ya viajó en los props, y aquí se vuelve a agrupar por site,
+ * tecnología y coordinador usando el catálogo de zonas.
+ */
+
+import type { DimensionVal } from '@/shared/types/domain';
+
+import type { CommercialNode } from './commercial';
+import type { SalesReportSite, SalesReportNode } from '../hooks/useSalesReportData';
+import type { BusinessUnitGroup, BusinessUnitNode } from '../hooks/useBusinessUnitsData';
+
+/** Una zona del catalogo, tal y como la envia `get_zonas_config()`. */
+export interface ZoneConfig {
+  name: string;
+  site: string;
+  type: string;
+  coordinator?: string;
+  /** Para la herencia de objetivos (ver `lib/targets.ts`). */
+  state?: string;
+}
+
+export interface ZonesConfig {
+  zones: ZoneConfig[];
+  /** Orden de presentacion de los sites; el backend es la unica fuente. */
+  siteOrder: string[];
+}
+
+const UNKNOWN_SITE = 'Otros / Desconocido';
+const DEFAULT_KIND = 'FTTH';
+const RF_GROUP = 'NODOS RADIOFRECUENCIA (RF)';
+
+/**
+ * Reagrupa el desglose `zona_sucursal` de un dia en las estructuras que
+ * renderizan Ventas y Unidades de Negocio.
+ *
+ * El mes entero ya viaja en los props (`dayMetrics`), asi que cambiar de dia en
+ * la barra de corte es esta reagrupacion en memoria y no una peticion nueva.
+ *
+ * Es el equivalente en cliente de `get_sales_report_data` /
+ * `get_business_units_data` (`backend/subscriptions/subs_data_api.py`): si
+ * cambia el criterio de agrupacion alli, hay que cambiarlo aqui. Los totales no
+ * se replican: ambas vistas los recalculan con `aggregateNodes`.
+ */
+
+/** "Zona - Sucursal" -> sus dos partes, con el mismo fallback que el backend. */
+const splitValue = (value: string): { zona: string; sucursal: string } => {
+  const parts = String(value).split(' - ');
+  return {
+    zona: (parts[0] ?? value).trim(),
+    sucursal: parts.length > 1 ? (parts[1] ?? '').trim() : 'Sin Sucursal',
+  };
+};
+
+const num = (value: number | undefined): number => Number(value ?? 0);
+
+const baseNode = (row: DimensionVal) => {
+  const value = String(row.value ?? '');
+  const { zona: zone, sucursal: branch } = splitValue(value);
+  return {
+    zona_sucursal: value,
+    zona: zone,
+    sucursal: branch,
+    active_start: num(row.active_start),
+    active_end: num(row.active_end),
+    new_subs: num(row.new_subs),
+    churned: num(row.churned),
+    growth: num(row.growth),
+    gross_churn_pct: num(row.gross_churn_pct),
+    // El backend expone la reactivacion valida como `react_val`.
+    reactivations: num(row.react_val),
+  } satisfies CommercialNode;
+};
+
+const byActiveAtEnd = <T extends { active_end?: number }>(a: T, b: T): number =>
+  num(b.active_end) - num(a.active_end);
+
+/** Ventas: site -> tecnologia -> nodos. */
+export function buildSalesSites(
+  rows: DimensionVal[],
+  config: ZonesConfig | undefined,
+): SalesReportSite[] {
+  if (!rows.length) return [];
+
+  const zoneInfo = new Map<string, { site: string; type: string }>();
+  config?.zones.forEach((zone) =>
+    zoneInfo.set(zone.name.toLowerCase(), { site: zone.site, type: zone.type }),
+  );
+
+  const siteGroups = new Map<string, Map<string, SalesReportNode[]>>();
+
+  rows.forEach((row) => {
+    const node = baseNode(row);
+    const info = zoneInfo.get(node.zona.toLowerCase())
+      ?? { site: UNKNOWN_SITE, type: DEFAULT_KIND };
+
+    const techs = siteGroups.get(info.site) ?? new Map<string, SalesReportNode[]>();
+    siteGroups.set(info.site, techs);
+    const nodes = techs.get(info.type) ?? [];
+    techs.set(info.type, nodes);
+    nodes.push(node);
+  });
+
+  const siteOrder = config?.siteOrder ?? [];
+  const orderIndex = (site: string): number => {
+    const index = siteOrder.indexOf(site);
+    return index === -1 ? siteOrder.length : index;
+  };
+
+  return [...siteGroups.keys()]
+    .sort((a, b) => orderIndex(a) - orderIndex(b))
+    .map((site) => ({
+      site,
+      technologies: [...(siteGroups.get(site)?.keys() ?? [])]
+        .sort()
+        .map((technology) => ({
+          technology,
+          nodes: [...(siteGroups.get(site)?.get(technology) ?? [])].sort(byActiveAtEnd),
+        })),
+    }));
+}
+
+/** Unidades de negocio: un grupo por coordinador, mas el bloque RF al final. */
+export function buildBusinessUnitGroups(
+  rows: DimensionVal[],
+  config: ZonesConfig | undefined,
+): BusinessUnitGroup[] {
+  if (!rows.length) return [];
+
+  const coordMap = new Map<string, string>();
+  const rfZones = new Set<string>();
+
+  config?.zones.forEach((zone) => {
+    const key = zone.name.toLowerCase();
+    if (zone.coordinator) coordMap.set(key, zone.coordinator);
+    if (zone.type.toUpperCase() === 'RF') rfZones.add(key);
+  });
+
+  const coordGroups = new Map<string, BusinessUnitNode[]>();
+  const rfNodes: BusinessUnitNode[] = [];
+
+  rows.forEach((row) => {
+    const base = baseNode(row);
+    const key = base.zona.toLowerCase();
+    const node: BusinessUnitNode = { ...base, type: rfZones.has(key) ? 'RF' : 'FTTH' };
+
+    const coordinator = coordMap.get(key);
+    if (coordinator) {
+      const nodes = coordGroups.get(coordinator) ?? [];
+      coordGroups.set(coordinator, nodes);
+      nodes.push(node);
+    }
+    // Una zona RF entra ademas en el bloque consolidado, aunque tenga coordinador.
+    if (rfZones.has(key)) rfNodes.push(node);
+  });
+
+  const groups: BusinessUnitGroup[] = [...coordGroups.keys()]
+    .sort()
+    .map((coordinator) => ({
+      coordinator,
+      nodes: [...(coordGroups.get(coordinator) ?? [])].sort(byActiveAtEnd),
+      is_rf: false,
+    }));
+
+  if (rfNodes.length) {
+    groups.push({
+      coordinator: RF_GROUP,
+      nodes: [...rfNodes].sort(byActiveAtEnd),
+      is_rf: true,
+    });
+  }
+
+  return groups;
+}

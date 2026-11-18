@@ -95,7 +95,7 @@ permisos, los catálogos, el directorio de soporte, las sesiones,
   porque los dos entornos comparten host y el navegador no distingue puertos.
 
 Algunos restos son anteriores a esta separación y hoy son redundantes pero
-inofensivos: `import_action_logs`/`analysis_jobs` y `SesionEntorno` cualifican
+inofensivos: `import_action_logs`/`analysis_jobs` y `SchemaSession` cualifican
 su `db_table` con `DB_SCHEMA` (el mismo esquema al que ya apunta el
 `search_path`), y `SESSION_ENGINE` sigue siendo `services.config.sessions`.
 
@@ -103,11 +103,11 @@ su `db_table` con `DB_SCHEMA` (el mismo esquema al que ya apunta el
 
 Hasta entonces usuarios, permisos, catálogos, directorio de soporte y
 `django_migrations` vivían en `public` y se compartían a propósito. Para pasar
-a esquemas aislados, `manage.py copiar_desde_public` clona cada tabla de
+a esquemas aislados, `manage.py copy_from_public` clona cada tabla de
 `public` (salvo `django_session`) en el esquema del entorno: estructura,
 secuencias propias, restricciones e índices con sus nombres originales, y las
 filas con sus ids. Es transaccional, no toca `public` y se detiene si alguna
-tabla ya existe en el destino. `--simular` hace la copia y la deshace.
+tabla ya existe en el destino. `--dry-run` hace la copia y la deshace.
 
 Se ejecuta una vez por entorno, con el código nuevo desplegado y **antes** de
 que nadie entre, para que ninguna edición hecha en `public` en el intervalo se
@@ -117,7 +117,7 @@ quede atrás. Las tablas de `public` quedan como copia de seguridad; nada las le
 
 Cuatro apps tienen modelos y por tanto `migrations/`:
 
-- `services/config/` — usuarios, perfiles, grupos de permisos, `SesionEntorno`.
+- `services/config/` — usuarios, perfiles, grupos de permisos, `SchemaSession`.
 - `services/imports/` — `ImportActionLog` y `AnalysisJob`.
 - `services/subscriptions/` — los catálogos de referencia.
 - `services/support/` — el directorio de usuarios de soporte.
@@ -160,16 +160,18 @@ edición: sus `db_table` no llevan esquema y el `search_path` los resuelve.
 
 Middlewares propios (`netowl_web/middleware.py`):
 
-- `RateLimitMiddleware` — convierte la excepción `Ratelimited` en un JSON 429 con
-  mensaje legible en vez de una página de error.
-- `InertiaShareMiddleware` — comparte con React `auth.user` y su matriz de
-  permisos, recorriendo `PERMISSION_FIELDS`. **Añadir un permiso al catálogo de
-  `services/config/models.py` lo publica automáticamente en el frontend.**
+- `AnonymousBodyLimitMiddleware` — un anónimo solo escribe en login y logout, con
+  un cuerpo de como mucho `ANON_MAX_BODY_SIZE`; el resto recibe 401 JSON antes de
+  leer el cuerpo.
+- `CSPMiddleware` — la cabecera Content-Security-Policy.
+
+Los límites de peticiones (429) y la matriz que ve React (`/api/auth/me/`) los
+resuelve `@endpoint`; ver [11 · Endpoints](11-api-endpoints.md).
 
 ## Assets: `VITE_DEV_SERVER` no cuelga de `DEBUG`
 
-`USE_VITE_DEV_SERVER` decide si `web/templates/app.html` carga los módulos desde
-`http://localhost:5173` o el bundle de `web/static/dist`.
+`USE_VITE_DEV_SERVER` decide si `backend/templates/app.html` carga los módulos desde
+`http://localhost:5173` o el bundle de `frontend/static/dist`.
 
 Antes esa decisión colgaba de `{% if debug %}`, que Django solo pone a `True`
 cuando `DEBUG` está activo **y además** `REMOTE_ADDR` figura en `INTERNAL_IPS`:

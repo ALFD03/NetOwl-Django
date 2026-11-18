@@ -19,12 +19,13 @@ services/subscriptions/
 │   ├── day_metrics.py      El corte acumulado de cada día del mes
 │   ├── lifetime/           Cuánto duraron activas las bajas de cada mes
 │   ├── eta_report.py       El reporte de la reguladora
+│   ├── office_coordinators.py  Ventas y objetivo de las coordinadoras de oficina (Sales Report)
 │   └── queries.py          Lectura de resultados + Sales Report + Business Units
 ├── models.py               Los catálogos de referencia
 ├── views.py                Dashboard, analytics, results, lifetime, reportes
 ├── views_eta.py            Las vistas del reporte ETA
 ├── urls.py
-└── management/commands/cargar_catalogos.py
+└── management/commands/load_catalogs.py
 ```
 
 ---
@@ -33,27 +34,23 @@ services/subscriptions/
 
 Dos entradas independientes: el export de **suscripciones** y el de **logs**.
 
-### `import_subscriptions_csv(ruta)`
+### `import_subscriptions(ruta)`
 
-1. Lee con `dtype=str`, `keep_default_na=False`, `encoding="utf-8-sig"`.
-2. Renombra con `SUBS_COLUMN_MAPPING` + `SUBS_ACTIVO_ALIASES` (Odoo no siempre
-   exporta `Activo` con la misma capitalización).
-3. Descarta las filas en las que se repite la cabecera y las columnas que no
-   estén en el mapa.
-4. `_blank_to_nan` — convierte en `NaN` las celdas vacías o de solo espacios,
-   **columna a columna**. La versión anterior usaba `DataFrame.apply`, que
-   entrega Series completas y no celdas, así que nunca convertía nada: sin esto
-   el `ffill` por orden no rellena, el `dropna` no descarta las líneas sin
-   referencia y `groupby.first` se queda con la cadena vacía.
-5. Descarta las líneas sin referencia de orden: no pertenecen a ninguna
-   suscripción y agrupadas formarían una fila fantasma.
-6. `ffill` de los metadatos por orden y consolidación con `groupby(...).agg()`.
-7. **El producto de la orden lo elige `_first_matching_plan`**: el export trae
-   varias líneas por orden (el plan, el router, la instalación) y se queda con
-   la primera que esté en `nombres_reconocidos()`.
-8. **`_verificar_catalogo(df_local)` — antes de crear, truncar o copiar nada.**
-9. Crea las tablas si faltan, añade las columnas nuevas
-   (`ADD COLUMN IF NOT EXISTS`), hace `TRUNCATE` y carga con `COPY`:
+1. Lee con `read_export(ruta, SUBSCRIPTIONS_EXPORT)` (`core.exports`): cabeceras
+   tolerantes (caja, acentos, `Activo`/`Active`), obligatorias comprobadas,
+   vacíos como nulo y `fecha_inicio`/`fecha_factura` como fecha y `total` como
+   número.
+2. Descarta las filas en las que se repite la cabecera y las líneas sin
+   referencia de orden: no pertenecen a ninguna suscripción y agrupadas
+   formarían una fila fantasma.
+3. `ffill` de los metadatos por orden y consolidación con `groupby(...).first()`.
+4. **El producto de la orden es la primera de sus líneas que está en
+   `recognized_names()`**: el export trae varias líneas por orden (el plan,
+   el router, la instalación).
+5. **`_check_catalog(lines)` — antes de tocar la base.**
+6. `activo` pasa a booleano: vacío es archivada; un valor desconocido cuenta
+   como activa y se avisa; un export sin la columna no archiva a nadie.
+7. Reemplaza en una sola transacción (`core.tables.replace`):
    - `subscriptions-b` ← el detalle línea a línea.
    - `subscriptions` ← una fila por orden.
 
@@ -62,41 +59,40 @@ Devuelve el número de órdenes consolidadas.
 ### La verificación de catálogo
 
 ```
-¿hay algún plan en el catálogo?            no → CatalogoVacio
+¿hay algún plan en el catálogo?            no → EmptyCatalog
 para cada orden con líneas de producto:
     ¿alguna línea está en nombres_reconocidos()?   sí → correcta
     ¿el resto están en productos_ignorados()?      sí → no cuenta
     en otro caso                                   → candidata
-si hay candidatas → ProductosSinCatalogo(productos, órdenes)
+si hay candidatas → UncatalogedProducts(productos, órdenes)
 ```
 
-- Se comprueba **antes del `TRUNCATE`**: si levanta, no se escribió nada y la
-  tabla anterior sigue intacta.
+- Se comprueba **antes de escribir**: si levanta, la tabla anterior sigue intacta.
 - **Una orden sin ninguna línea de producto no se reporta**: no hay nombre que
   registrar, así que pasa como antes.
 - Antes, cuando ninguna línea estaba catalogada, la orden se guardaba **sin
   producto**, y la pérdida no se notaba hasta meses después, en el reporte de la
   reguladora.
-- `ProductosSinCatalogo` lleva encima lo que el cliente necesita para resolverlo
+- `UncatalogedProducts` lleva encima lo que el cliente necesita para resolverlo
   sin volver a subir el fichero a ciegas: qué productos son y cuántas órdenes
   arrastra cada uno.
 
 La pantalla que lo recibe ofrece **las dos respuestas** por producto, porque la
 comprobación no puede distinguir un plan nuevo de una línea que nunca lo será:
 
-- **Crear plan** → `/catalogos/productos/?nuevo_plan=<nombre>`, que abre el
+- **Crear plan** → `/catalogos/productos/?new_plan=<nombre>`, que abre el
   formulario ya relleno.
-- **Ignorar** → registra el nombre en `ProductoIgnorado`.
+- **Ignorar** → registra el nombre en `IgnoredProduct`.
 
 Un nombre ignorado deja de contar como candidato en las dos comprobaciones
-(`_verificar_catalogo` y `productos_fuera_de_catalogo`), que es lo que evita que
+(`_check_catalog` y `products_outside_catalog`), que es lo que evita que
 routers, instalaciones y servicios puntuales bloqueen cada importación para
 siempre. Es una pestaña aparte del catálogo para poder deshacer la decisión.
 
-> No confundir con `Plan.declarar_en_eta`: eso es un plan real excluido del
+> No confundir con `Plan.declare_in_eta`: eso es un plan real excluido del
 > reporte de la reguladora, que sigue contando como plan en todas partes.
 
-### `productos_fuera_de_catalogo()`
+### `products_outside_catalog()`
 
 Mira lo **ya importado** que hoy no está en el catálogo. La importación
 garantiza que toda orden entra con un plan catalogado, pero un plan se puede
@@ -104,10 +100,11 @@ borrar después, y los datos cargados antes de que la comprobación existiera
 pueden no tener ninguno. Lo llama el análisis mensual **antes de los minutos de
 cálculo** y la pantalla de catálogos, que lo usa como primera pestaña.
 
-### `import_logs_csv(ruta)`
+### `import_logs(ruta)`
 
-Mucho más simple: renombra, exige las cuatro columnas (`orden`, `fecha_log`,
-`log`, `estado`), limpia, `TRUNCATE` y `COPY` sobre `subscriptions-logs`.
+Mucho más simple: `read_export` con las cuatro columnas obligatorias (`orden`,
+`fecha_log` como `timestamp`, `log`, `estado`) y `replace` de
+`subscriptions-logs`.
 
 ---
 
@@ -135,7 +132,7 @@ manda**. Así no hay que reprocesar este CSV en cada cálculo.
 
 Detalles:
 
-- `_eventos_estado` construye la línea de tiempo de entradas y salidas del
+- `_state_events` construye la línea de tiempo de entradas y salidas del
   servicio gratuito, y se queda con **la última entrada no revertida**.
 - Un cambio entre dos tarifas gratuitas no mueve el estado.
 - De las dos cotas superiores (3 y 4) se toma **la más antigua**.
@@ -143,8 +140,8 @@ Detalles:
   gratuita antes de existir*. Se guarda también `fecha_evidencia`, la fecha
   cruda antes de ese recorte.
 
-`import_gratis_csv` reconstruye la tabla entera (`DROP` + `CREATE` + `COPY`):
-es propia y siempre se rehace desde el CSV. `summarize_detection` da el resumen
+`import_free_plans` reemplaza la tabla entera: es propia y siempre se rehace
+desde el CSV. `summarize_detection` da el resumen
 por método y confianza para revisión humana.
 
 ---
@@ -154,15 +151,13 @@ por método y confianza para revisión humana.
 ### 3.1 `loader.py`
 
 Lee **en paralelo** (cuatro hilos) `subscriptions`, `subscriptions-logs`,
-`subscriptions-logs-v15` y la tabla de gratuitos. La columna `activo` solo se
-pide si existe en la tabla (`information_schema`), porque solo la traen los
-exports nuevos.
+`subscriptions-logs-v15` y la tabla de gratuitos.
 
 ### 3.2 `cleaner.py`
 
-- `parse_archivado(serie)` — deriva la marca de archivado de la columna
-  `activo`. **Un valor fuera de los dos vocabularios conocidos NO se asume
-  archivado**: eso sacaría clientes de pago de la base activa sin dejar rastro.
+- `parse_archived(serie)` — deriva la marca de archivado de la columna
+  `activo` (vacía o `false` = archivada). **Un valor fuera de los dos
+  vocabularios conocidos NO se asume archivado**: eso sacaría clientes de pago de la base activa sin dejar rastro.
   Se avisa por consola (el log del cálculo lo recoge) y se cuenta como activo.
 - `_normalize_string_series` — normaliza mapeando **solo los valores únicos**,
   que es lo que lo hace rápido sobre cientos de miles de filas.
@@ -173,7 +168,7 @@ exports nuevos.
   por orden.
 
 > **Invariante crítica: el frame de logs llega ordenado por `["orden", "f_dt"]`.**
-> De ella dependen `last_log_per_orden` y `EstadoAcumulado`. Cambiar esa
+> De ella dependen `last_log_per_order` y `AccumulatedState`. Cambiar esa
 > ordenación rompe las dos.
 
 ### 3.3 `rules.py` — logs sintéticos
@@ -197,22 +192,22 @@ aplica sobre el histórico ya consolidado (sintéticos incluidos) para que ning�
 log posterior lo saque del estado. *(«desarchivada» contiene «archivada», por
 eso se descarta primero.)*
 
-`_ordenes_siempre_gratis` identifica a las archivadas que **nunca llegaron a ser
+`_always_free_orders` identifica a las archivadas que **nunca llegaron a ser
 clientes de pago**: no deben nacer como activas ni contarse como altas.
 
 ### 3.4 `metrics_calc.py` — el estado a una fecha
 
 | Símbolo | Qué es |
 |---|---|
-| `last_log_per_orden(df)` | El último log de cada suscripción. Toma `tail(1)`, **no `idxmax`**: varios logs pueden compartir el mismo segundo (un cambio de plan deja «Plan change», «Suspensión TV» y el sintético a la vez) e `idxmax` devuelve la primera del empate |
+| `last_log_per_order(df)` | El último log de cada suscripción. Toma `tail(1)`, **no `idxmax`**: varios logs pueden compartir el mismo segundo (un cambio de plan deja «Plan change», «Suspensión TV» y el sintético a la vez) e `idxmax` devuelve la primera del empate |
 | `get_state_at(df, fecha, estado, strictly_before)` | **La definición de referencia**: filtra el histórico y reagrupa. Correcta, pero cara |
-| `EstadoAcumulado` | La misma respuesta recorriendo el log **una sola vez** |
+| `AccumulatedState` | La misma respuesta recorriendo el log **una sola vez** |
 | `react_candidates(df)` | Logs que podrían ser reactivación, sin filtrar por fecha |
-| `corte_candidates(df)` | Cortes por impago, deduplicados por orden y minuto |
+| `cut_candidates(df)` | Cortes por impago, deduplicados por orden y minuto |
 | `get_reactivations(...)` | Las reactivaciones del periodo, ya filtradas |
-| `get_corte_impagado(...)` | Los cortes del periodo |
+| `get_unpaid_cuts(...)` | Los cortes del periodo |
 
-#### `EstadoAcumulado`, la optimización central
+#### `AccumulatedState`, la optimización central
 
 `get_state_at` filtra el histórico entero y lo reagrupa por orden. El análisis de
 un mes pregunta **dos veces por cada uno de los 31 días** (activos y gratuitos),
@@ -250,7 +245,7 @@ inactivo y pasa a activo** (`VALID_REACT_ORIGINS`). Después se filtra:
 ### 3.5 `dimensions.py`
 
 `prepare_subs_dims()` normaliza el frame una vez y devuelve un objeto
-`DimsPreparadas` que cachea, por dimensión, el mapa `orden → valor` y la
+`PreparedDims` que cachea, por dimensión, el mapa `orden → valor` y la
 facturación como número. Nada de eso depende del periodo, y reconstruirlo dentro
 del bucle diario suponía **186 recorridos** (6 dimensiones × 31 días) de la tabla
 de suscripciones para obtener siempre lo mismo.
@@ -273,7 +268,7 @@ analyzer.run()          # load_data → build_clean_data → _apply_log_rules �
 ```
 
 `_prepare_caches()` precalcula todo lo que no depende del periodo: candidatos de
-reactivación y de corte, el frame de dimensiones y el `EstadoAcumulado`. Además
+reactivación y de corte, el frame de dimensiones y el `AccumulatedState`. Además
 cachea el estado **al inicio** del periodo (idéntico en los 31 cortes del mes) y
 los inactivos al inicio. El estado al cierre **no** se cachea: cambia cada día y
 guardarlo solo gastaría memoria.
@@ -322,7 +317,7 @@ desarchivados, que vuelven a la base sin ser altas ni reactivaciones.
 | `analyzer_activos_cierre` | `orden`, `f_dt`, `estado` de los activos al cierre |
 | `analyzer_reactivaciones` | Las reactivaciones con su origen |
 | `analyzer_bajas_detalladas` | `orden`, `f_ini_dt`, `estado` |
-| `analyzer_corte_impagado` | `orden`, `fecha_corte`, `motivo_corte` |
+| `analyzer_corte_impagado` | `orden`, `cutoff_date`, `motivo_corte` |
 | `analyzer_clientes_gratuitos` | `orden`, `fecha_archivado`, `estado` |
 | `analyzer_inactivos_detallados` | `orden`, `fecha_evento`, `estado_inactivo` |
 | `analyzer_churn_dimensiones` | Una fila por dimensión y valor |
@@ -354,19 +349,19 @@ recálculo. `dimensiones` se mantiene como lista plana de `zona_sucursal` (la
 forma que ya leen Sales Report y Business Units) y `dims` agrupa las dimensiones
 del selector de Analytics.
 
-`build_day_metrics(mes, db, hasta_dia, analyzer, progreso)`:
+`build_day_metrics(mes, db, until_day, analyzer, progreso)`:
 
 - **No calcula días futuros** del mes en curso.
 - `analyzer` permite reaprovechar uno que ya tenga los datos cargados (el del
   análisis mensual): un solo botón hace **una sola lectura** para el cierre y
   para los 31 días.
-- Vuelca a la base **cada 5 días** (`FLUSH_CADA_N_DIAS`): como el *upsert* solo
+- Vuelca a la base **cada 5 días** (`FLUSH_EVERY_N_DAYS`): como el *upsert* solo
   toca los días enviados, si la ejecución se corta el trabajo hecho queda
   guardado.
-- `progreso(hechos, total, etiqueta)` se llama al cerrar cada día: es la única
+- `progress(done, total, label)` se llama al cerrar cada día: es la única
   parte del análisis con pasos contables, y es la que mueve la barra.
 
-Lectura: `get_day_metrics(mes)` y `get_periodos_con_dias()`. Ambas comprueban
+Lectura: `get_day_metrics(mes)` y `get_periods_with_days()`. Ambas comprueban
 antes con `to_regclass` que la tabla exista —un entorno donde nunca terminó un
 análisis no la tiene, y eso no es un error.
 
@@ -383,19 +378,19 @@ sin periodo: un solo job calcula todos los meses.
 | Módulo | Contenido |
 |---|---|
 | `loader.py` | `load_data`: `analyzer.loader` + `cleaner` + `rules`, sin lectura propia. Devuelve suscripciones, el log limpio y las órdenes con actividad |
-| `bajas_mes.py` | `calcular_bajas_por_mes`: las bajas de cada mes con sus fechas y duraciones. `MES_INICIO`, `DIMS_BAJAS` |
-| `runner.py` | `run_lifecycle_analysis()`: carga una vez, calcula todos los meses y guarda cada uno |
-| `queries.py` | `get_meses_lifetime`, `get_lifetime_mes` (resumen, tramos y desglose) y `get_lifetime_detalle` (una fila por baja, para exportar) |
+| `monthly_churn.py` | `compute_churn_by_month`: las bajas de cada mes con sus fechas y duraciones. `START_MONTH`, `CHURN_DIMS` |
+| `runner.py` | `run_lifetime_analysis()`: carga una vez, calcula todos los meses y guarda cada uno |
+| `queries.py` | `get_lifetime_months`, `get_lifetime_month` (resumen, tramos y desglose) y `get_lifetime_detail` (una fila por baja, para exportar) |
 
 ### Las bajas del mes
 
-Son `bajas_idx` del mensual: activas justo antes del día 1 cuyo último log al
+Son `churn_idx` del mensual: activas justo antes del día 1 cuyo último log al
 cierre no es activo ni gratuito. Se leen del mismo log limpio (sintéticos y
-tramo gratuito incluidos) con el mismo `EstadoAcumulado`, así que el total de
+tramo gratuito incluidos) con el mismo `AccumulatedState`, así que el total de
 cada mes coincide con `analyzer_bajas_detalladas`; la página avisa si no
 (`bajas_reporte`), que solo pasa cuando uno de los dos se calculó con otros datos.
 
-Desde `MES_INICIO` (enero de 2026): antes, el estado al inicio de mes solo se ve
+Desde `START_MONTH` (enero de 2026): antes, el estado al inicio de mes solo se ve
 para las órdenes del formato v15. El mes de la fecha de corte sale marcado
 `mes_en_curso`: sus bajas son las de hoy y alguna puede volver antes del cierre.
 
@@ -409,10 +404,10 @@ inactivo): pausa → +30 días → cancelado es un solo tramo inactivo.
 - `dias_desde_instalacion` = baja − `fecha_inicio`: toda su antigüedad. Solo
   necesita esas dos fechas, así que vale para órdenes de cualquier año.
 
-La página mide **solo las bajas instaladas desde `INSTALADAS_DESDE`**
+La página mide **solo las bajas instaladas desde `INSTALLED_SINCE`**
 (2026-01-01): los clientes captados desde la migración de la base antigua, que
 es lo que interesa. Se guardan todas las bajas y `queries.py` filtra al leer
-(`_las_que_cuentan`). Enero de 2026 no tiene ninguna (sus bajas estaban activas
+(`_counted`). Enero de 2026 no tiene ninguna (sus bajas estaban activas
 el día 1), y en los primeros meses son pocas.
 
 El activo sintético que `rules.py` intercala entre un log inactivo y un «corte
@@ -422,11 +417,11 @@ factura, y ese activo inventado fechaba la baja en el último corte en vez de en
 el inicio de la pausa.
 
 Cada baja lleva su zona, sucursal, municipio, campaña y nodo del
-`DimsPreparadas` del mensual. **El producto no se desglosa**: el export guarda
+`PreparedDims` del mensual. **El producto no se desglosa**: el export guarda
 el plan de hoy, y el de casi todas las bajas es `Cancelado`.
 
 **Las campañas «Sin campanna» y «Exonerado» tampoco cuentan**
-(`CAMPANNAS_EXCLUIDAS` en `queries.py`): se quitan al leer, de todo —resumen,
+(`EXCLUDED_CAMPAIGNS` en `queries.py`): se quitan al leer, de todo —resumen,
 tramos, dimensiones y exportación—. «Sin campanna» es la base anterior a las
 campañas, casi entera instalada antes de 2026 (agosto de 2026: 1.659 de 2.695
 bajas); «Exonerado» no paga. Siguen guardadas en la tabla: el cuadre con
@@ -449,9 +444,6 @@ demás se calcula al leer, sobre unas miles de filas:
 El detalle no viaja en la página: lo pide el botón de exportar a
 `api/lifetime/detalle/`.
 
-Las tablas `lifetime_periodos`, `lifetime_metricas` y `lifetime_dimensiones` son
-de la versión anterior (curvas de supervivencia) y ya no se escriben ni se leen.
-
 ## 6. El reporte ETA (`analytics/eta_report.py`)
 
 Las matrices que se declaran a la reguladora, calculadas sobre **los activos al
@@ -468,9 +460,9 @@ cierre de un mes**.
 | `get_discovered_unmapped_plans` / `_subs` | Lo que falta por parametrizar |
 | `get_all_known_plans` | Para el desplegable del formulario |
 | `get_config_page_data(periodo)` | Todo lo que necesita la pantalla de parametrización |
-| `get_tasa_bcv` / `set_tasa_bcv` | La tasa del periodo y de dónde salió |
-| `asegurar_tasa_bcv(periodo)` | La consulta al BCV **solo si no hay ninguna guardada**. No propaga el fallo |
-| `consultar_tasa_bcv(periodo)` | Fuerza la consulta y pisa lo guardado. Deja subir `TasaNoDisponible` |
+| `get_bcv_rate` / `set_bcv_rate` | La tasa del periodo y de dónde salió |
+| `ensure_bcv_rate(periodo)` | La consulta al BCV **solo si no hay ninguna guardada**. No propaga el fallo |
+| `fetch_bcv_rate(periodo)` | Fuerza la consulta y pisa lo guardado. Deja subir `RateUnavailable` |
 
 ### El cálculo
 
@@ -486,7 +478,7 @@ cierre de un mes**.
    `unmapped_plans` (planes sin clasificar) y `unmapped_subs` (órdenes sin
    producto, o de tipo dedicado/transporte/L2, que se gestionan una a una).
 5. Normaliza a los dos vocabularios de la reguladora: `TECH_MAP` colapsa la
-   tecnología a **Alámbrico / Inalámbrico** y `PERSONA_MAP` a **Persona Natural
+   tecnología a **Alámbrico / Inalámbrico** y `PERSON_MAP` a **Persona Natural
    / Persona Jurídica**.
 6. Produce las matrices: totales de internet por tecnología, persona, estado y
    todos sus cruces; las de TV; el conteo de transporte de datos; y la
@@ -507,7 +499,7 @@ declarado**, con su velocidad, su renta y su consumo teórico. Son tres hojas
 descargan en un solo `.xlsx` desde la barra del reporte.
 
 **De dónde sale cada fila.** Un plan del catálogo comercial se declara por su
-**plan regulador** (`Plan.plan_regulador` → `catalogo_planes_reguladores`).
+**plan regulador** (`Plan.regulator_plan` → `catalogo_planes_reguladores`).
 Varios planes comerciales colapsan en uno: la misma velocidad con dos tarifas es
 un solo producto ante la reguladora, y declararla dos veces cuenta sus
 suscriptores dos veces. El regulador lleva **sus propios** campos y no los hereda
@@ -545,20 +537,20 @@ siete días y sin salirse del mes. El día que respondió se guarda en
 `tasa_fuente` —«BCV 2026-08-03 (ve.dolarapi.com)»— para que nadie se pregunte
 por qué la tasa de agosto es del día 3.
 
-**Se sale a la red una vez por periodo, no una por visita.** `asegurar_tasa_bcv`
+**Se sale a la red una vez por periodo, no una por visita.** `ensure_bcv_rate`
 solo consulta cuando no hay nada guardado: la tasa del primer día publicado de
 un mes pasado ya no cambia. Eso hace, además, que una tasa escrita a mano no se
 pise sola; para volver a la oficial está el botón de consultar, que llama a
-`consultar_tasa_bcv`.
+`fetch_bcv_rate`.
 
-**Un fallo del servicio no rompe el reporte.** `asegurar_tasa_bcv` devuelve el
+**Un fallo del servicio no rompe el reporte.** `ensure_bcv_rate` devuelve el
 motivo como aviso en vez de propagarlo, y las rentas salen vacías, que es lo
 mismo que pasaba antes de que hubiera consulta automática. El aviso se enseña
 bajo la barra del reporte: si no, una tasa ausente parece una tasa de cero.
 
 #### La tasa vigente, al lado de la del mes
 
-`consultar_tasa_actual()` pregunta por `ve.dolarapi.com/v1/dolares/oficial`, que
+`fetch_current_rate()` pregunta por `ve.dolarapi.com/v1/dolares/oficial`, que
 devuelve la **última tasa publicada** sin pedir fecha, y la sirve
 `GET api/eta-report/tasa/actual/` (`can_view_eta`, 10/m). Es otra pregunta que
 la del mes: aquella es la que fija la declaración —el primer día publicado del
@@ -593,12 +585,9 @@ Las fórmulas que pide la reguladora, y que están en `eta_forms.py`:
 
 ### El catálogo es el único sitio donde se clasifica un plan
 
-El maestro de ETA llevaba una segunda copia —con prioridad— de tecnología,
-persona, TV y Mbps en `analyzer_eta_config_planes`: el mismo plan podía estar
-clasificado de dos formas y ganaba la que nadie miraba. **Esa capa ya no
-existe**; la tabla sigue en la base de datos, vacía y sin leer.
+Tecnología, persona, TV y Mbps de un plan viven solo en el catálogo.
 
-Lo único que aportaba y el JSON no tenía es `Plan.declarar_en_eta`, que hoy es un
+Lo que el JSON de semilla no tenía es `Plan.declare_in_eta`, que es un
 campo del catálogo.
 
 El maestro conserva **solo sus excepciones por suscripción**
@@ -613,7 +602,7 @@ con un filtro «con renta / sin renta» — es el único sitio donde se ve que a
 dedicado le falta el precio con el que declararlo.
 
 `es_transporte` / `es_dedicado` se derivan del nombre del plan
-(`PLAN_TRANSPORTE`, `PLAN_DEDICADO`): son dos planes concretos, no un atributo
+(`TRANSPORT_PLAN`, `DEDICATED_PLAN`): son dos planes concretos, no un atributo
 que se marque por plan.
 
 `Cancelado` entra en el mapa de planes con una clasificación vacía. No está en el
@@ -627,11 +616,11 @@ clasificar y bloquearía el reporte entero.
 
 | Función | Devuelve |
 |---|---|
-| `get_cierre_churn(periodos=None)` | Las filas de `analyzer_cierre_historico`, tipadas y ordenadas de más reciente a más antigua |
-| `get_dimensiones(periodos=None)` | `{periodo, dimensiones: {dim: [valores]}}` |
-| `get_periodos()` | Las etiquetas de periodo disponibles |
+| `get_churn_close(periodos=None)` | Las filas de `analyzer_cierre_historico`, tipadas y ordenadas de más reciente a más antigua |
+| `get_dimensions(periodos=None)` | `{periodo, dimensiones: {dim: [valores]}}` |
+| `get_periods()` | Las etiquetas de periodo disponibles |
 | `get_dashboard_data()` / `get_analytics_data(periodos)` | Composiciones de las anteriores |
-| `get_zonas_config()` | Mapa de zonas + `siteOrder` para que el cliente reagrupe sin ir al servidor |
+| `get_zones_config()` | Mapa de zonas + `siteOrder` para que el cliente reagrupe sin ir al servidor |
 | `get_sales_report_data(periodo, dia)` | Site → Tecnología → Nodos, con subtotales |
 | `get_business_units_data(periodo, dia)` | Coordinador → Nodos, más el resumen FTTH global y el bloque RF |
 | `calculate_aggregation_totals(nodos)` | Suma los absolutos y **recalcula** los porcentajes |
@@ -651,7 +640,7 @@ tecnología por defecto, en vez de perderse.
 
 ---
 
-## 8. Los catálogos de referencia (`models.py`; la pantalla vive en `services/catalogos/`)
+## 8. Los catálogos de referencia (`models.py`; la pantalla vive en `services/catalogs/`)
 
 ### Los modelos
 
@@ -660,12 +649,12 @@ tienen cada uno su catálogo, y un cambio en uno no alcanza al otro.
 
 | Modelo | Tabla | Notas |
 |---|---|---|
-| `Estado` | `catalogo_estados` | Entidad federal de una zona |
+| `State` | `catalogo_estados` | Entidad federal de una zona |
 | `Site` | `catalogo_sites` | Sede regional. **`orden` no es decorativo**: es el orden comercial de presentación, antes la constante `CUSTOM_SITE_ORDER` |
-| `Coordinador` | `catalogo_coordinadores` | Responsable comercial (reporte Business Units) |
-| `Zona` | `catalogo_zonas` | Nodo de red. `site` y `estado` con `PROTECT`, `coordinador` con `SET_NULL` |
+| `Coordinator` | `catalogo_coordinadores` | Responsable comercial (reporte Business Units) |
+| `Zone` | `catalogo_zonas` | Nodo de red. `site` y `estado` con `PROTECT`, `coordinador` con `SET_NULL` |
 | `Plan` | `catalogo_planes` | Producto contratable |
-| `ProductoIgnorado` | `catalogo_productos_ignorados` | Nombre del export que no se registrará, por `area` (`productos`, `estructura`, `ventas`). Único por `(area, nombre)`; solo los de `productos` alimentan `fixtures.productos_ignorados()` |
+| `IgnoredProduct` | `catalogo_productos_ignorados` | Nombre del export que no se registrará, por `area` (`productos`, `estructura`, `ventas`). Único por `(area, nombre)`; solo los de `productos` alimentan `fixtures.ignored_products()` |
 
 Sobre `Plan`:
 
@@ -686,33 +675,33 @@ reguladora eso se colapsa a alámbrico o inalámbrico.
 
 Los catálogos fueron una pantalla de Subscriptions (`/subscriptions/config/`).
 Desde que los usan dos módulos —Subscriptions y Comisiones— son un módulo
-propio, `services/catalogos/`, montado en `/catalogos/` con una página por
+propio, `services/catalogs/`, montado en `/catalogos/` con una página por
 grupo. **Los modelos no se mudaron**: siguen en `services/subscriptions/models.py`,
 sus tablas ya tienen nombre propio y mover las clases de app no le daba nada a
 nadie. `/subscriptions/config/` sigue respondiendo con una redirección (con
-`?nuevo_plan=` va a Productos con el formulario abierto).
+`?new_plan=` va a Productos con el formulario abierto).
 
 | Página | Contenido | Permiso |
 |---|---|---|
-| `/catalogos/notificaciones/` | Por registrar (productos y zonas importados que el catálogo no reconoce) e Ignorados | cualquiera de los tres; cada área solo con el suyo |
-| `/catalogos/productos/` | Planes y planes reguladores. `?nuevo_plan=` | `can_manage_catalogo_operacional` |
-| `/catalogos/estructura/` | Zonas, sites y estados. `?nueva_zona=` | `can_manage_catalogo_comercial` |
-| `/catalogos/ventas/` | Coordinadores de unidad de negocio y objetivos | `can_manage_catalogo_ventas` |
+| `/catalogos/notificaciones/` | Por registrar (productos, zonas y personas importados que el catálogo no reconoce) e Ignorados | cualquiera de los tres; cada área solo con el suyo |
+| `/catalogos/productos/` | Planes y planes reguladores. `?new_plan=` | `can_manage_operational_catalog` |
+| `/catalogos/estructura/` | Zonas, sites y estados. `?new_zone=` | `can_manage_commercial_catalog` |
+| `/catalogos/ventas/` | Directorio de ventas (con el site de cada coordinadora de oficina), coordinadores de unidad de negocio y objetivos, también los de ventas de las oficinas | `can_manage_sales_catalog` |
 
-Las zonas por registrar (`zonas_fuera_de_catalogo`, en `analytics/imports.py`)
+Las zonas por registrar (`zones_outside_catalog`, en `analytics/imports.py`)
 **no bloquean nada**, a diferencia de los productos: sus órdenes se analizan
 igual, pero se quedan sin site, estado ni coordinador.
 
-`services/catalogos/views.py` sirve **todos los catálogos con un solo par de endpoints** en vez
+`services/catalogs/views.py` sirve **todos los catálogos con un solo par de endpoints** en vez
 de doce vistas casi iguales: lo único que cambia entre ellos es qué campos se
 leen del cuerpo y cómo se serializa la fila, y eso lo declara el diccionario
-`CATALOGOS`. Añadir un catálogo es añadir una entrada ahí y una pestaña en la
+`CATALOGS`. Añadir un catálogo es añadir una entrada ahí y una pestaña en la
 interfaz.
 
-**Un permiso por grupo.** Cada entrada de `CATALOGOS` declara su `permiso`:
-`can_manage_catalogo_operacional` para planes y planes reguladores,
-`can_manage_catalogo_comercial` para zonas, sites y estados, y
-`can_manage_catalogo_ventas` para coordinadores, objetivos y semáforo. Los
+**Un permiso por grupo.** Cada entrada de `CATALOGS` declara su `permiso`:
+`can_manage_operational_catalog` para planes y planes reguladores,
+`can_manage_commercial_catalog` para zonas, sites y estados, y
+`can_manage_sales_catalog` para coordinadores, objetivos y semáforo. Los
 ignorados declaran además `permiso_fila`: el de su área. Los endpoints de
 escritura dejan pasar a quien tenga cualquiera de los tres y comprueban el del
 `tipo` (y de la fila) concreto, respondiendo **403** si no es suyo. La
@@ -723,16 +712,40 @@ perdió acceso con el cambio. Aquella migración nombró las dos mitades al rev�
 `config/0007` intercambia los valores guardados para que cada cuenta conserve las
 mismas pestañas con el nombre correcto.
 
-- `GET /catalogos/<grupo>/` — las páginas. Productos acepta `?nuevo_plan=<nombre>`,
+- `GET /api/catalogs/notifications|products|structure|sales/` — los datos de las páginas. Productos acepta `?new_plan=<nombre>`,
   que abre el formulario de plan ya relleno; es a donde lleva el aviso de la
   importación. Notificaciones incluye los pendientes de cada área, y si una
   consulta falla no rompe la página.
-- `POST /catalogos/api/guardar/` — alta o edición. Valida con `_texto`,
-  `_numero`, `_opcion` y `_relacion`, que levantan `DatosInvalidos` → 400. Un
+- `POST /api/catalogs/save/` — alta o edición (`save-batch/` para varias filas). Valida con `_text`,
+  `_number`, `_option` y `_relation`, que levantan `InvalidData` → 400. Un
   duplicado responde **409**.
-- `POST /catalogos/api/eliminar/` — baja. Un site, estado o coordinador **con
+- `POST /api/catalogs/delete/` — baja. Un site, estado o coordinador **con
   zonas colgando no se borra**: la zona los referencia con `PROTECT` y se
-  responde 409 explicando cuál es el estorbo, en vez de un 500.
+  responde 409 explicando cuál es el estorbo, en vez de un 500. Igual un site
+  del que cuelga una coordinadora de oficina.
+
+### Las coordinadoras de oficina en el Sales Report
+
+Los equipos de ventas volvieron, con otra forma: ya no son un nombre leído de la
+columna `Equipo de ventas` del import (eso se quitó en `catalogos/0005`), sino una
+**agrupación de roles con sus propias condiciones de pago** (`catalogos/0006`;
+ver el capítulo 15 §3). **Cada coordinadora de oficina pertenece a uno o
+varios sites** (`TeamMembership.sites`, solo en ese rol; se eligen en su ficha del equipo; con varios sale en el bloque de
+cada uno con las mismas cifras, y su factor es el promedio simple de sus sites) y tiene un
+**objetivo de ventas**: una cantidad al mes (`OfficeSalesTarget`, Catálogos ›
+Ventas › Estructura de ventas › Objetivos), general o individual, con vigencia por mes como los
+objetivos comerciales. Manda el individual vigente; si no tiene, el general.
+
+El Sales Report abre el bloque de cada site con sus coordinadoras, como
+insignias bajo el título y antes del resumen —`nombre | Medio · Total |
+Objetivo · %`— (`analytics/office_coordinators.py`,
+`OfficeCoordinatorBadges`): de cada una, las instalaciones del mes
+(`fecha_inicio`, sin Cotización ni Instalación) en que es el **`Medio`**
+(propias) y en que es el **`Vendedor`** (las de su oficina), con el cruce de
+siempre (`name_key`). **El % Ventas se mide contra las propias**, a petición
+del usuario; las de la oficina solo se enseñan. Viajan por día de instalación y
+el cliente suma hasta el corte de la barra de días. Una coordinadora sin site no
+sale.
 
 **Toda escritura llama a `fixtures.reset_cache()`.** Sin eso, una edición
 tardaría hasta un minuto en verse, o no se vería nunca en el proceso que ya la
@@ -744,16 +757,16 @@ La meta de crecimiento y el churn máximo **no alteran ningún análisis**: solo
 deciden la meta y el cumplimiento de cada fila; el color lo pone aparte el
 semáforo, con umbrales fijos. Por eso
 no se guardan con las métricas calculadas ni exigen relanzar nada: viven en tres
-tablas del catálogo (`ObjetivoComercial`, `ObjetivoMes`, `SemaforoObjetivos`),
-`analytics/objetivos.get_objetivos_config()` los sirve en los props de
+tablas del catálogo (`CommercialTarget`, `MonthTarget`, `TargetsTrafficLight`),
+`analytics/objetivos.get_targets_config()` los sirve en los props de
 Dashboard, Analytics, Results, Sales Report y Business Units, y el cliente los
-aplica al pintar (`web/src/features/subscriptions/lib/objetivos.ts`). Cambiar un
+aplica al pintar (`frontend/src/features/subscriptions/lib/targets.ts`). Cambiar un
 objetivo se ve al recargar la página. Si las tablas no existen (entorno sin
 migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
 
 - **El general es uno solo y sin fecha** (restricción `objetivo_general_sin_fecha`):
   es el valor por defecto de la empresa y rige en todos los meses sin excepción,
-  pasados incluidos. Para cambiar un mes concreto está `ObjetivoMes`, que lo
+  pasados incluidos. Para cambiar un mes concreto está `MonthTarget`, que lo
   sustituye solo en ese mes.
 - **Vigencia por entidad.** Los tramos de zona, coordinador, site y estado valen
   desde su `desde` (`YYYY-MM`, nulo = siempre) hasta el siguiente de la misma
@@ -765,16 +778,29 @@ migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
   contra el 15%; una sucursal al 8% manda sobre toda la geografía de sus nodos.
   La pestaña de objetivos avisa en «Rige hoy» en qué nodos queda anulado cada uno.
 - **Sucursal y nodo.** La sucursal (`NETCOM`, `NYC`...) no es un catálogo: es el
-  texto del export y se guarda en `ObjetivoComercial.sucursal`. Un nodo es su
+  texto del export y se guarda en `CommercialTarget.branch`. Un nodo es su
   zona (clave ajena) más ese texto, y se cruza con la clave `"Zona - Sucursal"`
   de la dimensión `zona_sucursal`. Las que se ofrecen al elegir salen de
-  `objetivos.nodos_conocidos()`, los nodos de los cierres calculados.
+  `targets.known_nodes()`, los nodos de los cierres calculados.
 - **Los totales ignoran los niveles por debajo del grupo.** El de un coordinador
   mira coordinador, site, estado y sucursal (la excepción de una zona o de un
   nodo no lo mueve); el de un site mira site, estado y sucursal (ni el
   coordinador ni la zona lo mueven, porque un site reparte sus zonas entre varios
   coordinadores). Los totales globales —Analytics, Results, Dashboard,
   consolidado FTTH y bloque RF— usan el general del mes.
+- **Zonas sin objetivo** (`ZoneWithoutTarget`, Catálogos › Ventas › Objetivos,
+  varias a la vez). Para las zonas nuevas: sin base, su meta es cero, pero sus
+  instalaciones y su crecimiento entraban en las cifras de su site y de su
+  coordinador e inflaban el cumplimiento. Mientras su tramo (`desde`/`hasta`,
+  por mes, ambos incluidos) cubre el periodo, la zona **sigue en la tabla de su
+  grupo** —«Sin objetivo», cumplimientos «—»— pero **no entra en el resumen del
+  grupo**: ni en la meta, ni en la base, instalaciones, bajas, crecimiento,
+  churn o cumplimientos. Los hooks suman los totales con `measuredNodes` y `meta`
+  la salta y la cuenta en `Goal.zonesWithoutTarget`, que el resumen enseña. El
+  consolidado FTTH de Business Units tampoco la suma (salvo el ya sumado que
+  recibe una cuenta restringida). Un tramo por zona: para volver a medirla se le
+  pone `hasta`, y los meses anteriores no cambian. Los totales globales
+  (Analytics, Results, Dashboard) no lo aplican (no tienen el desglose por zona).
 - **Un grupo tiene meta, no tasa**: la suma de la meta de cada zona resuelta
   desde el nivel del grupo. Si el grupo tiene objetivo propio eso es su base ×
   su tasa; si no, cada zona aporta la de su site o su estado.
@@ -800,11 +826,11 @@ rojo/amarillo/verde), las excepciones por mes y los tramos por entidad como
 tablas. El general no se puede borrar: es el que responde cuando nadie más lo
 hace.
 
-### `manage.py cargar_catalogos`
+### `manage.py load_catalogs`
 
 Siembra las tablas desde `data/Planes.json` y `data/Zonas.json`. **Es lo único
 que sigue leyendo esos ficheros.** Idempotente: lo que ya existe no se toca
-salvo que se pase `--actualizar`, para no pisar con el fichero una corrección
+salvo que se pase `--update`, para no pisar con el fichero una corrección
 hecha desde la web.
 
 - Los nombres de coordinador del fichero traen espacios sobrantes; se recortan,
@@ -820,12 +846,12 @@ hecha desde la web.
 
 | Ruta | Página | Permiso |
 |---|---|---|
-| `/subscriptions/` y `/dashboard/` | `Subscriptions/Dashboard` | `can_view_subscriptions` |
+| `/dashboard/` (`/subscriptions/` redirige a la primera página visible) | `Subscriptions/Dashboard` | `can_view_subscriptions` y `can_view_subs_dashboard` |
 | `/analytics/` | `Subscriptions/Analytics` | `can_view_subs_analytics` |
 | `/results/` y `/results/<periodo>/` | `Subscriptions/Results` | `can_view_subs_results` |
 | `/lifetime/` | `Subscriptions/Lifetime` | `can_view_subs_lifetime` |
 | `/sales-report/` | `Subscriptions/SalesReport` | `can_view_subs_sales` |
-| `/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_sales` |
+| `/business-units/` | `Subscriptions/BusinessUnits` | `can_view_subs_business_units` |
 
 `analytics`, `sales_report` y `business_units` envían además `dayMetrics` (el mes
 completo) en los props: **seleccionar un día es una lectura de cliente**.

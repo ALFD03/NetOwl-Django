@@ -57,8 +57,8 @@ encolado. Para levantar el worker suelto: `make worker`.
 | `make worker` | Solo el worker de Celery, con su log en su terminal |
 | `make check` | `manage.py check` + `tsc --noEmit` + `ruff check` + `eslint`. **Es la puerta antes de dar algo por terminado** |
 | `make lint` | `ruff check .` + `npm run lint` |
-| `make format` | `ruff format .` + `prettier --write web/src` (**reescribe ficheros**) |
-| `make build` | `tsc && vite build` → `web/static/dist` |
+| `make format` | `ruff format .` + `prettier --write frontend/src` (**reescribe ficheros**) |
+| `make build` | `tsc && vite build` → `frontend/static/dist` |
 | `make migrate` | Aplica las migraciones versionadas |
 | `make makemigrations` | Genera migraciones. **Revisar el archivo antes de commitear**: en `services/imports` el `db_table` se calcula, no se escribe fijo |
 | `make collectstatic` | Recolecta estáticos (lo hace también el entrypoint) |
@@ -75,11 +75,11 @@ Equivalentes de solo frontend en `package.json`: `dev`, `build`, `preview`,
 
 | Comando | Qué hace | Cuándo |
 |---|---|---|
-| `manage.py cargar_catalogos [--actualizar]` | Siembra planes, zonas, sites, estados y coordinadores desde `data/*.json` | Al montar un entorno nuevo, o para la migración inicial |
-| `manage.py copiar_desde_public [--esquema X] [--simular]` | Copia al esquema del entorno las tablas que antes se compartían en `public` | **Una vez por entorno**, al desplegar la separación de esquemas |
+| `manage.py load_catalogs [--update]` | Siembra planes, zonas, sites, estados y coordinadores desde `data/*.json` | Al montar un entorno nuevo, o para la migración inicial |
+| `manage.py copy_from_public [--schema X] [--dry-run]` | Copia al esquema del entorno las tablas que antes se compartían en `public` | **Una vez por entorno**, al desplegar la separación de esquemas |
 
 Cada esquema tiene su propia `django_migrations`, así que `migrate` basta para
-dejar completo un entorno nuevo. `copiar_desde_public` solo sirve para la
+dejar completo un entorno nuevo. `copy_from_public` solo sirve para la
 transición desde `public`; ver [02 · Configuración](02-configuracion.md#la-separación-de-public-septiembre-de-2026).
 
 ## Producción
@@ -140,9 +140,9 @@ tenga delante la máquina no forma parte del compose.
 
 ```bash
 docker compose up -d --build
-docker compose exec netowl python manage.py cargar_catalogos            # primer arranque de un esquema
-docker compose exec netowl python manage.py crear_admin --usuario <nombre>
-docker compose exec netowl python manage.py verificar_entorno           # TLS de la BD, rol, Redis, DEBUG
+docker compose exec netowl python manage.py load_catalogs            # primer arranque de un esquema
+docker compose exec netowl python manage.py create_admin --username <nombre>
+docker compose exec netowl python manage.py check_env           # TLS de la BD, rol, Redis, DEBUG
 ```
 
 `migrate` toma un cerrojo de Postgres por esquema (ver
@@ -151,7 +151,7 @@ arrancan a la vez y los dos migran, el segundo espera al primero en lugar de
 chocar.
 
 **Antes del corte de verdad**, lo que hay que cambiar en el Vault corporativo:
-`SECURE_SSL` a `true`, `DB_SSLMODE` a `require` (hoy está en `prefer`; `verificar_entorno`
+`SECURE_SSL` a `true`, `DB_SSLMODE` a `require` (hoy está en `prefer`; `check_env`
 lo avisa), y retirar `PERMITIR_HTTP_INSEGURO` del `.env` de
 la máquina (ver `.env.example`).
 
@@ -181,13 +181,13 @@ primer mensaje). El log de un análisis concreto no está aquí sino en la colum
 | El análisis se queda en «En cola» para siempre | No hay worker, o no hay Redis. Comprobar el túnel y `make worker` |
 | El análisis pide turno y no avanza | Otro del mismo módulo tiene el cerrojo. Se reintenta cada 20 s |
 | 409 al lanzar un análisis | Ya hay uno abierto del **mismo módulo y periodo**. La interfaz se engancha a él |
-| 500 con `relation "<tabla>" does not exist` | Faltan migraciones en el esquema (`migrate`), no se ejecutó `copiar_desde_public` al separar el entorno, o esa tabla de análisis aún no se ha calculado nunca |
+| 500 con `relation "<tabla>" does not exist` | Faltan migraciones en el esquema (`migrate`), no se ejecutó `copy_from_public` al separar el entorno, o esa tabla de análisis aún no se ha calculado nunca |
 | La página carga vacía o rota tras un cambio | ¿Se renombró un fichero de `pages/`? Rompe la vista en tiempo de ejecución sin error de compilación |
 | Los assets dan 404 en desarrollo | Vite no está en el 5173 (puerto estricto), o falta `VITE_DEV_SERVER=1` |
 | 403 al hacer POST | Token CSRF viejo. El cliente lee la cookie antes que el meta precisamente por esto; comprobar que el meta `csrf-cookie-name` coincide con el entorno |
 | Los tickets de soporte salen todos como «Sin Especificar» en una dimensión | Odoo nombró esa columna de otra forma. El error de carga lista las cabeceras encontradas; añadir el alias en `SUPPORT_CSV_COLUMN_ALIASES` |
 | La importación de suscripciones devuelve 409 | Hay productos sin catalogar. **No se escribió nada**: registrarlos o ignorarlos y volver a subir |
-| El análisis de churn falla nada más empezar | `productos_fuera_de_catalogo()` encontró productos ya importados que hoy no están en el catálogo |
+| El análisis de churn falla nada más empezar | `products_outside_catalog()` encontró productos ya importados que hoy no están en el catálogo |
 | Una edición del catálogo no se ve en el worker | La instantánea cachea 60 s; las escrituras llaman a `reset_cache()` y cada análisis también, así que solo debería pasar en mitad de una ejecución ya iniciada |
 
 ## Convención de idioma

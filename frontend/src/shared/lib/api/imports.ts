@@ -1,0 +1,62 @@
+/**
+ * Cargas de CSV y lanzamiento de análisis.
+ *
+ * Lo que antes era un solo POST son hoy tres pasos —encolar, sondear y dar al
+ * resultado la forma de la respuesta antigua— para que quien llama siga leyendo
+ * las mismas claves.
+ */
+
+import { apiClient } from './client';
+import { startAndFollow, startBatch, type AnalysisJob } from './jobs';
+
+import type { ApiMessageResponse } from './types';
+
+export type ImportResponse = ApiMessageResponse;
+
+async function upload(path: string, file: File): Promise<ImportResponse> {
+  const formData = new FormData();
+  formData.append('csv_file', file);
+  return (await apiClient.post<ImportResponse>(path, formData)).data;
+}
+
+/**
+ * Enqueues an analysis and resolves when the worker finishes it.
+ *
+ * The analyses no longer run inside the request (they took minutes and hit the
+ * proxy's 504), so what used to be one POST is now: enqueue, poll, and shape
+ * the finished job like the old response so callers keep reading the same keys.
+ */
+async function run(
+  path: string,
+  month: string | null,
+  onProgress?: (job: AnalysisJob) => void,
+): Promise<ImportResponse> {
+  const job = await startAndFollow(path, { month }, onProgress);
+  return {
+    message: job.message,
+    log_output: job.log_output,
+    period_label: job.result.period_label,
+    computed_days: job.result.computed_days,
+  };
+}
+
+export const importsApi = {
+  importSubscriptions: (file: File) => upload('/api/imports/subscriptions/upload/', file),
+  importLogs: (file: File) => upload('/api/imports/subscriptions/logs/upload/', file),
+  importFreePlans: (file: File) => upload('/api/imports/subscriptions/free-plans/upload/', file),
+  importInvoices: (file: File) => upload('/api/imports/subscriptions/invoices/upload/', file),
+  importCrm: (file: File) => upload('/api/imports/crm/upload/', file),
+  importSupport: (file: File) => upload('/api/imports/support/upload/', file),
+  /** Suma un lote de logs de etapa: no reemplaza, cada log entra una sola vez. */
+  importSupportLogs: (file: File) => upload('/api/imports/support/logs/upload/', file),
+  runSubscriptionsAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>
+    run('/api/imports/subscriptions/run/', month, onProgress),
+  runCrmAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>
+    run('/api/imports/crm/run/', month, onProgress),
+  runSupportAnalysis: (month: string | null, onProgress?: (job: AnalysisJob) => void) =>
+    run('/api/imports/support/run/', month, onProgress),
+  /** Varios meses de una vez: un job por mes, encolados en un solo POST. */
+  runSubscriptionsAnalysisBatch: (months: string[]) => startBatch('/api/imports/subscriptions/run/', months),
+  runCrmAnalysisBatch: (months: string[]) => startBatch('/api/imports/crm/run/', months),
+  runSupportAnalysisBatch: (months: string[]) => startBatch('/api/imports/support/run/', months),
+};

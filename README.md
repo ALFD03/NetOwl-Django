@@ -11,8 +11,8 @@ el reporte mensual para la reguladora, sobre exports de Odoo cargados como CSV.
 | Capa | Tecnologia |
 |------|-----------|
 | Analitica | Python 3.11 — pandas, numpy, psycopg2 |
-| Web | Django 5 + Inertia.js (paginas renderizadas en servidor que hidratan a React) |
-| Interfaz | React 18 + TypeScript + Vite + Tailwind + Chart.js |
+| Web | Django 5.2: API JSON en `/api/` (sesion o token) |
+| Interfaz | SPA de React 18 + TypeScript + Vite + Tailwind + Chart.js (React Router, TanStack Query) |
 | Base de datos | PostgreSQL 15+ (SSL, un esquema por entorno) |
 | Cola de tareas | Celery sobre Redis (los analisis largos, fuera de la peticion) |
 | Secretos | HashiCorp Vault (KV v2, AppRole) |
@@ -21,42 +21,40 @@ el reporte mensual para la reguladora, sobre exports de Odoo cargados como CSV.
 La misma imagen sirve para dos contenedores: el que atiende HTTP y el worker que ejecuta
 los analisis. Solo cambia el comando de arranque.
 
-No hay REST separado ni SPA: cada vista devuelve una respuesta Inertia con sus
-props ya calculados, y React la hidrata. Los endpoints `api/` existen solo para
-lo que se pide despues de cargar la pagina.
+Django sirve la SPA en las rutas de pagina (`/modulo/pagina/`) y los datos en
+`/api/<modulo>/<servicio>/`. Esa misma API la usan otras aplicaciones con un token
+(`Authorization: Bearer`), que actua con los permisos de su cuenta y queda en
+auditoria.
 
 ## Estructura
 
 ```
-core/         Lo transversal, sin dominio: Vault, DBConnector, Periodo,
-              TableNames, utilidades de datos y lectura del catalogo.
+backend/      Django (API, analitica y Celery)
+  core/         Lo transversal, sin dominio: Vault, DBConnector, Periodo,
+                TableNames, utilidades de datos y lectura del catalogo.
+  services/     Un paquete por dominio de negocio, con su analitica y su capa HTTP.
+  netowl_web/   settings, urls, wsgi, celery, middleware
+  templates/    La unica plantilla Django (app.html)
+  data/         Planes.json y Zonas.json: semilla de los catalogos
+                (`manage.py load_catalogs`).
 
-services/     Un paquete por dominio de negocio. Cada uno tiene su analitica y
-              su capa HTTP juntas:
-  subscriptions/   analytics/{analyzer,lifetime,...} + views.py + urls.py
-  crm/             analytics/{loader,dimensions,analyzer,queries,metrics}
-  support/         analytics/{loader,cohorts,metrics,dimensions,analyzer,queries}
-  imports/         Carga de CSV, ejecucion de analisis y bitacora de importaciones
-  config/          Autenticacion, perfiles, permisos y subida de archivos
+frontend/     React + TypeScript + Vite
+  src/          pages/ -> features/ -> shared/
+  static/       Imagenes y el bundle compilado (dist/, no versionado)
 
-web/          src/       React: pages/ -> features/ -> shared/
-              templates/ La unica plantilla Django (app.html)
-              static/    Imagenes y el bundle compilado (dist/, no versionado)
-
-netowl_web/   settings, urls, wsgi, middleware
-data/         Planes.json y Zonas.json: semilla inicial de los catalogos.
-              Los catalogos vivos son tablas y se editan en el
-              modulo /catalogos/; solo `manage.py cargar_catalogos`
-              sigue leyendo estos ficheros.
 scripts/      dev.sh
+docs/         Documentacion tecnica
 ```
+
+Las rutas de Python de esta documentacion (`core/...`, `services/...`) son
+relativas a `backend/`.
 
 La dependencia va en un solo sentido: `views.py` importa de `analytics/`, nunca
 al reves, y `core/` no importa de ningun servicio. Dentro de cada dominio los
 modulos se llaman igual (`loader`, `dimensions`, `analyzer`, `queries`), asi que
 moverse entre servicios no obliga a reaprender nombres.
 
-Para el detalle de la parte React, lee **`web/src/README.md`**: es la
+Para el detalle de la parte React, lee **`frontend/src/README.md`**: es la
 documentacion viva de esa capa.
 
 ## Documentacion
@@ -134,7 +132,7 @@ Otros comandos (`make` a secas los lista):
 make check    # manage.py check + tsc --noEmit + lint, sin escribir nada
 make lint     # ruff + eslint
 make format   # ruff format + prettier (reescribe archivos)
-make build    # bundle de produccion en web/static/dist
+make build    # bundle de produccion en frontend/static/dist
 make migrate  # aplica las migraciones versionadas
 ```
 
@@ -171,7 +169,7 @@ el build no hay red hacia el.
 
 El despliegue es el `docker-compose.yml` de la raiz: cuatro contenedores,
 Postgres, Redis, la app y el worker. Los dos ultimos usan la misma imagen y solo
-cambian el comando de arranque. `manage.py verificar_entorno` revisa, sin cambiar
+cambian el comando de arranque. `manage.py check_env` revisa, sin cambiar
 nada, lo que el codigo no puede arreglar (TLS de la base, privilegios del rol,
 Redis sin contrasena, DEBUG).
 

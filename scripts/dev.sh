@@ -22,11 +22,11 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 PYTHON="${PYTHON:-python}"
-[[ -x .venv/bin/python ]] && PYTHON="${PYTHON_OVERRIDE:-.venv/bin/python}"
+[[ -x .venv/bin/python ]] && PYTHON="${PYTHON_OVERRIDE:-$PWD/.venv/bin/python}"
 
-if [[ ! -d node_modules ]]; then
-  echo "==> node_modules no existe; ejecutando npm ci"
-  npm ci
+if [[ ! -d frontend/node_modules ]]; then
+  echo "==> frontend/node_modules no existe; ejecutando npm ci"
+  (cd frontend && npm ci)
 fi
 
 # La app lee sus secretos de Vault al importar settings.py: sin estas variables
@@ -52,14 +52,14 @@ trap apagar INT TERM EXIT
 
 # Cada esquema lleva su propia django_migrations: aplicarlas deja el entorno
 # completo, incluido uno recien creado. Sin nada pendiente no hace nada.
-"$PYTHON" manage.py migrate --noinput
+(cd backend && "$PYTHON" manage.py migrate --noinput)
 
 # `stdbuf -oL` evita que el prefijo salga a bloques por el buffer de la tuberia.
-VITE_DEV_SERVER=1 stdbuf -oL "$PYTHON" manage.py runserver 2>&1 \
+(cd backend && VITE_DEV_SERVER=1 exec stdbuf -oL "$PYTHON" manage.py runserver) 2>&1 \
   | sed -u 's/^/[django] /' &
 pids+=($!)
 
-stdbuf -oL npm run dev 2>&1 \
+(cd frontend && exec stdbuf -oL npm run dev) 2>&1 \
   | sed -u 's/^/[vite]   /' &
 pids+=($!)
 
@@ -132,8 +132,8 @@ else
 fi
 
 if hay_redis; then
-  stdbuf -oL "$PYTHON" -m celery -A netowl_web worker \
-    --loglevel=info 2>&1 \
+  (cd backend && exec stdbuf -oL "$PYTHON" -m celery -A netowl_web worker \
+    --loglevel=info) 2>&1 \
     | sed -u 's/^/[worker] /' &
   pids+=($!)
   # El nombre de la cola sale de DB_SCHEMA (ver settings.py): asi el worker de

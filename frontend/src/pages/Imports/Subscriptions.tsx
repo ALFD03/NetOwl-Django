@@ -1,0 +1,115 @@
+/**
+ * Página `/imports/subscriptions/`.
+ *
+ * Carga los exports del dominio y lanza el análisis mensual. Intercepta el
+ * 409 de «producto sin catalogar» para enseñarlo como una decisión a tomar, no
+ * como un fallo: cuando ocurre no se escribió nada.
+ */
+
+import { useState } from 'react';
+
+import { AppLayout } from '@/shared/layout/AppLayout';
+import { usePermissions } from '@/shared/hooks/usePermissions';
+import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
+import { importsApi, type ImportResponse } from '@/shared/lib/api/imports';
+import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
+import { CatalogBlockModal } from '@/features/imports/components/CatalogBlockModal';
+import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
+import { ImportTypePicker } from '@/features/imports/components/ImportTypePicker';
+import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
+import { useCatalogBlock } from '@/features/imports/hooks/useCatalogBlock';
+import type { OdooField, OdooFieldGroup } from '@/features/imports/types';
+
+type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis' | 'facturas';
+
+const IMPORT_TYPES: { value: SubscriptionImportType; label: string }[] = [
+  { value: 'subscriptions', label: 'Suscripciones / Clientes' },
+  { value: 'logs', label: 'Logs / Transiciones' },
+  { value: 'gratis', label: 'Planes Gratuitos' },
+  { value: 'facturas', label: 'Facturas' },
+];
+
+const UPLOADERS: Record<SubscriptionImportType, (file: File) => Promise<ImportResponse>> = {
+  subscriptions: (file) => importsApi.importSubscriptions(file),
+  logs: (file) => importsApi.importLogs(file),
+  gratis: (file) => importsApi.importFreePlans(file),
+  facturas: (file) => importsApi.importInvoices(file),
+};
+
+interface ImportSubscriptionsProps {
+  /** Cabeceras de Odoo que lee cada importación, por tipo de export. */
+  odoo_fields?: Partial<Record<SubscriptionImportType, OdooField[]>>;
+}
+
+export default function ImportSubscriptions({ odoo_fields = {} }: ImportSubscriptionsProps) {
+  const [importType, setImportType] = useState<SubscriptionImportType>('subscriptions');
+  const catalogBlock = useCatalogBlock();
+  const { canAny } = usePermissions();
+
+  const fieldGroups: OdooFieldGroup[] = IMPORT_TYPES.map((importKind) => ({
+    key: importKind.value,
+    label: importKind.label,
+    fields: odoo_fields[importKind.value] ?? [],
+  }));
+
+  return (
+    <AppLayout>
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {canAny(IMPORT_ACTION_PERMISSIONS.subs) && (
+          <CsvUploadCard
+            title="Cargar Archivo CSV Subscriptions"
+            submitLabel="Iniciar Carga"
+            errorMessage="Error al procesar la importación."
+            onUpload={catalogBlock.guard((file) => UPLOADERS[importType](file))}
+          >
+            <ImportTypePicker options={IMPORT_TYPES} value={importType} onChange={setImportType} />
+          </CsvUploadCard>
+        )}
+
+        <RequirementsCard
+          title="Requisitos de Importación"
+          requirements={[
+            <>Formato de archivo soportado: <strong>CSV (.csv)</strong></>,
+            <>Codificación de caracteres: <strong>UTF-8</strong></>,
+            <>Separador de campos: <strong>Comas (,)</strong></>,
+            <><strong>Suscripciones:</strong> Debe contener orden, cliente, producto, fecha de inicio, tarifa, total.</>,
+            <><strong>Logs:</strong> Debe contener orden, fecha de cambio, nota y estado interno.</>,
+            <><strong>Planes Gratuitos:</strong> Export con tarifa, próxima fecha de factura y mensajes del chatter; detecta desde cuándo cada suscripción es gratuita.</>,
+            <><strong>Facturas:</strong> Export global de facturas con su número, estado, estado del pago, fecha de creación y productos. Reemplaza las anteriores; Comisiones lo usa para saber qué primeras mensualidades se pagaron.</>,
+          ]}
+          fieldGroups={fieldGroups}
+          activeGroup={importType}
+          note="Tras cargar ambos archivos, selecciona el mes correspondiente y ejecuta el análisis en la sección inferior. El análisis calcula también las métricas de cada día del mes."
+        />
+      </div>
+
+      {canAny(ANALYSIS_ACTION_PERMISSIONS.subs) && (
+        <AnalysisRunnerCard
+          jobModule="subs_analysis"
+          title="Ejecutar Análisis Mensual de Subscriptions (Churn)"
+          description="Calcula la base inicial, final, nuevos, reactivaciones y matrices dimensionales del mes, y el corte acumulado de cada día para la barra de días."
+          runLabel="Iniciar Análisis Churn"
+          consoleTitle="Consola de Ejecución MetricsAnalyzer"
+          monthPlaceholder="Elegir mes de análisis..."
+          requireMonth
+          missingMonthMessage="Por favor selecciona un mes en el calendario."
+          pendingLog={(month) => `Iniciando motor de análisis de Churn para el periodo ${month}...`}
+          onRun={(month, onProgress) => importsApi.runSubscriptionsAnalysis(month, onProgress)}
+          onRunBatch={(months) => importsApi.runSubscriptionsAnalysisBatch(months)}
+          successMessage={(result, month) =>
+            `Análisis de Churn completado exitosamente para ${result.period_label || month}` +
+            (result.computed_days ? ` (${result.computed_days} días calculados).` : '.')}
+          errorMessage="Error al ejecutar el análisis de Churn."
+        />
+      )}
+
+      <CatalogBlockModal
+        block={catalogBlock.block}
+        onClose={catalogBlock.close}
+        onIgnore={catalogBlock.ignoreProduct}
+        ignoring={catalogBlock.ignoring}
+        error={catalogBlock.error}
+      />
+    </AppLayout>
+  );
+}

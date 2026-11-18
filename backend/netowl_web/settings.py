@@ -1,0 +1,476 @@
+"""
+Configuración de Django para el proyecto NetOwl.
+
+Define todos los parámetros de la aplicación Django que sirve el
+sitio del analizador de churn: base de datos, plantillas, archivos
+estáticos, middleware, aplicaciones instaladas, etc.
+
+Los valores sensibles se leen de HashiCorp Vault (ver core/vault.py).
+Si Vault no está accesible, la aplicación no arranca.
+
+Dependencias:
+    - pathlib (estándar)
+    - core.vault (configuración desde Vault)
+"""
+
+import os
+import re
+from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
+
+from core.vault import get_config
+
+# Configuración sensible (Django + base de datos) obtenida de Vault
+config = get_config()
+
+# backend/ y la raíz del repo (que contiene frontend/, logs/ y staticfiles/).
+BASE_DIR = Path(__file__).resolve().parent.parent
+ROOT_DIR = BASE_DIR.parent
+
+LOGIN_URL = "/auth/login/"
+LOGOUT_REDIRECT_URL = "/auth/login/"
+
+# --- Seguridad ---
+# Modo debug: deshabilitar en producción (DJANGOCONFIG.DJANGO_DEBUG=false)
+DEBUG = config.django.DEBUG
+# Clave secreta de Django
+SECRET_KEY = config.django.SECRET_KEY
+# Hosts permitidos (en Vault: cadena separada por comas o lista)
+ALLOWED_HOSTS = config.django.ALLOWED_HOSTS
+
+# --- Seguridad HTTPS / Headers ---
+# Nginx termina el TLS y habla HTTP con gunicorn, asi que sin esta cabecera
+# `request.is_secure()` es siempre False: SECURE_SSL_REDIRECT redirige a https,
+# Nginx vuelve a entrar por http y el navegador da vueltas. La salida facil era
+# apagar DJANGO_SECURE_SSL, que ademas de la redireccion desactiva HSTS y el
+# flag Secure de las dos cookies. Gunicorn tiene que arrancar con
+# `--forwarded-allow-ips` para no descartar la cabecera (ver Dockerfile).
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
+SECURE_SSL_REDIRECT = config.django.SECURE_SSL
+SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
+CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
+SESSION_COOKIE_HTTPONLY = True
+# Explicitos aunque coincidan con el valor por defecto de Django: de estos
+# cuatro ajustes depende que la cookie de sesion no viaje en claro ni se envie
+# desde otro sitio, y conviene que se lean aqui y no en la documentacion.
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# 3. Cabecera HSTS (HTTP Strict Transport Security)
+# Fuerza a los navegadores a conectarse exclusivamente mediante HTTPS durante un año.
+SECURE_HSTS_SECONDS = 31536000 if SECURE_SSL_REDIRECT else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_SSL_REDIRECT
+SECURE_HSTS_PRELOAD = SECURE_SSL_REDIRECT
+
+# 4. Cabeceras de protección del navegador
+SECURE_CONTENT_TYPE_NOSNIFF = True  # Evita que el navegador adivine el tipo MIME (previene inyección de scripts)
+# `SECURE_BROWSER_XSS_FILTER` estaba aqui y se ha retirado: emite
+# `X-XSS-Protection`, una cabecera que ningun navegador actual honra (y cuya
+# implementacion antigua introducia sus propios fallos).
+X_FRAME_OPTIONS = "DENY"            # Protege contra Clickjacking (impide que el sitio se cargue en <frame> o <iframe> externos)
+
+# 5. Política de Referrer (Referrer Policy)
+# Limita la cantidad de información del path que tu servidor envía a enlaces externos.
+SECURE_REFERRER_POLICY = "same-origin"
+
+# 6. Orígenes de confianza para CSRF (CRÍTICO en Django 5+)
+# En producción con HTTPS, Django 5+ rechaza peticiones POST si el origen no está listado aquí.
+# En Vault: cadena separada por comas o lista. Si no se define, se usan
+# los orígenes locales por defecto (ver DjangoModel en backend/vault.py).
+CSRF_TRUSTED_ORIGINS = config.django.CSRF_TRUSTED_ORIGINS
+CSRF_FAILURE_VIEW = "services.config.api.endpoint.csrf_failure"
+
+# Limite de tiempo se sesiones 
+SESSION_COOKIE_AGE = 8*60*60
+
+# --- Politica de contrasenas ---
+# La lee `validate_password` al crear cuentas y cambiar contraseñas
+# (ver `services/config/api/users.py:check_password`).
+#
+# `min_length` 8 es el minimo del proyecto. Los otros tres validadores siguen
+# siendo los que hacen el trabajo: rechazan la contrasena parecida al nombre de
+# la cuenta, la que esta en la lista de las mas usadas y la que es solo digitos,
+# que es por donde entran las contrasenas debiles de verdad.
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 8},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
+# --- Aislamiento por entorno ---
+# Desarrollo y produccion apuntan a la misma base de datos y se separan por
+# esquema de Postgres (DB_SCHEMA): todo lo del entorno —usuarios, permisos,
+# catalogos, directorio de soporte, sesiones, `django_migrations` y los datos
+# calculados— vive dentro de su esquema, y nada se comparte a traves de
+# `public`. La conexion fija `search_path` a ese esquema y a nada mas (ver
+# DATABASES), asi que una tabla que falte da un error en vez de leerse en
+# silencio de otro sitio.
+#
+# Por eso el esquema es obligatorio y no puede ser `public`: sin el, dos
+# entornos mal configurados volverian a compartir datos sin que nadie lo note.
+DB_SCHEMA = os.getenv("DB_SCHEMA", "")
+if not re.fullmatch(r"[a-z_][a-z0-9_]*", DB_SCHEMA):
+    raise ImproperlyConfigured(
+        "DB_SCHEMA debe nombrar el esquema propio del entorno (p. ej. 'test' o "
+        f"'netowl'), en minusculas y distinto de 'public'. Valor actual: {DB_SCHEMA!r}."
+    )
+
+# `ENV_SUFFIX` identifica el entorno a partir del esquema. Lo usan las cookies
+# (abajo) y el nombre de la cola de Celery (ver la seccion de tareas
+# asincronas). Desarrollo y produccion comparten host (las cookies ignoran el
+# puerto): con los nombres por defecto ("sessionid" / "csrftoken") iniciar
+# sesion en un entorno sobreescribe las cookies del otro, que aparece
+# deslogueado y con un token CSRF viejo -> 403 al hacer POST.
+ENV_SUFFIX = DB_SCHEMA
+SESSION_COOKIE_NAME = f"netowl_sessionid_{ENV_SUFFIX}"
+CSRF_COOKIE_NAME = f"netowl_csrftoken_{ENV_SUFFIX}"
+
+# El backend de sesiones es el de base de datos de Django escribiendo en
+# `SesionEntorno` (ver services/config/sessions.py). Viene de cuando la tabla de
+# sesiones era lo unico propio de cada esquema; hoy apunta a la misma
+# `<esquema>.django_session` que usaria el backend estandar.
+SESSION_ENGINE = "services.config.sessions"
+
+# --- Límites de subida ---
+MAX_UPLOAD_SIZE = 1000 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE
+# Este es distinto del anterior y no debe igualarse a el: marca a partir de que
+# tamano Django deja de guardar el fichero subido en memoria y lo vuelca a un
+# temporal. Con los dos en 100 MB, cinco subidas simultaneas (una por worker de
+# gunicorn) mantenian medio giga residente, y ademas el temporal que crea
+# services/config/uploads.py recibia un fichero que ya estaba entero en RAM.
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+# Lo que puede mandar quien no ha iniciado sesion, y solo al formulario de
+# entrada: usuario y contrasena caben de sobra. El 1 GB de arriba es para las
+# importaciones, que exigen sesion; sin este tope cualquiera podia mandar
+# cuerpos de 1 GB al login y llenar la memoria de los workers
+# (ver netowl_web/middleware.py:AnonymousBodyLimitMiddleware).
+ANON_MAX_BODY_SIZE = 16 * 1024
+
+# --- Aplicaciones instaladas ---
+INSTALLED_APPS = [
+    "django.contrib.staticfiles",   # Servir archivos estáticos
+    "django.contrib.auth",          # Autenticación de usuarios
+    "django.contrib.contenttypes",  # Requerido por auth
+    "django.contrib.sessions",      # Soporte de sesiones
+    "django.contrib.messages",      # Framework de mensajes (flash)
+    "services.subscriptions",       # Suscripciones y churn
+    "services.crm",                 # CRM: efectividad y tiempos
+    "services.support",             # Soporte: cohortes de tickets
+    "services.imports",             # Carga de CSV y ejecucion de analisis
+    "services.catalogs",           # Catalogos de referencia (vistas; modelos en subscriptions)
+    "services.commissions",          # Comisiones de la fuerza de ventas
+    "services.config",              # Autenticacion y permisos
+    "services.audit",               # Auditoría (label `auditoria`)
+]
+
+# --- Middleware ---
+# Cadena de middleware ejecutado en cada petición/respuesta
+MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",              # Seguridad (HSTS, etc.)
+    "netowl_web.middleware.CSPMiddleware",                        # Cabecera CSP (ver CSP_POLITICA)
+    "whitenoise.middleware.WhiteNoiseMiddleware",                 # Servir estáticos en producción
+    "django.contrib.sessions.middleware.SessionMiddleware",       # Manejo de sesiones
+    "django.middleware.common.CommonMiddleware",                  # Varios (URL slashes, etc.)
+    "django.middleware.csrf.CsrfViewMiddleware",                  # Protección CSRF
+    "django.contrib.auth.middleware.AuthenticationMiddleware",    # Autenticación por sesión
+    # Token de API en `/api/`: sustituye a la sesión antes de que nadie mire request.user.
+    "services.config.api.middleware.ApiTokenMiddleware",
+    # Antes que el CSRF y que cualquier vista: un anonimo no sube nada (ver la clase).
+    "netowl_web.middleware.AnonymousBodyLimitMiddleware",
+    # Antes del limitador, para anotar tambien los 429.
+    "services.audit.middleware.AuditMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
+]
+
+# módulo raíz de las URLs
+ROOT_URLCONF = "netowl_web.urls"
+
+# Servir los assets desde el dev-server de Vite en vez del bundle compilado.
+# Es una decision de flujo de trabajo, no de seguridad: por eso tiene su propia
+# variable y no cuelga de DEBUG (ver context_processors.vite_dev_server).
+USE_VITE_DEV_SERVER = os.getenv("VITE_DEV_SERVER", "").lower() in {"1", "true", "yes"} or DEBUG
+
+# --- Content Security Policy ---
+# Solo se ejecuta el JavaScript servido por la propia aplicacion y los dos
+# <script> en linea de app.html, que llevan el nonce de la peticion: un
+# script inyectado (en un nombre de producto, un comentario de un ticket...)
+# no corre aunque llegue a pintarse. Los estilos en linea siguen permitidos
+# porque React los usa en atributos `style` (anchos de barras, framer-motion) y
+# Vite los inyecta en desarrollo; un estilo no ejecuta codigo.
+#
+# En desarrollo se anaden el servidor de Vite y su websocket de recarga.
+#
+# La aplica `netowl_web.middleware.CSPMiddleware`, no la CSP nativa de Django:
+# esa existe desde Django 6 y el contenedor corre 5.2 (ver requirements.txt).
+# `{nonce}` lo sustituye el middleware en cada peticion.
+_VITE = ["http://localhost:5173"] if USE_VITE_DEV_SERVER else []
+CSP_POLICY = {
+    "default-src": ["'self'"],
+    "script-src": ["'self'", "'nonce-{nonce}'", *_VITE],
+    "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", *_VITE],
+    "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+    "img-src": ["'self'", "data:", "blob:"],
+    "connect-src": ["'self'", *_VITE, *(["ws://localhost:5173"] if _VITE else [])],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+    "frame-ancestors": ["'none'"],
+}
+# Django compara INTERNAL_IPS contra REMOTE_ADDR, asi que solo admite direcciones
+# IP: los hostnames que habia aqui nunca llegaron a coincidir. Esta lista decide
+# la variable `debug` de las plantillas (ver backend/templates/app.html).
+INTERNAL_IPS = ["127.0.0.1", "::1", "10.3.0.41"]
+
+# --- Configuración de plantillas ---
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [BASE_DIR / "templates"],
+        # También buscar dentro de las carpetas templates de cada app
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+                "netowl_web.context_processors.csrf_cookie_name",
+                "netowl_web.context_processors.vite_dev_server",
+                "netowl_web.context_processors.csp_nonce",  # el nonce de los <script> de app.html
+            ],
+        },
+    },
+]
+
+# --- Base de datos (PostgreSQL) ---
+# Los parámetros de conexión se obtienen de Vault (DBCONFIG)
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": config.db.DB_NAME,          # Nombre de la base de datos
+        "USER": config.db.DB_USER,          # Usuario de BD
+        "PASSWORD": config.db.DB_PASSWORD,  # Contraseña
+        "HOST": config.db.DB_HOST,          # Host del servidor PostgreSQL
+        "PORT": str(config.db.DB_PORT),     # Puerto (por defecto 5432)
+        "OPTIONS": {
+            "sslmode": config.db.DB_SSLMODE,  # Modo SSL de la conexión
+            # Solo el esquema del entorno, sin `public` detras: es lo que aisla
+            # los entornos (ver "Aislamiento por entorno" mas arriba).
+            "options": f"-c search_path={DB_SCHEMA}",
+        },
+    }
+}
+
+# --- Archivos estáticos (CSS, JS, imágenes) ---
+# URL base para los archivos estáticos
+STATIC_URL = "static/"
+# Directorios adicionales donde Django buscará archivos estáticos
+STATICFILES_DIRS = [ROOT_DIR / "frontend" / "static"]
+# Directorio donde se recolectan los estáticos para producción (collectstatic)
+STATIC_ROOT = ROOT_DIR / "staticfiles"
+
+# --- Almacenamiento de archivos ---
+STORAGES = {
+    # Almacenamiento por defecto (sistema de archivos local)
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    # Almacenamiento para archivos estáticos (usa WhiteNoise con compresión y manifest)
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
+
+# Aplicación WSGI para servidores compatibles
+WSGI_APPLICATION = "netowl_web.wsgi.application"
+
+# --- Internacionalización y localización ---
+LANGUAGE_CODE = "es"               # Idioma español
+TIME_ZONE = "America/Caracas"      # Zona horaria de Caracas (UTC-4)
+USE_I18N = True                    # Activar internacionalización
+USE_TZ = True                      # Usar zona horaria consciente (UTC en BD)
+
+# --- Cola de tareas asincronas (Celery + Redis) ---
+# La URL de Redis no es un secreto y cambia por entorno, asi que vive en el
+# .env junto a DB_SCHEMA y no en Vault (ver core/vault.py).
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+
+CELERY_BROKER_URL = REDIS_URL
+# El estado de cada ejecucion se guarda en services.imports.models.AnalysisJob,
+# que es lo que lee la interfaz: un backend de resultados solo duplicaria eso.
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_TRACK_STARTED = True
+# La cola lleva el sufijo del entorno, por el mismo motivo que las cookies de
+# sesion: desarrollo y produccion comparten Redis igual que comparten host, y un
+# worker solo puede consumir lo que encolo una app apuntando a su mismo
+# DB_SCHEMA. Asi un .env mal copiado no hace que el worker de desarrollo recoja
+# un analisis de produccion y lo escriba en el esquema equivocado.
+#
+# El worker se arranca sin `--queues`: toma este valor, que ya sabe cual es su
+# entorno. Pasarlo a mano seria una segunda copia de la verdad.
+CELERY_TASK_DEFAULT_QUEUE = f"analisis_{ENV_SUFFIX}"
+CELERY_TIMEZONE = TIME_ZONE
+
+# El mensaje se confirma al terminar, no al recibirlo: si el contenedor del
+# worker se reinicia en mitad de un analisis, la tarea se vuelve a encolar.
+CELERY_TASK_ACKS_LATE = True
+# Sin esto un worker con varios procesos se reserva tareas que no puede empezar
+# y quedan invisibles para el resto.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+# Un analisis mensual completo (cierre + 31 dias) no deberia pasar de una hora.
+# El limite blando lanza SoftTimeLimitExceeded, que la tarea captura para dejar
+# el job marcado como error en vez de morir en silencio.
+CELERY_TASK_SOFT_TIME_LIMIT = 55 * 60
+CELERY_TASK_TIME_LIMIT = 60 * 60
+# Redis reentrega el mensaje si nadie lo confirma antes de este plazo: tiene que
+# ser mayor que el limite duro o una tarea larga se ejecutaria dos veces.
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 2 * 60 * 60}
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# Cuantos analisis puede calcular el worker a la vez. Se puede lanzar churn, CRM
+# y soporte en paralelo en vez de esperar a que termine el anterior; dos del
+# mismo modulo siguen yendo en fila (ver `module_lock` en imports/jobs.py),
+# porque comparten tabla.
+#
+# Subirlo tiene un coste que no se ve en la interfaz: cada analisis carga en
+# memoria el historico completo de logs y abre sus propias conexiones contra
+# Postgres, que tiene `max_connections=100`. 2 es un termino medio prudente;
+# medir la RAM del contenedor antes de subirlo.
+CELERY_WORKER_CONCURRENCY = int(os.getenv("WORKER_CONCURRENCY", "2"))
+
+# Cuanto tiempo sin dar senales de vida hace que un job "en curso" se considere
+# muerto (worker reiniciado a la fuerza) y deje de bloquear nuevas ejecuciones.
+ANALYSIS_JOB_STALE_SECONDS = 15 * 60
+
+# Caducidad del turno de escritura de un modulo. Mayor que el limite duro de la
+# tarea: si caducase antes, otro analisis del mismo modulo entraria mientras el
+# primero sigue escribiendo. Solo actua si el worker muere sin soltarlo.
+ANALYSIS_LOCK_TIMEOUT = 2 * 60 * 60
+
+
+# --- Cache compartida (y contadores del limitador de peticiones) ---
+# No habia `CACHES`, asi que Django usaba `LocMemCache`, que es donde
+# django-ratelimit guarda sus contadores: con `--workers 5` cada worker llevaba
+# la cuenta por su lado (el limite real era ~5x el declarado), los contadores se
+# borraban en cada despliegue y el worker de Celery no compartia ninguno. Redis
+# ya es una dependencia dura del proyecto —sin el no se puede lanzar un
+# analisis— asi que esto no anade infraestructura.
+#
+# El prefijo lleva el sufijo del entorno por el mismo motivo que la cola y las
+# cookies: desarrollo y produccion comparten Redis.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_URL,
+        "KEY_PREFIX": f"netowl_{ENV_SUFFIX}",
+    }
+}
+
+# Como se identifica al cliente para contar sus peticiones. Con el valor por
+# defecto (REMOTE_ADDR) todos los usuarios comparten cubo detras de Nginx, y el
+# limite de 2/m de los calculos se convertia en un 2/m para toda la empresa.
+# El porque de una funcion y no de `"HTTP_X_FORWARDED_FOR"` esta en el modulo.
+RATELIMIT_IP_META_KEY = "netowl_web.ratelimit.ip_cliente"
+
+# --- Campos auto-generados ---
+# Tipo de campo por defecto para claves primarias auto-generadas
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Logging de requests ---
+# La carpeta no se versiona: se crea al arrancar si no existe (el contenedor ya la
+# trae de la imagen). Sin ella cada linea de log fallaria al abrir el archivo.
+LOG_DIR = ROOT_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "request_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOG_DIR / "requests.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "verbose",
+            "delay": True,
+        },
+        # Los `logger.exception(...)` de las vistas y del backend no tenian
+        # handler propio: sin esto acababan en el logger raiz, que en gunicorn
+        # se descarta silenciosamente.
+        "app_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOG_DIR / "app.log",
+            "maxBytes": 10 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "verbose",
+            "delay": True,
+        },
+        "console": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} {levelname} {message}",
+            "style": "{",
+        },
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["request_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # Codigo propio. Los nombres tienen que ser los de los paquetes reales:
+        # los veinte modulos que crean un logger lo hacen con
+        # `logging.getLogger(__name__)`, asi que sus nombres empiezan por
+        # `services.` o por `core.`. Los dos loggers que habia antes aqui
+        # —`frontend` y `backend`— no correspondian a ningun paquete, de modo
+        # que no captaban nada: todo propagaba al logger raiz, que no tiene
+        # handler, y `logs/app.log` se quedaba vacio.
+        "services": {
+            "handlers": ["app_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "core": {
+            "handlers": ["app_file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
+
+# --- Cortafuegos de arranque ---
+# Toda la postura HTTPS cuelga de un unico booleano de Vault
+# (`DJANGO_SECURE_SSL`): de el salen la redireccion, HSTS y el flag Secure de
+# las cookies de sesion y CSRF. Si esa clave viene a false, la aplicacion
+# arrancaba igual y servia las cookies en claro sin que nadie se enterase.
+#
+# La salida existe —hay entornos internos que se sirven por HTTP a proposito—
+# pero hay que escribirla: `PERMITIR_HTTP_INSEGURO=1` en el `.env`. La
+# diferencia con el comportamiento anterior es que ahora servir en claro es una
+# decision anotada en el despliegue y no el resultado de olvidar una clave.
+ALLOW_INSECURE_HTTP = os.getenv("PERMITIR_HTTP_INSEGURO", "").lower() in {"1", "true", "yes"}
+
+if not DEBUG and not SECURE_SSL_REDIRECT and not ALLOW_INSECURE_HTTP:
+    raise ImproperlyConfigured(
+        "DJANGO_SECURE_SSL está en false con DJANGO_DEBUG en false: la sesión y "
+        "el token CSRF viajarían sin el flag Secure y sin HSTS. Ponga "
+        "DJANGO_SECURE_SSL=true en el secreto de Vault, o declare "
+        "PERMITIR_HTTP_INSEGURO=1 en el .env si este entorno se sirve por HTTP "
+        "a propósito."
+    )

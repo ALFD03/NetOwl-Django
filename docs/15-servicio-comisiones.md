@@ -1,24 +1,26 @@
-# 15. `services/comisiones/` — Comisiones de la fuerza de ventas
+# 15. `services/commissions/` — Comisiones de la fuerza de ventas
 
 Calcula lo que cobra cada persona de ventas por las suscripciones que vendió.
 Se construye mes a mes, unos 15 días después de que termine el mes, cuando las
 primeras facturas de lo instalado ya deberían estar pagadas.
 
 ```
-services/comisiones/
-├── models.py            Supervisores por UN, condiciones, periodos, revisiones, indicadores y lo congelado
-├── views.py             Informe, supervisores por UN, condiciones y sus escrituras
+services/commissions/
+├── models.py            Ventana de pago, periodos, revisiones, indicadores y lo congelado
+├── views.py             Informe, ventana de pago y sus escrituras
 ├── urls.py
 └── analytics/
-    ├── reglas.py        Las reglas de pago, como funciones puras (con doctests)
-    ├── calculo.py       Del periodo a las candidatas, su clasificación, sus personas y los pagos
-    ├── cierre.py        Cerrar (congelar) y reabrir un periodo
+    ├── rules.py        Las reglas que deciden si una venta cuenta, como funciones puras (con doctests)
+    ├── payments.py         El motor de pago por equipo y rol: cuánto se paga por una venta que ya cuenta (con doctests)
+    ├── calculation.py       Del periodo a las candidatas, su clasificación, sus personas, indicadores y pagos
+    ├── closing.py        Cerrar (congelar) y reabrir un periodo
     └── queries.py       Lo que leen las vistas
 ```
 
-Depende del directorio de ventas (`services/catalogos/models.py:PersonaVentas`,
-ver el capítulo 6 §8) y de tres columnas de la importación de suscripciones:
-`Medio`, `Oportunidad/Administrador` y `Estado de la factura`.
+Depende del directorio de ventas y de los equipos (`services/catalogs/`:
+`SalesPerson`, `TeamMembership`, `TeamConditions` y `teams.py`; ver el
+capítulo 6 §8) y de tres columnas de la importación de suscripciones: `Medio`,
+`Oportunidad/Administrador` y `Estado de la factura`.
 
 ---
 
@@ -28,7 +30,7 @@ Un periodo de comisiones **no va del 1 al último día del mes**. Lo instalado e
 los *días promocionales* (normalmente desde el 25) no paga la mensualidad del
 mes siguiente sino la del otro, así que su comisión es, por norma, del periodo
 siguiente. El periodo de un mes va del inicio de los días promocionales del mes
-anterior **al fin del mes**, en tres tramos (`reglas.tramo`):
+anterior **al fin del mes**, en tres tramos (`rules.tramo`):
 
 | Tramo | 2026-09 | Qué cuenta |
 |---|---|---|
@@ -40,14 +42,24 @@ anterior **al fin del mes**, en tres tramos (`reglas.tramo`):
 primera mensualidad el 1/11, y su comisión es de octubre. Si la adelanta y la
 paga el 7/10, cuando se saca el informe de septiembre (hacia el 22/10) ya está
 pagada: entra en septiembre y, al cerrarlo, octubre ya no la cuenta (es una
-venta válida de un periodo cerrado). El corte es `ComisionPeriodo.corte_adelantos`,
-propuesto el día `CondicionesComision.dia_corte` (22) del mes siguiente y
+venta válida de un periodo cerrado). El corte es `CommissionPeriod.advance_cutoff`,
+propuesto el día `CommissionConditions.cutoff_day` (22) del mes siguiente y
 editable por periodo; lo pagado después del corte ya va al siguiente.
+
+**El corte es la ventana de pago de todo el periodo, no solo de los días
+promocionales.** Una venta de `regular` o de `promo_anterior` que no tiene la
+primera mensualidad pagada hasta el corte es **no pagada**, aunque el export
+traiga facturas de los meses siguientes pagadas: las facturas creadas después
+del corte ni se miran (`first_installment(..., hasta=corte)`) y una pagada
+después del corte es como si no se hubiera pagado (`classify(..., corte=)`).
+Ejemplo: SUB119892, instalada el 25/08, con la mensualidad del 05/09 cancelada a
+los 25 días y otra del 01/11; para septiembre (corte 22/10) la del 01/11 no
+existe, así que queda excluida por la cancelación, se pague o no la de noviembre.
 
 **Cuándo se pagó** sale del export de facturas: la «Fecha del último pago». Si el
 export cargado no la trae, la «Última actualización el» (pagar la factura la
 actualiza, así que el pago no es posterior) y, si tampoco, el «Creado el», que es
-solo una aproximación; la página avisa (`reglas.fecha_del_pago`).
+solo una aproximación; la página avisa (`rules.payment_date`).
 
 **Lo del mes anterior.** Con el periodo anterior **cerrado**, lo que validó ya
 no cuenta (`Ya se pagó en …`) y no hay nada que decidir. Con el anterior **en
@@ -60,17 +72,17 @@ del mes del periodo). Lo que pagó después toca aquí sin más, y lo que otra r
 ya resolvió (no pagada, excluida, decidida en Revisión) no aparece. Cada una se
 decide `ya_pagada` (excluida) o `normal` (se clasifica por sus facturas): una a
 una, las marcadas con la casilla o todas las pendientes de una vez. Las
-decisiones van en `RevisionComision`; hasta que estén todas, no se cierra.
+decisiones van en `CommissionReview`; hasta que estén todas, no se cierra.
 
 Como los días promocionales se adelantan o se retrasan, **cada periodo guarda
-el inicio de los suyos** (`ComisionPeriodo.inicio_promo`) y el siguiente arranca
+el inicio de los suyos** (`CommissionPeriod.promo_start`) y el siguiente arranca
 en él. Al crear un periodo:
 
 1. Si el mes anterior tiene periodo, el inicio es su `inicio_promo` y no se
    pregunta.
 2. Si no, se pregunta dónde empezaron los días promocionales del mes anterior.
 3. Se confirma el inicio de los del mes, con el día habitual
-   (`CondicionesComision.dia_promocional`, 25) como propuesta, y el corte de
+   (`CommissionConditions.promo_day`, 25) como propuesta, y el corte de
    los adelantos (un día del mes siguiente).
 
 Cambiar el `inicio_promo` de un periodo mueve el inicio del siguiente, así que
@@ -82,7 +94,7 @@ pueden no estar pagadas aún.
 
 Las candidatas son las suscripciones con `fecha_inicio` dentro de la ventana,
 **menos** las que ya se pagaron en un periodo cerrado, **más** las agregadas a
-mano (`VentaManual`): una venta agregada a mano cuenta en el periodo se
+mano (`ManualSale`): una venta agregada a mano cuenta en el periodo se
 instalara cuando se instalara y digan lo que digan sus facturas, con una nota
 obligatoria; tiene que estar en suscripciones (de ahí sale quién cobra) y no se
 puede agregar si ya se pagó en otro periodo cerrado. Lo que paga la comisión es
@@ -90,7 +102,7 @@ la **primera mensualidad**, y sale del export de facturas (Importaciones ›
 Suscripciones › Facturas, tabla `subscriptions-facturas`, global y reemplazado
 en cada carga). Sin facturas importadas el informe no se calcula.
 
-**La primera mensualidad** (`reglas.primera_mensualidad`) es la primera factura,
+**La primera mensualidad** (`rules.first_installment`) es la primera factura,
 por `Creado el`, con una línea cuyo producto es un plan del catálogo (la de
 instalación o la del router no lo son; la referencia `[...]` que Odoo antepone
 al producto se ignora). **Las canceladas no cuentan**, sean del mes que sean: se
@@ -101,13 +113,14 @@ cliente volvió a pagar. Una factura de otro mes ya es la mensualidad siguiente 
 no la sustituye.
 
 Solo cuenta como pagada una factura **Registrada** con el pago **Pagado** o **En
-proceso de pago**. Pagado parcialmente, Revertido y Sin pagar no; Borrador
+proceso de pago**. **Pagado parcialmente** no cuenta (sí contaba antes de los equipos);
+Revertido y Sin pagar tampoco; Borrador
 todavía no se emitió y Cancelado no cuenta. **Que la suscripción siga hoy en
 progreso no importa**: si la primera mensualidad está pagada, vale aunque hoy
 esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo
-último importado: lo que esté pagado el día del cierre es lo que cuenta.
+último importado, pero lo que cuenta es lo pagado **hasta el corte**, no hasta el día en que se cierra.
 
-`reglas.clasificar`, en este orden:
+`rules.clasificar`, en este orden:
 
 | Caso | Clasificación |
 |---|---|
@@ -118,10 +131,12 @@ esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo
 | Hoy es gratuita | excluida: no paga comisión |
 | Pagada, sea cual sea el estado de la factura de la suscripción | **válida**: la factura ya se pagó. Si la suscripción dice «Por facturar» y la factura es de otro plan, se apunta como cambio de plan (Odoo factura el nuevo y deja la venta por facturar) |
 | Registrada sin pagar (o pagada en parte, o revertida) | **no pagada** |
-| En borrador | **no pagada** |
+| En borrador con el pago «Pagado» o «En proceso de pago» | **válida**: el estado de pago manda sobre el del documento (el motivo lo dice: «la factura sigue en borrador»). Una cancelada no cuenta aunque diga «Pagado» |
+| En borrador sin ese pago | **no pagada** |
 | «Nada que facturar» sin mensualidad pagada | excluida |
-| Todas sus mensualidades canceladas | **en revisión**: ¿exoneración? |
-| Sin factura de mensualidad, «Facturado por completo» o «Por facturar» | **en revisión** |
+| Todas sus mensualidades canceladas, la última a 20 días o más de emitida («Creado el» → «Última actualización el») | excluida: el cliente no pagó |
+| Todas sus mensualidades canceladas, la última a menos de 20 días de emitida, o sin una de las dos fechas | **en revisión** |
+| Sin factura de mensualidad, «Facturado por completo» o «Por facturar» | **no pagada**: sin factura no se paga |
 | Sin factura ni estado de factura | excluida |
 
 **Gratuita** es lo mismo que en el análisis mensual: archivada en el export
@@ -129,7 +144,7 @@ esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo
 log de archivado. Es el caso de la suscripción que pagó su instalación y pasó a
 plan gratuito: su mensualidad se cancela y no se paga comisión.
 
-**La revisión es manual** (`RevisionComision`): cada venta en revisión se cuenta
+**La revisión es manual** (`CommissionReview`): cada venta en revisión se cuenta
 en este periodo o no se cuenta. Una venta solo es candidata en el periodo en que
 se instaló, así que no contarla es que no se paga. **La decisión manda sobre lo
 que digan las facturas**, también si después cambian, hasta que se deshace; la
@@ -145,102 +160,90 @@ Las decisiones de revisión de los periodos sin cerrar se reiniciaron
 
 ## 3. Quién cobra por una venta
 
-Las tres columnas del export se cruzan contra el directorio de ventas, sin
-distinguir mayúsculas ni el sufijo `(User)` (`core.odoo_nombres.clave_nombre`):
+La venta lo dice todo y no se rellena nada: `Medio` es quien vendió,
+`Oportunidad/Administrador` su supervisor y `Vendedor` la coordinadora de oficina,
+cada uno contra su literal en el directorio (`SalesPerson.channel`,
+`.medio_supervisor`, `.usuario_odoo`). Un literal sin registrar es un problema de
+registro y se avisa; una venta sin `Vendedor` no paga a ninguna oficina.
 
-- `Medio` → quien vendió (`PersonaVentas.medio`).
-- `Oportunidad/Administrador` → su supervisor (`PersonaVentas.medio_supervisor`, o el
-  `medio` si no lo tiene: Odoo a veces escribe a la misma persona distinto como
-  supervisor que como medio, y en Catálogos › Notificaciones ese nombre se
-  vincula a quien ya está registrado con «Vincular»).
-- `Vendedor` → el coordinador de oficina (`PersonaVentas.usuario_odoo`).
-
-**Lo que trae la venta es lo que cobra**, sin rellenar nada: una venta sin
-`Vendedor` no paga a ninguna oficina, y una sin `Oportunidad/Administrador` a ningún
-supervisor. Un literal que no está en el directorio es un problema de registro:
-la venta lo lleva como aviso (y sale en Catálogos › Notificaciones).
-
-Lo único que Odoo no trae es el **coordinador de unidad de negocio**, y es lo
-único que se configura (`SupervisorUnidad`, en `/comisiones/supervisores/`): a
-qué coordinador de UN responde cada supervisor. Es independiente de la oficina:
-un mismo coordinador de UN tiene supervisores que cargan para oficinas
-distintas.
-
-```
-Oficina Yanny          Oficina Herminia          ← cobran por las ventas con su Vendedor
-   ├── Super1 ─┐          ├── Super3 ─┐
-   └── Super2 ─┤          └── Super4 ─┤
-               └──── UN Alvaro Maldonado ┘        ← cobra por las de sus cuatro supervisores
-```
-
-**Cualquier cargo puede ocupar cualquier columna.** Un coordinador de oficina o
-de UN también vende (`Medio`) y supervisa (`Oportunidad/Administrador`); en 2026, 3.049
-ventas tienen a la oficina como `Medio` (casi todas también como `Vendedor`) y
-1.608 a un coordinador de UN como supervisor. Por eso:
-
-- El coordinador de UN de la venta sale de su supervisor: el que tenga asignado
-  si es un supervisor, él mismo si es un coordinador de UN, ninguno si es una
-  oficina. Sin supervisor, de quien vendió con la misma regla. Un supervisor sin
-  coordinador de UN no le paga a ninguno.
-- **Cada persona cobra una venta una sola vez, con la regla de su cargo.** Quien
-  vendió cobra la venta propia y nada más; cada uno de los demás, una venta de
-  equipo, aunque ocupe dos columnas (la oficina como supervisor y `Vendedor`, el
-  coordinador de UN como supervisor y coordinador). Un coordinador de UN que
-  supervisa cobra esas ventas con su tramo de crecimiento, no con la tarifa de
-  supervisor.
+- **El equipo de la venta es el de su `Medio`** (si no está, el de su supervisor y
+  luego el de su `Vendedor`). Quien está en varios equipos —el gerente de
+  operaciones lo está en Aragua y La Victoria— se desempata con las demás personas de la venta.
+- **Las unidades de negocio de la venta** salen de la cadena supervisor → su
+  superior (`TeamMembership.manager`): el coordinador de UN lleva una, los jefes y
+  gerentes varias. Sin supervisor, las de quien vendió. Nada se deduce de la zona de la venta.
+- **Cualquier rol puede ocupar cualquier columna.** Una coordinadora de oficina o un
+  coordinador de UN también vende (`Medio`) y supervisa. Cada persona cobra una venta
+  **una sola vez, con la regla de su rol en ese equipo**: quien vendió, la propia; los
+  demás que tengan la venta en su **alcance**, una de equipo.
+- **El alcance** (`equipo.alcance` de las condiciones del rol): `supervisados` (es el
+  supervisor de la venta), `oficina` (es su `Vendedor`), `unidades` (la venta es de
+  una unidad que lleva) o `equipo_completo` (cualquier venta del equipo).
+  `excluir_oficina` deja fuera las ventas que hizo una coordinadora de oficina.
+- **Una venta de oficina** es la que hizo la propia coordinadora como `Medio`.
 
 ## 4. Lo que cobra cada uno
 
-Las reglas viven en `reglas.calcular_pagos`; los montos y tramos, en
-`CondicionesComision` (editables en `/comisiones/condiciones/`).
+Los equipos y sus roles son código (`services/catalogs/teams.py`); los valores
+se editan en Catálogos › Ventas › *equipo* › Condiciones de pago
+(`TeamConditions`). Un rol sin fila paga con `DEFAULT_PARAMETERS`, que
+reproduce la política. El motor es `analytics/payments.py:compute_payments`, una
+función pura con doctests.
 
-- **PYME** (`Plan.tipo_persona == PYME`): quien la vendió cobra
-  `Plan.precio × Plan.comision_pyme_pct`, sea cual sea su cargo y vendiera lo que
-  vendiera. Nadie más cobra por ella y **no cuenta para ningún tramo ni equipo**.
-  Un plan PYME sin % sale con aviso y sin monto.
-- **Asesor**: por tramos de sus ventas residenciales. Cada tramo vale desde
-  `desde` ventas; se pagan `(ventas − descontar) × monto`.
+| Pieza | Qué paga |
+|---|---|
+| `propia` / `equipo` | Un monto por venta, o un % del precio del plan (La Victoria: el 10 %, 20$ → 2$ … 70$ → 7$) |
+| `tramos_asesor` | Por ventas propias residenciales: cada tramo vale desde su cantidad; se pagan `(ventas − descontar) × monto` |
+| `bono_tramos` | Un monto único según las ventas propias (el último tramo alcanzado) |
+| `bono_por_asesor` | El supervisor cobra por **cada asesor suyo** que llega al tramo; el asesor es de quien más le supervisa |
+| `bono_por_unidad` | El jefe de UN: un monto por unidad × su % de ingresos (tope 100 %) |
+| `escalon_crecimiento` | El coordinador de UN: por venta de equipo, el monto alto si el crecimiento de su unidad llega al umbral (6 %), si no el bajo |
+| `bono_churn` | El coordinador de UN: según el churn bruto de su unidad (≤ 3 → 100$, ≤ 1,9 → 200$; vale el tramo más exigente que cumple) |
+| `bono_empresa` | La administradora: por debajo del 100 % de ventas de la empresa, el monto proporcional (80 % → 80$); al 100 %, 100$; por encima, 120$ |
+| `factor` | Multiplica lo que cobra por ventas (propias + equipo): el % de ventas de su site o el promedio de sus unidades, con tope del 100 % |
 
-  | Ventas | Pago (por defecto) |
-  |---|---|
-  | 0–5 | nada |
-  | 6–19 | (ventas − 5) × 5$ |
-  | 20 | 20 × 6$ |
-  | 21–25 | ventas × 7$ |
-  | 26+ | ventas × 8$ |
+Neto = (propias + equipo) × factor + PYME + bonos. **Los bonos no se multiplican
+por el factor.** La **PYME** la cobra solo quien la vendió, un `Plan.precio ×
+Plan.comision_pyme_pct`, en todos los equipos: no cuenta para tramos, equipos ni factor.
 
-- **Supervisor** y **coordinador de oficina**: `monto_equipo` (2.5$) por cada
-  venta residencial de su equipo y `monto_directa` (4$) por cada una propia
-  (`Medio` es él). El total se multiplica por su **% de cumplimiento del
-  objetivo**, con tope en 100%. La política dice que vendrá de un campo de
-  suscripciones que aún no existe; hasta entonces se escribe en el informe un
-  **cumplimiento general** del periodo (`ComisionPeriodo.cumplimiento_general_pct`),
-  el mismo para todos. Quien tenga uno distinto lo lleva en su fila
-  (`IndicadorComision`), y borrarlo lo devuelve al general. Sin ninguno de los
-  dos paga como 100% y lo avisa, pero **no deja cerrar**. La PYME queda fuera de la multiplicación: es del vendedor
-  directo.
-- **Coordinador de unidad de negocio**: por cada venta residencial de su
-  equipo, el monto del tramo de **crecimiento del mes de sus unidades** (por
-  defecto: menos de 1% → 1$, desde 1% → 1.5$, desde 2% → 2$; el 1% exacto no lo
-  cubre la política y se puso en 1.5$), y `monto_directa_un` (4$) por cada una
-  propia. Sin objetivo.
+Equipos y roles (los valores por defecto son los de la política):
 
-  El crecimiento sale de Unidades de negocio del **mes natural** del periodo:
-  los nodos de todas las unidades (`Coordinador`) que apuntan a la persona,
-  agregados con `calculate_aggregation_totals`. Si el mes no está analizado se
-  puede escribir a mano en el informe; sin él, sus ventas de equipo no se pagan
-  y el periodo no se cierra.
+- **Verticalización**: jefe (2$ por venta del equipo, 4$ propia), supervisor (2,5$ / 4$ + bono por asesor 30/40/50 → 20/25/30), asesor (5$ plano + bono 30/40/50 → 120/200/250).
+- **Carabobo**: jefe de UN (0,8$ por venta de sus unidades sin las de oficina + 50$ por unidad según su % de ingresos), coordinador de UN (4$ propia, escalón de crecimiento y bono por churn), coordinadora de oficina (4$ propia, 2,5$ de equipo, × % de su site), supervisor (2,5$ / 4$, × % de su unidad, bono por asesor), asesor (tramos 6–19 → 5$ descontando 5, 20 → 6$, 21–25 → 7$, 26+ → 8$; bono 30/40/50).
+- **Nacional**: administradora (bono por la empresa), telemarketing (2$ + bono 30/40/50).
+- **Aragua**: gerente de UN (2$ de sus unidades, 4$ propia, × % de su unidad), gerente de operaciones (1$ / 4$), coordinadora de oficina, supervisor, asesor (con un tramo extra de 15–19 → 5$ sin descuento y bono desde 15).
+- **La Victoria**: gerente de UN, gerente de operaciones, supervisor y asesor como los anteriores pero «según el monto del plan»; coordinadora de oficina 2$.
 
-Una venta propia de un supervisor no le cuenta además como venta de equipo
-(cobra 4$, no 6.5$), pero sí cuenta como venta de equipo para quienes están por
-encima de él.
+Decisiones que la política deja abiertas y quedan en los valores por defecto: 25
+ventas es el tramo de 7$ (la política salta de «21 a 24» a «más de 25»); el bono
+por churn se lee en dólares.
+
+### Los indicadores
+
+`calculation._indicators` los resuelve y `site_compliance.month_indicators` los
+calcula en el servidor, con la misma regla que el cliente (`lib/targets.ts`,
+`lib/commercial.ts`) para el total de un grupo —nodo a nodo, del nivel del grupo
+hacia arriba: en un site sucursal → estado → site, en una unidad además coordinador;
+sin las zonas sin objetivo; sin recortar—. **El cliente y el servidor tienen que decir lo mismo.**
+
+- **% Ventas** = instalaciones / meta; **% Ingresos** = crecimiento neto / meta.
+- **Factor**: el de su site (coordinadora de oficina) o el promedio simple de las
+  unidades que le tocan (supervisor por su superior; gerente por las suyas).
+- **Crecimiento y churn bruto** de la unidad del coordinador de UN; **% de ingresos**
+  de cada unidad (jefe); **% de ventas de la empresa** (administradora).
+- Precedencia del factor y del crecimiento: lo escrito para la persona
+  (`CommissionIndicator`) → lo calculado → ninguno (el factor paga como 100 % y
+  bloquea el cierre). El resto no tiene valor a mano: sin el análisis del mes no se
+  pagan y el cierre espera. **Nada se deduce de las ventas.**
+- La coordinadora de oficina ve además su % de ventas de oficina (sus ventas como
+  `Medio` contra su objetivo), que no paga.
 
 ## 5. Borrador y cierre
 
 **Un borrador no guarda resultados**: el informe se recalcula cada vez que se
 abre (medio segundo para un mes de ~3.400 candidatas). **Cerrar lo congela**
-(`cierre.cerrar_periodo`): las ventas con su clasificación (`ComisionVenta`), lo
-que cobra cada persona (`ComisionPago`, con nombre y cargo copiados), las
+(`closing.close_period`): las ventas con su clasificación (`CommissionSale`), lo
+que cobra cada persona (`CommissionPayment`, con nombre y cargo copiados), las
 condiciones usadas y el resumen. Hace falta porque la tabla de suscripciones se
 trunca en cada importación y su estado es siempre el de hoy: recalcular un mes
 pasado daría otra cosa. Es el mismo razonamiento que el bloqueo del reporte ETA.
@@ -249,14 +252,22 @@ No se cierra con ventas en revisión sin decidir, supervisores o coordinadores
 de oficina sin cumplimiento, ni coordinadores de UN sin crecimiento conocido. Las
 ventas válidas de un periodo cerrado no vuelven a contar en ningún otro.
 Reabrir borra lo congelado y no se permite si el periodo siguiente está cerrado.
-Tiene permiso propio (`can_reopen_comisiones`), exige un motivo de al menos 10
+Tiene permiso propio (`can_reopen_commissions`), exige un motivo de al menos 10
 caracteres y el periodo escrito a mano, y **antes de borrar copia el cierre
 entero** —periodo, condiciones, resumen, cada venta y cada pago— en
-`ComisionCierreArchivado` (`comisiones_cierres_archivados`), con quién cerró,
+`ArchivedClose` (`comisiones_cierres_archivados`), con quién cerró,
 quién reabrió, cuándo y por qué. Copia y borrado van en una transacción con la
 fila del periodo bloqueada. Cada reapertura deja una versión más; las versiones
 no se editan ni se borran (el modelo lo impide y la FK es `PROTECT`), y desde el
 paso de cierre se descarga cada una como el mismo Excel de la nómina.
+
+**Borrar un informe** (`api/periodo/borrar/`) tiene también permiso propio
+(`can_delete_commissions`, cerrado para todos). Solo vale para un borrador que
+**nunca se cerró**: se lleva el periodo con sus revisiones, sus ventas a mano y
+sus indicadores, sin copia. El botón abre un modal que avisa de lo que se pierde
+y pide el periodo escrito a mano, que el servidor vuelve a comprobar. Un periodo
+cerrado se reabre antes; uno con cierres archivados no se borra nunca, porque
+esos cierres son el historial de lo que se pagó.
 
 ## Bolívares: la tasa CONATEL del mes siguiente
 
@@ -264,10 +275,10 @@ Las comisiones se calculan en dólares y se pagan el mes siguiente (las de
 septiembre, en octubre), así que el informe las pasa a bolívares con la **tasa
 CONATEL de ese mes siguiente**: el valor del bolívar oficial **el día 1**. Si el
 BCV no publicó ese día (fin de semana o feriado), la vigente: la última publicada
-antes, y la fuente lo dice (`bcv.consultar_tasa_vigente_el`). Es independiente
+antes, y la fuente lo dice (`bcv.fetch_rate_on`). Es independiente
 del reporte ETA, que declara con el primer día *publicado* del mes (hacia
 delante). Se consulta una vez y se guarda en el periodo
-(`ComisionPeriodo.tasa_conatel`, `tasa_conatel_publicada`): el valor de un día
+(`CommissionPeriod.conatel_rate`, `tasa_conatel_publicada`): el valor de un día
 pasado no cambia. Un mes que aún no empezó no tiene tasa, y un fallo del
 servicio se avisa sin romper el informe.
 
@@ -276,73 +287,21 @@ no se guarda y se pide aparte para no frenar la página. La nómina y el Excel
 enseñan solo los bolívares a la tasa CONATEL: la del día es una referencia y no
 se paga con ella.
 
-## El informe: cuatro pasos y la nómina por unidad
+## El informe: cuatro pasos y la nómina por equipo
 
-El informe se recorre en **cuatro pasos**, en el orden en que se prepara un
-pago, y abre en el primero que falte: **Revisar ventas** (las `Por facturar`
-por decidir, o todas las ventas), **Indicadores** (el cumplimiento general, el
-propio de quien lo tenga distinto y el crecimiento de cada coordinador de UN,
-todos en una pantalla para que un 9 que debía ser 90 salte a la vista),
-**Nómina** y **Cerrar** (lo que falta, enlazado a su paso). Encima, el total a
-pagar en $ y en Bs y la tasa CONATEL; la del día, solo como referencia. Los %
-se escriben únicamente en Indicadores: la nómina es de solo lectura.
+Revisar las ventas por facturar → **indicadores** (cada % en una pantalla: cumplimiento, crecimiento y
+churn, ingresos de las unidades y de la empresa) → **nómina**, de solo lectura → **cerrar**.
 
-La **nómina** va unidad por unidad: a la izquierda las unidades de negocio, las
-oficinas y, al final, lo que no tiene ninguna de las dos, cada una con lo que
-cobra y un buscador de personas; a la derecha, la elegida (`lib/nomina.ts`,
-`NominaView`).
-
-- **La unidad la encabeza su coordinador de UN**; debajo, cada supervisor con
-  sus asesores. Un supervisor va a la unidad donde más supervisa; un asesor, con
-  el supervisor con quien más vende y en la unidad de ese supervisor.
-- **Las coordinadoras de oficina no son del equipo de un coordinador de UN**:
-  van aparte, en su propia sección, y cada una enseña con qué unidades comparte
-  ventas. La unidad, a su vez, dice con qué oficinas comparte las suyas.
-- **Lo que no tiene unidad va con su oficina**, con la misma forma que una
-  unidad: el supervisor sin coordinador de UN, con la oficina con que cargó más
-  ventas; el asesor sin supervisor, con la oficina de más ventas suyas (y el
-  supervisado por una oficina, con esa oficina). Solo lo que no tiene ni unidad
-  ni oficina queda en **«Sin unidad ni oficina»**, al final: en la práctica, los
-  contratistas, que no traen supervisor ni `Vendedor`.
-- **Cada persona sale una sola vez**, con su pago entero: el tramo de un asesor
-  depende de todas sus ventas y no se reparte. Si vendió también con otro
-  supervisor, su fila lo dice («+2 con otro supervisor, incluidas»). Así las
-  unidades, las oficinas con su equipo y lo de aparte suman exactamente el
-  total a pagar.
-- Las columnas son las del pago: **ventas pagadas / validadas** (en ámbar cuando
-  no se pagan todas: el tramo de un asesor descuenta, o el crecimiento de un
-  coordinador de UN es desconocido), el **cumplimiento, crecimiento o tramo** con
-  su barra, y lo que cobra en **$** y en **Bs a la tasa CONATEL**. A un
-  supervisor o una oficina con cumplimiento por debajo del 100 % se le cuentan
-  todas sus validadas y el recorte se ve en dólares («de $487,50»).
-- **Quien queda en $0 se ve, atenuado y con el motivo** («4 ventas: no llega a
-  6»), para que nadie falte sin explicación.
-- Los clientes vendidos y el monto de las ventas se quitaron: no deciden ningún
-  pago y se confundían con lo que se paga.
-- **Los bolívares de cada fila se redondean a céntimos** y los totales son la
-  suma de esas filas (`formato.aBs`/`totalBs`), en la página y en el Excel: la
-  columna cuadra al céntimo.
-
-El informe trae `equipos` (una fila por combinación de coordinador de UN,
-oficina, supervisor y vendedor con sus ventas válidas, unas trescientas al mes),
-`personas` (nombre y cargo de cada id) y `condiciones` (las del cierre si el
-periodo está cerrado, si no las vigentes), para armar la nómina y explicar cada
-recorte sin mandar las ventas.
+La nómina es para quien paga. A la izquierda, los equipos con lo que cobra cada uno; a la derecha,
+el elegido: sus roles de dirección (jefe, coordinadores, gerentes, oficinas, administradora) como
+secciones, y los supervisores cada uno con sus asesores. Cada persona sale **una vez por equipo**,
+con su pago entero, así que los equipos suman el total. Los de $0 se ven atenuados con el motivo.
 
 ### El Excel
 
-`lib/exportar.ts` escribe un libro para leer, no una lista que filtrar:
-
-- **Resumen**: el total en $ y en Bs, la tasa CONATEL y su fuente, cuántos
-  cobran, y lo que se paga por cargo, por unidad de negocio (cada oficina con su
-  equipo sin unidad como una fila más, y lo de aparte al final, cerrando el
-  total) y por oficina.
-- **Coord. de UN**, **Oficinas** (con «comparte ventas con»), **Supervisores**
-  (por unidad u oficina, con subtotales) y **Asesores** (banda de unidad u
-  oficina, sub-banda de supervisor, subtotal por banda y total), en el orden de
-  la nómina. Las ventas pagadas de menos van en
-  ámbar, quien no cobra en gris, y una columna de observaciones dice el motivo.
-- **Ventas**: el detalle venta a venta.
+Un **Resumen** (total en $ y Bs, tasa, y lo que se paga por equipo y rol), **una hoja por equipo**
+maquetada como la nómina, y **Ventas**, el detalle venta a venta. Los bolívares de cada fila se
+redondean a céntimos y los totales son la suma de esas filas.
 
 Lo escribe `shared/lib/excel.downloadStyledWorkbook`, que recibe las hojas ya
 maquetadas celda a celda.
@@ -351,9 +310,8 @@ maquetadas celda a celda.
 
 | Página | Contenido | Permiso |
 |---|---|---|
-| `/comisiones/?periodo=` | El informe en cuatro pasos (revisión, indicadores, nómina por unidad, cierre), total a pagar y tasas, exportación a Excel. La revisión tiene cinco vistas: por decidir, días promocionales del mes anterior (qué se cobró allí; confirmación en el primer periodo), días promocionales del mes (quién adelantó el pago), agregadas a mano (con el formulario para agregar) y todas las ventas | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
-| `/comisiones/supervisores/` | A qué coordinador de UN responde cada supervisor (uno a uno o en bloque) | `can_manage_comisiones` |
-| `/comisiones/condiciones/` | Tramos, montos, día promocional, días de espera, día de corte de los adelantos y los % de los planes PYME. Se abre en lectura (quién cobra qué, tramos con sus saltos y un simulador, fechas de un periodo de ejemplo, última modificación y quién la hizo); «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_comisiones` |
+| `/comisiones/?period=` | El informe en cuatro pasos (revisión, indicadores, nómina por equipo, cierre), total a pagar y tasas, exportación a Excel. La revisión tiene cinco vistas: por decidir, días promocionales del mes anterior (qué se cobró allí; confirmación en el primer periodo), días promocionales del mes (quién adelantó el pago), agregadas a mano (con el formulario para agregar) y todas las ventas | `can_view_commissions` (escribir: `can_manage_commissions`) |
+| `/comisiones/condiciones/` | Solo la ventana de pago (día promocional, días de espera, día de corte de los adelantos) y los % de los planes PYME. Cuánto cobra cada rol de cada equipo se edita en **Catálogos › Ventas**. Se abre en lectura; «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_commissions` |
 
 El detalle venta a venta no viaja en los props —un mes son miles de filas—: lo
 pide la página a `api/ventas/` la primera vez que hace falta (desglose de una

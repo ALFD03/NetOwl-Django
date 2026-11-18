@@ -1,6 +1,9 @@
 # Atajos para las tareas del dia a dia. `make` a secas lista lo disponible.
+# Los comandos de Python corren en backend/ y los de Node en frontend/.
 
-PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python)
+PYTHON ?= $(shell [ -x .venv/bin/python ] && echo $(CURDIR)/.venv/bin/python || echo python)
+BACKEND := cd backend &&
+FRONTEND := cd frontend &&
 
 .DEFAULT_GOAL := help
 .PHONY: help dev worker build lint format check migrate makemigrations collectstatic
@@ -11,31 +14,30 @@ help:  ## Muestra esta ayuda
 dev:  ## Levanta Django (:8000), Vite (:5173), el tunel SSH a Redis y el worker
 	@./scripts/dev.sh
 
-worker:  ## Ejecuta el worker de Celery (analisis de churn, CRM, soporte y ciclo de vida)
-	$(PYTHON) -m celery -A netowl_web worker --loglevel=info
+worker:  ## Ejecuta el worker de Celery
+	$(BACKEND) $(PYTHON) -m celery -A netowl_web worker --loglevel=info
 
-build:  ## Compila el bundle de produccion en web/static/dist
-	npm run build
+build:  ## Compila el bundle de produccion en frontend/static/dist
+	$(FRONTEND) npm run build
 
 lint:  ## Pasa ruff y eslint
-	$(PYTHON) -m ruff check .
-	npm run lint
+	$(BACKEND) $(PYTHON) -m ruff check .
+	$(FRONTEND) npm run lint
 
 format:  ## Formatea con ruff y prettier (reescribe archivos)
-	$(PYTHON) -m ruff format .
-	npm run format
+	$(BACKEND) $(PYTHON) -m ruff format .
+	$(FRONTEND) npm run format
 
 check:  ## Comprobaciones sin escribir nada: Django, tipos y lint
-	$(PYTHON) manage.py check
-	npx tsc --noEmit
+	$(BACKEND) $(PYTHON) manage.py check
+	$(FRONTEND) npx tsc --noEmit
 	$(MAKE) lint
 
 migrate:  ## Aplica las migraciones versionadas
-	$(PYTHON) manage.py migrate
+	$(BACKEND) $(PYTHON) manage.py migrate
 
-makemigrations:  ## Genera migraciones tras cambiar un modelo (revisa el archivo antes de commitear:
-                 ## en services/imports el db_table se calcula, no se escribe fijo)
-	$(PYTHON) manage.py makemigrations
+makemigrations:  ## Genera migraciones (revisalas antes de commitear)
+	$(BACKEND) $(PYTHON) manage.py makemigrations
 
 collectstatic:  ## Recolecta estaticos (lo hace tambien el entrypoint del contenedor)
-	$(PYTHON) manage.py collectstatic --noinput
+	$(BACKEND) $(PYTHON) manage.py collectstatic --noinput

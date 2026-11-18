@@ -1,0 +1,128 @@
+"""Normalizacion de las suscripciones y de los logs antes de calcular.
+
+Deja el historico en la forma de la que depende todo lo demas: un solo frame de
+logs, ordenado por `["orden", "f_dt"]`, con el estado traducido al vocabulario
+interno y el estado anterior de cada movimiento ya resuelto.
+"""
+
+from __future__ import annotations
+
+import pandas as pd
+
+from core.config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
+from core.tables import to_bool
+
+# OPTIMIZACIÓN Y REUTILIZACIÓN: Importamos la función de utilidades compartida del sistema
+from core.utils import normalize_text
+
+
+def parse_archived(series: pd.Series) -> pd.Series:
+    """Marca de archivado (plan gratuito) a partir de la columna `activo`.
+
+    Vacío es archivada. Un valor fuera de los vocabularios conocidos NO se da por
+    archivado: eso sacaría clientes de pago de la base activa sin dejar rastro.
+    Se avisa por consola (el log del cálculo lo recoge) y se trata como activo.
+    """
+    active = to_bool(series)
+    unknown = active.isna()
+    if unknown.any():
+        sample = sorted(series[unknown].astype(str).unique())[:5]
+        print(
+            f"AVISO: la columna 'activo' trae {int(unknown.sum())} valores no"
+            f" reconocidos {sample}; se cuentan como activos."
+            " Revisa el formato del export antes de fiarte de los gratuitos."
+        )
+    return active.eq(False).fillna(False).astype(bool)
+
+
+def _normalize_string_series(series: pd.Series) -> pd.Series:
+    """Normaliza una serie de texto mapeando solo los valores únicos para máxima velocidad."""
+    unique_vals = series.dropna().unique()
+    # Mapeamos vectorialmente usando la única fuente de verdad alfanumérica
+    mapping = {val: normalize_text(val) for val in unique_vals}
+    return series.map(mapping)
+
+FREE_META_COLS = ["orden", "fecha_gratuito"]
+
+
+def build_free_meta(df_free_raw):
+    """
+    Fechas semilla de paso a plan gratuito: (orden, fecha_gratuito).
+
+    Solo se usan para las suscripciones archivadas que no traen el log real
+    (ver `services.subscriptions.analytics.free_plans`).
+    """
+    if df_free_raw is None or df_free_raw.empty:
+        return pd.DataFrame(columns=FREE_META_COLS)
+    df = df_free_raw.copy()
+    df.columns = df.columns.str.lower()
+    df = df.rename(columns={"orden_producto": "orden"})
+    df["orden"] = df["orden"].astype(str).str.strip()
+    df["fecha_gratuito"] = pd.to_datetime(df["fecha_gratuito"], errors="coerce")
+    df = df.dropna(subset=["fecha_gratuito"]).drop_duplicates(subset=["orden"])
+    return df[FREE_META_COLS]
+
+
+def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
+    """Devuelve `(suscripciones, logs)` listos para las reglas y las metricas.
+
+    Une los dos formatos de log -el actual y el de la v15, donde la categoria
+    *En progreso*/*Cerrado* se traduce a los estados internos-, traduce el estado
+    de la suscripcion y calcula `estado_origen` con un desplazamiento por orden.
+
+    **El frame de logs sale ordenado por `["orden", "f_dt"]`, y esa ordenacion es
+    una invariante**: de ella dependen `last_log_per_order` y `AccumulatedState`.
+    """
+    df = df_subs_raw.copy()
+    df.columns = df.columns.str.lower()
+    df = df.rename(columns={"orden_producto": "orden", "fecha_inicio": "f_ini"})
+    
+    df["orden"] = df["orden"].astype(str).str.strip()
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0.0)
+    df["f_ini_dt"] = pd.to_datetime(df["f_ini"], errors="coerce")
+
+    # `activo` viene del export: false/vacio = suscripcion archivada.
+    if "activo" in df.columns:
+        df["archivado"] = parse_archived(df["activo"])
+    else:
+        df["archivado"] = False
+
+    if "estado" in df.columns:
+        # Aplicamos la normalización rápida por mapeo de únicos
+        df["estado"] = _normalize_string_series(df["estado"])
+        df["estado"] = df["estado"].map(SUBS_STATE_TO_LOG_MAP).fillna(EXCLUDED_STATE)
+    else:
+        df["estado"] = EXCLUDED_STATE
+    df_subs_full = df.drop_duplicates(subset=["orden"])
+
+    l1 = df_logs.rename(columns={
+        "orden": "orden", "fecha_log": "fecha",
+        "log": "nota", "estado": "estado",
+    })
+    l2 = df_logs_v15.rename(columns={
+        "orden": "orden", "tipo": "nota",
+        "categoria": "cat", "fecha": "fecha",
+    })
+    
+    l2["estado"] = (
+        l2["cat"]
+        .map({"En progreso": "3_progress", "Cerrado": "6_churn"})
+        .fillna(l2["cat"])
+    )
+
+    combined = pd.concat([l1, l2], ignore_index=True, sort=False)
+    combined["orden"] = combined["orden"].astype(str).str.strip()
+    combined["estado"] = combined["estado"].astype(str).str.strip().str.lower()
+    combined["f_dt"] = pd.to_datetime(combined["fecha"], errors="coerce")
+    
+    combined["log_norm"] = _normalize_string_series(combined["nota"])
+    
+    combined = (
+        combined.dropna(subset=["orden", "f_dt"])
+        .sort_values(["orden", "f_dt"])
+    ).reset_index(drop=True)
+    
+    # Agrupación vectorizada para estado_origen
+    combined["estado_origen"] = combined.groupby("orden", sort=False)["estado"].shift(1)
+
+    return df_subs_full, combined

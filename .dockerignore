@@ -25,16 +25,14 @@ venv
 .ruff_cache
 .mypy_cache
 .pytest_cache
-requirements-dev.txt
-pyproject.toml
+**/requirements-dev.txt
+**/pyproject.toml
 
 # --- Frontend ---
 # El bundle lo compila la etapa de frontend; el node_modules local puede ser de
 # otra plataforma y taparia el `npm ci` limpio de esa etapa.
-node_modules
-web/static/dist
-eslint.config.js
-.prettierrc.json
+**/node_modules
+frontend/static/dist
 
 # --- Desarrollo y despliegue: no se usan dentro del contenedor ---
 # El compose se lee desde fuera de la imagen; dev.sh y el Makefile son del puesto.

@@ -1,0 +1,14 @@
+/**
+ * Página `/support/users/`.
+ *
+ * Mantiene el directorio de quien puede crear o tener asignado un ticket y, en
+ * su primera pestaña, quién falta: nombres que ya están en los tickets
+ * importados y que el directorio no reconoce.
+ */
+
+import { SupportUsersView } from '@/features/support/components/users/SupportUsersView';
+import type { SupportUsersProps } from '@/features/support/types';
+
+export default function SupportUsers(props: SupportUsersProps) {
+  return <SupportUsersView {...props} />;
+}

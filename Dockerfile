@@ -1,12 +1,13 @@
 # --- Etapa 1: Compilación de Frontend (React + TypeScript + Vite) ---
 FROM node:20-alpine AS frontend-builder
-WORKDIR /app
+WORKDIR /app/frontend
 
-COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 
-COPY web/ ./web
-COPY tsconfig.json vite.config.ts tailwind.config.js postcss.config.js ./
+COPY frontend/ ./
+# Tailwind lee las clases de la plantilla Django.
+COPY backend/templates /app/backend/templates
 RUN npm run build
 
 # --- Etapa 2: Dependencias de Python ---
@@ -19,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # --- Etapa 3: Contenedor Final de Ejecución ---
@@ -36,11 +37,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copiar paquetes de Python
 COPY --from=python-builder /usr/local /usr/local
 
-# 1. Copiar código fuente
-COPY --chown=app:app . .
-
-# 2. Inyectar el bundle JS/CSS compilado en web/static/dist
-COPY --from=frontend-builder --chown=app:app /app/web/static/dist ./web/static/dist
+# Código: backend/ y las imágenes de frontend/static, más el bundle compilado.
+COPY --chown=app:app entrypoint.sh ./
+COPY --chown=app:app backend/ ./backend/
+COPY --chown=app:app frontend/static/ ./frontend/static/
+COPY --from=frontend-builder --chown=app:app /app/frontend/static/dist ./frontend/static/dist
 
 # Asegurar carpetas de logs, estáticos y .gunicorn con permisos de app
 RUN mkdir -p /app/logs /app/staticfiles /app/.gunicorn && \
@@ -48,6 +49,7 @@ RUN mkdir -p /app/logs /app/staticfiles /app/.gunicorn && \
     chown -R app:app /app
 
 USER app
+WORKDIR /app/backend
 EXPOSE 8000
 ENTRYPOINT ["/app/entrypoint.sh"]
 # --forwarded-allow-ips: sin esto gunicorn solo acepta X-Forwarded-* de

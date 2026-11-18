@@ -26,8 +26,8 @@ cálculo terminado, con `module`, `file_name`, `rows_processed`, `status`
 (`success` / `error` / `warning`), `message` y `details` (la traza o el log de
 consola completo). Ordenado por fecha descendente.
 
-`to_dict()` es la forma en la que viaja al cliente; la vista Inertia y el
-endpoint JSON sirven el mismo diccionario para no tener dos copias que mantener.
+`to_dict()` es la forma en la que viaja al cliente: la sirven tanto el historial
+como el seguimiento de un job, para no tener dos copias que mantener.
 
 Módulos (`MODULE_CHOICES`, compartidos con `AnalysisJob`):
 `subs_subscriptions`, `subs_logs`, `subs_analysis`, `crm`, `crm_analysis`,
@@ -52,7 +52,7 @@ Celery corre sin backend de resultados.
 
 Dos propiedades:
 
-- `esta_abierto` — `pending` o `running`.
+- `is_open` — `pending` o `running`.
 - `esta_muerto` — abierto y sin señales de vida desde hace más de
   `ANALYSIS_JOB_STALE_SECONDS` (15 min). **Si el contenedor del worker muere de
   golpe, la fila se queda en `running` para siempre y bloquearía cualquier
@@ -63,17 +63,17 @@ Dos propiedades:
 No hay bandera aparte ni columna nueva: cancelar pone `cancelled` en `status` y
 eso es todo. De ahí salen las dos mitades solas:
 
-- **En cola** — la fila deja de estar abierta, y `ejecutar_analisis` ya
+- **En cola** — la fila deja de estar abierta, y `run_analysis` ya
   descartaba los jobs cerrados al recogerlos (la guarda que protege de una
   reentrega tras reiniciar el worker). El análisis no llega a empezar.
-- **En curso** — `ConsolaJob` lo ve en su siguiente volcado y levanta
-  `AnalisisCancelado`, que la tarea distingue del resto de excepciones.
+- **En curso** — `JobConsole` lo ve en su siguiente volcado y levanta
+  `AnalysisCancelled`, que la tarea distingue del resto de excepciones.
 
 **No se le manda nada a Celery.** `revoke(terminate=True)` mata el proceso del
 worker a señal limpia, y en mitad de un `COPY` o de un `ALTER TABLE` eso deja la
 conexión y la tabla como caigan. Parar en un punto conocido cuesta como mucho un
-par de segundos más y no deja nada a medias: `save_historico` reescribe el
-periodo entero la próxima vez, y los volcados parciales de métricas diarias son
+par de segundos más y no deja nada a medias: cada periodo se guarda en una sola
+transacción y se reescribe entero la próxima vez, y los volcados parciales de métricas diarias son
 deliberadamente reanudables.
 
 Elegir el campo en vez de una columna nueva no es sólo economía: **añadir un
@@ -88,23 +88,23 @@ que haberla creado esquema por esquema; hoy cada esquema tiene la suya.)
 
 | Símbolo | Qué hace |
 |---|---|
-| `job_en_curso(module)` | La ejecución abierta y viva de ese módulo, o `None` |
-| `job_duplicado(module, periodo)` | La que escribiría exactamente lo mismo que la pedida |
-| `jobs_abiertos()` | Todas las ejecuciones vivas: en ejecución primero, luego las que esperan turno. Alimenta el aviso flotante |
-| `crear_job(user, module, periodo)` | Crea la fila en `pending` |
-| `bloqueo_modulo(module)` | Context manager: toma el turno de escritura del módulo o cede con `None` |
-| `ConsolaJob(job)` | Buffer de stdout que además vuelca el log a la fila |
-| `marcar_inicio` / `marcar_fin` | Transiciones de estado |
-| `cancelar_job(job, username)` | Cierra la fila como `cancelled`. No habla con Celery |
-| `AnalisisCancelado` | La levanta el punto de control de `ConsolaJob`; no es un error del análisis |
-| `lanzar_analisis(request, module, requiere_periodo=True)` | Valida, rechaza el duplicado, crea y encola. Devuelve la respuesta ya hecha |
+| `running_job(module)` | La ejecución abierta y viva de ese módulo, o `None` |
+| `duplicate_job(module, periodo)` | La que escribiría exactamente lo mismo que la pedida |
+| `open_jobs()` | Todas las ejecuciones vivas: en ejecución primero, luego las que esperan turno. Alimenta el aviso flotante |
+| `create_job(user, module, periodo)` | Crea la fila en `pending` |
+| `module_lock(module)` | Context manager: toma el turno de escritura del módulo o cede con `None` |
+| `JobConsole(job)` | Buffer de stdout que además vuelca el log a la fila |
+| `mark_started` / `mark_finished` | Transiciones de estado |
+| `cancel_job(job, username)` | Cierra la fila como `cancelled`. No habla con Celery |
+| `AnalysisCancelled` | La levanta el punto de control de `JobConsole`; no es un error del análisis |
+| `launch_analysis(request, module, needs_period=True)` | Valida, rechaza el duplicado, crea y encola. Devuelve la respuesta ya hecha |
 
-### `bloqueo_modulo` — por qué existe
+### `module_lock` — por qué existe
 
 Con el worker en paralelo pueden coincidir dos análisis, y dos del mismo módulo
-comparten tabla: además de reescribir filas, **`save_historico` crea y altera la
-tabla sobre la marcha, y dos DDL simultáneas sobre la misma tabla acaban en
-bloqueo mutuo**.
+comparten tabla: **los dos borrarían y reescribirían el mismo periodo, y la
+primera escritura de un proceso puede ajustar la tabla (`core.tables.ensure`):
+dos DDL simultáneas sobre la misma tabla acaban en bloqueo mutuo**.
 
 El cerrojo vive en Redis, con clave `netowl:analisis:<ENV_SUFFIX>:<module>` y
 caducidad `ANALYSIS_LOCK_TIMEOUT` (2 h): si el worker muere a la fuerza se
@@ -113,7 +113,7 @@ suelta solo. **No espera**: cede con `None` y el llamador reencola.
 Al soltarlo se ignora `LockNotOwnedError`: si el análisis duró más que la
 caducidad, el cerrojo ya es de otro y soltarlo sería quitárselo.
 
-### `ConsolaJob` — la consola en vivo
+### `JobConsole` — la consola en vivo
 
 Hereda de `io.StringIO`. Cada `write` mira el reloj y, pasados 2 segundos desde
 el último volcado, guarda el log acumulado en la fila del job. No se vuelca en
@@ -121,14 +121,14 @@ cada `write` a propósito: un análisis mensual imprime una línea por día y va
 por bloque, y un `UPDATE` por línea multiplicaría las escrituras sin que el
 usuario note diferencia.
 
-- `volcar(**campos)` **nunca propaga**: esto es la narración del análisis, no el
+- `dump(**campos)` **nunca propaga**: esto es la narración del análisis, no el
   análisis. Un corte de conexión guardando el log no puede tirar un cálculo de
   varios minutos. Reintenta una vez tras `close_old_connections()`, porque el
   fallo típico es una conexión caducada entre dos volcados.
-- `progreso(hechos, total, etiqueta)` **sí fuerza** el volcado: es lo que mueve
+- `progress(done, total, label)` **sí fuerza** el volcado: es lo que mueve
   la barra y llega una vez por día calculado, no una por línea impresa.
-- `abortar_si_cancelado()` es el **punto de control de la cancelación**: relee
-  sólo el estado de la fila y levanta `AnalisisCancelado` si ya está en
+- `abort_if_cancelled()` es el **punto de control de la cancelación**: relee
+  sólo el estado de la fila y levanta `AnalysisCancelled` si ya está en
   `cancelled`. Se llama al ritmo del volcado y en cada `progreso`, así que es el
   único sitio por el que pasan los cuatro análisis sin excepción y no añade ni
   una consulta por encima de las que ya hacía. Un fallo al preguntar **no**
@@ -137,14 +137,14 @@ usuario note diferencia.
 - `_volcando` evita reentrar si algo dentro del propio volcado escribiera a
   stdout, que en ese momento sigue redirigido a este buffer.
 
-### `lanzar_analisis`
+### `launch_analysis`
 
-1. Si `requiere_periodo`, lee `month` del cuerpo JSON y exige formato `YYYY-MM`
+1. Si `needs_period`, lee `month` del cuerpo JSON y exige formato `YYYY-MM`
    (longitud 7) → 400 si no.
-2. `job_duplicado(...)`: si ya hay uno abierto del mismo módulo y periodo,
+2. `duplicate_job(...)`: si ya hay uno abierto del mismo módulo y periodo,
    responde **409** con `status: "running"` y **el job vivo adjunto**, para que
    el cliente se enganche a él en vez de lanzar otro.
-3. Crea el `AnalysisJob`, encola `imports.ejecutar_analisis` y responde **202**
+3. Crea el `AnalysisJob`, encola `imports.run_analysis` y responde **202**
    con `status: "queued"` y el job.
 
 > El `import` de `tasks` está diferido dentro de la función: `tasks` importa
@@ -169,12 +169,12 @@ tarea.**
 
 | Runner | Qué ejecuta |
 |---|---|
-| `_correr_subscriptions` | Comprueba `productos_fuera_de_catalogo()` **antes de calcular**, luego `MetricsAnalyzer.run()` y `build_day_metrics()` reutilizando el mismo analyzer (una sola lectura de datos para el cierre y los 31 días) |
-| `_correr_crm` | `run_crm_analysis(job.periodo)` |
-| `_correr_support` | `run_support_analysis(job.periodo)` |
-| `_correr_lifetime` | `run_lifecycle_analysis()`: el lifetime de las bajas de todos los meses desde enero de 2026. En el job guarda el resumen (meses, bajas, fecha de corte); la página lee el mes elegido con `get_lifetime_mes` |
+| `_run_subscriptions` | Comprueba `products_outside_catalog()` **antes de calcular**, luego `MetricsAnalyzer.run()` y `build_day_metrics()` reutilizando el mismo analyzer (una sola lectura de datos para el cierre y los 31 días) |
+| `_run_crm` | `run_crm_analysis(job.periodo)` |
+| `_run_support` | `run_support_analysis(job.periodo)` |
+| `_run_lifetime` | `run_lifetime_analysis()`: el lifetime de las bajas de todos los meses desde enero de 2026. En el job guarda el resumen (meses, bajas, fecha de corte); la página lee el mes elegido con `get_lifetime_month` |
 
-### `ejecutar_analisis(job_id)`
+### `run_analysis(job_id)`
 
 ```
 close_old_connections()
@@ -186,18 +186,18 @@ with bloqueo_modulo(job.module) as turno:
     _ejecutar_con_turno(self, job)
 ```
 
-`_ejecutar_con_turno`:
+`_run_with_turn`:
 
 1. `fixtures.reset_cache()` — arrancar con lo último guardado y **no cambiar de
    catálogo a mitad de un cálculo de minutos**.
-2. `marcar_inicio(job, task_id)`.
+2. `mark_started(job, task_id)`.
 3. `with capture_console(consola): runner(job, consola)`.
-4. Captura `AnalisisCancelado` (cierra el job como `cancelled`, con el log
+4. Captura `AnalysisCancelled` (cierra el job como `cancelled`, con el log
    parcial, y lo deja en el historial como advertencia — no es un fallo),
    `SoftTimeLimitExceeded` y cualquier `Exception`: el desenlace se deja en el
    job y en `ImportActionLog`. **No propaga**: el error interesa donde lo lee la
    interfaz, no como traza de Celery que nadie mira.
-5. `marcar_fin(...)` + `register_import_log(...)`.
+5. `mark_finished(...)` + `register_import_log(...)`.
 
 ---
 
@@ -205,25 +205,23 @@ with bloqueo_modulo(job.module) as turno:
 
 ### Pantallas
 
-| Ruta | Página Inertia | Permisos |
+| Ruta de página | Datos | Permisos |
 |---|---|---|
 | `/imports/` | *(redirección)* | `can_view_imports` |
-| `/imports/subscriptions/` | `Imports/Subscriptions` | `can_view_imports` **y** `can_view_imports_subs` |
-| `/imports/crm/` | `Imports/Crm` | … **y** `can_view_imports_crm` |
-| `/imports/support/` | `Imports/Support` | … **y** `can_view_imports_support` |
-| `/imports/history/` | `Imports/History` | … **y** `can_view_import_history` (últimos 200 registros) |
+| `/imports/subscriptions/` | `/api/imports/subscriptions/` | `can_view_imports` **y** `can_view_imports_subs` |
+| `/imports/crm/` | `/api/imports/crm/` | … **y** `can_view_imports_crm` |
+| `/imports/support/` | `/api/imports/support/` | … **y** `can_view_imports_support` |
+| `/imports/history/` | `/api/imports/history/` | … **y** `can_view_import_history` (últimos 200 registros) |
 
-`imports_index_view` recorre `IMPORT_TABS` y **lleva a la primera pestaña que el
-usuario sí pueda ver**. Antes `/imports/` era un alias de la pestaña de
-Subscriptions, así que un usuario con acceso solo a otra pestaña entraba, se le
-negaba y se le expulsaba del módulo sin poder llegar nunca a la suya.
+`/imports/` (`module_root(PAGES)`) **lleva a la primera página que el usuario sí
+pueda ver**: quien solo tiene acceso a otra pestaña que Suscripciones llega a la suya.
 
 ### Cargas de CSV
 
-Las cinco (`subscriptions`, `logs`, `gratis`, `crm`, `support`) siguen el mismo
-patrón: `@ratelimit(5/m)`, `permission_required('can_import_<x>', 'can_import_data')`,
-`@require_POST`, `handle_csv_upload(...)` con las cabeceras obligatorias del
-dominio, y `cleanup_tempfile` en `finally`. Toda salida —buena o mala— queda en
+Todas (`/api/imports/<módulo>/…/upload/`) pasan por `_import(...)`: `@endpoint`
+con `5/m` y `can_import_<x>` **o** `can_import_data`, el cerrojo del módulo (409 si
+hay un análisis corriendo), `uploaded_csv(...)` con las cabeceras obligatorias del
+dominio, y el temporal borrado al salir. Toda salida —buena o mala— queda en
 `ImportActionLog`.
 
 > **Excepción deliberada de esta app:** los endpoints de mutación aceptan *o* el
@@ -231,25 +229,38 @@ dominio, y `cleanup_tempfile` en `finally`. Toda salida —buena o mala— queda
 > `can_run_calculations`), para que las cuentas que ya los tenían no pierdan
 > acceso. **Ese patrón OR debe conservarse.**
 
+Las cabeceras las comprueba cada importador al leer el fichero (`core.exports`):
+un `InvalidExport` (faltan columnas obligatorias, fichero vacío o que no es CSV)
+sale como **400** con el mensaje del importador, que dice qué falta y qué trae.
+
 La carga de suscripciones tiene dos respuestas especiales:
 
 | Excepción | Respuesta | Significado |
 |---|---|---|
-| `ProductosSinCatalogo` | **409** con `status: "catalogo"`, la lista de productos y el número de órdenes afectadas | El export trae productos que el catálogo no reconoce. **No se escribió nada**: la comprobación corre antes del `TRUNCATE`. Queda registrado como `warning` |
-| `CatalogoVacio` | **409** con `status: "error"` | No hay ni un plan registrado. Es un problema de configuración, no del fichero; confundirlos mandaba a revisar el export |
+| `UncatalogedProducts` | **409** con `status: "catalog"`, la lista de productos y el número de órdenes afectadas | El export trae productos que el catálogo no reconoce. **No se escribió nada**: la comprobación corre antes de tocar la base. Queda registrado como `warning` |
+| `EmptyCatalog` | **409** con `status: "error"` | No hay ni un plan registrado. Es un problema de configuración, no del fichero; confundirlos mandaba a revisar el export |
 
 ### Lanzamiento y seguimiento
 
 | Endpoint | Qué hace |
 |---|---|
-| `POST api/run-analysis/` | `lanzar_analisis(request, 'subs_analysis')` — `2/m` |
-| `POST api/run-crm-analysis/` | `'crm_analysis'` — `2/m` |
-| `POST api/run-support-analysis/` | `'support_analysis'` — `2/m` |
-| `GET api/jobs/<uuid>/` | Estado vivo de una ejecución. **Sin `@ratelimit`**: el sondeo es cada pocos segundos y el límite de `2/m` lo cortaría |
-| `GET api/jobs/queue/` | Todo lo que hay en la cola, para el aviso flotante. Sin límite y sin permiso de módulo |
-| `GET api/jobs/active/?module=…` | La ejecución abierta de un módulo, para reengancharse tras recargar |
+| `POST /api/imports/subscriptions/run/` | `launch_analysis(request, 'subs_analysis')` — `2/m` |
+| `POST /api/imports/crm/run/` | `'crm_analysis'` — `2/m` |
+| `POST /api/imports/support/run/` | `'support_analysis'` — `2/m` |
+| `GET /api/imports/jobs/<uuid>/` | Estado vivo de una ejecución. **Sin límite**: el sondeo es cada pocos segundos y el `2/m` lo cortaría |
+| `POST /api/imports/jobs/<uuid>/cancel/` | Detiene una ejecución abierta — `10/m` |
+| `GET /api/imports/jobs/queue/` | Todo lo que hay en la cola, para el aviso flotante. Sin límite y sin permiso de módulo |
+| `GET /api/imports/jobs/active/?module=…` | La ejecución abierta de un módulo, para reengancharse tras recargar |
 
-`_job_visible(request, job)` decide qué ve cada uno: **quien lanzó el análisis,
+Los tres `run/` aceptan `{"month": "YYYY-MM"}` o **`{"months": [...]}`** para
+varios meses de una vez (`jobs._launch_batch`, como mucho 24): se crea un job por
+mes, igual que si se pidieran sueltos, y el bloqueo del módulo los ejecuta de uno
+en uno. Va en un solo POST porque el límite de `2/m` cortaría un lote pedido mes
+a mes. Un mes que ya está en la cola o corriendo no se duplica: vuelve en
+`skipped` con su job (409 si eran todos). La tarjeta lo ofrece como «Varios
+meses» y sigue cada mes en `MonthBatch`.
+
+`_job_is_visible(request, job)` decide qué ve cada uno: **quien lanzó el análisis,
 quien puede ver el historial de importaciones, y los superusuarios**.
 
 *(El análisis de ciclo de vida se lanza desde `services/subscriptions`, con
