@@ -12,16 +12,16 @@ export type {
   CrmDimensionRow,
   CrmDimensionValue,
   CrmEffectivenessRow,
-  CrmHistoricoRow,
+  CrmHistoryRow,
   CrmStageTimeRow,
 } from '@/shared/types/crm';
 
-import type { CrmDimensionRow, CrmEffectivenessRow, CrmHistoricoRow } from '@/shared/types/crm';
+import type { CrmDimensionRow, CrmEffectivenessRow, CrmHistoryRow } from '@/shared/types/crm';
 import type { DayCuts } from '@/shared/types/domain';
 
 export interface CrmDashboardProps {
   metrics?: {
-    trend_history?: CrmHistoricoRow[];
+    trend_history?: CrmHistoryRow[];
     effectiveness?: CrmEffectivenessRow[];
   };
   periods?: string[];
@@ -67,8 +67,8 @@ export interface CrmTrendCard {
   labels: string[];
   values: number[];
   unitLabel: string;
-  rateKey: keyof CrmHistoricoRow;
-  countKey: keyof CrmHistoricoRow;
+  rateKey: keyof CrmHistoryRow;
+  countKey: keyof CrmHistoryRow;
 }
 
 export interface CrmHealthCard {
@@ -86,7 +86,7 @@ export interface CrmAnalyticsProps {
   /** Every dimension of the selected period; the dimension filter is client-side. */
   dimensionsData?: CrmDimensionRow[];
   /** The cierre row of the selected period: global denominators and header stats. */
-  globalData?: CrmHistoricoRow;
+  globalData?: CrmHistoryRow;
   /**
    * Which days of the month have a cut computed, and which one is on screen.
    * The cut itself arrives in `dimensionsData` / `globalData`, already swapped
@@ -99,7 +99,7 @@ export interface CrmAnalyticsProps {
 
 /** El corte completo de un día, tal y como lo sirve `/api/crm/day-metrics/`. */
 export interface CrmDayPayload {
-  global: CrmHistoricoRow;
+  global: CrmHistoryRow;
   dimensions: CrmDimensionRow[];
 }
 

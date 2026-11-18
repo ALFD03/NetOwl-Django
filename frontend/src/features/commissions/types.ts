@@ -342,9 +342,9 @@ export interface CommissionsReportProps {
   /** Los equipos y sus roles, para nombrar y ordenar la nómina. */
   teams: { slug: string; name: string; roles: { role: SalesRole; role_label: string }[] }[];
   canManage: boolean;
-  /** `can_reopen_comisiones`: reabrir va aparte de gestionar. */
+  /** `can_reopen_commissions`: reabrir va aparte de gestionar. */
   canReopen: boolean;
-  /** `can_delete_comisiones`: borrar un informe en borrador, con su propio permiso. */
+  /** `can_delete_commissions`: borrar un informe en borrador, con su propio permiso. */
   canDelete: boolean;
   /** Las versiones archivadas de los cierres anteriores del periodo, la más reciente primero. */
   archives: ArchivedClose[];
@@ -386,7 +386,7 @@ export interface CommissionConditions {
   names?: Record<string, string>;
 }
 
-export interface PlanPyme {
+export interface SmePlan {
   id: number;
   name: string;
   tariff: string;
@@ -403,6 +403,6 @@ export interface ConditionsUpdate {
 export interface CommissionsConditionsProps {
   conditions: CommissionConditions;
   last_update: ConditionsUpdate;
-  smePlans: PlanPyme[];
+  smePlans: SmePlan[];
   canEditPlans: boolean;
 }

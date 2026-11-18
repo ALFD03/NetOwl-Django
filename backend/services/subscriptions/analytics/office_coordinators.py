@@ -52,7 +52,7 @@ _MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 NO_SERVICE_STATES = frozenset({"cotizacion", "instalacion"})
 
 
-def current_target(tramos: list[tuple[str | None, int]], mes: str) -> int | None:
+def current_target(tiers: list[tuple[str | None, int]], month: str) -> int | None:
     """Las ventas del tramo vigente en `mes`: el mas reciente que ya empezo.
 
     `desde` nulo es "desde siempre". Nulo si ningun tramo ha empezado.
@@ -64,65 +64,65 @@ def current_target(tramos: list[tuple[str | None, int]], mes: str) -> int | None
     >>> objetivo_vigente([("2026-09", 40)], "2026-08") is None
     True
     """
-    current = [(desde or "", ventas) for desde, ventas in tramos if desde is None or desde <= mes]
+    current = [(since or "", sales) for since, sales in tiers if since is None or since <= month]
     return max(current)[1] if current else None
 
 
-def _sales_per_day(mes: str) -> dict[str, dict[str, list[int]]]:
+def _sales_per_day(month: str) -> dict[str, dict[str, list[int]]]:
     """`{"medio"|"vendedor": {clave: [instalaciones del dia 1..31]}}` del mes.
 
     `fecha_inicio` es texto: las fechas ISO se filtran en SQL y las que vengan
     en otro formato se resuelven con `parse_date`, como en comisiones. Una
     columna que el export no trae se queda vacia.
     """
-    anio, num = int(mes[:4]), int(mes[5:7])
-    inicio = date(anio, num, 1)
-    fin = date(anio, num, calendar.monthrange(anio, num)[1])
-    vacio: dict[str, dict[str, list[int]]] = {"medio": {}, "vendedor": {}}
+    year, num = int(month[:4]), int(month[5:7])
+    start = date(year, num, 1)
+    end = date(year, num, calendar.monthrange(year, num)[1])
+    empty: dict[str, dict[str, list[int]]] = {"medio": {}, "vendedor": {}}
 
     db = DBConnector()
-    columnas = db.columns(TableNames.SUBSCRIPTIONS)
-    nombres = [c for c in ("medio", "vendedor") if c in columnas]
-    if "fecha_inicio" not in columnas or not nombres:
-        return vacio
-    estado = ", estado" if "estado" in columnas else ""
+    columns = db.columns(TableNames.SUBSCRIPTIONS)
+    names = [c for c in ("medio", "vendedor") if c in columns]
+    if "fecha_inicio" not in columns or not names:
+        return empty
+    state = ", estado" if "estado" in columns else ""
     df = db.query(
         f"""
-        SELECT fecha_inicio, {", ".join(nombres)}{estado}
+        SELECT fecha_inicio, {", ".join(names)}{state}
         FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
         WHERE fecha_inicio BETWEEN %s AND %s
         """,
-        params=[inicio, fin],
+        params=[start, end],
     )
     if df.empty:
-        return vacio
+        return empty
 
-    for fila in df.itertuples(index=False):
-        if estado and normalize_text(fila.estado or "") in NO_SERVICE_STATES:
+    for row in df.itertuples(index=False):
+        if state and normalize_text(row.estado or "") in NO_SERVICE_STATES:
             continue
-        leido = parse_date(fila.fecha_inicio)
-        if leido is None or pd.isna(leido):
+        read = parse_date(row.fecha_inicio)
+        if read is None or pd.isna(read):
             continue
-        dia = leido.date()
-        if not inicio <= dia <= fin:
+        day = read.date()
+        if not start <= day <= end:
             continue
-        for columna in nombres:
-            clave = name_key(str(getattr(fila, columna) or ""))
-            if clave:
-                vacio[columna].setdefault(clave, [0] * 31)[dia.day - 1] += 1
-    return vacio
+        for column in names:
+            key = name_key(str(getattr(row, column) or ""))
+            if key:
+                empty[column].setdefault(key, [0] * 31)[day.day - 1] += 1
+    return empty
 
 
-def _add_days(by_key: dict[str, list[int]], claves: set[str]) -> list[int]:
+def _add_days(by_key: dict[str, list[int]], keys: set[str]) -> list[int]:
     """Las ventas por dia de todas las formas en que Odoo escribe a la persona, sumadas."""
     total = [0] * 31
-    for clave in claves:
-        for i, n in enumerate(by_key.get(clave, ())):
+    for key in keys:
+        for i, n in enumerate(by_key.get(key, ())):
             total[i] += n
     return total
 
 
-def get_office_coordinators(periodo: str | None) -> list[dict[str, Any]]:
+def get_office_coordinators(period: str | None) -> list[dict[str, Any]]:
     """Las coordinadoras de oficina con site, sus ventas por dia y su objetivo del mes.
 
     `periodo` es el del reporte (`"2026-10-01 al 2026-10-31"` o `"2026-10"`).
@@ -137,54 +137,54 @@ def get_office_coordinators(periodo: str | None) -> list[dict[str, Any]]:
     Si la tabla de suscripciones no se puede leer se devuelven sin ventas: es
     una parte del reporte, y no merece romperlo entero.
     """
-    from services.catalogs.models import MembresiaEquipo, ObjetivoVentasOficina
+    from services.catalogs.models import OfficeSalesTarget, TeamMembership
 
-    mes = str(periodo or "")[:7]
-    if not _MONTH.match(mes):
+    month = str(period or "")[:7]
+    if not _MONTH.match(month):
         return []
     # Una fila por persona y site: la coordinadora que figurara en dos equipos con el
     # mismo site saldria dos veces en su bloque.
-    vistas: set[tuple[int, int]] = set()
-    membresias = []
+    views: set[tuple[int, int]] = set()
+    memberships = []
     for m in (
-        MembresiaEquipo.objects.filter(rol="coord_oficina", sites__isnull=False)
-        .select_related("persona")
-        .prefetch_related("sites", "persona__alias")
+        TeamMembership.objects.filter(role="coord_oficina", sites__isnull=False)
+        .select_related("person")
+        .prefetch_related("sites", "person__aliases")
     ):
         for site in m.sites.all():
-            if (m.persona_id, site.id) not in vistas:
-                vistas.add((m.persona_id, site.id))
-                membresias.append((site, m))
-    if not membresias:
+            if (m.person_id, site.id) not in views:
+                views.add((m.person_id, site.id))
+                memberships.append((site, m))
+    if not memberships:
         return []
-    membresias.sort(key=lambda t: (t[0].orden, t[0].nombre, t[1].persona.nombre, t[1].persona.apellido))
+    memberships.sort(key=lambda t: (t[0].order, t[0].name, t[1].person.name, t[1].person.last_name))
 
     general: list[tuple[str | None, int]] = []
-    propios: dict[int, list[tuple[str | None, int]]] = {}
-    for o in ObjetivoVentasOficina.objects.all():
-        (propios.setdefault(o.persona_id, []) if o.persona_id else general).append((o.desde, o.ventas))
+    own: dict[int, list[tuple[str | None, int]]] = {}
+    for o in OfficeSalesTarget.objects.all():
+        (own.setdefault(o.person_id, []) if o.person_id else general).append((o.since, o.sales))
 
     try:
-        ventas = _sales_per_day(mes)
+        sales = _sales_per_day(month)
     except Exception:
-        logger.exception("No se pudieron contar las ventas de las coordinadoras de oficina de %s", mes)
-        ventas = {"medio": {}, "vendedor": {}}
+        logger.exception("No se pudieron contar las ventas de las coordinadoras de oficina de %s", month)
+        sales = {"medio": {}, "vendedor": {}}
 
-    filas = []
-    for site, m in membresias:
-        p = m.persona
-        objetivo = current_target(propios.get(p.id, []), mes)
-        origen = "individual" if objetivo is not None else None
-        if objetivo is None:
-            objetivo = current_target(general, mes)
-            origen = "general" if objetivo is not None else None
-        filas.append({
+    rows = []
+    for site, m in memberships:
+        p = m.person
+        target = current_target(own.get(p.id, []), month)
+        source = "individual" if target is not None else None
+        if target is None:
+            target = current_target(general, month)
+            source = "general" if target is not None else None
+        rows.append({
             "id": p.id,
-            "nombre": p.nombre_completo,
-            "site": site.nombre,
-            "propias_dia": _add_days(ventas["medio"], p.claves("medio")),
-            "oficina_dia": _add_days(ventas["vendedor"], p.claves("usuario")),
-            "objetivo": objetivo,
-            "origen_objetivo": origen,
+            "nombre": p.full_name,
+            "site": site.name,
+            "propias_dia": _add_days(sales["medio"], p.name_keys("medio")),
+            "oficina_dia": _add_days(sales["vendedor"], p.name_keys("usuario")),
+            "objetivo": target,
+            "origen_objetivo": source,
         })
-    return filas
+    return rows

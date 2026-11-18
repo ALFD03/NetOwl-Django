@@ -48,25 +48,25 @@ def _compute_stats_distribution(series: pd.Series) -> dict[str, float]:
             "pct_excede_promedio": 0.0,
         }
 
-    promedio = float(s.mean())
-    mediana = float(s.median())
+    average = float(s.mean())
+    median = float(s.median())
     p25 = float(s.quantile(0.25))
     p75 = float(s.quantile(0.75))
     min_val = float(s.min())
     max_val = float(s.max())
     std_val = float(s.std(ddof=0)) if n > 1 else 0.0
 
-    pct_excede_prom = round(float((s > promedio).sum() / n) * 100, 2)
+    pct_above_avg = round(float((s > average).sum() / n) * 100, 2)
 
     return {
-        "promedio": round(promedio, 2),
-        "mediana": round(mediana, 2),
+        "promedio": round(average, 2),
+        "mediana": round(median, 2),
         "p25": round(p25, 2),
         "p75": round(p75, 2),
         "min": round(min_val, 2),
         "max": round(max_val, 2),
         "std": round(std_val, 2),
-        "pct_excede_promedio": pct_excede_prom,
+        "pct_excede_promedio": pct_above_avg,
     }
 
 
@@ -78,8 +78,8 @@ def _total_duration(df: pd.DataFrame) -> pd.Series:
 
 
 def compute_close_times(
-    df_ganados: pd.DataFrame,
-    df_perdidos: pd.DataFrame
+    df_won: pd.DataFrame,
+    df_lost: pd.DataFrame
 ) -> dict[str, dict[str, float]]:
     """Las tres distribuciones de duración de una cohorte.
 
@@ -88,13 +88,13 @@ def compute_close_times(
     hacia la pérdida, que es justo lo que hace comparable el dato entre periodos.
     Los pendientes quedan fuera: todavía no tienen duración de cierre.
     """
-    dur_ganados = _total_duration(df_ganados)
-    dur_perdidos = _total_duration(df_perdidos)
-    close_duration = pd.concat([dur_ganados, dur_perdidos], ignore_index=True)
+    won_dur = _total_duration(df_won)
+    lost_dur = _total_duration(df_lost)
+    close_duration = pd.concat([won_dur, lost_dur], ignore_index=True)
 
     return {
-        "instalacion": _compute_stats_distribution(dur_ganados),
-        "perdida": _compute_stats_distribution(dur_perdidos),
+        "instalacion": _compute_stats_distribution(won_dur),
+        "perdida": _compute_stats_distribution(lost_dur),
         "cierre": _compute_stats_distribution(close_duration),
     }
 
@@ -115,36 +115,36 @@ def _winsorized_mean(s: pd.Series) -> tuple[float, float, int]:
     if s.empty:
         return 0.0, 0.0, 0
 
-    corte = float(s.quantile(STAGE_TIME_WINSOR_P))
-    n_recortados = int((s > corte).sum())
-    return float(s.clip(upper=corte).mean()), corte, n_recortados
+    cutoff = float(s.quantile(STAGE_TIME_WINSOR_P))
+    n_trimmed = int((s > cutoff).sum())
+    return float(s.clip(upper=cutoff).mean()), cutoff, n_trimmed
 
 
-def _classify_move(origen: str, destino: Any) -> str:
+def _classify_move(source: str, target: Any) -> str:
     """El sentido de una salida de etapa, desde el punto de vista del embudo.
 
     La etapa 8 va después de la 7 en `STAGE_ORDER`, así que el orden por sí solo
     leería una devolución como un avance: el destino se resuelve primero por
     nombre y sólo después por posición dentro de `STAGE_FLOW`.
     """
-    if not isinstance(destino, str) or destino not in STAGE_ORDER:
+    if not isinstance(target, str) or target not in STAGE_ORDER:
         return "otro"
-    if destino == STAGE8_KEY:
+    if target == STAGE8_KEY:
         return "devolucion"
 
-    i_origen = _FLOW_INDEX.get(origen)
-    i_target = _FLOW_INDEX.get(destino)
-    if i_origen is None or i_target is None:
+    i_source = _FLOW_INDEX.get(source)
+    i_target = _FLOW_INDEX.get(target)
+    if i_source is None or i_target is None:
         # Etapas 9, 10 y `perdido`: la oportunidad sale del embudo sin avanzar
         # ni volver a una cola de trabajo anterior.
         return "otro"
 
-    return "avance" if i_target > i_origen else "retorno"
+    return "avance" if i_target > i_source else "retorno"
 
 
-def _stats_desenlace(group: pd.DataFrame, sentido: str, total: int) -> dict[str, float]:
+def _stats_outcome(group: pd.DataFrame, direction: str, total: int) -> dict[str, float]:
     """Promedio, mediana y peso de un desenlace dentro de una etapa."""
-    sub = group.loc[group["sentido"] == sentido, "duracion_horas"]
+    sub = group.loc[group["sentido"] == direction, "duracion_horas"]
     n = len(sub)
     if n == 0:
         return {"movimientos": 0, "pct": 0.0, "promedio_horas": 0.0, "mediana_horas": 0.0}
@@ -162,7 +162,7 @@ def _stats_desenlace(group: pd.DataFrame, sentido: str, total: int) -> dict[str,
 def compute_stage_stays(
     df_clients: pd.DataFrame,
     df_logs: pd.DataFrame,
-    ahora: pd.Timestamp | None = None,
+    now: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """Cuánto lleva en su etapa cada oportunidad que no ha salido de ella.
 
@@ -187,18 +187,18 @@ def compute_stage_stays(
     `fecha_entrada` es lo que permite además recortarla por día, que es lo que
     necesitan los cortes diarios del periodo.
     """
-    columnas = [
+    columns = [
         "client_id", "etapa", "horas", "cerrada", "periodo_entrada", "fecha_entrada",
     ]
     if df_clients.empty or not {"id", "etapa_actual"} <= set(df_clients.columns):
-        return pd.DataFrame(columns=columnas)
+        return pd.DataFrame(columns=columns)
 
-    ahora = ahora if ahora is not None else pd.Timestamp.now()
+    now = now if now is not None else pd.Timestamp.now()
 
     measurable_stages = [e for e in STAGE_ORDER if e not in STAGES_WITHOUT_WAIT]
     df = df_clients[df_clients["etapa_actual"].isin(measurable_stages)].copy()
     if df.empty:
-        return pd.DataFrame(columns=columnas)
+        return pd.DataFrame(columns=columns)
 
     df["client_id"] = df["id"].astype(str)
 
@@ -206,19 +206,19 @@ def compute_stage_stays(
     # destino. Por construcción no puede haber una salida posterior —habría
     # cambiado `etapa_actual`—, así que esta estancia no solapa con ninguna de
     # las que ya miden los logs.
-    entrada_log = pd.Series(pd.NaT, index=df.index)
+    log_entry = pd.Series(pd.NaT, index=df.index)
     # La llegada se busca por la oportunidad que el log declara en su
     # Iniciativa/ID; `client_id` sólo cubre los logs anteriores a esa
     # resolución.
     col_op = "oportunidad_id" if "oportunidad_id" in df_logs.columns else "client_id"
     if not df_logs.empty and {col_op, "nueva_etapa", "created_at_log"} <= set(df_logs.columns):
-        llegadas = df_logs[[col_op, "nueva_etapa", "created_at_log"]].copy()
-        llegadas = llegadas.rename(columns={col_op: "client_id"})
-        llegadas["client_id"] = llegadas["client_id"].astype(str)
-        llegadas = llegadas[llegadas["created_at_log"].notna()]
+        arrivals = df_logs[[col_op, "nueva_etapa", "created_at_log"]].copy()
+        arrivals = arrivals.rename(columns={col_op: "client_id"})
+        arrivals["client_id"] = arrivals["client_id"].astype(str)
+        arrivals = arrivals[arrivals["created_at_log"].notna()]
 
         last = (
-            llegadas.groupby(["client_id", "nueva_etapa"])["created_at_log"]
+            arrivals.groupby(["client_id", "nueva_etapa"])["created_at_log"]
             .max()
             .rename("entrada_log")
             .reset_index()
@@ -229,29 +229,29 @@ def compute_stage_stays(
             right_on=["client_id", "nueva_etapa"],
             how="left",
         )
-        entrada_log = df["entrada_log"]
+        log_entry = df["entrada_log"]
 
-    entrada = pd.to_datetime(entrada_log, errors="coerce")
-    for respaldo in ("ultima_actualizacion", "creado_el"):
-        if respaldo in df.columns:
-            entrada = entrada.fillna(pd.to_datetime(df[respaldo], errors="coerce"))
+    entry = pd.to_datetime(log_entry, errors="coerce")
+    for backup in ("ultima_actualizacion", "creado_el"):
+        if backup in df.columns:
+            entry = entry.fillna(pd.to_datetime(df[backup], errors="coerce"))
 
-    cierre = (
+    close = (
         pd.to_datetime(df["fecha_cierre"], errors="coerce")
         if "fecha_cierre" in df.columns
         else pd.Series(pd.NaT, index=df.index)
     )
-    corte = cierre.fillna(ahora)
+    cutoff = close.fillna(now)
 
-    horas = (corte - entrada).dt.total_seconds() / 3600
+    hours = (cutoff - entry).dt.total_seconds() / 3600
 
     out = pd.DataFrame({
         "client_id": df["client_id"],
         "etapa": df["etapa_actual"],
-        "horas": horas,
-        "cerrada": cierre.notna(),
-        "periodo_entrada": entrada.dt.strftime("%Y-%m"),
-        "fecha_entrada": entrada,
+        "horas": hours,
+        "cerrada": close.notna(),
+        "periodo_entrada": entry.dt.strftime("%Y-%m"),
+        "fecha_entrada": entry,
     })
 
     # Una estancia negativa es un cierre anterior a la entrada a la etapa: ruido
@@ -259,7 +259,7 @@ def compute_stage_stays(
     return out[out["horas"].notna() & (out["horas"] >= 0)].reset_index(drop=True)
 
 
-def _stats_permanencia(sub: pd.DataFrame) -> dict[str, Any]:
+def _stats_tenure(sub: pd.DataFrame) -> dict[str, Any]:
     """Las estancias sin salida de una etapa, abiertas y cerradas por separado."""
     n = len(sub)
     if n == 0:
@@ -277,15 +277,15 @@ def _stats_permanencia(sub: pd.DataFrame) -> dict[str, Any]:
     h = sub["horas"]
     stats = _compute_stats_distribution(h)
     adjusted_average, _, _ = _winsorized_mean(h)
-    n_cerradas = int(sub["cerrada"].sum())
+    n_closed = int(sub["cerrada"].sum())
 
     return {
         "total": n,
         # Envejecen contra el reloj: es la parte del dato que cambia entre
         # ejecuciones.
-        "abiertas": n - n_cerradas,
+        "abiertas": n - n_closed,
         # Terminadas contra su fecha de cierre: reproducibles.
-        "cerradas_en_etapa": n_cerradas,
+        "cerradas_en_etapa": n_closed,
         "promedio_horas": stats["promedio"],
         "promedio_ajustado_horas": round(adjusted_average, 2),
         "mediana_horas": stats["mediana"],
@@ -294,8 +294,8 @@ def _stats_permanencia(sub: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def _stats_combinado(
-    salidas: pd.Series,
+def _stats_combined(
+    departures: pd.Series,
     stays: pd.Series,
     cutoff_iso: str | None,
 ) -> dict[str, Any]:
@@ -306,8 +306,8 @@ def _stats_combinado(
     tiene su movimiento de salida y la que no ha terminado no lo tiene—, así que
     se concatenan sin doble conteo.
     """
-    todo = pd.concat([salidas, stays], ignore_index=True)
-    n = len(todo)
+    everything = pd.concat([departures, stays], ignore_index=True)
+    n = len(everything)
     if n == 0:
         return {
             "total": 0,
@@ -319,8 +319,8 @@ def _stats_combinado(
             "corte": cutoff_iso,
         }
 
-    stats = _compute_stats_distribution(todo)
-    adjusted_average, _, _ = _winsorized_mean(todo)
+    stats = _compute_stats_distribution(everything)
+    adjusted_average, _, _ = _winsorized_mean(everything)
 
     return {
         "total": n,
@@ -334,7 +334,7 @@ def _stats_combinado(
     }
 
 
-def _deduplicar_movimientos(df: pd.DataFrame) -> pd.DataFrame:
+def _dedupe_moves(df: pd.DataFrame) -> pd.DataFrame:
     """Un movimiento por fila, sin perder ninguno.
 
     El análisis cruza los logs con los clientes para leer el motivo de
@@ -353,19 +353,19 @@ def _deduplicar_movimientos(df: pd.DataFrame) -> pd.DataFrame:
     if "id" in df.columns:
         return df.drop_duplicates(subset=["id"])
 
-    identidad = [
+    identity = [
         c
         for c in ("oportunidad_id", "client_id", "etapa_anterior", "nueva_etapa",
                   "created_at_log", "duracion_horas")
         if c in df.columns
     ]
-    return df.drop_duplicates(subset=identidad) if identidad else df
+    return df.drop_duplicates(subset=identity) if identity else df
 
 
 def compute_time_by_stage(
     df_logs: pd.DataFrame,
     df_stays: pd.DataFrame | None = None,
-    ahora: pd.Timestamp | None = None,
+    now: pd.Timestamp | None = None,
 ) -> list[dict[str, Any]]:
     """Cuánto tarda una oportunidad en salir de cada etapa.
 
@@ -406,14 +406,14 @@ def compute_time_by_stage(
     Una etapa donde nadie ha salido todavía sí produce fila: su tiempo son sus
     estancias en curso, y es justo la etapa que el cálculo anterior ocultaba.
     """
-    cutoff_iso = (ahora if ahora is not None else pd.Timestamp.now()).isoformat(timespec="minutes")
+    cutoff_iso = (now if now is not None else pd.Timestamp.now()).isoformat(timespec="minutes")
 
     measurable_stages = [e for e in STAGE_ORDER if e not in STAGES_WITHOUT_WAIT]
 
     df_valid = pd.DataFrame()
     n_nulls_by_stage: dict[str, int] = {}
     if not df_logs.empty and "duracion_horas" in df_logs.columns:
-        df = _deduplicar_movimientos(df_logs)
+        df = _dedupe_moves(df_logs)
 
         in_catalog = df[
             df["duracion_horas"].notna() & df["etapa_anterior"].isin(measurable_stages)
@@ -423,17 +423,17 @@ def compute_time_by_stage(
         # cuentan por etapa para poder reportarlas, pero no entran ni al
         # numerador ni al divisor del promedio. Desde un minuto, el movimiento
         # cuenta entero por corto que sea.
-        es_estancia = in_catalog["duracion_horas"] >= STAGE_TIME_MIN_DURATION_H
+        is_stay = in_catalog["duracion_horas"] >= STAGE_TIME_MIN_DURATION_H
         n_nulls_by_stage = (
-            in_catalog.loc[~es_estancia, "etapa_anterior"].value_counts().to_dict()
+            in_catalog.loc[~is_stay, "etapa_anterior"].value_counts().to_dict()
         )
-        df_valid = in_catalog[es_estancia].copy()
+        df_valid = in_catalog[is_stay].copy()
 
     if not df_valid.empty:
         if "nueva_etapa" in df_valid.columns:
             df_valid["sentido"] = [
-                _classify_move(origen, destino)
-                for origen, destino in zip(df_valid["etapa_anterior"], df_valid["nueva_etapa"])
+                _classify_move(source, target)
+                for source, target in zip(df_valid["etapa_anterior"], df_valid["nueva_etapa"])
             ]
         else:
             df_valid["sentido"] = "otro"
@@ -464,17 +464,17 @@ def compute_time_by_stage(
     # Las etapas que sólo aportaron movimientos de duración cero también
     # producen fila: sin ellas la etapa desaparecería del informe sin decir por
     # qué, y el motivo (todo su movimiento fue instantáneo) es la lectura.
-    for etapa in set(exits_by_stage) | set(perm_by_stage) | set(n_nulls_by_stage):
-        group = exits_by_stage.get(etapa, without_exits)
-        perm = perm_by_stage.get(etapa, df_perm.iloc[0:0])
+    for stage in set(exits_by_stage) | set(perm_by_stage) | set(n_nulls_by_stage):
+        group = exits_by_stage.get(stage, without_exits)
+        perm = perm_by_stage.get(stage, df_perm.iloc[0:0])
 
         h = group["duracion_horas"] if not group.empty else pd.Series(dtype=float)
         n = len(h)
 
         stats = _compute_stats_distribution(h)
-        adjusted_average, corte, n_recortados = _winsorized_mean(h)
-        n_instantaneos = int((h < STAGE_TIME_INSTANT_THRESHOLD_H).sum())
-        n_nulos = int(n_nulls_by_stage.get(etapa, 0))
+        adjusted_average, cutoff, n_trimmed = _winsorized_mean(h)
+        n_snapshots = int((h < STAGE_TIME_INSTANT_THRESHOLD_H).sum())
+        n_nulls = int(n_nulls_by_stage.get(stage, 0))
 
         # `oportunidad_id` lo resuelve el análisis desde `entrada_id`
         # (Iniciativa/ID del log); `client_id` queda como respaldo.
@@ -485,16 +485,16 @@ def compute_time_by_stage(
         # así que las dos poblaciones se unen en vez de sumarse.
         n_opportunities = len(exit_ids | ids_perm) or n
 
-        permanencia = _stats_permanencia(perm)
-        combinado = _stats_combinado(
+        tenure = _stats_tenure(perm)
+        combined = _stats_combined(
             h,
             perm["horas"] if not perm.empty else pd.Series(dtype=float),
             cutoff_iso,
         )
 
         records.append({
-            "etapa": etapa,
-            "es_clave": etapa in KEY_SALES_STAGES,
+            "etapa": stage,
+            "es_clave": stage in KEY_SALES_STAGES,
             "total_movimientos": n,
             "total_oportunidades": n_opportunities,
             "movimientos_por_oportunidad": (
@@ -509,9 +509,9 @@ def compute_time_by_stage(
             "tiempo_total_horas": round(float(h.sum()), 2) if n > 0 else 0.0,
             "tiempo_promedio_horas": stats["promedio"],
             "tiempo_promedio_ajustado_horas": round(adjusted_average, 2),
-            "tiempo_corte_outlier_horas": round(corte, 2),
-            "total_outliers": n_recortados,
-            "pct_outliers": round(n_recortados / n * 100, 2) if n > 0 else 0.0,
+            "tiempo_corte_outlier_horas": round(cutoff, 2),
+            "total_outliers": n_trimmed,
+            "pct_outliers": round(n_trimmed / n * 100, 2) if n > 0 else 0.0,
 
             "tiempo_mediana_horas": stats["mediana"],
             "tiempo_p25_horas": stats["p25"],
@@ -524,19 +524,19 @@ def compute_time_by_stage(
             # Movimientos casi instantáneos: correcciones de etapa y cargas
             # masivas que no son gestión pero sí hunden el promedio. Cuentan en
             # el promedio —son tiempo real—, se reportan para leerlo con reserva.
-            "movimientos_instantaneos": n_instantaneos,
-            "pct_instantaneos": round(n_instantaneos / n * 100, 2) if n > 0 else 0.0,
+            "movimientos_instantaneos": n_snapshots,
+            "pct_instantaneos": round(n_snapshots / n * 100, 2) if n > 0 else 0.0,
 
             # Descartados por durar exactamente 0: fuera del promedio, contados
             # aquí para que la diferencia con el log sea explicable.
-            "movimientos_nulos": n_nulos,
+            "movimientos_nulos": n_nulls,
 
-            "avance": _stats_desenlace(group, "avance", n),
-            "retorno": _stats_desenlace(group, "retorno", n),
-            "devolucion": _stats_desenlace(group, "devolucion", n),
+            "avance": _stats_outcome(group, "avance", n),
+            "retorno": _stats_outcome(group, "retorno", n),
+            "devolucion": _stats_outcome(group, "devolucion", n),
 
-            "permanencia": permanencia,
-            "combinado": combinado,
+            "permanencia": tenure,
+            "combinado": combined,
         })
 
     records.sort(key=lambda r: stage_order_map.get(r["etapa"], 999))

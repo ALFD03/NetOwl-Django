@@ -37,22 +37,22 @@ export interface TargetsPanelProps {
   thresholds: CatalogTrafficLight | null;
   config: TargetsConfig | null;
   /** Meses con cierre calculado, `YYYY-MM`. */
-  periodos: string[];
+  periods: string[];
   /** El catálogo de zonas: dice a qué coordinador, site y estado pertenece cada una. */
   zones: CatalogZone[];
   /** Los nodos de los datos: a cuáles alcanza cada objetivo. */
-  nodos: KnownNode[];
-  onEditarGeneral: (row: CatalogTarget) => void;
+  nodes: KnownNode[];
+  onEditGeneral: (row: CatalogTarget) => void;
   onNewTarget: () => void;
   onEditTarget: (row: CatalogTarget) => void;
   onDeleteTarget: (row: CatalogTarget) => void;
-  onMonthException: (periodo: string, existente?: CatalogMonthTarget) => void;
+  onMonthException: (period: string, existing?: CatalogMonthTarget) => void;
   onDeleteMonth: (row: CatalogMonthTarget) => void;
   onEditTrafficLight: () => void;
 }
 
 /** Un porcentaje de objetivo, o "hereda" si el tramo no lo fija. */
-const valor = (pct: number | null): ReactNode =>
+const value = (pct: number | null): ReactNode =>
   pct === null ? <span className="text-slate-500">hereda</span> : formatTarget(pct);
 
 interface MonthRow {
@@ -61,14 +61,14 @@ interface MonthRow {
   exception?: CatalogMonthTarget;
 }
 
-function BotonIcono({
+function IconButton({
   onClick, title, tone, children,
 }: { onClick: () => void; title: string; tone: 'sky' | 'rose'; children: ReactNode }) {
-  const clases = tone === 'sky'
+  const classes = tone === 'sky'
     ? 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10'
     : 'border-rose-500/30 text-rose-400 hover:bg-rose-500/10';
   return (
-    <button type="button" onClick={onClick} title={title} className={`rounded-lg border p-2 ${clases}`}>
+    <button type="button" onClick={onClick} title={title} className={`rounded-lg border p-2 ${classes}`}>
       {children}
     </button>
   );
@@ -76,19 +76,19 @@ function BotonIcono({
 
 export function TargetsPanel({
   targets,
-  monthTargets: objetivosMes,
+  monthTargets,
   thresholds,
   config,
-  periodos,
+  periods,
   zones,
-  nodos,
-  onEditarGeneral,
-  onNewTarget: onNuevoObjetivo,
-  onEditTarget: onEditarObjetivo,
-  onDeleteTarget: onBorrarObjetivo,
-  onMonthException: onExcepcionMes,
-  onDeleteMonth: onBorrarMes,
-  onEditTrafficLight: onEditarSemaforo,
+  nodes,
+  onEditGeneral,
+  onNewTarget,
+  onEditTarget,
+  onDeleteTarget,
+  onMonthException,
+  onDeleteMonth,
+  onEditTrafficLight,
 }: TargetsPanelProps) {
   const cfg = config ?? DEFAULT_TARGETS;
   const s = thresholds ?? DEFAULT_TARGETS.thresholds;
@@ -96,7 +96,7 @@ export function TargetsPanel({
   // Con la misma resolución que los reportes, para decir de cada objetivo en
   // qué nodos rige y en cuáles lo anula un nivel superior. Se mide en el mes
   // más reciente calculado.
-  const referenceMonth = periodos[0] ?? new Date().toISOString().slice(0, 7);
+  const referenceMonth = periods[0] ?? new Date().toISOString().slice(0, 7);
   const zoneOf = new Map(zones.map((z) => [z.name.toLowerCase(), z]));
   const resolve = createResolver(
     cfg,
@@ -105,16 +105,16 @@ export function TargetsPanel({
 
   /** Los nodos de los datos a los que alcanza un objetivo. */
   const nodesOf = (row: CatalogTarget): KnownNode[] => {
-    const igual = (a: string | undefined, b: string) => (a ?? '').toLowerCase() === b.toLowerCase();
-    return nodos.filter((n) => {
-      const zona = zoneOf.get(n.zona.toLowerCase());
+    const sameValue = (a: string | undefined, b: string) => (a ?? '').toLowerCase() === b.toLowerCase();
+    return nodes.filter((n) => {
+      const zone = zoneOf.get(n.zona.toLowerCase());
       switch (row.level) {
-        case 'zona_sucursal': return igual(n.node, row.entity);
-        case 'zona': return igual(n.zona, row.entity);
-        case 'sucursal': return igual(n.sucursal, row.entity);
-        case 'coordinador': return igual(zona?.coordinator, row.entity);
-        case 'site': return igual(zona?.site, row.entity);
-        case 'estado': return igual(zona?.state, row.entity);
+        case 'zona_sucursal': return sameValue(n.node, row.entity);
+        case 'zona': return sameValue(n.zona, row.entity);
+        case 'sucursal': return sameValue(n.sucursal, row.entity);
+        case 'coordinador': return sameValue(zone?.coordinator, row.entity);
+        case 'site': return sameValue(zone?.site, row.entity);
+        case 'estado': return sameValue(zone?.state, row.entity);
         default: return false;
       }
     });
@@ -122,34 +122,34 @@ export function TargetsPanel({
 
   /** Qué rige hoy en los nodos que alcanza el objetivo, por cada métrica que fija. */
   const effectiveToday = (row: CatalogTarget): ReactNode => {
-    const alcance = nodesOf(row);
-    if (alcance.length === 0) return <span className="text-slate-600">Sin nodos en los datos</span>;
+    const scope = nodesOf(row);
+    if (scope.length === 0) return <span className="text-slate-600">Sin nodos en los datos</span>;
 
-    const lineas = (['growth', 'churn'] as const)
-      .filter((metrica) => row[`${metrica}_pct`] !== null)
-      .flatMap((metrica) => {
-        const anulados = alcance
-          .map((n) => resolve.origen(referenceMonth, n, metrica))
-          .filter((origen) => origen.level !== row.level);
-        if (anulados.length === 0) return [];
-        const quien = anulados[0]!;
-        const donde = anulados.length === alcance.length ? '' : ` en ${anulados.length} de ${alcance.length} nodos`;
+    const lines = (['growth', 'churn'] as const)
+      .filter((metric) => row[`${metric}_pct`] !== null)
+      .flatMap((metric) => {
+        const overridden = scope
+          .map((n) => resolve.source(referenceMonth, n, metric))
+          .filter((source) => source.level !== row.level);
+        if (overridden.length === 0) return [];
+        const who = overridden[0]!;
+        const where = overridden.length === scope.length ? '' : ` en ${overridden.length} de ${scope.length} nodos`;
         return [{
-          metrica,
-          texto: `${metrica === 'growth' ? 'Crec.' : 'Churn'}${donde}: manda ${TARGET_LEVEL_UI[quien.level].label.toLowerCase()}${quien.name ? ` ${quien.name}` : ''} (${formatTarget(quien.value)})`,
+          metric,
+          text: `${metric === 'growth' ? 'Crec.' : 'Churn'}${where}: manda ${TARGET_LEVEL_UI[who.level].label.toLowerCase()}${who.name ? ` ${who.name}` : ''} (${formatTarget(who.value)})`,
         }];
       });
 
-    if (lineas.length === 0) {
+    if (lines.length === 0) {
       return (
         <span className="font-bold text-emerald-400">
-          Rige{alcance.length > 1 ? ` en ${alcance.length} nodos` : ''}
+          Rige{scope.length > 1 ? ` en ${scope.length} nodos` : ''}
         </span>
       );
     }
     return (
       <span className="font-bold text-amber-400">
-        {lineas.map(({ metrica, texto }) => <span key={metrica} className="block">{texto}</span>)}
+        {lines.map(({ metric, text }) => <span key={metric} className="block">{text}</span>)}
       </span>
     );
   };
@@ -160,14 +160,14 @@ export function TargetsPanel({
 
   // Los meses calculados y, además, los que tengan excepción sin estar
   // calculados todavía (un mes futuro que ya se sabe que será distinto).
-  const excepciones = new Map(objetivosMes.map((row) => [row.period, row]));
-  const monthRows: MonthRow[] = [...new Set([...periodos.map(monthOf), ...excepciones.keys()])]
+  const exceptions = new Map(monthTargets.map((row) => [row.period, row]));
+  const monthRows: MonthRow[] = [...new Set([...periods.map(monthOf), ...exceptions.keys()])]
     .sort()
     .reverse()
-    .map((periodo) => ({
-      period: periodo,
-      computed: periodos.includes(periodo),
-      exception: excepciones.get(periodo),
+    .map((period) => ({
+      period,
+      computed: periods.includes(period),
+      exception: exceptions.get(period),
     }));
 
   const tierActions: Column<CatalogTarget> = {
@@ -175,12 +175,12 @@ export function TargetsPanel({
     align: 'right',
     accessor: (row) => (
       <div className="flex justify-end gap-2">
-        <BotonIcono onClick={() => onEditarObjetivo(row)} title="Editar" tone="sky">
+        <IconButton onClick={() => onEditTarget(row)} title="Editar" tone="sky">
           <Edit3 className="h-4 w-4" />
-        </BotonIcono>
-        <BotonIcono onClick={() => onBorrarObjetivo(row)} title="Eliminar" tone="rose">
+        </IconButton>
+        <IconButton onClick={() => onDeleteTarget(row)} title="Eliminar" tone="rose">
           <Trash2 className="h-4 w-4" />
-        </BotonIcono>
+        </IconButton>
       </div>
     ),
   };
@@ -199,8 +199,8 @@ export function TargetsPanel({
       accessor: (row) => (row.since ? formatPeriodLabel(row.since) : 'Siempre'),
       sortKey: 'since',
     },
-    { header: 'Crecimiento', accessor: (row) => valor(row.growth_pct), align: 'right' },
-    { header: 'Churn máx.', accessor: (row) => valor(row.churn_pct), align: 'right' },
+    { header: 'Crecimiento', accessor: (row) => value(row.growth_pct), align: 'right' },
+    { header: 'Churn máx.', accessor: (row) => value(row.churn_pct), align: 'right' },
     { header: 'Rige hoy', accessor: effectiveToday },
     { header: 'Nota', accessor: (row) => row.note || '—' },
     tierActions,
@@ -242,15 +242,15 @@ export function TargetsPanel({
         <div className="flex justify-end gap-2">
           {row.exception ? (
             <>
-              <BotonIcono onClick={() => onExcepcionMes(row.period, row.exception)} title="Editar excepción" tone="sky">
+              <IconButton onClick={() => onMonthException(row.period, row.exception)} title="Editar excepción" tone="sky">
                 <Edit3 className="h-4 w-4" />
-              </BotonIcono>
-              <BotonIcono onClick={() => onBorrarMes(row.exception!)} title="Quitar excepción" tone="rose">
+              </IconButton>
+              <IconButton onClick={() => onDeleteMonth(row.exception!)} title="Quitar excepción" tone="rose">
                 <Trash2 className="h-4 w-4" />
-              </BotonIcono>
+              </IconButton>
             </>
           ) : (
-            <Button size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => onExcepcionMes(row.period)}>
+            <Button size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => onMonthException(row.period)}>
               Excepción
             </Button>
           )}
@@ -272,7 +272,7 @@ export function TargetsPanel({
             <Button
               size="sm"
               icon={<Edit3 className="h-4 w-4" />}
-              onClick={() => general && onEditarGeneral(general)}
+              onClick={() => general && onEditGeneral(general)}
               disabled={!general}
             >
               Editar
@@ -315,7 +315,7 @@ export function TargetsPanel({
               size="sm"
               variant="outline"
               icon={<Edit3 className="h-4 w-4" />}
-              onClick={onEditarSemaforo}
+              onClick={onEditTrafficLight}
               disabled={!thresholds}
             >
               Editar semáforo
@@ -327,10 +327,10 @@ export function TargetsPanel({
               ['Crecimiento', 'crecimiento', s.growth_green, s.growth_yellow],
               ['Churn', 'churn', s.churn_green, s.churn_yellow],
               ['Cumplimiento de la meta', 'cumplimiento', s.compliance_green, s.compliance_yellow],
-            ] as const).map(([titulo, metrica, verde, amarillo]) => (
-              <div key={metrica}>
-                <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-300">{titulo}</p>
-                <TrafficLightScale metrica={metrica} verde={verde} amarillo={amarillo} />
+            ] as const).map(([title, metric, green, yellow]) => (
+              <div key={metric}>
+                <p className="mb-1 text-[10px] font-black uppercase tracking-wider text-slate-300">{title}</p>
+                <TrafficLightScale metric={metric} green={green} yellow={yellow} />
               </div>
             ))}
           </div>
@@ -344,7 +344,7 @@ export function TargetsPanel({
         theme="blue"
         noPadding
         headerAction={
-          <Button size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => onExcepcionMes('')}>
+          <Button size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => onMonthException('')}>
             Excepción de otro mes
           </Button>
         }
@@ -363,7 +363,7 @@ export function TargetsPanel({
         theme="purple"
         noPadding
         headerAction={
-          <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={onNuevoObjetivo}>
+          <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={onNewTarget}>
             Nuevo objetivo
           </Button>
         }

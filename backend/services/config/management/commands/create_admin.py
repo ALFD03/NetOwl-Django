@@ -10,8 +10,8 @@ llegase primero por la red.
 Crear al primer administrador es una operacion de despliegue, no una pantalla:
 va por la misma via que `migrate`.
 
-    python manage.py crear_admin --usuario admin
-    python manage.py crear_admin --usuario admin --clave '...'   # no interactivo
+    python manage.py create_admin --username admin
+    python manage.py create_admin --username admin --password '...'   # no interactivo
 
 `auth_user` vive en el esquema del entorno (DB_SCHEMA): cada entorno tiene
 sus propias cuentas y hay que crear el administrador en cada uno.
@@ -34,43 +34,43 @@ class Command(BaseCommand):
     help = "Crea un administrador (superusuario) con todos los permisos concedidos."
 
     def add_arguments(self, parser):
-        parser.add_argument("--usuario", required=True, help="Nombre de la cuenta.")
+        parser.add_argument("--username", required=True, help="Nombre de la cuenta.")
         parser.add_argument(
-            "--clave",
+            "--password",
             help="Contraseña. Si se omite, se pide por teclado sin mostrarla.",
         )
 
     def handle(self, *args, **options):
         """Valida, crea la cuenta y le concede la matriz entera."""
-        usuario = options["usuario"].strip()
-        if not usuario:
+        user = options["username"].strip()
+        if not user:
             raise CommandError("El nombre de usuario no puede estar vacío.")
 
-        if User.objects.filter(username=usuario).exists():
-            raise CommandError(f"La cuenta '{usuario}' ya existe.")
+        if User.objects.filter(username=user).exists():
+            raise CommandError(f"La cuenta '{user}' ya existe.")
 
-        clave = options.get("clave")
-        if not clave:
-            clave = getpass("Contraseña: ")
-            if clave != getpass("Repita la contraseña: "):
+        key = options.get("password")
+        if not key:
+            key = getpass("Contraseña: ")
+            if key != getpass("Repita la contraseña: "):
                 raise CommandError("Las contraseñas no coinciden.")
 
         # Los mismos validadores que aplican las vistas de administracion
         # (AUTH_PASSWORD_VALIDATORS en netowl_web/settings.py).
         try:
-            validate_password(clave, user=User(username=usuario))
+            validate_password(key, user=User(username=user))
         except ValidationError as e:
             raise CommandError(" ".join(e.messages)) from None
 
         with transaction.atomic():
-            cuenta = User.objects.create_superuser(username=usuario, password=clave)
-            perfil = cuenta.profile
-            perfil.role = "admin"
-            perfil.group = None
-            for campo in PERMISSION_FIELDS:
-                setattr(perfil, campo, True)
-            perfil.save()
+            account = User.objects.create_superuser(username=user, password=key)
+            profile = account.profile
+            profile.role = "admin"
+            profile.group = None
+            for field in PERMISSION_FIELDS:
+                setattr(profile, field, True)
+            profile.save()
 
         self.stdout.write(
-            self.style.SUCCESS(f"Administrador '{usuario}' creado con la matriz completa.")
+            self.style.SUCCESS(f"Administrador '{user}' creado con la matriz completa.")
         )

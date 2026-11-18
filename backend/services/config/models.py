@@ -6,7 +6,7 @@ Tres cosas, todas de infraestructura y ninguna de negocio:
   `ACTION_PERMISSION_FIELDS`), que recorren el middleware, la pantalla de
   administracion y los decoradores en vez de repetir los nombres campo a campo;
 * `Profile` y `PermissionGroup`, que comparten esa matriz;
-* `SesionEntorno`, la tabla de sesiones cualificada por esquema.
+* `SchemaSession`, la tabla de sesiones cualificada por esquema.
 
 Como todo lo demas, usuarios, perfiles y permisos viven en el esquema del
 entorno (DB_SCHEMA): una cuenta de desarrollo no existe en produccion, ni al
@@ -47,18 +47,18 @@ VIEW_PERMISSION_FIELDS = [
     'can_view_crm_results', 'can_view_support_analytics', 'can_view_support_results',
     # Los tickets abiertos de hoy, de los logs de etapa. No abre pagina: recorta
     # lo que ensena el Dashboard de soporte.
-    'can_view_support_abiertos',
+    'can_view_support_open',
     # Paginas del modulo de Importaciones (una por pestana).
     'can_view_imports_subs', 'can_view_imports_crm', 'can_view_imports_support',
     'can_view_import_history',
-    'can_view_comisiones',
+    'can_view_commissions',
     # Profundidad historica: todos los periodos evaluados o solo el ultimo.
     'can_view_all_periods',
-    # Unidades de negocio: todas, o solo las de `unidades_negocio` (+ RF).
+    # Unidades de negocio: todas, o solo las de `business_units` (+ RF).
     'can_view_all_business_units',
     # Administracion: ver la pantalla de cuentas y grupos, y el registro de
     # auditoria.
-    'can_view_users', 'can_view_auditoria',
+    'can_view_users', 'can_view_audit',
     # Usar la API con un token propio.
     'can_use_api',
 ]
@@ -67,10 +67,10 @@ VIEW_PERMISSION_FIELDS = [
 ACTION_PERMISSION_FIELDS = [
     'can_import_data', 'can_run_calculations', 'can_run_lifetime',
     'can_manage_eta',
-    'can_manage_catalogo_comercial', 'can_manage_catalogo_operacional',
-    'can_manage_catalogo_ventas',
+    'can_manage_commercial_catalog', 'can_manage_operational_catalog',
+    'can_manage_sales_catalog',
     'can_manage_support_users',
-    'can_manage_comisiones', 'can_reopen_comisiones', 'can_delete_comisiones',
+    'can_manage_commissions', 'can_reopen_commissions', 'can_delete_commissions',
     # Administracion de cuentas, un permiso por accion (antes `can_manage_users`).
     'can_create_users', 'can_edit_user_permissions', 'can_change_passwords',
     'can_delete_users', 'can_manage_groups',
@@ -139,7 +139,7 @@ class PermissionMatrix(models.Model):
     can_view_support_results = models.BooleanField(default=False)
     # El bloque de abiertos del Dashboard. La migracion 0017 se lo concedio a
     # quien ya veia el dashboard o Analytics de soporte.
-    can_view_support_abiertos = models.BooleanField(default=False)
+    can_view_support_open = models.BooleanField(default=False, db_column="can_view_support_abiertos")
 
     # --- Paginas del modulo de Importaciones ---
     can_view_imports_subs = models.BooleanField(default=False)
@@ -155,22 +155,22 @@ class PermissionMatrix(models.Model):
 
     # --- Unidades de negocio ---
     # Con `can_view_all_business_units`, la pagina Unidades de negocio entera.
-    # Sin el, solo las unidades de la lista del usuario (`Profile.unidades_negocio`)
+    # Sin el, solo las unidades de la lista del usuario (`Profile.business_units`)
     # y el consolidado FTTH, que se ve siempre. La migracion 0014 dio el
     # interruptor a todas las cuentas existentes.
     can_view_all_business_units = models.BooleanField(default=False)
 
     # --- Comisiones ---
     # Ver el informe. Calcularlo, revisar sus casos, cerrarlo y configurar los
-    # supervisores de cada UN y las condiciones de pago es `can_manage_comisiones`.
-    can_view_comisiones = models.BooleanField(default=False)
-    # Reabrir un periodo cerrado. Va aparte de `can_manage_comisiones` porque
+    # supervisores de cada UN y las condiciones de pago es `can_manage_commissions`.
+    can_view_commissions = models.BooleanField(default=False, db_column="can_view_comisiones")
+    # Reabrir un periodo cerrado. Va aparte de `can_manage_commissions` porque
     # deshace una nomina ya pagada: el cierre queda archivado
     # (`ComisionCierreArchivado`), pero la decision no es de quien calcula.
-    can_reopen_comisiones = models.BooleanField(default=False)
+    can_reopen_commissions = models.BooleanField(default=False, db_column="can_reopen_comisiones")
     # Borrar un informe en borrador con todo lo decidido en el (revisiones,
     # ventas a mano, indicadores). Aparte de gestionar: no se deshace.
-    can_delete_comisiones = models.BooleanField(default=False)
+    can_delete_commissions = models.BooleanField(default=False, db_column="can_delete_comisiones")
 
     # --- Administracion de cuentas ---
     # `can_manage_users` era un solo interruptor para todo: ver, crear, borrar,
@@ -185,7 +185,7 @@ class PermissionMatrix(models.Model):
     can_delete_users = models.BooleanField(default=False)
     can_manage_groups = models.BooleanField(default=False)
     # El registro de auditoria (`services/auditoria`): quien hizo que y cuando.
-    can_view_auditoria = models.BooleanField(default=False)
+    can_view_audit = models.BooleanField(default=False, db_column="can_view_auditoria")
 
     # --- API ---
     # `can_use_api`: el dueño de un token puede usarlo. `can_manage_api_tokens`:
@@ -205,14 +205,14 @@ class PermissionMatrix(models.Model):
     # planes reguladores y sus productos por registrar e ignorados. Ventas son
     # los coordinadores, los objetivos comerciales y el directorio de
     # vendedores, que lleva quien paga comisiones y no quien reparte la red.
-    can_manage_catalogo_comercial = models.BooleanField(default=False)
-    can_manage_catalogo_operacional = models.BooleanField(default=False)
-    can_manage_catalogo_ventas = models.BooleanField(default=False)
+    can_manage_commercial_catalog = models.BooleanField(default=False, db_column="can_manage_catalogo_comercial")
+    can_manage_operational_catalog = models.BooleanField(default=False, db_column="can_manage_catalogo_operacional")
+    can_manage_sales_catalog = models.BooleanField(default=False, db_column="can_manage_catalogo_ventas")
     # Directorio de usuarios de soporte y sus departamentos. Va aparte de los
     # catalogos de suscripciones: quien los mantiene no es necesariamente quien
     # sabe quien trabaja en soporte.
     can_manage_support_users = models.BooleanField(default=False)
-    can_manage_comisiones = models.BooleanField(default=False)
+    can_manage_commissions = models.BooleanField(default=False, db_column="can_manage_comisiones")
 
     # --- Cargas de CSV por modulo ---
     can_import_subs = models.BooleanField(default=False)
@@ -277,11 +277,11 @@ class Profile(PermissionMatrix):
     # `services/config/units.py`). Es una relacion con el catalogo y no un
     # permiso por unidad, porque las unidades cambian; por id, asi que renombrar
     # una no se la quita a nadie.
-    unidades_negocio = models.ManyToManyField(
-        'subscriptions.Coordinador', blank=True, related_name='+',
+    business_units = models.ManyToManyField(
+        'subscriptions.Coordinator', blank=True, related_name='+', through='ProfileUnit',
     )
     # El bloque RF no es un coordinador: agrupa todas las zonas RF.
-    unidad_rf = models.BooleanField(default=False)
+    rf_unit = models.BooleanField(default=False, db_column='unidad_rf')
 
     def has_permission(self, perm_name: str) -> bool:
         """Si esta cuenta tiene el permiso indicado.
@@ -347,13 +347,24 @@ def save_user_profile(sender, instance, **kwargs):
     instance.profile.save()
 
 
+class ProfileUnit(models.Model):
+    """Una unidad de negocio de un perfil (la tabla del M2M `Profile.business_units`)."""
+
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, db_column='profile_id')
+    unit = models.ForeignKey('subscriptions.Coordinator', on_delete=models.CASCADE, db_column='coordinador_id')
+
+    class Meta:
+        db_table = 'config_profile_unidades_negocio'
+        unique_together = [('profile', 'unit')]
+
+
 # --- Sesiones del entorno ---
 # Nacio cuando usuarios y permisos se compartian en `public` y la tabla de
 # sesiones era lo unico propio de cada esquema; por eso cualifica su `db_table`
 # con DB_SCHEMA y es `managed = False`. Hoy todo el entorno vive en su esquema
 # y esta es la misma `<esquema>.django_session` que crea la migracion de
 # `django.contrib.sessions`.
-class SesionEntorno(AbstractBaseSession):
+class SchemaSession(AbstractBaseSession):
     # AbstractBaseSession marca expire_date con db_index, y el nombre que Django
     # autogenera es un hash del nombre de la tabla: seria distinto en cada
     # esquema y `makemigrations --check` reportaria cambios pendientes para

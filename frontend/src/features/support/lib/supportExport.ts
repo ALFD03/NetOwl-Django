@@ -61,8 +61,8 @@ export const SUPPORT_DIMENSION_EXCEL_COLUMNS: ExcelColumn<SupportDimensionRow>[]
  * grupo, dimensión y periodo, y sin ellos los archivos son indistinguibles en
  * la carpeta de descargas.
  */
-export function supportExportFileName(partes: Array<string | undefined>): string {
-  return ['Soporte', ...partes.filter((p): p is string => Boolean(p && p.trim()))].join(' - ');
+export function supportExportFileName(parts: Array<string | undefined>): string {
+  return ['Soporte', ...parts.filter((p): p is string => Boolean(p && p.trim()))].join(' - ');
 }
 
 /**
@@ -73,7 +73,7 @@ export function supportExportFileName(partes: Array<string | undefined>): string
  */
 export const SUPPORT_DEPARTMENT_EXCEL_COLUMNS: ExcelColumn<SupportDepartmentRow>[] = [
   { header: 'Departamento', value: (r) => r.name, width: 34 },
-  { header: 'Personas', value: (r) => num(r.personas), format: INT },
+  { header: 'Personas', value: (r) => num(r.people), format: INT },
   ...SUPPORT_DIMENSION_EXCEL_COLUMNS.filter(
     (col) => col.header !== 'Valor' && col.header !== 'Cierre Total Mediana (h)',
   ),

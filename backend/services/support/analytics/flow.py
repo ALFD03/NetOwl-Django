@@ -45,6 +45,7 @@ from services.support.analytics.config import (
     ESCALATION_STAGE,
     KIND_CLOSE,
     KIND_HANDLING,
+    KIND_PAUSE,
     KIND_QUEUE,
     KIND_UNCLASSIFIED,
     RESOLVED_STAGES,
@@ -52,9 +53,8 @@ from services.support.analytics.config import (
     TEAM_SUPPORT,
     TENURE_TIERS,
     TIME_ZONE,
-    TIPO_PAUSA,
 )
-from services.support.analytics.metrics import _compute_stats_for_series as estadisticos
+from services.support.analytics.metrics import _compute_stats_for_series as stats
 from services.support.analytics.tables import TICKET_LOGS
 
 logger = logging.getLogger(__name__)
@@ -63,8 +63,8 @@ LOGS = f"{DB_SCHEMA}.{TableNames.SUPPORT_TICKET_LOGS}"
 FLOW = f"{DB_SCHEMA}.{TableNames.SUPPORT_TICKET_FLOW}"
 
 CLOSES = sorted(RESOLVED_STAGES | CANCELED_STAGES)
-EQUIPOS = (TEAM_ATC, TEAM_SUPPORT)
-TIPOS = (KIND_QUEUE, TIPO_PAUSA, KIND_HANDLING, KIND_UNCLASSIFIED)
+TEAMS = (TEAM_ATC, TEAM_SUPPORT)
+KINDS = (KIND_QUEUE, KIND_PAUSE, KIND_HANDLING, KIND_UNCLASSIFIED)
 
 UNSPECIFIED = "Sin Especificar"
 
@@ -78,23 +78,23 @@ def stage_classification() -> dict[str, tuple[str, str]]:
     """`nombre en minusculas -> (equipo, tipo)`, del catalogo de etapas."""
     # Import diferido: el paquete de analitica tambien se importa sin las apps
     # de Django cargadas (comandos, el worker antes de `setup`).
-    from services.support.models import EtapaSoporte
+    from services.support.models import SupportStage
 
     return {
-        nombre.strip().lower(): (equipo, tipo)
-        for nombre, equipo, tipo in EtapaSoporte.objects.values_list("nombre", "equipo", "tipo")
+        name.strip().lower(): (team, kind)
+        for name, team, kind in SupportStage.objects.values_list("name", "team", "kind")
     }
 
 
-def _exists(cur, tabla: str) -> bool:
-    cur.execute("SELECT to_regclass(%s)", [tabla])
+def _exists(cur, table: str) -> bool:
+    cur.execute("SELECT to_regclass(%s)", [table])
     return cur.fetchone()[0] is not None
 
 
 # --- Los tramos y el resumen por ticket (SQL) ------------------------------
 
-def _build_segments(cur, etapas: dict[str, tuple[str, str]]) -> None:
-    """`_tramos`: una fila por log, con el tramo que abre, su equipo y su tipo.
+def _build_segments(cur, stages: dict[str, tuple[str, str]]) -> None:
+    """`_tiers`: una fila por log, con el tramo que abre, su equipo y su tipo.
 
     El tramo de un log va de su fecha a la del siguiente log del ticket (`fin`
     nulo en el ultimo: es la etapa en la que esta hoy). Temporal y con
@@ -104,9 +104,9 @@ def _build_segments(cur, etapas: dict[str, tuple[str, str]]) -> None:
         CREATE TEMP TABLE _etapas (clave TEXT PRIMARY KEY, equipo TEXT NOT NULL, tipo TEXT NOT NULL)
         ON COMMIT DROP;
     """)
-    filas = [(clave, equipo, tipo) for clave, (equipo, tipo) in etapas.items() if clave not in CLOSES]
-    if filas:
-        execute_values(cur, "INSERT INTO _etapas (clave, equipo, tipo) VALUES %s ON CONFLICT DO NOTHING", filas)
+    rows = [(key, team, kind) for key, (team, kind) in stages.items() if key not in CLOSES]
+    if rows:
+        execute_values(cur, "INSERT INTO _etapas (clave, equipo, tipo) VALUES %s ON CONFLICT DO NOTHING", rows)
 
     cur.execute(f"""
         CREATE TEMP TABLE _tramos ON COMMIT DROP AS
@@ -184,9 +184,9 @@ def _build_segments(cur, etapas: dict[str, tuple[str, str]]) -> None:
 
 def _persist_flow(cur) -> None:
     """`support_ticket_flujo`: una fila por ticket, rehecha entera."""
-    horas = ",\n".join(
+    hours = ",\n".join(
         f"SUM(horas) FILTER (WHERE equipo = '{e}' AND tipo = '{t}') AS h_{e}_{t}"
-        for e in EQUIPOS for t in TIPOS
+        for e in TEAMS for t in KINDS
     )
     cur.execute(f"DROP TABLE IF EXISTS {FLOW}")
     cur.execute(f"""
@@ -209,7 +209,7 @@ def _persist_flow(cur) -> None:
             MIN(fin) FILTER (WHERE equipo = '{TEAM_ATC}' AND tipo = '{KIND_QUEUE}') AS sale_cola_atc,
             MIN(inicio) FILTER (WHERE equipo = '{TEAM_SUPPORT}' AND tipo = '{KIND_QUEUE}') AS entra_cola_soporte,
             MIN(fin) FILTER (WHERE equipo = '{TEAM_SUPPORT}' AND tipo = '{KIND_QUEUE}') AS sale_cola_soporte,
-            {horas}
+            {hours}
         FROM _tramos
         GROUP BY ticket_sequence
     """)
@@ -249,22 +249,22 @@ def _read_open(db: DBConnector) -> pd.DataFrame:
     return df
 
 
-def _horas(inicio: pd.Series, fin: pd.Series) -> pd.Series:
-    return (fin - inicio).dt.total_seconds() / 3600.0
+def _hours(start: pd.Series, end: pd.Series) -> pd.Series:
+    return (end - start).dt.total_seconds() / 3600.0
 
 
-def _r(valor, decimales: int = 2):
-    if valor is None:
+def _r(value, decimals: int = 2):
+    if value is None:
         return None
     try:
-        v = float(valor)
+        v = float(value)
     except (TypeError, ValueError):
         return None
-    return None if np.isnan(v) else round(v, decimales)
+    return None if np.isnan(v) else round(v, decimals)
 
 
-def _pct(parte, total) -> float:
-    return round(float(parte) / float(total) * 100, 2) if total else 0.0
+def _pct(part, total) -> float:
+    return round(float(part) / float(total) * 100, 2) if total else 0.0
 
 
 # --- La pieza del analisis -------------------------------------------------
@@ -277,7 +277,7 @@ def run_flow_analysis(db: DBConnector | None = None) -> dict:
     resto de soporte funciona sin ellos.
     """
     db = db or DBConnector()
-    etapas = stage_classification()
+    stages = stage_classification()
 
     with db.get_connection() as conn:
         with conn.cursor() as cur:
@@ -289,28 +289,28 @@ def run_flow_analysis(db: DBConnector | None = None) -> dict:
                 return {"status": "empty"}
 
             print("🔀 Reconstruyendo el recorrido de los tickets desde sus logs...")
-            _build_segments(cur, etapas)
+            _build_segments(cur, stages)
             _persist_flow(cur)
             cur.execute(f"SELECT COUNT(*), COUNT(escalado_el) FROM {FLOW}")
-            tickets, escalados = cur.fetchone()
+            tickets, escalated = cur.fetchone()
         # El resumen por ticket se confirma junto con los temporales que lo
         # alimentan: un fallo no deja `support_ticket_flujo` a medias.
         conn.commit()
 
-    print(f"   · {tickets} tickets con logs, {escalados} escalados de ATC a Soporte")
-    sin_clasificar = stages_to_classify(db, etapas)
-    if sin_clasificar:
-        print(f"⚠️ {len(sin_clasificar)} etapa(s) sin clasificar en el catálogo: "
-              + ", ".join(e["etapa"] for e in sin_clasificar[:10]))
-    return {"status": "ok", "tickets": int(tickets), "escalados": int(escalados)}
+    print(f"   · {tickets} tickets con logs, {escalated} escalados de ATC a Soporte")
+    unclassified = stages_to_classify(db, stages)
+    if unclassified:
+        print(f"⚠️ {len(unclassified)} etapa(s) sin clasificar en el catálogo: "
+              + ", ".join(e["etapa"] for e in unclassified[:10]))
+    return {"status": "ok", "tickets": int(tickets), "escalados": int(escalated)}
 
 
 # --- Lectura ---------------------------------------------------------------
 
-def stages_to_classify(db: DBConnector | None = None, etapas: dict | None = None) -> list[dict]:
+def stages_to_classify(db: DBConnector | None = None, stages: dict | None = None) -> list[dict]:
     """Etapas que aparecen en los logs y no estan en el catalogo (ni son de cierre)."""
     db = db or DBConnector()
-    etapas = stage_classification() if etapas is None else etapas
+    stages = stage_classification() if stages is None else stages
     with db.get_connection() as conn:
         with conn.cursor() as cur:
             if not _exists(cur, LOGS):
@@ -322,13 +322,13 @@ def stages_to_classify(db: DBConnector | None = None, etapas: dict | None = None
                 WHERE NULLIF(btrim(etapa_nueva), '') IS NOT NULL
                 GROUP BY 1
             """)
-            filas = cur.fetchall()
-    conocidas = set(etapas) | set(CLOSES)
+            rows = cur.fetchall()
+    known = set(stages) | set(CLOSES)
     return sorted(
         (
-            {"etapa": etapa, "logs": int(n), "tickets": int(t), "ultimo": ultimo.strftime("%Y-%m-%d") if ultimo else None}
-            for etapa, n, t, ultimo in filas
-            if etapa.lower() not in conocidas
+            {"etapa": stage, "logs": int(n), "tickets": int(t), "ultimo": last.strftime("%Y-%m-%d") if last else None}
+            for stage, n, t, last in rows
+            if stage.lower() not in known
         ),
         key=lambda f: -f["logs"],
     )
@@ -345,7 +345,7 @@ def stage_usage(db: DBConnector | None = None) -> dict[str, int]:
                 SELECT lower(btrim(etapa_nueva)), COUNT(*) FROM {LOGS}
                 WHERE NULLIF(btrim(etapa_nueva), '') IS NOT NULL GROUP BY 1
             """)
-            return {etapa: int(n) for etapa, n in cur.fetchall()}
+            return {stage: int(n) for stage, n in cur.fetchall()}
 
 
 def get_open_tickets(list_limit: int = 300) -> dict | None:
@@ -361,28 +361,28 @@ def get_open_tickets(list_limit: int = 300) -> dict | None:
             if not _exists(cur, FLOW):
                 return None
             cur.execute(f"SELECT MAX(creado_el) FROM {LOGS}")
-            logs_hasta = cur.fetchone()[0]
+            logs_until = cur.fetchone()[0]
 
-    ahora = now_caracas()
-    abiertos = _read_open(db)
-    etapa_ticket = abiertos["etapa_ticket"].fillna("").str.strip().str.lower()
-    closed_in_tickets = etapa_ticket.isin(CLOSES)
-    desfasados = int(closed_in_tickets.sum())
-    abiertos = abiertos[~closed_in_tickets]
+    now = now_caracas()
+    open_count = _read_open(db)
+    ticket_stage = open_count["etapa_ticket"].fillna("").str.strip().str.lower()
+    closed_in_tickets = ticket_stage.isin(CLOSES)
+    lagging = int(closed_in_tickets.sum())
+    open_count = open_count[~closed_in_tickets]
 
     # Sin secuencia completa no hay log de creacion: la del export de tickets.
-    abiertos["desde"] = abiertos["creado"].where(abiertos["completa"], abiertos["creado_ticket"])
-    abiertos["desde"] = abiertos["desde"].fillna(abiertos["creado"])
-    abiertos["edad_h"] = _horas(abiertos["desde"], pd.Series(ahora, index=abiertos.index)).clip(lower=0)
-    abiertos["en_etapa_h"] = _horas(abiertos["ultimo_log"], pd.Series(ahora, index=abiertos.index)).clip(lower=0)
-    abiertos["en_soporte_h"] = _horas(abiertos["escalado_el"], pd.Series(ahora, index=abiertos.index))
+    open_count["desde"] = open_count["creado"].where(open_count["completa"], open_count["creado_ticket"])
+    open_count["desde"] = open_count["desde"].fillna(open_count["creado"])
+    open_count["edad_h"] = _hours(open_count["desde"], pd.Series(now, index=open_count.index)).clip(lower=0)
+    open_count["en_etapa_h"] = _hours(open_count["ultimo_log"], pd.Series(now, index=open_count.index)).clip(lower=0)
+    open_count["en_soporte_h"] = _hours(open_count["escalado_el"], pd.Series(now, index=open_count.index))
 
-    def agrupar(columnas: list[str]) -> list[dict]:
-        filas = []
-        for clave, sub in abiertos.groupby(columnas, sort=False, dropna=False):
-            clave = clave if isinstance(clave, tuple) else (clave,)
-            filas.append({
-                **{c: (UNSPECIFIED if pd.isna(v) else str(v)) for c, v in zip(columnas, clave)},
+    def group(columns: list[str]) -> list[dict]:
+        rows = []
+        for key, sub in open_count.groupby(columns, sort=False, dropna=False):
+            key = key if isinstance(key, tuple) else (key,)
+            rows.append({
+                **{c: (UNSPECIFIED if pd.isna(v) else str(v)) for c, v in zip(columns, key)},
                 "abiertos": len(sub),
                 "edad_media": _r(sub["edad_h"].mean()),
                 "edad_mediana": _r(sub["edad_h"].median()),
@@ -391,37 +391,37 @@ def get_open_tickets(list_limit: int = 300) -> dict | None:
                 "en_etapa_mediana": _r(sub["en_etapa_h"].median()),
                 "escalados": int(sub["escalado"].sum()),
             })
-        return sorted(filas, key=lambda f: -f["abiertos"])
+        return sorted(rows, key=lambda f: -f["abiertos"])
 
-    total = len(abiertos)
-    antiguedad = []
-    for etiqueta, from_h, until_h in TENURE_TIERS:
-        mascara = abiertos["edad_h"].ge(from_h)
+    total = len(open_count)
+    age = []
+    for label, from_h, until_h in TENURE_TIERS:
+        mask = open_count["edad_h"].ge(from_h)
         if until_h is not None:
-            mascara &= abiertos["edad_h"].lt(until_h)
-        n = int(mascara.sum())
-        antiguedad.append({"tramo": etiqueta, "abiertos": n, "pct": _pct(n, total)})
+            mask &= open_count["edad_h"].lt(until_h)
+        n = int(mask.sum())
+        age.append({"tramo": label, "abiertos": n, "pct": _pct(n, total)})
 
-    lista = abiertos.sort_values("edad_h", ascending=False).head(list_limit)
+    entries = open_count.sort_values("edad_h", ascending=False).head(list_limit)
     return {
-        "ahora": ahora.isoformat(),
-        "logs_hasta": logs_hasta.isoformat() if logs_hasta else None,
+        "ahora": now.isoformat(),
+        "logs_hasta": logs_until.isoformat() if logs_until else None,
         "resumen": {
             "abiertos": total,
-            "escalados": int(abiertos["escalado"].sum()),
-            "en_atc": int(abiertos["equipo_actual"].eq(TEAM_ATC).sum()),
-            "en_soporte": int(abiertos["equipo_actual"].eq(TEAM_SUPPORT).sum()),
-            "edad": estadisticos(abiertos["edad_h"]),
-            "en_etapa": estadisticos(abiertos["en_etapa_h"]),
-            "en_soporte_desde_escalamiento": estadisticos(abiertos["en_soporte_h"]),
-            "desfasados": desfasados,
+            "escalados": int(open_count["escalado"].sum()),
+            "en_atc": int(open_count["equipo_actual"].eq(TEAM_ATC).sum()),
+            "en_soporte": int(open_count["equipo_actual"].eq(TEAM_SUPPORT).sum()),
+            "edad": stats(open_count["edad_h"]),
+            "en_etapa": stats(open_count["en_etapa_h"]),
+            "en_soporte_desde_escalamiento": stats(open_count["en_soporte_h"]),
+            "desfasados": lagging,
         },
-        "antiguedad": antiguedad,
-        "por_etapa": agrupar(["etapa_actual", "equipo_actual", "tipo_actual"]),
-        "por_grupo": agrupar(["grupo_trabajo"]),
-        "por_asignado": agrupar(["asignado_a"]),
-        "por_tipo_solicitud": agrupar(["tipo_solicitud"]),
-        "por_zona": agrupar(["zona"]),
+        "antiguedad": age,
+        "por_etapa": group(["etapa_actual", "equipo_actual", "tipo_actual"]),
+        "por_grupo": group(["grupo_trabajo"]),
+        "por_asignado": group(["asignado_a"]),
+        "por_tipo_solicitud": group(["tipo_solicitud"]),
+        "por_zona": group(["zona"]),
         "lista": [
             {
                 "ticket": r.ticket_sequence,
@@ -437,7 +437,7 @@ def get_open_tickets(list_limit: int = 300) -> dict | None:
                 "edad_h": _r(r.edad_h),
                 "en_etapa_h": _r(r.en_etapa_h),
             }
-            for r in lista.itertuples()
+            for r in entries.itertuples()
         ],
         "lista_limite": list_limit,
     }

@@ -36,7 +36,7 @@ backend/      Django (API, analitica y Celery)
   netowl_web/   settings, urls, wsgi, celery, middleware
   templates/    La unica plantilla Django (app.html)
   data/         Planes.json y Zonas.json: semilla de los catalogos
-                (`manage.py cargar_catalogos`).
+                (`manage.py load_catalogs`).
 
 frontend/     React + TypeScript + Vite
   src/          pages/ -> features/ -> shared/
@@ -169,7 +169,7 @@ el build no hay red hacia el.
 
 El despliegue es el `docker-compose.yml` de la raiz: cuatro contenedores,
 Postgres, Redis, la app y el worker. Los dos ultimos usan la misma imagen y solo
-cambian el comando de arranque. `manage.py verificar_entorno` revisa, sin cambiar
+cambian el comando de arranque. `manage.py check_env` revisa, sin cambiar
 nada, lo que el codigo no puede arreglar (TLS de la base, privilegios del rol,
 Redis sin contrasena, DEBUG).
 

@@ -43,22 +43,22 @@ from core.tables import ensure_tables
 from . import tables
 from .config import STAGE8_KEY
 from .metrics.core import compute_crm_metrics_for_period
-from .metrics.tiempo import compute_stage_stays
+from .metrics.timing import compute_stage_stays
 
 logger = logging.getLogger(__name__)
 
 # Estado neutro de la columna `ganado`: el que el loader asigna a todo lo que no
 # se ha ganado ni perdido todavia.
-PENDIENTE = "pendiente"
+PENDING = "pendiente"
 
 
-def _normalize_id(serie: pd.Series) -> pd.Series:
+def _normalize_id(series: pd.Series) -> pd.Series:
     """El id de una oportunidad como texto comparable.
 
     El CSV lo trae a veces como número, y pandas lo lee como float: `4213` se
     convierte en `"4213.0"` y deja de cuadrar con el `id` de la oportunidad.
     """
-    txt = serie.astype(str).str.strip()
+    txt = series.astype(str).str.strip()
     # Sólo el caso del entero leído como float: un id alfanumérico que acabe en
     # `.0` de verdad no se toca.
     return txt.str.replace(r"^(\d+)\.0$", r"\1", regex=True)
@@ -79,13 +79,13 @@ class CrmData:
     # Un unico reloj para toda la ejecucion: si cada periodo tomase el suyo, dos
     # meses de la misma corrida medirian sus estancias abiertas contra instantes
     # distintos.
-    ahora: pd.Timestamp
+    now: pd.Timestamp
 
     @property
-    def vacio(self) -> bool:
+    def empty(self) -> bool:
         return self.df_clients.empty
 
-    def periodos(self) -> list[str]:
+    def periods(self) -> list[str]:
         """Los meses con oportunidades creadas, del mas reciente al mas antiguo."""
         if self.df_clients.empty:
             return []
@@ -110,23 +110,23 @@ def prepare_data(db: DBConnector) -> CrmData:
 
     # Una oportunidad repetida en la tabla ensancharía todos los cruces con los
     # logs y contaría cada movimiento tantas veces como copias tenga.
-    n_antes = len(df_clients)
+    n_before = len(df_clients)
     df_clients = df_clients.drop_duplicates(subset=["id"], keep="last")
-    if len(df_clients) != n_antes:
+    if len(df_clients) != n_before:
         logger.warning(
             "CRM: %d oportunidades duplicadas por `id` descartadas de %d.",
-            n_antes - len(df_clients), n_antes,
+            n_before - len(df_clients), n_before,
         )
 
     # Fecha y periodo de cada hito. La fecha se guarda aparte del periodo porque
     # es la que permite cortar por dia; el periodo, en texto `YYYY-MM`, es lo que
     # compara el resto del analisis.
-    dt_creacion = pd.to_datetime(df_clients["creado_el"], errors="coerce")
-    dt_cierre = pd.to_datetime(df_clients["fecha_cierre"], errors="coerce")
-    df_clients["dt_creacion"] = dt_creacion
-    df_clients["dt_cierre"] = dt_cierre
-    df_clients["periodo_creacion"] = dt_creacion.dt.strftime("%Y-%m")
-    df_clients["periodo_cierre"] = dt_cierre.dt.strftime("%Y-%m")
+    dt_creation = pd.to_datetime(df_clients["creado_el"], errors="coerce")
+    dt_close = pd.to_datetime(df_clients["fecha_cierre"], errors="coerce")
+    df_clients["dt_creacion"] = dt_creation
+    df_clients["dt_cierre"] = dt_close
+    df_clients["periodo_creacion"] = dt_creation.dt.strftime("%Y-%m")
+    df_clients["periodo_cierre"] = dt_close.dt.strftime("%Y-%m")
 
     if not df_logs.empty and "created_at_log" in df_logs.columns:
         dt_log = pd.to_datetime(df_logs["created_at_log"], errors="coerce")
@@ -141,16 +141,16 @@ def prepare_data(db: DBConnector) -> CrmData:
         # iniciativa no resuelve a una oportunidad cargada.
         opportunity_ids = set(df_clients["id"].astype(str).str.strip())
         if "entrada_id" in df_logs.columns:
-            declarada = _normalize_id(df_logs["entrada_id"])
+            declared = _normalize_id(df_logs["entrada_id"])
         else:
-            declarada = pd.Series("", index=df_logs.index)
+            declared = pd.Series("", index=df_logs.index)
 
-        resuelve = declarada.isin(opportunity_ids)
-        df_logs["oportunidad_id"] = declarada.where(
-            resuelve, _normalize_id(df_logs["client_id"])
+        resolves = declared.isin(opportunity_ids)
+        df_logs["oportunidad_id"] = declared.where(
+            resolves, _normalize_id(df_logs["client_id"])
         )
 
-        n_unresolved = int((~resuelve).sum())
+        n_unresolved = int((~resolves).sum())
         if n_unresolved:
             logger.warning(
                 "CRM: %d de %d logs traen una Iniciativa/ID que no corresponde a "
@@ -176,13 +176,13 @@ def prepare_data(db: DBConnector) -> CrmData:
     # Estancias que todavía no han producido una salida. Se calculan una sola vez
     # sobre toda la base —necesitan el historial completo para saber cuándo entró
     # cada oportunidad a su etapa actual— y luego se reparten por periodo.
-    ahora = pd.Timestamp.now()
-    df_stays = compute_stage_stays(df_clients, df_logs, ahora)
+    now = pd.Timestamp.now()
+    df_stays = compute_stage_stays(df_clients, df_logs, now)
 
-    return CrmData(df_clients, df_logs, df_stays, ahora)
+    return CrmData(df_clients, df_logs, df_stays, now)
 
 
-def _opportunities_at_risk(df_clients: pd.DataFrame, periodo: str) -> pd.DataFrame:
+def _opportunities_at_risk(df_clients: pd.DataFrame, period: str) -> pd.DataFrame:
     """Oportunidades con vida en el periodo.
 
     Vivas = creadas en el periodo o antes, y todavía sin cerrar cuando empezó.
@@ -198,48 +198,48 @@ def _opportunities_at_risk(df_clients: pd.DataFrame, periodo: str) -> pd.DataFra
     if df_clients.empty or "periodo_creacion" not in df_clients.columns:
         return pd.DataFrame(columns=df_clients.columns)
 
-    nacio = df_clients["periodo_creacion"].notna() & (df_clients["periodo_creacion"] <= periodo)
-    cierre = df_clients.get("periodo_cierre")
-    if cierre is None:
-        sigue_viva = pd.Series(True, index=df_clients.index)
+    born = df_clients["periodo_creacion"].notna() & (df_clients["periodo_creacion"] <= period)
+    close = df_clients.get("periodo_cierre")
+    if close is None:
+        still_alive = pd.Series(True, index=df_clients.index)
     else:
-        sigue_viva = cierre.isna() | (cierre >= periodo)
-    return df_clients[nacio & sigue_viva].copy()
+        still_alive = close.isna() | (close >= period)
+    return df_clients[born & still_alive].copy()
 
 
-def _to_end_of_day(hasta: date) -> pd.Timestamp:
+def _to_end_of_day(until: date) -> pd.Timestamp:
     """El ultimo instante del dia de corte: el dia N entra entero."""
-    return pd.Timestamp(hasta) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
+    return pd.Timestamp(until) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
 
 
-def _base_at_cutoff(datos: CrmData, hasta: date | None) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _base_at_cutoff(data: CrmData, until: date | None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """La base tal y como estaba al cerrar el dia `hasta`.
 
     Lo posterior al corte no ha pasado: las oportunidades creadas despues no
     existen, los movimientos posteriores no se han registrado y los cierres
     posteriores se deshacen -la oportunidad vuelve a estar abierta-.
     """
-    if hasta is None:
-        return datos.df_clients, datos.df_logs
+    if until is None:
+        return data.df_clients, data.df_logs
 
-    tope = _to_end_of_day(hasta)
+    cap = _to_end_of_day(until)
 
     # Una fecha ilegible no es una fecha futura: la fila se queda, igual que se
     # queda en el analisis del mes. Descartarla haria que el corte del dia 31 no
     # coincidiera con el cierre por una razon que nada tiene que ver con el dia.
-    creacion = datos.df_clients["dt_creacion"]
-    df_clients = datos.df_clients[creacion.isna() | (creacion <= tope)].copy()
+    creation = data.df_clients["dt_creacion"]
+    df_clients = data.df_clients[creation.isna() | (creation <= cap)].copy()
     if not df_clients.empty:
-        futuro = df_clients["dt_cierre"].notna() & (df_clients["dt_cierre"] > tope)
-        df_clients.loc[futuro, "dt_cierre"] = None
-        df_clients.loc[futuro, "fecha_cierre"] = None
-        df_clients.loc[futuro, "periodo_cierre"] = None
-        df_clients.loc[futuro, "ganado"] = PENDIENTE
+        future = df_clients["dt_cierre"].notna() & (df_clients["dt_cierre"] > cap)
+        df_clients.loc[future, "dt_cierre"] = None
+        df_clients.loc[future, "fecha_cierre"] = None
+        df_clients.loc[future, "periodo_cierre"] = None
+        df_clients.loc[future, "ganado"] = PENDING
 
-    if datos.df_logs.empty or "dt_log" not in datos.df_logs.columns:
-        return df_clients, datos.df_logs
-    log = datos.df_logs["dt_log"]
-    return df_clients, datos.df_logs[log.isna() | (log <= tope)].copy()
+    if data.df_logs.empty or "dt_log" not in data.df_logs.columns:
+        return df_clients, data.df_logs
+    log = data.df_logs["dt_log"]
+    return df_clients, data.df_logs[log.isna() | (log <= cap)].copy()
 
 
 @dataclass(frozen=True)
@@ -247,51 +247,51 @@ class CrmPopulations:
     """Las poblaciones de un periodo (o de un dia suyo), listas para medir.
 
     Existe para que el total del mes y cada rebanada dimensional recorran
-    exactamente el mismo camino: `filtrar` devuelve otra instancia y `metricas`
+    exactamente el mismo camino: `filter_by` devuelve otra instancia y `metrics`
     es la misma funcion en los dos casos.
     """
 
-    periodo: str
-    creados: pd.DataFrame
-    ganados: pd.DataFrame
-    perdidos: pd.DataFrame
-    pendientes: pd.DataFrame
+    period: str
+    created: pd.DataFrame
+    won: pd.DataFrame
+    lost: pd.DataFrame
+    pending: pd.DataFrame
     logs_e8: pd.DataFrame
     logs: pd.DataFrame
     clients: pd.DataFrame
-    historial: pd.DataFrame
+    history: pd.DataFrame
     close_losses: pd.DataFrame
     stays: pd.DataFrame
     at_risk: pd.DataFrame
-    ahora: pd.Timestamp
+    now: pd.Timestamp
 
     @property
-    def vacio(self) -> bool:
+    def empty(self) -> bool:
         """Sin creadas, ganadas, perdidas ni pendientes no hay fila que emitir."""
         return (
-            self.creados.empty and self.ganados.empty
-            and self.perdidos.empty and self.pendientes.empty
+            self.created.empty and self.won.empty
+            and self.lost.empty and self.pending.empty
         )
 
-    def metricas(self) -> dict[str, Any]:
+    def metrics(self) -> dict[str, Any]:
         """El bloque de metricas de estas poblaciones."""
         return compute_crm_metrics_for_period(
-            self.creados, self.ganados, self.perdidos, self.pendientes,
-            self.logs_e8, self.logs, self.clients, self.historial,
-            self.close_losses, self.stays, self.ahora, self.at_risk,
+            self.created, self.won, self.lost, self.pending,
+            self.logs_e8, self.logs, self.clients, self.history,
+            self.close_losses, self.stays, self.now, self.at_risk,
         )
 
-    def valores(self, dim: str) -> list[str]:
+    def values(self, dim: str) -> list[str]:
         """Los valores distintos de una dimension presentes en el periodo."""
-        encontrados: set[str] = set()
-        for df in (self.creados, self.ganados, self.perdidos, self.pendientes, self.clients):
+        found: set[str] = set()
+        for df in (self.created, self.won, self.lost, self.pending, self.clients):
             if df.empty or dim not in df.columns:
                 continue
             vals = df[dim].dropna().astype(str).str.strip()
-            encontrados.update(vals[~vals.isin(["", "nan", "None", "<NA>"])].unique())
-        return sorted(encontrados)
+            found.update(vals[~vals.isin(["", "nan", "None", "<NA>"])].unique())
+        return sorted(found)
 
-    def filtrar(self, dim: str, valor: str) -> CrmPopulations:
+    def filter_by(self, dim: str, value: str) -> CrmPopulations:
         """La misma foto recortada a un valor dimensional.
 
         Los movimientos se recortan por la oportunidad a la que pertenecen
@@ -303,7 +303,7 @@ class CrmPopulations:
         def by_dim(df: pd.DataFrame) -> pd.DataFrame:
             if df.empty or dim not in df.columns:
                 return df.iloc[0:0]
-            return df[df[dim].astype(str).str.strip() == valor]
+            return df[df[dim].astype(str).str.strip() == value]
 
         clients = by_dim(self.clients)
         ids = set(clients["id"].astype(str).to_numpy()) if not clients.empty else set()
@@ -324,14 +324,14 @@ class CrmPopulations:
 
         return replace(
             self,
-            creados=by_dim(self.creados),
-            ganados=by_dim(self.ganados),
-            perdidos=by_dim(self.perdidos),
-            pendientes=by_dim(self.pendientes),
+            created=by_dim(self.created),
+            won=by_dim(self.won),
+            lost=by_dim(self.lost),
+            pending=by_dim(self.pending),
             logs_e8=by_logs(self.logs_e8),
             logs=by_logs(self.logs),
             clients=clients,
-            historial=by_logs(self.historial),
+            history=by_logs(self.history),
             close_losses=by_dim(self.close_losses),
             stays=stays,
             at_risk=by_dim(self.at_risk),
@@ -339,42 +339,42 @@ class CrmPopulations:
 
 
 def build_populations(
-    datos: CrmData, periodo: str, hasta: date | None = None
+    data: CrmData, period: str, until: date | None = None
 ) -> CrmPopulations | None:
     """Parte la base en las poblaciones del periodo, o `None` si no creo nada.
 
     Con `hasta` el corte es el acumulado del mes hasta ese dia; sin el, el mes
     entero.
     """
-    df_clients, df_logs = _base_at_cutoff(datos, hasta)
+    df_clients, df_logs = _base_at_cutoff(data, until)
     if df_clients.empty:
         return None
 
     # A. Creados en el periodo
-    df_created = df_clients[df_clients["periodo_creacion"] == periodo].copy()
+    df_created = df_clients[df_clients["periodo_creacion"] == period].copy()
     if df_created.empty:
         return None
 
     # B. Ganados: creados en el periodo, ganados, instalados y cerrados en el.
-    mask_ganado = (
+    mask_won = (
         (df_created["ganado"] == "ganado")
         & (df_created["etapa_actual"] == "etapa_7_instalados")
-        & (df_created["periodo_cierre"] == periodo)
+        & (df_created["periodo_cierre"] == period)
     )
-    df_ganados = df_created[mask_ganado].copy()
+    df_won = df_created[mask_won].copy()
 
     # C. Perdidos: creados en el periodo y cerrados como perdidos en el.
-    mask_perdido = (
+    mask_lost = (
         (df_created["ganado"] == "perdido")
-        & (df_created["periodo_cierre"] == periodo)
+        & (df_created["periodo_cierre"] == period)
     )
-    df_perdidos = df_created[mask_perdido].copy()
+    df_lost = df_created[mask_lost].copy()
 
     # D. Pendientes: creados en el periodo cuyo cierre no ocurrio en el.
-    df_pending = df_created[~mask_ganado & ~mask_perdido].copy()
+    df_pending = df_created[~mask_won & ~mask_lost].copy()
 
     # E. Movimientos del periodo.
-    df_logs_p = df_logs[df_logs["periodo_log"] == periodo].copy() if not df_logs.empty else pd.DataFrame()
+    df_logs_p = df_logs[df_logs["periodo_log"] == period].copy() if not df_logs.empty else pd.DataFrame()
     df_logs_e8_p = (
         df_logs_p[df_logs_p["nueva_etapa"] == STAGE8_KEY].copy()
         if not df_logs_p.empty else pd.DataFrame()
@@ -386,7 +386,7 @@ def build_populations(
     # de lo que el embudo gestiona cualquier mes dado. El de `df_created` es una
     # cohorte: mezclado con el numerador del mes daba tasas que podían pasar del
     # 100%.
-    df_at_risk = _opportunities_at_risk(df_clients, periodo)
+    df_at_risk = _opportunities_at_risk(df_clients, period)
 
     # Historial completo de los clientes que se movieron en el periodo: la
     # efectividad necesita saber cómo terminaron, aunque cierren más tarde.
@@ -400,37 +400,37 @@ def build_populations(
     # cobra el fallo en el mes en que la oportunidad murió, y el 43% de las
     # pérdidas cierra en un mes distinto al de creación.
     df_close_losses = df_clients[
-        (df_clients["ganado"] == "perdido") & (df_clients["periodo_cierre"] == periodo)
+        (df_clients["ganado"] == "perdido") & (df_clients["periodo_cierre"] == period)
     ].copy()
 
     # E3. Estancias cuya entrada a la etapa cae en el periodo. Es la cara oculta
     # de los movimientos: lo que entró y todavía no ha salido.
-    df_perm_p = _period_stays(datos.df_stays, periodo, hasta)
+    df_perm_p = _period_stays(data.df_stays, period, until)
 
     return CrmPopulations(
-        periodo=periodo,
-        creados=df_created,
-        ganados=df_ganados,
-        perdidos=df_perdidos,
-        pendientes=df_pending,
+        period=period,
+        created=df_created,
+        won=df_won,
+        lost=df_lost,
+        pending=df_pending,
         logs_e8=df_logs_e8_p,
         logs=df_logs_p,
         clients=df_clients,
-        historial=df_hist_p,
+        history=df_hist_p,
         close_losses=df_close_losses,
         stays=df_perm_p,
         at_risk=df_at_risk,
-        ahora=datos.ahora,
+        now=data.now,
     )
 
 
 def _period_stays(
-    df_stays: pd.DataFrame, periodo: str, hasta: date | None
+    df_stays: pd.DataFrame, period: str, until: date | None
 ) -> pd.DataFrame:
     """Las estancias que entraron a su etapa dentro del periodo (y del corte)."""
     if df_stays.empty:
         return pd.DataFrame()
-    sub = df_stays[df_stays["periodo_entrada"] == periodo]
-    if hasta is not None and "fecha_entrada" in sub.columns:
-        sub = sub[sub["fecha_entrada"] <= _to_end_of_day(hasta)]
+    sub = df_stays[df_stays["periodo_entrada"] == period]
+    if until is not None and "fecha_entrada" in sub.columns:
+        sub = sub[sub["fecha_entrada"] <= _to_end_of_day(until)]
     return sub.copy()

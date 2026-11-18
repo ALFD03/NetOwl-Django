@@ -21,39 +21,46 @@ import { modalLabelClass } from '@/features/subscriptions/lib/formClasses';
 
 export type FormTone = 'blue' | 'emerald' | 'amber' | 'sky' | 'purple' | 'slate';
 
+/** Lo que todo formulario de catálogo recibe para guardarse o cerrarse. */
+export interface FormActions {
+  saving: boolean;
+  onClose: () => void;
+  onSubmit: (event: FormEvent) => void;
+}
+
 /**
  * Tailwind no ve los nombres de clase interpolados, así que cada tono se
  * escribe entero. Es la misma razón por la que `SummaryStrip` tiene su mapa
  * `COLUMNS`.
  */
-const TONES: Record<FormTone, { activa: string; acento: string }> = {
+const TONES: Record<FormTone, { active: string; accent: string }> = {
   blue: {
-    activa: 'bg-blue-800/20 border-blue-800 ring-1 ring-blue-800 shadow-lg shadow-blue-800/10',
-    acento: 'text-blue-800',
+    active: 'bg-blue-800/20 border-blue-800 ring-1 ring-blue-800 shadow-lg shadow-blue-800/10',
+    accent: 'text-blue-800',
   },
   emerald: {
-    activa: 'bg-emerald-500/15 border-emerald-500 ring-1 ring-emerald-500 shadow-lg shadow-emerald-500/10',
-    acento: 'text-emerald-400',
+    active: 'bg-emerald-500/15 border-emerald-500 ring-1 ring-emerald-500 shadow-lg shadow-emerald-500/10',
+    accent: 'text-emerald-400',
   },
   amber: {
-    activa: 'bg-amber-500/15 border-amber-500 ring-1 ring-amber-500 shadow-lg shadow-amber-500/10',
-    acento: 'text-amber-400',
+    active: 'bg-amber-500/15 border-amber-500 ring-1 ring-amber-500 shadow-lg shadow-amber-500/10',
+    accent: 'text-amber-400',
   },
   sky: {
-    activa: 'bg-sky-500/15 border-sky-500 ring-1 ring-sky-500 shadow-lg shadow-sky-500/10',
-    acento: 'text-sky-500',
+    active: 'bg-sky-500/15 border-sky-500 ring-1 ring-sky-500 shadow-lg shadow-sky-500/10',
+    accent: 'text-sky-500',
   },
   purple: {
-    activa: 'bg-purple-500/15 border-purple-500 ring-1 ring-purple-500 shadow-lg shadow-purple-500/10',
-    acento: 'text-purple-400',
+    active: 'bg-purple-500/15 border-purple-500 ring-1 ring-purple-500 shadow-lg shadow-purple-500/10',
+    accent: 'text-purple-400',
   },
   slate: {
-    activa: 'bg-slate-500/15 border-slate-500 ring-1 ring-slate-500 shadow-lg shadow-slate-500/10',
-    acento: 'text-slate-300',
+    active: 'bg-slate-500/15 border-slate-500 ring-1 ring-slate-500 shadow-lg shadow-slate-500/10',
+    accent: 'text-slate-300',
   },
 };
 
-const INACTIVA =
+const INACTIVE =
   'bg-surface-tertiary/40 border-slate-800 hover:border-slate-700 opacity-70 hover:opacity-100';
 
 export interface OptionCardProps {
@@ -82,7 +89,7 @@ export function OptionCard({
   onSelect,
   className,
 }: OptionCardProps) {
-  const estilo = TONES[tone];
+  const style = TONES[tone];
 
   return (
     <button
@@ -91,15 +98,15 @@ export function OptionCard({
       aria-pressed={selected}
       className={cn(
         'flex cursor-pointer flex-col justify-between rounded-2xl border p-4 text-left transition-all',
-        selected ? estilo.activa : INACTIVA,
+        selected ? style.active : INACTIVE,
         className,
       )}
     >
       <div className="mb-2 flex items-center justify-between">
-        <span className={cn('[&>svg]:h-5 [&>svg]:w-5', selected ? estilo.acento : 'text-slate-400')}>
+        <span className={cn('[&>svg]:h-5 [&>svg]:w-5', selected ? style.accent : 'text-slate-400')}>
           {icon}
         </span>
-        {selected && <CheckCircle2 className={cn('h-4 w-4', estilo.acento)} />}
+        {selected && <CheckCircle2 className={cn('h-4 w-4', style.accent)} />}
       </div>
 
       <div>

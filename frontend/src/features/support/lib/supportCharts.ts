@@ -17,7 +17,7 @@ import type {
   SupportTimeMeasure,
   SupportZoneRow,
 } from '../types';
-import { COLOR_TIPO, KIND_LABEL, formatDuration } from './flowFormat';
+import { KIND_COLOR, KIND_LABEL, formatDuration } from './flowFormat';
 
 /** Cuántos valores de un eje entran en un gráfico antes de pasar a «y N más». */
 export const VALUES_CAP = 15;
@@ -32,22 +32,22 @@ const TOOLTIP = {
   cornerRadius: 8,
 };
 
-const LEYENDA = {
+const LEGEND = {
   display: true,
   position: 'bottom' as const,
   labels: { color: CHART_CHROME.textAxis, boxWidth: 10, font: { size: 10 }, padding: 14 },
 };
 
-const EJE_CATEGORIAS = {
+const CATEGORY_AXIS = {
   grid: { display: false },
   ticks: { color: CHART_CHROME.textMuted, font: { size: 11 }, autoSkip: false },
 };
 
 /** Alto de un gráfico de barras horizontales con `n` filas. */
-export const altoBarras = (n: number) => Math.max(180, n * 30 + 70);
+export const barsHeight = (n: number) => Math.max(180, n * 30 + 70);
 
 /** Recorta un nombre largo de Odoo para el eje, entero en el tooltip. */
-const corto = (texto: string, max = 34) => (texto.length > max ? `${texto.slice(0, max - 1)}…` : texto);
+const short = (text: string, max = 34) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
 // --- En qué se va el tiempo -------------------------------------------------
 
@@ -71,7 +71,7 @@ export interface TimePart {
 }
 
 /** Qué se hace en cada tipo de etapa, para el pie de su tarjeta. */
-export const QUE_ES_TIPO: Record<TimeKind, string> = {
+export const KIND_HELP: Record<TimeKind, string> = {
   cola: 'Esperando a que alguien lo tome',
   pausa: 'Esperando algo de fuera: cliente, pago, falla masiva',
   gestion: 'Alguien trabajando en él',
@@ -87,18 +87,18 @@ export function timeParts(stats: SupportStats): { parts: TimePart[]; total: numb
     label: KIND_LABEL[kind],
     hours: hoursOf(kind),
     pct: total > 0 ? Number(((hoursOf(kind) / total) * 100).toFixed(1)) : 0,
-    color: COLOR_TIPO[kind],
+    color: KIND_COLOR[kind],
   })).filter((p) => p.hours > 0 || p.type !== 'sin_clasificar');
   return { parts, total };
 }
 
-export function timeDonutData(partes: TimePart[]): ChartData<'doughnut'> {
+export function timeDonutData(parts: TimePart[]): ChartData<'doughnut'> {
   return {
-    labels: partes.map((p) => p.label),
+    labels: parts.map((p) => p.label),
     datasets: [
       {
-        data: partes.map((p) => p.pct),
-        backgroundColor: partes.map((p) => `${p.color}D9`),
+        data: parts.map((p) => p.pct),
+        backgroundColor: parts.map((p) => `${p.color}D9`),
         borderColor: CHART_CHROME.surfaceDeep,
         borderWidth: 3,
         hoverOffset: 8,
@@ -115,10 +115,10 @@ export function timeDonutData(partes: TimePart[]): ChartData<'doughnut'> {
  * lo que entró y a la fecha seguía abierto.
  */
 export function volumeByValueData(rows: SupportDimensionRow[]): ChartData<'bar'> {
-  const visibles = rows.slice(0, VALUES_CAP);
-  const serie = (label: string, color: string, valor: (r: SupportDimensionRow) => number) => ({
+  const visible = rows.slice(0, VALUES_CAP);
+  const series = (label: string, color: string, value: (r: SupportDimensionRow) => number) => ({
     label,
-    data: visibles.map(valor),
+    data: visible.map(value),
     backgroundColor: `${color}CC`,
     borderColor: color,
     borderWidth: 1,
@@ -126,17 +126,17 @@ export function volumeByValueData(rows: SupportDimensionRow[]): ChartData<'bar'>
     stack: 'tickets',
     maxBarThickness: 22,
   });
-  const hasEscalated = visibles.some((r) => toNumber(r.tickets_escalated) > 0);
+  const hasEscalated = visible.some((r) => toNumber(r.tickets_escalated) > 0);
 
   return {
-    labels: visibles.map((r) => corto(r.name)),
+    labels: visible.map((r) => short(r.name)),
     datasets: [
-      serie('Resueltos', METRIC_COLOR.green, (r) => toNumber(r.tickets_resolved)),
-      serie('Cancelados', METRIC_COLOR.red, (r) => toNumber(r.tickets_cancelled)),
+      series('Resueltos', METRIC_COLOR.green, (r) => toNumber(r.tickets_resolved)),
+      series('Cancelados', METRIC_COLOR.red, (r) => toNumber(r.tickets_cancelled)),
       ...(hasEscalated
-        ? [serie('Escalados a Soporte', METRIC_COLOR.yellow, (r) => toNumber(r.tickets_escalated))]
+        ? [series('Escalados a Soporte', METRIC_COLOR.yellow, (r) => toNumber(r.tickets_escalated))]
         : []),
-      serie('Sin cerrar', METRIC_COLOR.slate, (r) =>
+      series('Sin cerrar', METRIC_COLOR.slate, (r) =>
         Math.max(0, toNumber(r.total_tickets) - toNumber(r.tickets_closed)),
       ),
     ],
@@ -151,16 +151,16 @@ export function volumeByValueOptions(
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
-    onClick: (_evento, elementos) => {
-      if (onSelect && elementos.length) onSelect(elementos[0].index);
+    onClick: (_event, elements) => {
+      if (onSelect && elements.length) onSelect(elements[0].index);
     },
-    onHover: (evento, elementos) => {
-      const canvas = evento.native?.target as HTMLCanvasElement | undefined;
-      if (canvas) canvas.style.cursor = onSelect && elementos.length ? 'pointer' : 'default';
+    onHover: (event, elements) => {
+      const canvas = event.native?.target as HTMLCanvasElement | undefined;
+      if (canvas) canvas.style.cursor = onSelect && elements.length ? 'pointer' : 'default';
     },
     interaction: { mode: 'index', axis: 'y', intersect: false },
     plugins: {
-      legend: LEYENDA,
+      legend: LEGEND,
       datalabels: { display: false },
       tooltip: {
         ...TOOLTIP,
@@ -185,36 +185,36 @@ export function volumeByValueOptions(
         grid: { color: CHART_CHROME.gridSoft },
         ticks: { color: CHART_CHROME.textAxis, font: { size: 10 } },
       },
-      y: { stacked: true, ...EJE_CATEGORIAS },
+      y: { stacked: true, ...CATEGORY_AXIS },
     },
   };
 }
 
 // --- Velas: cómo se reparte el tiempo de cada valor -------------------------
 
-interface Vela {
+interface Candle {
   name: string;
   min: number;
   p25: number;
   median: number;
-  promedio: number;
+  average: number;
   p75: number;
   max: number;
   sample: number;
 }
 
-function velas(rows: SupportDimensionRow[], medida: SupportTimeMeasure): Vela[] {
+function candles(rows: SupportDimensionRow[], measure: SupportTimeMeasure): Candle[] {
   return rows
     .slice(0, VALUES_CAP)
     .map((r) => ({
       name: r.name,
-      min: toNumber(r[`time_min_${medida}_hours`]),
-      p25: toNumber(r[`time_p25_${medida}_hours`]),
-      median: toNumber(r[`time_median_${medida}_hours`]),
-      promedio: toNumber(r[`time_mean_${medida}_hours`]),
-      p75: toNumber(r[`time_p75_${medida}_hours`]),
-      max: toNumber(r[`time_max_${medida}_hours`]),
-      sample: toNumber(r[`sample_${medida}`]),
+      min: toNumber(r[`time_min_${measure}_hours`]),
+      p25: toNumber(r[`time_p25_${measure}_hours`]),
+      median: toNumber(r[`time_median_${measure}_hours`]),
+      average: toNumber(r[`time_mean_${measure}_hours`]),
+      p75: toNumber(r[`time_p75_${measure}_hours`]),
+      max: toNumber(r[`time_max_${measure}_hours`]),
+      sample: toNumber(r[`sample_${measure}`]),
     }))
     .filter((v) => v.sample > 0);
 }
@@ -225,9 +225,9 @@ function velas(rows: SupportDimensionRow[], medida: SupportTimeMeasure): Vela[] 
  * y, dibujados enteros, aplastaban todas las cajas contra el cero; la mecha que
  * se sale del eje se corta, y su máximo real sigue en el tooltip.
  */
-function topeVelas(lista: Vela[]): number {
-  const tope = Math.max(1, ...lista.map((v) => Math.min(v.max, v.p75 + 1.5 * (v.p75 - v.p25))));
-  return Math.ceil(tope * 1.05);
+function candlesCap(list: Candle[]): number {
+  const cap = Math.max(1, ...list.map((v) => Math.min(v.max, v.p75 + 1.5 * (v.p75 - v.p25))));
+  return Math.ceil(cap * 1.05);
 }
 
 /**
@@ -237,16 +237,16 @@ function topeVelas(lista: Vela[]): number {
  * una contra otra dice quién es lento siempre (caja entera a la derecha) y quién
  * sólo tiene algunos casos largos (mecha larga, caja corta).
  */
-export function velasData(rows: SupportDimensionRow[], medida: SupportTimeMeasure): ChartData<'bar'> {
-  const lista = velas(rows, medida);
-  const tope = topeVelas(lista);
-  const grosor = tope * 0.004;
+export function candlesData(rows: SupportDimensionRow[], measure: SupportTimeMeasure): ChartData<'bar'> {
+  const list = candles(rows, measure);
+  const cap = candlesCap(list);
+  const thickness = cap * 0.004;
   return {
-    labels: lista.map((v) => corto(v.name)),
+    labels: list.map((v) => short(v.name)),
     datasets: [
       {
         label: 'Mínimo – máximo',
-        data: lista.map((v) => [v.min, Math.min(v.max, tope)] as [number, number]),
+        data: list.map((v) => [v.min, Math.min(v.max, cap)] as [number, number]),
         backgroundColor: CHART_CHROME.textAxis,
         barPercentage: 0.12,
         grouped: false,
@@ -254,7 +254,7 @@ export function velasData(rows: SupportDimensionRow[], medida: SupportTimeMeasur
       },
       {
         label: 'p25 – p75',
-        data: lista.map((v) => [v.p25, Math.max(v.p75, v.p25 + grosor)] as [number, number]),
+        data: list.map((v) => [v.p25, Math.max(v.p75, v.p25 + thickness)] as [number, number]),
         backgroundColor: `${CHART_PALETTE[2]}B3`,
         borderColor: CHART_PALETTE[2],
         borderWidth: 1,
@@ -265,9 +265,9 @@ export function velasData(rows: SupportDimensionRow[], medida: SupportTimeMeasur
       },
       {
         label: 'Promedio',
-        data: lista.map((v) => {
-          const p = Math.min(v.promedio, tope);
-          return [p - grosor, p + grosor] as [number, number];
+        data: list.map((v) => {
+          const p = Math.min(v.average, cap);
+          return [p - thickness, p + thickness] as [number, number];
         }),
         backgroundColor: CHART_CHROME.textStrong,
         barPercentage: 0.85,
@@ -278,38 +278,38 @@ export function velasData(rows: SupportDimensionRow[], medida: SupportTimeMeasur
   };
 }
 
-export function velasOptions(
+export function candlesOptions(
   rows: SupportDimensionRow[],
-  medida: SupportTimeMeasure,
-  onSelect?: (nombre: string) => void,
+  measure: SupportTimeMeasure,
+  onSelect?: (name: string) => void,
 ): ChartOptions<'bar'> {
-  const lista = velas(rows, medida);
+  const list = candles(rows, measure);
   return {
     indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
-    onClick: (_evento, elementos) => {
-      const v = elementos.length ? lista[elementos[0].index] : undefined;
+    onClick: (_event, elements) => {
+      const v = elements.length ? list[elements[0].index] : undefined;
       if (onSelect && v) onSelect(v.name);
     },
-    onHover: (evento, elementos) => {
-      const canvas = evento.native?.target as HTMLCanvasElement | undefined;
-      if (canvas) canvas.style.cursor = onSelect && elementos.length ? 'pointer' : 'default';
+    onHover: (event, elements) => {
+      const canvas = event.native?.target as HTMLCanvasElement | undefined;
+      if (canvas) canvas.style.cursor = onSelect && elements.length ? 'pointer' : 'default';
     },
     interaction: { mode: 'index', axis: 'y', intersect: false },
     plugins: {
-      legend: LEYENDA,
+      legend: LEGEND,
       datalabels: { display: false },
       tooltip: {
         ...TOOLTIP,
         callbacks: {
-          title: (items) => lista[items[0]?.dataIndex ?? 0]?.name ?? '',
+          title: (items) => list[items[0]?.dataIndex ?? 0]?.name ?? '',
           label: () => '',
           afterBody: (items) => {
-            const v = lista[items[0]?.dataIndex ?? 0];
+            const v = list[items[0]?.dataIndex ?? 0];
             if (!v) return [];
             return [
-              `Promedio ${formatDuration(v.promedio)} · mediana ${formatDuration(v.median)}`,
+              `Promedio ${formatDuration(v.average)} · mediana ${formatDuration(v.median)}`,
               `La mitad central: ${formatDuration(v.p25)} – ${formatDuration(v.p75)}`,
               `Del más rápido al más lento: ${formatDuration(v.min)} – ${formatDuration(v.max)}`,
               `${formatInteger(v.sample)} tickets medidos`,
@@ -322,7 +322,7 @@ export function velasOptions(
     scales: {
       x: {
         min: 0,
-        max: topeVelas(lista),
+        max: candlesCap(list),
         grid: { color: CHART_CHROME.gridSoft },
         ticks: {
           color: CHART_CHROME.textAxis,
@@ -330,78 +330,78 @@ export function velasOptions(
           callback: (v: string | number) => formatDuration(Number(v)),
         },
       },
-      y: EJE_CATEGORIAS,
+      y: CATEGORY_AXIS,
     },
   };
 }
 
-export const valuesWithCandles = (rows: SupportDimensionRow[], medida: SupportTimeMeasure) =>
-  velas(rows, medida).length;
+export const valuesWithCandles = (rows: SupportDimensionRow[], measure: SupportTimeMeasure) =>
+  candles(rows, measure).length;
 
 // --- Qué tipo de tickets entran ----------------------------------------------
 
-const COLORES_DESGLOSE = [2, 3, 6, 1, 5, 9, 7, 4, 8].map((i) => CHART_PALETTE[i]);
+const BREAKDOWN_COLORS = [2, 3, 6, 1, 5, 9, 7, 4, 8].map((i) => CHART_PALETTE[i]);
 
 /** Los valores más grandes de un desglose y el resto sumado en «Otros». */
-export function desgloseDonut(entries: SupportDimensionEntry[] | undefined, tope = 6) {
-  const filas = (entries ?? [])
-    .map((e) => ({ nombre: e.name, tickets: toNumber(e.metrics?.total_tickets) }))
+export function donutBreakdown(entries: SupportDimensionEntry[] | undefined, cap = 6) {
+  const rows = (entries ?? [])
+    .map((e) => ({ name: e.name, tickets: toNumber(e.metrics?.total_tickets) }))
     .filter((f) => f.tickets > 0)
     .sort((a, b) => b.tickets - a.tickets);
-  const total = filas.reduce((acc, f) => acc + f.tickets, 0);
-  const cabeza = filas.slice(0, tope);
-  const resto = filas.slice(tope).reduce((acc, f) => acc + f.tickets, 0);
-  const partes = resto > 0 ? [...cabeza, { nombre: `Otros (${filas.length - tope})`, tickets: resto }] : cabeza;
+  const total = rows.reduce((acc, f) => acc + f.tickets, 0);
+  const head = rows.slice(0, cap);
+  const rest = rows.slice(cap).reduce((acc, f) => acc + f.tickets, 0);
+  const parts = rest > 0 ? [...head, { name: `Otros (${rows.length - cap})`, tickets: rest }] : head;
 
-  const colores = partes.map((_, i) =>
-    i === cabeza.length ? CHART_PALETTE[10] : COLORES_DESGLOSE[i % COLORES_DESGLOSE.length],
+  const colors = parts.map((_, i) =>
+    i === head.length ? CHART_PALETTE[10] : BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length],
   );
-  const withPct = partes.map((p, i) => ({
+  const withPct = parts.map((p, i) => ({
     ...p,
-    color: colores[i],
+    color: colors[i],
     pct: total > 0 ? Number(((p.tickets / total) * 100).toFixed(1)) : 0,
   }));
 
   const data: ChartData<'doughnut'> = {
-    labels: partes.map((p) => corto(p.nombre, 28)),
+    labels: parts.map((p) => short(p.name, 28)),
     datasets: [
       {
         data: withPct.map((p) => p.pct),
-        backgroundColor: colores.map((c) => `${c}CC`),
+        backgroundColor: colors.map((c) => `${c}CC`),
         borderColor: CHART_CHROME.surfaceDeep,
         borderWidth: 3,
         hoverOffset: 8,
       },
     ],
   };
-  return { data, total, partes: withPct, valores: filas.length };
+  return { data, total, parts: withPct, values: rows.length };
 }
 
 // --- Incidencia por zona -----------------------------------------------------
 
-const COLOR_TECNOLOGIA: Record<string, string> = {
+const TECHNOLOGY_COLOR: Record<string, string> = {
   FTTH: CHART_PALETTE[9],
   RF: CHART_PALETTE[7],
 };
 
-export const colorTecnologia = (tecnologia: string) =>
-  COLOR_TECNOLOGIA[tecnologia.toUpperCase()] ?? CHART_PALETTE[10];
+export const technologyColor = (technology: string) =>
+  TECHNOLOGY_COLOR[technology.toUpperCase()] ?? CHART_PALETTE[10];
 
 /** Las zonas con más tickets por cada 100 clientes; sin población no hay tasa. */
-export function zonesWithRate(zonas: SupportZoneRow[]) {
-  return zonas.filter((z) => !z.withoutPopulation).slice(0, VALUES_CAP);
+export function zonesWithRate(zones: SupportZoneRow[]) {
+  return zones.filter((z) => !z.withoutPopulation).slice(0, VALUES_CAP);
 }
 
-export function incidenciaData(zonas: SupportZoneRow[]): ChartData<'bar'> {
-  const visibles = zonesWithRate(zonas);
+export function incidenceData(zones: SupportZoneRow[]): ChartData<'bar'> {
+  const visible = zonesWithRate(zones);
   return {
-    labels: visibles.map((z) => corto(z.zona)),
+    labels: visible.map((z) => short(z.zona)),
     datasets: [
       {
         label: 'Tickets por cada 100 clientes',
-        data: visibles.map((z) => z.incidenceRate),
-        backgroundColor: visibles.map((z) => `${colorTecnologia(z.technology)}CC`),
-        borderColor: visibles.map((z) => colorTecnologia(z.technology)),
+        data: visible.map((z) => z.incidenceRate),
+        backgroundColor: visible.map((z) => `${technologyColor(z.technology)}CC`),
+        borderColor: visible.map((z) => technologyColor(z.technology)),
         borderWidth: 1,
         borderRadius: 4,
         maxBarThickness: 22,
@@ -410,8 +410,8 @@ export function incidenciaData(zonas: SupportZoneRow[]): ChartData<'bar'> {
   };
 }
 
-export function incidenciaOptions(zonas: SupportZoneRow[]): ChartOptions<'bar'> {
-  const visibles = zonesWithRate(zonas);
+export function incidenceOptions(zones: SupportZoneRow[]): ChartOptions<'bar'> {
+  const visible = zonesWithRate(zones);
   return {
     indexAxis: 'y',
     responsive: true,
@@ -429,15 +429,15 @@ export function incidenciaOptions(zonas: SupportZoneRow[]): ChartOptions<'bar'> 
         ...TOOLTIP,
         callbacks: {
           title: (items) => {
-            const z = visibles[items[0]?.dataIndex ?? 0];
+            const z = visible[items[0]?.dataIndex ?? 0];
             return z ? `${z.zona} · ${z.site} · ${z.technology}` : '';
           },
           label: (ctx: TooltipItem<'bar'>) => ` ${formatTwoDecimals(Number(ctx.raw))} tickets por cada 100 clientes`,
           afterBody: (items) => {
-            const z = visibles[items[0]?.dataIndex ?? 0];
+            const z = visible[items[0]?.dataIndex ?? 0];
             if (!z) return [];
             return [
-              `${formatInteger(z.totalTickets)} tickets · ${formatInteger(z.totalSuscriptores)} clientes activos`,
+              `${formatInteger(z.totalTickets)} tickets · ${formatInteger(z.totalSubscribers)} clientes activos`,
               `Resueltos ${formatTwoDecimals(z.pctResolved)}% · cierre medio ${formatOneDecimal(z.mttrAverage)} h`,
             ];
           },
@@ -451,7 +451,7 @@ export function incidenciaOptions(zonas: SupportZoneRow[]): ChartOptions<'bar'> 
         grid: { color: CHART_CHROME.gridSoft },
         ticks: { color: CHART_CHROME.textAxis, font: { size: 10 }, callback: (v: string | number) => `${v}%` },
       },
-      y: EJE_CATEGORIAS,
+      y: CATEGORY_AXIS,
     },
   };
 }

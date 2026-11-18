@@ -4,8 +4,8 @@ import type { ReactNode } from 'react';
 import { Gauge, RefreshCw, TrendingUp } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
-import { Paginacion, usePaginacion } from '@/shared/ui';
-import type { Proyeccion } from '@/shared/lib/projection';
+import { Pagination, usePagination } from '@/shared/ui';
+import type { Projection } from '@/shared/lib/projection';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import { useTargetsConfig } from '../../hooks/useTargets';
 import {
@@ -20,8 +20,8 @@ import {
   formatTarget,
   baseGoal,
   overallTarget,
-  tonoChurn,
-  tonoCrecimiento,
+  churnTone,
+  growthTone,
 } from '../../lib/targets';
 import type { TargetsTrafficLight } from '../../types';
 import { TARGET_LEVEL_UI } from '../targets/levels';
@@ -45,7 +45,7 @@ export interface NodePerformanceTableProps<T extends CommercialNode> {
    * Los días laborables del corte elegido. Con ellos aparece la columna de
    * proyección: las instalaciones al ritmo actual hasta el cierre del mes.
    */
-  projection?: Proyeccion | null;
+  projection?: Projection | null;
 }
 
 /**
@@ -54,21 +54,21 @@ export interface NodePerformanceTableProps<T extends CommercialNode> {
  * Solo se enseña: los objetivos se editan en el catálogo.
  */
 function TargetBadge({
-  porcentaje,
-  meta,
-  origen,
-  expectedClose: cierreEsperado,
+  percentage,
+  goal,
+  source,
+  expectedClose,
   mono,
-  withoutTarget: sinObjetivo = false,
+  withoutTarget: withoutTarget = false,
 }: {
   withoutTarget?: boolean;
-  porcentaje: number;
-  meta: number;
-  origen?: CommercialNode['targetSource'];
+  percentage: number;
+  goal: number;
+  source?: CommercialNode['targetSource'];
   expectedClose: number;
   mono: boolean;
 }) {
-  if (sinObjetivo) {
+  if (withoutTarget) {
     return (
       <div className="flex flex-col items-end" title="Zona sin objetivo: no cuenta para el cumplimiento de su grupo. Se cambia en Catálogos › Ventas › Objetivos.">
         <span className="rounded border border-slate-600 bg-slate-800/60 px-1.5 py-px text-[9px] font-black uppercase text-slate-300">
@@ -77,21 +77,21 @@ function TargetBadge({
       </div>
     );
   }
-  const ui = TARGET_LEVEL_UI[origen?.level ?? 'general'];
-  const contenido = (
+  const ui = TARGET_LEVEL_UI[source?.level ?? 'general'];
+  const content = (
     <>
       <span className="flex items-baseline gap-1.5">
-        <span className={cn('text-sm font-black text-sky-300', mono && 'font-mono')}>{formatTarget(porcentaje)}</span>
-        <span className={cn('text-[10px] font-bold text-slate-400', mono && 'font-mono')}>+{formatInteger(meta)}</span>
+        <span className={cn('text-sm font-black text-sky-300', mono && 'font-mono')}>{formatTarget(percentage)}</span>
+        <span className={cn('text-[10px] font-bold text-slate-400', mono && 'font-mono')}>+{formatInteger(goal)}</span>
       </span>
       <span className={cn('mt-0.5 max-w-[140px] truncate rounded border px-1.5 py-px text-[9px] font-black uppercase', ui.chip)}>
-        {ui.corto}{origen?.name && origen.level !== 'zona_sucursal' ? ` ${origen.name}` : ''}
+        {ui.short}{source?.name && source.level !== 'zona_sucursal' ? ` ${source.name}` : ''}
       </span>
     </>
   );
-  const titulo = `Objetivo ${formatTarget(porcentaje)} (${ui.label.toLowerCase()}${origen?.name ? ` ${origen.name}` : ''}) · cierre esperado ${formatInteger(cierreEsperado)}`;
+  const title = `Objetivo ${formatTarget(percentage)} (${ui.label.toLowerCase()}${source?.name ? ` ${source.name}` : ''}) · cierre esperado ${formatInteger(expectedClose)}`;
 
-  return <div className="flex flex-col items-end" title={titulo}>{contenido}</div>;
+  return <div className="flex flex-col items-end" title={title}>{content}</div>;
 }
 
 /** Un cumplimiento: el porcentaje con el color del semáforo y una barra de progreso. */
@@ -124,29 +124,29 @@ function ComplianceCell({
 }
 
 /** Las instalaciones proyectadas al cierre y el cumplimiento de ventas que darían. */
-function CeldaProyeccion({
-  instalaciones,
-  cumplimiento,
+function ProjectionCell({
+  installs,
+  compliance,
   thresholds,
   mono,
 }: {
-  instalaciones: number | null;
-  cumplimiento: number | null;
+  installs: number | null;
+  compliance: number | null;
   thresholds: TargetsTrafficLight;
   mono: boolean;
 }) {
-  if (instalaciones === null) return <td className="py-3 text-right text-slate-600">—</td>;
+  if (installs === null) return <td className="py-3 text-right text-slate-600">—</td>;
 
   return (
     <td className="py-3 text-right">
       <div className="flex flex-col items-end">
-        <span className={cn('font-black text-cyan-300', mono && 'font-mono')}>{formatInteger(instalaciones)}</span>
-        {cumplimiento !== null && (
+        <span className={cn('font-black text-cyan-300', mono && 'font-mono')}>{formatInteger(installs)}</span>
+        {compliance !== null && (
           <span
-            className={cn('text-[10px] font-bold', mono && 'font-mono', completionTone(cumplimiento, thresholds))}
+            className={cn('text-[10px] font-bold', mono && 'font-mono', completionTone(compliance, thresholds))}
             title="Cumplimiento de ventas proyectado al cierre"
           >
-            {formatTwoDecimals(cumplimiento)}% obj.
+            {formatTwoDecimals(compliance)}% obj.
           </span>
         )}
       </div>
@@ -172,15 +172,15 @@ export function NodePerformanceTable<T extends CommercialNode>({
   renderBadge,
   mono = false,
   renderRowAction,
-  projection: proyeccion = null,
+  projection: projection = null,
 }: NodePerformanceTableProps<T>) {
   const { thresholds } = useTargetsConfig();
   const num = (extra?: string) => cn('py-3 text-right', mono && 'font-mono', extra);
-  const paginacion = usePaginacion(nodes);
+  const pagination = usePagination(nodes);
 
   return (
     <div>
-      <Paginacion estado={paginacion} posicion="arriba" className="mb-2" />
+      <Pagination state={pagination} position="arriba" className="mb-2" />
       <div className="overflow-x-auto">
         {/* `whitespace-nowrap`: en un teléfono la tabla se desliza en vez de
             partir cada cifra en dos líneas. La primera columna queda fijada. */}
@@ -192,10 +192,10 @@ export function NodePerformanceTable<T extends CommercialNode>({
               <th className="pb-3 text-right text-emerald-500">
                 <TrendingUp className="mr-1 inline h-3 w-3" />Inst.
               </th>
-              {proyeccion && (
+              {projection && (
                 <th
                   className="pb-3 text-right text-cyan-400"
-                  title={`Instalaciones al cierre al ritmo de ${proyeccion.elapsedDays} de ${proyeccion.monthDays} días laborables`}
+                  title={`Instalaciones al cierre al ritmo de ${projection.elapsedDays} de ${projection.monthDays} días laborables`}
                 >
                   <Gauge className="mr-1 inline h-3 w-3" />Proyección
                 </th>
@@ -216,17 +216,17 @@ export function NodePerformanceTable<T extends CommercialNode>({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50 text-xs font-bold">
-            {paginacion.visibles.map((node, idx) => {
-              const inicio = Number(node.active_start ?? 0);
+            {pagination.visible.map((node, idx) => {
+              const start = Number(node.active_start ?? 0);
               // Los hooks de los reportes resuelven la meta de cada nodo; el
               // respaldo solo cubre un uso que no pase por ellos.
-              const meta = node.meta
-                ?? baseGoal(inicio, overallTarget(DEFAULT_TARGETS, ''));
+              const goal = node.goal
+                ?? baseGoal(start, overallTarget(DEFAULT_TARGETS, ''));
               const metrics = calcCommercial(
-                inicio,
+                start,
                 Number(node.active_end ?? 0),
-                meta,
-                { new_subs: Number(node.new_subs ?? 0), projection: proyeccion },
+                goal,
+                { new_subs: Number(node.new_subs ?? 0), projection },
               );
               const growth = Number(node.growth ?? 0);
               const churn = Number(node.gross_churn_pct ?? 0);
@@ -241,10 +241,10 @@ export function NodePerformanceTable<T extends CommercialNode>({
                   </td>
                   <td className={num('text-slate-400')}>{formatInteger(node.active_start)}</td>
                   <td className={num('text-emerald-400')}>+{formatInteger(node.new_subs)}</td>
-                  {proyeccion && (
-                    <CeldaProyeccion
-                      instalaciones={metrics.instalacionesProyectadas}
-                      cumplimiento={metrics.projectedSalesCompliance}
+                  {projection && (
+                    <ProjectionCell
+                      installs={metrics.projectedInstalls}
+                      compliance={metrics.projectedSalesCompliance}
                       thresholds={thresholds}
                       mono={mono}
                     />
@@ -252,29 +252,29 @@ export function NodePerformanceTable<T extends CommercialNode>({
                   <td className={num('text-blue-400')}>{formatInteger(node.reactivations)}</td>
                   <td className={num('text-rose-500')}>-{formatInteger(node.churned)}</td>
                   <td
-                    className={num(TONE_TEXT[tonoChurn(churn, thresholds)])}
-                    title={`Objetivo de churn: ${formatTwoDecimals(meta.churnPct)}%`}
+                    className={num(TONE_TEXT[churnTone(churn, thresholds)])}
+                    title={`Objetivo de churn: ${formatTwoDecimals(goal.churnPct)}%`}
                   >
                     {formatTwoDecimals(node.gross_churn_pct)}%
                   </td>
                   <td
-                    className={num(TONE_TEXT[tonoCrecimiento(growth, thresholds)])}
-                    title={`Objetivo de crecimiento: ${formatTwoDecimals(meta.growthPct)}%`}
+                    className={num(TONE_TEXT[growthTone(growth, thresholds)])}
+                    title={`Objetivo de crecimiento: ${formatTwoDecimals(goal.growthPct)}%`}
                   >
                     {formatTwoDecimals(node.growth)}%
                   </td>
                   <td className="py-2 text-right">
                     <TargetBadge
-                      porcentaje={meta.growthPct}
-                      meta={metrics.target}
-                      origen={node.targetSource}
+                      percentage={goal.growthPct}
+                      goal={metrics.target}
+                      source={node.targetSource}
                       expectedClose={metrics.expectedClose}
                       mono={mono}
                       withoutTarget={metrics.withoutTarget}
                     />
                   </td>
                   <td className={num('font-black text-amber-500/80')}>
-                    {metrics.withoutTarget ? <span className="text-slate-600">—</span> : formatInteger(metrics.faltante)}
+                    {metrics.withoutTarget ? <span className="text-slate-600">—</span> : formatInteger(metrics.shortfall)}
                   </td>
                   <ComplianceCell value={metrics.withoutTarget ? null : metrics.complianceRate} thresholds={thresholds} mono={mono} />
                   <ComplianceCell value={metrics.withoutTarget ? null : metrics.salesCompliance} thresholds={thresholds} mono={mono} />
@@ -291,7 +291,7 @@ export function NodePerformanceTable<T extends CommercialNode>({
           </tbody>
         </table>
       </div>
-      <Paginacion estado={paginacion} className="mt-2" />
+      <Pagination state={pagination} className="mt-2" />
     </div>
   );
 }

@@ -136,7 +136,7 @@ Piezas clave:
   duplicado exacto, crear la fila y encolar), `module_lock()` (cerrojo Redis
   por módulo y entorno) y `JobConsole` (buffer de stdout que vuelca el log a la
   fila cada 2 segundos).
-- **`services/imports/tasks.py`** — una sola tarea, `imports.ejecutar_analisis`,
+- **`services/imports/tasks.py`** — una sola tarea, `imports.run_analysis`,
   y un diccionario `RUNNERS` que la especializa por módulo. **Para añadir un
   análisis se registra su función en `RUNNERS`; no se escribe una segunda
   tarea.**
@@ -162,7 +162,7 @@ Concurrencia:
   captura con `capture_console()` (`core/utils.py`). No se debe escribir un
   `redirect_stdout` a mano.
 - **Pasos contables → barra de progreso.** `build_day_metrics()` recibe un
-  callback `progreso(hechos, total, etiqueta)`; es lo que mueve la barra de
+  callback `progress(done, total, label)`; es lo que mueve la barra de
   `AnalysisRunnerCard` y del aviso flotante `AnalysisQueueAlert`.
 - **Los endpoints de mutación llevan límite de peticiones** (`rate=` de
   `@endpoint`): `2/m` para los que disparan un cálculo, `5/m` para las cargas de
@@ -184,7 +184,7 @@ Concurrencia:
 | `services/support/` | Tickets de soporte |
 | `frontend/src/` | React |
 | `backend/templates/app.html` | La única plantilla Django |
-| `data/Planes.json`, `data/Zonas.json` | Semilla inicial de los catálogos (solo los lee `cargar_catalogos`) |
+| `data/Planes.json`, `data/Zonas.json` | Semilla inicial de los catálogos (solo los lee `load_catalogs`) |
 | `scripts/dev.sh` | Arranque de desarrollo |
 | `docker-compose.yml`, `Dockerfile`, `entrypoint.sh` | Empaquetado y despliegue |
 | `graphify-out/` | Grafo de conocimiento del repositorio (generado) |

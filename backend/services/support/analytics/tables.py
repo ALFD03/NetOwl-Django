@@ -39,7 +39,7 @@ CLOSE_HISTORY = Table(
     defaults={"updated_at": "now()"},
 )
 DIMENSION_HISTORY = Table(
-    TableNames.SUPPORT_DIMENSIONES_HISTORICO,
+    TableNames.SUPPORT_DIMENSIONS_HISTORICAL,
     {
         "id": SERIAL, "periodo_reporte": TEXT, "grupo_trabajo": TEXT, "dimension": TEXT, "valor": TEXT,
         "metricas": JSON, "updated_at": TIMESTAMP,

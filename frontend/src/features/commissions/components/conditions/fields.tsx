@@ -11,12 +11,12 @@ import { cn } from '@/shared/lib/cn';
  * que la validación marca en vez de convertirla en un 0 silencioso.
  */
 export function NumberCell({
-  value, onChange, label, cambiado = false, error = false, min, placeholder,
+  value, onChange, label, changed: changed = false, error = false, min, placeholder,
 }: {
   value: number | null;
-  onChange: (valor: number | null) => void;
+  onChange: (inputValue: number | null) => void;
   label: string;
-  cambiado?: boolean;
+  changed?: boolean;
   error?: boolean;
   min?: number;
   placeholder?: string;
@@ -31,7 +31,7 @@ export function NumberCell({
       placeholder={placeholder}
       className={cn(
         'h-9 w-24 rounded-lg border border-slate-700 bg-surface-tertiary px-2 text-right font-mono text-xs tabular-nums text-white focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand',
-        cambiado && 'border-amber-500/70 bg-amber-500/10 font-bold',
+        changed && 'border-amber-500/70 bg-amber-500/10 font-bold',
         error && 'border-rose-500/70 bg-rose-500/10',
       )}
       value={value === null || Number.isNaN(value) ? '' : value}
@@ -41,7 +41,7 @@ export function NumberCell({
 }
 
 /** Lo que valía un campo editado, debajo de él. */
-export function Antes({ value }: { value: string | null }) {
+export function Before({ value }: { value: string | null }) {
   if (value === null) return null;
   return <span className="mt-1 block text-[10px] font-semibold text-amber-400">antes {value}</span>;
 }
@@ -55,7 +55,7 @@ export function RowError({ children }: { children: ReactNode }) {
   );
 }
 
-export function BotonQuitar({ label, onClick }: { label: string; onClick: () => void }) {
+export function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button type="button" title={label} aria-label={label} className="rounded p-2 text-rose-400 hover:bg-rose-500/10" onClick={onClick}>
       <Trash2 className="h-4 w-4" />
@@ -73,4 +73,4 @@ export function Note({ icon, children }: { icon: ReactNode; children: ReactNode 
   );
 }
 
-export const CABECERA = 'text-[10px] font-black uppercase tracking-wider text-slate-500';
+export const HEADER = 'text-[10px] font-black uppercase tracking-wider text-slate-500';

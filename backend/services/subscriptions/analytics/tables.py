@@ -55,7 +55,7 @@ ACTIVE_AT_CLOSE = Table(
     indexes=_BY_PERIOD,
 )
 REACTIVATIONS = Table(
-    TableNames.ANALYZER_REACTIVACIONES,
+    TableNames.ANALYZER_REACTIVATIONS,
     {"orden": TEXT, "fecha": TIMESTAMP, "estado_origen": TEXT, "periodo_reporte": TEXT},
     indexes=_BY_PERIOD,
 )
@@ -101,7 +101,7 @@ CLOSE_HISTORY = Table(
     indexes=_BY_PERIOD,
 )
 CHURN_DIMENSIONS = Table(
-    TableNames.ANALYZER_CHURN_DIMENSIONES,
+    TableNames.ANALYZER_CHURN_DIMENSIONS,
     {
         "dimension": TEXT, "valor": TEXT, "nuevos": INT,
         **{c: INT for c in _COUNTS}, **{c: FLOAT for c in _RATES},

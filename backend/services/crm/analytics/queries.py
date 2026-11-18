@@ -32,16 +32,16 @@ def get_crm_periods() -> list[str]:
         return []
 
 
-def get_crm_close_history(periodos: list[str] | None = None) -> list[dict[str, Any]]:
+def get_crm_close_history(periods: list[str] | None = None) -> list[dict[str, Any]]:
     """Los cierres de los periodos pedidos, con el JSONB ya parseado."""
     db = DBConnector()
     try:
         where_clause = ""
         params = []
-        if periodos:
-            placeholders = ", ".join(["%s"] * len(periodos))
+        if periods:
+            placeholders = ", ".join(["%s"] * len(periods))
             where_clause = f"WHERE periodo_reporte IN ({placeholders})"
-            params = periodos
+            params = periods
 
         df = db.query(f"""
             SELECT * FROM {DB_SCHEMA}.{TableNames.CRM_CLOSE_HISTORY}
@@ -67,7 +67,7 @@ def get_crm_close_history(periodos: list[str] | None = None) -> list[dict[str, A
 
 
 def get_crm_metric_totals(
-    periodo: str | None = None, solo: str | None = None,
+    period: str | None = None, only: str | None = None,
 ) -> dict[str, Any]:
     """El dashboard: promedio global, tiempos, efectividad y la serie historica.
 
@@ -77,19 +77,19 @@ def get_crm_metric_totals(
     Con `solo`, el mismo bloque construido con ese periodo y nada mas: es el
     dashboard de quien no ve todos los periodos (`services/config/periods.py`).
     """
-    if solo:
-        return _period_metric_totals(solo)
+    if only:
+        return _period_metric_totals(only)
     db = DBConnector()
     try:
         df_mg = db.query(f"SELECT resumen_global, tiempo_por_etapa, efectividad FROM {DB_SCHEMA}.{TableNames.CRM_GLOBAL_METRICS} WHERE id = 1")
         
-        resumen_global = {}
-        tiempo_por_etapa = []
-        efectividad = []
+        global_summary = {}
+        time_by_stage = []
+        effectiveness = []
         if not df_mg.empty:
-            resumen_global = parse_jsonb(df_mg.iloc[0]["resumen_global"]) or {}
-            tiempo_por_etapa = parse_jsonb(df_mg.iloc[0]["tiempo_por_etapa"]) or []
-            efectividad = parse_jsonb(df_mg.iloc[0]["efectividad"]) or []
+            global_summary = parse_jsonb(df_mg.iloc[0]["resumen_global"]) or {}
+            time_by_stage = parse_jsonb(df_mg.iloc[0]["tiempo_por_etapa"]) or []
+            effectiveness = parse_jsonb(df_mg.iloc[0]["efectividad"]) or []
 
         df_hist = db.query(f"""
             SELECT * FROM {DB_SCHEMA}.{TableNames.CRM_CLOSE_HISTORY}
@@ -99,45 +99,45 @@ def get_crm_metric_totals(
         # vista de analytics; aquí sólo abultarían el payload con dos JSON por
         # periodo que nadie lee.
         if not df_hist.empty:
-            historico = df_hist.drop(
+            historical = df_hist.drop(
                 columns=["efectividad", "tiempo_por_etapa"], errors="ignore"
             ).to_dict(orient="records")
         else:
-            historico = []
+            historical = []
 
         return {
-            "resumen_global": resumen_global,
-            "tiempo_por_etapa": tiempo_por_etapa,
-            "efectividad": efectividad,
-            "historico_tendencias": historico
+            "resumen_global": global_summary,
+            "tiempo_por_etapa": time_by_stage,
+            "efectividad": effectiveness,
+            "historico_tendencias": historical
         }
     except Exception:
         logger.exception("Error al consultar métricas globales de CRM")
         return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
 
 
-def _period_metric_totals(periodo: str) -> dict[str, Any]:
+def _period_metric_totals(period: str) -> dict[str, Any]:
     """`get_crm_metric_totals` sobre un solo cierre, con la misma forma.
 
     El promedio de un periodo es el propio periodo, pero pasa por
     `average_closes` para que las claves sean exactamente las del global.
     """
-    cierres = get_crm_close_history([periodo])
-    if not cierres:
+    closes = get_crm_close_history([period])
+    if not closes:
         return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
-    cierre = cierres[0]
+    close = closes[0]
     return {
-        "resumen_global": average_closes(cierres),
-        "tiempo_por_etapa": cierre["tiempo_por_etapa"],
-        "efectividad": cierre["efectividad"],
+        "resumen_global": average_closes(closes),
+        "tiempo_por_etapa": close["tiempo_por_etapa"],
+        "efectividad": close["efectividad"],
         "historico_tendencias": [
-            {k: v for k, v in cierre.items() if k not in ("efectividad", "tiempo_por_etapa")}
+            {k: v for k, v in close.items() if k not in ("efectividad", "tiempo_por_etapa")}
         ],
     }
 
 
-def get_crm_dimensiones(
-    periodos: list[str] | None = None,
+def get_crm_dimensions(
+    periods: list[str] | None = None,
     dimension: str | None = None
 ) -> list[dict[str, Any]]:
     """Las filas dimensionales de los periodos pedidos, con su JSONB parseado."""
@@ -145,10 +145,10 @@ def get_crm_dimensiones(
     try:
         clauses = []
         params = []
-        if periodos:
-            placeholders = ", ".join(["%s"] * len(periodos))
+        if periods:
+            placeholders = ", ".join(["%s"] * len(periods))
             clauses.append(f"periodo_reporte IN ({placeholders})")
-            params.extend(periodos)
+            params.extend(periods)
         if dimension:
             clauses.append("dimension = %s")
             params.append(dimension)
@@ -157,7 +157,7 @@ def get_crm_dimensiones(
 
         df = db.query(f"""
             SELECT periodo_reporte, dimension, valor, metricas, efectividad
-            FROM {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO}
+            FROM {DB_SCHEMA}.{TableNames.CRM_DIMENSIONS_HISTORICAL}
             {where_sql}
             ORDER BY periodo_reporte DESC, dimension ASC, valor ASC
         """, params=params)
@@ -165,16 +165,9 @@ def get_crm_dimensiones(
         if df.empty:
             return []
 
-        result = []
-        for _, row in df.iterrows():
-            result.append({
-                "periodo_reporte": row["periodo_reporte"],
-                "dimension": row["dimension"],
-                "valor": row["valor"],
-                "metricas": parse_jsonb(row["metricas"]) or {},
-                "efectividad": parse_jsonb(row["efectividad"]) or [],
-            })
-        return result
+        df["metricas"] = df["metricas"].map(lambda v: parse_jsonb(v) or {})
+        df["efectividad"] = df["efectividad"].map(lambda v: parse_jsonb(v) or [])
+        return df[["periodo_reporte", "dimension", "valor", "metricas", "efectividad"]].to_dict("records")
     except Exception:
         logger.exception("Error al consultar dimensiones de CRM")
         return []

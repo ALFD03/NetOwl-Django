@@ -30,7 +30,7 @@ from django_ratelimit.core import is_ratelimited
 from pydantic import BaseModel, ValidationError
 
 from core.utils import clean_json_nullable, clean_json_props
-from netowl_web.ratelimit import ip_cliente
+from netowl_web.ratelimit import client_ip
 from services.config.auth import has_permission
 
 from .keys import KeyMap
@@ -63,7 +63,7 @@ def _rate_key(group: str, request) -> str:
         return f"token:{token.pk}"
     if request.user.is_authenticated:
         return f"user:{request.user.pk}"
-    return f"ip:{ip_cliente(request)}"
+    return f"ip:{client_ip(request)}"
 
 
 def _is_list_field(model: type[BaseModel], name: str) -> bool:

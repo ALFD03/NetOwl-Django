@@ -84,7 +84,7 @@ def _row(r: AuditLog) -> dict:
     }
 
 
-@endpoint(perms=["can_view_auditoria"], query=LogQuery)
+@endpoint(perms=["can_view_audit"], query=LogQuery)
 def logs(request, query: LogQuery):
     """El registro filtrado: los `LIMIT` más recientes de lo que cumple los filtros."""
     filtered, filters = _filter(query)
@@ -103,20 +103,20 @@ def logs(request, query: LogQuery):
     }
 
 
-@endpoint(perms=["can_view_auditoria"])
+@endpoint(perms=["can_view_audit"])
 def log_detail(request, log_id: int):
     """Un registro con su `detail`."""
     r = AuditLog.objects.get(pk=log_id)
     return {**_row(r), "method": r.method, "path": r.path, "detail": r.detail}
 
 
-@endpoint(perms=["can_view_auditoria"])
+@endpoint(perms=["can_view_audit"])
 def health(request):
     """Estado de web, Postgres, Redis, worker de Celery y análisis."""
     return monitoring.health()
 
 
-@endpoint(perms=["can_view_auditoria"], query=StatsQuery)
+@endpoint(perms=["can_view_audit"], query=StatsQuery)
 def stats(request, query: StatsQuery):
     """Actividad, errores y latencia por endpoint de las últimas horas."""
     return monitoring.stats(query.hours)

@@ -8,8 +8,8 @@ import { downloadSheetsAsExcel } from '@/shared/lib/excel';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { ExportButton, SelectMenu, StatusMessage, type ExportState } from '@/shared/ui';
 import {
-  formularioEtaFileName,
-  hojasFormularioEta,
+  etaFormFileName,
+  etaFormSheets,
   formRowCount,
 } from '../../lib/etaFormsExport';
 import type { EtaForms } from '@/shared/types/subscriptions';
@@ -57,30 +57,30 @@ export function EtaFormsExportButton({
   forms,
   period,
   rate,
-  currentRate: tasaActual = 0,
-  currentRateSource: tasaActualFuente,
-  withoutRegulatory: sinRegulador = [],
+  currentRate: currentRate = 0,
+  currentRateSource,
+  withoutRegulatory: withoutRegulator = [],
   className,
 }: EtaFormsExportButtonProps) {
-  const [estado, setState] = useState<ExportState>('idle');
+  const [state, setState] = useState<ExportState>('idle');
   const [error, setError] = useState<string | null>(null);
   // La del mes por defecto: es la que se declara. Exportar a la tasa de hoy es
   // la excepción, y tiene que costar un clic elegirla.
-  const [origen, setOrigen] = useState<RateSource>('mes');
+  const [source, setSource] = useState<RateSource>('mes');
 
   // Elegir «hoy» y que luego la consulta al BCV falle dejaría exportando a
   // cero sin decirlo; mientras no haya tasa vigente, la elección no existe.
-  const puedeElegir = tasaActual > 0;
-  const usesCurrent = puedeElegir && origen === 'actual';
-  const usedRate = usesCurrent ? tasaActual : rate;
+  const canChoose = currentRate > 0;
+  const usesCurrent = canChoose && source === 'actual';
+  const usedRate = usesCurrent ? currentRate : rate;
 
-  const filas = formRowCount(forms);
+  const rows = formRowCount(forms);
   // Un periodo bloqueado antes de que existieran los formularios sirve el JSON
   // que se guardó entonces, y ese no los trae: hay que recalcularlo.
   const notComputed = !forms;
 
   const handleClick = async () => {
-    if (!forms || filas === 0) {
+    if (!forms || rows === 0) {
       setState('empty');
       return;
     }
@@ -88,8 +88,8 @@ export function EtaFormsExportButton({
     setError(null);
     try {
       await downloadSheetsAsExcel(
-        hojasFormularioEta(forms, usedRate),
-        formularioEtaFileName(period, usesCurrent ? 'tasa de hoy' : ''),
+        etaFormSheets(forms, usedRate),
+        etaFormFileName(period, usesCurrent ? 'tasa de hoy' : ''),
       );
       setState('idle');
     } catch (err) {
@@ -103,19 +103,19 @@ export function EtaFormsExportButton({
     }
   };
 
-  const avisos = [
+  const warnings = [
     notComputed
       ? 'Este periodo se calculó antes de que existieran los formularios: recalcúlalo para poder exportarlos.'
       : '',
     usedRate > 0
       ? ''
       : 'Sin tasa del BCV fijada: las columnas de renta básica saldrán vacías.',
-    sinRegulador.length
-      ? `${sinRegulador.length} plan(es) sin plan regulador asignado quedan fuera del formulario: ${sinRegulador.slice(0, 5).join(', ')}${sinRegulador.length > 5 ? '…' : ''}`
+    withoutRegulator.length
+      ? `${withoutRegulator.length} plan(es) sin plan regulador asignado quedan fuera del formulario: ${withoutRegulator.slice(0, 5).join(', ')}${withoutRegulator.length > 5 ? '…' : ''}`
       : '',
   ].filter(Boolean);
 
-  const bloqueado = !period || notComputed || filas === 0;
+  const locked = !period || notComputed || rows === 0;
 
   return (
     <div className="flex flex-col items-start gap-2">
@@ -126,7 +126,7 @@ export function EtaFormsExportButton({
       <div
         className={cn(
           'flex items-stretch overflow-hidden rounded-2xl border border-slate-700/50 bg-surface-secondary shadow-2xl transition-colors',
-          !bloqueado && 'hover:border-brand/40',
+          !locked && 'hover:border-brand/40',
           className,
         )}
       >
@@ -134,14 +134,14 @@ export function EtaFormsExportButton({
         <ExportButton
           seamless
           onClick={handleClick}
-          estado={estado}
+          state={state}
           label="Exportar formularios"
           labelEmpty="Nada que declarar"
           icon={<FileSpreadsheet className="h-4 w-4 text-brand" />}
-          disabled={bloqueado}
+          disabled={locked}
           title={[
             `Descargar las tres hojas del formulario de ${period} (internet, transporte y televisión).`,
-            ...avisos,
+            ...warnings,
           ].join(' ')}
         />
 
@@ -153,11 +153,11 @@ export function EtaFormsExportButton({
         <div
           className="flex"
           title={
-            puedeElegir
+            canChoose
               ? [
                   'Tasa con la que se convierten las rentas del libro.',
                   '«Del mes» es la que declara el periodo;',
-                  `«de hoy» es la última publicada${tasaActualFuente ? ` (${tasaActualFuente})` : ''}.`,
+                  `«de hoy» es la última publicada${currentRateSource ? ` (${currentRateSource})` : ''}.`,
                 ].join(' ')
               : 'Solo la tasa del mes: no se pudo leer la tasa vigente del BCV.'
           }
@@ -165,15 +165,15 @@ export function EtaFormsExportButton({
           <SelectMenu
             value={usesCurrent ? 'actual' : 'mes'}
             options={
-              puedeElegir
+              canChoose
                 ? [
                     { value: 'mes', label: 'Tasa del mes' },
                     { value: 'actual', label: 'Tasa de hoy' },
                   ]
                 : [{ value: 'mes', label: 'Tasa del mes' }]
             }
-            onChange={(valor) => setOrigen(valor as RateSource)}
-            disabled={!puedeElegir}
+            onChange={(value) => setSource(value as RateSource)}
+            disabled={!canChoose}
             aria-label="Tasa con la que se convierten las rentas"
             panelWidth={180}
             className={cn(
@@ -191,8 +191,8 @@ export function EtaFormsExportButton({
         status={
           error
             ? { type: 'error', text: error }
-            : avisos.length
-              ? { type: 'warning', text: avisos.join(' ') }
+            : warnings.length
+              ? { type: 'warning', text: warnings.join(' ') }
               : null
         }
         icon={<AlertTriangle />}

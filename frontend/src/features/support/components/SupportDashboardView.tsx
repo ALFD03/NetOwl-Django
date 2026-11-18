@@ -39,22 +39,18 @@ import {
   Modal,
   NeonContainer,
   ProgressBar,
-  Paginacion,
+  Pagination,
   SparklineCard,
-  StatTile,
   METRIC_CHART,
-  usePaginacion,
-} from '@/shared/ui';
+  usePagination } from '@/shared/ui';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import { usePermissions } from '@/shared/hooks/usePermissions';
 import {
   formatInteger,
   formatOneDecimal,
-  formatPeriodLabel,
-  formatTwoDecimals,
-} from '@/shared/utils';
+  formatPeriodLabel } from '@/shared/utils';
 import {
-  ASIGNACION,
+  ASSIGNMENT,
   CLOSE_TOTAL,
   ESCALATION,
   TIME_MEASURE_META,
@@ -64,123 +60,18 @@ import { MEASURE_ICONS } from '../lib/measureIcons';
 import { SUPPORT_TIME_MEASURES, type SupportDashboardProps } from '../types';
 import type { useSupportDashboard } from '../hooks/useSupportDashboard';
 import { OpenTicketsPanel } from './flow/OpenTicketsPanel';
-import { Seccion, SeccionesNav, type SeccionDef } from './Seccion';
+import { Section, SectionsNav, type SectionDef } from './Section';
+import { CloseSources } from './CloseSources';
 
 /**
- * `MetricCard`'s `trend` accessory is hardcoded to percentages and reads "up" as
- * good — neither holds for hours-to-close, so the gap is spelled out instead.
+ * El accesorio `trend` de `MetricCard` está fijo a porcentajes y lee «sube» como
+ * bueno; ninguna de las dos cosas vale para horas hasta el cierre, así que la
+ * diferencia se escribe con palabras.
  */
 function mttrGapLabel(deltaHours: number): string {
   if (deltaHours === 0) return 'En línea con el promedio global';
   const faster = deltaHours < 0;
   return `${Math.abs(deltaHours)} h ${faster ? 'más rápido' : 'más lento'} que el promedio global`;
-}
-
-/** De lo cerrado en el mes, cuánto nació en él y cuánto venía arrastrado. */
-function CloseSources({ stats }: { stats: ReturnType<typeof useSupportDashboard>['stats'] }) {
-  return (
-    <NeonContainer
-      theme="slate"
-      title="Origen de los Cierres"
-      subtitle="De lo cerrado en el mes, cuánto nació en él y cuánto venía arrastrado · escalar a Soporte es cerrar para ATC"
-      icon={<Layers className="h-5 w-5" />}
-    >
-      <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-2">
-        <div className="grid grid-cols-2 gap-3">
-          <StatTile
-            label="Resueltos del mes"
-            value={`${formatTwoDecimals(stats.pct_resolved_in_period)}%`}
-            caption={`${formatInteger(stats.tickets_resolved_in_period)} tickets`}
-            tone="green"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Resueltos arrastre"
-            value={`${formatTwoDecimals(stats.pct_resolved_carryover)}%`}
-            caption={`${formatInteger(stats.tickets_resolved_carryover)} tickets`}
-            tone="purple"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Cancelados del mes"
-            value={`${formatTwoDecimals(stats.pct_cancelled_in_period)}%`}
-            caption={`${formatInteger(stats.tickets_cancelled_in_period)} tickets`}
-            tone="red"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Cancelados arrastre"
-            value={`${formatTwoDecimals(stats.pct_cancelled_carryover)}%`}
-            caption={`${formatInteger(stats.tickets_cancelled_carryover)} tickets`}
-            tone="purple"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Escalados del mes"
-            value={`${formatTwoDecimals(stats.pct_escalated_in_period)}%`}
-            caption={`${formatInteger(stats.tickets_escalated_in_period)} tickets`}
-            tone="yellow"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Escalados arrastre"
-            value={`${formatTwoDecimals(stats.pct_escalated_carryover)}%`}
-            caption={`${formatInteger(stats.tickets_escalated_carryover)} tickets`}
-            tone="slate"
-            variant="boxed"
-            mono
-          />
-        </div>
-
-        {/* Los seis sumandos comparten denominador —los cerrados del mes, con lo
-              que ATC escaló—, así que las barras se leen unas contra otras y
-              suman 100 %. */}
-        <div className="space-y-3">
-          <ProgressBar
-            label="Resueltos del mes"
-            percent={stats.pct_resolved_in_period}
-            valueLabel={`${formatTwoDecimals(stats.pct_resolved_in_period)}%`}
-            color="green"
-          />
-          <ProgressBar
-            label="Resueltos de meses anteriores"
-            percent={stats.pct_resolved_carryover}
-            valueLabel={`${formatTwoDecimals(stats.pct_resolved_carryover)}%`}
-            color="purple"
-          />
-          <ProgressBar
-            label="Cancelados del mes"
-            percent={stats.pct_cancelled_in_period}
-            valueLabel={`${formatTwoDecimals(stats.pct_cancelled_in_period)}%`}
-            color="red"
-          />
-          <ProgressBar
-            label="Cancelados de meses anteriores"
-            percent={stats.pct_cancelled_carryover}
-            valueLabel={`${formatTwoDecimals(stats.pct_cancelled_carryover)}%`}
-            color="yellow"
-          />
-          <ProgressBar
-            label="Escalados a Soporte del mes"
-            percent={stats.pct_escalated_in_period}
-            valueLabel={`${formatTwoDecimals(stats.pct_escalated_in_period)}%`}
-            color="yellow"
-          />
-          <ProgressBar
-            label="Escalados de meses anteriores"
-            percent={stats.pct_escalated_carryover}
-            valueLabel={`${formatTwoDecimals(stats.pct_escalated_carryover)}%`}
-            color="slate"
-          />
-        </div>
-      </div>
-    </NeonContainer>
-  );
 }
 
 interface SupportDashboardViewProps {
@@ -190,11 +81,11 @@ interface SupportDashboardViewProps {
 
 export function SupportDashboardView({ data, open = null }: SupportDashboardViewProps) {
   const { can } = usePermissions();
-  const showOpen = can(PERMISSIONS.VIEW_SUPPORT_ABIERTOS);
+  const showOpen = can(PERMISSIONS.VIEW_SUPPORT_OPEN);
 
   const {
-    periodosEvaluados,
-    historico,
+    evaluatedPeriods,
+    history,
     stats,
     trendCards,
     groupCards,
@@ -205,14 +96,14 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
   } = data;
 
   const chartColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : undefined;
-  const periodsLabel = `${periodosEvaluados} periodos evaluados`;
-  const paginacion = usePaginacion(historico);
+  const periodsLabel = `${evaluatedPeriods} periodos evaluados`;
+  const pagination = usePagination(history);
 
   const closeTotal = distribution(stats, CLOSE_TOTAL);
-  const asignacion = distribution(stats, ASIGNACION);
-  const escalamiento = distribution(stats, ESCALATION);
+  const assignment = distribution(stats, ASSIGNMENT);
+  const escalation = distribution(stats, ESCALATION);
 
-  const secciones: SeccionDef[] = [
+  const sections: SectionDef[] = [
     { id: 'volumen', title: 'Volumen y cierre', icon: <Layers /> },
     { id: 'tiempos', title: 'Tiempos', icon: <Timer /> },
     ...(showOpen ? [{ id: 'abiertos', title: 'Abiertos ahora', icon: <FolderOpen /> }] : []),
@@ -221,9 +112,9 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
 
   return (
     <div className="space-y-10">
-      <SeccionesNav sections={secciones} />
+      <SectionsNav sections={sections} />
 
-      <Seccion
+      <Section
         id="volumen"
         title="Volumen y cierre"
         description="Cuánto entra y cuánto se despacha en un mes típico, y de dónde vienen los cierres."
@@ -276,9 +167,9 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
         </div>
 
         <CloseSources stats={stats} />
-      </Seccion>
+      </Section>
 
-      <Seccion
+      <Section
         id="tiempos"
         title="Tiempos"
         description="El promedio de cada medida de tiempo y la distribución del cierre total, de la asignación y de lo que ATC tarda en escalar."
@@ -286,17 +177,17 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
         icon={<Timer />}
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-          {SUPPORT_TIME_MEASURES.map((medida) => {
-            const meta = TIME_MEASURE_META[medida];
+          {SUPPORT_TIME_MEASURES.map((measure) => {
+            const goal = TIME_MEASURE_META[measure];
 
             return (
               <MetricCard
-                key={medida}
-                label={meta.label}
-                value={`${stats[`time_mean_${medida}_hours`]} h`}
-                color={meta.color}
-                subValue={`${meta.caption} · ${formatInteger(stats[`sample_${medida}`])} medidos`}
-                icon={MEASURE_ICONS[meta.color]}
+                key={measure}
+                label={goal.label}
+                value={`${stats[`time_mean_${measure}_hours`]} h`}
+                color={goal.color}
+                subValue={`${goal.caption} · ${formatInteger(stats[`sample_${measure}`])} medidos`}
+                icon={MEASURE_ICONS[goal.color]}
               />
             );
           })}
@@ -310,52 +201,52 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
             theme="blue"
             min={closeTotal.min}
             p25={closeTotal.p25}
-            mediana={closeTotal.median}
-            promedio={closeTotal.promedio}
+            median={closeTotal.median}
+            average={closeTotal.average}
             p75={closeTotal.p75}
             max={closeTotal.max}
             std={closeTotal.std}
-            pctExcedeProm={closeTotal.pctExcedeProm}
+            pctAboveAvg={closeTotal.pctAboveAvg}
           />
 
           <EquidistantTimeline
             title="Distribución Asignación"
-            subtitle={`Creación → asignación · ${formatInteger(asignacion.sample)} tickets medidos`}
+            subtitle={`Creación → asignación · ${formatInteger(assignment.sample)} tickets medidos`}
             icon={<Hourglass className="h-5 w-5" />}
             theme="slate"
-            min={asignacion.min}
-            p25={asignacion.p25}
-            mediana={asignacion.median}
-            promedio={asignacion.promedio}
-            p75={asignacion.p75}
-            max={asignacion.max}
-            std={asignacion.std}
-            pctExcedeProm={asignacion.pctExcedeProm}
+            min={assignment.min}
+            p25={assignment.p25}
+            median={assignment.median}
+            average={assignment.average}
+            p75={assignment.p75}
+            max={assignment.max}
+            std={assignment.std}
+            pctAboveAvg={assignment.pctAboveAvg}
           />
 
-          {escalamiento.sample > 0 && (
+          {escalation.sample > 0 && (
             <div className="xl:col-span-2">
               <EquidistantTimeline
                 title="Distribución Hasta Escalar"
-                subtitle={`Creación → paso a Soporte · ${formatInteger(escalamiento.sample)} escalados medidos`}
+                subtitle={`Creación → paso a Soporte · ${formatInteger(escalation.sample)} escalados medidos`}
                 icon={<ArrowRightLeft className="h-5 w-5" />}
                 theme="yellow"
-                min={escalamiento.min}
-                p25={escalamiento.p25}
-                mediana={escalamiento.median}
-                promedio={escalamiento.promedio}
-                p75={escalamiento.p75}
-                max={escalamiento.max}
-                std={escalamiento.std}
-                pctExcedeProm={escalamiento.pctExcedeProm}
+                min={escalation.min}
+                p25={escalation.p25}
+                median={escalation.median}
+                average={escalation.average}
+                p75={escalation.p75}
+                max={escalation.max}
+                std={escalation.std}
+                pctAboveAvg={escalation.pctAboveAvg}
               />
             </div>
           )}
         </div>
-      </Seccion>
+      </Section>
 
       {showOpen && (
-        <Seccion
+        <Section
           id="abiertos"
           title="Tickets abiertos ahora"
           description="Cuánto llevan abiertos desde su creación y cuánto en la etapa en que están, con el reloj en la hora de Caracas y los logs del último análisis."
@@ -363,10 +254,10 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
           icon={<FolderOpen />}
         >
           <OpenTicketsPanel open={open} />
-        </Seccion>
+        </Section>
       )}
 
-      <Seccion
+      <Section
         id="tendencias"
         title="Tendencias y grupos de trabajo"
         description="Cada tasa y cada tiempo mes a mes —pulsa una tarjeta para ver el histórico completo— y el rendimiento de cada grupo."
@@ -436,8 +327,8 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
                       )}
                       <ProgressBar
                         label="Rezagados"
-                        percent={card.pctRezagados}
-                        valueLabel={`${card.pctRezagados}%`}
+                        percent={card.pctLagging}
+                        valueLabel={`${card.pctLagging}%`}
                         color="yellow"
                       />
                     </MetricCard>
@@ -445,15 +336,15 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
                     <MetricCard
                       label={`${card.label} · Cierre Total`}
                       value={`${card.mttr} h`}
-                      caption={`Mediana ${card.mttrMediana} h · asignación ${formatOneDecimal(card.espera)} h`}
+                      caption={`Mediana ${card.mttrMedian} h · asignación ${formatOneDecimal(card.wait)} h`}
                       subValue={mttrGapLabel(card.mttrDelta)}
                       color={card.mttrColor}
                       icon={<Clock className="h-4 w-4 text-sky-400" />}
                     >
                       <ProgressBar
                         label="Excede el promedio"
-                        percent={card.pctExcedeProm}
-                        valueLabel={`${card.pctExcedeProm}%`}
+                        percent={card.pctAboveAvg}
+                        valueLabel={`${card.pctAboveAvg}%`}
                         color="blue"
                       />
                     </MetricCard>
@@ -463,7 +354,7 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
             )}
           </NeonContainer>
         </div>
-      </Seccion>
+      </Section>
 
       <Modal
         isOpen={!!selectedTrend}
@@ -487,7 +378,7 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
                 </span>
                 <span className="font-mono text-xs font-bold text-brand">{periodsLabel}</span>
               </div>
-              <Paginacion estado={paginacion} posicion="arriba" />
+              <Pagination state={pagination} position="arriba" />
               <div className="custom-scrollbar max-h-60 overflow-auto">
                 <table className={READONLY_TABLE}>
                   <thead className={READONLY_TABLE_HEAD_STICKY}>
@@ -504,7 +395,7 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
                     </tr>
                   </thead>
                   <tbody className={READONLY_TABLE_BODY}>
-                    {paginacion.visibles.map((row) => {
+                    {pagination.visible.map((row) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
 
@@ -537,7 +428,7 @@ export function SupportDashboardView({ data, open = null }: SupportDashboardView
                   </tbody>
                 </table>
               </div>
-              <Paginacion estado={paginacion} />
+              <Pagination state={pagination} />
             </div>
           </div>
         )}

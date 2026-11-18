@@ -21,8 +21,8 @@ import pandas as pd
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.odoo_names import name_key, normalize_odoo_name
-from services.support.analytics.config import SUPPORT_DIMENSIONES_PERSONA
-from services.support.models import HistorialDepartamento, UsuarioSoporte
+from services.support.analytics.config import SUPPORT_DIMENSIONS_PERSON
+from services.support.models import DepartmentHistory, SupportUser
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ UNSPECIFIED = "Sin Especificar"
 _key = name_key
 
 
-def departments_by_user(fecha: date | None = None) -> dict[str, str]:
+def departments_by_user(on_date: date | None = None) -> dict[str, str]:
     """`{clave del nombre -> departamento}` para todo el directorio.
 
     Con `fecha`, el departamento en el que estaba cada persona **ese dia**,
@@ -52,26 +52,26 @@ def departments_by_user(fecha: date | None = None) -> dict[str, str]:
     habria congelado el reparto al dia del analisis.
     """
     # El vigente como base: cubre a quien, por lo que sea, no tenga historia.
-    mapa = {
-        _key(nombre): departamento
-        for nombre, departamento in UsuarioSoporte.objects.values_list(
-            "nombre_odoo", "departamento__nombre"
+    mapping = {
+        _key(name): department
+        for name, department in SupportUser.objects.values_list(
+            "odoo_name", "department__name"
         )
     }
-    if fecha is None:
-        return mapa
+    if on_date is None:
+        return mapping
 
     # El orden del modelo —tramo inicial primero, luego por fecha— hace que
     # el ultimo tramo aplicable sea el que se queda.
-    for nombre, departamento, desde in HistorialDepartamento.objects.values_list(
-        "usuario__nombre_odoo", "departamento__nombre", "desde"
+    for name, department, since in DepartmentHistory.objects.values_list(
+        "user__odoo_name", "department__name", "since"
     ):
-        if desde is None or desde <= fecha:
-            mapa[_key(nombre)] = departamento
-    return mapa
+        if since is None or since <= on_date:
+            mapping[_key(name)] = department
+    return mapping
 
 
-def annotate_departments(grupos: dict, fecha: date | None = None) -> dict:
+def annotate_departments(groups: dict, on_date: date | None = None) -> dict:
     """Anade `departamento` a cada valor de las dos dimensiones de persona.
 
     `fecha` es el dia del corte: el ultimo del mes para el cierre, el dia
@@ -88,21 +88,21 @@ def annotate_departments(grupos: dict, fecha: date | None = None) -> dict:
     Quien no este en el directorio se queda con la cadena vacia; es la
     interfaz la que decide como llamar a ese grupo.
     """
-    if not grupos:
-        return grupos
+    if not groups:
+        return groups
 
     try:
-        mapa = departments_by_user(fecha)
+        mapping = departments_by_user(on_date)
     except Exception:
         logger.exception("No se pudo leer el directorio de soporte")
-        return grupos
+        return groups
 
-    for bloque in grupos.values():
-        for dimension in SUPPORT_DIMENSIONES_PERSONA:
-            for entrada in bloque.get(dimension, []):
-                entrada["departamento"] = mapa.get(_key(entrada.get("nombre", "")), "")
+    for block in groups.values():
+        for dimension in SUPPORT_DIMENSIONS_PERSON:
+            for entry in block.get(dimension, []):
+                entry["departamento"] = mapping.get(_key(entry.get("nombre", "")), "")
 
-    return grupos
+    return groups
 
 
 def users_outside_directory() -> list[dict]:
@@ -140,24 +140,24 @@ def users_outside_directory() -> list[dict]:
 
     # Un diccionario por nombre normalizado, con el literal tal y como lo
     # escribe el export: es lo que se le ofrece copiar a quien lo registre.
-    encontrados: dict[str, dict] = {}
-    for columna, papel in (("asignado_a", "asignados"), ("creado_por", "creados")):
-        if columna not in df.columns:
+    found: dict[str, dict] = {}
+    for column, role in (("asignado_a", "asignados"), ("creado_por", "creados")):
+        if column not in df.columns:
             continue
-        for literal, tickets in df.groupby(columna)["tickets"].sum().items():
-            nombre = normalize_odoo_name(literal)
-            if not nombre or str(literal).strip() == UNSPECIFIED:
+        for literal, tickets in df.groupby(column)["tickets"].sum().items():
+            name = normalize_odoo_name(literal)
+            if not name or str(literal).strip() == UNSPECIFIED:
                 continue
-            fila = encontrados.setdefault(
+            row = found.setdefault(
                 _key(literal),
-                {"nombre_odoo": nombre, "literal": str(literal).strip(), "asignados": 0, "creados": 0},
+                {"nombre_odoo": name, "literal": str(literal).strip(), "asignados": 0, "creados": 0},
             )
-            fila[papel] += int(tickets)
+            row[role] += int(tickets)
 
-    registrados = set(departments_by_user())
+    registered = set(departments_by_user())
     return sorted(
-        (fila for clave, fila in encontrados.items() if clave not in registrados),
-        key=lambda fila: fila["asignados"] + fila["creados"],
+        (row for key, row in found.items() if key not in registered),
+        key=lambda row: row["asignados"] + row["creados"],
         reverse=True,
     )
 
@@ -173,11 +173,11 @@ def tickets_after_churn() -> list[dict]:
 
     Igual que aquella, no bloquea nada: es una lista para reasignar en Odoo.
     """
-    bajas = {
-        _key(u.nombre_odoo): u
-        for u in UsuarioSoporte.objects.exclude(fecha_egreso=None)
+    churns = {
+        _key(u.odoo_name): u
+        for u in SupportUser.objects.exclude(end_date=None)
     }
-    if not bajas:
+    if not churns:
         return []
 
     db = DBConnector()
@@ -186,7 +186,7 @@ def tickets_after_churn() -> list[dict]:
 
     # Se filtra en SQL por la baja mas antigua para no traerse la tabla
     # entera; el corte fino, persona a persona, se hace despues.
-    desde = min(u.fecha_egreso for u in bajas.values())
+    since = min(u.end_date for u in churns.values())
     try:
         df = db.query(
             f"""
@@ -195,7 +195,7 @@ def tickets_after_churn() -> list[dict]:
             WHERE creado_el >= %s::date + 1
             GROUP BY asignado_a, creado_por, creado_el::date
             """,
-            params=[desde],
+            params=[since],
         )
     except Exception:
         logger.exception("Error al buscar tickets posteriores a las bajas de soporte")
@@ -207,30 +207,30 @@ def tickets_after_churn() -> list[dict]:
     df["tickets"] = pd.to_numeric(df["tickets"], errors="coerce").fillna(0).astype(int)
     df["dia"] = pd.to_datetime(df["dia"], errors="coerce").dt.date
 
-    encontrados: dict[str, dict] = {}
-    for columna, papel in (("asignado_a", "asignados"), ("creado_por", "creados")):
-        for (literal, dia), tickets in df.groupby([columna, "dia"])["tickets"].sum().items():
-            usuario = bajas.get(_key(literal))
-            if usuario is None or dia is None or dia <= usuario.fecha_egreso:
+    found: dict[str, dict] = {}
+    for column, role in (("asignado_a", "asignados"), ("creado_por", "creados")):
+        for (literal, day), tickets in df.groupby([column, "dia"])["tickets"].sum().items():
+            user = churns.get(_key(literal))
+            if user is None or day is None or day <= user.end_date:
                 continue
-            fila = encontrados.setdefault(
+            row = found.setdefault(
                 _key(literal),
                 {
-                    "id": usuario.id,
-                    "nombre_odoo": usuario.nombre_odoo,
-                    "fecha_egreso": usuario.fecha_egreso.isoformat(),
+                    "id": user.id,
+                    "nombre_odoo": user.odoo_name,
+                    "fecha_egreso": user.end_date.isoformat(),
                     "asignados": 0,
                     "creados": 0,
-                    "ultimo": dia,
+                    "ultimo": day,
                 },
             )
-            fila[papel] += int(tickets)
-            fila["ultimo"] = max(fila["ultimo"], dia)
+            row[role] += int(tickets)
+            row["ultimo"] = max(row["ultimo"], day)
 
-    for fila in encontrados.values():
-        fila["ultimo"] = fila["ultimo"].isoformat()
+    for row in found.values():
+        row["ultimo"] = row["ultimo"].isoformat()
     return sorted(
-        encontrados.values(),
-        key=lambda fila: fila["asignados"] + fila["creados"],
+        found.values(),
+        key=lambda row: row["asignados"] + row["creados"],
         reverse=True,
     )

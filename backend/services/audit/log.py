@@ -12,7 +12,7 @@ from typing import Any
 
 from django.db import transaction
 
-from netowl_web.ratelimit import ip_cliente
+from netowl_web.ratelimit import client_ip
 
 from .models import AuditLog
 
@@ -118,7 +118,7 @@ def record(
             return AuditLog.objects.create(
                 user=user if authenticated else None,
                 username=(user.username if authenticated else "")[:150],
-                ip=ip_cliente(request) if request is not None else None,
+                ip=client_ip(request) if request is not None else None,
                 module=module[:40],
                 action=action[:80],
                 method=(getattr(request, "method", None) or "")[:10],

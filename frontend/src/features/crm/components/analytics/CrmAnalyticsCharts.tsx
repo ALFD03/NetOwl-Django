@@ -19,7 +19,7 @@ import {
   type CrmAnalyticsMetricKey,
   type CrmMetricConfig,
 } from '../../lib/crmAnalyticsDistribution';
-import type { CrmDimensionValue, CrmHistoricoRow } from '../../types';
+import type { CrmDimensionValue, CrmHistoryRow } from '../../types';
 
 interface ChartDefinition {
   title: string;
@@ -35,7 +35,7 @@ const CHARTS: ChartDefinition[] = [
 ];
 
 interface Props {
-  globalData: CrmHistoricoRow;
+  globalData: CrmHistoryRow;
   rows: CrmDimensionValue[];
   selectedDimension: string;
 }
@@ -61,7 +61,7 @@ export function CrmAnalyticsCharts({ globalData, rows, selectedDimension }: Prop
 }
 
 type CrmChartItemProps = ChartDefinition & {
-  globalData: CrmHistoricoRow;
+  globalData: CrmHistoryRow;
   rows: CrmDimensionValue[];
 };
 

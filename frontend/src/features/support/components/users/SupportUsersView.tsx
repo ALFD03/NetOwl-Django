@@ -47,12 +47,12 @@ export function SupportUsersView({
 }: SupportUsersProps) {
   const d = useSupportUsers({ departments, newUser });
 
-  const enviar = (event: FormEvent, accion: () => void) => {
+  const send = (event: FormEvent, action: () => void) => {
     event.preventDefault();
-    accion();
+    action();
   };
 
-  const acciones = <T,>(onEdit: (row: T) => void, onDelete: (row: T) => void): Column<T> => ({
+  const actions = <T,>(onEdit: (row: T) => void, onDelete: (row: T) => void): Column<T> => ({
     header: 'Acciones',
     align: 'right',
     accessor: (row: T) => (
@@ -89,7 +89,7 @@ export function SupportUsersView({
           <Button
             size="sm"
             icon={<UserPlus className="h-4 w-4" />}
-            onClick={() => d.crearUsuarioDesde(row.odoo_name)}
+            onClick={() => d.createUserFrom(row.odoo_name)}
           >
             Registrar
           </Button>
@@ -137,7 +137,7 @@ export function SupportUsersView({
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            onClick={() => d.editarUsuario(row)}
+            onClick={() => d.editUser(row)}
             className={`${rowButton} border-sky-500/30 text-sky-400 hover:bg-sky-500/10`}
             title="Editar"
           >
@@ -145,7 +145,7 @@ export function SupportUsersView({
           </button>
           <button
             type="button"
-            onClick={() => d.abrirCambio(row)}
+            onClick={() => d.openChange(row)}
             disabled={!row.active}
             className={`${rowButton} border-violet-500/30 text-violet-400 hover:bg-violet-500/10 disabled:opacity-30`}
             title={row.active ? 'Cambiar departamento' : 'Dado de baja: reactívalo antes de moverlo'}
@@ -155,7 +155,7 @@ export function SupportUsersView({
           {row.active ? (
             <button
               type="button"
-              onClick={() => d.abrirBaja(row)}
+              onClick={() => d.openChurn(row)}
               className={`${rowButton} border-amber-500/30 text-amber-400 hover:bg-amber-500/10`}
               title="Dar de baja"
             >
@@ -164,8 +164,8 @@ export function SupportUsersView({
           ) : (
             <button
               type="button"
-              onClick={() => d.mover('reactivar', row.id)}
-              disabled={d.guardando}
+              onClick={() => d.move('reactivar', row.id)}
+              disabled={d.saving}
               className={`${rowButton} border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10`}
               title="Reactivar"
             >
@@ -174,7 +174,7 @@ export function SupportUsersView({
           )}
           <button
             type="button"
-            onClick={() => d.setBorrando({ type: 'usuarios', id: row.id, name: row.odoo_name })}
+            onClick={() => d.setDeleting({ type: 'usuarios', id: row.id, name: row.odoo_name })}
             className={`${rowButton} border-rose-500/30 text-rose-400 hover:bg-rose-500/10`}
             title="Eliminar (solo para registros hechos por error; para una salida, dar de baja)"
           >
@@ -196,17 +196,17 @@ export function SupportUsersView({
   const departmentColumns: Column<SupportDepartment>[] = [
     { header: 'Departamento', accessor: 'name', sortKey: 'name' },
     { header: 'Usuarios', accessor: 'users', align: 'right', sortKey: 'users' },
-    acciones<SupportDepartment>(d.editarDepartamento, (row) =>
-      d.setBorrando({ type: 'departamentos', id: row.id, name: row.name })),
+    actions<SupportDepartment>(d.editDepartment, (row) =>
+      d.setDeleting({ type: 'departamentos', id: row.id, name: row.name })),
   ];
 
   // La pestaña de pendientes no tiene alta propia: lo que hay ahí se resuelve
   // registrando el usuario desde su propia fila, con el nombre ya copiado.
-  const ALTAS: Partial<Record<DirectoryView, { label: string; onClick: () => void }>> = {
-    usuarios: { label: 'Nuevo usuario', onClick: d.nuevoUsuarioVacio },
-    departamentos: { label: 'Nuevo departamento', onClick: d.nuevoDepartamento },
+  const CREATIONS: Partial<Record<DirectoryView, { label: string; onClick: () => void }>> = {
+    usuarios: { label: 'Nuevo usuario', onClick: d.newEmptyUser },
+    departamentos: { label: 'Nuevo departamento', onClick: d.newDepartment },
   };
-  const alta = ALTAS[d.vista];
+  const create = CREATIONS[d.view];
 
   return (
     <AppLayout
@@ -214,8 +214,8 @@ export function SupportUsersView({
         <>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
             <ToggleGroup
-              activeKey={d.vista}
-              onChange={(key) => d.setVista(key as DirectoryView)}
+              activeKey={d.view}
+              onChange={(key) => d.setView(key as DirectoryView)}
               options={[
                 { key: 'pendientes', label: `Por registrar (${pending.length})`, icon: AlertTriangle },
                 { key: 'trasBaja', label: `Tras la baja (${afterChurn.length})`, icon: UserX },
@@ -224,9 +224,9 @@ export function SupportUsersView({
               ]}
             />
 
-            {alta && (
-              <Button icon={<Plus className="h-4 w-4" />} onClick={alta.onClick}>
-                {alta.label}
+            {create && (
+              <Button icon={<Plus className="h-4 w-4" />} onClick={create.onClick}>
+                {create.label}
               </Button>
             )}
           </div>
@@ -239,7 +239,7 @@ export function SupportUsersView({
         icon={<AlertTriangle />}
       />
 
-      {d.vista === 'pendientes' && (
+      {d.view === 'pendientes' && (
         <NeonContainer
           title="Usuarios por registrar"
           subtitle="Firman o atienden tickets ya importados y el directorio no los reconoce"
@@ -264,7 +264,7 @@ export function SupportUsersView({
         </NeonContainer>
       )}
 
-      {d.vista === 'trasBaja' && (
+      {d.view === 'trasBaja' && (
         <NeonContainer
           title="Tickets tras la baja"
           subtitle="Usuarios dados de baja con tickets creados después de su egreso: hay que reasignarlos en Odoo"
@@ -289,7 +289,7 @@ export function SupportUsersView({
         </NeonContainer>
       )}
 
-      {d.vista === 'usuarios' && (
+      {d.view === 'usuarios' && (
         <NeonContainer
           title="Usuarios"
           subtitle="A quién se le puede asignar un ticket y quién puede crearlo"
@@ -314,7 +314,7 @@ export function SupportUsersView({
         </NeonContainer>
       )}
 
-      {d.vista === 'departamentos' && (
+      {d.view === 'departamentos' && (
         <NeonContainer
           title="Departamentos"
           subtitle="Áreas por las que se agrupa el directorio. Se eligen de la lista, no se escriben"
@@ -340,101 +340,101 @@ export function SupportUsersView({
       )}
 
       <Modal
-        isOpen={Boolean(d.usuarioDraft)}
-        onClose={d.cerrarFormularios}
-        title={d.usuarioDraft?.id ? 'Editar usuario de soporte' : 'Nuevo usuario de soporte'}
+        isOpen={Boolean(d.userDraft)}
+        onClose={d.closeForms}
+        title={d.userDraft?.id ? 'Editar usuario de soporte' : 'Nuevo usuario de soporte'}
         subtitle="El nombre exacto con el que la persona aparece en el export, más su ficha"
         icon={<Contact className="h-5 w-5 text-sky-400" />}
         theme="blue"
         size="lg"
       >
-        {d.usuarioDraft && (
+        {d.userDraft && (
           <UserForm
-            value={d.usuarioDraft}
+            value={d.userDraft}
             departments={departments}
             suffix={suffix}
-            saving={d.guardando}
-            onChange={(patch) => d.setUsuarioDraft({ ...d.usuarioDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => d.guardar('usuarios', { ...d.usuarioDraft }))}
-            onClose={d.cerrarFormularios}
+            saving={d.saving}
+            onChange={(patch) => d.setUserDraft({ ...d.userDraft!, ...patch })}
+            onSubmit={(e) => send(e, () => d.save('usuarios', { ...d.userDraft }))}
+            onClose={d.closeForms}
           />
         )}
       </Modal>
 
       <Modal
-        isOpen={Boolean(d.departamentoDraft)}
-        onClose={d.cerrarFormularios}
-        title={d.departamentoDraft?.id ? 'Editar departamento' : 'Nuevo departamento'}
+        isOpen={Boolean(d.departmentDraft)}
+        onClose={d.closeForms}
+        title={d.departmentDraft?.id ? 'Editar departamento' : 'Nuevo departamento'}
         subtitle="Área a la que pertenecen los usuarios del directorio"
         icon={<Building2 className="h-5 w-5 text-slate-300" />}
         theme="slate"
         size="md"
       >
-        {d.departamentoDraft && (
+        {d.departmentDraft && (
           <DepartmentForm
-            value={d.departamentoDraft}
-            saving={d.guardando}
-            onChange={(patch) => d.setDepartamentoDraft({ ...d.departamentoDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => d.guardar('departamentos', { ...d.departamentoDraft }))}
-            onClose={d.cerrarFormularios}
+            value={d.departmentDraft}
+            saving={d.saving}
+            onChange={(patch) => d.setDepartmentDraft({ ...d.departmentDraft!, ...patch })}
+            onSubmit={(e) => send(e, () => d.save('departamentos', { ...d.departmentDraft }))}
+            onClose={d.closeForms}
           />
         )}
       </Modal>
 
       <Modal
-        isOpen={Boolean(d.cambioDraft)}
-        onClose={d.cerrarFormularios}
+        isOpen={Boolean(d.changeDraft)}
+        onClose={d.closeForms}
         title="Cambiar departamento"
-        subtitle={d.cambioDraft?.user.odoo_name}
+        subtitle={d.changeDraft?.user.odoo_name}
         icon={<ArrowRightLeft className="h-5 w-5 text-violet-400" />}
         theme="purple"
         size="lg"
       >
-        {d.cambioDraft && (
+        {d.changeDraft && (
           <DepartmentChangeForm
-            value={d.cambioDraft}
+            value={d.changeDraft}
             departments={departments}
-            saving={d.guardando}
-            onChange={(patch) => d.setCambioDraft({ ...d.cambioDraft!, ...patch })}
+            saving={d.saving}
+            onChange={(patch) => d.setChangeDraft({ ...d.changeDraft!, ...patch })}
             onSubmit={(e) =>
-              enviar(e, () =>
-                d.mover('cambiar_departamento', d.cambioDraft!.user.id, {
-                  department_id: d.cambioDraft!.department_id,
-                  date: d.cambioDraft!.date,
+              send(e, () =>
+                d.move('cambiar_departamento', d.changeDraft!.user.id, {
+                  department_id: d.changeDraft!.department_id,
+                  date: d.changeDraft!.date,
                 }),
               )
             }
-            onUndo={() => d.mover('deshacer_cambio', d.cambioDraft!.user.id)}
-            onClose={d.cerrarFormularios}
+            onUndo={() => d.move('deshacer_cambio', d.changeDraft!.user.id)}
+            onClose={d.closeForms}
           />
         )}
       </Modal>
 
       <Modal
-        isOpen={Boolean(d.bajaDraft)}
-        onClose={d.cerrarFormularios}
+        isOpen={Boolean(d.churnDraft)}
+        onClose={d.closeForms}
         title="Dar de baja"
         subtitle="El usuario no se borra"
         icon={<UserX className="h-5 w-5 text-rose-400" />}
         theme="red"
         size="md"
       >
-        {d.bajaDraft && (
+        {d.churnDraft && (
           <DeactivateForm
-            value={d.bajaDraft}
-            saving={d.guardando}
-            onChange={(patch) => d.setBajaDraft({ ...d.bajaDraft!, ...patch })}
+            value={d.churnDraft}
+            saving={d.saving}
+            onChange={(patch) => d.setChurnDraft({ ...d.churnDraft!, ...patch })}
             onSubmit={(e) =>
-              enviar(e, () => d.mover('baja', d.bajaDraft!.user.id, { date: d.bajaDraft!.date }))
+              send(e, () => d.move('baja', d.churnDraft!.user.id, { date: d.churnDraft!.date }))
             }
-            onClose={d.cerrarFormularios}
+            onClose={d.closeForms}
           />
         )}
       </Modal>
 
       <Modal
-        isOpen={Boolean(d.borrando)}
-        onClose={() => d.setBorrando(null)}
+        isOpen={Boolean(d.deleting)}
+        onClose={() => d.setDeleting(null)}
         title="Confirmar eliminación"
         subtitle="Esta acción no se puede deshacer"
         icon={<Trash2 className="h-5 w-5 text-rose-400" />}
@@ -443,13 +443,13 @@ export function SupportUsersView({
       >
         <div className="space-y-5">
           <p className="text-sm text-slate-300">
-            ¿Eliminar <strong className="text-white">{d.borrando?.name}</strong> del directorio?
+            ¿Eliminar <strong className="text-white">{d.deleting?.name}</strong> del directorio?
           </p>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => d.setBorrando(null)}>
+            <Button variant="outline" onClick={() => d.setDeleting(null)}>
               Cancelar
             </Button>
-            <Button variant="danger" isLoading={d.guardando} onClick={d.confirmarBorrado}>
+            <Button variant="danger" isLoading={d.saving} onClick={d.confirmDelete}>
               Eliminar
             </Button>
           </div>

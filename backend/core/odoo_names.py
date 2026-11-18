@@ -24,20 +24,20 @@ USERS_SUFFIX = "(User)"
 # Un sufijo de usuario al final de la cadena, escrito como sea: `(User)`,
 # `(user)`, `(Users)`, con o sin espacios. Solo se reconoce esa palabra, para
 # no comerse un parentesis que forme parte del nombre.
-_SUFIJO_RE = re.compile(r"\s*\(\s*users?\s*\)\s*$", re.IGNORECASE)
+_SUFFIX_RE = re.compile(r"\s*\(\s*users?\s*\)\s*$", re.IGNORECASE)
 
 
-def base_name(valor: str) -> str:
+def base_name(value: str) -> str:
     """El nombre de la persona sin el sufijo y con los espacios colapsados.
 
     Es lo que identifica a alguien: **la coincidencia no depende de que
     variante del sufijo traiga el export**, que ya viene escrito de tres formas
     distintas en los mismos datos.
     """
-    return _SUFIJO_RE.sub("", " ".join(str(valor or "").split()))
+    return _SUFFIX_RE.sub("", " ".join(str(value or "").split()))
 
 
-def normalize_odoo_name(valor: str) -> str:
+def normalize_odoo_name(value: str) -> str:
     """El nombre exacto de Odoo, con el sufijo canonico puesto.
 
     Escribirlo a mano es la mitad de los errores de tipeo —o se olvida, o se
@@ -45,7 +45,7 @@ def normalize_odoo_name(valor: str) -> str:
     deja una fila que se lee distinta de las demas. Se acepta cualquier
     variante y se guarda siempre la misma.
     """
-    base = base_name(valor)
+    base = base_name(value)
     return f"{base} {USERS_SUFFIX}" if base else ""
 
 

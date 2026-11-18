@@ -71,7 +71,7 @@ UNARCHIVED_LOG = "Suscripción desarchivada"
 TARIFF_CHANGE_RE = re.compile(r"^Cambio de Tarifa:\s*(?P<origen>.+?)\s*→\s*(?P<destino>.+?)\s*$")
 ZERO_INVOICE_RE = re.compile(r"price of zero|Suscripción no procesada", re.IGNORECASE)
 
-METODO_CONFIANZA = {
+CONFIDENCE_METHOD = {
     "log_archivada": "alta",
     "cambio_tarifa": "alta",
     "factura_cero": "media",
@@ -144,25 +144,25 @@ def _tariff_transitions(df_msgs: pd.DataFrame) -> pd.DataFrame:
 
 def _state_events(df_logs: pd.DataFrame, df_msgs: pd.DataFrame) -> pd.DataFrame:
     """Linea de tiempo de entradas y salidas del servicio gratuito."""
-    partes = []
+    parts = []
     if not df_logs.empty:
         arch = df_logs[df_logs["log"] == ARCHIVED_LOG][["orden", "f_dt"]].copy()
         arch["entra"], arch["metodo"] = True, "log_archivada"
-        desarch = df_logs[df_logs["log"] == UNARCHIVED_LOG][["orden", "f_dt"]].copy()
-        desarch["entra"], desarch["metodo"] = False, "log_desarchivada"
-        partes += [arch, desarch]
+        unarch = df_logs[df_logs["log"] == UNARCHIVED_LOG][["orden", "f_dt"]].copy()
+        unarch["entra"], unarch["metodo"] = False, "log_desarchivada"
+        parts += [arch, unarch]
 
     trans = _tariff_transitions(df_msgs)
     if not trans.empty:
         t = trans[["orden", "f_dt"]].copy()
         t["entra"] = trans["hacia_gratis"].to_numpy()
         t["metodo"] = "cambio_tarifa"
-        partes.append(t)
+        parts.append(t)
 
-    partes = [p for p in partes if not p.empty]
-    if not partes:
+    parts = [p for p in parts if not p.empty]
+    if not parts:
         return pd.DataFrame(columns=["orden", "f_dt", "entra", "metodo"])
-    return pd.concat(partes, ignore_index=True).sort_values(["orden", "f_dt"])
+    return pd.concat(parts, ignore_index=True).sort_values(["orden", "f_dt"])
 
 
 def _first_zero_attempt(df_msgs: pd.DataFrame) -> pd.Series:
@@ -173,17 +173,17 @@ def _first_zero_attempt(df_msgs: pd.DataFrame) -> pd.Series:
     """
     if df_msgs.empty:
         return pd.Series(dtype="datetime64[ns]")
-    cero = df_msgs[df_msgs["texto"].str.contains(ZERO_INVOICE_RE, na=False)]
-    if cero.empty:
+    zero = df_msgs[df_msgs["texto"].str.contains(ZERO_INVOICE_RE, na=False)]
+    if zero.empty:
         return pd.Series(dtype="datetime64[ns]")
-    return cero.groupby("orden")["f_dt"].min()
+    return zero.groupby("orden")["f_dt"].min()
 
 
 def detect_free_start(
     df_subs: pd.DataFrame,
     df_logs: pd.DataFrame,
     df_msgs: pd.DataFrame,
-    corte: pd.Timestamp | None = None,
+    cutoff: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """
     Devuelve `df_subs` con `fecha_gratuito`, `metodo`, `confianza`,
@@ -195,55 +195,55 @@ def detect_free_start(
     f_ini = pd.to_datetime(df["fecha_inicio"], errors="coerce")
     next_invoice = pd.to_datetime(df.get("fecha_factura"), errors="coerce")
 
-    if corte is None:
-        fechas = [s for s in (df_logs.get("f_dt"), df_msgs.get("f_dt")) if s is not None and len(s)]
-        corte = max(s.max() for s in fechas) if fechas else pd.Timestamp.utcnow().normalize()
+    if cutoff is None:
+        dates = [s for s in (df_logs.get("f_dt"), df_msgs.get("f_dt")) if s is not None and len(s)]
+        cutoff = max(s.max() for s in dates) if dates else pd.Timestamp.utcnow().normalize()
 
     # 1-2. Ultima entrada al servicio gratuito que no fue revertida.
-    eventos = _state_events(df_logs, df_msgs)
+    events = _state_events(df_logs, df_msgs)
     entry_date: dict[str, pd.Timestamp] = {}
     method_entry: dict[str, str] = {}
-    for orden, f_dt, entra, metodo in eventos[["orden", "f_dt", "entra", "metodo"]].itertuples(index=False):
-        if entra:
-            entry_date[orden], method_entry[orden] = f_dt, metodo
+    for order, f_dt, enters, method in events[["orden", "f_dt", "entra", "metodo"]].itertuples(index=False):
+        if enters:
+            entry_date[order], method_entry[order] = f_dt, method
         else:
-            entry_date.pop(orden, None)
-            method_entry.pop(orden, None)
+            entry_date.pop(order, None)
+            method_entry.pop(order, None)
 
     event_date = df["orden_producto"].map(entry_date)
-    evento_metodo = df["orden_producto"].map(method_entry)
+    method_event = df["orden_producto"].map(method_entry)
 
     # 3. Primer intento de facturacion en cero.
-    cero = df["orden_producto"].map(_first_zero_attempt(df_msgs))
+    zero = df["orden_producto"].map(_first_zero_attempt(df_msgs))
 
     # 4. Facturacion congelada en el pasado.
-    congelada = next_invoice.where(next_invoice < corte)
+    frozen = next_invoice.where(next_invoice < cutoff)
 
     # 3 y 4 son cotas superiores: nos quedamos con la mas antigua de las dos.
-    cota = pd.concat([cero, congelada], axis=1).min(axis=1)
-    cota_metodo = np.where(
-        cero.notna() & (cero <= congelada.fillna(pd.Timestamp.max)),
+    bound = pd.concat([zero, frozen], axis=1).min(axis=1)
+    bound_method = np.where(
+        zero.notna() & (zero <= frozen.fillna(pd.Timestamp.max)),
         "factura_cero",
         "facturacion_detenida",
     )
 
-    fecha = event_date.copy()
-    metodo = evento_metodo.copy()
-    usa_cota = fecha.isna() & cota.notna()
-    fecha = fecha.mask(usa_cota, cota)
-    metodo = metodo.mask(usa_cota, pd.Series(cota_metodo, index=df.index))
+    on_date = event_date.copy()
+    method = method_event.copy()
+    uses_bound = on_date.isna() & bound.notna()
+    on_date = on_date.mask(uses_bound, bound)
+    method = method.mask(uses_bound, pd.Series(bound_method, index=df.index))
 
-    sin_evidencia = fecha.isna()
-    fecha = fecha.fillna(f_ini)
-    metodo = metodo.fillna("sin_evidencia")
+    no_evidence = on_date.isna()
+    on_date = on_date.fillna(f_ini)
+    method = method.fillna("sin_evidencia")
 
-    df["fecha_evidencia"] = fecha
+    df["fecha_evidencia"] = on_date
     # Nunca puede ser gratuita antes de existir.
-    fecha = fecha.where(fecha >= f_ini, f_ini)
-    df["fecha_gratuito"] = fecha
-    df["metodo"] = metodo
-    df["confianza"] = metodo.map(METODO_CONFIANZA).fillna("baja")
-    df["siempre_gratuito"] = sin_evidencia | (fecha <= f_ini)
+    on_date = on_date.where(on_date >= f_ini, f_ini)
+    df["fecha_gratuito"] = on_date
+    df["metodo"] = method
+    df["confianza"] = method.map(CONFIDENCE_METHOD).fillna("baja")
+    df["siempre_gratuito"] = no_evidence | (on_date <= f_ini)
     return df
 
 
@@ -267,7 +267,7 @@ def load_free_subs(db: DBConnector) -> pd.DataFrame:
 
 def summarize_detection(df_free: pd.DataFrame) -> pd.DataFrame:
     """Resumen por metodo de deteccion, para revision humana."""
-    resumen = (
+    summary = (
         df_free.groupby(["metodo", "confianza"])
         .agg(
             suscripciones=("orden_producto", "count"),
@@ -277,4 +277,4 @@ def summarize_detection(df_free: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
         .sort_values("suscripciones", ascending=False)
     )
-    return resumen
+    return summary

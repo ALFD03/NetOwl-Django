@@ -27,7 +27,7 @@ def exigir_directorio_vacio(apps, schema_editor):
     if Persona.objects.exists():
         raise RuntimeError(
             "El directorio de ventas todavía tiene personas. Antes de migrar, "
-            "ejecuta `python manage.py reiniciar_ventas --ejecutar` (ensáyalo sin --ejecutar)."
+            "ejecuta `python manage.py reset_sales --execute` (ensáyalo sin --execute)."
         )
 
 

@@ -33,32 +33,32 @@ export const validatedSales = (p: CommissionPayment): number => p.own_sales + p.
  * plan sin % no se paga.
  */
 export function paidSales(p: CommissionPayment): number {
-  const pyme = p.sme_sales - p.sme_without_pct;
-  if (p.detail.paid_sales !== undefined) return p.detail.paid_sales + pyme;
-  if (p.role === 'coord_un' && p.detail.team_amount_per_sale === undefined) return p.own_sales + pyme;
-  return p.own_sales + p.team_sales + pyme;
+  const sme = p.sme_sales - p.sme_without_pct;
+  if (p.detail.paid_sales !== undefined) return p.detail.paid_sales + sme;
+  if (p.role === 'coord_un' && p.detail.team_amount_per_sale === undefined) return p.own_sales + sme;
+  return p.own_sales + p.team_sales + sme;
 }
 
 /** El tramo en el que cae una cantidad de ventas: el último que empieza en o antes. */
-export function advisorTier(ventas: number, tramos: PaymentTier[]): PaymentTier {
-  let elegido = tramos[0];
-  for (const tramo of tramos) if (tramo.since <= ventas) elegido = tramo;
-  return elegido;
+export function advisorTier(sales: number, tiers: PaymentTier[]): PaymentTier {
+  let chosen = tiers[0];
+  for (const tier of tiers) if (tier.since <= sales) chosen = tier;
+  return chosen;
 }
 
 /** El siguiente tramo que paga más por venta; nulo en el último. */
-export const nextTier = (ventas: number, tramos: PaymentTier[]): PaymentTier | null =>
-  tramos.find((t) => t.since > ventas) ?? null;
+export const nextTier = (sales: number, tiers: PaymentTier[]): PaymentTier | null =>
+  tiers.find((t) => t.since > sales) ?? null;
 
 /** Desde cuántas ventas empieza a cobrar quien cobra por tramos. */
-export const minimoQuePaga = (tramos: PaymentTier[]): number | null =>
-  tramos.find((t) => t.amount > 0)?.since ?? null;
+export const minThatPays = (tiers: PaymentTier[]): number | null =>
+  tiers.find((t) => t.amount > 0)?.since ?? null;
 
 /** `6–19`, `20`, `26+`. */
-export function tierRange(tramo: PaymentTier, tramos: PaymentTier[]): string {
-  const next = tramos[tramos.indexOf(tramo) + 1];
-  if (!next) return `${tramo.since}+`;
-  return next.since - 1 === tramo.since ? String(tramo.since) : `${tramo.since}–${next.since - 1}`;
+export function tierRange(tier: PaymentTier, tiers: PaymentTier[]): string {
+  const next = tiers[tiers.indexOf(tier) + 1];
+  if (!next) return `${tier.since}+`;
+  return next.since - 1 === tier.since ? String(tier.since) : `${tier.since}–${next.since - 1}`;
 }
 
 /**
@@ -66,15 +66,15 @@ export function tierRange(tramo: PaymentTier, tramos: PaymentTier[]): string {
  *
  * Es lo que acompaña a una fila atenuada: un $0 sin motivo se lee como un error.
  */
-export function trimReason(p: CommissionPayment, tramos: PaymentTier[] | undefined): string | null {
+export function trimReason(p: CommissionPayment, tiers: PaymentTier[] | undefined): string | null {
   const withoutPercentage = p.sme_without_pct ? ` · ${p.sme_without_pct} PYME sin % de comisión` : '';
   if (p.detail.paid_sales !== undefined) {
-    const pagadas = p.detail.paid_sales;
-    const minimo = tramos ? minimoQuePaga(tramos) : null;
+    const paid = p.detail.paid_sales;
+    const min = tiers ? minThatPays(tiers) : null;
     if (p.own_sales > 0 && !p.detail.amount_per_sale) {
-      return `${p.own_sales} ${p.own_sales === 1 ? 'venta' : 'ventas'}: no llega a ${minimo ?? 'el primer tramo'}${withoutPercentage}`;
+      return `${p.own_sales} ${p.own_sales === 1 ? 'venta' : 'ventas'}: no llega a ${min ?? 'el primer tramo'}${withoutPercentage}`;
     }
-    if (pagadas < p.own_sales) return `Su tramo descuenta ${p.own_sales - pagadas}${withoutPercentage}`;
+    if (paid < p.own_sales) return `Su tramo descuenta ${p.own_sales - paid}${withoutPercentage}`;
   }
   if (p.role === 'coord_un' && p.detail.team_amount_per_sale === undefined && p.team_sales) {
     return `Crecimiento desconocido: las ${p.team_sales} ventas de su equipo no se pagan${withoutPercentage}`;
@@ -94,14 +94,14 @@ export const bonusNotes = (p: CommissionPayment): string[] =>
  * alcance de equipo (`equipo.alcance` de sus condiciones), sin las de oficina si
  * las excluye. Es lo mismo que decide `pagos.calcular_pagos` en el servidor.
  */
-export function paymentSales(p: CommissionPayment, ventas: CommissionSale[], condiciones: CommissionConditions): CommissionSale[] {
-  const alcance = condiciones.teams?.[p.equipo]?.[p.role]?.equipo;
-  return ventas.filter((v) => {
+export function paymentSales(p: CommissionPayment, sales: CommissionSale[], conditions: CommissionConditions): CommissionSale[] {
+  const scope = conditions.teams?.[p.equipo]?.[p.role]?.equipo;
+  return sales.filter((v) => {
     if (v.classification !== 'valida' || v.equipo !== p.equipo) return false;
     if (v.channel_id === p.person_id) return true;
-    if (v.sme || !alcance) return false;
-    if (alcance.exclude_office && v.is_office) return false;
-    switch (alcance.scope) {
+    if (v.sme || !scope) return false;
+    if (scope.exclude_office && v.is_office) return false;
+    switch (scope.scope) {
       case 'supervisados': return v.supervisor_id === p.person_id;
       case 'oficina': return v.office_coord_id === p.person_id;
       case 'unidades': return v.units.some((u) => p.units.includes(u));
@@ -124,13 +124,13 @@ export interface SupervisorGroup {
   id: number | null;
   name: string;
   /** Su pago si es un supervisor del equipo; nulo si no lo es o la venta no lo trae. */
-  pago: CommissionPayment | null;
+  payment: CommissionPayment | null;
   advisors: CommissionPayment[];
   usd: number;
 }
 
 /** Los pagos de un rol de dirección dentro de un equipo (jefe, coordinadores, gerentes, oficinas...). */
-export interface SeccionRol {
+export interface RoleSection {
   role: SalesRole;
   role_label: string;
   payments: CommissionPayment[];
@@ -140,8 +140,8 @@ export interface SeccionRol {
 export interface PayrollTeam {
   slug: string;
   name: string;
-  secciones: SeccionRol[];
-  grupos: SupervisorGroup[];
+  sections: RoleSection[];
+  groups: SupervisorGroup[];
   /** Todos los que cobran en el equipo, cada uno una vez. */
   people: CommissionPayment[];
   /** Las ventas válidas del equipo. */
@@ -152,15 +152,15 @@ export interface PayrollTeam {
 export interface Payroll {
   teams: PayrollTeam[];
   /** Ventas válidas de cada persona que quedaron con otro supervisor (incluidas en su pago), por `paymentKey`. */
-  fuera: Map<string, { sales: number; donde: string }>;
+  outside: Map<string, { sales: number; where: string }>;
   /** El equipo donde quedó cada pago, para el buscador. */
-  ubicacion: Map<string, string>;
+  location: Map<string, string>;
 }
 
-const total = (personas: CommissionPayment[]) => Math.round(personas.reduce((t, p) => t + p.net, 0) * 100) / 100;
+const total = (people: CommissionPayment[]) => Math.round(people.reduce((t, p) => t + p.net, 0) * 100) / 100;
 const byNet = (a: CommissionPayment, b: CommissionPayment) => b.net - a.net || a.name.localeCompare(b.name);
 /** La clave con más ventas; a igualdad, la menor, para que el reparto no dependa del orden. */
-const mayor = (m: Map<string, number> | undefined): string | null => {
+const largest = (m: Map<string, number> | undefined): string | null => {
   if (!m || m.size === 0) return null;
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0][0];
 };
@@ -176,20 +176,20 @@ const ROLES_IN_GROUP: SalesRole[] = ['supervisor', 'asesor'];
  * - Cada asesor va con el supervisor con quien carga más ventas.
  */
 export function buildPayroll(
-  informe: CommissionReport,
-  orden: { slug: string; name: string; roles: { role: SalesRole; role_label: string }[] }[],
+  report: CommissionReport,
+  order: { slug: string; name: string; roles: { role: SalesRole; role_label: string }[] }[],
 ): Payroll {
-  const filas: TeamRow[] = informe.teams.filter((f) => f.sales + f.sme > 0);
-  const persona = (id: number) => informe.people[String(id)];
+  const rows: TeamRow[] = report.teams.filter((f) => f.sales + f.sme > 0);
+  const person = (id: number) => report.people[String(id)];
 
-  const fuera = new Map<string, { sales: number; donde: string }>();
-  const ubicacion = new Map<string, string>();
+  const outside = new Map<string, { sales: number; where: string }>();
+  const location = new Map<string, string>();
 
-  const equipos = orden.flatMap<PayrollTeam>((e) => {
-    const pagos = informe.payments.filter((p) => p.equipo === e.slug);
-    if (pagos.length === 0) return [];
-    const ofTeam = filas.filter((f) => f.equipo === e.slug);
-    const byKey = new Map(pagos.map((p) => [p.person_id, p]));
+  const teams = order.flatMap<PayrollTeam>((e) => {
+    const payments = report.payments.filter((p) => p.equipo === e.slug);
+    if (payments.length === 0) return [];
+    const ofTeam = rows.filter((f) => f.equipo === e.slug);
+    const byKey = new Map(payments.map((p) => [p.person_id, p]));
 
     // Con quién vende cada uno: quien vende → supervisor → ventas.
     const sellsWith = new Map<number, Map<string, number>>();
@@ -201,58 +201,58 @@ export function buildPayroll(
       sellsWith.set(f.channel_id, m);
     }
 
-    const secciones: SeccionRol[] = e.roles
+    const sections: RoleSection[] = e.roles
       .filter((r) => !ROLES_IN_GROUP.includes(r.role))
       .map((r) => {
-        const ofRole = pagos.filter((p) => p.role === r.role).sort(byNet);
+        const ofRole = payments.filter((p) => p.role === r.role).sort(byNet);
         return { role: r.role, role_label: r.role_label, payments: ofRole, usd: total(ofRole) };
       })
       .filter((s) => s.payments.length > 0);
 
-    const grupos = new Map<string, SupervisorGroup>();
-    const grupo = (key: string): SupervisorGroup => {
-      let g = grupos.get(key);
+    const groups = new Map<string, SupervisorGroup>();
+    const group = (key: string): SupervisorGroup => {
+      let g = groups.get(key);
       if (!g) {
         const id = key === NONE ? null : Number(key);
-        const pago = id !== null && byKey.get(id)?.role === 'supervisor' ? byKey.get(id) ?? null : null;
-        g = { key, id, name: id === null ? 'Sin supervisor' : pago?.name ?? persona(id)?.name ?? '—', pago, advisors: [], usd: 0 };
-        grupos.set(key, g);
+        const payment = id !== null && byKey.get(id)?.role === 'supervisor' ? byKey.get(id) ?? null : null;
+        g = { key, id, name: id === null ? 'Sin supervisor' : payment?.name ?? person(id)?.name ?? '—', payment, advisors: [], usd: 0 };
+        groups.set(key, g);
       }
       return g;
     };
 
-    for (const p of pagos) {
-      ubicacion.set(paymentKey(p), e.slug);
+    for (const p of payments) {
+      location.set(paymentKey(p), e.slug);
       if (p.role === 'supervisor') {
-        grupo(String(p.person_id));
+        group(String(p.person_id));
       } else if (p.role === 'asesor') {
-        const supKey = mayor(sellsWith.get(p.person_id)) ?? NONE;
+        const supKey = largest(sellsWith.get(p.person_id)) ?? NONE;
         // Un supervisor sin pago en este equipo (o una oficina) no encabeza grupo: «Sin supervisor».
         const key = supKey !== NONE && byKey.get(Number(supKey))?.role === 'supervisor' ? supKey : NONE;
-        grupo(key).advisors.push(p);
+        group(key).advisors.push(p);
         const withOthers = [...(sellsWith.get(p.person_id) ?? new Map<string, number>()).entries()]
           .reduce((t, [k, n]) => t + (k === supKey ? 0 : n), 0);
-        if (withOthers) fuera.set(paymentKey(p), { sales: withOthers, donde: 'otro supervisor' });
+        if (withOthers) outside.set(paymentKey(p), { sales: withOthers, where: 'otro supervisor' });
       }
     }
-    for (const g of grupos.values()) {
+    for (const g of groups.values()) {
       g.advisors.sort(byNet);
-      g.usd = total([...(g.pago ? [g.pago] : []), ...g.advisors]);
+      g.usd = total([...(g.payment ? [g.payment] : []), ...g.advisors]);
     }
-    const groupList = [...grupos.values()].sort((a, b) =>
+    const groupList = [...groups.values()].sort((a, b) =>
       Number(a.key === NONE) - Number(b.key === NONE) || b.usd - a.usd || a.name.localeCompare(b.name));
 
-    const personas = [...secciones.flatMap((s) => s.payments), ...groupList.flatMap((g) => [...(g.pago ? [g.pago] : []), ...g.advisors])];
+    const people = [...sections.flatMap((s) => s.payments), ...groupList.flatMap((g) => [...(g.payment ? [g.payment] : []), ...g.advisors])];
     return [{
       slug: e.slug,
       name: e.name,
-      secciones,
-      grupos: groupList,
-      people: personas,
+      sections,
+      groups: groupList,
+      people,
       sales: ofTeam.reduce((t, f) => t + f.sales + f.sme, 0),
-      usd: total(personas),
+      usd: total(people),
     }];
   });
 
-  return { teams: equipos, fuera, ubicacion };
+  return { teams, outside, location };
 }

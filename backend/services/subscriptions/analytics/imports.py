@@ -20,7 +20,7 @@ from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.exports import ExportSpec, read_export
 from core.fixtures import (
-    ignorados,
+    ignored_names,
     ignored_products,
     plan_names,
     recognized_names,
@@ -213,7 +213,7 @@ def zones_outside_catalog() -> list[dict[str, Any]]:
     if df.empty:
         return []
     cataloged = zones_by_name()
-    muted = {n.strip().lower() for n in ignorados("estructura")}
+    muted = {n.strip().lower() for n in ignored_names("estructura")}
     key = df["zona"].astype(str).str.strip().str.lower()
     outside = df[~key.isin(cataloged) & ~key.isin(muted)].sort_values("ordenes", ascending=False)
     return [{"nombre": str(r.zona).strip(), "ordenes": int(r.ordenes)} for r in outside.itertuples()]

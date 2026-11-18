@@ -10,8 +10,8 @@ import type {
   CatalogRegulatoryPlan,
   CatalogsProductsProps,
 } from '@/features/subscriptions/types';
-import { PlanForm, RegulatoryPlanForm } from './CatalogForms';
-import { CatalogBar, ConfirmarBorrado, CatalogErrorView, actionsColumn, enviar } from './CatalogCommon';
+import { PlanForm, RegulatoryPlanForm } from './ProductForms';
+import { CatalogBar, ConfirmDelete, CatalogErrorView, actionsColumn, send } from './CatalogCommon';
 
 /**
  * El vocabulario de lo que se vende. Es la única clasificación de un producto:
@@ -50,8 +50,8 @@ export function ProductsView({
       // declararlos, así que necesitan su propia opción en el desplegable.
       filterValue: (row) => row.regulator_plan || 'Sin asignar',
     },
-    actionsColumn<CatalogPlan>(c.editarPlan, (row) =>
-      c.setBorrando({ kind: 'planes', id: row.id, name: row.name })),
+    actionsColumn<CatalogPlan>(c.editPlan, (row) =>
+      c.setDeleting({ kind: 'planes', id: row.id, name: row.name })),
   ];
 
   const regulatoryColumns: Column<CatalogRegulatoryPlan>[] = [
@@ -68,23 +68,23 @@ export function ProductsView({
     { header: 'Precio', accessor: 'price', align: 'right', sortKey: 'price' },
     { header: 'TV', accessor: (row) => (row.has_tv ? 'Sí' : '—'), filterable: true, filterValue: (row) => (row.has_tv ? 'Sí' : 'No') },
     { header: 'Planes', accessor: 'plans', align: 'right', sortKey: 'plans' },
-    actionsColumn<CatalogRegulatoryPlan>(c.editarRegulador, (row) =>
-      c.setBorrando({ kind: 'reguladores', id: row.id, name: row.name })),
+    actionsColumn<CatalogRegulatoryPlan>(c.editRegulator, (row) =>
+      c.setDeleting({ kind: 'reguladores', id: row.id, name: row.name })),
   ];
 
-  const altas = {
-    planes: { label: 'Nuevo plan', onClick: c.nuevoPlanVacio },
-    reguladores: { label: 'Nuevo plan regulador', onClick: c.nuevoRegulador },
+  const creations = {
+    planes: { label: 'Nuevo plan', onClick: c.newEmptyPlan },
+    reguladores: { label: 'Nuevo plan regulador', onClick: c.newRegulator },
   } as Record<string, { label: string; onClick: () => void }>;
 
   return (
     <AppLayout
       toolbar={
         <CatalogBar
-          activa={c.vista}
-          onChange={(key) => c.setVista(key as typeof c.vista)}
-          alta={altas[c.vista]}
-          pestanas={[
+          active={c.view}
+          onChange={(key) => c.setView(key as typeof c.view)}
+          create={creations[c.view]}
+          tabs={[
             { key: 'planes', label: `Planes (${plans.length})`, icon: BookMarked },
             { key: 'reguladores', label: `Planes reguladores (${regulators.length})`, icon: FileSpreadsheet },
           ]}
@@ -93,13 +93,13 @@ export function ProductsView({
     >
       <CatalogErrorView c={c} />
 
-      {c.vista === 'planes' && (
+      {c.view === 'planes' && (
         <NeonContainer title="Planes" subtitle="Vocabulario comercial: qué productos existen y cómo se clasifican" icon={<BookMarked className="h-5 w-5" />} theme="purple" noPadding>
           <DataTable columns={planColumns} data={plans} searchable searchPlaceholder="Buscar plan..." />
         </NeonContainer>
       )}
 
-      {c.vista === 'reguladores' && (
+      {c.view === 'reguladores' && (
         <NeonContainer
           title="Planes reguladores"
           subtitle="Una fila por producto declarado: es lo que se exporta en el formulario de la reguladora"
@@ -126,7 +126,7 @@ export function ProductsView({
 
       <Modal
         isOpen={Boolean(c.planDraft)}
-        onClose={c.cerrarFormularios}
+        onClose={c.closeForms}
         title={c.planDraft?.id ? 'Editar plan del catálogo' : 'Nuevo plan del catálogo'}
         subtitle="Única clasificación del producto: de aquí la leen los análisis y el reporte ETA"
         icon={<BookMarked className="h-5 w-5 text-purple-400" />}
@@ -138,36 +138,36 @@ export function ProductsView({
             technologies={technologies}
             personTypes={personTypes}
             regulators={regulators}
-            saving={c.guardando}
+            saving={c.saving}
             onChange={(patch) => c.setPlanDraft({ ...c.planDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('planes', { ...c.planDraft }))}
-            onClose={c.cerrarFormularios}
+            onSubmit={(e) => send(e, () => c.save('planes', { ...c.planDraft }))}
+            onClose={c.closeForms}
           />
         )}
       </Modal>
 
       <Modal
-        isOpen={Boolean(c.reguladorDraft)}
-        onClose={c.cerrarFormularios}
-        title={c.reguladorDraft?.id ? 'Editar plan regulador' : 'Nuevo plan regulador'}
+        isOpen={Boolean(c.regulatorDraft)}
+        onClose={c.closeForms}
+        title={c.regulatorDraft?.id ? 'Editar plan regulador' : 'Nuevo plan regulador'}
         subtitle="Una fila del formulario de la reguladora: velocidad, renta y tipo de suscriptor declarados"
         icon={<FileSpreadsheet className="h-5 w-5 text-purple-400" />}
         theme="purple"
       >
-        {c.reguladorDraft && (
+        {c.regulatorDraft && (
           <RegulatoryPlanForm
-            value={c.reguladorDraft}
+            value={c.regulatorDraft}
             technologies={technologies}
             personTypes={personTypes}
-            saving={c.guardando}
-            onChange={(patch) => c.setReguladorDraft({ ...c.reguladorDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('reguladores', { ...c.reguladorDraft }))}
-            onClose={c.cerrarFormularios}
+            saving={c.saving}
+            onChange={(patch) => c.setRegulatorDraft({ ...c.regulatorDraft!, ...patch })}
+            onSubmit={(e) => send(e, () => c.save('reguladores', { ...c.regulatorDraft }))}
+            onClose={c.closeForms}
           />
         )}
       </Modal>
 
-      <ConfirmarBorrado c={c} />
+      <ConfirmDelete c={c} />
     </AppLayout>
   );
 }

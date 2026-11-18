@@ -15,10 +15,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import pandas as pd
+
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
-from core.fixtures import available_zones, sites_order, zonas
-from core.utils import zero_nulls
+from core.fixtures import available_zones, sites_order, zones
+from core.utils import typed_records, zero_nulls
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +31,51 @@ def get_site_sort_index(site_name: str) -> int:
     El orden ya no es una lista en el codigo sino la columna `Site.orden`; lo
     que no este dado de alta se va al final, igual que antes.
     """
-    orden = sites_order()
+    order = sites_order()
     try:
-        return orden.index(site_name)
+        return order.index(site_name)
     except ValueError:
-        return len(orden)
+        return len(order)
+
+CLOSE_INTS = (
+    "activos_inicio", "activos_final", "nuevos_mes", "ingresos", "bajas", "reactivaciones", "react_val",
+    "react_6_churn", "react_8_30days", "react_4_paused", "react_4_p", "react_4_h", "corte_impagado",
+    "total_inactivos", "adiciones_brutas", "adiciones_netas", "clientes_gratuitos", "gratuitos_nuevos",
+    "gratuitos_retornados",
+)
+CLOSE_FLOATS = (
+    "crecimiento", "churn_neto_pct", "churn_bruto_pct", "tasa_winback_pct", "total_billing", "arpu",
+    "porcentaje_suspensiones", "tasa_aporte_react_pct", "indice_reemplazo_react_pct",
+)
+DIMENSION_INTS = tuple(c for c in CLOSE_INTS if c not in ("nuevos_mes", "ingresos", "total_inactivos")) + ("nuevos",)
+DIMENSION_FLOATS = CLOSE_FLOATS
+# Postgres guarda las columnas en minuscula; la API las nombra con la letra del estado.
+REACT_KEYS = {"react_4_p": "react_4_P", "react_4_h": "react_4_H"}
+NODE_INTS = (
+    "activos_inicio", "activos_final", "nuevos", "bajas", "react_val", "adiciones_netas", "adiciones_brutas",
+    "corte_impagado",
+)
+NODE_FLOATS = ("crecimiento", "churn_neto_pct", "churn_bruto_pct")
+
+
+def _zone_nodes(df: pd.DataFrame) -> list[dict[str, Any]]:
+    """Un nodo por fila de `zona_sucursal`, con la zona y la sucursal separadas.
+
+    `reactivaciones` de un nodo son las validas (`react_val`).
+    """
+    value = df["valor"].astype(str)
+    parts = value.str.split(" - ")
+    nodes = pd.DataFrame({
+        "zona_sucursal": value,
+        "zona": parts.str[0].str.strip(),
+        "sucursal": parts.str[1].str.strip().fillna("Sin Sucursal"),
+    })
+    metrics = typed_records(df, ints=NODE_INTS, floats=NODE_FLOATS, rename={"react_val": "reactivaciones"})
+    return [{**node, **m} for node, m in zip(nodes.to_dict("records"), metrics, strict=True)]
+
 
 def get_churn_close(
-    periodos: list[str] | None = None,
+    periods: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Los cierres mensuales, del mas reciente al mas antiguo.
 
@@ -44,94 +83,37 @@ def get_churn_close(
     """
     db = DBConnector()
     try:
-        df = zero_nulls(db.read_table_filtered(TableNames.ANALYZER_CLOSE_HISTORY, "periodo_reporte", periodos))
+        df = zero_nulls(db.read_table_filtered(TableNames.ANALYZER_CLOSE_HISTORY, "periodo_reporte", periods))
         if df.empty:
             return []
-        result: list[dict[str, Any]] = []
-        for _, row in df.iterrows():
-            result.append({
-                "periodo_reporte": str(row.get("periodo_reporte", "")),
-                "activos_inicio": int(row.get("activos_inicio") or 0),
-                "activos_final": int(row.get("activos_final") or 0),
-                "nuevos_mes": int(row.get("nuevos_mes") or 0),
-                "ingresos": int(row.get("ingresos") or 0),
-                "crecimiento": float(row.get("crecimiento") or 0),
-                "bajas": int(row.get("bajas") or 0),
-                "churn_neto_pct": float(row.get("churn_neto_pct") or 0),
-                "churn_bruto_pct": float(row.get("churn_bruto_pct") or 0),
-                "reactivaciones": int(row.get("reactivaciones") or 0),
-                "react_val": int(row.get("react_val") or 0),
-                "react_6_churn": int(row.get("react_6_churn") or 0),
-                "react_8_30days": int(row.get("react_8_30days") or 0),
-                "react_4_paused": int(row.get("react_4_paused") or 0),
-                "react_4_P": int(row.get("react_4_p") or 0),
-                "react_4_H": int(row.get("react_4_h") or 0),
-                "tasa_winback_pct": float(row.get("tasa_winback_pct") or 0),
-                "total_billing": float(row.get("total_billing") or 0),
-                "arpu": float(row.get("arpu") or 0),
-                "corte_impagado": int(row.get("corte_impagado") or 0),
-                "porcentaje_suspensiones": float(row.get("porcentaje_suspensiones") or 0),
-                "total_inactivos": int(row.get("total_inactivos") or 0),
-                "tasa_aporte_react_pct": float(row.get("tasa_aporte_react_pct") or 0),
-                "indice_reemplazo_react_pct": float(row.get("indice_reemplazo_react_pct") or 0),
-                "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
-                "adiciones_netas": int(row.get("adiciones_netas") or 0),
-                "clientes_gratuitos": int(row.get("clientes_gratuitos") or 0),
-                "gratuitos_nuevos": int(row.get("gratuitos_nuevos") or 0),
-                "gratuitos_retornados": int(row.get("gratuitos_retornados") or 0),
-            })
+        result = typed_records(
+            df, texts=["periodo_reporte"], ints=CLOSE_INTS, floats=CLOSE_FLOATS, rename=REACT_KEYS,
+        )
         return sorted(result, key=lambda x: x["periodo_reporte"], reverse=True)
     except Exception:
         logger.exception("Error getting churn cierre")
         return []
 
-def get_dimensiones(
-    periodos: list[str] | None = None,
+def get_dimensions(
+    periods: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """El desglose dimensional de cada periodo, agrupado por dimension."""
     db = DBConnector()
     try:
-        df = zero_nulls(db.read_table_filtered(TableNames.ANALYZER_CHURN_DIMENSIONES, "periodo_reporte", periodos))
+        df = zero_nulls(db.read_table_filtered(TableNames.ANALYZER_CHURN_DIMENSIONS, "periodo_reporte", periods))
         if df.empty:
             return []
 
+        rows = typed_records(
+            df, texts=["periodo_reporte", "dimension", "valor"], ints=DIMENSION_INTS, floats=DIMENSION_FLOATS,
+            rename=REACT_KEYS,
+        )
         pd_dict: dict[str, dict] = {}
-        for _, row in df.iterrows():
-            p = str(row.get("periodo_reporte", ""))
-            if p not in pd_dict:
-                pd_dict[p] = {"periodo_reporte": p, "dimensiones": {}}
-            dim = str(row.get("dimension", ""))
-            if dim not in pd_dict[p]["dimensiones"]:
-                pd_dict[p]["dimensiones"][dim] = []
-            pd_dict[p]["dimensiones"][dim].append({
-                "valor": str(row.get("valor", "")),
-                "activos_inicio": int(row.get("activos_inicio") or 0),
-                "activos_final": int(row.get("activos_final") or 0),
-                "nuevos": int(row.get("nuevos") or 0),
-                "bajas": int(row.get("bajas") or 0),
-                "crecimiento": float(row.get("crecimiento") or 0),
-                "churn_neto_pct": float(row.get("churn_neto_pct") or 0),
-                "churn_bruto_pct": float(row.get("churn_bruto_pct") or 0),
-                "reactivaciones": int(row.get("reactivaciones") or 0),
-                "tasa_winback_pct": float(row.get("tasa_winback_pct") or 0),
-                "total_billing": float(row.get("total_billing") or 0),
-                "arpu": float(row.get("arpu") or 0),
-                "tasa_aporte_react_pct": float(row.get("tasa_aporte_react_pct") or 0),
-                "indice_reemplazo_react_pct": float(row.get("indice_reemplazo_react_pct") or 0),
-                "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
-                "adiciones_netas": int(row.get("adiciones_netas") or 0),
-                "corte_impagado": int(row.get("corte_impagado") or 0),
-                "porcentaje_suspensiones": float(row.get("porcentaje_suspensiones") or 0),
-                "react_4_P": int(row.get("react_4_p") or 0),
-                "react_4_H": int(row.get("react_4_h") or 0),
-                "react_val": int(row.get("react_val") or 0),
-                "react_6_churn": int(row.get("react_6_churn") or 0),
-                "react_8_30days": int(row.get("react_8_30days") or 0),
-                "react_4_paused": int(row.get("react_4_paused") or 0),
-                "clientes_gratuitos": int(row.get("clientes_gratuitos") or 0),
-                "gratuitos_nuevos": int(row.get("gratuitos_nuevos") or 0),
-                "gratuitos_retornados": int(row.get("gratuitos_retornados") or 0),
-            })
+        for row in rows:
+            period = row.pop("periodo_reporte")
+            dim = row.pop("dimension")
+            block = pd_dict.setdefault(period, {"periodo_reporte": period, "dimensiones": {}})
+            block["dimensiones"].setdefault(dim, []).append(row)
         return sorted(pd_dict.values(), key=lambda x: x["periodo_reporte"], reverse=True)
     except Exception:
         logger.exception("Error getting churn dimensiones")
@@ -150,12 +132,12 @@ def get_periods() -> list[str]:
         return []
 
 def get_analytics_data(
-    periodos: list[str] | None = None,
+    periods: list[str] | None = None,
 ) -> dict[str, Any]:
     """Cierres y dimensiones de los periodos pedidos, para la pagina de Analytics."""
     return {
-        "periodos": get_churn_close(periodos),
-        "dimensiones": get_dimensiones(periodos),
+        "periodos": get_churn_close(periods),
+        "dimensiones": get_dimensions(periods),
     }
 
 
@@ -180,13 +162,13 @@ def get_zones_config() -> dict[str, Any]:
             # el de su coordinador, su site o su estado (ver `targets.py`).
             "estado": str(z.get("Estado") or "").strip(),
         }
-        for z in zonas()
+        for z in zones()
         if str(z.get("name", "")).strip()
     ]
     return {"zonas": catalog_zones, "siteOrder": sites_order()}
 
 
-def _dimension_df(db: DBConnector, target_period: str, dia: int | None):
+def _dimension_df(db: DBConnector, target_period: str, day: int | None):
     """Filas de la dimension zona_sucursal, del cierre del mes o de un dia.
 
     Con `dia` la fuente es la fila precalculada de analyzer_day_metrics: una
@@ -194,11 +176,11 @@ def _dimension_df(db: DBConnector, target_period: str, dia: int | None):
     """
     import pandas as pd
 
-    if dia:
+    if day:
         from .day_metrics import get_day_metrics
 
-        mes = target_period[:7]
-        payload = get_day_metrics(mes).get("dias", {}).get(str(dia))
+        month = target_period[:7]
+        payload = get_day_metrics(month).get("dias", {}).get(str(day))
         if not payload:
             return pd.DataFrame()
         return pd.DataFrame(payload.get("dimensiones", []))
@@ -207,7 +189,7 @@ def _dimension_df(db: DBConnector, target_period: str, dia: int | None):
         SELECT valor, activos_inicio, activos_final, nuevos, bajas, crecimiento,
                churn_neto_pct, churn_bruto_pct, react_val,
                adiciones_netas, adiciones_brutas, corte_impagado
-        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONS}
         WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
     """, params=[target_period]))
 
@@ -217,38 +199,38 @@ def calculate_aggregation_totals(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     los indicadores porcentuales para evitar el error de promediar promedios.
     """
     act_ini = sum(n["activos_inicio"] for n in nodes)
-    act_fin = sum(n["activos_final"] for n in nodes)
-    nuevos = sum(n["nuevos"] for n in nodes)
-    bajas = sum(n["bajas"] for n in nodes)
+    act_end = sum(n["activos_final"] for n in nodes)
+    new = sum(n["nuevos"] for n in nodes)
+    churns = sum(n["bajas"] for n in nodes)
     react = sum(n["reactivaciones"] for n in nodes)
-    corte = sum(n["corte_impagado"] for n in nodes)
-    ad_netas = sum(n["adiciones_netas"] for n in nodes)
-    ad_brutas = sum(n["adiciones_brutas"] for n in nodes)
+    cutoff = sum(n["corte_impagado"] for n in nodes)
+    net_adds = sum(n["adiciones_netas"] for n in nodes)
+    gross_adds = sum(n["adiciones_brutas"] for n in nodes)
 
     # Fórmulas de agregación consistentes
-    crecimiento = round(((act_fin - act_ini) / act_ini * 100), 2) if act_ini > 0 else 0.0
+    growth = round(((act_end - act_ini) / act_ini * 100), 2) if act_ini > 0 else 0.0
     
-    net_churn_calc = max(0, act_ini - (act_fin - nuevos))
-    churn_neto = round((net_churn_calc / act_ini * 100), 2) if act_ini > 0 else 0.0
-    churn_bruto = round((bajas / act_ini * 100), 2) if act_ini > 0 else 0.0
+    net_churn_calc = max(0, act_ini - (act_end - new))
+    net_churn = round((net_churn_calc / act_ini * 100), 2) if act_ini > 0 else 0.0
+    gross_churn = round((churns / act_ini * 100), 2) if act_ini > 0 else 0.0
 
     return {
         "activos_inicio": act_ini,
-        "activos_final": act_fin,
-        "nuevos": nuevos,
-        "bajas": bajas,
+        "activos_final": act_end,
+        "nuevos": new,
+        "bajas": churns,
         "reactivaciones": react,
-        "crecimiento": crecimiento,
-        "churn_neto_pct": churn_neto,
-        "churn_bruto_pct": churn_bruto,
-        "adiciones_netas": ad_netas,
-        "adiciones_brutas": ad_brutas,
-        "corte_impagado": corte,
+        "crecimiento": growth,
+        "churn_neto_pct": net_churn,
+        "churn_bruto_pct": gross_churn,
+        "adiciones_netas": net_adds,
+        "adiciones_brutas": gross_adds,
+        "corte_impagado": cutoff,
     }
 
 def get_sales_report_data(
-    periodo_reporte: str | None = None,
-    dia: int | None = None,
+    report_period: str | None = None,
+    day: int | None = None,
 ) -> dict[str, Any]:
     """
     Agrupa las métricas del periodo por Site regional -> Type (Tecnología) -> Nodos,
@@ -260,65 +242,39 @@ def get_sales_report_data(
         if not available_periods:
             return {"status": "empty", "message": "No hay periodos calculados"}
         
-        target_period = periodo_reporte or available_periods[0]
+        target_period = report_period or available_periods[0]
         
         if not available_zones():
             return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Catálogos → Estructura."}
 
         # Mapeamos zonas a su respectivo Site y Type (Tecnología)
         zone_info = {}
-        for z in zonas():
+        for z in zones():
             name = z["name"].strip().lower()
             zone_info[name] = {
                 "site": z.get("Site", "Valencia").strip(),
                 "type": z.get("Type", "FTTH").strip()  # el mismo valor por defecto que el catalogo
             }
         
-        df = _dimension_df(db, target_period, dia)
+        df = _dimension_df(db, target_period, day)
         
         if df.empty:
             return {
                 "status": "empty",
                 "period": target_period,
                 "periods": available_periods,
-                "dia": dia,
+                "dia": day,
             }
             
         # Agrupación en estructura anidada en memoria
         # Estructura: site_groups[site][tech_type] = List[nodos]
         site_groups: dict[str, dict[str, list[dict[str, Any]]]] = {}
         
-        for _, row in df.iterrows():
-            val_str = str(row["valor"])
-            parts = val_str.split(" - ")
-            zone_name = parts[0].strip() if len(parts) > 0 else val_str
-            branch_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
-            
+        for node in _zone_nodes(df):
             # Zona que no esta en el catalogo: se agrupa aparte, con la
             # tecnologia por defecto del catalogo.
-            z_data = zone_info.get(zone_name.lower(), {"site": "Otros / Desconocido", "type": "FTTH"})
-            site = z_data["site"]
-            tech_type = z_data["type"]
-            
-            site_groups.setdefault(site, {})
-            site_groups[site].setdefault(tech_type, [])
-            
-            site_groups[site][tech_type].append({
-                "zona_sucursal": val_str,
-                "zona": zone_name,
-                "sucursal": branch_name,
-                "activos_inicio": int(row.get("activos_inicio") or 0),
-                "activos_final": int(row.get("activos_final") or 0),
-                "nuevos": int(row.get("nuevos") or 0),
-                "bajas": int(row.get("bajas") or 0),
-                "crecimiento": float(row.get("crecimiento") or 0),
-                "churn_neto_pct": float(row.get("churn_neto_pct") or 0),
-                "churn_bruto_pct": float(row.get("churn_bruto_pct") or 0),
-                "reactivaciones": int(row.get("react_val") or 0),
-                "adiciones_netas": int(row.get("adiciones_netas") or 0),
-                "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
-                "corte_impagado": int(row.get("corte_impagado") or 0),
-            })
+            z_data = zone_info.get(node["zona"].lower(), {"site": "Otros / Desconocido", "type": "FTTH"})
+            site_groups.setdefault(z_data["site"], {}).setdefault(z_data["type"], []).append(node)
 
         # Estructurar la respuesta final aplicando las ordenaciones y sumatorias de subtotales
         final_data_list = []
@@ -357,7 +313,7 @@ def get_sales_report_data(
             "status": "success",
             "period": target_period,
             "periods": available_periods,
-            "dia": dia,
+            "dia": day,
             "data": final_data_list
         }
     except Exception:
@@ -373,8 +329,8 @@ def get_sales_report_data(
         }
     
 def get_business_units_data(
-    periodo_reporte: str | None = None,
-    dia: int | None = None,
+    report_period: str | None = None,
+    day: int | None = None,
 ) -> dict[str, Any]:
     """
     Genera el reporte de Business Units:
@@ -388,7 +344,7 @@ def get_business_units_data(
         if not available_periods:
             return {"status": "empty", "message": "No hay periodos calculados"}
         
-        target_period = periodo_reporte or available_periods[0]
+        target_period = report_period or available_periods[0]
         
         if not available_zones():
             return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Catálogos → Estructura."}
@@ -398,15 +354,15 @@ def get_business_units_data(
         rf_zones_set = set()
         ftth_zones_set = set()
 
-        for z in zonas():
+        for z in zones():
             z_name = z.get("name", "").strip().lower()
             if not z_name:
                 continue
 
             # Mapeo de Coordinadores
-            coordinador = z.get("Coordinador")
-            if coordinador and str(coordinador).strip():
-                zone_coord_map[z_name] = str(coordinador).strip()
+            coordinator = z.get("Coordinador")
+            if coordinator and str(coordinator).strip():
+                zone_coord_map[z_name] = str(coordinator).strip()
 
             # Mapeo por Tecnología. El catálogo solo admite estas dos.
             z_type = str(z.get("Type", "")).strip().upper()
@@ -415,14 +371,14 @@ def get_business_units_data(
             elif z_type == "FTTH":
                 ftth_zones_set.add(z_name)
 
-        df = _dimension_df(db, target_period, dia)
+        df = _dimension_df(db, target_period, day)
         
         if df.empty:
             return {
                 "status": "empty",
                 "period": target_period,
                 "periods": available_periods,
-                "dia": dia,
+                "dia": day,
             }
             
         # 2. Agrupadores
@@ -430,32 +386,9 @@ def get_business_units_data(
         rf_nodes: list[dict[str, Any]] = []
         ftth_nodes: list[dict[str, Any]] = []
 
-        for _, row in df.iterrows():
-            val_str = str(row["valor"])
-            parts = val_str.split(" - ")
-            zone_name = parts[0].strip() if len(parts) > 0 else val_str
-            branch_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
-            
-            z_key = zone_name.lower()
-            z_type = "RF" if z_key in rf_zones_set else "FTTH"
-
-            node_data = {
-                "zona_sucursal": val_str,
-                "zona": zone_name,
-                "sucursal": branch_name,
-                "type": z_type,  # 👈 2. AÑADIDO: Tipo de servicio (FTTH o RF)
-                "activos_inicio": int(row.get("activos_inicio") or 0),
-                "activos_final": int(row.get("activos_final") or 0),
-                "nuevos": int(row.get("nuevos") or 0),
-                "bajas": int(row.get("bajas") or 0),
-                "crecimiento": float(row.get("crecimiento") or 0),
-                "churn_neto_pct": float(row.get("churn_neto_pct") or 0),
-                "churn_bruto_pct": float(row.get("churn_bruto_pct") or 0),
-                "reactivaciones": int(row.get("react_val") or 0),
-                "adiciones_netas": int(row.get("adiciones_netas") or 0),
-                "adiciones_brutas": int(row.get("adiciones_brutas") or 0),
-                "corte_impagado": int(row.get("corte_impagado") or 0),
-            }
+        for node_data in _zone_nodes(df):
+            z_key = node_data["zona"].lower()
+            node_data["type"] = "RF" if z_key in rf_zones_set else "FTTH"
 
             # Si pertenece a un Coordinador
             if z_key in zone_coord_map:
@@ -477,14 +410,14 @@ def get_business_units_data(
 
         # 4. Construcción de respuesta por coordinador
         final_data_list = []
-        sorted_coordinadores = sorted(coord_groups.keys())
+        sorted_coordinators = sorted(coord_groups.keys())
         
-        for coordinador in sorted_coordinadores:
-            nodes = sorted(coord_groups[coordinador], key=lambda x: x["activos_final"], reverse=True)
+        for coordinator in sorted_coordinators:
+            nodes = sorted(coord_groups[coordinator], key=lambda x: x["activos_final"], reverse=True)
             coord_totals = calculate_aggregation_totals(nodes)
             
             final_data_list.append({
-                "coordinador": coordinador,
+                "coordinador": coordinator,
                 "totals": coord_totals,
                 "nodes": nodes,
                 "is_rf": False
@@ -505,7 +438,7 @@ def get_business_units_data(
             "status": "success",
             "period": target_period,
             "periods": available_periods,
-            "dia": dia,
+            "dia": day,
             "ftth_summary": ftth_summary,
             "data": final_data_list
         }
@@ -526,7 +459,7 @@ def restrict_units(
     bu_data: dict[str, Any],
     day_metrics: dict[str, Any],
     zones_config: dict[str, Any],
-    unidades: frozenset[str],
+    units: frozenset[str],
     rf: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Unidades de negocio para quien no las ve todas (`services/config/units.py`).
@@ -543,66 +476,66 @@ def restrict_units(
     nodo con la suma da exactamente lo mismo que sumar los nodos, y su meta es
     la general, que tampoco depende del reparto por zonas.
     """
-    zonas = zones_config.get("zonas", [])
-    coordinator_of = {z["name"].lower(): z["coordinador"] for z in zonas if z.get("coordinador")}
-    rf_zones = {z["name"].lower() for z in zonas if str(z.get("type", "")).upper() == "RF"}
-    visibles = {zona for zona, c in coordinator_of.items() if c in unidades}
+    zones = zones_config.get("zonas", [])
+    coordinator_of = {z["name"].lower(): z["coordinador"] for z in zones if z.get("coordinador")}
+    rf_zones = {z["name"].lower() for z in zones if str(z.get("type", "")).upper() == "RF"}
+    visible = {zone for zone, c in coordinator_of.items() if c in units}
     if rf:
-        visibles |= rf_zones
+        visible |= rf_zones
 
-    def zone_of(valor: Any) -> str:
-        return str(valor).split(" - ")[0].strip().lower()
+    def zone_of(value: Any) -> str:
+        return str(value).split(" - ")[0].strip().lower()
 
-    def consolidado(nodos: list[dict[str, Any]], reactivaciones: str) -> dict[str, int]:
-        suma = {
-            campo: sum(int(n.get(campo) or 0) for n in nodos)
-            for campo in ("activos_inicio", "activos_final", "nuevos", "bajas")
+    def consolidate(nodes: list[dict[str, Any]], reactivations_key: str) -> dict[str, int]:
+        total_sum = {
+            field: sum(int(n.get(field) or 0) for n in nodes)
+            for field in ("activos_inicio", "activos_final", "nuevos", "bajas")
         }
-        suma["reactivaciones"] = sum(int(n.get(reactivaciones) or 0) for n in nodos)
-        suma["total_nodos"] = len(nodos)
-        return suma
+        total_sum["reactivaciones"] = sum(int(n.get(reactivations_key) or 0) for n in nodes)
+        total_sum["total_nodos"] = len(nodes)
+        return total_sum
 
     # Lo mismo que suma el cliente: los nodos FTTH de las unidades (no del
     # bloque RF, que agrupa por tecnologia).
-    grupos = bu_data.get("data") or []
+    groups = bu_data.get("data") or []
     ftth_close = [
-        nodo for g in grupos if not g.get("is_rf")
-        for nodo in g.get("nodes", []) if nodo.get("type") == "FTTH"
+        node for g in groups if not g.get("is_rf")
+        for node in g.get("nodes", []) if node.get("type") == "FTTH"
     ]
-    dias = (day_metrics or {}).get("dias") or {}
+    days = (day_metrics or {}).get("dias") or {}
     ftth_days = {
-        dia: consolidado([
-            fila for fila in corte.get("dimensiones", [])
-            if zone_of(fila.get("valor")) in coordinator_of
-            and zone_of(fila.get("valor")) not in rf_zones
+        day: consolidate([
+            row for row in cutoff.get("dimensiones", [])
+            if zone_of(row.get("valor")) in coordinator_of
+            and zone_of(row.get("valor")) not in rf_zones
         ], "react_val")
-        for dia, corte in dias.items()
+        for day, cutoff in days.items()
     }
 
     bu = dict(bu_data)
     if "data" in bu:
         bu["data"] = [
-            g for g in grupos
-            if (rf if g.get("is_rf") else g.get("coordinador") in unidades)
+            g for g in groups
+            if (rf if g.get("is_rf") else g.get("coordinador") in units)
         ]
     bu["ftth_consolidado"] = {
-        "cierre": consolidado(ftth_close, "reactivaciones"),
+        "cierre": consolidate(ftth_close, "reactivaciones"),
         "dias": ftth_days,
     }
-    bu["alcance"] = {"coordinadores": sorted(unidades), "rf": rf}
+    bu["alcance"] = {"coordinadores": sorted(units), "rf": rf}
 
     dm = dict(day_metrics or {})
-    if dias:
+    if days:
         dm["dias"] = {
-            dia: {
-                "global": corte.get("global", {}),
+            day: {
+                "global": cutoff.get("global", {}),
                 "dimensiones": [
-                    fila for fila in corte.get("dimensiones", [])
-                    if zone_of(fila.get("valor")) in visibles
+                    row for row in cutoff.get("dimensiones", [])
+                    if zone_of(row.get("valor")) in visible
                 ],
             }
-            for dia, corte in dias.items()
+            for day, cutoff in days.items()
         }
 
-    zc = {**zones_config, "zonas": [z for z in zonas if z["name"].lower() in visibles]}
+    zc = {**zones_config, "zonas": [z for z in zones if z["name"].lower() in visible]}
     return bu, dm, zc

@@ -21,11 +21,11 @@ def register_import_log(
     despues de que la peticion haya terminado, y el usuario que la lanzo pudo
     haber sido borrado entre medias (el job lo guarda con on_delete=SET_NULL).
     """
-    autenticado = user is not None and getattr(user, 'is_authenticated', False)
+    authenticated = user is not None and getattr(user, 'is_authenticated', False)
     try:
         ImportActionLog.objects.create(
-            user=user if autenticado else None,
-            username=user.username if autenticado else 'Sistema',
+            user=user if authenticated else None,
+            username=user.username if authenticated else 'Sistema',
             module=module,
             file_name=file_name or 'N/A',
             rows_processed=rows,

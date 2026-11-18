@@ -5,19 +5,16 @@
  * tienen el suyo en `RoleConditions.tsx`.
  */
 
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import {
-  Banknote, Briefcase, Building, Crown, Landmark, MapPin, Network, Phone, Plus, ShieldCheck, Target, Trash2, UserCheck, Users, X,
-} from 'lucide-react';
+  Banknote, Briefcase, Building, Crown, Landmark, MapPin, Network, Phone, Plus, ShieldCheck, Trash2, UserCheck, Users } from 'lucide-react';
 
-import { MonthPicker, SelectMenu } from '@/shared/ui';
+import { SelectMenu } from '@/shared/ui';
 import {
-  Field, FormBanner, FormColumns, FormFooter, ModalForm, type FormTone,
+  FormActions, Field, FormBanner, FormColumns, FormFooter, ModalForm, type FormTone,
 } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
-import type {
-  MembershipDraft, OfficeTargetDraft, SiteDraft, UnidadDraft,
-} from '@/features/subscriptions/hooks/useCatalogs';
+import type { MembershipDraft, SiteDraft, UnitDraft } from '@/features/subscriptions/lib/catalogDrafts';
 import type {
   CatalogSalesTeam,
   CatalogMembership,
@@ -27,29 +24,25 @@ import type {
   CatalogZone,
   SalesRole,
 } from '@/features/subscriptions/types';
+import { CheckboxList } from './CheckboxList';
 
-interface Acciones {
-  saving: boolean;
-  onClose: () => void;
-  onSubmit: (event: FormEvent) => void;
-}
 
 /** Cómo se presenta cada rol. Las etiquetas las manda el servidor (`equipos.ROLES`). */
-export const ROL_UI: Record<SalesRole, { icon: ReactNode; corto: string; description: string; tone: FormTone }> = {
-  jefe: { icon: <ShieldCheck />, corto: 'Jefe', description: 'Lleva el equipo entero. Aparece en «Medio» y «Oportunidad/Administrador».', tone: 'amber' },
-  jefe_un: { icon: <Crown />, corto: 'Jefe de UN', description: 'Lleva varias unidades de negocio. Cobra por todas sus ventas y por su cumplimiento de ingresos.', tone: 'amber' },
-  coord_un: { icon: <Crown />, corto: 'Coord. de UN', description: 'Lleva una unidad de negocio. Cobra por su crecimiento y su churn.', tone: 'amber' },
-  gerente_un: { icon: <Crown />, corto: 'Gerente de UN', description: 'Lleva varias unidades de negocio.', tone: 'amber' },
-  gerente_ops: { icon: <Landmark />, corto: 'Gerente de operaciones', description: 'Cobra por las ventas de las unidades de negocio que tiene. No aparece en las suscripciones.', tone: 'sky' },
-  coord_oficina: { icon: <Building />, corto: 'Coord. de oficina', description: 'Lleva una oficina de un site. Aparece en «Vendedor», como usuario de Odoo.', tone: 'purple' },
-  supervisor: { icon: <UserCheck />, corto: 'Supervisores', description: 'Lleva un equipo de asesores. Aparece en «Oportunidad/Administrador».', tone: 'emerald' },
-  asesor: { icon: <Users />, corto: 'Asesores', description: 'Vende. Aparece en «Medio».', tone: 'blue' },
-  administradora: { icon: <Banknote />, corto: 'Administradora', description: 'No cobra comisión por ventas: cobra un bono por el cumplimiento de la empresa.', tone: 'slate' },
-  telemarketing: { icon: <Phone />, corto: 'Telemarketing', description: 'Vende por teléfono. Aparece en «Medio».', tone: 'blue' },
+export const ROLE_UI: Record<SalesRole, { icon: ReactNode; short: string; description: string; tone: FormTone }> = {
+  jefe: { icon: <ShieldCheck />, short: 'Jefe', description: 'Lleva el equipo entero. Aparece en «Medio» y «Oportunidad/Administrador».', tone: 'amber' },
+  jefe_un: { icon: <Crown />, short: 'Jefe de UN', description: 'Lleva varias unidades de negocio. Cobra por todas sus ventas y por su cumplimiento de ingresos.', tone: 'amber' },
+  coord_un: { icon: <Crown />, short: 'Coord. de UN', description: 'Lleva una unidad de negocio. Cobra por su crecimiento y su churn.', tone: 'amber' },
+  gerente_un: { icon: <Crown />, short: 'Gerente de UN', description: 'Lleva varias unidades de negocio.', tone: 'amber' },
+  gerente_ops: { icon: <Landmark />, short: 'Gerente de operaciones', description: 'Cobra por las ventas de las unidades de negocio que tiene. No aparece en las suscripciones.', tone: 'sky' },
+  coord_oficina: { icon: <Building />, short: 'Coord. de oficina', description: 'Lleva una oficina de un site. Aparece en «Vendedor», como usuario de Odoo.', tone: 'purple' },
+  supervisor: { icon: <UserCheck />, short: 'Supervisores', description: 'Lleva un equipo de asesores. Aparece en «Oportunidad/Administrador».', tone: 'emerald' },
+  asesor: { icon: <Users />, short: 'Asesores', description: 'Vende. Aparece en «Medio».', tone: 'blue' },
+  administradora: { icon: <Banknote />, short: 'Administradora', description: 'No cobra comisión por ventas: cobra un bono por el cumplimiento de la empresa.', tone: 'slate' },
+  telemarketing: { icon: <Phone />, short: 'Telemarketing', description: 'Vende por teléfono. Aparece en «Medio».', tone: 'blue' },
 };
 
 /** Valor de un desplegable sin elección. */
-const NINGUNO = '';
+const NONE = '';
 
 /**
  * Otros nombres con los que Odoo escribe a la misma persona en una columna
@@ -57,29 +50,29 @@ const NINGUNO = '';
  * principal, así que sus ventas son todas de ella.
  */
 function OtherNames({
-  nombres,
+  names: nameList,
   placeholder,
   onChange,
 }: {
-  nombres: string[];
+  names: string[];
   placeholder: string;
-  onChange: (nombres: string[]) => void;
+  onChange: (names: string[]) => void;
 }) {
   return (
     <div className="mt-2 space-y-2">
-      {nombres.map((nombre, i) => (
+      {nameList.map((name, i) => (
         <div key={i} className="flex items-center gap-2">
           <input
             type="text"
             className={modalInputClass}
             placeholder={placeholder}
             aria-label="Otro nombre"
-            value={nombre}
-            onChange={(e) => onChange(nombres.map((n, k) => (k === i ? e.target.value : n)))}
+            value={name}
+            onChange={(e) => onChange(nameList.map((n, k) => (k === i ? e.target.value : n)))}
           />
           <button
             type="button"
-            onClick={() => onChange(nombres.filter((_, k) => k !== i))}
+            onClick={() => onChange(nameList.filter((_, k) => k !== i))}
             className="text-rose-400 hover:text-rose-300"
             title="Quitar este nombre"
           >
@@ -89,7 +82,7 @@ function OtherNames({
       ))}
       <button
         type="button"
-        onClick={() => onChange([...nombres, ''])}
+        onClick={() => onChange([...nameList, ''])}
         className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-sky-300"
       >
         <Plus className="h-3 w-3" /> Añadir otro nombre
@@ -98,60 +91,11 @@ function OtherNames({
   );
 }
 
-/**
- * Una lista de casillas con buscador, para elegir varias zonas, equipos o
- * unidades de una vez. `detalle` aclara de qué otro grupo viene hoy cada una.
- */
-export function CheckboxList({
-  label,
-  hint,
-  options,
-  seleccion,
-  onChange,
-  buscable = true,
-}: {
-  label: string;
-  hint?: string;
-  options: { id: number; name: string; detalle?: string }[];
-  seleccion: number[];
-  onChange: (ids: number[]) => void;
-  buscable?: boolean;
-}) {
-  const [busqueda, setBusqueda] = useState('');
-  const visibles = options.filter((other) => `${other.name} ${other.detalle ?? ''}`.toLowerCase().includes(busqueda.toLowerCase()));
-  const alternar = (id: number) =>
-    onChange(seleccion.includes(id) ? seleccion.filter((x) => x !== id) : [...seleccion, id]);
-
-  return (
-    <Field label={`${label} (${seleccion.length})`} hint={hint}>
-      {buscable && options.length > 6 && (
-        <input
-          type="text"
-          className={`${modalInputClass} mb-2`}
-          placeholder="Buscar..."
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-        />
-      )}
-      <div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-slate-700 bg-surface-tertiary p-2">
-        {visibles.length === 0 && <p className="p-2 text-xs text-slate-500">Nada que mostrar.</p>}
-        {visibles.map((other) => (
-          <label key={other.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-xs text-slate-200 hover:bg-slate-800">
-            <input type="checkbox" checked={seleccion.includes(other.id)} onChange={() => alternar(other.id)} />
-            <span className="flex-1">{other.name}</span>
-            {other.detalle && <span className="text-[10px] text-slate-500">{other.detalle}</span>}
-          </label>
-        ))}
-      </div>
-    </Field>
-  );
-}
-
 /** Alta o edición del papel de una persona en un equipo. Lo que pide depende del rol. */
 export function MembershipForm({
   value,
   teams,
-  equipo,
+  team,
   role,
   people,
   memberships,
@@ -161,11 +105,11 @@ export function MembershipForm({
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
+}: FormActions & {
   value: MembershipDraft;
   /** Todos los equipos, para poder pasar a la persona de uno a otro. */
   teams: CatalogSalesTeam[];
-  equipo: CatalogSalesTeam;
+  team: CatalogSalesTeam;
   role: CatalogTeamRole;
   /** Las personas ya registradas, para dar un papel nuevo a quien ya existe (p. ej. el gerente de operaciones). */
   people: CatalogSalesPerson[];
@@ -175,45 +119,45 @@ export function MembershipForm({
   units: CatalogBusinessUnit[];
   onChange: (patch: Partial<MembershipDraft>) => void;
 }) {
-  const ui = ROL_UI[role.role];
-  const superiores = role.manager
-    ? memberships.filter((m) => m.equipo === equipo.slug && m.role === role.manager)
+  const ui = ROLE_UI[role.role];
+  const superiors = role.manager
+    ? memberships.filter((m) => m.equipo === team.slug && m.role === role.manager)
     : [];
   // Quien ya está en este equipo no se ofrece: tendría dos papeles en el mismo.
-  const alreadyInTeam = new Set(memberships.filter((m) => m.equipo === equipo.slug).map((m) => m.person_id));
-  const disponibles = people.filter((p) => !alreadyInTeam.has(p.id));
+  const alreadyInTeam = new Set(memberships.filter((m) => m.equipo === team.slug).map((m) => m.person_id));
+  const available = people.filter((p) => !alreadyInTeam.has(p.id));
 
   const pickPerson = (id: string) => {
-    const persona = people.find((p) => String(p.id) === id);
-    onChange(persona
+    const person = people.find((p) => String(p.id) === id);
+    onChange(person
       ? {
-        person_id: persona.id,
-        name: persona.name,
-        last_name: persona.last_name,
-        channel: persona.channel,
-        supervisor_channel: persona.supervisor_channel,
-        odoo_user: persona.odoo_user,
-        channel_alias: persona.channel_alias,
-        supervisor_alias: persona.supervisor_alias,
-        user_alias: persona.user_alias,
+        person_id: person.id,
+        name: person.name,
+        last_name: person.last_name,
+        channel: person.channel,
+        supervisor_channel: person.supervisor_channel,
+        odoo_user: person.odoo_user,
+        channel_alias: person.channel_alias,
+        supervisor_alias: person.supervisor_alias,
+        user_alias: person.user_alias,
       }
       : { person_id: null });
   };
 
   // Cambiar de equipo o de puesto: el rol se conserva si el equipo nuevo lo tiene, y si no se
   // toma el primero. El superior no se lleva: era de otro equipo u otro rol.
-  const cambiarPuesto = (slug: string, newRole: SalesRole | null) => {
-    const destino = teams.find((e) => e.slug === slug);
-    if (!destino) return;
-    const elegido = newRole ?? (destino.roles.some((r) => r.role === value.role) ? value.role : destino.roles[0]?.role);
-    if (!elegido) return;
-    onChange({ team_id: destino.id, equipo: destino.slug, role: elegido, manager_id: null });
+  const changeTitle = (slug: string, newRole: SalesRole | null) => {
+    const target = teams.find((e) => e.slug === slug);
+    if (!target) return;
+    const chosen = newRole ?? (target.roles.some((r) => r.role === value.role) ? value.role : target.roles[0]?.role);
+    if (!chosen) return;
+    onChange({ team_id: target.id, equipo: target.slug, role: chosen, manager_id: null });
   };
 
   return (
     <ModalForm onSubmit={onSubmit}>
       <FormBanner
-        title={`${role.role_label} · ${equipo.name}`}
+        title={`${role.role_label} · ${team.name}`}
         description={`${ui.description} Los literales se comparan contra el export sin distinguir mayúsculas: cópialos tal cual aparecen en las suscripciones.`}
         action={<Briefcase className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
@@ -223,9 +167,9 @@ export function MembershipForm({
           <SelectMenu
             aria-label="Equipo de ventas"
             className={modalInputClass}
-            value={equipo.slug}
+            value={team.slug}
             options={teams.map((e) => ({ value: e.slug, label: e.name }))}
-            onChange={(slug) => cambiarPuesto(slug, null)}
+            onChange={(slug) => changeTitle(slug, null)}
           />
         </Field>
         <Field label="Puesto">
@@ -233,8 +177,8 @@ export function MembershipForm({
             aria-label="Puesto"
             className={modalInputClass}
             value={role.role}
-            options={equipo.roles.map((r) => ({ value: r.role, label: r.role_label }))}
-            onChange={(r) => cambiarPuesto(equipo.slug, r as SalesRole)}
+            options={team.roles.map((r) => ({ value: r.role, label: r.role_label }))}
+            onChange={(r) => changeTitle(team.slug, r as SalesRole)}
           />
         </Field>
       </FormColumns>
@@ -245,15 +189,15 @@ export function MembershipForm({
         </p>
       )}
 
-      {!value.id && disponibles.length > 0 && (
+      {!value.id && available.length > 0 && (
         <Field label="Persona" hint="Elige una ya registrada (en otro equipo, por ejemplo) o escribe una nueva.">
           <SelectMenu
             aria-label="Persona"
             className={modalInputClass}
-            value={String(value.person_id ?? NINGUNO)}
+            value={String(value.person_id ?? NONE)}
             options={[
-              { value: NINGUNO, label: 'Persona nueva' },
-              ...disponibles.map((p) => ({ value: String(p.id), label: `${p.name} ${p.last_name}` })),
+              { value: NONE, label: 'Persona nueva' },
+              ...available.map((p) => ({ value: String(p.id), label: `${p.name} ${p.last_name}` })),
             ]}
             onChange={pickPerson}
           />
@@ -272,7 +216,7 @@ export function MembershipForm({
       {role.channel && (
         <Field label="Medio (Odoo)" hint="Tal y como aparece en «Medio»: normalmente nombre y apellido, p. ej. «Ahiam Aguilar».">
           <input type="text" required className={modalInputClass} value={value.channel} onChange={(e) => onChange({ channel: e.target.value })} />
-          <OtherNames nombres={value.channel_alias} placeholder="Otra forma de escribirlo (p. ej. con tilde)" onChange={(alias_medio) => onChange({ channel_alias: alias_medio })} />
+          <OtherNames names={value.channel_alias} placeholder="Otra forma de escribirlo (p. ej. con tilde)" onChange={(channel_alias) => onChange({ channel_alias })} />
         </Field>
       )}
 
@@ -288,14 +232,14 @@ export function MembershipForm({
             value={value.supervisor_channel}
             onChange={(e) => onChange({ supervisor_channel: e.target.value })}
           />
-          <OtherNames nombres={value.supervisor_alias} placeholder="Otra forma de escribirlo como supervisor" onChange={(alias_supervisor) => onChange({ supervisor_alias: alias_supervisor })} />
+          <OtherNames names={value.supervisor_alias} placeholder="Otra forma de escribirlo como supervisor" onChange={(alias_supervisor) => onChange({ supervisor_alias: alias_supervisor })} />
         </Field>
       )}
 
       {role.user && (
         <Field label="Usuario de Odoo" hint="Tal y como aparece en «Vendedor»: el nombre completo con el sufijo «(User)», que se añade solo si falta.">
           <input type="text" required className={modalInputClass} value={value.odoo_user} onChange={(e) => onChange({ odoo_user: e.target.value })} />
-          <OtherNames nombres={value.user_alias} placeholder="Otro usuario de Odoo de la misma persona" onChange={(alias_usuario) => onChange({ user_alias: alias_usuario })} />
+          <OtherNames names={value.user_alias} placeholder="Otro usuario de Odoo de la misma persona" onChange={(user_alias) => onChange({ user_alias })} />
         </Field>
       )}
 
@@ -304,9 +248,9 @@ export function MembershipForm({
           label="Sites"
           hint="Los sites del Sales Report bajo los que se la muestra, y de donde sale su % de cumplimiento de ventas (el promedio si son varios)."
           options={sites.map((s) => ({ id: s.id, name: s.name }))}
-          seleccion={value.site_ids}
+          selection={value.site_ids}
           onChange={(ids) => onChange({ site_ids: ids })}
-          buscable={false}
+          searchable={false}
         />
       )}
 
@@ -315,10 +259,10 @@ export function MembershipForm({
           <SelectMenu
             aria-label="Responde a"
             className={modalInputClass}
-            value={String(value.manager_id ?? NINGUNO)}
+            value={String(value.manager_id ?? NONE)}
             options={[
-              { value: NINGUNO, label: 'Sin asignar' },
-              ...superiores.map((m) => ({ value: String(m.id), label: `${m.name} ${m.last_name}` })),
+              { value: NONE, label: 'Sin asignar' },
+              ...superiors.map((m) => ({ value: String(m.id), label: `${m.name} ${m.last_name}` })),
             ]}
             onChange={(id) => onChange({ manager_id: id ? Number(id) : null })}
           />
@@ -329,8 +273,8 @@ export function MembershipForm({
         <CheckboxList
           label="Unidades de negocio"
           hint={role.units === 'una' ? 'Lleva exactamente una.' : 'Las que lleva: cobra por sus ventas.'}
-          options={units.map((u) => ({ id: u.id, name: u.name, detalle: u.teams.join(', ') }))}
-          seleccion={value.unit_ids}
+          options={units.map((u) => ({ id: u.id, name: u.name, detail: u.teams.join(', ') }))}
+          selection={value.unit_ids}
           onChange={(ids) => onChange({ unit_ids: role.units === 'una' ? ids.slice(-1) : ids })}
         />
       )}
@@ -349,7 +293,7 @@ export function SiteForm({
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
+}: FormActions & {
   value: SiteDraft;
   zones: CatalogZone[];
   teams: CatalogSalesTeam[];
@@ -375,14 +319,14 @@ export function SiteForm({
       <CheckboxList
         label="Equipos de ventas"
         options={teams.map((e) => ({ id: e.id, name: e.name }))}
-        seleccion={value.team_ids}
+        selection={value.team_ids}
         onChange={(ids) => onChange({ team_ids: ids })}
-        buscable={false}
+        searchable={false}
       />
       <CheckboxList
         label="Zonas relacionadas"
-        options={zones.map((z) => ({ id: z.id, name: z.name, detalle: z.site }))}
-        seleccion={value.zone_ids}
+        options={zones.map((z) => ({ id: z.id, name: z.name, detail: z.site }))}
+        selection={value.zone_ids}
         onChange={(ids) => onChange({ zone_ids: ids })}
       />
 
@@ -392,7 +336,7 @@ export function SiteForm({
 }
 
 /** Alta o edición de una unidad de negocio: sus zonas y los equipos que la trabajan. */
-export function UnidadForm({
+export function UnitForm({
   value,
   zones,
   teams,
@@ -400,11 +344,11 @@ export function UnidadForm({
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
-  value: UnidadDraft;
+}: FormActions & {
+  value: UnitDraft;
   zones: CatalogZone[];
   teams: CatalogSalesTeam[];
-  onChange: (patch: Partial<UnidadDraft>) => void;
+  onChange: (patch: Partial<UnitDraft>) => void;
 }) {
   return (
     <ModalForm onSubmit={onSubmit}>
@@ -421,90 +365,17 @@ export function UnidadForm({
       <CheckboxList
         label="Equipos de ventas"
         options={teams.map((e) => ({ id: e.id, name: e.name }))}
-        seleccion={value.team_ids}
+        selection={value.team_ids}
         onChange={(ids) => onChange({ team_ids: ids })}
-        buscable={false}
+        searchable={false}
       />
       <CheckboxList
         label="Zonas relacionadas"
         hint="Una zona pertenece a una sola unidad: elegirla aquí se la quita a la que tenga hoy."
-        options={zones.map((z) => ({ id: z.id, name: z.name, detalle: z.coordinator || 'sin unidad' }))}
-        seleccion={value.zone_ids}
+        options={zones.map((z) => ({ id: z.id, name: z.name, detail: z.coordinator || 'sin unidad' }))}
+        selection={value.zone_ids}
         onChange={(ids) => onChange({ zone_ids: ids })}
       />
-
-      <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : 'Crear'} />
-    </ModalForm>
-  );
-}
-
-/** Valor del desplegable para el objetivo general (sin persona). */
-const GENERAL = '';
-
-/** Alta o edición de un tramo del objetivo de ventas de las coordinadoras de oficina. */
-export function OfficeTargetForm({
-  value,
-  coordinadoras,
-  saving,
-  onChange,
-  onSubmit,
-  onClose,
-}: Acciones & {
-  value: OfficeTargetDraft;
-  /** Las coordinadoras de oficina del directorio: de quien puede ser uno individual. */
-  coordinadoras: CatalogSalesPerson[];
-  onChange: (patch: Partial<OfficeTargetDraft>) => void;
-}) {
-  const sinceAlways = !value.since;
-  return (
-    <ModalForm onSubmit={onSubmit}>
-      <FormBanner
-        title="Objetivo de ventas de oficina"
-        description="Cuántas ventas al mes se esperan de una coordinadora. Se mide contra él lo que vendió ella misma («Medio»). El individual manda sobre el general."
-        action={<Target className="h-8 w-8 flex-shrink-0 text-slate-600" />}
-      />
-
-      {value.id ? (
-        <Field label="Para">
-          <div className="py-2 text-sm font-semibold text-white">{value.role_label}</div>
-        </Field>
-      ) : (
-        <Field label="Para" hint="General: el de todas las que no tengan uno propio.">
-          <SelectMenu
-            aria-label="Para quién es el objetivo"
-            className={modalInputClass}
-            value={String(value.person_id ?? GENERAL)}
-            options={[
-              { value: GENERAL, label: 'General (todas las coordinadoras)' },
-              ...coordinadoras.map((p) => ({ value: String(p.id), label: `${p.name} ${p.last_name}` })),
-            ]}
-            onChange={(id) => onChange({ person_id: id ? Number(id) : null })}
-          />
-        </Field>
-      )}
-
-      <FormColumns>
-        <Field label="Ventas al mes">
-          <input type="number" required min={1} step={1} className={modalInputClass} value={value.ventas} onChange={(e) => onChange({ ventas: e.target.value })} />
-        </Field>
-        <Field
-          label="Vigente desde"
-          hint="Vacío: desde siempre. Los meses anteriores conservan el objetivo que tenían."
-          action={
-            sinceAlways ? undefined : (
-              <button type="button" onClick={() => onChange({ since: '' })} className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white">
-                <X className="h-3 w-3" /> Quitar fecha
-              </button>
-            )
-          }
-        >
-          <MonthPicker value={value.since} onChange={(desde) => onChange({ since: desde })} placeholder="Desde siempre" />
-        </Field>
-      </FormColumns>
-
-      <Field label="Nota" hint="Opcional: por qué se fijó.">
-        <input type="text" className={modalInputClass} value={value.note} onChange={(e) => onChange({ note: e.target.value })} />
-      </Field>
 
       <FormFooter saving={saving} onClose={onClose} submitLabel={value.id ? 'Guardar cambios' : 'Crear'} />
     </ModalForm>

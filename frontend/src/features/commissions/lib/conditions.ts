@@ -10,54 +10,54 @@
 
 import type { CommissionConditions } from '../types';
 
-export type CampoSimple = 'promo_day' | 'wait_days' | 'cutoff_day';
+export type SimpleField = 'promo_day' | 'wait_days' | 'cutoff_day';
 
 /** Lo que `api_condiciones_guardar` rechazaría de los campos sueltos. */
-export function fieldErrors(c: CommissionConditions): Partial<Record<CampoSimple, string>> {
-  const errores: Partial<Record<CampoSimple, string>> = {};
+export function fieldErrors(c: CommissionConditions): Partial<Record<SimpleField, string>> {
+  const errors: Partial<Record<SimpleField, string>> = {};
   if (!Number.isInteger(c.promo_day) || c.promo_day < 1 || c.promo_day > 31) {
-    errores.promo_day = 'Un día del mes, de 1 a 31.';
+    errors.promo_day = 'Un día del mes, de 1 a 31.';
   }
   if (!Number.isInteger(c.wait_days) || c.wait_days < 0 || c.wait_days > 60) {
-    errores.wait_days = 'De 0 a 60 días.';
+    errors.wait_days = 'De 0 a 60 días.';
   }
   if (!Number.isInteger(c.cutoff_day) || c.cutoff_day < 1 || c.cutoff_day > 31) {
-    errores.cutoff_day = 'Un día del mes, de 1 a 31.';
+    errors.cutoff_day = 'Un día del mes, de 1 a 31.';
   }
-  return errores;
+  return errors;
 }
 
 // --- Cambios sin guardar -------------------------------------------------------------
 
 /** Un cambio respecto a lo guardado. `antes` nulo es algo nuevo; `despues` nulo, algo quitado. */
 export interface Change {
-  donde: string;
-  antes: string | null;
-  despues: string | null;
+  where: string;
+  before: string | null;
+  after: string | null;
 }
 
-const CAMPOS: Record<CampoSimple, { donde: string; value: (v: number) => string }> = {
-  promo_day: { donde: 'Periodo · inicio de los días promocionales', value: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
-  wait_days: { donde: 'Periodo · días de espera', value: (v) => (Number.isFinite(v) ? `${v} días` : '—') },
-  cutoff_day: { donde: 'Periodo · corte de los pagos adelantados', value: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
+const FIELDS: Record<SimpleField, { where: string; value: (v: number) => string }> = {
+  promo_day: { where: 'Periodo · inicio de los días promocionales', value: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
+  wait_days: { where: 'Periodo · días de espera', value: (v) => (Number.isFinite(v) ? `${v} días` : '—') },
+  cutoff_day: { where: 'Periodo · corte de los pagos adelantados', value: (v) => (Number.isFinite(v) ? `día ${v}` : '—') },
 };
 
-export function pendingChanges(guardadas: CommissionConditions, borrador: CommissionConditions): Change[] {
-  const cambios: Change[] = [];
-  for (const campo of ['promo_day', 'wait_days', 'cutoff_day'] as const) {
-    if (borrador[campo] !== guardadas[campo]) {
-      cambios.push({ donde: CAMPOS[campo].donde, antes: CAMPOS[campo].value(guardadas[campo]), despues: CAMPOS[campo].value(borrador[campo]) });
+export function pendingChanges(saved: CommissionConditions, draft: CommissionConditions): Change[] {
+  const changes: Change[] = [];
+  for (const field of ['promo_day', 'wait_days', 'cutoff_day'] as const) {
+    if (draft[field] !== saved[field]) {
+      changes.push({ where: FIELDS[field].where, before: FIELDS[field].value(saved[field]), after: FIELDS[field].value(draft[field]) });
     }
   }
-  return cambios;
+  return changes;
 }
 
 // --- Periodo -------------------------------------------------------------------------
 
 /** El día `dia` de un mes, recortado al último si el mes es más corto: `calculo.dia_del_mes`. */
-function dayOfMonth(anio: number, mes: number, dia: number): Date {
-  const ultimo = new Date(anio, mes + 1, 0).getDate();
-  return new Date(anio, mes, Math.min(dia, ultimo));
+function dayOfMonth(year: number, month: number, day: number): Date {
+  const last = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, last));
 }
 
 export interface ExamplePeriod {
@@ -68,9 +68,9 @@ export interface ExamplePeriod {
   end: Date;
   promoStart: Date;
   monthEndDate: Date;
-  calculo: Date;
+  calc: Date;
   /** Hasta cuándo un pago adelantado de los días promocionales cuenta en el periodo. */
-  corte: Date;
+  cutoff: Date;
 }
 
 /**
@@ -79,30 +79,30 @@ export interface ExamplePeriod {
  * confirma su propio inicio al crearlo. Nulo si los campos no son válidos.
  */
 export function examplePeriod(
-  promoDay: number, waitDays: number, diaCorte: number, today = new Date(),
+  promoDay: number, waitDays: number, cutoffDay: number, today = new Date(),
 ): ExamplePeriod | null {
   if (!Number.isInteger(promoDay) || promoDay < 1 || promoDay > 31) return null;
   if (!Number.isInteger(waitDays) || waitDays < 0) return null;
-  if (!Number.isInteger(diaCorte) || diaCorte < 1 || diaCorte > 31) return null;
-  const anio = today.getFullYear();
-  const mes = today.getMonth();
-  const inicioPromo = dayOfMonth(anio, mes, promoDay);
-  const fin = new Date(inicioPromo);
-  fin.setDate(fin.getDate() - 1);
-  const finDeMes = new Date(anio, mes + 1, 0);
-  const calculo = new Date(finDeMes);
-  calculo.setDate(calculo.getDate() + waitDays);
+  if (!Number.isInteger(cutoffDay) || cutoffDay < 1 || cutoffDay > 31) return null;
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const promoStart = dayOfMonth(year, month, promoDay);
+  const end = new Date(promoStart);
+  end.setDate(end.getDate() - 1);
+  const monthEnd = new Date(year, month + 1, 0);
+  const calc = new Date(monthEnd);
+  calc.setDate(calc.getDate() + waitDays);
   return {
-    name: new Intl.DateTimeFormat('es-VE', { month: 'long', year: 'numeric' }).format(new Date(anio, mes, 1)),
-    start: dayOfMonth(anio, mes - 1, promoDay),
-    end: fin,
-    promoStart: inicioPromo,
-    monthEndDate: finDeMes,
-    calculo,
-    corte: dayOfMonth(anio, mes + 1, diaCorte),
+    name: new Intl.DateTimeFormat('es-VE', { month: 'long', year: 'numeric' }).format(new Date(year, month, 1)),
+    start: dayOfMonth(year, month - 1, promoDay),
+    end,
+    promoStart,
+    monthEndDate: monthEnd,
+    calc,
+    cutoff: dayOfMonth(year, month + 1, cutoffDay),
   };
 }
 
 /** `25/09`. */
-export const dayAndMonth = (fecha: Date): string =>
-  `${String(fecha.getDate()).padStart(2, '0')}/${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+export const dayAndMonth = (date: Date): string =>
+  `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`;

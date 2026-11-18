@@ -7,27 +7,19 @@
  * crecimiento/churn con su "vacío = hereda"—.
  */
 
-import type { FormEvent } from 'react';
 import { Target, TrafficCone, X } from 'lucide-react';
 
 import { MonthPicker, SelectMenu } from '@/shared/ui';
 import {
-  Field, FormBanner, FormColumns, FormFooter, ModalForm, OptionCard, OptionCardGroup,
+  FormActions, Field, FormBanner, FormColumns, FormFooter, ModalForm, OptionCard, OptionCardGroup,
 } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
 import { TrafficLightScale, type TrafficLightMetric } from './TrafficLightScale';
 import { formatTarget, type TargetSpec } from '@/features/subscriptions/lib/targets';
-import type {
-  TargetDraft, MonthTargetDraft, TrafficLightDraft,
-} from '@/features/subscriptions/hooks/useCatalogs';
+import type { TargetDraft, MonthTargetDraft, TrafficLightDraft } from '@/features/subscriptions/lib/catalogDrafts';
 import type { KnownNode } from '@/features/subscriptions/types';
 import { ENTITY_LEVELS, TARGET_LEVEL_UI } from '../targets/levels';
 
-interface Acciones {
-  saving: boolean;
-  onClose: () => void;
-  onSubmit: (event: FormEvent) => void;
-}
 
 /** Una entidad elegible para un objetivo: zona, site, estado o coordinador. */
 export interface TargetEntity {
@@ -43,8 +35,8 @@ export { TARGET_LEVEL_UI };
 function TargetValues({
   growth,
   churn,
-  heredado,
-  obligatorio = false,
+  inherited,
+  required: required = false,
   onChange,
 }: {
   growth: string;
@@ -53,38 +45,38 @@ function TargetValues({
    * El general de hoy, como referencia en el placeholder. No es necesariamente
    * lo que se heredaría: una zona hereda antes de su coordinador, site o estado.
    */
-  heredado?: TargetSpec;
-  obligatorio?: boolean;
+  inherited?: TargetSpec;
+  required?: boolean;
   onChange: (patch: { growth_pct?: string; churn_pct?: string }) => void;
 }) {
-  const pista = obligatorio
+  const hint = required
     ? 'Obligatorio: no hay nivel superior del que heredar.'
     : 'Vacío: se hereda del nivel de arriba.';
   return (
     <FormColumns>
-      <Field label="Objetivo de crecimiento (%)" hint={pista}>
+      <Field label="Objetivo de crecimiento (%)" hint={hint}>
         <input
           type="number"
           step="0.01"
           min="0"
           max="100"
-          required={obligatorio}
+          required={required}
           className={modalInputClass}
           value={growth}
-          placeholder={heredado ? `Vacío: hereda (general hoy ${formatTarget(heredado.growth)})` : ''}
+          placeholder={inherited ? `Vacío: hereda (general hoy ${formatTarget(inherited.growth)})` : ''}
           onChange={(e) => onChange({ growth_pct: e.target.value })}
         />
       </Field>
-      <Field label="Churn máximo (%)" hint={pista}>
+      <Field label="Churn máximo (%)" hint={hint}>
         <input
           type="number"
           step="0.01"
           min="0"
           max="100"
-          required={obligatorio}
+          required={required}
           className={modalInputClass}
           value={churn}
-          placeholder={heredado ? `Vacío: hereda (general hoy ${formatTarget(heredado.churn)})` : ''}
+          placeholder={inherited ? `Vacío: hereda (general hoy ${formatTarget(inherited.churn)})` : ''}
           onChange={(e) => onChange({ churn_pct: e.target.value })}
         />
       </Field>
@@ -95,37 +87,37 @@ function TargetValues({
 type CatalogLevel = 'estado' | 'site' | 'coordinador' | 'zona';
 
 /** Quién tiene el objetivo, para enseñarlo al editar (nivel y entidad no se cambian). */
-function entityLabel(value: TargetDraft, entidades: Record<CatalogLevel, TargetEntity[]>): string {
+function entityLabel(value: TargetDraft, entities: Record<CatalogLevel, TargetEntity[]>): string {
   if (value.role_label) return value.role_label;
   if (value.level === 'sucursal') return value.sucursal;
   if (value.level === 'general' || value.level === 'zona_sucursal') return value.role_label ?? '—';
-  return entidades[value.level].find((row) => row.id === value.entity_id)?.name ?? '—';
+  return entities[value.level].find((row) => row.id === value.entity_id)?.name ?? '—';
 }
 
 export function TargetForm({
   value,
   entities,
-  nodos,
+  nodes,
   general,
   saving,
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
+}: FormActions & {
   value: TargetDraft;
   /** Las filas elegibles de cada nivel del catálogo. */
   entities: Record<CatalogLevel, TargetEntity[]>;
   /** Los nodos de los datos, cuya zona está en el catálogo: de ellos salen sucursales y nodos. */
-  nodos: KnownNode[];
+  nodes: KnownNode[];
   /** El general vigente hoy, para decir qué se hereda si se deja un valor vacío. */
   general: TargetSpec;
   onChange: (patch: Partial<TargetDraft>) => void;
 }) {
   const isNew = !value.id;
-  const esGeneral = value.level === 'general';
+  const isGeneral = value.level === 'general';
   const ui = TARGET_LEVEL_UI[value.level];
   const sinceAlways = !value.since;
-  const sucursales = [...new Set(nodos.map((n) => n.sucursal))].sort();
+  const branches = [...new Set(nodes.map((n) => n.sucursal))].sort();
 
   /** El selector de a quién va el objetivo, según el nivel. */
   const entitySelector = () => {
@@ -136,8 +128,8 @@ export function TargetForm({
           className={modalInputClass}
           value={value.sucursal}
           placeholder="Elegir sucursal..."
-          options={sucursales.map((s) => ({ value: s, label: s }))}
-          onChange={(sucursal) => onChange({ sucursal })}
+          options={branches.map((s) => ({ value: s, label: s }))}
+          onChange={(branch) => onChange({ sucursal: branch })}
         />
       );
     }
@@ -149,10 +141,10 @@ export function TargetForm({
           className={modalInputClass}
           value={current}
           placeholder="Elegir nodo (zona - sucursal)..."
-          options={nodos.map((n) => ({ value: n.node, label: n.node }))}
-          onChange={(valor) => {
-            const nodo = nodos.find((n) => n.node === valor);
-            if (nodo) onChange({ entity_id: null, entity_name: nodo.zona, sucursal: nodo.sucursal });
+          options={nodes.map((n) => ({ value: n.node, label: n.node }))}
+          onChange={(inputValue) => {
+            const node = nodes.find((n) => n.node === inputValue);
+            if (node) onChange({ entity_id: null, entity_name: node.zona, sucursal: node.sucursal });
           }}
         />
       );
@@ -173,28 +165,28 @@ export function TargetForm({
   return (
     <ModalForm onSubmit={onSubmit}>
       <FormBanner
-        title={esGeneral ? 'Objetivo general' : `Objetivo por ${ui.label.toLowerCase()}`}
+        title={isGeneral ? 'Objetivo general' : `Objetivo por ${ui.label.toLowerCase()}`}
         description={
-          esGeneral
+          isGeneral
             ? 'Rige en todo lo que no tenga un objetivo propio. Para cambiar solo un mes, usa una excepción de ese mes.'
             : `${ui.description} Manda siempre el nivel más alto que tenga objetivo: sucursal, estado, site, coordinador, zona y, por último, el nodo.`
         }
         action={<Target className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
 
-      {isNew && !esGeneral && (
+      {isNew && !isGeneral && (
         <OptionCardGroup label="Nivel" columns="md:grid-cols-3">
-          {ENTITY_LEVELS.map((nivel) => {
-            const levelUi = TARGET_LEVEL_UI[nivel];
+          {ENTITY_LEVELS.map((level) => {
+            const levelUi = TARGET_LEVEL_UI[level];
             return (
               <OptionCard
-                key={nivel}
+                key={level}
                 icon={levelUi.icon}
                 title={levelUi.label}
                 description={levelUi.description}
                 tone={levelUi.tone}
-                selected={value.level === nivel}
-                onSelect={() => onChange({ level: nivel, entity_id: null, entity_name: '', sucursal: '' })}
+                selected={value.level === level}
+                onSelect={() => onChange({ level, entity_id: null, entity_name: '', sucursal: '' })}
               />
             );
           })}
@@ -202,7 +194,7 @@ export function TargetForm({
       )}
 
       <FormColumns>
-        {!esGeneral && (
+        {!isGeneral && (
           <Field
             label={ui.label}
             hint={isNew ? undefined : 'Para mover el objetivo a otra entidad, elimínalo y crea uno nuevo.'}
@@ -217,7 +209,7 @@ export function TargetForm({
           </Field>
         )}
 
-        {esGeneral ? (
+        {isGeneral ? (
           <div className="rounded-2xl border border-slate-800 bg-surface-tertiary/30 p-4 md:col-span-2">
             <p className="text-[10px] leading-relaxed text-slate-400">
               El objetivo general es uno solo y no lleva fecha: vale para todos los meses que no
@@ -242,7 +234,7 @@ export function TargetForm({
           >
             <MonthPicker
               value={value.since}
-              onChange={(desde) => onChange({ since: desde })}
+              onChange={(since) => onChange({ since })}
               placeholder="Desde siempre"
             />
           </Field>
@@ -252,8 +244,8 @@ export function TargetForm({
       <TargetValues
         growth={value.growth_pct}
         churn={value.churn_pct}
-        heredado={esGeneral ? undefined : general}
-        obligatorio={esGeneral}
+        inherited={isGeneral ? undefined : general}
+        required={isGeneral}
         onChange={onChange}
       />
 
@@ -277,16 +269,16 @@ export function TargetForm({
 
 export function MonthTargetForm({
   value,
-  periodos,
+  periods,
   general,
   saving,
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
+}: FormActions & {
   value: MonthTargetDraft;
   /** Meses con cierre calculado, para elegir sin teclear. */
-  periodos: string[];
+  periods: string[];
   /** El general que rige ese mes sin la excepción. */
   general: TargetSpec;
   onChange: (patch: Partial<MonthTargetDraft>) => void;
@@ -299,10 +291,10 @@ export function MonthTargetForm({
         action={<Target className="h-8 w-8 flex-shrink-0 text-slate-600" />}
       />
 
-      <Field label="Mes" hint={periodos.length ? undefined : 'Todavía no hay meses calculados; puede fijarse uno futuro.'}>
+      <Field label="Mes" hint={periods.length ? undefined : 'Todavía no hay meses calculados; puede fijarse uno futuro.'}>
         <MonthPicker
           value={value.period}
-          onChange={(periodo) => onChange({ period: periodo })}
+          onChange={(period) => onChange({ period })}
           disabled={Boolean(value.id)}
         />
       </Field>
@@ -310,7 +302,7 @@ export function MonthTargetForm({
       <TargetValues
         growth={value.growth_pct}
         churn={value.churn_pct}
-        heredado={general}
+        inherited={general}
         onChange={onChange}
       />
 
@@ -333,7 +325,7 @@ export function MonthTargetForm({
 }
 
 /** Un campo numérico del semáforo. */
-function Umbral({
+function Threshold({
   label,
   value,
   min,
@@ -343,7 +335,7 @@ function Umbral({
   value: number;
   /** El crecimiento admite umbrales negativos; churn y cumplimiento no. */
   min?: number;
-  onChange: (valor: number) => void;
+  onChange: (inputValue: number) => void;
 }) {
   return (
     <Field label={label}>
@@ -362,47 +354,47 @@ function Umbral({
 
 /** Una métrica del semáforo: su barra en vivo y sus dos umbrales. */
 function TrafficLightBlock({
-  titulo,
-  explicacion,
-  metrica,
-  verde,
-  amarillo,
-  greenLabel: etiquetaVerde,
-  yellowLabel: etiquetaAmarillo,
+  title,
+  explanation,
+  metric,
+  green,
+  yellow,
+  greenLabel,
+  yellowLabel,
   min,
-  onVerde,
-  onAmarillo,
+  onGreen,
+  onYellow,
 }: {
-  titulo: string;
-  explicacion: string;
-  metrica: TrafficLightMetric;
-  verde: number;
-  amarillo: number;
+  title: string;
+  explanation: string;
+  metric: TrafficLightMetric;
+  green: number;
+  yellow: number;
   greenLabel: string;
   yellowLabel: string;
   min?: number;
-  onVerde: (valor: number) => void;
-  onAmarillo: (valor: number) => void;
+  onGreen: (value: number) => void;
+  onYellow: (value: number) => void;
 }) {
   return (
     <div className="space-y-4 rounded-2xl border border-slate-800 bg-surface-tertiary/30 p-4">
       <div>
-        <p className="text-[11px] font-black uppercase tracking-wider text-white">{titulo}</p>
-        <p className="text-[10px] text-slate-400">{explicacion}</p>
+        <p className="text-[11px] font-black uppercase tracking-wider text-white">{title}</p>
+        <p className="text-[10px] text-slate-400">{explanation}</p>
       </div>
-      <TrafficLightScale metrica={metrica} verde={verde} amarillo={amarillo} />
+      <TrafficLightScale metric={metric} green={green} yellow={yellow} />
       {/* Los campos en el mismo orden que los colores de la barra: en churn el
           verde va a la izquierda; en crecimiento y cumplimiento, a la derecha. */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {metrica === 'churn' ? (
+        {metric === 'churn' ? (
           <>
-            <Umbral label={etiquetaVerde} value={verde} min={min} onChange={onVerde} />
-            <Umbral label={etiquetaAmarillo} value={amarillo} min={min} onChange={onAmarillo} />
+            <Threshold label={greenLabel} value={green} min={min} onChange={onGreen} />
+            <Threshold label={yellowLabel} value={yellow} min={min} onChange={onYellow} />
           </>
         ) : (
           <>
-            <Umbral label={etiquetaAmarillo} value={amarillo} min={min} onChange={onAmarillo} />
-            <Umbral label={etiquetaVerde} value={verde} min={min} onChange={onVerde} />
+            <Threshold label={yellowLabel} value={yellow} min={min} onChange={onYellow} />
+            <Threshold label={greenLabel} value={green} min={min} onChange={onGreen} />
           </>
         )}
       </div>
@@ -416,7 +408,7 @@ export function TrafficLightForm({
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
+}: FormActions & {
   value: TrafficLightDraft;
   onChange: (patch: Partial<TrafficLightDraft>) => void;
 }) {
@@ -429,41 +421,41 @@ export function TrafficLightForm({
       />
 
       <TrafficLightBlock
-        titulo="Crecimiento"
-        explicacion="Más es mejor. Rojo por debajo del amarillo; verde a partir del umbral verde."
-        metrica="crecimiento"
-        verde={value.growth_green}
-        amarillo={value.growth_yellow}
+        title="Crecimiento"
+        explanation="Más es mejor. Rojo por debajo del amarillo; verde a partir del umbral verde."
+        metric="crecimiento"
+        green={value.growth_green}
+        yellow={value.growth_yellow}
         greenLabel="Verde desde (%)"
         yellowLabel="Amarillo desde (%)"
-        onVerde={(crec_verde) => onChange({ growth_green: crec_verde })}
-        onAmarillo={(crec_amarillo) => onChange({ growth_yellow: crec_amarillo })}
+        onGreen={(crec_verde) => onChange({ growth_green: crec_verde })}
+        onYellow={(crec_amarillo) => onChange({ growth_yellow: crec_amarillo })}
       />
 
       <TrafficLightBlock
-        titulo="Churn"
-        explicacion="Menos es mejor. Verde hasta el umbral verde; rojo por encima del amarillo."
-        metrica="churn"
-        verde={value.churn_green}
-        amarillo={value.churn_yellow}
+        title="Churn"
+        explanation="Menos es mejor. Verde hasta el umbral verde; rojo por encima del amarillo."
+        metric="churn"
+        green={value.churn_green}
+        yellow={value.churn_yellow}
         greenLabel="Verde hasta (%)"
         yellowLabel="Amarillo hasta (%)"
         min={0}
-        onVerde={(churn_verde) => onChange({ churn_green: churn_verde })}
-        onAmarillo={(churn_amarillo) => onChange({ churn_yellow: churn_amarillo })}
+        onGreen={(churn_verde) => onChange({ churn_green: churn_verde })}
+        onYellow={(churn_amarillo) => onChange({ churn_yellow: churn_amarillo })}
       />
 
       <TrafficLightBlock
-        titulo="Cumplimiento de la meta"
-        explicacion="Porcentaje de la meta alcanzado. Es lo único que depende del objetivo de cada fila."
-        metrica="cumplimiento"
-        verde={value.compliance_green}
-        amarillo={value.compliance_yellow}
+        title="Cumplimiento de la meta"
+        explanation="Porcentaje de la meta alcanzado. Es lo único que depende del objetivo de cada fila."
+        metric="cumplimiento"
+        green={value.compliance_green}
+        yellow={value.compliance_yellow}
         greenLabel="Verde desde (% de la meta)"
         yellowLabel="Amarillo desde (% de la meta)"
         min={0}
-        onVerde={(cumpl_verde) => onChange({ compliance_green: cumpl_verde })}
-        onAmarillo={(cumpl_amarillo) => onChange({ compliance_yellow: cumpl_amarillo })}
+        onGreen={(cumpl_verde) => onChange({ compliance_green: cumpl_verde })}
+        onYellow={(cumpl_amarillo) => onChange({ compliance_yellow: cumpl_amarillo })}
       />
 
       <FormFooter saving={saving} onClose={onClose} submitLabel="Guardar semáforo" />

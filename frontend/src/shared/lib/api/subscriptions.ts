@@ -61,9 +61,9 @@ export const subscriptionsApi = {
    * No hay variante por día: `analyzer_day_metrics` guarda agregados, no las
    * órdenes que los componen, así que el detalle es siempre el del cierre.
    */
-  getBajasDetalle: async (period: string, nodos?: string[]) =>
+  getChurnsDetail: async (period: string, nodes?: string[]) =>
     (await apiClient.get<ChurnDetailResponse>('/api/subscriptions/churn/detail/', {
-      params: { period, node: nodos },
+      params: { period, node: nodes },
       // Axios serializa un array como `node[]=x`; Django lee `node=x&node=y`.
       paramsSerializer: { indexes: null },
     })).data,
@@ -81,7 +81,7 @@ export const subscriptionsApi = {
    * No recalcula nada: los formularios guardan el precio en divisa y la
    * conversión la hace el exportador, así que también vale en un mes bloqueado.
    */
-  setEtaTasa: async (request: EtaRateRequest) =>
+  setEtaRate: async (request: EtaRateRequest) =>
     (await apiClient.post<EtaRateResponse>('/api/subscriptions/eta-report/rate/', request)).data,
 
   /**
@@ -91,7 +91,7 @@ export const subscriptionsApi = {
    * cuando aquello no bastó — el servicio estaba caído, o alguien escribió una
    * tasa a mano y quiere volver a la oficial.
    */
-  consultarEtaTasa: async (period: string) =>
+  fetchEtaRate: async (period: string) =>
     (await apiClient.post<EtaRateResponse>('/api/subscriptions/eta-report/rate/fetch/', { period })).data,
 
   /**
@@ -101,7 +101,7 @@ export const subscriptionsApi = {
    * la tasa del mes, y esta sirve para exportar el mismo formulario valorado
    * a día de hoy. Por eso es un GET y no pisa nada.
    */
-  getEtaTasaActual: async () =>
+  getEtaCurrentRate: async () =>
     (await apiClient.get<EtaRateResponse>('/api/subscriptions/eta-report/rate/current/')).data,
 
   saveEtaSubConfig: async (request: EtaSubConfigRequest) =>
@@ -120,7 +120,7 @@ export const subscriptionsApi = {
     startAndFollow('/api/subscriptions/lifetime/run/', {}, onProgress),
 
   /** Las bajas de un mes con sus duraciones, una por orden, para exportar. */
-  getLifetimeDetalle: async (period: string) =>
+  getLifetimeDetail: async (period: string) =>
     (await apiClient.get<LifetimeDetailResponse>('/api/subscriptions/lifetime/detail/', {
       params: { period },
     })).data,

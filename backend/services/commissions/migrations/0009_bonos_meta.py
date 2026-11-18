@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='condicionescomision',
             name='bonos_meta',
-            field=models.JSONField(default=services.commissions.models._bonos_meta),
+            field=models.JSONField(default=services.commissions.models._empty_list),
         ),
         migrations.RunPython(sembrar_bonos, migrations.RunPython.noop),
     ]

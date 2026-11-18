@@ -4,14 +4,14 @@ import { History, Table as TableIcon } from 'lucide-react';
 
 import { DataTable, NeonContainer, type Column } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatPeriodLabel, formatTwoDecimals } from '@/shared/utils';
-import type { SupportHistoricoRow, SupportResultsProps } from '../types';
-import { Seccion, SeccionesNav } from './Seccion';
+import type { SupportHistoryRow, SupportResultsProps } from '../types';
+import { Section, SectionsNav } from './Section';
 import { SupportMonthDetail } from './SupportMonthDetail';
 
 const dec = formatTwoDecimals;
 const hrs = formatOneDecimal;
 
-const COLUMNS: Column<SupportHistoricoRow>[] = [
+const COLUMNS: Column<SupportHistoryRow>[] = [
   { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodLabel(r.report_period)}</span>, sortKey: 'report_period' },
   { header: 'Creados', accessor: (r) => formatInteger(r.tickets_created), align: 'right', sortKey: 'tickets_created' },
   { header: 'Cerrados', accessor: (r) => <span className="text-sky-400">{formatInteger(r.tickets_closed)}</span>, align: 'right', sortKey: 'tickets_closed' },
@@ -46,14 +46,14 @@ type Props = SupportResultsProps;
 export function SupportResultsView({ history = [], analyticsData, periods = [], selectedPeriod = '' }: Props) {
   return (
     <div className="space-y-10">
-      <SeccionesNav
+      <SectionsNav
         sections={[
           { id: 'historial', title: 'Historial de cierres', icon: <History /> },
           { id: 'detalle', title: 'Detalle del mes', icon: <TableIcon /> },
         ]}
       />
 
-      <Seccion
+      <Section
         id="historial"
         title="Historial de cierres"
         description="Un bloque por periodo, de toda la empresa: la suma de los grupos, así que un ticket escalado cuenta en ATC y en Soporte."
@@ -75,16 +75,16 @@ export function SupportResultsView({ history = [], analyticsData, periods = [], 
             />
           </div>
         </NeonContainer>
-      </Seccion>
+      </Section>
 
-      <Seccion
+      <Section
         id="detalle"
         title="Detalle del mes"
         description="Cada valor de la dimensión elegida con todas sus columnas, la incidencia de cada zona y el desglose de un valor al pulsarlo. Es el cierre del mes; los cortes por día están en Analytics."
         icon={<TableIcon />}
       >
         <SupportMonthDetail analyticsData={analyticsData} periods={periods} selectedPeriod={selectedPeriod} />
-      </Seccion>
+      </Section>
     </div>
   );
 }

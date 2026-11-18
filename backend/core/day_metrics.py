@@ -32,7 +32,7 @@ from typing import Any
 
 from core.config import DB_SCHEMA
 from core.database import DBConnector
-from core.models import Periodo
+from core.models import Period
 from core.tables import Table, upsert
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ def month_bounds(year_month: str) -> tuple[int, int, int]:
 
 def month_label(year_month: str) -> str:
     """Etiqueta del mes completo, la misma clave que usan las demás tablas."""
-    return Periodo.build(f"{year_month}-01").label()
+    return Period.build(f"{year_month}-01").label()
 
 
 def last_day_to_compute(year_month: str, until_day: int | None = None) -> int:

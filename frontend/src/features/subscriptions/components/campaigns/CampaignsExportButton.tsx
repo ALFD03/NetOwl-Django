@@ -6,10 +6,10 @@ import { ExcelExportButton } from '@/shared/ui';
 import type { DimensionVal } from '@/shared/types/domain';
 import { useTargetsConfig } from '../../hooks/useTargets';
 import {
-  CAMPANNAS_EXCEL_COLUMNS,
-  campannasFileName,
+  CAMPAIGN_EXCEL_COLUMNS,
+  campaignsFileName,
   buildCampaignReport,
-} from '../../lib/campannasExport';
+} from '../../lib/campaignsExport';
 import { formatTarget, overallTarget } from '../../lib/targets';
 
 interface Props {
@@ -26,20 +26,20 @@ interface Props {
  * el reporte es siempre de campañas, y obligar a cambiar el selector para
  * descargarlo cambiaría también lo que se está mirando.
  */
-export function CampannasExportButton({ rows, period, day }: Props) {
+export function CampaignsExportButton({ rows, period, day }: Props) {
   const config = useTargetsConfig();
-  const objetivo = useMemo(() => overallTarget(config, period), [config, period]);
-  const reportRows = useMemo(() => buildCampaignReport(rows, objetivo), [rows, objetivo]);
+  const target = useMemo(() => overallTarget(config, period), [config, period]);
+  const reportRows = useMemo(() => buildCampaignReport(rows, target), [rows, target]);
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
       <p className="text-xs text-slate-400">
-        {reportRows.length} campañas · meta al {formatTarget(objetivo.growth)} del objetivo general
+        {reportRows.length} campañas · meta al {formatTarget(target.growth)} del objetivo general
       </p>
       <ExcelExportButton
         rows={reportRows}
-        columns={CAMPANNAS_EXCEL_COLUMNS}
-        fileName={campannasFileName(period, day)}
+        columns={CAMPAIGN_EXCEL_COLUMNS}
+        fileName={campaignsFileName(period, day)}
         sheetName="Campañas"
         label="Reporte de campañas"
       />

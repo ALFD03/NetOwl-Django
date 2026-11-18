@@ -15,17 +15,19 @@ import logging
 from datetime import date, datetime
 from typing import Any
 
+import pandas as pd
+
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.fixtures import zones_by_name
-from core.models import Periodo
+from core.models import Period
 from core.utils import parse_jsonb, zero_nulls
 from services.support.analytics.cohorts import PeriodCohort, build_cohort, classify_tickets
 from services.support.analytics.config import (
     GROUP_DIM,
-    SUPPORT_DESGLOSES,
+    SUPPORT_BREAKDOWNS,
     SUPPORT_DIMENSION_COLUMNS,
-    SUPPORT_DIMENSIONES,
+    SUPPORT_DIMENSIONS,
 )
 from services.support.analytics.escalation import (
     add_escalation,
@@ -54,7 +56,7 @@ def get_support_periods() -> list[str]:
         return []
 
 
-def get_support_close_history(periodos: list[str] | None = None) -> list[dict]:
+def get_support_close_history(periods: list[str] | None = None) -> list[dict]:
     """
     El histórico de cierres, con las métricas del JSONB ya aplanadas.
 
@@ -66,9 +68,9 @@ def get_support_close_history(periodos: list[str] | None = None) -> list[dict]:
         where = ["1=1"]
         params: list[Any] = []
 
-        if periodos:
-            where.append(f"periodo_reporte IN ({', '.join(['%s'] * len(periodos))})")
-            params.extend(periodos)
+        if periods:
+            where.append(f"periodo_reporte IN ({', '.join(['%s'] * len(periods))})")
+            params.extend(periods)
 
         df = db.query(f"""
             SELECT periodo_reporte, metricas
@@ -81,25 +83,22 @@ def get_support_close_history(periodos: list[str] | None = None) -> list[dict]:
             return []
 
         return [
-            {
-                "periodo_reporte": row["periodo_reporte"],
-                **(parse_jsonb(row["metricas"]) or {}),
-            }
-            for _, row in df.iterrows()
+            {"periodo_reporte": period, **(metrics or {})}
+            for period, metrics in zip(df["periodo_reporte"], df["metricas"].map(parse_jsonb), strict=True)
         ]
     except Exception:
         logger.exception("Error al consultar cierre histórico de soporte")
         return []
 
 
-def get_support_metric_totals(solo: str | None = None) -> dict:
+def get_support_metric_totals(only: str | None = None) -> dict:
     """El dashboard de empresa: promedio de todos los periodos, más su serie.
 
     Con `solo`, el mismo bloque construido con ese periodo y nada mas: es el
     dashboard de quien no ve todos los periodos (`services/config/periods.py`).
     """
-    if solo:
-        return _period_metric_totals(solo)
+    if only:
+        return _period_metric_totals(only)
     db = DBConnector()
     try:
         df = db.query(f"""
@@ -108,20 +107,20 @@ def get_support_metric_totals(solo: str | None = None) -> dict:
             WHERE id = 1
         """)
 
-        resumen: dict = {}
-        por_grupo: dict = {}
-        periodos_evaluados = 0
+        summary: dict = {}
+        by_group: dict = {}
+        evaluated_periods = 0
 
         if not df.empty:
-            fila = df.iloc[0]
-            resumen = parse_jsonb(fila["resumen_global"]) or {}
-            por_grupo = parse_jsonb(fila["por_grupo_trabajo"]) or {}
-            periodos_evaluados = int(fila["periodos_evaluados"] or 0)
+            row = df.iloc[0]
+            summary = parse_jsonb(row["resumen_global"]) or {}
+            by_group = parse_jsonb(row["por_grupo_trabajo"]) or {}
+            evaluated_periods = int(row["periodos_evaluados"] or 0)
 
         return {
-            "periodos_evaluados": periodos_evaluados,
-            "resumen_global": resumen,
-            "por_grupo_trabajo": por_grupo,
+            "periodos_evaluados": evaluated_periods,
+            "resumen_global": summary,
+            "por_grupo_trabajo": by_group,
             "historico_tendencias": get_support_close_history(),
         }
     except Exception:
@@ -132,51 +131,51 @@ def get_support_metric_totals(solo: str | None = None) -> dict:
         }
 
 
-def _period_metric_totals(periodo: str) -> dict:
+def _period_metric_totals(period: str) -> dict:
     """`get_support_metric_totals` sobre un solo periodo, con la misma forma.
 
     El total sale del cierre del periodo y cada grupo de su fila de la
     dimension `grupo_trabajo`, ya persistida; los dos pasan por
     `average_blocks` para que las claves sean exactamente las del global.
     """
-    historico = get_support_close_history([periodo])
-    if not historico:
+    historical = get_support_close_history([period])
+    if not historical:
         return {
             "periodos_evaluados": 0,
             "resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": [],
         }
-    bloque = {k: v for k, v in historico[0].items() if k != "periodo_reporte"}
-    por_grupo = {
-        fila["grupo_trabajo"]: average_blocks([fila["metricas"]])
-        for fila in get_support_dimension_metrics(periodo, dimension=GROUP_DIM)
+    block = {k: v for k, v in historical[0].items() if k != "periodo_reporte"}
+    by_group = {
+        row["grupo_trabajo"]: average_blocks([row["metricas"]])
+        for row in get_support_dimension_metrics(period, dimension=GROUP_DIM)
     }
     return {
         "periodos_evaluados": 1,
-        "resumen_global": average_blocks([bloque]),
-        "por_grupo_trabajo": por_grupo,
-        "historico_tendencias": historico,
+        "resumen_global": average_blocks([block]),
+        "por_grupo_trabajo": by_group,
+        "historico_tendencias": historical,
     }
 
 
 def get_support_dimension_metrics(
-    periodo: str, grupo: str | None = None, dimension: str | None = None,
+    period: str, group: str | None = None, dimension: str | None = None,
 ) -> list[dict]:
     """Las filas dimensionales persistidas de un periodo."""
     db = DBConnector()
     try:
         where = ["periodo_reporte = %s"]
-        params: list[Any] = [periodo]
+        params: list[Any] = [period]
 
-        if grupo:
+        if group:
             where.append("grupo_trabajo = %s")
-            params.append(grupo)
+            params.append(group)
         if dimension:
             where.append("dimension = %s")
             params.append(dimension)
 
         df = db.query(f"""
             SELECT grupo_trabajo, dimension, valor, metricas
-            FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
+            FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONS_HISTORICAL}
             WHERE {" AND ".join(where)}
             ORDER BY grupo_trabajo ASC, dimension ASC, valor ASC
         """, params=params)
@@ -184,15 +183,8 @@ def get_support_dimension_metrics(
         if df.empty:
             return []
 
-        return [
-            {
-                "grupo_trabajo": row["grupo_trabajo"],
-                "dimension": row["dimension"],
-                "valor": row["valor"],
-                "metricas": parse_jsonb(row["metricas"]) or {},
-            }
-            for _, row in df.iterrows()
-        ]
+        df["metricas"] = df["metricas"].map(lambda v: parse_jsonb(v) or {})
+        return df[["grupo_trabajo", "dimension", "valor", "metricas"]].to_dict("records")
     except Exception:
         logger.exception("Error al consultar métricas dimensionales de soporte")
         return []
@@ -200,7 +192,7 @@ def get_support_dimension_metrics(
 
 # --- Cálculo al vuelo -------------------------------------------------------
 
-def _load_period_cohort(db: DBConnector, periodo: str) -> PeriodCohort:
+def _load_period_cohort(db: DBConnector, period: str) -> PeriodCohort:
     """
     La cohorte de un periodo, reconstruida desde los tickets.
 
@@ -214,29 +206,29 @@ def _load_period_cohort(db: DBConnector, periodo: str) -> PeriodCohort:
     # indices ya existen (ver loader.py). El rango es semiabierto —desde el dia
     # 1 hasta el 1 del mes siguiente, excluido— que es exactamente el mismo
     # conjunto de filas que devolvia la comparacion de texto.
-    desde = Periodo.build(f"{periodo}-01").fecha_inicio
+    since = Period.build(f"{period}-01").start_date
     # Primer instante del mes siguiente, sin dependencias extra.
-    hasta = datetime(desde.year + desde.month // 12, desde.month % 12 + 1, 1)
+    until = datetime(since.year + since.month // 12, since.month % 12 + 1, 1)
 
     # Más los escalados en el mes, que nacieron y cerraron fuera de él pero que
     # ese mes ATC despachó y Soporte recibió (ver `escalation.py`).
-    escalados = escalated_between(db, desde, hasta)
+    escalated = escalated_between(db, since, until)
     df = db.query(f"""
         SELECT * FROM {DB_SCHEMA}.{TableNames.SUPPORT_TICKETS}
         WHERE (creado_el >= %s AND creado_el < %s)
            OR (ultima_actualizacion_etapa >= %s AND ultima_actualizacion_etapa < %s)
            OR ticket_sequence = ANY(%s::text[])
-    """, params=[desde, hasta, desde, hasta, escalados])
+    """, params=[since, until, since, until, escalated])
 
     if df.empty:
-        return PeriodCohort(periodo, df)
+        return PeriodCohort(period, df)
 
     paths = read_paths(db, df["ticket_sequence"].astype(str).unique().tolist())
-    return build_cohort(add_escalation(classify_tickets(df), paths), periodo)
+    return build_cohort(add_escalation(classify_tickets(df), paths), period)
 
 
 def get_support_breakdown(
-    periodo: str, dimension: str, valor: str, grupo: str | None = None,
+    period: str, dimension: str, value: str, group: str | None = None,
 ) -> dict:
     """
     El desglose de un valor dimensional por tipo, razón y solución.
@@ -251,23 +243,23 @@ def get_support_breakdown(
 
     db = DBConnector()
     try:
-        cohorte = _load_period_cohort(db, periodo)
-        if grupo:
-            cohorte = cohorte.filter(GROUP_DIM, grupo)
-        cohorte = cohorte.filter(dimension, valor)
+        cohort = _load_period_cohort(db, period)
+        if group:
+            cohort = cohort.filter(GROUP_DIM, group)
+        cohort = cohort.filter(dimension, value)
 
         return {
-            "periodo": periodo,
-            "grupo_trabajo": grupo or "",
+            "periodo": period,
+            "grupo_trabajo": group or "",
             "dimension": dimension,
-            "valor": valor,
-            "metricas": compute_metrics_for_period(cohorte),
+            "valor": value,
+            "metricas": compute_metrics_for_period(cohort),
             "desgloses": {
-                desglose: [
-                    {"nombre": nombre, "metricas": compute_metrics_for_period(sub)}
-                    for nombre, sub in cohorte.desglosar(desglose)
+                breakdown: [
+                    {"nombre": name, "metricas": compute_metrics_for_period(sub)}
+                    for name, sub in cohort.break_down(breakdown)
                 ]
-                for desglose in SUPPORT_DESGLOSES
+                for breakdown in SUPPORT_BREAKDOWNS
             },
         }
     except Exception:
@@ -284,15 +276,15 @@ def _load_zone_info() -> dict:
     una tabla que se mantiene desde el modulo de Catalogos (`/catalogos/`).
     """
     zone_info: dict[str, dict] = {}
-    for nombre, z in zones_by_name().items():
-        zone_info[nombre] = {
+    for name, z in zones_by_name().items():
+        zone_info[name] = {
             "site": z.get("Site", "Valencia").strip(),
             "type": z.get("Type", "RF").strip(),
         }
     return zone_info
 
 
-def _get_active_by_zone(db: DBConnector, periodo: str | None) -> dict[str, int]:
+def _get_active_by_zone(db: DBConnector, period: str | None) -> dict[str, int]:
     """
     Suscriptores activos por zona al cierre del periodo, según el módulo de
     suscripciones (`analyzer_churn_dimensiones`, dimensión `zona_sucursal`).
@@ -305,73 +297,70 @@ def _get_active_by_zone(db: DBConnector, periodo: str | None) -> dict[str, int]:
     """
     df_periods = db.query(f"""
         SELECT DISTINCT periodo_reporte
-        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONS}
         WHERE dimension = 'zona_sucursal'
         ORDER BY periodo_reporte DESC
     """)
     if df_periods.empty:
         return {}
 
-    disponibles = df_periods["periodo_reporte"].astype(str).tolist()
-    target = periodo if periodo in disponibles else disponibles[0]
+    available = df_periods["periodo_reporte"].astype(str).tolist()
+    target = period if period in available else available[0]
 
     df = zero_nulls(db.query(f"""
         SELECT valor, activos_final
-        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+        FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONS}
         WHERE periodo_reporte = %s AND dimension = 'zona_sucursal'
     """, params=[target]))
 
-    activos: dict[str, int] = {}
-    for _, row in df.iterrows():
-        # `valor` viene como "<zona> - <sucursal>"; la misma zona puede aparecer
-        # en varias sucursales, así que se acumulan.
-        zona = str(row["valor"]).split(" - ")[0].strip().lower()
-        activos[zona] = activos.get(zona, 0) + int(row.get("activos_final") or 0)
-
-    return activos
+    # `valor` viene como "<zona> - <sucursal>"; la misma zona puede aparecer en
+    # varias sucursales, así que se acumulan.
+    zone = df["valor"].astype(str).str.split(" - ").str[0].str.strip().str.lower()
+    active = pd.to_numeric(df["activos_final"], errors="coerce").fillna(0).astype(int)
+    return {str(z): int(n) for z, n in active.groupby(zone).sum().items()}
 
 
 def _incidence_rows(
-    cohorte: PeriodCohort, zone_info: dict, active_map: dict[str, int]
+    cohort: PeriodCohort, zone_info: dict, active_map: dict[str, int]
 ) -> list[dict]:
     """Las filas de zona de una cohorte ya recortada al grupo de trabajo."""
-    filas = []
-    for zona, sub in cohorte.desglosar("zona"):
-        metricas = compute_metrics_for_period(sub)
-        clave = zona.strip().lower()
-        meta = zone_info.get(clave, {"site": "Otros / Desconocido", "type": "RF"})
-        activos = active_map.get(clave, 0)
-        tickets = metricas["total_tickets"]
+    rows = []
+    for zone, sub in cohort.break_down("zona"):
+        metrics = compute_metrics_for_period(sub)
+        key = zone.strip().lower()
+        meta = zone_info.get(key, {"site": "Otros / Desconocido", "type": "RF"})
+        active = active_map.get(key, 0)
+        tickets = metrics["total_tickets"]
 
-        filas.append({
-            "zona": zona,
+        rows.append({
+            "zona": zone,
             "site": meta["site"],
             "tecnologia": meta["type"],
             "total_tickets": tickets,
-            "total_suscriptores": activos,
+            "total_suscriptores": active,
             # Sin población conocida no hay denominador: se deja en 0 y el front
             # lo distingue de una zona realmente sana por `total_suscriptores`.
-            "tasa_incidencia_pct": round((tickets / activos) * 100, 2) if activos > 0 else 0.0,
-            "mttr_promedio": metricas["tiempo_medio_cierre_creado_cerrados_horas"],
-            "pct_resueltos": metricas["pct_resueltos"],
+            "tasa_incidencia_pct": round((tickets / active) * 100, 2) if active > 0 else 0.0,
+            "mttr_promedio": metrics["tiempo_medio_cierre_creado_cerrados_horas"],
+            "pct_resueltos": metrics["pct_resueltos"],
         })
 
-    filas.sort(key=lambda x: x["tasa_incidencia_pct"], reverse=True)
-    return filas
+    rows.sort(key=lambda x: x["tasa_incidencia_pct"], reverse=True)
+    return rows
 
 
-def contexto_incidencia(db: DBConnector, periodo: str) -> tuple[dict, dict[str, int]]:
+def context_incidence(db: DBConnector, period: str) -> tuple[dict, dict[str, int]]:
     """Las zonas del catalogo y los activos del periodo, para reutilizarlos.
 
     Los cortes diarios de un mes recorren treinta y un cohortes contra las mismas
     zonas y los mismos activos: se leen una vez y se pasan a cada llamada.
     """
-    return _load_zone_info(), _get_active_by_zone(db, periodo)
+    return _load_zone_info(), _get_active_by_zone(db, period)
 
 
 def get_incidence_by_zone(
     db: DBConnector,
-    cohorte: PeriodCohort,
+    cohort: PeriodCohort,
     zone_info: dict | None = None,
     active_map: dict[str, int] | None = None,
 ) -> dict[str, list[dict]]:
@@ -396,23 +385,23 @@ def get_incidence_by_zone(
     zonas y los mismos activos, y volver a leerlos en cada uno serían sesenta y
     dos consultas para el mismo resultado.
     """
-    if cohorte.empty:
+    if cohort.empty:
         return {}
 
     zone_info = _load_zone_info() if zone_info is None else zone_info
     active_map = (
-        _get_active_by_zone(db, cohorte.periodo) if active_map is None else active_map
+        _get_active_by_zone(db, cohort.period) if active_map is None else active_map
     )
 
     return {
-        grupo: _incidence_rows(sub, zone_info, active_map)
-        for grupo, sub in cohorte.desglosar(GROUP_DIM)
+        group: _incidence_rows(sub, zone_info, active_map)
+        for group, sub in cohort.break_down(GROUP_DIM)
     }
 
 
 # --- Payload de la vista Analytics ------------------------------------------
 
-def structure_groups(filas: list[dict]) -> dict[str, dict]:
+def structure_groups(rows: list[dict]) -> dict[str, dict]:
     """Agrupa las filas dimensionales por grupo de trabajo.
 
     Es la forma que consume la vista: cada grupo con sus metricas totales y una
@@ -420,33 +409,33 @@ def structure_groups(filas: list[dict]) -> dict[str, dict]:
     mes y las que un corte diario trae ya calculadas, para que el front reciba
     exactamente lo mismo en los dos casos.
     """
-    grupos: dict[str, dict] = {}
-    for fila in filas:
-        grupo = grupos.setdefault(fila["grupo_trabajo"], {
+    groups: dict[str, dict] = {}
+    for row in rows:
+        group = groups.setdefault(row["grupo_trabajo"], {
             "metricas": {},
-            **{dim: [] for dim in (*SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES)},
+            **{dim: [] for dim in (*SUPPORT_DIMENSIONS, *SUPPORT_BREAKDOWNS)},
         })
 
-        if fila["dimension"] == GROUP_DIM:
-            grupo["metricas"] = fila["metricas"]
-        elif fila["dimension"] in grupo:
-            grupo[fila["dimension"]].append({
-                "nombre": fila["valor"],
-                "metricas": fila["metricas"],
+        if row["dimension"] == GROUP_DIM:
+            group["metricas"] = row["metricas"]
+        elif row["dimension"] in group:
+            group[row["dimension"]].append({
+                "nombre": row["valor"],
+                "metricas": row["metricas"],
             })
 
-    return grupos
+    return groups
 
 
-def _end_date(periodo: str) -> date | None:
+def _end_date(period: str) -> date | None:
     """El ultimo dia de una etiqueta `"YYYY-MM-DD al YYYY-MM-DD"`, o None."""
     try:
-        return date.fromisoformat(periodo[-10:])
+        return date.fromisoformat(period[-10:])
     except ValueError:
         return None
 
 
-def get_support_analytics_structured(periodo: str | None = None) -> dict:
+def get_support_analytics_structured(period: str | None = None) -> dict:
     """
     Todo lo que la vista de periodo necesita en una sola carga.
 
@@ -455,25 +444,25 @@ def get_support_analytics_structured(periodo: str | None = None) -> dict:
     costar una vuelta al servidor. Sólo el drill-down de un valor concreto pide
     datos nuevos, a `get_support_breakdown`.
     """
-    periodos = get_support_periods()
-    if not periodos:
+    periods = get_support_periods()
+    if not periods:
         return {"periodo": "", "grupos": {}, "incidencia_zonas": {}}
 
-    periodo = periodo if periodo in periodos else periodos[0]
+    period = period if period in periods else periods[0]
 
     db = DBConnector()
     try:
-        grupos = annotate_departments(
-            structure_groups(get_support_dimension_metrics(periodo)),
-            _end_date(periodo),
+        groups = annotate_departments(
+            structure_groups(get_support_dimension_metrics(period)),
+            _end_date(period),
         )
-        cohorte = _load_period_cohort(db, periodo)
+        cohort = _load_period_cohort(db, period)
 
         return {
-            "periodo": periodo,
-            "grupos": grupos,
-            "incidencia_zonas": get_incidence_by_zone(db, cohorte),
+            "periodo": period,
+            "grupos": groups,
+            "incidencia_zonas": get_incidence_by_zone(db, cohort),
         }
     except Exception:
         logger.exception("Error estructurando Analytics de Soporte")
-        return {"periodo": periodo, "grupos": {}, "incidencia_zonas": {}}
+        return {"periodo": period, "grupos": {}, "incidencia_zonas": {}}

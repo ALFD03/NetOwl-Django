@@ -10,7 +10,7 @@ export type { DayTrendSeries } from './DayTrendChart';
 export { BarChart } from './BarChart';
 export { DoughnutChart } from './DoughnutChart';
 export { SankeyChart } from './SankeyChart';
-export type { SankeyEnlace, SankeyNode } from './SankeyChart';
+export type { SankeyLink, SankeyNode } from './SankeyChart';
 export { centerTextPlugin };
 export * from './chartOptions';
 

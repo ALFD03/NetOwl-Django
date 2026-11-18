@@ -1,7 +1,7 @@
 import { StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import type { DimensionVal } from '@/shared/types/domain';
-import { TONE_TEXT, tonoChurn, tonoCrecimiento } from '../../lib/targets';
+import { TONE_TEXT, churnTone, growthTone } from '../../lib/targets';
 import type { TargetsTrafficLight } from '../../types';
 
 const int = formatInteger;
@@ -26,11 +26,11 @@ export const buildAnalyticsDimensionColumns = (s: TargetsTrafficLight): Column<D
   { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{int(r.new_subs)}</span>, align: 'right', sortKey: 'new_subs' },
   { header: 'Adic. Net', accessor: (r) => <span className="text-emerald-500">{int(r.net_adds)}</span>, align: 'right', sortKey: 'net_adds' },
   { header: 'Adic. Bru', accessor: (r) => <span className="text-emerald-500">{int(r.gross_adds)}</span>, align: 'right', sortKey: 'gross_adds' },
-  { header: 'Crec %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoCrecimiento(r.growth ?? 0, s)]}`}>{dec(r.growth)}%</span>, align: 'right', sortKey: 'growth' },
+  { header: 'Crec %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[growthTone(r.growth ?? 0, s)]}`}>{dec(r.growth)}%</span>, align: 'right', sortKey: 'growth' },
 
   { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{int(r.churned)}</span>, align: 'right', sortKey: 'churned' },
-  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.net_churn_pct ?? 0, s)]}`}>{dec(r.net_churn_pct)}%</span>, align: 'right', sortKey: 'net_churn_pct' },
-  { header: 'C. Bruto %', accessor: (r) => <span className={TONE_TEXT[tonoChurn(r.gross_churn_pct ?? 0, s)]}>{dec(r.gross_churn_pct)}%</span>, align: 'right', sortKey: 'gross_churn_pct' },
+  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[churnTone(r.net_churn_pct ?? 0, s)]}`}>{dec(r.net_churn_pct)}%</span>, align: 'right', sortKey: 'net_churn_pct' },
+  { header: 'C. Bruto %', accessor: (r) => <span className={TONE_TEXT[churnTone(r.gross_churn_pct ?? 0, s)]}>{dec(r.gross_churn_pct)}%</span>, align: 'right', sortKey: 'gross_churn_pct' },
   { header: 'Corte Imp', accessor: (r) => int(r.unpaid_cuts), align: 'right', sortKey: 'unpaid_cuts' },
   { header: 'Susp %', accessor: (r) => `${dec(r.suspension_pct)}%`, align: 'right', sortKey: 'suspension_pct' },
   { header: 'Gratuitos', accessor: (r) => <span className="text-purple-400">{int(r.free_clients)}</span>, align: 'right', sortKey: 'free_clients' },

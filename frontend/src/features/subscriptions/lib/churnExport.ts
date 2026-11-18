@@ -31,8 +31,8 @@ export const CHURN_COLUMNS: ExcelColumn<ChurnDetail>[] = [
  *
  * `downloadRowsAsExcel` ya lo sanea, así que aquí solo se compone.
  */
-export const churnFileName = (period: string, alcance: string): string =>
-  `Bajas ${alcance} ${period}`.replace(/\s+/g, ' ').trim();
+export const churnFileName = (period: string, scope: string): string =>
+  `Bajas ${scope} ${period}`.replace(/\s+/g, ' ').trim();
 
 /**
  * Los nodos `"Zona - Sucursal"` de un grupo, para acotar la exportación.
@@ -47,13 +47,13 @@ export const churnFileName = (period: string, alcance: string): string =>
  * las bajas de las dos.
  */
 export const groupNodes = (
-  nodos: { zona?: string; sucursal?: string; zona_sucursal?: string }[] | undefined,
+  nodes: { zona?: string; sucursal?: string; zona_sucursal?: string }[] | undefined,
 ): string[] => [
   ...new Set(
-    (nodos ?? [])
-      .map((nodo) => (
-        nodo.zona_sucursal
-        ?? [nodo.zona ?? '', nodo.sucursal ?? 'Sin Sucursal'].join(' - ')
+    (nodes ?? [])
+      .map((node) => (
+        node.zona_sucursal
+        ?? [node.zona ?? '', node.sucursal ?? 'Sin Sucursal'].join(' - ')
       ).trim())
       .filter(Boolean),
   ),

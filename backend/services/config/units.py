@@ -2,7 +2,7 @@
 
 Una unidad es un `Coordinador` del catálogo, y el catálogo cambia: por eso no hay
 un permiso por unidad sino el interruptor `can_view_all_business_units` y, sin él,
-una lista (`unidades_negocio`) más el bloque RF (`unidad_rf`).
+una lista (`business_units`) más el bloque RF (`rf_unit`).
 
 El interruptor puede venir del grupo; **la lista no**: es siempre la del usuario.
 Solo restringe la página Unidades de negocio.
@@ -20,9 +20,9 @@ class UnitScope:
 
     def names(self) -> frozenset[str]:
         """Los nombres de las unidades, que es como las nombra el reporte."""
-        from services.subscriptions.models import Coordinador
+        from services.subscriptions.models import Coordinator
 
-        return frozenset(Coordinador.objects.filter(id__in=self.ids).values_list("nombre", flat=True))
+        return frozenset(Coordinator.objects.filter(id__in=self.ids).values_list("name", flat=True))
 
     def covers(self, other: "UnitScope | None") -> bool:
         """Si este alcance incluye entero a `other` (`None` es todas)."""
@@ -47,6 +47,6 @@ def unit_scope(user) -> UnitScope | None:
 def saved_units(profile) -> UnitScope:
     """La lista guardada en el perfil, rija o no."""
     return UnitScope(
-        ids=frozenset(profile.unidades_negocio.values_list("id", flat=True)),
-        rf=profile.unidad_rf,
+        ids=frozenset(profile.business_units.values_list("id", flat=True)),
+        rf=profile.rf_unit,
     )

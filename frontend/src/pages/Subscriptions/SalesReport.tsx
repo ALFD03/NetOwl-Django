@@ -1,118 +1,38 @@
 /**
  * Página `/subscriptions/sales-report/`.
  *
- * Agrupa por Site → Tecnología → Nodos. El día seleccionado se reagrupa en
- * cliente con `buildSalesSites`, sobre los props que ya llegaron.
+ * Agrupa por Site → Tecnología → Nodos.
  */
 
-import { useMemo, useState } from 'react';
-
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { DayProgressBar } from '@/shared/ui';
-import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
-import { useTargets } from '@/features/subscriptions/hooks/useTargets';
-import { buildSalesSites, type ZonesConfig } from '@/features/subscriptions/lib/dayReports';
-import { EMPTY_METRIC_FILTER, type MetricFilter } from '@/features/subscriptions/lib/metricFilter';
-import type { DayMetrics } from '@/shared/types/domain';
-import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
+import { CommercialReportToolbar } from '@/features/subscriptions/components/reports/CommercialReportToolbar';
 import { SalesReportView } from '@/features/subscriptions/components/reports/SalesReportView';
-import type { OfficeCoordinator } from '@/features/subscriptions/components/reports/OfficeCoordinatorBadges';
-import { ProjectionNote } from '@/features/subscriptions/components/reports/ProjectionNote';
-import { useSalesReportData, type SalesReportSite } from '@/features/subscriptions/hooks/useSalesReportData';
-import { useVisit } from '@/shared/page/PageData';
+import { useSalesReportPage, type SalesReportProps } from '@/features/subscriptions/hooks/useSalesReportPage';
 
-interface SalesReportProps {
-  reportData?: { data?: SalesReportSite[]; periods?: string[]; period?: string; day?: number | null };
-  dayMetrics?: DayMetrics;
-  zonesConfig?: ZonesConfig;
-  /** Las coordinadoras de oficina de cada site, con sus ventas por día y su objetivo. */
-  officeCoordinators?: OfficeCoordinator[];
-}
-
-export default function SalesReport({
-  reportData = {}, dayMetrics, zonesConfig, officeCoordinators = [],
-}: SalesReportProps) {
-  const visit = useVisit();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedBranch, setSelectedBranch] = useState('ALL');
-  const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
-  const [selectedDay, setSelectedDay] = useState(reportData.day ?? 0);
-  const [filtroMetrica, setMetricFilter] = useState<MetricFilter>(EMPTY_METRIC_FILTER);
-  const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
-
-  const currentPeriod = reportData.period ?? '';
-
-  // El mes entero ya viaja en los props: elegir un dia solo reagrupa en memoria,
-  // sin pedir nada al servidor. Sin dias calculados se usa el cierre del mes.
-  const sites = useMemo(
-    () => (dayData ? buildSalesSites(dayData.dimensions, zonesConfig) : reportData.data ?? []),
-    [dayData, zonesConfig, reportData.data],
-  );
-
-  // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
-  // site y estado pertenece cada zona, que es por donde se heredan.
-  const objetivos = useTargets(zonesConfig?.zones);
-
-  const { branchList, filteredData } = useSalesReportData({
-    sites,
-    searchTerm,
-    selectedBranch,
-    selectedTech,
-    period: currentPeriod,
-    targets: objetivos,
-    metricFilter: filtroMetrica,
-    projection: proyeccion,
-  });
-
-  const changePeriod = (period: string) => {
-    setSelectedDay(0);
-    visit({ period });
-  };
+export default function SalesReport(props: SalesReportProps) {
+  const { filters, period, periods, branchList, filteredData } = useSalesReportPage(props);
 
   return (
     <AppLayout
       toolbar={
-        <>
-          <SubscriptionReportFilters
-            period={currentPeriod}
-            periods={reportData.periods ?? []}
-            onPeriodChange={changePeriod}
-            selectedTech={selectedTech}
-            onTechChange={setSelectedTech}
-            selectedBranch={selectedBranch}
-            branches={branchList}
-            onBranchChange={setSelectedBranch}
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-            searchPlaceholder="Buscar por Sede o Zona..."
-            metricFilter={filtroMetrica}
-            onMetricFilterChange={setMetricFilter}
-            filterLevels={{ zona: 'Zonas', grupo: 'Sites' }}
-            projectionAvailable={Boolean(proyeccion)}
-          />
-          {availableDays.length > 0 && (
-            <div className="mb-8">
-              <DayProgressBar
-                availableDays={availableDays}
-                monthPeriod={dayMetrics?.month}
-                daysInMonth={totalDays}
-                selectedDay={effectiveDay}
-                onSelect={setSelectedDay}
-              />
-              <ProjectionNote projection={proyeccion} />
-            </div>
-          )}
-        </>
+        <CommercialReportToolbar
+          filters={filters}
+          period={period}
+          periods={periods}
+          branches={branchList}
+          searchPlaceholder="Buscar por Sede o Zona..."
+          filterLevels={{ zone: 'Zonas', group: 'Sites' }}
+        />
       }
     >
       <SalesReportView
         sites={filteredData}
-        period={currentPeriod}
-        diaSeleccionado={Boolean(dayData)}
-        projection={proyeccion}
-        coordinadoras={officeCoordinators}
+        period={period}
+        selectedDay={Boolean(filters.dayData)}
+        projection={filters.projection}
+        coordinatorOffices={props.officeCoordinators ?? []}
         // Sin días calculados se pinta el cierre del mes, y sus ventas son las del mes entero.
-        cutoffDay={dayData ? effectiveDay : null}
+        cutoffDay={filters.dayData ? filters.effectiveDay : null}
       />
     </AppLayout>
   );

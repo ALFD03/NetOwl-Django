@@ -15,7 +15,7 @@ import { PaidOn, FirstInstallment } from './pieces';
  */
 export function MonthPromoTable({ report, sales }: { report: CommissionReport; sales: CommissionSale[] }) {
   const next = monthName(nextMonth(report.period));
-  const adelantadas = sales.filter((v) => v.is_advanced).length;
+  const advanced = sales.filter((v) => v.is_advanced).length;
   const situation = (v: CommissionSale) => (v.is_advanced ? 'Adelantó: cuenta aquí' : `Pasa a ${next}`);
 
   const columns: Column<CommissionSale>[] = [
@@ -37,7 +37,7 @@ export function MonthPromoTable({ report, sales }: { report: CommissionReport; s
   ];
 
   // Las que cuentan, primero: son las que se vienen a mirar.
-  const filas = [...sales].sort((a, b) => Number(Boolean(b.is_advanced)) - Number(Boolean(a.is_advanced)));
+  const rows = [...sales].sort((a, b) => Number(Boolean(b.is_advanced)) - Number(Boolean(a.is_advanced)));
 
   return (
     <>
@@ -49,7 +49,7 @@ export function MonthPromoTable({ report, sales }: { report: CommissionReport; s
           <strong className="text-slate-200">{report.advance_cutoff ? formatDateValue(report.advance_cutoff) : '—'}</strong>{' '}
           cuenta aquí y ya no en {next}.{' '}
           <span className="text-slate-500">
-            {sales.length} instaladas · <strong className="text-emerald-300">{adelantadas}</strong> adelantaron · {sales.length - adelantadas} pasan a {next}
+            {sales.length} instaladas · <strong className="text-emerald-300">{advanced}</strong> adelantaron · {sales.length - advanced} pasan a {next}
           </span>
         </p>
         {report.invoices_with_paid_date === false && (
@@ -64,7 +64,7 @@ export function MonthPromoTable({ report, sales }: { report: CommissionReport; s
       </div>
       <DataTable
         columns={columns}
-        data={filas}
+        data={rows}
         searchable
         searchPlaceholder="Buscar orden o cliente..."
         emptyMessage="No hay instalaciones en los días promocionales de este mes."

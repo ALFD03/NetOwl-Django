@@ -77,5 +77,5 @@ export const CRM_KEY_STAGES = [
 ] as const;
 
 /** `etapa_5_gpi` -> `5 · GPI`, falling back to the raw key for a new stage. */
-export const crmStageLabel = (etapa: string): string =>
-  CRM_STAGE_LABELS[etapa as keyof typeof CRM_STAGE_LABELS] ?? etapa;
+export const crmStageLabel = (stage: string): string =>
+  CRM_STAGE_LABELS[stage as keyof typeof CRM_STAGE_LABELS] ?? stage;

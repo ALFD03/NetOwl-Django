@@ -27,10 +27,10 @@ import {
   type CrmStageTimeCard,
   type CrmStageTimeDimensionRow,
 } from '../../lib/crmStageTime';
-import type { CrmDimensionValue, CrmHistoricoRow } from '../../types';
+import type { CrmDimensionValue, CrmHistoryRow } from '../../types';
 
 interface Props {
-  globalData: CrmHistoricoRow;
+  globalData: CrmHistoryRow;
   rows: CrmDimensionValue[];
   selectedDimension: string;
 }

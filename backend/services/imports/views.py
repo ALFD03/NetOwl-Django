@@ -22,7 +22,7 @@ from services.support.analytics import loader as support_loader
 from services.support.analytics import logs as support_logs
 
 from .history import register_import_log
-from .jobs import cancelar_job, launch_analysis, module_locks, open_jobs, running_job
+from .jobs import cancel_job, launch_analysis, module_locks, open_jobs, running_job
 from .models import AnalysisJob, ImportActionLog
 
 logger = logging.getLogger(__name__)
@@ -305,7 +305,7 @@ def job_cancel(request, job_id):
             "message": f"La ejecución ya terminó ({job.get_status_display()}).",
             "job": job.to_dict(),
         }, 409
-    cancelar_job(job, request.user.username)
+    cancel_job(job, request.user.username)
     return {
         "status": "cancelled",
         "message": (
@@ -323,7 +323,7 @@ def job_queue(request):
     return {
         "jobs": [job.to_dict() for job in visible],
         "running": sum(1 for j in visible if j.status == AnalysisJob.RUNNING),
-        "queued": sum(1 for j in visible if j.status == AnalysisJob.PENDIENTE),
+        "queued": sum(1 for j in visible if j.status == AnalysisJob.PENDING),
     }
 
 

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Loader2, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FilterX } from 'lucide-react';
 
 import { FilterField, FILTER_TRIGGER_CLASS, SearchInput, SelectMenu } from '../inputs';
-import { ROWS_PER_PAGE, Paginacion, usePaginacion } from './Paginacion';
+import { ROWS_PER_PAGE, Pagination, usePagination } from './Pagination';
 
 export interface Column<T> {
   header: string;
@@ -66,7 +66,7 @@ export interface DataTableSelection<T> {
    * vacía al cambiar la vista, para que una acción en bloque no toque filas que
    * el filtro ya escondió. Quien lo activa debe decir cuántas lleva elegidas.
    */
-  conservar?: boolean;
+  keep?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -89,16 +89,16 @@ interface DataTableProps<T> {
 }
 
 /** La casilla de la cabecera, que además sabe pintarse a medias. */
-function CasillaTodas({ estado, onChange }: { estado: 'todas' | 'algunas' | 'ninguna'; onChange: () => void }) {
+function SelectAllCheckbox({ state, onChange }: { state: 'todas' | 'algunas' | 'ninguna'; onChange: () => void }) {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (ref.current) ref.current.indeterminate = estado === 'algunas';
-  }, [estado]);
+    if (ref.current) ref.current.indeterminate = state === 'algunas';
+  }, [state]);
   return (
     <input
       ref={ref}
       type="checkbox"
-      checked={estado === 'todas'}
+      checked={state === 'todas'}
       onChange={onChange}
       onClick={(e) => e.stopPropagation()}
       className="h-4 w-4 cursor-pointer accent-brand"
@@ -132,11 +132,11 @@ export function DataTable<T>({
   // la seleccion se conserve, la vacia: lo seleccionado tiene que estar a la
   // vista, o una accion en bloque tocaria filas que el filtro ya escondio.
   const onViewChange = () => {
-    paginacion.irA(0);
-    if (selection && !selection.conservar && selection.selected.size > 0) selection.onChange(new Set());
+    pagination.goTo(0);
+    if (selection && !selection.keep && selection.selected.size > 0) selection.onChange(new Set());
   };
-  const search = (termino: string) => {
-    setSearchTerm(termino);
+  const search = (term: string) => {
+    setSearchTerm(term);
     onViewChange();
   };
   const filterRows = (next: Record<string, string>) => {
@@ -160,16 +160,16 @@ export function DataTable<T>({
   // filtrados: si se estrecharan entre ellas, elegir un valor vaciaria los
   // desplegables de al lado y no habria forma de cambiar de idea.
   const filterOptions = useMemo(() => {
-    const mapa: Record<string, string[]> = {};
+    const map: Record<string, string[]> = {};
     filterColumns.forEach((col) => {
-      const valores = new Set<string>();
+      const values = new Set<string>();
       data.forEach((row) => {
-        const valor = filterValue(col, row);
-        if (valor) valores.add(valor);
+        const value = filterValue(col, row);
+        if (value) values.add(value);
       });
-      mapa[col.header] = [...valores].sort((a, b) => a.localeCompare(b, 'es'));
+      map[col.header] = [...values].sort((a, b) => a.localeCompare(b, 'es'));
     });
-    return mapa;
+    return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filterValue` se recrea en cada render y solo lee de `col`.
   }, [data, filterColumns]);
 
@@ -181,9 +181,9 @@ export function DataTable<T>({
 
     // 1. Filtrar por columna
     filterColumns.forEach((col) => {
-      const elegido = filters[col.header];
-      if (!elegido || elegido === TODOS) return;
-      filtered = filtered.filter((row) => filterValue(col, row) === elegido);
+      const chosen = filters[col.header];
+      if (!chosen || chosen === TODOS) return;
+      filtered = filtered.filter((row) => filterValue(col, row) === chosen);
     });
 
     // 2. Buscar
@@ -223,46 +223,46 @@ export function DataTable<T>({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `filterValue` se recrea en cada render y solo lee de `col`.
   }, [data, searchTerm, sortConfig, filters, filterColumns, columns]);
 
-  const paginacion = usePaginacion(processedData, pageSize);
+  const pagination = usePagination(processedData, pageSize);
 
-  const ordenable = (col: Column<T>) => Boolean(col.sortValue || col.sortKey || typeof col.accessor === 'string');
+  const sortable = (col: Column<T>) => Boolean(col.sortValue || col.sortKey || typeof col.accessor === 'string');
   const handleSort = (col: Column<T>) => {
-    if (!ordenable(col)) return;
+    if (!sortable(col)) return;
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig?.header === col.header && sortConfig.direction === 'asc') {
       direction = 'desc';
     }
     setSortConfig({ header: col.header, direction });
-    paginacion.irA(0);
+    pagination.goTo(0);
   };
 
   // La casilla de la cabecera actua sobre todas las filas filtradas, no solo
   // las de la pagina: filtrar y seleccionar todo es la forma de elegir en bloque.
   const filteredKeys = selection ? processedData.map(selection.rowKey) : [];
-  const elegidasFiltradas = selection ? filteredKeys.filter((k) => selection.selected.has(k)).length : 0;
-  const allStatesKey = elegidasFiltradas === 0
+  const selectedFiltered = selection ? filteredKeys.filter((k) => selection.selected.has(k)).length : 0;
+  const allStatesKey = selectedFiltered === 0
     ? 'ninguna'
-    : elegidasFiltradas === filteredKeys.length ? 'todas' : 'algunas';
-  const alternarTodas = () => {
+    : selectedFiltered === filteredKeys.length ? 'todas' : 'algunas';
+  const toggleAll = () => {
     if (!selection) return;
-    if (!selection.conservar) {
+    if (!selection.keep) {
       selection.onChange(allStatesKey === 'todas' ? new Set() : new Set(filteredKeys));
       return;
     }
     // Se suma o se resta solo lo filtrado: lo marcado fuera de la vista se queda.
     const next = new Set(selection.selected);
-    for (const clave of filteredKeys) {
-      if (allStatesKey === 'todas') next.delete(clave);
-      else next.add(clave);
+    for (const key of filteredKeys) {
+      if (allStatesKey === 'todas') next.delete(key);
+      else next.add(key);
     }
     selection.onChange(next);
   };
   const toggleRow = (row: T) => {
     if (!selection) return;
-    const clave = selection.rowKey(row);
+    const key = selection.rowKey(row);
     const next = new Set(selection.selected);
-    if (next.has(clave)) next.delete(clave);
-    else next.add(clave);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
     selection.onChange(next);
   };
   const columnCount = columns.length + (selection ? 1 : 0);
@@ -289,10 +289,10 @@ export function DataTable<T>({
                 value={filters[col.header] ?? TODOS}
                 options={[
                   { value: TODOS, label: 'Todos' },
-                  ...(filterOptions[col.header] ?? []).map((valor) => ({ value: valor, label: valor })),
+                  ...(filterOptions[col.header] ?? []).map((value) => ({ value, label: value })),
                 ]}
-                onChange={(valor) =>
-                  filterRows({ ...filters, [col.header]: valor === TODOS ? '' : valor })
+                onChange={(value) =>
+                  filterRows({ ...filters, [col.header]: value === TODOS ? '' : value })
                 }
               />
             </FilterField>
@@ -330,7 +330,7 @@ export function DataTable<T>({
         </div>
       )}
 
-      <Paginacion estado={paginacion} posicion="arriba" />
+      <Pagination state={pagination} position="arriba" />
 
       <div className={`overflow-x-auto overflow-y-auto flex-1 custom-scrollbar ${scrollClassName}`}>
         <table className="w-full text-sm text-slate-300 border-collapse">
@@ -338,7 +338,7 @@ export function DataTable<T>({
             <tr>
               {selection && (
                 <th className="w-10 border-b border-slate-800 p-3 text-center">
-                  <CasillaTodas estado={allStatesKey} onChange={alternarTodas} />
+                  <SelectAllCheckbox state={allStatesKey} onChange={toggleAll} />
                 </th>
               )}
               {columns.map((col, idx) => (
@@ -346,12 +346,12 @@ export function DataTable<T>({
                   key={idx}
                   onClick={() => handleSort(col)}
                   className={`p-3 text-[10px] uppercase font-bold tracking-wider border-b border-slate-800 transition-colors 
-                    ${ordenable(col) ? 'cursor-pointer hover:text-white hover:bg-slate-700/50' : ''} 
+                    ${sortable(col) ? 'cursor-pointer hover:text-white hover:bg-slate-700/50' : ''} 
                     ${alignMap[col.align || 'left']} ${col.sticky ? STICKY_TH : ''} ${col.className || ''}`}
                 >
                   <div className={`flex items-center gap-2 ${col.align === 'right' ? 'justify-end' : ''}`}>
                     <span>{col.header}</span>
-                    {ordenable(col) && (
+                    {sortable(col) && (
                       <span className="text-slate-600">
                         {sortConfig?.header === col.header ? (
                           sortConfig.direction === 'asc' ? <ChevronUp className="w-3 h-3 text-brand" /> : <ChevronDown className="w-3 h-3 text-brand" />
@@ -371,7 +371,7 @@ export function DataTable<T>({
             ) : processedData.length === 0 ? (
               <tr><td colSpan={columnCount} className="p-10 text-center text-slate-500">{emptyMessage}</td></tr>
             ) : (
-              paginacion.visibles.map((row, rowIdx) => (
+              pagination.visible.map((row, rowIdx) => (
                 <tr
                   key={selection ? selection.rowKey(row) : rowIdx}
                   onClick={() => onRowClick?.(row)}
@@ -401,7 +401,7 @@ export function DataTable<T>({
         </table>
       </div>
 
-      <Paginacion estado={paginacion} />
+      <Pagination state={pagination} />
     </div>
   );
 }

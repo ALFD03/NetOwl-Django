@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 from core.config import ACTIVE_STATE, DIMS, FREE_STATE
-from core.models import Periodo
+from core.models import Period
 
 from ..analyzer.metrics_calc import AccumulatedState
 
@@ -46,7 +46,7 @@ ACTIVE_BETWEEN_CUTS_NOTE = "sintetico - activo entre inactivo y corte impago"
 # mucho en las bajas de cada mes. Se guardan todas; `queries.py` filtra al leer.
 INSTALLED_SINCE = pd.Timestamp("2026-01-01")
 
-COLUMNAS = [
+COLUMNS = [
     "orden", "f_ini", "f_baja", "estado_cierre", "dias_desde_instalacion",
     *CHURN_DIMS, "mes_en_curso", "fecha_corte",
 ]
@@ -59,31 +59,31 @@ def _annotate_tiers(log: pd.DataFrame) -> pd.DataFrame:
     arman con `tier_class`, que trata como inactivo el activo sintetico entre
     cortes.
     """
-    estado = log["estado"].to_numpy()
-    clase = np.where(estado == ACTIVE_STATE, "A", np.where(estado == FREE_STATE, "F", "X"))
-    log["clase"] = clase
+    state = log["estado"].to_numpy()
+    kind = np.where(state == ACTIVE_STATE, "A", np.where(state == FREE_STATE, "F", "X"))
+    log["clase"] = kind
     between_cuts = log["log_norm"].fillna("").eq(ACTIVE_BETWEEN_CUTS_NOTE).to_numpy()
-    tier_class = pd.Series(np.where(between_cuts, "X", clase), index=log.index)
+    tier_class = pd.Series(np.where(between_cuts, "X", kind), index=log.index)
 
     other_order = log["orden"] != log["orden"].shift()
-    nuevo = other_order | (tier_class != tier_class.shift())
-    log["inicio_tramo"] = log["f_dt"].where(nuevo).ffill()
+    new = other_order | (tier_class != tier_class.shift())
+    log["inicio_tramo"] = log["f_dt"].where(new).ffill()
     return log
 
 
-def _months(fecha_corte: pd.Timestamp) -> list[Periodo]:
+def _months(cutoff_date: pd.Timestamp) -> list[Period]:
     """Los meses desde `START_MONTH` hasta el de la fecha de corte, este incluido."""
-    meses = []
-    mes = START_MONTH
-    while mes <= fecha_corte:
-        meses.append(Periodo.build(mes.strftime("%Y-%m-01")))
-        mes = mes + pd.offsets.MonthBegin(1)
-    return meses
+    months = []
+    month = START_MONTH
+    while month <= cutoff_date:
+        months.append(Period.build(month.strftime("%Y-%m-01")))
+        month = month + pd.offsets.MonthBegin(1)
+    return months
 
 
-def _days(desde: pd.Series, hasta: pd.Series) -> pd.Series:
+def _days(since: pd.Series, until: pd.Series) -> pd.Series:
     """Dias enteros entre dos fechas; nunca negativos, nulos si falta una."""
-    return ((hasta - desde).dt.total_seconds() // 86400).clip(lower=0).astype("Int64")
+    return ((until - since).dt.total_seconds() // 86400).clip(lower=0).astype("Int64")
 
 
 def compute_churn_by_month(
@@ -91,41 +91,41 @@ def compute_churn_by_month(
 ) -> dict[str, pd.DataFrame]:
     """Las bajas de cada mes con su duracion, indexadas por `YYYY-MM`.
 
-    `dims` es el `DimsPreparadas` del mensual (`prepare_subs_dims`): cada baja
+    `dims` es el `PreparedDims` del mensual (`prepare_subs_dims`): cada baja
     cae en la misma zona, sucursal o campana que en el reporte de churn. El mes
     de la fecha de corte sale marcado `mes_en_curso`: sus bajas son las de hoy y
     todavia pueden volver antes de fin de mes.
     """
     if logs.empty:
         return {}
-    fecha_corte = pd.Timestamp(logs["f_dt"].max())
+    cutoff_date = pd.Timestamp(logs["f_dt"].max())
     log = _annotate_tiers(
         logs[["orden", "f_dt", "estado", "log_norm"]].reset_index(drop=True)
     )
-    estados = AccumulatedState(log)
+    states = AccumulatedState(log)
     f_ini = subs.drop_duplicates(subset=["orden"]).set_index("orden")["f_ini_dt"]
-    mapas = {d: dims.mapa(d, f"Sin {d}") for d in CHURN_DIMS if d in dims.frame.columns}
+    mappings = {d: dims.mapping(d, f"Sin {d}") for d in CHURN_DIMS if d in dims.frame.columns}
 
-    resultado: dict[str, pd.DataFrame] = {}
-    for periodo in _months(fecha_corte):
+    result: dict[str, pd.DataFrame] = {}
+    for period in _months(cutoff_date):
         # Mismo recorrido que el mensual: activas justo antes del dia 1, y el
         # ultimo log de cada una al cierre. Las fechas crecen de un mes al
         # siguiente, asi que `AccumulatedState` sigue siendo una sola pasada.
-        inicio = estados.latest(periodo.fecha_inicio, strictly_before=True)
-        active_at_start = set(inicio.loc[inicio["clase"] == "A", "orden"])
-        cierre = estados.latest(periodo.end_date)
-        bajas = cierre[(cierre["clase"] == "X") & cierre["orden"].isin(active_at_start)].copy()
+        start = states.latest(period.start_date, strictly_before=True)
+        active_at_start = set(start.loc[start["clase"] == "A", "orden"])
+        close = states.latest(period.end_date)
+        churns = close[(close["clase"] == "X") & close["orden"].isin(active_at_start)].copy()
 
-        bajas["f_ini"] = bajas["orden"].map(f_ini)
-        bajas["f_baja"] = bajas["inicio_tramo"]
-        bajas["estado_cierre"] = bajas["estado"]
-        bajas["dias_desde_instalacion"] = _days(bajas["f_ini"], bajas["f_baja"])
-        for dim, mapa in mapas.items():
-            bajas[dim] = bajas["orden"].map(mapa).fillna(f"Sin {dim}")
-        bajas["mes_en_curso"] = pd.Timestamp(periodo.end_date) > fecha_corte
-        bajas["fecha_corte"] = fecha_corte.strftime("%Y-%m-%d")
+        churns["f_ini"] = churns["orden"].map(f_ini)
+        churns["f_baja"] = churns["inicio_tramo"]
+        churns["estado_cierre"] = churns["estado"]
+        churns["dias_desde_instalacion"] = _days(churns["f_ini"], churns["f_baja"])
+        for dim, mapping in mappings.items():
+            churns[dim] = churns["orden"].map(mapping).fillna(f"Sin {dim}")
+        churns["mes_en_curso"] = pd.Timestamp(period.end_date) > cutoff_date
+        churns["fecha_corte"] = cutoff_date.strftime("%Y-%m-%d")
 
         for col in ("f_ini", "f_baja"):
-            bajas[col] = bajas[col].dt.strftime("%Y-%m-%d")
-        resultado[periodo.periodo_mes()] = bajas.reindex(columns=COLUMNAS).reset_index(drop=True)
-    return resultado
+            churns[col] = churns[col].dt.strftime("%Y-%m-%d")
+        result[period.period_month()] = churns.reindex(columns=COLUMNS).reset_index(drop=True)
+    return result

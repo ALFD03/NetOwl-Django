@@ -1,62 +1,62 @@
 /** La proyección de las instalaciones al cierre, dentro del bloque del día de Analytics. */
 
-import { dailyAverage, proyectar, type Proyeccion } from '@/shared/lib/projection';
+import { dailyAverage, project, type Projection } from '@/shared/lib/projection';
 import { SummaryStrip, type SummaryStripItem, type StatTileTone } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 
 interface Props {
   /** Instalaciones acumuladas del mes hasta el corte (`nuevos_mes`). */
-  instalaciones: number;
-  projection: Proyeccion;
+  installs: number;
+  projection: Projection;
   /**
    * El cumplimiento de ventas que darían las instalaciones proyectadas, ya
    * calculado por quien llama (que decide si se recorta a 100). Sin él, la
    * franja no habla del objetivo.
    */
-  cumplimiento?: { value: number; target: number; tono: StatTileTone } | null;
+  compliance?: { value: number; target: number; tone: StatTileTone } | null;
 }
 
 /**
  * Lo instalado hasta el corte, su promedio por día laborable y adónde lleva al
  * cierre si el resto del mes sigue al mismo ritmo (ver `shared/lib/projection`).
  */
-export function CloseProjection({ instalaciones, projection: proyeccion, cumplimiento = null }: Props) {
-  const { dia, elapsedDays: diasTranscurridos, monthDays: diasMes } = proyeccion;
-  const complianceCell: SummaryStripItem[] = cumplimiento ? [{
+export function CloseProjection({ installs, projection, compliance: compliance = null }: Props) {
+  const { day, elapsedDays, monthDays } = projection;
+  const complianceCell: SummaryStripItem[] = compliance ? [{
     id: 'cumplimiento',
     label: 'Cumpl. Ventas Proyectado',
-    value: `${formatTwoDecimals(cumplimiento.value)}%`,
-    caption: `Sobre un objetivo de +${formatInteger(cumplimiento.target)}`,
-    tone: cumplimiento.tono,
+    value: `${formatTwoDecimals(compliance.value)}%`,
+    caption: `Sobre un objetivo de +${formatInteger(compliance.target)}`,
+    tone: compliance.tone,
   }] : [];
 
   return (
     <SummaryStrip
-      columns={cumplimiento ? 5 : 4}
+      columns={compliance ? 5 : 4}
       mono
       items={[
         {
           id: 'instaladas',
-          label: `Instalaciones al día ${dia}`,
-          value: formatInteger(instalaciones),
+          label: `Instalaciones al día ${day}`,
+          value: formatInteger(installs),
           tone: 'green',
         },
         {
           id: 'laborables',
           label: 'Días laborables',
-          value: `${diasTranscurridos} de ${diasMes}`,
+          value: `${elapsedDays} de ${monthDays}`,
           caption: 'Lunes a sábado',
         },
         {
           id: 'promedio',
           label: 'Promedio diario',
-          value: formatTwoDecimals(dailyAverage(instalaciones, proyeccion)),
+          value: formatTwoDecimals(dailyAverage(installs, projection)),
           caption: 'Por día laborable',
         },
         {
           id: 'proyeccion',
           label: 'Proyección al cierre',
-          value: formatInteger(proyectar(instalaciones, proyeccion)),
+          value: formatInteger(project(installs, projection)),
           caption: 'Al mismo ritmo hasta fin de mes',
           tone: 'brand',
           divided: true,

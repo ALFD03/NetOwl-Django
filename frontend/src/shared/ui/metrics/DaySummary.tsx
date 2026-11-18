@@ -26,7 +26,7 @@ export interface DayCardSpec {
    * Color según el valor del día, en lugar del fijo `color`: para las métricas
    * con semáforo (el churn de Subscriptions, por ejemplo).
    */
-  colorFor?: (valor: number) => MetricColor;
+  colorFor?: (value: number) => MetricColor;
 }
 
 export interface DayChartSpec {
@@ -45,11 +45,11 @@ export interface DayChartSpec {
 }
 
 interface Props {
-  serie: DaySeries | undefined;
+  series: DaySeries | undefined;
   /** Los días con corte, ordenados. Puede haber más de los que trae `serie`. */
-  dias: number[];
+  days: number[];
   /** Día elegido en la barra. */
-  dia: number;
+  day: number;
   cards: DayCardSpec[];
   charts: DayChartSpec[];
   title?: string;
@@ -74,9 +74,9 @@ interface Props {
  * porque de eso depende que restar tenga sentido (ver `shared/lib/daySeries`).
  */
 export function DaySummary({
-  serie,
-  dias,
-  dia,
+  series,
+  days,
+  day,
   cards,
   charts,
   title = 'El día seleccionado',
@@ -87,18 +87,18 @@ export function DaySummary({
   // Los días de la barra y los de este bloque no son siempre los mismos: un mes
   // analizado antes de que su módulo guardara el bloque global tiene cortes
   // -el desglose se lee igual- pero nada que resumir aquí.
-  const seriesDays = useMemo(() => computedDays(serie), [serie]);
+  const seriesDays = useMemo(() => computedDays(series), [series]);
 
   const activeDay = useMemo(() => {
     if (!seriesDays.length) return 0;
-    if (seriesDays.includes(dia)) return dia;
+    if (seriesDays.includes(day)) return day;
     // Al día elegido le falta el bloque: se cae al último corte anterior que sí
     // lo tenga, que es el dato más cercano que no es mentira.
-    const anteriores = seriesDays.filter((d) => d < dia);
-    return anteriores.length ? anteriores[anteriores.length - 1] : seriesDays[0];
-  }, [dia, seriesDays]);
+    const previous = seriesDays.filter((d) => d < day);
+    return previous.length ? previous[previous.length - 1] : seriesDays[0];
+  }, [day, seriesDays]);
 
-  if (!dias.length) return null;
+  if (!days.length) return null;
 
   if (!seriesDays.length) {
     return (
@@ -109,7 +109,7 @@ export function DaySummary({
         icon={<CalendarClock className="h-5 w-5" />}
       >
         <p className="text-sm font-semibold text-slate-400">
-          Los {dias.length} cortes del mes están calculados y el resto de la página
+          Los {days.length} cortes del mes están calculados y el resto de la página
           los lee, pero ninguno guarda el bloque global del que salen estas
           tarjetas. Vuelve a ejecutar el análisis del mes para verlas.
         </p>
@@ -126,13 +126,13 @@ export function DaySummary({
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
         {cards.map((card) => {
-          const reading = readDay(serie, seriesDays, activeDay, card.key, card.kind);
+          const reading = readDay(series, seriesDays, activeDay, card.key, card.kind);
           return (
             <DayMetricCard
               key={card.key}
               label={card.label}
               kind={card.kind}
-              dia={activeDay}
+              day={activeDay}
               color={card.colorFor ? card.colorFor(reading.ofDay) : card.color}
               icon={card.icon}
               subValue={card.subValue}
@@ -152,14 +152,14 @@ export function DaySummary({
               key={chart.title}
               title={chart.title}
               subtitle={chart.subtitle}
-              dias={seriesDays}
+              days={seriesDays}
               selectedDay={activeDay}
               isRate={chart.isRate}
               series={chart.series.map<DayTrendSeries>((s) => ({
                 label: s.label,
                 color: s.color,
                 trendGoodWhen: s.trendGoodWhen,
-                values: seriesOf(serie, seriesDays, s.key, s.kind),
+                values: seriesOf(series, seriesDays, s.key, s.kind),
               }))}
             />
           ))}

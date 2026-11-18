@@ -22,7 +22,7 @@ Las piezas de pago, y quien las puede llevar, estan en `PIECES_BY_ROLE`:
 - `bono_por_unidad`: `{monto}` por unidad, proporcional a su % de ingresos.
 - `escalon_crecimiento`: `{umbral_pct, alto, bajo}` para la venta de equipo
   del coordinador de UN.
-- `bono_churn`: `[{max, monto}]` segun el churn bruto de su unidad.
+- `bonus_churn`: `[{max, monto}]` segun el churn bruto de su unidad.
 - `bono_empresa`: `{monto, excedente}` segun el % de ventas de la empresa.
 """
 
@@ -34,7 +34,7 @@ from typing import Any
 # --- Equipos y roles ---------------------------------------------------------------
 
 # Se siembran en la migracion `catalogos/0006` con estos mismos slugs.
-EQUIPOS: list[tuple[str, str]] = [
+TEAMS: list[tuple[str, str]] = [
     ("verticalizacion", "Verticalización"),
     ("carabobo", "Carabobo"),
     ("nacional", "Nacional"),
@@ -44,28 +44,28 @@ EQUIPOS: list[tuple[str, str]] = [
 
 # El rol al que responde un supervisor, por equipo: el coordinador de UN en
 # Carabobo y el gerente de UN en Aragua y La Victoria. Verticalizacion no tiene.
-SUPERVISOR_SUPERIOR = {"carabobo": "coord_un", "aragua": "gerente_un", "la_victoria": "gerente_un"}
+SUPERVISOR_MANAGER = {"carabobo": "coord_un", "aragua": "gerente_un", "la_victoria": "gerente_un"}
 
 # Que literal de Odoo lleva cada rol: `medio` (columna `Medio`), `supervisor`
 # (`Oportunidad/Administrador`, opcional: vacio es «igual que medio») y `usuario`
 # (`Vendedor`, el usuario de Odoo con sufijo). `True` lo exige, `False` no aplica.
 ROLES: dict[str, dict[str, Any]] = {
-    "jefe": {"etiqueta": "Jefe", "medio": True, "supervisor": True, "usuario": False},
-    "jefe_un": {"etiqueta": "Jefe de unidades de negocio", "medio": True, "supervisor": True, "usuario": False,
-                "unidades": "varias"},
-    "coord_un": {"etiqueta": "Coordinador de unidad de negocio", "medio": True, "supervisor": True,
-                 "usuario": False, "unidades": "una"},
-    "gerente_un": {"etiqueta": "Gerente de unidad de negocio", "medio": True, "supervisor": True,
-                   "usuario": False, "unidades": "varias"},
-    "gerente_ops": {"etiqueta": "Gerente de operaciones", "medio": False, "supervisor": False,
-                    "usuario": False, "unidades": "varias"},
-    "coord_oficina": {"etiqueta": "Coordinadora de oficina", "medio": True, "supervisor": True, "usuario": True,
+    "jefe": {"label": "Jefe", "channel": True, "supervisor": True, "user": False},
+    "jefe_un": {"label": "Jefe de unidades de negocio", "channel": True, "supervisor": True, "user": False,
+                "units": "varias"},
+    "coord_un": {"label": "Coordinador de unidad de negocio", "channel": True, "supervisor": True,
+                 "user": False, "units": "una"},
+    "gerente_un": {"label": "Gerente de unidad de negocio", "channel": True, "supervisor": True,
+                   "user": False, "units": "varias"},
+    "gerente_ops": {"label": "Gerente de operaciones", "channel": False, "supervisor": False,
+                    "user": False, "units": "varias"},
+    "coord_oficina": {"label": "Coordinadora de oficina", "channel": True, "supervisor": True, "user": True,
                       "site": True},
-    "supervisor": {"etiqueta": "Supervisor de ventas", "medio": True, "supervisor": True, "usuario": False},
-    "asesor": {"etiqueta": "Asesor de ventas", "medio": True, "supervisor": False, "usuario": False},
-    "administradora": {"etiqueta": "Administradora de ventas", "medio": False, "supervisor": False,
-                       "usuario": True},
-    "telemarketing": {"etiqueta": "Asesor de telemarketing", "medio": True, "supervisor": False, "usuario": False},
+    "supervisor": {"label": "Supervisor de ventas", "channel": True, "supervisor": True, "user": False},
+    "asesor": {"label": "Asesor de ventas", "channel": True, "supervisor": False, "user": False},
+    "administradora": {"label": "Administradora de ventas", "channel": False, "supervisor": False,
+                       "user": True},
+    "telemarketing": {"label": "Asesor de telemarketing", "channel": True, "supervisor": False, "user": False},
 }
 
 ROLES_BY_TEAM: dict[str, list[str]] = {
@@ -76,12 +76,12 @@ ROLES_BY_TEAM: dict[str, list[str]] = {
     "la_victoria": ["gerente_un", "gerente_ops", "coord_oficina", "supervisor", "asesor"],
 }
 
-ROL_CHOICES = [(rol, spec["etiqueta"]) for rol, spec in ROLES.items()]
+ROLE_CHOICES = [(role, spec["label"]) for role, spec in ROLES.items()]
 
 # Los roles que cobran por las ventas de unidades de negocio: llevan `unidades`.
-ROLES_WITH_UNITS = tuple(rol for rol, spec in ROLES.items() if spec.get("unidades"))
+ROLES_WITH_UNITS = tuple(role for role, spec in ROLES.items() if spec.get("units"))
 # Los roles que pueden figurar en `Oportunidad/Administrador`.
-SUPERVISING_ROLES = tuple(rol for rol, spec in ROLES.items() if spec["supervisor"])
+SUPERVISING_ROLES = tuple(role for role, spec in ROLES.items() if spec["supervisor"])
 
 
 def team_roles(slug: str) -> list[str]:
@@ -89,15 +89,15 @@ def team_roles(slug: str) -> list[str]:
     return list(ROLES_BY_TEAM.get(slug, []))
 
 
-def role_label(rol: str) -> str:
+def role_label(role: str) -> str:
     """El nombre legible de un rol."""
-    return ROLES.get(rol, {}).get("etiqueta", rol)
+    return ROLES.get(role, {}).get("label", role)
 
 
 # --- Piezas de pago ----------------------------------------------------------------
 
-ALCANCES = ("supervisados", "equipo_completo", "unidades", "oficina")
-FACTORES = ("ninguno", "site", "unidad")
+SCOPES = ("supervisados", "equipo_completo", "unidades", "oficina")
+FACTORS = ("ninguno", "site", "unidad")
 AMOUNT_TYPES = ("monto", "pct_plan")
 
 PIECES_BY_ROLE: dict[str, tuple[str, ...]] = {
@@ -135,16 +135,16 @@ _TIERS_ARAGUA = [
 ]
 
 
-def _amount(valor: float) -> dict[str, Any]:
-    return {"tipo": "monto", "valor": valor}
+def _amount(value: float) -> dict[str, Any]:
+    return {"tipo": "monto", "valor": value}
 
 
-def _pct_plan(valor: float = 10) -> dict[str, Any]:
-    return {"tipo": "pct_plan", "valor": valor}
+def _pct_plan(value: float = 10) -> dict[str, Any]:
+    return {"tipo": "pct_plan", "valor": value}
 
 
-def _team(valor: dict[str, Any], alcance: str, excluir_oficina: bool = False) -> dict[str, Any]:
-    return {**valor, "alcance": alcance, "excluir_oficina": excluir_oficina}
+def _team(value: dict[str, Any], scope: str, exclude_office: bool = False) -> dict[str, Any]:
+    return {**value, "alcance": scope, "excluir_oficina": exclude_office}
 
 
 DEFAULT_PARAMETERS: dict[tuple[str, str], dict[str, Any]] = {
@@ -159,10 +159,10 @@ DEFAULT_PARAMETERS: dict[tuple[str, str], dict[str, Any]] = {
     },
     # Carabobo
     ("carabobo", "jefe_un"): {
-        "equipo": _team(_amount(0.8), "unidades", excluir_oficina=True), "bono_por_unidad": {"monto": 50},
+        "equipo": _team(_amount(0.8), "unidades", exclude_office=True), "bono_por_unidad": {"monto": 50},
     },
     ("carabobo", "coord_un"): {
-        "propia": _amount(4), "equipo": _team(_amount(0), "unidades", excluir_oficina=True),
+        "propia": _amount(4), "equipo": _team(_amount(0), "unidades", exclude_office=True),
         "escalon_crecimiento": {"umbral_pct": 6, "alto": 2, "bajo": 1},
         "bono_churn": [{"max": 3, "monto": 100}, {"max": 1.9, "monto": 200}],
     },
@@ -208,121 +208,121 @@ DEFAULT_PARAMETERS: dict[tuple[str, str], dict[str, Any]] = {
 }
 
 
-def default_parameters(slug: str, rol: str) -> dict[str, Any]:
+def default_parameters(slug: str, role: str) -> dict[str, Any]:
     """Copia de los parametros por defecto de un rol de un equipo (vacios si no existe)."""
-    return copy.deepcopy(DEFAULT_PARAMETERS.get((slug, rol), {}))
+    return copy.deepcopy(DEFAULT_PARAMETERS.get((slug, role), {}))
 
 
-def current_parameters(slug: str, rol: str, guardados: dict[str, Any] | None) -> dict[str, Any]:
+def current_parameters(slug: str, role: str, saved: dict[str, Any] | None) -> dict[str, Any]:
     """Los parametros que valen: los guardados, completados con los de por defecto.
 
     Una pieza que el rol admite y no esta guardada paga con la de por defecto; una
     que esta guardada manda entera (no se mezcla por dentro).
     """
-    base = default_parameters(slug, rol)
-    if guardados:
-        base.update({k: v for k, v in guardados.items() if k in PIECES_BY_ROLE.get(rol, ())})
+    base = default_parameters(slug, role)
+    if saved:
+        base.update({k: v for k, v in saved.items() if k in PIECES_BY_ROLE.get(role, ())})
     return base
 
 
 # --- Validacion ---------------------------------------------------------------------
 
-def _number(valor: Any, que: str, minimo: float | None = 0) -> float:
+def _number(value: Any, that: str, min_value: float | None = 0) -> float:
     try:
-        n = float(valor)
+        n = float(value)
     except (TypeError, ValueError):
-        raise ValueError(f"{que} tiene que ser un número.") from None
-    if minimo is not None and n < minimo:
-        raise ValueError(f"{que} no puede ser menor que {minimo:g}.")
+        raise ValueError(f"{that} tiene que ser un número.") from None
+    if min_value is not None and n < min_value:
+        raise ValueError(f"{that} no puede ser menor que {min_value:g}.")
     return n
 
 
-def _amount_or_pct(pieza: Any, que: str) -> dict[str, Any]:
-    if not isinstance(pieza, dict) or pieza.get("tipo") not in AMOUNT_TYPES:
-        raise ValueError(f"{que}: el tipo tiene que ser «monto» o «pct_plan».")
-    return {"tipo": pieza["tipo"], "valor": _number(pieza.get("valor"), f"{que}: el valor")}
+def _amount_or_pct(piece: Any, that: str) -> dict[str, Any]:
+    if not isinstance(piece, dict) or piece.get("tipo") not in AMOUNT_TYPES:
+        raise ValueError(f"{that}: el tipo tiene que ser «monto» o «pct_plan».")
+    return {"tipo": piece["tipo"], "valor": _number(piece.get("valor"), f"{that}: el valor")}
 
 
-def _tramos(lista: Any, que: str, *, discounted: bool = False) -> list[dict[str, float]]:
-    if not isinstance(lista, list) or not lista:
-        raise ValueError(f"{que}: no puede quedar vacío.")
-    limpios = []
-    for t in lista:
+def _tiers(entries: Any, that: str, *, discounted: bool = False) -> list[dict[str, float]]:
+    if not isinstance(entries, list) or not entries:
+        raise ValueError(f"{that}: no puede quedar vacío.")
+    clean = []
+    for t in entries:
         if not isinstance(t, dict):
-            raise ValueError(f"{que}: cada tramo necesita «desde» y «monto».")
-        desde = int(_number(t.get("desde"), f"{que}: «desde»"))
-        fila: dict[str, float] = {"desde": desde, "monto": _number(t.get("monto"), f"{que}: «monto»")}
+            raise ValueError(f"{that}: cada tramo necesita «desde» y «monto».")
+        since = int(_number(t.get("desde"), f"{that}: «desde»"))
+        row: dict[str, float] = {"desde": since, "monto": _number(t.get("monto"), f"{that}: «monto»")}
         if discounted:
-            descontar = int(_number(t.get("descontar") or 0, f"{que}: «descontar»"))
-            if descontar > desde:
-                raise ValueError(f"{que}: el tramo desde {desde} ventas no puede descontar {descontar}.")
-            fila["descontar"] = descontar
-        limpios.append(fila)
-    limpios.sort(key=lambda t: t["desde"])
-    if len({t["desde"] for t in limpios}) != len(limpios):
-        raise ValueError(f"{que}: dos tramos empiezan en la misma cantidad de ventas.")
-    if discounted and limpios[0]["desde"] != 0:
-        raise ValueError(f"{que}: el primer tramo tiene que empezar en 0 ventas.")
-    if not discounted and limpios[0]["desde"] < 1:
-        raise ValueError(f"{que}: los tramos empiezan en 1 venta o más.")
-    return limpios
+            discount = int(_number(t.get("descontar") or 0, f"{that}: «descontar»"))
+            if discount > since:
+                raise ValueError(f"{that}: el tramo desde {since} ventas no puede descontar {discount}.")
+            row["descontar"] = discount
+        clean.append(row)
+    clean.sort(key=lambda t: t["desde"])
+    if len({t["desde"] for t in clean}) != len(clean):
+        raise ValueError(f"{that}: dos tramos empiezan en la misma cantidad de ventas.")
+    if discounted and clean[0]["desde"] != 0:
+        raise ValueError(f"{that}: el primer tramo tiene que empezar en 0 ventas.")
+    if not discounted and clean[0]["desde"] < 1:
+        raise ValueError(f"{that}: los tramos empiezan en 1 venta o más.")
+    return clean
 
 
-def validate_parameters(rol: str, parametros: Any) -> dict[str, Any]:
+def validate_parameters(role: str, params: Any) -> dict[str, Any]:
     """Los parametros de un rol, comprobados y limpios. Levanta `ValueError`.
 
     Solo se admiten las piezas del rol (`PIECES_BY_ROLE`); las que falten se
     dejan sin guardar y pagan con las de por defecto.
     """
-    if rol not in PIECES_BY_ROLE:
+    if role not in PIECES_BY_ROLE:
         raise ValueError("Rol desconocido.")
-    if not isinstance(parametros, dict):
+    if not isinstance(params, dict):
         raise ValueError("Los parámetros tienen que ser un objeto.")
-    desconocidas = set(parametros) - set(PIECES_BY_ROLE[rol])
-    if desconocidas:
-        raise ValueError(f"{role_label(rol)} no admite: {', '.join(sorted(desconocidas))}.")
+    unknown = set(params) - set(PIECES_BY_ROLE[role])
+    if unknown:
+        raise ValueError(f"{role_label(role)} no admite: {', '.join(sorted(unknown))}.")
 
-    limpio: dict[str, Any] = {}
-    for clave, pieza in parametros.items():
-        if clave == "propia":
-            limpio[clave] = _amount_or_pct(pieza, "Venta propia")
-        elif clave == "equipo":
-            base = _amount_or_pct(pieza, "Venta de equipo")
-            alcance = pieza.get("alcance")
-            if alcance not in ALCANCES:
+    clean: dict[str, Any] = {}
+    for key, piece in params.items():
+        if key == "propia":
+            clean[key] = _amount_or_pct(piece, "Venta propia")
+        elif key == "equipo":
+            base = _amount_or_pct(piece, "Venta de equipo")
+            scope = piece.get("alcance")
+            if scope not in SCOPES:
                 raise ValueError("Venta de equipo: el alcance no es válido.")
-            limpio[clave] = {**base, "alcance": alcance, "excluir_oficina": bool(pieza.get("excluir_oficina"))}
-        elif clave == "factor":
-            if pieza not in FACTORES:
+            clean[key] = {**base, "alcance": scope, "excluir_oficina": bool(piece.get("excluir_oficina"))}
+        elif key == "factor":
+            if piece not in FACTORS:
                 raise ValueError("El factor de cumplimiento no es válido.")
-            limpio[clave] = pieza
-        elif clave == "tramos_asesor":
-            limpio[clave] = _tramos(pieza, "Tramos del asesor", discounted=True)
-        elif clave in ("bono_tramos", "bono_por_asesor"):
-            limpio[clave] = _tramos(pieza, "Bono por ventas")
-        elif clave == "bono_por_unidad":
-            limpio[clave] = {"monto": _number((pieza or {}).get("monto"), "Bono por unidad")}
-        elif clave == "escalon_crecimiento":
-            pieza = pieza or {}
-            limpio[clave] = {
-                "umbral_pct": _number(pieza.get("umbral_pct"), "Umbral de crecimiento", None),
-                "alto": _number(pieza.get("alto"), "Monto con crecimiento"),
-                "bajo": _number(pieza.get("bajo"), "Monto sin crecimiento"),
+            clean[key] = piece
+        elif key == "tramos_asesor":
+            clean[key] = _tiers(piece, "Tramos del asesor", discounted=True)
+        elif key in ("bono_tramos", "bono_por_asesor"):
+            clean[key] = _tiers(piece, "Bono por ventas")
+        elif key == "bono_por_unidad":
+            clean[key] = {"monto": _number((piece or {}).get("monto"), "Bono por unidad")}
+        elif key == "escalon_crecimiento":
+            piece = piece or {}
+            clean[key] = {
+                "umbral_pct": _number(piece.get("umbral_pct"), "Umbral de crecimiento", None),
+                "alto": _number(piece.get("alto"), "Monto con crecimiento"),
+                "bajo": _number(piece.get("bajo"), "Monto sin crecimiento"),
             }
-        elif clave == "bono_churn":
-            if not isinstance(pieza, list):
+        elif key == "bono_churn":
+            if not isinstance(piece, list):
                 raise ValueError("Bono por churn: tiene que ser una lista.")
-            filas = [
+            rows = [
                 {"max": _number(f.get("max"), "Bono por churn: «max»", None),
                  "monto": _number(f.get("monto"), "Bono por churn: «monto»")}
-                for f in pieza
+                for f in piece
                 if isinstance(f, dict)
             ]
-            limpio[clave] = sorted(filas, key=lambda f: f["max"], reverse=True)
-        elif clave == "bono_empresa":
-            pieza = pieza or {}
-            limpio[clave] = {
-                "monto": _number(pieza.get("monto"), "Bono de la administradora"),
-                "excedente": _number(pieza.get("excedente"), "Bono por superar el 100 %"),
+            clean[key] = sorted(rows, key=lambda f: f["max"], reverse=True)
+        elif key == "bono_empresa":
+            piece = piece or {}
+            clean[key] = {
+                "monto": _number(piece.get("monto"), "Bono de la administradora"),
+                "excedente": _number(piece.get("excedente"), "Bono por superar el 100 %"),
             }
-    return limpio
+    return clean

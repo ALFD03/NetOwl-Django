@@ -29,7 +29,7 @@ export type Breakpoint = keyof typeof tokens.screens;
 
 /** Ancho mínimo de cada breakpoint, en px. */
 export const BREAKPOINTS = Object.fromEntries(
-  Object.entries(tokens.screens).map(([nombre, valor]) => [nombre, parseInt(valor, 10)]),
+  Object.entries(tokens.screens).map(([name, value]) => [name, parseInt(value, 10)]),
 ) as Record<Breakpoint, number>;
 
 /** Media query de "desde este breakpoint", la misma que genera el prefijo de Tailwind. */

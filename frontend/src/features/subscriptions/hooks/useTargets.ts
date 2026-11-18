@@ -25,10 +25,10 @@ export function useTargetsConfig(): TargetsConfig {
 }
 
 /**
- * El resolvedor de la página. `zonas` es el `zonasConfig` de los reportes; las
+ * El resolvedor de la página. `zones` es el `zonesConfig.zones` de los reportes; las
  * páginas que solo pintan totales globales lo omiten.
  */
-export function useTargets(zonas?: readonly ZoneConfig[]): TargetsResolver {
+export function useTargets(zones?: readonly ZoneConfig[]): TargetsResolver {
   const config = useTargetsConfig();
-  return useMemo(() => createResolver(config, zonas ?? []), [config, zonas]);
+  return useMemo(() => createResolver(config, zones ?? []), [config, zones]);
 }

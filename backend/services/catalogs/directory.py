@@ -16,9 +16,9 @@ from typing import Any
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
-from core.fixtures import ignorados
+from core.fixtures import ignored_names
 from core.odoo_names import name_key
-from services.catalogs.models import PersonaVentas
+from services.catalogs.models import SalesPerson
 
 # Las columnas del export que nombran a una persona de ventas, con el rol
 # que se le sugiere a quien aparece en cada una (el equipo lo elige quien registra). El orden es el de la
@@ -40,12 +40,12 @@ def registered_keys() -> dict[str, set[str]]:
     Es el mismo cruce que hace el calculo de comisiones: lo que aqui sale como
     pendiente es exactamente lo que alli no encuentra a nadie.
     """
-    claves: dict[str, set[str]] = {columna: set() for columna in SALES_COLUMNS}
-    for persona in PersonaVentas.objects.prefetch_related("alias"):
-        claves["medio"] |= persona.claves("medio")
-        claves["medio_supervisor"] |= persona.claves("supervisor")
-        claves["vendedor"] |= persona.claves("usuario")
-    return claves
+    keys: dict[str, set[str]] = {column: set() for column in SALES_COLUMNS}
+    for person in SalesPerson.objects.prefetch_related("aliases"):
+        keys["medio"] |= person.name_keys("medio")
+        keys["medio_supervisor"] |= person.name_keys("supervisor")
+        keys["vendedor"] |= person.name_keys("usuario")
+    return keys
 
 
 def people_outside_directory() -> list[dict[str, Any]]:
@@ -60,16 +60,16 @@ def people_outside_directory() -> list[dict[str, Any]]:
     importado con `Medio` simplemente no tiene esa lista.
     """
     db = DBConnector()
-    presentes = db.columns(TableNames.SUBSCRIPTIONS)
-    columnas = [c for c in SALES_COLUMNS if c in presentes]
-    if not columnas:
+    present = db.columns(TableNames.SUBSCRIPTIONS)
+    columns = [c for c in SALES_COLUMNS if c in present]
+    if not columns:
         return []
 
     union = " UNION ALL ".join(
         f"""SELECT '{c}' AS columna, TRIM({c}) AS nombre, orden_producto
             FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS}"
             WHERE {c} IS NOT NULL AND TRIM({c}) <> ''"""
-        for c in columnas
+        for c in columns
     )
     df = db.query(
         f"""
@@ -81,23 +81,25 @@ def people_outside_directory() -> list[dict[str, Any]]:
     if df.empty:
         return []
 
-    registradas = registered_keys()
-    callados = {name_key(n) for n in ignorados("ventas")}
+    registered = registered_keys()
+    silent = {name_key(n) for n in ignored_names("ventas")}
 
+    df = df.assign(
+        nombre=df["nombre"].astype(str),
+        columna=df["columna"].astype(str),
+        ordenes=df["ordenes"].astype(int),
+    )
+    df["clave"] = df["nombre"].map(name_key)
+    known = [bool(c) and c not in registered[col] and c not in silent for c, col in zip(df["clave"], df["columna"], strict=True)]
     by_key: dict[str, dict[str, Any]] = {}
-    for _, fila in df.iterrows():
-        nombre = str(fila["nombre"])
-        columna = str(fila["columna"])
-        clave = name_key(nombre)
-        if not clave or clave in registradas[columna] or clave in callados:
-            continue
-        entrada = by_key.setdefault(clave, {"nombre": nombre, "ordenes": {}})
-        entrada["ordenes"][columna] = int(fila["ordenes"])
+    for row in df[known].to_dict("records"):
+        entry = by_key.setdefault(row["clave"], {"nombre": row["nombre"], "ordenes": {}})
+        entry["ordenes"][row["columna"]] = row["ordenes"]
 
-    filas = []
-    for entrada in by_key.values():
-        primera = next(c for c in SALES_COLUMNS if c in entrada["ordenes"])
-        entrada["rol"] = SALES_COLUMNS[primera]
-        filas.append(entrada)
-    return sorted(filas, key=lambda f: -max(f["ordenes"].values()))
+    rows = []
+    for entry in by_key.values():
+        first = next(c for c in SALES_COLUMNS if c in entry["ordenes"])
+        entry["rol"] = SALES_COLUMNS[first]
+        rows.append(entry)
+    return sorted(rows, key=lambda f: -max(f["ordenes"].values()))
 

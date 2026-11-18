@@ -7,8 +7,8 @@ oficina; el resto de la estructura (a quien responde un supervisor, que
 unidades lleva cada quien) la dicen las membresias.
 
 Las tarifas, tramos y bonos ya no estan aqui: son las condiciones de cada rol
-de cada equipo (`catalogos.CondicionesEquipo`). Un periodo cerrado guarda copia
-de las que uso (ver `ComisionPeriodo`), asi que cambiarlas solo afecta a lo
+de cada equipo (`catalogos.TeamConditions`). Un periodo cerrado guarda copia
+de las que uso (ver `CommissionPeriod`), asi que cambiarlas solo afecta a lo
 que se calcule despues.
 """
 
@@ -19,43 +19,37 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.db import models
 
-from services.catalogs.models import PersonaVentas
+from services.catalogs.models import SalesPerson
 
 
-# Valores por defecto de campos que ya no existen. Se conservan porque las
-# migraciones 0001 y 0009 los referencian por su ruta; no se usan para nada mas.
-def _tramos_asesor() -> list[dict]:
+# Valor por defecto de tres campos que ya no existen. Se conserva porque las
+# migraciones 0001 y 0009 lo referencian por su ruta; no se usa para nada mas.
+def _empty_list() -> list[dict]:
     return []
 
 
-def _tramos_un() -> list[dict]:
-    return []
-
-
-def _bonos_meta() -> list[dict]:
-    return []
-
-
-class CondicionesComision(models.Model):
+class CommissionConditions(models.Model):
     """La ventana de pago de los periodos. Fila unica (pk=1).
 
     Es lo unico global de las condiciones: las reglas que deciden si una venta
     cuenta son las mismas para todos los equipos.
 
-    `dia_promocional` es el dia en que suelen empezar los dias promocionales,
+    `promo_day` es el dia en que suelen empezar los dias promocionales,
     que es donde se corta cada periodo de comisiones; se propone al calcular
-    y se puede cambiar mes a mes. `dias_espera` son los dias tras el cierre
+    y se puede cambiar mes a mes. `wait_days` son los dias tras el cierre
     del periodo antes de calcularlo, para que la primera factura este pagada.
-    `dia_corte` es el dia del mes siguiente hasta el que un pago adelantado de
+    `cutoff_day` es el dia del mes siguiente hasta el que un pago adelantado de
     lo instalado en dias promocionales cuenta en el periodo (ver
-    `ComisionPeriodo.corte_adelantos`); tambien se propone y se cambia por mes.
+    `CommissionPeriod.advance_cutoff`); tambien se propone y se cambia por mes.
     """
 
-    dia_promocional = models.PositiveSmallIntegerField(default=25)
-    dias_espera = models.PositiveSmallIntegerField(default=15)
-    dia_corte = models.PositiveSmallIntegerField(default=22)
-    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    actualizado_en = models.DateTimeField(auto_now=True)
+    promo_day = models.PositiveSmallIntegerField(default=25, db_column="dia_promocional")
+    wait_days = models.PositiveSmallIntegerField(default=15, db_column="dias_espera")
+    cutoff_day = models.PositiveSmallIntegerField(default=22, db_column="dia_corte")
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        db_column="actualizado_por_id",
+    )
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "comisiones_condiciones"
@@ -63,10 +57,10 @@ class CondicionesComision(models.Model):
         verbose_name_plural = "condiciones de comision"
 
     @classmethod
-    def actual(cls) -> CondicionesComision:
+    def current(cls) -> CommissionConditions:
         """La fila unica, creandola con la politica por defecto si falta."""
-        fila, _ = cls.objects.get_or_create(pk=1)
-        return fila
+        row, _ = cls.objects.get_or_create(pk=1)
+        return row
 
     def __str__(self):
         return "condiciones de comision"
@@ -80,59 +74,63 @@ PERIOD_STATE_CHOICES = [
 ]
 
 
-class ComisionPeriodo(models.Model):
+class CommissionPeriod(models.Model):
     """Un periodo de comisiones: un mes, con su ventana de instalacion.
 
     El periodo de un mes no va del 1 al ultimo dia sino del inicio de los dias
     promocionales del mes anterior al fin del mes. Lo instalado en dias
     promocionales paga su primera mensualidad un mes mas tarde, asi que su
     comision es del periodo siguiente, **salvo que el cliente adelante el
-    pago**: si la primera mensualidad estaba pagada el dia `corte_adelantos`
+    pago**: si la primera mensualidad estaba pagada el dia `advance_cutoff`
     (el 22 del mes siguiente, o el que se escriba), cuenta en este y ya no en
     el siguiente. Ese corte es ademas la ventana de pago de **todo** el periodo:
     una venta sin la primera mensualidad pagada hasta ese dia no se paga,
     aunque despues lleguen facturas pagadas. Como los dias promocionales se adelantan o se retrasan, el
-    inicio de los de cada mes se guarda aqui (`inicio_promo`) y el periodo
+    inicio de los de cada mes se guarda aqui (`promo_start`) y el periodo
     siguiente arranca en el.
 
     **Un borrador no guarda resultados**: se recalcula cada vez que se abre,
     con las suscripciones de ese momento. Al cerrarlo se congela en
-    `ComisionVenta` y `ComisionPago`, con una copia de las condiciones: la
+    `CommissionSale` y `CommissionPayment`, con una copia de las condiciones: la
     tabla de suscripciones se trunca en cada importacion y su estado es
     siempre el de hoy, asi que recalcular un mes pasado daria otra cosa.
     """
 
-    periodo = models.CharField(max_length=7, unique=True)
-    inicio = models.DateField()
-    inicio_promo = models.DateField()
-    # Nulo: el `dia_corte` de las condiciones, en el mes siguiente.
-    corte_adelantos = models.DateField(null=True, blank=True)
-    estado = models.CharField(max_length=10, choices=PERIOD_STATE_CHOICES, default="borrador")
+    period = models.CharField(max_length=7, unique=True, db_column="periodo")
+    start = models.DateField(db_column="inicio")
+    promo_start = models.DateField(db_column="inicio_promo")
+    # Nulo: el `cutoff_day` de las condiciones, en el mes siguiente.
+    advance_cutoff = models.DateField(null=True, blank=True, db_column="corte_adelantos")
+    status = models.CharField(max_length=10, choices=PERIOD_STATE_CHOICES, default="borrador", db_column="estado")
     # La tasa CONATEL con que se paga: el bolivar oficial del dia 1 del mes
     # siguiente, y de que publicacion del BCV salio (la ultima antes, si ese
     # dia no hubo). Se consulta una vez: el valor de un dia pasado no cambia.
-    tasa_conatel = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True)
-    tasa_conatel_publicada = models.DateField(null=True, blank=True)
+    conatel_rate = models.DecimalField(max_digits=14, decimal_places=4, null=True, blank=True, db_column="tasa_conatel")
+    conatel_rate_published = models.DateField(null=True, blank=True, db_column="tasa_conatel_publicada")
     # Lo congelado al cerrar: las condiciones usadas y el resumen del informe.
-    condiciones = models.JSONField(null=True, blank=True)
-    resumen = models.JSONField(null=True, blank=True)
-    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    creado_en = models.DateTimeField(auto_now_add=True)
-    cerrado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    cerrado_en = models.DateTimeField(null=True, blank=True)
+    conditions = models.JSONField(null=True, blank=True, db_column="condiciones")
+    summary = models.JSONField(null=True, blank=True, db_column="resumen")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        db_column="creado_por_id",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_column="creado_en")
+    closed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        db_column="cerrado_por_id",
+    )
+    closed_at = models.DateTimeField(null=True, blank=True, db_column="cerrado_en")
 
     class Meta:
         db_table = "comisiones_periodos"
-        ordering = ["-periodo"]
+        ordering = ["-period"]
         verbose_name = "periodo de comisiones"
         verbose_name_plural = "periodos de comisiones"
 
     @property
-    def cerrado(self) -> bool:
-        return self.estado == "cerrado"
+    def is_closed(self) -> bool:
+        return self.status == "cerrado"
 
     def __str__(self):
-        return self.periodo
+        return self.period
 
 
 REVIEW_DECISION_CHOICES = [
@@ -145,7 +143,7 @@ REVIEW_DECISION_CHOICES = [
 ]
 
 
-class RevisionComision(models.Model):
+class CommissionReview(models.Model):
     """La decision a mano sobre una venta: contarla en su periodo o no contarla.
 
     Las que van a revision son las que las facturas no resuelven: paso a plan
@@ -161,26 +159,28 @@ class RevisionComision(models.Model):
     segundo periodo eso lo dice el cierre del anterior y no se decide.
     """
 
-    orden = models.CharField(max_length=80)
-    periodo_origen = models.CharField(max_length=7)
+    order = models.CharField(max_length=80, db_column="orden")
+    source_period = models.CharField(max_length=7, db_column="periodo_origen")
     decision = models.CharField(max_length=10, choices=REVIEW_DECISION_CHOICES)
-    nota = models.CharField(max_length=255, blank=True, default="")
-    decidido_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    decidido_en = models.DateTimeField(auto_now=True)
+    note = models.CharField(max_length=255, blank=True, default="", db_column="nota")
+    decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        db_column="decidido_por_id",
+    )
+    decided_at = models.DateTimeField(auto_now=True, db_column="decidido_en")
 
     class Meta:
         db_table = "comisiones_revisiones"
         constraints = [
-            models.UniqueConstraint(fields=["orden", "periodo_origen"], name="comision_revision_unica"),
+            models.UniqueConstraint(fields=["order", "source_period"], name="comision_revision_unica"),
         ]
         verbose_name = "revision de venta"
         verbose_name_plural = "revisiones de ventas"
 
     def __str__(self):
-        return f"{self.orden} ({self.periodo_origen}): {self.decision}"
+        return f"{self.order} ({self.source_period}): {self.decision}"
 
 
-class VentaManual(models.Model):
+class ManualSale(models.Model):
     """Una venta agregada a mano a un periodo: cuenta en el, se instalara cuando se instalara.
 
     Para lo que las reglas no recogen y hay que pagar igual. Las personas que
@@ -189,66 +189,70 @@ class VentaManual(models.Model):
     cerrado: una venta no se paga dos veces.
     """
 
-    orden = models.CharField(max_length=80)
-    periodo = models.CharField(max_length=7)
-    nota = models.CharField(max_length=255)
-    agregado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    agregado_en = models.DateTimeField(auto_now_add=True)
+    order = models.CharField(max_length=80, db_column="orden")
+    period = models.CharField(max_length=7, db_column="periodo")
+    note = models.CharField(max_length=255, db_column="nota")
+    added_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        db_column="agregado_por_id",
+    )
+    added_at = models.DateTimeField(auto_now_add=True, db_column="agregado_en")
 
     class Meta:
         db_table = "comisiones_ventas_manuales"
         constraints = [
-            models.UniqueConstraint(fields=["orden", "periodo"], name="comision_manual_unica"),
+            models.UniqueConstraint(fields=["order", "period"], name="comision_manual_unica"),
         ]
         verbose_name = "venta agregada a mano"
         verbose_name_plural = "ventas agregadas a mano"
 
     def __str__(self):
-        return f"{self.orden} ({self.periodo})"
+        return f"{self.order} ({self.period})"
 
 
-class IndicadorComision(models.Model):
+class CommissionIndicator(models.Model):
     """Lo que de una persona en un periodo no sale de las suscripciones.
 
-    - `cumplimiento_pct`: el % de objetivo de un supervisor o coordinador de
+    - `compliance_pct`: el % de objetivo de un supervisor o coordinador de
       oficina, escrito a mano, que multiplica su total (tope 100%). Manda sobre
       el calculado del % Ventas de su site (`calculation._cumplimientos`), y es lo
       unico que vale para quien no tiene calculo. No hay uno general.
-    - `crecimiento_pct`: corrige a mano el crecimiento de un coordinador de UN
+    - `growth_pct`: corrige a mano el crecimiento de un coordinador de UN
       cuando Unidades de negocio no tiene el mes calculado.
     """
 
-    periodo = models.CharField(max_length=7)
-    persona = models.ForeignKey(PersonaVentas, on_delete=models.CASCADE, related_name="indicadores_comision")
-    cumplimiento_pct = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    crecimiento_pct = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    actualizado_en = models.DateTimeField(auto_now=True)
+    period = models.CharField(max_length=7, db_column="periodo")
+    person = models.ForeignKey(SalesPerson, on_delete=models.CASCADE, related_name="commission_indicators", db_column="persona_id")
+    compliance_pct = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, db_column="cumplimiento_pct")
+    growth_pct = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, db_column="crecimiento_pct")
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        db_column="actualizado_por_id",
+    )
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "comisiones_indicadores"
         constraints = [
-            models.UniqueConstraint(fields=["periodo", "persona"], name="comision_indicador_unico"),
+            models.UniqueConstraint(fields=["period", "person"], name="comision_indicador_unico"),
         ]
         verbose_name = "indicador de comision"
         verbose_name_plural = "indicadores de comision"
 
     def __str__(self):
-        return f"{self.persona} {self.periodo}"
+        return f"{self.person} {self.period}"
 
 
-class ComisionVenta(models.Model):
+class CommissionSale(models.Model):
     """Una venta de un periodo cerrado, tal y como se clasifico al cerrarlo.
 
-    `orden` y `clasificacion` son columnas porque se consultan: una venta
+    `order` y `classification` son columnas porque se consultan: una venta
     valida de un periodo cerrado ya se pago y no vuelve a contar en otro. El
-    resto de la fila (cliente, plan, personas, estados) va en `datos`.
+    resto de la fila (cliente, plan, personas, estados) va en `data`.
     """
 
-    periodo = models.ForeignKey(ComisionPeriodo, on_delete=models.CASCADE, related_name="ventas")
-    orden = models.CharField(max_length=80, db_index=True)
-    clasificacion = models.CharField(max_length=12)
-    datos = models.JSONField()
+    period = models.ForeignKey(CommissionPeriod, on_delete=models.CASCADE, related_name="sales", db_column="periodo_id")
+    order = models.CharField(max_length=80, db_index=True, db_column="orden")
+    classification = models.CharField(max_length=12, db_column="clasificacion")
+    data = models.JSONField(db_column="datos")
 
     class Meta:
         db_table = "comisiones_ventas"
@@ -256,23 +260,25 @@ class ComisionVenta(models.Model):
         verbose_name_plural = "ventas de periodos cerrados"
 
 
-class ComisionPago(models.Model):
+class CommissionPayment(models.Model):
     """Lo que cobro una persona en un periodo cerrado.
 
     El nombre y el cargo se copian: el directorio puede cambiar despues y el
     pago tiene que seguir diciendo a quien se le hizo y por que.
     """
 
-    periodo = models.ForeignKey(ComisionPeriodo, on_delete=models.CASCADE, related_name="pagos")
-    persona = models.ForeignKey(PersonaVentas, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    nombre = models.CharField(max_length=170)
-    cargo = models.CharField(max_length=16)
-    neto = models.DecimalField(max_digits=12, decimal_places=2)
-    datos = models.JSONField()
+    period = models.ForeignKey(CommissionPeriod, on_delete=models.CASCADE, related_name="payments", db_column="periodo_id")
+    person = models.ForeignKey(SalesPerson, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        db_column="persona_id",
+    )
+    name = models.CharField(max_length=170, db_column="nombre")
+    title = models.CharField(max_length=16, db_column="cargo")
+    net = models.DecimalField(max_digits=12, decimal_places=2, db_column="neto")
+    data = models.JSONField(db_column="datos")
 
     class Meta:
         db_table = "comisiones_pagos"
-        ordering = ["cargo", "nombre"]
+        ordering = ["title", "name"]
         verbose_name = "pago de un periodo cerrado"
         verbose_name_plural = "pagos de periodos cerrados"
 
@@ -281,10 +287,10 @@ class ImmutableClose(Exception):
     """Se intento modificar o borrar un cierre archivado."""
 
 
-class ComisionCierreArchivado(models.Model):
+class ArchivedClose(models.Model):
     """La copia de un cierre, guardada en el momento de reabrir el periodo.
 
-    Reabrir borra lo congelado (`ComisionVenta`, `ComisionPago`, las condiciones y
+    Reabrir borra lo congelado (`CommissionSale`, `CommissionPayment`, las condiciones y
     el resumen) para que el periodo se recalcule, y esas filas no se pueden
     reconstruir: las suscripciones y las facturas se reemplazan en cada
     importacion. Antes de borrarlas se copian aqui, enteras, con quien cerro,
@@ -293,33 +299,35 @@ class ComisionCierreArchivado(models.Model):
     Es **solo de anadir**: una nomina pagada no se reescribe desde la aplicacion.
     """
 
-    periodo = models.ForeignKey(ComisionPeriodo, on_delete=models.PROTECT, related_name="archivos")
+    period = models.ForeignKey(CommissionPeriod, on_delete=models.PROTECT, related_name="archives", db_column="periodo_id")
     version = models.PositiveIntegerField()
-    cerrado_por = models.CharField(max_length=150, blank=True, default="")
-    cerrado_en = models.DateTimeField(null=True, blank=True)
-    reabierto_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    reabierto_por_nombre = models.CharField(max_length=150, blank=True, default="")
-    reabierto_en = models.DateTimeField(auto_now_add=True)
-    motivo = models.TextField()
+    closed_by = models.CharField(max_length=150, blank=True, default="", db_column="cerrado_por")
+    closed_at = models.DateTimeField(null=True, blank=True, db_column="cerrado_en")
+    reopened_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        db_column="reabierto_por_id",
+    )
+    reopened_by_name = models.CharField(max_length=150, blank=True, default="", db_column="reabierto_por_nombre")
+    reopened_at = models.DateTimeField(auto_now_add=True, db_column="reabierto_en")
+    reason = models.TextField(db_column="motivo")
     # Para listar sin abrir la copia.
-    total_neto = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
-    pagos = models.PositiveIntegerField(default=0)
-    ventas = models.PositiveIntegerField(default=0)
+    net_total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"), db_column="total_neto")
+    payments = models.PositiveIntegerField(default=0, db_column="pagos")
+    sales = models.PositiveIntegerField(default=0, db_column="ventas")
     # El cierre entero: los campos del periodo, las condiciones, el resumen, y
     # cada venta y cada pago tal y como se congelaron.
-    copia = models.JSONField()
+    snapshot = models.JSONField(db_column="copia")
 
     class Meta:
         db_table = "comisiones_cierres_archivados"
-        ordering = ["periodo", "-version"]
+        ordering = ["period", "-version"]
         constraints = [
-            models.UniqueConstraint(fields=["periodo", "version"], name="uq_cierre_archivado_version"),
+            models.UniqueConstraint(fields=["period", "version"], name="uq_cierre_archivado_version"),
         ]
         verbose_name = "cierre archivado"
         verbose_name_plural = "cierres archivados"
 
     def __str__(self):
-        return f"{self.periodo} v{self.version}"
+        return f"{self.period} v{self.version}"
 
     def save(self, *args, **kwargs):
         if not self._state.adding:

@@ -15,23 +15,23 @@ import { useVisit } from '@/shared/page/PageData';
  * Tras cada escritura se recarga la página: el informe de un borrador se
  * recalcula en el servidor y cualquier decisión mueve los totales.
  */
-export function useCommissionsReport(periodo: string, exists: boolean) {
+export function useCommissionsReport(period: string, exists: boolean) {
   const visit = useVisit();
   // Guardadas con su periodo: la página reutiliza el componente al cambiar de
   // mes, y el detalle de otro periodo no vale para este.
-  const [cache, setCache] = useState<{ period: string; filas: CommissionSale[] } | null>(null);
-  const ventas = cache?.period === periodo ? cache.filas : null;
-  const [cargandoVentas, setLoadingSales] = useState(false);
-  const [guardando, setGuardando] = useState(false);
+  const [cache, setCache] = useState<{ period: string; rows: CommissionSale[] } | null>(null);
+  const sales = cache?.period === period ? cache.rows : null;
+  const [loadingSales, setLoadingSales] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // La tasa de hoy no viaja en los props: es de un tercero y no debe frenar la
   // página. Se pide una vez; si falla, se dice en `fuente`.
-  const [tasaHoy, setTodayRate] = useState<BolivarRate | null>(null);
+  const [todayRate, setTodayRate] = useState<BolivarRate | null>(null);
   useEffect(() => {
     let current = true;
     commissionsApi
-      .tasaActual()
+      .currentRate()
       .then((r) => current && setTodayRate({ rate: r.rate, source: r.source }))
       .catch((err: unknown) => current && setTodayRate({ rate: null, source: getApiErrorMessage(err, 'No se pudo consultar.') }));
     return () => {
@@ -39,52 +39,52 @@ export function useCommissionsReport(periodo: string, exists: boolean) {
     };
   }, []);
 
-  const cargarVentas = useCallback(async () => {
-    if (!exists || ventas || cargandoVentas) return ventas;
+  const loadSales = useCallback(async () => {
+    if (!exists || sales || loadingSales) return sales;
     setLoadingSales(true);
     try {
-      const filas = await commissionsApi.ventas<CommissionSale>(periodo);
-      setCache({ period: periodo, filas });
-      return filas;
+      const rows = await commissionsApi.sales<CommissionSale>(period);
+      setCache({ period, rows });
+      return rows;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo cargar el detalle de ventas.'));
       return null;
     } finally {
       setLoadingSales(false);
     }
-  }, [exists, ventas, cargandoVentas, periodo]);
+  }, [exists, sales, loadingSales, period]);
 
   /** Ejecuta una escritura; si sale bien, el informe llega solo y el detalle se vuelve a pedir. */
-  const escribir = async (accion: () => Promise<unknown>, message: string) => {
-    setGuardando(true);
+  const write = async (action: () => Promise<unknown>, message: string) => {
+    setSaving(true);
     setError(null);
     try {
-      await accion();
+      await action();
       setCache(null);
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, message));
       return false;
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
   return {
-    ventas, cargandoVentas, cargarVentas,
-    tasaHoy,
-    guardando, error, setError,
-    guardarPeriodo: (body: { period: string; promo_start: string; start?: string; advance_cutoff?: string }) =>
-      escribir(() => commissionsApi.guardarPeriodo(body), 'No se pudo guardar el periodo.'),
-    cerrar: () => escribir(() => commissionsApi.cerrar(periodo), 'No se pudo cerrar el periodo.'),
-    reabrir: (motivo: string, confirmacion: string) =>
-      escribir(() => commissionsApi.reabrir(periodo, motivo, confirmacion), 'No se pudo reabrir el periodo.'),
+    sales, loadingSales, loadSales,
+    todayRate,
+    saving, error, setError,
+    savePeriod: (body: { period: string; promo_start: string; start?: string; advance_cutoff?: string }) =>
+      write(() => commissionsApi.savePeriod(body), 'No se pudo guardar el periodo.'),
+    closePeriod: () => write(() => commissionsApi.closePeriod(period), 'No se pudo cerrar el periodo.'),
+    reopen: (reason: string, confirmation: string) =>
+      write(() => commissionsApi.reopen(period, reason, confirmation), 'No se pudo reabrir el periodo.'),
     /** Tras borrarlo, el periodo ya no existe: se vuelve a la página sin él, no se recarga. */
-    borrar: async (confirmacion: string) => {
-      setGuardando(true);
+    deleteDraft: async (confirmation: string) => {
+      setSaving(true);
       setError(null);
       try {
-        await commissionsApi.borrar(periodo, confirmacion);
+        await commissionsApi.deleteDraft(period, confirmation);
         setCache(null);
         visit({}, { remount: true });
         return true;
@@ -92,26 +92,26 @@ export function useCommissionsReport(periodo: string, exists: boolean) {
         setError(getApiErrorMessage(err, 'No se pudo borrar el informe.'));
         return false;
       } finally {
-        setGuardando(false);
+        setSaving(false);
       }
     },
-    decidir: (ordenes: string[], decision: '' | ReviewDecision) =>
-      escribir(
-        () => commissionsApi.guardarRevision({ period: periodo, orders: ordenes, decision }),
+    decide: (orders: string[], decision: '' | ReviewDecision) =>
+      write(
+        () => commissionsApi.saveReview({ period, orders, decision }),
         'No se pudo guardar la decisión.',
       ),
-    agregarManual: (ordenes: string[], nota: string) =>
-      escribir(() => commissionsApi.agregarManual({ period: periodo, orders: ordenes, note: nota }), 'No se pudo agregar la venta.'),
-    quitarManual: (orden: string) =>
-      escribir(() => commissionsApi.quitarManual(periodo, orden), 'No se pudo quitar la venta.'),
-    guardarCumplimiento: (personId: number, valor: number | null) =>
-      escribir(
-        () => commissionsApi.guardarIndicador({ period: periodo, person_id: personId, compliance_pct: valor }),
+    addManual: (orders: string[], note: string) =>
+      write(() => commissionsApi.addManual({ period, orders, note }), 'No se pudo agregar la venta.'),
+    removeManual: (order: string) =>
+      write(() => commissionsApi.removeManual(period, order), 'No se pudo quitar la venta.'),
+    saveCompliance: (personId: number, value: number | null) =>
+      write(
+        () => commissionsApi.saveIndicator({ period, person_id: personId, compliance_pct: value }),
         'No se pudo guardar el cumplimiento.',
       ),
-    guardarCrecimiento: (personId: number, valor: number | null) =>
-      escribir(
-        () => commissionsApi.guardarIndicador({ period: periodo, person_id: personId, growth_pct: valor }),
+    saveGrowth: (personId: number, value: number | null) =>
+      write(
+        () => commissionsApi.saveIndicator({ period, person_id: personId, growth_pct: value }),
         'No se pudo guardar el crecimiento.',
       ),
   };

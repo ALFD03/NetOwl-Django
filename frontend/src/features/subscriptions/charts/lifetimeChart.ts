@@ -27,14 +27,14 @@ export const ACCUMULATED_COLOR = CHART_PALETTE[9];
  * Es un gráfico mixto; el envoltorio `BarChart` lo tipa como solo barras, pero
  * Chart.js tiene registrados los dos controladores, así que la línea se dibuja.
  */
-export function buildTiersChartData(tramos: LifetimeTier[]): ChartData<'bar'> {
+export function buildTiersChartData(tiers: LifetimeTier[]): ChartData<'bar'> {
   const data: ChartData<'bar' | 'line'> = {
-    labels: tramos.map((t) => t.bucket),
+    labels: tiers.map((t) => t.bucket),
     datasets: [
       {
         type: 'line',
         label: '% acumulado',
-        data: tramos.map((t) => t.cumulative_pct),
+        data: tiers.map((t) => t.cumulative_pct),
         yAxisID: 'acumulado',
         borderColor: ACCUMULATED_COLOR,
         backgroundColor: ACCUMULATED_COLOR,
@@ -47,10 +47,10 @@ export function buildTiersChartData(tramos: LifetimeTier[]): ChartData<'bar'> {
       {
         type: 'bar',
         label: 'Bajas',
-        data: tramos.map((t) => t.churned),
+        data: tiers.map((t) => t.churned),
         yAxisID: 'bajas',
-        backgroundColor: tramos.map((_, i) => `${tierColor(i, tramos.length)}CC`),
-        borderColor: tramos.map((_, i) => tierColor(i, tramos.length)),
+        backgroundColor: tiers.map((_, i) => `${tierColor(i, tiers.length)}CC`),
+        borderColor: tiers.map((_, i) => tierColor(i, tiers.length)),
         borderWidth: 1,
         borderRadius: 8,
         order: 1,
@@ -60,7 +60,7 @@ export function buildTiersChartData(tramos: LifetimeTier[]): ChartData<'bar'> {
   return data as unknown as ChartData<'bar'>;
 }
 
-export function tiersChartOptions(tramos: LifetimeTier[]): ChartOptions<'bar'> {
+export function tiersChartOptions(tiers: LifetimeTier[]): ChartOptions<'bar'> {
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -73,11 +73,11 @@ export function tiersChartOptions(tramos: LifetimeTier[]): ChartOptions<'bar'> {
       },
       datalabels: {
         // Solo en las barras: el % del tramo encima de cada una.
-        display: (ctx) => ctx.datasetIndex === 1 && tramos[ctx.dataIndex]?.churned > 0,
+        display: (ctx) => ctx.datasetIndex === 1 && tiers[ctx.dataIndex]?.churned > 0,
         anchor: 'end',
         align: 'top',
         font: { size: 10, weight: 'bold' },
-        formatter: (_value: number, ctx) => `${tramos[ctx.dataIndex].pct}%`,
+        formatter: (_value: number, ctx) => `${tiers[ctx.dataIndex].pct}%`,
       },
       tooltip: {
         backgroundColor: CHART_CHROME.surfaceDeep,
@@ -87,10 +87,10 @@ export function tiersChartOptions(tramos: LifetimeTier[]): ChartOptions<'bar'> {
         cornerRadius: 8,
         callbacks: {
           label: (ctx: TooltipItem<'bar'>) => {
-            const tramo = tramos[ctx.dataIndex];
+            const tier = tiers[ctx.dataIndex];
             return ctx.datasetIndex === 1
-              ? `Bajas: ${tramo.churned.toLocaleString('en-US')} (${tramo.pct}%)`
-              : `Acumulado: ${tramo.cumulative_pct}% ya se había ido`;
+              ? `Bajas: ${tier.churned.toLocaleString('en-US')} (${tier.pct}%)`
+              : `Acumulado: ${tier.cumulative_pct}% ya se había ido`;
           },
         },
       },

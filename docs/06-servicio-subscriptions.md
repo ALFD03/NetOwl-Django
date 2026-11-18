@@ -25,7 +25,7 @@ services/subscriptions/
 ├── views.py                Dashboard, analytics, results, lifetime, reportes
 ├── views_eta.py            Las vistas del reporte ETA
 ├── urls.py
-└── management/commands/cargar_catalogos.py
+└── management/commands/load_catalogs.py
 ```
 
 ---
@@ -82,14 +82,14 @@ comprobación no puede distinguir un plan nuevo de una línea que nunca lo será
 
 - **Crear plan** → `/catalogos/productos/?new_plan=<nombre>`, que abre el
   formulario ya relleno.
-- **Ignorar** → registra el nombre en `ProductoIgnorado`.
+- **Ignorar** → registra el nombre en `IgnoredProduct`.
 
 Un nombre ignorado deja de contar como candidato en las dos comprobaciones
 (`_check_catalog` y `products_outside_catalog`), que es lo que evita que
 routers, instalaciones y servicios puntuales bloqueen cada importación para
 siempre. Es una pestaña aparte del catálogo para poder deshacer la decisión.
 
-> No confundir con `Plan.declarar_en_eta`: eso es un plan real excluido del
+> No confundir con `Plan.declare_in_eta`: eso es un plan real excluido del
 > reporte de la reguladora, que sigue contando como plan en todas partes.
 
 ### `products_outside_catalog()`
@@ -245,7 +245,7 @@ inactivo y pasa a activo** (`VALID_REACT_ORIGINS`). Después se filtra:
 ### 3.5 `dimensions.py`
 
 `prepare_subs_dims()` normaliza el frame una vez y devuelve un objeto
-`DimsPreparadas` que cachea, por dimensión, el mapa `orden → valor` y la
+`PreparedDims` que cachea, por dimensión, el mapa `orden → valor` y la
 facturación como número. Nada de eso depende del periodo, y reconstruirlo dentro
 del bucle diario suponía **186 recorridos** (6 dimensiones × 31 días) de la tabla
 de suscripciones para obtener siempre lo mismo.
@@ -317,7 +317,7 @@ desarchivados, que vuelven a la base sin ser altas ni reactivaciones.
 | `analyzer_activos_cierre` | `orden`, `f_dt`, `estado` de los activos al cierre |
 | `analyzer_reactivaciones` | Las reactivaciones con su origen |
 | `analyzer_bajas_detalladas` | `orden`, `f_ini_dt`, `estado` |
-| `analyzer_corte_impagado` | `orden`, `fecha_corte`, `motivo_corte` |
+| `analyzer_corte_impagado` | `orden`, `cutoff_date`, `motivo_corte` |
 | `analyzer_clientes_gratuitos` | `orden`, `fecha_archivado`, `estado` |
 | `analyzer_inactivos_detallados` | `orden`, `fecha_evento`, `estado_inactivo` |
 | `analyzer_churn_dimensiones` | Una fila por dimensión y valor |
@@ -358,7 +358,7 @@ del selector de Analytics.
 - Vuelca a la base **cada 5 días** (`FLUSH_EVERY_N_DAYS`): como el *upsert* solo
   toca los días enviados, si la ejecución se corta el trabajo hecho queda
   guardado.
-- `progreso(hechos, total, etiqueta)` se llama al cerrar cada día: es la única
+- `progress(done, total, label)` se llama al cerrar cada día: es la única
   parte del análisis con pasos contables, y es la que mueve la barra.
 
 Lectura: `get_day_metrics(mes)` y `get_periods_with_days()`. Ambas comprueban
@@ -417,11 +417,11 @@ factura, y ese activo inventado fechaba la baja en el último corte en vez de en
 el inicio de la pausa.
 
 Cada baja lleva su zona, sucursal, municipio, campaña y nodo del
-`DimsPreparadas` del mensual. **El producto no se desglosa**: el export guarda
+`PreparedDims` del mensual. **El producto no se desglosa**: el export guarda
 el plan de hoy, y el de casi todas las bajas es `Cancelado`.
 
 **Las campañas «Sin campanna» y «Exonerado» tampoco cuentan**
-(`CAMPANNAS_EXCLUIDAS` en `queries.py`): se quitan al leer, de todo —resumen,
+(`EXCLUDED_CAMPAIGNS` en `queries.py`): se quitan al leer, de todo —resumen,
 tramos, dimensiones y exportación—. «Sin campanna» es la base anterior a las
 campañas, casi entera instalada antes de 2026 (agosto de 2026: 1.659 de 2.695
 bajas); «Exonerado» no paga. Siguen guardadas en la tabla: el cuadre con
@@ -499,7 +499,7 @@ declarado**, con su velocidad, su renta y su consumo teórico. Son tres hojas
 descargan en un solo `.xlsx` desde la barra del reporte.
 
 **De dónde sale cada fila.** Un plan del catálogo comercial se declara por su
-**plan regulador** (`Plan.plan_regulador` → `catalogo_planes_reguladores`).
+**plan regulador** (`Plan.regulator_plan` → `catalogo_planes_reguladores`).
 Varios planes comerciales colapsan en uno: la misma velocidad con dos tarifas es
 un solo producto ante la reguladora, y declararla dos veces cuenta sus
 suscriptores dos veces. El regulador lleva **sus propios** campos y no los hereda
@@ -587,7 +587,7 @@ Las fórmulas que pide la reguladora, y que están en `eta_forms.py`:
 
 Tecnología, persona, TV y Mbps de un plan viven solo en el catálogo.
 
-Lo que el JSON de semilla no tenía es `Plan.declarar_en_eta`, que es un
+Lo que el JSON de semilla no tenía es `Plan.declare_in_eta`, que es un
 campo del catálogo.
 
 El maestro conserva **solo sus excepciones por suscripción**
@@ -602,7 +602,7 @@ con un filtro «con renta / sin renta» — es el único sitio donde se ve que a
 dedicado le falta el precio con el que declararlo.
 
 `es_transporte` / `es_dedicado` se derivan del nombre del plan
-(`PLAN_TRANSPORTE`, `PLAN_DEDICADO`): son dos planes concretos, no un atributo
+(`TRANSPORT_PLAN`, `DEDICATED_PLAN`): son dos planes concretos, no un atributo
 que se marque por plan.
 
 `Cancelado` entra en el mapa de planes con una clasificación vacía. No está en el
@@ -617,7 +617,7 @@ clasificar y bloquearía el reporte entero.
 | Función | Devuelve |
 |---|---|
 | `get_churn_close(periodos=None)` | Las filas de `analyzer_cierre_historico`, tipadas y ordenadas de más reciente a más antigua |
-| `get_dimensiones(periodos=None)` | `{periodo, dimensiones: {dim: [valores]}}` |
+| `get_dimensions(periodos=None)` | `{periodo, dimensiones: {dim: [valores]}}` |
 | `get_periods()` | Las etiquetas de periodo disponibles |
 | `get_dashboard_data()` / `get_analytics_data(periodos)` | Composiciones de las anteriores |
 | `get_zones_config()` | Mapa de zonas + `siteOrder` para que el cliente reagrupe sin ir al servidor |
@@ -649,12 +649,12 @@ tienen cada uno su catálogo, y un cambio en uno no alcanza al otro.
 
 | Modelo | Tabla | Notas |
 |---|---|---|
-| `Estado` | `catalogo_estados` | Entidad federal de una zona |
+| `State` | `catalogo_estados` | Entidad federal de una zona |
 | `Site` | `catalogo_sites` | Sede regional. **`orden` no es decorativo**: es el orden comercial de presentación, antes la constante `CUSTOM_SITE_ORDER` |
-| `Coordinador` | `catalogo_coordinadores` | Responsable comercial (reporte Business Units) |
-| `Zona` | `catalogo_zonas` | Nodo de red. `site` y `estado` con `PROTECT`, `coordinador` con `SET_NULL` |
+| `Coordinator` | `catalogo_coordinadores` | Responsable comercial (reporte Business Units) |
+| `Zone` | `catalogo_zonas` | Nodo de red. `site` y `estado` con `PROTECT`, `coordinador` con `SET_NULL` |
 | `Plan` | `catalogo_planes` | Producto contratable |
-| `ProductoIgnorado` | `catalogo_productos_ignorados` | Nombre del export que no se registrará, por `area` (`productos`, `estructura`, `ventas`). Único por `(area, nombre)`; solo los de `productos` alimentan `fixtures.ignored_products()` |
+| `IgnoredProduct` | `catalogo_productos_ignorados` | Nombre del export que no se registrará, por `area` (`productos`, `estructura`, `ventas`). Único por `(area, nombre)`; solo los de `productos` alimentan `fixtures.ignored_products()` |
 
 Sobre `Plan`:
 
@@ -684,9 +684,9 @@ nadie. `/subscriptions/config/` sigue respondiendo con una redirección (con
 | Página | Contenido | Permiso |
 |---|---|---|
 | `/catalogos/notificaciones/` | Por registrar (productos, zonas y personas importados que el catálogo no reconoce) e Ignorados | cualquiera de los tres; cada área solo con el suyo |
-| `/catalogos/productos/` | Planes y planes reguladores. `?new_plan=` | `can_manage_catalogo_operacional` |
-| `/catalogos/estructura/` | Zonas, sites y estados. `?new_zone=` | `can_manage_catalogo_comercial` |
-| `/catalogos/ventas/` | Directorio de ventas (con el site de cada coordinadora de oficina), coordinadores de unidad de negocio y objetivos, también los de ventas de las oficinas | `can_manage_catalogo_ventas` |
+| `/catalogos/productos/` | Planes y planes reguladores. `?new_plan=` | `can_manage_operational_catalog` |
+| `/catalogos/estructura/` | Zonas, sites y estados. `?new_zone=` | `can_manage_commercial_catalog` |
+| `/catalogos/ventas/` | Directorio de ventas (con el site de cada coordinadora de oficina), coordinadores de unidad de negocio y objetivos, también los de ventas de las oficinas | `can_manage_sales_catalog` |
 
 Las zonas por registrar (`zones_outside_catalog`, en `analytics/imports.py`)
 **no bloquean nada**, a diferencia de los productos: sus órdenes se analizan
@@ -699,9 +699,9 @@ leen del cuerpo y cómo se serializa la fila, y eso lo declara el diccionario
 interfaz.
 
 **Un permiso por grupo.** Cada entrada de `CATALOGS` declara su `permiso`:
-`can_manage_catalogo_operacional` para planes y planes reguladores,
-`can_manage_catalogo_comercial` para zonas, sites y estados, y
-`can_manage_catalogo_ventas` para coordinadores, objetivos y semáforo. Los
+`can_manage_operational_catalog` para planes y planes reguladores,
+`can_manage_commercial_catalog` para zonas, sites y estados, y
+`can_manage_sales_catalog` para coordinadores, objetivos y semáforo. Los
 ignorados declaran además `permiso_fila`: el de su área. Los endpoints de
 escritura dejan pasar a quien tenga cualquiera de los tres y comprueban el del
 `tipo` (y de la fila) concreto, respondiendo **403** si no es suyo. La
@@ -730,9 +730,9 @@ Los equipos de ventas volvieron, con otra forma: ya no son un nombre leído de l
 columna `Equipo de ventas` del import (eso se quitó en `catalogos/0005`), sino una
 **agrupación de roles con sus propias condiciones de pago** (`catalogos/0006`;
 ver el capítulo 15 §3). **Cada coordinadora de oficina pertenece a uno o
-varios sites** (`MembresiaEquipo.sites`, solo en ese rol; se eligen en su ficha del equipo; con varios sale en el bloque de
+varios sites** (`TeamMembership.sites`, solo en ese rol; se eligen en su ficha del equipo; con varios sale en el bloque de
 cada uno con las mismas cifras, y su factor es el promedio simple de sus sites) y tiene un
-**objetivo de ventas**: una cantidad al mes (`ObjetivoVentasOficina`, Catálogos ›
+**objetivo de ventas**: una cantidad al mes (`OfficeSalesTarget`, Catálogos ›
 Ventas › Estructura de ventas › Objetivos), general o individual, con vigencia por mes como los
 objetivos comerciales. Manda el individual vigente; si no tiene, el general.
 
@@ -757,7 +757,7 @@ La meta de crecimiento y el churn máximo **no alteran ningún análisis**: solo
 deciden la meta y el cumplimiento de cada fila; el color lo pone aparte el
 semáforo, con umbrales fijos. Por eso
 no se guardan con las métricas calculadas ni exigen relanzar nada: viven en tres
-tablas del catálogo (`ObjetivoComercial`, `ObjetivoMes`, `TargetsTrafficLight`),
+tablas del catálogo (`CommercialTarget`, `MonthTarget`, `TargetsTrafficLight`),
 `analytics/objetivos.get_targets_config()` los sirve en los props de
 Dashboard, Analytics, Results, Sales Report y Business Units, y el cliente los
 aplica al pintar (`frontend/src/features/subscriptions/lib/targets.ts`). Cambiar un
@@ -766,7 +766,7 @@ migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
 
 - **El general es uno solo y sin fecha** (restricción `objetivo_general_sin_fecha`):
   es el valor por defecto de la empresa y rige en todos los meses sin excepción,
-  pasados incluidos. Para cambiar un mes concreto está `ObjetivoMes`, que lo
+  pasados incluidos. Para cambiar un mes concreto está `MonthTarget`, que lo
   sustituye solo en ese mes.
 - **Vigencia por entidad.** Los tramos de zona, coordinador, site y estado valen
   desde su `desde` (`YYYY-MM`, nulo = siempre) hasta el siguiente de la misma
@@ -778,7 +778,7 @@ migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
   contra el 15%; una sucursal al 8% manda sobre toda la geografía de sus nodos.
   La pestaña de objetivos avisa en «Rige hoy» en qué nodos queda anulado cada uno.
 - **Sucursal y nodo.** La sucursal (`NETCOM`, `NYC`...) no es un catálogo: es el
-  texto del export y se guarda en `ObjetivoComercial.sucursal`. Un nodo es su
+  texto del export y se guarda en `CommercialTarget.branch`. Un nodo es su
   zona (clave ajena) más ese texto, y se cruza con la clave `"Zona - Sucursal"`
   de la dimensión `zona_sucursal`. Las que se ofrecen al elegir salen de
   `targets.known_nodes()`, los nodos de los cierres calculados.
@@ -788,7 +788,7 @@ migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
   coordinador ni la zona lo mueven, porque un site reparte sus zonas entre varios
   coordinadores). Los totales globales —Analytics, Results, Dashboard,
   consolidado FTTH y bloque RF— usan el general del mes.
-- **Zonas sin objetivo** (`ZonaSinObjetivo`, Catálogos › Ventas › Objetivos,
+- **Zonas sin objetivo** (`ZoneWithoutTarget`, Catálogos › Ventas › Objetivos,
   varias a la vez). Para las zonas nuevas: sin base, su meta es cero, pero sus
   instalaciones y su crecimiento entraban en las cifras de su site y de su
   coordinador e inflaban el cumplimiento. Mientras su tramo (`desde`/`hasta`,
@@ -796,7 +796,7 @@ migrar), se sirve el 6% / 3% de siempre en vez de tumbar la página.
   grupo** —«Sin objetivo», cumplimientos «—»— pero **no entra en el resumen del
   grupo**: ni en la meta, ni en la base, instalaciones, bajas, crecimiento,
   churn o cumplimientos. Los hooks suman los totales con `measuredNodes` y `meta`
-  la salta y la cuenta en `Meta.zonasSinObjetivo`, que el resumen enseña. El
+  la salta y la cuenta en `Goal.zonesWithoutTarget`, que el resumen enseña. El
   consolidado FTTH de Business Units tampoco la suma (salvo el ya sumado que
   recibe una cuenta restringida). Un tramo por zona: para volver a medirla se le
   pone `hasta`, y los meses anteriores no cambian. Los totales globales
@@ -826,11 +826,11 @@ rojo/amarillo/verde), las excepciones por mes y los tramos por entidad como
 tablas. El general no se puede borrar: es el que responde cuando nadie más lo
 hace.
 
-### `manage.py cargar_catalogos`
+### `manage.py load_catalogs`
 
 Siembra las tablas desde `data/Planes.json` y `data/Zonas.json`. **Es lo único
 que sigue leyendo esos ficheros.** Idempotente: lo que ya existe no se toca
-salvo que se pase `--actualizar`, para no pisar con el fichero una corrección
+salvo que se pase `--update`, para no pisar con el fichero una corrección
 hecha desde la web.
 
 - Los nombres de coordinador del fichero traen espacios sobrantes; se recortan,

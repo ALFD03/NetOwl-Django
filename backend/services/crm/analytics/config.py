@@ -37,7 +37,7 @@ STAGE_ORDER = [
     "etapa_10_proyectos", "perdido"
 ]
 
-DIMENSIONES = ["campana", "sucursal", "vendedor"]
+DIMENSIONS = ["campana", "sucursal", "vendedor"]
 
 # --- Tiempo por etapa -------------------------------------------------------
 # El embudo lineal: las etapas por las que una oportunidad progresa hasta
@@ -280,11 +280,11 @@ LOSS_EXCEPTION_REASONS = [
 # reparten con la distribución observada en las que sí lo traen, condicionada a
 # la etapa de origen (que el log sí conserva siempre). Si un origen no llega a
 # esta muestra mínima se usa la distribución global.
-E8_IMPUTACION_MIN_MUESTRA = 30
+E8_IMPUTATION_MIN_SAMPLE = 30
 
 # Retornos que sí penalizan: el cliente ya había sido enviado hacia adelante
 # y volvió, así que la etapa no resolvió. Se compara contra `forward_key`.
-RETORNO_ATRIBUCION = [
+COMEBACK_ATTRIBUTION = [
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_4_adecuaciones"},
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_5_gpi"},
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_6_contratistas"},
@@ -323,7 +323,7 @@ CSV_COLUMN_MAP = {
 CLIENT_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if not k.startswith("Entradas de Tiempo")]
 LOG_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if k.startswith("Entradas de Tiempo")]
 
-GANADO_STATES = {"perdido", "ganado", "pendiente"}
+WON_STATES = {"perdido", "ganado", "pendiente"}
 
 
 # --- Cabeceras minimas del export de Odoo ------------------------------------

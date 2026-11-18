@@ -25,10 +25,10 @@ import { EmptyState, NeonContainer, ToggleGroup } from '@/shared/ui';
 import { formatInteger } from '@/shared/utils';
 import {
   VALUES_CAP,
-  altoBarras,
+  barsHeight,
   valuesWithCandles,
-  velasData,
-  velasOptions,
+  candlesData,
+  candlesOptions,
   volumeByValueData,
   volumeByValueOptions,
 } from '../../lib/supportCharts';
@@ -41,14 +41,14 @@ import {
 import { isPersonDimension, type SupportDimension, type SupportDimensionRow } from '../../types';
 
 type View = 'volumen' | 'tiempos';
-type Lectura = 'persona' | 'departamento';
+type Reading = 'persona' | 'departamento';
 
 interface Props {
   dimension: SupportDimension;
   rows: SupportDimensionRow[];
   groupName: string;
   /** Abre el desglose de un valor; no se ofrece en la vista por departamento. */
-  onSelect: (valor: string) => void;
+  onSelect: (value: string) => void;
   /** Adónde lleva «Tabla completa»: Results con el mismo mes. */
   resultsHref?: string;
 }
@@ -56,34 +56,34 @@ interface Props {
 export function SupportDimensionChart({ dimension, rows, groupName, onSelect, resultsHref }: Props) {
   const label = SUPPORT_DIMENSION_LABELS[dimension];
   const isPerson = isPersonDimension(dimension);
-  const [vista, setVista] = useState<View>('volumen');
-  const [lectura, setLectura] = useState<Lectura>('persona');
+  const [view, setView] = useState<View>('volumen');
+  const [reading, setReading] = useState<Reading>('persona');
 
-  const byDepartment = isPerson && lectura === 'departamento';
+  const byDepartment = isPerson && reading === 'departamento';
   const groupTotal = useMemo(() => rows.reduce((acc, r) => acc + Number(r.total_tickets ?? 0), 0), [rows]);
-  const filas = useMemo(
+  const chartRows = useMemo(
     () => (byDepartment ? groupByDepartment(rows, groupTotal) : rows),
     [byDepartment, rows, groupTotal],
   );
-  const seleccionar = byDepartment ? undefined : onSelect;
+  const select = byDepartment ? undefined : onSelect;
 
   // Los departamentos no tienen distribución: sus medianas no se pueden sumar.
-  const activeView: View = byDepartment ? 'volumen' : vista;
-  const withCandles = valuesWithCandles(filas, CLOSE_TOTAL);
-  const dibujadas = activeView === 'volumen' ? Math.min(filas.length, VALUES_CAP) : withCandles;
-  const resto = filas.length - Math.min(filas.length, VALUES_CAP);
+  const activeView: View = byDepartment ? 'volumen' : view;
+  const withCandles = valuesWithCandles(chartRows, CLOSE_TOTAL);
+  const drawn = activeView === 'volumen' ? Math.min(chartRows.length, VALUES_CAP) : withCandles;
+  const rest = chartRows.length - Math.min(chartRows.length, VALUES_CAP);
 
   const chart = useMemo(() => {
     if (activeView === 'volumen') {
       return {
-        data: volumeByValueData(filas),
-        options: volumeByValueOptions(filas, seleccionar ? (i) => seleccionar(filas[i].name) : undefined),
+        data: volumeByValueData(chartRows),
+        options: volumeByValueOptions(chartRows, select ? (i) => select(chartRows[i].name) : undefined),
       };
     }
-    return { data: velasData(filas, CLOSE_TOTAL), options: velasOptions(filas, CLOSE_TOTAL, seleccionar) };
-  }, [activeView, filas, seleccionar]);
+    return { data: candlesData(chartRows, CLOSE_TOTAL), options: candlesOptions(chartRows, CLOSE_TOTAL, select) };
+  }, [activeView, chartRows, select]);
 
-  const subtitulo =
+  const subtitle =
     activeView === 'volumen'
       ? `${SUPPORT_DIMENSION_CAPTIONS[dimension]} · cada barra partida por cómo terminó`
       : `${SUPPORT_DIMENSION_CAPTIONS[dimension]} · cierre total: mecha de mínimo a máximo, caja de la mitad central, marca en el promedio`;
@@ -92,14 +92,14 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
     <NeonContainer
       theme="purple"
       title={byDepartment ? `${label} por departamento` : `${groupName} por ${label.toLowerCase()}`}
-      subtitle={subtitulo}
+      subtitle={subtitle}
       icon={activeView === 'volumen' ? <BarChart3 className="h-5 w-5" /> : <CandlestickChart className="h-5 w-5" />}
       headerAction={
         <div className="flex flex-wrap items-center gap-3">
           {isPerson && (
             <ToggleGroup
-              activeKey={lectura}
-              onChange={(key) => setLectura(key as Lectura)}
+              activeKey={reading}
+              onChange={(key) => setReading(key as Reading)}
               options={[
                 { key: 'persona', label: 'Por persona', icon: Users },
                 { key: 'departamento', label: 'Por departamento', icon: Building2 },
@@ -108,8 +108,8 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
           )}
           {!byDepartment && (
             <ToggleGroup
-              activeKey={vista}
-              onChange={(key) => setVista(key as View)}
+              activeKey={view}
+              onChange={(key) => setView(key as View)}
               options={[
                 { key: 'volumen', label: 'Volumen', icon: BarChart3 },
                 { key: 'tiempos', label: 'Tiempos', icon: CandlestickChart },
@@ -119,7 +119,7 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
         </div>
       }
     >
-      {dibujadas === 0 ? (
+      {drawn === 0 ? (
         <EmptyState
           title={
             activeView === 'tiempos'
@@ -130,20 +130,20 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
         />
       ) : (
         <>
-          <div style={{ height: altoBarras(dibujadas) }}>
+          <div style={{ height: barsHeight(drawn) }}>
             <BarChart data={chart.data} options={chart.options} className="h-full w-full" />
           </div>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
             <span className="flex items-center gap-2">
-              {seleccionar && (
+              {select && (
                 <>
                   <MousePointerClick className="h-3.5 w-3.5 text-brand" />
                   Pulsa un valor para ver su tipo, razón y solución.
                 </>
               )}
-              {resto > 0 && (
+              {rest > 0 && (
                 <span>
-                  Se ven los {VALUES_CAP} con más tickets; quedan {formatInteger(resto)} más.
+                  Se ven los {VALUES_CAP} con más tickets; quedan {formatInteger(rest)} más.
                 </span>
               )}
             </span>

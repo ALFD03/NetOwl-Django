@@ -31,7 +31,7 @@ interface EtaReportToolbarProps {
   rateSource?: string;
   /** Por qué no hay tasa, cuando la consulta automática falló. */
   rateNotice?: string;
-  onRateChange: (tasa: number) => void;
+  onRateChange: (rate: number) => void;
   /** Vuelve a pedirle la tasa al BCV, pisando la guardada. */
   onRateFetch: () => Promise<void>;
 }
@@ -51,17 +51,17 @@ interface EtaReportToolbarProps {
  */
 function BcvRateField({
   rate,
-  rateSource: tasaFuente,
-  onRateChange: onTasaChange,
-  onRateFetch: onTasaConsultar,
+  rateSource,
+  onRateChange,
+  onRateFetch: onFetchRate,
 }: {
   rate: number;
   rateSource?: string;
-  onRateChange: (tasa: number) => void;
+  onRateChange: (rateValue: number) => void;
   onRateFetch: () => Promise<void>;
 }) {
-  const [texto, setText] = useState(rate ? String(rate) : '');
-  const [consultando, setConsultando] = useState(false);
+  const [text, setText] = useState(rate ? String(rate) : '');
+  const [fetching, setFetching] = useState(false);
 
   // El periodo cambia y con él su tasa: el campo tiene que seguir al reporte,
   // no quedarse con lo que se tecleó para el mes anterior. Se ajusta durante
@@ -73,22 +73,22 @@ function BcvRateField({
     setText(rate ? String(rate) : '');
   }
 
-  const confirmar = () => {
+  const confirm = () => {
     // La coma es lo que se teclea en español y `Number` no la entiende.
-    const valor = Number(texto.replace(',', '.'));
-    if (!Number.isFinite(valor) || valor < 0) {
+    const value = Number(text.replace(',', '.'));
+    if (!Number.isFinite(value) || value < 0) {
       setText(rate ? String(rate) : '');
       return;
     }
-    if (valor !== rate) onTasaChange(valor);
+    if (value !== rate) onRateChange(value);
   };
 
   const fetchData = async () => {
-    setConsultando(true);
+    setFetching(true);
     try {
-      await onTasaConsultar();
+      await onFetchRate();
     } finally {
-      setConsultando(false);
+      setFetching(false);
     }
   };
 
@@ -98,29 +98,29 @@ function BcvRateField({
       icon={<DollarSign className="h-4 w-4 text-brand" />}
       title={[
         'Tasa del BCV con la que se declara la renta básica de este mes.',
-        tasaFuente ? `Origen: ${tasaFuente}.` : 'Sin fijar: las rentas se exportan vacías.',
+        rateSource ? `Origen: ${rateSource}.` : 'Sin fijar: las rentas se exportan vacías.',
       ].join(' ')}
     >
       <input
         type="text"
         inputMode="decimal"
         aria-label="Tasa del BCV"
-        value={texto}
+        value={text}
         placeholder="Sin fijar"
         onChange={(event) => setText(event.target.value)}
-        onBlur={confirmar}
+        onBlur={confirm}
         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
         className="w-24 min-w-0 flex-1 bg-transparent px-4 py-2.5 text-xs font-bold text-white placeholder-slate-500 outline-none sm:flex-none"
       />
       <button
         type="button"
         onClick={fetchData}
-        disabled={consultando}
+        disabled={fetching}
         title="Volver a consultar la tasa del BCV para este mes"
         aria-label="Volver a consultar la tasa del BCV"
         className="border-l border-slate-700/50 px-3 py-2.5 text-slate-400 transition-colors hover:text-white disabled:opacity-50"
       >
-        <RefreshCw className={cn('h-4 w-4', consultando && 'animate-spin')} />
+        <RefreshCw className={cn('h-4 w-4', fetching && 'animate-spin')} />
       </button>
     </FilterField>
   );
@@ -137,14 +137,14 @@ function BcvRateField({
  */
 function CurrentRateField({
   rate,
-  fuente,
-  cargando,
-  onRecargar,
+  source,
+  loading,
+  onReload,
 }: {
   rate: number;
-  fuente: string;
-  cargando: boolean;
-  onRecargar: () => Promise<void>;
+  source: string;
+  loading: boolean;
+  onReload: () => Promise<void>;
 }) {
   return (
     <FilterField
@@ -153,7 +153,7 @@ function CurrentRateField({
       title={[
         'Última tasa publicada por el BCV. No es la que declara el periodo:',
         'sirve para exportar el formulario valorado a día de hoy.',
-        fuente ? `Origen: ${fuente}.` : '',
+        source ? `Origen: ${source}.` : '',
       ].filter(Boolean).join(' ')}
     >
       <span className="flex-1 px-4 py-2.5 text-xs font-bold text-white sm:flex-none">
@@ -161,13 +161,13 @@ function CurrentRateField({
       </span>
       <button
         type="button"
-        onClick={() => { void onRecargar(); }}
-        disabled={cargando}
+        onClick={() => { void onReload(); }}
+        disabled={loading}
         title="Volver a consultar la tasa vigente del BCV"
         aria-label="Volver a consultar la tasa vigente del BCV"
         className="border-l border-slate-700/50 px-3 py-2.5 text-slate-400 transition-colors hover:text-white disabled:opacity-50"
       >
-        <RefreshCw className={cn('h-4 w-4', cargando && 'animate-spin')} />
+        <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
       </button>
     </FilterField>
   );
@@ -182,16 +182,16 @@ export function EtaReportToolbar({
   isSaving,
   onToggleLock,
   forms,
-  withoutRegulatory: sinRegulador,
+  withoutRegulatory: withoutRegulator,
   rate,
-  rateSource: tasaFuente,
-  rateNotice: tasaAviso,
-  onRateChange: onTasaChange,
-  onRateFetch: onTasaConsultar,
+  rateSource,
+  rateNotice: rateWarning,
+  onRateChange,
+  onRateFetch: onFetchRate,
 }: EtaReportToolbarProps) {
   // La tasa vigente no se guarda en ninguna parte: no es un dato del periodo,
   // cambia cada día y su sitio es la pantalla, no la tabla del reporte.
-  const tasaActual = useCurrentBcvRate();
+  const currentRate = useCurrentBcvRate();
 
   return (
     <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
@@ -206,16 +206,16 @@ export function EtaReportToolbar({
 
         <BcvRateField
           rate={rate}
-          rateSource={tasaFuente}
-          onRateChange={onTasaChange}
-          onRateFetch={onTasaConsultar}
+          rateSource={rateSource}
+          onRateChange={onRateChange}
+          onRateFetch={onFetchRate}
         />
 
         <CurrentRateField
-          rate={tasaActual.rate}
-          fuente={tasaActual.fuente}
-          cargando={tasaActual.cargando}
-          onRecargar={tasaActual.recargar}
+          rate={currentRate.rate}
+          source={currentRate.source}
+          loading={currentRate.loading}
+          onReload={currentRate.reload}
         />
 
         <Link
@@ -232,9 +232,9 @@ export function EtaReportToolbar({
             forms={forms}
             period={period}
             rate={rate}
-            currentRate={tasaActual.rate}
-            currentRateSource={tasaActual.fuente}
-            withoutRegulatory={sinRegulador}
+            currentRate={currentRate.rate}
+            currentRateSource={currentRate.source}
+            withoutRegulatory={withoutRegulator}
           />
         )}
 
@@ -263,8 +263,8 @@ export function EtaReportToolbar({
           ratón por encima. */}
       <StatusMessage
         status={
-          tasaAviso || tasaActual.aviso
-            ? { type: 'warning', text: [tasaAviso, tasaActual.aviso].filter(Boolean).join(' ') }
+          rateWarning || currentRate.warning
+            ? { type: 'warning', text: [rateWarning, currentRate.warning].filter(Boolean).join(' ') }
             : null
         }
         icon={<AlertTriangle />}

@@ -17,7 +17,7 @@ from core.exports import ExportSpec, iter_export
 from core.tables import FLOAT, TIMESTAMP, append, to_bool, truncate
 from core.utils import normalize_text
 
-from .config import CLIENT_FIELDS, CSV_COLUMN_MAP, GANADO_STATES, REQUIRED_CRM_HEADERS, STAGE_MAP
+from .config import CLIENT_FIELDS, CSV_COLUMN_MAP, REQUIRED_CRM_HEADERS, STAGE_MAP, WON_STATES
 from .tables import CLIENTS, LOGS
 
 CRM_EXPORT = ExportSpec(
@@ -97,8 +97,8 @@ def split_chunk(df: pd.DataFrame, prev_client: str | None = None) -> tuple[pd.Da
     clients = df[df["id"].notna()].reindex(columns=CLIENT_FIELDS).drop_duplicates(subset=["id"])
     clients["etapa_actual"] = _stages(clients["etapa"])
     clients["activo"] = to_bool(clients["activo"])
-    ganado = clients["ganado"].astype(str).str.strip().str.lower()
-    clients["ganado"] = ganado.where(ganado.isin(GANADO_STATES), "pendiente")
+    won = clients["ganado"].astype(str).str.strip().str.lower()
+    clients["ganado"] = won.where(won.isin(WON_STATES), "pendiente")
 
     logs = df[df["entradas_de_tiempo_iniciativa_id"].notna() & df["client_id"].notna()]
     logs = logs.reindex(columns=list(_LOG_COLUMNS)).rename(columns=_LOG_COLUMNS)

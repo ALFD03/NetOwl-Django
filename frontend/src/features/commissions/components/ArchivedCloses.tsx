@@ -14,31 +14,31 @@ import type { ArchivedClose, CloseSnapshot, SalesRole } from '../types';
 
 interface Props {
   archives: ArchivedClose[];
-  roleLabel: (rol: SalesRole) => string;
+  roleLabel: (role: SalesRole) => string;
 }
 
-export function ArchivedCloses({ archives, roleLabel: etiquetaCargo }: Props) {
-  const [estados, setStates] = useState<Record<number, ExportState>>({});
+export function ArchivedCloses({ archives, roleLabel: titleLabel }: Props) {
+  const [states, setStates] = useState<Record<number, ExportState>>({});
 
   /** La nómina del cierre archivado, en el mismo Excel que el informe vivo. */
-  const descargar = async (archivo: ArchivedClose) => {
-    setStates((previos) => ({ ...previos, [archivo.id]: 'busy' }));
+  const download = async (archive: ArchivedClose) => {
+    setStates((prev) => ({ ...prev, [archive.id]: 'busy' }));
     try {
-      const copia = await commissionsApi.archivo<CloseSnapshot>(archivo.id);
-      const tasa = copia.summary.conatel_rate?.rate
-        ?? (copia.period.conatel_rate !== null ? Number(copia.period.conatel_rate) : null);
+      const copy = await commissionsApi.archive<CloseSnapshot>(archive.id);
+      const rate = copy.summary.conatel_rate?.rate
+        ?? (copy.period.conatel_rate !== null ? Number(copy.period.conatel_rate) : null);
       await exportReport(
-        copia.summary,
-        copia.sales.map((venta) => venta.data),
-        copia.conditions,
-        tasa,
-        etiquetaCargo,
-        `Comisiones ${copia.period.period} - cierre archivado v${archivo.version}`,
+        copy.summary,
+        copy.sales.map((sale) => sale.data),
+        copy.conditions,
+        rate,
+        titleLabel,
+        `Comisiones ${copy.period.period} - cierre archivado v${archive.version}`,
       );
-      setStates((previos) => ({ ...previos, [archivo.id]: 'idle' }));
+      setStates((prev) => ({ ...prev, [archive.id]: 'idle' }));
     } catch (err) {
       console.error('No se pudo descargar el cierre archivado:', err);
-      setStates((previos) => ({ ...previos, [archivo.id]: 'error' }));
+      setStates((prev) => ({ ...prev, [archive.id]: 'error' }));
     }
   };
 
@@ -59,8 +59,8 @@ export function ArchivedCloses({ archives, roleLabel: etiquetaCargo }: Props) {
           iconOnly
           label={`Descargar la nómina de la versión ${a.version}`}
           icon={<FileSpreadsheet className="h-4 w-4 text-brand" />}
-          estado={estados[a.id] ?? 'idle'}
-          onClick={() => void descargar(a)}
+          state={states[a.id] ?? 'idle'}
+          onClick={() => void download(a)}
         />
       ),
     },

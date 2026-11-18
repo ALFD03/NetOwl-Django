@@ -66,10 +66,10 @@ slugs de equipo, áreas y piezas de pago (`propia`, `equipo`, `factor`, `bono_*`
 
 | Método | Ruta | Permiso | Límite | Qué hace |
 |---|---|---|---|---|
-| GET | `/api/audit/logs/` | `can_view_auditoria` | — | El registro filtrado: los `LIMIT` más recientes de lo que cumple los filtros. |
-| GET | `/api/audit/logs/<log_id>/` | `can_view_auditoria` | — | Un registro con su `detail`. |
-| GET | `/api/audit/health/` | `can_view_auditoria` | — | Estado de web, Postgres, Redis, worker de Celery y análisis. |
-| GET | `/api/audit/stats/` | `can_view_auditoria` | — | Actividad, errores y latencia por endpoint de las últimas horas. |
+| GET | `/api/audit/logs/` | `can_view_audit` | — | El registro filtrado: los `LIMIT` más recientes de lo que cumple los filtros. |
+| GET | `/api/audit/logs/<log_id>/` | `can_view_audit` | — | Un registro con su `detail`. |
+| GET | `/api/audit/health/` | `can_view_audit` | — | Estado de web, Postgres, Redis, worker de Celery y análisis. |
+| GET | `/api/audit/stats/` | `can_view_audit` | — | Actividad, errores y latencia por endpoint de las últimas horas. |
 
 ### `/api/subscriptions/`
 
@@ -149,32 +149,32 @@ slugs de equipo, áreas y piezas de pago (`propia`, `equipo`, `factor`, `bono_*`
 
 | Método | Ruta | Permiso | Límite | Qué hace |
 |---|---|---|---|---|
-| GET | `/api/catalogs/notifications/` | `can_manage_catalogo_operacional` o `can_manage_catalogo_comercial` o `can_manage_catalogo_ventas` | — | Lo que falta en cada área administrada, lo ignorado y las opciones para registrarlo aquí. |
-| GET | `/api/catalogs/products/` | `can_manage_catalogo_operacional` | — | Planes y planes reguladores. `?new_plan=` abre el alta ya rellena. |
-| GET | `/api/catalogs/structure/` | `can_manage_catalogo_comercial` | — | Zonas y estados (con sites y unidades para el formulario). `?new_zone=` abre el alta. |
-| GET | `/api/catalogs/sales/` | `can_manage_catalogo_ventas` | — | Estructura de ventas, equipos con su gente y condiciones, y objetivos. |
-| POST | `/api/catalogs/save/` | `can_manage_catalogo_operacional` o `can_manage_catalogo_comercial` o `can_manage_catalogo_ventas` | 60/m | Alta o edición de una fila de cualquier catálogo. |
-| POST | `/api/catalogs/save-batch/` | `can_manage_catalogo_operacional` o `can_manage_catalogo_comercial` o `can_manage_catalogo_ventas` | 20/m | Alta de varias filas de un catálogo; cada una en su savepoint. |
-| POST | `/api/catalogs/delete/` | `can_manage_catalogo_operacional` o `can_manage_catalogo_comercial` o `can_manage_catalogo_ventas` | 60/m | Baja de una fila. Lo que otra fila referencia con `PROTECT` responde 409 con el motivo. |
+| GET | `/api/catalogs/notifications/` | `can_manage_operational_catalog` o `can_manage_commercial_catalog` o `can_manage_sales_catalog` | — | Lo que falta en cada área administrada, lo ignorado y las opciones para registrarlo aquí. |
+| GET | `/api/catalogs/products/` | `can_manage_operational_catalog` | — | Planes y planes reguladores. `?new_plan=` abre el alta ya rellena. |
+| GET | `/api/catalogs/structure/` | `can_manage_commercial_catalog` | — | Zonas y estados (con sites y unidades para el formulario). `?new_zone=` abre el alta. |
+| GET | `/api/catalogs/sales/` | `can_manage_sales_catalog` | — | Estructura de ventas, equipos con su gente y condiciones, y objetivos. |
+| POST | `/api/catalogs/save/` | `can_manage_operational_catalog` o `can_manage_commercial_catalog` o `can_manage_sales_catalog` | 60/m | Alta o edición de una fila de cualquier catálogo. |
+| POST | `/api/catalogs/save-batch/` | `can_manage_operational_catalog` o `can_manage_commercial_catalog` o `can_manage_sales_catalog` | 20/m | Alta de varias filas de un catálogo; cada una en su savepoint. |
+| POST | `/api/catalogs/delete/` | `can_manage_operational_catalog` o `can_manage_commercial_catalog` o `can_manage_sales_catalog` | 60/m | Baja de una fila. Lo que otra fila referencia con `PROTECT` responde 409 con el motivo. |
 
 ### `/api/commissions/`
 
 | Método | Ruta | Permiso | Límite | Qué hace |
 |---|---|---|---|---|
-| GET | `/api/commissions/report/` | `can_view_comisiones` | — | El informe de un periodo (`?period=YYYY-MM`); sin él, el más reciente o el que toca crear. |
-| GET | `/api/commissions/sales/` | `can_view_comisiones` | — | El detalle venta a venta de un periodo, para el desglose y la exportación. |
-| POST | `/api/commissions/periods/save/` | `can_manage_comisiones` | 30/m | Crea un periodo en borrador o cambia sus días promocionales. |
-| POST | `/api/commissions/periods/close/` | `can_manage_comisiones` | 10/m | Cierra el periodo: congela ventas, pagos y condiciones. 409 si queda algo pendiente. |
-| POST | `/api/commissions/periods/reopen/` | `can_reopen_comisiones` | 10/m | Devuelve un periodo cerrado a borrador archivando su cierre. Exige `reason` y `confirmation`. |
-| POST | `/api/commissions/periods/delete/` | `can_delete_comisiones` | 10/m | Borra un informe en borrador con lo decidido en él. 409 si está o estuvo cerrado. |
-| GET | `/api/commissions/archives/<archive_id>/` | `can_view_comisiones` | — | La copia completa de un cierre archivado, para descargarla. |
-| POST | `/api/commissions/reviews/save/` | `can_manage_comisiones` | 60/m | Decide ventas por facturar; `decision` vacía deshace y `orders` decide varias. |
-| POST | `/api/commissions/manual/add/` | `can_manage_comisiones` | 30/m | Agrega ventas a mano (`orders`, `note` obligatoria). Todo o nada. |
-| POST | `/api/commissions/manual/remove/` | `can_manage_comisiones` | 30/m | Quita una venta agregada a mano. |
-| POST | `/api/commissions/indicators/save/` | `can_manage_comisiones` | 60/m | El % de cumplimiento o de crecimiento a mano de una persona; vacío vuelve al calculado. |
-| GET | `/api/commissions/current-rate/` | `can_view_comisiones` | 30/m | La tasa oficial del BCV de hoy, como referencia (no se guarda). 502 si falla. |
-| GET | `/api/commissions/conditions/` | `can_manage_comisiones` | — | La ventana de pago y los % PYME de cada plan. |
-| POST | `/api/commissions/conditions/save/` | `can_manage_comisiones` | 30/m | Guarda la ventana de pago. Solo afecta a lo que se calcule después. |
+| GET | `/api/commissions/report/` | `can_view_commissions` | — | El informe de un periodo (`?period=YYYY-MM`); sin él, el más reciente o el que toca crear. |
+| GET | `/api/commissions/sales/` | `can_view_commissions` | — | El detalle venta a venta de un periodo, para el desglose y la exportación. |
+| POST | `/api/commissions/periods/save/` | `can_manage_commissions` | 30/m | Crea un periodo en borrador o cambia sus días promocionales. |
+| POST | `/api/commissions/periods/close/` | `can_manage_commissions` | 10/m | Cierra el periodo: congela ventas, pagos y condiciones. 409 si queda algo pendiente. |
+| POST | `/api/commissions/periods/reopen/` | `can_reopen_commissions` | 10/m | Devuelve un periodo cerrado a borrador archivando su cierre. Exige `reason` y `confirmation`. |
+| POST | `/api/commissions/periods/delete/` | `can_delete_commissions` | 10/m | Borra un informe en borrador con lo decidido en él. 409 si está o estuvo cerrado. |
+| GET | `/api/commissions/archives/<archive_id>/` | `can_view_commissions` | — | La copia completa de un cierre archivado, para descargarla. |
+| POST | `/api/commissions/reviews/save/` | `can_manage_commissions` | 60/m | Decide ventas por facturar; `decision` vacía deshace y `orders` decide varias. |
+| POST | `/api/commissions/manual/add/` | `can_manage_commissions` | 30/m | Agrega ventas a mano (`orders`, `note` obligatoria). Todo o nada. |
+| POST | `/api/commissions/manual/remove/` | `can_manage_commissions` | 30/m | Quita una venta agregada a mano. |
+| POST | `/api/commissions/indicators/save/` | `can_manage_commissions` | 60/m | El % de cumplimiento o de crecimiento a mano de una persona; vacío vuelve al calculado. |
+| GET | `/api/commissions/current-rate/` | `can_view_commissions` | 30/m | La tasa oficial del BCV de hoy, como referencia (no se guarda). 502 si falla. |
+| GET | `/api/commissions/conditions/` | `can_manage_commissions` | — | La ventana de pago y los % PYME de cada plan. |
+| POST | `/api/commissions/conditions/save/` | `can_manage_commissions` | 30/m | Guarda la ventana de pago. Solo afecta a lo que se calcule después. |
 
 ---
 
@@ -216,9 +216,9 @@ página que la cuenta sí puede abrir (`LANDING_ROUTES`).
 | `/imports/history/` | `can_view_imports` y `can_view_import_history` |
 | `/catalogos/` | Redirige a Notificaciones |
 | `/catalogos/notificaciones/` | Cualquiera de los tres permisos de catálogo |
-| `/catalogos/productos/` | `can_manage_catalogo_operacional` |
-| `/catalogos/estructura/` | `can_manage_catalogo_comercial` |
-| `/catalogos/ventas/` | `can_manage_catalogo_ventas` |
-| `/comisiones/` | `can_view_comisiones` |
-| `/comisiones/condiciones/` | `can_manage_comisiones` |
-| `/auditoria/`, `/auditoria/monitoreo/` | `can_view_auditoria` |
+| `/catalogos/productos/` | `can_manage_operational_catalog` |
+| `/catalogos/estructura/` | `can_manage_commercial_catalog` |
+| `/catalogos/ventas/` | `can_manage_sales_catalog` |
+| `/comisiones/` | `can_view_commissions` |
+| `/comisiones/condiciones/` | `can_manage_commissions` |
+| `/auditoria/`, `/auditoria/monitoreo/` | `can_view_audit` |

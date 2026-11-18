@@ -95,7 +95,7 @@ permisos, los catálogos, el directorio de soporte, las sesiones,
   porque los dos entornos comparten host y el navegador no distingue puertos.
 
 Algunos restos son anteriores a esta separación y hoy son redundantes pero
-inofensivos: `import_action_logs`/`analysis_jobs` y `SesionEntorno` cualifican
+inofensivos: `import_action_logs`/`analysis_jobs` y `SchemaSession` cualifican
 su `db_table` con `DB_SCHEMA` (el mismo esquema al que ya apunta el
 `search_path`), y `SESSION_ENGINE` sigue siendo `services.config.sessions`.
 
@@ -103,11 +103,11 @@ su `db_table` con `DB_SCHEMA` (el mismo esquema al que ya apunta el
 
 Hasta entonces usuarios, permisos, catálogos, directorio de soporte y
 `django_migrations` vivían en `public` y se compartían a propósito. Para pasar
-a esquemas aislados, `manage.py copiar_desde_public` clona cada tabla de
+a esquemas aislados, `manage.py copy_from_public` clona cada tabla de
 `public` (salvo `django_session`) en el esquema del entorno: estructura,
 secuencias propias, restricciones e índices con sus nombres originales, y las
 filas con sus ids. Es transaccional, no toca `public` y se detiene si alguna
-tabla ya existe en el destino. `--simular` hace la copia y la deshace.
+tabla ya existe en el destino. `--dry-run` hace la copia y la deshace.
 
 Se ejecuta una vez por entorno, con el código nuevo desplegado y **antes** de
 que nadie entre, para que ninguna edición hecha en `public` en el intervalo se
@@ -117,7 +117,7 @@ quede atrás. Las tablas de `public` quedan como copia de seguridad; nada las le
 
 Cuatro apps tienen modelos y por tanto `migrations/`:
 
-- `services/config/` — usuarios, perfiles, grupos de permisos, `SesionEntorno`.
+- `services/config/` — usuarios, perfiles, grupos de permisos, `SchemaSession`.
 - `services/imports/` — `ImportActionLog` y `AnalysisJob`.
 - `services/subscriptions/` — los catálogos de referencia.
 - `services/support/` — el directorio de usuarios de soporte.

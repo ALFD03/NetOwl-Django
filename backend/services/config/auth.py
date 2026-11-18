@@ -10,7 +10,7 @@ import logging
 from django.contrib.auth import authenticate, login
 from django_ratelimit.core import get_usage
 
-from netowl_web.ratelimit import ip_cliente, user_login
+from netowl_web.ratelimit import client_ip, user_login
 from services.audit.log import record
 from services.audit.models import AuditLog
 
@@ -48,7 +48,7 @@ def count_failure(request) -> None:
 def attempt_login(request, username: str, password: str) -> str | None:
     """Abre la sesión. Devuelve None si entró, o el mensaje de error para el usuario."""
     if is_locked(request):
-        logger.warning("Acceso bloqueado por límite: usuario=%r ip=%s", username, ip_cliente(request))
+        logger.warning("Acceso bloqueado por límite: usuario=%r ip=%s", username, client_ip(request))
         record(
             request,
             module="auth",
@@ -62,10 +62,10 @@ def attempt_login(request, username: str, password: str) -> str | None:
     user = authenticate(request, username=username, password=password)
     if user is None:
         count_failure(request)
-        logger.warning("Credenciales incorrectas: usuario=%r ip=%s", username, ip_cliente(request))
+        logger.warning("Credenciales incorrectas: usuario=%r ip=%s", username, client_ip(request))
         return BAD_CREDENTIALS_MESSAGE
 
-    logger.info("Acceso correcto: usuario=%r ip=%s", username, ip_cliente(request))
+    logger.info("Acceso correcto: usuario=%r ip=%s", username, client_ip(request))
     login(request, user)
     return None
 

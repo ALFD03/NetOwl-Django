@@ -25,7 +25,7 @@ import {
   type Column,
 } from '@/shared/ui';
 import { formatInteger } from '@/shared/utils/formatters';
-import { antiguedadChartData, antiguedadChartOptions } from '../../lib/flowCharts';
+import { ageChartData, ageChartOptions } from '../../lib/flowCharts';
 import {
   TEAM_LABEL,
   KIND_LABEL,
@@ -34,9 +34,9 @@ import {
 } from '../../lib/flowFormat';
 import type { OpenGroup, OpenTicket, OpenTickets } from '../../types';
 
-type Agrupacion = 'by_stage' | 'by_group' | 'by_assignee' | 'by_request_type' | 'by_zone';
+type Grouping = 'by_stage' | 'by_group' | 'by_assignee' | 'by_request_type' | 'by_zone';
 
-const AGRUPACIONES: { key: Agrupacion; label: string; field: keyof OpenGroup }[] = [
+const GROUPINGS: { key: Grouping; label: string; field: keyof OpenGroup }[] = [
   { key: 'by_stage', label: 'Etapa', field: 'current_stage' },
   { key: 'by_group', label: 'Grupo de trabajo', field: 'grupo_trabajo' },
   { key: 'by_assignee', label: 'Asignado a', field: 'asignado_a' },
@@ -59,16 +59,16 @@ const Duration = ({
   </span>
 );
 
-function groupColumns(campo: keyof OpenGroup, etiqueta: string): Column<OpenGroup>[] {
+function groupColumns(field: keyof OpenGroup, label: string): Column<OpenGroup>[] {
   const columns: Column<OpenGroup>[] = [
     {
-      header: etiqueta,
-      accessor: (r) => <StickyLabel minWidth="180px">{String(r[campo] ?? '—')}</StickyLabel>,
-      sortKey: campo,
+      header: label,
+      accessor: (r) => <StickyLabel minWidth="180px">{String(r[field] ?? '—')}</StickyLabel>,
+      sortKey: field,
       sticky: true,
     },
   ];
-  if (campo === 'current_stage') {
+  if (field === 'current_stage') {
     columns.push(
       {
         header: 'Equipo',
@@ -245,24 +245,24 @@ function Summary({ data }: { data: OpenTickets }) {
 }
 
 /** Dónde están hoy: las etapas con más abiertos, con su parte del total. */
-function DondeEstan({ data }: { data: OpenTickets }) {
+function WhereTheyAre({ data }: { data: OpenTickets }) {
   const total = data.summary.open;
-  const etapas = [...data.by_stage].sort((a, b) => b.open - a.open).slice(0, 7);
+  const stages = [...data.by_stage].sort((a, b) => b.open - a.open).slice(0, 7);
   return (
     <div className="space-y-3">
-      {etapas.map((e) => {
-        const parte = total > 0 ? Math.round((e.open / total) * 1000) / 10 : 0;
+      {stages.map((e) => {
+        const part = total > 0 ? Math.round((e.open / total) * 1000) / 10 : 0;
         return (
           <ProgressBar
             key={e.current_stage ?? '—'}
             label={`${e.current_stage ?? '—'} · ${formatInteger(e.open)}${e.current_team ? ` · ${TEAM_LABEL[e.current_team]}` : ''}`}
-            percent={parte}
-            valueLabel={`${parte}% · ${formatDuration(e.age_mean)}`}
+            percent={part}
+            valueLabel={`${part}% · ${formatDuration(e.age_mean)}`}
             color={e.current_team === 'soporte' ? 'purple' : 'blue'}
           />
         );
       })}
-      {data.by_stage.length > etapas.length && (
+      {data.by_stage.length > stages.length && (
         <p className="text-[11px] text-slate-500">Las demás etapas, en la tabla de abajo.</p>
       )}
     </div>
@@ -274,9 +274,9 @@ function DondeEstan({ data }: { data: OpenTickets }) {
  * Es la sección del Dashboard: no tiene mes.
  */
 export function OpenTicketsPanel({ open }: { open: OpenTickets | null }) {
-  const [agrupacion, setAgrupacion] = useState<Agrupacion>('by_stage');
+  const [grouping, setGrouping] = useState<Grouping>('by_stage');
   const chart = useMemo(
-    () => (open ? antiguedadChartData(open.aging) : null),
+    () => (open ? ageChartData(open.aging) : null),
     [open],
   );
 
@@ -292,8 +292,8 @@ export function OpenTicketsPanel({ open }: { open: OpenTickets | null }) {
     );
   }
 
-  const activa = AGRUPACIONES.find((a) => a.key === agrupacion) ?? AGRUPACIONES[0];
-  const vacio = open.summary.open === 0;
+  const active = GROUPINGS.find((a) => a.key === grouping) ?? GROUPINGS[0];
+  const empty = open.summary.open === 0;
 
   return (
     <div className="space-y-6">
@@ -309,7 +309,7 @@ export function OpenTicketsPanel({ open }: { open: OpenTickets | null }) {
 
       <Summary data={open} />
 
-      {vacio || !chart ? (
+      {empty || !chart ? (
         <EmptyState title="No hay tickets abiertos" icon={<FolderOpen />} size="md" bordered />
       ) : (
         <>
@@ -321,7 +321,7 @@ export function OpenTicketsPanel({ open }: { open: OpenTickets | null }) {
               icon={<Clock className="h-5 w-5" />}
               className="xl:col-span-3"
             >
-              <BarChart data={chart} options={antiguedadChartOptions} className="h-72 w-full" />
+              <BarChart data={chart} options={ageChartOptions} className="h-72 w-full" />
             </NeonContainer>
             <NeonContainer
               theme="yellow"
@@ -330,29 +330,29 @@ export function OpenTicketsPanel({ open }: { open: OpenTickets | null }) {
               icon={<Hourglass className="h-5 w-5" />}
               className="xl:col-span-2"
             >
-              <DondeEstan data={open} />
+              <WhereTheyAre data={open} />
             </NeonContainer>
           </div>
 
           <NeonContainer
             theme="slate"
-            title={`Abiertos por ${activa.label.toLowerCase()}`}
+            title={`Abiertos por ${active.label.toLowerCase()}`}
             subtitle="Dónde se acumulan y cuánto llevan"
             icon={<Layers className="h-5 w-5" />}
             headerAction={
               <div className="rounded-2xl border border-slate-800 bg-surface-primary p-1">
                 <ToggleGroup
-                  options={AGRUPACIONES.map((a) => ({ key: a.key, label: a.label }))}
-                  activeKey={agrupacion}
-                  onChange={(k) => setAgrupacion(k as Agrupacion)}
+                  options={GROUPINGS.map((a) => ({ key: a.key, label: a.label }))}
+                  activeKey={grouping}
+                  onChange={(k) => setGrouping(k as Grouping)}
                 />
               </div>
             }
             noPadding
           >
             <DataTable
-              columns={groupColumns(activa.field, activa.label)}
-              data={open[agrupacion]}
+              columns={groupColumns(active.field, active.label)}
+              data={open[grouping]}
               searchable
               searchPlaceholder="Buscar..."
               emptyMessage="No hay tickets abiertos."

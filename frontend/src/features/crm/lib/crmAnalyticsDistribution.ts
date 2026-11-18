@@ -10,7 +10,7 @@ import {
   type MetricWeightMode,
   type RankingOptions,
 } from '@/shared/utils/distribution';
-import type { CrmDimensionValue, CrmHistoricoRow } from '../types';
+import type { CrmDimensionValue, CrmHistoryRow } from '../types';
 
 /**
  * Keys whose value is a number. Both CRM row types also carry `effectiveness`,
@@ -22,7 +22,7 @@ type NumericKeys<T> = {
 
 export interface CrmMetricConfig extends RankingOptions {
   dimensionKey: NumericKeys<CrmDimensionValue>;
-  globalKey: NumericKeys<CrmHistoricoRow>;
+  globalKey: NumericKeys<CrmHistoryRow>;
   mode: MetricWeightMode;
   unit?: '%' | 'h' | 'number';
   round?: number;
@@ -74,7 +74,7 @@ export type CrmAnalyticsMetricKey = keyof typeof CRM_ANALYTICS_METRICS;
 
 export function getCrmChartDistribution(
   dimensions: CrmDimensionValue[],
-  globalData: CrmHistoricoRow,
+  globalData: CrmHistoryRow,
   metric: CrmMetricConfig,
 ): DistributionItem[] {
   if (metric.mode === 'ranking') {

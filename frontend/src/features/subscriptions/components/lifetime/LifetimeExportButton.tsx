@@ -14,14 +14,14 @@ import { LIFETIME_COLUMNS, lifetimeFileName } from '../../lib/lifetimeExport';
  * para mostrar el resumen, y cargarlas en cada cambio de mes pesaba casi 1 MB.
  */
 export function LifetimeExportButton({ churn_month }: { churn_month: string }) {
-  const [estado, setState] = useState<ExportState>('idle');
+  const [state, setState] = useState<ExportState>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const handleClick = async () => {
     setState('busy');
     setError(null);
     try {
-      const data = await subscriptionsApi.getLifetimeDetalle(churn_month);
+      const data = await subscriptionsApi.getLifetimeDetail(churn_month);
       if (!data.churned?.length) {
         setState('empty');
         return;
@@ -44,7 +44,7 @@ export function LifetimeExportButton({ churn_month }: { churn_month: string }) {
     <div className="flex flex-col items-start gap-2">
       <ExportButton
         onClick={handleClick}
-        estado={estado}
+        state={state}
         label="Exportar bajas"
         labelEmpty="Sin bajas que exportar"
         title={`Descargar las bajas de ${churn_month} con su instalación, última activación, fecha de baja y días.`}

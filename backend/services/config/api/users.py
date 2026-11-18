@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from services.config.auth import can_act_on, effective_permissions
 from services.config.models import PERMISSION_FIELDS, PermissionGroup, Profile
 from services.config.units import EMPTY_SCOPE, UnitScope, saved_units, unit_scope
-from services.subscriptions.models import Coordinador
+from services.subscriptions.models import Coordinator
 
 from .endpoint import ApiError, endpoint
 
@@ -85,7 +85,7 @@ def check_grant(actor, new: dict[str, bool], previous: dict[str, bool] | None = 
 
 def read_units(body: UnitsBody) -> UnitScope:
     """La lista de unidades del cuerpo; un id fuera del catálogo se descarta."""
-    ids = frozenset(Coordinador.objects.filter(id__in=set(body.ids)).values_list("id", flat=True))
+    ids = frozenset(Coordinator.objects.filter(id__in=set(body.ids)).values_list("id", flat=True))
     return UnitScope(ids=ids, rf=body.rf)
 
 
@@ -95,7 +95,7 @@ def check_units(actor, new: UnitScope, previous: UnitScope) -> None:
     if own is None:
         return
     outside = sorted(
-        Coordinador.objects.filter(id__in=new.ids - previous.ids - own.ids).values_list("nombre", flat=True)
+        Coordinator.objects.filter(id__in=new.ids - previous.ids - own.ids).values_list("name", flat=True)
     )
     if new.rf and not previous.rf and not own.rf:
         outside.append("RF")
@@ -104,9 +104,9 @@ def check_units(actor, new: UnitScope, previous: UnitScope) -> None:
 
 
 def save_units(profile: Profile, units: UnitScope) -> None:
-    profile.unidad_rf = units.rf
-    profile.save(update_fields=["unidad_rf"])
-    profile.unidades_negocio.set(units.ids)
+    profile.rf_unit = units.rf
+    profile.save(update_fields=["rf_unit"])
+    profile.business_units.set(units.ids)
 
 
 def check_password(password: str, user: User) -> None:
@@ -153,14 +153,14 @@ def serialize_permissions(target) -> dict[str, bool]:
 def serialize_units(profile: Profile | None) -> dict:
     if profile is None:
         return {"ids": [], "rf": False}
-    return {"ids": [c.id for c in profile.unidades_negocio.all()], "rf": profile.unidad_rf}
+    return {"ids": [c.id for c in profile.business_units.all()], "rf": profile.rf_unit}
 
 
 def management_payload(request) -> dict:
     """Todo lo que pinta la pantalla de usuarios y grupos."""
     users = (
         User.objects.select_related("profile", "profile__group")
-        .prefetch_related("profile__unidades_negocio")
+        .prefetch_related("profile__business_units")
         .order_by("username")
     )
     own_group = getattr(getattr(request.user, "profile", None), "group_id", None)
@@ -195,7 +195,7 @@ def management_payload(request) -> dict:
         ],
         "roles": Profile.ROLE_CHOICES,
         "grantable": effective_permissions(request.user),
-        "business_units": [{"id": c["id"], "name": c["nombre"]} for c in Coordinador.objects.order_by("nombre").values("id", "nombre")],
+        "business_units": [{"id": c["id"], "name": c["name"]} for c in Coordinator.objects.order_by("name").values("id", "name")],
         "grantable_units": None if scope is None else {"ids": sorted(scope.ids), "rf": scope.rf},
     }
 

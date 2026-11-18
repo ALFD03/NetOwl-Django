@@ -9,7 +9,7 @@
 import { EyeOff, Plus, ShieldAlert } from 'lucide-react';
 
 import { Button, DataTable, Modal, StatusMessage, type Column } from '@/shared/ui';
-import type { ProductoPendiente } from '@/shared/types/subscriptions';
+import type { PendingProduct } from '@/shared/types/subscriptions';
 import type { CatalogBlock } from '../lib/catalog';
 
 export interface CatalogBlockModalProps {
@@ -37,7 +37,7 @@ export function CatalogBlockModal({
   ignoring,
   error,
 }: CatalogBlockModalProps) {
-  const columns: Column<ProductoPendiente>[] = [
+  const columns: Column<PendingProduct>[] = [
     { header: 'Producto', accessor: 'name', sortKey: 'name' },
     { header: 'Órdenes', accessor: 'orders', align: 'right', sortKey: 'orders' },
     {

@@ -14,7 +14,7 @@ import { useSubscriptionResults } from '../../hooks/useSubscriptionResults';
 import type { SubscriptionClose } from '../../types';
 
 interface SubscriptionResultsViewProps {
-  periodos: SubscriptionClose[];
+  periods: SubscriptionClose[];
 }
 
 const DIMENSION_OPTIONS = Object.entries(DIMENSION_CONFIG).map(([key, config]) => ({
@@ -23,14 +23,14 @@ const DIMENSION_OPTIONS = Object.entries(DIMENSION_CONFIG).map(([key, config]) =
   icon: config.icon,
 }));
 
-export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewProps) {
+export function SubscriptionResultsView({ periods }: SubscriptionResultsViewProps) {
   const [selectedRow, setSelectedRow] = useState<SubscriptionClose | null>(null);
   const [activeDimension, setActiveDimension] = useState('zona');
   const { data: details, loading } = useSubscriptionResults(selectedRow?.report_period ?? null);
-  const objetivos = useTargets();
-  const columns = useMemo(() => buildPeriodColumns(objetivos.thresholds), [objetivos]);
-  const dimensionColumns = useMemo(() => buildDimensionColumns(objetivos.thresholds), [objetivos]);
-  const filas = useMemo(() => withComplianceData(periodos, objetivos), [periodos, objetivos]);
+  const targets = useTargets();
+  const columns = useMemo(() => buildPeriodColumns(targets.thresholds), [targets]);
+  const dimensionColumns = useMemo(() => buildDimensionColumns(targets.thresholds), [targets]);
+  const rows = useMemo(() => withComplianceData(periods, targets), [periods, targets]);
 
   const activeLabel = DIMENSION_CONFIG[activeDimension]?.label ?? activeDimension;
 
@@ -44,7 +44,7 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
         noPadding
       >
         <div className="h-[550px]">
-          <DataTable columns={columns} data={filas} searchable onRowClick={setSelectedRow} />
+          <DataTable columns={columns} data={rows} searchable onRowClick={setSelectedRow} />
         </div>
       </NeonContainer>
 

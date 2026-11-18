@@ -28,22 +28,22 @@ from services.support.analytics.metrics import average_blocks, compute_metrics_f
 logger = logging.getLogger(__name__)
 
 
-def _save_close(db: DBConnector, periodo: str, metricas: dict) -> None:
+def _save_close(db: DBConnector, period: str, metrics: dict) -> None:
     """Guarda (o actualiza) el bloque de métricas de un periodo."""
     with db.transaction() as cur:
-        upsert(cur, tables.CLOSE_HISTORY, [{"periodo_reporte": periodo, "metricas": metricas}])
+        upsert(cur, tables.CLOSE_HISTORY, [{"periodo_reporte": period, "metricas": metrics}])
 
 
-def _save_global(db: DBConnector, resumen: dict, por_grupo: dict, periodos: int) -> None:
+def _save_global(db: DBConnector, summary: dict, by_group: dict, periods: int) -> None:
     """Guarda la fila única del dashboard de empresa."""
-    row = {"id": 1, "resumen_global": resumen, "por_grupo_trabajo": por_grupo, "periodos_evaluados": periodos}
+    row = {"id": 1, "resumen_global": summary, "por_grupo_trabajo": by_group, "periodos_evaluados": periods}
     with db.transaction() as cur:
         upsert(cur, tables.GLOBAL_METRICS, [row])
 
 
 def run_support_analysis(
     period_str: str | None = None,
-    progreso: Callable[[int, int, str], None] | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> dict:
     """
     Recalcula soporte: la cohorte de cada periodo y el promedio global.
@@ -77,29 +77,29 @@ def run_support_analysis(
 
     print(f"\n📊 PROCESANDO SOPORTE TÉCNICO PARA {len(target_periods)} PERIODO(S)...")
 
-    resumenes: dict[str, dict] = {}
+    summaries: dict[str, dict] = {}
 
-    for periodo in target_periods:
-        cohorte = build_cohort(df_all, periodo)
-        metricas = compute_metrics_for_period(cohorte)
+    for period in target_periods:
+        cohort = build_cohort(df_all, period)
+        metrics = compute_metrics_for_period(cohort)
 
-        _save_close(db, periodo, metricas)
-        save_dimensions(db, periodo, build_dimension_rows(cohorte))
+        _save_close(db, period, metrics)
+        save_dimensions(db, period, build_dimension_rows(cohort))
         # Solo del mes pedido: recorrer los dias de todo el historico son
         # treinta y un cortes por cada mes que haya, y nadie lanza un analisis
         # global esperando eso. El cierre de cada mes si se recalcula entero.
         if single_month:
-            build_support_day_metrics(periodo, db=db, df_all=df_all, progreso=progreso)
+            build_support_day_metrics(period, db=db, df_all=df_all, progress=progress)
 
-        resumenes[periodo] = metricas
-        print(f"   · {periodo}: {metricas['tickets_creados']} creados, "
-              f"{metricas['tickets_cerrados']} cerrados, "
-              f"{metricas['tickets_escalados']} escalados de ATC a Soporte")
+        summaries[period] = metrics
+        print(f"   · {period}: {metrics['tickets_creados']} creados, "
+              f"{metrics['tickets_cerrados']} cerrados, "
+              f"{metrics['tickets_escalados']} escalados de ATC a Soporte")
 
     _recompute_global_average(db, df_all)
 
     print("✅ ANÁLISIS DE SUPPORT COMPLETADO CON ÉXITO.\n")
-    return resumenes
+    return summaries
 
 
 def _recompute_global_average(db: DBConnector, df_all: pd.DataFrame) -> None:
@@ -120,20 +120,20 @@ def _recompute_global_average(db: DBConnector, df_all: pd.DataFrame) -> None:
     if df_hist.empty:
         return
 
-    bloques = [
+    blocks = [
         m if isinstance(m, dict) else json.loads(m)
         for m in df_hist["metricas"]
     ]
-    resumen = average_blocks(bloques)
+    summary = average_blocks(blocks)
 
-    periodos = sorted(df_hist["periodo_reporte"].unique().tolist())
+    periods = sorted(df_hist["periodo_reporte"].unique().tolist())
 
-    acumulado: dict[str, list[dict]] = {}
-    for periodo in periodos:
-        cohorte = build_cohort(df_all, periodo)
-        for grupo, sub in cohorte.desglosar(GROUP_DIM):
-            acumulado.setdefault(grupo, []).append(compute_metrics_for_period(sub))
+    accumulated: dict[str, list[dict]] = {}
+    for period in periods:
+        cohort = build_cohort(df_all, period)
+        for group, sub in cohort.break_down(GROUP_DIM):
+            accumulated.setdefault(group, []).append(compute_metrics_for_period(sub))
 
-    por_grupo = {g: average_blocks(b) for g, b in acumulado.items()}
+    by_group = {g: average_blocks(b) for g, b in accumulated.items()}
 
-    _save_global(db, resumen, por_grupo, len(periodos))
+    _save_global(db, summary, by_group, len(periods))

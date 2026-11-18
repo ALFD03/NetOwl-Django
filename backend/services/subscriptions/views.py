@@ -22,7 +22,7 @@ from services.subscriptions.analytics import (
     get_churn_close,
     get_churn_detail,
     get_day_metrics,
-    get_dimensiones,
+    get_dimensions,
     get_periods,
     get_sales_report_data,
     get_targets_config,
@@ -43,7 +43,7 @@ PERIOD_DENIED = "Acceso denegado. Solo puedes ver el último periodo evaluado."
 
 
 def _day(request) -> int | None:
-    return request_int(request, "day", minimo=1, maximo=31)
+    return request_int(request, "day", min_value=1, max_value=31)
 
 
 def _visible_selector(request, data: dict) -> dict:
@@ -58,7 +58,7 @@ def dashboard(request):
     """Los cierres de todos los periodos visibles y sus zonas."""
     periods = clamp_requested(request, None, get_periods)
     closings = get_churn_close(periods) if periods != [] else []
-    dims = get_dimensiones(periods) if periods != [] else []
+    dims = get_dimensions(periods) if periods != [] else []
     zones = [zone for period in dims for zone in period.get("dimensiones", {}).get("zona", [])]
     return {"closings": closings, "dimensiones": {"zona": zones}, "objetivos": get_targets_config()}
 
@@ -100,7 +100,7 @@ def result_detail(request, period: str):
     if period_denied(request, period, get_periods):
         raise ApiError(PERIOD_DENIED, 403)
     closing = get_churn_close([period])
-    dims = get_dimensiones([period])
+    dims = get_dimensions([period])
     return {
         "period": period,
         "summary": closing[0] if closing else {},

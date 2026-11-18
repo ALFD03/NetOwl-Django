@@ -7,6 +7,6 @@ from services.config.pages import page
 app_name = "auditoria"
 
 urlpatterns = [
-    path("", page("can_view_auditoria"), name="registro"),
-    path("monitoreo/", page("can_view_auditoria"), name="monitoreo"),
+    path("", page("can_view_audit"), name="registro"),
+    path("monitoreo/", page("can_view_audit"), name="monitoreo"),
 ]

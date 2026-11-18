@@ -43,12 +43,12 @@ class AnonymousBodyLimitMiddleware:
 
 
 class CSPMiddleware:
-    """Cabecera Content-Security-Policy de `settings.CSP_POLITICA` con un nonce por petición."""
+    """Cabecera Content-Security-Policy de `settings.CSP_POLICY` con un nonce por petición."""
 
     def __init__(self, get_response):
         self.get_response = get_response
         self.policy = "; ".join(
-            f"{directive} {' '.join(sources)}" for directive, sources in settings.CSP_POLITICA.items()
+            f"{directive} {' '.join(sources)}" for directive, sources in settings.CSP_POLICY.items()
         )
 
     def __call__(self, request):

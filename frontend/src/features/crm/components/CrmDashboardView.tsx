@@ -10,11 +10,11 @@ import {
   MetricCard,
   Modal,
   NeonContainer,
-  Paginacion,
+  Pagination,
   ProgressBar,
   SparklineCard,
   METRIC_CHART,
-  usePaginacion,
+  usePagination,
 } from '@/shared/ui';
 import { LineChart } from '@/shared/charts';
 import { formatInteger, formatPeriodLabel } from '@/shared/utils';
@@ -26,7 +26,7 @@ interface CrmDashboardViewProps {
 
 export function CrmDashboardView({ data }: CrmDashboardViewProps) {
   const {
-    historico,
+    history,
     stats,
     trendCards,
     healthCards,
@@ -37,7 +37,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
   } = data;
 
   const chartColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : undefined;
-  const pagination = usePaginacion(historico);
+  const pagination = usePagination(history);
 
   return (
     <>
@@ -56,12 +56,12 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
           theme="green"
           min={stats.hours_min_inst}
           p25={stats.hours_p25_inst}
-          mediana={stats.hours_median_inst}
-          promedio={stats.hours_avg_inst}
+          median={stats.hours_median_inst}
+          average={stats.hours_avg_inst}
           p75={stats.hours_p75_inst}
           max={stats.hours_max_inst}
           std={stats.hours_std_inst}
-          pctExcedeProm={stats.pct_over_avg_inst}
+          pctAboveAvg={stats.pct_over_avg_inst}
         />
         <EquidistantTimeline
           title="Distribución Tiempo para Pérdida"
@@ -69,12 +69,12 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
           theme="red"
           min={stats.hours_min_lost}
           p25={stats.hours_p25_lost}
-          mediana={stats.hours_median_lost}
-          promedio={stats.hours_avg_lost}
+          median={stats.hours_median_lost}
+          average={stats.hours_avg_lost}
           p75={stats.hours_p75_lost}
           max={stats.hours_max_lost}
           std={stats.hours_std_lost}
-          pctExcedeProm={stats.pct_over_avg_lost}
+          pctAboveAvg={stats.pct_over_avg_lost}
         />
         <div className="lg:col-span-2">
           <EquidistantTimeline
@@ -84,12 +84,12 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
             theme="purple"
             min={stats.hours_min_close}
             p25={stats.hours_p25_close}
-            mediana={stats.hours_median_close}
-            promedio={stats.hours_avg_close}
+            median={stats.hours_median_close}
+            average={stats.hours_avg_close}
             p75={stats.hours_p75_close}
             max={stats.hours_max_close}
             std={stats.hours_std_close}
-            pctExcedeProm={stats.pct_over_avg_close}
+            pctAboveAvg={stats.pct_over_avg_close}
           />
         </div>
       </div>
@@ -161,10 +161,10 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                   Desglose Numérico por Periodo
                 </span>
                 <span className="text-xs font-bold text-brand font-mono">
-                  {historico.length} periodos evaluados
+                  {history.length} periodos evaluados
                 </span>
               </div>
-              <Paginacion estado={pagination} posicion="arriba" />
+              <Pagination state={pagination} position="arriba" />
               <div className="max-h-60 overflow-auto custom-scrollbar">
                 <table className={READONLY_TABLE}>
                   <thead className={READONLY_TABLE_HEAD_STICKY}>
@@ -176,7 +176,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                     </tr>
                   </thead>
                   <tbody className={READONLY_TABLE_BODY}>
-                    {pagination.visibles.map((row, idx) => {
+                    {pagination.visible.map((row, idx) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
                       return (
@@ -191,7 +191,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                   </tbody>
                 </table>
               </div>
-              <Paginacion estado={pagination} />
+              <Pagination state={pagination} />
             </div>
           </div>
         )}

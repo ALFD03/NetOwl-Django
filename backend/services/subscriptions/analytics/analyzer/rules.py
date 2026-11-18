@@ -143,9 +143,9 @@ def apply_log_rules(df_clean_logs: pd.DataFrame, df_subs_full: pd.DataFrame, df_
     Devuelve `(logs, orders_with_activity_set)`; lo segundo es lo que distingue un
     alta real de una suscripcion que nunca llego a estar activa.
     """
-    valid_ordens = set(df_subs_full["orden"].to_numpy())
+    valid_orders = set(df_subs_full["orden"].to_numpy())
     always_free_orders = _always_free_orders(df_subs_full, df_free_meta)
-    log_filtered = df_clean_logs[df_clean_logs["orden"].isin(valid_ordens)].copy()
+    log_filtered = df_clean_logs[df_clean_logs["orden"].isin(valid_orders)].copy()
     log_filtered["_sintetico"] = False
     
     # Ordenamos una sola vez al inicio
@@ -158,8 +158,8 @@ def apply_log_rules(df_clean_logs: pd.DataFrame, df_subs_full: pd.DataFrame, df_
     first_idx = log_filtered.groupby("orden", sort=False)["f_dt"].idxmin()
     df_first_logs = log_filtered.loc[first_idx]
     
-    mask_caso5 = df_first_logs["log_norm"].str.contains(UNPAID_CUT_EVENT, na=False)
-    orders_case5 = set(df_first_logs.loc[mask_caso5, "orden"].to_numpy())
+    mask_case5 = df_first_logs["log_norm"].str.contains(UNPAID_CUT_EVENT, na=False)
+    orders_case5 = set(df_first_logs.loc[mask_case5, "orden"].to_numpy())
     
     if orders_case5:
         df_subs_c5 = df_subs_full[df_subs_full["orden"].isin(orders_case5)].copy()
@@ -193,21 +193,21 @@ def apply_log_rules(df_clean_logs: pd.DataFrame, df_subs_full: pd.DataFrame, df_
     log_filtered["next_log_norm"] = log_filtered["log_norm"].shift(-1)
     log_filtered["next_orden"] = log_filtered["orden"].shift(-1)
     
-    mask_caso6 = (
+    mask_case6 = (
         log_filtered["estado"].isin(INACTIVE_STATES) &
         log_filtered["next_log_norm"].str.contains(UNPAID_CUT_EVENT, na=False) &
         (log_filtered["orden"] == log_filtered["next_orden"])
     )
-    df_caso6 = log_filtered[mask_caso6].copy()
-    if not df_caso6.empty:
-        df_caso6["f_dt"] = df_caso6["f_dt"] + pd.Timedelta(seconds=1)
-        df_caso6["fecha"] = df_caso6["f_dt"].dt.strftime("%Y-%m-%d %H:%M:%S")
-        df_caso6["nota"] = "sintetico - activo entre inactivo y corte impago"
-        df_caso6["log_norm"] = "sintetico - activo entre inactivo y corte impago"
-        df_caso6["estado"] = ACTIVE_STATE
-        df_caso6["estado_origen"] = None
-        df_caso6["_sintetico"] = True
-        synth_parts.append(df_caso6[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
+    df_case6 = log_filtered[mask_case6].copy()
+    if not df_case6.empty:
+        df_case6["f_dt"] = df_case6["f_dt"] + pd.Timedelta(seconds=1)
+        df_case6["fecha"] = df_case6["f_dt"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        df_case6["nota"] = "sintetico - activo entre inactivo y corte impago"
+        df_case6["log_norm"] = "sintetico - activo entre inactivo y corte impago"
+        df_case6["estado"] = ACTIVE_STATE
+        df_case6["estado_origen"] = None
+        df_case6["_sintetico"] = True
+        synth_parts.append(df_case6[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
 
     # Removemos columnas auxiliares de log_filtered
     log_filtered.drop(columns=["next_log_norm", "next_orden"], inplace=True)
@@ -223,34 +223,34 @@ def apply_log_rules(df_clean_logs: pd.DataFrame, df_subs_full: pd.DataFrame, df_
     merged.rename(columns={"estado": "estado_subs"}, inplace=True)
 
     # Caso 2: Último log inactivo, suscripción activa
-    mask_caso2 = merged["ultimo_estado_log"].isin(INACTIVE_STATES) & (merged["estado_subs"] == ACTIVE_STATE)
-    df_caso2 = merged[mask_caso2].copy()
-    if not df_caso2.empty:
-        df_caso2["f_dt"] = df_caso2["f_dt"] + pd.Timedelta(seconds=1)
-        df_caso2["fecha"] = df_caso2["f_dt"].dt.strftime("%Y-%m-%d %H:%M:%S")
-        df_caso2["nota"] = "sintetico - ultimo log inactivo, sub activa"
-        df_caso2["log_norm"] = "sintetico - ultimo log inactivo, sub activa"
-        df_caso2["estado"] = ACTIVE_STATE
-        df_caso2["estado_origen"] = None
-        df_caso2["_sintetico"] = True
-        synth_parts.append(df_caso2[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
+    mask_case2 = merged["ultimo_estado_log"].isin(INACTIVE_STATES) & (merged["estado_subs"] == ACTIVE_STATE)
+    df_case2 = merged[mask_case2].copy()
+    if not df_case2.empty:
+        df_case2["f_dt"] = df_case2["f_dt"] + pd.Timedelta(seconds=1)
+        df_case2["fecha"] = df_case2["f_dt"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        df_case2["nota"] = "sintetico - ultimo log inactivo, sub activa"
+        df_case2["log_norm"] = "sintetico - ultimo log inactivo, sub activa"
+        df_case2["estado"] = ACTIVE_STATE
+        df_case2["estado_origen"] = None
+        df_case2["_sintetico"] = True
+        synth_parts.append(df_case2[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
 
     # Caso 4: Último log activo, suscripción inactiva
-    mask_caso4 = (
+    mask_case4 = (
         (merged["ultimo_estado_log"] == ACTIVE_STATE) & 
         (merged["estado_subs"] != ACTIVE_STATE) & 
         (merged["estado_subs"] != EXCLUDED_STATE)
     )
-    df_caso4 = merged[mask_caso4].copy()
-    if not df_caso4.empty:
-        df_caso4["f_dt"] = df_caso4["f_dt"] + pd.Timedelta(seconds=1)
-        df_caso4["fecha"] = df_caso4["f_dt"].dt.strftime("%Y-%m-%d %H:%M:%S")
-        df_caso4["nota"] = "sintetico - ultimo log activo, sub inactiva"
-        df_caso4["log_norm"] = "sintetico - ultimo log activo, sub inactiva"
-        df_caso4["estado"] = df_caso4["estado_subs"]
-        df_caso4["estado_origen"] = None
-        df_caso4["_sintetico"] = True
-        synth_parts.append(df_caso4[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
+    df_case4 = merged[mask_case4].copy()
+    if not df_case4.empty:
+        df_case4["f_dt"] = df_case4["f_dt"] + pd.Timedelta(seconds=1)
+        df_case4["fecha"] = df_case4["f_dt"].dt.strftime("%Y-%m-%d %H:%M:%S")
+        df_case4["nota"] = "sintetico - ultimo log activo, sub inactiva"
+        df_case4["log_norm"] = "sintetico - ultimo log activo, sub inactiva"
+        df_case4["estado"] = df_case4["estado_subs"]
+        df_case4["estado_origen"] = None
+        df_case4["_sintetico"] = True
+        synth_parts.append(df_case4[["orden", "fecha", "nota", "estado", "f_dt", "log_norm", "estado_origen", "_sintetico"]])
 
     # El log real de archivado tiene prioridad sobre la fecha detectada.
     orders_with_archived_log = set(

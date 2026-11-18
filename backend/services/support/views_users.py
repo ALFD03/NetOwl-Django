@@ -18,7 +18,7 @@ from core.odoo_names import USERS_SUFFIX, normalize_odoo_name
 from services.config.api import ApiError, endpoint, json_body
 from services.support.analytics.users import tickets_after_churn, users_outside_directory
 from services.support.api_keys import SUPPORT_KEYS
-from services.support.models import Departamento, MovimientoInvalido, UsuarioSoporte
+from services.support.models import Department, InvalidMove, SupportUser
 
 logger = logging.getLogger(__name__)
 
@@ -58,80 +58,80 @@ def _iso(value: date | None) -> str | None:
     return value.isoformat() if value else None
 
 
-def _user(u: UsuarioSoporte) -> dict[str, Any]:
+def _user(u: SupportUser) -> dict[str, Any]:
     return {
         "id": u.id,
-        "nombre_odoo": u.nombre_odoo,
-        "nombre": u.nombre,
-        "apellido": u.apellido,
-        "nombre_completo": u.nombre_completo,
-        "departamento_id": u.departamento_id,
-        "departamento": u.departamento.nombre,
-        "fecha_ingreso": _iso(u.fecha_ingreso),
-        "fecha_egreso": _iso(u.fecha_egreso),
-        "activo": u.activo,
+        "nombre_odoo": u.odoo_name,
+        "nombre": u.name,
+        "apellido": u.last_name,
+        "nombre_completo": u.full_name,
+        "departamento_id": u.department_id,
+        "departamento": u.department.name,
+        "fecha_ingreso": _iso(u.start_date),
+        "fecha_egreso": _iso(u.end_date),
+        "activo": u.is_active,
         "historial": [
-            {"id": step.id, "departamento_id": step.departamento_id,
-             "departamento": step.departamento.nombre, "desde": _iso(step.desde)}
-            for step in u.historial.all()
+            {"id": step.id, "departamento_id": step.department_id,
+             "departamento": step.department.name, "desde": _iso(step.since)}
+            for step in u.history.all()
         ],
     }
 
 
-def _department(d: Departamento) -> dict[str, Any]:
-    return {"id": d.id, "nombre": d.nombre, "usuarios": d.usuarios.count()}
+def _department(d: Department) -> dict[str, Any]:
+    return {"id": d.id, "nombre": d.name, "usuarios": d.users.count()}
 
 
-def _apply_user(row: UsuarioSoporte, data: dict) -> None:
+def _apply_user(row: SupportUser, data: dict) -> None:
     odoo_name = normalize_odoo_name(_text(data, "nombre_odoo", required=True, max_length=200))
     if not odoo_name:
         raise ApiError(f"«{USERS_SUFFIX}» no es un nombre de usuario.")
-    row.nombre_odoo = odoo_name
-    row.nombre = _text(data, "nombre", required=True, max_length=120)
-    row.apellido = _text(data, "apellido", max_length=120)
+    row.odoo_name = odoo_name
+    row.name = _text(data, "nombre", required=True, max_length=120)
+    row.last_name = _text(data, "apellido", max_length=120)
 
     # Obligatoria en el alta; puede seguir vacía en quien se registró antes del campo.
     joined = _date(data, "fecha_ingreso", required=row.pk is None)
-    steps = list(row.historial.all()) if row.pk else []
+    steps = list(row.history.all()) if row.pk else []
     if joined:
-        first_change = next((s.desde for s in steps if s.desde), None)
+        first_change = next((s.since for s in steps if s.since), None)
         if first_change and joined >= first_change:
             raise ApiError("La fecha de ingreso tiene que ser anterior al primer cambio de departamento.")
-        if row.fecha_egreso and joined > row.fecha_egreso:
+        if row.end_date and joined > row.end_date:
             raise ApiError("La fecha de ingreso no puede ser posterior a la de egreso.")
-    row.fecha_ingreso = joined
+    row.start_date = joined
 
     # Con cambios encima, el departamento solo se toca con un movimiento.
-    department = _related(Departamento, data, "departamento_id")
-    if len(steps) > 1 and department.pk != row.departamento_id:
+    department = _related(Department, data, "departamento_id")
+    if len(steps) > 1 and department.pk != row.department_id:
         raise ApiError(
             "Este usuario ya tiene cambios de departamento: usa «Cambiar departamento» "
             "o deshaz el último cambio."
         )
-    row.departamento = department
+    row.department = department
 
 
-def _sync_history(row: UsuarioSoporte) -> None:
+def _sync_history(row: SupportUser) -> None:
     """Crea el tramo inicial en el alta o lo corrige si aún no hubo cambios."""
-    steps = list(row.historial.all())
+    steps = list(row.history.all())
     if not steps:
-        row.historial.create(departamento=row.departamento, desde=None)
-    elif len(steps) == 1 and steps[0].departamento_id != row.departamento_id:
-        steps[0].departamento = row.departamento
-        steps[0].save(update_fields=["departamento"])
+        row.history.create(department=row.department, since=None)
+    elif len(steps) == 1 and steps[0].department_id != row.department_id:
+        steps[0].department = row.department
+        steps[0].save(update_fields=["department"])
 
 
-def _apply_department(row: Departamento, data: dict) -> None:
-    row.nombre = _text(data, "nombre", required=True, max_length=120)
+def _apply_department(row: Department, data: dict) -> None:
+    row.name = _text(data, "nombre", required=True, max_length=120)
 
 
 CATALOGS: dict[str, dict[str, Any]] = {
     "usuarios": {
-        "model": UsuarioSoporte, "serialize": _user, "apply": _apply_user,
+        "model": SupportUser, "serialize": _user, "apply": _apply_user,
         "after": _sync_history, "label": "usuario",
     },
     "departamentos": {
-        "model": Departamento, "serialize": _department, "apply": _apply_department, "label": "departamento",
+        "model": Department, "serialize": _department, "apply": _apply_department, "label": "departamento",
     },
 }
 
@@ -140,7 +140,7 @@ def _listing(name: str) -> list[dict[str, Any]]:
     catalog = CATALOGS[name]
     rows = catalog["model"].objects.all()
     if name == "usuarios":
-        rows = rows.select_related("departamento").prefetch_related("historial__departamento")
+        rows = rows.select_related("department").prefetch_related("history__department")
     return [catalog["serialize"](row) for row in rows]
 
 
@@ -223,25 +223,25 @@ def user_delete(request):
     return {"status": "success", "message": f"{catalog['label'].capitalize()} eliminado."}
 
 
-def _change_department(user: UsuarioSoporte, data: dict) -> str:
-    department = _related(Departamento, data, "departamento_id")
-    user.cambiar_departamento(department, _date(data, "fecha", required=True))
-    return f"{user.nombre_completo} pasa a {department.nombre}."
+def _change_department(user: SupportUser, data: dict) -> str:
+    department = _related(Department, data, "departamento_id")
+    user.change_department(department, _date(data, "fecha", required=True))
+    return f"{user.full_name} pasa a {department.name}."
 
 
-def _undo_change(user: UsuarioSoporte, data: dict) -> str:
+def _undo_change(user: SupportUser, data: dict) -> str:
     user.undo_last_change()
-    return f"{user.nombre_completo} vuelve a {user.departamento.nombre}."
+    return f"{user.full_name} vuelve a {user.department.name}."
 
 
-def _deactivate(user: UsuarioSoporte, data: dict) -> str:
+def _deactivate(user: SupportUser, data: dict) -> str:
     user.deactivate(_date(data, "fecha", required=True))
-    return f"{user.nombre_completo} queda dado de baja."
+    return f"{user.full_name} queda dado de baja."
 
 
-def _reactivate(user: UsuarioSoporte, data: dict) -> str:
-    user.reactivar()
-    return f"{user.nombre_completo} vuelve a estar activo."
+def _reactivate(user: SupportUser, data: dict) -> str:
+    user.reactivate()
+    return f"{user.full_name} vuelve a estar activo."
 
 
 MOVES = {
@@ -259,11 +259,11 @@ def user_move(request):
     move = MOVES.get(str(data.get("accion") or ""))
     if move is None:
         raise ApiError("Acción desconocida.")
-    user = UsuarioSoporte.objects.select_related("departamento").filter(pk=data.get("id")).first()
+    user = SupportUser.objects.select_related("department").filter(pk=data.get("id")).first()
     if user is None:
         raise ApiError("El usuario ya no existe.", 404)
     try:
         message = move(user, data)
-    except MovimientoInvalido as exc:
+    except InvalidMove as exc:
         raise ApiError(str(exc)) from exc
     return {"status": "success", "message": message, "registro": _user(user)}

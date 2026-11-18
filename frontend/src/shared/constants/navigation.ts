@@ -19,9 +19,9 @@ import type { AppNavigationItem, NavigationPage } from '@/shared/types/navigatio
 const REPORTS = 'Reportes';
 // El módulo de Catálogos lo abre cualquiera de sus tres permisos.
 const CATALOGS = [
-  PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL,
-  PERMISSIONS.MANAGE_CATALOGO_COMERCIAL,
-  PERMISSIONS.MANAGE_CATALOGO_VENTAS,
+  PERMISSIONS.MANAGE_OPERATIONAL_CATALOG,
+  PERMISSIONS.MANAGE_COMMERCIAL_CATALOG,
+  PERMISSIONS.MANAGE_SALES_CATALOG,
 ] as const;
 const SETTINGS = 'Configuración';
 
@@ -76,9 +76,9 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     permission: CATALOGS,
     pages: [
       { id: 'notificaciones', label: 'Notificaciones', href: '/catalogos/notificaciones/', icon: Bell, permission: CATALOGS },
-      { id: 'productos', label: 'Productos', href: '/catalogos/productos/', icon: Package, permission: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL },
-      { id: 'estructura', label: 'Estructura', href: '/catalogos/estructura/', icon: Network, permission: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL },
-      { id: 'ventas', label: 'Ventas', href: '/catalogos/ventas/', icon: UserCheck, permission: PERMISSIONS.MANAGE_CATALOGO_VENTAS },
+      { id: 'productos', label: 'Productos', href: '/catalogos/productos/', icon: Package, permission: PERMISSIONS.MANAGE_OPERATIONAL_CATALOG },
+      { id: 'estructura', label: 'Estructura', href: '/catalogos/estructura/', icon: Network, permission: PERMISSIONS.MANAGE_COMMERCIAL_CATALOG },
+      { id: 'ventas', label: 'Ventas', href: '/catalogos/ventas/', icon: UserCheck, permission: PERMISSIONS.MANAGE_SALES_CATALOG },
     ],
   },
   {
@@ -86,10 +86,10 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     name: 'Comisiones',
     icon: HandCoins,
     pathPrefix: '/comisiones',
-    permission: [PERMISSIONS.VIEW_COMISIONES, PERMISSIONS.MANAGE_COMISIONES],
+    permission: [PERMISSIONS.VIEW_COMMISSIONS, PERMISSIONS.MANAGE_COMMISSIONS],
     pages: [
-      { id: 'informe', label: 'Informe', href: '/comisiones/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_COMISIONES },
-      { id: 'condiciones', label: 'Ventana de pago y PYME', href: '/comisiones/condiciones/', icon: SlidersHorizontal, permission: PERMISSIONS.MANAGE_COMISIONES, section: SETTINGS },
+      { id: 'informe', label: 'Informe', href: '/comisiones/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_COMMISSIONS },
+      { id: 'condiciones', label: 'Ventana de pago y PYME', href: '/comisiones/condiciones/', icon: SlidersHorizontal, permission: PERMISSIONS.MANAGE_COMMISSIONS, section: SETTINGS },
     ],
   },
   {
@@ -110,7 +110,7 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     name: 'Auditoría',
     icon: ScrollText,
     pathPrefix: '/auditoria',
-    permission: PERMISSIONS.VIEW_AUDITORIA,
+    permission: PERMISSIONS.VIEW_AUDIT,
     pages: [
       { id: 'registro', label: 'Registro', href: '/auditoria/', icon: ScrollText },
       { id: 'monitoreo', label: 'Monitoreo', href: '/auditoria/monitoreo/', icon: Activity },

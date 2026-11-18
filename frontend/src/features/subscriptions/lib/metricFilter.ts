@@ -9,35 +9,35 @@
  * una fila dice 3,00 %, «= 3» la encuentra y «> 3» no.
  */
 
-import type { Proyeccion } from '@/shared/lib/projection';
+import type { Projection } from '@/shared/lib/projection';
 
 import { calcCommercial } from './commercial';
-import type { Meta } from './targets';
+import type { Goal } from './targets';
 
-export type FilterMetric = 'growth' | 'churn' | 'proyeccion';
+export type FilterMetric = 'growth' | 'churn' | 'projection';
 export type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=';
-/** `zona`: cada fila de la tabla. `grupo`: el site o el coordinador, por sus totales. */
-export type FilterLevel = 'zona' | 'grupo';
+/** `zone`: cada fila de la tabla. `group`: el site o el coordinador, por sus totales. */
+export type FilterLevel = 'zone' | 'group';
 
 export interface MetricFilter {
-  metrica: FilterMetric;
-  operador: FilterOperator;
+  metric: FilterMetric;
+  operator: FilterOperator;
   /** Tal como se escribió: vacío es «sin filtro». */
   value: string;
   level: FilterLevel;
 }
 
 export const EMPTY_METRIC_FILTER: MetricFilter = {
-  metrica: 'growth',
-  operador: '>=',
+  metric: 'growth',
+  operator: '>=',
   value: '',
-  level: 'zona',
+  level: 'zone',
 };
 
 export const FILTER_METRICS: { value: FilterMetric; label: string }[] = [
   { value: 'growth', label: 'Crecimiento %' },
   { value: 'churn', label: 'Churn %' },
-  { value: 'proyeccion', label: 'Proyección %' },
+  { value: 'projection', label: 'Proyección %' },
 ];
 
 export const FILTER_OPERATORS: FilterOperator[] = ['=', '!=', '>', '<', '>=', '<='];
@@ -50,7 +50,7 @@ export interface MetricValues {
   growth: number;
   churn: number;
   /** El cumplimiento de ventas proyectado al cierre, en % del objetivo. */
-  proyeccion: number | null;
+  projection: number | null;
 }
 
 /**
@@ -58,30 +58,30 @@ export interface MetricValues {
  * es todavía un número («-», «3,») o filtrando por proyección sin un día que
  * proyectar.
  */
-export function filterThreshold(filtro: MetricFilter, proyeccion: Proyeccion | null): number | null {
-  if (filtro.metrica === 'proyeccion' && !proyeccion) return null;
-  const texto = filtro.value.trim().replace(',', '.');
-  if (!/^-?\d+(\.\d+)?$/.test(texto)) return null;
-  return Number(texto);
+export function filterThreshold(filter: MetricFilter, projection: Projection | null): number | null {
+  if (filter.metric === 'projection' && !projection) return null;
+  const text = filter.value.trim().replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(text)) return null;
+  return Number(text);
 }
 
-const dosDecimales = (valor: number) => Math.round(valor * 100) / 100;
+const twoDecimals = (value: number) => Math.round(value * 100) / 100;
 
 /** Si los valores cumplen el filtro. Con `umbral` nulo no se filtra nada. */
-export function matchesFilter(valores: MetricValues, filtro: MetricFilter, umbral: number | null): boolean {
-  if (umbral === null) return true;
-  const crudo = valores[filtro.metrica];
-  if (crudo === null) return false;
+export function matchesFilter(values: MetricValues, filter: MetricFilter, threshold: number | null): boolean {
+  if (threshold === null) return true;
+  const raw = values[filter.metric];
+  if (raw === null) return false;
 
-  const valor = dosDecimales(crudo);
-  const objetivo = dosDecimales(umbral);
-  switch (filtro.operador) {
-    case '=': return valor === objetivo;
-    case '!=': return valor !== objetivo;
-    case '>': return valor > objetivo;
-    case '<': return valor < objetivo;
-    case '>=': return valor >= objetivo;
-    case '<=': return valor <= objetivo;
+  const value = twoDecimals(raw);
+  const target = twoDecimals(threshold);
+  switch (filter.operator) {
+    case '=': return value === target;
+    case '!=': return value !== target;
+    case '>': return value > target;
+    case '<': return value < target;
+    case '>=': return value >= target;
+    case '<=': return value <= target;
   }
 }
 
@@ -91,25 +91,25 @@ export function matchesFilter(valores: MetricValues, filtro: MetricFilter, umbra
  * El filtro compara contra lo que se ve: la proyección sin recortar.
  */
 export function metricValues(
-  cifras: {
+  figures: {
     active_start?: number;
     active_end?: number;
     new_subs?: number;
     growth?: number;
     churn?: number;
   },
-  meta: Meta,
-  { projection: proyeccion }: { projection: Proyeccion | null },
+  goal: Goal,
+  { projection }: { projection: Projection | null },
 ): MetricValues {
-  const { projectedSalesCompliance: cumplimientoVentasProyectado } = calcCommercial(
-    Number(cifras.active_start ?? 0),
-    Number(cifras.active_end ?? 0),
-    meta,
-    { new_subs: Number(cifras.new_subs ?? 0), projection: proyeccion },
+  const { projectedSalesCompliance } = calcCommercial(
+    Number(figures.active_start ?? 0),
+    Number(figures.active_end ?? 0),
+    goal,
+    { new_subs: Number(figures.new_subs ?? 0), projection },
   );
   return {
-    growth: Number(cifras.growth ?? 0),
-    churn: Number(cifras.churn ?? 0),
-    proyeccion: cumplimientoVentasProyectado,
+    growth: Number(figures.growth ?? 0),
+    churn: Number(figures.churn ?? 0),
+    projection: projectedSalesCompliance,
   };
 }

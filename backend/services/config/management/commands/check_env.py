@@ -11,7 +11,7 @@ se corrige en la maquina (Postgres, Redis, Vault), no aqui:
 - si Redis acepta ordenes sin contrasena y si va por TLS;
 - `DEBUG` y las cookies seguras.
 
-`--estricto` termina con codigo 1 si hay algun aviso, para usarlo en un
+`--strict` termina con codigo 1 si hay algun aviso, para usarlo en un
 despliegue.
 """
 
@@ -30,47 +30,47 @@ class Command(BaseCommand):
     help = "Revisa el cifrado de la base, los privilegios del rol, Redis y DEBUG. Solo lee."
 
     def add_arguments(self, parser):
-        parser.add_argument("--estricto", action="store_true", help="Codigo de salida 1 si hay avisos.")
+        parser.add_argument("--strict", action="store_true", help="Codigo de salida 1 si hay avisos.")
 
     def handle(self, *args, **options):
-        self.avisos = 0
+        self.warnings = 0
         self._database()
         self._redis()
         self._django()
-        if self.avisos:
-            self.stdout.write(self.style.WARNING(f"\n{self.avisos} aviso(s)."))
-            if options["estricto"]:
+        if self.warnings:
+            self.stdout.write(self.style.WARNING(f"\n{self.warnings} aviso(s)."))
+            if options["strict"]:
                 raise SystemExit(1)
         else:
             self.stdout.write(self.style.SUCCESS("\nSin avisos."))
 
-    def _ok(self, texto):
-        self.stdout.write(self.style.SUCCESS(f"  OK     {texto}"))
+    def _ok(self, text):
+        self.stdout.write(self.style.SUCCESS(f"  OK     {text}"))
 
-    def _warning(self, texto):
-        self.avisos += 1
-        self.stdout.write(self.style.WARNING(f"  AVISO  {texto}"))
+    def _warning(self, text):
+        self.warnings += 1
+        self.stdout.write(self.style.WARNING(f"  AVISO  {text}"))
 
     def _database(self):
         self.stdout.write("Postgres")
         with connection.cursor() as cur:
             cur.execute("SELECT ssl, version FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
-            fila = cur.fetchone()
-            if fila and fila[0]:
-                self._ok(f"conexion cifrada ({fila[1]})")
+            row = cur.fetchone()
+            if row and row[0]:
+                self._ok(f"conexion cifrada ({row[1]})")
             else:
                 self._warning("la conexion NO va cifrada: las credenciales y los datos viajan en claro. "
                             "Se activa con ssl=on en el servidor y sslmode=require en DBCONFIG.")
 
             cur.execute("SELECT current_user, rolsuper, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname = current_user")
-            usuario, superusuario, creates_roles, crea_bases = cur.fetchone()
-            if superusuario:
-                self._warning(f"el rol {usuario} es SUPERUSUARIO de Postgres: puede leer y borrar todo el servidor.")
+            user, superuser, creates_roles, create_bases = cur.fetchone()
+            if superuser:
+                self._warning(f"el rol {user} es SUPERUSUARIO de Postgres: puede leer y borrar todo el servidor.")
             else:
-                self._ok(f"el rol {usuario} no es superusuario")
-            if creates_roles or crea_bases:
-                self._warning(f"el rol {usuario} puede crear {'roles' if creates_roles else ''}"
-                            f"{' y ' if creates_roles and crea_bases else ''}{'bases' if crea_bases else ''}.")
+                self._ok(f"el rol {user} no es superusuario")
+            if creates_roles or create_bases:
+                self._warning(f"el rol {user} puede crear {'roles' if creates_roles else ''}"
+                            f"{' y ' if creates_roles and create_bases else ''}{'bases' if create_bases else ''}.")
 
             cur.execute(
                 """
@@ -82,9 +82,9 @@ class Command(BaseCommand):
                 """,
                 (SYSTEM_SCHEMAS, settings.DB_SCHEMA),
             )
-            otros = [f[0] for f in cur.fetchall()]
-            if otros:
-                self._warning(f"el rol entra tambien en otros esquemas: {', '.join(otros)}. "
+            others = [f[0] for f in cur.fetchall()]
+            if others:
+                self._warning(f"el rol entra tambien en otros esquemas: {', '.join(others)}. "
                             "Un rol por entorno, con permisos solo sobre su esquema, impide que "
                             "desarrollo toque produccion.")
             else:
@@ -127,8 +127,8 @@ class Command(BaseCommand):
             self._warning("DEBUG esta activo: un error muestra el codigo y la configuracion a quien lo provoque.")
         else:
             self._ok("DEBUG desactivado")
-        for nombre in ("SESSION_COOKIE_SECURE", "CSRF_COOKIE_SECURE"):
-            if getattr(settings, nombre, False):
-                self._ok(f"{nombre} activo")
+        for name in ("SESSION_COOKIE_SECURE", "CSRF_COOKIE_SECURE"):
+            if getattr(settings, name, False):
+                self._ok(f"{name} activo")
             else:
-                self._warning(f"{nombre} desactivado: la cookie viaja tambien por HTTP sin cifrar.")
+                self._warning(f"{name} desactivado: la cookie viaja tambien por HTTP sin cifrar.")

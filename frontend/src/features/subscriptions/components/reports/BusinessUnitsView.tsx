@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
-import type { Proyeccion } from '@/shared/lib/projection';
+import type { Projection } from '@/shared/lib/projection';
 import { MetricCard, NeonContainer } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import { CloseProjection } from '../analytics/CloseProjection';
@@ -17,7 +17,7 @@ import { TargetGroup } from './TargetGroup';
 import { useTargetsConfig } from '../../hooks/useTargets';
 import { groupNodes } from '../../lib/churnExport';
 import { completionTone } from '../../lib/commercial';
-import { formatTarget, tonoChurn, tonoCrecimiento, complianceTone } from '../../lib/targets';
+import { formatTarget, churnTone, growthTone, complianceTone } from '../../lib/targets';
 import type {
   BusinessUnitGroup, BusinessUnitNode, FtthSummary,
 } from '../../hooks/useBusinessUnitsData';
@@ -33,9 +33,9 @@ interface BusinessUnitsViewProps {
    *
    * El export de bajas es siempre el del cierre del mes; el botón lo avisa.
    */
-  diaSeleccionado?: boolean;
+  selectedDay?: boolean;
   /** Los días laborables del corte elegido, para proyectar las instalaciones al cierre. */
-  projection?: Proyeccion | null;
+  projection?: Projection | null;
 }
 
 function TechnologyBadge({ node }: { node: BusinessUnitNode }) {
@@ -54,14 +54,14 @@ function TechnologyBadge({ node }: { node: BusinessUnitNode }) {
   );
 }
 
-function FtthConsolidated({ summary, projection: proyeccion }: { summary: FtthSummary; projection: Proyeccion | null }) {
+function FtthConsolidated({ summary, projection }: { summary: FtthSummary; projection: Projection | null }) {
   const { thresholds } = useTargetsConfig();
   // "Meta Cumplida" es llegar a la meta, no al umbral verde del semáforo: con
   // el verde en 90 se pintaría verde un grupo que todavía no la alcanzó.
   const met = summary.complianceRate >= 100;
   const salesCompliance = summary.salesCompliance;
   const closeCompliance = summary.closeCompliance;
-  const tonoIngreso = complianceTone(summary.complianceRate, thresholds);
+  const inflowTone = complianceTone(summary.complianceRate, thresholds);
   const salesTone = complianceTone(salesCompliance, thresholds);
   const closeTone = complianceTone(closeCompliance, thresholds);
 
@@ -90,29 +90,29 @@ function FtthConsolidated({ summary, projection: proyeccion }: { summary: FtthSu
           <MetricCard label="Instalaciones" value={`+ ${formatInteger(summary.new_subs)}`} color="green" icon={<Wrench className="text-emerald-400" />} />
           <MetricCard label="Reactivaciones" value={`+ ${formatInteger(summary.reactivations)}`} color="blue" icon={<Repeat className="text-sky-400" />} />
           <MetricCard label="Ingresos Reales" value={`+ ${formatInteger(summary.gross_adds)}`} color="purple" icon={<TrendingUp className="text-purple-400" />} />
-          <MetricCard label="Objetivo" value={formatInteger(summary.target)} subValue={`${formatTarget(summary.meta.growthPct)} de la base`} color="green" icon={<Target className="text-emerald-400" />} />
+          <MetricCard label="Objetivo" value={formatInteger(summary.target)} subValue={`${formatTarget(summary.goal.growthPct)} de la base`} color="green" icon={<Target className="text-emerald-400" />} />
           <MetricCard label="Bajas" value={`- ${formatInteger(summary.churned)}`} color="red" icon={<TrendingDown className="text-rose-400" />} />
           <MetricCard label="Activos Cierre" value={formatInteger(summary.active_end)} color="slate" icon={<Users />} />
           <MetricCard label="Cierre Esperado" value={formatInteger(summary.expectedClose)} color="slate" icon={<UserRoundCheck />} />
-          <MetricCard label="Faltante" value={formatInteger(summary.faltante)} color="yellow" icon={<Ellipsis className="text-amber-400" />} />
+          <MetricCard label="Faltante" value={formatInteger(summary.shortfall)} color="yellow" icon={<Ellipsis className="text-amber-400" />} />
           <MetricCard
             label="Churn Rate"
             value={`${formatTwoDecimals(summary.churn_rate)} %`}
-            subValue={`Objetivo ${formatTarget(summary.meta.churnPct)}`}
-            color={tonoChurn(summary.churn_rate, thresholds)}
+            subValue={`Objetivo ${formatTarget(summary.goal.churnPct)}`}
+            color={churnTone(summary.churn_rate, thresholds)}
             icon={<Percent className="text-rose-400" />}
           />
           <MetricCard
             label="Crecimiento"
             value={`${formatTwoDecimals(summary.growth)} %`}
-            subValue={`Objetivo ${formatTarget(summary.meta.growthPct)}`}
-            color={tonoCrecimiento(summary.growth, thresholds)}
+            subValue={`Objetivo ${formatTarget(summary.goal.growthPct)}`}
+            color={growthTone(summary.growth, thresholds)}
             icon={<CircleArrowUp className="text-emerald-400" />}
           />
           <MetricCard
             label="Cumplimiento de Ingreso"
             value={`${formatTwoDecimals(summary.complianceRate)} %`}
-            color={tonoIngreso}
+            color={inflowTone}
             icon={<CircleCheckBig className={completionTone(summary.complianceRate, thresholds)} />}
           />
           <MetricCard
@@ -129,17 +129,17 @@ function FtthConsolidated({ summary, projection: proyeccion }: { summary: FtthSu
           />
         </div>
 
-        {proyeccion && (
+        {projection && (
           // Aparte de las tarjetas del corte: esto no es lo que hay, es adónde
           // lleva el ritmo de los días laborables si sigue igual hasta el cierre.
           <div className="mt-6">
             <CloseProjection
-              instalaciones={summary.new_subs}
-              projection={proyeccion}
-              cumplimiento={summary.projectedSalesCompliance === null ? null : {
+              installs={summary.new_subs}
+              projection={projection}
+              compliance={summary.projectedSalesCompliance === null ? null : {
                 value: summary.projectedSalesCompliance,
                 target: summary.target,
-                tono: complianceTone(summary.projectedSalesCompliance, thresholds),
+                tone: complianceTone(summary.projectedSalesCompliance, thresholds),
               }}
             />
           </div>
@@ -154,12 +154,12 @@ export function BusinessUnitsView({
   ftthSummary,
   showFtthSummary,
   period,
-  diaSeleccionado = false,
-  projection: proyeccion = null,
+  selectedDay: selectedDay = false,
+  projection: projection = null,
 }: BusinessUnitsViewProps) {
   return (
     <>
-      {showFtthSummary && ftthSummary.total_nodes > 0 && <FtthConsolidated summary={ftthSummary} projection={proyeccion} />}
+      {showFtthSummary && ftthSummary.total_nodes > 0 && <FtthConsolidated summary={ftthSummary} projection={projection} />}
 
       <div className="space-y-10">
         {groups.map((group) => {
@@ -175,14 +175,14 @@ export function BusinessUnitsView({
               icon={isRf ? <Radio className="h-5 w-5" /> : <UserCheck className="h-5 w-5" />}
               headerAction={
                 <div className="flex flex-wrap items-center justify-end gap-3">
-                  <TargetGroup meta={group.dynamic.meta} />
+                  <TargetGroup goal={group.dynamic.goal} />
                   <ChurnExportButton
                     period={period}
                     // El bloque RF no es un coordinador, pero se acota igual: por
                     // los nodos que tiene en pantalla.
-                    nodos={groupNodes(group.nodes)}
+                    nodes={groupNodes(group.nodes)}
                     scope={group.coordinator}
-                    dayNotice={diaSeleccionado}
+                    dayNotice={selectedDay}
                     label={isRf ? 'Exportar bajas RF' : 'Exportar bajas del coordinador'}
                   />
                 </div>
@@ -197,9 +197,9 @@ export function BusinessUnitsView({
                   growth={group.dynamic.growth}
                   churnRate={group.dynamic.churn_rate}
                   churned={group.dynamic.churned}
-                  meta={group.dynamic.meta}
+                  goal={group.dynamic.goal}
                   new_subs={group.dynamic.new_subs}
-                  projection={proyeccion}
+                  projection={projection}
                   mono
                 />
 
@@ -208,13 +208,13 @@ export function BusinessUnitsView({
                   labelHeader="Zona / Sucursal"
                   renderBadge={(node) => <TechnologyBadge node={node} />}
                   mono
-                  projection={proyeccion}
+                  projection={projection}
                   renderRowAction={(node) => (
                     <ChurnExportButton
                       period={period}
-                      nodos={groupNodes([node])}
+                      nodes={groupNodes([node])}
                       scope={node.zona_sucursal ?? node.zona ?? ''}
-                      dayNotice={diaSeleccionado}
+                      dayNotice={selectedDay}
                       iconOnly
                     />
                   )}

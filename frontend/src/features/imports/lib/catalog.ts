@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-import type { ProductoPendiente } from '@/shared/types/subscriptions';
+import type { PendingProduct } from '@/shared/types/subscriptions';
 
 /**
  * Respuesta 409 de la importación de suscripciones cuando el export trae
@@ -12,14 +12,14 @@ import type { ProductoPendiente } from '@/shared/types/subscriptions';
  */
 export interface CatalogBlock {
   message: string;
-  products: ProductoPendiente[];
+  products: PendingProduct[];
   orders: number;
 }
 
 interface CatalogBody {
   status?: string;
   message?: string;
-  products?: ProductoPendiente[];
+  products?: PendingProduct[];
   orders?: number;
 }
 

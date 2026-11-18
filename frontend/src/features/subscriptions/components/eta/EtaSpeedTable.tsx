@@ -27,9 +27,9 @@ export function EtaSpeedTable({ speedMetrics }: EtaSpeedTableProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50">
-            {Object.entries(speedMetrics).map(([rango, techs]) => (
-              <tr key={rango} className="transition-colors hover:bg-white/5">
-                <td className="border-r border-slate-800/80 p-4 font-bold text-slate-300">{rango}</td>
+            {Object.entries(speedMetrics).map(([range, techs]) => (
+              <tr key={range} className="transition-colors hover:bg-white/5">
+                <td className="border-r border-slate-800/80 p-4 font-bold text-slate-300">{range}</td>
                 <td className="p-4 text-right font-mono font-black text-white">{formatInteger(techs.Alámbrico)}</td>
                 <td className="p-4 text-right font-mono font-black text-white">{formatInteger(techs.Inalámbrico)}</td>
               </tr>

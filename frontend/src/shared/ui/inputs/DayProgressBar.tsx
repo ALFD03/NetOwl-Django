@@ -21,8 +21,8 @@ interface Props {
   className?: string;
 }
 
-const parseMonth = (periodoMes?: string): { year: number; month: number } | null => {
-  const match = periodoMes?.match(/^(\d{4})-(\d{2})/);
+const parseMonth = (monthPeriod?: string): { year: number; month: number } | null => {
+  const match = monthPeriod?.match(/^(\d{4})-(\d{2})/);
   return match ? { year: Number(match[1]), month: Number(match[2]) } : null;
 };
 
@@ -41,11 +41,11 @@ export function DayProgressBar({
   daysInMonth,
   selectedDay,
   onSelect,
-  monthPeriod: periodoMes,
+  monthPeriod,
   label = 'Fecha de corte',
 }: Props) {
   const available = useMemo(() => new Set(availableDays), [availableDays]);
-  const mes = useMemo(() => parseMonth(periodoMes), [periodoMes]);
+  const month = useMemo(() => parseMonth(monthPeriod), [monthPeriod]);
 
   const ticks = useMemo(() => {
     const marks = new Set<number>([1, daysInMonth]);
@@ -76,8 +76,8 @@ export function DayProgressBar({
   const hasData = available.has(selectedDay);
   const readableDate = !hasData
     ? 'Sin datos'
-    : mes
-      ? `${selectedDay} ${MONTH_NAMES[mes.month - 1]} ${mes.year}`
+    : month
+      ? `${selectedDay} ${MONTH_NAMES[month.month - 1]} ${month.year}`
       : `Dia ${selectedDay}`;
 
   return (

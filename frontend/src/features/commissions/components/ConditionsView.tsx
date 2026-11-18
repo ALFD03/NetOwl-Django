@@ -20,15 +20,15 @@ import { PeriodCard } from './conditions/PeriodCard';
 import { SmePlansCard } from './conditions/SmePlansCard';
 import { useBlocker } from 'react-router-dom';
 
-const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`;
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 function Validity({ last_update }: { last_update: ConditionsUpdate }) {
-  const fecha = last_update.at ? new Date(last_update.at) : null;
+  const date = last_update.at ? new Date(last_update.at) : null;
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="text-sm font-semibold text-white">
-        {fecha
-          ? `Vigentes · modificadas el ${fecha.toLocaleDateString('es-VE')} a las ${fecha.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}${last_update.by ? ` por ${last_update.by}` : ''}`
+        {date
+          ? `Vigentes · modificadas el ${date.toLocaleDateString('es-VE')} a las ${date.toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}${last_update.by ? ` por ${last_update.by}` : ''}`
           : 'Vigentes · las de la política, sin cambios desde entonces'}
       </span>
       <span className="text-xs text-slate-400">
@@ -38,18 +38,18 @@ function Validity({ last_update }: { last_update: ConditionsUpdate }) {
   );
 }
 
-function ChangeList({ cambios }: { cambios: Change[] }) {
+function ChangeList({ changes }: { changes: Change[] }) {
   return (
     <Panel title="Cambios pendientes">
       <ul className="flex flex-col gap-2 text-sm">
-        {cambios.map((c) => (
-          <li key={c.donde} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {changes.map((c) => (
+          <li key={c.where} className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" aria-hidden />
-            <span className="text-slate-400">{c.donde}</span>
-            {c.antes === null && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-400">nuevo</span>}
-            {c.despues === null && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-400">quitado</span>}
-            {c.antes !== null && <span className="font-mono tabular-nums text-slate-500 line-through">{c.antes}</span>}
-            {c.despues !== null && <span className="font-mono font-bold tabular-nums text-white">{c.antes !== null ? '→ ' : ''}{c.despues}</span>}
+            <span className="text-slate-400">{c.where}</span>
+            {c.before === null && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-400">nuevo</span>}
+            {c.after === null && <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-400">quitado</span>}
+            {c.before !== null && <span className="font-mono tabular-nums text-slate-500 line-through">{c.before}</span>}
+            {c.after !== null && <span className="font-mono font-bold tabular-nums text-white">{c.before !== null ? '→ ' : ''}{c.after}</span>}
           </li>
         ))}
       </ul>
@@ -64,9 +64,9 @@ function ChangeList({ cambios }: { cambios: Change[] }) {
  */
 export function ConditionsView({ conditions, last_update, smePlans, canEditPlans }: CommissionsConditionsProps) {
   const [draft, setDraft] = useState<CommissionConditions>(conditions);
-  const [editando, setEditando] = useState(false);
-  const [guardando, setGuardando] = useState(false);
-  const [estado, setState] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [state, setState] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Tras guardar, la recarga trae las condiciones como las dejó el servidor (tramos ordenados):
   // el borrador se reinicia con ellas en el mismo render, sin un efecto de por medio.
@@ -76,56 +76,56 @@ export function ConditionsView({ conditions, last_update, smePlans, canEditPlans
     setDraft(conditions);
   }
 
-  const cambios = useMemo(() => pendingChanges(conditions, draft), [conditions, draft]);
-  const errores = useMemo(() => fieldErrors(draft), [draft]);
-  const errorCount = Object.keys(errores).length;
-  const sucio = editando && cambios.length > 0;
+  const changes = useMemo(() => pendingChanges(conditions, draft), [conditions, draft]);
+  const errors = useMemo(() => fieldErrors(draft), [draft]);
+  const errorCount = Object.keys(errors).length;
+  const dirty = editing && changes.length > 0;
 
   // Salir con cambios sin guardar pregunta antes, cierre la pestaña o navegue por la app.
   useEffect(() => {
-    if (!sucio) return undefined;
+    if (!dirty) return undefined;
     const onCloseModal = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', onCloseModal);
     return () => window.removeEventListener('beforeunload', onCloseModal);
-  }, [sucio]);
-  const bloqueo = useBlocker(({ currentLocation, nextLocation }) => sucio && currentLocation.pathname !== nextLocation.pathname);
+  }, [dirty]);
+  const lock = useBlocker(({ currentLocation, nextLocation }) => dirty && currentLocation.pathname !== nextLocation.pathname);
   useEffect(() => {
-    if (bloqueo.state !== 'blocked') return;
-    if (window.confirm('Hay cambios sin guardar en las condiciones. ¿Salir sin guardarlos?')) bloqueo.proceed();
-    else bloqueo.reset();
-  }, [bloqueo]);
+    if (lock.state !== 'blocked') return;
+    if (window.confirm('Hay cambios sin guardar en las condiciones. ¿Salir sin guardarlos?')) lock.proceed();
+    else lock.reset();
+  }, [lock]);
 
-  const cambiar = (patch: Partial<CommissionConditions>) => setDraft((d) => ({ ...d, ...patch }));
+  const change = (patch: Partial<CommissionConditions>) => setDraft((d) => ({ ...d, ...patch }));
 
-  const descartar = () => {
+  const discard = () => {
     setDraft(conditions);
-    setEditando(false);
+    setEditing(false);
     setState(null);
   };
 
-  const guardar = async () => {
-    setGuardando(true);
+  const save = async () => {
+    setSaving(true);
     setState(null);
     try {
-      const response = await commissionsApi.guardarCondiciones({
+      const response = await commissionsApi.saveConditions({
         promo_day: draft.promo_day, wait_days: draft.wait_days, cutoff_day: draft.cutoff_day,
       });
-      setEditando(false);
+      setEditing(false);
       setState({ type: 'success', text: response.message });
     } catch (err: unknown) {
       setState({ type: 'error', text: getApiErrorMessage(err, 'No se pudieron guardar las condiciones.') });
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
-  const toolbar = editando ? (
+  const toolbar = editing ? (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-amber-500/40 bg-amber-950/30 p-4 shadow-xl">
       <div className="flex min-w-0 items-center gap-3">
         <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-sm font-bold text-white">
-            {cambios.length ? `${plural(cambios.length, 'cambio', 'cambios')} sin guardar` : 'Editando: todavía sin cambios'}
+            {changes.length ? `${plural(changes.length, 'cambio', 'cambios')} sin guardar` : 'Editando: todavía sin cambios'}
             {errorCount > 0 && <span className="text-rose-400"> · {plural(errorCount, 'error', 'errores')} por corregir</span>}
           </span>
           <span className="text-xs text-slate-400">
@@ -134,15 +134,15 @@ export function ConditionsView({ conditions, last_update, smePlans, canEditPlans
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" icon={<Undo2 className="h-4 w-4" />} onClick={descartar} disabled={guardando}>
+        <Button variant="outline" icon={<Undo2 className="h-4 w-4" />} onClick={discard} disabled={saving}>
           Descartar
         </Button>
         <Button
           icon={<Save className="h-4 w-4" />}
-          isLoading={guardando}
-          disabled={!cambios.length || errorCount > 0}
+          isLoading={saving}
+          disabled={!changes.length || errorCount > 0}
           title={errorCount > 0 ? 'Corrige los errores antes de guardar' : undefined}
-          onClick={() => void guardar()}
+          onClick={() => void save()}
         >
           Guardar condiciones
         </Button>
@@ -151,7 +151,7 @@ export function ConditionsView({ conditions, last_update, smePlans, canEditPlans
   ) : (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
       <Validity last_update={last_update} />
-      <Button icon={<Pencil className="h-4 w-4" />} onClick={() => { setState(null); setEditando(true); }}>
+      <Button icon={<Pencil className="h-4 w-4" />} onClick={() => { setState(null); setEditing(true); }}>
         Editar condiciones
       </Button>
     </div>
@@ -159,20 +159,20 @@ export function ConditionsView({ conditions, last_update, smePlans, canEditPlans
 
   return (
     <AppLayout toolbar={toolbar}>
-      <StatusMessage status={estado} className="mb-4" icon={<AlertTriangle />} />
+      <StatusMessage status={state} className="mb-4" icon={<AlertTriangle />} />
 
       <div className="flex flex-col gap-6">
-        {editando && cambios.length > 0 && <ChangeList cambios={cambios} />}
+        {editing && changes.length > 0 && <ChangeList changes={changes} />}
 
-        {editando ? (
+        {editing ? (
           <>
-            <PeriodCard borrador={draft} guardadas={conditions} editando errores={errores} cambiar={cambiar} />
-            <SmePlansCard planes={smePlans} canEditPlans={canEditPlans} compacto />
+            <PeriodCard draft={draft} saved={conditions} editing errors={errors} change={change} />
+            <SmePlansCard plans={smePlans} canEditPlans={canEditPlans} compact />
           </>
         ) : (
           <>
-            <SmePlansCard planes={smePlans} canEditPlans={canEditPlans} compacto={false} />
-            <PeriodCard borrador={draft} guardadas={conditions} editando={false} errores={errores} cambiar={cambiar} />
+            <SmePlansCard plans={smePlans} canEditPlans={canEditPlans} compact={false} />
+            <PeriodCard draft={draft} saved={conditions} editing={false} errors={errors} change={change} />
           </>
         )}
       </div>

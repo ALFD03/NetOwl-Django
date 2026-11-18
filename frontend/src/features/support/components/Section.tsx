@@ -11,18 +11,18 @@ import type { ReactNode } from 'react';
 
 import { cn } from '@/shared/lib/cn';
 
-export interface SeccionDef {
+export interface SectionDef {
   id: string;
   title: string;
   icon?: ReactNode;
 }
 
 /** El índice de la página: un botón por sección, que la lleva arriba. */
-export function SeccionesNav({
+export function SectionsNav({
   sections,
   className,
 }: {
-  sections: SeccionDef[];
+  sections: SectionDef[];
   className?: string;
 }) {
   if (sections.length < 2) return null;
@@ -45,7 +45,7 @@ export function SeccionesNav({
   );
 }
 
-interface SeccionProps {
+interface SectionProps {
   id: string;
   title: string;
   description?: string;
@@ -57,7 +57,7 @@ interface SeccionProps {
   className?: string;
 }
 
-export function Seccion({
+export function Section({
   id,
   title,
   description,
@@ -66,7 +66,7 @@ export function Seccion({
   action,
   children,
   className,
-}: SeccionProps) {
+}: SectionProps) {
   return (
     <section id={id} className={cn('scroll-mt-6 space-y-4', className)}>
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-800 pb-3">

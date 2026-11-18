@@ -183,7 +183,7 @@ porque `shared` no puede depender de un feature; los features los reexportan.
   (desde `lg`) y `MobileNavDrawer`.
 - **Ruta de migas** — es el encabezado de toda página de un módulo: `AppLayout`
   pinta «Módulo › Página», resuelta de la URL con `resolveLocation`. Las páginas
-  no llevan título ni declaran dónde están. `subpagina` añade un tercer tramo a
+  no llevan título ni declaran dónde están. `subpage` añade un tercer tramo a
   una subruta (Reporte ETA › Maestro de planes); `title` queda solo para las
   pantallas fuera del registro (la gestión de usuarios).
 - **`AnalysisQueueAlert`** — el aviso flotante que sigue la cola. Vive en
@@ -249,7 +249,7 @@ centraliza las opciones y `plugins.ts` el texto central del *doughnut*.
 `utils/distribution.ts` concentra el cálculo de distribuciones y rankings
 (simple, ponderada, agrupando los menores) y su conversión a datos de gráfico.
 `formatters/` tiene `toNumber`, `formatInteger`, `formatOneDecimal`,
-`formatTwoDecimals`, `formatPercentage` y `formatPeriodLabel`.
+`formatTwoDecimals` y `formatPeriodLabel`.
 
 `lib/excel.ts` exporta a `.xlsx` **en el navegador**: el libro se construye con
 las filas que la vista ya tiene, así que exportar no cuesta una vuelta al
@@ -286,12 +286,14 @@ nada**: la comprobación corre antes del truncate.
 Vistas: `SubscriptionResultsView`, `SubscriptionPeriodDetail`, `LifetimeView`,
 `SalesReportView`, `BusinessUnitsView`, `NodePerformanceTable`,
 `CommercialSummaryStrip`, `SubscriptionReportFilters`, `EtaReportView`,
-`EtaReportToolbar`, `EtaSpeedTable`, `EtaManagementView`, `CatalogosView`, y los
+`EtaReportToolbar`, `EtaSpeedTable`, `EtaManagementView`, las vistas de `catalogs/`, y los
 bloques de `analytics/` y `dashboard/`.
 
 Hooks: `useSubscriptionDashboard`, `useSubscriptionsAnalyticsData`,
 `useSubscriptionResults`, `useSubscriptionEtaReport`, `useEtaManagement`,
-`useSalesReportData`, `useBusinessUnitsData`, `useDayMetrics`, `useCatalogs`.
+`useSalesReportData`, `useBusinessUnitsData`, `useDayMetrics`, `useCatalogs`, y los
+hooks de página (`useSalesReportPage`, `useBusinessUnitsPage`, `useEtaReportPage`,
+`useSubscriptionsAnalyticsPage`) que dejan las páginas como cascarones.
 
 `lib/`:
 

@@ -6,7 +6,7 @@
 
 import { Building2, Search } from 'lucide-react';
 
-import type { Proyeccion } from '@/shared/lib/projection';
+import type { Projection } from '@/shared/lib/projection';
 import { EmptyState, NeonContainer } from '@/shared/ui';
 import { formatPeriodLabel } from '@/shared/utils/formatters';
 import { ChurnExportButton } from './ChurnExportButton';
@@ -25,24 +25,24 @@ interface SalesReportViewProps {
    *
    * El export de bajas es siempre el del cierre del mes; el botón lo avisa.
    */
-  diaSeleccionado?: boolean;
+  selectedDay?: boolean;
   /** Los días laborables del corte elegido, para proyectar las instalaciones al cierre. */
-  projection?: Proyeccion | null;
+  projection?: Projection | null;
   /** Las coordinadoras de oficina con site; cada bloque enseña las suyas. */
-  coordinadoras?: OfficeCoordinator[];
+  coordinatorOffices?: OfficeCoordinator[];
   /** El día del corte, hasta el que se suman sus ventas; nulo es el mes entero. */
   cutoffDay?: number | null;
 }
 
-const siteKey = (nombre: string | undefined) => String(nombre ?? '').trim().toLowerCase();
+const siteKey = (name: string | undefined) => String(name ?? '').trim().toLowerCase();
 
 export function SalesReportView({
   sites,
   period,
-  diaSeleccionado = false,
-  projection: proyeccion = null,
-  coordinadoras = [],
-  cutoffDay: diaCorte = null,
+  selectedDay: selectedDay = false,
+  projection: projection = null,
+  coordinatorOffices: coordinatorOffices = [],
+  cutoffDay: cutoffDay = null,
 }: SalesReportViewProps) {
   if (sites.length === 0) {
     return (
@@ -66,14 +66,14 @@ export function SalesReportView({
           icon={<Building2 className="h-5 w-5" />}
           headerAction={
             <div className="flex flex-wrap items-center justify-end gap-3">
-              <TargetGroup meta={site.meta} />
+              <TargetGroup goal={site.goal} />
               <ChurnExportButton
                 period={period}
                 // Los nodos que el site tiene en pantalla, no los del catálogo:
                 // los filtros de tecnología y sucursal ya recortaron la tabla.
-                nodos={groupNodes(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
+                nodes={groupNodes(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
                 scope={String(site.site ?? '')}
-                dayNotice={diaSeleccionado}
+                dayNotice={selectedDay}
                 label="Exportar bajas del site"
               />
             </div>
@@ -81,18 +81,18 @@ export function SalesReportView({
         >
           <div className="space-y-10">
             <OfficeCoordinatorBadges
-              coordinadoras={coordinadoras.filter((c) => siteKey(c.site) === siteKey(site.site))}
-              day={diaCorte}
+              coordinatorOffices={coordinatorOffices.filter((c) => siteKey(c.site) === siteKey(site.site))}
+              day={cutoffDay}
               // Pegadas al resumen del site, no a diez de distancia.
               className="-mb-6"
             />
-            {site.totales && site.meta && (
+            {site.totals && site.goal && (
               <SimpleSummary
-                activeAtStart={site.totales.active_start}
-                activeAtEnd={site.totales.active_end}
-                new_subs={site.totales.new_subs}
-                meta={site.meta}
-                projection={proyeccion}
+                activeAtStart={site.totals.active_start}
+                activeAtEnd={site.totals.active_end}
+                new_subs={site.totals.new_subs}
+                goal={site.goal}
+                projection={projection}
               />
             )}
             {site.technologies?.map((tech: SalesReportTechnology) => {
@@ -108,17 +108,17 @@ export function SalesReportView({
                     churned={tech.dynamic.churned}
                     growth={tech.dynamic.growth}
                     churnRate={tech.dynamic.churn_rate}
-                    meta={tech.dynamic.meta}
+                    goal={tech.dynamic.goal}
                     new_subs={tech.dynamic.new_subs}
-                    projection={proyeccion}
+                    projection={projection}
                   />
 
                   <div className="flex justify-end">
                     <ChurnExportButton
                       period={period}
-                      nodos={groupNodes(tech.nodes)}
+                      nodes={groupNodes(tech.nodes)}
                       scope={`${site.site ?? ''} ${tech.technology ?? ''}`}
-                      dayNotice={diaSeleccionado}
+                      dayNotice={selectedDay}
                       label={`Exportar bajas ${tech.technology ?? ''}`}
                     />
                   </div>
@@ -126,13 +126,13 @@ export function SalesReportView({
                   <NodePerformanceTable
                     nodes={tech.nodes ?? []}
                     labelHeader="Nodo / Zona"
-                    projection={proyeccion}
+                    projection={projection}
                     renderRowAction={(node) => (
                       <ChurnExportButton
                         period={period}
-                        nodos={groupNodes([node])}
+                        nodes={groupNodes([node])}
                         scope={node.zona_sucursal ?? node.zona ?? ''}
-                        dayNotice={diaSeleccionado}
+                        dayNotice={selectedDay}
                         iconOnly
                       />
                     )}

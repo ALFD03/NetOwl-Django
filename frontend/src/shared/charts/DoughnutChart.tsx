@@ -7,7 +7,7 @@ import { Doughnut } from 'react-chartjs-2';
 
 import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useTheme } from '@/shared/hooks/useTheme';
-import { compactarAnillo } from './compacto';
+import { compactRing } from './compacto';
 import { centerTextPlugin } from './plugins';
 import { adaptToTheme } from './tema';
 
@@ -32,13 +32,13 @@ export function DoughnutChart({
   plugins = DEFAULT_PLUGINS,
   className = 'h-96 w-full',
 }: DoughnutChartProps) {
-  const ancho = useBreakpoint('sm');
-  const { tema } = useTheme();
+  const width = useBreakpoint('sm');
+  const { theme } = useTheme();
   const resolvedOptions = useMemo(() => {
-    const themed = adaptToTheme(options, tema);
-    return ancho || !themed ? themed : compactarAnillo(themed);
-  }, [options, ancho, tema]);
-  const resolvedData = useMemo(() => adaptToTheme(data, tema), [data, tema]);
+    const themed = adaptToTheme(options, theme);
+    return width || !themed ? themed : compactRing(themed);
+  }, [options, width, theme]);
+  const resolvedData = useMemo(() => adaptToTheme(data, theme), [data, theme]);
 
   return (
     <div className={className}>

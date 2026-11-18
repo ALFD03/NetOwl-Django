@@ -31,7 +31,7 @@ export function SupportMonthDetail({ analyticsData, periods, selectedPeriod }: P
   const [dimension, setDimension] = useState<SupportDimension>('zona');
 
   const data = useSupportAnalytics({ analyticsData, periods, selectedPeriod }, selectedGroup, dimension);
-  const { periodo, activeGroupName, hasGroups, dimensionRows, zonas, breakdown, openBreakdown, closeBreakdown } = data;
+  const { period, activeGroupName, hasGroups, dimensionRows, zones, breakdown, openBreakdown, closeBreakdown } = data;
 
   // El histórico de arriba no cambia con el mes: sólo se pide el detalle.
   const changeMonth = (period: string) =>
@@ -41,7 +41,7 @@ export function SupportMonthDetail({ analyticsData, periods, selectedPeriod }: P
     <div className="space-y-6">
       <SupportAnalyticsFilters
         periods={periods}
-        selectedPeriod={periodo}
+        selectedPeriod={period}
         onPeriodChange={changeMonth}
         groups={data.groupOptions}
         selectedGroup={activeGroupName}
@@ -66,17 +66,17 @@ export function SupportMonthDetail({ analyticsData, periods, selectedPeriod }: P
             dimension={dimension}
             rows={dimensionRows}
             groupName={activeGroupName}
-            period={periodo}
+            period={period}
             onSelect={openBreakdown}
           />
 
-          <SupportIncidenceTable rows={zonas} groupName={activeGroupName} />
+          <SupportIncidenceTable rows={zones} groupName={activeGroupName} />
 
           <SupportBreakdownModal
             dimension={dimension}
             breakdown={breakdown}
             groupName={activeGroupName}
-            period={periodo}
+            period={period}
             onClose={closeBreakdown}
           />
         </>

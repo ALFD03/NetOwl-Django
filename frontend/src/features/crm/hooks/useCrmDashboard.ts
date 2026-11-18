@@ -10,7 +10,7 @@ import type {
   CrmDashboardProps,
   CrmGlobalStats,
   CrmHealthCard,
-  CrmHistoricoRow,
+  CrmHistoryRow,
   CrmTrendCard,
 } from '@/features/crm/types';
 
@@ -46,7 +46,7 @@ const EMPTY_STATS: CrmGlobalStats = {
   pct_over_avg_close: 0,
 };
 
-function averageField(rows: CrmHistoricoRow[], key: keyof CrmHistoricoRow, digits = 2): number {
+function averageField(rows: CrmHistoryRow[], key: keyof CrmHistoryRow, digits = 2): number {
   if (rows.length === 0) return 0;
   const sum = rows.reduce((acc, row) => acc + (Number(row[key]) || 0), 0);
   return Number((sum / rows.length).toFixed(digits));
@@ -55,9 +55,9 @@ function averageField(rows: CrmHistoricoRow[], key: keyof CrmHistoricoRow, digit
 const TREND_DEFS: Array<{
   id: string;
   title: string;
-  valueKey: keyof CrmHistoricoRow;
-  rateKey: keyof CrmHistoricoRow;
-  countKey: keyof CrmHistoricoRow;
+  valueKey: keyof CrmHistoryRow;
+  rateKey: keyof CrmHistoryRow;
+  countKey: keyof CrmHistoryRow;
   unitLabel: string;
   color: MetricColor;
 }> = [
@@ -68,50 +68,50 @@ const TREND_DEFS: Array<{
 ];
 
 export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
-  const historico = useMemo(() => metrics.trend_history ?? [], [metrics]);
-  const efectividad = useMemo(() => metrics.effectiveness ?? [], [metrics]);
+  const history = useMemo(() => metrics.trend_history ?? [], [metrics]);
+  const effectiveness = useMemo(() => metrics.effectiveness ?? [], [metrics]);
   const [selectedTrend, setSelectedTrend] = useState<CrmTrendCard | null>(null);
 
   const stats = useMemo<CrmGlobalStats>(() => {
-    const n = historico.length;
+    const n = history.length;
     if (n === 0) return EMPTY_STATS;
 
     return {
-      total_opportunities: Math.round(averageField(historico, 'total_opportunities', 0)),
-      pct_installation: averageField(historico, 'pct_installation'),
-      pct_lost: averageField(historico, 'pct_lost'),
-      pct_pending: averageField(historico, 'pct_pending'),
-      pct_returned_e8: averageField(historico, 'pct_returned_e8'),
-      hours_avg_inst: averageField(historico, 'hours_avg_inst'),
-      hours_median_inst: averageField(historico, 'hours_median_inst'),
-      hours_p25_inst: averageField(historico, 'hours_p25_inst'),
-      hours_p75_inst: averageField(historico, 'hours_p75_inst'),
-      hours_min_inst: averageField(historico, 'hours_min_inst'),
-      hours_max_inst: averageField(historico, 'hours_max_inst'),
-      hours_std_inst: averageField(historico, 'hours_std_inst'),
-      pct_over_avg_inst: averageField(historico, 'pct_over_avg_inst'),
-      hours_avg_lost: averageField(historico, 'hours_avg_lost'),
-      hours_median_lost: averageField(historico, 'hours_median_lost'),
-      hours_p25_lost: averageField(historico, 'hours_p25_lost'),
-      hours_p75_lost: averageField(historico, 'hours_p75_lost'),
-      hours_min_lost: averageField(historico, 'hours_min_lost'),
-      hours_max_lost: averageField(historico, 'hours_max_lost'),
-      hours_std_lost: averageField(historico, 'hours_std_lost'),
-      pct_over_avg_lost: averageField(historico, 'pct_over_avg_lost'),
-      hours_avg_close: averageField(historico, 'hours_avg_close'),
-      hours_median_close: averageField(historico, 'hours_median_close'),
-      hours_p25_close: averageField(historico, 'hours_p25_close'),
-      hours_p75_close: averageField(historico, 'hours_p75_close'),
-      hours_min_close: averageField(historico, 'hours_min_close'),
-      hours_max_close: averageField(historico, 'hours_max_close'),
-      hours_std_close: averageField(historico, 'hours_std_close'),
-      pct_over_avg_close: averageField(historico, 'pct_over_avg_close'),
+      total_opportunities: Math.round(averageField(history, 'total_opportunities', 0)),
+      pct_installation: averageField(history, 'pct_installation'),
+      pct_lost: averageField(history, 'pct_lost'),
+      pct_pending: averageField(history, 'pct_pending'),
+      pct_returned_e8: averageField(history, 'pct_returned_e8'),
+      hours_avg_inst: averageField(history, 'hours_avg_inst'),
+      hours_median_inst: averageField(history, 'hours_median_inst'),
+      hours_p25_inst: averageField(history, 'hours_p25_inst'),
+      hours_p75_inst: averageField(history, 'hours_p75_inst'),
+      hours_min_inst: averageField(history, 'hours_min_inst'),
+      hours_max_inst: averageField(history, 'hours_max_inst'),
+      hours_std_inst: averageField(history, 'hours_std_inst'),
+      pct_over_avg_inst: averageField(history, 'pct_over_avg_inst'),
+      hours_avg_lost: averageField(history, 'hours_avg_lost'),
+      hours_median_lost: averageField(history, 'hours_median_lost'),
+      hours_p25_lost: averageField(history, 'hours_p25_lost'),
+      hours_p75_lost: averageField(history, 'hours_p75_lost'),
+      hours_min_lost: averageField(history, 'hours_min_lost'),
+      hours_max_lost: averageField(history, 'hours_max_lost'),
+      hours_std_lost: averageField(history, 'hours_std_lost'),
+      pct_over_avg_lost: averageField(history, 'pct_over_avg_lost'),
+      hours_avg_close: averageField(history, 'hours_avg_close'),
+      hours_median_close: averageField(history, 'hours_median_close'),
+      hours_p25_close: averageField(history, 'hours_p25_close'),
+      hours_p75_close: averageField(history, 'hours_p75_close'),
+      hours_min_close: averageField(history, 'hours_min_close'),
+      hours_max_close: averageField(history, 'hours_max_close'),
+      hours_std_close: averageField(history, 'hours_std_close'),
+      pct_over_avg_close: averageField(history, 'pct_over_avg_close'),
     };
-  }, [historico]);
+  }, [history]);
 
   const labels = useMemo(
-    () => historico.map((row) => formatPeriodLabel(String(row.report_period ?? ''))),
-    [historico],
+    () => history.map((row) => formatPeriodLabel(String(row.report_period ?? ''))),
+    [history],
   );
 
   const trendCards = useMemo<CrmTrendCard[]>(() => TREND_DEFS.map((def) => ({
@@ -120,13 +120,13 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
     value: `${stats[def.valueKey as keyof CrmGlobalStats]}%`,
     color: def.color,
     labels,
-    values: historico.map((row) => Number(row[def.rateKey]) || 0),
+    values: history.map((row) => Number(row[def.rateKey]) || 0),
     unitLabel: def.unitLabel,
     rateKey: def.rateKey,
     countKey: def.countKey,
-  })), [historico, labels, stats]);
+  })), [history, labels, stats]);
 
-  const healthCards = useMemo<CrmHealthCard[]>(() => buildHealthCards(efectividad), [efectividad]);
+  const healthCards = useMemo<CrmHealthCard[]>(() => buildHealthCards(effectiveness), [effectiveness]);
 
   const modalChartData = useMemo<ChartData<'line'> | null>(() => {
     if (!selectedTrend) return null;
@@ -135,7 +135,7 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
       labels,
       datasets: [{
         label: `Total ${selectedTrend.unitLabel}`,
-        data: historico.map((row) => Number(row[selectedTrend.countKey]) || 0),
+        data: history.map((row) => Number(row[selectedTrend.countKey]) || 0),
         borderColor: chart.line,
         backgroundColor: chart.fill.replace('0.1', '0.25'),
         fill: true,
@@ -148,7 +148,7 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
         tension: 0.35,
       }],
     };
-  }, [selectedTrend, historico, labels]);
+  }, [selectedTrend, history, labels]);
 
   const modalChartOptions: ChartOptions<'line'> = useMemo(() => {
     const lineColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : CHART_CHROME.textStrong;
@@ -186,7 +186,7 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
   }, [selectedTrend]);
 
   return {
-    historico,
+    history,
     stats,
     trendCards,
     healthCards,

@@ -24,13 +24,13 @@ type Props = SubscriptionEtaManagementProps;
  * Es lo primero por lo que se filtra cuando se revisa el maestro, y no es un
  * campo sino la combinación de dos banderas, así que se resuelve una vez aquí.
  */
-const tipoDeclaracion = (sub: EtaSubscriptionConfig): string => {
+const declarationKind = (sub: EtaSubscriptionConfig): string => {
   if (sub.is_transport) return 'Transporte';
   if (sub.is_dedicated) return 'Dedicado';
   return 'Internet';
 };
 
-const textOrDash = (valor?: string) => valor?.trim() || '—';
+const textOrDash = (value?: string) => value?.trim() || '—';
 
 /**
  * Parametrización del reporte ETA.
@@ -74,14 +74,14 @@ export function EtaManagementView({
     });
   };
 
-  const botonIcono = (
+  const iconButton = (
     onClick: () => void,
-    titulo: string,
-    icono: React.ReactNode,
-    tono: string,
+    title: string,
+    icon: React.ReactNode,
+    tone: string,
   ) => (
-    <button type="button" onClick={onClick} title={titulo} className={`rounded-lg border p-2 ${tono}`}>
-      {icono}
+    <button type="button" onClick={onClick} title={title} className={`rounded-lg border p-2 ${tone}`}>
+      {icon}
     </button>
   );
 
@@ -108,8 +108,8 @@ export function EtaManagementView({
       align: 'right',
       accessor: (row) => (
         <div className="flex justify-end gap-2">
-          {botonIcono(() => handleOpenEditSub(row), 'Clasificar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
-          {botonIcono(() => handleQuickIgnoreSub(row), 'Ignorar', <EyeOff className="h-4 w-4" />, 'border-slate-700 text-slate-400 hover:bg-slate-700/30')}
+          {iconButton(() => handleOpenEditSub(row), 'Clasificar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
+          {iconButton(() => handleQuickIgnoreSub(row), 'Ignorar', <EyeOff className="h-4 w-4" />, 'border-slate-700 text-slate-400 hover:bg-slate-700/30')}
         </div>
       ),
     },
@@ -121,9 +121,9 @@ export function EtaManagementView({
     { header: 'Producto', accessor: (row) => textOrDash(row.product), sortKey: 'product', filterable: true },
     {
       header: 'Declaración',
-      accessor: tipoDeclaracion,
+      accessor: declarationKind,
       filterable: true,
-      filterValue: tipoDeclaracion,
+      filterValue: declarationKind,
     },
     { header: 'Tecnología', accessor: (row) => textOrDash(row.technology), sortKey: 'technology', filterable: true },
     { header: 'Persona', accessor: (row) => textOrDash(row.person_type), sortKey: 'person_type', filterable: true },
@@ -158,8 +158,8 @@ export function EtaManagementView({
       align: 'right',
       accessor: (row) => (
         <div className="flex justify-end gap-2">
-          {botonIcono(() => handleOpenEditSub(row), 'Editar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
-          {botonIcono(() => setDeletingItem({ type: 'sub', id: row.order }), 'Eliminar', <Trash2 className="h-4 w-4" />, 'border-rose-500/30 text-rose-400 hover:bg-rose-500/10')}
+          {iconButton(() => handleOpenEditSub(row), 'Editar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
+          {iconButton(() => setDeletingItem({ type: 'sub', id: row.order }), 'Eliminar', <Trash2 className="h-4 w-4" />, 'border-rose-500/30 text-rose-400 hover:bg-rose-500/10')}
         </div>
       ),
     },
@@ -167,7 +167,7 @@ export function EtaManagementView({
 
   return (
     <AppLayout
-      subpagina="Maestro de planes"
+      subpage="Maestro de planes"
       toolbar={
         <>
           <div className="mb-8 flex flex-wrap items-center justify-between gap-4">

@@ -20,8 +20,8 @@ _AVERAGED = {
 }
 
 CRM_KEYS = KeyMap(
-    {f"horas_{s}_{c}": f"hours_{en_s}_{en_c}" for s, en_s in _STATS.items() for c, en_c in _CLOCKS.items()},
-    {f"pct_excede_prom_{c}": f"pct_over_avg_{en_c}" for c, en_c in _CLOCKS.items()},
+    {f"horas_{s}_{c}": f"hours_{in_s}_{in_c}" for s, in_s in _STATS.items() for c, in_c in _CLOCKS.items()},
+    {f"pct_excede_prom_{c}": f"pct_over_avg_{in_c}" for c, in_c in _CLOCKS.items()},
     _AVERAGED,
     {f"{es}_promedio": f"{en}_avg" for es, en in _AVERAGED.items()},
     {

@@ -42,7 +42,7 @@ _CARD_COLUMNS = [
     "producto", "tipo", "total", "fecha_inicio", "estado", "phone", "phone2",
 ]
 
-def clean_nodes(crudo: list[str] | None) -> list[str] | None:
+def clean_nodes(raw: list[str] | None) -> list[str] | None:
     """Normaliza la lista de nodos de un filtro; None significa "todos".
 
     Un nodo es `"Zona - Sucursal"`, no solo la zona: la misma zona puede estar
@@ -50,33 +50,33 @@ def clean_nodes(crudo: list[str] | None) -> list[str] | None:
     filas distintas del reporte. Filtrando por la zona sola, exportar cualquiera
     de las dos traia las bajas de ambas.
     """
-    if not crudo:
+    if not raw:
         return None
-    nodos = [n.strip() for n in crudo if n and n.strip()]
-    if not nodos:
+    nodes = [n.strip() for n in raw if n and n.strip()]
+    if not nodes:
         return None
-    return nodos[:MAX_NODES_PER_QUERY]
+    return nodes[:MAX_NODES_PER_QUERY]
 
 
-def _text(valor: Any) -> str:
+def _text(value: Any) -> str:
     """Una celda de la base (todas son `text`) como cadena limpia."""
-    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
         return ""
-    texto = str(valor).strip()
-    return "" if texto.lower() in ("nan", "none", "null", "<na>") else texto
+    text = str(value).strip()
+    return "" if text.lower() in ("nan", "none", "null", "<na>") else text
 
 
-def _number(valor: Any) -> float | None:
+def _number(value: Any) -> float | None:
     """El subtotal como numero, o None si no lo es.
 
     Va como numero y no como texto porque en la hoja tiene que poder sumarse;
     None -y no 0- cuando no hay dato, que es lo que espera `downloadRowsAsExcel`.
     """
-    numero = pd.to_numeric(_text(valor).replace(",", ""), errors="coerce")
-    return None if pd.isna(numero) else float(numero)
+    number = pd.to_numeric(_text(value).replace(",", ""), errors="coerce")
+    return None if pd.isna(number) else float(number)
 
 
-def _present_columns(db: DBConnector, tabla: str) -> list[str]:
+def _present_columns(db: DBConnector, table: str) -> list[str]:
     """Las columnas de `_CARD_COLUMNS` que la tabla tiene de verdad.
 
     Las tablas de importacion se crean a partir del export, y el export no
@@ -89,13 +89,13 @@ def _present_columns(db: DBConnector, tabla: str) -> list[str]:
         SELECT column_name FROM information_schema.columns
         WHERE table_schema = %s AND table_name = %s
         """,
-        params=[DB_SCHEMA, tabla],
+        params=[DB_SCHEMA, table],
     )
-    existentes = set(df["column_name"]) if not df.empty else set()
-    return [c for c in _CARD_COLUMNS if c in existentes]
+    existing = set(df["column_name"]) if not df.empty else set()
+    return [c for c in _CARD_COLUMNS if c in existing]
 
 
-def _cards(db: DBConnector, ordenes: list[str]) -> pd.DataFrame:
+def _cards(db: DBConnector, orders: list[str]) -> pd.DataFrame:
     """La ficha de cada orden, indexada por orden y sin duplicados.
 
     Primero `subscriptions` (una fila por orden) y, para lo que ya no este ahi,
@@ -106,19 +106,19 @@ def _cards(db: DBConnector, ordenes: list[str]) -> pd.DataFrame:
     `imports._first_matching_plan` y el detalle no. Es lo mismo que hace
     `eta_report.calculate_eta_report` con su propio respaldo.
     """
-    vacio = pd.DataFrame(columns=_CARD_COLUMNS).set_index("orden_producto")
+    empty = pd.DataFrame(columns=_CARD_COLUMNS).set_index("orden_producto")
 
-    def _read(tabla: str, valores: list[str]) -> pd.DataFrame:
-        if not db.table_exists(tabla):
-            return vacio
-        columnas = _present_columns(db, tabla)
-        if "orden_producto" not in columnas:
-            return vacio
+    def _read(table: str, values: list[str]) -> pd.DataFrame:
+        if not db.table_exists(table):
+            return empty
+        columns = _present_columns(db, table)
+        if "orden_producto" not in columns:
+            return empty
         df = db.read_table_filtered(
-            tabla, "orden_producto", valores, columns=columnas
+            table, "orden_producto", values, columns=columns
         )
         if df.empty:
-            return vacio
+            return empty
         # Lo que el export no traiga se rellena vacio: la ficha sale incompleta,
         # no rota.
         for col in _CARD_COLUMNS:
@@ -129,17 +129,17 @@ def _cards(db: DBConnector, ordenes: list[str]) -> pd.DataFrame:
             "orden_producto"
         )
 
-    cards = _read(TableNames.SUBSCRIPTIONS, ordenes)
-    faltantes = [o for o in ordenes if o not in cards.index]
-    if faltantes:
-        historicas = _read(TableNames.SUBSCRIPTIONS_B, faltantes)
-        if not historicas.empty:
-            cards = pd.concat([cards, historicas])
+    cards = _read(TableNames.SUBSCRIPTIONS, orders)
+    missing = [o for o in orders if o not in cards.index]
+    if missing:
+        historical = _read(TableNames.SUBSCRIPTIONS_B, missing)
+        if not historical.empty:
+            cards = pd.concat([cards, historical])
     return cards
 
 
 def get_churn_detail(
-    periodo_reporte: str | None = None,
+    report_period: str | None = None,
     filter_nodes: list[str] | None = None,
 ) -> dict[str, Any]:
     """Las bajas de un periodo con la ficha de cada cliente.
@@ -154,84 +154,84 @@ def get_churn_detail(
     """
     db = DBConnector()
     try:
-        periodos = get_periods()
-        if not periodos:
+        periods = get_periods()
+        if not periods:
             return {"status": "empty", "message": "No hay periodos calculados", "bajas": []}
 
-        objetivo = periodo_reporte or periodos[0]
+        target = report_period or periods[0]
 
         # La crea el analisis mensual la primera vez que termina: que no exista
         # todavia no es un fallo, es que nadie ha calculado nada.
         if not db.table_exists(TableNames.ANALYZER_CHURNED):
             return {
                 "status": "empty",
-                "period": objetivo,
-                "periods": periodos,
-                "message": f"No hay bajas calculadas para {objetivo}",
+                "period": target,
+                "periods": periods,
+                "message": f"No hay bajas calculadas para {target}",
                 "bajas": [],
             }
 
-        df_bajas = db.query(
+        df_churns = db.query(
             f"""
             SELECT DISTINCT orden
             FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURNED}
             WHERE periodo_reporte = %s
             """,
-            params=[objetivo],
+            params=[target],
         )
-        if df_bajas.empty:
+        if df_churns.empty:
             return {
                 "status": "empty",
-                "period": objetivo,
-                "periods": periodos,
-                "message": f"No hay bajas registradas en {objetivo}",
+                "period": target,
+                "periods": periods,
+                "message": f"No hay bajas registradas en {target}",
                 "bajas": [],
             }
 
-        ordenes = [o for o in df_bajas["orden"].astype(str).str.strip().unique() if o]
-        cards = _cards(db, ordenes)
+        orders = [o for o in df_churns["orden"].astype(str).str.strip().unique() if o]
+        cards = _cards(db, orders)
 
         # El nodo se arma igual que en `prepare_subs_dims` -recortado, con el
         # mismo relleno y unido por " - "- para que el filtro case exactamente
         # con lo que la pagina muestra en la columna de la dimension.
-        permitidos = (
+        allowed = (
             {n.strip().lower() for n in filter_nodes} if filter_nodes else None
         )
 
-        filas: list[dict[str, Any]] = []
-        for orden in ordenes:
-            ficha = cards.loc[orden] if orden in cards.index else None
-            dato = (lambda col: _text(ficha[col])) if ficha is not None else (lambda col: "")
+        rows: list[dict[str, Any]] = []
+        for order in orders:
+            card = cards.loc[order] if order in cards.index else None
+            datum = (lambda col: _text(card[col])) if card is not None else (lambda col: "")
 
-            zona = dato("zona") or "Sin Zona"
-            sucursal = dato("sucursal") or "Sin Sucursal"
-            if permitidos is not None and f"{zona} - {sucursal}".lower() not in permitidos:
+            zone = datum("zona") or "Sin Zona"
+            branch = datum("sucursal") or "Sin Sucursal"
+            if allowed is not None and f"{zone} - {branch}".lower() not in allowed:
                 continue
 
-            filas.append({
-                "orden": orden,
-                "cliente": dato("cliente"),
-                "cedula": dato("ci"),
-                "sucursal": sucursal,
-                "zona": zona,
-                "campanna": dato("campanna"),
-                "producto": dato("producto"),
-                "tipo_servicio": dato("tipo"),
-                "subtotal": _number(ficha["total"]) if ficha is not None else None,
-                "fecha_inicio": dato("fecha_inicio"),
-                "estado_suscripcion": dato("estado"),
-                "phone1": dato("phone"),
-                "phone2": dato("phone2"),
+            rows.append({
+                "orden": order,
+                "cliente": datum("cliente"),
+                "cedula": datum("ci"),
+                "sucursal": branch,
+                "zona": zone,
+                "campanna": datum("campanna"),
+                "producto": datum("producto"),
+                "tipo_servicio": datum("tipo"),
+                "subtotal": _number(card["total"]) if card is not None else None,
+                "fecha_inicio": datum("fecha_inicio"),
+                "estado_suscripcion": datum("estado"),
+                "phone1": datum("phone"),
+                "phone2": datum("phone2"),
             })
 
-        filas.sort(key=lambda f: (f["zona"], f["sucursal"], f["orden"]))
+        rows.sort(key=lambda f: (f["zona"], f["sucursal"], f["orden"]))
 
         return {
             "status": "success",
-            "period": objetivo,
-            "periods": periodos,
-            "total": len(filas),
-            "bajas": filas,
+            "period": target,
+            "periods": periods,
+            "total": len(rows),
+            "bajas": rows,
         }
     except Exception:
         # Igual que en los reportes comerciales: la traza va al log del

@@ -27,9 +27,9 @@ Se ejecuta una vez por entorno, **con el codigo nuevo ya desplegado pero antes
 de que nadie entre**, para que ninguna edicion hecha en `public` en el
 intervalo se quede atras:
 
-    python manage.py copiar_desde_public --simular   # ensaya y deshace
-    python manage.py copiar_desde_public             # esquema de DB_SCHEMA
-    python manage.py copiar_desde_public --esquema netowl
+    python manage.py copy_from_public --dry-run   # ensaya y deshace
+    python manage.py copy_from_public             # esquema de DB_SCHEMA
+    python manage.py copy_from_public --schema netowl
 """
 
 import re
@@ -39,10 +39,10 @@ from django.db import connection, transaction
 
 from core.config import DB_SCHEMA
 
-ORIGEN = "public"
+SOURCE = "public"
 
 # Tablas de `public` que no se copian, con el motivo.
-EXCLUIDAS = {
+EXCLUDED = {
     # Cada esquema ya tiene su propia tabla de sesiones.
     "django_session",
 }
@@ -52,12 +52,12 @@ EXCLUIDAS = {
 # Postgres 18) no aparece: `LIKE` ya las copia.
 CONSTRAINT_ORDER = ("p", "u", "x", "c", "f")
 
-IDENTIFICADOR = re.compile(r"^[a-z_][a-z0-9_]*$")
+IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 
-def _q(nombre: str) -> str:
+def _q(name: str) -> str:
     """Entrecomilla un identificador de Postgres."""
-    return connection.ops.quote_name(nombre)
+    return connection.ops.quote_name(name)
 
 
 class Command(BaseCommand):
@@ -67,22 +67,22 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--esquema",
+            "--schema",
             default=DB_SCHEMA,
             help="Esquema destino. Por defecto el de DB_SCHEMA.",
         )
         parser.add_argument(
-            "--simular",
+            "--dry-run",
             action="store_true",
             help="Hace toda la copia y la deshace al final: comprueba que funcionaria sin dejar nada.",
         )
 
-    def handle(self, *args, esquema, simular, **options):
+    def handle(self, *args, schema, dry_run, **options):
         """Valida el destino y copia todo dentro de una unica transaccion."""
-        if not esquema or esquema == ORIGEN:
+        if not schema or schema == SOURCE:
             raise CommandError("Indique un esquema destino distinto de 'public'.")
-        if not IDENTIFICADOR.match(esquema):
-            raise CommandError(f"'{esquema}' no es un nombre de esquema valido.")
+        if not IDENTIFIER.match(schema):
+            raise CommandError(f"'{schema}' no es un nombre de esquema valido.")
 
         with transaction.atomic(), connection.cursor() as cur:
             # Con `pg_catalog` como unico search_path, Postgres escribe todas
@@ -90,74 +90,74 @@ class Command(BaseCommand):
             # lo que permite reescribirlas con seguridad hacia el destino.
             cur.execute("SET LOCAL search_path = pg_catalog")
 
-            tablas = self._tablas_origen(cur)
-            if not tablas:
+            tables = self._source_tables(cur)
+            if not tables:
                 raise CommandError("No hay tablas que copiar en 'public'.")
 
-            cur.execute("CREATE SCHEMA IF NOT EXISTS " + _q(esquema))
+            cur.execute("CREATE SCHEMA IF NOT EXISTS " + _q(schema))
             # pg_class y no information_schema: esta solo lista las tablas sobre
             # las que el usuario tiene privilegios, y un choque no se puede ocultar.
             cur.execute(
                 "SELECT relname FROM pg_class "
                 "WHERE relnamespace = %s::regnamespace AND relname = ANY(%s)",
-                [esquema, tablas],
+                [schema, tables],
             )
-            chocan = sorted(r[0] for r in cur.fetchall())
-            if chocan:
+            clash = sorted(r[0] for r in cur.fetchall())
+            if clash:
                 raise CommandError(
-                    f"Estas tablas ya existen en '{esquema}' y no se sobreescriben: "
-                    f"{', '.join(chocan)}. ¿Ya se copio este esquema?"
+                    f"Estas tablas ya existen en '{schema}' y no se sobreescriben: "
+                    f"{', '.join(clash)}. ¿Ya se copio este esquema?"
                 )
 
-            for tabla in tablas:
-                self._create_table(cur, esquema, tabla)
-            for tabla in tablas:
-                self._copy_rows(cur, esquema, tabla)
-            for tipo in CONSTRAINT_ORDER:
-                for tabla in tablas:
-                    self._create_constraints(cur, esquema, tabla, tipo)
-            for tabla in tablas:
-                self._create_indexes(cur, esquema, tabla)
-                self._ajustar_secuencias(cur, esquema, tabla)
+            for table in tables:
+                self._create_table(cur, schema, table)
+            for table in tables:
+                self._copy_rows(cur, schema, table)
+            for kind in CONSTRAINT_ORDER:
+                for table in tables:
+                    self._create_constraints(cur, schema, table, kind)
+            for table in tables:
+                self._create_indexes(cur, schema, table)
+                self._adjust_sequences(cur, schema, table)
 
-            resumen = self._verificar(cur, esquema, tablas)
+            summary = self._verify(cur, schema, tables)
 
-            if simular:
+            if dry_run:
                 transaction.set_rollback(True)
 
-        for tabla, filas in resumen:
-            self.stdout.write(f"  {tabla:<40} {filas:>7} filas")
-        if simular:
+        for table, rows in summary:
+            self.stdout.write(f"  {table:<40} {rows:>7} filas")
+        if dry_run:
             self.stdout.write(
                 self.style.WARNING(
-                    f"Simulacion: {len(tablas)} tablas copiarian bien a '{esquema}'. No se guardo nada."
+                    f"Simulacion: {len(tables)} tablas copiarian bien a '{schema}'. No se guardo nada."
                 )
             )
         else:
             self.stdout.write(
-                self.style.SUCCESS(f"{len(tablas)} tablas copiadas de 'public' a '{esquema}'.")
+                self.style.SUCCESS(f"{len(tables)} tablas copiadas de 'public' a '{schema}'.")
             )
 
-    def _tablas_origen(self, cur) -> list[str]:
+    def _source_tables(self, cur) -> list[str]:
         """Las tablas de `public` que se copian."""
         cur.execute(
             "SELECT c.relname FROM pg_class c "
             "WHERE c.relnamespace = %s::regnamespace AND c.relkind IN ('r', 'p') "
             "ORDER BY c.relname",
-            [ORIGEN],
+            [SOURCE],
         )
-        return [r[0] for r in cur.fetchall() if r[0] not in EXCLUIDAS]
+        return [r[0] for r in cur.fetchall() if r[0] not in EXCLUDED]
 
-    def _create_table(self, cur, esquema: str, tabla: str) -> None:
+    def _create_table(self, cur, schema: str, table: str) -> None:
         """Crea la tabla con las columnas, defaults e identidades del origen.
 
         Las restricciones y los indices se anaden despues, con su nombre
         original. Una columna `serial` sale de `LIKE` apuntando a la secuencia de
         `public`; se le da una propia, o los dos esquemas compartirian contador.
         """
-        destino = f"{_q(esquema)}.{_q(tabla)}"
+        target = f"{_q(schema)}.{_q(table)}"
         cur.execute(
-            f"CREATE TABLE {destino} (LIKE {_q(ORIGEN)}.{_q(tabla)} "
+            f"CREATE TABLE {target} (LIKE {_q(SOURCE)}.{_q(table)} "
             "INCLUDING DEFAULTS INCLUDING IDENTITY INCLUDING GENERATED "
             "INCLUDING STORAGE INCLUDING COMMENTS)"
         )
@@ -167,98 +167,98 @@ class Command(BaseCommand):
             "FROM pg_attribute a "
             "WHERE a.attrelid = %s::regclass AND a.attnum > 0 AND NOT a.attisdropped "
             "AND a.attidentity = ''",
-            [f"{_q(ORIGEN)}.{_q(tabla)}"] * 2,
+            [f"{_q(SOURCE)}.{_q(table)}"] * 2,
         )
-        for columna, secuencia in cur.fetchall():
-            if not secuencia:
+        for column, sequence in cur.fetchall():
+            if not sequence:
                 continue
-            nombre = secuencia.split(".")[-1].strip('"')
-            nueva = f"{_q(esquema)}.{_q(nombre)}"
-            cur.execute(f"CREATE SEQUENCE {nueva} OWNED BY {destino}.{_q(columna)}")
+            name = sequence.split(".")[-1].strip('"')
+            new = f"{_q(schema)}.{_q(name)}"
+            cur.execute(f"CREATE SEQUENCE {new} OWNED BY {target}.{_q(column)}")
             cur.execute(
-                f"ALTER TABLE {destino} ALTER COLUMN {_q(columna)} "
+                f"ALTER TABLE {target} ALTER COLUMN {_q(column)} "
                 "SET DEFAULT nextval(%s::regclass)",
-                [f"{esquema}.{nombre}"],
+                [f"{schema}.{name}"],
             )
 
-    def _copy_rows(self, cur, esquema: str, tabla: str) -> None:
+    def _copy_rows(self, cur, schema: str, table: str) -> None:
         """Copia las filas tal cual, ids incluidos."""
         # `LIKE` conserva el orden de las columnas, asi que `SELECT *` encaja.
         # OVERRIDING SYSTEM VALUE conserva los ids aunque la identidad sea ALWAYS.
         cur.execute(
-            f"INSERT INTO {_q(esquema)}.{_q(tabla)} OVERRIDING SYSTEM VALUE "
-            f"SELECT * FROM {_q(ORIGEN)}.{_q(tabla)}"
+            f"INSERT INTO {_q(schema)}.{_q(table)} OVERRIDING SYSTEM VALUE "
+            f"SELECT * FROM {_q(SOURCE)}.{_q(table)}"
         )
 
-    def _create_constraints(self, cur, esquema: str, tabla: str, tipo: str) -> None:
+    def _create_constraints(self, cur, schema: str, table: str, kind: str) -> None:
         """Recrea las restricciones de un tipo con su nombre original."""
         cur.execute(
             "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint "
             "WHERE conrelid = %s::regclass AND contype = %s ORDER BY conname",
-            [f"{_q(ORIGEN)}.{_q(tabla)}", tipo],
+            [f"{_q(SOURCE)}.{_q(table)}", kind],
         )
-        for nombre, definicion in cur.fetchall():
-            if tipo == "f":
-                definicion = self._redirect_reference(definicion, esquema, nombre)
+        for name, definition in cur.fetchall():
+            if kind == "f":
+                definition = self._redirect_reference(definition, schema, name)
             cur.execute(
-                f"ALTER TABLE {_q(esquema)}.{_q(tabla)} ADD CONSTRAINT {_q(nombre)} {definicion}"
+                f"ALTER TABLE {_q(schema)}.{_q(table)} ADD CONSTRAINT {_q(name)} {definition}"
             )
 
-    def _redirect_reference(self, definicion: str, esquema: str, nombre: str) -> str:
+    def _redirect_reference(self, definition: str, schema: str, name: str) -> str:
         """Hace que una clave foranea apunte a la tabla del destino, no a la de `public`."""
-        nueva, cambios = re.subn(
-            r"REFERENCES public\.", f"REFERENCES {_q(esquema)}.", definicion
+        new, changes = re.subn(
+            r"REFERENCES public\.", f"REFERENCES {_q(schema)}.", definition
         )
-        if cambios != 1:
+        if changes != 1:
             raise CommandError(
-                f"La clave foranea '{nombre}' no apunta a una tabla de 'public': {definicion}"
+                f"La clave foranea '{name}' no apunta a una tabla de 'public': {definition}"
             )
-        return nueva
+        return new
 
-    def _create_indexes(self, cur, esquema: str, tabla: str) -> None:
+    def _create_indexes(self, cur, schema: str, table: str) -> None:
         """Recrea los indices que no respaldan una restriccion (esos ya existen)."""
         cur.execute(
             "SELECT pg_get_indexdef(i.indexrelid) FROM pg_index i "
             "WHERE i.indrelid = %s::regclass "
             "AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid = i.indexrelid)",
-            [f"{_q(ORIGEN)}.{_q(tabla)}"],
+            [f"{_q(SOURCE)}.{_q(table)}"],
         )
-        for (definicion,) in cur.fetchall():
-            nueva, cambios = re.subn(
-                r" ON (ONLY )?public\.", lambda m: f" ON {m.group(1) or ''}{_q(esquema)}.", definicion, count=1
+        for (definition,) in cur.fetchall():
+            new, changes = re.subn(
+                r" ON (ONLY )?public\.", lambda m: f" ON {m.group(1) or ''}{_q(schema)}.", definition, count=1
             )
-            if cambios != 1:
-                raise CommandError(f"No se pudo reescribir el indice: {definicion}")
-            cur.execute(nueva)
+            if changes != 1:
+                raise CommandError(f"No se pudo reescribir el indice: {definition}")
+            cur.execute(new)
 
-    def _ajustar_secuencias(self, cur, esquema: str, tabla: str) -> None:
+    def _adjust_sequences(self, cur, schema: str, table: str) -> None:
         """Deja cada contador detras del mayor id copiado."""
-        destino = f"{_q(esquema)}.{_q(tabla)}"
+        target = f"{_q(schema)}.{_q(table)}"
         cur.execute(
             "SELECT a.attname, pg_get_serial_sequence(%s, a.attname) "
             "FROM pg_attribute a "
             "WHERE a.attrelid = %s::regclass AND a.attnum > 0 AND NOT a.attisdropped",
-            [destino, destino],
+            [target, target],
         )
-        for columna, secuencia in cur.fetchall():
-            if not secuencia:
+        for column, sequence in cur.fetchall():
+            if not sequence:
                 continue
             cur.execute(
-                f"SELECT setval(%s, COALESCE(MAX({_q(columna)}), 0) + 1, false) FROM {destino}",
-                [secuencia],
+                f"SELECT setval(%s, COALESCE(MAX({_q(column)}), 0) + 1, false) FROM {target}",
+                [sequence],
             )
 
-    def _verificar(self, cur, esquema: str, tablas: list[str]) -> list[tuple[str, int]]:
+    def _verify(self, cur, schema: str, tables: list[str]) -> list[tuple[str, int]]:
         """Compara el numero de filas de cada tabla en origen y destino."""
-        resumen = []
-        for tabla in tablas:
-            cur.execute(f"SELECT COUNT(*) FROM {_q(ORIGEN)}.{_q(tabla)}")
-            origen = cur.fetchone()[0]
-            cur.execute(f"SELECT COUNT(*) FROM {_q(esquema)}.{_q(tabla)}")
-            destino = cur.fetchone()[0]
-            if origen != destino:
+        summary = []
+        for table in tables:
+            cur.execute(f"SELECT COUNT(*) FROM {_q(SOURCE)}.{_q(table)}")
+            source = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(*) FROM {_q(schema)}.{_q(table)}")
+            target = cur.fetchone()[0]
+            if source != target:
                 raise CommandError(
-                    f"'{tabla}': {origen} filas en public y {destino} en '{esquema}'."
+                    f"'{table}': {source} filas en public y {target} en '{schema}'."
                 )
-            resumen.append((tabla, destino))
-        return resumen
+            summary.append((table, target))
+        return summary

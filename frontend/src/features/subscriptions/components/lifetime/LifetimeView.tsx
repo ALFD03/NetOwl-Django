@@ -45,7 +45,7 @@ const formatDays = (value: number | null | undefined): string =>
  * Un % de bajas tempranas con su barrita: el color va del verde al rojo según
  * pese más, para que la tabla se lea por color antes que por número.
  */
-function PctTemprano({ pct }: { pct: number }) {
+function EarlyPct({ pct }: { pct: number }) {
   // Un valor alto es malo: se fueron pronto. Se usa la rampa de los tramos al revés.
   const color = tierColor(Math.round((1 - Math.min(pct, 100) / 100) * 4), 5);
   return (
@@ -81,8 +81,8 @@ const DIMENSION_COLUMNS: Column<LifetimeDimensionRow>[] = [
     align: 'right',
     sortKey: 'p25',
   },
-  { header: 'Se fueron ≤ 30 d', accessor: (r) => <PctTemprano pct={r.pct_30} />, align: 'right', sortKey: 'pct_30' },
-  { header: 'Se fueron ≤ 90 d', accessor: (r) => <PctTemprano pct={r.pct_90} />, align: 'right', sortKey: 'pct_90' },
+  { header: 'Se fueron ≤ 30 d', accessor: (r) => <EarlyPct pct={r.pct_30} />, align: 'right', sortKey: 'pct_30' },
+  { header: 'Se fueron ≤ 90 d', accessor: (r) => <EarlyPct pct={r.pct_90} />, align: 'right', sortKey: 'pct_90' },
 ];
 
 function MeasureSummary({ summary, color }: { summary: LifetimeSummary; color: 'blue' }) {
@@ -118,8 +118,8 @@ export function LifetimeView({ months, period, lifetime }: LifetimeViewProps) {
   // Al terminar el job los datos de la página se vuelven a pedir solos.
   const handleRun = () => void recompute.run();
 
-  const changeMonth = (mes: string) =>
-    visit({ period: mes });
+  const changeMonth = (month: string) =>
+    visit({ period: month });
 
   const toolbar = (
     <div className="flex flex-wrap items-start gap-4">

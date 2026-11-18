@@ -6,7 +6,7 @@
 import { Key, Search, Settings2, Shield, SlidersHorizontal, Trash2 } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
-import { EmptyState, Paginacion, usePaginacion } from '@/shared/ui';
+import { EmptyState, Pagination, usePagination } from '@/shared/ui';
 import type { GroupData, UserData } from '@/features/config/types';
 import {
   Avatar, ModulesWithAccess, TOTAL_PERMISSIONS, countPermissions, effectivePermissions,
@@ -29,7 +29,7 @@ interface Props {
 const ACTION = 'rounded-lg p-2 text-slate-500 transition-colors hover:bg-surface-hover';
 
 export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }: Props) {
-  const pagination = usePaginacion(users);
+  const pagination = usePagination(users);
   if (!users.length) {
     return (
       <EmptyState
@@ -43,7 +43,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-800 bg-surface-secondary shadow-xl">
-      <Paginacion estado={pagination} posicion="arriba" />
+      <Pagination state={pagination} position="arriba" />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead>
@@ -58,7 +58,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/70">
-            {pagination.visibles.map((user) => {
+            {pagination.visible.map((user) => {
               const granted = effectivePermissions(user, groups);
               return (
                 <tr key={user.id} className="group transition-colors hover:bg-white/[0.03]">
@@ -154,7 +154,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
           </tbody>
         </table>
       </div>
-      <Paginacion estado={pagination} />
+      <Pagination state={pagination} />
     </div>
   );
 }

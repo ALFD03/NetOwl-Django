@@ -13,7 +13,7 @@ services/crm/analytics/
 │   ├── core.py         Compone el bloque de métricas de un periodo
 │   ├── effectiveness.py  Quién responde por cada ciclo fallido
 │   ├── probability.py Riesgo de caer a la etapa 8
-│   └── tiempo.py       Permanencia por etapa y tiempos de cierre
+│   └── timing.py       Permanencia por etapa y tiempos de cierre
 └── queries.py     Lectura de lo calculado
 ```
 
@@ -158,7 +158,7 @@ etapa 8 —`devolver_oportunidad` se sobrescribe al moverse— y **dos tercios d
 devoluciones históricas no lo traen**. Se imputan: la fracción que son de
 gestión se estima con la tasa observada en las que sí lo traen, **condicionada a
 la etapa de origen** (que el log siempre conserva). Si un origen no llega a
-`E8_IMPUTACION_MIN_MUESTRA` (30) casos legibles se usa la tasa global, y si no
+`E8_IMPUTATION_MIN_SAMPLE` (30) casos legibles se usa la tasa global, y si no
 hay ninguno legible no se excluye nada: sin evidencia de excepción, la devolución
 cuenta.
 
@@ -197,7 +197,7 @@ Desenlaces de un ciclo, leídos sobre todo el historial del cliente:
 Quién paga cada fallo:
 
 - El **retorno** lo paga la etapa que mandó al cliente hacia adelante
-  (`RETORNO_ATRIBUCION`).
+  (`COMEBACK_ATTRIBUTION`).
 - La **devolución** la paga la etapa que indica su motivo (`STAGE8_ATTRIBUTION`,
   en orden de prioridad: gana la primera etapa cuyo motivo y destino de avance
   encajan). Lo no legible se estima y viaja en `devoluciones_estimadas`.
@@ -220,7 +220,7 @@ fallidos      = retornos_penalizados + devoluciones_atribuidas
                 + devoluciones_estimadas + perdidas_atribuidas
 ```
 
-### Tiempos (`tiempo.py`)
+### Tiempos (`timing.py`)
 
 **`compute_close_times(ganados, perdidos)`** devuelve tres distribuciones:
 `instalacion`, `perdida` y **`cierre`**, que es el universo cerrado (ganados y
@@ -319,7 +319,7 @@ ejecución se corta, lo ya hecho queda guardado.
 | `get_crm_periods()` | Los periodos con cierre calculado |
 | `get_crm_close_history(periodos)` | Las filas del cierre, con `efectividad` y `tiempo_por_etapa` ya parseados a lista |
 | `get_crm_metric_totals(periodo)` | Promedio global + tiempos + efectividad + la serie histórica (sin los dos JSON por periodo, que nadie lee ahí) |
-| `get_crm_dimensiones(periodos, dimension)` | Las filas dimensionales con su JSONB parseado |
+| `get_crm_dimensions(periodos, dimension)` | Las filas dimensionales con su JSONB parseado |
 | `get_crm_day_series(mes)` | La serie ligera: el bloque global de cada día, sin desgloses. Es lo que dice qué días hay calculados |
 | `get_crm_day_payload(mes, dia)` | El corte completo de un día: `{global, dimensiones}` |
 

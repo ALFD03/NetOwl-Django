@@ -99,27 +99,27 @@ class AnalysisJob(models.Model):
     **La cancelacion es este mismo campo.** Cancelar escribe `cancelled` en
     `status` y ya esta: no hace falta una bandera aparte porque la fila ya es la
     fuente de verdad. Un job en cola deja de estar abierto, asi que la tarea lo
-    descarta al recogerlo (ver `ejecutar_analisis`); uno en curso lo ve en su
+    descarta al recogerlo (ver `run_analysis`); uno en curso lo ve en su
     siguiente punto de control y se detiene solo (ver `JobConsole`). El estado
     tampoco lleva CHECK en Postgres -Django no lo genera para `choices`-, asi que
     anadir el valor no toca la tabla.
     """
 
-    PENDIENTE = 'pending'
+    PENDING = 'pending'
     RUNNING = 'running'
-    EXITO = 'success'
+    SUCCESS = 'success'
     ERROR = 'error'
     CANCELLED_STATE = 'cancelled'
 
     STATUS_CHOICES = [
-        (PENDIENTE, 'En cola'),
+        (PENDING, 'En cola'),
         (RUNNING, 'En ejecucion'),
-        (EXITO, 'Completado'),
+        (SUCCESS, 'Completado'),
         (ERROR, 'Error'),
         (CANCELLED_STATE, 'Cancelado'),
     ]
 
-    OPEN_STATES = (PENDIENTE, RUNNING)
+    OPEN_STATES = (PENDING, RUNNING)
 
     # UUID y no autoincremental: el id viaja al navegador y se sondea sin sesion
     # de por medio; un entero correlativo deja adivinar ejecuciones ajenas.
@@ -127,8 +127,8 @@ class AnalysisJob(models.Model):
     module = models.CharField(max_length=50, choices=ImportActionLog.MODULE_CHOICES)
     # Mes analizado en formato YYYY-MM. Vacio en los analisis sin periodo
     # (ciclo de vida, que recorre todo el historico).
-    periodo = models.CharField(max_length=7, blank=True, default='')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDIENTE)
+    period = models.CharField(max_length=7, blank=True, default='', db_column="periodo")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
     task_id = models.CharField(max_length=255, blank=True, default='')
 
     # Salida de consola acumulada: lo que el analisis imprime por stdout.
@@ -146,7 +146,7 @@ class AnalysisJob(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     # Latido: cada volcado de log lo actualiza. Sirve para detectar un job que
-    # quedo "en curso" porque mataron al worker (ver `esta_muerto`).
+    # quedo "en curso" porque mataron al worker (ver `is_dead`).
     updated_at = models.DateTimeField(auto_now=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -160,7 +160,7 @@ class AnalysisJob(models.Model):
         indexes = [models.Index(fields=['module', 'status'], name='analysis_jobs_mod_est_idx')]
 
     def __str__(self):
-        return f"{self.get_module_display()} | {self.periodo or 'global'} | {self.status}"
+        return f"{self.get_module_display()} | {self.period or 'global'} | {self.status}"
 
     @property
     def is_open(self):
@@ -168,7 +168,7 @@ class AnalysisJob(models.Model):
         return self.status in self.OPEN_STATES
 
     @property
-    def esta_muerto(self):
+    def is_dead(self):
         """Job abierto que lleva demasiado tiempo sin dar senales de vida.
 
         Si el contenedor del worker muere de golpe, la fila se queda en
@@ -177,8 +177,8 @@ class AnalysisJob(models.Model):
         """
         if not self.is_open:
             return False
-        margen = getattr(settings, 'ANALYSIS_JOB_STALE_SECONDS', 15 * 60)
-        return (timezone.now() - self.updated_at).total_seconds() > margen
+        margin = getattr(settings, 'ANALYSIS_JOB_STALE_SECONDS', 15 * 60)
+        return (timezone.now() - self.updated_at).total_seconds() > margin
 
     def to_dict(self):
         """Forma en la que el job viaja al cliente durante el sondeo.
@@ -189,7 +189,7 @@ class AnalysisJob(models.Model):
             "id": str(self.id),
             "module": self.module,
             "module_display": self.get_module_display(),
-            "period": self.periodo,
+            "period": self.period,
             "status": self.status,
             "status_display": self.get_status_display(),
             "message": self.message,

@@ -4,13 +4,13 @@ Un modulo por familia, y `core` los compone en el bloque que se persiste.
 """
 
 from .core import average_closes, compute_crm_metrics_for_period
-from .effectiveness import atribuir_perdidas, compute_effectiveness
+from .effectiveness import attribute_lost, compute_effectiveness
 from .probability import (
     compute_lost_distribution,
     compute_stage8_distribution,
     compute_stage8_probability,
 )
-from .tiempo import (
+from .timing import (
     _compute_stats_distribution,
     compute_close_times,
     compute_stage_stays,

@@ -11,10 +11,10 @@ import { Target } from 'lucide-react';
 
 import { cn } from '@/shared/lib/cn';
 import { formatInteger } from '@/shared/utils/formatters';
-import { formatTarget, type Meta } from '../../lib/targets';
+import { formatTarget, type Goal } from '../../lib/targets';
 
-export function TargetGroup({ meta, className }: { meta?: Meta; className?: string }) {
-  if (!meta) return null;
+export function TargetGroup({ goal, className }: { goal?: Goal; className?: string }) {
+  if (!goal) return null;
   return (
     <div
       className={cn(
@@ -26,13 +26,13 @@ export function TargetGroup({ meta, className }: { meta?: Meta; className?: stri
       <Target className="h-4 w-4 flex-shrink-0 text-sky-400" />
       <div className="flex items-baseline gap-1.5">
         <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Objetivo</span>
-        <span className="text-sm font-black text-sky-300">{formatTarget(meta.growthPct)}</span>
-        <span className="text-[10px] font-bold text-slate-400">+{formatInteger(meta.growthGoal)}</span>
+        <span className="text-sm font-black text-sky-300">{formatTarget(goal.growthPct)}</span>
+        <span className="text-[10px] font-bold text-slate-400">+{formatInteger(goal.growthGoal)}</span>
       </div>
       <span className="h-4 w-px bg-slate-700" />
       <div className="flex items-baseline gap-1.5">
         <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Churn máx.</span>
-        <span className="text-sm font-black text-rose-300">{formatTarget(meta.churnPct)}</span>
+        <span className="text-sm font-black text-rose-300">{formatTarget(goal.churnPct)}</span>
       </div>
     </div>
   );

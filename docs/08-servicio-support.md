@@ -355,7 +355,7 @@ El export identifica a una persona por el literal de `Asignado a` y
 técnico: el mismo nombre escrito de dos maneras son dos técnicos distintos en
 el reporte y nada avisa.
 
-`services/support/models.py` registra la forma buena. `SupportUser.nombre_odoo`
+`services/support/models.py` registra la forma buena. `SupportUser.odoo_name`
 es la clave —**el nombre exacto tal y como Odoo lo exporta, sufijo `(User)`
 incluido**—. Es `(User)` en singular, que es lo que dicen los tickets ya
 cargados: de los 329 nombres distintos de `asignado_a` y `creado_por`, todos
@@ -374,7 +374,7 @@ eso es una sola persona.
 sufijo, y no se derivan partiendo `nombre_odoo` por el primer espacio: los
 apellidos compuestos no se parten así.
 
-El departamento es **otro modelo** (`Departamento`) y la FK es obligatoria con
+El departamento es **otro modelo** (`Department`) y la FK es obligatoria con
 `PROTECT`. Por lo mismo que existe el directorio: un departamento tecleado
 libremente se escribe de tres maneras y deja de agrupar. Borrar uno con gente
 dentro responde 409 en vez de dejar filas huérfanas.

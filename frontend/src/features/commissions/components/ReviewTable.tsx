@@ -11,9 +11,9 @@ import type { CommissionSale } from '../types';
 interface ReviewTableProps {
   sales: CommissionSale[];
   editable: boolean;
-  guardando: boolean;
+  saving: boolean;
   /** Resuelve a `true` si se guardó: entonces se vacía la selección. */
-  onDecidir: (ordenes: string[], decision: '' | 'contar' | 'no_contar') => Promise<boolean>;
+  onDecide: (orders: string[], decision: '' | 'contar' | 'no_contar') => Promise<boolean>;
 }
 
 /**
@@ -29,15 +29,15 @@ interface ReviewTableProps {
  * marcar ninguna, todas las pendientes —lo filtrado en la tabla no cuenta—.
  * Marcar una ya decidida y elegir la otra opción cambia su decisión.
  */
-export function ReviewTable({ sales, editable, guardando, onDecidir }: ReviewTableProps) {
-  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
-  const pendientes = sales.filter((v) => !v.decision).map((v) => v.order);
+export function ReviewTable({ sales, editable, saving, onDecide }: ReviewTableProps) {
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  const pending = sales.filter((v) => !v.decision).map((v) => v.order);
   // Lo seleccionado que sigue en la lista (tras una recarga puede no estar).
-  const elegidas = sales.filter((v) => seleccion.has(v.order));
-  const elegidasDecididas = elegidas.filter((v) => v.decision).length;
+  const selected = sales.filter((v) => selection.has(v.order));
+  const selectedDecided = selected.filter((v) => v.decision).length;
 
-  const decidirSeleccion = async (decision: '' | 'contar' | 'no_contar') => {
-    if (await onDecidir(elegidas.map((v) => v.order), decision)) setSeleccion(new Set());
+  const decideSelection = async (decision: '' | 'contar' | 'no_contar') => {
+    if (await onDecide(selected.map((v) => v.order), decision)) setSelection(new Set());
   };
 
   const columns: Column<CommissionSale>[] = [
@@ -87,22 +87,22 @@ export function ReviewTable({ sales, editable, guardando, onDecidir }: ReviewTab
         if (!editable) return null;
         if (row.decision) {
           return (
-            <Button size="sm" variant="outline" icon={<Undo2 className="h-4 w-4" />} disabled={guardando} onClick={() => void onDecidir([row.order], '')}>
+            <Button size="sm" variant="outline" icon={<Undo2 className="h-4 w-4" />} disabled={saving} onClick={() => void onDecide([row.order], '')}>
               Deshacer
             </Button>
           );
         }
         return (
           <div className="flex items-center justify-end gap-2">
-            <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" />} disabled={guardando} onClick={() => void onDecidir([row.order], 'contar')}>
+            <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" />} disabled={saving} onClick={() => void onDecide([row.order], 'contar')}>
               Contar
             </Button>
             <Button
               size="sm"
               variant="outline"
               icon={<Ban className="h-4 w-4" />}
-              disabled={guardando}
-              onClick={() => void onDecidir([row.order], 'no_contar')}
+              disabled={saving}
+              onClick={() => void onDecide([row.order], 'no_contar')}
             >
               No contar
             </Button>
@@ -114,42 +114,42 @@ export function ReviewTable({ sales, editable, guardando, onDecidir }: ReviewTab
 
   return (
     <>
-      {editable && elegidas.length > 0 && (
+      {editable && selected.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-sky-500/20 bg-sky-500/5 px-4 py-2.5">
           <span className="mr-auto text-[10px] font-black uppercase tracking-wider text-sky-300">
-            {elegidas.length} seleccionada{elegidas.length === 1 ? '' : 's'}
-            {elegidasDecididas > 0 && <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">{elegidasDecididas} ya decidida{elegidasDecididas === 1 ? '' : 's'}</span>}
+            {selected.length} seleccionada{selected.length === 1 ? '' : 's'}
+            {selectedDecided > 0 && <span className="ml-2 font-normal normal-case tracking-normal text-slate-400">{selectedDecided} ya decidida{selectedDecided === 1 ? '' : 's'}</span>}
           </span>
-          <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" />} disabled={guardando} onClick={() => void decidirSeleccion('contar')}>
-            Contar {elegidas.length}
+          <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" />} disabled={saving} onClick={() => void decideSelection('contar')}>
+            Contar {selected.length}
           </Button>
-          <Button size="sm" variant="outline" icon={<Ban className="h-4 w-4" />} disabled={guardando} onClick={() => void decidirSeleccion('no_contar')}>
-            No contar {elegidas.length}
+          <Button size="sm" variant="outline" icon={<Ban className="h-4 w-4" />} disabled={saving} onClick={() => void decideSelection('no_contar')}>
+            No contar {selected.length}
           </Button>
-          {elegidasDecididas > 0 && (
-            <Button size="sm" variant="outline" icon={<Undo2 className="h-4 w-4" />} disabled={guardando} onClick={() => void decidirSeleccion('')}>
+          {selectedDecided > 0 && (
+            <Button size="sm" variant="outline" icon={<Undo2 className="h-4 w-4" />} disabled={saving} onClick={() => void decideSelection('')}>
               Deshacer decisión
             </Button>
           )}
-          <Button size="sm" variant="outline" icon={<X className="h-4 w-4" />} onClick={() => setSeleccion(new Set())}>
+          <Button size="sm" variant="outline" icon={<X className="h-4 w-4" />} onClick={() => setSelection(new Set())}>
             Quitar selección
           </Button>
         </div>
       )}
-      {editable && elegidas.length === 0 && pendientes.length > 0 && (
+      {editable && selected.length === 0 && pending.length > 0 && (
         <div className="flex flex-wrap items-center justify-end gap-2 border-b border-slate-800 p-4">
           <span className="mr-auto text-xs text-slate-400">
-            {pendientes.length} por decidir · marca varias con la casilla para decidir solo esas
+            {pending.length} por decidir · marca varias con la casilla para decidir solo esas
           </span>
-          <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" />} disabled={guardando} onClick={() => void onDecidir(pendientes, 'contar')}>
+          <Button size="sm" icon={<CheckCircle2 className="h-4 w-4" />} disabled={saving} onClick={() => void onDecide(pending, 'contar')}>
             Contar todas
           </Button>
           <Button
             size="sm"
             variant="outline"
             icon={<Ban className="h-4 w-4" />}
-            disabled={guardando}
-            onClick={() => void onDecidir(pendientes, 'no_contar')}
+            disabled={saving}
+            onClick={() => void onDecide(pending, 'no_contar')}
           >
             No contar ninguna
           </Button>
@@ -161,7 +161,7 @@ export function ReviewTable({ sales, editable, guardando, onDecidir }: ReviewTab
         searchable
         searchPlaceholder="Buscar orden o cliente..."
         emptyMessage="No hay ventas que revisar: las facturas lo resuelven todo."
-        selection={editable ? { rowKey: (row) => row.order, selected: seleccion, onChange: setSeleccion } : undefined}
+        selection={editable ? { rowKey: (row) => row.order, selected: selection, onChange: setSelection } : undefined}
       />
     </>
   );

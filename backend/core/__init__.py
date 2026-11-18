@@ -1,7 +1,7 @@
 """Piezas transversales: no pertenecen a ningun dominio de negocio.
 
 Aqui vive lo que los tres servicios comparten -conexion a base de datos,
-configuracion desde Vault, el `Periodo`, los nombres de tabla y las utilidades
+configuracion desde Vault, el `Period`, los nombres de tabla y las utilidades
 de datos- y nada mas. `core` no importa de `services`: la dependencia va
 siempre en el otro sentido.
 """
@@ -17,7 +17,7 @@ from .config import (
     TableNames,
 )
 from .database import DBConnector
-from .models import Periodo
+from .models import Period
 from .utils import parse_date
 
 __all__ = [

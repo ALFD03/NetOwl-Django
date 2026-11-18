@@ -12,7 +12,7 @@ from __future__ import annotations
 # Los sites no se ordenan alfabeticamente sino por relevancia comercial. Ese
 # orden vive ahora en la columna `Site.orden` del catalogo y se lee con
 # `fixtures.sites_order()`; esta lista sobrevive solo como su semilla, y la usa
-# unicamente `manage.py cargar_catalogos`.
+# unicamente `manage.py load_catalogs`.
 CUSTOM_SITE_ORDER = [
     "Valencia",
     "Naguanagua",
@@ -32,9 +32,9 @@ CUSTOM_SITE_ORDER = [
 # --- Planes con tratamiento especial en el reporte de la reguladora ---------
 # No son planes residenciales: se excluyen de los conteos por tecnologia y se
 # reportan en su propia categoria.
-PLAN_TRANSPORTE = "Transporte de Datos"
-PLAN_DEDICADO = "Internet Dedicado"
-NON_RESIDENTIAL_PLANS = [PLAN_TRANSPORTE, PLAN_DEDICADO]
+TRANSPORT_PLAN = "Transporte de Datos"
+DEDICATED_PLAN = "Internet Dedicado"
+NON_RESIDENTIAL_PLANS = [TRANSPORT_PLAN, DEDICATED_PLAN]
 
 # --- Vocabulario del reporte de la reguladora -------------------------------
 # La reguladora solo distingue alambrico / inalambrico, asi que las tecnologias

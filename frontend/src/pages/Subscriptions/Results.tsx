@@ -11,7 +11,7 @@ interface SubscriptionsResultsProps {
 export default function SubscriptionsResults({ closings = [] }: SubscriptionsResultsProps) {
   return (
     <AppLayout>
-      <SubscriptionResultsView periodos={closings} />
+      <SubscriptionResultsView periods={closings} />
     </AppLayout>
   );
 }

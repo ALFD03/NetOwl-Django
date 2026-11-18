@@ -26,13 +26,13 @@
 import type { DayCardSpec, DayChartSpec } from '@/shared/ui';
 
 import type { TargetsTrafficLight } from '../types';
-import { tonoChurn } from './targets';
+import { churnTone } from './targets';
 
 /**
  * Las tarjetas del día. Una fábrica y no una constante porque el churn se pinta
  * con el semáforo del catálogo.
  */
-export const subsDayCards = (semaforo: TargetsTrafficLight): DayCardSpec[] => [
+export const subsDayCards = (trafficLight: TargetsTrafficLight): DayCardSpec[] => [
   { key: 'new_in_month', label: 'Nuevos', kind: 'flujo', color: 'green', subValue: 'Altas de ese día' },
   {
     key: 'churned',
@@ -70,7 +70,7 @@ export const subsDayCards = (semaforo: TargetsTrafficLight): DayCardSpec[] => [
     label: 'Churn Bruto',
     kind: 'tasa',
     color: 'red',
-    colorFor: (valor) => tonoChurn(valor, semaforo),
+    colorFor: (value) => churnTone(value, trafficLight),
     subValue: 'Bajas / base inicial',
     trendGoodWhen: 'down',
   },

@@ -190,7 +190,7 @@ export function SubscriptionForm({
                   { value: 'FTTH', label: 'Alámbrico' },
                   { value: 'RF', label: 'Inalámbrico' },
                 ]}
-                onChange={(tecnologia) => onChange({ technology: tecnologia })}
+                onChange={(technology) => onChange({ technology })}
               />
             </Field>
 
@@ -203,7 +203,7 @@ export function SubscriptionForm({
                   { value: 'pyme', label: 'Jurídica' },
                   { value: 'nat', label: 'Natural' },
                 ]}
-                onChange={(tipo_persona) => onChange({ person_type: tipo_persona })}
+                onChange={(person_type) => onChange({ person_type })}
               />
             </Field>
           </div>

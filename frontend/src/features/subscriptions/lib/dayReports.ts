@@ -28,7 +28,7 @@ export interface ZonesConfig {
   siteOrder: string[];
 }
 
-const SITE_DESCONOCIDO = 'Otros / Desconocido';
+const UNKNOWN_SITE = 'Otros / Desconocido';
 const DEFAULT_KIND = 'FTTH';
 const RF_GROUP = 'NODOS RADIOFRECUENCIA (RF)';
 
@@ -46,10 +46,10 @@ const RF_GROUP = 'NODOS RADIOFRECUENCIA (RF)';
  */
 
 /** "Zona - Sucursal" -> sus dos partes, con el mismo fallback que el backend. */
-const splitValue = (valor: string): { zona: string; sucursal: string } => {
-  const parts = String(valor).split(' - ');
+const splitValue = (value: string): { zona: string; sucursal: string } => {
+  const parts = String(value).split(' - ');
   return {
-    zona: (parts[0] ?? valor).trim(),
+    zona: (parts[0] ?? value).trim(),
     sucursal: parts.length > 1 ? (parts[1] ?? '').trim() : 'Sin Sucursal',
   };
 };
@@ -57,12 +57,12 @@ const splitValue = (valor: string): { zona: string; sucursal: string } => {
 const num = (value: number | undefined): number => Number(value ?? 0);
 
 const baseNode = (row: DimensionVal) => {
-  const valor = String(row.value ?? '');
-  const { zona, sucursal } = splitValue(valor);
+  const value = String(row.value ?? '');
+  const { zona: zone, sucursal: branch } = splitValue(value);
   return {
-    zona_sucursal: valor,
-    zona,
-    sucursal,
+    zona_sucursal: value,
+    zona: zone,
+    sucursal: branch,
     active_start: num(row.active_start),
     active_end: num(row.active_end),
     new_subs: num(row.new_subs),
@@ -85,8 +85,8 @@ export function buildSalesSites(
   if (!rows.length) return [];
 
   const zoneInfo = new Map<string, { site: string; type: string }>();
-  config?.zones.forEach((zona) =>
-    zoneInfo.set(zona.name.toLowerCase(), { site: zona.site, type: zona.type }),
+  config?.zones.forEach((zone) =>
+    zoneInfo.set(zone.name.toLowerCase(), { site: zone.site, type: zone.type }),
   );
 
   const siteGroups = new Map<string, Map<string, SalesReportNode[]>>();
@@ -94,7 +94,7 @@ export function buildSalesSites(
   rows.forEach((row) => {
     const node = baseNode(row);
     const info = zoneInfo.get(node.zona.toLowerCase())
-      ?? { site: SITE_DESCONOCIDO, type: DEFAULT_KIND };
+      ?? { site: UNKNOWN_SITE, type: DEFAULT_KIND };
 
     const techs = siteGroups.get(info.site) ?? new Map<string, SalesReportNode[]>();
     siteGroups.set(info.site, techs);
@@ -132,10 +132,10 @@ export function buildBusinessUnitGroups(
   const coordMap = new Map<string, string>();
   const rfZones = new Set<string>();
 
-  config?.zones.forEach((zona) => {
-    const key = zona.name.toLowerCase();
-    if (zona.coordinator) coordMap.set(key, zona.coordinator);
-    if (zona.type.toUpperCase() === 'RF') rfZones.add(key);
+  config?.zones.forEach((zone) => {
+    const key = zone.name.toLowerCase();
+    if (zone.coordinator) coordMap.set(key, zone.coordinator);
+    if (zone.type.toUpperCase() === 'RF') rfZones.add(key);
   });
 
   const coordGroups = new Map<string, BusinessUnitNode[]>();
@@ -146,10 +146,10 @@ export function buildBusinessUnitGroups(
     const key = base.zona.toLowerCase();
     const node: BusinessUnitNode = { ...base, type: rfZones.has(key) ? 'RF' : 'FTTH' };
 
-    const coordinador = coordMap.get(key);
-    if (coordinador) {
-      const nodes = coordGroups.get(coordinador) ?? [];
-      coordGroups.set(coordinador, nodes);
+    const coordinator = coordMap.get(key);
+    if (coordinator) {
+      const nodes = coordGroups.get(coordinator) ?? [];
+      coordGroups.set(coordinator, nodes);
       nodes.push(node);
     }
     // Una zona RF entra ademas en el bloque consolidado, aunque tenga coordinador.
@@ -158,9 +158,9 @@ export function buildBusinessUnitGroups(
 
   const groups: BusinessUnitGroup[] = [...coordGroups.keys()]
     .sort()
-    .map((coordinador) => ({
-      coordinator: coordinador,
-      nodes: [...(coordGroups.get(coordinador) ?? [])].sort(byActiveAtEnd),
+    .map((coordinator) => ({
+      coordinator,
+      nodes: [...(coordGroups.get(coordinator) ?? [])].sort(byActiveAtEnd),
       is_rf: false,
     }));
 

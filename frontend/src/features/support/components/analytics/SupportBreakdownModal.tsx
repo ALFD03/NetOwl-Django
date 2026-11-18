@@ -6,12 +6,12 @@ import { AlertOctagon, Layers, Loader2, Wrench } from 'lucide-react';
 import { DataTable, EmptyState, ExcelExportButton, MetricCard, Modal, StatusMessage, ToggleGroup } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils';
 import { SUPPORT_DIMENSION_EXCEL_COLUMNS, supportExportFileName } from '../../lib/supportExport';
-import { SUPPORT_DESGLOSE_LABELS, SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';
-import { SUPPORT_DESGLOSES, type SupportDesglose, type SupportDimension } from '../../types';
+import { SUPPORT_BREAKDOWN_LABELS, SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';
+import { SUPPORT_BREAKDOWNS, type SupportBreakdown, type SupportDimension } from '../../types';
 import type { SupportBreakdownState } from '../../hooks/useSupportAnalytics';
 import { SUPPORT_DIMENSION_COLUMNS } from './supportColumns';
 
-const TAB_ICONS: Record<SupportDesglose, JSX.Element> = {
+const TAB_ICONS: Record<SupportBreakdown, JSX.Element> = {
   tipo_solicitud: <Layers className="h-4 w-4" />,
   razon_falla: <AlertOctagon className="h-4 w-4" />,
   solucion_falla: <Wrench className="h-4 w-4" />,
@@ -35,7 +35,7 @@ interface Props {
  * ever read one cell at a time.
  */
 export function SupportBreakdownModal({ dimension, breakdown, groupName, period, onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<SupportDesglose>('razon_falla');
+  const [activeTab, setActiveTab] = useState<SupportBreakdown>('razon_falla');
 
   const { value, loading, error, stats, breakdowns } = breakdown;
   const rows = breakdowns[activeTab];
@@ -45,7 +45,7 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, period,
       isOpen={value !== null}
       onClose={onClose}
       title={value ?? ''}
-      subtitle={`${SUPPORT_DIMENSION_LABELS[dimension]} · desglose por ${SUPPORT_DESGLOSE_LABELS[activeTab].toLowerCase()}`}
+      subtitle={`${SUPPORT_DIMENSION_LABELS[dimension]} · desglose por ${SUPPORT_BREAKDOWN_LABELS[activeTab].toLowerCase()}`}
       theme="purple"
       icon={TAB_ICONS[activeTab]}
       size="wide"
@@ -73,13 +73,13 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, period,
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <ToggleGroup
-              options={SUPPORT_DESGLOSES.map((key) => ({
+              options={SUPPORT_BREAKDOWNS.map((key) => ({
                 key,
-                label: SUPPORT_DESGLOSE_LABELS[key],
+                label: SUPPORT_BREAKDOWN_LABELS[key],
                 icon: TAB_ICONS[key],
               }))}
               activeKey={activeTab}
-              onChange={(key) => setActiveTab(key as SupportDesglose)}
+              onChange={(key) => setActiveTab(key as SupportBreakdown)}
             />
 
             {/* Se exporta la pestaña abierta, no las tres: es el cuadro que se
@@ -88,18 +88,18 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, period,
               rows={rows}
               columns={SUPPORT_DIMENSION_EXCEL_COLUMNS}
               fileName={supportExportFileName([
-                SUPPORT_DESGLOSE_LABELS[activeTab],
+                SUPPORT_BREAKDOWN_LABELS[activeTab],
                 value ?? '',
                 groupName,
                 period,
               ])}
-              sheetName={SUPPORT_DESGLOSE_LABELS[activeTab]}
+              sheetName={SUPPORT_BREAKDOWN_LABELS[activeTab]}
             />
           </div>
 
           {rows.length === 0 ? (
             <EmptyState
-              title={`Sin ${SUPPORT_DESGLOSE_LABELS[activeTab].toLowerCase()} registrada para este valor.`}
+              title={`Sin ${SUPPORT_BREAKDOWN_LABELS[activeTab].toLowerCase()} registrada para este valor.`}
               icon={TAB_ICONS[activeTab]}
             />
           ) : (
@@ -108,7 +108,7 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, period,
                 columns={SUPPORT_DIMENSION_COLUMNS}
                 data={rows}
                 searchable
-                searchPlaceholder={`Buscar ${SUPPORT_DESGLOSE_LABELS[activeTab].toLowerCase()}...`}
+                searchPlaceholder={`Buscar ${SUPPORT_BREAKDOWN_LABELS[activeTab].toLowerCase()}...`}
               />
             </div>
           )}

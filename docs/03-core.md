@@ -7,10 +7,10 @@ catálogo *dentro* de la función para no reventar con `AppRegistryNotReady`.
 
 | Fichero | Contenido |
 |---|---|
-| `__init__.py` | Reexporta lo más usado: `DBConnector`, `Periodo`, `TableNames`, `parse_date` y las constantes de estado |
+| `__init__.py` | Reexporta lo más usado: `DBConnector`, `Period`, `TableNames`, `parse_date` y las constantes de estado |
 | `vault.py` | Lectura y validación de la configuración sensible |
 | `config.py` | Constantes del negocio y el catálogo de nombres de tabla |
-| `models.py` | La dataclass `Periodo` |
+| `models.py` | La dataclass `Period` |
 | `database.py` | `DBConnector`: pool psycopg2 + puente a pandas |
 | `utils.py` | Fechas, normalización de texto, validación de CSV, limpieza para JSON, captura de consola |
 | `fixtures.py` | Acceso único a los catálogos de referencia, con instantánea cacheada |
@@ -68,17 +68,17 @@ Constantes del dominio, leídas por los tres analizadores.
 
 ---
 
-## `core/models.py` — `Periodo`
+## `core/models.py` — `Period`
 
 Dataclass con `fecha_inicio` y `end_date`. Es lo que todos los análisis usan
 para hablar de un mes o de un corte dentro de él.
 
 | Método | Qué hace |
 |---|---|
-| `Periodo.build(ini, fin=None)` | Sin `fin`, construye el mes completo de `ini` (del día 1 a las 00:00:00 al último día a las 23:59:59). Con `fin`, un corte arbitrario; si `fin` viene sin hora se le pone 23:59:59 |
+| `Period.build(ini, fin=None)` | Sin `fin`, construye el mes completo de `ini` (del día 1 a las 00:00:00 al último día a las 23:59:59). Con `fin`, un corte arbitrario; si `fin` viene sin hora se le pone 23:59:59 |
 | `label()` | `"2025-03-01 al 2025-03-31"` — **es la clave `periodo_reporte` de casi todas las tablas** |
-| `fecha_corte()` | `"YYYY-MM-DD"` del día final |
-| `periodo_mes()` | `"YYYY-MM"` del mes de inicio |
+| `cutoff_date()` | `"YYYY-MM-DD"` del día final |
+| `period_month()` | `"YYYY-MM"` del mes de inicio |
 
 ---
 
@@ -172,7 +172,7 @@ borra los anteriores.
 
 | Lectura | Devuelve | Quién la usa |
 |---|---|---|
-| `read_series(tabla, mes, key, block)` | `{periodo_mes, dias_disponibles, serie: {"1": {…}, …}}` — solo el bloque `global` de cada día | Los tres |
+| `read_series(tabla, mes, key, block)` | `{period_month, dias_disponibles, serie: {"1": {…}, …}}` — solo el bloque `global` de cada día | Los tres |
 | `read_month(tabla, mes, scalars, key)` | El mes entero, desgloses incluidos | Suscripciones |
 | `read_day(tabla, mes, dia, key)` | El corte completo de **un** día, o `None` | CRM y soporte |
 
@@ -196,7 +196,7 @@ pide de uno en uno (`read_day`, servido por `api/day-metrics/`) y el
 navegador lo cachea. En ningún caso se recalcula nada: se lee una celda ya
 escrita por el análisis.
 
-`key` es el `periodo_reporte` de la fila: la etiqueta larga de `Periodo.label()`
+`key` es el `periodo_reporte` de la fila: la etiqueta larga de `Period.label()`
 en suscripciones, el `YYYY-MM` en CRM y soporte, como en el resto de sus tablas.
 
 ---
@@ -225,7 +225,7 @@ Es **el único lector** de las tablas de catálogo. Los cuatro consumidores
 (`subscriptions/analytics/{imports,queries,eta_report}.py` y
 `support/analytics/queries.py`) siguen recibiendo los mismos diccionarios con
 las claves de la época JSON (`Site`, `Type`, `Estado`, `TV`…); de eso se encargan
-`Zona.to_fixture()` y `Plan.to_fixture()`.
+`Zone.to_fixture()` y `Plan.to_fixture()`.
 
 ### La caché
 
@@ -254,7 +254,7 @@ En su lugar se guarda **una sola instantánea coherente de todos los catálogos*
 | `plan_names()` | Qué planes existen. **No incluye `Cancelado`** |
 | `recognized_names()` | `plan_names()` + `Cancelado`. Responde «¿esta línea del export es un plan?» |
 | `zones_by_name()` | Zonas indexadas por nombre en minúsculas |
-| `sites_order()` | Sites por relevancia comercial (columna `Site.orden`), no alfabéticamente |
+| `sites_order()` | Sites por relevancia comercial (columna `Site.order`), no alfabéticamente |
 | `ignored_products()` | Nombres que alguien declaró que nunca serán un plan |
 
 ### Por qué `plan_names()` y `recognized_names()` son distintas

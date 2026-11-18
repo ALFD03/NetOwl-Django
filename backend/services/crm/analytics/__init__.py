@@ -11,7 +11,7 @@ from .day_metrics import (
 )
 from .queries import (
     get_crm_close_history,
-    get_crm_dimensiones,
+    get_crm_dimensions,
     get_crm_metric_totals,
     get_crm_periods,
 )

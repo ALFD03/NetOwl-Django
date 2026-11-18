@@ -26,14 +26,14 @@ export function useEtaManagement({ allKnownPlans = [], discoveredPlans = [], dis
   useOnOpen(formOpen, () => setError(null));
 
   /** Ejecuta una escritura; si falla, el error queda en el modal abierto o en la página. */
-  const run = async (action: () => Promise<unknown>, fallo: string) => {
+  const run = async (action: () => Promise<unknown>, onFail: string) => {
     setIsSaving(true);
     setError(null);
     try {
       await action();
       return true;
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, fallo));
+      setError(getApiErrorMessage(err, onFail));
       return false;
     } finally {
       setIsSaving(false);

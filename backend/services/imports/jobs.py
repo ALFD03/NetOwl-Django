@@ -29,7 +29,7 @@ class AnalysisCancelled(Exception):
     """Alguien pidio parar la ejecucion desde la interfaz.
 
     No es un error del analisis: la levanta el punto de control de `JobConsole`
-    al ver que su fila ya no esta abierta, y `ejecutar_analisis` la distingue del
+    al ver que su fila ya no esta abierta, y `run_analysis` la distingue del
     resto para cerrar el job como cancelado y no como fallido.
     """
 
@@ -39,18 +39,18 @@ def running_job(module: str) -> AnalysisJob | None:
 
     Un job cuyo worker murio a la fuerza se queda en `running` para siempre; sin
     descartarlo, el modulo quedaria bloqueado hasta tocar la base a mano (ver
-    `AnalysisJob.esta_muerto`).
+    `AnalysisJob.is_dead`).
     """
-    abiertos = AnalysisJob.objects.filter(
+    open_count = AnalysisJob.objects.filter(
         module=module, status__in=AnalysisJob.OPEN_STATES
     )
-    for job in abiertos:
-        if not job.esta_muerto:
+    for job in open_count:
+        if not job.is_dead:
             return job
     return None
 
 
-def duplicate_job(module: str, periodo: str) -> AnalysisJob | None:
+def duplicate_job(module: str, period: str) -> AnalysisJob | None:
     """Ejecucion abierta que escribiria exactamente lo mismo que la pedida.
 
     Lo que no se puede permitir no es que haya varios analisis a la vez, sino
@@ -61,11 +61,11 @@ def duplicate_job(module: str, periodo: str) -> AnalysisJob | None:
     El ciclo de vida no tiene periodo, asi que su duplicado es simplemente otro
     ciclo de vida abierto.
     """
-    abiertos = AnalysisJob.objects.filter(
-        module=module, periodo=periodo or '', status__in=AnalysisJob.OPEN_STATES
+    open_count = AnalysisJob.objects.filter(
+        module=module, period=period or '', status__in=AnalysisJob.OPEN_STATES
     )
-    for job in abiertos:
-        if not job.esta_muerto:
+    for job in open_count:
+        if not job.is_dead:
             return job
     return None
 
@@ -90,26 +90,26 @@ def module_lock(module: str):
     """
     import redis
 
-    cliente = redis.Redis.from_url(settings.REDIS_URL)
-    cerrojo = cliente.lock(
+    client = redis.Redis.from_url(settings.REDIS_URL)
+    lock = client.lock(
         f"netowl:analisis:{settings.ENV_SUFFIX}:{module}",
         timeout=settings.ANALYSIS_LOCK_TIMEOUT,
         blocking=False,
     )
-    if not cerrojo.acquire(blocking=False):
+    if not lock.acquire(blocking=False):
         yield None
         return
     try:
-        yield cerrojo
+        yield lock
     finally:
         # `LockNotOwnedError` si el analisis duro mas que la caducidad: el
         # cerrojo ya es de otro y soltarlo seria quitarselo.
         with contextlib.suppress(Exception):
-            cerrojo.release()
+            lock.release()
 
 
 @contextlib.contextmanager
-def module_locks(modulos: tuple[str, ...]):
+def module_locks(modules: tuple[str, ...]):
     """El turno de escritura de varios modulos a la vez, o ninguno.
 
     Lo toman las importaciones: reemplazar `subscriptions` mientras el analisis
@@ -117,25 +117,25 @@ def module_locks(modulos: tuple[str, ...]):
     suscripciones de un export y los logs del siguiente). Con el turno de los
     analisis que leen esas tablas, la importacion espera a que no haya ninguno
     en curso, y un analisis encolado espera a que termine la importacion (su
-    tarea reintenta, ver `ejecutar_analisis`).
+    tarea reintenta, ver `run_analysis`).
 
     Todo o nada: si alguno esta ocupado se sueltan los ya tomados y se cede
     `None`, igual que `module_lock`. Se cede el modulo ocupado en
     `ocupado` para poder decir cual.
     """
-    tomados = []
+    taken = []
     try:
-        for modulo in modulos:
-            with contextlib.ExitStack() as pila:
-                turno = pila.enter_context(module_lock(modulo))
-                if turno is None:
-                    yield None, modulo
+        for module in modules:
+            with contextlib.ExitStack() as stack:
+                shift = stack.enter_context(module_lock(module))
+                if shift is None:
+                    yield None, module
                     return
-                tomados.append(pila.pop_all())
+                taken.append(stack.pop_all())
         yield True, None
     finally:
-        for pila in reversed(tomados):
-            pila.close()
+        for stack in reversed(taken):
+            stack.close()
 
 
 def open_jobs() -> list[AnalysisJob]:
@@ -147,14 +147,14 @@ def open_jobs() -> list[AnalysisJob]:
 
     En ejecucion primero y luego las que esperan turno, que es como avanzaran.
     """
-    abiertos = AnalysisJob.objects.filter(
+    open_count = AnalysisJob.objects.filter(
         status__in=AnalysisJob.OPEN_STATES
     ).order_by('created_at')
-    vivos = [job for job in abiertos if not job.esta_muerto]
-    return sorted(vivos, key=lambda j: (j.status != AnalysisJob.RUNNING, j.created_at))
+    alive = [job for job in open_count if not job.is_dead]
+    return sorted(alive, key=lambda j: (j.status != AnalysisJob.RUNNING, j.created_at))
 
 
-def create_job(user, module: str, periodo: str = '') -> AnalysisJob:
+def create_job(user, module: str, period: str = '') -> AnalysisJob:
     """Crea la fila de una ejecucion en estado `pending`.
 
     El usuario se guarda con `SET_NULL`, asi que un job puede sobrevivir a la
@@ -162,10 +162,10 @@ def create_job(user, module: str, periodo: str = '') -> AnalysisJob:
     """
     return AnalysisJob.objects.create(
         module=module,
-        periodo=periodo or '',
+        period=period or '',
         user=user if user.is_authenticated else None,
         username=user.username if user.is_authenticated else 'Sistema',
-        status=AnalysisJob.PENDIENTE,
+        status=AnalysisJob.PENDING,
     )
 
 
@@ -174,7 +174,7 @@ class JobConsole(io.StringIO):
 
     El analisis narra su avance con `print`; antes esa salida solo llegaba al
     navegador al terminar, dentro del JSON de respuesta. Ahora se guarda en la
-    base cada `INTERVALO_VOLCADO` segundos, que es lo que convierte la consola
+    base cada `FLUSH_INTERVAL` segundos, que es lo que convierte la consola
     de la interfaz en algo que se lee en vivo.
 
     No se vuelca en cada `write` a proposito: un analisis mensual imprime una
@@ -193,7 +193,7 @@ class JobConsole(io.StringIO):
     son deliberadamente reanudables (ver `day_metrics`).
     """
 
-    INTERVALO_VOLCADO = 2.0
+    FLUSH_INTERVAL = 2.0
 
     def __init__(self, job: AnalysisJob):
         super().__init__()
@@ -201,22 +201,22 @@ class JobConsole(io.StringIO):
         self._last_flush = 0.0
         # Evita reentrar si algo dentro del propio volcado escribiese a stdout,
         # que en ese momento sigue redirigido a este buffer.
-        self._volcando = False
+        self._flushing = False
 
     def write(self, s):  # noqa: D102 - contrato de StringIO
-        """Acumula la salida y, cada `INTERVALO_VOLCADO`, la guarda en el job.
+        """Acumula la salida y, cada `FLUSH_INTERVAL`, la guarda en el job.
 
         Al mismo ritmo comprueba si le han pedido parar; si es asi, levanta
         `AnalysisCancelled` desde el `print` del analisis, que es lo que lo corta.
         """
-        escrito = super().write(s)
-        ahora = time.monotonic()
-        if not self._volcando and ahora - self._last_flush >= self.INTERVALO_VOLCADO:
+        written = super().write(s)
+        now = time.monotonic()
+        if not self._flushing and now - self._last_flush >= self.FLUSH_INTERVAL:
             self.dump()
             self.abort_if_cancelled()
-        return escrito
+        return written
 
-    def dump(self, **campos) -> None:
+    def dump(self, **fields) -> None:
         """Guarda el log acumulado (y los campos indicados) en el job.
 
         Nunca propaga: esto es la narracion del analisis, no el analisis. Un
@@ -225,14 +225,14 @@ class JobConsole(io.StringIO):
         conexion caducada entre dos volcados, y `close_old_connections` la
         renueva.
         """
-        if self._volcando:
+        if self._flushing:
             return
-        self._volcando = True
+        self._flushing = True
         try:
             self.job.log = self.getvalue()
-            for nombre, valor in campos.items():
-                setattr(self.job, nombre, valor)
-            fields_to_save = ['log', 'updated_at', *campos.keys()]
+            for name, value in fields.items():
+                setattr(self.job, name, value)
+            fields_to_save = ['log', 'updated_at', *fields.keys()]
             try:
                 self.job.save(update_fields=fields_to_save)
             except Exception:
@@ -244,7 +244,7 @@ class JobConsole(io.StringIO):
             # Se reintentara en el siguiente volcado; no se toca el reloj para
             # que el proximo write lo intente de inmediato.
         finally:
-            self._volcando = False
+            self._flushing = False
 
     def abort_if_cancelled(self) -> None:
         """Levanta `AnalysisCancelled` si la fila del job ya no esta abierta.
@@ -256,7 +256,7 @@ class JobConsole(io.StringIO):
         mas en pararlo.
         """
         try:
-            estado = (
+            state = (
                 AnalysisJob.objects.filter(pk=self.job.pk)
                 .values_list('status', flat=True)
                 .first()
@@ -265,28 +265,28 @@ class JobConsole(io.StringIO):
             logger.exception("No se pudo comprobar la cancelacion del job %s", self.job.pk)
             return
 
-        if estado == AnalysisJob.CANCELLED_STATE:
+        if state == AnalysisJob.CANCELLED_STATE:
             raise AnalysisCancelled
 
-    def progreso(self, hechos: int, total: int, etiqueta: str = '') -> None:
+    def progress(self, done: int, total: int, label: str = '') -> None:
         """Callback de avance que reciben los analisis con pasos contables.
 
         Es el punto de control mas fino que tiene un analisis largo: los que
         recorren dias lo llaman una vez por dia, asi que una cancelacion se nota
         en lo que tarda un corte, no en lo que tarda el mes.
         """
-        self.job.progress_done = hechos
+        self.job.progress_done = done
         self.job.progress_total = total
-        self.job.progress_label = etiqueta
+        self.job.progress_label = label
         # El progreso si se fuerza: es lo que mueve la barra, y llega una vez
         # por dia calculado, no una vez por linea impresa.
         self.dump(
-            progress_done=hechos, progress_total=total, progress_label=etiqueta
+            progress_done=done, progress_total=total, progress_label=label
         )
         self.abort_if_cancelled()
 
 
-def cancelar_job(job: AnalysisJob, username: str) -> None:
+def cancel_job(job: AnalysisJob, username: str) -> None:
     """Marca el job como cancelado. Es todo lo que hace falta.
 
     No se le manda nada a Celery. Un job en cola deja de estar abierto, y la
@@ -316,7 +316,7 @@ def mark_started(job: AnalysisJob, task_id: str) -> None:
 
 def mark_finished(
     job: AnalysisJob,
-    consola: JobConsole,
+    console: JobConsole,
     status: str,
     message: str,
     result: dict | None = None,
@@ -326,7 +326,7 @@ def mark_finished(
     job.message = message
     job.result = result or {}
     job.finished_at = timezone.now()
-    consola.dump(
+    console.dump(
         status=status, message=message, result=job.result, finished_at=job.finished_at
     )
 
@@ -338,10 +338,10 @@ def mark_finished(
 
 # Cuantos meses admite un lote: dos anos. Cada mes es un analisis de minutos, y
 # un rango mal elegido (2016-2026) llenaria la cola durante horas.
-MAX_MESES_LOTE = 24
+MAX_MONTHS_PER_BATCH = 24
 
 
-def _launch_batch(request, module, meses) -> JsonResponse:
+def _launch_batch(request, module, months) -> JsonResponse:
     """Encola un analisis por cada mes de `meses`, del mas antiguo al mas nuevo.
 
     Es un solo POST y no uno por mes porque los endpoints de calculo van a
@@ -354,41 +354,41 @@ def _launch_batch(request, module, meses) -> JsonResponse:
     Un mes que ya esta en la cola o corriendo no se duplica: se devuelve en
     `omitidos` con su job, para que la interfaz lo siga igualmente.
     """
-    if not isinstance(meses, list) or not meses:
+    if not isinstance(months, list) or not months:
         return JsonResponse({"status": "error", "message": "Indica al menos un mes."}, status=400)
-    invalid = [m for m in meses if not is_period(m)]
+    invalid = [m for m in months if not is_period(m)]
     if invalid:
         return JsonResponse(
             {"status": "error", "message": f"Periodo inválido (YYYY-MM): {invalid[0]}"}, status=400
         )
-    meses = sorted({m.strip() for m in meses})
-    if len(meses) > MAX_MESES_LOTE:
+    months = sorted({m.strip() for m in months})
+    if len(months) > MAX_MONTHS_PER_BATCH:
         return JsonResponse({
             "status": "error",
-            "message": f"Como mucho {MAX_MESES_LOTE} meses por lote; pediste {len(meses)}.",
+            "message": f"Como mucho {MAX_MONTHS_PER_BATCH} meses por lote; pediste {len(months)}.",
         }, status=400)
 
-    from .tasks import ejecutar_analisis
+    from .tasks import run_analysis
 
-    encolados, omitidos = [], []
-    for periodo in meses:
-        duplicate = duplicate_job(module, periodo)
+    queued, skipped = [], []
+    for period in months:
+        duplicate = duplicate_job(module, period)
         if duplicate is not None:
-            omitidos.append(duplicate.to_dict())
+            skipped.append(duplicate.to_dict())
             continue
-        job = create_job(request.user, module, periodo)
-        ejecutar_analisis.delay(str(job.id))
-        encolados.append(job.to_dict())
+        job = create_job(request.user, module, period)
+        run_analysis.delay(str(job.id))
+        queued.append(job.to_dict())
 
-    partes = [f"{len(encolados)} {'mes encolado' if len(encolados) == 1 else 'meses encolados'}"]
-    if omitidos:
-        partes.append(f"{len(omitidos)} ya {'estaba' if len(omitidos) == 1 else 'estaban'} en la cola")
+    parts = [f"{len(queued)} {'mes encolado' if len(queued) == 1 else 'meses encolados'}"]
+    if skipped:
+        parts.append(f"{len(skipped)} ya {'estaba' if len(skipped) == 1 else 'estaban'} en la cola")
     return JsonResponse({
         "status": "queued",
-        "message": " · ".join(partes) + ". Se calculan de uno en uno; el cálculo continúa aunque cierres esta página.",
-        "jobs": encolados,
-        "skipped": omitidos,
-    }, status=202 if encolados else 409)
+        "message": " · ".join(parts) + ". Se calculan de uno en uno; el cálculo continúa aunque cierres esta página.",
+        "jobs": queued,
+        "skipped": skipped,
+    }, status=202 if queued else 409)
 
 
 def launch_analysis(request, module, needs_period=True):
@@ -397,11 +397,11 @@ def launch_analysis(request, module, needs_period=True):
     Con `months` (una lista) en lugar de `month` encola uno por mes: ver
     `_launch_batch`.
     """
-    periodo = ''
+    period = ''
     if needs_period:
         try:
             data = json.loads(request.body)
-            periodo = data.get("month")
+            period = data.get("month")
         except Exception:
             return JsonResponse({"status": "error", "message": "JSON inválido"}, status=400)
         if isinstance(data, dict) and "months" in data:
@@ -411,7 +411,7 @@ def launch_analysis(request, module, needs_period=True):
         # que acababa escrita como `periodo_reporte` en las tablas de
         # resultados y solo se descubria cuando `Periodo.build` reventaba a
         # mitad del calculo, con el job ya encolado.
-        if not is_period(periodo):
+        if not is_period(period):
             return JsonResponse(
                 {"status": "error", "message": "Periodo inválido (YYYY-MM)"}, status=400
             )
@@ -420,13 +420,13 @@ def launch_analysis(request, module, needs_period=True):
     # mismo modulo que ya esta encolado o corriendo no calcularia nada nuevo, y
     # las dos ejecuciones se pisarian las mismas filas. Cualquier otra
     # combinacion se encola y espera turno.
-    duplicate = duplicate_job(module, periodo)
+    duplicate = duplicate_job(module, period)
     if duplicate is not None:
         running = duplicate.status == AnalysisJob.RUNNING
         return JsonResponse({
             "status": "running",
             "message": (
-                f"Este análisis{f' del periodo {duplicate.periodo}' if duplicate.periodo else ''}"
+                f"Este análisis{f' del periodo {duplicate.period}' if duplicate.period else ''}"
                 f"{' ya se está ejecutando' if running else ' ya está en la cola'}."
                 " Se muestra su progreso."
             ),
@@ -435,10 +435,10 @@ def launch_analysis(request, module, needs_period=True):
 
     # Import diferido: `tasks` importa este modulo para su consola y su
     # registro de estado, asi que hacerlo arriba cerraria el ciclo.
-    from .tasks import ejecutar_analisis
+    from .tasks import run_analysis
 
-    job = create_job(request.user, module, periodo)
-    ejecutar_analisis.delay(str(job.id))
+    job = create_job(request.user, module, period)
+    run_analysis.delay(str(job.id))
     return JsonResponse({
         "status": "queued",
         "message": "Análisis encolado. El cálculo continúa aunque cierres esta página.",

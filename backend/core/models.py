@@ -1,4 +1,4 @@
-"""El `Periodo`: el mes (o el corte dentro de el) del que habla un analisis.
+"""El `Period`: el mes (o el corte dentro de el) del que habla un analisis.
 
 Es la unica pieza de dominio compartida por los tres modulos, por eso vive en
 `core` y no en ninguno de ellos.
@@ -14,18 +14,18 @@ from .utils import parse_date
 
 
 @dataclass
-class Periodo:
+class Period:
     """Un intervalo cerrado de fechas, normalmente un mes natural.
 
     `label()` es la clave con la que se guarda y se lee casi todo:
     `periodo_reporte` en las tablas de resultados es exactamente esa cadena.
     """
 
-    fecha_inicio: datetime
+    start_date: datetime
     end_date: datetime
 
     @classmethod
-    def build(cls, ini_text: str, fin_text: str | None = None) -> Periodo:
+    def build(cls, ini_text: str, end_text: str | None = None) -> Period:
         """Construye un periodo a partir de texto.
 
         Sin `fin_text` devuelve el mes completo de `ini_text` (del dia 1 a las
@@ -33,20 +33,20 @@ class Periodo:
         fecha final llega sin hora se le pone el final del dia, para que el corte
         incluya lo ocurrido ese mismo dia.
         """
-        inicio = parse_date(ini_text)
-        if inicio is None:
+        start = parse_date(ini_text)
+        if start is None:
             raise ValueError(f"Fecha inicio inválida: {ini_text}")
-        if fin_text:
-            final = parse_date(fin_text)
+        if end_text:
+            final = parse_date(end_text)
             if final and final.hour == 0:
                 final = final.replace(hour=23, minute=59, second=59)
             return cls(
-                inicio.replace(hour=0, minute=0, second=0), final
+                start.replace(hour=0, minute=0, second=0), final
             )
-        last_day = calendar.monthrange(inicio.year, inicio.month)[1]
-        final = datetime(inicio.year, inicio.month, last_day, 23, 59, 59)
+        last_day = calendar.monthrange(start.year, start.month)[1]
+        final = datetime(start.year, start.month, last_day, 23, 59, 59)
         return cls(
-            inicio.replace(day=1, hour=0, minute=0, second=0), final
+            start.replace(day=1, hour=0, minute=0, second=0), final
         )
 
     def label(self) -> str:
@@ -56,14 +56,14 @@ class Periodo:
         invalidaria la lectura de todo lo ya calculado.
         """
         return (
-            f"{self.fecha_inicio.strftime('%Y-%m-%d')}"
+            f"{self.start_date.strftime('%Y-%m-%d')}"
             f" al {self.end_date.strftime('%Y-%m-%d')}"
         )
 
-    def fecha_corte(self) -> str:
+    def cutoff_date(self) -> str:
         """Fecha de corte del snapshot (día hasta el que se calculó)."""
         return self.end_date.strftime("%Y-%m-%d")
 
-    def periodo_mes(self) -> str:
+    def period_month(self) -> str:
         """Mes al que pertenece el corte, en formato YYYY-MM."""
-        return self.fecha_inicio.strftime("%Y-%m")
+        return self.start_date.strftime("%Y-%m")

@@ -15,19 +15,19 @@ import type { AnalysisJob } from '@/shared/lib/api/jobs';
 import { METRIC_BAR, METRIC_TEXT, PulseDot } from '@/shared/ui';
 
 /** Porcentaje calculado del job, o null si el análisis no reporta pasos. */
-function porcentaje(job: AnalysisJob): number | null {
+function percentage(job: AnalysisJob): number | null {
   const { done, total } = job.progress;
   if (!total || total <= 1) return null;
   return Math.min(100, Math.round((done / total) * 100));
 }
 
-function subtitulo(job: AnalysisJob): string {
+function subtitle(job: AnalysisJob): string {
   return job.period ? `${job.module_display} · ${job.period}` : job.module_display;
 }
 
-interface AccionCancelar {
+interface CancelAction {
   onCancel: (id: string) => void;
-  cancelando: boolean;
+  cancelling: boolean;
 }
 
 /**
@@ -38,14 +38,14 @@ interface AccionCancelar {
  * tanto el botón queda marcado, porque el sondeo tarda en reflejarlo y si no
  * parecería que el clic no hizo nada.
  */
-function BotonCancelar({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
+function CancelButton({ job, onCancel, cancelling }: { job: AnalysisJob } & CancelAction) {
   return (
     <button
       type="button"
       onClick={() => onCancel(job.id)}
-      disabled={cancelando}
-      title={cancelando ? 'Cancelando...' : 'Cancelar este análisis'}
-      aria-label={`Cancelar ${subtitulo(job)}`}
+      disabled={cancelling}
+      title={cancelling ? 'Cancelando...' : 'Cancelar este análisis'}
+      aria-label={`Cancelar ${subtitle(job)}`}
       className="shrink-0 rounded p-1 text-slate-500 transition-colors hover:bg-rose-500/10 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
     >
       <Ban className="h-3.5 w-3.5" />
@@ -53,19 +53,19 @@ function BotonCancelar({ job, onCancel, cancelando }: { job: AnalysisJob } & Acc
   );
 }
 
-function RunningRow({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
-  const pct = porcentaje(job);
+function RunningRow({ job, onCancel, cancelling }: { job: AnalysisJob } & CancelAction) {
+  const pct = percentage(job);
 
   return (
     <div className="px-4 py-3">
       <div className="flex items-center gap-2">
         <PulseDot color="blue" />
-        <span className="flex-1 truncate text-xs font-semibold text-white">{subtitulo(job)}</span>
-        <BotonCancelar job={job} onCancel={onCancel} cancelando={cancelando} />
+        <span className="flex-1 truncate text-xs font-semibold text-white">{subtitle(job)}</span>
+        <CancelButton job={job} onCancel={onCancel} cancelling={cancelling} />
       </div>
 
       <p className="mt-1 truncate text-[11px] text-slate-400">
-        {cancelando ? 'Deteniendo en el próximo punto de control...' : (job.progress.label || 'Preparando el cálculo...')}
+        {cancelling ? 'Deteniendo en el próximo punto de control...' : (job.progress.label || 'Preparando el cálculo...')}
       </p>
 
       {pct !== null && (
@@ -88,39 +88,39 @@ function RunningRow({ job, onCancel, cancelando }: { job: AnalysisJob } & Accion
   );
 }
 
-function WaitingRow({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
+function WaitingRow({ job, onCancel, cancelling }: { job: AnalysisJob } & CancelAction) {
   return (
     <div className="flex items-center gap-2 px-4 py-2">
       <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-      <span className="flex-1 truncate text-[11px] text-slate-400">{subtitulo(job)}</span>
-      <BotonCancelar job={job} onCancel={onCancel} cancelando={cancelando} />
+      <span className="flex-1 truncate text-[11px] text-slate-400">{subtitle(job)}</span>
+      <CancelButton job={job} onCancel={onCancel} cancelling={cancelling} />
     </div>
   );
 }
 
 /** Los tres desenlaces posibles. Cancelado no es un fallo y no se pinta como tal. */
-const DESENLACES = {
-  success: { icono: CheckCircle2, tono: METRIC_TEXT.green, titulo: 'Análisis completado' },
-  cancelled: { icono: XCircle, tono: METRIC_TEXT.yellow, titulo: 'Análisis cancelado' },
-  error: { icono: AlertTriangle, tono: METRIC_TEXT.red, titulo: 'El análisis falló' },
+const OUTCOMES = {
+  success: { icon: CheckCircle2, tone: METRIC_TEXT.green, title: 'Análisis completado' },
+  cancelled: { icon: XCircle, tone: METRIC_TEXT.yellow, title: 'Análisis cancelado' },
+  error: { icon: AlertTriangle, tone: METRIC_TEXT.red, title: 'El análisis falló' },
 } as const;
 
 function FinalNotice({ job, onClose }: { job: AnalysisJob; onClose: () => void }) {
-  const desenlace =
-    job.status === 'success' ? DESENLACES.success
-    : job.status === 'cancelled' ? DESENLACES.cancelled
-    : DESENLACES.error;
-  const Icono = desenlace.icono;
+  const outcome =
+    job.status === 'success' ? OUTCOMES.success
+    : job.status === 'cancelled' ? OUTCOMES.cancelled
+    : OUTCOMES.error;
+  const Icon = outcome.icon;
 
   return (
     <div className="flex items-start gap-2 px-4 py-3">
-      <Icono className={cn('mt-0.5 h-4 w-4 shrink-0', desenlace.tono)} />
+      <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', outcome.tone)} />
       <div className="min-w-0 flex-1">
-        <p className={cn('text-xs font-semibold', desenlace.tono)}>
-          {desenlace.titulo}
+        <p className={cn('text-xs font-semibold', outcome.tone)}>
+          {outcome.title}
         </p>
         <p className="mt-0.5 line-clamp-2 text-[11px] text-slate-400">
-          {job.message || subtitulo(job)}
+          {job.message || subtitle(job)}
         </p>
       </div>
       <button
@@ -149,10 +149,10 @@ function FinalNotice({ job, onClose }: { job: AnalysisJob; onClose: () => void }
  */
 export function AnalysisQueueAlert() {
   const { jobs, running, queued, finished, dismissFinished, cancel, cancelling } = useJobQueue();
-  const [abierto, setOpen] = useState(true);
+  const [isOpen, setOpen] = useState(true);
 
-  const hayTrabajo = jobs.length > 0;
-  if (!hayTrabajo && !finished) return null;
+  const hasWork = jobs.length > 0;
+  if (!hasWork && !finished) return null;
 
   const runningJobs = jobs.filter((job) => job.status === 'running');
   const waitingJobs = jobs.filter((job) => job.status !== 'running');
@@ -169,7 +169,7 @@ export function AnalysisQueueAlert() {
           transition={{ duration: 0.25, ease: 'easeOut' }}
           className="pointer-events-auto overflow-hidden rounded-xl border border-slate-700 bg-surface-secondary shadow-2xl shadow-black/50"
         >
-          {hayTrabajo && (
+          {hasWork && (
             <button
               type="button"
               onClick={() => setOpen((v) => !v)}
@@ -187,20 +187,20 @@ export function AnalysisQueueAlert() {
               <ChevronDown
                 className={cn(
                   'h-4 w-4 shrink-0 text-slate-500 transition-transform',
-                  !abierto && '-rotate-90',
+                  !isOpen && '-rotate-90',
                 )}
               />
             </button>
           )}
 
-          {hayTrabajo && abierto && (
+          {hasWork && isOpen && (
             <div className="divide-y divide-slate-800">
               {runningJobs.map((job) => (
                 <RunningRow
                   key={job.id}
                   job={job}
                   onCancel={cancel}
-                  cancelando={cancelling.includes(job.id)}
+                  cancelling={cancelling.includes(job.id)}
                 />
               ))}
               {waitingJobs.map((job) => (
@@ -208,14 +208,14 @@ export function AnalysisQueueAlert() {
                   key={job.id}
                   job={job}
                   onCancel={cancel}
-                  cancelando={cancelling.includes(job.id)}
+                  cancelling={cancelling.includes(job.id)}
                 />
               ))}
             </div>
           )}
 
           {finished && (
-            <div className={cn(hayTrabajo && 'border-t border-slate-800')}>
+            <div className={cn(hasWork && 'border-t border-slate-800')}>
               <FinalNotice job={finished} onClose={dismissFinished} />
             </div>
           )}

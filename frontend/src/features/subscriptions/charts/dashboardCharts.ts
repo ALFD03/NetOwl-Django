@@ -7,10 +7,10 @@ import type { Context } from 'chartjs-plugin-datalabels';
 import { getHorizontalBarOptions, getLineOptions, horizontalBarOptions } from '@/shared/charts';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters/number';
 
-export function buildChurnData(periodos: PeriodData[], labels: string[]): ChartData<'line'> {
+export function buildChurnData(periods: PeriodData[], labels: string[]): ChartData<'line'> {
   return { labels, datasets: [
-    { label: 'Churn Neto %', data: periodos.map((p) => Number(p.net_churn_pct.toFixed(2))), borderColor: CHART_PALETTE[4], borderWidth: 3, fill: false, tension: 0.35 },
-    { label: 'Churn Bruto %', data: periodos.map((p) => Number(p.gross_churn_pct.toFixed(2))), borderColor: CHART_PALETTE[0], borderDash: [5, 5], borderWidth: 2.5, fill: false, tension: 0.35 },
+    { label: 'Churn Neto %', data: periods.map((p) => Number(p.net_churn_pct.toFixed(2))), borderColor: CHART_PALETTE[4], borderWidth: 3, fill: false, tension: 0.35 },
+    { label: 'Churn Bruto %', data: periods.map((p) => Number(p.gross_churn_pct.toFixed(2))), borderColor: CHART_PALETTE[0], borderDash: [5, 5], borderWidth: 2.5, fill: false, tension: 0.35 },
   ] };
 }
 
@@ -21,20 +21,20 @@ export function buildChurnData(periodos: PeriodData[], labels: string[]): ChartD
  * columna, no apilado con ellas. La única cifra etiquetada es el total de la
  * pila (el crecimiento); el reparto se lee por altura y en el tooltip.
  */
-export function buildGrowthData(periodos: PeriodData[], labels: string[]): ChartData<'bar'> {
-  const crecimiento = periodos.map((p) => (p.active_start > 0 ? ((p.active_end - p.active_start) / p.active_start) * 100 : 0));
+export function buildGrowthData(periods: PeriodData[], labels: string[]): ChartData<'bar'> {
+  const growth = periods.map((p) => (p.active_start > 0 ? ((p.active_end - p.active_start) / p.active_start) * 100 : 0));
   /** Parte del crecimiento que aporta cada origen, proporcional a sus altas. */
-  const aporte = (i: number, origen: 'nuevos' | 'react') => {
-    const p = periodos[i];
+  const contribution = (i: number, source: 'nuevos' | 'react') => {
+    const p = periods[i];
     const total = (p.new_in_month || 0) + (p.react_val || 0);
-    const cuota = total > 0 ? (p.react_val || 0) / total : 0;
-    return Number((crecimiento[i] * (origen === 'react' ? cuota : 1 - cuota)).toFixed(2));
+    const share = total > 0 ? (p.react_val || 0) / total : 0;
+    return Number((growth[i] * (source === 'react' ? share : 1 - share)).toFixed(2));
   };
 
   return { labels, datasets: [
-    { label: 'Nuevos Clientes', data: crecimiento.map((_, i) => aporte(i, 'nuevos')), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6, stack: 'crecimiento', datalabels: { display: false } },
+    { label: 'Nuevos Clientes', data: growth.map((_, i) => contribution(i, 'nuevos')), backgroundColor: 'rgba(0, 255, 136, 0.85)', borderRadius: 6, stack: 'crecimiento', datalabels: { display: false } },
     // Última de la pila: es la que lleva la etiqueta con el total.
-    { label: 'Reactivaciones', data: crecimiento.map((_, i) => aporte(i, 'react')), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6, stack: 'crecimiento', datalabels: { ...TOTAL_PILA_LABEL, color: CHART_CHROME.textStrong } },
+    { label: 'Reactivaciones', data: growth.map((_, i) => contribution(i, 'react')), backgroundColor: 'rgba(37, 99, 235, 0.85)', borderRadius: 6, stack: 'crecimiento', datalabels: { ...STACK_TOTAL_LABEL, color: CHART_CHROME.textStrong } },
   ] };
 }
 
@@ -44,15 +44,15 @@ export function buildGrowthData(periodos: PeriodData[], labels: string[]): Chart
  * porque una pila negativa crece hacia abajo y la etiqueta arriba caería dentro
  * de las barras.
  */
-const TOTAL_PILA_LABEL = {
+const STACK_TOTAL_LABEL = {
   display: 'auto' as const,
   anchor: 'end' as const,
   offset: 8,
-  align: (ctx: Context) => (totalPila(ctx) < 0 ? 'bottom' : 'top') as 'bottom' | 'top',
-  formatter: (_value: number, ctx: Context) => `${formatTwoDecimals(totalPila(ctx))} %`,
+  align: (ctx: Context) => (stackTotal(ctx) < 0 ? 'bottom' : 'top') as 'bottom' | 'top',
+  formatter: (_value: number, ctx: Context) => `${formatTwoDecimals(stackTotal(ctx))} %`,
 };
 
-function totalPila(ctx: Context): number {
+function stackTotal(ctx: Context): number {
   const { stack } = ctx.dataset as { stack?: string };
   return ctx.chart.data.datasets.reduce((sumBy, ds) => {
     if ((ds as { stack?: string }).stack !== stack) return sumBy;
@@ -82,26 +82,26 @@ export const growthChartOptions: ChartOptions<'bar'> = getHorizontalBarOptions(u
  */
 function periodBalance(p: PeriodData) {
   const base = p.active_start || 0;
-  const cortes = p.unpaid_cuts || 0;
-  const recuperados = p.react_4_P || 0;
+  const cuts = p.unpaid_cuts || 0;
+  const recovered = p.react_4_P || 0;
   return {
-    cortes,
-    recuperados,
-    suspensionPct: base > 0 ? (cortes / base) * 100 : 0,
-    recuperacionBasePct: base > 0 ? (recuperados / base) * 100 : 0,
-    recuperacionPct: cortes > 0 ? (recuperados / cortes) * 100 : 0,
+    cuts,
+    recovered,
+    suspensionPct: base > 0 ? (cuts / base) * 100 : 0,
+    recoveryBasePct: base > 0 ? (recovered / base) * 100 : 0,
+    recoveryPct: cuts > 0 ? (recovered / cuts) * 100 : 0,
   };
 }
 
-export function buildBalanzaRecuperacionData(periodos: PeriodData[], labels: string[]): ChartData<'line'> {
-  const balanza = periodos.map(periodBalance);
+export function buildRecoveryBalanceData(periods: PeriodData[], labels: string[]): ChartData<'line'> {
+  const balance = periods.map(periodBalance);
   return { labels, datasets: [
-    { label: 'Tasa de Suspensión %', data: balanza.map((b) => Number(b.suspensionPct.toFixed(2))), borderColor: CHART_PALETTE[0], backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
-    { label: 'Tasa de Recuperación %', data: balanza.map((b) => Number(b.recuperacionBasePct.toFixed(2))), borderColor: CHART_PALETTE[4], backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
+    { label: 'Tasa de Suspensión %', data: balance.map((b) => Number(b.suspensionPct.toFixed(2))), borderColor: CHART_PALETTE[0], backgroundColor: 'rgba(255, 42, 95, 0.2)', fill: true, tension: 0.35 },
+    { label: 'Tasa de Recuperación %', data: balance.map((b) => Number(b.recoveryBasePct.toFixed(2))), borderColor: CHART_PALETTE[4], backgroundColor: 'rgba(0, 255, 136, 0.2)', fill: true, borderDash: [4, 4], tension: 0.35 },
   ] };
 }
 
-export function buildBalanzaRecuperacionOptions(periodos: PeriodData[]): ChartOptions<'line'> {
+export function buildRecoveryBalanceOptions(periods: PeriodData[]): ChartOptions<'line'> {
   const base = getLineOptions(' %', 2);
   return {
     ...base,
@@ -111,13 +111,13 @@ export function buildBalanzaRecuperacionOptions(periodos: PeriodData[]): ChartOp
         ...base.plugins?.tooltip,
         callbacks: {
           label: (ctx) => {
-            const b = periodBalance(periodos[ctx.dataIndex]);
+            const b = periodBalance(periods[ctx.dataIndex]);
             if (ctx.datasetIndex === 0) {
-              return `Suspensión: ${formatTwoDecimals(b.suspensionPct)} % · ${formatInteger(b.cortes)} clientes cortados`;
+              return `Suspensión: ${formatTwoDecimals(b.suspensionPct)} % · ${formatInteger(b.cuts)} clientes cortados`;
             }
             return [
-              `Recuperación: ${formatTwoDecimals(b.recuperacionPct)} % de los cortados · ${formatInteger(b.recuperados)} clientes`,
-              `  equivale a ${formatTwoDecimals(b.recuperacionBasePct)} % de la base`,
+              `Recuperación: ${formatTwoDecimals(b.recoveryPct)} % de los cortados · ${formatInteger(b.recovered)} clientes`,
+              `  equivale a ${formatTwoDecimals(b.recoveryBasePct)} % de la base`,
             ];
           },
         },

@@ -13,13 +13,13 @@ interface Props {
   /** Omit when the source only stores quartiles — the node is then dropped. */
   min?: number;
   p25: number;
-  mediana: number;
-  promedio: number;
+  median: number;
+  average: number;
   p75: number;
   /** Omit when the source only stores quartiles — the node is then dropped. */
   max?: number;
   std: number;
-  pctExcedeProm: number;
+  pctAboveAvg: number;
 }
 
 /**
@@ -43,21 +43,21 @@ export function EquidistantTimeline({
   theme = 'green',
   min,
   p25,
-  mediana,
-  promedio,
+  median,
+  average,
   p75,
   max,
   std,
-  pctExcedeProm,
+  pctAboveAvg,
 }: Props) {
   const averageAccent = AVERAGE_ACCENT[theme];
 
   const nodes = [
     ...(min != null ? [{ key: 'min', label: 'Min', val: min, textCol: 'text-slate-400', dotBg: 'bg-slate-500' }] : []),
     { key: 'p25', label: 'P25', val: p25, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
-    { key: 'med', label: 'Mediana', val: mediana, textCol: 'text-amber-400', dotBg: 'bg-amber-400 ring-4 ring-amber-400/20' },
-    { key: 'prom', label: 'Promedio', val: promedio, textCol: averageAccent.text, dotBg: averageAccent.dot },
-    { key: 'std_plus', label: '+1σ', val: Number((promedio + std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
+    { key: 'med', label: 'Mediana', val: median, textCol: 'text-amber-400', dotBg: 'bg-amber-400 ring-4 ring-amber-400/20' },
+    { key: 'prom', label: 'Promedio', val: average, textCol: averageAccent.text, dotBg: averageAccent.dot },
+    { key: 'std_plus', label: '+1σ', val: Number((average + std).toFixed(1)), textCol: 'text-purple-400', dotBg: 'bg-purple-400' },
     { key: 'p75', label: 'P75', val: p75, textCol: 'text-sky-400', dotBg: 'bg-sky-400' },
     ...(max != null ? [{ key: 'max', label: 'Max', val: max, textCol: 'text-slate-400', dotBg: 'bg-slate-500' }] : []),
   ];
@@ -69,7 +69,7 @@ export function EquidistantTimeline({
       subtitle={subtitle ? `${subtitle} · σ ${std} h` : `Desviación Estándar (σ): ${std} h`}
       icon={icon}
       headerAction={(
-        <MiniExceedRing label="Excede Prom" pct={pctExcedeProm} color={METRIC_COLOR.blue} />
+        <MiniExceedRing label="Excede Prom" pct={pctAboveAvg} color={METRIC_COLOR.blue} />
       )}
     >
       <div className="py-4 px-2 h-full">

@@ -4,7 +4,7 @@ export { SupportDashboardView } from './components/SupportDashboardView';
 export { SupportAnalyticsView } from './components/SupportAnalyticsView';
 export { SupportResultsView } from './components/SupportResultsView';
 export { SupportUsersView } from './components/users/SupportUsersView';
-export { Seccion, SeccionesNav } from './components/Seccion';
+export { Section, SectionsNav } from './components/Section';
 export { SupportStagesView } from './components/flow/SupportStagesView';
 export { SupportAnalyticsFilters } from './components/analytics/SupportAnalyticsFilters';
 export { useSupportDashboard } from './hooks/useSupportDashboard';

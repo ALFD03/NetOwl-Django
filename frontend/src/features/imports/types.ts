@@ -37,3 +37,12 @@ export interface OdooFieldGroup {
   label: string;
   fields: OdooField[];
 }
+
+/** Los logs de etapa de soporte ya cargados, por mes. */
+export interface LoadedLogs {
+  logs: number;
+  tickets: number;
+  since: string | null;
+  until: string | null;
+  by_month: { month: string; logs: number }[];
+}

@@ -27,8 +27,8 @@ export function formatHours(hours: number): string {
 
   // Rounding to the minute can reach zero from a real duration; the reading is
   // "shorter than a minute", never "no time at all".
-  const minutos = Math.round(hours * 60);
-  return minutos < 1 ? '<1 min' : `${minutos} min`;
+  const minutes = Math.round(hours * 60);
+  return minutes < 1 ? '<1 min' : `${minutes} min`;
 }
 
 /** The one stage's row out of a `time_by_stage` list. */
@@ -244,16 +244,16 @@ export function buildStageTimeDimensionRows(
  * Tone of a variation against the baseline. Faster is better in every stage
  * this section covers, so the scale is one-directional; ±15 % is noise.
  */
-export function changeColor(variacionPct: number): MetricColor {
-  if (variacionPct <= -15) return 'green';
-  if (variacionPct >= 15) return 'red';
+export function changeColor(variationPct: number): MetricColor {
+  if (variationPct <= -15) return 'green';
+  if (variationPct >= 15) return 'red';
   return 'slate';
 }
 
 /** `-23.4 %` / `+8.1 %`, with the sign kept — it is the whole message. */
-export function formatChange(variacionPct: number): string {
-  const signo = variacionPct > 0 ? '+' : '';
-  return `${signo}${variacionPct.toFixed(1)}%`;
+export function formatChange(variationPct: number): string {
+  const sign = variationPct > 0 ? '+' : '';
+  return `${sign}${variationPct.toFixed(1)}%`;
 }
 
 /**
@@ -269,9 +269,9 @@ export function stageTimeLeaders(rows: CrmStageTimeDimensionRow[]): {
   comparable: boolean;
 } {
   // A value with three exits will top or bottom the ranking on noise alone.
-  const fiables = rows.filter((row) => row.reliable && row.avg > 0);
-  if (fiables.length === 0) return { fast: null, slow: null, comparable: false };
-  if (fiables.length === 1) return { fast: fiables[0], slow: null, comparable: false };
+  const reliable = rows.filter((row) => row.reliable && row.avg > 0);
+  if (reliable.length === 0) return { fast: null, slow: null, comparable: false };
+  if (reliable.length === 1) return { fast: reliable[0], slow: null, comparable: false };
 
-  return { fast: fiables[0], slow: fiables[fiables.length - 1], comparable: true };
+  return { fast: reliable[0], slow: reliable[reliable.length - 1], comparable: true };
 }

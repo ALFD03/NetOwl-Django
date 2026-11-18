@@ -1,9 +1,9 @@
 /** Catálogos › Ventas: la estructura de ventas, los equipos con su gente y sus condiciones, y los objetivos. */
 
-import { Banknote, Briefcase, Building, Crown, MapPin, Plus, Target, TrafficCone, Users } from 'lucide-react';
+import { Banknote, Briefcase, Building, Crown, MapPin, Plus, Target, Users } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { Button, DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
+import { Button, DataTable, EmptyState, NeonContainer, type Column } from '@/shared/ui';
 import { useCatalogs } from '@/features/subscriptions/hooks/useCatalogs';
 import type {
   CatalogSalesTeam,
@@ -15,13 +15,14 @@ import type {
   CatalogsSalesProps,
   SalesRole,
 } from '@/features/subscriptions/types';
-import { CatalogBar, ConfirmarBorrado, CatalogErrorView, actionsColumn, enviar } from './CatalogCommon';
-import { ConditionsForm, RoleConditionsCard } from './RoleConditions';
-import { MembershipForm, OfficeTargetForm, ROL_UI, SiteForm, UnidadForm } from './SalesForms';
-import { TARGET_LEVEL_UI, TargetForm, MonthTargetForm, TrafficLightForm } from './TargetForms';
+import { CatalogBar, ConfirmDelete, CatalogErrorView, actionsColumn } from './CatalogCommon';
+import { RoleConditionsCard } from './RoleConditions';
+import { ROLE_UI } from './SalesForms';
+import { TARGET_LEVEL_UI } from './TargetForms';
 import { TargetsPanel } from './TargetsPanel';
 import { ZonesWithoutTargetPanel } from './ZonesWithoutTarget';
 import { overallTarget } from '../../lib/targets';
+import { SalesFormModals } from './SalesFormModals';
 
 /**
  * Quién vende, cómo cobra y qué se espera de cada parte de la red.
@@ -36,56 +37,42 @@ import { overallTarget } from '../../lib/targets';
  * `carabobo/supervisor`, `aragua/asesor`).
  */
 
-const ESTRUCTURA = 'estructura';
+const STRUCTURE = 'estructura';
 
 /** Las ventas del tramo vigente en `mes`: el más reciente que ya empezó (`coordinadoras_oficina.objetivo_vigente`). */
-function currentTarget(tramos: CatalogOfficeTarget[], mes: string): CatalogOfficeTarget | null {
-  let mejor: CatalogOfficeTarget | null = null;
-  for (const t of tramos) {
-    if (t.since && t.since > mes) continue;
-    if (!mejor || (mejor.since || '') <= (t.since || '')) mejor = t;
+function currentTarget(tiers: CatalogOfficeTarget[], month: string): CatalogOfficeTarget | null {
+  let best: CatalogOfficeTarget | null = null;
+  for (const t of tiers) {
+    if (t.since && t.since > month) continue;
+    if (!best || (best.since || '') <= (t.since || '')) best = t;
   }
-  return mejor;
+  return best;
 }
 
 /** El nombre principal y, en gris, los otros con los que Odoo escribe a la misma persona. */
-function withOthers(principal: string, others: string[]) {
-  if (others.length === 0) return principal;
+function withOthers(main: string, others: string[]) {
+  if (others.length === 0) return main;
   return (
     <>
-      {principal}
+      {main}
       <span className="text-slate-500"> · también «{others.join('», «')}»</span>
     </>
   );
 }
 
-export function SalesView({
-  teams,
-  memberships,
-  people,
-  conditions,
-  newPerson,
-  coordinators,
-  targets,
-  officeTargets,
-  zonesWithoutTarget,
-  monthly_targets: objetivosMes,
-  thresholds,
-  targetsConfig,
-  computedPeriods,
-  knownNodes,
-  zones,
-  sites,
-  states,
-}: CatalogsSalesProps) {
+export function SalesView(props: CatalogsSalesProps) {
+  const {
+    teams, memberships, people, conditions, newPerson, coordinators, targets, officeTargets, zonesWithoutTarget,
+    monthly_targets: monthTargets, thresholds, targetsConfig, computedPeriods, knownNodes, zones, sites,
+  } = props;
   const c = useCatalogs({
-    initialView: newPerson.literal && newPerson.equipo ? `${newPerson.equipo}/${newPerson.role}` : `${ESTRUCTURA}/unidades`,
+    initialView: newPerson.literal && newPerson.equipo ? `${newPerson.equipo}/${newPerson.role}` : `${STRUCTURE}/unidades`,
     newPerson,
     teams,
     sites,
   });
-  const [seccion, sub = ''] = c.vista.split('/');
-  const equipo = teams.find((e) => e.slug === seccion);
+  const [section, sub = ''] = c.view.split('/');
+  const team = teams.find((e) => e.slug === section);
 
   // El general que rige hoy, para decir en los formularios qué se hereda si
   // se deja un valor vacío. La excepción de un mes no cuenta como "heredado"
@@ -96,22 +83,22 @@ export function SalesView({
   // el objetivo cuelga de la zona. La sucursal, en cambio, vale sin catálogo.
   const zoneNames = new Set(zones.map((z) => z.name.toLowerCase()));
   const catalogNodes = knownNodes.filter((n) => zoneNames.has(n.zona.toLowerCase()));
-  const overallWithoutException = (periodo: string) =>
-    overallTarget({ ...targetsConfig, months: {} }, periodo || referenceMonth);
+  const overallWithoutException = (period: string) =>
+    overallTarget({ ...targetsConfig, months: {} }, period || referenceMonth);
 
   // El objetivo de ventas que rige este mes para cada coordinadora: el suyo o el general.
   const currentMonth = new Date().toISOString().slice(0, 7);
   const officeOverall = currentTarget(officeTargets.filter((other) => other.person_id === null), currentMonth);
   const currentOf = (personId: number) =>
     currentTarget(officeTargets.filter((other) => other.person_id === personId), currentMonth) ?? officeOverall;
-  const coordinadorasOficina: CatalogSalesPerson[] = people.filter((p) =>
+  const officeCoordinators: CatalogSalesPerson[] = people.filter((p) =>
     p.memberships.some((m) => m.role === 'coord_oficina'));
 
-  const ofRole = (e: CatalogSalesTeam, rol: SalesRole) =>
-    memberships.filter((m) => m.equipo === e.slug && m.role === rol);
+  const ofRole = (e: CatalogSalesTeam, role: SalesRole) =>
+    memberships.filter((m) => m.equipo === e.slug && m.role === role);
 
-  const membershipColumns = (e: CatalogSalesTeam, rol: SalesRole): Column<CatalogMembership>[] => {
-    const spec = e.roles.find((r) => r.role === rol)!;
+  const membershipColumns = (e: CatalogSalesTeam, role: SalesRole): Column<CatalogMembership>[] => {
+    const spec = e.roles.find((r) => r.role === role)!;
     const columns: Column<CatalogMembership>[] = [
       { header: 'Nombre', accessor: 'name', sortKey: 'name' },
       { header: 'Apellido', accessor: 'last_name', sortKey: 'last_name' },
@@ -152,8 +139,8 @@ export function SalesView({
       });
     }
     if (spec.units) columns.push({ header: 'Unidades', accessor: (row) => row.units.join(', ') || '—' });
-    columns.push(actionsColumn<CatalogMembership>(c.editarPersona, (row) =>
-      c.setBorrando({ kind: 'membresias', id: row.id, name: `${row.name} ${row.last_name} de ${e.name}` })));
+    columns.push(actionsColumn<CatalogMembership>(c.editPerson, (row) =>
+      c.setDeleting({ kind: 'membresias', id: row.id, name: `${row.name} ${row.last_name} de ${e.name}` })));
     return columns;
   };
 
@@ -167,8 +154,8 @@ export function SalesView({
         : <span className="text-slate-500">— nadie</span>),
     },
     { header: 'Zonas', accessor: 'zones', align: 'right', sortKey: 'zones' },
-    actionsColumn<CatalogBusinessUnit>(c.editarUnidad, (row) =>
-      c.setBorrando({ kind: 'coordinadores', id: row.id, name: row.name })),
+    actionsColumn<CatalogBusinessUnit>(c.editUnit, (row) =>
+      c.setDeleting({ kind: 'coordinadores', id: row.id, name: row.name })),
   ];
 
   const siteColumns: Column<CatalogSite>[] = [
@@ -176,8 +163,8 @@ export function SalesView({
     { header: 'Orden', accessor: 'order', align: 'right', sortKey: 'order' },
     { header: 'Equipos', accessor: (row) => row.teams.join(', ') || '—' },
     { header: 'Zonas', accessor: 'zones', align: 'right', sortKey: 'zones' },
-    actionsColumn<CatalogSite>(c.editarSite, (row) =>
-      c.setBorrando({ kind: 'sites', id: row.id, name: row.name })),
+    actionsColumn<CatalogSite>(c.editSite, (row) =>
+      c.setDeleting({ kind: 'sites', id: row.id, name: row.name })),
   ];
 
   const officeTargetColumns: Column<CatalogOfficeTarget>[] = [
@@ -196,8 +183,8 @@ export function SalesView({
       accessor: (row) => `${row.updated_at}${row.updated_by ? ` · ${row.updated_by}` : ''}`,
       sortKey: 'updated_at',
     },
-    actionsColumn<CatalogOfficeTarget>(c.editarObjetivoOficina, (row) =>
-      c.setBorrando({
+    actionsColumn<CatalogOfficeTarget>(c.editOfficeTarget, (row) =>
+      c.setDeleting({
         kind: 'objetivos_oficina',
         id: row.id,
         name: `el objetivo de ventas ${row.person ? `de ${row.person}` : 'general'} ${row.since ? `desde ${row.since}` : 'desde siempre'}`,
@@ -205,49 +192,49 @@ export function SalesView({
   ];
 
   // --- Pestañas y altas de la sección abierta ---
-  const pestanasEstructura = [
-    { key: `${ESTRUCTURA}/unidades`, label: `Unidades de negocio (${coordinators.length})`, icon: Crown },
-    { key: `${ESTRUCTURA}/sites`, label: `Sites (${sites.length})`, icon: MapPin },
-    { key: `${ESTRUCTURA}/objetivos`, label: 'Objetivos', icon: Target },
+  const structureTabs = [
+    { key: `${STRUCTURE}/unidades`, label: `Unidades de negocio (${coordinators.length})`, icon: Crown },
+    { key: `${STRUCTURE}/sites`, label: `Sites (${sites.length})`, icon: MapPin },
+    { key: `${STRUCTURE}/objetivos`, label: 'Objetivos', icon: Target },
   ];
-  const teamTabs = equipo
+  const teamTabs = team
     ? [
-      ...equipo.roles.map((r) => ({
-        key: `${equipo.slug}/${r.role}`,
-        label: `${ROL_UI[r.role].corto} (${ofRole(equipo, r.role).length})`,
+      ...team.roles.map((r) => ({
+        key: `${team.slug}/${r.role}`,
+        label: `${ROLE_UI[r.role].short} (${ofRole(team, r.role).length})`,
         icon: Briefcase,
       })),
     ]
     : [];
 
-  const activeRole = equipo?.roles.find((r) => r.role === sub);
-  const alta = (() => {
-    if (seccion === ESTRUCTURA && sub === 'unidades') return { label: 'Nueva unidad', onClick: c.nuevaUnidad };
-    if (seccion === ESTRUCTURA && sub === 'sites') return { label: 'Nuevo site', onClick: c.nuevoSite };
-    if (equipo && activeRole) {
+  const activeRole = team?.roles.find((r) => r.role === sub);
+  const create = (() => {
+    if (section === STRUCTURE && sub === 'unidades') return { label: 'Nueva unidad', onClick: c.newUnit };
+    if (section === STRUCTURE && sub === 'sites') return { label: 'Nuevo site', onClick: c.newSite };
+    if (team && activeRole) {
       return {
         label: `Registrar ${activeRole.role_label.toLowerCase()}`,
-        onClick: () => c.nuevaPersonaVacia(activeRole.role, equipo.id, equipo.slug),
+        onClick: () => c.newEmptyPerson(activeRole.role, team.id, team.slug),
       };
     }
     return undefined;
   })();
 
   const firstSubscreen = (slug: string) =>
-    (slug === ESTRUCTURA ? 'unidades' : (teams.find((e) => e.slug === slug)?.roles[0]?.role ?? ''));
+    (slug === STRUCTURE ? 'unidades' : (teams.find((e) => e.slug === slug)?.roles[0]?.role ?? ''));
 
   // Lo que pide el formulario de la persona abierta.
-  const teamDraft = teams.find((e) => e.slug === c.personaDraft?.equipo);
-  const rolDraft = teamDraft?.roles.find((r) => r.role === c.personaDraft?.role);
+  const teamDraft = teams.find((e) => e.slug === c.personDraft?.equipo);
+  const roleDraft = teamDraft?.roles.find((r) => r.role === c.personDraft?.role);
 
   return (
     <AppLayout
       toolbar={
         <CatalogBar
-          activa={seccion}
-          onChange={(key) => c.setVista(`${key}/${firstSubscreen(key)}`)}
-          pestanas={[
-            { key: ESTRUCTURA, label: 'Estructura de ventas', icon: Building },
+          active={section}
+          onChange={(key) => c.setView(`${key}/${firstSubscreen(key)}`)}
+          tabs={[
+            { key: STRUCTURE, label: 'Estructura de ventas', icon: Building },
             ...teams.map((e) => ({ key: e.slug, label: e.name, icon: Users })),
           ]}
         />
@@ -256,34 +243,34 @@ export function SalesView({
       <CatalogErrorView c={c} />
 
       <CatalogBar
-        activa={c.vista}
-        onChange={c.setVista}
-        alta={alta}
-        pestanas={seccion === ESTRUCTURA ? pestanasEstructura : teamTabs}
+        active={c.view}
+        onChange={c.setView}
+        create={create}
+        tabs={section === STRUCTURE ? structureTabs : teamTabs}
       />
 
-      {seccion === ESTRUCTURA && sub === 'unidades' && (
+      {section === STRUCTURE && sub === 'unidades' && (
         <NeonContainer title="Unidades de negocio" subtitle="Los grupos de zonas de Unidades de negocio, los equipos que los trabajan y quien los lleva" icon={<Crown className="h-5 w-5" />} theme="green" noPadding>
           <DataTable columns={unitColumns} data={coordinators} searchable searchPlaceholder="Buscar unidad..." />
         </NeonContainer>
       )}
 
-      {seccion === ESTRUCTURA && sub === 'sites' && (
+      {section === STRUCTURE && sub === 'sites' && (
         <NeonContainer title="Sites" subtitle="Sedes regionales: lo que muestra el Sales Report, con las zonas y los equipos que las trabajan" icon={<MapPin className="h-5 w-5" />} theme="slate" noPadding>
           <DataTable columns={siteColumns} data={sites} searchable searchPlaceholder="Buscar site..." />
         </NeonContainer>
       )}
 
-      {equipo && activeRole && (
+      {team && activeRole && (
         <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
           <NeonContainer
-            title={`${activeRole.role_label} · ${equipo.name}`}
-            subtitle={ROL_UI[activeRole.role].description}
+            title={`${activeRole.role_label} · ${team.name}`}
+            subtitle={ROLE_UI[activeRole.role].description}
             icon={<Briefcase className="h-5 w-5" />}
             theme="green"
             noPadding
           >
-            {ofRole(equipo, activeRole.role).length === 0 ? (
+            {ofRole(team, activeRole.role).length === 0 ? (
               <EmptyState
                 title="Nadie registrado con este rol"
                 description="Notificaciones lista los nombres de las suscripciones que el directorio todavía no reconoce."
@@ -291,8 +278,8 @@ export function SalesView({
               />
             ) : (
               <DataTable
-                columns={membershipColumns(equipo, activeRole.role)}
-                data={ofRole(equipo, activeRole.role)}
+                columns={membershipColumns(team, activeRole.role)}
+                data={ofRole(team, activeRole.role)}
                 searchable
                 searchPlaceholder="Buscar persona..."
               />
@@ -301,56 +288,56 @@ export function SalesView({
 
           <NeonContainer
             title="Condiciones de pago"
-            subtitle={`Cómo cobra ${activeRole.role_label.toLowerCase()} en ${equipo.name}`}
+            subtitle={`Cómo cobra ${activeRole.role_label.toLowerCase()} en ${team.name}`}
             icon={<Banknote className="h-5 w-5" />}
             theme="purple"
             noPadding
           >
             <RoleConditionsCard
-              condicion={conditions.find((x) => x.equipo === equipo.slug && x.role === activeRole.role)}
-              onEditar={c.editarCondicion}
-              onRestablecer={(row) => {
+              condition={conditions.find((x) => x.equipo === team.slug && x.role === activeRole.role)}
+              onEdit={c.editCondition}
+              onReset={(row) => {
                 if (row.id === null) {
                   c.setError('Ese rol ya paga con las condiciones de la política.');
                   return;
                 }
-                c.setBorrando({ kind: 'condiciones_equipo', id: row.id, name: `las condiciones editadas de ${row.role_label} en ${equipo.name} (vuelve a la política)` });
+                c.setDeleting({ kind: 'condiciones_equipo', id: row.id, name: `las condiciones editadas de ${row.role_label} en ${team.name} (vuelve a la política)` });
               }}
             />
           </NeonContainer>
         </div>
       )}
 
-      {seccion === ESTRUCTURA && sub === 'objetivos' && (
+      {section === STRUCTURE && sub === 'objetivos' && (
         <>
           <TargetsPanel
             targets={targets}
-            monthTargets={objetivosMes}
+            monthTargets={monthTargets}
             thresholds={thresholds}
             config={targetsConfig}
-            periodos={computedPeriods}
+            periods={computedPeriods}
             zones={zones}
-            nodos={knownNodes}
-            onEditarGeneral={c.editarObjetivo}
-            onNewTarget={() => c.nuevoObjetivo('zona')}
-            onEditTarget={c.editarObjetivo}
+            nodes={knownNodes}
+            onEditGeneral={c.editTarget}
+            onNewTarget={() => c.newTarget('zona')}
+            onEditTarget={c.editTarget}
             onDeleteTarget={(row) =>
-              c.setBorrando({
+              c.setDeleting({
                 kind: 'objetivos',
                 id: row.id,
                 name: `el objetivo ${TARGET_LEVEL_UI[row.level].label.toLowerCase()} ${row.entity} ${row.since ? `desde ${row.since}` : 'desde siempre'}`.replace(/\s+/g, ' '),
               })}
-            onMonthException={(periodo, existente) =>
-              (existente ? c.editarObjetivoMes(existente) : c.nuevoObjetivoMes(periodo))}
+            onMonthException={(period, existing) =>
+              (existing ? c.editMonthTarget(existing) : c.newMonthTarget(period))}
             onDeleteMonth={(row) =>
-              c.setBorrando({ kind: 'objetivos_mes', id: row.id, name: `la excepción de ${row.period}` })}
-            onEditTrafficLight={() => c.editarSemaforo(thresholds)}
+              c.setDeleting({ kind: 'objetivos_mes', id: row.id, name: `la excepción de ${row.period}` })}
+            onEditTrafficLight={() => c.editTrafficLight(thresholds)}
           />
 
           <ZonesWithoutTargetPanel
             rows={zonesWithoutTarget}
             zones={zones}
-            onDelete={(row) => c.setBorrando({
+            onDelete={(row) => c.setDeleting({
               kind: 'zonas_sin_objetivo',
               id: row.id,
               name: `el tramo sin objetivo de ${row.zona} (vuelve a medirse en todos sus meses)`,
@@ -365,7 +352,7 @@ export function SalesView({
             theme="purple"
             noPadding
             headerAction={
-              <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => c.nuevoObjetivoOficina()}>
+              <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => c.newOfficeTarget()}>
                 Nuevo objetivo de ventas
               </Button>
             }
@@ -383,183 +370,18 @@ export function SalesView({
         </>
       )}
 
-      <Modal
-        isOpen={Boolean(c.personaDraft && teamDraft && rolDraft)}
-        onClose={c.cerrarFormularios}
-        title={c.personaDraft?.id ? 'Editar persona del equipo' : 'Registrar persona en el equipo'}
-        subtitle="Cómo aparece en las suscripciones: es contra esto que Comisiones reparte cada venta"
-        icon={<Briefcase className="h-5 w-5 text-emerald-400" />}
-        theme="green"
-      >
-        {c.personaDraft && teamDraft && rolDraft && (
-          <MembershipForm
-            value={c.personaDraft}
-            teams={teams}
-            equipo={teamDraft}
-            role={rolDraft}
-            people={people}
-            memberships={memberships}
-            sites={sites}
-            units={coordinators}
-            saving={c.guardando}
-            onChange={(patch) => c.setPersonaDraft({ ...c.personaDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('membresias', { ...c.personaDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
+      <SalesFormModals
+        c={c}
+        props={props}
+        teamDraft={teamDraft}
+        roleDraft={roleDraft}
+        officeCoordinators={officeCoordinators}
+        overallToday={overallToday}
+        overallWithoutException={overallWithoutException}
+        catalogNodes={catalogNodes}
+      />
 
-      <Modal
-        isOpen={Boolean(c.condicionDraft)}
-        onClose={c.cerrarFormularios}
-        title="Condiciones de pago"
-        subtitle="Solo afecta a lo que se calcule después"
-        icon={<Banknote className="h-5 w-5 text-purple-400" />}
-        theme="purple"
-      >
-        {c.condicionDraft && (
-          <ConditionsForm
-            value={c.condicionDraft}
-            saving={c.guardando}
-            onChange={(patch) => c.setCondicionDraft({ ...c.condicionDraft!, ...patch })}
-            onSubmit={(e) =>
-              enviar(e, () => c.guardar('condiciones_equipo', {
-                team_id: c.condicionDraft!.team_id,
-                role: c.condicionDraft!.role,
-                params: c.condicionDraft!.params,
-              }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(c.objetivoOficinaDraft)}
-        onClose={c.cerrarFormularios}
-        title={c.objetivoOficinaDraft?.id ? 'Editar objetivo de ventas' : 'Nuevo objetivo de ventas'}
-        subtitle="Cuántas ventas al mes se esperan de una coordinadora de oficina"
-        icon={<Building className="h-5 w-5 text-purple-400" />}
-        theme="purple"
-        size="md"
-      >
-        {c.objetivoOficinaDraft && (
-          <OfficeTargetForm
-            value={c.objetivoOficinaDraft}
-            coordinadoras={coordinadorasOficina}
-            saving={c.guardando}
-            onChange={(patch) => c.setObjetivoOficinaDraft({ ...c.objetivoOficinaDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('objetivos_oficina', { ...c.objetivoOficinaDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(c.unidadDraft)}
-        onClose={c.cerrarFormularios}
-        title={c.unidadDraft?.id ? 'Editar unidad de negocio' : 'Nueva unidad de negocio'}
-        subtitle="Un conjunto de zonas y los equipos de ventas que lo trabajan"
-        icon={<Crown className="h-5 w-5 text-emerald-400" />}
-        theme="green"
-      >
-        {c.unidadDraft && (
-          <UnidadForm
-            value={c.unidadDraft}
-            zones={zones}
-            teams={teams}
-            saving={c.guardando}
-            onChange={(patch) => c.setUnidadDraft({ ...c.unidadDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('coordinadores', { ...c.unidadDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(c.siteDraft)}
-        onClose={c.cerrarFormularios}
-        title={c.siteDraft?.id ? 'Editar site' : 'Nuevo site'}
-        subtitle="Sede regional, sus zonas y los equipos que la trabajan"
-        icon={<MapPin className="h-5 w-5 text-slate-300" />}
-        theme="slate"
-      >
-        {c.siteDraft && (
-          <SiteForm
-            value={c.siteDraft}
-            zones={zones}
-            teams={teams}
-            saving={c.guardando}
-            onChange={(patch) => c.setSiteDraft({ ...c.siteDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('sites', { ...c.siteDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(c.objetivoDraft)}
-        onClose={c.cerrarFormularios}
-        title={c.objetivoDraft?.id ? 'Editar objetivo' : 'Nuevo objetivo'}
-        subtitle="Meta de crecimiento y churn máximo. No cambia ningún análisis: solo metas, cumplimiento y colores"
-        icon={<Target className="h-5 w-5 text-purple-400" />}
-        theme="purple"
-      >
-        {c.objetivoDraft && (
-          <TargetForm
-            value={c.objetivoDraft}
-            entities={{ zona: zones, site: sites, estado: states, coordinador: coordinators }}
-            nodos={catalogNodes}
-            general={overallToday}
-            saving={c.guardando}
-            onChange={(patch) => c.setObjetivoDraft({ ...c.objetivoDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('objetivos', { ...c.objetivoDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(c.objetivoMesDraft)}
-        onClose={c.cerrarFormularios}
-        title={c.objetivoMesDraft?.id ? 'Editar excepción del mes' : 'Excepción de un mes'}
-        subtitle="Sustituye al objetivo general solo en ese mes"
-        icon={<Target className="h-5 w-5 text-sky-400" />}
-        theme="blue"
-        size="md"
-      >
-        {c.objetivoMesDraft && (
-          <MonthTargetForm
-            value={c.objetivoMesDraft}
-            periodos={computedPeriods}
-            general={overallWithoutException(c.objetivoMesDraft.period)}
-            saving={c.guardando}
-            onChange={(patch) => c.setObjetivoMesDraft({ ...c.objetivoMesDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('objetivos_mes', { ...c.objetivoMesDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
-
-      <Modal
-        isOpen={Boolean(c.semaforoDraft)}
-        onClose={c.cerrarFormularios}
-        title="Semáforo de objetivos"
-        subtitle="Desde dónde es verde, amarillo o rojo cada métrica, igual en todo el módulo"
-        icon={<TrafficCone className="h-5 w-5 text-amber-400" />}
-        theme="yellow"
-      >
-        {c.semaforoDraft && (
-          <TrafficLightForm
-            value={c.semaforoDraft}
-            saving={c.guardando}
-            onChange={(patch) => c.setSemaforoDraft({ ...c.semaforoDraft!, ...patch })}
-            onSubmit={(e) => enviar(e, () => c.guardar('semaforo', { ...c.semaforoDraft }))}
-            onClose={c.cerrarFormularios}
-          />
-        )}
-      </Modal>
-
-      <ConfirmarBorrado c={c} />
+      <ConfirmDelete c={c} />
     </AppLayout>
   );
 }

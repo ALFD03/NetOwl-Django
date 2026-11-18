@@ -21,6 +21,6 @@ class SessionStore(DBStore):
     @classmethod
     def get_model_class(cls):
         """El modelo de sesion del entorno, en vez del de `django.contrib.sessions`."""
-        from services.config.models import SesionEntorno
+        from services.config.models import SchemaSession
 
-        return SesionEntorno
+        return SchemaSession

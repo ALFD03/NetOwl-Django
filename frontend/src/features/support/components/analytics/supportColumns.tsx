@@ -75,7 +75,7 @@ export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
  */
 export const SUPPORT_DEPARTMENT_COLUMNS: Column<SupportDepartmentRow>[] = [
   { header: 'Departamento', accessor: (r) => <StickyLabel>{r.name}</StickyLabel>, sortKey: 'name', sticky: true },
-  { header: 'Personas', accessor: (r) => int(r.personas), align: 'right', sortKey: 'personas' },
+  { header: 'Personas', accessor: (r) => int(r.people), align: 'right', sortKey: 'personas' },
   ...SUPPORT_DIMENSION_COLUMNS.filter(
     (col) => col.header !== 'Valor' && !col.header.includes('Mediana (h)'),
   ),
@@ -86,7 +86,7 @@ export const SUPPORT_ZONE_COLUMNS: Column<SupportZoneRow>[] = [
   { header: 'Site', accessor: (r) => r.site, sortKey: 'site' },
   { header: 'Tecnología', accessor: (r) => <span className="text-slate-400">{r.technology}</span>, sortKey: 'technology' },
   { header: 'Tickets', accessor: (r) => int(r.totalTickets), align: 'right', sortKey: 'totalTickets' },
-  { header: 'Activos', accessor: (r) => (r.withoutPopulation ? <span className="text-slate-600">Sin datos</span> : int(r.totalSuscriptores)), align: 'right', sortKey: 'totalSuscriptores' },
+  { header: 'Activos', accessor: (r) => (r.withoutPopulation ? <span className="text-slate-600">Sin datos</span> : int(r.totalSubscribers)), align: 'right', sortKey: 'totalSubscribers' },
   {
     header: 'Incidencia %',
     accessor: (r) =>

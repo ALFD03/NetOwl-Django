@@ -6,11 +6,11 @@ import type {
   CrmAnalyticsProps,
   CrmDimensionValue,
   CrmHealthCard,
-  CrmHistoricoRow,
+  CrmHistoryRow,
   CrmRankingEntry,
 } from '../types';
 
-const EMPTY_GLOBAL: CrmHistoricoRow = {};
+const EMPTY_GLOBAL: CrmHistoryRow = {};
 
 /**
  * Picks the dimension value that leads `key`.

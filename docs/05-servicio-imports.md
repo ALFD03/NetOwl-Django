@@ -63,7 +63,7 @@ Dos propiedades:
 No hay bandera aparte ni columna nueva: cancelar pone `cancelled` en `status` y
 eso es todo. De ahí salen las dos mitades solas:
 
-- **En cola** — la fila deja de estar abierta, y `ejecutar_analisis` ya
+- **En cola** — la fila deja de estar abierta, y `run_analysis` ya
   descartaba los jobs cerrados al recogerlos (la guarda que protege de una
   reentrega tras reiniciar el worker). El análisis no llega a empezar.
 - **En curso** — `JobConsole` lo ve en su siguiente volcado y levanta
@@ -95,7 +95,7 @@ que haberla creado esquema por esquema; hoy cada esquema tiene la suya.)
 | `module_lock(module)` | Context manager: toma el turno de escritura del módulo o cede con `None` |
 | `JobConsole(job)` | Buffer de stdout que además vuelca el log a la fila |
 | `mark_started` / `mark_finished` | Transiciones de estado |
-| `cancelar_job(job, username)` | Cierra la fila como `cancelled`. No habla con Celery |
+| `cancel_job(job, username)` | Cierra la fila como `cancelled`. No habla con Celery |
 | `AnalysisCancelled` | La levanta el punto de control de `JobConsole`; no es un error del análisis |
 | `launch_analysis(request, module, needs_period=True)` | Valida, rechaza el duplicado, crea y encola. Devuelve la respuesta ya hecha |
 
@@ -125,7 +125,7 @@ usuario note diferencia.
   análisis. Un corte de conexión guardando el log no puede tirar un cálculo de
   varios minutos. Reintenta una vez tras `close_old_connections()`, porque el
   fallo típico es una conexión caducada entre dos volcados.
-- `progreso(hechos, total, etiqueta)` **sí fuerza** el volcado: es lo que mueve
+- `progress(done, total, label)` **sí fuerza** el volcado: es lo que mueve
   la barra y llega una vez por día calculado, no una por línea impresa.
 - `abort_if_cancelled()` es el **punto de control de la cancelación**: relee
   sólo el estado de la fila y levanta `AnalysisCancelled` si ya está en
@@ -144,7 +144,7 @@ usuario note diferencia.
 2. `duplicate_job(...)`: si ya hay uno abierto del mismo módulo y periodo,
    responde **409** con `status: "running"` y **el job vivo adjunto**, para que
    el cliente se enganche a él en vez de lanzar otro.
-3. Crea el `AnalysisJob`, encola `imports.ejecutar_analisis` y responde **202**
+3. Crea el `AnalysisJob`, encola `imports.run_analysis` y responde **202**
    con `status: "queued"` y el job.
 
 > El `import` de `tasks` está diferido dentro de la función: `tasks` importa
@@ -174,7 +174,7 @@ tarea.**
 | `_run_support` | `run_support_analysis(job.periodo)` |
 | `_run_lifetime` | `run_lifetime_analysis()`: el lifetime de las bajas de todos los meses desde enero de 2026. En el job guarda el resumen (meses, bajas, fecha de corte); la página lee el mes elegido con `get_lifetime_month` |
 
-### `ejecutar_analisis(job_id)`
+### `run_analysis(job_id)`
 
 ```
 close_old_connections()

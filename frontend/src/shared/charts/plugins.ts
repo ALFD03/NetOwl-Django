@@ -54,8 +54,8 @@ export const centerTextPlugin: Plugin<'doughnut'> = {
     const customText = typedChart.options.customCenterText;
     if (!customText) return;
 
-    const meta = chart.getDatasetMeta(0);
-    const firstElement = meta.data[0] as ArcElement | undefined;
+    const goal = chart.getDatasetMeta(0);
+    const firstElement = goal.data[0] as ArcElement | undefined;
     if (!firstElement) return;
 
     const { x, y, innerRadius } = firstElement.getProps(['x', 'y', 'innerRadius'], true);

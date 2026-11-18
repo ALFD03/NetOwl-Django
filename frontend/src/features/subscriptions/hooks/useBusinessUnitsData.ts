@@ -24,12 +24,12 @@ import { useMemo } from 'react';
 import {
   aggregateNodes, calcCommercial, type CommercialMetrics, type CommercialNode,
 } from '../lib/commercial';
-import type { Proyeccion } from '@/shared/lib/projection';
+import type { Projection } from '@/shared/lib/projection';
 
 import {
   matchesFilter, filterThreshold, metricValues, type MetricFilter,
 } from '../lib/metricFilter';
-import { measuredNodes, type Meta, type TargetsResolver } from '../lib/targets';
+import { measuredNodes, type Goal, type TargetsResolver } from '../lib/targets';
 
 export interface BusinessUnitNode extends CommercialNode {
   type?: 'FTTH' | 'RF' | string;
@@ -49,7 +49,7 @@ export interface BusinessUnitGroup {
     churn_rate: number;
     total_nodes: number;
     /** Meta del grupo: desde el coordinador, o la general si es el bloque RF. */
-    meta: Meta;
+    goal: Goal;
   };
 }
 
@@ -63,7 +63,7 @@ export interface FtthSummary extends CommercialMetrics {
   churn_rate: number;
   gross_adds: number;
   total_nodes: number;
-  meta: Meta;
+  goal: Goal;
 }
 
 interface UseBusinessUnitsDataParams {
@@ -75,11 +75,11 @@ interface UseBusinessUnitsDataParams {
   period: string;
   targets: TargetsResolver;
   /** Los días laborables del corte elegido; el consolidado FTTH proyecta con ellos. */
-  projection?: Proyeccion | null;
+  projection?: Projection | null;
   /** El filtro por crecimiento, churn o proyección, por nodo o por coordinador. */
   metricFilter: MetricFilter;
   /** El consolidado FTTH ya sumado, para quien no ve todas las unidades. */
-  ftthFijo?: FtthNodeTotals | null;
+  ftthFixed?: FtthNodeTotals | null;
 }
 
 /** Un nodo con la suma de los nodos FTTH de toda la empresa en un corte. */
@@ -99,14 +99,14 @@ export function useBusinessUnitsData({
   selectedTech,
   period,
   targets,
-  projection: proyeccion = null,
-  metricFilter: filtroMetrica,
-  ftthFijo = null,
+  projection: projection = null,
+  metricFilter,
+  ftthFixed: ftthFixed = null,
 }: UseBusinessUnitsDataParams) {
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const umbral = filterThreshold(filtroMetrica, proyeccion);
-  const filtersNodes = umbral !== null && filtroMetrica.level === 'zona';
-  const filtersGroups = umbral !== null && filtroMetrica.level === 'grupo';
+  const threshold = filterThreshold(metricFilter, projection);
+  const filtersNodes = threshold !== null && metricFilter.level === 'zone';
+  const filtersGroups = threshold !== null && metricFilter.level === 'group';
 
   const branchList = useMemo(() => {
     const branches = new Set<string>();
@@ -117,8 +117,8 @@ export function useBusinessUnitsData({
   }, [groups]);
 
   const filteredData = useMemo(() => {
-    const cumple = (cifras: Parameters<typeof metricValues>[0], meta: Meta) =>
-      matchesFilter(metricValues(cifras, meta, { projection: proyeccion }), filtroMetrica, umbral);
+    const meets = (figures: Parameters<typeof metricValues>[0], goal: Goal) =>
+      matchesFilter(metricValues(figures, goal, { projection }), metricFilter, threshold);
 
     return groups.flatMap((group) => {
       if (group.is_rf && selectedTech === 'FTTH') return [];
@@ -131,9 +131,9 @@ export function useBusinessUnitsData({
         return (coordinatorMatches || zoneMatches) && branchMatches && techMatches;
       }) ?? []).map((node) => ({
         ...node,
-        meta: targets.meta(period, [node], 'zona_sucursal'),
-        targetSource: targets.origen(period, node, 'growth'),
-      })).filter((node) => !filtersNodes || cumple({ ...node, churn: node.gross_churn_pct }, node.meta));
+        goal: targets.goal(period, [node], 'zona_sucursal'),
+        targetSource: targets.source(period, node, 'growth'),
+      })).filter((node) => !filtersNodes || meets({ ...node, churn: node.gross_churn_pct }, node.goal));
 
       if (filteredNodes.length === 0) return [];
 
@@ -141,8 +141,8 @@ export function useBusinessUnitsData({
       const totals = aggregateNodes(measuredNodes(targets, period, filteredNodes));
       // El bloque RF no es un coordinador: agrupa por tecnología a través de
       // sites y coordinadores, así que se mide contra el general.
-      const meta = targets.meta(period, filteredNodes, group.is_rf ? 'general' : 'coordinador');
-      if (filtersGroups && !cumple({ ...totals, churn: totals.churn_rate }, meta)) return [];
+      const goal = targets.goal(period, filteredNodes, group.is_rf ? 'general' : 'coordinador');
+      if (filtersGroups && !meets({ ...totals, churn: totals.churn_rate }, goal)) return [];
 
       return [{
         ...group,
@@ -150,48 +150,48 @@ export function useBusinessUnitsData({
         dynamic: {
           ...totals,
           total_nodes: filteredNodes.length,
-          meta,
+          goal,
         },
       }];
     });
-  }, [groups, normalizedSearch, selectedBranch, selectedTech, period, targets, filtroMetrica, umbral, filtersNodes, filtersGroups, proyeccion]);
+  }, [groups, normalizedSearch, selectedBranch, selectedTech, period, targets, metricFilter, threshold, filtersNodes, filtersGroups, projection]);
 
   const dynamicFtthSummary = useMemo<FtthSummary>(() => {
     // Con el filtro por coordinador, solo cuentan los que lo cumplen.
-    const coordinadores = filtersGroups ? new Set(filteredData.map((group) => group.coordinator)) : null;
-    const ftthNodes = ftthFijo ? [ftthFijo] : groups.flatMap((group) => {
-      if (group.is_rf || (coordinadores && !coordinadores.has(group.coordinator))) return [];
+    const coordinators = filtersGroups ? new Set(filteredData.map((group) => group.coordinator)) : null;
+    const ftthNodes = ftthFixed ? [ftthFixed] : groups.flatMap((group) => {
+      if (group.is_rf || (coordinators && !coordinators.has(group.coordinator))) return [];
       return group.nodes?.filter((node) => {
         const branchMatches = selectedBranch === 'ALL' || node.sucursal === selectedBranch;
         const searchMatches = !normalizedSearch
           || String(node.zona_sucursal ?? '').toLowerCase().includes(normalizedSearch);
         if (node.type !== 'FTTH' || !branchMatches || !searchMatches) return false;
         if (!filtersNodes) return true;
-        const valores = metricValues(
+        const values = metricValues(
           { ...node, churn: node.gross_churn_pct },
-          targets.meta(period, [node], 'zona_sucursal'),
-          { projection: proyeccion },
+          targets.goal(period, [node], 'zona_sucursal'),
+          { projection },
         );
-        return matchesFilter(valores, filtroMetrica, umbral);
+        return matchesFilter(values, metricFilter, threshold);
       }) ?? [];
     });
 
     // El consolidado tampoco suma las zonas sin objetivo. El ya sumado que
     // recibe una cuenta restringida (`ftthFijo`) no se puede descomponer.
     const totals = aggregateNodes(measuredNodes(targets, period, ftthNodes));
-    const meta = targets.meta(period, ftthNodes, 'general');
+    const goal = targets.goal(period, ftthNodes, 'general');
 
     return {
       ...totals,
       gross_adds: totals.new_subs + totals.reactivations - totals.churned,
-      total_nodes: ftthFijo ? ftthFijo.total_nodes : ftthNodes.length,
-      meta,
-      ...calcCommercial(totals.active_start, totals.active_end, meta, {
+      total_nodes: ftthFixed ? ftthFixed.total_nodes : ftthNodes.length,
+      goal,
+      ...calcCommercial(totals.active_start, totals.active_end, goal, {
         new_subs: totals.new_subs,
-        projection: proyeccion,
+        projection,
       }),
     };
-  }, [groups, selectedBranch, normalizedSearch, period, targets, proyeccion, filteredData, filtroMetrica, umbral, filtersNodes, filtersGroups, ftthFijo]);
+  }, [groups, selectedBranch, normalizedSearch, period, targets, projection, filteredData, metricFilter, threshold, filtersNodes, filtersGroups, ftthFixed]);
 
   return { branchList, filteredData, dynamicFtthSummary };
 }

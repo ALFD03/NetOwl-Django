@@ -16,14 +16,14 @@ import { buildTiersChartData, tierColor, tiersChartOptions } from '../../charts/
 import type { LifetimeMonth, LifetimeTier } from '../../types';
 
 /** El % acumulado al cerrar el tramo que termina en `dias`, si se llegó a él. */
-const accumulatedUntil = (tramos: LifetimeTier[], dias: number): number | null =>
-  tramos.find((t) => t.until === dias)?.cumulative_pct ?? null;
+const accumulatedUntil = (tiers: LifetimeTier[], days: number): number | null =>
+  tiers.find((t) => t.until === days)?.cumulative_pct ?? null;
 
 const formatPct = (value: number | null): string => (value === null ? '—' : `${value}%`);
 
 /** Una fila por tramo: su barra, cuántas bajas y qué parte ya se había ido. */
 function TierDistribution({ buckets }: { buckets: LifetimeTier[] }) {
-  const maximo = Math.max(1, ...buckets.map((t) => t.pct));
+  const max = Math.max(1, ...buckets.map((t) => t.pct));
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-[88px_1fr_64px_64px] gap-3 px-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
@@ -47,7 +47,7 @@ function TierDistribution({ buckets }: { buckets: LifetimeTier[] }) {
               <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-800">
                 <div
                   className="h-full rounded-full transition-all"
-                  style={{ width: `${(t.pct / maximo) * 100}%`, backgroundColor: color }}
+                  style={{ width: `${(t.pct / max) * 100}%`, backgroundColor: color }}
                 />
               </div>
               <span className="w-12 text-right text-xs tabular-nums text-slate-300">{formatInteger(t.churned)}</span>
@@ -62,14 +62,14 @@ function TierDistribution({ buckets }: { buckets: LifetimeTier[] }) {
 }
 
 export function LifetimeTiersPanel({ lifetime }: { lifetime: LifetimeMonth }) {
-  const tramos = lifetime.buckets;
+  const tiers = lifetime.buckets;
   const total = lifetime.summary.n;
 
-  const chartData = useMemo(() => buildTiersChartData(tramos), [tramos]);
-  const chartOptions = useMemo(() => tiersChartOptions(tramos), [tramos]);
+  const chartData = useMemo(() => buildTiersChartData(tiers), [tiers]);
+  const chartOptions = useMemo(() => tiersChartOptions(tiers), [tiers]);
 
-  const pico = tramos.reduce<LifetimeTier | null>(
-    (mayor, t) => (!mayor || t.churned > mayor.churned ? t : mayor),
+  const peak = tiers.reduce<LifetimeTier | null>(
+    (largest, t) => (!largest || t.churned > largest.churned ? t : largest),
     null,
   );
 
@@ -92,21 +92,21 @@ export function LifetimeTiersPanel({ lifetime }: { lifetime: LifetimeMonth }) {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <MetricCard
               label="Se fueron en su primer mes"
-              value={formatPct(accumulatedUntil(tramos, 30))}
+              value={formatPct(accumulatedUntil(tiers, 30))}
               color="red"
               subValue="0–30 días desde la instalación"
             />
             <MetricCard
               label="En sus primeros 90 días"
-              value={formatPct(accumulatedUntil(tramos, 90))}
+              value={formatPct(accumulatedUntil(tiers, 90))}
               color="yellow"
               subValue="Acumulado hasta los 90 días"
             />
             <MetricCard
               label="Tramo con más bajas"
-              value={pico ? pico.bucket : '—'}
+              value={peak ? peak.bucket : '—'}
               color="blue"
-              subValue={pico ? `${formatInteger(pico.churned)} bajas · ${pico.pct}%` : undefined}
+              subValue={peak ? `${formatInteger(peak.churned)} bajas · ${peak.pct}%` : undefined}
             />
           </div>
 
@@ -115,7 +115,7 @@ export function LifetimeTiersPanel({ lifetime }: { lifetime: LifetimeMonth }) {
               <BarChart data={chartData} options={chartOptions} className="h-80 w-full" />
             </div>
             <div className="xl:col-span-2">
-              <TierDistribution buckets={tramos} />
+              <TierDistribution buckets={tiers} />
             </div>
           </div>
         </div>

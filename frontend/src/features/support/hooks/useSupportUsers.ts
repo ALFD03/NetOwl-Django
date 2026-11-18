@@ -57,25 +57,25 @@ interface Args {
  * devuelve todo junto.
  */
 export function useSupportUsers({ departments, newUser }: Args) {
-  const [vista, setVista] = useState<DirectoryView>(() => (newUser ? 'usuarios' : 'pendientes'));
-  const [guardando, setGuardando] = useState(false);
+  const [view, setView] = useState<DirectoryView>(() => (newUser ? 'usuarios' : 'pendientes'));
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // `?new_user=` viene de la pestaña de pendientes: el formulario abre con
   // el literal ya escrito para no obligar a copiar a mano una cadena que tiene
   // que coincidir carácter por carácter. Estado inicial y no efecto: el valor
   // llega con la primera pintada y no vuelve a cambiar mientras la página viva.
-  const [usuarioDraft, setUsuarioDraft] = useState<UserDraft | null>(
+  const [userDraft, setUserDraft] = useState<UserDraft | null>(
     () => (newUser ? { ...emptyUser(departments), odoo_name: newUser } : null),
   );
-  const [departamentoDraft, setDepartamentoDraft] = useState<DepartmentDraft | null>(null);
-  const [borrando, setBorrando] = useState<{ type: DirectoryKind; id: number; name: string } | null>(null);
+  const [departmentDraft, setDepartmentDraft] = useState<DepartmentDraft | null>(null);
+  const [deleting, setDeleting] = useState<{ type: DirectoryKind; id: number; name: string } | null>(null);
 
-  const nuevoUsuarioVacio = () => setUsuarioDraft(emptyUser(departments));
-  const crearUsuarioDesde = (odoo_name: string) =>
-    setUsuarioDraft({ ...emptyUser(departments), odoo_name });
-  const editarUsuario = (row: SupportUser) =>
-    setUsuarioDraft({
+  const newEmptyUser = () => setUserDraft(emptyUser(departments));
+  const createUserFrom = (odoo_name: string) =>
+    setUserDraft({ ...emptyUser(departments), odoo_name });
+  const editUser = (row: SupportUser) =>
+    setUserDraft({
       id: row.id,
       odoo_name: row.odoo_name,
       name: row.name,
@@ -83,90 +83,90 @@ export function useSupportUsers({ departments, newUser }: Args) {
       department_id: row.department_id,
       start_date: row.start_date ?? '',
       departmentEditable: row.timeline.length <= 1,
-      maxStartDate: limiteIngreso(row),
+      maxStartDate: inflowLimit(row),
     });
 
-  const [cambioDraft, setCambioDraft] = useState<ChangeDraft | null>(null);
-  const [bajaDraft, setBajaDraft] = useState<DeactivateDraft | null>(null);
+  const [changeDraft, setChangeDraft] = useState<ChangeDraft | null>(null);
+  const [churnDraft, setChurnDraft] = useState<DeactivateDraft | null>(null);
   // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
-  const formOpen = Boolean(usuarioDraft || departamentoDraft || cambioDraft || bajaDraft || borrando);
+  const formOpen = Boolean(userDraft || departmentDraft || changeDraft || churnDraft || deleting);
   useOnOpen(formOpen, () => setError(null));
 
   // Sin fecha de partida: hoy puede caer antes del último cambio, y un valor
   // ya puesto que el servidor rechaza confunde más que un campo vacío. El
   // calendario ofrece «Hoy» a un clic cuando es válido.
-  const abrirCambio = (user: SupportUser) => setCambioDraft({ user, department_id: null, date: '' });
-  const abrirBaja = (user: SupportUser) => setBajaDraft({ user, date: '' });
+  const openChange = (user: SupportUser) => setChangeDraft({ user, department_id: null, date: '' });
+  const openChurn = (user: SupportUser) => setChurnDraft({ user, date: '' });
 
-  const nuevoDepartamento = () => setDepartamentoDraft({ name: '' });
+  const newDepartment = () => setDepartmentDraft({ name: '' });
   // `usuarios` se queda fuera a propósito: es un conteo que calcula el
   // servidor, no un campo del formulario.
-  const editarDepartamento = (row: SupportDepartment) =>
-    setDepartamentoDraft({ id: row.id, name: row.name });
+  const editDepartment = (row: SupportDepartment) =>
+    setDepartmentDraft({ id: row.id, name: row.name });
 
-  const cerrarFormularios = () => {
-    setUsuarioDraft(null);
-    setDepartamentoDraft(null);
-    setCambioDraft(null);
-    setBajaDraft(null);
+  const closeForms = () => {
+    setUserDraft(null);
+    setDepartmentDraft(null);
+    setChangeDraft(null);
+    setChurnDraft(null);
   };
 
-  const guardar = async (tipo: DirectoryKind, payload: DirectoryPayload) => {
-    setGuardando(true);
+  const save = async (kind: DirectoryKind, payload: DirectoryPayload) => {
+    setSaving(true);
     setError(null);
     try {
-      await supportApi.saveDirectorio(tipo, payload);
-      cerrarFormularios();
+      await supportApi.saveDirectoryEntry(kind, payload);
+      closeForms();
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo guardar el registro.'));
       return false;
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
   /** Un cambio de departamento, su deshacer, una baja o una reactivación. */
-  const mover = async (
-    accion: UserMove,
+  const move = async (
+    action: UserMove,
     id: number,
     extra: { department_id?: number | null; date?: string } = {},
   ) => {
-    setGuardando(true);
+    setSaving(true);
     setError(null);
     try {
-      await supportApi.moverUsuario(accion, id, extra);
-      cerrarFormularios();
+      await supportApi.moveUser(action, id, extra);
+      closeForms();
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo registrar el movimiento.'));
       return false;
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
-  const confirmarBorrado = async () => {
-    if (!borrando) return;
-    setGuardando(true);
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setSaving(true);
     setError(null);
     try {
-      await supportApi.deleteDirectorio(borrando.type, borrando.id);
-      setBorrando(null);
+      await supportApi.deleteDirectoryEntry(deleting.type, deleting.id);
+      setDeleting(null);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo eliminar el registro.'));
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
   return {
-    vista, setVista, guardando, error, setError,
-    usuarioDraft, setUsuarioDraft, nuevoUsuarioVacio, editarUsuario, crearUsuarioDesde,
-    departamentoDraft, setDepartamentoDraft, nuevoDepartamento, editarDepartamento,
-    cambioDraft, setCambioDraft, abrirCambio, bajaDraft, setBajaDraft, abrirBaja, mover,
-    borrando, setBorrando, confirmarBorrado,
-    cerrarFormularios, guardar,
+    view, setView, saving, error, setError,
+    userDraft, setUserDraft, newEmptyUser, editUser, createUserFrom,
+    departmentDraft, setDepartmentDraft, newDepartment, editDepartment,
+    changeDraft, setChangeDraft, openChange, churnDraft, setChurnDraft, openChurn, move,
+    deleting, setDeleting, confirmDelete,
+    closeForms, save,
   };
 }
 
@@ -176,12 +176,12 @@ export function useSupportUsers({ departments, newUser }: Args) {
  * El departamento es obligatorio en el servidor, así que abrir el formulario
  * sin ninguno seleccionado solo consigue que el primer intento falle.
  */
-function emptyUser(departamentos: SupportDepartment[]): UserDraft {
+function emptyUser(departments: SupportDepartment[]): UserDraft {
   return {
     odoo_name: '',
     name: '',
     last_name: '',
-    department_id: departamentos[0]?.id ?? null,
+    department_id: departments[0]?.id ?? null,
     start_date: '',
     departmentEditable: true,
     maxStartDate: null,
@@ -189,7 +189,7 @@ function emptyUser(departamentos: SupportDepartment[]): UserDraft {
 }
 
 /** El tope de `fecha_ingreso` que aplica el servidor, para no ofrecer días que rechazaría. */
-function limiteIngreso(row: SupportUser): string | null {
+function inflowLimit(row: SupportUser): string | null {
   const firstChange = row.timeline.find((p) => p.since)?.since;
   if (firstChange) {
     const [a, m, d] = firstChange.split('-').map(Number);

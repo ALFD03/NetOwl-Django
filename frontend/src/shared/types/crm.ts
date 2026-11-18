@@ -6,7 +6,7 @@
  * re-exports them, so `@/features/crm/types` stays the single import site.
  */
 
-export interface CrmHistoricoRow {
+export interface CrmHistoryRow {
   report_period?: string;
   total_opportunities?: number;
   won?: number;
@@ -161,9 +161,9 @@ export interface CrmStageTimeRow {
 
 /**
  * A closed monthly cohort as sent to the Results page — the same fields as
- * `CrmHistoricoRow`, but the endpoint guarantees every one of them.
+ * `CrmHistoryRow`, but the endpoint guarantees every one of them.
  */
-export type CrmClose = Required<CrmHistoricoRow>;
+export type CrmClose = Required<CrmHistoryRow>;
 
 export interface CrmEffectivenessRow {
   stage?: string;
@@ -179,7 +179,7 @@ export interface CrmEffectivenessRow {
  * branch / campaign / seller — so it carries the same measures, minus the
  * period itself.
  */
-export type CrmMetrics = Omit<CrmHistoricoRow, 'report_period'>;
+export type CrmMetrics = Omit<CrmHistoryRow, 'report_period'>;
 
 /** A row of `crm_dimensiones_historico`, as the analytics endpoint sends it. */
 export interface CrmDimensionRow {

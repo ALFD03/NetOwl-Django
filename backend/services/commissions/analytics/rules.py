@@ -49,7 +49,7 @@ from core.utils import normalize_text
 
 # `Estado de la factura` de la suscripcion, normalizado. Odoo escribe «Nada que
 # facturar»; la politica lo llama «nada por facturar».
-FACTURADO = "facturado por completo"
+BILLED = "facturado por completo"
 TO_INVOICE = "por facturar"
 NOTHING_TO_INVOICE = frozenset({"nada que facturar", "nada por facturar"})
 
@@ -65,17 +65,17 @@ VALID_PAYMENTS = frozenset({"pagado", "en proceso de pago"})
 NO_SERVICE_STATES = frozenset({"cotizacion", "instalacion"})
 
 
-def one_month_later(dia: date) -> date:
+def one_month_later(day: date) -> date:
     """El mismo dia del mes siguiente, recortado al ultimo si ese mes es mas corto.
 
     >>> un_mes_despues(date(2026, 8, 31)), un_mes_despues(date(2026, 12, 15))
     (datetime.date(2026, 9, 30), datetime.date(2027, 1, 15))
     """
-    anio, mes = (dia.year + 1, 1) if dia.month == 12 else (dia.year, dia.month + 1)
-    return date(anio, mes, min(dia.day, calendar.monthrange(anio, mes)[1]))
+    year, month = (day.year + 1, 1) if day.month == 12 else (day.year, day.month + 1)
+    return date(year, month, min(day.day, calendar.monthrange(year, month)[1]))
 
 
-def cancelled_within_first_month(instalada: date | None, cancelada: date | None) -> bool:
+def cancelled_within_first_month(installed: date | None, cancelled: date | None) -> bool:
     """Si se cancelo antes de cumplir un mes desde su instalacion.
 
     Un mes es hasta el mismo dia del mes siguiente: instalada el 1 de septiembre
@@ -89,15 +89,15 @@ def cancelled_within_first_month(instalada: date | None, cancelada: date | None)
     >>> cancelada_sin_cumplir_un_mes(date(2026, 9, 1), None)
     False
     """
-    return instalada is not None and cancelada is not None and cancelada < one_month_later(instalada)
+    return installed is not None and cancelled is not None and cancelled < one_month_later(installed)
 
 VALID = "valida"
 UNPAID = "no_pagada"
 REVIEW = "revision"
-EXCLUIDA = "excluida"
+EXCLUDED = "excluida"
 # Instalada en los dias promocionales del mes sin adelantar la mensualidad: su
 # comision es del periodo siguiente, y en este solo se informa.
-DIFERIDA = "diferida"
+DEFERRED = "diferida"
 
 # Las decisiones a mano (`RevisionComision.decision`). Las dos primeras
 # resuelven una venta en revision; las otras dos, en el primer periodo, si una
@@ -107,9 +107,9 @@ DONT_COUNT = "no_contar"
 ALREADY_PAID = "ya_pagada"
 NORMAL = "normal"
 
-# Lo que le paso a la primera mensualidad (`situacion`).
+# Lo que le paso a la primera mensualidad (`situation`).
 PAID = "pagada"
-IMPAGA = "impaga"
+INVOICE_UNPAID = "impaga"
 IN_DRAFT = "borrador"
 CANCELLED = "cancelada"
 NO_INVOICE = "sin_factura"
@@ -123,7 +123,7 @@ PLAN_CHANGE_REASON = "Por facturar con cambio de plan: la primera mensualidad, d
 
 
 @dataclass(frozen=True)
-class Factura:
+class Invoice:
     """Una factura de la suscripcion, tal y como la lee `invoices.read_invoices`.
 
     `plan` es el plan de catalogo de sus lineas; vacio si no factura ninguno
@@ -132,24 +132,24 @@ class Factura:
     `fecha_pago` y `actualizado_el` tambien, y vacias si el export no las traia.
     """
 
-    numero: str
-    estado: str
-    estado_pago: str
-    creado_el: str
+    number: str
+    state: str
+    payment_state: str
+    created_at: str
     plan: str
-    fecha_pago: str = ""
-    actualizado_el: str = ""
+    paid_date: str = ""
+    updated_at: str = ""
 
 
-def _cancelled(factura: Factura) -> bool:
-    return normalize_text(factura.estado) == INVOICE_CANCELLED
+def _cancelled(invoice: Invoice) -> bool:
+    return normalize_text(invoice.state) == INVOICE_CANCELLED
 
 
-def _reversed(factura: Factura) -> bool:
-    return normalize_text(factura.estado_pago) == PAYMENT_REVERSED
+def _reversed(invoice: Invoice) -> bool:
+    return normalize_text(invoice.payment_state) == PAYMENT_REVERSED
 
 
-def first_installment(facturas: list[Factura], hasta: date | None = None) -> Factura | None:
+def first_installment(invoices: list[Invoice], until: date | None = None) -> Invoice | None:
     """La factura que dice si se pago la primera mensualidad.
 
     Con `hasta` (el corte del periodo) solo se miran las facturas creadas hasta
@@ -184,26 +184,26 @@ def first_installment(facturas: list[Factura], hasta: date | None = None) -> Fac
     >>> primera_mensualidad([f("B", "2026-11-01")], hasta=date(2026, 10, 22)) is None
     True
     """
-    limite = hasta.isoformat() if hasta else None
-    mensualidades = sorted(
-        (f for f in facturas if f.plan and not (limite and f.creado_el and f.creado_el[:10] > limite)),
-        key=lambda f: (f.creado_el == "", f.creado_el, f.numero),
+    limit = until.isoformat() if until else None
+    installments = sorted(
+        (f for f in invoices if f.plan and not (limit and f.created_at and f.created_at[:10] > limit)),
+        key=lambda f: (f.created_at == "", f.created_at, f.number),
     )
-    if not mensualidades:
+    if not installments:
         return None
-    current = [f for f in mensualidades if not _cancelled(f)]
+    current = [f for f in installments if not _cancelled(f)]
     if not current:
-        return mensualidades[-1]
-    elegida = current[0]
-    mes = elegida.creado_el[:7]
-    for siguiente in current[1:]:
-        if not mes or siguiente.creado_el[:7] != mes or not _reversed(elegida):
+        return installments[-1]
+    chosen = current[0]
+    month = chosen.created_at[:7]
+    for next_row in current[1:]:
+        if not month or next_row.created_at[:7] != month or not _reversed(chosen):
             break
-        elegida = siguiente
-    return elegida
+        chosen = next_row
+    return chosen
 
 
-def days_until_cancel(factura: Factura | None) -> int | None:
+def days_until_cancel(invoice: Invoice | None) -> int | None:
     """Dias entre el `Creado el` de una factura y su «Última actualización el».
 
     En una cancelada, la ultima actualizacion es la cancelacion. `None` si
@@ -214,18 +214,18 @@ def days_until_cancel(factura: Factura | None) -> int | None:
     >>> dias_hasta_cancelar(Factura("F", "Cancelado", "", "2026-09-05", "P")) is None
     True
     """
-    if factura is None or not factura.creado_el or not factura.actualizado_el:
+    if invoice is None or not invoice.created_at or not invoice.updated_at:
         return None
     try:
-        creada = date.fromisoformat(factura.creado_el[:10])
-        actualizada = date.fromisoformat(factura.actualizado_el[:10])
+        created = date.fromisoformat(invoice.created_at[:10])
+        updated = date.fromisoformat(invoice.updated_at[:10])
     except ValueError:
         return None
-    return (actualizada - creada).days
+    return (updated - created).days
 
 
-def situacion(factura: Factura | None) -> str:
-    """`PAID`, `IMPAGA`, `IN_DRAFT`, `CANCELLED` o `NO_INVOICE`.
+def situation(invoice: Invoice | None) -> str:
+    """`PAID`, `INVOICE_UNPAID`, `IN_DRAFT`, `CANCELLED` o `NO_INVOICE`.
 
     Solo cuenta como pagada una factura con el pago «Pagado» o «En proceso de
     pago»: «Pagado parcialmente», «Revertido» y «Sin pagar» no. **Una factura en
@@ -241,25 +241,25 @@ def situacion(factura: Factura | None) -> str:
     >>> situacion(f("Cancelado", "Pagado")), situacion(f("Registrado", "Pagado"))
     ('cancelada', 'pagada')
     """
-    if factura is None:
+    if invoice is None:
         return NO_INVOICE
-    estado = normalize_text(factura.estado)
-    if estado == INVOICE_CANCELLED:
+    state = normalize_text(invoice.state)
+    if state == INVOICE_CANCELLED:
         return CANCELLED
-    if normalize_text(factura.estado_pago) in VALID_PAYMENTS:
+    if normalize_text(invoice.payment_state) in VALID_PAYMENTS:
         return PAID
-    return IN_DRAFT if estado == INVOICE_DRAFT else IMPAGA
+    return IN_DRAFT if state == INVOICE_DRAFT else INVOICE_UNPAID
 
 
-def clasificar(
-    estado_factura: str,
-    factura: Factura | None,
-    plan_suscripcion: str = "",
-    gratuita: bool = False,
+def classify(
+    invoice_state: str,
+    invoice: Invoice | None,
+    subscription_plan: str = "",
+    free: bool = False,
     decision: str | None = None,
-    estado_suscripcion: str = "",
+    subscription_state: str = "",
     cancelled_without_month: bool = False,
-    corte: date | None = None,
+    cutoff: date | None = None,
 ) -> tuple[str, str]:
     """`(clasificacion, motivo)` de una venta del periodo.
 
@@ -329,98 +329,98 @@ def clasificar(
     >>> clasificar("Facturado por completo", g("2026-10-23"), corte=date(2026, 10, 22))
     ('no_pagada', 'Primera mensualidad pagada el 23/10/2026, después del corte del 22/10/2026')
     """
-    if normalize_text(estado_suscripcion) in NO_SERVICE_STATES:
-        return EXCLUIDA, f"En «{estado_suscripcion}»: todavía no es un servicio"
+    if normalize_text(subscription_state) in NO_SERVICE_STATES:
+        return EXCLUDED, f"En «{subscription_state}»: todavía no es un servicio"
     if cancelled_without_month:
-        return EXCLUIDA, "Se canceló sin cumplir un mes activa"
+        return EXCLUDED, "Se canceló sin cumplir un mes activa"
     if decision == "contar":
         return VALID, "Decisión manual: contarla"
     if decision == "no_contar":
-        return EXCLUIDA, "Decisión manual: no contarla"
+        return EXCLUDED, "Decisión manual: no contarla"
 
-    pago = situacion(factura)
-    estado = normalize_text(estado_factura)
-    paid_late = pago == PAID and corte is not None and not paid_until(factura, corte)
+    payment = situation(invoice)
+    state = normalize_text(invoice_state)
+    paid_late = payment == PAID and cutoff is not None and not paid_until(invoice, cutoff)
     if paid_late:
-        pago = IMPAGA
+        payment = INVOICE_UNPAID
 
-    if gratuita:
-        if pago == PAID:
+    if free:
+        if payment == PAID:
             return REVIEW, "Pasó a plan gratuito, pero su primera mensualidad está pagada"
-        return EXCLUIDA, "Pasó a plan gratuito: no paga comisión"
+        return EXCLUDED, "Pasó a plan gratuito: no paga comisión"
 
-    if pago == PAID:
-        plan_change = plan_suscripcion and normalize_text(plan_suscripcion) != normalize_text(factura.plan)
-        if estado == TO_INVOICE and plan_change:
+    if payment == PAID:
+        plan_change = subscription_plan and normalize_text(subscription_plan) != normalize_text(invoice.plan)
+        if state == TO_INVOICE and plan_change:
             return VALID, PLAN_CHANGE_REASON
-        if normalize_text(factura.estado) == INVOICE_DRAFT:
+        if normalize_text(invoice.state) == INVOICE_DRAFT:
             return VALID, "Primera mensualidad pagada (la factura sigue en borrador)"
         return VALID, "Primera mensualidad pagada"
     if paid_late:
-        dia = payment_date(factura)[0]
-        cuando = f" el {date.fromisoformat(dia).strftime('%d/%m/%Y')}" if dia else ""
-        return UNPAID, f"Primera mensualidad pagada{cuando}, después del corte del {corte.strftime('%d/%m/%Y')}"
-    if pago == IMPAGA:
-        return UNPAID, f"Primera mensualidad «{factura.estado_pago or 'sin estado de pago'}»"
-    if pago == IN_DRAFT:
+        day = payment_date(invoice)[0]
+        when = f" el {date.fromisoformat(day).strftime('%d/%m/%Y')}" if day else ""
+        return UNPAID, f"Primera mensualidad pagada{when}, después del corte del {cutoff.strftime('%d/%m/%Y')}"
+    if payment == INVOICE_UNPAID:
+        return UNPAID, f"Primera mensualidad «{invoice.payment_state or 'sin estado de pago'}»"
+    if payment == IN_DRAFT:
         return UNPAID, "Primera mensualidad en borrador: todavía no se emitió"
 
-    if estado in NOTHING_TO_INVOICE:
-        return EXCLUIDA, "Nada que facturar"
-    if pago == CANCELLED:
-        dias = days_until_cancel(factura)
-        if dias is None:
+    if state in NOTHING_TO_INVOICE:
+        return EXCLUDED, "Nada que facturar"
+    if payment == CANCELLED:
+        days = days_until_cancel(invoice)
+        if days is None:
             return REVIEW, "Todas sus mensualidades están canceladas y no se sabe cuándo se canceló la última"
-        if dias >= CANCELLATION_DAYS:
-            return EXCLUIDA, f"Su mensualidad se canceló a los {dias} días de emitida y no tiene otra"
-        return REVIEW, f"Su mensualidad se canceló a los {dias} días de emitida (menos de {CANCELLATION_DAYS}) y no tiene otra"
-    if estado in (FACTURADO, TO_INVOICE):
-        return UNPAID, f"«{estado_factura}» sin factura de mensualidad: sin factura no se paga"
-    return EXCLUIDA, "Sin estado de factura ni factura de mensualidad"
+        if days >= CANCELLATION_DAYS:
+            return EXCLUDED, f"Su mensualidad se canceló a los {days} días de emitida y no tiene otra"
+        return REVIEW, f"Su mensualidad se canceló a los {days} días de emitida (menos de {CANCELLATION_DAYS}) y no tiene otra"
+    if state in (BILLED, TO_INVOICE):
+        return UNPAID, f"«{invoice_state}» sin factura de mensualidad: sin factura no se paga"
+    return EXCLUDED, "Sin estado de factura ni factura de mensualidad"
 
 
 # --- Tramos ----------------------------------------------------------------------
 
-def validate_advisor_tiers(tramos: Any) -> list[dict[str, float]]:
+def validate_advisor_tiers(tiers: Any) -> list[dict[str, float]]:
     """Los tramos del asesor, comprobados y ordenados. Levanta `ValueError`.
 
     Cada tramo vale desde `desde` ventas hasta el siguiente: el primero tiene
     que empezar en 0 y no puede haber dos con el mismo inicio. `descontar` no
     puede pasar de `desde`, o el tramo pagaria ventas negativas.
     """
-    if not isinstance(tramos, list) or not tramos:
+    if not isinstance(tiers, list) or not tiers:
         raise ValueError("Los tramos del asesor no pueden quedar vacíos.")
-    limpios = []
-    for tramo in tramos:
+    clean = []
+    for tier in tiers:
         try:
-            desde = int(tramo["desde"])
-            monto = float(tramo["monto"])
-            descontar = int(tramo.get("descontar") or 0)
+            since = int(tier["desde"])
+            amount = float(tier["monto"])
+            discount = int(tier.get("descontar") or 0)
         except (KeyError, TypeError, ValueError):
             raise ValueError("Cada tramo del asesor necesita «desde», «monto» y «descontar» numéricos.") from None
-        if desde < 0 or monto < 0 or descontar < 0:
+        if since < 0 or amount < 0 or discount < 0:
             raise ValueError("Los tramos del asesor no admiten valores negativos.")
-        if descontar > desde:
-            raise ValueError(f"El tramo desde {desde} ventas no puede descontar {descontar}.")
-        limpios.append({"desde": desde, "monto": monto, "descontar": descontar})
-    limpios.sort(key=lambda t: t["desde"])
-    if limpios[0]["desde"] != 0:
+        if discount > since:
+            raise ValueError(f"El tramo desde {since} ventas no puede descontar {discount}.")
+        clean.append({"desde": since, "monto": amount, "descontar": discount})
+    clean.sort(key=lambda t: t["desde"])
+    if clean[0]["desde"] != 0:
         raise ValueError("El primer tramo del asesor tiene que empezar en 0 ventas.")
-    if len({t["desde"] for t in limpios}) != len(limpios):
+    if len({t["desde"] for t in clean}) != len(clean):
         raise ValueError("Dos tramos del asesor empiezan en la misma cantidad de ventas.")
-    return limpios
+    return clean
 
 
-def advisor_tier(ventas: int, tramos: list[dict[str, float]]) -> dict[str, float]:
+def advisor_tier(sales: int, tiers: list[dict[str, float]]) -> dict[str, float]:
     """El tramo en el que cae una cantidad de ventas (el ultimo que empieza en o antes)."""
-    elegido = tramos[0]
-    for tramo in tramos:
-        if tramo["desde"] <= ventas:
-            elegido = tramo
-    return elegido
+    chosen = tiers[0]
+    for tier in tiers:
+        if tier["desde"] <= sales:
+            chosen = tier
+    return chosen
 
 
-def advisor_payment(ventas: int, tramos: list[dict[str, float]]) -> tuple[dict[str, float], int, float]:
+def advisor_payment(sales: int, tiers: list[dict[str, float]]) -> tuple[dict[str, float], int, float]:
     """`(tramo, ventas pagadas, monto)` de un asesor con `ventas` residenciales.
 
     >>> T = validar_tramos_asesor([{"desde": 0, "monto": 0, "descontar": 0},
@@ -429,12 +429,12 @@ def advisor_payment(ventas: int, tramos: list[dict[str, float]]) -> tuple[dict[s
     >>> [pago_asesor(n, T)[2] for n in (5, 6, 19, 20, 21, 25, 26)]
     [0.0, 5.0, 70.0, 120.0, 147.0, 175.0, 208.0]
     """
-    tramo = advisor_tier(ventas, tramos)
-    pagadas = max(0, ventas - int(tramo["descontar"]))
-    return tramo, pagadas, round(pagadas * float(tramo["monto"]), 2)
+    tier = advisor_tier(sales, tiers)
+    paid = max(0, sales - int(tier["descontar"]))
+    return tier, paid, round(paid * float(tier["monto"]), 2)
 
 
-def goal_bonus(ventas: int, tramos: list[dict[str, float]]) -> tuple[dict[str, float] | None, float]:
+def goal_bonus(sales: int, tiers: list[dict[str, float]]) -> tuple[dict[str, float] | None, float]:
     """`(tramo, monto)` del bono por meta de un asesor con `ventas` residenciales.
 
     El tramo es el ultimo que empieza en o antes de `ventas`; por debajo del
@@ -449,23 +449,23 @@ def goal_bonus(ventas: int, tramos: list[dict[str, float]]) -> tuple[dict[str, f
     >>> [bono_meta(n, CARABOBO)[1] for n in (29, 30, 45, 51)]
     [0.0, 120.0, 200.0, 250.0]
     """
-    elegido = None
-    for tramo in sorted(tramos, key=lambda t: t["desde"]):
-        if tramo["desde"] <= ventas:
-            elegido = tramo
-    return elegido, round(float(elegido["monto"]), 2) if elegido else 0.0
+    chosen = None
+    for tier in sorted(tiers, key=lambda t: t["desde"]):
+        if tier["desde"] <= sales:
+            chosen = tier
+    return chosen, round(float(chosen["monto"]), 2) if chosen else 0.0
 
 
 # --- El periodo ---------------------------------------------------------------------
 
-# En que parte de la ventana de un periodo se instalo una venta (`tramo`).
+# En que parte de la ventana de un periodo se instalo una venta (`tier`).
 PREVIOUS_PROMO = "promo_anterior"
 REGULAR = "regular"
 PROMO = "promo"
 MANUAL = "manual"
 
 
-def tramo(instalada: date, inicio: date, inicio_promo: date) -> str:
+def tier(installed: date, start: date, promo_start: date) -> str:
     """En que parte de la ventana de un periodo cae una instalacion.
 
     La ventana va del inicio de los dias promocionales del mes anterior al
@@ -481,12 +481,12 @@ def tramo(instalada: date, inicio: date, inicio_promo: date) -> str:
     >>> [tramo(date(2026, m, d), date(2026, 8, 25), date(2026, 9, 25)) for m, d in ((8, 31), (9, 1), (9, 24), (9, 25))]
     ['promo_anterior', 'regular', 'regular', 'promo']
     """
-    if instalada < inicio_promo.replace(day=1):
+    if installed < promo_start.replace(day=1):
         return PREVIOUS_PROMO
-    return PROMO if instalada >= inicio_promo else REGULAR
+    return PROMO if installed >= promo_start else REGULAR
 
 
-def payment_date(factura: Factura | None) -> tuple[str, str]:
+def payment_date(invoice: Invoice | None) -> tuple[str, str]:
     """`(dia, fuente)`: hasta cuando se sabe que estaba pagada una factura pagada.
 
     La «Fecha del último pago» si el export la trae. Si no, la «Última
@@ -504,20 +504,20 @@ def payment_date(factura: Factura | None) -> tuple[str, str]:
     >>> fecha_del_pago(Factura("F", "Registrado", "Sin pagar", "2026-10-01", "P"))
     ('', '')
     """
-    if situacion(factura) != PAID:
+    if situation(invoice) != PAID:
         return "", ""
-    for valor, fuente in ((factura.fecha_pago, "pago"), (factura.actualizado_el, "actualizacion"), (factura.creado_el, "creacion")):
-        if valor:
-            return valor[:10], fuente
+    for value, source in ((invoice.paid_date, "pago"), (invoice.updated_at, "actualizacion"), (invoice.created_at, "creacion")):
+        if value:
+            return value[:10], source
     return "", ""
 
 
-def paid_until(factura: Factura | None, corte: date) -> bool:
+def paid_until(invoice: Invoice | None, cutoff: date) -> bool:
     """Si la factura estaba pagada el dia `corte` (incluido), segun `payment_date`.
 
     >>> f = Factura("F", "Registrado", "Pagado", "2026-10-01", "P", "2026-10-07")
     >>> pagada_hasta(f, date(2026, 10, 22)), pagada_hasta(f, date(2026, 10, 6))
     (True, False)
     """
-    dia, _ = payment_date(factura)
-    return bool(dia) and dia <= corte.isoformat()
+    day, _ = payment_date(invoice)
+    return bool(day) and day <= cutoff.isoformat()

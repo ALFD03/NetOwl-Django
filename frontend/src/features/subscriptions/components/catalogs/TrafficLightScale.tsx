@@ -12,118 +12,118 @@ import { formatTarget } from '../../lib/targets';
 export type TrafficLightMetric = 'crecimiento' | 'churn' | 'cumplimiento';
 
 interface Tier {
-  tono: 'red' | 'yellow' | 'green';
+  tone: 'red' | 'yellow' | 'green';
   since: number;
   until: number;
-  texto: string;
+  text: string;
 }
 
-const TIER_COLOR: Record<Tier['tono'], { barra: string; chip: string; punto: string }> = {
-  red: { barra: 'bg-rose-500/80', chip: 'text-rose-300', punto: 'bg-rose-500' },
-  yellow: { barra: 'bg-amber-400/85', chip: 'text-amber-300', punto: 'bg-amber-400' },
-  green: { barra: 'bg-emerald-500/85', chip: 'text-emerald-300', punto: 'bg-emerald-500' },
+const TIER_COLOR: Record<Tier['tone'], { bar: string; chip: string; dot: string }> = {
+  red: { bar: 'bg-rose-500/80', chip: 'text-rose-300', dot: 'bg-rose-500' },
+  yellow: { bar: 'bg-amber-400/85', chip: 'text-amber-300', dot: 'bg-amber-400' },
+  green: { bar: 'bg-emerald-500/85', chip: 'text-emerald-300', dot: 'bg-emerald-500' },
 };
 
-const TONE_NAME: Record<Tier['tono'], string> = { red: 'Rojo', yellow: 'Amarillo', green: 'Verde' };
+const TONE_NAME: Record<Tier['tone'], string> = { red: 'Rojo', yellow: 'Amarillo', green: 'Verde' };
 
 /** Un número a medio escribir (`NaN`) se dibuja como 0 en vez de romper la barra. */
-const finito = (n: number): number => (Number.isFinite(n) ? n : 0);
+const finite = (n: number): number => (Number.isFinite(n) ? n : 0);
 
 /**
  * Los tres tramos de la métrica sobre un rango de dibujo con margen a los dos
  * lados, para que ningún color quede reducido a una raya.
  */
-function tramos(metrica: TrafficLightMetric, verdeBruto: number, amarilloBruto: number) {
-  const verde = finito(verdeBruto);
-  const amarillo = finito(amarilloBruto);
+function tiers(metric: TrafficLightMetric, rawGreen: number, rawYellow: number) {
+  const green = finite(rawGreen);
+  const yellow = finite(rawYellow);
   const f = formatTarget;
 
-  if (metrica === 'churn') {
-    // Menos es mejor: verde desde 0 hasta `verde`, amarillo hasta `amarillo`.
-    const hasta = Math.max(amarillo, verde) + Math.max(Math.abs(amarillo - verde), 2);
+  if (metric === 'churn') {
+    // Menos es mejor: verde desde 0 hasta `green`, amarillo hasta `yellow`.
+    const until = Math.max(yellow, green) + Math.max(Math.abs(yellow - green), 2);
     return {
-      desde: 0,
-      hasta,
-      marcas: [verde, amarillo],
-      tramos: [
-        { tono: 'green', since: 0, until: verde, texto: `≤ ${f(verde)}` },
-        { tono: 'yellow', since: verde, until: amarillo, texto: `${f(verde)} – ${f(amarillo)}` },
-        { tono: 'red', since: amarillo, until: hasta, texto: `> ${f(amarillo)}` },
+      start: 0,
+      end: until,
+      marks: [green, yellow],
+      bands: [
+        { tone: 'green', since: 0, until: green, text: `≤ ${f(green)}` },
+        { tone: 'yellow', since: green, until: yellow, text: `${f(green)} – ${f(yellow)}` },
+        { tone: 'red', since: yellow, until, text: `> ${f(yellow)}` },
       ] as Tier[],
     };
   }
 
-  // Más es mejor: rojo por debajo de `amarillo`, amarillo hasta `verde`, verde desde `verde`.
-  const hueco = Math.max(Math.abs(verde - amarillo), metrica === 'cumplimiento' ? 20 : 2);
-  const desde = metrica === 'cumplimiento' ? 0 : Math.min(amarillo, verde) - hueco;
-  const hasta = Math.max(verde, amarillo) + hueco;
+  // Más es mejor: rojo por debajo de `yellow`, amarillo hasta `green`, verde desde `green`.
+  const gap = Math.max(Math.abs(green - yellow), metric === 'cumplimiento' ? 20 : 2);
+  const since = metric === 'cumplimiento' ? 0 : Math.min(yellow, green) - gap;
+  const end = Math.max(green, yellow) + gap;
   return {
-    desde,
-    hasta,
-    marcas: [amarillo, verde],
-    tramos: [
-      { tono: 'red', since: desde, until: amarillo, texto: `< ${f(amarillo)}` },
-      { tono: 'yellow', since: amarillo, until: verde, texto: `${f(amarillo)} – ${f(verde)}` },
-      { tono: 'green', since: verde, until: hasta, texto: `≥ ${f(verde)}` },
+    start: since,
+    end,
+    marks: [yellow, green],
+    bands: [
+      { tone: 'red', since, until: yellow, text: `< ${f(yellow)}` },
+      { tone: 'yellow', since: yellow, until: green, text: `${f(yellow)} – ${f(green)}` },
+      { tone: 'green', since: green, until: end, text: `≥ ${f(green)}` },
     ] as Tier[],
   };
 }
 
 export interface TrafficLightScaleProps {
-  metrica: TrafficLightMetric;
-  verde: number;
-  amarillo: number;
+  metric: TrafficLightMetric;
+  green: number;
+  yellow: number;
   className?: string;
 }
 
-export function TrafficLightScale({ metrica, verde, amarillo, className }: TrafficLightScaleProps) {
-  const escala = tramos(metrica, verde, amarillo);
-  const rango = escala.hasta - escala.desde || 1;
-  const posicion = (valor: number) =>
-    Math.min(100, Math.max(0, ((valor - escala.desde) / rango) * 100));
+export function TrafficLightScale({ metric, green, yellow, className }: TrafficLightScaleProps) {
+  const scale = tiers(metric, green, yellow);
+  const range = scale.end - scale.start || 1;
+  const position = (value: number) =>
+    Math.min(100, Math.max(0, ((value - scale.start) / range) * 100));
 
   return (
     <div className={cn('space-y-3', className)}>
       {/* Los umbrales, encima de la barra, en su posición real. */}
       <div className="relative h-4">
-        {escala.marcas.map((marca, i) => (
+        {scale.marks.map((mark, i) => (
           <span
             key={i}
             className="absolute -translate-x-1/2 text-[10px] font-black text-white"
-            style={{ left: `${posicion(finito(marca))}%` }}
+            style={{ left: `${position(finite(mark))}%` }}
           >
-            {formatTarget(finito(marca))}
+            {formatTarget(finite(mark))}
           </span>
         ))}
       </div>
 
       <div className="relative">
         <div className="flex h-3 w-full overflow-hidden rounded-full bg-slate-800">
-          {escala.tramos.map((tramo) => (
+          {scale.bands.map((tier) => (
             <div
-              key={tramo.tono}
-              className={cn('h-full transition-all', TIER_COLOR[tramo.tono].barra)}
-              style={{ width: `${Math.max(0, posicion(tramo.until) - posicion(tramo.since))}%` }}
+              key={tier.tone}
+              className={cn('h-full transition-all', TIER_COLOR[tier.tone].bar)}
+              style={{ width: `${Math.max(0, position(tier.until) - position(tier.since))}%` }}
             />
           ))}
         </div>
-        {escala.marcas.map((marca, i) => (
+        {scale.marks.map((mark, i) => (
           <span
             key={i}
             className="absolute -top-1 h-5 w-0.5 -translate-x-1/2 rounded-full bg-white/80"
-            style={{ left: `${posicion(finito(marca))}%` }}
+            style={{ left: `${position(finite(mark))}%` }}
           />
         ))}
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {escala.tramos.map((tramo) => (
-          <div key={tramo.tono} className="flex items-center gap-1.5 text-[10px]">
-            <span className={cn('h-2 w-2 flex-shrink-0 rounded-full', TIER_COLOR[tramo.tono].punto)} />
-            <span className={cn('font-black uppercase tracking-wider', TIER_COLOR[tramo.tono].chip)}>
-              {TONE_NAME[tramo.tono]}
+        {scale.bands.map((tier) => (
+          <div key={tier.tone} className="flex items-center gap-1.5 text-[10px]">
+            <span className={cn('h-2 w-2 flex-shrink-0 rounded-full', TIER_COLOR[tier.tone].dot)} />
+            <span className={cn('font-black uppercase tracking-wider', TIER_COLOR[tier.tone].chip)}>
+              {TONE_NAME[tier.tone]}
             </span>
-            <span className="truncate text-slate-400">{tramo.texto}</span>
+            <span className="truncate text-slate-400">{tier.text}</span>
           </div>
         ))}
       </div>

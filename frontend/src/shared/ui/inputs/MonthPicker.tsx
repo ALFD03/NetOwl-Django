@@ -41,38 +41,38 @@ export function MonthPicker({
   // AppLayout es un contenedor con `overflow-y-auto`, y las tarjetas
   // (NeonContainer) tienen `overflow-hidden`. Un `z-index` alto no salva eso,
   // porque el recorte lo hace el ancestro, no el apilamiento.
-  const [coords, setCoords] = useState<{ top: number; left: number; alto: number } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number; height: number } | null>(null);
 
-  const recolocar = useCallback(() => {
+  const reposition = useCallback(() => {
     const trigger = containerRef.current;
     if (!trigger) return;
     const r = trigger.getBoundingClientRect();
-    const ANCHO = 288; // w-72
-    const MARGEN = 8;
+    const WIDTH = 288; // w-72
+    const MARGIN = 8;
     // Alto real del panel cuando ya esta montado; en la primera pasada todavia
     // no existe, asi que se estima y `useLayoutEffect` corrige tras medirlo.
-    const alto = panelRef.current?.offsetHeight ?? 340;
+    const height = panelRef.current?.offsetHeight ?? 340;
 
     // Si no cabe a la derecha, se alinea por el borde derecho del disparador.
-    const left = Math.max(MARGEN, Math.min(r.left, window.innerWidth - ANCHO - MARGEN));
+    const left = Math.max(MARGIN, Math.min(r.left, window.innerWidth - WIDTH - MARGIN));
 
     // El disparador vive al pie de la pagina y esta no crece: abrir siempre
     // hacia abajo dejaba el panel cortado por el borde de la ventana. Se elige
     // el lado con hueco, y si no hay ninguno se ajusta el alto con scroll
     // propio en vez de desbordar.
-    const abajo = window.innerHeight - r.bottom - MARGEN;
-    const arriba = r.top - MARGEN;
+    const down = window.innerHeight - r.bottom - MARGIN;
+    const up = r.top - MARGIN;
     let top: number;
-    let disponible: number;
-    if (alto <= abajo || abajo >= arriba) {
-      top = r.bottom + MARGEN;
-      disponible = abajo;
+    let available: number;
+    if (height <= down || down >= up) {
+      top = r.bottom + MARGIN;
+      available = down;
     } else {
-      top = Math.max(MARGEN, r.top - MARGEN - alto);
-      disponible = arriba;
+      top = Math.max(MARGIN, r.top - MARGIN - height);
+      available = up;
     }
 
-    setCoords({ top, left, alto: disponible });
+    setCoords({ top, left, height: available });
   }, []);
 
   // Extraer año y mes actual del valor recibido o fecha actual
@@ -102,23 +102,23 @@ export function MonthPicker({
     // Si la pagina se desplaza o cambia de tamano, el panel tiene que seguir
     // al boton: al estar en el <body> no se mueve solo. `true` en la captura
     // para enterarse tambien del scroll de los contenedores internos.
-    const seguir = () => recolocar();
+    const follow = () => reposition();
 
     document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', seguir, true);
-    window.addEventListener('resize', seguir);
+    window.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('scroll', seguir, true);
-      window.removeEventListener('resize', seguir);
+      window.removeEventListener('scroll', follow, true);
+      window.removeEventListener('resize', follow);
     };
-  }, [isOpen, recolocar]);
+  }, [isOpen, reposition]);
 
   // Una vez montado el panel se vuelve a colocar con su alto medido: la
   // primera colocacion se hace a ciegas porque el nodo aun no existe.
   useLayoutEffect(() => {
-    if (isOpen) recolocar();
-  }, [isOpen, recolocar]);
+    if (isOpen) reposition();
+  }, [isOpen, reposition]);
 
   const handleSelectMonth = (monthNum: string) => {
     onChange(`${displayYear}-${monthNum}`);
@@ -153,8 +153,8 @@ export function MonthPicker({
         disabled={disabled}
         onClick={() => {
           if (disabled) return;
-          if (!isOpen) recolocar();
-          setIsOpen((abierto) => !abierto);
+          if (!isOpen) reposition();
+          setIsOpen((wasOpen) => !wasOpen);
         }}
         className={`flex items-center gap-2.5 px-4 py-2 bg-surface-secondary border rounded-xl text-xs font-bold transition-all shadow-md ${
           isOpen
@@ -172,7 +172,7 @@ export function MonthPicker({
       {isOpen && coords && createPortal(
         <div
           ref={panelRef}
-          style={{ top: coords.top, left: coords.left, maxHeight: coords.alto }}
+          style={{ top: coords.top, left: coords.left, maxHeight: coords.height }}
           className="fixed z-[100] w-72 overflow-y-auto bg-surface-secondary border border-slate-700/80 rounded-2xl p-4 shadow-2xl backdrop-blur-xl"
         >
           

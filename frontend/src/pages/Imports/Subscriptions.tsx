@@ -11,14 +11,13 @@ import { useState } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { usePermissions } from '@/shared/hooks/usePermissions';
 import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
-import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { importsApi, type ImportResponse } from '@/shared/lib/api/imports';
-import { catalogsApi } from '@/shared/lib/api/catalogs';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
 import { CatalogBlockModal } from '@/features/imports/components/CatalogBlockModal';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
+import { ImportTypePicker } from '@/features/imports/components/ImportTypePicker';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
-import { extractCatalogBlock, type CatalogBlock } from '@/features/imports/lib/catalog';
+import { useCatalogBlock } from '@/features/imports/hooks/useCatalogBlock';
 import type { OdooField, OdooFieldGroup } from '@/features/imports/types';
 
 type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis' | 'facturas';
@@ -44,13 +43,8 @@ interface ImportSubscriptionsProps {
 
 export default function ImportSubscriptions({ odoo_fields = {} }: ImportSubscriptionsProps) {
   const [importType, setImportType] = useState<SubscriptionImportType>('subscriptions');
-  const [pendingBlock, setBlock] = useState<CatalogBlock | null>(null);
-  const [ignoringName, setIgnoring] = useState<string | null>(null);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const catalogBlock = useCatalogBlock();
   const { canAny } = usePermissions();
-
-  const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.subs);
-  const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.subs);
 
   const fieldGroups: OdooFieldGroup[] = IMPORT_TYPES.map((importKind) => ({
     key: importKind.value,
@@ -58,69 +52,17 @@ export default function ImportSubscriptions({ odoo_fields = {} }: ImportSubscrip
     fields: odoo_fields[importKind.value] ?? [],
   }));
 
-  /**
-   * Intercepta el 409 de "producto sin catalogar" y lo enseña como una
-   * decisión a tomar, no como un fallo. El error se vuelve a lanzar para que
-   * `CsvUploadCard` mantenga su propio mensaje de estado.
-   */
-  const uploadFile = async (file: File) => {
-    try {
-      return await UPLOADERS[importType](file);
-    } catch (error) {
-      const found = extractCatalogBlock(error);
-      if (found) {
-        setCatalogError(null);
-        setBlock(found);
-      }
-      throw error;
-    }
-  };
-
-  /** Saca un producto de la lista de bloqueo declarando que nunca será un plan. */
-  const ignoreProduct = async (productName: string) => {
-    setIgnoring(productName);
-    setCatalogError(null);
-    try {
-      await catalogsApi.guardar('ignorados', { productName, nota: '', area: 'productos' });
-      setBlock((prev) =>
-        prev
-          ? { ...prev, products: prev.products.filter((p) => p.name !== productName) }
-          : prev,
-      );
-    } catch (error: unknown) {
-      setCatalogError(getApiErrorMessage(error, 'No se pudo ignorar el producto.'));
-    } finally {
-      setIgnoring(null);
-    }
-  };
-
   return (
     <AppLayout>
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {canUpload && (
+        {canAny(IMPORT_ACTION_PERMISSIONS.subs) && (
           <CsvUploadCard
             title="Cargar Archivo CSV Subscriptions"
             submitLabel="Iniciar Carga"
             errorMessage="Error al procesar la importación."
-            onUpload={uploadFile}
+            onUpload={catalogBlock.guard((file) => UPLOADERS[importType](file))}
           >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {IMPORT_TYPES.map((option) => (
-                <label
-                  key={option.value}
-                  className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-surface-tertiary p-3 text-xs font-semibold text-slate-200"
-                >
-                  <input
-                    type="radio"
-                    name="importType"
-                    className="text-brand"
-                    checked={importType === option.value}
-                    onChange={() => setImportType(option.value)}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))}
-            </div>
+            <ImportTypePicker options={IMPORT_TYPES} value={importType} onChange={setImportType} />
           </CsvUploadCard>
         )}
 
@@ -141,7 +83,7 @@ export default function ImportSubscriptions({ odoo_fields = {} }: ImportSubscrip
         />
       </div>
 
-      {canRunAnalysis && (
+      {canAny(ANALYSIS_ACTION_PERMISSIONS.subs) && (
         <AnalysisRunnerCard
           jobModule="subs_analysis"
           title="Ejecutar Análisis Mensual de Subscriptions (Churn)"
@@ -162,11 +104,11 @@ export default function ImportSubscriptions({ odoo_fields = {} }: ImportSubscrip
       )}
 
       <CatalogBlockModal
-        block={pendingBlock}
-        onClose={() => setBlock(null)}
-        onIgnore={ignoreProduct}
-        ignoring={ignoringName}
-        error={catalogError}
+        block={catalogBlock.block}
+        onClose={catalogBlock.close}
+        onIgnore={catalogBlock.ignoreProduct}
+        ignoring={catalogBlock.ignoring}
+        error={catalogBlock.error}
       />
     </AppLayout>
   );

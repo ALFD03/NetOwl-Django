@@ -28,23 +28,23 @@ interface Props {
 }
 
 /** El hueco del anillo es estrecho: un nombre largo se corta antes de encogerse ilegible. */
-const recortar = (texto: string, max = 22) => (texto.length > max ? `${texto.slice(0, max - 1)}…` : texto);
+const truncate = (text: string, max = 22) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
-export function CenteredRing({ data, center, onHover: alPasar, minLabelValue = 6, className }: Props) {
-  const [activo, setActive] = useState<number | null>(null);
+export function CenteredRing({ data, center, onHover, minLabelValue = 6, className }: Props) {
+  const [active, setActive] = useState<number | null>(null);
 
   const options = useMemo(() => {
-    const texto = activo === null ? center : alPasar(activo);
+    const text = active === null ? center : onHover(active);
     const base = getDoughnutOptions(
-      { title: recortar(texto.title), value: texto.value },
-      (_evento: ChartEvent, elementos: ActiveElement[]) => {
-        const i = elementos.length ? elementos[0].index : null;
+      { title: truncate(text.title), value: text.value },
+      (_event: ChartEvent, elements: ActiveElement[]) => {
+        const i = elements.length ? elements[0].index : null;
         setActive((prev) => (prev === i ? prev : i));
       },
       { valueSuffix: '%', minLabelValue },
     );
     return { ...base, plugins: { ...base.plugins, legend: { display: false } } };
-  }, [activo, center, alPasar, minLabelValue]);
+  }, [active, center, onHover, minLabelValue]);
 
   return <DoughnutChart data={data} options={options} className={className} />;
 }

@@ -5,7 +5,7 @@ demás dependen de ella (`@endpoint`, vistas de página, matriz de permisos, sub
 
 | Fichero | Contenido |
 |---|---|
-| `models.py` | Matriz de permisos, `Profile`, `PermissionGroup`, `ApiToken`, `SesionEntorno` |
+| `models.py` | Matriz de permisos, `Profile`, `PermissionGroup`, `ApiToken`, `SchemaSession` |
 | `auth.py` | Login con límite de fallos, matriz efectiva, `has_permission`, `can_act_on` |
 | `pages.py` | `page()`, `module_root()`, `root`, `login_page`, `LANDING_ROUTES` |
 | `periods.py` | Periodos visibles sin `can_view_all_periods` |
@@ -14,7 +14,7 @@ demás dependen de ella (`@endpoint`, vistas de página, matriz de permisos, sub
 | `urls.py` | Páginas bajo `/auth/` (`login/`, `users/`, `tokens/`) |
 | `sessions.py` | Backend de sesiones que escribe en la tabla del entorno |
 | `uploads.py` | Recepción de CSV compartida por todas las apps |
-| `management/commands/copiar_desde_public.py` | Copia al esquema del entorno lo que antes se compartía en `public` (una vez por entorno) |
+| `management/commands/copy_from_public.py` | Copia al esquema del entorno lo que antes se compartía en `public` (una vez por entorno) |
 
 ---
 
@@ -42,11 +42,11 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_view_crm_analytics` / `can_view_crm_results` | Páginas de CRM |
 | `can_view_support_analytics` / `can_view_support_results` | Páginas de soporte |
 | `can_view_imports_subs` / `_crm` / `_support` / `can_view_import_history` | Una por pestaña de importaciones |
-| `can_view_comisiones` | El informe de comisiones |
+| `can_view_commissions` | El informe de comisiones |
 | `can_view_all_periods` | Todos los periodos evaluados de Suscripciones, CRM y Soporte. Sin él, solo el **último periodo calculado** de cada módulo (ver abajo). `config/0013` lo concedió a todas las cuentas existentes; una cuenta nueva nace sin él |
-| `can_view_all_business_units` | Todas las unidades de negocio. Sin él, la página Unidades de negocio enseña solo las de `unidades_negocio` y el bloque RF si `unidad_rf` (ver abajo). `config/0014` lo concedió a todas las cuentas existentes |
+| `can_view_all_business_units` | Todas las unidades de negocio. Sin él, la página Unidades de negocio enseña solo las de `business_units` y el bloque RF si `rf_unit` (ver abajo). `config/0014` lo concedió a todas las cuentas existentes |
 | `can_view_users` | La pantalla de usuarios y grupos (solo verla) |
-| `can_view_auditoria` | El registro de auditoría (`/auditoria/`) |
+| `can_view_audit` | El registro de auditoría (`/auditoria/`) |
 | `can_use_api` | Que los tokens de esta cuenta funcionen |
 
 ### Periodos visibles (`services/config/periods.py`)
@@ -66,9 +66,9 @@ se aplica en el servidor, no solo en el selector:
 
 ### Unidades de negocio por cuenta (`services/config/units.py`)
 
-Una unidad de negocio es un `Coordinador` del catálogo, y el catálogo cambia, así que no hay un permiso por
-unidad: `can_view_all_business_units` es el interruptor y, sin él, `Profile.unidades_negocio` (M2M a
-`Coordinador`, por id: renombrar no quita nada) más `Profile.unidad_rf` (el bloque RF, que no es un coordinador).
+Una unidad de negocio es un `Coordinator` del catálogo, y el catálogo cambia, así que no hay un permiso por
+unidad: `can_view_all_business_units` es el interruptor y, sin él, `Profile.business_units` (M2M a
+`Coordinator`, por id: renombrar no quita nada) más `Profile.rf_unit` (el bloque RF, que no es un coordinador).
 
 **El interruptor es de la matriz, la lista es del usuario.** El interruptor puede venir del grupo, como cualquier
 permiso; la lista se elige siempre por persona y el grupo ni la lleva ni la sincroniza (`config/0016` la quitó de
@@ -100,18 +100,18 @@ permiso; la lista se elige siempre por persona y el grupo ni la lleva ni la sinc
 | `can_change_passwords` | Cambiar la contraseña de otra cuenta |
 | `can_delete_users` | Eliminar cuentas |
 | `can_manage_groups` | Crear, editar y eliminar grupos de permisos |
-| `can_manage_catalogo_operacional` | Catálogos › Productos: planes, planes reguladores y los productos por registrar e ignorados |
-| `can_manage_catalogo_comercial` | Catálogos › Estructura: zonas, sites, estados y las zonas por registrar e ignoradas |
-| `can_manage_catalogo_ventas` | Catálogos › Ventas: directorio de ventas, unidades de negocio y objetivos comerciales |
-| `can_manage_comisiones` | Comisiones: crear y cerrar periodos, revisar ventas, escribir cumplimientos; supervisores por UN y condiciones de pago |
-| `can_reopen_comisiones` | Reabrir un periodo de comisiones cerrado (archiva el cierre) |
-| `can_delete_comisiones` | Borrar un informe de comisiones en borrador, con lo decidido en él (no se deshace; `config/0019`, cerrado para todos) |
+| `can_manage_operational_catalog` | Catálogos › Productos: planes, planes reguladores y los productos por registrar e ignorados |
+| `can_manage_commercial_catalog` | Catálogos › Estructura: zonas, sites, estados y las zonas por registrar e ignoradas |
+| `can_manage_sales_catalog` | Catálogos › Ventas: directorio de ventas, unidades de negocio y objetivos comerciales |
+| `can_manage_commissions` | Comisiones: crear y cerrar periodos, revisar ventas, escribir cumplimientos; supervisores por UN y condiciones de pago |
+| `can_reopen_commissions` | Reabrir un periodo de comisiones cerrado (archiva el cierre) |
+| `can_delete_commissions` | Borrar un informe de comisiones en borrador, con lo decidido en él (no se deshace; `config/0019`, cerrado para todos) |
 
 ### Administración de cuentas: un permiso por acción y un techo
 
 `can_manage_users` era un solo interruptor para todo, y con él cualquiera podía
 darse a sí mismo —o a una cuenta cómplice— cualquier permiso. Se partió en los
-seis de arriba (`config/0010` se los dio, junto con `can_view_auditoria`, a quien
+seis de arriba (`config/0010` se los dio, junto con `can_view_audit`, a quien
 lo tenía; `config/0011` lo quitó), y las vistas aplican además dos reglas:
 
 - **Nadie concede lo que no tiene** (`permisos_fuera_de_alcance`): crear una
@@ -224,7 +224,7 @@ tokens: un token filtrado no puede crear otros.
 
 ## Sesiones por entorno
 
-`SesionEntorno` + `services/config/sessions.py`. Hoy todo el entorno vive en su
+`SchemaSession` + `services/config/sessions.py`. Hoy todo el entorno vive en su
 esquema y la tabla la crea la migración de `django.contrib.sessions`; ver
 [02 · Configuración](02-configuracion.md#db_schema-un-esquema-de-postgres-por-entorno).
 

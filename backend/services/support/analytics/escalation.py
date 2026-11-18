@@ -41,22 +41,22 @@ from core.database import DBConnector
 from services.support.analytics.cohorts import classify_tickets
 from services.support.analytics.config import (
     ASSIGNED_ESCALATED,
+    COMPOSITION_KINDS,
     ESCALATED_SOLUTION,
     GROUP_ATC,
     TEAM_ATC,
     TEAM_SUPPORT,
-    TIPOS_COMPOSICION,
 )
 
 FLOW = f"{DB_SCHEMA}.{TableNames.SUPPORT_TICKET_FLOW}"
 
-_HOURS = [f"h_{e}_{t}" for e in (TEAM_ATC, TEAM_SUPPORT) for t in TIPOS_COMPOSICION]
+_HOURS = [f"h_{e}_{t}" for e in (TEAM_ATC, TEAM_SUPPORT) for t in COMPOSITION_KINDS]
 _DATES = ["escalado_el", "sale_cola_atc", "sale_cola_soporte"]
 PATH_COLUMNS = ["ticket_sequence", "completa", *_DATES, *_HOURS]
 
 # Lo que la cohorte necesita de cada fila además de lo que pone `classify_tickets`.
 ROW_COLUMNS = ["es_escalado", "llego_escalado", "con_recorrido",
-                 *(f"h_{t}" for t in TIPOS_COMPOSICION)]
+                 *(f"h_{t}" for t in COMPOSITION_KINDS)]
 
 
 def _flow_exists(db: DBConnector) -> bool:
@@ -66,28 +66,28 @@ def _flow_exists(db: DBConnector) -> bool:
             return cur.fetchone()[0] is not None
 
 
-def read_paths(db: DBConnector, secuencias: list[str] | None = None) -> pd.DataFrame:
+def read_paths(db: DBConnector, sequences: list[str] | None = None) -> pd.DataFrame:
     """Del recorrido de cada ticket, lo que reparte sus filas entre equipos.
 
     Con `secuencias`, sólo esos tickets: la cohorte de un mes que se arma al
     vuelo (un desglose) no necesita los ciento cincuenta mil.
     """
-    vacio = pd.DataFrame(columns=PATH_COLUMNS)
+    empty = pd.DataFrame(columns=PATH_COLUMNS)
     if not _flow_exists(db):
-        return vacio
+        return empty
 
-    columnas = ", ".join(PATH_COLUMNS)
-    if secuencias is None:
-        return db.query(f"SELECT {columnas} FROM {FLOW}")
-    if not secuencias:
-        return vacio
+    columns = ", ".join(PATH_COLUMNS)
+    if sequences is None:
+        return db.query(f"SELECT {columns} FROM {FLOW}")
+    if not sequences:
+        return empty
     return db.query(
-        f"SELECT {columnas} FROM {FLOW} WHERE ticket_sequence = ANY(%s::text[])",
-        params=[list(secuencias)],
+        f"SELECT {columns} FROM {FLOW} WHERE ticket_sequence = ANY(%s::text[])",
+        params=[list(sequences)],
     )
 
 
-def escalated_between(db: DBConnector, desde, hasta) -> list[str]:
+def escalated_between(db: DBConnector, since, until) -> list[str]:
     """Los tickets escalados en `[desde, hasta)`: entran en ese mes aunque no
     nacieran ni cerraran en él, porque ese mes ATC los despachó y Soporte los
     recibió."""
@@ -95,7 +95,7 @@ def escalated_between(db: DBConnector, desde, hasta) -> list[str]:
         return []
     df = db.query(
         f"SELECT ticket_sequence FROM {FLOW} WHERE escalado_el >= %s AND escalado_el < %s",
-        params=[desde, hasta],
+        params=[since, until],
     )
     return df["ticket_sequence"].astype(str).tolist() if not df.empty else []
 
@@ -106,21 +106,21 @@ def _without_path(df: pd.DataFrame) -> pd.DataFrame:
     out["es_escalado"] = False
     out["llego_escalado"] = False
     out["con_recorrido"] = False
-    for tipo in TIPOS_COMPOSICION:
-        out[f"h_{tipo}"] = float("nan")
+    for kind in COMPOSITION_KINDS:
+        out[f"h_{kind}"] = float("nan")
     return out
 
 
-def _horas(inicio: pd.Series, fin: pd.Series) -> pd.Series:
-    return (fin - inicio).dt.total_seconds() / 3600.0
+def _hours(start: pd.Series, end: pd.Series) -> pd.Series:
+    return (end - start).dt.total_seconds() / 3600.0
 
 
-def _first_valid(*candidatas: pd.Series, mascara) -> pd.Series:
+def _first_valid(*candidates: pd.Series, mask) -> pd.Series:
     """La primera fecha de las candidatas que cumple su condición, fila a fila."""
-    resultado = pd.Series(pd.NaT, index=candidatas[0].index, dtype="datetime64[ns]")
-    for serie, condicion in zip(candidatas, mascara):
-        resultado = resultado.where(resultado.notna(), serie.where(condicion))
-    return resultado
+    result = pd.Series(pd.NaT, index=candidates[0].index, dtype="datetime64[ns]")
+    for series, condition in zip(candidates, mask):
+        result = result.where(result.notna(), series.where(condition))
+    return result
 
 
 def add_escalation(df: pd.DataFrame, paths: pd.DataFrame) -> pd.DataFrame:
@@ -147,11 +147,11 @@ def add_escalation(df: pd.DataFrame, paths: pd.DataFrame) -> pd.DataFrame:
     out["_con_logs"] = out["_con_logs"].eq(True)
     out["con_recorrido"] = out["_con_logs"] & out["completa"].eq(True)
 
-    en_atc = out["grupo_trabajo"].eq(GROUP_ATC)
-    escalado = out["escalado_el"].notna() & ~en_atc
+    in_atc = out["grupo_trabajo"].eq(GROUP_ATC)
+    escalated = out["escalado_el"].notna() & ~in_atc
 
     # --- La copia de ATC, sacada del ticket tal y como venía.
-    atc = out[escalado].copy()
+    atc = out[escalated].copy()
     esc = atc["escalado_el"]
     atc["grupo_trabajo"] = GROUP_ATC
     atc["asignado_a"] = ASSIGNED_ESCALATED
@@ -161,11 +161,11 @@ def add_escalation(df: pd.DataFrame, paths: pd.DataFrame) -> pd.DataFrame:
     # escalamiento; si no, la salida de la cola de ATC según los logs.
     atc["dt_asignacion"] = _first_valid(
         atc["dt_asignacion"], atc["sale_cola_atc"],
-        mascara=[atc["dt_asignacion"] <= esc, atc["sale_cola_atc"] <= esc],
+        mask=[atc["dt_asignacion"] <= esc, atc["sale_cola_atc"] <= esc],
     )
     atc["dt_cierre"] = esc
     atc["periodo_cierre"] = esc.dt.strftime("%Y-%m")
-    atc["duracion_total_horas"] = _horas(atc["dt_creacion"], esc)
+    atc["duracion_total_horas"] = _hours(atc["dt_creacion"], esc)
     atc["es_resuelto"] = False
     atc["es_cancelado"] = False
     atc["es_cerrado"] = True
@@ -174,30 +174,30 @@ def add_escalation(df: pd.DataFrame, paths: pd.DataFrame) -> pd.DataFrame:
     atc["llego_escalado"] = False
 
     # --- La fila de Soporte: el mismo ticket, nacido al escalarse.
-    sop = escalado
+    sop = escalated
     esc = out.loc[sop, "escalado_el"]
     out.loc[sop, "dt_asignacion"] = _first_valid(
         out.loc[sop, "sale_cola_soporte"], out.loc[sop, "dt_asignacion"],
-        mascara=[out.loc[sop, "sale_cola_soporte"] >= esc, out.loc[sop, "dt_asignacion"] >= esc],
+        mask=[out.loc[sop, "sale_cola_soporte"] >= esc, out.loc[sop, "dt_asignacion"] >= esc],
     )
     # Las columnas del export llegan como texto: numérica antes de mezclarle horas.
     out["duracion_total_horas"] = pd.to_numeric(out.get("duracion_total_horas"), errors="coerce")
-    out.loc[sop, "duracion_total_horas"] = _horas(esc, out.loc[sop, "dt_cierre"])
+    out.loc[sop, "duracion_total_horas"] = _hours(esc, out.loc[sop, "dt_cierre"])
     out.loc[sop, "dt_creacion"] = esc
     out.loc[sop, "periodo_creacion"] = esc.dt.strftime("%Y-%m")
     out["es_escalado"] = False
     out["llego_escalado"] = sop
     out["es_rezagado"] = ~out["es_cerrado"] | (out["periodo_creacion"] != out["periodo_cierre"])
 
-    filas = pd.concat([out, atc], ignore_index=True)
+    rows = pd.concat([out, atc], ignore_index=True)
 
     # Las horas de cada fila son las de su equipo.
-    from_atc = filas["grupo_trabajo"].eq(GROUP_ATC)
-    for tipo in TIPOS_COMPOSICION:
-        horas = filas[f"h_{TEAM_ATC}_{tipo}"].where(from_atc, filas[f"h_{TEAM_SUPPORT}_{tipo}"])
-        filas[f"h_{tipo}"] = horas.where(filas["con_recorrido"])
+    from_atc = rows["grupo_trabajo"].eq(GROUP_ATC)
+    for kind in COMPOSITION_KINDS:
+        hours = rows[f"h_{TEAM_ATC}_{kind}"].where(from_atc, rows[f"h_{TEAM_SUPPORT}_{kind}"])
+        rows[f"h_{kind}"] = hours.where(rows["con_recorrido"])
 
-    return filas.drop(columns=[c for c in PATH_COLUMNS if c != "ticket_sequence"] + ["_con_logs"])
+    return rows.drop(columns=[c for c in PATH_COLUMNS if c != "ticket_sequence"] + ["_con_logs"])
 
 
 def load_tickets(db: DBConnector) -> pd.DataFrame:

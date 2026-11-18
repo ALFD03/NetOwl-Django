@@ -25,8 +25,8 @@ from core.tables import replace
 from services.support.analytics.cohorts import PeriodCohort
 from services.support.analytics.config import (
     GROUP_DIM,
-    SUPPORT_DESGLOSES,
-    SUPPORT_DIMENSIONES,
+    SUPPORT_BREAKDOWNS,
+    SUPPORT_DIMENSIONS,
 )
 from services.support.analytics.metrics import compute_metrics_for_period
 from services.support.analytics.tables import DIMENSION_HISTORY
@@ -34,7 +34,7 @@ from services.support.analytics.tables import DIMENSION_HISTORY
 logger = logging.getLogger(__name__)
 
 
-def build_dimension_rows(cohorte: PeriodCohort) -> list[dict[str, Any]]:
+def build_dimension_rows(cohort: PeriodCohort) -> list[dict[str, Any]]:
     """Las filas de dimensión de una cohorte.
 
     La forma de cada fila es la misma que devuelve `get_support_dimension_metrics`
@@ -43,26 +43,26 @@ def build_dimension_rows(cohorte: PeriodCohort) -> list[dict[str, Any]]:
     """
     rows: list[dict[str, Any]] = []
 
-    def fila(grupo: str, dimension: str, valor: str, sub: PeriodCohort) -> None:
+    def row(group: str, dimension: str, value: str, sub: PeriodCohort) -> None:
         rows.append({
-            "grupo_trabajo": grupo,
+            "grupo_trabajo": group,
             "dimension": dimension,
-            "valor": valor,
+            "valor": value,
             "metricas": compute_metrics_for_period(sub),
         })
 
-    for grupo, c_group in cohorte.desglosar(GROUP_DIM):
-        fila(grupo, GROUP_DIM, grupo, c_group)
+    for group, c_group in cohort.break_down(GROUP_DIM):
+        row(group, GROUP_DIM, group, c_group)
 
-        for dimension in (*SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES):
-            for valor, c_value in c_group.desglosar(dimension):
-                fila(grupo, dimension, valor, c_value)
+        for dimension in (*SUPPORT_DIMENSIONS, *SUPPORT_BREAKDOWNS):
+            for value, c_value in c_group.break_down(dimension):
+                row(group, dimension, value, c_value)
 
     return rows
 
 
-def save_dimensions(db: DBConnector, periodo: str, rows: list[dict[str, Any]]) -> None:
+def save_dimensions(db: DBConnector, period: str, rows: list[dict[str, Any]]) -> None:
     """Reemplaza las filas dimensionales del periodo por las recién calculadas."""
     df = pd.DataFrame(rows, columns=["grupo_trabajo", "dimension", "valor", "metricas"])
     with db.transaction() as cur:
-        replace(cur, DIMENSION_HISTORY, df, periodo_reporte=periodo)
+        replace(cur, DIMENSION_HISTORY, df, periodo_reporte=period)

@@ -12,22 +12,22 @@
  * (ver `daySeries.ts`).
  */
 
-export interface Proyeccion {
+export interface Projection {
   /** Días laborables del 1 al día del corte, ambos incluidos. */
   elapsedDays: number;
   /** Días laborables del mes entero. */
   monthDays: number;
   /** Día del mes del corte. */
-  dia: number;
+  day: number;
 }
 
-const DOMINGO = 0;
+const SUNDAY = 0;
 
 /** Días laborables (lunes a sábado) del 1 al `hasta` del mes. */
-function countWorkdays(anio: number, mes: number, hasta: number): number {
+function countWorkdays(year: number, month: number, until: number): number {
   let total = 0;
-  for (let dia = 1; dia <= hasta; dia += 1) {
-    if (new Date(anio, mes - 1, dia).getDay() !== DOMINGO) total += 1;
+  for (let day = 1; day <= until; day += 1) {
+    if (new Date(year, month - 1, day).getDay() !== SUNDAY) total += 1;
   }
   return total;
 }
@@ -37,25 +37,25 @@ function countWorkdays(anio: number, mes: number, hasta: number): number {
  * proyectar: sin día elegido, con un periodo que no es `YYYY-MM`, o con un corte
  * que todavía no cubre ningún día laborable (un día 1 que cae en domingo).
  */
-export function computeProjection(periodoMes: string | undefined, dia: number): Proyeccion | null {
-  const match = (periodoMes ?? '').match(/^(\d{4})-(\d{2})/);
-  if (!match || !dia) return null;
+export function computeProjection(monthPeriod: string | undefined, day: number): Projection | null {
+  const match = (monthPeriod ?? '').match(/^(\d{4})-(\d{2})/);
+  if (!match || !day) return null;
 
-  const anio = Number(match[1]);
-  const mes = Number(match[2]);
-  const lastDay = new Date(anio, mes, 0).getDate();
-  const diasTranscurridos = countWorkdays(anio, mes, Math.min(dia, lastDay));
-  if (!diasTranscurridos) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const lastDay = new Date(year, month, 0).getDate();
+  const elapsedDays = countWorkdays(year, month, Math.min(day, lastDay));
+  if (!elapsedDays) return null;
 
-  return { elapsedDays: diasTranscurridos, monthDays: countWorkdays(anio, mes, lastDay), dia };
+  return { elapsedDays, monthDays: countWorkdays(year, month, lastDay), day };
 }
 
 /** El promedio por día laborable de lo acumulado al corte. */
-export function dailyAverage(acumulado: number, proyeccion: Proyeccion): number {
-  return acumulado / proyeccion.elapsedDays;
+export function dailyAverage(accumulated: number, projection: Projection): number {
+  return accumulated / projection.elapsedDays;
 }
 
 /** Lo acumulado al corte llevado al cierre del mes al mismo ritmo, redondeado. */
-export function proyectar(acumulado: number, proyeccion: Proyeccion): number {
-  return Math.round(dailyAverage(acumulado, proyeccion) * proyeccion.monthDays);
+export function project(accumulated: number, projection: Projection): number {
+  return Math.round(dailyAverage(accumulated, projection) * projection.monthDays);
 }

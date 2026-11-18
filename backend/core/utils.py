@@ -11,6 +11,7 @@ import io
 import json
 import math
 import re
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime
 from typing import Any
@@ -39,7 +40,7 @@ def is_period(value: Any) -> bool:
     return isinstance(value, str) and RE_PERIOD.fullmatch(value.strip()) is not None
 
 
-def clean_periods(crudo: str | None) -> list[str] | None:
+def clean_periods(raw: str | None) -> list[str] | None:
     """Convierte un `?periods=a,b,c` en una lista validada y acotada.
 
     Devuelve None cuando no se pidio ninguno, que es lo que las consultas
@@ -47,17 +48,17 @@ def clean_periods(crudo: str | None) -> list[str] | None:
     periodo: el parametro lo escribe la interfaz, y un valor invalido es ruido,
     no algo que el usuario pueda corregir.
     """
-    if not crudo:
+    if not raw:
         return None
-    periodos = [p.strip() for p in crudo.split(",") if is_period(p)]
-    if not periodos:
+    periods = [p.strip() for p in raw.split(",") if is_period(p)]
+    if not periods:
         return None
-    return periodos[:MAX_PERIODS_PER_QUERY]
+    return periods[:MAX_PERIODS_PER_QUERY]
 
 
 def request_int(
-    request, clave: str, default: int | None = None,
-    minimo: int | None = None, maximo: int | None = None,
+    request, key: str, default: int | None = None,
+    min_value: int | None = None, max_value: int | None = None,
 ) -> int | None:
     """Lee un entero de la query string sin reventar si no lo es.
 
@@ -65,18 +66,18 @@ def request_int(
     `?limit=-1` llegaba hasta Postgres como `LIMIT -1`. Las vistas HTML ya lo
     hacian bien; eran sus gemelas JSON las que no.
     """
-    crudo = request.GET.get(clave)
-    if crudo in (None, ""):
+    raw = request.GET.get(key)
+    if raw in (None, ""):
         return default
     try:
-        valor = int(crudo)
+        value = int(raw)
     except (TypeError, ValueError):
         return default
-    if minimo is not None:
-        valor = max(valor, minimo)
-    if maximo is not None:
-        valor = min(valor, maximo)
-    return valor
+    if min_value is not None:
+        value = max(value, min_value)
+    if max_value is not None:
+        value = min(value, max_value)
+    return value
 
 
 def parse_date(value: Any) -> datetime | None:
@@ -131,6 +132,28 @@ def zero_nulls(df: pd.DataFrame) -> pd.DataFrame:
     """Las columnas numéricas con los nulos en 0: un entero con algún NULL llega de Postgres como `NaN`."""
     numeric = df.select_dtypes("number").columns
     return df.fillna({c: 0 for c in numeric}) if len(numeric) else df
+
+
+def typed_records(
+    df: pd.DataFrame,
+    *,
+    texts: Iterable[str] = (),
+    ints: Iterable[str] = (),
+    floats: Iterable[str] = (),
+    rename: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Las filas de `df` como dicts, cada columna en su tipo y sin nulos.
+
+    Una columna que falta (un cierre viejo que no la calculaba) sale en `""` o
+    en 0. `rename` cambia la clave de salida de una columna.
+    """
+    out = pd.DataFrame(index=df.index)
+    for col in texts:
+        out[col] = df[col].astype(str) if col in df else ""
+    for col, kind in [*((c, "int") for c in ints), *((c, "float") for c in floats)]:
+        values = pd.to_numeric(df[col], errors="coerce").fillna(0) if col in df else 0
+        out[col] = pd.Series(values, index=df.index).astype(kind)
+    return out.rename(columns=dict(rename or {})).to_dict("records")
 
 
 def _clean_json(obj: Any, nan_value: Any) -> Any:

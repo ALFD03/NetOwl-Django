@@ -10,7 +10,7 @@ export const CLOSE_STATE_LABEL: Record<string, string> = {
   '6_churn': 'Cancelado',
 };
 
-export const closeStateLabel = (estado: string): string => CLOSE_STATE_LABEL[estado] ?? estado;
+export const closeStateLabel = (state: string): string => CLOSE_STATE_LABEL[state] ?? state;
 
 export const LIFETIME_COLUMNS: ExcelColumn<LifetimeChurn>[] = [
   { header: 'Orden', value: (b) => b.order, width: 16 },
@@ -25,4 +25,4 @@ export const LIFETIME_COLUMNS: ExcelColumn<LifetimeChurn>[] = [
   { header: 'Días desde la instalación', value: (b) => b.days_since_install, format: '#,##0', width: 14 },
 ];
 
-export const lifetimeFileName = (mes: string): string => `Lifetime bajas ${mes}`;
+export const lifetimeFileName = (month: string): string => `Lifetime bajas ${month}`;

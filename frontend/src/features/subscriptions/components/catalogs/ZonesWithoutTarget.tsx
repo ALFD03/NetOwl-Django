@@ -23,7 +23,7 @@ import { cn } from '@/shared/lib/cn';
 import type { CatalogZone, CatalogZoneWithoutTarget } from '@/features/subscriptions/types';
 import { actionsColumn } from './CatalogCommon';
 
-interface Borrador {
+interface Draft {
   id?: number;
   /** Solo al crear: las zonas elegidas. */
   zones: number[];
@@ -37,57 +37,57 @@ interface Borrador {
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 /** Si el tramo rige en `mes`. */
-const current = (row: CatalogZoneWithoutTarget, mes: string) =>
-  (!row.since || row.since <= mes) && (!row.until || mes <= row.until);
+const current = (row: CatalogZoneWithoutTarget, month: string) =>
+  (!row.since || row.since <= month) && (!row.until || month <= row.until);
 
 export function ZonesWithoutTargetPanel({
   rows,
   zones,
-  onDelete: onBorrar,
+  onDelete,
 }: {
   rows: CatalogZoneWithoutTarget[];
   zones: CatalogZone[];
   onDelete: (row: CatalogZoneWithoutTarget) => void;
 }) {
-  const [borrador, setBorrador] = useState<Borrador | null>(null);
-  const [guardando, setGuardando] = useState(false);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const today = currentMonth();
 
-  const cerrar = () => {
-    setBorrador(null);
+  const close = () => {
+    setDraft(null);
     setError(null);
   };
 
-  const guardar = async (event: FormEvent) => {
+  const save = async (event: FormEvent) => {
     event.preventDefault();
-    if (!borrador) return;
-    const { since, until, note } = borrador;
-    setGuardando(true);
+    if (!draft) return;
+    const { since, until, note } = draft;
+    setSaving(true);
     setError(null);
     try {
-      if (borrador.id) {
-        await catalogsApi.guardar('zonas_sin_objetivo', { id: borrador.id, since, until, note });
+      if (draft.id) {
+        await catalogsApi.save('zonas_sin_objetivo', { id: draft.id, since, until, note });
       } else {
-        if (borrador.zones.length === 0) {
+        if (draft.zones.length === 0) {
           setError('Elige al menos una zona.');
           return;
         }
         const byId = new Map(zones.map((z) => [z.id, z.name]));
-        const response = await catalogsApi.guardarLote(
+        const response = await catalogsApi.saveBatch(
           'zonas_sin_objetivo',
-          borrador.zones.map((id) => ({ zone_id: id, name: byId.get(id) ?? '', since, until, note })),
+          draft.zones.map((id) => ({ zone_id: id, name: byId.get(id) ?? '', since, until, note })),
         );
         if (response.errors.length) {
           setError(`${response.message} No entraron: ${response.errors.map((e) => `${e.name}: ${e.message}`).join(' · ')}`);
           return;
         }
       }
-      cerrar();
+      close();
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo guardar.'));
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
@@ -110,8 +110,8 @@ export function ZonesWithoutTargetPanel({
       sortKey: 'updated_at',
     },
     actionsColumn<CatalogZoneWithoutTarget>(
-      (row) => setBorrador({ id: row.id, zones: [row.zone_id], role_label: row.zona, since: row.since, until: row.until, note: row.note }),
-      onBorrar,
+      (row) => setDraft({ id: row.id, zones: [row.zone_id], role_label: row.zona, since: row.since, until: row.until, note: row.note }),
+      onDelete,
     ),
   ];
 
@@ -128,7 +128,7 @@ export function ZonesWithoutTargetPanel({
           <Button
             size="sm"
             icon={<Plus className="h-4 w-4" />}
-            onClick={() => setBorrador({ zones: [], since: today, until: '', note: '' })}
+            onClick={() => setDraft({ zones: [], since: today, until: '', note: '' })}
           >
             Apartar zonas
           </Button>
@@ -146,53 +146,53 @@ export function ZonesWithoutTargetPanel({
       </NeonContainer>
 
       <Modal
-        isOpen={Boolean(borrador)}
-        onClose={cerrar}
-        title={borrador?.id ? 'Editar zona sin objetivo' : 'Apartar zonas del objetivo'}
+        isOpen={Boolean(draft)}
+        onClose={close}
+        title={draft?.id ? 'Editar zona sin objetivo' : 'Apartar zonas del objetivo'}
         subtitle="No cambia ningún análisis: solo qué cuenta para el cumplimiento"
         icon={<MapPinOff className="h-5 w-5 text-amber-400" />}
         theme="yellow"
         size="md"
       >
         <ActionMessage status={error ? { type: 'error', text: error } : null} />
-        {borrador && (
-          <ModalForm onSubmit={guardar}>
+        {draft && (
+          <ModalForm onSubmit={save}>
             <FormBanner
               title="Zonas sin objetivo"
               description="Mientras rija el tramo, la zona sale «Sin objetivo» en la tabla de su grupo y no suma a su resumen. Ponle «Hasta» cuando ya deba medirse: los meses anteriores no cambian."
               action={<MapPinOff className="h-8 w-8 flex-shrink-0 text-slate-600" />}
             />
 
-            {borrador.id ? (
+            {draft.id ? (
               <Field label="Zona">
-                <div className="py-2 text-sm font-semibold text-white">{borrador.role_label}</div>
+                <div className="py-2 text-sm font-semibold text-white">{draft.role_label}</div>
               </Field>
             ) : (
               <ZoneSelector
                 zones={zones.filter((z) => !rows.some((f) => f.zone_id === z.id))}
-                elegidas={borrador.zones}
-                onChange={(ids) => setBorrador({ ...borrador, zones: ids })}
+                selected={draft.zones}
+                onChange={(ids) => setDraft({ ...draft, zones: ids })}
               />
             )}
 
             <FormColumns>
               <Field label="Desde" hint="Vacío: desde siempre.">
-                <MonthPicker value={borrador.since} onChange={(desde) => setBorrador({ ...borrador, since: desde })} placeholder="Desde siempre" />
+                <MonthPicker value={draft.since} onChange={(since) => setDraft({ ...draft, since })} placeholder="Desde siempre" />
               </Field>
               <Field
                 label="Hasta (incluido)"
                 hint="Vacío: hasta que se le ponga fin."
-                action={borrador.until ? (
+                action={draft.until ? (
                   <button
                     type="button"
-                    onClick={() => setBorrador({ ...borrador, until: '' })}
+                    onClick={() => setDraft({ ...draft, until: '' })}
                     className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white"
                   >
                     <X className="h-3 w-3" /> Quitar
                   </button>
                 ) : undefined}
               >
-                <MonthPicker value={borrador.until} onChange={(hasta) => setBorrador({ ...borrador, until: hasta })} placeholder="Sin fin" />
+                <MonthPicker value={draft.until} onChange={(until) => setDraft({ ...draft, until })} placeholder="Sin fin" />
               </Field>
             </FormColumns>
 
@@ -200,18 +200,18 @@ export function ZonesWithoutTargetPanel({
               <input
                 type="text"
                 className={modalInputClass}
-                value={borrador.note}
-                onChange={(e) => setBorrador({ ...borrador, note: e.target.value })}
+                value={draft.note}
+                onChange={(e) => setDraft({ ...draft, note: e.target.value })}
               />
             </Field>
 
 
             <FormFooter
-              saving={guardando}
-              onClose={cerrar}
-              submitLabel={borrador.id
+              saving={saving}
+              onClose={close}
+              submitLabel={draft.id
                 ? 'Guardar cambios'
-                : `Apartar ${borrador.zones.length || ''} ${borrador.zones.length === 1 ? 'zona' : 'zonas'}`.replace(/\s+/g, ' ')}
+                : `Apartar ${draft.zones.length || ''} ${draft.zones.length === 1 ? 'zona' : 'zonas'}`.replace(/\s+/g, ' ')}
             />
           </ModalForm>
         )}
@@ -223,47 +223,47 @@ export function ZonesWithoutTargetPanel({
 /** Lista con búsqueda para marcar varias zonas; las ya apartadas no salen. */
 function ZoneSelector({
   zones,
-  elegidas,
+  selected,
   onChange,
 }: {
   zones: CatalogZone[];
-  elegidas: number[];
+  selected: number[];
   onChange: (ids: number[]) => void;
 }) {
-  const [busqueda, setBusqueda] = useState('');
-  const visibles = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
+  const [search, setSearch] = useState('');
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return zones.filter((z) => !q || `${z.name} ${z.site} ${z.coordinator}`.toLowerCase().includes(q));
-  }, [zones, busqueda]);
-  const marcadas = new Set(elegidas);
-  const alternar = (id: number) =>
-    onChange(marcadas.has(id) ? elegidas.filter((e) => e !== id) : [...elegidas, id]);
+  }, [zones, search]);
+  const checkedRows = new Set(selected);
+  const toggle = (id: number) =>
+    onChange(checkedRows.has(id) ? selected.filter((e) => e !== id) : [...selected, id]);
 
   return (
-    <Field label={`Zonas (${elegidas.length} elegidas)`} hint="Marca todas las que no deban medirse.">
+    <Field label={`Zonas (${selected.length} elegidas)`} hint="Marca todas las que no deban medirse.">
       <div className="space-y-2">
-        <SearchInput value={busqueda} onChange={setBusqueda} placeholder="Buscar zona, site o unidad..." />
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar zona, site o unidad..." />
         <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-700/60 bg-slate-900/40">
-          {visibles.length === 0 ? (
+          {visible.length === 0 ? (
             <p className="p-3 text-xs text-slate-500">Ninguna zona coincide.</p>
-          ) : visibles.map((z) => {
-            const marcada = marcadas.has(z.id);
+          ) : visible.map((z) => {
+            const checked = checkedRows.has(z.id);
             return (
               <button
                 key={z.id}
                 type="button"
-                onClick={() => alternar(z.id)}
-                aria-pressed={marcada}
+                onClick={() => toggle(z.id)}
+                aria-pressed={checked}
                 className={cn(
                   'flex w-full items-center gap-3 border-b border-slate-800/60 px-3 py-2 text-left text-xs last:border-0 hover:bg-white/5',
-                  marcada && 'bg-amber-500/10',
+                  checked && 'bg-amber-500/10',
                 )}
               >
                 <span className={cn(
                   'flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border',
-                  marcada ? 'border-amber-400 bg-amber-400 text-slate-900' : 'border-slate-600',
+                  checked ? 'border-amber-400 bg-amber-400 text-slate-900' : 'border-slate-600',
                 )}>
-                  {marcada && <Check className="h-3 w-3" />}
+                  {checked && <Check className="h-3 w-3" />}
                 </span>
                 <span className="font-semibold text-white">{z.name}</span>
                 <span className="ml-auto text-slate-500">{z.site}{z.coordinator ? ` · ${z.coordinator}` : ''}</span>

@@ -19,7 +19,7 @@ repositorio:
 |---|---|---|
 | 01 | [Arquitectura](01-arquitectura.md) | Visión general, capas, flujo de datos, ciclo de vida de una petición y de un análisis. |
 | 02 | [Configuración y entornos](02-configuracion.md) | Vault, `.env`, `DB_SCHEMA`, aislamiento entre entornos, sesiones, Celery/Redis. |
-| 03 | [`core/`](03-core.md) | Vault, `DBConnector`, `Periodo`, `TableNames`, utilidades y catálogos (`fixtures`). |
+| 03 | [`core/`](03-core.md) | Vault, `DBConnector`, `Period`, `TableNames`, utilidades y catálogos (`fixtures`). |
 | 04 | [`services/config/`](04-servicio-config.md) | Autenticación, perfiles, matriz de permisos, grupos, sesiones por entorno, subida de CSV. |
 | 05 | [`services/imports/`](05-servicio-imports.md) | Importación de CSV, `AnalysisJob`, tareas de Celery, historial, endpoints de seguimiento. |
 | 06 | [`services/subscriptions/`](06-servicio-subscriptions.md) | El dominio mayor: churn mensual, métricas diarias, planes gratuitos, ciclo de vida, reporte ETA y catálogos. |

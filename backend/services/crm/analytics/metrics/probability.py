@@ -30,7 +30,7 @@ todas como gestión lo inflaría, así que se aplica **el mismo algoritmo de
 imputación que la efectividad**: la fracción de devoluciones sin motivo que son
 de gestión se estima con la tasa observada en las que sí lo traen, condicionada
 a la etapa de origen del movimiento (el log siempre la conserva). Si un origen
-no llega a `E8_IMPUTACION_MIN_MUESTRA` casos legibles se usa la tasa global, y
+no llega a `E8_IMPUTATION_MIN_SAMPLE` casos legibles se usa la tasa global, y
 si no hay ninguno legible no se excluye nada: sin evidencia de excepción, la
 devolución cuenta.
 
@@ -58,12 +58,12 @@ import pandas as pd
 from core.utils import normalize_text
 
 from ..config import (
-    E8_IMPUTACION_MIN_MUESTRA,
+    E8_IMPUTATION_MIN_SAMPLE,
     STAGE8_EXCEPTION_REASONS,
     STAGE8_KEY,
 )
 
-_VACIOS = ["", "nan", "None", "<NA>"]
+_EMPTY = ["", "nan", "None", "<NA>"]
 _UNSPECIFIED = "Sin Especificar"
 
 
@@ -81,28 +81,28 @@ def _opportunity_key(df: pd.DataFrame) -> str:
     return "oportunidad_id" if "oportunidad_id" in df.columns else "client_id"
 
 
-def _normalized_series(serie: pd.Series) -> pd.Series:
+def _normalized_series(series: pd.Series) -> pd.Series:
     """Texto legible de una columna de motivos, con los vacíos unificados."""
-    txt = serie.fillna(_UNSPECIFIED).astype(str).str.strip()
-    return txt.replace(_VACIOS, _UNSPECIFIED)
+    txt = series.fillna(_UNSPECIFIED).astype(str).str.strip()
+    return txt.replace(_EMPTY, _UNSPECIFIED)
 
 
-def compute_lost_distribution(df_perdidos: pd.DataFrame) -> list[dict[str, Any]]:
+def compute_lost_distribution(df_lost: pd.DataFrame) -> list[dict[str, Any]]:
     """Reparto de las oportunidades perdidas por motivo."""
-    if df_perdidos.empty or "motivo_perdida" not in df_perdidos.columns:
+    if df_lost.empty or "motivo_perdida" not in df_lost.columns:
         return []
 
-    motivos = _normalized_series(df_perdidos["motivo_perdida"])
+    reasons = _normalized_series(df_lost["motivo_perdida"])
 
-    total = len(motivos)
+    total = len(reasons)
     if total == 0:
         return []
 
-    counts = motivos.value_counts()
+    counts = reasons.value_counts()
     result = []
-    for motivo, count in counts.items():
+    for reason, count in counts.items():
         result.append({
-            "motivo": motivo,
+            "motivo": reason,
             "total": int(count),
             "pct": round((int(count) / total) * 100, 2),
         })
@@ -122,8 +122,8 @@ def compute_stage8_distribution(
     if df_logs_e8.empty:
         return []
 
-    clave = _opportunity_key(df_logs_e8)
-    cids = df_logs_e8[clave].dropna().astype(str).str.strip().unique()
+    key = _opportunity_key(df_logs_e8)
+    cids = df_logs_e8[key].dropna().astype(str).str.strip().unique()
     if len(cids) == 0:
         return []
 
@@ -131,21 +131,21 @@ def compute_stage8_distribution(
     if df_subset.empty or "devolver_oportunidad" not in df_subset.columns:
         return []
 
-    motivos = _normalized_series(df_subset["devolver_oportunidad"])
+    reasons = _normalized_series(df_subset["devolver_oportunidad"])
 
-    total = len(motivos)
+    total = len(reasons)
     if total == 0:
         return []
 
-    excepciones = _exception_reasons()
-    counts = motivos.value_counts()
+    exceptions = _exception_reasons()
+    counts = reasons.value_counts()
     result = []
-    for motivo, count in counts.items():
+    for reason, count in counts.items():
         result.append({
-            "motivo": motivo,
+            "motivo": reason,
             "total": int(count),
             "pct": round((int(count) / total) * 100, 2),
-            "excepcion": normalize_text(motivo) in excepciones,
+            "excepcion": normalize_text(reason) in exceptions,
         })
     return result
 
@@ -183,14 +183,14 @@ def _handling_rates(
     total_legible = sum(with_reason.values())
     global_rate = sum(handling.values()) / total_legible if total_legible else 1.0
 
-    tasas = {}
-    for origen, muestra in with_reason.items():
-        tasas[origen] = (
-            handling[origen] / muestra
-            if muestra >= E8_IMPUTACION_MIN_MUESTRA
+    rates = {}
+    for source, sample in with_reason.items():
+        rates[source] = (
+            handling[source] / sample
+            if sample >= E8_IMPUTATION_MIN_SAMPLE
             else global_rate
         )
-    return tasas, global_rate
+    return rates, global_rate
 
 
 def _client_maps(df_clients: pd.DataFrame) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -198,15 +198,15 @@ def _client_maps(df_clients: pd.DataFrame) -> tuple[dict[str, Any], dict[str, An
     if df_clients is None or df_clients.empty or "id" not in df_clients.columns:
         return {}, {}
     ids = df_clients["id"].astype(str).str.strip()
-    etapa = (
+    stage = (
         dict(zip(ids, df_clients["etapa_actual"]))
         if "etapa_actual" in df_clients.columns else {}
     )
-    motivo = (
+    reason = (
         dict(zip(ids, df_clients["devolver_oportunidad"]))
         if "devolver_oportunidad" in df_clients.columns else {}
     )
-    return etapa, motivo
+    return stage, reason
 
 
 def compute_stage8_probability(
@@ -229,62 +229,62 @@ def compute_stage8_probability(
     if total == 0 or df_logs_e8 is None or df_logs_e8.empty:
         return _empty_result(total)
 
-    clave = _opportunity_key(df_logs_e8)
+    key = _opportunity_key(df_logs_e8)
     # El numerador se recorta a la población del denominador: un movimiento de
     # una oportunidad que no consta viva en el periodo no puede sumar riesgo
     # sobre una base que no la incluye.
     at_risk = set(df_at_risk["id"].astype(str).str.strip())
-    sub = df_logs_e8[df_logs_e8[clave].astype(str).str.strip().isin(at_risk)]
+    sub = df_logs_e8[df_logs_e8[key].astype(str).str.strip().isin(at_risk)]
     if sub.empty:
         return _empty_result(total)
 
-    cids = sub[clave].astype(str).str.strip()
-    transiciones = len(sub)
-    clientes = int(cids.nunique())
-    reincidentes = int((cids.value_counts() > 1).sum())
+    cids = sub[key].astype(str).str.strip()
+    transitions = len(sub)
+    clients = int(cids.nunique())
+    repeat = int((cids.value_counts() > 1).sum())
 
     # El motivo vive en la oportunidad, no en el log, y sólo es fiable mientras
     # ésta siga en la etapa 8: en cuanto se mueve, Odoo lo sobrescribe.
-    etapa_actual, reason_by_client = _client_maps(df_clients)
+    current_stage, reason_by_client = _client_maps(df_clients)
 
-    excepciones = _exception_reasons()
+    exceptions = _exception_reasons()
     with_reason: dict[str, int] = defaultdict(int)
     handling: dict[str, int] = defaultdict(int)
     without_reason: dict[str, int] = defaultdict(int)
 
-    origenes = (
+    sources = (
         sub["etapa_anterior"] if "etapa_anterior" in sub.columns
-        else pd.Series([""] * transiciones, index=sub.index)
+        else pd.Series([""] * transitions, index=sub.index)
     )
-    for cid, origen in zip(cids, origenes):
-        origen = str(origen) if pd.notna(origen) else ""
-        motivo = normalize_text(reason_by_client.get(cid))
-        legible = etapa_actual.get(cid) == STAGE8_KEY and motivo != ""
+    for cid, source in zip(cids, sources):
+        source = str(source) if pd.notna(source) else ""
+        reason = normalize_text(reason_by_client.get(cid))
+        legible = current_stage.get(cid) == STAGE8_KEY and reason != ""
         if not legible:
-            without_reason[origen] += 1
+            without_reason[source] += 1
             continue
-        with_reason[origen] += 1
-        if motivo not in excepciones:
-            handling[origen] += 1
+        with_reason[source] += 1
+        if reason not in exceptions:
+            handling[source] += 1
 
-    tasas, global_rate = _handling_rates(with_reason, handling)
-    estimadas = int(round(sum(
-        n * tasas.get(origen, global_rate) for origen, n in without_reason.items()
+    rates, global_rate = _handling_rates(with_reason, handling)
+    estimated = int(round(sum(
+        n * rates.get(source, global_rate) for source, n in without_reason.items()
     )))
 
     observed_handling = sum(handling.values())
-    handling_count = observed_handling + estimadas
+    handling_count = observed_handling + estimated
 
     return {
         "total_en_riesgo": total,
         "count_devueltos_e8": handling_count,
         "pct_devueltos_e8": round(handling_count / total * 100, 2),
-        "count_devueltos_e8_bruto": transiciones,
-        "pct_devueltos_e8_bruto": round(transiciones / total * 100, 2),
-        "e8_devueltos_excepcion": transiciones - handling_count,
+        "count_devueltos_e8_bruto": transitions,
+        "pct_devueltos_e8_bruto": round(transitions / total * 100, 2),
+        "e8_devueltos_excepcion": transitions - handling_count,
         "e8_devueltos_con_motivo": sum(with_reason.values()),
         "e8_devueltos_sin_motivo": sum(without_reason.values()),
-        "e8_devueltos_estimados": estimadas,
-        "e8_clientes_devueltos": clientes,
-        "e8_reincidentes": reincidentes,
+        "e8_devueltos_estimados": estimated,
+        "e8_clientes_devueltos": clients,
+        "e8_reincidentes": repeat,
     }

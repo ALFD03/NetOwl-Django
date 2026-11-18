@@ -98,7 +98,7 @@ export interface EtaMetrics {
  * ese precio por la tasa del BCV, y la tasa se aplica al exportar para que un
  * periodo ya calculado no quede congelado a la tasa de aquel día.
  */
-export interface EtaFormularioInternet {
+export interface EtaInternetForm {
   name: string;
   subscriber_type: string;
   /** Todas las entidades federales del catálogo, encadenadas. */
@@ -112,14 +112,14 @@ export interface EtaFormularioInternet {
   avg_usage_mb: number;
 }
 
-export interface EtaFormularioTransporte {
+export interface EtaTransportForm {
   name: string;
   subscribers: number;
   price: number;
   speed_kbps: number;
 }
 
-export interface EtaFormularioTelevision {
+export interface EtaTelevisionForm {
   name: string;
   subscriber_type: string;
   entities: string;
@@ -128,9 +128,9 @@ export interface EtaFormularioTelevision {
 }
 
 export interface EtaForms {
-  internet: EtaFormularioInternet[];
-  transport: EtaFormularioTransporte[];
-  television: EtaFormularioTelevision[];
+  internet: EtaInternetForm[];
+  transport: EtaTransportForm[];
+  television: EtaTelevisionForm[];
   entities: string;
 }
 
@@ -583,7 +583,7 @@ export interface CatalogTrafficLight extends TargetsTrafficLight {
 }
 
 /** Nombre ya importado que hoy no está en su catálogo (un producto, una zona…). */
-export interface ProductoPendiente {
+export interface PendingProduct {
   name: string;
   orders: number;
 }
@@ -784,8 +784,8 @@ interface CatalogsPageProps {
 export interface CatalogsNotificationsProps extends CatalogsPageProps {
   /** `null` en las áreas que el usuario no administra; vacía es "todo registrado". */
   pending: {
-    productos: ProductoPendiente[] | null;
-    estructura: ProductoPendiente[] | null;
+    productos: PendingProduct[] | null;
+    estructura: PendingProduct[] | null;
     ventas: PendingPerson[] | null;
   };
   ignored: CatalogIgnoredProduct[];

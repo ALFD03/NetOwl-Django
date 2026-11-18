@@ -40,7 +40,7 @@ import { TEAM_LABEL, KIND_LABEL } from '../../lib/flowFormat';
 import type { PendingStage, SupportStage, SupportStagesProps } from '../../types';
 
 type View = 'pendientes' | 'catalogo';
-type Borrador = { id?: number; name: string; team: string; type: string };
+type Draft = { id?: number; name: string; team: string; type: string };
 
 export function SupportStagesView({
   stages,
@@ -51,45 +51,45 @@ export function SupportStagesView({
   closeStages,
   newStage,
 }: SupportStagesProps) {
-  const vacio = (name = ''): Borrador => ({
+  const empty = (name = ''): Draft => ({
     name,
     team: teams[0]?.value ?? 'atc',
     type: types[0]?.value ?? 'cola',
   });
 
-  const [vista, setVista] = useState<View>(() =>
+  const [view, setView] = useState<View>(() =>
     pending.length && !newStage ? 'pendientes' : 'catalogo',
   );
   // `?new_stage=` abre el alta con el literal copiado: tiene que coincidir con el de Odoo.
-  const [borrador, setBorrador] = useState<Borrador | null>(() =>
-    newStage ? vacio(newStage) : null,
+  const [draft, setDraft] = useState<Draft | null>(() =>
+    newStage ? empty(newStage) : null,
   );
-  const [borrando, setBorrando] = useState<SupportStage | null>(null);
-  const [guardando, setGuardando] = useState(false);
+  const [deleting, setDeleting] = useState<SupportStage | null>(null);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [aviso, setNotice] = useState<string | null>(null);
+  const [warning, setNotice] = useState<string | null>(null);
   // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
-  const formOpen = Boolean(borrador || borrando);
+  const formOpen = Boolean(draft || deleting);
   useOnOpen(formOpen, () => setError(null));
 
-  const run = async (accion: () => Promise<{ message?: string }>, fallo: string) => {
-    setGuardando(true);
+  const run = async (action: () => Promise<{ message?: string }>, onFail: string) => {
+    setSaving(true);
     setError(null);
     try {
-      const r = await accion();
-      setBorrador(null);
-      setBorrando(null);
+      const r = await action();
+      setDraft(null);
+      setDeleting(null);
       setNotice(r.message ?? null);
     } catch (err: unknown) {
-      setError(getApiErrorMessage(err, fallo));
+      setError(getApiErrorMessage(err, onFail));
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
-  const guardar = (event: FormEvent) => {
+  const save = (event: FormEvent) => {
     event.preventDefault();
-    if (borrador) run(() => supportApi.saveEtapa(borrador), 'No se pudo guardar la etapa.');
+    if (draft) run(() => supportApi.saveStage(draft), 'No se pudo guardar la etapa.');
   };
 
   const pendingColumns: Column<PendingStage>[] = [
@@ -110,7 +110,7 @@ export function SupportStagesView({
           <Button
             size="sm"
             icon={<Plus className="h-4 w-4" />}
-            onClick={() => setBorrador(vacio(r.stage))}
+            onClick={() => setDraft(empty(r.stage))}
           >
             Clasificar
           </Button>
@@ -157,7 +157,7 @@ export function SupportStagesView({
           <button
             type="button"
             onClick={() =>
-              setBorrador({ id: r.id, name: r.name, team: r.team, type: r.type })
+              setDraft({ id: r.id, name: r.name, team: r.team, type: r.type })
             }
             className="rounded-lg border border-sky-500/30 p-2 text-sky-400 hover:bg-sky-500/10"
             title="Editar"
@@ -166,7 +166,7 @@ export function SupportStagesView({
           </button>
           <button
             type="button"
-            onClick={() => setBorrando(r)}
+            onClick={() => setDeleting(r)}
             className="rounded-lg border border-rose-500/30 p-2 text-rose-400 hover:bg-rose-500/10"
             title="Eliminar"
           >
@@ -182,8 +182,8 @@ export function SupportStagesView({
       toolbar={
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
           <ToggleGroup
-            activeKey={vista}
-            onChange={(key) => setVista(key as View)}
+            activeKey={view}
+            onChange={(key) => setView(key as View)}
             options={[
               {
                 key: 'pendientes',
@@ -193,7 +193,7 @@ export function SupportStagesView({
               { key: 'catalogo', label: `Etapas (${stages.length})`, icon: ListChecks },
             ]}
           />
-          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setBorrador(vacio())}>
+          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setDraft(empty())}>
             Nueva etapa
           </Button>
         </div>
@@ -204,7 +204,7 @@ export function SupportStagesView({
         className="mb-4"
         icon={<AlertTriangle />}
       />
-      <ActionMessage status={aviso ? { type: 'success', text: aviso } : null} className="mb-4" />
+      <ActionMessage status={warning ? { type: 'success', text: warning } : null} className="mb-4" />
 
       <NeonContainer
         title="Reglas fijas"
@@ -239,7 +239,7 @@ export function SupportStagesView({
         </ul>
       </NeonContainer>
 
-      {vista === 'pendientes' && (
+      {view === 'pendientes' && (
         <NeonContainer
           title="Etapas por clasificar"
           subtitle="Aparecen en los logs cargados y el catálogo no dice de qué equipo son"
@@ -264,7 +264,7 @@ export function SupportStagesView({
         </NeonContainer>
       )}
 
-      {vista === 'catalogo' && (
+      {view === 'catalogo' && (
         <NeonContainer
           title="Etapas"
           subtitle="Equipo y tipo de cada etapa de los tickets"
@@ -290,21 +290,21 @@ export function SupportStagesView({
       )}
 
       <Modal
-        isOpen={Boolean(borrador)}
-        onClose={() => setBorrador(null)}
-        title={borrador?.id ? 'Editar etapa' : 'Nueva etapa'}
+        isOpen={Boolean(draft)}
+        onClose={() => setDraft(null)}
+        title={draft?.id ? 'Editar etapa' : 'Nueva etapa'}
         subtitle="El nombre exacto con que la etapa aparece en Odoo"
         icon={<GitBranch className="h-5 w-5 text-sky-400" />}
         theme="blue"
         size="md"
       >
-        {borrador && (
-          <form onSubmit={guardar} className="space-y-6">
+        {draft && (
+          <form onSubmit={save} className="space-y-6">
             <TextField
               label="Etapa"
               icon={<GitBranch />}
-              value={borrador.name}
-              onChange={(e) => setBorrador({ ...borrador, name: e.target.value })}
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               placeholder="En Progreso - Soporte Técnico"
               autoFocus
             />
@@ -312,28 +312,28 @@ export function SupportStagesView({
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-slate-400">Equipo</label>
                 <SelectMenu
-                  value={borrador.team}
+                  value={draft.team}
                   options={teams}
-                  onChange={(team) => setBorrador({ ...borrador, team })}
+                  onChange={(team) => setDraft({ ...draft, team })}
                   aria-label="Equipo"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase text-slate-400">Tipo</label>
                 <SelectMenu
-                  value={borrador.type}
+                  value={draft.type}
                   options={types}
-                  onChange={(type) => setBorrador({ ...borrador, type })}
+                  onChange={(type) => setDraft({ ...draft, type })}
                   aria-label="Tipo"
                 />
               </div>
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
-              <Button type="button" variant="outline" onClick={() => setBorrador(null)}>
+              <Button type="button" variant="outline" onClick={() => setDraft(null)}>
                 Cancelar
               </Button>
-              <Button type="submit" isLoading={guardando} icon={<Save className="h-4 w-4" />}>
-                {borrador.id ? 'Guardar cambios' : 'Crear etapa'}
+              <Button type="submit" isLoading={saving} icon={<Save className="h-4 w-4" />}>
+                {draft.id ? 'Guardar cambios' : 'Crear etapa'}
               </Button>
             </div>
           </form>
@@ -341,8 +341,8 @@ export function SupportStagesView({
       </Modal>
 
       <Modal
-        isOpen={Boolean(borrando)}
-        onClose={() => setBorrando(null)}
+        isOpen={Boolean(deleting)}
+        onClose={() => setDeleting(null)}
         title="Confirmar eliminación"
         subtitle="Sus tramos pasarán a «sin clasificar» en el siguiente análisis"
         icon={<Trash2 className="h-5 w-5 text-rose-400" />}
@@ -351,18 +351,18 @@ export function SupportStagesView({
       >
         <div className="space-y-5">
           <p className="text-sm text-slate-300">
-            ¿Eliminar <strong className="text-white">{borrando?.name}</strong> del catálogo?
+            ¿Eliminar <strong className="text-white">{deleting?.name}</strong> del catálogo?
           </p>
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setBorrando(null)}>
+            <Button variant="outline" onClick={() => setDeleting(null)}>
               Cancelar
             </Button>
             <Button
               variant="danger"
-              isLoading={guardando}
+              isLoading={saving}
               onClick={() =>
-                borrando &&
-                run(() => supportApi.deleteEtapa(borrando.id), 'No se pudo eliminar la etapa.')
+                deleting &&
+                run(() => supportApi.deleteStage(deleting.id), 'No se pudo eliminar la etapa.')
               }
             >
               Eliminar

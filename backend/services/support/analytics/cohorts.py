@@ -83,9 +83,9 @@ def classify_tickets(df: pd.DataFrame) -> pd.DataFrame:
     out["periodo_creacion"] = out["dt_creacion"].dt.strftime("%Y-%m")
     out["periodo_cierre"] = out["dt_cierre"].dt.strftime("%Y-%m")
 
-    etapa = out["etapa"].astype(str).str.strip().str.lower()
-    out["es_resuelto"] = etapa.isin(RESOLVED_STAGES)
-    out["es_cancelado"] = etapa.isin(CANCELED_STAGES)
+    stage = out["etapa"].astype(str).str.strip().str.lower()
+    out["es_resuelto"] = stage.isin(RESOLVED_STAGES)
+    out["es_cancelado"] = stage.isin(CANCELED_STAGES)
     out["es_cerrado"] = out["es_resuelto"] | out["es_cancelado"]
 
     # Rezagado = no se cerró dentro de su propio mes de creación. Cubre por
@@ -111,55 +111,55 @@ class PeriodCohort:
     dimensionales de un mismo corte tienen que medirse contra la misma hora.
     """
 
-    periodo: str
+    period: str
     df: pd.DataFrame
-    corte: pd.Timestamp = field(default_factory=pd.Timestamp.now)
+    cutoff: pd.Timestamp = field(default_factory=pd.Timestamp.now)
 
-    def filter(self, columna: str, valor: Any) -> PeriodCohort:
+    def filter(self, column: str, value: Any) -> PeriodCohort:
         """La misma cohorte restringida a las filas con `columna == valor`."""
-        if self.df.empty or columna not in self.df.columns:
-            return PeriodCohort(self.periodo, self.df.iloc[0:0], self.corte)
-        return PeriodCohort(self.periodo, self.df[self.df[columna] == valor], self.corte)
+        if self.df.empty or column not in self.df.columns:
+            return PeriodCohort(self.period, self.df.iloc[0:0], self.cutoff)
+        return PeriodCohort(self.period, self.df[self.df[column] == value], self.cutoff)
 
-    def valores(self, columna: str) -> list[str]:
+    def values(self, column: str) -> list[str]:
         """Valores distintos de la columna, en orden alfabético estable."""
-        if self.df.empty or columna not in self.df.columns:
+        if self.df.empty or column not in self.df.columns:
             return []
-        return sorted(str(v) for v in self.df[columna].dropna().unique())
+        return sorted(str(v) for v in self.df[column].dropna().unique())
 
-    def desglosar(self, columna: str) -> Iterator[tuple[str, PeriodCohort]]:
+    def break_down(self, column: str) -> Iterator[tuple[str, PeriodCohort]]:
         """Itera (valor, sub-cohorte) por cada valor distinto de la columna."""
-        for valor in self.valores(columna):
-            yield valor, self.filter(columna, valor)
+        for value in self.values(column):
+            yield value, self.filter(column, value)
 
     @property
     def empty(self) -> bool:
         """Si la cohorte no tiene ningun ticket."""
         return self.df.empty
 
-    def population(self, clave: str) -> pd.DataFrame:
+    def population(self, key: str) -> pd.DataFrame:
         """La sub-tabla sobre la que se mide una métrica."""
         if self.df.empty:
             return self.df
 
-        cerrado = self.df["cerrado_en_periodo"]
-        if clave == POP_CLOSED:
-            return self.df[cerrado]
-        if clave == POP_RESOLVED:
-            return self.df[cerrado & self.df["es_resuelto"]]
-        if clave == POP_CANCELLED:
-            return self.df[cerrado & self.df["es_cancelado"]]
-        if clave == POP_CREATED:
+        is_closed = self.df["cerrado_en_periodo"]
+        if key == POP_CLOSED:
+            return self.df[is_closed]
+        if key == POP_RESOLVED:
+            return self.df[is_closed & self.df["es_resuelto"]]
+        if key == POP_CANCELLED:
+            return self.df[is_closed & self.df["es_cancelado"]]
+        if key == POP_CREATED:
             return self.df[self.df["nacido_en_periodo"]]
-        if clave == POP_ESCALATED:
+        if key == POP_ESCALATED:
             if "es_escalado" not in self.df.columns:
                 return self.df.iloc[0:0]
-            return self.df[cerrado & self.df["es_escalado"]]
-        raise ValueError(f"Población desconocida: {clave!r}")
+            return self.df[is_closed & self.df["es_escalado"]]
+        raise ValueError(f"Población desconocida: {key!r}")
 
 
 def build_cohort(
-    df_all: pd.DataFrame, periodo: str, hasta: date | None = None
+    df_all: pd.DataFrame, period: str, until: date | None = None
 ) -> PeriodCohort:
     """
     Los tickets de un periodo: los que nacieron en él o los que cerraron en él.
@@ -186,8 +186,8 @@ def build_cohort(
     Las dos son una comparación vectorizada sobre las filas ya recortadas, así
     que los treinta y un cortes de un mes no cuestan una pasada más.
     """
-    nacidos = df_all["periodo_creacion"] == periodo
-    cerrados = df_all["es_cerrado"] & (df_all["periodo_cierre"] == periodo)
+    born = df_all["periodo_creacion"] == period
+    closed = df_all["es_cerrado"] & (df_all["periodo_cierre"] == period)
 
     # Sin día de corte el "ahora" es el final del mes, no la hora del cálculo.
     # Es lo que hace que **un mes cerrado dé siempre lo mismo**: si el corte
@@ -199,22 +199,22 @@ def build_cohort(
     # El mes en curso es la única excepción, y por el mismo motivo: su final
     # todavía no ha ocurrido, así que se topa en el instante del cálculo para
     # no contar una espera que aún no ha pasado.
-    corte = min(pd.Period(periodo, freq="M").end_time, pd.Timestamp.now())
+    cutoff = min(pd.Period(period, freq="M").end_time, pd.Timestamp.now())
 
-    if hasta is not None:
+    if until is not None:
         # El día del corte entra entero.
-        corte = pd.Timestamp(hasta) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
-        nacidos = nacidos & (df_all["dt_creacion"] <= corte)
-        cerrados = cerrados & (df_all["dt_cierre"] <= corte)
+        cutoff = pd.Timestamp(until) + pd.Timedelta(days=1) - pd.Timedelta(nanoseconds=1)
+        born = born & (df_all["dt_creacion"] <= cutoff)
+        closed = closed & (df_all["dt_cierre"] <= cutoff)
 
-    dentro = nacidos | cerrados
-    df = df_all[dentro].copy()
-    df["nacido_en_periodo"] = nacidos[dentro]
-    df["cerrado_en_periodo"] = cerrados[dentro]
-    df["asignado_al_corte"] = df["dt_asignacion"].where(df["dt_asignacion"] <= corte)
-    df["cerrado_al_corte"] = df["es_cerrado"] & (df["dt_cierre"] <= corte)
+    inside = born | closed
+    df = df_all[inside].copy()
+    df["nacido_en_periodo"] = born[inside]
+    df["cerrado_en_periodo"] = closed[inside]
+    df["asignado_al_corte"] = df["dt_asignacion"].where(df["dt_asignacion"] <= cutoff)
+    df["cerrado_al_corte"] = df["es_cerrado"] & (df["dt_cierre"] <= cutoff)
 
-    return PeriodCohort(periodo, df, corte)
+    return PeriodCohort(period, df, cutoff)
 
 
 def available_periods(df_all: pd.DataFrame) -> list[str]:
@@ -224,6 +224,6 @@ def available_periods(df_all: pd.DataFrame) -> list[str]:
     Se unen los meses de creación y los de cierre: un mes en el que no nació
     nada pero sí se cerró arrastre sigue teniendo un reporte que dar.
     """
-    creados = df_all["periodo_creacion"].dropna()
-    cerrados = df_all.loc[df_all["es_cerrado"], "periodo_cierre"].dropna()
-    return sorted(set(creados) | set(cerrados), reverse=True)
+    created = df_all["periodo_creacion"].dropna()
+    closed = df_all.loc[df_all["es_cerrado"], "periodo_cierre"].dropna()
+    return sorted(set(created) | set(closed), reverse=True)

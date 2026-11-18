@@ -6,11 +6,11 @@ import { Briefcase } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { DataTable, NeonContainer, Panel, ToggleGroup, type Column } from '@/shared/ui';
 import { formatAmount, formatPctValue } from '../../lib/format';
-import type { PlanPyme } from '../../types';
+import type { SmePlan } from '../../types';
 
-const ENLACE = '/catalogos/productos/';
+const LINK = '/catalogos/productos/';
 
-const columns: Column<PlanPyme>[] = [
+const columns: Column<SmePlan>[] = [
   {
     header: 'Plan',
     accessor: (row) => (
@@ -38,26 +38,26 @@ const columns: Column<PlanPyme>[] = [
 ];
 
 export function SmePlansCard({
-  planes, canEditPlans, compacto,
+  plans, canEditPlans, compact,
 }: {
-  planes: PlanPyme[];
+  plans: SmePlan[];
   canEditPlans: boolean;
   /** En la edición de condiciones: solo un recordatorio de dónde se editan. */
-  compacto: boolean;
+  compact: boolean;
 }) {
-  const [filtro, setFilter] = useState<'todos' | 'sin'>('todos');
-  const withoutPct = planes.filter((p) => p.sme_commission_pct === null).length;
+  const [filter, setFilter] = useState<'todos' | 'sin'>('todos');
+  const withoutPct = plans.filter((p) => p.sme_commission_pct === null).length;
   // Los que no cobran nada primero: son lo que hay que resolver.
-  const ordenados = useMemo(
-    () => [...planes].sort((a, b) => Number(b.sme_commission_pct === null) - Number(a.sme_commission_pct === null) || a.name.localeCompare(b.name)),
-    [planes],
+  const sorted = useMemo(
+    () => [...plans].sort((a, b) => Number(b.sme_commission_pct === null) - Number(a.sme_commission_pct === null) || a.name.localeCompare(b.name)),
+    [plans],
   );
-  const visibles = filtro === 'sin' ? ordenados.filter((p) => p.sme_commission_pct === null) : ordenados;
-  const enlace = canEditPlans ? <a href={ENLACE} className="text-xs text-sky-400 hover:underline">Editar en Catálogos › Productos</a> : null;
+  const visible = filter === 'sin' ? sorted.filter((p) => p.sme_commission_pct === null) : sorted;
+  const link = canEditPlans ? <a href={LINK} className="text-xs text-sky-400 hover:underline">Editar en Catálogos › Productos</a> : null;
 
-  if (compacto) {
+  if (compact) {
     return (
-      <Panel title="Planes PYME" actions={enlace}>
+      <Panel title="Planes PYME" actions={link}>
         <p className="text-xs text-slate-400">
           Su % de comisión se edita en el catálogo de productos, no aquí
           {withoutPct ? ` · ${withoutPct} ${withoutPct === 1 ? 'plan' : 'planes'} sin definir` : ''}.
@@ -80,18 +80,18 @@ export function SmePlansCard({
           {withoutPct > 0 && (
             <ToggleGroup
               options={[
-                { key: 'todos', label: `Todos (${planes.length})` },
+                { key: 'todos', label: `Todos (${plans.length})` },
                 { key: 'sin', label: `Sin % (${withoutPct})` },
               ]}
-              activeKey={filtro}
+              activeKey={filter}
               onChange={(key) => setFilter(key as 'todos' | 'sin')}
             />
           )}
-          {enlace}
+          {link}
         </div>
       )}
     >
-      <DataTable columns={columns} data={visibles} searchable searchPlaceholder="Buscar plan..." emptyMessage="No hay planes PYME en el catálogo." />
+      <DataTable columns={columns} data={visible} searchable searchPlaceholder="Buscar plan..." emptyMessage="No hay planes PYME en el catálogo." />
     </NeonContainer>
   );
 }

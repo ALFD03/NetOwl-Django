@@ -6,7 +6,7 @@ dimensiones del analisis agrupan por el literal de la columna. Un nombre
 escrito de dos maneras son dos tecnicos distintos en el reporte, y nada avisa.
 
 Este directorio es el vocabulario contra el que se contrastan esos literales.
-Por eso `nombre_odoo` no es un nombre bonito sino **el nombre exacto tal y como
+Por eso `odoo_name` no es un nombre bonito sino **el nombre exacto tal y como
 Odoo lo exporta**, sufijo incluido; el nombre y el apellido de persona van
 aparte, para poder presentarlos sin tocar la clave.
 
@@ -26,7 +26,7 @@ from django.db.models.functions import Lower
 from core.odoo_names import normalize_odoo_name
 
 
-class Departamento(models.Model):
+class Department(models.Model):
     """Area a la que pertenece un usuario de soporte.
 
     Es un modelo y no una columna de texto por lo mismo que el directorio
@@ -34,81 +34,82 @@ class Departamento(models.Model):
     deja de agrupar. Aqui solo puede elegirse uno de los que ya existen.
     """
 
-    nombre = models.CharField(max_length=120, unique=True)
+    name = models.CharField(max_length=120, unique=True, db_column="nombre")
 
     class Meta:
         db_table = "catalogo_departamentos"
-        ordering = ["nombre"]
+        ordering = ["name"]
         verbose_name = "departamento"
         verbose_name_plural = "departamentos"
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
 
-class MovimientoInvalido(ValueError):
+class InvalidMove(ValueError):
     """Un cambio de departamento, una baja o una reactivacion que no cuadra
     con las fechas que el usuario ya tiene."""
 
 
-class UsuarioSoporte(models.Model):
+class SupportUser(models.Model):
     """Persona a la que se le puede asignar —o que puede crear— un ticket.
 
-    `nombre_odoo` es la clave real: es el literal con el que la persona aparece
+    `odoo_name` es la clave real: es el literal con el que la persona aparece
     en las columnas `Asignado a` y `Creado por` del export, y lo que permite
-    cruzar el directorio con los tickets ya importados. `nombre` y `apellido`
+    cruzar el directorio con los tickets ya importados. `name` y `last_name`
     son para leerlo en pantalla, y no se derivan del anterior porque los
     apellidos compuestos no se parten por el primer espacio.
     """
 
-    nombre_odoo = models.CharField(max_length=200, unique=True)
-    nombre = models.CharField(max_length=120)
-    apellido = models.CharField(max_length=120, blank=True, default="")
+    odoo_name = models.CharField(max_length=200, unique=True, db_column="nombre_odoo")
+    name = models.CharField(max_length=120, db_column="nombre")
+    last_name = models.CharField(max_length=120, blank=True, default="", db_column="apellido")
     # El departamento *vigente*. La historia completa esta en
-    # `HistorialDepartamento`, y esta columna es su ultima fila repetida: se
+    # `DepartmentHistory`, y esta columna es su ultima fila repetida: se
     # conserva porque es lo que filtra, ordena y cuenta el listado sin tener
-    # que recorrer la historia. Solo la escriben `cambiar_departamento`,
+    # que recorrer la historia. Solo la escriben `change_department`,
     # `undo_last_change` y la correccion del alta.
     #
     # Obligatorio y con PROTECT: un usuario sin departamento no agrupa por
     # nada, y borrar un departamento con gente dentro dejaria filas huerfanas.
-    departamento = models.ForeignKey(
-        Departamento,
+    department = models.ForeignKey(
+        Department,
         on_delete=models.PROTECT,
-        related_name="usuarios",
+        related_name="users",
+        db_column="departamento_id",
     )
 
     # Nulo en quien se registro antes de que existiera el campo: inventarle
     # una fecha seria peor que dejarla sin rellenar.
-    fecha_ingreso = models.DateField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True, db_column="fecha_ingreso")
     # La baja. **No se borra a la persona**: sus tickets pasados siguen siendo
     # suyos y el directorio tiene que seguir reconociendola. Lo que cambia es
     # que a partir de esta fecha no deberia entrarle ningun ticket nuevo, y
     # `tickets_after_churn` avisa de los que entren.
-    fecha_egreso = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True, db_column="fecha_egreso")
 
-    creado_en = models.DateTimeField(auto_now_add=True)
-    actualizado_en = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_column="creado_en")
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "catalogo_usuarios_soporte"
-        ordering = ["nombre_odoo"]
+        ordering = ["odoo_name"]
         verbose_name = "usuario de soporte"
         verbose_name_plural = "usuarios de soporte"
 
     def __str__(self):
-        return self.nombre_odoo
+        return self.odoo_name
 
     @property
-    def nombre_completo(self) -> str:
+    def full_name(self) -> str:
         """Nombre y apellido, para presentar sin arrastrar el sufijo."""
-        return f"{self.nombre} {self.apellido}".strip()
+        return f"{self.name} {self.last_name}".strip()
 
     @property
-    def activo(self) -> bool:
-        return self.fecha_egreso is None
+    def is_active(self) -> bool:
+        return self.end_date is None
 
-    def cambiar_departamento(self, departamento: Departamento, fecha: date) -> HistorialDepartamento:
+    def change_department(self, department: Department, on_date: date) -> DepartmentHistory:
         """Pasa a la persona a otro departamento a partir de `fecha`.
 
         Solo se anade al final: la fecha tiene que ser posterior al ultimo
@@ -116,23 +117,23 @@ class UsuarioSoporte(models.Model):
         reescribiria a que departamento pertenecio en meses ya revisados, y eso
         se hace deshaciendo, no colando una fila.
         """
-        if not self.activo:
-            raise MovimientoInvalido("El usuario está dado de baja: reactívalo antes de cambiarlo de departamento.")
-        if departamento.pk == self.departamento_id:
-            raise MovimientoInvalido(f"El usuario ya está en «{departamento.nombre}».")
-        if self.fecha_ingreso and fecha <= self.fecha_ingreso:
-            raise MovimientoInvalido("La fecha del cambio tiene que ser posterior a la fecha de ingreso.")
-        ultimo = self.historial.exclude(desde=None).order_by("-desde").first()
-        if ultimo and fecha <= ultimo.desde:
-            raise MovimientoInvalido(
-                f"La fecha del cambio tiene que ser posterior al último ({ultimo.desde:%d/%m/%Y})."
+        if not self.is_active:
+            raise InvalidMove("El usuario está dado de baja: reactívalo antes de cambiarlo de departamento.")
+        if department.pk == self.department_id:
+            raise InvalidMove(f"El usuario ya está en «{department.name}».")
+        if self.start_date and on_date <= self.start_date:
+            raise InvalidMove("La fecha del cambio tiene que ser posterior a la fecha de ingreso.")
+        last = self.history.exclude(since=None).order_by("-since").first()
+        if last and on_date <= last.since:
+            raise InvalidMove(
+                f"La fecha del cambio tiene que ser posterior al último ({last.since:%d/%m/%Y})."
             )
 
         with transaction.atomic():
-            paso = self.historial.create(departamento=departamento, desde=fecha)
-            self.departamento = departamento
-            self.save(update_fields=["departamento", "actualizado_en"])
-        return paso
+            step = self.history.create(department=department, since=on_date)
+            self.department = department
+            self.save(update_fields=["department", "updated_at"])
+        return step
 
     def undo_last_change(self) -> None:
         """Borra el ultimo cambio y devuelve a la persona al departamento anterior.
@@ -141,85 +142,87 @@ class UsuarioSoporte(models.Model):
         ingreso— no se deshace: se corrige editando el usuario mientras no
         tenga cambios encima.
         """
-        pasos = list(self.historial.all())
-        if len(pasos) < 2:
-            raise MovimientoInvalido("No hay ningún cambio de departamento que deshacer.")
+        steps = list(self.history.all())
+        if len(steps) < 2:
+            raise InvalidMove("No hay ningún cambio de departamento que deshacer.")
         with transaction.atomic():
-            pasos[-1].delete()
-            self.departamento = pasos[-2].departamento
-            self.save(update_fields=["departamento", "actualizado_en"])
+            steps[-1].delete()
+            self.department = steps[-2].department
+            self.save(update_fields=["department", "updated_at"])
 
-    def deactivate(self, fecha: date) -> None:
+    def deactivate(self, on_date: date) -> None:
         """Marca la salida. No toca la historia ni borra nada."""
-        if not self.activo:
-            raise MovimientoInvalido("El usuario ya está dado de baja.")
-        if self.fecha_ingreso and fecha < self.fecha_ingreso:
-            raise MovimientoInvalido("La fecha de egreso no puede ser anterior a la de ingreso.")
-        ultimo = self.historial.exclude(desde=None).order_by("-desde").first()
-        if ultimo and fecha < ultimo.desde:
-            raise MovimientoInvalido(
-                f"La fecha de egreso no puede ser anterior al último cambio de departamento ({ultimo.desde:%d/%m/%Y})."
+        if not self.is_active:
+            raise InvalidMove("El usuario ya está dado de baja.")
+        if self.start_date and on_date < self.start_date:
+            raise InvalidMove("La fecha de egreso no puede ser anterior a la de ingreso.")
+        last = self.history.exclude(since=None).order_by("-since").first()
+        if last and on_date < last.since:
+            raise InvalidMove(
+                f"La fecha de egreso no puede ser anterior al último cambio de departamento ({last.since:%d/%m/%Y})."
             )
-        self.fecha_egreso = fecha
-        self.save(update_fields=["fecha_egreso", "actualizado_en"])
+        self.end_date = on_date
+        self.save(update_fields=["end_date", "updated_at"])
 
-    def reactivar(self) -> None:
+    def reactivate(self) -> None:
         """Deshace la baja: una reincorporacion o una baja puesta por error."""
-        if self.activo:
-            raise MovimientoInvalido("El usuario no está dado de baja.")
-        self.fecha_egreso = None
-        self.save(update_fields=["fecha_egreso", "actualizado_en"])
+        if self.is_active:
+            raise InvalidMove("El usuario no está dado de baja.")
+        self.end_date = None
+        self.save(update_fields=["end_date", "updated_at"])
 
     def save(self, *args, **kwargs):
         # La normalizacion vive aqui y no solo en la vista: cualquier alta
         # —una vista futura, un comando, el shell— tiene que dejar la misma
         # cadena, porque la unicidad se apoya en ella.
-        self.nombre_odoo = normalize_odoo_name(self.nombre_odoo)
+        self.odoo_name = normalize_odoo_name(self.odoo_name)
         super().save(*args, **kwargs)
 
 
-class HistorialDepartamento(models.Model):
+class DepartmentHistory(models.Model):
     """Un tramo de la vida de un usuario en un departamento.
 
     Una persona pasa por varios departamentos, y los tickets de un mes tienen
     que agruparse bajo el departamento en el que estaba *ese* mes, no en el de
     hoy: si no, un ascenso reescribiria el reparto de todos los meses pasados.
 
-    Cada fila dice "a partir de `desde`, en `departamento`", y el tramo acaba
-    donde empieza el siguiente. La primera fila tiene `desde` nulo y significa
+    Cada fila dice "a partir de `since`, en `department`", y el tramo acaba
+    donde empieza el siguiente. La primera fila tiene `since` nulo y significa
     "desde el ingreso": asi no hay que mantenerla sincronizada con
-    `fecha_ingreso`, que puede faltar o corregirse despues.
+    `start_date`, que puede faltar o corregirse despues.
 
     Vive en el esquema del entorno, como el resto del directorio.
     """
 
-    usuario = models.ForeignKey(
-        UsuarioSoporte,
+    user = models.ForeignKey(
+        SupportUser,
         on_delete=models.CASCADE,
-        related_name="historial",
+        related_name="history",
+        db_column="usuario_id",
     )
     # PROTECT por lo mismo que en el usuario: borrar un departamento por el
     # que alguien paso dejaria meses pasados sin donde agrupar.
-    departamento = models.ForeignKey(
-        Departamento,
+    department = models.ForeignKey(
+        Department,
         on_delete=models.PROTECT,
-        related_name="historial",
+        related_name="history",
+        db_column="departamento_id",
     )
-    desde = models.DateField(null=True, blank=True)
+    since = models.DateField(null=True, blank=True, db_column="desde")
 
-    creado_en = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_column="creado_en")
 
     class Meta:
         db_table = "catalogo_usuarios_soporte_historial"
-        ordering = [models.F("desde").asc(nulls_first=True), "id"]
+        ordering = [models.F("since").asc(nulls_first=True), "id"]
         verbose_name = "cambio de departamento"
         verbose_name_plural = "historial de departamentos"
 
     def __str__(self):
-        return f"{self.usuario_id} -> {self.departamento_id} ({self.desde or 'ingreso'})"
+        return f"{self.user_id} -> {self.department_id} ({self.since or 'ingreso'})"
 
 
-class EtapaSoporte(models.Model):
+class SupportStage(models.Model):
     """Una etapa de los tickets: de que equipo es y que se hace en ella.
 
     Los logs de etapa solo dicen "de A paso a B". Para repartir el tiempo de un
@@ -236,39 +239,39 @@ class EtapaSoporte(models.Model):
     se ve en cuanto se vuelve a ejecutar, en todos los meses.
     """
 
-    EQUIPOS = [
+    TEAMS = [
         ("atc", "Atención al cliente"),
         ("soporte", "Soporte técnico"),
         ("compartida", "Compartida"),
     ]
-    TIPOS = [
+    KINDS = [
         ("cola", "Cola"),
         ("pausa", "Pausa"),
         ("gestion", "Gestión"),
     ]
 
     # El literal exacto de Odoo: es la clave contra la que se cruzan los logs.
-    nombre = models.CharField(max_length=200)
-    equipo = models.CharField(max_length=12, choices=EQUIPOS)
-    tipo = models.CharField(max_length=12, choices=TIPOS)
+    name = models.CharField(max_length=200, db_column="nombre")
+    team = models.CharField(max_length=12, choices=TEAMS, db_column="equipo")
+    kind = models.CharField(max_length=12, choices=KINDS, db_column="tipo")
 
-    creado_en = models.DateTimeField(auto_now_add=True)
-    actualizado_en = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_column="creado_en")
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "catalogo_etapas_soporte"
-        ordering = ["equipo", "nombre"]
+        ordering = ["team", "name"]
         verbose_name = "etapa de soporte"
         verbose_name_plural = "etapas de soporte"
         constraints = [
             # Los logs se cruzan sin distinguir mayusculas: dos filas que solo
             # difieren en la caja serian la misma etapa.
-            models.UniqueConstraint(Lower("nombre"), name="etapa_soporte_nombre_unico"),
+            models.UniqueConstraint(Lower("name"), name="etapa_soporte_nombre_unico"),
         ]
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
     def save(self, *args, **kwargs):
-        self.nombre = " ".join(str(self.nombre or "").split())
+        self.name = " ".join(str(self.name or "").split())
         super().save(*args, **kwargs)

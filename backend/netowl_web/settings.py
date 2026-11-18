@@ -213,7 +213,7 @@ USE_VITE_DEV_SERVER = os.getenv("VITE_DEV_SERVER", "").lower() in {"1", "true", 
 # esa existe desde Django 6 y el contenedor corre 5.2 (ver requirements.txt).
 # `{nonce}` lo sustituye el middleware en cada peticion.
 _VITE = ["http://localhost:5173"] if USE_VITE_DEV_SERVER else []
-CSP_POLITICA = {
+CSP_POLICY = {
     "default-src": ["'self'"],
     "script-src": ["'self'", "'nonce-{nonce}'", *_VITE],
     "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", *_VITE],
@@ -464,9 +464,9 @@ LOGGING = {
 # pero hay que escribirla: `PERMITIR_HTTP_INSEGURO=1` en el `.env`. La
 # diferencia con el comportamiento anterior es que ahora servir en claro es una
 # decision anotada en el despliegue y no el resultado de olvidar una clave.
-PERMITIR_HTTP_INSEGURO = os.getenv("PERMITIR_HTTP_INSEGURO", "").lower() in {"1", "true", "yes"}
+ALLOW_INSECURE_HTTP = os.getenv("PERMITIR_HTTP_INSEGURO", "").lower() in {"1", "true", "yes"}
 
-if not DEBUG and not SECURE_SSL_REDIRECT and not PERMITIR_HTTP_INSEGURO:
+if not DEBUG and not SECURE_SSL_REDIRECT and not ALLOW_INSECURE_HTTP:
     raise ImproperlyConfigured(
         "DJANGO_SECURE_SSL está en false con DJANGO_DEBUG en false: la sesión y "
         "el token CSRF viajarían sin el flag Secure y sin HSTS. Ponga "

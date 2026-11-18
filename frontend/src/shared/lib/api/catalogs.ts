@@ -24,17 +24,17 @@ export const catalogsApi = {
    * Un solo endpoint para todos los catálogos: lo que cambia entre ellos son
    * los campos del cuerpo, no la forma de la petición.
    */
-  guardar: async (tipo: CatalogKind, payload: CatalogPayload) =>
-    (await apiClient.post('/api/catalogs/save/', { tipo, ...payload })).data,
+  save: async (kind: CatalogKind, payload: CatalogPayload) =>
+    (await apiClient.post('/api/catalogs/save/', { kind, ...payload })).data,
 
   /**
    * Alta de varias filas de un catálogo de una vez. Cada una se valida como un
-   * alta suelta; las que no entran vuelven en `errores` y las demás quedan
+   * alta suelta; las que no entran vuelven en `errors` y las demás quedan
    * guardadas.
    */
-  guardarLote: async (tipo: CatalogKind, filas: CatalogPayload[]): Promise<BatchResult> =>
-    (await apiClient.post('/api/catalogs/save-batch/', { tipo, filas })).data,
+  saveBatch: async (kind: CatalogKind, rows: CatalogPayload[]): Promise<BatchResult> =>
+    (await apiClient.post('/api/catalogs/save-batch/', { kind, rows })).data,
 
-  eliminar: async (tipo: CatalogKind, id: number) =>
-    (await apiClient.post('/api/catalogs/delete/', { tipo, id })).data,
+  remove: async (kind: CatalogKind, id: number) =>
+    (await apiClient.post('/api/catalogs/delete/', { kind, id })).data,
 };

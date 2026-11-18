@@ -16,7 +16,7 @@ from services.crm.analytics import (
     get_crm_close_history,
     get_crm_day_payload,
     get_crm_day_series,
-    get_crm_dimensiones,
+    get_crm_dimensions,
     get_crm_metric_totals,
     get_crm_periods,
 )
@@ -31,7 +31,7 @@ def _metric_totals(request, period: str | None) -> dict:
         return get_crm_metric_totals(period)
     if not period:
         return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
-    return get_crm_metric_totals(solo=period)
+    return get_crm_metric_totals(only=period)
 
 
 @endpoint(perms=["can_view_crm", "can_view_crm_dashboard"], require_all=True, keys=CRM_KEYS)
@@ -55,7 +55,7 @@ def analytics(request):
     """
     periods = visible_periods(request, get_crm_periods())
     period = visible_period(request, request.GET.get("period"), lambda: periods)
-    day = request_int(request, "day", minimo=1, maximo=31)
+    day = request_int(request, "day", min_value=1, max_value=31)
     target = period or (periods[0] if periods else None)
 
     series = get_crm_day_series(target) if target else {}
@@ -67,7 +67,7 @@ def analytics(request):
         dimensions, global_data = cut.get("dimensiones", []), cut.get("global", {})
     else:
         # Sin cortes diarios, el cierre del mes.
-        dimensions = get_crm_dimensiones(periodos=[target] if target else None)
+        dimensions = get_crm_dimensions(periods=[target] if target else None)
         closing = get_crm_close_history([target]) if target else []
         global_data = closing[0] if closing else {}
 
@@ -96,7 +96,7 @@ def results(request):
 def day_metrics(request):
     """El corte completo de un día: `{global, dimensions}`. Lo escribe el análisis."""
     period = request.GET.get("period")
-    day = request_int(request, "day", minimo=1, maximo=31)
+    day = request_int(request, "day", min_value=1, max_value=31)
     if not period or not day:
         raise ApiError("Se requieren period y day.")
     if month_denied(request, period, get_crm_periods):
@@ -116,4 +116,4 @@ def dimension_metrics(request):
     periods = clamp_requested(request, [period] if period else None, get_crm_periods)
     if periods == []:
         return {"dimensiones": []}
-    return {"dimensiones": get_crm_dimensiones(periodos=periods, dimension=request.GET.get("dimension"))}
+    return {"dimensiones": get_crm_dimensions(periods=periods, dimension=request.GET.get("dimension"))}

@@ -60,7 +60,7 @@ GLOBAL_METRICS = Table(
     defaults={"id": "1", "updated_at": "now()"},
 )
 DIMENSION_HISTORY = Table(
-    TableNames.CRM_DIMENSIONES_HISTORICO,
+    TableNames.CRM_DIMENSIONS_HISTORICAL,
     {
         "id": SERIAL, "periodo_reporte": TEXT, "dimension": TEXT, "valor": TEXT, "metricas": JSON,
         "efectividad": JSON, "updated_at": TIMESTAMP,

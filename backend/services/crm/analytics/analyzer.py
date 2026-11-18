@@ -56,14 +56,14 @@ _CLOSE_COLUMNS = (
 _CLOSE_JSON_COLUMNS = ("efectividad", "tiempo_por_etapa")
 
 
-def _save_close(db: DBConnector, periodo: str, m: dict) -> None:
+def _save_close(db: DBConnector, period: str, m: dict) -> None:
     """Guarda (o actualiza) la fila de cierre de un periodo.
 
     Se indexa con `m[c]` y no con `.get`: una métrica declarada y no calculada
     debe reventar, no escribir un NULL silencioso en el histórico.
     """
     row = {
-        "periodo_reporte": periodo,
+        "periodo_reporte": period,
         **{c: m[c] for c in _CLOSE_COLUMNS},
         **{c: m.get(c, []) for c in _CLOSE_JSON_COLUMNS},
     }
@@ -71,16 +71,16 @@ def _save_close(db: DBConnector, periodo: str, m: dict) -> None:
         upsert(cur, tables.CLOSE_HISTORY, [row])
 
 
-def _save_global(db: DBConnector, resumen_global: dict, tiempo_por_etapa: list, efectividad: list) -> None:
+def _save_global(db: DBConnector, global_summary: dict, time_by_stage: list, effectiveness: list) -> None:
     """Guarda la fila única con el promedio de todos los periodos."""
-    row = {"id": 1, "resumen_global": resumen_global, "tiempo_por_etapa": tiempo_por_etapa, "efectividad": efectividad}
+    row = {"id": 1, "resumen_global": global_summary, "tiempo_por_etapa": time_by_stage, "efectividad": effectiveness}
     with db.transaction() as cur:
         upsert(cur, tables.GLOBAL_METRICS, [row])
 
 
 def run_crm_analysis(
     period_str: str | None = None,
-    progreso: Callable[[int, int, str], None] | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> dict:
     """Recalcula CRM: un periodo concreto, o todos los que tengan oportunidades.
 
@@ -94,32 +94,32 @@ def run_crm_analysis(
     es lo que alimenta la barra de la interfaz mientras los recorre.
     """
     db = DBConnector()
-    datos = prepare_data(db)
+    data = prepare_data(db)
 
-    if datos.vacio:
+    if data.empty:
         print("⚠️ No hay oportunidades de CRM para analizar.")
         return {"status": "empty", "message": "No hay datos cargados."}
 
     single_month = bool(period_str and len(period_str) == 7)
-    target_periods = [period_str] if single_month else datos.periodos()
+    target_periods = [period_str] if single_month else data.periods()
 
     print(f"\n📊 PROCESANDO CRM ANALYTICS PARA {len(target_periods)} PERIODO(S)...")
     all_summaries = {}
 
     for p in target_periods:
-        pob = build_populations(datos, p)
-        if pob is None:
+        pop = build_populations(data, p)
+        if pop is None:
             continue
 
-        m = pob.metricas()
+        m = pop.metrics()
 
         _save_close(db, p, m)
-        save_dimensions(db, p, build_crm_dimension_rows(pob))
+        save_dimensions(db, p, build_crm_dimension_rows(pop))
         # Solo del mes pedido: recorrer los dias de todo el historico son
         # treinta y un cortes por cada mes que haya, y nadie lanza un analisis
         # global esperando eso. El cierre de cada mes si se recalcula entero.
         if single_month:
-            build_crm_day_metrics(p, db=db, datos=datos, progreso=progreso)
+            build_crm_day_metrics(p, db=db, data=data, progress=progress)
 
         all_summaries[p] = m
 

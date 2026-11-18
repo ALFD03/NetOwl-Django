@@ -1,4 +1,4 @@
-"""Páginas de `/auth/`. El primer administrador se crea con `manage.py crear_admin`."""
+"""Páginas de `/auth/`. El primer administrador se crea con `manage.py create_admin`."""
 
 from django.urls import path
 

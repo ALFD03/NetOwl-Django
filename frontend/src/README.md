@@ -157,7 +157,7 @@ as `Sí`/`No`, not `true`/`false`).
 **Every table pages at 20 rows** (`ROWS_PER_PAGE`). `DataTable` does it by
 default (`pageSize={0}` shows everything); the few hand-built read-only tables
 (the dashboards' history, `NodePerformanceTable`, `UsersTable`) use the same
-`usePaginacion` + `Paginacion` pair, so the pager is one component everywhere.
+`usePagination` + `Pagination` pair, so the pager is one component everywhere.
 **Every paginated table carries it twice, above and below** (`posicion="arriba"`
 and the default `abajo`, sharing one `estado`): at 20 rows, scrolling down to the
 foot to turn the page was the annoyance. It only appears past one page. Fixed matrices (the ETA speed grid, the
@@ -304,14 +304,14 @@ and the copy.
 ## The reference catalogues
 
 `pages/Catalogs/` is a module of its own, one page per group, each behind its own
-permission: **Productos** (plans and regulator plans; `can_manage_catalogo_operacional`),
-**Estructura** (zones, sites, states; `can_manage_catalogo_comercial`) and **Ventas**
-(business-unit coordinators and objectives; `can_manage_catalogo_ventas`). They edit the
+permission: **Productos** (plans and regulator plans; `can_manage_operational_catalog`),
+**Estructura** (zones, sites, states; `can_manage_commercial_catalog`) and **Ventas**
+(business-unit coordinators and objectives; `can_manage_sales_catalog`). They edit the
 tables that used to be `data/Planes.json` and `data/Zonas.json`, and Productos is the
 only place a plan is classified — the ETA screen no longer keeps a second, overriding
 copy of that classification, only its per-subscription exceptions.
 
-The components still live in `features/subscriptions/components/catalogos/`: the
+The components still live in `features/subscriptions/components/catalogs/`: the
 objectives tab leans on `features/subscriptions/lib/targets.ts` and the subscriptions
 form controls, and pages may compose any feature, so moving them would only have meant
 promoting all of that to `shared/` for nothing. `CatalogCommon.tsx` holds what the four
@@ -334,22 +334,22 @@ is intact and the file can be re-uploaded once the decisions are made.
 `features/commissions/` serves the three pages of the Comisiones module (report, supervisors' business units,
 payment conditions). The report is calculated on the server; the client only edits what the server cannot know (the
 objective %, a business unit's growth when the month is not analysed, the review decisions) and reloads. The
-sale-by-sale detail is fetched from `api/ventas/` the first time it is needed and kept per period in
+sale-by-sale detail is fetched from `api/commissions/sales/` the first time it is needed and kept per period in
 `useCommissionsReport`. Condiciones opens read-only, explaining each rule with what it pays (who is paid what per
 sale, the advisor's tiers with their jumps and a simulator, the business-unit growth tiers, the period's dates), and
-switches to the forms on «Editar». `lib/conditions.ts` mirrors `rules.advisor_payment`, `rules.monto_un` and the
-checks of `validar_tramos_*` / `api_condiciones_guardar` only to show the effect of an edit and flag errors in the
+switches to the forms on «Editar». `lib/conditions.ts` mirrors `rules.advisor_payment`, `payments._step` and the
+checks of `rules.validate_advisor_tiers` / `teams.validate_parameters` (`conditions_save`) only to show the effect of an edit and flag errors in the
 row that causes them before saving; the server validates again, and its figure is the one that counts.
 
 How the payroll is *laid out* is client work: `lib/payroll.ts` places each person once (unit → supervisor →
-advisors, offices apart) from the `equipos` rows, and explains each cut from `condiciones`; `lib/export.ts`
+advisors, offices apart) from the `teams` rows, and explains each cut from `conditions`; `lib/export.ts`
 writes the same layout to Excel through `shared/lib/excel.downloadStyledWorkbook`. Neither computes a payment —
-every amount is the server's `neto`.
+every amount is the server's `net`.
 
 ## Commercial objectives are applied here, not stored
 
 The growth target and the maximum churn (6% / 3% by default) are catalogue data served in
-the `objetivos` prop of the subscriptions pages. `features/subscriptions/lib/targets.ts`
+the `targets` prop of the subscriptions pages. `features/subscriptions/lib/targets.ts`
 is the only place that resolves them — meta, completion and colour — and
 `hooks/useTargets` reads them from the page. Never hardcode a target or a colour threshold
 again: that is how the app ended up with the 6% written in eight files and three different
@@ -366,16 +366,16 @@ components only paint.
 ## Completion is never clamped
 
 `features/subscriptions/lib/commercial.ts` holds the single `calcCommercial`. It receives the
-absolute growth meta (`Meta.growthGoal`) and returns the real completions — over 100% and
+absolute growth meta (`Goal.growthGoal`) and returns the real completions — over 100% and
 below 0 included — in both reports. Sales Report used to clamp them to `[0, 100]` (and
-`faltante` at 0) while Business Units did not; the user asked for the real value everywhere
+`shortfall` at 0) while Business Units did not; the user asked for the real value everywhere
 (November 2026), so the `clamp` option is gone. Don't bring it back. The node table shows the
 three completions — ingreso (net growth), ventas (installations) and cierre (final base against
 the expected one) — next to each row's objective. `CommercialSummaryStrip`, the headline row of
 both reports, shows installations and two of them: «% Ingresos» (`complianceRate`) and
 «% Ventas» (`salesCompliance`). Only the bars' *width* stops at 100%, the number does not.
 
-`calcCommercial` takes the whole `Meta`. A zone without objective (`zonas_sin_objetivo`) stays in
+`calcCommercial` takes the whole `Goal`. A zone without objective (`zonas_sin_objetivo` in the catalogue) stays in
 its group's node table but out of the group's summary: the hooks sum the totals with
-`measuredNodes`, `targets.meta` skips it and counts it in `Meta.zonasSinObjetivo`, and its own
+`measuredNodes`, the resolver's `goal` skips it and counts it in `Goal.zonesWithoutTarget`, and its own
 row comes back with `metrics.withoutTarget`, which paints its completions as «—».

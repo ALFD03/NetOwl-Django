@@ -12,7 +12,7 @@ from .queries import (
     get_analytics_data,
     get_business_units_data,
     get_churn_close,
-    get_dimensiones,
+    get_dimensions,
     get_periods,
     get_sales_report_data,
     get_zones_config,

@@ -12,9 +12,9 @@ export { SubscriptionReportFilters } from './components/reports/SubscriptionRepo
 export { EtaReportView } from './components/eta/EtaReportView';
 export { EtaReportToolbar } from './components/eta/EtaReportToolbar';
 export { EtaManagementView } from './components/etamanagement/EtaView';
-export { NotificacionesView } from './components/catalogs/NotificationsView';
+export { NotificationsView } from './components/catalogs/NotificationsView';
 export { ProductsView } from './components/catalogs/ProductsView';
-export { EstructuraView } from './components/catalogs/StructureView';
+export { StructureView } from './components/catalogs/StructureView';
 export { SalesView } from './components/catalogs/SalesView';
 export * from './lib/churnExport';
 export * from './lib/commercial';

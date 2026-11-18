@@ -15,10 +15,10 @@ export function useBreakpoint(bp: Breakpoint): boolean {
   const query = mediaFrom(bp);
 
   return useSyncExternalStore(
-    (avisar) => {
+    (notify) => {
       const mql = window.matchMedia(query);
-      mql.addEventListener('change', avisar);
-      return () => mql.removeEventListener('change', avisar);
+      mql.addEventListener('change', notify);
+      return () => mql.removeEventListener('change', notify);
     },
     () => window.matchMedia(query).matches,
     // Sin ventana (no hay SSR hoy, pero no cuesta nada) se asume escritorio,

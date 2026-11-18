@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from netowl_web.ratelimit import ip_cliente
+from netowl_web.ratelimit import client_ip
 from services.audit.log import record
 from services.audit.models import AuditLog
 from services.config.auth import has_permission
@@ -66,5 +66,5 @@ class ApiTokenMiddleware:
             request._dont_enforce_csrf_checks = True
             now = timezone.now()
             if token.last_used_at is None or now - token.last_used_at > TOUCH_INTERVAL:
-                ApiToken.objects.filter(pk=token.pk).update(last_used_at=now, last_used_ip=ip_cliente(request))
+                ApiToken.objects.filter(pk=token.pk).update(last_used_at=now, last_used_ip=client_ip(request))
         return self.get_response(request)

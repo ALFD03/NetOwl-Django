@@ -106,9 +106,9 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
         <CampaignsExportButton dimensions={dimensionsData} period={selectedPeriod} day={payload ? resolvedDay : 0} />
 
         <DaySummary
-          serie={dayMetrics?.series}
-          dias={availableDays}
-          dia={selectedDay}
+          series={dayMetrics?.series}
+          days={availableDays}
+          day={selectedDay}
           cards={CRM_DAY_CARDS}
           charts={CRM_DAY_CHARTS}
         />

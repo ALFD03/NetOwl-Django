@@ -17,7 +17,7 @@ interface ChurnExportButtonProps {
    * exporta el periodo entero; con ellos, lo que ese site, coordinador o nodo
    * tiene en pantalla.
    */
-  nodos?: string[];
+  nodes?: string[];
   /** Qué se está exportando; va en el nombre del archivo. */
   scope: string;
   /**
@@ -43,21 +43,21 @@ interface ChurnExportButtonProps {
  */
 export function ChurnExportButton({
   period,
-  nodos,
+  nodes,
   scope,
-  dayNotice: avisoDia = false,
+  dayNotice: dayWarning = false,
   label = 'Exportar bajas',
   iconOnly = false,
   className,
 }: ChurnExportButtonProps) {
-  const [estado, setState] = useState<ExportState>('idle');
+  const [state, setState] = useState<ExportState>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const handleClick = async () => {
     setState('busy');
     setError(null);
     try {
-      const data = await subscriptionsApi.getBajasDetalle(period, nodos);
+      const data = await subscriptionsApi.getChurnsDetail(period, nodes);
       if (!data.churned?.length) {
         setState('empty');
         return;
@@ -80,9 +80,9 @@ export function ChurnExportButton({
     }
   };
 
-  const titulo = [
+  const title = [
     `Descargar el detalle de las bajas de ${scope} (${period}).`,
-    avisoDia ? 'El detalle nominal solo existe por cierre mensual: se exporta el mes completo, no el día seleccionado.' : '',
+    dayWarning ? 'El detalle nominal solo existe por cierre mensual: se exporta el mes completo, no el día seleccionado.' : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -90,12 +90,12 @@ export function ChurnExportButton({
       <ExportButton
         className={className}
         onClick={handleClick}
-        estado={estado}
+        state={state}
         label={label}
         labelEmpty="Sin bajas que exportar"
         iconOnly={iconOnly}
         disabled={!period}
-        title={error ? `${titulo} ${error}` : titulo}
+        title={error ? `${title} ${error}` : title}
       />
 
       {/* En la variante de solo icono va en el `title`: el botón vive dentro de

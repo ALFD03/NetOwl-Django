@@ -14,7 +14,7 @@ import {
   type SupportDimension,
   type SupportDimensionEntry,
   type SupportDimensionRow,
-  type SupportHistoricoRow,
+  type SupportHistoryRow,
   type SupportMetrics,
   type SupportStats,
   type SupportTimeDistribution,
@@ -23,17 +23,17 @@ import {
 } from '../types';
 
 /** The nine scalar keys the backend stores for one measure. */
-function timeStatKeys(medida: SupportTimeMeasure): Array<keyof SupportTimeStats> {
+function timeStatKeys(measure: SupportTimeMeasure): Array<keyof SupportTimeStats> {
   return [
-    `time_mean_${medida}_hours`,
-    `time_median_${medida}_hours`,
-    `time_min_${medida}_hours`,
-    `time_p25_${medida}_hours`,
-    `time_p75_${medida}_hours`,
-    `time_max_${medida}_hours`,
-    `time_std_${medida}_hours`,
-    `pct_over_avg_${medida}`,
-    `sample_${medida}`,
+    `time_mean_${measure}_hours`,
+    `time_median_${measure}_hours`,
+    `time_min_${measure}_hours`,
+    `time_p25_${measure}_hours`,
+    `time_p75_${measure}_hours`,
+    `time_max_${measure}_hours`,
+    `time_std_${measure}_hours`,
+    `pct_over_avg_${measure}`,
+    `sample_${measure}`,
   ];
 }
 
@@ -71,28 +71,28 @@ export function resolveStats(metrics: SupportMetrics | undefined): SupportStats 
 /** Reads one `_compute_stats_for_series` block out of its flat column names. */
 export function distribution(
   metrics: SupportMetrics | undefined,
-  medida: SupportTimeMeasure,
+  measure: SupportTimeMeasure,
 ): SupportTimeDistribution {
   const source = (metrics ?? {}) as Record<string, number | undefined>;
   const num = (key: string) => toNumber(source[key]);
 
   return {
-    promedio: num(`time_mean_${medida}_hours`),
-    median: num(`time_median_${medida}_hours`),
-    min: num(`time_min_${medida}_hours`),
-    p25: num(`time_p25_${medida}_hours`),
-    p75: num(`time_p75_${medida}_hours`),
-    max: num(`time_max_${medida}_hours`),
-    std: num(`time_std_${medida}_hours`),
-    pctExcedeProm: num(`pct_over_avg_${medida}`),
-    sample: num(`sample_${medida}`),
+    average: num(`time_mean_${measure}_hours`),
+    median: num(`time_median_${measure}_hours`),
+    min: num(`time_min_${measure}_hours`),
+    p25: num(`time_p25_${measure}_hours`),
+    p75: num(`time_p75_${measure}_hours`),
+    max: num(`time_max_${measure}_hours`),
+    std: num(`time_std_${measure}_hours`),
+    pctAboveAvg: num(`pct_over_avg_${measure}`),
+    sample: num(`sample_${measure}`),
   };
 }
 
 /** Mean of one column across period rows, used by the company-wide dashboard. */
 export function averageField(
-  rows: SupportHistoricoRow[],
-  key: keyof SupportHistoricoRow,
+  rows: SupportHistoryRow[],
+  key: keyof SupportHistoryRow,
   digits = 2,
 ): number {
   if (rows.length === 0) return 0;
@@ -148,20 +148,20 @@ export function groupByDepartment(
   rows: SupportDimensionRow[],
   parentTotal: number,
 ): SupportDepartmentRow[] {
-  const acumulado = new Map<string, { row: SupportDepartmentRow; weights: Map<string, number> }>();
+  const accumulated = new Map<string, { row: SupportDepartmentRow; weights: Map<string, number> }>();
 
   for (const row of rows) {
-    const nombre = row.department || NO_DEPARTMENT;
-    let entry = acumulado.get(nombre);
+    const name = row.department || NO_DEPARTMENT;
+    let entry = accumulated.get(name);
     if (entry === undefined) {
       entry = {
-        row: { ...emptyStats(), name: nombre, pctOfParent: 0, department: nombre, personas: 0 },
+        row: { ...emptyStats(), name, pctOfParent: 0, department: name, people: 0 },
         weights: new Map(),
       };
-      acumulado.set(nombre, entry);
+      accumulated.set(name, entry);
     }
 
-    entry.row.personas += 1;
+    entry.row.people += 1;
     for (const key of VOLUME_KEYS) {
       entry.row[key] = toNumber(entry.row[key]) + toNumber(row[key]);
     }
@@ -169,29 +169,29 @@ export function groupByDepartment(
     // Media ponderada de los tiempos: se acumula suma(media × muestra) y la
     // muestra, y se divide al final. La media de las medias sin ponderar daría
     // el mismo peso a quien cerró tres tickets que a quien cerró trescientos.
-    for (const medida of SUPPORT_TIME_MEASURES) {
-      const muestra = toNumber(row[`sample_${medida}`]);
-      if (muestra <= 0) continue;
-      const clave = `time_mean_${medida}_hours` as const;
-      entry.row[clave] = toNumber(entry.row[clave]) + toNumber(row[clave]) * muestra;
-      entry.weights.set(medida, (entry.weights.get(medida) ?? 0) + muestra);
+    for (const measure of SUPPORT_TIME_MEASURES) {
+      const sample = toNumber(row[`sample_${measure}`]);
+      if (sample <= 0) continue;
+      const key = `time_mean_${measure}_hours` as const;
+      entry.row[key] = toNumber(entry.row[key]) + toNumber(row[key]) * sample;
+      entry.weights.set(measure, (entry.weights.get(measure) ?? 0) + sample);
     }
   }
 
-  return [...acumulado.values()]
+  return [...accumulated.values()]
     .map(({ row, weights }) => {
-      for (const medida of SUPPORT_TIME_MEASURES) {
-        const muestra = weights.get(medida) ?? 0;
-        const clave = `time_mean_${medida}_hours` as const;
-        row[`sample_${medida}`] = muestra;
-        row[clave] = muestra > 0 ? Number((toNumber(row[clave]) / muestra).toFixed(2)) : 0;
+      for (const measure of SUPPORT_TIME_MEASURES) {
+        const sample = weights.get(measure) ?? 0;
+        const key = `time_mean_${measure}_hours` as const;
+        row[`sample_${measure}`] = sample;
+        row[key] = sample > 0 ? Number((toNumber(row[key]) / sample).toFixed(2)) : 0;
       }
 
       // Las tasas se recalculan desde las sumas, nunca se promedian: cada una
       // trae fijado su denominador —lo cerrado en el mes, o lo creado— y
       // promediar porcentajes de personas con cargas distintas no da ninguno.
       const closedItems = toNumber(row.tickets_closed);
-      const creados = toNumber(row.tickets_created);
+      const created = toNumber(row.tickets_created);
       row.pct_resolved = share(toNumber(row.tickets_resolved), closedItems);
       row.pct_resolved_in_period = share(toNumber(row.tickets_resolved_in_period), closedItems);
       row.pct_resolved_carryover = share(toNumber(row.tickets_resolved_carryover), closedItems);
@@ -201,8 +201,8 @@ export function groupByDepartment(
       row.pct_escalated = share(toNumber(row.tickets_escalated), closedItems);
       row.pct_escalated_in_period = share(toNumber(row.tickets_escalated_in_period), closedItems);
       row.pct_escalated_carryover = share(toNumber(row.tickets_escalated_carryover), closedItems);
-      row.pct_received_escalated = share(toNumber(row.tickets_received_escalated), creados);
-      row.pct_lagging = share(toNumber(row.tickets_lagging), creados);
+      row.pct_received_escalated = share(toNumber(row.tickets_received_escalated), created);
+      row.pct_lagging = share(toNumber(row.tickets_lagging), created);
 
       row.pctOfParent = share(toNumber(row.total_tickets), parentTotal);
       return row;
@@ -230,7 +230,7 @@ interface LeaderSpec {
   label: string;
   color: MetricColor;
   pick: (row: SupportDimensionRow) => number | undefined;
-  format: (valor: number) => string;
+  format: (value: number) => string;
   caption: (row: SupportDimensionRow) => string;
 }
 
@@ -356,7 +356,7 @@ export const TIME_MEASURE_META: Record<SupportTimeMeasure, TimeMeasureMeta> = {
 /** The two clocks the summary panels lead with, one per formula. */
 export const CLOSE_TOTAL: SupportTimeMeasure = 'close_created_closed';
 export const HANDLING: SupportTimeMeasure = 'close_assigned_closed';
-export const ASIGNACION: SupportTimeMeasure = 'assignment';
+export const ASSIGNMENT: SupportTimeMeasure = 'assignment';
 export const ESCALATION: SupportTimeMeasure = 'escalation';
 
 /**
@@ -380,7 +380,7 @@ export const SUPPORT_DIMENSION_CAPTIONS: Record<SupportDimension, string> = {
   creado_por: 'quién abrió el ticket en Odoo · mide la demanda registrada',
 };
 
-export const SUPPORT_DESGLOSE_LABELS = {
+export const SUPPORT_BREAKDOWN_LABELS = {
   tipo_solicitud: 'Tipo de ticket',
   razon_falla: 'Razón de la falla',
   solucion_falla: 'Solución aplicada',

@@ -9,12 +9,12 @@ export interface CurrentBcvRate {
   /** `0` mientras no se haya podido leer. */
   rate: number;
   /** El día que la publicó, tal como lo devuelve el servicio. */
-  fuente: string;
-  cargando: boolean;
+  source: string;
+  loading: boolean;
   /** Por qué no hay cifra. Se enseña, no rompe la página. */
-  aviso: string;
+  warning: string;
   /** Vuelve a preguntar. La tasa de hoy sí cambia dentro del día. */
-  recargar: () => Promise<void>;
+  reload: () => Promise<void>;
 }
 
 /**
@@ -30,18 +30,18 @@ export interface CurrentBcvRate {
  * sin reporte a quien solo venía a leerlo.
  */
 export function useCurrentBcvRate(): CurrentBcvRate {
-  const [tasa, setRate] = useState(0);
-  const [fuente, setSource] = useState('');
-  const [aviso, setNotice] = useState('');
+  const [rate, setRate] = useState(0);
+  const [source, setSource] = useState('');
+  const [warning, setNotice] = useState('');
   // Arranca cargando: la primera consulta sale en cuanto se monta el hook, y
   // así el efecto no tiene que anunciarlo con un `setState` de más.
-  const [cargando, setCargando] = useState(true);
+  const [isLoading, setLoading] = useState(true);
 
   // Con `.then` y no con `await`: el linter no distingue un `setState` que
   // sigue a un `await` de uno síncrono, y esta función se llama desde el efecto.
   const fetchData = useCallback(
     () =>
-      subscriptionsApi.getEtaTasaActual()
+      subscriptionsApi.getEtaCurrentRate()
         .then((response) => {
           setRate(response.bcv_rate);
           setSource(response.bcv_rate_source);
@@ -50,16 +50,16 @@ export function useCurrentBcvRate(): CurrentBcvRate {
         .catch((error: unknown) => {
           setNotice(getApiErrorMessage(error, 'No se pudo consultar la tasa vigente del BCV.'));
         })
-        .finally(() => setCargando(false)),
+        .finally(() => setLoading(false)),
     [],
   );
 
-  const recargar = useCallback(async () => {
-    setCargando(true);
+  const reload = useCallback(async () => {
+    setLoading(true);
     await fetchData();
   }, [fetchData]);
 
   useEffect(() => { void fetchData(); }, [fetchData]);
 
-  return { rate: tasa, fuente, cargando, aviso, recargar };
+  return { rate, source, loading: isLoading, warning, reload };
 }

@@ -35,26 +35,26 @@ export const supportApi = {
    * Un solo endpoint para los dos: lo que cambia entre ellos son los campos
    * del cuerpo, no la forma de la petición.
    */
-  saveDirectorio: async (tipo: DirectoryKind, payload: DirectoryPayload) =>
-    (await apiClient.post('/api/support/users/save/', { tipo, ...payload })).data,
+  saveDirectoryEntry: async (kind: DirectoryKind, payload: DirectoryPayload) =>
+    (await apiClient.post('/api/support/users/save/', { type: kind, ...payload })).data,
 
-  deleteDirectorio: async (tipo: DirectoryKind, id: number) =>
-    (await apiClient.post('/api/support/users/delete/', { tipo, id })).data,
+  deleteDirectoryEntry: async (kind: DirectoryKind, id: number) =>
+    (await apiClient.post('/api/support/users/delete/', { type: kind, id })).data,
 
   /**
    * Cambio de departamento, baja o reactivación. `fecha` la piden el cambio
    * (desde cuándo) y la baja (el egreso).
    */
-  moverUsuario: async (
-    accion: UserMove,
+  moveUser: async (
+    action: UserMove,
     id: number,
     extra: { department_id?: number | null; date?: string } = {},
-  ) => (await apiClient.post('/api/support/users/move/', { accion, id, ...extra })).data,
+  ) => (await apiClient.post('/api/support/users/move/', { action, id, ...extra })).data,
 
   /** Alta o edición de una etapa del catálogo. Sin `id` es un alta. */
-  saveEtapa: async (payload: { id?: number; name: string; team: string; type: string }) =>
+  saveStage: async (payload: { id?: number; name: string; team: string; type: string }) =>
     (await apiClient.post<ApiMessageResponse>('/api/support/stages/save/', payload)).data,
 
-  deleteEtapa: async (id: number) =>
+  deleteStage: async (id: number) =>
     (await apiClient.post<ApiMessageResponse>('/api/support/stages/delete/', { id })).data,
 };

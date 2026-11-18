@@ -64,7 +64,7 @@ from .dimensions import build_dimension_rows
 from .escalation import load_tickets
 from .metrics import compute_metrics_for_period
 from .queries import (
-    contexto_incidencia,
+    context_incidence,
     get_incidence_by_zone,
     structure_groups,
 )
@@ -82,7 +82,7 @@ def build_support_day_metrics(
     db: DBConnector | None = None,
     df_all: pd.DataFrame | None = None,
     until_day: int | None = None,
-    progreso: Callable[[int, int, str], None] | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """Calcula y guarda el corte de cada dia del mes.
 
@@ -99,55 +99,55 @@ def build_support_day_metrics(
     if df_all.empty:
         return {"periodo_reporte": year_month, "dias_calculados": 0}
 
-    tope = last_day_to_compute(year_month, until_day)
+    cap = last_day_to_compute(year_month, until_day)
     # Las zonas y los activos del mes son los mismos para los treinta y un
     # cortes: se leen una vez y se comparten.
-    zone_info, active_map = contexto_incidencia(db, year_month)
+    zone_info, active_map = context_incidence(db, year_month)
 
-    pendientes: dict[str, Any] = {}
-    calculados = 0
+    pending: dict[str, Any] = {}
+    computed = 0
 
-    for dia in range(1, tope + 1):
-        cohorte = build_cohort(df_all, year_month, hasta=cutoff_date(year_month, dia))
+    for day in range(1, cap + 1):
+        cohort = build_cohort(df_all, year_month, until=cutoff_date(year_month, day))
         # Un dia sin un solo ticket no deja columna: la barra lo pinta como hueco
         # en vez de como un corte de ceros, que se leeria como un dato.
-        if not cohorte.empty:
-            grupos = structure_groups(build_dimension_rows(cohorte))
-            pendientes[f"dia{dia}"] = clean_json_props({
-                "global": compute_metrics_for_period(cohorte),
+        if not cohort.empty:
+            groups = structure_groups(build_dimension_rows(cohort))
+            pending[f"dia{day}"] = clean_json_props({
+                "global": compute_metrics_for_period(cohort),
                 # Reaprovechadas de las filas dimensionales: la metrica de cada
                 # grupo ya se calculo para su fila `grupo_trabajo`.
-                "global_grupos": {g: b["metricas"] for g, b in grupos.items()},
-                "grupos": grupos,
+                "global_grupos": {g: b["metricas"] for g, b in groups.items()},
+                "grupos": groups,
                 "incidencia_zonas": get_incidence_by_zone(
-                    db, cohorte, zone_info=zone_info, active_map=active_map
+                    db, cohort, zone_info=zone_info, active_map=active_map
                 ),
             })
-            calculados += 1
-        print(f"  dia {dia:02d}/{tope} OK")
-        if progreso is not None:
-            progreso(dia, tope, f"Dia {dia} de {tope}")
+            computed += 1
+        print(f"  dia {day:02d}/{cap} OK")
+        if progress is not None:
+            progress(day, cap, f"Dia {day} de {cap}")
 
         # Volcado parcial: el upsert solo toca los dias enviados, asi que si la
         # ejecucion se corta el trabajo ya hecho queda guardado.
-        if len(pendientes) >= FLUSH_EVERY_N_DAYS:
-            _save(db, year_month, pendientes)
-            print(f"  -> guardados {len(pendientes)} dias")
-            pendientes = {}
+        if len(pending) >= FLUSH_EVERY_N_DAYS:
+            _save(db, year_month, pending)
+            print(f"  -> guardados {len(pending)} dias")
+            pending = {}
 
-    if pendientes:
-        _save(db, year_month, pendientes)
+    if pending:
+        _save(db, year_month, pending)
 
-    print(f"\nMETRICAS DIARIAS DE SOPORTE GUARDADAS | {year_month} | {calculados} dias")
-    return {"periodo_reporte": year_month, "dias_calculados": calculados}
+    print(f"\nMETRICAS DIARIAS DE SOPORTE GUARDADAS | {year_month} | {computed} dias")
+    return {"periodo_reporte": year_month, "dias_calculados": computed}
 
 
-def _save(db: DBConnector, label: str, dias: dict[str, Any]) -> None:
+def _save(db: DBConnector, label: str, days: dict[str, Any]) -> None:
     """Vuelca los dias pendientes a `support_day_metrics`."""
-    save_days(db, DAY_METRICS, label, dias)
+    save_days(db, DAY_METRICS, label, days)
 
 
-def get_support_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
+def get_support_day_payload(year_month: str, day: int) -> dict[str, Any] | None:
     """El corte completo de un dia: `{global, grupos, incidencia_zonas}`, o None.
 
     Es lo pesado —cada grupo de trabajo por sus seis ejes— y por eso se pide de
@@ -157,9 +157,9 @@ def get_support_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
     guardado dentro del corte: asi un cambio en el directorio se ve en todos
     los dias ya calculados sin volver a analizar el mes.
     """
-    payload = read_day(TableNames.SUPPORT_DAY_METRICS, year_month, dia, key=year_month)
+    payload = read_day(TableNames.SUPPORT_DAY_METRICS, year_month, day, key=year_month)
     if payload:
-        annotate_departments(payload.get("grupos") or {}, cutoff_date(year_month, dia))
+        annotate_departments(payload.get("grupos") or {}, cutoff_date(year_month, day))
     return payload
 
 
@@ -174,12 +174,12 @@ def get_support_day_series(year_month: str) -> dict[str, Any]:
     Son dos lecturas de la misma fila y no una para no traerse el resto del JSON:
     el recorte lo sigue haciendo Postgres.
     """
-    serie = read_series(TableNames.SUPPORT_DAY_METRICS, year_month, key=year_month)
-    por_grupo = read_series(
+    series = read_series(TableNames.SUPPORT_DAY_METRICS, year_month, key=year_month)
+    by_group = read_series(
         TableNames.SUPPORT_DAY_METRICS, year_month,
         key=year_month, block="global_grupos",
     )
-    return {**serie, "serie_grupos": por_grupo.get("serie", {})}
+    return {**series, "serie_grupos": by_group.get("serie", {})}
 
 
 def get_support_periods_with_days() -> list[str]:

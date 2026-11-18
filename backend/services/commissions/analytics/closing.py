@@ -19,10 +19,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from services.commissions.models import (
-    ComisionCierreArchivado,
-    ComisionPago,
-    ComisionPeriodo,
-    ComisionVenta,
+    ArchivedClose,
+    CommissionPayment,
+    CommissionPeriod,
+    CommissionSale,
 )
 
 from .calculation import build_report, current_conditions, next_month
@@ -32,81 +32,81 @@ class CannotClose(RuntimeError):
     """El informe todavia tiene algo por decidir (ver `pendientes_cierre`)."""
 
 
-def close_period(periodo: ComisionPeriodo, usuario) -> dict:
+def close_period(period: CommissionPeriod, user) -> dict:
     """Congela el periodo. Levanta `CannotClose` si queda algo pendiente."""
-    informe, ventas = build_report(periodo)
-    if informe["pendientes_cierre"]:
-        raise CannotClose("; ".join(informe["pendientes_cierre"]))
+    period_report, sales = build_report(period)
+    if period_report["pendientes_cierre"]:
+        raise CannotClose("; ".join(period_report["pendientes_cierre"]))
 
     with transaction.atomic():
-        periodo.ventas.all().delete()
-        periodo.pagos.all().delete()
-        ComisionVenta.objects.bulk_create(
-            ComisionVenta(periodo=periodo, orden=v["orden"], clasificacion=v["clasificacion"], datos=v)
-            for v in ventas
+        period.sales.all().delete()
+        period.payments.all().delete()
+        CommissionSale.objects.bulk_create(
+            CommissionSale(period=period, order=v["orden"], classification=v["clasificacion"], data=v)
+            for v in sales
         )
-        ComisionPago.objects.bulk_create(
-            ComisionPago(
-                periodo=periodo,
-                persona_id=p["persona_id"],
-                nombre=p["nombre"][:170],
-                cargo=p["rol"],
-                neto=Decimal(str(p["neto"])),
-                datos=p,
+        CommissionPayment.objects.bulk_create(
+            CommissionPayment(
+                period=period,
+                person_id=p["persona_id"],
+                name=p["nombre"][:170],
+                title=p["rol"],
+                net=Decimal(str(p["neto"])),
+                data=p,
             )
-            for p in informe["pagos"]
+            for p in period_report["pagos"]
         )
-        periodo.estado = "cerrado"
-        periodo.condiciones = current_conditions()
-        periodo.cerrado_por = usuario
-        periodo.cerrado_en = timezone.now()
-        informe["estado"] = "cerrado"
-        periodo.resumen = informe
-        periodo.save()
-    return informe
+        period.status = "cerrado"
+        period.conditions = current_conditions()
+        period.closed_by = user
+        period.closed_at = timezone.now()
+        period_report["estado"] = "cerrado"
+        period.summary = period_report
+        period.save()
+    return period_report
 
 
 # Lo minimo que tiene que explicar quien reabre: un "x" no es un motivo.
 MIN_REASON = 10
 
 
-def _iso_date(valor):
-    return valor.isoformat() if valor else None
+def _iso_date(value):
+    return value.isoformat() if value else None
 
 
-def close_snapshot(periodo: ComisionPeriodo) -> dict:
+def close_snapshot(period: CommissionPeriod) -> dict:
     """El cierre entero en JSON: el periodo, lo congelado y cada venta y pago."""
     return {
         "periodo": {
-            "periodo": periodo.periodo,
-            "inicio": _iso_date(periodo.inicio),
-            "inicio_promo": _iso_date(periodo.inicio_promo),
-            "corte_adelantos": _iso_date(periodo.corte_adelantos),
-            "tasa_conatel": str(periodo.tasa_conatel) if periodo.tasa_conatel is not None else None,
-            "tasa_conatel_publicada": _iso_date(periodo.tasa_conatel_publicada),
-            "cerrado_por": periodo.cerrado_por.username if periodo.cerrado_por else None,
-            "cerrado_en": _iso_date(periodo.cerrado_en),
+            "periodo": period.period,
+            "inicio": _iso_date(period.start),
+            "inicio_promo": _iso_date(period.promo_start),
+            "corte_adelantos": _iso_date(period.advance_cutoff),
+            "tasa_conatel": str(period.conatel_rate) if period.conatel_rate is not None else None,
+            "tasa_conatel_publicada": _iso_date(period.conatel_rate_published),
+            "cerrado_por": period.closed_by.username if period.closed_by else None,
+            "cerrado_en": _iso_date(period.closed_at),
         },
-        "condiciones": periodo.condiciones,
-        "resumen": periodo.resumen,
+        "condiciones": period.conditions,
+        "resumen": period.summary,
         "ventas": [
-            {"orden": v.orden, "clasificacion": v.clasificacion, "datos": v.datos}
-            for v in periodo.ventas.all().order_by("orden")
+            {"orden": v.order, "clasificacion": v.classification, "datos": v.data}
+            for v in period.sales.all().order_by("order")
         ],
         "pagos": [
             {
-                "persona_id": p.persona_id,
-                "nombre": p.nombre,
-                "cargo": p.cargo,
-                "neto": str(p.neto),
-                "datos": p.datos,
+                "persona_id": p.person_id,
+                "nombre": p.name,
+                "cargo": p.title,
+                "neto": str(p.net),
+                "datos": p.data,
             }
-            for p in periodo.pagos.all().order_by("cargo", "nombre")
+            for p in period.payments.all().order_by("title", "name")
         ],
     }
 
 
-def reopen_period(periodo: ComisionPeriodo, usuario, motivo: str) -> ComisionCierreArchivado:
+def reopen_period(period: CommissionPeriod, user, reason: str) -> ArchivedClose:
     """Devuelve el periodo a borrador, archivando antes el cierre.
 
     No se reabre si el siguiente esta cerrado: su ventana empieza donde termina
@@ -114,40 +114,40 @@ def reopen_period(periodo: ComisionPeriodo, usuario, motivo: str) -> ComisionCie
     al menos `MIN_REASON` caracteres. La copia y el borrado van en la misma
     transaccion: o queda archivado y reabierto, o nada.
     """
-    motivo = (motivo or "").strip()
-    if len(motivo) < MIN_REASON:
+    reason = (reason or "").strip()
+    if len(reason) < MIN_REASON:
         raise CannotClose(
             f"Escribe el motivo de la reapertura (al menos {MIN_REASON} caracteres)."
         )
-    siguiente = ComisionPeriodo.objects.filter(periodo=next_month(periodo.periodo)).first()
-    if siguiente and siguiente.cerrado:
-        raise CannotClose(f"El periodo {siguiente.periodo} está cerrado: reábrelo primero.")
+    next_row = CommissionPeriod.objects.filter(period=next_month(period.period)).first()
+    if next_row and next_row.is_closed:
+        raise CannotClose(f"El periodo {next_row.period} está cerrado: reábrelo primero.")
     with transaction.atomic():
         # Bloquea la fila: dos reaperturas a la vez archivarian la misma version.
-        periodo = ComisionPeriodo.objects.select_for_update().get(pk=periodo.pk)
-        if not periodo.cerrado:
-            raise CannotClose(f"El periodo {periodo.periodo} ya está en borrador.")
-        copia = close_snapshot(periodo)
-        last = periodo.archivos.order_by("-version").values_list("version", flat=True).first() or 0
-        archivo = ComisionCierreArchivado.objects.create(
-            periodo=periodo,
+        period = CommissionPeriod.objects.select_for_update().get(pk=period.pk)
+        if not period.is_closed:
+            raise CannotClose(f"El periodo {period.period} ya está en borrador.")
+        snapshot = close_snapshot(period)
+        last = period.archives.order_by("-version").values_list("version", flat=True).first() or 0
+        archive = ArchivedClose.objects.create(
+            period=period,
             version=last + 1,
-            cerrado_por=copia["periodo"]["cerrado_por"] or "",
-            cerrado_en=periodo.cerrado_en,
-            reabierto_por=usuario,
-            reabierto_por_nombre=usuario.username,
-            motivo=motivo,
-            total_neto=sum((Decimal(p["neto"]) for p in copia["pagos"]), Decimal("0")),
-            pagos=len(copia["pagos"]),
-            ventas=len(copia["ventas"]),
-            copia=copia,
+            closed_by=snapshot["periodo"]["cerrado_por"] or "",
+            closed_at=period.closed_at,
+            reopened_by=user,
+            reopened_by_name=user.username,
+            reason=reason,
+            net_total=sum((Decimal(p["neto"]) for p in snapshot["pagos"]), Decimal("0")),
+            payments=len(snapshot["pagos"]),
+            sales=len(snapshot["ventas"]),
+            snapshot=snapshot,
         )
-        periodo.ventas.all().delete()
-        periodo.pagos.all().delete()
-        periodo.estado = "borrador"
-        periodo.condiciones = None
-        periodo.resumen = None
-        periodo.cerrado_por = None
-        periodo.cerrado_en = None
-        periodo.save()
-    return archivo
+        period.sales.all().delete()
+        period.payments.all().delete()
+        period.status = "borrador"
+        period.conditions = None
+        period.summary = None
+        period.closed_by = None
+        period.closed_at = None
+        period.save()
+    return archive

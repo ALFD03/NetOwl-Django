@@ -20,10 +20,10 @@ const SELECTOR_CLASS =
   'flex min-w-0 cursor-pointer items-center justify-between gap-2 border-r border-slate-700/50 py-2.5 pl-3 pr-2 text-xs font-bold text-white outline-none hover:bg-white/5';
 
 interface Props {
-  filtro: MetricFilter;
-  onChange: (filtro: MetricFilter) => void;
+  filter: MetricFilter;
+  onChange: (filter: MetricFilter) => void;
   /** Cómo se llama cada nivel en este reporte: «Zonas» y «Sites», o «Zonas» y «Coordinadores». */
-  niveles: Record<FilterLevel, string>;
+  levels: Record<FilterLevel, string>;
   /** Hay un día de corte del que proyectar; sin él la proyección no filtra. */
   projectionAvailable: boolean;
 }
@@ -34,9 +34,9 @@ interface Props {
  * proyectado al cierre, en % del objetivo, y solo existe con un día elegido en
  * la barra: sin él el campo se deshabilita en vez de filtrar contra nada.
  */
-export function MetricFilterField({ filtro, onChange, niveles, projectionAvailable: proyeccionDisponible }: Props) {
-  const set = (change: Partial<MetricFilter>) => onChange({ ...filtro, ...change });
-  const withoutProjection = filtro.metrica === 'proyeccion' && !proyeccionDisponible;
+export function MetricFilterField({ filter, onChange, levels, projectionAvailable }: Props) {
+  const set = (change: Partial<MetricFilter>) => onChange({ ...filter, ...change });
+  const withoutProjection = filter.metric === 'projection' && !projectionAvailable;
 
   return (
     <FilterField
@@ -48,17 +48,17 @@ export function MetricFilterField({ filtro, onChange, niveles, projectionAvailab
     >
       <SelectMenu
         aria-label="Métrica a filtrar"
-        value={filtro.metrica}
+        value={filter.metric}
         options={FILTER_METRICS}
-        onChange={(v) => set({ metrica: v as FilterMetric })}
+        onChange={(v) => set({ metric: v as FilterMetric })}
         panelWidth={170}
         className={cn(SELECTOR_CLASS, 'flex-1 sm:min-w-[130px] sm:flex-none')}
       />
       <SelectMenu
         aria-label="Operador"
-        value={filtro.operador}
+        value={filter.operator}
         options={FILTER_OPERATORS.map((op) => ({ value: op, label: op }))}
-        onChange={(v) => set({ operador: v as FilterOperator })}
+        onChange={(v) => set({ operator: v as FilterOperator })}
         panelWidth={90}
         className={cn(SELECTOR_CLASS, 'w-16 shrink-0 font-mono')}
       />
@@ -66,7 +66,7 @@ export function MetricFilterField({ filtro, onChange, niveles, projectionAvailab
         type="text"
         inputMode="decimal"
         aria-label="Valor del filtro"
-        value={filtro.value}
+        value={filter.value}
         disabled={withoutProjection}
         placeholder={withoutProjection ? 'Elige un día' : 'Valor %'}
         onChange={(event) => {
@@ -76,16 +76,16 @@ export function MetricFilterField({ filtro, onChange, niveles, projectionAvailab
       />
       <SelectMenu
         aria-label="Aplicar el filtro a"
-        value={filtro.level}
+        value={filter.level}
         options={[
-          { value: 'zona', label: niveles.zona },
-          { value: 'grupo', label: niveles.grupo },
+          { value: 'zone', label: levels.zone },
+          { value: 'group', label: levels.group },
         ]}
         onChange={(v) => set({ level: v as FilterLevel })}
         panelWidth={170}
         className={cn(SELECTOR_CLASS, 'flex-1 border-r-0 sm:min-w-[120px] sm:flex-none')}
       />
-      {filtro.value && (
+      {filter.value && (
         <button
           type="button"
           onClick={() => onChange(EMPTY_METRIC_FILTER)}

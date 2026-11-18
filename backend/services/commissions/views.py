@@ -1,7 +1,7 @@
 """`/api/commissions/`: el informe de comisiones y la ventana de pago.
 
-Ver el informe es `can_view_comisiones`; crear el periodo, decidir revisiones,
-agregar ventas, escribir cumplimientos y cerrar, `can_manage_comisiones`.
+Ver el informe es `can_view_commissions`; crear el periodo, decidir revisiones,
+agregar ventas, escribir cumplimientos y cerrar, `can_manage_commissions`.
 Reabrir y borrar tienen permiso propio. El informe de un borrador se calcula en
 la petición: es un mes de instalaciones.
 """
@@ -18,7 +18,7 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from services.catalogs.models import EquipoVentas, PersonaVentas
+from services.catalogs.models import SalesPerson, SalesTeam
 from services.catalogs.teams import ROLES, ROLES_BY_TEAM
 from services.commissions.analytics.calculation import (
     MissingCommissionColumns,
@@ -28,17 +28,17 @@ from services.commissions.analytics.calculation import (
     read_orders,
 )
 from services.commissions.analytics.closing import CannotClose, close_period, reopen_period
-from services.commissions.analytics.queries import default_period, informe, periodos, propuesta
+from services.commissions.analytics.queries import default_period, period_report, periods, proposal
 from services.commissions.analytics.rules import ALREADY_PAID, COUNT, DONT_COUNT, NORMAL, VALID
 from services.commissions.api_keys import COMMISSION_KEYS
 from services.commissions.models import (
-    ComisionCierreArchivado,
-    ComisionPeriodo,
-    ComisionVenta,
-    CondicionesComision,
-    IndicadorComision,
-    RevisionComision,
-    VentaManual,
+    ArchivedClose,
+    CommissionConditions,
+    CommissionIndicator,
+    CommissionPeriod,
+    CommissionReview,
+    CommissionSale,
+    ManualSale,
 )
 from services.config.api import ApiError, endpoint, json_body
 from services.config.auth import has_permission
@@ -47,10 +47,10 @@ from services.subscriptions.models import Plan
 
 logger = logging.getLogger(__name__)
 
-VIEW = ["can_view_comisiones"]
-MANAGE = ["can_manage_comisiones"]
-REOPEN = ["can_reopen_comisiones"]
-DELETE = ["can_delete_comisiones"]
+VIEW = ["can_view_commissions"]
+MANAGE = ["can_manage_commissions"]
+REOPEN = ["can_reopen_commissions"]
+DELETE = ["can_delete_commissions"]
 
 _MONTH = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -95,12 +95,12 @@ def _conflicts(view):
     return wrapped
 
 
-def _open_period(key: str) -> ComisionPeriodo:
+def _open_period(key: str) -> CommissionPeriod:
     """El periodo indicado, que tiene que existir y estar en borrador."""
-    period = ComisionPeriodo.objects.filter(periodo=key).first()
+    period = CommissionPeriod.objects.filter(period=key).first()
     if period is None:
         raise ApiError(f"El periodo {key} no existe.")
-    if period.cerrado:
+    if period.is_closed:
         raise _conflict(f"El periodo {key} está cerrado: reábrelo para cambiarlo.")
     return period
 
@@ -116,19 +116,19 @@ def _orders(data: dict, limit: int) -> list[str]:
     return orders
 
 
-def _archive(a: ComisionCierreArchivado) -> dict[str, Any]:
+def _archive(a: ArchivedClose) -> dict[str, Any]:
     """Un cierre archivado para la lista, sin la copia."""
     return {
         "id": a.id,
         "version": a.version,
-        "cerrado_por": a.cerrado_por,
-        "cerrado_en": timezone.localtime(a.cerrado_en).strftime("%Y-%m-%d %H:%M") if a.cerrado_en else None,
-        "reabierto_por": a.reabierto_por_nombre,
-        "reabierto_en": timezone.localtime(a.reabierto_en).strftime("%Y-%m-%d %H:%M"),
-        "motivo": a.motivo,
-        "total_neto": float(a.total_neto),
-        "pagos": a.pagos,
-        "ventas": a.ventas,
+        "cerrado_por": a.closed_by,
+        "cerrado_en": timezone.localtime(a.closed_at).strftime("%Y-%m-%d %H:%M") if a.closed_at else None,
+        "reabierto_por": a.reopened_by_name,
+        "reabierto_en": timezone.localtime(a.reopened_at).strftime("%Y-%m-%d %H:%M"),
+        "motivo": a.reason,
+        "total_neto": float(a.net_total),
+        "pagos": a.payments,
+        "ventas": a.sales,
     }
 
 
@@ -140,17 +140,17 @@ def report(request):
 
     El detalle venta a venta se pide aparte a `sales/`.
     """
-    conditions = CondicionesComision.actual()
-    existing = periodos(conditions.dia_corte)
+    conditions = CommissionConditions.current()
+    existing = periods(conditions.cutoff_day)
     requested = request.GET.get("period") or ""
     key = requested if _MONTH.match(requested) else (
-        existing[0]["periodo"] if existing else default_period(conditions.dias_espera)
+        existing[0]["periodo"] if existing else default_period(conditions.wait_days)
     )
-    period = ComisionPeriodo.objects.filter(periodo=key).first()
+    period = CommissionPeriod.objects.filter(period=key).first()
     data, error = None, None
     if period is not None:
         try:
-            data, _ = informe(period)
+            data, _ = period_report(period)
         except MissingCommissionColumns as exc:
             error = str(exc)
         except Exception:
@@ -162,24 +162,24 @@ def report(request):
         "periodos": existing,
         "informe": data,
         "error": error,
-        "propuesta": propuesta(key, conditions.dia_promocional, conditions.dia_corte),
+        "propuesta": proposal(key, conditions.promo_day, conditions.cutoff_day),
         # Las del cierre si está cerrado; si no, las vigentes.
         "condiciones": (
-            period.condiciones if period is not None and period.cerrado and period.condiciones
+            period.conditions if period is not None and period.is_closed and period.conditions
             else current_conditions()
         ),
         "equipos": [
             {
                 "slug": e.slug,
-                "nombre": e.nombre,
-                "roles": [{"rol": r, "etiqueta": ROLES[r]["etiqueta"]} for r in ROLES_BY_TEAM.get(e.slug, [])],
+                "nombre": e.name,
+                "roles": [{"rol": r, "etiqueta": ROLES[r]["label"]} for r in ROLES_BY_TEAM.get(e.slug, [])],
             }
-            for e in EquipoVentas.objects.all()
+            for e in SalesTeam.objects.all()
         ],
         "puedeGestionar": has_permission(request.user, MANAGE[0]),
         "puedeReabrir": has_permission(request.user, REOPEN[0]),
         "puedeBorrar": has_permission(request.user, DELETE[0]),
-        "archivos": [_archive(a) for a in period.archivos.all()] if period is not None else [],
+        "archivos": [_archive(a) for a in period.archives.all()] if period is not None else [],
     }
 
 
@@ -189,11 +189,11 @@ def sales(request):
     key = request.GET.get("period") or ""
     if not _MONTH.match(key):
         raise ApiError("Periodo invalido.")
-    period = ComisionPeriodo.objects.filter(periodo=key).first()
+    period = CommissionPeriod.objects.filter(period=key).first()
     if period is None:
         raise ApiError("El periodo no existe.", 404)
     try:
-        _, rows = informe(period)
+        _, rows = period_report(period)
     except MissingCommissionColumns as exc:
         raise _conflict(str(exc)) from exc
     return {"status": "success", "ventas": rows}
@@ -216,9 +216,9 @@ def period_save(request):
     if cutoff and cutoff.strftime("%Y-%m") != next_month(key):
         raise ApiError("El corte de los pagos adelantados tiene que caer en el mes siguiente: es cuando se saca el informe.")
 
-    previous = ComisionPeriodo.objects.filter(periodo=previous_month(key)).first()
+    previous = CommissionPeriod.objects.filter(period=previous_month(key)).first()
     if previous:
-        start = previous.inicio_promo
+        start = previous.promo_start
     else:
         start = _date(data.get("inicio"), "start")
         if start.strftime("%Y-%m") != previous_month(key):
@@ -226,23 +226,23 @@ def period_save(request):
     if promo_start <= start:
         raise ApiError("El periodo tiene que terminar después de empezar.")
 
-    following = ComisionPeriodo.objects.filter(periodo=next_month(key)).first()
-    existing = ComisionPeriodo.objects.filter(periodo=key).first()
-    if existing and existing.cerrado:
+    following = CommissionPeriod.objects.filter(period=next_month(key)).first()
+    existing = CommissionPeriod.objects.filter(period=key).first()
+    if existing and existing.is_closed:
         raise _conflict(f"El periodo {key} está cerrado: reábrelo para cambiarlo.")
-    if following and following.cerrado and (not existing or existing.inicio_promo != promo_start):
-        raise _conflict(f"El periodo {following.periodo} está cerrado y empieza donde termina este.")
+    if following and following.is_closed and (not existing or existing.promo_start != promo_start):
+        raise _conflict(f"El periodo {following.period} está cerrado y empieza donde termina este.")
 
     with transaction.atomic():
-        period = existing or ComisionPeriodo(periodo=key, creado_por=request.user)
-        period.inicio = start
-        period.inicio_promo = promo_start
+        period = existing or CommissionPeriod(period=key, created_by=request.user)
+        period.start = start
+        period.promo_start = promo_start
         if "corte_adelantos" in data:
-            period.corte_adelantos = cutoff
+            period.advance_cutoff = cutoff
         period.save()
-        if following and not following.cerrado:
-            following.inicio = promo_start
-            following.save(update_fields=["inicio"])
+        if following and not following.is_closed:
+            following.start = promo_start
+            following.save(update_fields=["start"])
     return {"status": "success", "message": f"Periodo {key} guardado."}
 
 
@@ -259,19 +259,19 @@ def review_save(request):
     decision = str(data.get("decision") or "").strip()
 
     if not decision:
-        RevisionComision.objects.filter(orden__in=orders, periodo_origen=period.periodo).delete()
+        CommissionReview.objects.filter(order__in=orders, source_period=period.period).delete()
         return {"status": "success", "message": "Decisión deshecha."}
     if decision not in (COUNT, DONT_COUNT, ALREADY_PAID, NORMAL):
         raise ApiError("La decisión es «contar», «no contar», «ya cobrada» o «toca aquí».")
-    if decision in (ALREADY_PAID, NORMAL) and ComisionPeriodo.objects.filter(periodo=previous_month(period.periodo)).exists():
+    if decision in (ALREADY_PAID, NORMAL) and CommissionPeriod.objects.filter(period=previous_month(period.period)).exists():
         raise ApiError("El periodo anterior existe: lo que ya se cobró en él lo dice su cierre.")
 
     note = str(data.get("nota") or "").strip()[:255]
     with transaction.atomic():
         for order in orders:
-            RevisionComision.objects.update_or_create(
-                orden=order, periodo_origen=period.periodo,
-                defaults={"decision": decision, "nota": note, "decidido_por": request.user},
+            CommissionReview.objects.update_or_create(
+                order=order, source_period=period.period,
+                defaults={"decision": decision, "note": note, "decided_by": request.user},
             )
     return {
         "status": "success",
@@ -296,17 +296,17 @@ def manual_add(request):
     if missing:
         raise ApiError("No están en suscripciones: " + ", ".join(missing) + ".")
     paid = dict(
-        ComisionVenta.objects.filter(orden__in=orders, clasificacion=VALID, periodo__estado="cerrado")
-        .exclude(periodo=period).values_list("orden", "periodo__periodo")
+        CommissionSale.objects.filter(order__in=orders, classification=VALID, period__status="cerrado")
+        .exclude(period=period).values_list("order", "period__period")
     )
     if paid:
         raise ApiError("Ya se pagaron: " + ", ".join(f"{o} en {p}" for o, p in sorted(paid.items())) + ".")
-    repeated = set(VentaManual.objects.filter(periodo=period.periodo, orden__in=orders).values_list("orden", flat=True))
+    repeated = set(ManualSale.objects.filter(period=period.period, order__in=orders).values_list("order", flat=True))
     if repeated:
         raise ApiError("Ya estaban agregadas: " + ", ".join(sorted(repeated)) + ".")
 
-    VentaManual.objects.bulk_create(
-        VentaManual(orden=o, periodo=period.periodo, nota=note, agregado_por=request.user) for o in orders
+    ManualSale.objects.bulk_create(
+        ManualSale(order=o, period=period.period, note=note, added_by=request.user) for o in orders
     )
     n = len(orders)
     return {"status": "success", "message": f"{n} venta{'s' if n != 1 else ''} agregada{'s' if n != 1 else ''}."}
@@ -319,7 +319,7 @@ def manual_remove(request):
     data = COMMISSION_KEYS.back(json_body(request))
     period = _open_period(_month(data.get("periodo")))
     order = str(data.get("orden") or "").strip()
-    deleted, _ = VentaManual.objects.filter(periodo=period.periodo, orden=order).delete()
+    deleted, _ = ManualSale.objects.filter(period=period.period, order=order).delete()
     if not deleted:
         raise ApiError(f"La orden {order} no estaba agregada a mano.")
     return {"status": "success", "message": f"{order} quitada."}
@@ -331,29 +331,29 @@ def indicator_save(request):
     """El % de cumplimiento o de crecimiento a mano de una persona; vacío vuelve al calculado."""
     data = COMMISSION_KEYS.back(json_body(request))
     period = _open_period(_month(data.get("periodo")))
-    person = PersonaVentas.objects.filter(pk=data.get("persona_id")).first()
+    person = SalesPerson.objects.filter(pk=data.get("persona_id")).first()
     if person is None:
         raise ApiError("La persona no existe.")
 
     pieces = [
-        current_conditions()["equipos"].get(m.equipo.slug, {}).get(m.rol, {})
-        for m in person.membresias.select_related("equipo")
+        current_conditions()["equipos"].get(m.team.slug, {}).get(m.role, {})
+        for m in person.memberships.select_related("team")
     ]
-    row, _ = IndicadorComision.objects.get_or_create(periodo=period.periodo, persona=person)
+    row, _ = CommissionIndicator.objects.get_or_create(period=period.period, person=person)
     if "cumplimiento_pct" in data:
         if not any(p.get("factor") not in (None, "ninguno") for p in pieces):
             raise ApiError("Su rol no cobra con un % de cumplimiento.")
         value = _decimal(data.get("cumplimiento_pct"), "compliance_pct")
         if value is not None and value < 0:
             raise ApiError("El cumplimiento no puede ser negativo.")
-        row.cumplimiento_pct = value
+        row.compliance_pct = value
     if "crecimiento_pct" in data:
         if not any("escalon_crecimiento" in p for p in pieces):
             raise ApiError("Su rol no cobra por el crecimiento de su unidad.")
-        row.crecimiento_pct = _decimal(data.get("crecimiento_pct"), "growth_pct")
-    row.actualizado_por = request.user
+        row.growth_pct = _decimal(data.get("crecimiento_pct"), "growth_pct")
+    row.updated_by = request.user
 
-    if row.cumplimiento_pct is None and row.crecimiento_pct is None:
+    if row.compliance_pct is None and row.growth_pct is None:
         row.delete()
     else:
         row.save()
@@ -376,7 +376,7 @@ def period_close(request):
     """Cierra el periodo: congela ventas, pagos y condiciones. 409 si queda algo pendiente."""
     period = _open_period(_month(COMMISSION_KEYS.back(json_body(request)).get("periodo")))
     close_period(period, request.user)
-    return {"status": "success", "message": f"Periodo {period.periodo} cerrado."}
+    return {"status": "success", "message": f"Periodo {period.period} cerrado."}
 
 
 @endpoint(methods=["POST"], perms=REOPEN, rate="10/m", keys=COMMISSION_KEYS)
@@ -387,10 +387,10 @@ def period_reopen(request):
     key = _month(data.get("periodo"))
     if str(data.get("confirmacion") or "").strip() != key:
         raise ApiError(f"Para reabrir, escribe el periodo exacto ({key}) en la confirmación.")
-    period = ComisionPeriodo.objects.filter(periodo=key).first()
+    period = CommissionPeriod.objects.filter(period=key).first()
     if period is None:
         raise ApiError(f"El periodo {key} no existe.")
-    if not period.cerrado:
+    if not period.is_closed:
         return {"status": "success", "message": "El periodo ya estaba en borrador."}
     archive = reopen_period(period, request.user, str(data.get("motivo") or ""))
     return {
@@ -408,12 +408,12 @@ def period_delete(request):
     key = _month(data.get("periodo"))
     if str(data.get("confirmacion") or "").strip() != key:
         raise ApiError(f"Para borrar, escribe el periodo exacto ({key}) en la confirmación.")
-    period = ComisionPeriodo.objects.filter(periodo=key).first()
+    period = CommissionPeriod.objects.filter(period=key).first()
     if period is None:
         raise ApiError(f"El periodo {key} no existe.")
-    if period.cerrado:
+    if period.is_closed:
         raise _conflict(f"El periodo {key} está cerrado: es una nómina pagada. Reábrelo antes de borrarlo.")
-    archived = period.archivos.count()
+    archived = period.archives.count()
     if archived:
         raise _conflict(
             f"El periodo {key} se cerró {archived} vez/veces: sus cierres archivados son el historial de lo"
@@ -421,9 +421,9 @@ def period_delete(request):
         )
     with transaction.atomic():
         deleted = {
-            "revisiones": RevisionComision.objects.filter(periodo_origen=key).delete()[0],
-            "manuales": VentaManual.objects.filter(periodo=key).delete()[0],
-            "indicadores": IndicadorComision.objects.filter(periodo=key).delete()[0],
+            "revisiones": CommissionReview.objects.filter(source_period=key).delete()[0],
+            "manuales": ManualSale.objects.filter(period=key).delete()[0],
+            "indicadores": CommissionIndicator.objects.filter(period=key).delete()[0],
         }
         period.delete()
     return {
@@ -439,8 +439,8 @@ def period_delete(request):
 @endpoint(perms=VIEW, nullable=True, keys=COMMISSION_KEYS)
 def archive_detail(request, archive_id: int):
     """La copia completa de un cierre archivado, para descargarla."""
-    archive = ComisionCierreArchivado.objects.select_related("periodo").get(pk=archive_id)
-    return {**_archive(archive), "periodo": archive.periodo.periodo, "copia": archive.copia}
+    archive = ArchivedClose.objects.select_related("period").get(pk=archive_id)
+    return {**_archive(archive), "periodo": archive.period.period, "copia": archive.snapshot}
 
 
 # --- La ventana de pago ---
@@ -449,28 +449,28 @@ def _pyme_plans() -> list[dict[str, Any]]:
     return [
         {
             "id": p.id,
-            "nombre": p.nombre,
-            "tarifa": p.tarifa,
-            "precio": float(p.precio),
-            "comision_pyme_pct": float(p.comision_pyme_pct) if p.comision_pyme_pct is not None else None,
+            "nombre": p.name,
+            "tarifa": p.tariff,
+            "precio": float(p.price),
+            "comision_pyme_pct": float(p.sme_commission_pct) if p.sme_commission_pct is not None else None,
         }
-        for p in Plan.objects.filter(tipo_persona="PYME")
+        for p in Plan.objects.filter(person_type="PYME")
     ]
 
 
 @endpoint(perms=MANAGE, nullable=True, keys=COMMISSION_KEYS)
 def conditions(request):
     """La ventana de pago y los % PYME de cada plan."""
-    c = CondicionesComision.actual()
-    by = c.actualizado_por
+    c = CommissionConditions.current()
+    by = c.updated_by
     return {
-        "condiciones": {"dia_promocional": c.dia_promocional, "dias_espera": c.dias_espera, "dia_corte": c.dia_corte},
+        "condiciones": {"dia_promocional": c.promo_day, "dias_espera": c.wait_days, "dia_corte": c.cutoff_day},
         "actualizacion": {
-            "en": c.actualizado_en.isoformat() if c.actualizado_en else None,
+            "en": c.updated_at.isoformat() if c.updated_at else None,
             "por": (by.get_full_name() or by.get_username()) if by else None,
         },
         "planesPyme": _pyme_plans(),
-        "puedeEditarPlanes": has_permission(request.user, "can_manage_catalogo_operacional"),
+        "puedeEditarPlanes": has_permission(request.user, "can_manage_operational_catalog"),
     }
 
 
@@ -488,8 +488,8 @@ def conditions_save(request):
         raise ApiError("El día de corte de los adelantos es un día del mes, de 1 a 31.")
     if not 0 <= wait <= 60 or wait != int(wait):
         raise ApiError("Los días de espera van de 0 a 60.")
-    c = CondicionesComision.actual()
-    c.dia_promocional, c.dias_espera, c.dia_corte = int(day), int(wait), int(cutoff)
-    c.actualizado_por = request.user
+    c = CommissionConditions.current()
+    c.promo_day, c.wait_days, c.cutoff_day = int(day), int(wait), int(cutoff)
+    c.updated_by = request.user
     c.save()
     return {"status": "success", "message": "Condiciones guardadas."}

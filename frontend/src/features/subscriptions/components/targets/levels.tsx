@@ -15,7 +15,7 @@ import type { CatalogTargetLevel } from '@/features/subscriptions/types';
 export interface TargetLevelUi {
   label: string;
   /** Nombre corto para la insignia de un nodo. */
-  corto: string;
+  short: string;
   icon: ReactNode;
   tone: FormTone;
   /** Clases de la insignia: texto, fondo y borde en el tono del nivel. */
@@ -27,7 +27,7 @@ export interface TargetLevelUi {
 export const TARGET_LEVEL_UI: Record<CatalogTargetLevel, TargetLevelUi> = {
   general: {
     label: 'General',
-    corto: 'general',
+    short: 'general',
     icon: <Globe2 />,
     tone: 'slate',
     chip: 'border-slate-500/30 bg-slate-500/10 text-slate-300',
@@ -35,7 +35,7 @@ export const TARGET_LEVEL_UI: Record<CatalogTargetLevel, TargetLevelUi> = {
   },
   sucursal: {
     label: 'Sucursal',
-    corto: 'sucursal',
+    short: 'sucursal',
     icon: <Store />,
     tone: 'purple',
     chip: 'border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300',
@@ -43,7 +43,7 @@ export const TARGET_LEVEL_UI: Record<CatalogTargetLevel, TargetLevelUi> = {
   },
   estado: {
     label: 'Estado',
-    corto: 'estado',
+    short: 'estado',
     icon: <MapPin />,
     tone: 'purple',
     chip: 'border-purple-500/30 bg-purple-500/10 text-purple-300',
@@ -51,7 +51,7 @@ export const TARGET_LEVEL_UI: Record<CatalogTargetLevel, TargetLevelUi> = {
   },
   site: {
     label: 'Site',
-    corto: 'site',
+    short: 'site',
     icon: <Building2 />,
     tone: 'blue',
     chip: 'border-sky-500/30 bg-sky-500/10 text-sky-300',
@@ -59,7 +59,7 @@ export const TARGET_LEVEL_UI: Record<CatalogTargetLevel, TargetLevelUi> = {
   },
   coordinador: {
     label: 'Coordinador',
-    corto: 'coord.',
+    short: 'coord.',
     icon: <UserCheck />,
     tone: 'emerald',
     chip: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
@@ -67,7 +67,7 @@ export const TARGET_LEVEL_UI: Record<CatalogTargetLevel, TargetLevelUi> = {
   },
   zona: {
     label: 'Zona',
-    corto: 'zona',
+    short: 'zona',
     icon: <Network />,
     tone: 'amber',
     chip: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
@@ -75,7 +75,7 @@ export const TARGET_LEVEL_UI: Record<CatalogTargetLevel, TargetLevelUi> = {
   },
   zona_sucursal: {
     label: 'Zona - sucursal',
-    corto: 'nodo',
+    short: 'nodo',
     icon: <Waypoints />,
     tone: 'sky',
     chip: 'border-orange-500/30 bg-orange-500/10 text-orange-300',

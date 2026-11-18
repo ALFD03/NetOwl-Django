@@ -20,115 +20,14 @@ import type {
   CatalogKind,
   CatalogZone,
   CatalogTargetLevel,
-  PaymentParameters,
   SalesRole,
-  TargetsTrafficLight,
-} from '@/features/subscriptions/types';
+  TargetsTrafficLight } from '@/features/subscriptions/types';
+import {
+  type CatalogView, type ConditionDraft, type IgnoredDraft, type MembershipDraft, type MonthTargetDraft, type NameDraft, type OfficeTargetDraft, type PlanDraft, type RegulatoryDraft, type SiteDraft, type TargetDraft, type TrafficLightDraft, type UnitDraft, type ZoneDraft, membershipSince,
+} from '../lib/catalogDrafts';
 
-/** Una fila en edición. Sin `id` es un alta. */
-export type PlanDraft = Omit<CatalogPlan, 'id'> & { id?: number };
-export type RegulatoryDraft = Omit<CatalogRegulatoryPlan, 'id' | 'plans'> & { id?: number };
-export type ZoneDraft = {
-  id?: number;
-  name: string;
-  site_id: number | null;
-  state_id: number | null;
-  technology: string;
-  coordinator_id: number | null;
-};
-/** Un site en edición: sus zonas y los equipos que lo trabajan se eligen en el mismo formulario. */
-export type SiteDraft = { id?: number; name: string; order: number; zone_ids: number[]; team_ids: number[] };
-export type NameDraft = { id?: number; name: string; kind: 'estados' };
-/**
- * El papel de una persona en un equipo, en edición. En el alta se elige una
- * persona que ya existe (`persona_id`) o se escribe una nueva; equipo y rol no
- * cambian después.
- */
-export type MembershipDraft = {
-  id?: number;
-  team_id: number;
-  /** El slug del equipo, para saber qué roles y qué exige cada uno. */
-  equipo: string;
-  role: SalesRole;
-  person_id: number | null;
-  name: string;
-  last_name: string;
-  channel: string;
-  supervisor_channel: string;
-  odoo_user: string;
-  /** Otros nombres de la misma persona en cada columna del export. */
-  channel_alias: string[];
-  supervisor_alias: string[];
-  user_alias: string[];
-  site_ids: number[];
-  manager_id: number | null;
-  unit_ids: number[];
-};
-export type UnidadDraft = { id?: number; name: string; zone_ids: number[]; team_ids: number[] };
-/** Las condiciones de un rol de un equipo en edición: se manda el objeto entero de parámetros. */
-export type ConditionDraft = {
-  team_id: number;
-  role: SalesRole;
-  role_label: string;
-  equipo: string;
-  pieces: CatalogRoleCondition['pieces'];
-  params: PaymentParameters;
-  policy: PaymentParameters;
-};
-/**
- * Un tramo del objetivo de ventas de las oficinas. `persona_id` nulo es el
- * general; las ventas van como texto para que el campo pueda quedar vacío.
- */
-export type OfficeTargetDraft = {
-  id?: number;
-  person_id: number | null;
-  /** Quién lo tiene, para enseñarlo al editar (la persona no se cambia). */
-  role_label?: string;
-  since: string;
-  ventas: string;
-  note: string;
-};
-export type IgnoredDraft = { id?: number; name: string; note: string; area: CatalogArea };
+const asText = (value: number | null): string => (value === null ? '' : String(value));
 
-/**
- * Un tramo de objetivo en edición. Los porcentajes van como texto porque vacío
- * significa algo —"se hereda"— y un `number` no puede estar vacío.
- */
-export type TargetDraft = {
-  id?: number;
-  level: CatalogTargetLevel;
-  entity_id: number | null;
-  /** La zona de un nodo, por nombre: los nodos salen de los datos, no del catálogo. */
-  entity_name?: string;
-  /** En los niveles `sucursal` y `zona_sucursal`. */
-  sucursal: string;
-  /** Cómo se llama lo que tiene el objetivo, para enseñarlo al editar. */
-  role_label?: string;
-  /** `YYYY-MM`; vacío es "desde siempre". */
-  since: string;
-  growth_pct: string;
-  churn_pct: string;
-  note: string;
-  /** El objetivo general: uno solo, sin fecha ni valores vacíos. */
-  esBase?: boolean;
-};
-export type MonthTargetDraft = {
-  id?: number;
-  period: string;
-  growth_pct: string;
-  churn_pct: string;
-  note: string;
-};
-export type TrafficLightDraft = TargetsTrafficLight;
-
-const asText = (valor: number | null): string => (valor === null ? '' : String(valor));
-
-/**
- * La pestaña activa. Las de Productos, Estructura y Notificaciones son nombres
- * fijos; las de Ventas llevan sección: `estructura/unidades`, `estructura/sites`,
- * `estructura/objetivos` y, por equipo, `<slug>/<rol>` y `<slug>/condiciones`.
- */
-export type CatalogView = string;
 
 const EMPTY_PLAN: PlanDraft = {
   name: '',
@@ -171,41 +70,6 @@ interface Args {
   teams?: { id: number; slug: string }[];
 }
 
-/** Los roles que aparecen en `Vendedor` (usuario de Odoo) y no en `Medio`. */
-const ROLES_WITH_USER: SalesRole[] = ['coord_oficina', 'administradora'];
-
-/**
- * Una membresía en blanco del rol y equipo indicados, rellena a partir del
- * literal del export si lo hay.
- *
- * El literal de `Vendedor` (coordinadora de oficina, administradora) es el
- * nombre completo con `(User)`: va entero al usuario de Odoo, y de él se
- * adivinan nombre, apellido y medio —dos nombres y dos apellidos es lo
- * habitual—. Los de `Medio` son ya nombre + apellido y van al medio. Todo
- * queda editable: es una sugerencia.
- */
-export function membershipSince(
-  literal: string, rol: SalesRole, teamId: number, equipo: string,
-): MembershipDraft {
-  const base = literal.replace(/\s*\(\s*users?\s*\)\s*$/i, '').trim();
-  const partes = base.split(/\s+/).filter(Boolean);
-  const vacia = {
-    team_id: teamId, equipo, role: rol, person_id: null, supervisor_channel: '', site_ids: [] as number[], manager_id: null,
-    channel_alias: [] as string[], supervisor_alias: [] as string[], user_alias: [] as string[],
-    unit_ids: [] as number[],
-  };
-  if (ROLES_WITH_USER.includes(rol)) {
-    const corte = partes.length >= 4 ? 2 : 1;
-    return {
-      ...vacia,
-      name: partes.slice(0, corte).join(' '),
-      last_name: partes.slice(corte).join(' '),
-      channel: rol === 'coord_oficina' ? [partes[0], partes[corte]].filter(Boolean).join(' ') : '',
-      odoo_user: literal ? `${base} (User)` : '',
-    };
-  }
-  return { ...vacia, name: partes[0] ?? '', last_name: partes.slice(1).join(' '), channel: base, odoo_user: '' };
-}
 
 /**
  * Estado de una página del módulo de Catálogos.
@@ -222,15 +86,15 @@ export function membershipSince(
  * elegir una zona) y el servidor ya devuelve todo junto.
  */
 export function useCatalogs({
-  initialView: vistaInicial, sites = [], states = [], newPlan = '', newZone = '', newPerson, teams = [],
+  initialView, sites = [], states = [], newPlan = '', newZone = '', newPerson, teams = [],
 }: Args) {
-  const [vista, setVista] = useState<CatalogView>(vistaInicial);
-  const [guardando, setGuardando] = useState(false);
+  const [view, setView] = useState<CatalogView>(initialView);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Lo que respondió la última escritura que salió bien. Hace falta en las
   // páginas donde se registra en serie (Notificaciones): sin ir a otra página,
   // es lo único que confirma que se guardó.
-  const [aviso, setNotice] = useState<string | null>(null);
+  const [warning, setNotice] = useState<string | null>(null);
 
   // `?new_plan=` viene del aviso de la importación, de la pestaña de planes
   // por clasificar del ETA y de las notificaciones: el formulario abre con el
@@ -240,47 +104,47 @@ export function useCatalogs({
   const [planDraft, setPlanDraft] = useState<PlanDraft | null>(
     () => (newPlan ? { ...EMPTY_PLAN, name: newPlan } : null),
   );
-  const [reguladorDraft, setReguladorDraft] = useState<RegulatoryDraft | null>(null);
-  const emptyZone = (nombre = ''): ZoneDraft => ({
-    name: nombre,
+  const [regulatorDraft, setRegulatorDraft] = useState<RegulatoryDraft | null>(null);
+  const emptyZone = (name = ''): ZoneDraft => ({
+    name,
     site_id: sites[0]?.id ?? null,
     state_id: states[0]?.id ?? null,
     technology: 'FTTH',
     coordinator_id: null,
   });
-  const [zonaDraft, setZonaDraft] = useState<ZoneDraft | null>(
+  const [zoneDraft, setZoneDraft] = useState<ZoneDraft | null>(
     () => (newZone ? emptyZone(newZone) : null),
   );
   const [siteDraft, setSiteDraft] = useState<SiteDraft | null>(null);
-  const [personaDraft, setPersonaDraft] = useState<MembershipDraft | null>(() => {
-    const equipo = teams.find((e) => e.slug === newPerson?.equipo);
-    return newPerson?.literal && equipo
-      ? membershipSince(newPerson.literal, newPerson.role as SalesRole, equipo.id, equipo.slug)
+  const [personDraft, setPersonDraft] = useState<MembershipDraft | null>(() => {
+    const team = teams.find((e) => e.slug === newPerson?.equipo);
+    return newPerson?.literal && team
+      ? membershipSince(newPerson.literal, newPerson.role as SalesRole, team.id, team.slug)
       : null;
   });
-  const [condicionDraft, setCondicionDraft] = useState<ConditionDraft | null>(null);
-  const [unidadDraft, setUnidadDraft] = useState<UnidadDraft | null>(null);
-  const [objetivoOficinaDraft, setObjetivoOficinaDraft] = useState<OfficeTargetDraft | null>(null);
-  const [nombreDraft, setNombreDraft] = useState<NameDraft | null>(null);
-  const [ignoradoDraft, setIgnoradoDraft] = useState<IgnoredDraft | null>(null);
-  const [objetivoDraft, setObjetivoDraft] = useState<TargetDraft | null>(null);
-  const [objetivoMesDraft, setObjetivoMesDraft] = useState<MonthTargetDraft | null>(null);
-  const [semaforoDraft, setSemaforoDraft] = useState<TrafficLightDraft | null>(null);
-  const [borrando, setBorrando] = useState<{ kind: CatalogKind; id: number; name: string } | null>(null);
+  const [conditionDraft, setConditionDraft] = useState<ConditionDraft | null>(null);
+  const [unitDraft, setUnitDraft] = useState<UnitDraft | null>(null);
+  const [officeTargetDraft, setOfficeTargetDraft] = useState<OfficeTargetDraft | null>(null);
+  const [nameDraft, setNameDraft] = useState<NameDraft | null>(null);
+  const [ignoredDraft, setIgnoredDraft] = useState<IgnoredDraft | null>(null);
+  const [targetDraft, setTargetDraft] = useState<TargetDraft | null>(null);
+  const [monthTargetDraft, setMonthTargetDraft] = useState<MonthTargetDraft | null>(null);
+  const [trafficLightDraft, setTrafficLightDraft] = useState<TrafficLightDraft | null>(null);
+  const [deleting, setDeleting] = useState<{ kind: CatalogKind; id: number; name: string } | null>(null);
   // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
-  const formOpen = Boolean(planDraft || reguladorDraft || zonaDraft || siteDraft || personaDraft || condicionDraft || unidadDraft || objetivoOficinaDraft || nombreDraft || ignoradoDraft || objetivoDraft || objetivoMesDraft || semaforoDraft || borrando);
+  const formOpen = Boolean(planDraft || regulatorDraft || zoneDraft || siteDraft || personDraft || conditionDraft || unitDraft || officeTargetDraft || nameDraft || ignoredDraft || targetDraft || monthTargetDraft || trafficLightDraft || deleting);
   useOnOpen(formOpen, () => setError(null));
 
-  const nuevoPlanVacio = () => setPlanDraft({ ...EMPTY_PLAN });
-  const editarPlan = (plan: CatalogPlan) => setPlanDraft({ ...plan });
-  const crearPlanDesde = (name: string) => setPlanDraft({ ...EMPTY_PLAN, name });
+  const newEmptyPlan = () => setPlanDraft({ ...EMPTY_PLAN });
+  const editPlan = (plan: CatalogPlan) => setPlanDraft({ ...plan });
+  const createPlanFrom = (name: string) => setPlanDraft({ ...EMPTY_PLAN, name });
 
-  const nuevoRegulador = () => setReguladorDraft({ ...EMPTY_REGULATORY });
+  const newRegulator = () => setRegulatorDraft({ ...EMPTY_REGULATORY });
   // `planes` se queda fuera a propósito: es un conteo que calcula el servidor,
   // no un campo del formulario, y mandarlo de vuelta sería enviar un dato que
   // el backend ignora y que aquí solo confunde.
-  const editarRegulador = (row: CatalogRegulatoryPlan) =>
-    setReguladorDraft({
+  const editRegulator = (row: CatalogRegulatoryPlan) =>
+    setRegulatorDraft({
       id: row.id,
       name: row.name,
       technology: row.technology,
@@ -292,30 +156,30 @@ export function useCatalogs({
       notes: row.notes,
     });
 
-  const nuevaZonaVacia = () => setZonaDraft(emptyZone());
-  const crearZonaDesde = (nombre: string) => setZonaDraft(emptyZone(nombre));
-  const editarZona = (zona: CatalogZone) =>
-    setZonaDraft({
-      id: zona.id,
-      name: zona.name,
-      site_id: zona.site_id,
-      state_id: zona.state_id,
-      technology: zona.technology,
-      coordinator_id: zona.coordinator_id,
+  const newEmptyZone = () => setZoneDraft(emptyZone());
+  const createZoneFrom = (name: string) => setZoneDraft(emptyZone(name));
+  const editZone = (zone: CatalogZone) =>
+    setZoneDraft({
+      id: zone.id,
+      name: zone.name,
+      site_id: zone.site_id,
+      state_id: zone.state_id,
+      technology: zone.technology,
+      coordinator_id: zone.coordinator_id,
     });
 
-  const nuevoSite = () => setSiteDraft({ name: '', order: 999, zone_ids: [], team_ids: [] });
-  const editarSite = (site: CatalogSite) =>
+  const newSite = () => setSiteDraft({ name: '', order: 999, zone_ids: [], team_ids: [] });
+  const editSite = (site: CatalogSite) =>
     setSiteDraft({
       id: site.id, name: site.name, order: site.order, zone_ids: site.zone_ids, team_ids: site.team_ids,
     });
 
-  const nuevaPersonaVacia = (rol: SalesRole, teamId: number, equipo: string) =>
-    setPersonaDraft(membershipSince('', rol, teamId, equipo));
-  const crearPersonaDesde = (literal: string, rol: SalesRole, teamId: number, equipo: string) =>
-    setPersonaDraft(membershipSince(literal, rol, teamId, equipo));
-  const editarPersona = (row: CatalogMembership) =>
-    setPersonaDraft({
+  const newEmptyPerson = (role: SalesRole, teamId: number, team: string) =>
+    setPersonDraft(membershipSince('', role, teamId, team));
+  const createPersonFrom = (literal: string, role: SalesRole, teamId: number, team: string) =>
+    setPersonDraft(membershipSince(literal, role, teamId, team));
+  const editPerson = (row: CatalogMembership) =>
+    setPersonDraft({
       id: row.id,
       team_id: row.team_id,
       equipo: row.equipo,
@@ -334,8 +198,8 @@ export function useCatalogs({
       unit_ids: row.unit_ids,
     });
 
-  const editarCondicion = (row: CatalogRoleCondition) =>
-    setCondicionDraft({
+  const editCondition = (row: CatalogRoleCondition) =>
+    setConditionDraft({
       team_id: row.team_id,
       equipo: row.equipo,
       role: row.role,
@@ -345,14 +209,14 @@ export function useCatalogs({
       policy: row.policy,
     });
 
-  const nuevaUnidad = () => setUnidadDraft({ name: '', zone_ids: [], team_ids: [] });
-  const editarUnidad = (row: CatalogBusinessUnit) =>
-    setUnidadDraft({ id: row.id, name: row.name, zone_ids: row.zone_ids, team_ids: row.team_ids });
+  const newUnit = () => setUnitDraft({ name: '', zone_ids: [], team_ids: [] });
+  const editUnit = (row: CatalogBusinessUnit) =>
+    setUnitDraft({ id: row.id, name: row.name, zone_ids: row.zone_ids, team_ids: row.team_ids });
 
-  const nuevoObjetivoOficina = (personId: number | null = null) =>
-    setObjetivoOficinaDraft({ person_id: personId, since: '', ventas: '', note: '' });
-  const editarObjetivoOficina = (row: CatalogOfficeTarget) =>
-    setObjetivoOficinaDraft({
+  const newOfficeTarget = (personId: number | null = null) =>
+    setOfficeTargetDraft({ person_id: personId, since: '', ventas: '', note: '' });
+  const editOfficeTarget = (row: CatalogOfficeTarget) =>
+    setOfficeTargetDraft({
       id: row.id,
       person_id: row.person_id,
       role_label: row.person || 'General (todas las coordinadoras)',
@@ -361,17 +225,17 @@ export function useCatalogs({
       note: row.note,
     });
 
-  const nuevoNombre = (tipo: NameDraft['kind']) => setNombreDraft({ name: '', kind: tipo });
-  const editarNombre = (tipo: NameDraft['kind'], row: CatalogNamed) =>
-    setNombreDraft({ id: row.id, name: row.name, kind: tipo });
+  const newName = (kind: NameDraft['kind']) => setNameDraft({ name: '', kind });
+  const editName = (kind: NameDraft['kind'], row: CatalogNamed) =>
+    setNameDraft({ id: row.id, name: row.name, kind });
 
-  const nuevoIgnorado = (area: CatalogArea) => setIgnoradoDraft({ name: '', note: '', area });
-  const editarIgnorado = (row: CatalogIgnoredProduct) =>
-    setIgnoradoDraft({ id: row.id, name: row.name, note: row.note, area: row.area });
+  const newIgnored = (area: CatalogArea) => setIgnoredDraft({ name: '', note: '', area });
+  const editIgnored = (row: CatalogIgnoredProduct) =>
+    setIgnoredDraft({ id: row.id, name: row.name, note: row.note, area: row.area });
 
-  const nuevoObjetivo = (nivel: CatalogTargetLevel) =>
-    setObjetivoDraft({
-      level: nivel,
+  const newTarget = (level: CatalogTargetLevel) =>
+    setTargetDraft({
+      level,
       entity_id: null,
       sucursal: '',
       since: '',
@@ -379,8 +243,8 @@ export function useCatalogs({
       churn_pct: '',
       note: '',
     });
-  const editarObjetivo = (row: CatalogTarget) =>
-    setObjetivoDraft({
+  const editTarget = (row: CatalogTarget) =>
+    setTargetDraft({
       id: row.id,
       level: row.level,
       entity_id: row.entity_id,
@@ -390,13 +254,13 @@ export function useCatalogs({
       growth_pct: asText(row.growth_pct),
       churn_pct: asText(row.churn_pct),
       note: row.note,
-      esBase: row.level === 'general',
+      isBase: row.level === 'general',
     });
 
-  const nuevoObjetivoMes = (periodo = '') =>
-    setObjetivoMesDraft({ period: periodo, growth_pct: '', churn_pct: '', note: '' });
-  const editarObjetivoMes = (row: CatalogMonthTarget) =>
-    setObjetivoMesDraft({
+  const newMonthTarget = (period = '') =>
+    setMonthTargetDraft({ period, growth_pct: '', churn_pct: '', note: '' });
+  const editMonthTarget = (row: CatalogMonthTarget) =>
+    setMonthTargetDraft({
       id: row.id,
       period: row.period,
       growth_pct: asText(row.growth_pct),
@@ -404,38 +268,38 @@ export function useCatalogs({
       note: row.note,
     });
 
-  const editarSemaforo = (semaforo: TargetsTrafficLight) => setSemaforoDraft({ ...semaforo });
+  const editTrafficLight = (trafficLight: TargetsTrafficLight) => setTrafficLightDraft({ ...trafficLight });
 
-  const cerrarFormularios = () => {
+  const closeForms = () => {
     setPlanDraft(null);
-    setReguladorDraft(null);
-    setZonaDraft(null);
+    setRegulatorDraft(null);
+    setZoneDraft(null);
     setSiteDraft(null);
-    setPersonaDraft(null);
-    setCondicionDraft(null);
-    setUnidadDraft(null);
-    setObjetivoOficinaDraft(null);
-    setNombreDraft(null);
-    setIgnoradoDraft(null);
-    setObjetivoDraft(null);
-    setObjetivoMesDraft(null);
-    setSemaforoDraft(null);
+    setPersonDraft(null);
+    setConditionDraft(null);
+    setUnitDraft(null);
+    setOfficeTargetDraft(null);
+    setNameDraft(null);
+    setIgnoredDraft(null);
+    setTargetDraft(null);
+    setMonthTargetDraft(null);
+    setTrafficLightDraft(null);
   };
 
-  const guardar = async (tipo: CatalogKind, payload: CatalogPayload) => {
-    setGuardando(true);
+  const save = async (kind: CatalogKind, payload: CatalogPayload) => {
+    setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      const response = await catalogsApi.guardar(tipo, payload);
-      cerrarFormularios();
+      const response = await catalogsApi.save(kind, payload);
+      closeForms();
       setNotice(response?.message ?? null);
       return true;
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo guardar el registro.'));
       return false;
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
@@ -447,7 +311,7 @@ export function useCatalogs({
    * zona nueva de una mal escrita, así que la decisión la toma quien mira la
    * lista.
    */
-  const ignorar = (area: CatalogArea, nombre: string) => guardar('ignorados', { name: nombre, note: '', area });
+  const ignore = (area: CatalogArea, name: string) => save('ignorados', { name, note: '', area });
 
   /**
    * Registra de una vez varios nombres pendientes de ventas con el mismo rol y equipo.
@@ -459,23 +323,23 @@ export function useCatalogs({
    * cruce. Lo que no entra se enumera con su motivo; lo demás queda guardado.
    * Los roles que piden más (site, unidades) no se registran en bloque.
    */
-  const registrarPersonas = async (literals: string[], rol: SalesRole, teamId: number, equipo: string) => {
-    setGuardando(true);
+  const registerPeople = async (literals: string[], role: SalesRole, teamId: number, team: string) => {
+    setSaving(true);
     setError(null);
     setNotice(null);
     try {
-      const response = await catalogsApi.guardarLote(
+      const response = await catalogsApi.saveBatch(
         'membresias',
-        literals.map((literal) => ({ ...membershipSince(literal, rol, teamId, equipo) })),
+        literals.map((literal) => ({ ...membershipSince(literal, role, teamId, team) })),
       );
       if (response.errors.length) {
-        const MOSTRADOS = 5;
-        const detalle = response.errors
-          .slice(0, MOSTRADOS)
+        const SHOWN = 5;
+        const detail = response.errors
+          .slice(0, SHOWN)
           .map((e) => `${e.name}: ${e.message}`)
           .join(' · ');
-        const resto = response.errors.length - MOSTRADOS;
-        setError(`${response.message} No entraron: ${detalle}${resto > 0 ? ` · y ${resto} más` : ''}`);
+        const rest = response.errors.length - SHOWN;
+        setError(`${response.message} No entraron: ${detail}${rest > 0 ? ` · y ${rest} más` : ''}`);
       } else {
         setNotice(response.message);
       }
@@ -484,7 +348,7 @@ export function useCatalogs({
       setError(getApiErrorMessage(err, 'No se pudo registrar el lote.'));
       return 0;
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
@@ -495,48 +359,48 @@ export function useCatalogs({
    * Campos») y registrarla otra vez la partiría en dos. No toca sus nombres
    * principales: añade `literal` a cada columna en la que aparecía.
    */
-  const vincularNombre = (
-    persona: CatalogSalesPerson,
+  const linkName = (
+    person: CatalogSalesPerson,
     literal: string,
     columns: ('channel_alias' | 'supervisor_alias' | 'user_alias')[],
   ) =>
-    guardar('personas', {
-      id: persona.id,
-      name: persona.name,
-      last_name: persona.last_name,
-      ...Object.fromEntries(columns.map((c) => [c, [...persona[c], literal]])),
+    save('personas', {
+      id: person.id,
+      name: person.name,
+      last_name: person.last_name,
+      ...Object.fromEntries(columns.map((c) => [c, [...person[c], literal]])),
     });
 
-  const confirmarBorrado = async () => {
-    if (!borrando) return;
-    setGuardando(true);
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    setSaving(true);
     setError(null);
     try {
-      await catalogsApi.eliminar(borrando.kind, borrando.id);
-      setBorrando(null);
+      await catalogsApi.remove(deleting.kind, deleting.id);
+      setDeleting(null);
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'No se pudo eliminar el registro.'));
     } finally {
-      setGuardando(false);
+      setSaving(false);
     }
   };
 
   return {
-    vista, setVista, guardando, error, setError, aviso,
-    planDraft, setPlanDraft, nuevoPlanVacio, editarPlan, crearPlanDesde,
-    reguladorDraft, setReguladorDraft, nuevoRegulador, editarRegulador,
-    zonaDraft, setZonaDraft, nuevaZonaVacia, crearZonaDesde, editarZona,
-    siteDraft, setSiteDraft, nuevoSite, editarSite,
-    personaDraft, setPersonaDraft, nuevaPersonaVacia, crearPersonaDesde, editarPersona,
-    condicionDraft, setCondicionDraft, editarCondicion,
-    unidadDraft, setUnidadDraft, nuevaUnidad, editarUnidad,
-    objetivoOficinaDraft, setObjetivoOficinaDraft, nuevoObjetivoOficina, editarObjetivoOficina,
-    nombreDraft, setNombreDraft, nuevoNombre, editarNombre,
-    ignoradoDraft, setIgnoradoDraft, nuevoIgnorado, editarIgnorado,
-    objetivoDraft, setObjetivoDraft, nuevoObjetivo, editarObjetivo,
-    objetivoMesDraft, setObjetivoMesDraft, nuevoObjetivoMes, editarObjetivoMes,
-    semaforoDraft, setSemaforoDraft, editarSemaforo,
-    borrando, setBorrando, confirmarBorrado,
-    cerrarFormularios, guardar, ignorar, registrarPersonas, vincularNombre,
+    view, setView, saving, error, setError, notice: warning,
+    planDraft, setPlanDraft, newEmptyPlan, editPlan, createPlanFrom,
+    regulatorDraft, setRegulatorDraft, newRegulator, editRegulator,
+    zoneDraft, setZoneDraft, newEmptyZone, createZoneFrom, editZone,
+    siteDraft, setSiteDraft, newSite, editSite,
+    personDraft, setPersonDraft, newEmptyPerson, createPersonFrom, editPerson,
+    conditionDraft, setConditionDraft, editCondition,
+    unitDraft, setUnitDraft, newUnit, editUnit,
+    officeTargetDraft, setOfficeTargetDraft, newOfficeTarget, editOfficeTarget,
+    nameDraft, setNameDraft, newName, editName,
+    ignoredDraft, setIgnoredDraft, newIgnored, editIgnored,
+    targetDraft, setTargetDraft, newTarget, editTarget,
+    monthTargetDraft, setMonthTargetDraft, newMonthTarget, editMonthTarget,
+    trafficLightDraft, setTrafficLightDraft, editTrafficLight,
+    deleting, setDeleting, confirmDelete,
+    closeForms, save, ignore, registerPeople, linkName,
   };
 }

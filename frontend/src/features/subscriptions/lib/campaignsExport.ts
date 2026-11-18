@@ -17,29 +17,29 @@ const INT = '#,##0';
 const DEC = '0.00';
 
 export interface CampaignReport {
-  campanna: string;
+  campaign: string;
   startBase: number;
-  aporte: number;
-  instalaciones: number;
+  contribution: number;
+  installs: number;
   reactivations: number;
-  ingresosNetos: number;
+  netInflows: number;
   churned: number;
-  ingresosBrutos: number;
+  grossInflows: number;
   churn: number;
   growth: number;
-  meta: number;
+  goal: number;
   salesCompliance: number;
   revenueCompliance: number;
   closeCompliance: number;
-  suspensiones: number;
+  suspensions: number;
   suspensionRate: number;
-  recuperaciones: number;
+  recoveries: number;
   recoveryRate: number;
   arpu: number;
   baseFinal: number;
 }
 
-const tasa = (parte: number, total: number) => (total > 0 ? (parte / total) * 100 : 0);
+const rate = (part: number, total: number) => (total > 0 ? (part / total) * 100 : 0);
 
 /**
  * Las filas del reporte, de la campaña que más instala a la que menos.
@@ -54,44 +54,41 @@ const tasa = (parte: number, total: number) => (total > 0 ? (parte / total) * 10
  * misma cifra, y de este modo el aporte nunca mezcla un corte con otro si el
  * desglose cayó al cierre del mes por faltarle al día.
  */
-export function buildCampaignReport(
-  filas: DimensionVal[],
-  objetivo: TargetSpec,
-): CampaignReport[] {
-  const totalInstallations = filas.reduce((total, row) => total + toNumber(row.new_subs), 0);
+export function buildCampaignReport(rows: DimensionVal[], target: TargetSpec): CampaignReport[] {
+  const totalInstallations = rows.reduce((total, row) => total + toNumber(row.new_subs), 0);
 
-  return filas
+  return rows
     .map((row) => {
-      const instalaciones = toNumber(row.new_subs);
-      const reactivaciones = toNumber(row.react_val);
-      const suspensiones = toNumber(row.unpaid_cuts);
-      const recuperaciones = toNumber(row.react_4_P);
-      const cumplimiento = periodCompliance({ ...row, new_in_month: row.new_subs }, objetivo);
+      const installs = toNumber(row.new_subs);
+      const reactivations = toNumber(row.react_val);
+      const suspensions = toNumber(row.unpaid_cuts);
+      const recoveries = toNumber(row.react_4_P);
+      const compliance = periodCompliance({ ...row, new_in_month: row.new_subs }, target);
 
       return {
-        campanna: row.value,
+        campaign: row.value,
         startBase: toNumber(row.active_start),
-        aporte: tasa(instalaciones, totalInstallations),
-        instalaciones,
-        reactivations: reactivaciones,
-        ingresosNetos: instalaciones + reactivaciones,
+        contribution: rate(installs, totalInstallations),
+        installs,
+        reactivations,
+        netInflows: installs + reactivations,
         churned: toNumber(row.churned),
-        ingresosBrutos: toNumber(row.gross_adds),
+        grossInflows: toNumber(row.gross_adds),
         churn: toNumber(row.gross_churn_pct),
         growth: toNumber(row.growth),
-        meta: cumplimiento.metaIngresos,
-        salesCompliance: cumplimiento.salesCompliance,
-        revenueCompliance: cumplimiento.revenueCompliance,
-        closeCompliance: cumplimiento.closeCompliance,
-        suspensiones,
+        goal: compliance.inflowsGoal,
+        salesCompliance: compliance.salesCompliance,
+        revenueCompliance: compliance.revenueCompliance,
+        closeCompliance: compliance.closeCompliance,
+        suspensions,
         suspensionRate: toNumber(row.suspension_pct),
-        recuperaciones,
-        recoveryRate: tasa(recuperaciones, suspensiones),
+        recoveries,
+        recoveryRate: rate(recoveries, suspensions),
         arpu: toNumber(row.arpu),
         baseFinal: toNumber(row.active_end),
       };
     })
-    .sort((a, b) => b.instalaciones - a.instalaciones || a.campanna.localeCompare(b.campanna));
+    .sort((a, b) => b.installs - a.installs || a.campaign.localeCompare(b.campaign));
 }
 
 /**
@@ -100,29 +97,29 @@ export function buildCampaignReport(
  * Los porcentajes salen como la cifra que se lee (12.5, no 0.125), igual que en
  * el resto de exportaciones; el formato solo decide los decimales.
  */
-export const CAMPANNAS_EXCEL_COLUMNS: ExcelColumn<CampaignReport>[] = [
-  { header: 'Campaña', value: (r) => r.campanna, width: 30 },
+export const CAMPAIGN_EXCEL_COLUMNS: ExcelColumn<CampaignReport>[] = [
+  { header: 'Campaña', value: (r) => r.campaign, width: 30 },
   { header: 'Base Inicio', value: (r) => r.startBase, format: INT },
-  { header: 'Aporte %', value: (r) => r.aporte, format: DEC },
-  { header: 'Instalaciones', value: (r) => r.instalaciones, format: INT },
+  { header: 'Aporte %', value: (r) => r.contribution, format: DEC },
+  { header: 'Instalaciones', value: (r) => r.installs, format: INT },
   { header: 'Reactivaciones', value: (r) => r.reactivations, format: INT },
-  { header: 'Ingresos Netos', value: (r) => r.ingresosNetos, format: INT },
+  { header: 'Ingresos Netos', value: (r) => r.netInflows, format: INT },
   { header: 'Bajas', value: (r) => r.churned, format: INT },
-  { header: 'Ingresos Brutos', value: (r) => r.ingresosBrutos, format: INT },
+  { header: 'Ingresos Brutos', value: (r) => r.grossInflows, format: INT },
   { header: 'Churn %', value: (r) => r.churn, format: DEC },
   { header: 'Crecimiento %', value: (r) => r.growth, format: DEC },
-  { header: 'Meta', value: (r) => r.meta, format: DEC },
+  { header: 'Meta', value: (r) => r.goal, format: DEC },
   { header: 'Cumpl. Ventas %', value: (r) => r.salesCompliance, format: DEC },
   { header: 'Cumpl. Ingresos %', value: (r) => r.revenueCompliance, format: DEC },
   { header: 'Cumpl. Cierre %', value: (r) => r.closeCompliance, format: DEC },
-  { header: 'Suspensiones', value: (r) => r.suspensiones, format: INT },
+  { header: 'Suspensiones', value: (r) => r.suspensions, format: INT },
   { header: 'Tasa Suspensiones %', value: (r) => r.suspensionRate, format: DEC },
-  { header: 'Recuperaciones', value: (r) => r.recuperaciones, format: INT },
+  { header: 'Recuperaciones', value: (r) => r.recoveries, format: INT },
   { header: 'Tasa Recuperación %', value: (r) => r.recoveryRate, format: DEC },
   { header: 'ARPU', value: (r) => r.arpu, format: DEC },
   { header: 'Base Final', value: (r) => r.baseFinal, format: INT },
 ];
 
 /** `Campañas Suscripciones 2026-09 día 15`: qué, de qué mes y de qué corte. */
-export const campannasFileName = (periodo: string, dia: number): string =>
-  ['Campañas Suscripciones', monthOf(periodo), dia ? `día ${dia}` : ''].join(' ').trim();
+export const campaignsFileName = (period: string, day: number): string =>
+  ['Campañas Suscripciones', monthOf(period), day ? `día ${day}` : ''].join(' ').trim();

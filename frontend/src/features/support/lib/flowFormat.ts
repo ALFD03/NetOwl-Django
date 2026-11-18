@@ -9,15 +9,15 @@
 import { CHART_PALETTE } from '@/shared/constants/theme';
 import type { FlowTeam, StageKind } from '../types';
 
-export function formatDuration(horas: number | null | undefined): string {
-  if (horas === null || horas === undefined || Number.isNaN(horas)) return '—';
-  if (horas < 1) return `${Math.round(horas * 60)} min`;
-  if (horas < 48) return `${horas.toFixed(1)} h`;
-  return `${(horas / 24).toFixed(1)} d`;
+export function formatDuration(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined || Number.isNaN(hours)) return '—';
+  if (hours < 1) return `${Math.round(hours * 60)} min`;
+  if (hours < 48) return `${hours.toFixed(1)} h`;
+  return `${(hours / 24).toFixed(1)} d`;
 }
 
-export const formatExactHours = (horas: number | null | undefined): string =>
-  horas === null || horas === undefined ? '' : `${horas.toFixed(2)} horas`;
+export const formatExactHours = (hours: number | null | undefined): string =>
+  hours === null || hours === undefined ? '' : `${hours.toFixed(2)} horas`;
 
 export const TEAM_LABEL: Record<FlowTeam | 'compartida', string> = {
   atc: 'ATC',
@@ -34,7 +34,7 @@ export const KIND_LABEL: Record<StageKind, string> = {
 };
 
 /** Colores por tipo de etapa, iguales en los dos equipos: la composición del tiempo. */
-export const COLOR_TIPO: Record<'cola' | 'pausa' | 'gestion' | 'sin_clasificar', string> = {
+export const KIND_COLOR: Record<'cola' | 'pausa' | 'gestion' | 'sin_clasificar', string> = {
   cola: CHART_PALETTE[1],
   pausa: CHART_PALETTE[9],
   gestion: CHART_PALETTE[2],

@@ -25,27 +25,27 @@ export interface SankeyNode {
   caption?: string;
 }
 
-export interface SankeyEnlace {
-  origen: string;
-  destino: string;
-  valor: number;
+export interface SankeyLink {
+  source: string;
+  target: string;
+  value: number;
 }
 
 interface Props {
-  origenes: SankeyNode[];
+  sources: SankeyNode[];
   targets: SankeyNode[];
-  enlaces: SankeyEnlace[];
-  formatValue?: (valor: number) => string;
+  links: SankeyLink[];
+  formatValue?: (value: number) => string;
   /** Alto del dibujo en unidades del viewBox (el ancho es 1000). */
-  alto?: number;
+  height?: number;
   className?: string;
 }
 
-const ANCHO = 1000;
-const X_ORIGEN = 250;
+const WIDTH = 1000;
+const X_SOURCE = 250;
 const X_TARGET = 735;
 const NODE = 16;
-const HUECO = 28;
+const GAP = 28;
 /**
  * Alto mínimo que ocupa un nodo en su columna: el de sus dos líneas de texto.
  * Un nodo fino (el arrastre, lo que quedó abierto) se dibuja centrado en ese
@@ -54,93 +54,93 @@ const HUECO = 28;
 const LABEL = 56;
 /** Con `caption` la etiqueta lleva una tercera línea. */
 const LABEL_WITH_NOTE = 80;
-const MARGEN = 12;
+const MARGIN = 12;
 
 interface PlacedNode extends SankeyNode {
-  valor: number;
+  value: number;
   y: number;
   h: number;
 }
 
 interface Column {
-  nodos: PlacedNode[];
-  alto: number;
+  nodes: PlacedNode[];
+  height: number;
 }
 
-function colocar(nodos: SankeyNode[], valores: Map<string, number>, escala: number): Column {
+function placeNodes(nodes: SankeyNode[], values: Map<string, number>, scale: number): Column {
   let y = 0;
-  const colocados = nodos
-    .filter((n) => (valores.get(n.id) ?? 0) > 0)
+  const placedNodes = nodes
+    .filter((n) => (values.get(n.id) ?? 0) > 0)
     .map((n) => {
-      const valor = valores.get(n.id) ?? 0;
-      const h = Math.max(2, valor * escala);
-      const hueco = Math.max(h, n.caption ? LABEL_WITH_NOTE : LABEL);
-      const colocado = { ...n, valor, y: y + (hueco - h) / 2, h };
-      y += hueco + HUECO;
-      return colocado;
+      const value = values.get(n.id) ?? 0;
+      const h = Math.max(2, value * scale);
+      const gap = Math.max(h, n.caption ? LABEL_WITH_NOTE : LABEL);
+      const placed = { ...n, value, y: y + (gap - h) / 2, h };
+      y += gap + GAP;
+      return placed;
     });
-  return { nodos: colocados, alto: Math.max(0, y - HUECO) };
+  return { nodes: placedNodes, height: Math.max(0, y - GAP) };
 }
 
 export function SankeyChart({
-  origenes,
-  targets: destinos,
-  enlaces,
-  formatValue: formatValor = (v) => v.toLocaleString('es-VE'),
-  alto = 300,
+  sources,
+  targets,
+  links,
+  formatValue: formatValue = (v) => v.toLocaleString('es-VE'),
+  height: height = 300,
   className,
 }: Props) {
-  const [activo, setActive] = useState<number | null>(null);
+  const [active, setActive] = useState<number | null>(null);
 
-  const dibujo = useMemo(() => {
-    const validos = enlaces.filter((e) => e.valor > 0);
-    const sumBy = (clave: 'origen' | 'destino') => {
+  const drawing = useMemo(() => {
+    const validLinks = links.filter((e) => e.value > 0);
+    const sumBy = (key: 'source' | 'target') => {
       const m = new Map<string, number>();
-      for (const e of validos) m.set(e[clave], (m.get(e[clave]) ?? 0) + e.valor);
+      for (const e of validLinks) m.set(e[key], (m.get(e[key]) ?? 0) + e.value);
       return m;
     };
-    const exits = sumBy('origen');
-    const entries = sumBy('destino');
+    const exits = sumBy('source');
+    const entries = sumBy('target');
     const total = Math.max(1, ...[exits, entries].map((m) => [...m.values()].reduce((a, b) => a + b, 0)));
-    const nVisible = (nodos: SankeyNode[], m: Map<string, number>) => nodos.filter((n) => (m.get(n.id) ?? 0) > 0).length;
-    const huecos = Math.max(nVisible(origenes, exits), nVisible(destinos, entries)) - 1;
-    const escala = (alto - Math.max(0, huecos) * HUECO) / total;
+    const nVisible = (nodes: SankeyNode[], m: Map<string, number>) => nodes.filter((n) => (m.get(n.id) ?? 0) > 0).length;
+    const gaps = Math.max(nVisible(sources, exits), nVisible(targets, entries)) - 1;
+    const scale = (height - Math.max(0, gaps) * GAP) / total;
 
-    const leftColumn = colocar(origenes, exits, escala);
-    const rightColumn = colocar(destinos, entries, escala);
+    const leftColumn = placeNodes(sources, exits, scale);
+    const rightColumn = placeNodes(targets, entries, scale);
     // Centra la columna más corta respecto de la más alta.
-    const H = Math.max(leftColumn.alto, rightColumn.alto);
+    const H = Math.max(leftColumn.height, rightColumn.height);
     for (const c of [leftColumn, rightColumn]) {
-      const d = (H - c.alto) / 2;
-      for (const n of c.nodos) n.y += d;
+      const d = (H - c.height) / 2;
+      for (const n of c.nodes) n.y += d;
     }
-    const izq = leftColumn.nodos;
-    const der = rightColumn.nodos;
+    const left = leftColumn.nodes;
+    const right = rightColumn.nodes;
 
     const byId = (c: PlacedNode[]) => new Map(c.map((n) => [n.id, n]));
-    const mIzq = byId(izq);
-    const mDer = byId(der);
+    const mLeft = byId(left);
+    const mRight = byId(right);
     const exitOffset = new Map<string, number>();
     const enterOffset = new Map<string, number>();
-    const targetOrder = new Map(der.map((n, i) => [n.id, i]));
-    const sourceOrder = new Map(izq.map((n, i) => [n.id, i]));
+    const targetOrder = new Map(right.map((n, i) => [n.id, i]));
+    const sourceOrder = new Map(left.map((n, i) => [n.id, i]));
 
-    const bandas = [...validos]
+    const bands = [...validLinks]
       .sort(
         (a, b) =>
-          (sourceOrder.get(a.origen) ?? 0) - (sourceOrder.get(b.origen) ?? 0) ||
-          (targetOrder.get(a.destino) ?? 0) - (targetOrder.get(b.destino) ?? 0),
+          (sourceOrder.get(a.source) ?? 0) - (sourceOrder.get(b.source) ?? 0) ||
+          (targetOrder.get(a.target) ?? 0) - (targetOrder.get(b.target) ?? 0),
       )
       .flatMap((e) => {
-        const other = mIzq.get(e.origen);
-        const d = mDer.get(e.destino);
+        const other = mLeft.get(e.source);
+        const d = mRight.get(e.target);
         if (!other || !d) return [];
-        const h = e.valor * escala;
+        const h = e.value * scale;
         const y0 = other.y + (exitOffset.get(other.id) ?? 0);
         const y1 = d.y + (enterOffset.get(d.id) ?? 0);
         exitOffset.set(other.id, (exitOffset.get(other.id) ?? 0) + h);
         enterOffset.set(d.id, (enterOffset.get(d.id) ?? 0) + h);
-        const xa = X_ORIGEN + NODE;
+        const xa = X_SOURCE + NODE;
         const xb = X_TARGET;
         const xm = (xa + xb) / 2;
         const path = [
@@ -150,53 +150,53 @@ export function SankeyChart({
           `C ${xm} ${y1 + h}, ${xm} ${y0 + h}, ${xa} ${y0 + h}`,
           'Z',
         ].join(' ');
-        return [{ ...e, path, color: other.color, origenLabel: other.label, destinoLabel: d.label }];
+        return [{ ...e, path, color: other.color, sourceLabel: other.label, targetLabel: d.label }];
       });
 
-    return { izq, der, bandas, H, total: [...exits.values()].reduce((a, b) => a + b, 0) };
-  }, [origenes, destinos, enlaces, alto]);
+    return { left, right, bands, H, total: [...exits.values()].reduce((a, b) => a + b, 0) };
+  }, [sources, targets, links, height]);
 
-  const pct = (v: number) => (dibujo.total > 0 ? `${((v / dibujo.total) * 100).toFixed(1)}%` : '');
-  const banda = activo !== null ? dibujo.bandas[activo] : null;
+  const pct = (v: number) => (drawing.total > 0 ? `${((v / drawing.total) * 100).toFixed(1)}%` : '');
+  const band = active !== null ? drawing.bands[active] : null;
 
   return (
     <div className={cn('custom-scrollbar overflow-x-auto', className)}>
       <div className="relative min-w-[640px]">
         <svg
-          viewBox={`0 ${-MARGEN} ${ANCHO} ${dibujo.H + 2 * MARGEN}`}
+          viewBox={`0 ${-MARGIN} ${WIDTH} ${drawing.H + 2 * MARGIN}`}
           className="h-auto w-full text-slate-300"
           role="img"
           aria-label="Diagrama de flujo"
         >
-          {dibujo.bandas.map((b, i) => (
+          {drawing.bands.map((b, i) => (
             <path
-              key={`${b.origen}-${b.destino}`}
+              key={`${b.source}-${b.target}`}
               d={b.path}
               fill={b.color}
-              fillOpacity={activo === null ? 0.32 : activo === i ? 0.6 : 0.12}
+              fillOpacity={active === null ? 0.32 : active === i ? 0.6 : 0.12}
               onMouseEnter={() => setActive(i)}
               onMouseLeave={() => setActive(null)}
               className="cursor-default transition-[fill-opacity] duration-150"
             >
-              <title>{`${b.origenLabel} → ${b.destinoLabel}: ${formatValor(b.valor)}`}</title>
+              <title>{`${b.sourceLabel} → ${b.targetLabel}: ${formatValue(b.value)}`}</title>
             </path>
           ))}
 
-          {dibujo.izq.map((n) => {
+          {drawing.left.map((n) => {
             // La nota va en una línea propia: al lado de la cifra se saldría
             // del dibujo por la izquierda.
-            const sube = n.caption ? 22 : 11;
+            const lift = n.caption ? 22 : 11;
             return (
               <g key={n.id}>
-                <rect x={X_ORIGEN} y={n.y} width={NODE} height={n.h} rx={4} fill={n.color} />
-                <text x={X_ORIGEN - 14} y={n.y + n.h / 2 - sube} textAnchor="end" dominantBaseline="middle" className="fill-current text-[19px] font-bold">
+                <rect x={X_SOURCE} y={n.y} width={NODE} height={n.h} rx={4} fill={n.color} />
+                <text x={X_SOURCE - 14} y={n.y + n.h / 2 - lift} textAnchor="end" dominantBaseline="middle" className="fill-current text-[19px] font-bold">
                   {n.label}
                 </text>
-                <text x={X_ORIGEN - 14} y={n.y + n.h / 2 - sube + 24} textAnchor="end" dominantBaseline="middle" className="fill-current font-mono text-[17px] opacity-80">
-                  {formatValor(n.valor)}
+                <text x={X_SOURCE - 14} y={n.y + n.h / 2 - lift + 24} textAnchor="end" dominantBaseline="middle" className="fill-current font-mono text-[17px] opacity-80">
+                  {formatValue(n.value)}
                 </text>
                 {n.caption && (
-                  <text x={X_ORIGEN - 14} y={n.y + n.h / 2 - sube + 46} textAnchor="end" dominantBaseline="middle" className="fill-current text-[15px] opacity-60">
+                  <text x={X_SOURCE - 14} y={n.y + n.h / 2 - lift + 46} textAnchor="end" dominantBaseline="middle" className="fill-current text-[15px] opacity-60">
                     {n.caption}
                   </text>
                 )}
@@ -204,21 +204,21 @@ export function SankeyChart({
             );
           })}
 
-          {dibujo.der.map((n) => (
+          {drawing.right.map((n) => (
             <g key={n.id}>
               <rect x={X_TARGET} y={n.y} width={NODE} height={n.h} rx={4} fill={n.color} />
               <text x={X_TARGET + NODE + 14} y={n.y + n.h / 2 - 11} dominantBaseline="middle" className="fill-current text-[19px] font-bold">
                 {n.label}
               </text>
               <text x={X_TARGET + NODE + 14} y={n.y + n.h / 2 + 13} dominantBaseline="middle" className="fill-current font-mono text-[17px] opacity-80">
-                {formatValor(n.valor)} · {pct(n.valor)}
+                {formatValue(n.value)} · {pct(n.value)}
               </text>
             </g>
           ))}
         </svg>
 
         <p className="mt-1 h-4 text-center font-mono text-[11px] text-slate-400" aria-live="polite">
-          {banda ? `${banda.origenLabel} → ${banda.destinoLabel}: ${formatValor(banda.valor)} (${pct(banda.valor)})` : ''}
+          {band ? `${band.sourceLabel} → ${band.targetLabel}: ${formatValue(band.value)} (${pct(band.value)})` : ''}
         </p>
       </div>
     </div>

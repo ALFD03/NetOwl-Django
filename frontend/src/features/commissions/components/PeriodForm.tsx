@@ -9,15 +9,15 @@ import type { PeriodProposal } from '../types';
 
 interface PeriodFormProps {
   proposal: PeriodProposal;
-  guardando: boolean;
+  saving: boolean;
   onSave: (body: { period: string; promo_start: string; start?: string; advance_cutoff: string }) => void;
   onClose: () => void;
 }
 
 /** El primer y el último día de un `YYYY-MM`, en ISO. */
-function monthBounds(periodo: string): [string, string] {
-  const [anio, mes] = periodo.split('-').map(Number);
-  return [`${periodo}-01`, `${periodo}-${String(new Date(anio, mes, 0).getDate()).padStart(2, '0')}`];
+function monthBounds(period: string): [string, string] {
+  const [year, month] = period.split('-').map(Number);
+  return [`${period}-01`, `${period}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`];
 }
 
 /**
@@ -33,18 +33,18 @@ function monthBounds(periodo: string): [string, string] {
  * El inicio solo se pregunta si el mes anterior no tiene periodo: si lo
  * tiene, es donde empezaron sus días promocionales.
  */
-export function PeriodForm({ proposal, guardando, onSave: onGuardar, onClose: onCerrar }: PeriodFormProps) {
-  const [inicio, setStart] = useState(proposal.start);
-  const [inicioPromo, setPromoStart] = useState(proposal.promo_start);
-  const [corte, setCutoff] = useState(proposal.advance_cutoff);
+export function PeriodForm({ proposal, saving, onSave, onClose }: PeriodFormProps) {
+  const [start, setStart] = useState(proposal.start);
+  const [promoStart, setPromoStart] = useState(proposal.promo_start);
+  const [cutoff, setCutoff] = useState(proposal.advance_cutoff);
 
-  const enviar = (event: FormEvent) => {
+  const send = (event: FormEvent) => {
     event.preventDefault();
-    onGuardar({
+    onSave({
       period: proposal.period,
-      promo_start: inicioPromo,
-      advance_cutoff: corte,
-      ...(proposal.ask_start ? { start: inicio } : {}),
+      promo_start: promoStart,
+      advance_cutoff: cutoff,
+      ...(proposal.ask_start ? { start } : {}),
     });
   };
 
@@ -54,7 +54,7 @@ export function PeriodForm({ proposal, guardando, onSave: onGuardar, onClose: on
   const [nextStart, nextEnd] = monthBounds(next);
 
   return (
-    <form onSubmit={enviar} className="space-y-5">
+    <form onSubmit={send} className="space-y-5">
       <div className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-surface-tertiary/40 p-4 text-xs text-slate-300">
         <CalendarRange className="h-6 w-6 flex-shrink-0 text-slate-500" />
         <p>
@@ -70,12 +70,12 @@ export function PeriodForm({ proposal, guardando, onSave: onGuardar, onClose: on
         <DatePicker
           label="Inicio de los días promocionales del mes anterior"
           hint="El mes anterior no tiene periodo de comisiones: indica dónde empezaron sus días promocionales. Es el primer día que cuenta."
-          value={inicio}
+          value={start}
           onChange={setStart}
         />
       ) : (
         <p className="text-xs text-slate-400">
-          Empieza el <strong className="text-white">{formatDateValue(inicio)}</strong>, donde empezaron los días
+          Empieza el <strong className="text-white">{formatDateValue(start)}</strong>, donde empezaron los días
           promocionales del periodo anterior.
         </p>
       )}
@@ -83,7 +83,7 @@ export function PeriodForm({ proposal, guardando, onSave: onGuardar, onClose: on
       <DatePicker
         label="Inicio de los días promocionales de este mes"
         hint="Normalmente el 25. Lo instalado desde este día cuenta para el periodo siguiente, salvo que adelante el pago."
-        value={inicioPromo}
+        value={promoStart}
         onChange={setPromoStart}
         min={monthStart}
         max={monthEnd}
@@ -92,25 +92,25 @@ export function PeriodForm({ proposal, guardando, onSave: onGuardar, onClose: on
       <DatePicker
         label="Corte de pagos"
         hint={`Normalmente el 22 de ${monthName(next)}, cuando se saca el informe. Solo cuenta la primera mensualidad pagada hasta este día; lo de los días promocionales pagado después va al periodo siguiente.`}
-        value={corte}
+        value={cutoff}
         onChange={setCutoff}
         min={nextStart}
         max={nextEnd}
       />
 
-      {inicio && inicioPromo && (
+      {start && promoStart && (
         <p className="text-xs text-slate-400">
-          Cuenta lo instalado del <strong className="text-white">{formatDateValue(inicio)}</strong> al{' '}
-          <strong className="text-white">{formatDateValue(previousDay(inicioPromo))}</strong> con la primera mensualidad
+          Cuenta lo instalado del <strong className="text-white">{formatDateValue(start)}</strong> al{' '}
+          <strong className="text-white">{formatDateValue(previousDay(promoStart))}</strong> con la primera mensualidad
           pagada hasta el corte, y del{' '}
-          <strong className="text-white">{formatDateValue(inicioPromo)}</strong> al <strong className="text-white">{formatDateValue(monthEnd)}</strong>{' '}
-          solo con la primera mensualidad pagada hasta el <strong className="text-white">{corte ? formatDateValue(corte) : '—'}</strong>.
+          <strong className="text-white">{formatDateValue(promoStart)}</strong> al <strong className="text-white">{formatDateValue(monthEnd)}</strong>{' '}
+          solo con la primera mensualidad pagada hasta el <strong className="text-white">{cutoff ? formatDateValue(cutoff) : '—'}</strong>.
         </p>
       )}
 
       <div className="flex justify-end gap-3">
-        <Button type="button" variant="outline" onClick={onCerrar}>Cancelar</Button>
-        <Button type="submit" isLoading={guardando}>Guardar periodo</Button>
+        <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+        <Button type="submit" isLoading={saving}>Guardar periodo</Button>
       </div>
     </form>
   );

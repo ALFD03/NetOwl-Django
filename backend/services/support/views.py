@@ -34,13 +34,13 @@ def _metric_totals(request) -> dict:
     period = visible_period(request, None, get_support_periods)
     if not period:
         return {"periodos_evaluados": 0, "resumen_global": {}, "por_grupo_trabajo": {}, "historico_tendencias": []}
-    return get_support_metric_totals(solo=period)
+    return get_support_metric_totals(only=period)
 
 
 @endpoint(perms=["can_view_support", "can_view_support_dashboard"], require_all=True, keys=SUPPORT_KEYS)
 def dashboard(request):
     """El promedio de los periodos evaluados y, con su permiso, los tickets abiertos hoy."""
-    open_tickets = get_open_tickets() if has_permission(request.user, "can_view_support_abiertos") else None
+    open_tickets = get_open_tickets() if has_permission(request.user, "can_view_support_open") else None
     return {"metrics": _metric_totals(request), "abiertos": open_tickets}
 
 
@@ -51,7 +51,7 @@ def analytics(request):
     data = get_support_analytics_structured(visible_period(request, request.GET.get("period"), lambda: periods))
     period = data.get("periodo", "")
 
-    day = request_int(request, "day", minimo=1, maximo=31)
+    day = request_int(request, "day", min_value=1, max_value=31)
     series = get_support_day_series(period) if period else {}
     available = series.get("dias_disponibles", [])
     active_day = day if day in available else (available[-1] if available else 0)
@@ -101,7 +101,7 @@ def breakdown(request):
     if period_denied(request, period, get_support_periods):
         raise ApiError(PERIOD_DENIED, 403)
     return get_support_breakdown(
-        periodo=period, dimension=dimension, valor=value, grupo=request.GET.get("group") or None,
+        period=period, dimension=dimension, value=value, group=request.GET.get("group") or None,
     )
 
 
@@ -109,7 +109,7 @@ def breakdown(request):
 def day_metrics(request):
     """El corte completo de un día: `{global, groups, zone_incidence}`."""
     period = request.GET.get("period")
-    day = request_int(request, "day", minimo=1, maximo=31)
+    day = request_int(request, "day", min_value=1, max_value=31)
     if not period or not day:
         raise ApiError("Se requieren period y day.")
     if month_denied(request, period, get_support_periods):

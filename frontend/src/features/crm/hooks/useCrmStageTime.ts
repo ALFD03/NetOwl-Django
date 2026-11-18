@@ -9,7 +9,7 @@ import {
   stageTimeLeaders,
   stageTime,
 } from '../lib/crmStageTime';
-import type { CrmDimensionValue, CrmHistoricoRow, CrmStageTimeRow } from '../types';
+import type { CrmDimensionValue, CrmHistoryRow, CrmStageTimeRow } from '../types';
 
 /** Una sola lista vacía: un `[]` nuevo en cada render invalidaría todos los memos de abajo. */
 const NO_STAGES: CrmStageTimeRow[] = [];
@@ -22,7 +22,7 @@ const NO_STAGES: CrmStageTimeRow[] = [];
  * dimension. The breakdown below them does: it answers "who is slow in this
  * stage", which only means something inside one axis at a time.
  */
-export function useCrmStageTime(globalData: CrmHistoricoRow, rows: CrmDimensionValue[]) {
+export function useCrmStageTime(globalData: CrmHistoryRow, rows: CrmDimensionValue[]) {
   const [pickedStage, setPickedStage] = useState<string>(CRM_KEY_STAGES[0]);
   const [showAll, setShowAll] = useState(false);
 

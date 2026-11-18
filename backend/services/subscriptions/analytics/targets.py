@@ -24,10 +24,10 @@ from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from services.subscriptions.models import (
     REFERENCE_BY_LEVEL,
-    ObjetivoComercial,
-    ObjetivoMes,
-    SemaforoObjetivos,
-    ZonaSinObjetivo,
+    CommercialTarget,
+    MonthTarget,
+    TargetThresholds,
+    ZoneWithoutTarget,
 )
 
 # Lo que responde si la tabla estuviera vacia: el 6% / 3% que la aplicacion
@@ -38,29 +38,29 @@ DEFAULT_GENERAL = {"crecimiento": 6.0, "churn": 3.0}
 logger = logging.getLogger(__name__)
 
 
-def _pct(valor) -> float | None:
+def _pct(value) -> float | None:
     """Decimal del ORM a float, conservando el nulo que significa "hereda"."""
-    return None if valor is None else float(valor)
+    return None if value is None else float(value)
 
 
-def _tier(fila) -> dict[str, Any]:
+def _tier(row) -> dict[str, Any]:
     """Un tramo con vigencia, en la forma minima que necesita el cliente."""
     return {
-        "desde": fila.desde,
-        "crecimiento": _pct(fila.crecimiento_pct),
-        "churn": _pct(fila.churn_pct),
+        "desde": row.since,
+        "crecimiento": _pct(row.growth_pct),
+        "churn": _pct(row.churn_pct),
     }
 
 
-def serialize_traffic_light(semaforo: SemaforoObjetivos) -> dict[str, float]:
+def serialize_traffic_light(traffic_light: TargetThresholds) -> dict[str, float]:
     """Los umbrales de color como numeros planos."""
     return {
-        "cumpl_verde": float(semaforo.cumpl_verde),
-        "cumpl_amarillo": float(semaforo.cumpl_amarillo),
-        "crec_verde": float(semaforo.crec_verde),
-        "crec_amarillo": float(semaforo.crec_amarillo),
-        "churn_verde": float(semaforo.churn_verde),
-        "churn_amarillo": float(semaforo.churn_amarillo),
+        "cumpl_verde": float(traffic_light.compliance_green),
+        "cumpl_amarillo": float(traffic_light.compliance_yellow),
+        "crec_verde": float(traffic_light.growth_green),
+        "crec_amarillo": float(traffic_light.growth_yellow),
+        "churn_verde": float(traffic_light.churn_green),
+        "churn_amarillo": float(traffic_light.churn_yellow),
     }
 
 
@@ -76,7 +76,7 @@ def _default_config() -> dict[str, Any]:
         "sucursales": {},
         "zonas_sucursal": {},
         "zonas_sin_objetivo": {},
-        "semaforo": serialize_traffic_light(SemaforoObjetivos()),
+        "semaforo": serialize_traffic_light(TargetThresholds()),
     }
 
 
@@ -132,33 +132,33 @@ def _read_targets() -> dict[str, Any]:
 
     # El `ordering` del modelo ya los deja con el tramo "desde siempre" primero
     # y el resto por fecha, que es el orden en que el cliente los recorre.
-    filas = ObjetivoComercial.objects.select_related(*REFERENCE_BY_LEVEL.values())
-    for fila in filas:
-        if fila.nivel == "general":
+    rows = CommercialTarget.objects.select_related(*REFERENCE_BY_LEVEL.values())
+    for row in rows:
+        if row.level == "general":
             # Una sola fila y sin fecha (`objetivo_general_sin_fecha`). Un
             # valor nulo no deberia darse, pero si se diera cae al por defecto.
-            for metrica, valor in (("crecimiento", fila.crecimiento_pct), ("churn", fila.churn_pct)):
-                if valor is not None:
-                    config["general"][metrica] = float(valor)
+            for metric, value in (("crecimiento", row.growth_pct), ("churn", row.churn_pct)):
+                if value is not None:
+                    config["general"][metric] = float(value)
             continue
         # Un nodo va con la misma clave que el `valor` de la dimension
         # `zona_sucursal` ("Guacara - NYC"), que es contra lo que se cruza.
-        nombre = fila.entity_name
-        if nombre:
-            by_level[fila.nivel].setdefault(nombre, []).append(_tier(fila))
+        name = row.entity_name
+        if name:
+            by_level[row.level].setdefault(name, []).append(_tier(row))
 
-    for fila in ObjetivoMes.objects.all():
-        config["meses"][fila.periodo] = {
-            "crecimiento": _pct(fila.crecimiento_pct),
-            "churn": _pct(fila.churn_pct),
+    for row in MonthTarget.objects.all():
+        config["meses"][row.period] = {
+            "crecimiento": _pct(row.growth_pct),
+            "churn": _pct(row.churn_pct),
         }
 
     # Las zonas apartadas del cumplimiento, con su tramo: el cliente decide en
     # cada periodo si rige (Results y el Dashboard pintan varios meses).
-    for fila in ZonaSinObjetivo.objects.select_related("zona"):
-        config["zonas_sin_objetivo"][fila.zona.nombre] = {"desde": fila.desde, "hasta": fila.hasta}
+    for row in ZoneWithoutTarget.objects.select_related("zone"):
+        config["zonas_sin_objetivo"][row.zone.name] = {"desde": row.since, "hasta": row.until}
 
-    config["semaforo"] = serialize_traffic_light(SemaforoObjetivos.actual())
+    config["semaforo"] = serialize_traffic_light(TargetThresholds.current())
     return config
 
 
@@ -173,7 +173,7 @@ def known_nodes() -> list[dict[str, str]]:
         df = DBConnector().query(
             f"""
             SELECT DISTINCT valor
-            FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONES}
+            FROM {DB_SCHEMA}.{TableNames.ANALYZER_CHURN_DIMENSIONS}
             WHERE dimension = 'zona_sucursal'
             """
         )
@@ -181,9 +181,9 @@ def known_nodes() -> list[dict[str, str]]:
         logger.exception("No se pudieron leer los nodos conocidos")
         return []
 
-    nodos = []
-    for valor in sorted(str(v) for v in df.get("valor", [])):
-        zona, _, sucursal = valor.partition(" - ")
-        if zona.strip() and sucursal.strip():
-            nodos.append({"nodo": valor, "zona": zona.strip(), "sucursal": sucursal.strip()})
-    return nodos
+    nodes = []
+    for value in sorted(str(v) for v in df.get("valor", [])):
+        zone, _, branch = value.partition(" - ")
+        if zone.strip() and branch.strip():
+            nodes.append({"nodo": value, "zona": zone.strip(), "sucursal": branch.strip()})
+    return nodes

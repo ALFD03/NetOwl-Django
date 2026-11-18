@@ -30,35 +30,35 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `auth_user` | Django | Cuentas |
 | `config_profile` | `services.config.Profile` | Rol, grupo y matriz de permisos por usuario |
 | `config_permissiongroup` | `services.config.PermissionGroup` | Plantillas de permisos reutilizables |
-| `config_profile_unidades_negocio` | M2M `Profile.unidades_negocio` | Las unidades de negocio (`Coordinador`) que ve un usuario sin `can_view_all_business_units`. Solo del usuario: los grupos no la llevan (`config/0016`) |
-| `catalogo_estados` | `Estado` | Entidad federal |
+| `config_profile_unidades_negocio` | M2M `Profile.business_units` | Las unidades de negocio (`Coordinator`) que ve un usuario sin `can_view_all_business_units`. Solo del usuario: los grupos no la llevan (`config/0016`) |
+| `catalogo_estados` | `State` | Entidad federal |
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
-| `catalogo_coordinadores` | `Coordinador` | Unidad de negocio: el grupo de zonas por el que agrupa Unidades de negocio. `equipos` (M2M a `catalogo_equipos_ventas`) son los equipos que la trabajan. Quien la lleva no se guarda aquí: es la membresía que la tiene en `unidades` |
-| `catalogo_personas_ventas` | `catalogos.PersonaVentas` | La **identidad** de una persona de ventas: nombre, apellido y los literales de Odoo, todos opcionales —`medio` (`Medio`), `medio_supervisor` (`Oportunidad/Administrador` cuando Odoo lo escribe distinto; vacío es el mismo que `medio`) y `usuario_odoo` (`Vendedor`, con `(User)`)—. Cada uno es único sin distinguir mayúsculas y solo si no está vacío. Lo que cada rol exige lo valida `catalogos/teams.py:ROLES` |
-| `catalogo_equipos_ventas` | `catalogos.EquipoVentas` | Los cinco equipos (Verticalización, Carabobo, Nacional, Aragua, La Victoria), sembrados por `catalogos/0006` con su `slug`. No se crean ni se borran desde la web |
-| `catalogo_alias_persona` | `catalogos.AliasPersona` | Otros nombres con los que Odoo escribe a una persona en una columna (`medio`, `supervisor`, `usuario`): la misma persona con y sin tilde. Únicos por (columna, nombre en minúsculas); entre personas lo comprueba la vista. Escribe la vista de personas, lee el cálculo de comisiones, el reporte de coordinadoras y Notificaciones |
-| `catalogo_membresias_equipo` | `catalogos.MembresiaEquipo` | El papel de una persona en un equipo (`persona`, `equipo`, `rol`; única por persona y equipo). `sites` (M2M a `catalogo_sites`: los de una coordinadora de oficina; la vista no deja borrar un site que alguna lleve), `superior` (a quién responde un supervisor) y `unidades` (M2M a `catalogo_coordinadores`: las que lleva un coordinador de UN, un jefe o un gerente) |
-| `catalogo_condiciones_equipo` | `catalogos.CondicionesEquipo` | Los valores de pago de un rol de un equipo (`parametros`, JSON validado por `teams.validate_parameters`). Solo hay fila si alguien las editó: sin ella el rol paga con `DEFAULT_PARAMETERS` |
-| `catalogo_objetivos_ventas_oficina` | `catalogos.ObjetivoVentasOficina` | Objetivo de ventas de las coordinadoras de oficina: `persona` (FK `CASCADE` nullable a un `coord_oficina`; nula es el **general**), `desde` (`YYYY-MM`, nulo = desde siempre), `ventas` (cantidad al mes), `nota`. Manda el individual vigente sobre el general vigente; la unicidad de (persona, desde) la comprueba la vista |
-| `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
+| `catalogo_coordinadores` | `Coordinator` | Unidad de negocio: el grupo de zonas por el que agrupa Unidades de negocio. `equipos` (M2M a `catalogo_equipos_ventas`) son los equipos que la trabajan. Quien la lleva no se guarda aquí: es la membresía que la tiene en `unidades` |
+| `catalogo_personas_ventas` | `catalogos.SalesPerson` | La **identidad** de una persona de ventas: nombre, apellido y los literales de Odoo, todos opcionales —`medio` (`Medio`), `medio_supervisor` (`Oportunidad/Administrador` cuando Odoo lo escribe distinto; vacío es el mismo que `medio`) y `usuario_odoo` (`Vendedor`, con `(User)`)—. Cada uno es único sin distinguir mayúsculas y solo si no está vacío. Lo que cada rol exige lo valida `catalogos/teams.py:ROLES` |
+| `catalogo_equipos_ventas` | `catalogos.SalesTeam` | Los cinco equipos (Verticalización, Carabobo, Nacional, Aragua, La Victoria), sembrados por `catalogos/0006` con su `slug`. No se crean ni se borran desde la web |
+| `catalogo_alias_persona` | `catalogos.PersonAlias` | Otros nombres con los que Odoo escribe a una persona en una columna (`medio`, `supervisor`, `usuario`): la misma persona con y sin tilde. Únicos por (columna, nombre en minúsculas); entre personas lo comprueba la vista. Escribe la vista de personas, lee el cálculo de comisiones, el reporte de coordinadoras y Notificaciones |
+| `catalogo_membresias_equipo` | `catalogos.TeamMembership` | El papel de una persona en un equipo (`persona`, `equipo`, `rol`; única por persona y equipo). `sites` (M2M a `catalogo_sites`: los de una coordinadora de oficina; la vista no deja borrar un site que alguna lleve), `superior` (a quién responde un supervisor) y `unidades` (M2M a `catalogo_coordinadores`: las que lleva un coordinador de UN, un jefe o un gerente) |
+| `catalogo_condiciones_equipo` | `catalogos.TeamConditions` | Los valores de pago de un rol de un equipo (`parametros`, JSON validado por `teams.validate_parameters`). Solo hay fila si alguien las editó: sin ella el rol paga con `DEFAULT_PARAMETERS` |
+| `catalogo_objetivos_ventas_oficina` | `catalogos.OfficeSalesTarget` | Objetivo de ventas de las coordinadoras de oficina: `persona` (FK `CASCADE` nullable a un `coord_oficina`; nula es el **general**), `desde` (`YYYY-MM`, nulo = desde siempre), `ventas` (cantidad al mes), `nota`. Manda el individual vigente sobre el general vigente; la unicidad de (persona, desde) la comprueba la vista |
+| `catalogo_zonas` | `Zone` | Nodo de red: site, estado, tecnología, coordinador |
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
-| `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
-| `catalogo_productos_ignorados` | `ProductoIgnorado` | Nombres del export que no se registrarán, por `area` (`productos`, `estructura`, `ventas`); únicos por `(area, nombre)` |
-| `catalogo_objetivos` | `ObjetivoComercial` | Objetivos por nivel (general, sucursal, estado, site, coordinador, zona, zona-sucursal); `sucursal` es el texto del export en los niveles que la usan: `desde` (`YYYY-MM`, nulo = siempre; el general es una sola fila y siempre nulo), `crecimiento_pct` y `churn_pct` (nulo = se hereda). Lo escribe la pestaña Objetivos del catálogo; lo lee `analytics/targets.py` y lo aplica el cliente |
-| `catalogo_objetivos_mes` | `ObjetivoMes` | Excepción de un mes concreto al objetivo general |
-| `catalogo_zonas_sin_objetivo` | `ZonaSinObjetivo` | Zonas apartadas del cumplimiento (las nuevas): `zona` (uno a uno, `CASCADE`), `desde`/`hasta` (`YYYY-MM`, incluidos, nulos = sin límite), `nota`. Lo aplica el cliente al pintar (`lib/targets.ts`) |
+| `catalogo_planes_reguladores` | `RegulatoryPlan` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
+| `catalogo_productos_ignorados` | `IgnoredProduct` | Nombres del export que no se registrarán, por `area` (`productos`, `estructura`, `ventas`); únicos por `(area, nombre)` |
+| `catalogo_objetivos` | `CommercialTarget` | Objetivos por nivel (general, sucursal, estado, site, coordinador, zona, zona-sucursal); `sucursal` es el texto del export en los niveles que la usan: `desde` (`YYYY-MM`, nulo = siempre; el general es una sola fila y siempre nulo), `crecimiento_pct` y `churn_pct` (nulo = se hereda). Lo escribe la pestaña Objetivos del catálogo; lo lee `analytics/targets.py` y lo aplica el cliente |
+| `catalogo_objetivos_mes` | `MonthTarget` | Excepción de un mes concreto al objetivo general |
+| `catalogo_zonas_sin_objetivo` | `ZoneWithoutTarget` | Zonas apartadas del cumplimiento (las nuevas): `zona` (uno a uno, `CASCADE`), `desde`/`hasta` (`YYYY-MM`, incluidos, nulos = sin límite), `nota`. Lo aplica el cliente al pintar (`lib/targets.ts`) |
 | `catalogo_objetivos_semaforo` | `TargetsTrafficLight` | Fila única con los umbrales de color, fijos: crecimiento y cumplimiento "verde desde", churn "verde hasta" |
-| `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
+| `catalogo_departamentos` | `Department` | Área a la que pertenece un usuario de soporte |
 | `catalogo_usuarios_soporte` | `SupportUser` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
-| `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
+| `catalogo_usuarios_soporte_historial` | `DepartmentHistory` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
 | `comisiones_condiciones` | `CommissionConditions` | Fila única: la **ventana de pago** —día promocional habitual, días de espera y `dia_corte` (el día del mes siguiente que se propone como corte de los pagos adelantados)—. Lo que cobra cada rol está en `catalogo_condiciones_equipo` |
-| `comisiones_periodos` | `ComisionPeriodo` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana llega al fin de mes; desde `inicio_promo` solo cuenta lo adelantado), `corte_adelantos` (nulo: el `dia_corte` habitual), `estado` (borrador/cerrado), `tasa_conatel` y `tasa_conatel_publicada` (el bolívar oficial del día 1 del mes siguiente, con que se paga) y, al cerrar, `condiciones` y `resumen` congelados |
-| `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta en revisión: contarla en su periodo o no contarla (no se paga). En el primer periodo, también si lo instalado en los días promocionales del mes anterior ya se cobró allí (`ya_pagada`) o toca aquí (`normal`). Única por `(orden, periodo_origen)` |
+| `comisiones_periodos` | `CommissionPeriod` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana llega al fin de mes; desde `inicio_promo` solo cuenta lo adelantado), `corte_adelantos` (nulo: el `dia_corte` habitual), `estado` (borrador/cerrado), `tasa_conatel` y `tasa_conatel_publicada` (el bolívar oficial del día 1 del mes siguiente, con que se paga) y, al cerrar, `condiciones` y `resumen` congelados |
+| `comisiones_revisiones` | `CommissionReview` | Decisión sobre una venta en revisión: contarla en su periodo o no contarla (no se paga). En el primer periodo, también si lo instalado en los días promocionales del mes anterior ya se cobró allí (`ya_pagada`) o toca aquí (`normal`). Única por `(orden, periodo_origen)` |
 | `comisiones_ventas_manuales` | `ManualSale` | Una venta agregada a mano a un periodo, con su nota: cuenta en él se instalara cuando se instalara. Única por `(orden, periodo)` |
-| `comisiones_indicadores` | `IndicadorComision` | Por periodo y persona: `cumplimiento_pct` propio (supervisor, coord. de oficina; sustituye al general) y `crecimiento_pct` a mano (coord. de UN) |
-| `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`). Incluye las `diferida` (días promocionales sin adelanto), solo informativas |
-| `comisiones_pagos` | `ComisionPago` | Lo que cobró cada persona en un periodo cerrado, con nombre y rol copiados (el equipo, en `datos`) |
-| `comisiones_cierres_archivados` | `ComisionCierreArchivado` | La copia de un cierre, guardada al reabrir el periodo: quién cerró y reabrió, cuándo, el motivo y en `copia` el cierre entero. Única por `(periodo, version)`; solo se añade |
+| `comisiones_indicadores` | `CommissionIndicator` | Por periodo y persona: `cumplimiento_pct` propio (supervisor, coord. de oficina; sustituye al general) y `crecimiento_pct` a mano (coord. de UN) |
+| `comisiones_ventas` | `CommissionSale` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`). Incluye las `diferida` (días promocionales sin adelanto), solo informativas |
+| `comisiones_pagos` | `CommissionPayment` | Lo que cobró cada persona en un periodo cerrado, con nombre y rol copiados (el equipo, en `datos`) |
+| `comisiones_cierres_archivados` | `ArchivedClose` | La copia de un cierre, guardada al reabrir el periodo: quién cerró y reabrió, cuándo, el motivo y en `copia` el cierre entero. Única por `(periodo, version)`; solo se añade |
 | `auditoria_registro` | `AuditLog` | Quién hizo qué: cada escritura, los accesos (y los fallidos o bloqueados), algunas lecturas sensibles, **toda petición con token de API** y el desenlace de cada análisis. Usuario, IP, módulo, acción, resultado, canal (`web`/`api`/`worker`), token, duración y `detalle` (sin contraseñas ni tokens). Solo se añade. Índices `ix_auditoria_modulo_fecha`, `ix_auditoria_usuario_fecha` e `ix_auditoria_token_fecha` |
 | `config_api_token` | `ApiToken` | Tokens de API: dueño, quién lo creó, nombre, `prefix` visible y hash SHA-256 (el valor en claro no se guarda). Caducidad, revocación y último uso. No se borran, se revocan |
 | `django_migrations` | Django | Propia de cada esquema |
@@ -67,7 +67,7 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 
 | Tabla | Modelo | Contenido |
 |---|---|---|
-| `django_session` | `SesionEntorno` (`managed=False`) | Sesiones del entorno. La crea la migración de `django.contrib.sessions` |
+| `django_session` | `SchemaSession` (`managed=False`) | Sesiones del entorno. La crea la migración de `django.contrib.sessions` |
 | `import_action_logs` | `ImportActionLog` | Historial permanente de importaciones y cálculos (con su consola; la auditoría solo dice quién y cómo acabó) |
 | `analysis_jobs` | `AnalysisJob` | Estado vivo de cada ejecución. Índice `analysis_jobs_mod_est_idx` sobre `(module, status)` |
 
@@ -139,7 +139,7 @@ ID del registro en Odoo, único entre todos los tickets), `ticket_sequence`,
 
 ## 3. Resultados de suscripciones
 
-Todas llevan `periodo_reporte` con la etiqueta `Periodo.label()`
+Todas llevan `periodo_reporte` con la etiqueta `Period.label()`
 (`"2025-03-01 al 2025-03-31"`) y las escribe `MetricsAnalyzer.persist`, todas en
 una sola transacción con `core.tables.replace(..., periodo_reporte=…)`.
 
@@ -149,7 +149,7 @@ una sola transacción con `core.tables.replace(..., periodo_reporte=…)`.
 | `analyzer_activos_cierre` | `orden`, `f_dt`, `estado` |
 | `analyzer_reactivaciones` | `orden`, `fecha`, `estado_origen` |
 | `analyzer_bajas_detalladas` | `orden`, `f_ini_dt`, `estado` |
-| `analyzer_corte_impagado` | `orden`, `fecha_corte`, `motivo_corte` |
+| `analyzer_corte_impagado` | `orden`, `cutoff_date`, `motivo_corte` |
 | `analyzer_inactivos_detallados` | `orden`, `fecha_evento`, `estado_inactivo` |
 | `analyzer_clientes_gratuitos` | `orden`, `fecha_archivado`, `estado` |
 | `analyzer_churn_dimensiones` | `dimension`, `valor` y las mismas métricas del cierre |
@@ -166,7 +166,7 @@ Escritas con `metodo_calculo = "lifetime"`.
 
 | Tabla | Contenido |
 |---|---|
-| `lifetime_bajas_mes` | Una fila por baja del mes, `periodo_reporte = "YYYY-MM"`: `orden`, `f_ini`, `f_baja`, `estado_cierre`, `dias_desde_instalacion`, las dimensiones (sin producto), `mes_en_curso` y `fecha_corte` |
+| `lifetime_bajas_mes` | Una fila por baja del mes, `periodo_reporte = "YYYY-MM"`: `orden`, `f_ini`, `f_baja`, `estado_cierre`, `dias_desde_instalacion`, las dimensiones (sin producto), `mes_en_curso` y `cutoff_date` |
 
 ### Reporte ETA
 
@@ -240,7 +240,7 @@ aplana antes de servirlas.
 | `analyzer_eta_*` | `ETAReportManager` | Reporte ETA y su pantalla de parametrización |
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
-| `catalogo_*` (planes, zonas, sites…) | Módulo de Catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
+| `catalogo_*` (planes, zonas, sites…) | Módulo de Catálogos, `load_catalogs` | **Solo `core/fixtures.py`** |
 | `catalogo_personas_ventas` | Catálogos › Ventas | `people_outside_directory` (Notificaciones), Comisiones |
 | `catalogo_objetivos_ventas_oficina` | Catálogos › Ventas › Objetivos | Sales Report (`office_coordinators.get_office_coordinators`) |
 | `comisiones_*` | Módulo de Comisiones | Módulo de Comisiones |

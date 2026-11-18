@@ -49,7 +49,7 @@ export interface TargetSpec {
 }
 
 /** La meta de una fila o de un grupo de filas. */
-export interface Meta {
+export interface Goal {
   /** Tasa de crecimiento efectiva (%): meta / base, ponderada si es un grupo. */
   growthPct: number;
   /** Churn máximo efectivo (%), ponderado igual. */
@@ -72,14 +72,14 @@ export type TargetLevel =
   | 'sucursal'
   | 'general';
 
-type Metrica = keyof TargetSpec;
+type Metric = keyof TargetSpec;
 type EntityLevel = Exclude<TargetLevel, 'general'>;
 
 /**
  * De más bajo a más alto; `general` va aparte porque no es una entidad. La
  * sucursal está arriba del todo: su objetivo manda sobre toda la geografía.
  */
-const CADENA: readonly EntityLevel[] = ['zona_sucursal', 'zona', 'coordinador', 'site', 'estado', 'sucursal'];
+const CHAIN: readonly EntityLevel[] = ['zona_sucursal', 'zona', 'coordinador', 'site', 'estado', 'sucursal'];
 
 /**
  * Un nodo de los reportes: su zona y su sucursal. Los niveles `zona_sucursal`
@@ -124,7 +124,7 @@ export const DEFAULT_TARGETS: TargetsConfig = {
 };
 
 /** `"2026-08-01 al 2026-08-31"` (o `"2026-08"`) → `"2026-08"`. */
-export const monthOf = (periodo: string): string => String(periodo ?? '').slice(0, 7);
+export const monthOf = (period: string): string => String(period ?? '').slice(0, 7);
 
 /**
  * El valor de `metrica` vigente en `mes` según una lista de tramos.
@@ -134,89 +134,89 @@ export const monthOf = (periodo: string): string => String(periodo ?? '').slice(
  * entidad tenía antes. Nulo si ningún tramo lo fija.
  */
 export function currentValue(
-  tramos: readonly TargetTier[] | undefined,
-  mes: string,
-  metrica: Metrica,
+  tiers: readonly TargetTier[] | undefined,
+  month: string,
+  metric: Metric,
 ): number | null {
-  let mejor: TargetTier | undefined;
-  for (const tramo of tramos ?? []) {
-    if (tramo[metrica] === null || tramo[metrica] === undefined) continue;
-    if (tramo.since !== null && tramo.since > mes) continue;
-    if (!mejor || (mejor.since ?? '') <= (tramo.since ?? '')) mejor = tramo;
+  let best: TargetTier | undefined;
+  for (const tier of tiers ?? []) {
+    if (tier[metric] === null || tier[metric] === undefined) continue;
+    if (tier.since !== null && tier.since > month) continue;
+    if (!best || (best.since ?? '') <= (tier.since ?? '')) best = tier;
   }
-  return mejor ? (mejor[metrica] as number) : null;
+  return best ? (best[metric] as number) : null;
 }
 
 /** El objetivo general de un periodo: su excepción de mes, o el general. */
-export function overallTarget(cfg: TargetsConfig, periodo: string): TargetSpec {
-  const excepcion = cfg.months[monthOf(periodo)];
-  const resolve = (metrica: Metrica): number =>
-    excepcion?.[metrica] ?? cfg.general?.[metrica] ?? DEFAULT_TARGETS.general[metrica];
+export function overallTarget(cfg: TargetsConfig, period: string): TargetSpec {
+  const exception = cfg.months[monthOf(period)];
+  const resolve = (metric: Metric): number =>
+    exception?.[metric] ?? cfg.general?.[metric] ?? DEFAULT_TARGETS.general[metric];
   return { growth: resolve('growth'), churn: resolve('churn') };
 }
 
 /** Dónde está un nodo: el nombre que tiene en cada nivel de la cadena. */
-type Ubicacion = Partial<Record<EntityLevel, string>>;
+type Location = Partial<Record<EntityLevel, string>>;
 
-const clave = (nombre: string | undefined): string => String(nombre ?? '').trim().toLowerCase();
+const key = (name: string | undefined): string => String(name ?? '').trim().toLowerCase();
 
 /** Tramos por nombre en minúsculas: los nodos traen el nombre tal y como lo escribe el export. */
-function indexar(table: Record<string, TargetTier[]>): Map<string, TargetTier[]> {
-  return new Map(Object.entries(table ?? {}).map(([nombre, tramos]) => [clave(nombre), tramos]));
+function indexBy(table: Record<string, TargetTier[]>): Map<string, TargetTier[]> {
+  return new Map(Object.entries(table ?? {}).map(([name, tiers]) => [key(name), tiers]));
 }
 
 export interface TargetsResolver {
   thresholds: TargetsTrafficLight;
   /** El objetivo general del periodo (excepción del mes o tramo vigente). */
-  general: (periodo: string) => TargetSpec;
+  general: (period: string) => TargetSpec;
   /**
    * El objetivo de un nodo (o de una zona, si se pasa solo su nombre). Solo
    * cuentan `desde` y los niveles por encima, y entre ellos manda el más alto
    * que tenga objetivo.
    */
-  zona: (periodo: string, nodo: TargetNode | string | undefined, desde?: TargetLevel) => TargetSpec;
+  zone: (period: string, node: TargetNode | string | undefined, since?: TargetLevel) => TargetSpec;
   /** Qué nivel fija una métrica de un nodo: para explicar por qué rige lo que rige. */
-  origen: (
-    periodo: string,
-    nodo: TargetNode | string | undefined,
-    metrica: Metrica,
-    desde?: TargetLevel,
+  source: (
+    period: string,
+    node: TargetNode | string | undefined,
+    metric: Metric,
+    since?: TargetLevel,
   ) => TargetSource;
   /** Si el nodo está apartado del cumplimiento en ese periodo (zona sin objetivo). */
-  withoutTarget: (periodo: string, nodo: TargetNode | string | undefined) => boolean;
+  withoutTarget: (period: string, node: TargetNode | string | undefined) => boolean;
   /**
    * La meta de un conjunto de nodos, cada uno resuelto desde `desde`. Los que
-   * están sin objetivo no aportan meta y se cuentan en `zonasSinObjetivo`.
+   * están sin objetivo no aportan meta y se cuentan en `zonesWithoutTarget`.
    */
-  meta: (
-    periodo: string,
-    nodos: readonly (TargetNode & { active_start?: number })[],
-    desde: TargetLevel,
-  ) => Meta;
+  goal: (
+    period: string,
+    nodes: readonly (TargetNode & { active_start?: number })[],
+    since: TargetLevel,
+  ) => Goal;
 }
 
 /**
  * Prepara la resolución de objetivos para una página.
  *
- * `zonas` es el catálogo que ya viaja como `zonasConfig`: es lo que dice a qué
+ * `zones` es el catálogo que ya viaja como `zonesConfig`: es lo que dice a qué
  * coordinador, site y estado pertenece cada zona. Sin él (páginas que solo
  * pintan totales globales) todo cae en el general.
  */
 export function createResolver(
   cfg: TargetsConfig = DEFAULT_TARGETS,
-  zonas: readonly ZoneConfig[] = [],
+  zones: readonly ZoneConfig[] = [],
 ): TargetsResolver {
-  const tablas: Record<EntityLevel, Map<string, TargetTier[]>> = {
-    zona_sucursal: indexar(cfg.zone_branches),
-    zona: indexar(cfg.zones),
-    coordinador: indexar(cfg.coordinators),
-    site: indexar(cfg.sites),
-    estado: indexar(cfg.states),
-    sucursal: indexar(cfg.branches),
+  const tables: Record<EntityLevel, Map<string, TargetTier[]>> = {
+    zona_sucursal: indexBy(cfg.zone_branches),
+    zona: indexBy(cfg.zones),
+    coordinador: indexBy(cfg.coordinators),
+    site: indexBy(cfg.sites),
+    estado: indexBy(cfg.states),
+    sucursal: indexBy(cfg.branches),
   };
-  const catalogZones = new Map<string, Ubicacion>(
-    zonas.map((z) => [
-      clave(z.name),
+  const catalogZones = new Map<string, Location>(
+    zones.map((z) => [
+      key(z.name),
       { zona: z.name, coordinador: z.coordinator || undefined, site: z.site, estado: z.state || undefined },
     ]),
   );
@@ -225,86 +225,86 @@ export function createResolver(
    * El nombre del nodo en cada nivel. La zona fuera del catálogo solo puede
    * tener objetivo propio, de nodo o de sucursal: no se sabe de quién cuelga.
    */
-  const locate = (nodo: TargetNode | string | undefined): Ubicacion => {
-    const { zona, sucursal } = typeof nodo === 'string' ? { zona: nodo, sucursal: undefined } : (nodo ?? {});
-    const ubicacion: Ubicacion = { ...(catalogZones.get(clave(zona)) ?? { zona }) };
-    if (sucursal) {
-      ubicacion.sucursal = sucursal;
-      if (zona) ubicacion.zona_sucursal = `${zona} - ${sucursal}`;
+  const locate = (node: TargetNode | string | undefined): Location => {
+    const { zona: zone, sucursal: branch } = typeof node === 'string' ? { zona: node, sucursal: undefined } : (node ?? {});
+    const location: Location = { ...(catalogZones.get(key(zone)) ?? { zona: zone }) };
+    if (branch) {
+      location.sucursal = branch;
+      if (zone) location.zona_sucursal = `${zone} - ${branch}`;
     }
-    return ubicacion;
+    return location;
   };
 
-  const general = (periodo: string) => overallTarget(cfg, periodo);
+  const general = (period: string) => overallTarget(cfg, period);
 
-  const apartadas = new Map(Object.entries(cfg.zones_without_target ?? {}).map(([nombre, t]) => [clave(nombre), t]));
-  const sinObjetivo: TargetsResolver['withoutTarget'] = (periodo, nodo) => {
-    const zona = typeof nodo === 'string' ? nodo : nodo?.zona;
-    const tramo = apartadas.get(clave(zona));
-    if (!tramo) return false;
-    const mes = monthOf(periodo);
-    return (!tramo.since || tramo.since <= mes) && (!tramo.until || mes <= tramo.until);
+  const setAside = new Map(Object.entries(cfg.zones_without_target ?? {}).map(([name, t]) => [key(name), t]));
+  const withoutTarget: TargetsResolver['withoutTarget'] = (period, node) => {
+    const zone = typeof node === 'string' ? node : node?.zona;
+    const tier = setAside.get(key(zone));
+    if (!tier) return false;
+    const month = monthOf(period);
+    return (!tier.since || tier.since <= month) && (!tier.until || month <= tier.until);
   };
 
-  const origen: TargetsResolver['origen'] = (periodo, nodo, metrica, desde = 'zona_sucursal') => {
-    const base: TargetSource = { level: 'general', name: '', value: general(periodo)[metrica] };
-    if (desde === 'general') return base;
+  const source: TargetsResolver['source'] = (period, node, metric, since = 'zona_sucursal') => {
+    const base: TargetSource = { level: 'general', name: '', value: general(period)[metric] };
+    if (since === 'general') return base;
 
-    const mes = monthOf(periodo);
-    const ubicacion = locate(nodo);
+    const month = monthOf(period);
+    const location = locate(node);
     // Los niveles desde `desde` hacia arriba, recorridos del más alto al más
     // bajo: el primero que fije la métrica es el que manda.
-    const niveles = CADENA.slice(CADENA.indexOf(desde)).reverse();
+    const levels = CHAIN.slice(CHAIN.indexOf(since)).reverse();
 
-    for (const nivel of niveles) {
-      const levelName = ubicacion[nivel];
+    for (const level of levels) {
+      const levelName = location[level];
       if (!levelName) continue;
-      const valor = currentValue(tablas[nivel].get(clave(levelName)), mes, metrica);
-      if (valor !== null) return { level: nivel, name: levelName, value: valor };
+      const value = currentValue(tables[level].get(key(levelName)), month, metric);
+      if (value !== null) return { level, name: levelName, value };
     }
     return base;
   };
 
-  const zona: TargetsResolver['zona'] = (periodo, nodo, desde = 'zona_sucursal') => ({
-    growth: origen(periodo, nodo, 'growth', desde).value,
-    churn: origen(periodo, nodo, 'churn', desde).value,
+  const zoneTarget: TargetsResolver['zone'] = (period, node, since = 'zona_sucursal') => ({
+    growth: source(period, node, 'growth', since).value,
+    churn: source(period, node, 'churn', since).value,
   });
 
-  const meta: TargetsResolver['meta'] = (periodo, nodos, desde) => {
+  const goal: TargetsResolver['goal'] = (period, nodes, since) => {
     let base = 0;
-    let metaCrecimiento = 0;
+    let growthGoal = 0;
     let churnAllowed = 0;
-    let apartadas = 0;
-    for (const nodo of nodos) {
-      const inicio = Number(nodo.active_start ?? 0);
-      if (sinObjetivo(periodo, nodo)) {
-        apartadas += 1;
+    let setAsideCount = 0;
+    for (const node of nodes) {
+      const start = Number(node.active_start ?? 0);
+      if (withoutTarget(period, node)) {
+        setAsideCount += 1;
         continue;
       }
-      const objetivo = zona(periodo, nodo, desde);
-      base += inicio;
-      metaCrecimiento += (inicio * objetivo.growth) / 100;
-      churnAllowed += (inicio * objetivo.churn) / 100;
+      const target = zoneTarget(period, node, since);
+      base += start;
+      growthGoal += (start * target.growth) / 100;
+      churnAllowed += (start * target.churn) / 100;
     }
     const extra = {
-      ...(apartadas > 0 ? { zonasSinObjetivo: apartadas } : {}),
-      ...(apartadas > 0 && apartadas === nodos.length ? { sinObjetivo: true } : {}),
+      ...(setAsideCount > 0 ? { zonesWithoutTarget: setAsideCount } : {}),
+      ...(setAsideCount > 0 && setAsideCount === nodes.length ? { withoutTarget: true } : {}),
     };
     // Sin base no hay ponderación posible: se informa el objetivo del nivel
     // tal cual, para que el rótulo no diga 0%.
     if (base <= 0) {
-      const objetivo = nodos.length === 1 ? zona(periodo, nodos[0], desde) : general(periodo);
-      return { growthPct: objetivo.growth, churnPct: objetivo.churn, growthGoal: 0, ...extra };
+      const target = nodes.length === 1 ? zoneTarget(period, nodes[0], since) : general(period);
+      return { growthPct: target.growth, churnPct: target.churn, growthGoal: 0, ...extra };
     }
     return {
-      growthPct: (metaCrecimiento / base) * 100,
+      growthPct: (growthGoal / base) * 100,
       churnPct: (churnAllowed / base) * 100,
-      growthGoal: metaCrecimiento,
+      growthGoal,
       ...extra,
     };
   };
 
-  return { thresholds: cfg.thresholds ?? DEFAULT_TARGETS.thresholds, general, zona, origen, withoutTarget: sinObjetivo, meta };
+  return { thresholds: cfg.thresholds ?? DEFAULT_TARGETS.thresholds, general, zone: zoneTarget, source, withoutTarget, goal };
 }
 
 /**
@@ -315,24 +315,24 @@ export function createResolver(
  */
 export function measuredNodes<T extends TargetNode>(
   resolve: TargetsResolver,
-  periodo: string,
-  nodos: readonly T[],
+  period: string,
+  nodes: readonly T[],
 ): T[] {
-  return nodos.filter((nodo) => !resolve.withoutTarget(periodo, nodo));
+  return nodes.filter((node) => !resolve.withoutTarget(period, node));
 }
 
 /** La meta de una base con un objetivo global (sin reparto por zonas). */
-export function baseGoal(activosInicio: number, objetivo: TargetSpec): Meta {
+export function baseGoal(startActive: number, target: TargetSpec): Goal {
   return {
-    growthPct: objetivo.growth,
-    churnPct: objetivo.churn,
-    growthGoal: (Number(activosInicio || 0) * objetivo.growth) / 100,
+    growthPct: target.growth,
+    churnPct: target.churn,
+    growthGoal: (Number(startActive || 0) * target.growth) / 100,
   };
 }
 
 /** Las tres metas de un periodo y su cumplimiento, contra el objetivo del mes. */
 export interface PeriodCompliance {
-  metaIngresos: number;
+  inflowsGoal: number;
   salesGoal: number;
   closeGoal: number;
   revenueCompliance: number;
@@ -348,21 +348,21 @@ export interface PeriodCompliance {
  * inicial más esa meta. Sin base, el cumplimiento es 0 y no `Infinity`.
  */
 export function periodCompliance(
-  periodo: { active_start?: number; active_end?: number; gross_adds?: number; new_in_month?: number },
-  objetivo: TargetSpec,
+  period: { active_start?: number; active_end?: number; gross_adds?: number; new_in_month?: number },
+  target: TargetSpec,
 ): PeriodCompliance {
-  const inicio = Number(periodo.active_start || 0);
-  const metaIngresos = (inicio * objetivo.growth) / 100;
-  const metaVentas = metaIngresos;
-  const metaCierre = inicio + metaIngresos;
-  const ratio = (valor: number | undefined, meta: number) => (meta > 0 ? (Number(valor || 0) / meta) * 100 : 0);
+  const start = Number(period.active_start || 0);
+  const inflowsGoal = (start * target.growth) / 100;
+  const salesGoal = inflowsGoal;
+  const closeGoal = start + inflowsGoal;
+  const ratio = (value: number | undefined, goal: number) => (goal > 0 ? (Number(value || 0) / goal) * 100 : 0);
   return {
-    metaIngresos,
-    salesGoal: metaVentas,
-    closeGoal: metaCierre,
-    revenueCompliance: ratio(periodo.gross_adds, metaIngresos),
-    salesCompliance: ratio(periodo.new_in_month, metaVentas),
-    closeCompliance: ratio(periodo.active_end, metaCierre),
+    inflowsGoal,
+    salesGoal,
+    closeGoal,
+    revenueCompliance: ratio(period.gross_adds, inflowsGoal),
+    salesCompliance: ratio(period.new_in_month, salesGoal),
+    closeCompliance: ratio(period.active_end, closeGoal),
   };
 }
 
@@ -371,43 +371,43 @@ export function periodCompliance(
 // Umbrales fijos, iguales para todo el módulo: no dependen del objetivo de la
 // fila. Así el mismo churn se pinta igual en Analytics, Results y los reportes.
 
-export type Tono = Extract<MetricColor, 'green' | 'yellow' | 'red'>;
+export type Tone = Extract<MetricColor, 'green' | 'yellow' | 'red'>;
 
 /** Cumplimiento (% de la meta): verde desde `cumpl_verde`, amarillo desde `cumpl_amarillo`. */
-export function complianceTone(cumplimiento: number, s: TargetsTrafficLight): Tono {
-  if (cumplimiento >= s.compliance_green) return 'green';
-  if (cumplimiento >= s.compliance_yellow) return 'yellow';
+export function complianceTone(compliance: number, s: TargetsTrafficLight): Tone {
+  if (compliance >= s.compliance_green) return 'green';
+  if (compliance >= s.compliance_yellow) return 'yellow';
   return 'red';
 }
 
 /** Crecimiento (%), más es mejor: verde desde `crec_verde`, amarillo desde `crec_amarillo`. */
-export function tonoCrecimiento(crecimiento: number, s: TargetsTrafficLight): Tono {
-  if (crecimiento >= s.growth_green) return 'green';
-  if (crecimiento >= s.growth_yellow) return 'yellow';
+export function growthTone(growth: number, s: TargetsTrafficLight): Tone {
+  if (growth >= s.growth_green) return 'green';
+  if (growth >= s.growth_yellow) return 'yellow';
   return 'red';
 }
 
 /** Churn (%), menos es mejor: verde hasta `churn_verde`, amarillo hasta `churn_amarillo`. */
-export function tonoChurn(churn: number, s: TargetsTrafficLight): Tono {
+export function churnTone(churn: number, s: TargetsTrafficLight): Tone {
   if (churn <= s.churn_green) return 'green';
   if (churn <= s.churn_yellow) return 'yellow';
   return 'red';
 }
 
 /** Clase de texto de Tailwind para un tono. */
-export const TONE_TEXT: Record<Tono, string> = {
+export const TONE_TEXT: Record<Tone, string> = {
   green: 'text-emerald-400',
   yellow: 'text-amber-400',
   red: 'text-rose-400',
 };
 
 /** Clase de fondo de Tailwind para la barra de progreso de un tono. */
-export const BARRA_TONO: Record<Tono, string> = {
+export const TONE_BAR: Record<Tone, string> = {
   green: 'bg-emerald-400',
   yellow: 'bg-amber-400',
   red: 'bg-rose-400',
 };
 
 /** `6` → `"6%"`, `6.5` → `"6.5%"`: el objetivo tal y como se escribe en un rótulo. */
-export const formatTarget = (valor: number): string =>
-  `${toNumber(valor).toLocaleString('en-US', { maximumFractionDigits: 2 })}%`;
+export const formatTarget = (value: number): string =>
+  `${toNumber(value).toLocaleString('en-US', { maximumFractionDigits: 2 })}%`;

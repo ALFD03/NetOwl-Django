@@ -12,7 +12,7 @@ import { Banknote, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button, EmptyState, SelectMenu } from '@/shared/ui';
 import { Field, FormBanner, FormFooter, ModalForm } from '@/features/subscriptions/components/FormControls';
 import { modalInputClass } from '@/features/subscriptions/lib/formClasses';
-import type { ConditionDraft } from '@/features/subscriptions/hooks/useCatalogs';
+import type { ConditionDraft } from '@/features/subscriptions/lib/catalogDrafts';
 import type {
   TeamScope,
   CatalogRoleCondition,
@@ -23,91 +23,91 @@ import type {
   PaymentTier,
 } from '@/features/subscriptions/types';
 
-const ALCANCES: Record<TeamScope, string> = {
+const SCOPES: Record<TeamScope, string> = {
   supervisados: 'las ventas de sus asesores (es el supervisor)',
   oficina: 'las ventas de su oficina (es el «Vendedor»)',
   unidades: 'las ventas de sus unidades de negocio',
   equipo_completo: 'todas las ventas del equipo',
 };
 
-const FACTORES: Record<ComplianceFactor, string> = {
+const FACTORS: Record<ComplianceFactor, string> = {
   ninguno: 'Sin factor',
   site: '% de ventas de su site',
   unidad: '% de ventas de su unidad (promedio si son varias)',
 };
 
-const dolares = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(2)} $`;
-const monto = (p: AmountPiece) => (p.kind === 'pct_plan' ? `${p.value} % del precio del plan` : `${dolares(p.value)} por venta`);
+const dollars = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(2)} $`;
+const amount = (p: AmountPiece) => (p.kind === 'pct_plan' ? `${p.value} % del precio del plan` : `${dollars(p.value)} por venta`);
 
 /** Las condiciones de un rol, en una línea por pieza, para la tabla. */
 export function describePieces(p: PaymentParameters): string[] {
-  const lineas: string[] = [];
+  const lines: string[] = [];
   if (p.tramos_asesor) {
-    lineas.push(`Por ventas propias: ${p.tramos_asesor
-      .map((t) => `desde ${t.since} → ${dolares(t.amount)}${t.deduct ? ` (−${t.deduct})` : ''}`)
+    lines.push(`Por ventas propias: ${p.tramos_asesor
+      .map((t) => `desde ${t.since} → ${dollars(t.amount)}${t.deduct ? ` (−${t.deduct})` : ''}`)
       .join(' · ')}`);
   }
-  if (p.propia) lineas.push(`Venta propia: ${monto(p.propia)}`);
+  if (p.propia) lines.push(`Venta propia: ${amount(p.propia)}`);
   if (p.equipo) {
-    lineas.push(`Por ${ALCANCES[p.equipo.scope]}: ${p.escalon_crecimiento ? 'según crecimiento' : monto(p.equipo)}${p.equipo.exclude_office ? ' · sin las ventas de oficina' : ''}`);
+    lines.push(`Por ${SCOPES[p.equipo.scope]}: ${p.escalon_crecimiento ? 'según crecimiento' : amount(p.equipo)}${p.equipo.exclude_office ? ' · sin las ventas de oficina' : ''}`);
   }
   if (p.escalon_crecimiento) {
     const e = p.escalon_crecimiento;
-    lineas.push(`Crecimiento de su unidad ≥ ${e.threshold_pct} %: ${dolares(e.high)} por venta; si no, ${dolares(e.low)}`);
+    lines.push(`Crecimiento de su unidad ≥ ${e.threshold_pct} %: ${dollars(e.high)} por venta; si no, ${dollars(e.low)}`);
   }
-  if (p.factor && p.factor !== 'ninguno') lineas.push(`Total × ${FACTORES[p.factor]} (máx. 100 %)`);
-  if (p.bono_tramos) lineas.push(`Bono por ventas: ${p.bono_tramos.map((t) => `≥ ${t.since} → ${dolares(t.amount)}`).join(' · ')}`);
-  if (p.bono_por_asesor) lineas.push(`Bono por cada asesor: ${p.bono_por_asesor.map((t) => `≥ ${t.since} → ${dolares(t.amount)}`).join(' · ')}`);
-  if (p.bono_por_unidad) lineas.push(`Bono de ${dolares(p.bono_por_unidad.amount)} por unidad, proporcional a su % de ingresos (máx. 100 %)`);
-  if (p.bono_churn) lineas.push(`Bono por churn bruto: ${p.bono_churn.map((t) => `≤ ${t.max} % → ${dolares(t.amount)}`).join(' · ')}`);
+  if (p.factor && p.factor !== 'ninguno') lines.push(`Total × ${FACTORS[p.factor]} (máx. 100 %)`);
+  if (p.bono_tramos) lines.push(`Bono por ventas: ${p.bono_tramos.map((t) => `≥ ${t.since} → ${dollars(t.amount)}`).join(' · ')}`);
+  if (p.bono_por_asesor) lines.push(`Bono por cada asesor: ${p.bono_por_asesor.map((t) => `≥ ${t.since} → ${dollars(t.amount)}`).join(' · ')}`);
+  if (p.bono_por_unidad) lines.push(`Bono de ${dollars(p.bono_por_unidad.amount)} por unidad, proporcional a su % de ingresos (máx. 100 %)`);
+  if (p.bono_churn) lines.push(`Bono por churn bruto: ${p.bono_churn.map((t) => `≤ ${t.max} % → ${dollars(t.amount)}`).join(' · ')}`);
   if (p.bono_empresa) {
-    lineas.push(`Bono por ventas de la empresa: ${dolares(p.bono_empresa.amount)} al 100 % (proporcional por debajo), ${dolares(p.bono_empresa.surplus)} por encima`);
+    lines.push(`Bono por ventas de la empresa: ${dollars(p.bono_empresa.amount)} al 100 % (proporcional por debajo), ${dollars(p.bono_empresa.surplus)} por encima`);
   }
-  return lineas;
+  return lines;
 }
 
 /** Las condiciones del rol abierto, junto a su gente: qué piezas paga, de dónde vienen y cómo editarlas. */
 export function RoleConditionsCard({
-  condicion,
-  onEditar,
-  onRestablecer,
+  condition,
+  onEdit,
+  onReset,
 }: {
-  condicion: CatalogRoleCondition | undefined;
-  onEditar: (row: CatalogRoleCondition) => void;
-  onRestablecer: (row: CatalogRoleCondition) => void;
+  condition: CatalogRoleCondition | undefined;
+  onEdit: (row: CatalogRoleCondition) => void;
+  onReset: (row: CatalogRoleCondition) => void;
 }) {
-  if (!condicion) {
+  if (!condition) {
     return <EmptyState title="Sin condiciones" description="Este rol no tiene condiciones de pago." icon={<Banknote />} />;
   }
-  const lineas = describePieces(condicion.params);
+  const lines = describePieces(condition.params);
   return (
     <div className="flex flex-col gap-4 p-5">
       <div className="flex items-center justify-between gap-2">
         <span
           className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-            condicion.custom ? 'bg-amber-500/10 text-amber-300' : 'bg-slate-700/40 text-slate-400'
+            condition.custom ? 'bg-amber-500/10 text-amber-300' : 'bg-slate-700/40 text-slate-400'
           }`}
         >
-          {condicion.custom ? 'Editadas' : 'De la política'}
+          {condition.custom ? 'Editadas' : 'De la política'}
         </span>
         <div className="flex items-center gap-2">
-          {condicion.custom && (
-            <Button type="button" variant="outline" size="sm" icon={<RotateCcw className="h-4 w-4" />} onClick={() => onRestablecer(condicion)}>
+          {condition.custom && (
+            <Button type="button" variant="outline" size="sm" icon={<RotateCcw className="h-4 w-4" />} onClick={() => onReset(condition)}>
               Política
             </Button>
           )}
-          <Button type="button" size="sm" icon={<Pencil className="h-4 w-4" />} onClick={() => onEditar(condicion)}>
+          <Button type="button" size="sm" icon={<Pencil className="h-4 w-4" />} onClick={() => onEdit(condition)}>
             Editar
           </Button>
         </div>
       </div>
-      {lineas.length === 0 ? (
+      {lines.length === 0 ? (
         <p className="text-sm text-slate-500">Este rol no cobra nada por sí mismo.</p>
       ) : (
         <ul className="space-y-2">
-          {lineas.map((linea) => (
-            <li key={linea} className="rounded-lg border border-slate-800 bg-surface-primary/60 px-3 py-2 text-xs leading-relaxed text-slate-300">
-              {linea}
+          {lines.map((line) => (
+            <li key={line} className="rounded-lg border border-slate-800 bg-surface-primary/60 px-3 py-2 text-xs leading-relaxed text-slate-300">
+              {line}
             </li>
           ))}
         </ul>
@@ -123,28 +123,28 @@ const number = (e: { target: { value: string } }) => (e.target.value === '' ? 0 
 
 /** Filas editables de tramos `desde → monto` (con `descontar` en los del asesor). */
 function Tiers({
-  titulo,
+  title,
   hint,
   buckets,
-  withDiscount: conDescuento = false,
+  withDiscount: withDiscount = false,
   onChange,
 }: {
-  titulo: string;
+  title: string;
   hint?: string;
   buckets: PaymentTier[];
   withDiscount?: boolean;
-  onChange: (tramos: PaymentTier[]) => void;
+  onChange: (tiers: PaymentTier[]) => void;
 }) {
-  const cambiar = (i: number, patch: Partial<PaymentTier>) =>
+  const change = (i: number, patch: Partial<PaymentTier>) =>
     onChange(buckets.map((t, k) => (k === i ? { ...t, ...patch } : t)));
   return (
     <Field
-      label={titulo}
+      label={title}
       hint={hint}
       action={
         <button
           type="button"
-          onClick={() => onChange([...buckets, { since: 0, amount: 0, ...(conDescuento ? { deduct: 0 } : {}) }])}
+          onClick={() => onChange([...buckets, { since: 0, amount: 0, ...(withDiscount ? { deduct: 0 } : {}) }])}
           className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-sky-300"
         >
           <Plus className="h-3 w-3" /> Añadir tramo
@@ -155,14 +155,14 @@ function Tiers({
         {buckets.map((t, i) => (
           <div key={i} className="flex items-center gap-2">
             <span className="text-[10px] text-slate-400">desde</span>
-            <input type="number" min={0} className={modalInputClass} value={t.since} onChange={(e) => cambiar(i, { since: number(e) })} />
+            <input type="number" min={0} className={modalInputClass} value={t.since} onChange={(e) => change(i, { since: number(e) })} />
             <span className="text-[10px] text-slate-400">ventas →</span>
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={t.amount} onChange={(e) => cambiar(i, { amount: number(e) })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={t.amount} onChange={(e) => change(i, { amount: number(e) })} />
             <span className="text-[10px] text-slate-400">$</span>
-            {conDescuento && (
+            {withDiscount && (
               <>
                 <span className="text-[10px] text-slate-400">descuenta</span>
-                <input type="number" min={0} className={modalInputClass} value={t.deduct ?? 0} onChange={(e) => cambiar(i, { deduct: number(e) })} />
+                <input type="number" min={0} className={modalInputClass} value={t.deduct ?? 0} onChange={(e) => change(i, { deduct: number(e) })} />
               </>
             )}
             <button type="button" onClick={() => onChange(buckets.filter((_, k) => k !== i))} className="text-rose-400 hover:text-rose-300" title="Quitar tramo">
@@ -176,18 +176,18 @@ function Tiers({
 }
 
 /** Un monto por venta: dólares fijos o un % del precio del plan. */
-function AmountEditor({ titulo, hint, value, onChange }: {
-  titulo: string; hint?: string; value: AmountPiece; onChange: (p: AmountPiece) => void;
+function AmountEditor({ title, hint, value, onChange }: {
+  title: string; hint?: string; value: AmountPiece; onChange: (p: AmountPiece) => void;
 }) {
   return (
-    <Field label={titulo} hint={hint}>
+    <Field label={title} hint={hint}>
       <div className="flex items-center gap-2">
         <SelectMenu
-          aria-label={titulo}
+          aria-label={title}
           className={modalInputClass}
           value={value.kind}
           options={[{ value: 'monto', label: 'Dólares por venta' }, { value: 'pct_plan', label: '% del precio del plan' }]}
-          onChange={(tipo) => onChange({ ...value, kind: tipo as AmountPiece['kind'] })}
+          onChange={(kind) => onChange({ ...value, kind: kind as AmountPiece['kind'] })}
         />
         <input type="number" min={0} step="0.01" className={modalInputClass} value={value.value} onChange={(e) => onChange({ ...value, value: number(e) })} />
       </div>
@@ -210,8 +210,8 @@ export function ConditionsForm({
   onClose: () => void;
 }) {
   const p = value.params;
-  const poner = (patch: Partial<PaymentParameters>) => onChange({ params: { ...p, ...patch } });
-  const tiene = (pieza: ConditionDraft['pieces'][number]) => value.pieces.includes(pieza);
+  const put = (patch: Partial<PaymentParameters>) => onChange({ params: { ...p, ...patch } });
+  const has = (piece: ConditionDraft['pieces'][number]) => value.pieces.includes(piece);
 
   return (
     <ModalForm onSubmit={onSubmit}>
@@ -231,82 +231,82 @@ export function ConditionsForm({
         }
       />
 
-      {tiene('tramos_asesor') && p.tramos_asesor && (
+      {has('tramos_asesor') && p.tramos_asesor && (
         <Tiers
-          titulo="Por ventas propias"
+          title="Por ventas propias"
           hint="Cada tramo vale desde esa cantidad de ventas hasta el siguiente. «Descuenta»: ventas que no se pagan en ese tramo."
           buckets={p.tramos_asesor}
           withDiscount
-          onChange={(t) => poner({ tramos_asesor: t })}
+          onChange={(t) => put({ tramos_asesor: t })}
         />
       )}
-      {tiene('propia') && p.propia && (
-        <AmountEditor titulo="Venta propia" hint="Lo que cobra por cada venta que hizo él mismo («Medio»)." value={p.propia} onChange={(v) => poner({ propia: v })} />
+      {has('propia') && p.propia && (
+        <AmountEditor title="Venta propia" hint="Lo que cobra por cada venta que hizo él mismo («Medio»)." value={p.propia} onChange={(v) => put({ propia: v })} />
       )}
-      {tiene('equipo') && p.equipo && (
+      {has('equipo') && p.equipo && (
         <>
           <AmountEditor
-            titulo="Venta de equipo"
-            hint={tiene('escalon_crecimiento') ? 'Con el escalón de crecimiento de abajo este monto no se usa.' : undefined}
+            title="Venta de equipo"
+            hint={has('escalon_crecimiento') ? 'Con el escalón de crecimiento de abajo este monto no se usa.' : undefined}
             value={p.equipo}
-            onChange={(v) => poner({ equipo: { ...p.equipo!, ...v } })}
+            onChange={(v) => put({ equipo: { ...p.equipo!, ...v } })}
           />
           <Field label="¿De qué ventas?">
             <SelectMenu
               aria-label="Alcance de la venta de equipo"
               className={modalInputClass}
               value={p.equipo.scope}
-              options={(Object.keys(ALCANCES) as TeamScope[]).map((a) => ({ value: a, label: ALCANCES[a] }))}
-              onChange={(a) => poner({ equipo: { ...p.equipo!, scope: a as TeamScope } as TeamPiece })}
+              options={(Object.keys(SCOPES) as TeamScope[]).map((a) => ({ value: a, label: SCOPES[a] }))}
+              onChange={(a) => put({ equipo: { ...p.equipo!, scope: a as TeamScope } as TeamPiece })}
             />
             <label className="mt-2 flex items-center gap-2 text-xs text-slate-300">
-              <input type="checkbox" checked={p.equipo.exclude_office} onChange={(e) => poner({ equipo: { ...p.equipo!, exclude_office: e.target.checked } })} />
+              <input type="checkbox" checked={p.equipo.exclude_office} onChange={(e) => put({ equipo: { ...p.equipo!, exclude_office: e.target.checked } })} />
               No contar las ventas de oficina (las que hizo una coordinadora de oficina)
             </label>
           </Field>
         </>
       )}
-      {tiene('escalon_crecimiento') && p.escalon_crecimiento && (
+      {has('escalon_crecimiento') && p.escalon_crecimiento && (
         <Field label="Escalón de crecimiento" hint="Por venta de equipo: cobra el monto alto si el crecimiento de su unidad llega al umbral, y el bajo si no.">
           <div className="flex items-center gap-2 text-[10px] text-slate-400">
             umbral
-            <input type="number" step="0.1" className={modalInputClass} value={p.escalon_crecimiento.threshold_pct} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, threshold_pct: number(e) } })} />
+            <input type="number" step="0.1" className={modalInputClass} value={p.escalon_crecimiento.threshold_pct} onChange={(e) => put({ escalon_crecimiento: { ...p.escalon_crecimiento!, threshold_pct: number(e) } })} />
             % · alto
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.escalon_crecimiento.high} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, high: number(e) } })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.escalon_crecimiento.high} onChange={(e) => put({ escalon_crecimiento: { ...p.escalon_crecimiento!, high: number(e) } })} />
             $ · bajo
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.escalon_crecimiento.low} onChange={(e) => poner({ escalon_crecimiento: { ...p.escalon_crecimiento!, low: number(e) } })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.escalon_crecimiento.low} onChange={(e) => put({ escalon_crecimiento: { ...p.escalon_crecimiento!, low: number(e) } })} />
             $
           </div>
         </Field>
       )}
-      {tiene('factor') && (
+      {has('factor') && (
         <Field label="Factor de cumplimiento" hint="Multiplica lo que cobra por ventas (propias + equipo), con tope del 100 %. El bono no se multiplica.">
           <SelectMenu
             aria-label="Factor de cumplimiento"
             className={modalInputClass}
             value={p.factor ?? 'ninguno'}
-            options={(Object.keys(FACTORES) as ComplianceFactor[]).map((f) => ({ value: f, label: FACTORES[f] }))}
-            onChange={(f) => poner({ factor: f as ComplianceFactor })}
+            options={(Object.keys(FACTORS) as ComplianceFactor[]).map((f) => ({ value: f, label: FACTORS[f] }))}
+            onChange={(f) => put({ factor: f as ComplianceFactor })}
           />
         </Field>
       )}
-      {tiene('bono_tramos') && p.bono_tramos && (
-        <Tiers titulo="Bono por ventas propias" hint="Un monto único según cuántas ventas hizo en el mes; vale el último tramo alcanzado." buckets={p.bono_tramos} onChange={(t) => poner({ bono_tramos: t })} />
+      {has('bono_tramos') && p.bono_tramos && (
+        <Tiers title="Bono por ventas propias" hint="Un monto único según cuántas ventas hizo en el mes; vale el último tramo alcanzado." buckets={p.bono_tramos} onChange={(t) => put({ bono_tramos: t })} />
       )}
-      {tiene('bono_por_asesor') && p.bono_por_asesor && (
-        <Tiers titulo="Bono por cada asesor de su equipo" hint="Se paga por cada asesor suyo que llega al tramo (el que más vende con él)." buckets={p.bono_por_asesor} onChange={(t) => poner({ bono_por_asesor: t })} />
+      {has('bono_por_asesor') && p.bono_por_asesor && (
+        <Tiers title="Bono por cada asesor de su equipo" hint="Se paga por cada asesor suyo que llega al tramo (el que más vende con él)." buckets={p.bono_por_asesor} onChange={(t) => put({ bono_por_asesor: t })} />
       )}
-      {tiene('bono_por_unidad') && p.bono_por_unidad && (
+      {has('bono_por_unidad') && p.bono_por_unidad && (
         <Field label="Bono por unidad de negocio" hint="Por cada unidad que lleva: este monto × su % de ingresos, con tope del 100 %.">
-          <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_por_unidad.amount} onChange={(e) => poner({ bono_por_unidad: { amount: number(e) } })} />
+          <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_por_unidad.amount} onChange={(e) => put({ bono_por_unidad: { amount: number(e) } })} />
         </Field>
       )}
-      {tiene('bono_churn') && p.bono_churn && (
+      {has('bono_churn') && p.bono_churn && (
         <Field
           label="Bono por churn bruto"
           hint="Cobra el del tramo más exigente que cumple (churn bruto de su unidad ≤ máximo)."
           action={
-            <button type="button" onClick={() => poner({ bono_churn: [...p.bono_churn!, { max: 0, amount: 0 }] })} className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-sky-300">
+            <button type="button" onClick={() => put({ bono_churn: [...p.bono_churn!, { max: 0, amount: 0 }] })} className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-sky-300">
               <Plus className="h-3 w-3" /> Añadir tramo
             </button>
           }
@@ -315,11 +315,11 @@ export function ConditionsForm({
             {p.bono_churn.map((t, i) => (
               <div key={i} className="flex items-center gap-2 text-[10px] text-slate-400">
                 ≤
-                <input type="number" step="0.1" className={modalInputClass} value={t.max} onChange={(e) => poner({ bono_churn: p.bono_churn!.map((x, k) => (k === i ? { ...x, max: number(e) } : x)) })} />
+                <input type="number" step="0.1" className={modalInputClass} value={t.max} onChange={(e) => put({ bono_churn: p.bono_churn!.map((x, k) => (k === i ? { ...x, max: number(e) } : x)) })} />
                 % →
-                <input type="number" min={0} step="0.01" className={modalInputClass} value={t.amount} onChange={(e) => poner({ bono_churn: p.bono_churn!.map((x, k) => (k === i ? { ...x, amount: number(e) } : x)) })} />
+                <input type="number" min={0} step="0.01" className={modalInputClass} value={t.amount} onChange={(e) => put({ bono_churn: p.bono_churn!.map((x, k) => (k === i ? { ...x, amount: number(e) } : x)) })} />
                 $
-                <button type="button" onClick={() => poner({ bono_churn: p.bono_churn!.filter((_, k) => k !== i) })} className="text-rose-400 hover:text-rose-300" title="Quitar tramo">
+                <button type="button" onClick={() => put({ bono_churn: p.bono_churn!.filter((_, k) => k !== i) })} className="text-rose-400 hover:text-rose-300" title="Quitar tramo">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -327,13 +327,13 @@ export function ConditionsForm({
           </div>
         </Field>
       )}
-      {tiene('bono_empresa') && p.bono_empresa && (
+      {has('bono_empresa') && p.bono_empresa && (
         <Field label="Bono por las ventas de la empresa" hint="Por debajo del 100 % cobra el monto proporcional (80 % → 80 $ si el monto es 100); al 100 %, el monto; por encima, el excedente.">
           <div className="flex items-center gap-2 text-[10px] text-slate-400">
             al 100 %
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_empresa.amount} onChange={(e) => poner({ bono_empresa: { ...p.bono_empresa!, amount: number(e) } })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_empresa.amount} onChange={(e) => put({ bono_empresa: { ...p.bono_empresa!, amount: number(e) } })} />
             $ · por encima
-            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_empresa.surplus} onChange={(e) => poner({ bono_empresa: { ...p.bono_empresa!, surplus: number(e) } })} />
+            <input type="number" min={0} step="0.01" className={modalInputClass} value={p.bono_empresa.surplus} onChange={(e) => put({ bono_empresa: { ...p.bono_empresa!, surplus: number(e) } })} />
             $
           </div>
         </Field>

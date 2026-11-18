@@ -167,7 +167,7 @@ TIME_MEASURE_SPECS = [
     ("escalamiento", "creado_a_cierre", POP_ESCALATED),
 ]
 
-SUPPORT_TIME_MEASURES = [medida for medida, _, _ in TIME_MEASURE_SPECS]
+SUPPORT_TIME_MEASURES = [measure for measure, _, _ in TIME_MEASURE_SPECS]
 
 # Los nueve estadísticos que `_prefixed` emite por medida.
 TIME_STATS = ["medio", "mediana", "min", "p25", "p75", "max", "std"]
@@ -219,8 +219,8 @@ SUPPORT_RATE_FIELDS = [
 # las de ATC hasta el escalamiento; la fila de Soporte, las de Soporte desde
 # él. `muestra_composicion` son los cerrados con logs de etapa: sin logs no hay
 # reparto que hacer.
-TIPOS_COMPOSICION = ["cola", "pausa", "gestion", "sin_clasificar"]
-SUPPORT_COMPOSICION_FIELDS = [f"composicion_{t}_horas" for t in TIPOS_COMPOSICION]
+COMPOSITION_KINDS = ["cola", "pausa", "gestion", "sin_clasificar"]
+SUPPORT_COMPOSITION_FIELDS = [f"composicion_{t}_horas" for t in COMPOSITION_KINDS]
 
 
 # --- Dimensiones ------------------------------------------------------------
@@ -244,16 +244,16 @@ SUPPORT_COMPOSICION_FIELDS = [f"composicion_{t}_horas" for t in TIPOS_COMPOSICIO
 # del periodo, con las mismas funciones de métrica.
 GROUP_DIM = "grupo_trabajo"
 
-SUPPORT_DIMENSIONES = ["zona", "sucursal", "asignado_a", "creado_por"]
+SUPPORT_DIMENSIONS = ["zona", "sucursal", "asignado_a", "creado_por"]
 
 # Las dos dimensiones cuyo valor es una persona, y por tanto las unicas que el
 # directorio de `services/support/models.py` puede anotar con un departamento.
 # Se declaran aparte para que quien anada un eje de persona no tenga que
 # acordarse de tocar tambien la anotacion.
-SUPPORT_DIMENSIONES_PERSONA = ["asignado_a", "creado_por"]
-SUPPORT_DESGLOSES = ["tipo_solicitud", "razon_falla", "solucion_falla"]
+SUPPORT_DIMENSIONS_PERSON = ["asignado_a", "creado_por"]
+SUPPORT_BREAKDOWNS = ["tipo_solicitud", "razon_falla", "solucion_falla"]
 
-SUPPORT_DIMENSION_COLUMNS = [GROUP_DIM, *SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES]
+SUPPORT_DIMENSION_COLUMNS = [GROUP_DIM, *SUPPORT_DIMENSIONS, *SUPPORT_BREAKDOWNS]
 
 
 # El escalamiento: entrar en esta etapa viniendo de una que no es de Soporte
@@ -273,7 +273,7 @@ TEAM_SHARED = "compartida"
 # el. Las etapas de cierre no van en el catalogo: son RESOLVED_STAGES y
 # CANCELED_STAGES, las mismas de los tickets.
 KIND_QUEUE = "cola"
-TIPO_PAUSA = "pausa"
+KIND_PAUSE = "pausa"
 KIND_HANDLING = "gestion"
 KIND_CLOSE = "cierre"
 KIND_UNCLASSIFIED = "sin_clasificar"

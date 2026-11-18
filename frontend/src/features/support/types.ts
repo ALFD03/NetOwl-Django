@@ -128,20 +128,20 @@ export interface SupportMetrics extends SupportTimeMetrics, SupportRateMetrics {
 export type SupportStats = SupportTimeStats & Required<SupportRateMetrics>;
 
 /** One period of `support_cierre_historico`, flattened by the query layer. */
-export interface SupportHistoricoRow extends SupportMetrics {
+export interface SupportHistoryRow extends SupportMetrics {
   report_period: string;
 }
 
 /** A distribution of hours, resolved from one `_compute_stats_for_series` block. */
 export interface SupportTimeDistribution {
-  promedio: number;
+  average: number;
   median: number;
   min: number;
   p25: number;
   p75: number;
   max: number;
   std: number;
-  pctExcedeProm: number;
+  pctAboveAvg: number;
   /** Tickets that could actually be measured; 0 means there is nothing to draw. */
   sample: number;
 }
@@ -153,7 +153,7 @@ export interface SupportDashboardProps {
     evaluated_periods?: number;
     global_summary?: SupportMetrics;
     by_work_group?: Record<string, SupportMetrics>;
-    trend_history?: SupportHistoricoRow[];
+    trend_history?: SupportHistoryRow[];
   };
   /** Los tickets abiertos ahora; `null` sin el permiso o sin logs analizados. */
   open?: OpenTickets | null;
@@ -169,9 +169,9 @@ export interface SupportTrendCard {
   values: number[];
   unitLabel: string;
   /** Series shown on the card. */
-  rateKey: keyof SupportHistoricoRow;
+  rateKey: keyof SupportHistoryRow;
   /** Absolute-volume series shown in the drill-down modal. */
-  countKey: keyof SupportHistoricoRow;
+  countKey: keyof SupportHistoryRow;
   /** Volume figures are counts; time figures are hours. */
   unit: 'tickets' | 'horas';
 }
@@ -185,19 +185,19 @@ export interface SupportGroupCard {
   sharePct: number;
   pctResolved: number;
   pctCancelled: number;
-  pctRezagados: number;
+  pctLagging: number;
   /** Sólo el grupo que escala (ATC) lo tiene distinto de cero. */
   pctEscalated: number;
   /** Mean hours from creation to closure, over resolved and cancelled alike. */
   mttr: number;
-  mttrMediana: number;
+  mttrMedian: number;
   /** Green when the group closes faster than the global mean, red when slower. */
   mttrColor: MetricColor;
   /** Signed gap against the global MTTR, in hours. */
   mttrDelta: number;
   /** Mean hours spent queued before the first assignment. */
-  espera: number;
-  pctExcedeProm: number;
+  wait: number;
+  pctAboveAvg: number;
 }
 
 // --- Analytics --------------------------------------------------------------
@@ -230,8 +230,8 @@ export function isPersonDimension(
 }
 
 /** The three ways a dimension value is broken down. */
-export const SUPPORT_DESGLOSES = ['tipo_solicitud', 'razon_falla', 'solucion_falla'] as const;
-export type SupportDesglose = (typeof SUPPORT_DESGLOSES)[number];
+export const SUPPORT_BREAKDOWNS = ['tipo_solicitud', 'razon_falla', 'solucion_falla'] as const;
+export type SupportBreakdown = (typeof SUPPORT_BREAKDOWNS)[number];
 
 /** One value of any axis — a zone, a technician, a failure reason. */
 export interface SupportDimensionEntry {
@@ -250,7 +250,7 @@ export interface SupportDimensionEntry {
 
 /** One work group with its own block and every axis already grouped. */
 export type SupportGroup = { metrics?: SupportMetrics } & Partial<
-  Record<SupportDimension | SupportDesglose, SupportDimensionEntry[]>
+  Record<SupportDimension | SupportBreakdown, SupportDimensionEntry[]>
 >;
 
 /**
@@ -340,7 +340,7 @@ export interface SupportDimensionRow extends SupportMetrics {
  */
 export interface SupportDepartmentRow extends SupportDimensionRow {
   /** Cuántas personas del eje caen en este departamento. */
-  personas: number;
+  people: number;
 }
 
 /** A zone ranked by how many tickets each 100 of its active subscribers raise. */
@@ -349,7 +349,7 @@ export interface SupportZoneRow {
   site: string;
   technology: string;
   totalTickets: number;
-  totalSuscriptores: number;
+  totalSubscribers: number;
   incidenceRate: number;
   mttrAverage: number;
   pctResolved: number;
@@ -364,13 +364,13 @@ export interface SupportBreakdownResponse {
   dimension?: string;
   value?: string;
   metrics?: SupportMetrics;
-  breakdowns?: Partial<Record<SupportDesglose, SupportDimensionEntry[]>>;
+  breakdowns?: Partial<Record<SupportBreakdown, SupportDimensionEntry[]>>;
 }
 
 // --- Results ----------------------------------------------------------------
 
 export interface SupportResultsProps {
-  history?: SupportHistoricoRow[];
+  history?: SupportHistoryRow[];
   /** El detalle del mes elegido: el mismo bloque que Analytics lee para el cierre. */
   analyticsData?: SupportAnalyticsProps['analyticsData'];
   periods?: string[];

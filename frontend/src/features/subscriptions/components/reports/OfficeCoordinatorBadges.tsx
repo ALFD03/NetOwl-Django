@@ -34,30 +34,30 @@ export interface OfficeCoordinator {
 }
 
 /** La suma de los días 1..`dia` (o del mes entero sin corte). */
-const hasta = (dias: number[], dia: number | null): number =>
-  dias.slice(0, dia ?? dias.length).reduce((total, n) => total + Number(n || 0), 0);
+const until = (days: number[], day: number | null): number =>
+  days.slice(0, day ?? days.length).reduce((total, n) => total + Number(n || 0), 0);
 
-const Separador = () => <span className="h-4 w-px bg-slate-700" aria-hidden />;
+const Separator = () => <span className="h-4 w-px bg-slate-700" aria-hidden />;
 
 export function OfficeCoordinatorBadges({
-  coordinadoras,
+  coordinatorOffices,
   day = null,
   className,
 }: {
-  coordinadoras: OfficeCoordinator[];
+  coordinatorOffices: OfficeCoordinator[];
   /** El día del corte; nulo es el mes entero. */
   day?: number | null;
   className?: string;
 }) {
   const { thresholds } = useTargetsConfig();
-  if (coordinadoras.length === 0) return null;
+  if (coordinatorOffices.length === 0) return null;
 
   return (
     <div className={cn('flex flex-wrap gap-2', className)} aria-label="Coordinadoras de oficina del site">
-      {coordinadoras.map((c) => {
-        const propias = hasta(c.own_by_day, day);
-        const oficina = hasta(c.office_by_day, day);
-        const pct = c.target ? (propias / c.target) * 100 : null;
+      {coordinatorOffices.map((c) => {
+        const own = until(c.own_by_day, day);
+        const office = until(c.office_by_day, day);
+        const pct = c.target ? (own / c.target) * 100 : null;
         return (
           <div
             key={c.id}
@@ -68,15 +68,15 @@ export function OfficeCoordinatorBadges({
               <UserRound className="h-3.5 w-3.5 text-sky-400" />
               {c.name}
             </span>
-            <Separador />
+            <Separator />
             <span className="flex items-baseline gap-1.5">
               <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Medio</span>
-              <span className="font-mono font-black tabular-nums text-white">{formatInteger(propias)}</span>
+              <span className="font-mono font-black tabular-nums text-white">{formatInteger(own)}</span>
               <span className="text-slate-600">·</span>
               <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Total</span>
-              <span className="font-mono font-bold tabular-nums text-slate-200">{formatInteger(oficina)}</span>
+              <span className="font-mono font-bold tabular-nums text-slate-200">{formatInteger(office)}</span>
             </span>
-            <Separador />
+            <Separator />
             <span className="flex items-baseline gap-1.5">
               <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Objetivo</span>
               {c.target === null ? (

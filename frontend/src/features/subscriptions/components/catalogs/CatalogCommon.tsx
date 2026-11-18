@@ -11,12 +11,12 @@ import type { LucideIcon } from 'lucide-react';
 import { ActionMessage, Button, Modal, ToggleGroup, type Column } from '@/shared/ui';
 import type { useCatalogs } from '@/features/subscriptions/hooks/useCatalogs';
 
-type CatalogsState = ReturnType<typeof useCatalogs>;
+export type CatalogsState = ReturnType<typeof useCatalogs>;
 
 /** Evita el envío nativo del formulario y ejecuta la acción. */
-export const enviar = (event: FormEvent, accion: () => void) => {
+export const send = (event: FormEvent, action: () => void) => {
   event.preventDefault();
-  accion();
+  action();
 };
 
 /** La columna con los botones de editar y eliminar de una fila. */
@@ -52,21 +52,21 @@ export interface CatalogTab {
 }
 
 interface CatalogBarProps {
-  pestanas: CatalogTab[];
-  activa: string;
+  tabs: CatalogTab[];
+  active: string;
   onChange: (key: string) => void;
   /** El alta de la pestaña activa, si tiene. */
-  alta?: { label: string; onClick: () => void };
+  create?: { label: string; onClick: () => void };
 }
 
 /** Las pestañas de la página y, a la derecha, el alta de la que está abierta. */
-export function CatalogBar({ pestanas, activa, onChange, alta }: CatalogBarProps) {
+export function CatalogBar({ tabs, active, onChange, create }: CatalogBarProps) {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
-      <ToggleGroup activeKey={activa} onChange={onChange} options={pestanas} />
-      {alta && (
-        <Button icon={<Plus className="h-4 w-4" />} onClick={alta.onClick}>
-          {alta.label}
+      <ToggleGroup activeKey={active} onChange={onChange} options={tabs} />
+      {create && (
+        <Button icon={<Plus className="h-4 w-4" />} onClick={create.onClick}>
+          {create.label}
         </Button>
       )}
     </div>
@@ -78,11 +78,11 @@ export function CatalogBar({ pestanas, activa, onChange, alta }: CatalogBarProps
  * contenido de la página. Con `withNotice`, también la confirmación de la última
  * que salió bien: la usan las páginas donde se registra en serie sin salir de ellas.
  */
-export function CatalogErrorView({ c, withNotice: conAviso = false }: { c: CatalogsState; withNotice?: boolean }) {
+export function CatalogErrorView({ c, withNotice = false }: { c: CatalogsState; withNotice?: boolean }) {
   const status = c.error
     ? { type: 'error' as const, text: c.error }
-    : conAviso && c.aviso
-      ? { type: 'success' as const, text: c.aviso }
+    : withNotice && c.notice
+      ? { type: 'success' as const, text: c.notice }
       : null;
   return (
     <ActionMessage
@@ -94,11 +94,11 @@ export function CatalogErrorView({ c, withNotice: conAviso = false }: { c: Catal
 }
 
 /** Confirmación de borrado de la fila que el hook tiene marcada. */
-export function ConfirmarBorrado({ c, children }: { c: CatalogsState; children?: ReactNode }) {
+export function ConfirmDelete({ c, children }: { c: CatalogsState; children?: ReactNode }) {
   return (
     <Modal
-      isOpen={Boolean(c.borrando)}
-      onClose={() => c.setBorrando(null)}
+      isOpen={Boolean(c.deleting)}
+      onClose={() => c.setDeleting(null)}
       title="Confirmar eliminación"
       subtitle="Esta acción no se puede deshacer"
       icon={<Trash2 className="h-5 w-5 text-rose-400" />}
@@ -107,14 +107,14 @@ export function ConfirmarBorrado({ c, children }: { c: CatalogsState; children?:
     >
       <div className="space-y-5">
         <p className="text-sm text-slate-300">
-          ¿Eliminar <strong className="text-white">{c.borrando?.name}</strong> del catálogo?
+          ¿Eliminar <strong className="text-white">{c.deleting?.name}</strong> del catálogo?
         </p>
         {children}
         <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => c.setBorrando(null)}>
+          <Button variant="outline" onClick={() => c.setDeleting(null)}>
             Cancelar
           </Button>
-          <Button variant="danger" isLoading={c.guardando} onClick={c.confirmarBorrado}>
+          <Button variant="danger" isLoading={c.saving} onClick={c.confirmDelete}>
             Eliminar
           </Button>
         </div>

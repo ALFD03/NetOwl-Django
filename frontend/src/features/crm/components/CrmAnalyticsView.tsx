@@ -12,13 +12,13 @@ import {
   ProgressBar,
 } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals, toNumber } from '@/shared/utils/formatters';
-import type { CrmDimensionValue, CrmHealthCard, CrmHistoricoRow, CrmRankingEntry } from '../types';
+import type { CrmDimensionValue, CrmHealthCard, CrmHistoryRow, CrmRankingEntry } from '../types';
 import { CrmAnalyticsCharts } from './analytics/CrmAnalyticsCharts';
 import { CrmAnalyticsTable } from './analytics/CrmAnalyticsTable';
 import { CrmStageTimeSection } from './analytics/CrmStageTimeSection';
 
 interface CrmAnalyticsViewProps {
-  globalData: CrmHistoricoRow;
+  globalData: CrmHistoryRow;
   rows: CrmDimensionValue[];
   healthCards: CrmHealthCard[];
   rankingCards: CrmRankingEntry[];
@@ -34,8 +34,8 @@ export function CrmAnalyticsView({
   selectedDimension,
   selectedPeriod,
 }: CrmAnalyticsViewProps) {
-  const num = (key: keyof CrmHistoricoRow) => toNumber(globalData[key] as number | undefined);
-  const pct = (key: keyof CrmHistoricoRow) => `${formatTwoDecimals(globalData[key] as number | undefined)}%`;
+  const num = (key: keyof CrmHistoryRow) => toNumber(globalData[key] as number | undefined);
+  const pct = (key: keyof CrmHistoryRow) => `${formatTwoDecimals(globalData[key] as number | undefined)}%`;
 
   return (
     <div className="space-y-6">
@@ -54,12 +54,12 @@ export function CrmAnalyticsView({
           theme="green"
           min={num('hours_min_inst')}
           p25={num('hours_p25_inst')}
-          mediana={num('hours_median_inst')}
-          promedio={num('hours_avg_inst')}
+          median={num('hours_median_inst')}
+          average={num('hours_avg_inst')}
           p75={num('hours_p75_inst')}
           max={num('hours_max_inst')}
           std={num('hours_std_inst')}
-          pctExcedeProm={num('pct_over_avg_inst')}
+          pctAboveAvg={num('pct_over_avg_inst')}
         />
         <EquidistantTimeline
           title="Distribución Tiempo para Pérdida"
@@ -67,12 +67,12 @@ export function CrmAnalyticsView({
           theme="red"
           min={num('hours_min_lost')}
           p25={num('hours_p25_lost')}
-          mediana={num('hours_median_lost')}
-          promedio={num('hours_avg_lost')}
+          median={num('hours_median_lost')}
+          average={num('hours_avg_lost')}
           p75={num('hours_p75_lost')}
           max={num('hours_max_lost')}
           std={num('hours_std_lost')}
-          pctExcedeProm={num('pct_over_avg_lost')}
+          pctAboveAvg={num('pct_over_avg_lost')}
         />
         <div className="lg:col-span-2">
           <EquidistantTimeline
@@ -82,12 +82,12 @@ export function CrmAnalyticsView({
             theme="purple"
             min={num('hours_min_close')}
             p25={num('hours_p25_close')}
-            mediana={num('hours_median_close')}
-            promedio={num('hours_avg_close')}
+            median={num('hours_median_close')}
+            average={num('hours_avg_close')}
             p75={num('hours_p75_close')}
             max={num('hours_max_close')}
             std={num('hours_std_close')}
-            pctExcedeProm={num('pct_over_avg_close')}
+            pctAboveAvg={num('pct_over_avg_close')}
           />
         </div>
       </div>

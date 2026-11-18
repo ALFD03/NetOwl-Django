@@ -10,9 +10,9 @@ import type { ManualSale } from '../types';
 interface ManualSalesPanelProps {
   manual_sales: ManualSale[];
   editable: boolean;
-  guardando: boolean;
-  onAgregar: (ordenes: string[], nota: string) => Promise<boolean>;
-  onQuitar: (orden: string) => void;
+  saving: boolean;
+  onAdd: (orders: string[], note: string) => Promise<boolean>;
+  onRemove: (order: string) => void;
 }
 
 /**
@@ -22,14 +22,14 @@ interface ManualSalesPanelProps {
  * orden tiene que estar en suscripciones; y no se puede agregar si ya se pagó
  * en otro periodo cerrado. La nota es obligatoria: queda con la venta.
  */
-export function ManualSalesPanel({ manual_sales, editable, guardando, onAgregar, onQuitar }: ManualSalesPanelProps) {
-  const [ordenes, setOrders] = useState('');
-  const [nota, setNote] = useState('');
-  const lista = ordenes.split(/[\s,;]+/).map((other) => other.trim()).filter(Boolean);
+export function ManualSalesPanel({ manual_sales, editable, saving, onAdd, onRemove }: ManualSalesPanelProps) {
+  const [orders, setOrders] = useState('');
+  const [note, setNote] = useState('');
+  const list = orders.split(/[\s,;]+/).map((other) => other.trim()).filter(Boolean);
 
-  const enviar = async (event: FormEvent) => {
+  const send = async (event: FormEvent) => {
     event.preventDefault();
-    if (await onAgregar(lista, nota.trim())) {
+    if (await onAdd(list, note.trim())) {
       setOrders('');
       setNote('');
     }
@@ -62,7 +62,7 @@ export function ManualSalesPanel({ manual_sales, editable, guardando, onAgregar,
       header: '',
       align: 'right',
       accessor: (row) => (editable ? (
-        <Button size="sm" variant="outline" icon={<Trash2 className="h-4 w-4" />} disabled={guardando} onClick={() => onQuitar(row.order)}>
+        <Button size="sm" variant="outline" icon={<Trash2 className="h-4 w-4" />} disabled={saving} onClick={() => onRemove(row.order)}>
           Quitar
         </Button>
       ) : null),
@@ -78,22 +78,22 @@ export function ManualSalesPanel({ manual_sales, editable, guardando, onAgregar,
           otro periodo cerrado.
         </p>
         {editable && (
-          <form onSubmit={(e) => void enviar(e)} className="grid gap-3 md:grid-cols-[1fr_1.5fr_auto] md:items-end">
+          <form onSubmit={(e) => void send(e)} className="grid gap-3 md:grid-cols-[1fr_1.5fr_auto] md:items-end">
             <TextField
               label="Órdenes"
               placeholder="SUB123456, SUB123457"
-              value={ordenes}
+              value={orders}
               onChange={(e) => setOrders(e.target.value)}
             />
             <TextField
               label="Por qué se agrega"
               placeholder="Obligatorio: queda con la venta"
-              value={nota}
+              value={note}
               maxLength={255}
               onChange={(e) => setNote(e.target.value)}
             />
-            <Button type="submit" icon={<Plus className="h-4 w-4" />} isLoading={guardando} disabled={!lista.length || !nota.trim()}>
-              Agregar{lista.length > 1 ? ` ${lista.length}` : ''}
+            <Button type="submit" icon={<Plus className="h-4 w-4" />} isLoading={saving} disabled={!list.length || !note.trim()}>
+              Agregar{list.length > 1 ? ` ${list.length}` : ''}
             </Button>
           </form>
         )}

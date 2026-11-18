@@ -9,7 +9,7 @@ Cada columna `diaN` es un JSON con el corte acumulado del mes hasta ese dia:
     {"global": {...}, "dimensiones": [{dimension, valor, metricas, efectividad}]}
 
 Es la misma forma que la vista recibe del historico (`get_crm_close_history`
-y `get_crm_dimensiones`), de modo que Analytics no distingue si esta mirando el
+y `get_crm_dimensions`), de modo que Analytics no distingue si esta mirando el
 cierre del mes o el corte de un dia: le llegan las mismas dos props.
 
 **El calculo recorre el mes reutilizando una sola carga.** Preparar la base de
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 FLUSH_EVERY_N_DAYS = 5
 
 
-def _payload_dia(pob: CrmPopulations) -> dict[str, Any]:
+def _day_payload(pop: CrmPopulations) -> dict[str, Any]:
     """El JSON de un dia: el cierre acumulado mas su desglose dimensional.
 
     `global` lleva ademas `periodo_reporte` para ser intercambiable con la fila
@@ -69,17 +69,17 @@ def _payload_dia(pob: CrmPopulations) -> dict[str, Any]:
     tiene cortes diarios.
     """
     return clean_json_props({
-        "global": {"periodo_reporte": pob.periodo, **pob.metricas()},
-        "dimensiones": build_crm_dimension_rows(pob),
+        "global": {"periodo_reporte": pop.period, **pop.metrics()},
+        "dimensiones": build_crm_dimension_rows(pop),
     })
 
 
 def build_crm_day_metrics(
     year_month: str,
     db: DBConnector | None = None,
-    datos: CrmData | None = None,
+    data: CrmData | None = None,
     until_day: int | None = None,
-    progreso: Callable[[int, int, str], None] | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """Calcula y guarda el corte de cada dia del mes.
 
@@ -90,55 +90,55 @@ def build_crm_day_metrics(
     alimenta la barra de la interfaz desde la tarea de Celery.
     """
     db = db or DBConnector()
-    datos = datos if datos is not None else prepare_data(db)
-    if datos.vacio:
+    data = data if data is not None else prepare_data(db)
+    if data.empty:
         return {"periodo_reporte": year_month, "dias_calculados": 0}
 
-    tope = last_day_to_compute(year_month, until_day)
+    cap = last_day_to_compute(year_month, until_day)
     # La clave de fila es el mes en `YYYY-MM`, la misma que usan el cierre y las
     # dimensiones de CRM. Suscripciones usa la etiqueta larga porque asi nacieron
     # sus tablas; mezclarlas aqui obligaria a traducir en cada lectura.
     label = year_month
-    pendientes: dict[str, Any] = {}
-    calculados = 0
+    pending: dict[str, Any] = {}
+    computed = 0
 
-    for dia in range(1, tope + 1):
-        pob = build_populations(datos, year_month, hasta=cutoff_date(year_month, dia))
+    for day in range(1, cap + 1):
+        pop = build_populations(data, year_month, until=cutoff_date(year_month, day))
         # Un dia sin nada creado todavia no deja columna: la barra lo pinta como
         # hueco en vez de como un corte de ceros, que se leeria como un dato.
-        if pob is not None:
-            pendientes[f"dia{dia}"] = _payload_dia(pob)
-            calculados += 1
-        print(f"  dia {dia:02d}/{tope} OK")
-        if progreso is not None:
-            progreso(dia, tope, f"Dia {dia} de {tope}")
+        if pop is not None:
+            pending[f"dia{day}"] = _day_payload(pop)
+            computed += 1
+        print(f"  dia {day:02d}/{cap} OK")
+        if progress is not None:
+            progress(day, cap, f"Dia {day} de {cap}")
 
         # Volcado parcial: el upsert solo toca los dias enviados, asi que si la
         # ejecucion se corta el trabajo ya hecho queda guardado.
-        if len(pendientes) >= FLUSH_EVERY_N_DAYS:
-            _save(db, label, pendientes)
-            print(f"  -> guardados {len(pendientes)} dias")
-            pendientes = {}
+        if len(pending) >= FLUSH_EVERY_N_DAYS:
+            _save(db, label, pending)
+            print(f"  -> guardados {len(pending)} dias")
+            pending = {}
 
-    if pendientes:
-        _save(db, label, pendientes)
+    if pending:
+        _save(db, label, pending)
 
-    print(f"\nMETRICAS DIARIAS DE CRM GUARDADAS | {label} | {calculados} dias")
-    return {"periodo_reporte": label, "dias_calculados": calculados}
+    print(f"\nMETRICAS DIARIAS DE CRM GUARDADAS | {label} | {computed} dias")
+    return {"periodo_reporte": label, "dias_calculados": computed}
 
 
-def _save(db: DBConnector, label: str, dias: dict[str, Any]) -> None:
+def _save(db: DBConnector, label: str, days: dict[str, Any]) -> None:
     """Vuelca los dias pendientes a `crm_day_metrics`."""
-    save_days(db, DAY_METRICS, label, dias)
+    save_days(db, DAY_METRICS, label, days)
 
 
-def get_crm_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
+def get_crm_day_payload(year_month: str, day: int) -> dict[str, Any] | None:
     """El corte completo de un dia: `{global, dimensiones}`, o None si no esta.
 
     Es lo pesado —el bloque de cada vendedor, sucursal y campana— y por eso se
     pide de uno en uno. Los dias que hay calculados los dice `get_crm_day_series`.
     """
-    return read_day(TableNames.CRM_DAY_METRICS, year_month, dia, key=year_month)
+    return read_day(TableNames.CRM_DAY_METRICS, year_month, day, key=year_month)
 
 
 def get_crm_day_series(year_month: str) -> dict[str, Any]:

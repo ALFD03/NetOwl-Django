@@ -14,87 +14,87 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 
-export type PreferenciaTema = 'sistema' | 'claro' | 'oscuro';
-export type Tema = 'claro' | 'oscuro';
+export type ThemePreference = 'system' | 'light' | 'dark';
+export type Theme = 'light' | 'dark';
 
 const THEME_KEY = 'netowl-tema';
 /** La versión anterior escribía `dark` aquí sin que nadie lo eligiera; no vale como elección. */
 const LEGACY_KEY = 'netowl-theme';
-const CONSULTA_CLARO = '(prefers-color-scheme: light)';
+const LIGHT_QUERY = '(prefers-color-scheme: light)';
 
-function readPreference(): PreferenciaTema {
+function readPreference(): ThemePreference {
   try {
     localStorage.removeItem(LEGACY_KEY);
-    const guardada = localStorage.getItem(THEME_KEY);
-    if (guardada === 'claro' || guardada === 'oscuro') return guardada;
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
   } catch {
     // Sin almacenamiento (modo privado) se sigue al sistema.
   }
-  return 'sistema';
+  return 'system';
 }
 
-function useSistemaClaro(): boolean {
+function useSystemLight(): boolean {
   return useSyncExternalStore(
-    (avisar) => {
-      const mql = window.matchMedia(CONSULTA_CLARO);
-      mql.addEventListener('change', avisar);
-      return () => mql.removeEventListener('change', avisar);
+    (notify) => {
+      const mql = window.matchMedia(LIGHT_QUERY);
+      mql.addEventListener('change', notify);
+      return () => mql.removeEventListener('change', notify);
     },
-    () => window.matchMedia(CONSULTA_CLARO).matches,
+    () => window.matchMedia(LIGHT_QUERY).matches,
     () => false,
   );
 }
 
 interface ThemeContextValue {
-  /** Lo que eligió el usuario, `sistema` incluido. */
-  preferencia: PreferenciaTema;
+  /** Lo que eligió el usuario, `system` incluido. */
+  preference: ThemePreference;
   /** El tema que se ve: la preferencia ya resuelta contra el sistema. */
-  tema: Tema;
-  setPreferencia: (preferencia: PreferenciaTema) => void;
+  theme: Theme;
+  setPreference: (preference: ThemePreference) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preferencia, setPreferenciaState] = useState(readPreference);
-  const sistemaClaro = useSistemaClaro();
-  const tema: Tema = preferencia === 'sistema' ? (sistemaClaro ? 'claro' : 'oscuro') : preferencia;
+  const [preference, setPreferenceState] = useState(readPreference);
+  const systemLight = useSystemLight();
+  const theme: Theme = preference === 'system' ? (systemLight ? 'light' : 'dark') : preference;
 
   // Antes de pintar, para que el cambio no muestre un cuadro a medio tema.
   useLayoutEffect(() => {
-    const clases = document.documentElement.classList;
-    clases.toggle('light', tema === 'claro');
-    clases.toggle('dark', tema === 'oscuro');
-  }, [tema]);
+    const classes = document.documentElement.classList;
+    classes.toggle('light', theme === 'light');
+    classes.toggle('dark', theme === 'dark');
+  }, [theme]);
 
   // Otra pestaña cambió el tema: se sigue, para no tener dos pestañas distintas.
   useEffect(() => {
-    const onChangeValue = (evento: StorageEvent) => {
-      if (evento.key === THEME_KEY || evento.key === null) setPreferenciaState(readPreference());
+    const onChangeValue = (event: StorageEvent) => {
+      if (event.key === THEME_KEY || event.key === null) setPreferenceState(readPreference());
     };
     window.addEventListener('storage', onChangeValue);
     return () => window.removeEventListener('storage', onChangeValue);
   }, []);
 
-  const setPreferencia = useCallback((nueva: PreferenciaTema) => {
-    setPreferenciaState(nueva);
+  const setPreference = useCallback((next: ThemePreference) => {
+    setPreferenceState(next);
     try {
-      if (nueva === 'sistema') localStorage.removeItem(THEME_KEY);
-      else localStorage.setItem(THEME_KEY, nueva);
+      if (next === 'system') localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, next);
     } catch {
       // Sin almacenamiento el tema cambia igual, solo que no se recuerda.
     }
   }, []);
 
-  const valor = useMemo(() => ({ preferencia, tema, setPreferencia }), [preferencia, tema, setPreferencia]);
+  const value = useMemo(() => ({ preference, theme, setPreference }), [preference, theme, setPreference]);
 
-  return <ThemeContext.Provider value={valor}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeContextValue {
-  const contexto = useContext(ThemeContext);
-  if (!contexto) {
+  const context = useContext(ThemeContext);
+  if (!context) {
     throw new Error('useTheme debe usarse dentro de un ThemeProvider');
   }
-  return contexto;
+  return context;
 }

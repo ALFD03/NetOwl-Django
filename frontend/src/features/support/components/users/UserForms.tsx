@@ -30,14 +30,14 @@ function addDays(iso: string, n: number): string {
  * departamento o, si no tiene, su ingreso. Un cambio nuevo o una baja no
  * pueden caer antes; es la misma regla que aplica el modelo.
  */
-function lastBusyDate(usuario: SupportUser): string | undefined {
-  const dates = [usuario.start_date, ...usuario.timeline.map((p) => p.since)].filter(
+function lastBusyDate(user: SupportUser): string | undefined {
+  const dates = [user.start_date, ...user.timeline.map((p) => p.since)].filter(
     (f): f is string => Boolean(f),
   );
   return dates.sort().at(-1);
 }
 
-interface Acciones {
+interface Actions {
   saving: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent) => void;
@@ -50,7 +50,7 @@ function Pie({
   submitLabel,
   variant,
   disabled,
-}: Omit<Acciones, 'onSubmit'> & { submitLabel: string; variant?: 'primary' | 'danger'; disabled?: boolean }) {
+}: Omit<Actions, 'onSubmit'> & { submitLabel: string; variant?: 'primary' | 'danger'; disabled?: boolean }) {
   return (
     <div className="flex justify-end gap-3 border-t border-slate-800 pt-4">
       <Button type="button" variant="outline" onClick={onClose}>
@@ -71,7 +71,7 @@ export function UserForm({
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
+}: Actions & {
   value: UserDraft;
   departments: SupportDepartment[];
   suffix: string;
@@ -168,7 +168,7 @@ export function DepartmentForm({
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
+}: Actions & {
   value: DepartmentDraft;
   onChange: (patch: Partial<DepartmentDraft>) => void;
 }) {
@@ -202,35 +202,35 @@ export function DepartmentChangeForm({
   onSubmit,
   onClose,
   onUndo,
-}: Acciones & {
+}: Actions & {
   value: ChangeDraft;
   departments: SupportDepartment[];
   onChange: (patch: Partial<ChangeDraft>) => void;
   onUndo: () => void;
 }) {
   const { user } = value;
-  const ocupada = lastBusyDate(user);
-  const opciones = departments.filter((d) => d.id !== user.department_id);
-  const ultimo = user.timeline.length - 1;
+  const busy = lastBusyDate(user);
+  const options = departments.filter((d) => d.id !== user.department_id);
+  const last = user.timeline.length - 1;
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div className="space-y-2">
         <label className="text-[10px] font-bold uppercase text-slate-400">Historial</label>
         <ol className="space-y-2">
-          {user.timeline.map((paso, i) => (
+          {user.timeline.map((step, i) => (
             <li
-              key={paso.id}
+              key={step.id}
               className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-surface-tertiary/50 px-3 py-2 text-xs"
             >
               <span className="text-slate-300">
-                <strong className="text-white">{paso.department}</strong>
+                <strong className="text-white">{step.department}</strong>
                 <span className="ml-2 text-slate-500">
-                  desde {paso.since ? shortDate(paso.since) : `el ingreso (${shortDate(user.start_date)})`}
+                  desde {step.since ? shortDate(step.since) : `el ingreso (${shortDate(user.start_date)})`}
                 </span>
-                {i === ultimo && <span className="ml-2 text-emerald-400">· vigente</span>}
+                {i === last && <span className="ml-2 text-emerald-400">· vigente</span>}
               </span>
-              {i === ultimo && i > 0 && (
+              {i === last && i > 0 && (
                 <button
                   type="button"
                   onClick={onUndo}
@@ -251,10 +251,10 @@ export function DepartmentChangeForm({
           <label className="text-[10px] font-bold uppercase text-slate-400">Nuevo departamento</label>
           <SelectMenu
             value={value.department_id ? String(value.department_id) : ''}
-            options={opciones.map((d) => ({ value: String(d.id), label: d.name }))}
+            options={options.map((d) => ({ value: String(d.id), label: d.name }))}
             onChange={(v) => onChange({ department_id: v ? Number(v) : null })}
-            placeholder={opciones.length ? 'Seleccionar...' : 'No hay otro departamento'}
-            disabled={opciones.length === 0}
+            placeholder={options.length ? 'Seleccionar...' : 'No hay otro departamento'}
+            disabled={options.length === 0}
             aria-label="Nuevo departamento"
           />
         </div>
@@ -262,7 +262,7 @@ export function DepartmentChangeForm({
           label="Fecha del cambio (ascenso)"
           value={value.date}
           onChange={(date) => onChange({ date })}
-          min={ocupada ? addDays(ocupada, 1) : undefined}
+          min={busy ? addDays(busy, 1) : undefined}
         />
       </div>
       <p className="-mt-3 text-[10px] leading-tight text-slate-500">
@@ -298,7 +298,7 @@ export function DeactivateForm({
   onChange,
   onSubmit,
   onClose,
-}: Acciones & {
+}: Actions & {
   value: DeactivateDraft;
   onChange: (patch: Partial<DeactivateDraft>) => void;
 }) {

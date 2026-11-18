@@ -7,7 +7,7 @@ import { MetricCard } from '@/shared/ui';
 import type { Period } from '@/shared/types/domain';
 import { useTargets } from '../../hooks/useTargets';
 import {
-  periodCompliance, formatTarget, tonoChurn, tonoCrecimiento, complianceTone,
+  periodCompliance, formatTarget, churnTone, growthTone, complianceTone,
 } from '../../lib/targets';
 
 interface Props {
@@ -21,27 +21,27 @@ interface Props {
 }
 
 export function AnalyticsMetrics({ data, period }: Props) {
-  const objetivos = useTargets();
-  const objetivo = objetivos.general(period);
-  const { thresholds } = objetivos;
+  const targets = useTargets();
+  const target = targets.general(period);
+  const { thresholds } = targets;
   const {
-    metaIngresos, salesGoal: metaVentas, closeGoal: metaCierre, revenueCompliance: cumplimientoIngresos, salesCompliance: cumplimientoVentas, closeCompliance: cumplimientoCierre,
-  } = periodCompliance(data, objetivo);
+    inflowsGoal, salesGoal, closeGoal, revenueCompliance: inflowsCompliance, salesCompliance, closeCompliance,
+  } = periodCompliance(data, target);
 
-  const tonoIngresos = complianceTone(cumplimientoIngresos, thresholds);
-  const salesTone = complianceTone(cumplimientoVentas, thresholds);
-  const closeTone = complianceTone(cumplimientoCierre, thresholds);
-  const base = `Meta basada en el ${formatTarget(objetivo.growth)}`;
+  const inflowsTone = complianceTone(inflowsCompliance, thresholds);
+  const salesTone = complianceTone(salesCompliance, thresholds);
+  const closeTone = complianceTone(closeCompliance, thresholds);
+  const base = `Meta basada en el ${formatTarget(target.growth)}`;
 
   return (
     <div className="space-y-8 mb-10">
       <MetricGroup title="Grupo Pérdida" icon={<TrendingDown className="w-4 h-4" />} tone="text-rose-400" columns='md:grid-cols-2 lg:grid-cols-5'>
-        <MetricCard label="Churn Neto" value={`${(data.net_churn_pct || 0).toFixed(2)} %`} color={tonoChurn(data.net_churn_pct || 0, thresholds)} />
+        <MetricCard label="Churn Neto" value={`${(data.net_churn_pct || 0).toFixed(2)} %`} color={churnTone(data.net_churn_pct || 0, thresholds)} />
         <MetricCard
           label="Churn Bruto"
           value={`${(data.gross_churn_pct || 0).toFixed(2)} %`}
-          subValue={`Objetivo ${formatTarget(objetivo.churn)}`}
-          color={tonoChurn(data.gross_churn_pct || 0, thresholds)}
+          subValue={`Objetivo ${formatTarget(target.churn)}`}
+          color={churnTone(data.gross_churn_pct || 0, thresholds)}
         />
         <MetricCard label="Bajas" value={`${(data.churned || 0)}`} color="red" />
         <MetricCard label="Corte Impago" value={data.unpaid_cuts || 0} color="yellow" />
@@ -55,18 +55,18 @@ export function AnalyticsMetrics({ data, period }: Props) {
         <MetricCard
           label="Crecimiento"
           value={`${(data.growth || 0).toFixed(2)} %`}
-          subValue={`Objetivo ${formatTarget(objetivo.growth)}`}
-          color={tonoCrecimiento(data.growth || 0, thresholds)}
+          subValue={`Objetivo ${formatTarget(target.growth)}`}
+          color={growthTone(data.growth || 0, thresholds)}
         />
       </MetricGroup>
 
       <MetricGroup title="Grupo de Objetivos" icon={<Target className="w-4 h-4" />} tone="text-amber-400" columns='md:grid-cols-3'>
-        <MetricCard label="Meta Ingresos" subValue={base} icon={<UserPlus className="w-4 h-4" color={tonoIngresos} />} value={metaIngresos.toFixed(0)} color={tonoIngresos} />
-        <MetricCard label="Meta Ventas" subValue={base} icon={<Landmark className="w-4 h-4" color={salesTone} />} value={metaVentas.toFixed(0)} color={salesTone} />
-        <MetricCard label="Meta Cierre" subValue={base} icon={<Scale className="w-4 h-4" color={closeTone} />} value={metaCierre.toFixed(0)} color={closeTone} />
-        <MetricCard label="Cumplimiento Ingresos" subValue={base} icon={<UserPlus className="w-4 h-4" color={tonoIngresos} />} value={`${cumplimientoIngresos.toFixed(2)} %`} color={tonoIngresos} />
-        <MetricCard label="Cumplimiento Ventas" subValue={base} icon={<Landmark className="w-4 h-4" color={salesTone} />} value={`${cumplimientoVentas.toFixed(2)} %`} color={salesTone} />
-        <MetricCard label="Cumplimiento Cierre" subValue={base} icon={<Scale className="w-4 h-4" color={closeTone} />} value={`${cumplimientoCierre.toFixed(2)} %`} color={closeTone} />
+        <MetricCard label="Meta Ingresos" subValue={base} icon={<UserPlus className="w-4 h-4" color={inflowsTone} />} value={inflowsGoal.toFixed(0)} color={inflowsTone} />
+        <MetricCard label="Meta Ventas" subValue={base} icon={<Landmark className="w-4 h-4" color={salesTone} />} value={salesGoal.toFixed(0)} color={salesTone} />
+        <MetricCard label="Meta Cierre" subValue={base} icon={<Scale className="w-4 h-4" color={closeTone} />} value={closeGoal.toFixed(0)} color={closeTone} />
+        <MetricCard label="Cumplimiento Ingresos" subValue={base} icon={<UserPlus className="w-4 h-4" color={inflowsTone} />} value={`${inflowsCompliance.toFixed(2)} %`} color={inflowsTone} />
+        <MetricCard label="Cumplimiento Ventas" subValue={base} icon={<Landmark className="w-4 h-4" color={salesTone} />} value={`${salesCompliance.toFixed(2)} %`} color={salesTone} />
+        <MetricCard label="Cumplimiento Cierre" subValue={base} icon={<Scale className="w-4 h-4" color={closeTone} />} value={`${closeCompliance.toFixed(2)} %`} color={closeTone} />
       </MetricGroup>
 
       <MetricGroup title="Grupo Retención" icon={<RefreshCw className="w-4 h-4" />} tone="text-blue-400" columns='md:grid-cols-2 lg:grid-cols-3'>

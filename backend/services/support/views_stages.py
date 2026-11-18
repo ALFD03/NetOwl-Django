@@ -11,20 +11,20 @@ from services.config.api import ApiError, endpoint, json_body
 from services.support.analytics.config import CANCELED_STAGES, ESCALATION_STAGE, RESOLVED_STAGES
 from services.support.analytics.flow import stage_usage, stages_to_classify
 from services.support.api_keys import SUPPORT_KEYS
-from services.support.models import EtapaSoporte
+from services.support.models import SupportStage
 
-TEAMS = dict(EtapaSoporte.EQUIPOS)
-KINDS = dict(EtapaSoporte.TIPOS)
+TEAMS = dict(SupportStage.TEAMS)
+KINDS = dict(SupportStage.KINDS)
 
 
-def _row(stage: EtapaSoporte, usage: dict[str, int]) -> dict:
+def _row(stage: SupportStage, usage: dict[str, int]) -> dict:
     return {
         "id": stage.pk,
-        "nombre": stage.nombre,
-        "equipo": stage.equipo,
-        "tipo": stage.tipo,
-        "logs": usage.get(stage.nombre.lower(), 0),
-        "es_escalamiento": stage.nombre.lower() == ESCALATION_STAGE.lower(),
+        "nombre": stage.name,
+        "equipo": stage.team,
+        "tipo": stage.kind,
+        "logs": usage.get(stage.name.lower(), 0),
+        "es_escalamiento": stage.name.lower() == ESCALATION_STAGE.lower(),
     }
 
 
@@ -33,10 +33,10 @@ def stages(request):
     """El catálogo, lo que falta clasificar y las reglas fijas."""
     usage = stage_usage()
     return {
-        "etapas": [_row(s, usage) for s in EtapaSoporte.objects.all()],
+        "etapas": [_row(s, usage) for s in SupportStage.objects.all()],
         "pendientes": stages_to_classify(),
-        "equipos": [{"value": k, "label": v} for k, v in EtapaSoporte.EQUIPOS],
-        "tipos": [{"value": k, "label": v} for k, v in EtapaSoporte.TIPOS],
+        "equipos": [{"value": k, "label": v} for k, v in SupportStage.TEAMS],
+        "tipos": [{"value": k, "label": v} for k, v in SupportStage.KINDS],
         "etapaEscalamiento": ESCALATION_STAGE,
         "etapasCierre": sorted({"Resuelto", "Cancelado"}),
         "nuevaEtapa": str(request.GET.get("new_stage") or "")[:200],
@@ -58,12 +58,12 @@ def stage_save(request):
         raise ApiError("Equipo o tipo no válidos.")
 
     if data.get("id"):
-        stage = EtapaSoporte.objects.filter(pk=data.get("id")).first()
+        stage = SupportStage.objects.filter(pk=data.get("id")).first()
         if stage is None:
             raise ApiError("La etapa ya no existe.", 404)
     else:
-        stage = EtapaSoporte()
-    stage.nombre, stage.equipo, stage.tipo = name, team, kind
+        stage = SupportStage()
+    stage.name, stage.team, stage.kind = name, team, kind
     try:
         stage.save()
     except IntegrityError as exc:
@@ -74,5 +74,5 @@ def stage_save(request):
 @endpoint(methods=["POST"], perms=["can_manage_support_users"], rate="60/m")
 def stage_delete(request):
     """Baja de una etapa: sus tramos pasan a «sin clasificar» en el siguiente análisis."""
-    EtapaSoporte.objects.filter(pk=json_body(request).get("id")).delete()
+    SupportStage.objects.filter(pk=json_body(request).get("id")).delete()
     return {"status": "success", "message": "Etapa eliminada."}
