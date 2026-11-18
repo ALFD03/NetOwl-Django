@@ -4,7 +4,7 @@ Dos formas de responder la misma pregunta:
 
 * `get_state_at` es la **definicion de referencia**: filtra el historico entero
   y reagrupa por orden. Correcta y facil de leer, pero cara.
-* `EstadoAcumulado` da el mismo resultado recorriendo el log **una sola vez**,
+* `AccumulatedState` da el mismo resultado recorriendo el log **una sola vez**,
   que es lo que hace viable calcular los 31 cortes de un mes.
 
 Aqui viven tambien las dos definiciones de evento del periodo: que cuenta como
@@ -16,10 +16,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from core.config import ACTIVE_STATE, CORTE_IMPAGADO_EVENT, FREE_STATE, VALID_REACT_ORIGINS
+from core.config import ACTIVE_STATE, FREE_STATE, UNPAID_CUT_EVENT, VALID_REACT_ORIGINS
 
 
-def last_log_per_orden(df_logs):
+def last_log_per_order(df_logs):
     """
     Ultimo log de cada suscripcion.
 
@@ -34,11 +34,11 @@ def last_log_per_orden(df_logs):
     return df_logs.groupby("orden", sort=False).tail(1)
 
 
-def get_state_at(df_clean_logs, target_date, estado, strictly_before=False):
+def get_state_at(df_clean_logs, target_date, state, strictly_before=False):
     """Suscripciones cuyo último log hasta la fecha las deja en `estado`.
 
     Definicion de referencia, para una fecha suelta. El analisis mensual no la
-    usa: recorre muchas fechas y va por `EstadoAcumulado`, que da el mismo
+    usa: recorre muchas fechas y va por `AccumulatedState`, que da el mismo
     resultado en una sola pasada.
     """
     if strictly_before:
@@ -47,8 +47,8 @@ def get_state_at(df_clean_logs, target_date, estado, strictly_before=False):
         filt = df_clean_logs[df_clean_logs["f_dt"] <= target_date]
     if filt.empty:
         return pd.DataFrame(columns=["orden"])
-    last_logs = last_log_per_orden(filt)
-    return last_logs[last_logs["estado"] == estado].copy()
+    last_logs = last_log_per_order(filt)
+    return last_logs[last_logs["estado"] == state].copy()
 
 
 def get_active_at(df_clean_logs, target_date, strictly_before=False):
@@ -61,7 +61,7 @@ def get_free_at(df_clean_logs, target_date, strictly_before=False):
     return get_state_at(df_clean_logs, target_date, FREE_STATE, strictly_before)
 
 
-class EstadoAcumulado:
+class AccumulatedState:
     """Estado de cada suscripcion a una fecha, recorriendo el log una sola vez.
 
     `get_state_at` responde una fecha filtrando el historico entero y
@@ -74,7 +74,7 @@ class EstadoAcumulado:
     justo como avanza `build_day_metrics`- cada fila se toca una sola vez.
 
     El resultado es identico al de `get_state_at`, no una aproximacion. La razon
-    es la invariante que ya sostenia a `last_log_per_orden`: el frame llega
+    es la invariante que ya sostenia a `last_log_per_order`: el frame llega
     ordenado por ["orden", "f_dt"], asi que dentro de una suscripcion la
     posicion crece con la fecha y "el ultimo log hasta la fecha" es siempre "la
     posicion mas alta de esa orden entre las filas que ya entraron". Los
@@ -85,68 +85,68 @@ class EstadoAcumulado:
 
     def __init__(self, df_logs: pd.DataFrame):
         self.df = df_logs
-        self.vacio = df_logs.empty
-        if self.vacio:
+        self.empty = df_logs.empty
+        if self.empty:
             return
 
-        fechas = df_logs["f_dt"].to_numpy()
+        dates = df_logs["f_dt"].to_numpy()
         # Recorrido por fecha. `stable` es lo que conserva el orden del frame
         # entre filas de la misma fecha, y con el, el desempate historico.
-        self._visita = np.argsort(fechas, kind="stable")
-        self._fechas_visita = fechas[self._visita]
-        self._codigos = pd.factorize(df_logs["orden"], sort=False)[0]
-        self._n_ordenes = int(self._codigos.max()) + 1
-        self._estados = df_logs["estado"].to_numpy()
-        self._reiniciar()
+        self._visit = np.argsort(dates, kind="stable")
+        self._visit_dates = dates[self._visit]
+        self._codes = pd.factorize(df_logs["orden"], sort=False)[0]
+        self._n_orders = int(self._codes.max()) + 1
+        self._states = df_logs["estado"].to_numpy()
+        self._reset()
 
-    def _reiniciar(self) -> None:
+    def _reset(self) -> None:
         """Vuelve al principio del recorrido, olvidando lo acumulado."""
         self._cursor = 0
-        self._ultima_fila = np.full(self._n_ordenes, -1, dtype=np.int64)
+        self._last_row = np.full(self._n_orders, -1, dtype=np.int64)
 
-    def _avanzar(self, corte: int) -> None:
+    def _advance(self, cutoff: int) -> None:
         """Incorpora las filas hasta `corte` (indice en el recorrido por fecha)."""
-        if corte < self._cursor:
+        if cutoff < self._cursor:
             # Retroceso: pasa una vez por ejecucion, cuando el cierre del mes se
             # calcula antes que los dias. Rehacerlo desde cero sigue siendo una
             # pasada, frente a las 62 de antes.
-            self._reiniciar()
-        if corte == self._cursor:
+            self._reset()
+        if cutoff == self._cursor:
             return
 
-        tramo = self._visita[self._cursor:corte]
-        maximos = pd.Series(tramo).groupby(self._codigos[tramo]).max()
-        indices = maximos.index.to_numpy()
-        self._ultima_fila[indices] = np.maximum(
-            self._ultima_fila[indices], maximos.to_numpy()
+        tier = self._visit[self._cursor:cutoff]
+        maxima = pd.Series(tier).groupby(self._codes[tier]).max()
+        indexes = maxima.index.to_numpy()
+        self._last_row[indexes] = np.maximum(
+            self._last_row[indexes], maxima.to_numpy()
         )
-        self._cursor = corte
+        self._cursor = cutoff
 
-    def _filas_vigentes(self, target_date, strictly_before: bool) -> np.ndarray:
+    def _current_rows(self, target_date, strictly_before: bool) -> np.ndarray:
         """Indices del ultimo log de cada suscripcion hasta la fecha indicada."""
         # side='left' cuenta las filas estrictamente anteriores; 'right', las
         # que llegan hasta la fecha incluida.
-        corte = int(np.searchsorted(
-            self._fechas_visita,
+        cutoff = int(np.searchsorted(
+            self._visit_dates,
             np.datetime64(target_date),
             side="left" if strictly_before else "right",
         ))
-        self._avanzar(corte)
-        return self._ultima_fila[self._ultima_fila >= 0]
+        self._advance(cutoff)
+        return self._last_row[self._last_row >= 0]
 
-    def ultimos(self, target_date, strictly_before: bool = False) -> pd.DataFrame:
+    def latest(self, target_date, strictly_before: bool = False) -> pd.DataFrame:
         """Ultimo log de cada suscripcion hasta la fecha, sea cual sea su estado."""
-        if self.vacio:
+        if self.empty:
             return self.df
-        return self.df.take(np.sort(self._filas_vigentes(target_date, strictly_before)))
+        return self.df.take(np.sort(self._current_rows(target_date, strictly_before)))
 
-    def en_estado(self, target_date, estado, strictly_before: bool = False) -> pd.DataFrame:
+    def in_state(self, target_date, state, strictly_before: bool = False) -> pd.DataFrame:
         """Suscripciones cuyo ultimo log hasta la fecha las deja en `estado`."""
-        if self.vacio:
+        if self.empty:
             return self.df
-        filas = self._filas_vigentes(target_date, strictly_before)
-        filas = filas[self._estados[filas] == estado]
-        return self.df.take(np.sort(filas)).copy()
+        rows = self._current_rows(target_date, strictly_before)
+        rows = rows[self._states[rows] == state]
+        return self.df.take(np.sort(rows)).copy()
 
 
 def react_candidates(df_clean_logs):
@@ -163,16 +163,16 @@ def react_candidates(df_clean_logs):
     return df_clean_logs[mask_react_text | mask_react_state].copy()
 
 
-def corte_candidates(df_clean_logs):
+def cut_candidates(df_clean_logs):
     """Logs de corte por impago, sin filtrar por fecha (igual que arriba)."""
-    df_corte = df_clean_logs[
-        df_clean_logs["log_norm"].str.contains(CORTE_IMPAGADO_EVENT, na=False)
+    df_cutoff = df_clean_logs[
+        df_clean_logs["log_norm"].str.contains(UNPAID_CUT_EVENT, na=False)
     ].copy()
-    df_corte = df_corte.assign(f_min=df_corte["f_dt"].dt.floor("min"))
-    return df_corte.drop_duplicates(subset=["orden", "f_min"])
+    df_cutoff = df_cutoff.assign(f_min=df_cutoff["f_dt"].dt.floor("min"))
+    return df_cutoff.drop_duplicates(subset=["orden", "f_min"])
 
 
-def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin, candidates=None):
+def get_reactivations(df_clean_logs, df_subs_full, period, act_end, candidates=None):
     """Reactivaciones del periodo, una por suscripcion.
 
     Cuenta como reactivacion volver a activo desde un estado inactivo, o un log
@@ -182,8 +182,8 @@ def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin, candidates=
     """
     df_react = react_candidates(df_clean_logs) if candidates is None else candidates
     df_react = df_react[
-        (df_react["f_dt"] >= periodo.fecha_inicio)
-        & (df_react["f_dt"] <= periodo.fecha_final)
+        (df_react["f_dt"] >= period.start_date)
+        & (df_react["f_dt"] <= period.end_date)
     ]
     priority_map = {"6_churn": 0, "8_30days": 1, "4_paused": 2}
     df_react = df_react.assign(
@@ -198,24 +198,24 @@ def get_reactivations(df_clean_logs, df_subs_full, periodo, act_fin, candidates=
     df_react = df_react[["orden", "f_dt", "estado_origen"]].rename(
         columns={"f_dt": "fecha"}
     )
-    nuevas = df_subs_full[
-        (df_subs_full["f_ini_dt"] >= periodo.fecha_inicio)
-        & (df_subs_full["f_ini_dt"] <= periodo.fecha_final)
+    new = df_subs_full[
+        (df_subs_full["f_ini_dt"] >= period.start_date)
+        & (df_subs_full["f_ini_dt"] <= period.end_date)
     ]
-    if not nuevas.empty:
-        df_react = df_react[~df_react["orden"].isin(nuevas["orden"])]
+    if not new.empty:
+        df_react = df_react[~df_react["orden"].isin(new["orden"])]
     if not df_react.empty:
-        df_react = df_react[df_react["orden"].isin(act_fin["orden"])]
+        df_react = df_react[df_react["orden"].isin(act_end["orden"])]
     return df_react
 
 
-def get_corte_impagado(df_clean_logs, periodo, candidates=None):
+def get_unpaid_cuts(df_clean_logs, period, candidates=None):
     """Cortes por factura impaga ocurridos dentro del periodo."""
-    df_corte = corte_candidates(df_clean_logs) if candidates is None else candidates
-    df_corte = df_corte[
-        (df_corte["f_dt"] >= periodo.fecha_inicio)
-        & (df_corte["f_dt"] <= periodo.fecha_final)
+    df_cutoff = cut_candidates(df_clean_logs) if candidates is None else candidates
+    df_cutoff = df_cutoff[
+        (df_cutoff["f_dt"] >= period.start_date)
+        & (df_cutoff["f_dt"] <= period.end_date)
     ]
-    return df_corte[["orden", "f_dt", "nota"]].rename(
+    return df_cutoff[["orden", "f_dt", "nota"]].rename(
         columns={"f_dt": "fecha_corte", "nota": "motivo_corte"}
     )

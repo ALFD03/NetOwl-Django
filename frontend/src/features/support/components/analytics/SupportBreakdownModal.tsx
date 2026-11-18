@@ -6,12 +6,12 @@ import { AlertOctagon, Layers, Loader2, Wrench } from 'lucide-react';
 import { DataTable, EmptyState, ExcelExportButton, MetricCard, Modal, StatusMessage, ToggleGroup } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils';
 import { SUPPORT_DIMENSION_EXCEL_COLUMNS, supportExportFileName } from '../../lib/supportExport';
-import { SUPPORT_DESGLOSE_LABELS, SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';
-import { SUPPORT_DESGLOSES, type SupportDesglose, type SupportDimension } from '../../types';
+import { SUPPORT_BREAKDOWN_LABELS, SUPPORT_DIMENSION_LABELS } from '../../lib/supportMetrics';
+import { SUPPORT_BREAKDOWNS, type SupportBreakdown, type SupportDimension } from '../../types';
 import type { SupportBreakdownState } from '../../hooks/useSupportAnalytics';
 import { SUPPORT_DIMENSION_COLUMNS } from './supportColumns';
 
-const TAB_ICONS: Record<SupportDesglose, JSX.Element> = {
+const TAB_ICONS: Record<SupportBreakdown, JSX.Element> = {
   tipo_solicitud: <Layers className="h-4 w-4" />,
   razon_falla: <AlertOctagon className="h-4 w-4" />,
   solucion_falla: <Wrench className="h-4 w-4" />,
@@ -22,7 +22,7 @@ interface Props {
   breakdown: SupportBreakdownState;
   /** Sólo para nombrar el archivo exportado. */
   groupName: string;
-  periodo: string;
+  period: string;
   onClose: () => void;
 }
 
@@ -34,18 +34,18 @@ interface Props {
  * solutions is far too large to persist or to ship up front, and it is only
  * ever read one cell at a time.
  */
-export function SupportBreakdownModal({ dimension, breakdown, groupName, periodo, onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<SupportDesglose>('razon_falla');
+export function SupportBreakdownModal({ dimension, breakdown, groupName, period, onClose }: Props) {
+  const [activeTab, setActiveTab] = useState<SupportBreakdown>('razon_falla');
 
-  const { valor, loading, error, stats, desgloses } = breakdown;
-  const rows = desgloses[activeTab];
+  const { value, loading, error, stats, breakdowns } = breakdown;
+  const rows = breakdowns[activeTab];
 
   return (
     <Modal
-      isOpen={valor !== null}
+      isOpen={value !== null}
       onClose={onClose}
-      title={valor ?? ''}
-      subtitle={`${SUPPORT_DIMENSION_LABELS[dimension]} · desglose por ${SUPPORT_DESGLOSE_LABELS[activeTab].toLowerCase()}`}
+      title={value ?? ''}
+      subtitle={`${SUPPORT_DIMENSION_LABELS[dimension]} · desglose por ${SUPPORT_BREAKDOWN_LABELS[activeTab].toLowerCase()}`}
       theme="purple"
       icon={TAB_ICONS[activeTab]}
       size="wide"
@@ -60,26 +60,26 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, periodo
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-            <MetricCard label="Creados" value={formatInteger(stats.tickets_creados)} color="slate" />
-            <MetricCard label="Cerrados" value={formatInteger(stats.tickets_cerrados)} color="purple" />
-            <MetricCard label="% Resueltos" value={`${formatTwoDecimals(stats.pct_resueltos)}%`} caption="de los cerrados" color="green" />
-            {stats.tickets_escalados > 0 && (
-              <MetricCard label="% Escalados" value={`${formatTwoDecimals(stats.pct_escalados)}%`} caption="de los cerrados, a Soporte" color="yellow" />
+            <MetricCard label="Creados" value={formatInteger(stats.tickets_created)} color="slate" />
+            <MetricCard label="Cerrados" value={formatInteger(stats.tickets_closed)} color="purple" />
+            <MetricCard label="% Resueltos" value={`${formatTwoDecimals(stats.pct_resolved)}%`} caption="de los cerrados" color="green" />
+            {stats.tickets_escalated > 0 && (
+              <MetricCard label="% Escalados" value={`${formatTwoDecimals(stats.pct_escalated)}%`} caption="de los cerrados, a Soporte" color="yellow" />
             )}
-            <MetricCard label="% Rezagados" value={`${formatTwoDecimals(stats.pct_rezagados)}%`} caption="de los creados" color="yellow" />
-            <MetricCard label="Cierre Total" value={`${formatOneDecimal(stats.tiempo_medio_cierre_creado_cerrados_horas)} h`} caption="creación → cierre" color="blue" />
-            <MetricCard label="Asignación" value={`${formatOneDecimal(stats.tiempo_medio_asignacion_horas)} h`} caption="creación → asignación" color="slate" />
+            <MetricCard label="% Rezagados" value={`${formatTwoDecimals(stats.pct_lagging)}%`} caption="de los creados" color="yellow" />
+            <MetricCard label="Cierre Total" value={`${formatOneDecimal(stats.time_mean_close_created_closed_hours)} h`} caption="creación → cierre" color="blue" />
+            <MetricCard label="Asignación" value={`${formatOneDecimal(stats.time_mean_assignment_hours)} h`} caption="creación → asignación" color="slate" />
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <ToggleGroup
-              options={SUPPORT_DESGLOSES.map((key) => ({
+              options={SUPPORT_BREAKDOWNS.map((key) => ({
                 key,
-                label: SUPPORT_DESGLOSE_LABELS[key],
+                label: SUPPORT_BREAKDOWN_LABELS[key],
                 icon: TAB_ICONS[key],
               }))}
               activeKey={activeTab}
-              onChange={(key) => setActiveTab(key as SupportDesglose)}
+              onChange={(key) => setActiveTab(key as SupportBreakdown)}
             />
 
             {/* Se exporta la pestaña abierta, no las tres: es el cuadro que se
@@ -88,18 +88,18 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, periodo
               rows={rows}
               columns={SUPPORT_DIMENSION_EXCEL_COLUMNS}
               fileName={supportExportFileName([
-                SUPPORT_DESGLOSE_LABELS[activeTab],
-                valor ?? '',
+                SUPPORT_BREAKDOWN_LABELS[activeTab],
+                value ?? '',
                 groupName,
-                periodo,
+                period,
               ])}
-              sheetName={SUPPORT_DESGLOSE_LABELS[activeTab]}
+              sheetName={SUPPORT_BREAKDOWN_LABELS[activeTab]}
             />
           </div>
 
           {rows.length === 0 ? (
             <EmptyState
-              title={`Sin ${SUPPORT_DESGLOSE_LABELS[activeTab].toLowerCase()} registrada para este valor.`}
+              title={`Sin ${SUPPORT_BREAKDOWN_LABELS[activeTab].toLowerCase()} registrada para este valor.`}
               icon={TAB_ICONS[activeTab]}
             />
           ) : (
@@ -108,7 +108,7 @@ export function SupportBreakdownModal({ dimension, breakdown, groupName, periodo
                 columns={SUPPORT_DIMENSION_COLUMNS}
                 data={rows}
                 searchable
-                searchPlaceholder={`Buscar ${SUPPORT_DESGLOSE_LABELS[activeTab].toLowerCase()}...`}
+                searchPlaceholder={`Buscar ${SUPPORT_BREAKDOWN_LABELS[activeTab].toLowerCase()}...`}
               />
             </div>
           )}

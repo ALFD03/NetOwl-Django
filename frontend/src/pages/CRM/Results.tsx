@@ -1,17 +1,17 @@
-/** Página Inertia `CRM/Results` (`/crm/results/`). */
+/** `/crm/results/`. */
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { CrmResultsView } from '@/features/crm';
-import type { CrmCierre } from '@/features/crm/types';
+import type { CrmClose } from '@/features/crm/types';
 
 interface CrmResultsProps {
-  historico?: CrmCierre[];
+  history?: CrmClose[];
 }
 
-export default function CrmResults({ historico = [] }: CrmResultsProps) {
+export default function CrmResults({ history = [] }: CrmResultsProps) {
   return (
     <AppLayout>
-      <CrmResultsView historico={historico} />
+      <CrmResultsView history={history} />
     </AppLayout>
   );
 }

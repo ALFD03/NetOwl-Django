@@ -3,51 +3,51 @@
 import { apiClient } from './client';
 import { startAndFollow, type AnalysisJob } from './jobs';
 import type {
-  BajasDetalleResponse, LifetimeDetalleResponse, SubscriptionResultsResponse,
+  ChurnDetailResponse, LifetimeDetailResponse, SubscriptionResultsResponse,
 } from '@/shared/types/subscriptions';
 
 export interface EtaReportResponse {
   status?: string;
-  periodo?: string;
+  period?: string;
   [key: string]: unknown;
 }
 
 export interface EtaLockRequest { period: string; lock: boolean; }
 
-export interface EtaTasaRequest { period: string; tasa: number; }
+export interface EtaRateRequest { period: string; rate: number; }
 
-export interface EtaTasaResponse {
+export interface EtaRateResponse {
   status: string;
-  tasa_bcv: number;
-  tasa_bcv_fuente: string;
+  bcv_rate: number;
+  bcv_rate_source: string;
   message?: string;
 }
 
 export interface EtaSubConfigRequest {
-  orden?: string;
-  cliente?: string;
-  producto?: string;
-  tecnologia?: string;
-  tipo_persona?: string;
-  datas_mbps?: number;
-  tiene_tv?: boolean;
-  reportar?: boolean;
-  es_transporte?: boolean;
-  es_dedicado?: boolean;
+  order?: string;
+  client?: string;
+  product?: string;
+  technology?: string;
+  person_type?: string;
+  data_mbps?: number;
+  has_tv?: boolean;
+  report?: boolean;
+  is_transport?: boolean;
+  is_dedicated?: boolean;
   /**
    * La renta de este contrato, en divisa.
    *
    * El catálogo comercial no puede darla: cada enlace dedicado negocia la
    * suya, y es el único dato con que se declara su renta básica.
    */
-  precio?: number;
+  price?: number;
 }
 
-export interface DeleteEtaSubRequest { orden: string; }
+export interface DeleteEtaSubRequest { order: string; }
 
 export const subscriptionsApi = {
   getResultsDetails: async (period: string) =>
-    (await apiClient.get<SubscriptionResultsResponse>(`/subscriptions/api/results/${period}/`)).data,
+    (await apiClient.get<SubscriptionResultsResponse>(`/api/subscriptions/results/${period}/`)).data,
 
   /**
    * Las bajas de un periodo con la ficha de cada cliente.
@@ -61,18 +61,18 @@ export const subscriptionsApi = {
    * No hay variante por día: `analyzer_day_metrics` guarda agregados, no las
    * órdenes que los componen, así que el detalle es siempre el del cierre.
    */
-  getBajasDetalle: async (period: string, nodos?: string[]) =>
-    (await apiClient.get<BajasDetalleResponse>('/subscriptions/api/bajas/detalle/', {
-      params: { period, nodo: nodos },
-      // Axios serializa un array como `nodo[]=x`; Django lee `nodo=x&nodo=y`.
+  getChurnsDetail: async (period: string, nodes?: string[]) =>
+    (await apiClient.get<ChurnDetailResponse>('/api/subscriptions/churn/detail/', {
+      params: { period, node: nodes },
+      // Axios serializa un array como `node[]=x`; Django lee `node=x&node=y`.
       paramsSerializer: { indexes: null },
     })).data,
 
   getEtaReport: async (period: string, force = false) =>
-    (await apiClient.get<EtaReportResponse>('/subscriptions/api/eta-report/data/', { params: { period, force } })).data,
+    (await apiClient.get<EtaReportResponse>('/api/subscriptions/eta-report/data/', { params: { period, force } })).data,
 
   lockEtaReport: async (request: EtaLockRequest) =>
-    (await apiClient.post('/subscriptions/api/eta-report/lock/', request)).data,
+    (await apiClient.post('/api/subscriptions/eta-report/lock/', request)).data,
 
   /**
    * Fija la tasa del BCV con que se declara la renta básica del periodo.
@@ -81,8 +81,8 @@ export const subscriptionsApi = {
    * No recalcula nada: los formularios guardan el precio en divisa y la
    * conversión la hace el exportador, así que también vale en un mes bloqueado.
    */
-  setEtaTasa: async (request: EtaTasaRequest) =>
-    (await apiClient.post<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/', request)).data,
+  setEtaRate: async (request: EtaRateRequest) =>
+    (await apiClient.post<EtaRateResponse>('/api/subscriptions/eta-report/rate/', request)).data,
 
   /**
    * Vuelve a pedirle al BCV la tasa del periodo, pisando la guardada.
@@ -91,8 +91,8 @@ export const subscriptionsApi = {
    * cuando aquello no bastó — el servicio estaba caído, o alguien escribió una
    * tasa a mano y quiere volver a la oficial.
    */
-  consultarEtaTasa: async (period: string) =>
-    (await apiClient.post<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/consultar/', { period })).data,
+  fetchEtaRate: async (period: string) =>
+    (await apiClient.post<EtaRateResponse>('/api/subscriptions/eta-report/rate/fetch/', { period })).data,
 
   /**
    * La última tasa publicada por el BCV, la de hoy.
@@ -101,14 +101,14 @@ export const subscriptionsApi = {
    * la tasa del mes, y esta sirve para exportar el mismo formulario valorado
    * a día de hoy. Por eso es un GET y no pisa nada.
    */
-  getEtaTasaActual: async () =>
-    (await apiClient.get<EtaTasaResponse>('/subscriptions/api/eta-report/tasa/actual/')).data,
+  getEtaCurrentRate: async () =>
+    (await apiClient.get<EtaRateResponse>('/api/subscriptions/eta-report/rate/current/')).data,
 
   saveEtaSubConfig: async (request: EtaSubConfigRequest) =>
-    (await apiClient.post('/subscriptions/api/eta-report/save-sub-config/', request)).data,
+    (await apiClient.post('/api/subscriptions/eta-report/orders/save/', request)).data,
 
   deleteEtaSubConfig: async (request: DeleteEtaSubRequest) =>
-    (await apiClient.post('/subscriptions/api/eta-report/delete-sub-config/', request)).data,
+    (await apiClient.post('/api/subscriptions/eta-report/orders/delete/', request)).data,
 
   /**
    * Recalcula en el worker el lifetime de todos los meses y espera a que termine.
@@ -117,11 +117,11 @@ export const subscriptionsApi = {
    * el mismo timeout y va por un job.
    */
   runLifetime: async (onProgress?: (job: AnalysisJob) => void) =>
-    startAndFollow('/subscriptions/api/lifecycle/run/', {}, onProgress),
+    startAndFollow('/api/subscriptions/lifetime/run/', {}, onProgress),
 
   /** Las bajas de un mes con sus duraciones, una por orden, para exportar. */
-  getLifetimeDetalle: async (period: string) =>
-    (await apiClient.get<LifetimeDetalleResponse>('/subscriptions/api/lifetime/detalle/', {
+  getLifetimeDetail: async (period: string) =>
+    (await apiClient.get<LifetimeDetailResponse>('/api/subscriptions/lifetime/detail/', {
       params: { period },
     })).data,
 };

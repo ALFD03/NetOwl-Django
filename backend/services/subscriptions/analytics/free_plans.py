@@ -31,37 +31,37 @@ import re
 
 import numpy as np
 import pandas as pd
-from psycopg2 import sql
 
-from core.config import DB_SCHEMA, TableNames
+from core.config import TableNames
 from core.database import DBConnector
+from core.exports import ExportSpec, read_export
+from core.tables import DATE, TIMESTAMP, replace
 
 from .config import SUBS_COLUMN_MAPPING
+from .tables import FREE_PLANS
 
 # --- Columnas del export -----------------------------------------------------
-
-SUBS_COLUMNS = SUBS_COLUMN_MAPPING
 
 LOG_COLUMNS = {
     "Logs de Cambios/Fecha de Cambio": "fecha_log",
     "Logs de Cambios/Nota": "log",
     "Logs de Cambios/Estado Interno de Suscripción": "estado_log",
 }
-
 MSG_COLUMNS = {
     "Mensajes/Creado el": "fecha_msg",
     "Mensajes/Descripción corta": "asunto",
     "Mensajes/Contenidos": "cuerpo",
 }
 
-REQUIRED_GRATIS_HEADERS = [
-    "Líneas de la orden/Referencia de la orden",
-    "Tarifa",
-    "Fecha de inicio",
-    "Próxima Fecha de Factura",
-    "Mensajes/Creado el",
-    "Mensajes/Contenidos",
-]
+FREE_PLANS_EXPORT = ExportSpec(
+    label="planes gratuitos",
+    columns={**SUBS_COLUMN_MAPPING, **LOG_COLUMNS, **MSG_COLUMNS},
+    required=(
+        "Líneas de la orden/Referencia de la orden", "Tarifa", "Fecha de inicio", "Próxima Fecha de Factura",
+        "Mensajes/Creado el", "Mensajes/Contenidos",
+    ),
+    types={"fecha_inicio": DATE, "fecha_factura": DATE, "fecha_log": TIMESTAMP, "fecha_msg": TIMESTAMP},
+)
 
 # --- Patrones de evidencia ---------------------------------------------------
 
@@ -71,7 +71,7 @@ UNARCHIVED_LOG = "Suscripción desarchivada"
 TARIFF_CHANGE_RE = re.compile(r"^Cambio de Tarifa:\s*(?P<origen>.+?)\s*→\s*(?P<destino>.+?)\s*$")
 ZERO_INVOICE_RE = re.compile(r"price of zero|Suscripción no procesada", re.IGNORECASE)
 
-METODO_CONFIANZA = {
+CONFIDENCE_METHOD = {
     "log_archivada": "alta",
     "cambio_tarifa": "alta",
     "factura_cero": "media",
@@ -79,12 +79,6 @@ METODO_CONFIANZA = {
     "sin_evidencia": "baja",
 }
 
-# La suscripcion en si (zona, producto, total...) llega por el import regular:
-# esta tabla solo guarda desde cuando es gratuita y con que evidencia.
-FREE_TABLE_COLUMNS = [
-    "orden_producto", "cliente", "fecha_inicio", "tarifa", "fecha_factura",
-    "fecha_gratuito", "metodo", "confianza", "siempre_gratuito", "fecha_evidencia",
-]
 
 
 def _is_free_tariff(value: object) -> bool:
@@ -101,67 +95,39 @@ def _strip_html(series: pd.Series) -> pd.Series:
     )
 
 
-def parse_gratis_csv(csv_path: str):
+def parse_free_plans_csv(csv_path: str):
     """Desdobla el export agrupado de Odoo en (suscripciones, logs, mensajes)."""
-    raw = pd.read_csv(
-        csv_path, dtype=str, keep_default_na=False,
-        low_memory=False, encoding="utf-8-sig",
-    )
-    ref_col = "Líneas de la orden/Referencia de la orden"
-    if ref_col not in raw.columns:
-        raise ValueError(f"El CSV no contiene la columna requerida: {ref_col}")
-
-    # Las filas de continuacion vienen sin referencia: heredan la de arriba.
-    raw["orden"] = raw[ref_col].replace("", np.nan).ffill()
+    raw = read_export(csv_path, FREE_PLANS_EXPORT)
+    # Las filas de continuación vienen sin referencia: heredan la de arriba.
+    raw["orden"] = raw["orden_producto"].ffill()
     raw = raw.dropna(subset=["orden"])
-
-    df_subs = _consolidate_subs(raw)
-    df_logs = _extract_logs(raw)
-    df_msgs = _extract_msgs(raw)
-    return df_subs, df_logs, df_msgs
+    return _consolidate_subs(raw), _extract_logs(raw), _extract_msgs(raw)
 
 
 def _consolidate_subs(raw: pd.DataFrame) -> pd.DataFrame:
-    """Una fila por suscripcion, priorizando la linea de tarifa gratuita."""
-    cols = {k: v for k, v in SUBS_COLUMNS.items() if k in raw.columns}
-    df = raw[["orden"] + list(cols)].rename(columns=cols)
-    df = df.replace("", np.nan)
-    meta = [c for c in cols.values() if c != "orden_producto"]
-    # Cada suscripcion puede traer varias lineas; nos quedamos con el primer
-    # valor no vacio de cada campo, priorizando la linea de tarifa gratuita.
+    """Una fila por suscripción con el primer valor no vacío de cada campo, priorizando la línea de tarifa gratuita."""
+    fields = [c for c in SUBS_COLUMN_MAPPING.values() if c in raw.columns and c != "orden_producto"]
+    df = raw[["orden", *fields]].copy()
     df["_es_gratis"] = df["tarifa"].map(_is_free_tariff) if "tarifa" in df else False
     df = df.sort_values(["orden", "_es_gratis"], ascending=[True, False])
-    df_out = df.groupby("orden", as_index=False)[meta].first()
-    df_out.rename(columns={"orden": "orden_producto"}, inplace=True)
-    return df_out
+    return df.groupby("orden", as_index=False)[fields].first().rename(columns={"orden": "orden_producto"})
 
 
 def _extract_logs(raw: pd.DataFrame) -> pd.DataFrame:
-    """Los logs de cambio del export, con la fecha ya convertida."""
-    cols = {k: v for k, v in LOG_COLUMNS.items() if k in raw.columns}
-    if not cols:
-        return pd.DataFrame(columns=["orden", "fecha_log", "log", "estado_log"])
-    df = raw[["orden"] + list(cols)].rename(columns=cols)
-    df = df[df["fecha_log"].astype(str).str.strip() != ""].copy()
-    df["f_dt"] = pd.to_datetime(df["fecha_log"], errors="coerce")
-    return df.dropna(subset=["f_dt"])
+    """Los logs de cambio del export, con su fecha."""
+    df = raw.reindex(columns=["orden", *LOG_COLUMNS.values()]).dropna(subset=["fecha_log"])
+    return df.assign(f_dt=df["fecha_log"])
 
 
 def _extract_msgs(raw: pd.DataFrame) -> pd.DataFrame:
-    """Los mensajes del chatter, con el cuerpo en texto plano."""
-    cols = {k: v for k, v in MSG_COLUMNS.items() if k in raw.columns}
-    if not cols:
-        return pd.DataFrame(columns=["orden", "fecha_msg", "asunto", "cuerpo"])
-    df = raw[["orden"] + list(cols)].rename(columns=cols)
-    df = df[df["fecha_msg"].astype(str).str.strip() != ""].copy()
-    df["f_dt"] = pd.to_datetime(df["fecha_msg"], errors="coerce")
-    df["texto"] = _strip_html(df["cuerpo"].fillna(""))
-    return df.dropna(subset=["f_dt"])
+    """Los mensajes del chatter, con su fecha y el cuerpo en texto plano."""
+    df = raw.reindex(columns=["orden", *MSG_COLUMNS.values()]).dropna(subset=["fecha_msg"])
+    return df.assign(f_dt=df["fecha_msg"], texto=_strip_html(df["cuerpo"].fillna("").astype(str)))
 
 
 # --- Deteccion ---------------------------------------------------------------
 
-def _transiciones_tarifa(df_msgs: pd.DataFrame) -> pd.DataFrame:
+def _tariff_transitions(df_msgs: pd.DataFrame) -> pd.DataFrame:
     """Mensajes de cambio de tarifa, con el sentido de la transicion."""
     if df_msgs.empty:
         return pd.DataFrame(columns=["orden", "f_dt", "hacia_gratis"])
@@ -176,30 +142,30 @@ def _transiciones_tarifa(df_msgs: pd.DataFrame) -> pd.DataFrame:
     return df[df["hacia_gratis"] != df["desde_gratis"]]
 
 
-def _eventos_estado(df_logs: pd.DataFrame, df_msgs: pd.DataFrame) -> pd.DataFrame:
+def _state_events(df_logs: pd.DataFrame, df_msgs: pd.DataFrame) -> pd.DataFrame:
     """Linea de tiempo de entradas y salidas del servicio gratuito."""
-    partes = []
+    parts = []
     if not df_logs.empty:
         arch = df_logs[df_logs["log"] == ARCHIVED_LOG][["orden", "f_dt"]].copy()
         arch["entra"], arch["metodo"] = True, "log_archivada"
-        desarch = df_logs[df_logs["log"] == UNARCHIVED_LOG][["orden", "f_dt"]].copy()
-        desarch["entra"], desarch["metodo"] = False, "log_desarchivada"
-        partes += [arch, desarch]
+        unarch = df_logs[df_logs["log"] == UNARCHIVED_LOG][["orden", "f_dt"]].copy()
+        unarch["entra"], unarch["metodo"] = False, "log_desarchivada"
+        parts += [arch, unarch]
 
-    trans = _transiciones_tarifa(df_msgs)
+    trans = _tariff_transitions(df_msgs)
     if not trans.empty:
         t = trans[["orden", "f_dt"]].copy()
         t["entra"] = trans["hacia_gratis"].to_numpy()
         t["metodo"] = "cambio_tarifa"
-        partes.append(t)
+        parts.append(t)
 
-    partes = [p for p in partes if not p.empty]
-    if not partes:
+    parts = [p for p in parts if not p.empty]
+    if not parts:
         return pd.DataFrame(columns=["orden", "f_dt", "entra", "metodo"])
-    return pd.concat(partes, ignore_index=True).sort_values(["orden", "f_dt"])
+    return pd.concat(parts, ignore_index=True).sort_values(["orden", "f_dt"])
 
 
-def _primer_intento_cero(df_msgs: pd.DataFrame) -> pd.Series:
+def _first_zero_attempt(df_msgs: pd.DataFrame) -> pd.Series:
     """Primera factura por importe cero de cada suscripcion.
 
     Es una cota superior: en esa fecha la suscripcion ya era gratuita, aunque
@@ -207,17 +173,17 @@ def _primer_intento_cero(df_msgs: pd.DataFrame) -> pd.Series:
     """
     if df_msgs.empty:
         return pd.Series(dtype="datetime64[ns]")
-    cero = df_msgs[df_msgs["texto"].str.contains(ZERO_INVOICE_RE, na=False)]
-    if cero.empty:
+    zero = df_msgs[df_msgs["texto"].str.contains(ZERO_INVOICE_RE, na=False)]
+    if zero.empty:
         return pd.Series(dtype="datetime64[ns]")
-    return cero.groupby("orden")["f_dt"].min()
+    return zero.groupby("orden")["f_dt"].min()
 
 
 def detect_free_start(
     df_subs: pd.DataFrame,
     df_logs: pd.DataFrame,
     df_msgs: pd.DataFrame,
-    corte: pd.Timestamp | None = None,
+    cutoff: pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """
     Devuelve `df_subs` con `fecha_gratuito`, `metodo`, `confianza`,
@@ -227,114 +193,81 @@ def detect_free_start(
     df = df_subs.copy()
     df["orden_producto"] = df["orden_producto"].astype(str).str.strip()
     f_ini = pd.to_datetime(df["fecha_inicio"], errors="coerce")
-    prox_factura = pd.to_datetime(df.get("fecha_factura"), errors="coerce")
+    next_invoice = pd.to_datetime(df.get("fecha_factura"), errors="coerce")
 
-    if corte is None:
-        fechas = [s for s in (df_logs.get("f_dt"), df_msgs.get("f_dt")) if s is not None and len(s)]
-        corte = max(s.max() for s in fechas) if fechas else pd.Timestamp.utcnow().normalize()
+    if cutoff is None:
+        dates = [s for s in (df_logs.get("f_dt"), df_msgs.get("f_dt")) if s is not None and len(s)]
+        cutoff = max(s.max() for s in dates) if dates else pd.Timestamp.utcnow().normalize()
 
     # 1-2. Ultima entrada al servicio gratuito que no fue revertida.
-    eventos = _eventos_estado(df_logs, df_msgs)
-    entrada_fecha: dict[str, pd.Timestamp] = {}
-    entrada_metodo: dict[str, str] = {}
-    for orden, f_dt, entra, metodo in eventos[["orden", "f_dt", "entra", "metodo"]].itertuples(index=False):
-        if entra:
-            entrada_fecha[orden], entrada_metodo[orden] = f_dt, metodo
+    events = _state_events(df_logs, df_msgs)
+    entry_date: dict[str, pd.Timestamp] = {}
+    method_entry: dict[str, str] = {}
+    for order, f_dt, enters, method in events[["orden", "f_dt", "entra", "metodo"]].itertuples(index=False):
+        if enters:
+            entry_date[order], method_entry[order] = f_dt, method
         else:
-            entrada_fecha.pop(orden, None)
-            entrada_metodo.pop(orden, None)
+            entry_date.pop(order, None)
+            method_entry.pop(order, None)
 
-    evento_fecha = df["orden_producto"].map(entrada_fecha)
-    evento_metodo = df["orden_producto"].map(entrada_metodo)
+    event_date = df["orden_producto"].map(entry_date)
+    method_event = df["orden_producto"].map(method_entry)
 
     # 3. Primer intento de facturacion en cero.
-    cero = df["orden_producto"].map(_primer_intento_cero(df_msgs))
+    zero = df["orden_producto"].map(_first_zero_attempt(df_msgs))
 
     # 4. Facturacion congelada en el pasado.
-    congelada = prox_factura.where(prox_factura < corte)
+    frozen = next_invoice.where(next_invoice < cutoff)
 
     # 3 y 4 son cotas superiores: nos quedamos con la mas antigua de las dos.
-    cota = pd.concat([cero, congelada], axis=1).min(axis=1)
-    cota_metodo = np.where(
-        cero.notna() & (cero <= congelada.fillna(pd.Timestamp.max)),
+    bound = pd.concat([zero, frozen], axis=1).min(axis=1)
+    bound_method = np.where(
+        zero.notna() & (zero <= frozen.fillna(pd.Timestamp.max)),
         "factura_cero",
         "facturacion_detenida",
     )
 
-    fecha = evento_fecha.copy()
-    metodo = evento_metodo.copy()
-    usa_cota = fecha.isna() & cota.notna()
-    fecha = fecha.mask(usa_cota, cota)
-    metodo = metodo.mask(usa_cota, pd.Series(cota_metodo, index=df.index))
+    on_date = event_date.copy()
+    method = method_event.copy()
+    uses_bound = on_date.isna() & bound.notna()
+    on_date = on_date.mask(uses_bound, bound)
+    method = method.mask(uses_bound, pd.Series(bound_method, index=df.index))
 
-    sin_evidencia = fecha.isna()
-    fecha = fecha.fillna(f_ini)
-    metodo = metodo.fillna("sin_evidencia")
+    no_evidence = on_date.isna()
+    on_date = on_date.fillna(f_ini)
+    method = method.fillna("sin_evidencia")
 
-    df["fecha_evidencia"] = fecha.dt.strftime("%Y-%m-%d %H:%M:%S")
+    df["fecha_evidencia"] = on_date
     # Nunca puede ser gratuita antes de existir.
-    fecha = fecha.where(fecha >= f_ini, f_ini)
-    df["fecha_gratuito"] = fecha.dt.strftime("%Y-%m-%d %H:%M:%S")
-    df["metodo"] = metodo
-    df["confianza"] = metodo.map(METODO_CONFIANZA).fillna("baja")
-    df["siempre_gratuito"] = (sin_evidencia | (fecha <= f_ini)).map({True: "true", False: "false"})
+    on_date = on_date.where(on_date >= f_ini, f_ini)
+    df["fecha_gratuito"] = on_date
+    df["metodo"] = method
+    df["confianza"] = method.map(CONFIDENCE_METHOD).fillna("baja")
+    df["siempre_gratuito"] = no_evidence | (on_date <= f_ini)
     return df
 
 
 # --- Persistencia ------------------------------------------------------------
 
-def import_gratis_csv(csv_path: str) -> int:
-    """Importa el export de planes gratuitos y guarda la deteccion en la BD."""
-    df_subs, df_logs, df_msgs = parse_gratis_csv(csv_path)
-    df_free = detect_free_start(df_subs, df_logs, df_msgs)
-
-    for col in FREE_TABLE_COLUMNS:
-        if col not in df_free.columns:
-            df_free[col] = None
-    df_free = df_free[FREE_TABLE_COLUMNS]
-    for col in df_free.columns:
-        df_free[col] = df_free[col].astype(str).replace(["nan", "None", "<NA>", ""], None)
-
-    db = DBConnector()
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            # Tabla propia y siempre reconstruida desde el CSV: se rehace entera.
-            cur.execute(
-                sql.SQL("DROP TABLE IF EXISTS {t}").format(
-                    t=sql.Identifier(DB_SCHEMA, TableNames.SUBSCRIPTIONS_FREE)
-                )
-            )
-            cur.execute(
-                sql.SQL("CREATE TABLE {t} ({fields})").format(
-                    t=sql.Identifier(DB_SCHEMA, TableNames.SUBSCRIPTIONS_FREE),
-                    fields=sql.SQL(", ").join(
-                        sql.SQL("{} text").format(sql.Identifier(c)) for c in FREE_TABLE_COLUMNS
-                    ),
-                )
-            )
-            # DROP, CREATE y COPY en una transaccion: un fallo deja la tabla anterior.
-            DBConnector.copiar(cur, df_free, TableNames.SUBSCRIPTIONS_FREE)
-        conn.commit()
-
-    return len(df_free)
+def import_free_plans(csv_path: str) -> int:
+    """Importa el export de planes gratuitos y reemplaza la detección guardada."""
+    df_free = detect_free_start(*parse_free_plans_csv(csv_path))
+    with DBConnector().transaction() as cur:
+        return replace(cur, FREE_PLANS, df_free)
 
 
 def load_free_subs(db: DBConnector) -> pd.DataFrame:
-    """Lee la base de planes gratuitos; vacia si aun no se ha importado."""
-    try:
-        df = db.read_table(TableNames.SUBSCRIPTIONS_FREE)
-    except Exception:
-        return pd.DataFrame(columns=FREE_TABLE_COLUMNS)
-    if df.empty:
-        return pd.DataFrame(columns=FREE_TABLE_COLUMNS)
-    df.columns = df.columns.str.lower()
+    """Lee la base de planes gratuitos; vacía si aún no se ha importado."""
+    if not db.table_exists(TableNames.SUBSCRIPTIONS_FREE):
+        return pd.DataFrame(columns=list(FREE_PLANS.columns))
+    df = db.read_table(TableNames.SUBSCRIPTIONS_FREE)
     df["orden_producto"] = df["orden_producto"].astype(str).str.strip()
     return df
 
 
 def summarize_detection(df_free: pd.DataFrame) -> pd.DataFrame:
     """Resumen por metodo de deteccion, para revision humana."""
-    resumen = (
+    summary = (
         df_free.groupby(["metodo", "confianza"])
         .agg(
             suscripciones=("orden_producto", "count"),
@@ -344,4 +277,4 @@ def summarize_detection(df_free: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
         .sort_values("suscripciones", ascending=False)
     )
-    return resumen
+    return summary

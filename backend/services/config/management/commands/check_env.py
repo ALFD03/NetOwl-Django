@@ -1,0 +1,134 @@
+"""Revisa lo que el codigo no puede arreglar y conviene saber del entorno.
+
+Solo lee: no cambia nada, ni en la base de datos ni en Redis. Lo que reporta
+se corrige en la maquina (Postgres, Redis, Vault), no aqui:
+
+- si la conexion a Postgres va cifrada (`pg_stat_ssl`);
+- si el rol de la aplicacion es superusuario o puede crear roles o bases;
+- a que otros esquemas de la misma base puede entrar ese rol: desarrollo y
+  produccion comparten base y se separan solo por esquema, asi que un rol
+  que ve los dos deja que un error en desarrollo alcance produccion;
+- si Redis acepta ordenes sin contrasena y si va por TLS;
+- `DEBUG` y las cookies seguras.
+
+`--strict` termina con codigo 1 si hay algun aviso, para usarlo en un
+despliegue.
+"""
+
+from __future__ import annotations
+
+from urllib.parse import urlparse
+
+from django.conf import settings
+from django.core.management.base import BaseCommand
+from django.db import connection
+
+SYSTEM_SCHEMAS = ("pg_catalog", "information_schema", "pg_toast")
+
+
+class Command(BaseCommand):
+    help = "Revisa el cifrado de la base, los privilegios del rol, Redis y DEBUG. Solo lee."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--strict", action="store_true", help="Codigo de salida 1 si hay avisos.")
+
+    def handle(self, *args, **options):
+        self.warnings = 0
+        self._database()
+        self._redis()
+        self._django()
+        if self.warnings:
+            self.stdout.write(self.style.WARNING(f"\n{self.warnings} aviso(s)."))
+            if options["strict"]:
+                raise SystemExit(1)
+        else:
+            self.stdout.write(self.style.SUCCESS("\nSin avisos."))
+
+    def _ok(self, text):
+        self.stdout.write(self.style.SUCCESS(f"  OK     {text}"))
+
+    def _warning(self, text):
+        self.warnings += 1
+        self.stdout.write(self.style.WARNING(f"  AVISO  {text}"))
+
+    def _database(self):
+        self.stdout.write("Postgres")
+        with connection.cursor() as cur:
+            cur.execute("SELECT ssl, version FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
+            row = cur.fetchone()
+            if row and row[0]:
+                self._ok(f"conexion cifrada ({row[1]})")
+            else:
+                self._warning("la conexion NO va cifrada: las credenciales y los datos viajan en claro. "
+                            "Se activa con ssl=on en el servidor y sslmode=require en DBCONFIG.")
+
+            cur.execute("SELECT current_user, rolsuper, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname = current_user")
+            user, superuser, creates_roles, create_bases = cur.fetchone()
+            if superuser:
+                self._warning(f"el rol {user} es SUPERUSUARIO de Postgres: puede leer y borrar todo el servidor.")
+            else:
+                self._ok(f"el rol {user} no es superusuario")
+            if creates_roles or create_bases:
+                self._warning(f"el rol {user} puede crear {'roles' if creates_roles else ''}"
+                            f"{' y ' if creates_roles and create_bases else ''}{'bases' if create_bases else ''}.")
+
+            cur.execute(
+                """
+                SELECT nspname FROM pg_namespace
+                WHERE nspname NOT IN %s AND nspname NOT LIKE 'pg_temp%%' AND nspname NOT LIKE 'pg_toast%%'
+                  AND nspname <> %s AND nspname <> 'public'
+                  AND has_schema_privilege(current_user, nspname, 'USAGE')
+                ORDER BY nspname
+                """,
+                (SYSTEM_SCHEMAS, settings.DB_SCHEMA),
+            )
+            others = [f[0] for f in cur.fetchall()]
+            if others:
+                self._warning(f"el rol entra tambien en otros esquemas: {', '.join(others)}. "
+                            "Un rol por entorno, con permisos solo sobre su esquema, impide que "
+                            "desarrollo toque produccion.")
+            else:
+                self._ok(f"el rol solo entra en su esquema ({settings.DB_SCHEMA})")
+
+    def _redis(self):
+        self.stdout.write("Redis")
+        url = urlparse(settings.REDIS_URL)
+        if url.scheme == "rediss":
+            self._ok("conexion por TLS")
+        else:
+            self._warning("Redis va sin TLS (redis://).")
+        try:
+            import redis
+        except ImportError:
+            self._warning("no se pudo importar el cliente de Redis.")
+            return
+        without_credentials = url._replace(netloc=f"{url.hostname}:{url.port or 6379}").geturl()
+        try:
+            redis.Redis.from_url(without_credentials, socket_connect_timeout=3).ping()
+        except redis.AuthenticationError:
+            self._ok("Redis exige contrasena")
+        except redis.ResponseError as e:
+            if "NOAUTH" in str(e):
+                self._ok("Redis exige contrasena")
+            else:
+                self._warning(f"respuesta inesperada de Redis: {e}")
+        except redis.ConnectionError:
+            self._warning(f"no se pudo conectar a Redis en {url.hostname}:{url.port or 6379} (¿tunel cerrado?).")
+        else:
+            self._warning("Redis acepta ordenes SIN contrasena: cualquiera que llegue al puerto puede leer la "
+                        "cola, los cerrojos y los contadores de intentos. Se activa con requirepass y "
+                        "la contrasena en REDIS_URL.")
+            if url.password is None:
+                self._warning("REDIS_URL no lleva contrasena.")
+
+    def _django(self):
+        self.stdout.write("Django")
+        if settings.DEBUG:
+            self._warning("DEBUG esta activo: un error muestra el codigo y la configuracion a quien lo provoque.")
+        else:
+            self._ok("DEBUG desactivado")
+        for name in ("SESSION_COOKIE_SECURE", "CSRF_COOKIE_SECURE"):
+            if getattr(settings, name, False):
+                self._ok(f"{name} activo")
+            else:
+                self._warning(f"{name} desactivado: la cookie viaja tambien por HTTP sin cifrar.")

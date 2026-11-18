@@ -29,7 +29,7 @@ DATE_FORMATS = [
 ACTIVE_STATE = "3_progress"
 INACTIVE_STATES = {"4_paused", "6_churn", "8_30days"}
 VALID_REACT_ORIGINS = {"4_paused", "6_churn", "8_30days"}
-CORTE_IMPAGADO_EVENT = "corte automatico por factura impaga"
+UNPAID_CUT_EVENT = "corte automatico por factura impaga"
 
 # Clientes migrados a un servicio gratuito: no son activos ni bajas.
 FREE_STATE = "9_free"
@@ -40,8 +40,8 @@ EXCLUDED_STATE = "0_other"
 
 # Marca que Odoo deja como producto de una suscripcion dada de baja. No es
 # un plan: no esta en el catalogo, pero si cuenta como linea de producto
-# reconocida (ver `fixtures.nombres_reconocidos`).
-PLAN_CANCELADO = "Cancelado"
+# reconocida (ver `fixtures.recognized_names`).
+CANCELLED_PLAN = "Cancelado"
 
 SUBS_STATE_TO_LOG_MAP = {
     "en progreso": "3_progress",
@@ -56,51 +56,39 @@ SUBS_STATE_TO_LOG_MAP = {
 class TableNames:
     """Los nombres de todas las tablas de Postgres, en un solo sitio.
 
-    Es la lista canonica: ningun modulo escribe un literal de nombre de tabla. Las
-    que empiezan por `analyzer_`, `crm_`, `support_` o `lifetime_` las crea la
-    propia analitica sobre la marcha (`DBConnector.save_historico`); las de
-    `subscriptions*` las escribe la importacion.
+    Es la lista canonica: ningun modulo escribe un literal de nombre de tabla. La
+    forma de cada una (columnas, tipos, indices) se declara en el `tables.py` de
+    su dominio y la pone al dia `migrate` (ver `core.tables`).
     """
     CRM_CLIENTS = "crm_clients"
     CRM_LOGS = "crm_logs"
-    CRM_CIERRE_HISTORICO = "crm_cierre_historico"
-    CRM_METRICAS_GLOBALES = "crm_metricas_globales"
-    CRM_DIMENSIONES_HISTORICO = "crm_dimensiones_historico"
+    CRM_CLOSE_HISTORY = "crm_cierre_historico"
+    CRM_GLOBAL_METRICS = "crm_metricas_globales"
+    CRM_DIMENSIONS_HISTORICAL = "crm_dimensiones_historico"
     CRM_DAY_METRICS = "crm_day_metrics"
-    ANALYZER_ACTIVOS_CIERRE = "analyzer_activos_cierre"
-    ANALYZER_REACTIVACIONES = "analyzer_reactivaciones"
-    ANALYZER_BAJAS_DETALLADAS = "analyzer_bajas_detalladas"
-    ANALYZER_CORTE_IMPAGADO = "analyzer_corte_impagado"
-    ANALYZER_CIERRE_HISTORICO = "analyzer_cierre_historico"
-    ANALYZER_INACTIVOS_DETALLADOS = "analyzer_inactivos_detallados"
-    ANALYZER_CLIENTES_GRATUITOS = "analyzer_clientes_gratuitos"
-    ANALYZER_CHURN_DIMENSIONES = "analyzer_churn_dimensiones"
+    ANALYZER_ACTIVE_AT_CLOSE = "analyzer_activos_cierre"
+    ANALYZER_REACTIVATIONS = "analyzer_reactivaciones"
+    ANALYZER_CHURNED = "analyzer_bajas_detalladas"
+    ANALYZER_UNPAID_CUTS = "analyzer_corte_impagado"
+    ANALYZER_CLOSE_HISTORY = "analyzer_cierre_historico"
+    ANALYZER_INACTIVE = "analyzer_inactivos_detallados"
+    ANALYZER_FREE_CLIENTS = "analyzer_clientes_gratuitos"
+    ANALYZER_CHURN_DIMENSIONS = "analyzer_churn_dimensiones"
     ANALYZER_DAY_METRICS = "analyzer_day_metrics"
-    # Obsoleta: guardaba una segunda copia, con prioridad, de la clasificacion
-    # de cada plan. Hoy un plan se clasifica solo en el catalogo
-    # (services/subscriptions/models.py). La tabla sigue existiendo, vacia y
-    # sin leer; el nombre se conserva para poder identificarla.
-    ANALYZER_ETA_CONFIG_PLANES = "analyzer_eta_config_planes"
     ANALYZER_ETA_CONFIG_SUBS = "analyzer_eta_config_subs_individual"
-    ANALYZER_ETA_REPORTE_MENSUAL = "analyzer_eta_reporte_mensual"
-    LIFETIME_BAJAS_MES = "lifetime_bajas_mes"
-    # Obsoletas: guardaban las curvas de supervivencia que mostraba Lifetime
-    # antes de pasar a medir las bajas de cada mes. Siguen en la base, sin
-    # escribirse ni leerse; los nombres se conservan para poder identificarlas.
-    LIFETIME_PERIODOS = "lifetime_periodos"
-    LIFETIME_METRICAS = "lifetime_metricas"
-    LIFETIME_DIMENSIONES = "lifetime_dimensiones"
+    ANALYZER_ETA_MONTHLY_REPORT = "analyzer_eta_reporte_mensual"
+    LIFETIME_CHURNED = "lifetime_bajas_mes"
     SUBSCRIPTIONS = "subscriptions"
     SUBSCRIPTIONS_B = "subscriptions-b"
     SUBSCRIPTIONS_LOGS = "subscriptions-logs"
     SUBSCRIPTIONS_LOGS_V15 = "subscriptions-logs-v15"
     SUBSCRIPTIONS_FREE = "subscriptions_gratis"
     # Una fila por linea de factura; la reemplaza entera la importacion de facturas.
-    SUBSCRIPTIONS_FACTURAS = "subscriptions-facturas"
+    SUBSCRIPTIONS_INVOICES = "subscriptions-facturas"
     SUPPORT_TICKETS = "support_tickets"
-    SUPPORT_METRICAS_GLOBALES = "support_metricas_globales"
-    SUPPORT_DIMENSIONES_HISTORICO = "support_dimensiones_historico"
-    SUPPORT_CIERRE_HISTORICO = "support_cierre_historico"
+    SUPPORT_GLOBAL_METRICS = "support_metricas_globales"
+    SUPPORT_DIMENSIONS_HISTORICAL = "support_dimensiones_historico"
+    SUPPORT_CLOSE_HISTORY = "support_cierre_historico"
     SUPPORT_DAY_METRICS = "support_day_metrics"
     # Los cambios de etapa de cada ticket ("Registros de tiempo" de Odoo). Es la
     # unica tabla de importacion que NO se reemplaza: se carga por lotes
@@ -109,7 +97,7 @@ class TableNames:
     # Una fila por ticket, derivada de sus logs en cada analisis (origen,
     # escalamiento, horas por equipo y por tipo de etapa). Se rehace entera, y
     # de ella sale el reparto de los escalados entre ATC y Soporte.
-    SUPPORT_TICKET_FLUJO = "support_ticket_flujo"
+    SUPPORT_TICKET_FLOW = "support_ticket_flujo"
 
 
 # --- Columna `Activo` de los exports de Odoo ---------------------------------
@@ -117,10 +105,10 @@ class TableNames:
 # viaja escrito. Los dos vocabularios se listan de forma explicita para que un
 # valor desconocido se pueda detectar en vez de caer en silencio de un lado.
 # Lo consumen el loader de suscripciones y el de CRM, que leen el mismo export.
-ACTIVO_TRUE_TOKENS = frozenset(
+TRUE_TOKENS = frozenset(
     {"true", "t", "1", "1.0", "si", "sí", "yes", "y", "verdadero", "v"}
 )
-ACTIVO_FALSE_TOKENS = frozenset(
+FALSE_TOKENS = frozenset(
     {"false", "f", "0", "0.0", "no", "n", "falso", "", "none", "nan", "<na>", "null"}
 )
 

@@ -82,6 +82,10 @@ class ImportActionLog(models.Model):
         }
 
 
+# Claves guardadas en `AnalysisJob.result` → claves de la API.
+RESULT_KEYS = {"periodo_label": "period_label", "dias_calculados": "computed_days"}
+
+
 class AnalysisJob(models.Model):
     """Una ejecucion de analisis encolada en Celery.
 
@@ -95,27 +99,27 @@ class AnalysisJob(models.Model):
     **La cancelacion es este mismo campo.** Cancelar escribe `cancelled` en
     `status` y ya esta: no hace falta una bandera aparte porque la fila ya es la
     fuente de verdad. Un job en cola deja de estar abierto, asi que la tarea lo
-    descarta al recogerlo (ver `ejecutar_analisis`); uno en curso lo ve en su
-    siguiente punto de control y se detiene solo (ver `ConsolaJob`). El estado
+    descarta al recogerlo (ver `run_analysis`); uno en curso lo ve en su
+    siguiente punto de control y se detiene solo (ver `JobConsole`). El estado
     tampoco lleva CHECK en Postgres -Django no lo genera para `choices`-, asi que
     anadir el valor no toca la tabla.
     """
 
-    PENDIENTE = 'pending'
-    EN_CURSO = 'running'
-    EXITO = 'success'
+    PENDING = 'pending'
+    RUNNING = 'running'
+    SUCCESS = 'success'
     ERROR = 'error'
-    CANCELADO = 'cancelled'
+    CANCELLED_STATE = 'cancelled'
 
     STATUS_CHOICES = [
-        (PENDIENTE, 'En cola'),
-        (EN_CURSO, 'En ejecucion'),
-        (EXITO, 'Completado'),
+        (PENDING, 'En cola'),
+        (RUNNING, 'En ejecucion'),
+        (SUCCESS, 'Completado'),
         (ERROR, 'Error'),
-        (CANCELADO, 'Cancelado'),
+        (CANCELLED_STATE, 'Cancelado'),
     ]
 
-    ESTADOS_ABIERTOS = (PENDIENTE, EN_CURSO)
+    OPEN_STATES = (PENDING, RUNNING)
 
     # UUID y no autoincremental: el id viaja al navegador y se sondea sin sesion
     # de por medio; un entero correlativo deja adivinar ejecuciones ajenas.
@@ -123,8 +127,8 @@ class AnalysisJob(models.Model):
     module = models.CharField(max_length=50, choices=ImportActionLog.MODULE_CHOICES)
     # Mes analizado en formato YYYY-MM. Vacio en los analisis sin periodo
     # (ciclo de vida, que recorre todo el historico).
-    periodo = models.CharField(max_length=7, blank=True, default='')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDIENTE)
+    period = models.CharField(max_length=7, blank=True, default='', db_column="periodo")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
     task_id = models.CharField(max_length=255, blank=True, default='')
 
     # Salida de consola acumulada: lo que el analisis imprime por stdout.
@@ -142,7 +146,7 @@ class AnalysisJob(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     # Latido: cada volcado de log lo actualiza. Sirve para detectar un job que
-    # quedo "en curso" porque mataron al worker (ver `esta_muerto`).
+    # quedo "en curso" porque mataron al worker (ver `is_dead`).
     updated_at = models.DateTimeField(auto_now=True)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -156,33 +160,36 @@ class AnalysisJob(models.Model):
         indexes = [models.Index(fields=['module', 'status'], name='analysis_jobs_mod_est_idx')]
 
     def __str__(self):
-        return f"{self.get_module_display()} | {self.periodo or 'global'} | {self.status}"
+        return f"{self.get_module_display()} | {self.period or 'global'} | {self.status}"
 
     @property
-    def esta_abierto(self):
+    def is_open(self):
         """Si la ejecucion sigue viva: encolada o calculando."""
-        return self.status in self.ESTADOS_ABIERTOS
+        return self.status in self.OPEN_STATES
 
     @property
-    def esta_muerto(self):
+    def is_dead(self):
         """Job abierto que lleva demasiado tiempo sin dar senales de vida.
 
         Si el contenedor del worker muere de golpe, la fila se queda en
         `running` para siempre y bloquearia cualquier ejecucion posterior del
         mismo modulo. Pasado el margen se le deja de tener en cuenta.
         """
-        if not self.esta_abierto:
+        if not self.is_open:
             return False
-        margen = getattr(settings, 'ANALYSIS_JOB_STALE_SECONDS', 15 * 60)
-        return (timezone.now() - self.updated_at).total_seconds() > margen
+        margin = getattr(settings, 'ANALYSIS_JOB_STALE_SECONDS', 15 * 60)
+        return (timezone.now() - self.updated_at).total_seconds() > margin
 
     def to_dict(self):
-        """Forma en la que el job viaja al cliente durante el sondeo."""
+        """Forma en la que el job viaja al cliente durante el sondeo.
+
+        `result` se guarda con claves en español; aquí salen en inglés.
+        """
         return {
             "id": str(self.id),
             "module": self.module,
             "module_display": self.get_module_display(),
-            "periodo": self.periodo,
+            "period": self.period,
             "status": self.status,
             "status_display": self.get_status_display(),
             "message": self.message,
@@ -192,7 +199,7 @@ class AnalysisJob(models.Model):
                 "total": self.progress_total,
                 "label": self.progress_label,
             },
-            "result": self.result or {},
+            "result": {RESULT_KEYS.get(k, k): v for k, v in (self.result or {}).items()},
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "finished_at": self.finished_at.strftime("%Y-%m-%d %H:%M:%S") if self.finished_at else None,
         }

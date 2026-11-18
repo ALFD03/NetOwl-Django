@@ -1,26 +1,26 @@
 /** Tipos de la pantalla de usuarios, grupos y permisos. */
 
-import type { UnidadesSeleccion } from '@/shared/types/auth';
+import type { UnitsSelection } from '@/shared/types/auth';
 
-export type { UnidadesSeleccion };
+export type { UnitsSelection };
 
-export const SIN_UNIDADES: UnidadesSeleccion = { ids: [], rf: false };
+export const NO_UNITS: UnitsSelection = { ids: [], rf: false };
 
-export interface UnidadNegocio {
+export interface BusinessUnit {
   id: number;
-  nombre: string;
+  name: string;
 }
 
 export interface UserData {
   id: number;
   username: string;
   role: string;
-  role_display: string;
+  role_label: string;
   group_id: number | null;
   group_name?: string | null;
   is_superuser: boolean;
   permissions: Record<string, boolean>;
-  unidades: UnidadesSeleccion;
+  units: UnitsSelection;
   /** Si quien mira tiene rango para tocar esta cuenta (no es la suya ni una con más permisos). */
   editable: boolean;
 }
@@ -41,15 +41,15 @@ export interface NewUserForm {
   role: string;
   group_id: number | string;
   permissions: Record<string, boolean>;
-  unidades: UnidadesSeleccion;
+  units: UnitsSelection;
 }
 
 export type EditableUser = Omit<UserData, 'group_id'> & {
   group_id: number | string | null;
   /** La matriz al abrir el editor: lo que ya tenía se puede quitar aunque quien edita no lo tenga. */
-  previa?: Record<string, boolean>;
+  previous?: Record<string, boolean>;
   /** Las unidades al abrir el editor, por la misma razón que `previa`. */
-  previaUnidades?: UnidadesSeleccion;
+  previousUnits?: UnitsSelection;
 };
 
 export interface PasswordForm {
@@ -64,7 +64,7 @@ export interface EditableGroup {
   description: string;
   permissions: Record<string, boolean>;
   /** Ver `EditableUser.previa`. */
-  previa?: Record<string, boolean>;
+  previous?: Record<string, boolean>;
 }
 
 /** Props Django passes to the user & group management page. */
@@ -73,9 +73,9 @@ export interface ConfigManagementProps {
   groups: GroupData[];
   roles: [string, string][];
   /** Los permisos que tiene quien mira: solo esos puede conceder. */
-  concedibles: Record<string, boolean>;
+  grantable: Record<string, boolean>;
   /** El catálogo de unidades de negocio. */
-  unidadesNegocio: UnidadNegocio[];
+  business_units: BusinessUnit[];
   /** Las unidades que puede conceder quien mira; `null` si las ve todas. */
-  unidadesConcedibles: UnidadesSeleccion | null;
+  grantable_units: UnitsSelection | null;
 }

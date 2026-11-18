@@ -9,10 +9,7 @@ La clasificacion de cada suscripcion se resuelve con esta prioridad:
 **excepcion individual -> plan del catalogo**. Lo que no resuelva sale como
 `unmapped_elements` para que alguien lo decida.
 
-El catalogo es la unica fuente de la clasificacion de un plan. Antes habia una
-segunda, `analyzer_eta_config_planes`, que pisaba a la primera: el mismo plan
-podia estar clasificado de dos formas y ganaba la que nadie miraba. Esa capa ya
-no existe.
+El catalogo es la unica fuente de la clasificacion de un plan.
 
 Ademas de las matrices, el reporte lleva los **formularios** que se declaran:
 una fila por producto declarado, con su velocidad, su renta y su consumo
@@ -26,28 +23,31 @@ from __future__ import annotations
 import json
 import logging
 import math
+from datetime import datetime
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from core.config import DB_SCHEMA, PLAN_CANCELADO, TableNames
+from core.config import CANCELLED_PLAN, DB_SCHEMA, TableNames
 from core.database import DBConnector
-from core.fixtures import estados as estados_catalogo
-from core.fixtures import planes, planes_reguladores, zonas
+from core.fixtures import plans, regulatory_plans, zones
+from core.fixtures import states as catalog_states
+from core.tables import ensure, upsert
 
-from .bcv import TasaNoDisponible, consultar_tasa_del_mes
+from .bcv import RateUnavailable, fetch_month_rate
 from .config import (
-    PERSONA_DEFAULT,
-    PERSONA_MAP,
-    PLAN_DEDICADO,
-    PLAN_TRANSPORTE,
-    PLANES_NO_RESIDENCIALES,
+    DEDICATED_PLAN,
+    NON_RESIDENTIAL_PLANS,
+    PERSON_DEFAULT,
+    PERSON_MAP,
     TECH_DEFAULT,
     TECH_MAP,
+    TRANSPORT_PLAN,
 )
-from .eta_forms import construir_formularios, nombre_sintetizado
-from .queries import get_periodos
+from .eta_forms import build_forms, synthesized_name
+from .queries import get_periods
+from .tables import ETA_MONTHLY_REPORT, ETA_ORDER_CONFIG
 
 
 def normalize_tech(val: str) -> str:
@@ -56,41 +56,48 @@ def normalize_tech(val: str) -> str:
     val_clean = str(val).strip().upper()
     return TECH_MAP.get(val_clean, TECH_DEFAULT)
 
-def normalize_persona(val: str) -> str:
+def normalize_person(val: str) -> str:
     """Colapsa el tipo de titular a persona natural/juridica."""
-    if not val: return PERSONA_DEFAULT
+    if not val: return PERSON_DEFAULT
     val_clean = str(val).strip().lower()
-    return PERSONA_MAP.get(val_clean, PERSONA_DEFAULT)
+    return PERSON_MAP.get(val_clean, PERSON_DEFAULT)
 
 logger = logging.getLogger(__name__)
 
 
-def _texto(valor: Any) -> str:
+def _text(value: Any) -> str:
     """Un campo de texto que puede venir nulo o como `NaN` de pandas."""
-    if valor is None or (isinstance(valor, float) and math.isnan(valor)):
+    if value is None or (isinstance(value, float) and math.isnan(value)):
         return ""
-    texto = str(valor).strip()
-    return "" if texto.lower() in ("nan", "none", "null", "<na>") else texto
+    text = str(value).strip()
+    return "" if text.lower() in ("nan", "none", "null", "<na>") else text
 
 
-def _numero(valor: Any, por_defecto: float = 0.0) -> float:
+def _text_col(series: pd.Series, default: str = "") -> pd.Series:
+    """`_text` sobre una columna entera: lo nulo o vacio sale como `default`."""
+    text = series.astype("string").str.strip()
+    empty = text.isna() | text.str.lower().isin(["nan", "none", "null", "<na>", ""])
+    return text.mask(empty, default).astype(object)
+
+
+def _number(value: Any, default: float = 0.0) -> float:
     """Un campo numerico que puede venir nulo, vacio o como `NaN`.
 
     Se comprueba el resultado y no el tipo de entrada: la columna llega de
     psycopg2 como `Decimal`, y `Decimal("NaN")` pasa el `float()` sin excepcion.
-    Ese `NaN` acaba en el `json.dumps` del reporte, que lo escribe como `NaN`
-    literal y revienta el `JSON.parse` del navegador.
+    Ese `NaN` llegaria al JSON del reporte como `NaN` literal y reventaria el
+    `JSON.parse` del navegador.
     """
-    if valor is None:
-        return por_defecto
+    if value is None:
+        return default
     try:
-        numero = float(valor)
+        number = float(value)
     except (TypeError, ValueError):
-        return por_defecto
-    return numero if math.isfinite(numero) else por_defecto
+        return default
+    return number if math.isfinite(number) else default
 
 
-def _regulador_desde_fixture(fx: dict[str, Any] | None) -> dict[str, Any] | None:
+def _regulatory_from_fixture(fx: dict[str, Any] | None) -> dict[str, Any] | None:
     """El plan regulador que sirve `core/fixtures`, en la forma del formulario.
 
     `fixtures` sirve diccionarios con las claves planas de la epoca JSON
@@ -104,16 +111,16 @@ def _regulador_desde_fixture(fx: dict[str, Any] | None) -> dict[str, Any] | None
         "nombre": str(fx.get("name") or "").strip(),
         "tecnologia": str(fx.get("type") or "RF").strip(),
         "tipo_persona": str(fx.get("people") or "nat").strip(),
-        "datas_mbps": _numero(fx.get("datas")),
-        "precio": _numero(fx.get("price")),
+        "datas_mbps": _number(fx.get("datas")),
+        "precio": _number(fx.get("price")),
         "tiene_tv": str(fx.get("TV")).strip().lower() == "true",
         "es_transporte": bool(fx.get("es_transporte", False)),
     }
 
 
-def _resolver_regulador(
+def _resolve_regulatory(
     cfg: dict[str, Any],
-    reguladores_catalogo: dict[str, dict[str, Any]],
+    regulatory_catalog: dict[str, dict[str, Any]],
 ) -> dict[str, Any] | None:
     """Con que fila del formulario se declara esta suscripcion.
 
@@ -128,29 +135,29 @@ def _resolver_regulador(
     matrices del reporte y solo queda fuera de los formularios, que es
     exactamente lo que significa un plan todavia sin agrupar.
     """
-    asignado = cfg.get("regulador")
-    if asignado and asignado.get("nombre"):
-        return asignado
+    assigned = cfg.get("regulador")
+    if assigned and assigned.get("nombre"):
+        return assigned
 
-    es_transporte = bool(cfg.get("es_transporte", False))
-    if not (es_transporte or cfg.get("es_dedicado", False)):
+    is_transport = bool(cfg.get("es_transporte", False))
+    if not (is_transport or cfg.get("es_dedicado", False)):
         return None
 
-    mbps = _numero(cfg.get("datas_mbps"))
-    nombre = nombre_sintetizado(mbps, es_transporte=es_transporte)
+    mbps = _number(cfg.get("datas_mbps"))
+    name = synthesized_name(mbps, is_transport=is_transport)
 
-    del_catalogo = reguladores_catalogo.get(nombre)
-    if del_catalogo:
-        return del_catalogo
+    from_catalog = regulatory_catalog.get(name)
+    if from_catalog:
+        return from_catalog
 
     return {
-        "nombre": nombre,
+        "nombre": name,
         "tecnologia": str(cfg.get("tecnologia") or "FTTH").strip(),
         "tipo_persona": str(cfg.get("tipo_persona") or "PYME").strip(),
         "datas_mbps": mbps,
-        "precio": _numero(cfg.get("precio")),
+        "precio": _number(cfg.get("precio")),
         "tiene_tv": bool(cfg.get("tiene_tv", False)),
-        "es_transporte": es_transporte,
+        "es_transporte": is_transport,
     }
 
 
@@ -167,83 +174,25 @@ class ETAReportManager:
         self._ensure_tables_exist()
 
     def _ensure_tables_exist(self):
-        """Crea las tablas de persistencia para configuraciones globales e individuales."""
-        # `analyzer_eta_config_planes` ya no aparece aqui: guardaba una segunda
-        # copia —con prioridad— de la clasificacion de cada plan, y un plan se
-        # clasifica en un solo sitio, el catalogo. La tabla sigue en la base de
-        # datos, vacia y sin leer.
-        statements = [
-            f"""
-            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} (
-                orden TEXT PRIMARY KEY,
-                cliente TEXT,
-                producto TEXT,
-                reportar BOOLEAN DEFAULT TRUE,
-                tecnologia TEXT,
-                tipo_persona TEXT,
-                tiene_tv BOOLEAN DEFAULT FALSE,
-                datas_mbps NUMERIC DEFAULT 0,
-                es_transporte BOOLEAN DEFAULT FALSE,
-                es_dedicado BOOLEAN DEFAULT FALSE,
-                precio NUMERIC DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT NOW()
-            )
-            """,
-            # `CREATE TABLE IF NOT EXISTS` no toca una tabla que ya existe, asi
-            # que las columnas anadidas despues hay que pedirlas aparte o los
-            # entornos que ya tenian la tabla se quedan sin ellas para siempre.
-            f"""
-            ALTER TABLE {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS}
-                ADD COLUMN IF NOT EXISTS precio NUMERIC DEFAULT 0
-            """,
-            f"""
-            CREATE TABLE IF NOT EXISTS {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} (
-                periodo_reporte TEXT PRIMARY KEY,
-                reporte_data JSONB,
-                esta_bloqueado BOOLEAN DEFAULT FALSE,
-                tasa_bcv NUMERIC DEFAULT 0,
-                tasa_fuente TEXT DEFAULT '',
-                fecha_calculo TIMESTAMP DEFAULT NOW()
-            )
-            """,
-            f"""
-            ALTER TABLE {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL}
-                ADD COLUMN IF NOT EXISTS tasa_bcv NUMERIC DEFAULT 0
-            """,
-            f"""
-            ALTER TABLE {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL}
-                ADD COLUMN IF NOT EXISTS tasa_fuente TEXT DEFAULT ''
-            """,
-        ]
-        with self.db.get_connection() as conn:
-            with conn.cursor() as cur:
-                for stmt in statements:
-                    cur.execute(stmt)
-            conn.commit()
+        """Las tablas de configuración por orden y del reporte mensual, al día."""
+        with self.db.transaction() as cur:
+            ensure(cur, ETA_ORDER_CONFIG)
+            ensure(cur, ETA_MONTHLY_REPORT)
 
-    def get_lock_status(self, periodo: str) -> bool:
+    def get_lock_status(self, period: str) -> bool:
         """Si el periodo esta bloqueado (congelado)."""
         df = self.db.query(
-            f"SELECT esta_bloqueado FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} WHERE periodo_reporte = %s",
-            params=[periodo]
+            f"SELECT esta_bloqueado FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_MONTHLY_REPORT} WHERE periodo_reporte = %s",
+            params=[period]
         )
         return not df.empty and bool(df.iloc[0]["esta_bloqueado"])
 
-    def set_lock_status(self, periodo: str, lock: bool) -> None:
+    def set_lock_status(self, period: str, lock: bool) -> None:
         """Bloquea o desbloquea un periodo."""
-        with self.db.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} (periodo_reporte, esta_bloqueado)
-                    VALUES (%s, %s)
-                    ON CONFLICT (periodo_reporte) DO UPDATE SET esta_bloqueado = EXCLUDED.esta_bloqueado
-                    """,
-                    [periodo, lock]
-                )
-            conn.commit()
+        with self.db.transaction() as cur:
+            upsert(cur, ETA_MONTHLY_REPORT, [{"periodo_reporte": period, "esta_bloqueado": lock}])
 
-    def get_tasa_bcv(self, periodo: str) -> tuple[float, str]:
+    def get_bcv_rate(self, period: str) -> tuple[float, str]:
         """La tasa con que se declara el periodo, y de donde salio.
 
         Se guarda por periodo y no como ajuste global porque la renta se
@@ -258,157 +207,122 @@ class ETAReportManager:
         df = self.db.query(
             f"""
             SELECT tasa_bcv, tasa_fuente
-            FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL}
+            FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_MONTHLY_REPORT}
             WHERE periodo_reporte = %s
             """,
-            params=[periodo],
+            params=[period],
         )
         if df.empty:
             return 0.0, ""
-        fila = df.iloc[0]
-        return _numero(fila["tasa_bcv"]), _texto(fila.get("tasa_fuente"))
+        row = df.iloc[0]
+        return _number(row["tasa_bcv"]), _text(row.get("tasa_fuente"))
 
-    def set_tasa_bcv(self, periodo: str, tasa: float, fuente: str = "") -> None:
+    def set_bcv_rate(self, period: str, rate: float, source: str = "") -> None:
         """Fija la tasa del periodo. No toca el reporte ya calculado."""
-        with self.db.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL}
-                        (periodo_reporte, tasa_bcv, tasa_fuente)
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (periodo_reporte) DO UPDATE SET
-                        tasa_bcv = EXCLUDED.tasa_bcv,
-                        tasa_fuente = EXCLUDED.tasa_fuente
-                    """,
-                    [periodo, tasa, fuente],
-                )
-            conn.commit()
+        with self.db.transaction() as cur:
+            upsert(cur, ETA_MONTHLY_REPORT, [{"periodo_reporte": period, "tasa_bcv": rate, "tasa_fuente": source}])
 
-    def consultar_tasa_bcv(self, periodo: str) -> tuple[float, str]:
+    def fetch_bcv_rate(self, period: str) -> tuple[float, str]:
         """Consulta la tasa del mes al BCV y la guarda, pisando lo que hubiera.
 
         Es la que hay detras del boton de volver a consultar. Deja subir
-        `TasaNoDisponible`: quien la llama decide si eso rompe la peticion o
+        `RateUnavailable`: quien la llama decide si eso rompe la peticion o
         solo se avisa.
         """
-        tasa, fuente = consultar_tasa_del_mes(periodo)
-        self.set_tasa_bcv(periodo, tasa, fuente)
-        return tasa, fuente
+        rate, source = fetch_month_rate(period)
+        self.set_bcv_rate(period, rate, source)
+        return rate, source
 
-    def asegurar_tasa_bcv(self, periodo: str) -> tuple[float, str, str]:
+    def ensure_bcv_rate(self, period: str) -> tuple[float, str, str]:
         """La tasa del periodo, consultandola la primera vez que haga falta.
 
         Devuelve `(tasa, fuente, aviso)`. Solo se sale a la red cuando no hay
         nada guardado: la tasa del dia 1 de un mes pasado ya no cambia, asi que
         una vez consultada no se vuelve a preguntar. Eso hace que una tasa
-        escrita a mano tampoco se pise sola — para eso esta `consultar_tasa_bcv`.
+        escrita a mano tampoco se pise sola — para eso esta `fetch_bcv_rate`.
 
         **No propaga el fallo.** Esto se llama desde la peticion que pinta el
         reporte, y que el servicio de tasas este caido no puede dejar sin
         reporte a nadie: se devuelve el aviso y las rentas salen vacias, que es
         lo mismo que pasaba antes de que hubiera consulta automatica.
         """
-        tasa, fuente = self.get_tasa_bcv(periodo)
-        if tasa > 0:
-            return tasa, fuente, ""
+        rate, source = self.get_bcv_rate(period)
+        if rate > 0:
+            return rate, source, ""
 
         try:
-            tasa, fuente = self.consultar_tasa_bcv(periodo)
-        except TasaNoDisponible as e:
-            logger.warning("No se pudo obtener la tasa del BCV para %s: %s", periodo, e)
+            rate, source = self.fetch_bcv_rate(period)
+        except RateUnavailable as e:
+            logger.warning("No se pudo obtener la tasa del BCV para %s: %s", period, e)
             return 0.0, "", str(e)
 
-        return tasa, fuente, ""
+        return rate, source, ""
 
-    def _tasa_para_el_reporte(self, periodo: str) -> dict[str, Any]:
+    def _report_rate(self, period: str) -> dict[str, Any]:
         """Las tres claves de la tasa que viajan con el reporte.
 
         Se consulta aqui —al servir el reporte— y no en un comando aparte
         porque es el unico momento en que se sabe que periodo interesa. Como
-        `asegurar_tasa_bcv` solo sale a la red la primera vez, esto es una
+        `ensure_bcv_rate` solo sale a la red la primera vez, esto es una
         consulta por periodo en toda la vida del entorno, no una por visita.
         """
-        tasa, fuente, aviso = self.asegurar_tasa_bcv(periodo)
-        return {"tasa_bcv": tasa, "tasa_bcv_fuente": fuente, "tasa_bcv_aviso": aviso}
+        rate, source, warning = self.ensure_bcv_rate(period)
+        return {"tasa_bcv": rate, "tasa_bcv_fuente": source, "tasa_bcv_aviso": warning}
 
-    def save_sub_individual_config(self, orden: str, config: dict[str, Any]) -> None:
+    def save_sub_individual_config(self, order: str, config: dict[str, Any]) -> None:
         """Guarda o actualiza la parametrización individual de una suscripción."""
-        orden_clean = str(orden).strip()
-        if not orden_clean:
+        order_clean = str(order).strip()
+        if not order_clean:
             return
 
-        with self.db.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} 
-                    (orden, cliente, producto, reportar, tecnologia, tipo_persona, tiene_tv, datas_mbps, es_transporte, es_dedicado, precio, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                    ON CONFLICT (orden) DO UPDATE SET
-                        cliente = EXCLUDED.cliente,
-                        producto = EXCLUDED.producto,
-                        reportar = EXCLUDED.reportar,
-                        tecnologia = EXCLUDED.tecnologia,
-                        tipo_persona = EXCLUDED.tipo_persona,
-                        tiene_tv = EXCLUDED.tiene_tv,
-                        datas_mbps = EXCLUDED.datas_mbps,
-                        es_transporte = EXCLUDED.es_transporte,
-                        es_dedicado = EXCLUDED.es_dedicado,
-                        precio = EXCLUDED.precio,
-                        updated_at = NOW()
-                    """,
-                    [
-                        orden_clean, 
-                        str(config.get("cliente", "")).strip(), 
-                        str(config.get("producto", "")).strip(),
-                        bool(config.get("reportar", True)), 
-                        str(config.get("tecnologia", "FTTH")).strip(),
-                        str(config.get("tipo_persona", "pyme")).strip(), 
-                        bool(config.get("tiene_tv", False)),
-                        float(config.get("datas_mbps", 0.0)), 
-                        bool(config.get("es_transporte", False)),
-                        bool(config.get("es_dedicado", False)),
-                        # El catalogo comercial no puede dar la renta de estos
-                        # contratos: cada enlace dedicado negocia la suya, y es
-                        # el unico dato con que se declara su renta basica.
-                        float(config.get("precio", 0.0)),
-                    ]
-                )
-            conn.commit()
+        row = {
+            "orden": order_clean,
+            "cliente": str(config.get("cliente", "")).strip(),
+            "producto": str(config.get("producto", "")).strip(),
+            "reportar": bool(config.get("reportar", True)),
+            "tecnologia": str(config.get("tecnologia", "FTTH")).strip(),
+            "tipo_persona": str(config.get("tipo_persona", "pyme")).strip(),
+            "tiene_tv": bool(config.get("tiene_tv", False)),
+            "datas_mbps": float(config.get("datas_mbps", 0.0)),
+            "es_transporte": bool(config.get("es_transporte", False)),
+            "es_dedicado": bool(config.get("es_dedicado", False)),
+            # El catalogo comercial no puede dar la renta de estos contratos:
+            # cada enlace dedicado negocia la suya, y es el unico dato con que
+            # se declara su renta basica.
+            "precio": float(config.get("precio", 0.0)),
+        }
+        with self.db.transaction() as cur:
+            upsert(cur, ETA_ORDER_CONFIG, [row])
 
 
     def _load_mappings(self) -> tuple[dict[str, dict], dict[str, str], dict[str, dict]]:
         """Planes del catalogo, zonas mapeadas y configuraciones individuales.
 
-        El catalogo es la unica fuente de la clasificacion de un plan. Antes
-        habia una segunda, `analyzer_eta_config_planes`, que pisaba a la
-        primera: el mismo plan podia estar clasificado de dos formas y ganaba
-        la que nadie miraba. Lo que el catalogo no tenia —si el plan se declara
-        o no a la reguladora— es hoy `Plan.declarar_en_eta`.
+        El catalogo es la unica fuente de la clasificacion de un plan; si se
+        declara a la reguladora lo dice `Plan.declarar_en_eta`.
         """
-        zonas_map = {
+        zones_map = {
             z["name"].strip().lower(): z.get("Estado", "Desconocido").strip()
-            for z in zonas()
+            for z in zones()
         }
 
-        planes_map: dict[str, dict] = {}
-        for p in planes():
+        plans_map: dict[str, dict] = {}
+        for p in plans():
             name = p["name"].strip()
             try:
                 datas_mbps = float(p.get("datas") or "0")
             except ValueError:
                 datas_mbps = 0.0
 
-            planes_map[name] = {
+            plans_map[name] = {
                 "reportar": bool(p.get("declarar_en_eta", True)),
-                "regulador": _regulador_desde_fixture(p.get("regulador")),
+                "regulador": _regulatory_from_fixture(p.get("regulador")),
                 "tecnologia": p.get("type", "RF").strip(),
                 "tipo_persona": p.get("people", "nat").strip().lower(),
                 "tiene_tv": str(p.get("TV")).strip().lower() == "true",
                 "datas_mbps": datas_mbps,
-                "es_transporte": name == PLAN_TRANSPORTE,
-                "es_dedicado": name == PLAN_DEDICADO,
+                "es_transporte": name == TRANSPORT_PLAN,
+                "es_dedicado": name == DEDICATED_PLAN,
             }
 
         # `Cancelado` no es un plan y por eso no esta en el catalogo, pero lo
@@ -416,7 +330,7 @@ class ETAReportManager:
         # Dejarlo fuera del mapa las convertiria en planes sin clasificar y
         # bloquearia el reporte entero, asi que entra con la misma
         # clasificacion vacia que tenia en el JSON.
-        planes_map.setdefault(PLAN_CANCELADO, {
+        plans_map.setdefault(CANCELLED_PLAN, {
             "reportar": True,
             "regulador": None,
             "tecnologia": "",
@@ -427,36 +341,24 @@ class ETAReportManager:
             "es_dedicado": False,
         })
 
-        individual_map = {}
-        df_custom_subs = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_SUBS)
-        if not df_custom_subs.empty:
-            for _, row in df_custom_subs.iterrows():
-                individual_map[str(row["orden"])] = {
-                    "reportar": bool(row["reportar"]),
-                    "tecnologia": str(row["tecnologia"]),
-                    "tipo_persona": str(row["tipo_persona"]),
-                    "tiene_tv": bool(row["tiene_tv"]),
-                    "datas_mbps": float(row["datas_mbps"]),
-                    "es_transporte": bool(row["es_transporte"]),
-                    "es_dedicado": bool(row["es_dedicado"]),
-                    "precio": _numero(row.get("precio")),
-                    # Un contrato individual no cuelga del catalogo comercial,
-                    # asi que su fila del formulario se sintetiza por velocidad
-                    # (ver `_resolver_regulador`).
-                    "regulador": None,
-                }
+        # Un contrato individual no cuelga del catalogo comercial, asi que su
+        # fila del formulario se sintetiza por velocidad (`_resolve_regulatory`).
+        individual_map = {
+            row.pop("orden"): {**row, "regulador": None}
+            for row in self._order_configs().drop(columns=["cliente", "producto", "updated_at"]).to_dict("records")
+        }
 
-        return planes_map, zonas_map, individual_map
+        return plans_map, zones_map, individual_map
 
-    def calculate_eta_report(self, periodo: str, force_recalc: bool = False) -> dict[str, Any]:
+    def calculate_eta_report(self, period: str, force_recalc: bool = False) -> dict[str, Any]:
         """Calcula el reporte completo generando las 10 matrices requeridas."""
-        is_locked = self.get_lock_status(periodo)
+        is_locked = self.get_lock_status(period)
         individual_configs = self.get_configured_individual_subs()
 
         if is_locked and not force_recalc:
             df_saved = self.db.query(
-                f"SELECT reporte_data FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} WHERE periodo_reporte = %s",
-                params=[periodo]
+                f"SELECT reporte_data FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_MONTHLY_REPORT} WHERE periodo_reporte = %s",
+                params=[period]
             )
             if not df_saved.empty and df_saved.iloc[0]["reporte_data"]:
                 data = df_saved.iloc[0]["reporte_data"]
@@ -467,33 +369,33 @@ class ETAReportManager:
                 # despues de bloquear el periodo sin recalcular nada, porque
                 # los formularios guardan el precio en divisa y la conversion
                 # se hace al exportar.
-                res_dict.update(self._tasa_para_el_reporte(periodo))
+                res_dict.update(self._report_rate(period))
                 return res_dict
 
         # 1. Cierre de Activos Únicos del mes (58,839 suscriptores)
         # La tabla de cierres la crea el analisis mensual la primera vez que
         # termina: en un entorno recien estrenado no existe todavia, y eso no
         # es un fallo sino la misma respuesta que un cierre vacio.
-        if not self.db.tabla_existe(TableNames.ANALYZER_ACTIVOS_CIERRE):
+        if not self.db.table_exists(TableNames.ANALYZER_ACTIVE_AT_CLOSE):
             return {
                 "status": "empty",
-                "message": f"No hay cierre para {periodo}",
+                "message": f"No hay cierre para {period}",
                 "individual_configs": individual_configs,
             }
 
-        df_activos = self.db.query(
+        df_active = self.db.query(
             f"""
             SELECT DISTINCT orden 
-            FROM {DB_SCHEMA}.{TableNames.ANALYZER_ACTIVOS_CIERRE} 
+            FROM {DB_SCHEMA}.{TableNames.ANALYZER_ACTIVE_AT_CLOSE} 
             WHERE periodo_reporte LIKE %s
             """,
-            params=[f"{periodo}%"]
+            params=[f"{period}%"]
         )
-        if df_activos.empty:
-            return {"status": "empty", "message": f"No hay cierre para {periodo}", "individual_configs": individual_configs}
+        if df_active.empty:
+            return {"status": "empty", "message": f"No hay cierre para {period}", "individual_configs": individual_configs}
 
         # Asegurar unicidad absoluta en activos
-        df_activos = df_activos.drop_duplicates(subset=["orden"])
+        df_active = df_active.drop_duplicates(subset=["orden"])
 
         # 2. Cargar metadata consolidada por orden (1 sola fila por contrato)
         df_subs = self.db.query(
@@ -507,7 +409,7 @@ class ETAReportManager:
         df_subs = df_subs.drop_duplicates(subset=["orden_producto"], keep="first")
         
         # Cruce exacto 1 a 1
-        df_base = df_activos.merge(df_subs, left_on="orden", right_on="orden_producto", how="left")
+        df_base = df_active.merge(df_subs, left_on="orden", right_on="orden_producto", how="left")
 
         # 3. Respaldo histórico en subscriptions-b para los que no tengan producto en la tabla actual
         missing_mask = df_base["producto"].isna()
@@ -522,52 +424,45 @@ class ETAReportManager:
             )
             if not df_hist.empty:
                 df_hist = df_hist.drop_duplicates(subset=["orden_producto"], keep="first").set_index("orden_producto")
-                for idx, r in df_base[missing_mask].iterrows():
-                    ord_id = r["orden"]
-                    if ord_id in df_hist.index:
-                        df_base.at[idx, "producto"] = df_hist.loc[ord_id, "producto"]
-                        df_base.at[idx, "cliente"] = df_hist.loc[ord_id, "cliente"]
-                        df_base.at[idx, "zona"] = df_hist.loc[ord_id, "zona"]
-                        df_base.at[idx, "sucursal"] = df_hist.loc[ord_id, "sucursal"]
+                orders = df_base.loc[missing_mask, "orden"]
+                found = orders[orders.isin(df_hist.index)]
+                for col in ("producto", "cliente", "zona", "sucursal"):
+                    df_base.loc[found.index, col] = found.map(df_hist[col])
 
         # ✅ GARANTÍA TOTAL: 1 sola fila por cada suscriptor activo
         df_base = df_base.drop_duplicates(subset=["orden"], keep="first")
 
         # 4. Mapeos
-        planes_map, zonas_map, individual_map = self._load_mappings()
-        reguladores_catalogo = {
+        plans_map, zones_map, individual_map = self._load_mappings()
+        regulatory_catalog = {
             r["nombre"]: r
-            for r in (_regulador_desde_fixture(fx) for fx in planes_reguladores())
+            for r in (_regulatory_from_fixture(fx) for fx in regulatory_plans())
             if r and r["nombre"]
         }
         unmapped_plans, unmapped_subs = [], []
         rows_processed = []
 
-        for _, row in df_base.iterrows():
-            ord_id = str(row["orden"]).strip()
-
-            raw_prod = row.get("producto")
-            if pd.isna(raw_prod) or str(raw_prod).strip().lower() in ("nan", "none", "null", "<na>", ""):
-                prod_name = None
-            else:
-                prod_name = str(raw_prod).strip()
-
-            raw_cli = row.get("cliente")
-            cli_name = str(raw_cli).strip() if pd.notna(raw_cli) and str(raw_cli).strip().lower() not in ("nan", "none", "null") else "Cliente Histórico"
-
-            raw_zona = row.get("zona")
-            zona_name = str(raw_zona).strip() if pd.notna(raw_zona) and str(raw_zona).strip().lower() not in ("nan", "none", "null") else "Sin Zona"
-            estado = zonas_map.get(zona_name.lower(), "Otros / Desconocido")
+        base = pd.DataFrame({
+            "orden": df_base["orden"].astype(str).str.strip(),
+            "producto": _text_col(df_base["producto"]),
+            "cliente": _text_col(df_base["cliente"], "Cliente Histórico"),
+            "zona": _text_col(df_base["zona"], "Sin Zona"),
+        })
+        for row in base.to_dict("records"):
+            ord_id = row["orden"]
+            prod_name = row["producto"] or None
+            cli_name = row["cliente"]
+            state = zones_map.get(row["zona"].lower(), "Otros / Desconocido")
 
             if ord_id in individual_map:
                 cfg = individual_map[ord_id]
                 # Una excepcion individual sobre un plan normal —ni dedicado ni
                 # transporte— no tiene grupo propio: se declara con el mismo
                 # regulador que su plan del catalogo.
-                if prod_name in planes_map:
-                    cfg = {**cfg, "regulador": planes_map[prod_name].get("regulador")}
-            elif prod_name in planes_map and prod_name not in PLANES_NO_RESIDENCIALES:
-                cfg = planes_map[prod_name]
+                if prod_name in plans_map:
+                    cfg = {**cfg, "regulador": plans_map[prod_name].get("regulador")}
+            elif prod_name in plans_map and prod_name not in NON_RESIDENTIAL_PLANS:
+                cfg = plans_map[prod_name]
             elif not prod_name:
                 unmapped_subs.append({
                     "orden": ord_id,
@@ -590,15 +485,15 @@ class ETAReportManager:
                 continue
 
             tech_str = normalize_tech(cfg.get("tecnologia"))
-            pers_str = normalize_persona(cfg.get("tipo_persona"))
+            person_type = normalize_person(cfg.get("tipo_persona"))
 
             rows_processed.append({
                 "orden": ord_id,
                 "producto": prod_name or "",
-                "regulador": _resolver_regulador(cfg, reguladores_catalogo),
-                "estado": estado,
+                "regulador": _resolve_regulatory(cfg, regulatory_catalog),
+                "estado": state,
                 "tecnologia": tech_str,
-                "tipo_persona": pers_str,
+                "tipo_persona": person_type,
                 "tiene_tv": bool(cfg.get("tiene_tv", False)),
                 "datas_mbps": float(cfg.get("datas_mbps", 0.0)),
                 "es_transporte": bool(cfg.get("es_transporte", False))
@@ -612,7 +507,7 @@ class ETAReportManager:
                 "unmapped_plans": clean_unmapped_plans,
                 "unmapped_subs": unmapped_subs,
                 "individual_configs": individual_configs,
-                "periodo": periodo
+                "periodo": period
             }
 
         # 5. Cálculo de matrices con base limpia 1 a 1
@@ -621,22 +516,22 @@ class ETAReportManager:
         # fila lleva el plan regulador como diccionario, y eso es un valor que
         # no tiene sentido meter en una columna de pandas: lo consumen los
         # formularios, no las matrices.
-        vistos: set[str] = set()
-        filas_formulario: list[dict[str, Any]] = []
-        for fila in rows_processed:
-            if fila["orden"] in vistos:
+        seen: set[str] = set()
+        form_rows: list[dict[str, Any]] = []
+        for row in rows_processed:
+            if row["orden"] in seen:
                 continue
-            vistos.add(fila["orden"])
-            filas_formulario.append(fila)
+            seen.add(row["orden"])
+            form_rows.append(row)
 
-        sin_regulador = sorted({
-            fila["producto"] for fila in filas_formulario
-            if not fila["regulador"] and fila["producto"]
+        without_regulatory = sorted({
+            row["producto"] for row in form_rows
+            if not row["regulador"] and row["producto"]
         })
 
         df_rep = pd.DataFrame(
             [{k: v for k, v in f.items() if k not in ("regulador", "producto")}
-             for f in filas_formulario]
+             for f in form_rows]
         )
         if df_rep.empty:
             return {"status": "empty", "message": "No hay datos reportables", "individual_configs": individual_configs}
@@ -645,28 +540,28 @@ class ETAReportManager:
         # comparacion elemento a elemento que devuelve la mascara booleana.
         # Escribirlo como prueba de verdad daria el valor de verdad de la
         # Series entera, que pandas rechaza.
-        df_transporte = df_rep[df_rep["es_transporte"] == True].copy()  # noqa: E712
+        df_transport = df_rep[df_rep["es_transporte"] == True].copy()  # noqa: E712
         df_main = df_rep[df_rep["es_transporte"] == False].copy()  # noqa: E712
         df_net = df_main[df_main["tecnologia"].isin(["Inalámbrico", "Alámbrico"])].copy()
         df_tv = df_main[df_main["tiene_tv"] == True].copy()  # noqa: E712
 
-        reporte_final = {
+        final_report = {
             "status": "success",
-            "periodo": periodo,
+            "periodo": period,
             "esta_bloqueado": is_locked,
             "total_muestreado": int(len(df_rep)),
             "individual_configs": individual_configs,
-            "transporte_metrics": int(len(df_transporte)),
+            "transporte_metrics": int(len(df_transport)),
 
             # --- FORMULARIOS DE LA REGULADORA ---
             # Una fila por producto declarado, que es otra pregunta distinta de
             # la que responden las matrices de abajo. Se guardan con el reporte
             # para que un periodo bloqueado sirva los formularios que se
             # declararon y no los que saldrian hoy.
-            "formularios": construir_formularios(filas_formulario, estados_catalogo()),
+            "formularios": build_forms(form_rows, catalog_states()),
             # Planes que cuentan en las matrices pero no tienen con que
             # declararse: les falta asignar un plan regulador en el catalogo.
-            "planes_sin_regulador": sin_regulador,
+            "planes_sin_regulador": without_regulatory,
             
             # --- MATRICES DE INTERNET ---
             "net_metrics": {
@@ -705,30 +600,23 @@ class ETAReportManager:
                 "Inalámbrico": int(speed_grouped.at[r, "Inalámbrico"]) if "Inalámbrico" in speed_grouped.columns else 0,
                 "total": int(speed_grouped.loc[r].sum())
             }
-        reporte_final["speed_metrics"] = speed_res
+        final_report["speed_metrics"] = speed_res
 
         # 7. Persistencia
         if not is_locked:
-            with self.db.get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        f"""
-                        INSERT INTO {DB_SCHEMA}.{TableNames.ANALYZER_ETA_REPORTE_MENSUAL} (periodo_reporte, reporte_data, fecha_calculo) 
-                        VALUES (%s, %s, NOW()) 
-                        ON CONFLICT (periodo_reporte) DO UPDATE SET reporte_data = EXCLUDED.reporte_data, fecha_calculo = NOW()
-                        """,
-                        [periodo, json.dumps(reporte_final)]
-                    )
-                conn.commit()
+            with self.db.transaction() as cur:
+                upsert(cur, ETA_MONTHLY_REPORT, [{
+                    "periodo_reporte": period, "reporte_data": final_report, "fecha_calculo": datetime.now(),
+                }])
 
-        # Fuera del `json.dumps` de arriba a proposito: la tasa no forma parte
-        # del reporte congelado, se corrige aparte.
-        reporte_final.update(self._tasa_para_el_reporte(periodo))
-        return reporte_final
+        # Despues de guardar a proposito: la tasa no forma parte del reporte
+        # congelado, se corrige aparte.
+        final_report.update(self._report_rate(period))
+        return final_report
     
     def get_discovered_unmapped_plans(self) -> list[str]:
         """Busca productos en la tabla de suscripciones que no tienen configuración ETA."""
-        planes_config, _, _ = self._load_mappings()
+        plans_config, _, _ = self._load_mappings()
         
         # Buscamos todos los productos únicos que tenemos en la base de datos de suscripciones
         df_products = self.db.query(f"SELECT DISTINCT producto FROM {DB_SCHEMA}.{TableNames.SUBSCRIPTIONS} WHERE producto IS NOT NULL AND producto != ''")
@@ -740,56 +628,45 @@ class ETAReportManager:
         for p in all_products:
             p_clean = p.strip()
             is_special = any(word in p_clean.lower() for word in ["dedicado", "transporte", "l2"])
-            if not is_special and p_clean not in planes_config:
+            if not is_special and p_clean not in plans_config:
                 discovered.append(p_clean)
         
         return sorted(discovered)
 
     def get_configured_individual_subs(self) -> list[dict[str, Any]]:
         """Retorna las suscripciones individuales parametrizadas sanitizadas."""
+        return self._order_configs().to_dict("records")
+
+    def _order_configs(self) -> pd.DataFrame:
+        """La ficha individual de cada orden, con cada columna limpia y en su tipo."""
         df = self.db.read_table(TableNames.ANALYZER_ETA_CONFIG_SUBS)
         if df.empty:
-            return []
-        
-        records = []
-        for _, row in df.iterrows():
-            raw_cli = row.get("cliente")
-            cli_name = str(raw_cli).strip() if pd.notna(raw_cli) and str(raw_cli).strip().lower() not in ("nan", "none", "null") else ""
-            
-            raw_prod = row.get("producto")
-            prod_name = str(raw_prod).strip() if pd.notna(raw_prod) and str(raw_prod).strip().lower() not in ("nan", "none", "null") else ""
+            return pd.DataFrame(columns=[*ETA_ORDER_CONFIG.columns])
 
-            raw_tec = row.get("tecnologia")
-            tec_name = str(raw_tec).strip() if pd.notna(raw_tec) and str(raw_tec).strip().lower() not in ("nan", "none", "null") else "FTTH"
+        def flag(col: str, default: bool) -> pd.Series:
+            return df[col].astype(object).where(df[col].notna(), default).astype(bool)
 
-            raw_pers = row.get("tipo_persona")
-            pers_name = str(raw_pers).strip() if pd.notna(raw_pers) and str(raw_pers).strip().lower() not in ("nan", "none", "null") else "pyme"
+        def number(col: str) -> pd.Series:
+            return pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
-            try:
-                mbps = float(row.get("datas_mbps")) if pd.notna(row.get("datas_mbps")) else 0.0
-                if pd.isna(mbps): mbps = 0.0
-            except (ValueError, TypeError):
-                mbps = 0.0
-
-            records.append({
-                "orden": str(row["orden"]),
-                "cliente": cli_name,
-                "producto": prod_name,
-                "reportar": bool(row.get("reportar", True)),
-                "tecnologia": tec_name,
-                "tipo_persona": pers_name,
-                "tiene_tv": bool(row.get("tiene_tv", False)),
-                "datas_mbps": mbps,
-                "es_transporte": bool(row.get("es_transporte", False)),
-                "es_dedicado": bool(row.get("es_dedicado", False)),
-                "precio": _numero(row.get("precio")),
-                "updated_at": str(row["updated_at"]) if pd.notna(row.get("updated_at")) else None
-            })
-        return records
+        return pd.DataFrame({
+            "orden": df["orden"].astype(str),
+            "cliente": _text_col(df["cliente"]),
+            "producto": _text_col(df["producto"]),
+            "reportar": flag("reportar", True),
+            "tecnologia": _text_col(df["tecnologia"], "FTTH"),
+            "tipo_persona": _text_col(df["tipo_persona"], "pyme"),
+            "tiene_tv": flag("tiene_tv", False),
+            "datas_mbps": number("datas_mbps"),
+            "es_transporte": flag("es_transporte", False),
+            "es_dedicado": flag("es_dedicado", False),
+            "precio": number("precio"),
+            "updated_at": df["updated_at"].astype(str).where(df["updated_at"].notna(), None),
+        })
     
     def get_discovered_unmapped_subs(self) -> list[dict[str, Any]]:
         """Detecta solo las órdenes que realmente requieren configuración individual."""
-        planes_map, _, individual_map = self._load_mappings()
+        plans_map, _, individual_map = self._load_mappings()
         
         df_subs = self.db.query(f"""
             SELECT DISTINCT orden_producto as orden, cliente, producto, sucursal, zona
@@ -799,44 +676,28 @@ class ETAReportManager:
         if df_subs.empty:
             return []
 
-        pending_subs = []
-        for _, row in df_subs.iterrows():
-            ord_id = str(row["orden"]).strip()
-            
-            raw_prod = row.get("producto")
-            prod_name = str(raw_prod).strip() if pd.notna(raw_prod) and str(raw_prod).strip().lower() not in ("nan", "none", "null") else ""
-            
-            # ✅ REGLA: Si ya está en planes_map (como 'Pyme FTTH 100 Mbps'), NO es un pendiente individual
-            if prod_name in planes_map and prod_name not in PLANES_NO_RESIDENCIALES:
-                continue
-
-            # ✅ Solo marcar como individual si ya está guardado, o si es Dedicado/Transporte o no tiene producto
-            is_dedicated = any(w in prod_name.lower() for w in ["dedicado", "transporte", "l2"]) or not prod_name
-            
-            if is_dedicated and ord_id not in individual_map:
-                raw_cli = row.get("cliente")
-                cli_name = str(raw_cli).strip() if pd.notna(raw_cli) and str(raw_cli).strip().lower() not in ("nan", "none", "null") else "Sin Nombre"
-                
-                raw_suc = row.get("sucursal")
-                suc_name = str(raw_suc).strip() if pd.notna(raw_suc) and str(raw_suc).strip().lower() not in ("nan", "none", "null") else ""
-                
-                raw_zona = row.get("zona")
-                zona_name = str(raw_zona).strip() if pd.notna(raw_zona) and str(raw_zona).strip().lower() not in ("nan", "none", "null") else ""
-
-                pending_subs.append({
-                    "orden": ord_id,
-                    "cliente": cli_name,
-                    "producto": prod_name or "Sin producto (Histórico)",
-                    "sucursal": suc_name,
-                    "zona": zona_name
-                })
-        return pending_subs
+        subs = pd.DataFrame({
+            "orden": df_subs["orden"].astype(str).str.strip(),
+            "cliente": _text_col(df_subs["cliente"], "Sin Nombre"),
+            "producto": _text_col(df_subs["producto"]),
+            "sucursal": _text_col(df_subs["sucursal"]),
+            "zona": _text_col(df_subs["zona"]),
+        })
+        # Un plan del catalogo (como 'Pyme FTTH 100 Mbps') no es un pendiente
+        # individual; si lo es un dedicado, un transporte o una orden sin
+        # producto que todavia no tenga ficha guardada.
+        from_catalog = subs["producto"].isin(set(plans_map) - set(NON_RESIDENTIAL_PLANS))
+        dedicated = subs["producto"].str.lower().str.contains("dedicado|transporte|l2") | (subs["producto"] == "")
+        pending = subs[~from_catalog & dedicated & ~subs["orden"].isin(list(individual_map))]
+        return pending.assign(
+            producto=pending["producto"].replace("", "Sin producto (Histórico)")
+        ).to_dict("records")
     
     def get_all_known_plans(self) -> list[dict[str, Any]]:
         """Planes del catalogo, para el desplegable de la ficha individual."""
-        planes_map, _, _ = self._load_mappings()
+        plans_map, _, _ = self._load_mappings()
         result = []
-        for name, cfg in sorted(planes_map.items()):
+        for name, cfg in sorted(plans_map.items()):
             result.append({
                 "name": name,
                 "tecnologia": cfg.get("tecnologia", "FTTH"),
@@ -848,16 +709,14 @@ class ETAReportManager:
             })
         return result
     
-    def delete_sub_individual_config(self, orden: str) -> None:
+    def delete_sub_individual_config(self, order: str) -> None:
         """Elimina la configuración individual de una orden."""
-        with self.db.get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"DELETE FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} WHERE orden = %s",
-                    [orden]
-                )
-            conn.commit()
-    def get_config_page_data(self, periodo: str | None = None) -> dict[str, Any]:
+        with self.db.transaction() as cur:
+            cur.execute(
+                f"DELETE FROM {DB_SCHEMA}.{TableNames.ANALYZER_ETA_CONFIG_SUBS} WHERE orden = %s", [order]
+            )
+
+    def get_config_page_data(self, period: str | None = None) -> dict[str, Any]:
         """Todo lo que necesita la pagina de parametrizacion del reporte ETA.
 
         Calcular el reporte es lo que descubre los planes y suscripciones sin
@@ -865,16 +724,16 @@ class ETAReportManager:
         contra la tabla de suscripciones. La vista encadenaba estas cinco
         llamadas y ese "si no hay, busca de la otra forma" a mano.
         """
-        periodos_disponibles = sorted(
-            {p[:7] for p in get_periodos()}, reverse=True
+        available_periods = sorted(
+            {p[:7] for p in get_periods()}, reverse=True
         )
-        if not periodo and periodos_disponibles:
-            periodo = periodos_disponibles[0]
+        if not period and available_periods:
+            period = available_periods[0]
 
         unmapped_plans: list[Any] = []
         unmapped_subs: list[Any] = []
-        if periodo:
-            report_data = self.calculate_eta_report(periodo, force_recalc=True)
+        if period:
+            report_data = self.calculate_eta_report(period, force_recalc=True)
             if report_data.get("status") == "unmapped_elements":
                 unmapped_plans = report_data.get("unmapped_plans", [])
                 unmapped_subs = report_data.get("unmapped_subs", [])
@@ -889,6 +748,6 @@ class ETAReportManager:
             "discoveredPlans": unmapped_plans or [],
             "discoveredSubs": unmapped_subs or [],
             "allKnownPlans": self.get_all_known_plans() or [],
-            "currentPeriod": periodo or "",
-            "periods": periodos_disponibles,
+            "currentPeriod": period or "",
+            "periods": available_periods,
         }

@@ -81,15 +81,14 @@ SECURE_REFERRER_POLICY = "same-origin"
 # En Vault: cadena separada por comas o lista. Si no se define, se usan
 # los orígenes locales por defecto (ver DjangoModel en backend/vault.py).
 CSRF_TRUSTED_ORIGINS = config.django.CSRF_TRUSTED_ORIGINS
+CSRF_FAILURE_VIEW = "services.config.api.endpoint.csrf_failure"
 
 # Limite de tiempo se sesiones 
 SESSION_COOKIE_AGE = 8*60*60
 
 # --- Politica de contrasenas ---
-# No existia ninguna: Django aplica una lista vacia si no se define, de modo
-# que `create_user` aceptaba cualquier cosa. Los tres `len(clave) < 8` sueltos
-# que habia en services/config/views.py se sustituyeron por una llamada a
-# `validate_password`, que es lo que lee esta lista (ver `validar_clave`).
+# La lee `validate_password` al crear cuentas y cambiar contraseñas
+# (ver `services/config/api/users.py:check_password`).
 #
 # `min_length` 8 es el minimo del proyecto. Los otros tres validadores siguen
 # siendo los que hacen el trabajo: rechazan la contrasena parecida al nombre de
@@ -152,7 +151,7 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
 # entrada: usuario y contrasena caben de sobra. El 1 GB de arriba es para las
 # importaciones, que exigen sesion; sin este tope cualquiera podia mandar
 # cuerpos de 1 GB al login y llenar la memoria de los workers
-# (ver netowl_web/middleware.py:LimiteCuerpoAnonimoMiddleware).
+# (ver netowl_web/middleware.py:AnonymousBodyLimitMiddleware).
 ANON_MAX_BODY_SIZE = 16 * 1024
 
 # --- Aplicaciones instaladas ---
@@ -166,11 +165,10 @@ INSTALLED_APPS = [
     "services.crm",                 # CRM: efectividad y tiempos
     "services.support",             # Soporte: cohortes de tickets
     "services.imports",             # Carga de CSV y ejecucion de analisis
-    "services.catalogos",           # Catalogos de referencia (vistas; modelos en subscriptions)
-    "services.comisiones",          # Comisiones de la fuerza de ventas
+    "services.catalogs",           # Catalogos de referencia (vistas; modelos en subscriptions)
+    "services.commissions",          # Comisiones de la fuerza de ventas
     "services.config",              # Autenticacion y permisos
-    "services.auditoria",           # Registro de auditoria: quien hizo que
-    "inertia",
+    "services.audit",               # Auditoría (label `auditoria`)
 ]
 
 # --- Middleware ---
@@ -183,21 +181,18 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",                  # Varios (URL slashes, etc.)
     "django.middleware.csrf.CsrfViewMiddleware",                  # Protección CSRF
     "django.contrib.auth.middleware.AuthenticationMiddleware",    # Autenticación por sesión
+    # Token de API en `/api/`: sustituye a la sesión antes de que nadie mire request.user.
+    "services.config.api.middleware.ApiTokenMiddleware",
     # Antes que el CSRF y que cualquier vista: un anonimo no sube nada (ver la clase).
-    "netowl_web.middleware.LimiteCuerpoAnonimoMiddleware",
-    # Antes del limitador, para anotar tambien los 429 (ver services/auditoria).
-    "services.auditoria.middleware.AuditoriaMiddleware",
+    "netowl_web.middleware.AnonymousBodyLimitMiddleware",
+    # Antes del limitador, para anotar tambien los 429.
+    "services.audit.middleware.AuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",       # Mensajes flash
     "django.middleware.clickjacking.XFrameOptionsMiddleware",     # Protección clickjacking
-    "netowl_web.middleware.RateLimitMiddleware",
-    "inertia.middleware.InertiaMiddleware",
-    "netowl_web.middleware.InertiaShareMiddleware", 
 ]
 
 # módulo raíz de las URLs
 ROOT_URLCONF = "netowl_web.urls"
-
-INERTIA_LAYOUT = "app.html"
 
 # Servir los assets desde el dev-server de Vite en vez del bundle compilado.
 # Es una decision de flujo de trabajo, no de seguridad: por eso tiene su propia
@@ -218,7 +213,7 @@ USE_VITE_DEV_SERVER = os.getenv("VITE_DEV_SERVER", "").lower() in {"1", "true", 
 # esa existe desde Django 6 y el contenedor corre 5.2 (ver requirements.txt).
 # `{nonce}` lo sustituye el middleware en cada peticion.
 _VITE = ["http://localhost:5173"] if USE_VITE_DEV_SERVER else []
-CSP_POLITICA = {
+CSP_POLICY = {
     "default-src": ["'self'"],
     "script-src": ["'self'", "'nonce-{nonce}'", *_VITE],
     "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", *_VITE],
@@ -343,7 +338,7 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Cuantos analisis puede calcular el worker a la vez. Se puede lanzar churn, CRM
 # y soporte en paralelo en vez de esperar a que termine el anterior; dos del
-# mismo modulo siguen yendo en fila (ver `bloqueo_modulo` en imports/jobs.py),
+# mismo modulo siguen yendo en fila (ver `module_lock` en imports/jobs.py),
 # porque comparten tabla.
 #
 # Subirlo tiene un coste que no se ve en la interfaz: cada analisis carga en
@@ -469,9 +464,9 @@ LOGGING = {
 # pero hay que escribirla: `PERMITIR_HTTP_INSEGURO=1` en el `.env`. La
 # diferencia con el comportamiento anterior es que ahora servir en claro es una
 # decision anotada en el despliegue y no el resultado de olvidar una clave.
-PERMITIR_HTTP_INSEGURO = os.getenv("PERMITIR_HTTP_INSEGURO", "").lower() in {"1", "true", "yes"}
+ALLOW_INSECURE_HTTP = os.getenv("PERMITIR_HTTP_INSEGURO", "").lower() in {"1", "true", "yes"}
 
-if not DEBUG and not SECURE_SSL_REDIRECT and not PERMITIR_HTTP_INSEGURO:
+if not DEBUG and not SECURE_SSL_REDIRECT and not ALLOW_INSECURE_HTTP:
     raise ImproperlyConfigured(
         "DJANGO_SECURE_SSL está en false con DJANGO_DEBUG en false: la sesión y "
         "el token CSRF viajarían sin el flag Secure y sin HSTS. Ponga "

@@ -1,4 +1,4 @@
-/** Página Inertia `CRM/Dashboard` (`/crm/`). */
+/** `/crm/`. */
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { CrmDashboardView, useCrmDashboard } from '@/features/crm';

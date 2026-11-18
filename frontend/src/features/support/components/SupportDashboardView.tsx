@@ -39,162 +39,53 @@ import {
   Modal,
   NeonContainer,
   ProgressBar,
-  Paginacion,
+  Pagination,
   SparklineCard,
-  StatTile,
   METRIC_CHART,
-  usePaginacion,
-} from '@/shared/ui';
+  usePagination } from '@/shared/ui';
 import { PERMISSIONS } from '@/shared/constants/permissions';
 import { usePermissions } from '@/shared/hooks/usePermissions';
 import {
   formatInteger,
   formatOneDecimal,
-  formatPeriodoLabel,
-  formatTwoDecimals,
-} from '@/shared/utils';
+  formatPeriodLabel } from '@/shared/utils';
 import {
-  ASIGNACION,
-  CIERRE_TOTAL,
-  ESCALAMIENTO,
+  ASSIGNMENT,
+  CLOSE_TOTAL,
+  ESCALATION,
   TIME_MEASURE_META,
   distribution,
 } from '../lib/supportMetrics';
 import { MEASURE_ICONS } from '../lib/measureIcons';
 import { SUPPORT_TIME_MEASURES, type SupportDashboardProps } from '../types';
 import type { useSupportDashboard } from '../hooks/useSupportDashboard';
-import { TicketsAbiertosPanel } from './flujo/TicketsAbiertosPanel';
-import { Seccion, SeccionesNav, type SeccionDef } from './Seccion';
+import { OpenTicketsPanel } from './flow/OpenTicketsPanel';
+import { Section, SectionsNav, type SectionDef } from './Section';
+import { CloseSources } from './CloseSources';
 
 /**
- * `MetricCard`'s `trend` accessory is hardcoded to percentages and reads "up" as
- * good — neither holds for hours-to-close, so the gap is spelled out instead.
+ * El accesorio `trend` de `MetricCard` está fijo a porcentajes y lee «sube» como
+ * bueno; ninguna de las dos cosas vale para horas hasta el cierre, así que la
+ * diferencia se escribe con palabras.
  */
-function mttrGapLabel(deltaHoras: number): string {
-  if (deltaHoras === 0) return 'En línea con el promedio global';
-  const faster = deltaHoras < 0;
-  return `${Math.abs(deltaHoras)} h ${faster ? 'más rápido' : 'más lento'} que el promedio global`;
-}
-
-/** De lo cerrado en el mes, cuánto nació en él y cuánto venía arrastrado. */
-function OrigenCierres({ stats }: { stats: ReturnType<typeof useSupportDashboard>['stats'] }) {
-  return (
-    <NeonContainer
-      theme="slate"
-      title="Origen de los Cierres"
-      subtitle="De lo cerrado en el mes, cuánto nació en él y cuánto venía arrastrado · escalar a Soporte es cerrar para ATC"
-      icon={<Layers className="h-5 w-5" />}
-    >
-      <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-2">
-        <div className="grid grid-cols-2 gap-3">
-          <StatTile
-            label="Resueltos del mes"
-            value={`${formatTwoDecimals(stats.pct_resueltos_periodo)}%`}
-            caption={`${formatInteger(stats.tickets_resueltos_periodo)} tickets`}
-            tone="green"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Resueltos arrastre"
-            value={`${formatTwoDecimals(stats.pct_resueltos_arrastre)}%`}
-            caption={`${formatInteger(stats.tickets_resueltos_arrastre)} tickets`}
-            tone="purple"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Cancelados del mes"
-            value={`${formatTwoDecimals(stats.pct_cancelados_periodo)}%`}
-            caption={`${formatInteger(stats.tickets_cancelados_periodo)} tickets`}
-            tone="red"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Cancelados arrastre"
-            value={`${formatTwoDecimals(stats.pct_cancelados_arrastre)}%`}
-            caption={`${formatInteger(stats.tickets_cancelados_arrastre)} tickets`}
-            tone="purple"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Escalados del mes"
-            value={`${formatTwoDecimals(stats.pct_escalados_periodo)}%`}
-            caption={`${formatInteger(stats.tickets_escalados_periodo)} tickets`}
-            tone="yellow"
-            variant="boxed"
-            mono
-          />
-          <StatTile
-            label="Escalados arrastre"
-            value={`${formatTwoDecimals(stats.pct_escalados_arrastre)}%`}
-            caption={`${formatInteger(stats.tickets_escalados_arrastre)} tickets`}
-            tone="slate"
-            variant="boxed"
-            mono
-          />
-        </div>
-
-        {/* Los seis sumandos comparten denominador —los cerrados del mes, con lo
-              que ATC escaló—, así que las barras se leen unas contra otras y
-              suman 100 %. */}
-        <div className="space-y-3">
-          <ProgressBar
-            label="Resueltos del mes"
-            percent={stats.pct_resueltos_periodo}
-            valueLabel={`${formatTwoDecimals(stats.pct_resueltos_periodo)}%`}
-            color="green"
-          />
-          <ProgressBar
-            label="Resueltos de meses anteriores"
-            percent={stats.pct_resueltos_arrastre}
-            valueLabel={`${formatTwoDecimals(stats.pct_resueltos_arrastre)}%`}
-            color="purple"
-          />
-          <ProgressBar
-            label="Cancelados del mes"
-            percent={stats.pct_cancelados_periodo}
-            valueLabel={`${formatTwoDecimals(stats.pct_cancelados_periodo)}%`}
-            color="red"
-          />
-          <ProgressBar
-            label="Cancelados de meses anteriores"
-            percent={stats.pct_cancelados_arrastre}
-            valueLabel={`${formatTwoDecimals(stats.pct_cancelados_arrastre)}%`}
-            color="yellow"
-          />
-          <ProgressBar
-            label="Escalados a Soporte del mes"
-            percent={stats.pct_escalados_periodo}
-            valueLabel={`${formatTwoDecimals(stats.pct_escalados_periodo)}%`}
-            color="yellow"
-          />
-          <ProgressBar
-            label="Escalados de meses anteriores"
-            percent={stats.pct_escalados_arrastre}
-            valueLabel={`${formatTwoDecimals(stats.pct_escalados_arrastre)}%`}
-            color="slate"
-          />
-        </div>
-      </div>
-    </NeonContainer>
-  );
+function mttrGapLabel(deltaHours: number): string {
+  if (deltaHours === 0) return 'En línea con el promedio global';
+  const faster = deltaHours < 0;
+  return `${Math.abs(deltaHours)} h ${faster ? 'más rápido' : 'más lento'} que el promedio global`;
 }
 
 interface SupportDashboardViewProps {
   data: ReturnType<typeof useSupportDashboard>;
-  abiertos?: SupportDashboardProps['abiertos'];
+  open?: SupportDashboardProps['open'];
 }
 
-export function SupportDashboardView({ data, abiertos = null }: SupportDashboardViewProps) {
+export function SupportDashboardView({ data, open = null }: SupportDashboardViewProps) {
   const { can } = usePermissions();
-  const verAbiertos = can(PERMISSIONS.VIEW_SUPPORT_ABIERTOS);
+  const showOpen = can(PERMISSIONS.VIEW_SUPPORT_OPEN);
 
   const {
-    periodosEvaluados,
-    historico,
+    evaluatedPeriods,
+    history,
     stats,
     trendCards,
     groupCards,
@@ -205,98 +96,98 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
   } = data;
 
   const chartColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : undefined;
-  const periodsLabel = `${periodosEvaluados} periodos evaluados`;
-  const paginacion = usePaginacion(historico);
+  const periodsLabel = `${evaluatedPeriods} periodos evaluados`;
+  const pagination = usePagination(history);
 
-  const cierreTotal = distribution(stats, CIERRE_TOTAL);
-  const asignacion = distribution(stats, ASIGNACION);
-  const escalamiento = distribution(stats, ESCALAMIENTO);
+  const closeTotal = distribution(stats, CLOSE_TOTAL);
+  const assignment = distribution(stats, ASSIGNMENT);
+  const escalation = distribution(stats, ESCALATION);
 
-  const secciones: SeccionDef[] = [
-    { id: 'volumen', titulo: 'Volumen y cierre', icon: <Layers /> },
-    { id: 'tiempos', titulo: 'Tiempos', icon: <Timer /> },
-    ...(verAbiertos ? [{ id: 'abiertos', titulo: 'Abiertos ahora', icon: <FolderOpen /> }] : []),
-    { id: 'tendencias', titulo: 'Tendencias y grupos', icon: <Activity /> },
+  const sections: SectionDef[] = [
+    { id: 'volumen', title: 'Volumen y cierre', icon: <Layers /> },
+    { id: 'tiempos', title: 'Tiempos', icon: <Timer /> },
+    ...(showOpen ? [{ id: 'abiertos', title: 'Abiertos ahora', icon: <FolderOpen /> }] : []),
+    { id: 'tendencias', title: 'Tendencias y grupos', icon: <Activity /> },
   ];
 
   return (
     <div className="space-y-10">
-      <SeccionesNav secciones={secciones} />
+      <SectionsNav sections={sections} />
 
-      <Seccion
+      <Section
         id="volumen"
-        titulo="Volumen y cierre"
-        descripcion="Cuánto entra y cuánto se despacha en un mes típico, y de dónde vienen los cierres."
-        alcance={periodsLabel}
+        title="Volumen y cierre"
+        description="Cuánto entra y cuánto se despacha en un mes típico, y de dónde vienen los cierres."
+        scope={periodsLabel}
         icon={<Layers />}
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <MetricCard
             label="Creados / Mes"
-            value={formatInteger(stats.tickets_creados)}
+            value={formatInteger(stats.tickets_created)}
             color="slate"
             subValue="Suma de los grupos: un escalado entra en ATC y en Soporte"
             icon={<Users className="h-4 w-4 text-slate-300" />}
           />
           <MetricCard
             label="Cerrados / Mes"
-            value={formatInteger(stats.tickets_cerrados)}
+            value={formatInteger(stats.tickets_closed)}
             color="blue"
             subValue="Resueltos, cancelados y escalados por ATC"
             icon={<Layers className="h-4 w-4 text-sky-400" />}
           />
           <MetricCard
             label="% Resueltos"
-            value={`${stats.pct_resueltos}%`}
+            value={`${stats.pct_resolved}%`}
             color="green"
             subValue="Sobre los cerrados del mes"
             icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />}
           />
           <MetricCard
             label="% Cancelados"
-            value={`${stats.pct_cancelados}%`}
+            value={`${stats.pct_cancelled}%`}
             color="red"
             subValue="Sobre los cerrados del mes"
             icon={<XCircle className="h-4 w-4 text-rose-400" />}
           />
           <MetricCard
             label="% Escalados a Soporte"
-            value={`${stats.pct_escalados}%`}
+            value={`${stats.pct_escalated}%`}
             color="yellow"
-            subValue={`${formatInteger(stats.tickets_escalados)} / mes · ATC los da por cerrados`}
+            subValue={`${formatInteger(stats.tickets_escalated)} / mes · ATC los da por cerrados`}
             icon={<ArrowRightLeft className="h-4 w-4 text-amber-400" />}
           />
           <MetricCard
             label="% Rezagados"
-            value={`${stats.pct_rezagados}%`}
+            value={`${stats.pct_lagging}%`}
             color="yellow"
             subValue="Creados que no cerraron en su mes"
             icon={<AlertTriangle className="h-4 w-4 text-amber-400" />}
           />
         </div>
 
-        <OrigenCierres stats={stats} />
-      </Seccion>
+        <CloseSources stats={stats} />
+      </Section>
 
-      <Seccion
+      <Section
         id="tiempos"
-        titulo="Tiempos"
-        descripcion="El promedio de cada medida de tiempo y la distribución del cierre total, de la asignación y de lo que ATC tarda en escalar."
-        alcance={periodsLabel}
+        title="Tiempos"
+        description="El promedio de cada medida de tiempo y la distribución del cierre total, de la asignación y de lo que ATC tarda en escalar."
+        scope={periodsLabel}
         icon={<Timer />}
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-          {SUPPORT_TIME_MEASURES.map((medida) => {
-            const meta = TIME_MEASURE_META[medida];
+          {SUPPORT_TIME_MEASURES.map((measure) => {
+            const goal = TIME_MEASURE_META[measure];
 
             return (
               <MetricCard
-                key={medida}
-                label={meta.label}
-                value={`${stats[`tiempo_medio_${medida}_horas`]} h`}
-                color={meta.color}
-                subValue={`${meta.caption} · ${formatInteger(stats[`muestra_${medida}`])} medidos`}
-                icon={MEASURE_ICONS[meta.color]}
+                key={measure}
+                label={goal.label}
+                value={`${stats[`time_mean_${measure}_hours`]} h`}
+                color={goal.color}
+                subValue={`${goal.caption} · ${formatInteger(stats[`sample_${measure}`])} medidos`}
+                icon={MEASURE_ICONS[goal.color]}
               />
             );
           })}
@@ -305,72 +196,72 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <EquidistantTimeline
             title="Distribución Cierre Total"
-            subtitle={`Creación → cierre · ${formatInteger(cierreTotal.muestra)} tickets medidos`}
+            subtitle={`Creación → cierre · ${formatInteger(closeTotal.sample)} tickets medidos`}
             icon={<Clock className="h-5 w-5" />}
             theme="blue"
-            min={cierreTotal.min}
-            p25={cierreTotal.p25}
-            mediana={cierreTotal.mediana}
-            promedio={cierreTotal.promedio}
-            p75={cierreTotal.p75}
-            max={cierreTotal.max}
-            std={cierreTotal.std}
-            pctExcedeProm={cierreTotal.pctExcedeProm}
+            min={closeTotal.min}
+            p25={closeTotal.p25}
+            median={closeTotal.median}
+            average={closeTotal.average}
+            p75={closeTotal.p75}
+            max={closeTotal.max}
+            std={closeTotal.std}
+            pctAboveAvg={closeTotal.pctAboveAvg}
           />
 
           <EquidistantTimeline
             title="Distribución Asignación"
-            subtitle={`Creación → asignación · ${formatInteger(asignacion.muestra)} tickets medidos`}
+            subtitle={`Creación → asignación · ${formatInteger(assignment.sample)} tickets medidos`}
             icon={<Hourglass className="h-5 w-5" />}
             theme="slate"
-            min={asignacion.min}
-            p25={asignacion.p25}
-            mediana={asignacion.mediana}
-            promedio={asignacion.promedio}
-            p75={asignacion.p75}
-            max={asignacion.max}
-            std={asignacion.std}
-            pctExcedeProm={asignacion.pctExcedeProm}
+            min={assignment.min}
+            p25={assignment.p25}
+            median={assignment.median}
+            average={assignment.average}
+            p75={assignment.p75}
+            max={assignment.max}
+            std={assignment.std}
+            pctAboveAvg={assignment.pctAboveAvg}
           />
 
-          {escalamiento.muestra > 0 && (
+          {escalation.sample > 0 && (
             <div className="xl:col-span-2">
               <EquidistantTimeline
                 title="Distribución Hasta Escalar"
-                subtitle={`Creación → paso a Soporte · ${formatInteger(escalamiento.muestra)} escalados medidos`}
+                subtitle={`Creación → paso a Soporte · ${formatInteger(escalation.sample)} escalados medidos`}
                 icon={<ArrowRightLeft className="h-5 w-5" />}
                 theme="yellow"
-                min={escalamiento.min}
-                p25={escalamiento.p25}
-                mediana={escalamiento.mediana}
-                promedio={escalamiento.promedio}
-                p75={escalamiento.p75}
-                max={escalamiento.max}
-                std={escalamiento.std}
-                pctExcedeProm={escalamiento.pctExcedeProm}
+                min={escalation.min}
+                p25={escalation.p25}
+                median={escalation.median}
+                average={escalation.average}
+                p75={escalation.p75}
+                max={escalation.max}
+                std={escalation.std}
+                pctAboveAvg={escalation.pctAboveAvg}
               />
             </div>
           )}
         </div>
-      </Seccion>
+      </Section>
 
-      {verAbiertos && (
-        <Seccion
+      {showOpen && (
+        <Section
           id="abiertos"
-          titulo="Tickets abiertos ahora"
-          descripcion="Cuánto llevan abiertos desde su creación y cuánto en la etapa en que están, con el reloj en la hora de Caracas y los logs del último análisis."
-          alcance="Hoy"
+          title="Tickets abiertos ahora"
+          description="Cuánto llevan abiertos desde su creación y cuánto en la etapa en que están, con el reloj en la hora de Caracas y los logs del último análisis."
+          scope="Hoy"
           icon={<FolderOpen />}
         >
-          <TicketsAbiertosPanel abiertos={abiertos} />
-        </Seccion>
+          <OpenTicketsPanel open={open} />
+        </Section>
       )}
 
-      <Seccion
+      <Section
         id="tendencias"
-        titulo="Tendencias y grupos de trabajo"
-        descripcion="Cada tasa y cada tiempo mes a mes —pulsa una tarjeta para ver el histórico completo— y el rendimiento de cada grupo."
-        alcance={periodsLabel}
+        title="Tendencias y grupos de trabajo"
+        description="Cada tasa y cada tiempo mes a mes —pulsa una tarjeta para ver el histórico completo— y el rendimiento de cada grupo."
+        scope={periodsLabel}
         icon={<Activity />}
       >
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -409,35 +300,35 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
                   <Fragment key={card.id}>
                     <MetricCard
                       label={card.label}
-                      value={`${card.pctResueltos}%`}
+                      value={`${card.pctResolved}%`}
                       caption={`${formatInteger(card.totalTickets)} tickets/mes · ${card.sharePct}% del total`}
                       color={card.color}
                       indicator
                     >
                       <ProgressBar
                         label="Resueltos"
-                        percent={card.pctResueltos}
-                        valueLabel={`${card.pctResueltos}%`}
+                        percent={card.pctResolved}
+                        valueLabel={`${card.pctResolved}%`}
                         color="green"
                       />
                       <ProgressBar
                         label="Cancelados"
-                        percent={card.pctCancelados}
-                        valueLabel={`${card.pctCancelados}%`}
+                        percent={card.pctCancelled}
+                        valueLabel={`${card.pctCancelled}%`}
                         color="red"
                       />
-                      {card.pctEscalados > 0 && (
+                      {card.pctEscalated > 0 && (
                         <ProgressBar
                           label="Escalados a Soporte"
-                          percent={card.pctEscalados}
-                          valueLabel={`${card.pctEscalados}%`}
+                          percent={card.pctEscalated}
+                          valueLabel={`${card.pctEscalated}%`}
                           color="yellow"
                         />
                       )}
                       <ProgressBar
                         label="Rezagados"
-                        percent={card.pctRezagados}
-                        valueLabel={`${card.pctRezagados}%`}
+                        percent={card.pctLagging}
+                        valueLabel={`${card.pctLagging}%`}
                         color="yellow"
                       />
                     </MetricCard>
@@ -445,15 +336,15 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
                     <MetricCard
                       label={`${card.label} · Cierre Total`}
                       value={`${card.mttr} h`}
-                      caption={`Mediana ${card.mttrMediana} h · asignación ${formatOneDecimal(card.espera)} h`}
+                      caption={`Mediana ${card.mttrMedian} h · asignación ${formatOneDecimal(card.wait)} h`}
                       subValue={mttrGapLabel(card.mttrDelta)}
                       color={card.mttrColor}
                       icon={<Clock className="h-4 w-4 text-sky-400" />}
                     >
                       <ProgressBar
                         label="Excede el promedio"
-                        percent={card.pctExcedeProm}
-                        valueLabel={`${card.pctExcedeProm}%`}
+                        percent={card.pctAboveAvg}
+                        valueLabel={`${card.pctAboveAvg}%`}
                         color="blue"
                       />
                     </MetricCard>
@@ -463,7 +354,7 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
             )}
           </NeonContainer>
         </div>
-      </Seccion>
+      </Section>
 
       <Modal
         isOpen={!!selectedTrend}
@@ -487,7 +378,7 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
                 </span>
                 <span className="font-mono text-xs font-bold text-brand">{periodsLabel}</span>
               </div>
-              <Paginacion estado={paginacion} posicion="arriba" />
+              <Pagination state={pagination} position="arriba" />
               <div className="custom-scrollbar max-h-60 overflow-auto">
                 <table className={READONLY_TABLE}>
                   <thead className={READONLY_TABLE_HEAD_STICKY}>
@@ -504,23 +395,23 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
                     </tr>
                   </thead>
                   <tbody className={READONLY_TABLE_BODY}>
-                    {paginacion.visibles.map((row) => {
+                    {pagination.visible.map((row) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
 
                       return (
                         <tr
-                          key={row.periodo_reporte}
+                          key={row.report_period}
                           className="transition-colors hover:bg-white/5"
                         >
                           <td className="p-4 font-bold text-white">
-                            {formatPeriodoLabel(String(row.periodo_reporte))}
+                            {formatPeriodLabel(String(row.report_period))}
                           </td>
                           <td className="p-4 text-right font-mono text-slate-400">
-                            {formatInteger(row.tickets_creados)}
+                            {formatInteger(row.tickets_created)}
                           </td>
                           <td className="p-4 text-right font-mono text-slate-400">
-                            {formatInteger(row.tickets_cerrados)}
+                            {formatInteger(row.tickets_closed)}
                           </td>
                           <td className="p-4 text-right font-mono font-black text-white">
                             {formatInteger(countVal)}
@@ -537,7 +428,7 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
                   </tbody>
                 </table>
               </div>
-              <Paginacion estado={paginacion} />
+              <Pagination state={pagination} />
             </div>
           </div>
         )}

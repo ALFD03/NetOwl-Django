@@ -7,31 +7,31 @@ import {
   DataTable, EmptyState, ExcelExportButton, MetricCard, NeonContainer, ToggleGroup,
 } from '@/shared/ui';
 import {
-  SUPPORT_DEPARTAMENTO_EXCEL_COLUMNS,
+  SUPPORT_DEPARTMENT_EXCEL_COLUMNS,
   SUPPORT_DIMENSION_EXCEL_COLUMNS,
   supportExportFileName,
 } from '../../lib/supportExport';
 import {
-  agruparPorDepartamento,
+  groupByDepartment,
   dimensionLeaders,
-  SIN_DEPARTAMENTO,
+  NO_DEPARTMENT,
   SUPPORT_DIMENSION_CAPTIONS,
   SUPPORT_DIMENSION_LABELS,
 } from '../../lib/supportMetrics';
-import { esDimensionPersona, type SupportDimension, type SupportDimensionRow } from '../../types';
-import { SUPPORT_DEPARTAMENTO_COLUMNS, SUPPORT_DIMENSION_COLUMNS } from './supportColumns';
+import { isPersonDimension, type SupportDimension, type SupportDimensionRow } from '../../types';
+import { SUPPORT_DEPARTMENT_COLUMNS, SUPPORT_DIMENSION_COLUMNS } from './supportColumns';
 
 interface Props {
   dimension: SupportDimension;
   rows: SupportDimensionRow[];
   /** Sólo para nombrar el archivo exportado. */
   groupName: string;
-  periodo: string;
-  onSelect: (valor: string) => void;
+  period: string;
+  onSelect: (value: string) => void;
 }
 
 /** Las dos lecturas de un eje de persona. */
-type VistaPersona = 'persona' | 'departamento';
+type PersonView = 'persona' | 'departamento';
 
 /**
  * The values of the selected first-level axis inside the group.
@@ -49,57 +49,57 @@ type VistaPersona = 'persona' | 'departamento';
  * Un departamento no tiene desglose propio: pinchar su fila filtra la tabla de
  * personas a su gente, que es donde el drill-down sí existe.
  */
-export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onSelect }: Props) {
+export function SupportDimensionPanel({ dimension, rows, groupName, period, onSelect }: Props) {
   const label = SUPPORT_DIMENSION_LABELS[dimension];
   const caption = SUPPORT_DIMENSION_CAPTIONS[dimension];
-  const esPersona = esDimensionPersona(dimension);
+  const isPerson = isPersonDimension(dimension);
 
-  const [vista, setVista] = useState<VistaPersona>('persona');
-  const [filtro, setFiltro] = useState<string | null>(null);
+  const [view, setView] = useState<PersonView>('persona');
+  const [filter, setFilter] = useState<string | null>(null);
 
-  // El denominador es el del grupo, no el de lo que se ve: `pctDelPadre` ya
+  // El denominador es el del grupo, no el de lo que se ve: `pctOfParent` ya
   // viene calculado contra el total del grupo y los departamentos tienen que
   // leerse contra el mismo, o las dos vistas dejarían de cuadrar entre sí.
-  const totalGrupo = useMemo(
+  const groupTotal = useMemo(
     () => rows.reduce((acc, row) => acc + Number(row.total_tickets ?? 0), 0),
     [rows],
   );
 
-  const departamentos = useMemo(
-    () => (esPersona ? agruparPorDepartamento(rows, totalGrupo) : []),
-    [esPersona, rows, totalGrupo],
+  const departments = useMemo(
+    () => (isPerson ? groupByDepartment(rows, groupTotal) : []),
+    [isPerson, rows, groupTotal],
   );
 
-  const personas = useMemo(
-    () => (filtro === null ? rows : rows.filter((row) => (row.departamento || SIN_DEPARTAMENTO) === filtro)),
-    [rows, filtro],
+  const people = useMemo(
+    () => (filter === null ? rows : rows.filter((row) => (row.department || NO_DEPARTMENT) === filter)),
+    [rows, filter],
   );
 
-  const verDepartamentos = esPersona && vista === 'departamento';
-  const visibles = verDepartamentos ? departamentos : personas;
-  const leaders = dimensionLeaders(personas);
+  const showDepartments = isPerson && view === 'departamento';
+  const visible = showDepartments ? departments : people;
+  const leaders = dimensionLeaders(people);
 
-  const elegirDepartamento = (nombre: string) => {
-    setFiltro(nombre);
-    setVista('persona');
+  const pickDepartment = (name: string) => {
+    setFilter(name);
+    setView('persona');
   };
 
-  const subtitulo = verDepartamentos
-    ? `${caption} · ${departamentos.length} departamentos · click en una fila para ver a su gente`
-    : `${caption} · ${visibles.length} valores · click en una fila para ver su tipo, razón y solución`;
+  const subtitle = showDepartments
+    ? `${caption} · ${departments.length} departamentos · click en una fila para ver a su gente`
+    : `${caption} · ${visible.length} valores · click en una fila para ver su tipo, razón y solución`;
 
   return (
     <NeonContainer
       theme="purple"
-      title={verDepartamentos ? `${label} por departamento` : `Desglose por ${label}`}
-      subtitle={subtitulo}
-      icon={verDepartamentos ? <Building2 className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
+      title={showDepartments ? `${label} por departamento` : `Desglose por ${label}`}
+      subtitle={subtitle}
+      icon={showDepartments ? <Building2 className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
       headerAction={
         <div className="flex flex-wrap items-center gap-3">
-          {esPersona && (
+          {isPerson && (
             <ToggleGroup
-              activeKey={vista}
-              onChange={(key) => setVista(key as VistaPersona)}
+              activeKey={view}
+              onChange={(key) => setView(key as PersonView)}
               options={[
                 { key: 'persona', label: 'Por persona', icon: Users },
                 { key: 'departamento', label: 'Por departamento', icon: Building2 },
@@ -107,25 +107,25 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
             />
           )}
 
-          {!verDepartamentos && (
+          {!showDepartments && (
             <span className="flex items-center gap-2 rounded-full bg-brand/20 px-3 py-1 text-xs font-semibold text-brand">
               <MousePointerClick className="h-3.5 w-3.5" />
               Drill-down
             </span>
           )}
 
-          {verDepartamentos ? (
+          {showDepartments ? (
             <ExcelExportButton
-              rows={departamentos}
-              columns={SUPPORT_DEPARTAMENTO_EXCEL_COLUMNS}
-              fileName={supportExportFileName([label, 'departamentos', groupName, periodo])}
+              rows={departments}
+              columns={SUPPORT_DEPARTMENT_EXCEL_COLUMNS}
+              fileName={supportExportFileName([label, 'departamentos', groupName, period])}
               sheetName="Departamentos"
             />
           ) : (
             <ExcelExportButton
-              rows={personas}
+              rows={people}
               columns={SUPPORT_DIMENSION_EXCEL_COLUMNS}
-              fileName={supportExportFileName([label, groupName, periodo])}
+              fileName={supportExportFileName([label, groupName, period])}
               sheetName={label}
             />
           )}
@@ -136,27 +136,27 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
         Con un departamento elegido la tabla de personas deja de ser la del
         grupo entero, y eso tiene que verse: el chip dice cuál y lo quita.
       */}
-      {filtro !== null && !verDepartamentos && (
+      {filter !== null && !showDepartments && (
         <button
           type="button"
-          onClick={() => setFiltro(null)}
+          onClick={() => setFilter(null)}
           className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
         >
           <Building2 className="h-3.5 w-3.5" />
-          {filtro}
+          {filter}
           <X className="h-3.5 w-3.5" />
         </button>
       )}
 
-      {visibles.length === 0 ? (
+      {visible.length === 0 ? (
         <EmptyState
           title={
-            filtro !== null
-              ? `Nadie de ${filtro} registra tickets en el periodo.`
+            filter !== null
+              ? `Nadie de ${filter} registra tickets en el periodo.`
               : `El grupo no registra ninguna ${label.toLowerCase()} en el periodo.`
           }
           description={
-            filtro !== null
+            filter !== null
               ? 'Quita el filtro de departamento para ver el eje completo.'
               : 'Vuelve a ejecutar el análisis del mes si esperabas ver datos aquí.'
           }
@@ -181,29 +181,29 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
                 label={leader.label}
                 value={leader.value}
                 caption={leader.caption}
-                subValue={leader.nombre}
+                subValue={leader.name}
                 color={leader.color}
-                onClick={() => onSelect(leader.nombre)}
+                onClick={() => onSelect(leader.name)}
               />
             ))}
           </div>
 
           <div className="h-[480px]">
-            {verDepartamentos ? (
+            {showDepartments ? (
               <DataTable
-                columns={SUPPORT_DEPARTAMENTO_COLUMNS}
-                data={departamentos}
+                columns={SUPPORT_DEPARTMENT_COLUMNS}
+                data={departments}
                 searchable
                 searchPlaceholder="Buscar departamento..."
-                onRowClick={(row) => elegirDepartamento(row.nombre)}
+                onRowClick={(row) => pickDepartment(row.name)}
               />
             ) : (
               <DataTable
                 columns={SUPPORT_DIMENSION_COLUMNS}
-                data={personas}
+                data={people}
                 searchable
                 searchPlaceholder={`Buscar ${label.toLowerCase()}...`}
-                onRowClick={(row) => onSelect(row.nombre)}
+                onRowClick={(row) => onSelect(row.name)}
               />
             )}
           </div>

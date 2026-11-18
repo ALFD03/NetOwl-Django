@@ -7,7 +7,7 @@ import type { ActiveElement, ChartEvent, ChartOptions } from 'chart.js';
 import type { Context as DatalabelContext } from 'chartjs-plugin-datalabels';
 import type React from 'react';
 import type { CenterTextConfig } from './plugins';
-import { colorDelTema } from './tema';
+import { themeColor } from './tema';
 
 /** Used when a dataset carries no colour of its own to borrow. */
 export const DATALABEL_FALLBACK_COLOR = CHART_CHROME.textStrong;
@@ -49,7 +49,7 @@ export function seriesDatalabelColor(...sources: SeriesColorKey[]) {
       if (typeof resolved === 'string') return resolved;
     }
 
-    return colorDelTema(DATALABEL_FALLBACK_COLOR);
+    return themeColor(DATALABEL_FALLBACK_COLOR);
   };
 }
 

@@ -4,39 +4,39 @@ import { useState } from 'react';
 import { Activity, Table as TableIcon } from 'lucide-react';
 
 import { DataTable, Modal, NeonContainer, StickyLabel, type Column } from '@/shared/ui';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
+import { formatInteger, formatPeriodLabel } from '@/shared/utils/formatters';
 import { CrmPeriodDetail } from './CrmPeriodDetail';
 import { CrmPeriodDimensions } from './CrmPeriodDimensions';
-import type { CrmCierre } from '../types';
+import type { CrmClose } from '../types';
 
 interface CrmResultsViewProps {
-  historico: CrmCierre[];
+  history: CrmClose[];
 }
 
-const COLUMNS: Column<CrmCierre>[] = [
+const COLUMNS: Column<CrmClose>[] = [
   {
     header: 'Periodo',
     accessor: (r) => (
-      <StickyLabel minWidth="120px">{formatPeriodoLabel(r.periodo_reporte)}</StickyLabel>
+      <StickyLabel minWidth="120px">{formatPeriodLabel(r.report_period)}</StickyLabel>
     ),
-    sortKey: 'periodo_reporte',
+    sortKey: 'report_period',
     sticky: true,
   },
-  { header: 'Oportunidades', accessor: (r) => formatInteger(r.total_oportunidades), align: 'right', sortKey: 'total_oportunidades' },
-  { header: 'Ganados', accessor: (r) => <span className="font-semibold text-emerald-400">+{formatInteger(r.ganados)}</span>, align: 'right', sortKey: 'ganados' },
-  { header: '% Instalación', accessor: (r) => <span className="font-bold text-emerald-400">{r.pct_instalacion}%</span>, align: 'right', sortKey: 'pct_instalacion' },
-  { header: 'Perdidos', accessor: (r) => <span className="font-semibold text-rose-400">-{formatInteger(r.perdidos)}</span>, align: 'right', sortKey: 'perdidos' },
-  { header: '% Pérdida', accessor: (r) => <span className="font-bold text-rose-400">{r.pct_perdida}%</span>, align: 'right', sortKey: 'pct_perdida' },
-  { header: 'Pendientes', accessor: (r) => <span className="text-sky-400">{formatInteger(r.pendientes)}</span>, align: 'right', sortKey: 'pendientes' },
-  { header: '% Pendientes', accessor: (r) => <span className="text-sky-400">{r.pct_pendientes}%</span>, align: 'right', sortKey: 'pct_pendientes' },
-  { header: 'Devueltos E8', accessor: (r) => <span className="text-amber-400">{formatInteger(r.count_devueltos_e8)}</span>, align: 'right', sortKey: 'count_devueltos_e8' },
-  { header: '% Devueltos E8', accessor: (r) => <span className="font-bold text-amber-400">{r.pct_devueltos_e8}%</span>, align: 'right', sortKey: 'pct_devueltos_e8' },
-  { header: 'Lead Time Inst. (h)', accessor: (r) => `${r.horas_promedio_inst} h`, align: 'right', sortKey: 'horas_promedio_inst' },
-  { header: 'Tiempo Pérdida (h)', accessor: (r) => `${r.horas_promedio_perd} h`, align: 'right', sortKey: 'horas_promedio_perd' },
+  { header: 'Oportunidades', accessor: (r) => formatInteger(r.total_opportunities), align: 'right', sortKey: 'total_opportunities' },
+  { header: 'Ganados', accessor: (r) => <span className="font-semibold text-emerald-400">+{formatInteger(r.won)}</span>, align: 'right', sortKey: 'won' },
+  { header: '% Instalación', accessor: (r) => <span className="font-bold text-emerald-400">{r.pct_installation}%</span>, align: 'right', sortKey: 'pct_installation' },
+  { header: 'Perdidos', accessor: (r) => <span className="font-semibold text-rose-400">-{formatInteger(r.lost)}</span>, align: 'right', sortKey: 'lost' },
+  { header: '% Pérdida', accessor: (r) => <span className="font-bold text-rose-400">{r.pct_lost}%</span>, align: 'right', sortKey: 'pct_lost' },
+  { header: 'Pendientes', accessor: (r) => <span className="text-sky-400">{formatInteger(r.pending)}</span>, align: 'right', sortKey: 'pending' },
+  { header: '% Pendientes', accessor: (r) => <span className="text-sky-400">{r.pct_pending}%</span>, align: 'right', sortKey: 'pct_pending' },
+  { header: 'Devueltos E8', accessor: (r) => <span className="text-amber-400">{formatInteger(r.count_returned_e8)}</span>, align: 'right', sortKey: 'count_returned_e8' },
+  { header: '% Devueltos E8', accessor: (r) => <span className="font-bold text-amber-400">{r.pct_returned_e8}%</span>, align: 'right', sortKey: 'pct_returned_e8' },
+  { header: 'Lead Time Inst. (h)', accessor: (r) => `${r.hours_avg_inst} h`, align: 'right', sortKey: 'hours_avg_inst' },
+  { header: 'Tiempo Pérdida (h)', accessor: (r) => `${r.hours_avg_lost} h`, align: 'right', sortKey: 'hours_avg_lost' },
 ];
 
-export function CrmResultsView({ historico }: CrmResultsViewProps) {
-  const [selectedRow, setSelectedRow] = useState<CrmCierre | null>(null);
+export function CrmResultsView({ history }: CrmResultsViewProps) {
+  const [selectedRow, setSelectedRow] = useState<CrmClose | null>(null);
 
   return (
     <>
@@ -50,7 +50,7 @@ export function CrmResultsView({ historico }: CrmResultsViewProps) {
         <div className="h-[550px]">
           <DataTable
             columns={COLUMNS}
-            data={historico}
+            data={history}
             searchable
             searchPlaceholder="Buscar por periodo..."
             onRowClick={setSelectedRow}
@@ -61,7 +61,7 @@ export function CrmResultsView({ historico }: CrmResultsViewProps) {
       <Modal
         isOpen={Boolean(selectedRow)}
         onClose={() => setSelectedRow(null)}
-        title={`Auditoría de Periodo: ${selectedRow ? formatPeriodoLabel(selectedRow.periodo_reporte) : ''}`}
+        title={`Auditoría de Periodo: ${selectedRow ? formatPeriodLabel(selectedRow.report_period) : ''}`}
         subtitle="Conversión del embudo, efectividad por etapa, tiempos y desglose dimensional"
         theme="blue"
         icon={<Activity className="h-5 w-5 text-brand" />}
@@ -70,7 +70,7 @@ export function CrmResultsView({ historico }: CrmResultsViewProps) {
         {selectedRow && (
           <div className="space-y-6">
             <CrmPeriodDetail row={selectedRow} />
-            <CrmPeriodDimensions period={selectedRow.periodo_reporte} />
+            <CrmPeriodDimensions period={selectedRow.report_period} />
           </div>
         )}
       </Modal>

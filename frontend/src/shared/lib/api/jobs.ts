@@ -6,7 +6,7 @@
  * que las páginas pueden esperar.
  */
 
-import { apiClient } from './client';
+import { apiClient, notifyDataChanged } from './client';
 import { JobCancelledError, JobFailedError } from '../http/errors';
 
 /** Modules that run their analysis through the Celery worker. */
@@ -18,13 +18,13 @@ export interface AnalysisJob {
   id: string;
   module: JobModule;
   module_display: string;
-  periodo: string;
+  period: string;
   status: JobStatus;
   status_display: string;
   message: string;
   log_output: string;
   progress: { done: number; total: number; label: string };
-  result: { periodo_label?: string; dias_calculados?: number };
+  result: { period_label?: string; computed_days?: number };
   created_at: string;
   finished_at: string | null;
 }
@@ -46,17 +46,17 @@ const POLL_INTERVAL_MS = 2000;
  * la pantalla no refleja nada de lo que se acaba de pedir. Esto le da la señal
  * para consultar en el acto, sin bajar el intervalo de todos los demás sondeos.
  */
-type OyenteDeCola = () => void;
-const oyentesDeCola = new Set<OyenteDeCola>();
+type QueueListener = () => void;
+const queueListeners = new Set<QueueListener>();
 
-export function notificarJobEncolado(): void {
-  oyentesDeCola.forEach((oyente) => oyente());
+export function notifyJobQueued(): void {
+  queueListeners.forEach((listener) => listener());
 }
 
-export function suscribirseAJobsEncolados(oyente: OyenteDeCola): () => void {
-  oyentesDeCola.add(oyente);
+export function subscribeToQueuedJobs(listener: QueueListener): () => void {
+  queueListeners.add(listener);
   return () => {
-    oyentesDeCola.delete(oyente);
+    queueListeners.delete(listener);
   };
 }
 
@@ -67,18 +67,18 @@ const isFinished = (job: AnalysisJob) =>
 /** Everything the worker is running or has queued, for the floating indicator. */
 export interface JobQueue {
   jobs: AnalysisJob[];
-  en_ejecucion: number;
-  en_cola: number;
+  running: number;
+  queued: number;
 }
 
 export const jobsApi = {
-  fetch: async (id: string) => (await apiClient.get<AnalysisJob>(`/imports/api/jobs/${id}/`)).data,
+  fetch: async (id: string) => (await apiClient.get<AnalysisJob>(`/api/imports/jobs/${id}/`)).data,
 
-  queue: async () => (await apiClient.get<JobQueue>('/imports/api/jobs/queue/')).data,
+  queue: async () => (await apiClient.get<JobQueue>('/api/imports/jobs/queue/')).data,
 
   /** Open run of a module, so a reloaded page can re-attach to it. */
   active: async (module: JobModule) =>
-    (await apiClient.get<{ job: AnalysisJob | null }>('/imports/api/jobs/active/', { params: { module } }))
+    (await apiClient.get<{ job: AnalysisJob | null }>('/api/imports/jobs/active/', { params: { module } }))
       .data.job,
 
   /**
@@ -90,7 +90,7 @@ export const jobsApi = {
    */
   cancel: async (id: string) =>
     (await apiClient.post<{ status: string; message: string; job: AnalysisJob }>(
-      `/imports/api/jobs/${id}/cancel/`,
+      `/api/imports/jobs/${id}/cancel/`,
     )).data,
 };
 
@@ -119,6 +119,8 @@ export async function followJob(
     }
     onProgress?.(current);
   }
+  // Lo que escribió el worker (o la parte que llegó a escribir) ya está en la BD.
+  notifyDataChanged();
 
   if (current.status === 'cancelled') {
     throw new JobCancelledError(current.message, current.log_output);
@@ -143,10 +145,10 @@ export async function startAndFollow(
     // el usuario, es el mismo trabajo: nos enganchamos a el.
     const running = extractRunningJob(error);
     if (!running) throw error;
-    notificarJobEncolado();
+    notifyJobQueued();
     return followJob(running.job, onProgress);
   }
-  notificarJobEncolado();
+  notifyJobQueued();
   return followJob(started.job, onProgress);
 }
 
@@ -157,12 +159,12 @@ function extractRunningJob(error: unknown): StartJobResponse | null {
 }
 
 /** Lo que responde el lanzamiento de un lote de meses (`jobs._lanzar_lote`). */
-export interface LoteJobs {
+export interface BatchJobs {
   message: string;
   /** Los jobs creados ahora, uno por mes. */
   jobs: AnalysisJob[];
   /** Los meses que ya estaban en la cola o corriendo, con su job, para seguirlos igual. */
-  omitidos: AnalysisJob[];
+  skipped: AnalysisJob[];
 }
 
 /**
@@ -172,16 +174,16 @@ export interface LoteJobs {
  * endpoints de cálculo. Si todos ya estaban en la cola el servidor responde
  * 409 con ellos en `omitidos`, y se tratan igual: se siguen.
  */
-export async function startBatch(path: string, months: string[]): Promise<LoteJobs> {
+export async function startBatch(path: string, months: string[]): Promise<BatchJobs> {
   try {
-    const lote = (await apiClient.post<LoteJobs>(path, { months })).data;
-    notificarJobEncolado();
-    return lote;
+    const batch = (await apiClient.post<BatchJobs>(path, { months })).data;
+    notifyJobQueued();
+    return batch;
   } catch (error) {
-    const respuesta = (error as { response?: { status?: number; data?: LoteJobs } })?.response;
-    if (respuesta?.status === 409 && respuesta.data?.omitidos) {
-      notificarJobEncolado();
-      return respuesta.data;
+    const response = (error as { response?: { status?: number; data?: BatchJobs } })?.response;
+    if (response?.status === 409 && response.data?.skipped) {
+      notifyJobQueued();
+      return response.data;
     }
     throw error;
   }
@@ -197,14 +199,15 @@ export async function followJobs(
   jobs: AnalysisJob[],
   onProgress: (jobs: AnalysisJob[]) => void,
 ): Promise<AnalysisJob[]> {
-  let actuales = jobs;
-  onProgress(actuales);
-  while (actuales.some((job) => !isFinished(job))) {
+  let currentJobs = jobs;
+  onProgress(currentJobs);
+  while (currentJobs.some((job) => !isFinished(job))) {
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-    actuales = await Promise.all(
-      actuales.map((job) => (isFinished(job) ? job : jobsApi.fetch(job.id).catch(() => job))),
+    currentJobs = await Promise.all(
+      currentJobs.map((job) => (isFinished(job) ? job : jobsApi.fetch(job.id).catch(() => job))),
     );
-    onProgress(actuales);
+    onProgress(currentJobs);
   }
-  return actuales;
+  notifyDataChanged();
+  return currentJobs;
 }

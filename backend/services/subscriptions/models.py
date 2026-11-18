@@ -21,12 +21,12 @@ from django.db import models
 
 # Vocabulario de tecnologias. Son dos y solo dos: la red es fibra o radio, y
 # ante la reguladora eso se colapsa a alambrico o inalambrico (ver `TECH_MAP`).
-TECNOLOGIA_CHOICES = [
+TECHNOLOGY_CHOICES = [
     ("FTTH", "FTTH (fibra)"),
     ("RF", "RF (radiofrecuencia)"),
 ]
 
-TIPO_PERSONA_CHOICES = [
+PERSON_KIND_CHOICES = [
     ("nat", "Persona natural"),
     ("PYME", "Persona juridica / PYME"),
 ]
@@ -34,100 +34,125 @@ TIPO_PERSONA_CHOICES = [
 
 # Las listas de "por registrar" que admiten un "ignorar": cada area del modulo
 # de catalogos detecta en los datos importados los nombres que no reconoce.
-AREA_IGNORADO_CHOICES = [
+IGNORED_AREA_CHOICES = [
     ("productos", "Productos"),
     ("estructura", "Estructura"),
     ("ventas", "Ventas"),
 ]
 
 
-class Estado(models.Model):
+class State(models.Model):
     """Entidad federal a la que pertenece una zona (Aragua, Carabobo...)."""
 
-    nombre = models.CharField(max_length=80, unique=True)
+    name = models.CharField(max_length=80, unique=True, db_column="nombre")
 
     class Meta:
         db_table = "catalogo_estados"
-        ordering = ["nombre"]
+        ordering = ["name"]
         verbose_name = "estado"
         verbose_name_plural = "estados"
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
 
 class Site(models.Model):
     """Sede regional que agrupa zonas.
 
-    `orden` no es decorativo: los sites no se presentan alfabeticamente sino
+    `order` no es decorativo: los sites no se presentan alfabeticamente sino
     por relevancia comercial. Antes ese orden era la lista `CUSTOM_SITE_ORDER`
     en el codigo; ahora es esta columna, y aquella solo sobrevive como semilla.
 
-    `equipos` son los equipos de ventas que trabajan en el site (se eligen en
+    `teams` son los equipos de ventas que trabajan en el site (se eligen en
     Catalogos › Ventas › Estructura de ventas).
     """
 
-    nombre = models.CharField(max_length=80, unique=True)
-    orden = models.IntegerField(default=999)
-    equipos = models.ManyToManyField("catalogos.EquipoVentas", blank=True, related_name="sites")
+    name = models.CharField(max_length=80, unique=True, db_column="nombre")
+    order = models.IntegerField(default=999, db_column="orden")
+    teams = models.ManyToManyField("catalogos.SalesTeam", blank=True, related_name="sites", through="SiteTeam")
 
     class Meta:
         db_table = "catalogo_sites"
-        ordering = ["orden", "nombre"]
+        ordering = ["order", "name"]
         verbose_name = "site"
         verbose_name_plural = "sites"
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
 
-class Coordinador(models.Model):
+class Coordinator(models.Model):
     """Unidad de negocio: un conjunto de zonas llevado por un responsable comercial.
 
-    `nombre` es como se presenta en Unidades de negocio, no una persona: una
+    `name` es como se presenta en Unidades de negocio, no una persona: una
     misma persona puede llevar dos unidades («German Cerruti» y «German
     Cerruti 2») y una unidad puede estar «Vacante». Quien la lleva no se guarda
-    aqui sino en la membresia de equipo que la tiene en `unidades`
-    (`catalogos.MembresiaEquipo`): el coordinador de UN, y los jefes y gerentes
-    que cobran por ella. `equipos` son los equipos de ventas que la trabajan.
+    aqui sino en la membresia de equipo que la tiene en `units`
+    (`catalogos.TeamMembership`): el coordinador de UN, y los jefes y gerentes
+    que cobran por ella. `teams` son los equipos de ventas que la trabajan.
     """
 
-    nombre = models.CharField(max_length=120, unique=True)
-    equipos = models.ManyToManyField("catalogos.EquipoVentas", blank=True, related_name="unidades_negocio")
+    name = models.CharField(max_length=120, unique=True, db_column="nombre")
+    teams = models.ManyToManyField(
+        "catalogos.SalesTeam", blank=True, related_name="business_units", through="CoordinatorTeam",
+    )
 
     class Meta:
         db_table = "catalogo_coordinadores"
-        ordering = ["nombre"]
+        ordering = ["name"]
         verbose_name = "coordinador"
         verbose_name_plural = "coordinadores"
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
 
-class Zona(models.Model):
+class SiteTeam(models.Model):
+    """Un equipo de ventas que trabaja en un site (la tabla del M2M `Site.teams`)."""
+
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, db_column="site_id")
+    team = models.ForeignKey("catalogos.SalesTeam", on_delete=models.CASCADE, db_column="equipoventas_id")
+
+    class Meta:
+        db_table = "catalogo_sites_equipos"
+        unique_together = [("site", "team")]
+
+
+class CoordinatorTeam(models.Model):
+    """Un equipo de ventas que trabaja una unidad de negocio (la tabla del M2M `Coordinator.teams`)."""
+
+    coordinator = models.ForeignKey(Coordinator, on_delete=models.CASCADE, db_column="coordinador_id")
+    team = models.ForeignKey("catalogos.SalesTeam", on_delete=models.CASCADE, db_column="equipoventas_id")
+
+    class Meta:
+        db_table = "catalogo_coordinadores_equipos"
+        unique_together = [("coordinator", "team")]
+
+
+class Zone(models.Model):
     """Nodo de red. Es la dimension por la que se desglosa casi toda metrica."""
 
-    nombre = models.CharField(max_length=120, unique=True)
-    site = models.ForeignKey(Site, on_delete=models.PROTECT, related_name="zonas")
-    estado = models.ForeignKey(Estado, on_delete=models.PROTECT, related_name="zonas")
-    tecnologia = models.CharField(max_length=10, choices=TECNOLOGIA_CHOICES, default="FTTH")
-    coordinador = models.ForeignKey(
-        Coordinador,
+    name = models.CharField(max_length=120, unique=True, db_column="nombre")
+    site = models.ForeignKey(Site, on_delete=models.PROTECT, related_name="zones")
+    state = models.ForeignKey(State, on_delete=models.PROTECT, related_name="zones", db_column="estado_id")
+    technology = models.CharField(max_length=10, choices=TECHNOLOGY_CHOICES, default="FTTH", db_column="tecnologia")
+    coordinator = models.ForeignKey(
+        Coordinator,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="zonas",
+        related_name="zones",
+        db_column="coordinador_id",
     )
 
     class Meta:
         db_table = "catalogo_zonas"
-        ordering = ["nombre"]
+        ordering = ["name"]
         verbose_name = "zona"
         verbose_name_plural = "zonas"
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
     def to_fixture(self) -> dict[str, str]:
         """La zona con las claves que usaba `Zonas.json`.
@@ -137,15 +162,15 @@ class Zona(models.Model):
         tocarlos todos sin ganar nada.
         """
         return {
-            "name": self.nombre,
-            "Site": self.site.nombre,
-            "Type": self.tecnologia,
-            "Estado": self.estado.nombre,
-            "Coordinador": self.coordinador.nombre if self.coordinador else "",
+            "name": self.name,
+            "Site": self.site.name,
+            "Type": self.technology,
+            "Estado": self.state.name,
+            "Coordinador": self.coordinator.name if self.coordinator else "",
         }
 
 
-class PlanRegulador(models.Model):
+class RegulatoryPlan(models.Model):
     """Plan tal y como se **declara** a la reguladora, no como se vende.
 
     La reguladora no quiere el catalogo comercial: quiere una fila por producto
@@ -162,31 +187,31 @@ class PlanRegulador(models.Model):
     `ETAReportManager` lo reporta aparte para que se note.
     """
 
-    nombre = models.CharField(max_length=200, unique=True)
-    tecnologia = models.CharField(max_length=10, choices=TECNOLOGIA_CHOICES, default="FTTH")
-    tipo_persona = models.CharField(max_length=10, choices=TIPO_PERSONA_CHOICES, default="nat")
-    datas_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    # En divisa, igual que `Plan.precio`. La conversion a bolivares se hace al
+    name = models.CharField(max_length=200, unique=True, db_column="nombre")
+    technology = models.CharField(max_length=10, choices=TECHNOLOGY_CHOICES, default="FTTH", db_column="tecnologia")
+    person_type = models.CharField(max_length=10, choices=PERSON_KIND_CHOICES, default="nat", db_column="tipo_persona")
+    data_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0, db_column="datas_mbps")
+    # En divisa, igual que `Plan.price`. La conversion a bolivares se hace al
     # exportar, con la tasa del dia: guardarla aqui congelaria el reporte a la
     # tasa que hubiera cuando alguien edito el catalogo.
-    precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    tiene_tv = models.BooleanField(default=False)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0, db_column="precio")
+    has_tv = models.BooleanField(default=False, db_column="tiene_tv")
     # Decide en que hoja del libro cae la fila: transporte va en la suya, que
     # pide otras columnas (medio de transmision, numero de enlaces).
-    es_transporte = models.BooleanField(default=False)
-    notas = models.CharField(max_length=255, blank=True, default="")
+    is_transport = models.BooleanField(default=False, db_column="es_transporte")
+    notes = models.CharField(max_length=255, blank=True, default="", db_column="notas")
 
-    creado_en = models.DateTimeField(auto_now_add=True)
-    actualizado_en = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_column="creado_en")
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "catalogo_planes_reguladores"
-        ordering = ["nombre"]
+        ordering = ["name"]
         verbose_name = "plan regulador"
         verbose_name_plural = "planes reguladores"
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
     def to_fixture(self) -> dict[str, str]:
         """El regulador con las claves planas que consume `eta_report`.
@@ -195,13 +220,13 @@ class PlanRegulador(models.Model):
         consumidores de `core/fixtures` los convierten ellos.
         """
         return {
-            "name": self.nombre,
-            "type": self.tecnologia,
-            "people": self.tipo_persona,
-            "TV": "True" if self.tiene_tv else "False",
-            "datas": _numero(self.datas_mbps),
-            "price": _numero(self.precio),
-            "es_transporte": self.es_transporte,
+            "name": self.name,
+            "type": self.technology,
+            "people": self.person_type,
+            "TV": "True" if self.has_tv else "False",
+            "datas": _number(self.data_mbps),
+            "price": _number(self.price),
+            "es_transporte": self.is_transport,
         }
 
 
@@ -212,39 +237,37 @@ class Plan(models.Model):
     dos veces cuando cambiaba de tarifa (los de Puerto Cabello tienen otra
     velocidad de referencia). La pareja (nombre, tarifa) si lo es.
 
-    `declarar_en_eta` es el unico campo que el JSON no tenia: sustituye a la
-    tabla `analyzer_eta_config_planes`, que guardaba una segunda copia —con
-    prioridad— de tecnologia, persona, TV y Mbps. Un plan se clasifica en un
-    solo sitio, y es este.
+    `declare_in_eta` es el unico campo que el JSON no tenia. Un plan se
+    clasifica en un solo sitio, y es este.
     """
 
-    nombre = models.CharField(max_length=150)
-    tarifa = models.CharField(max_length=150, blank=True, default="")
-    tecnologia = models.CharField(max_length=10, choices=TECNOLOGIA_CHOICES, default="FTTH")
-    tipo_persona = models.CharField(max_length=10, choices=TIPO_PERSONA_CHOICES, default="nat")
-    referencia = models.CharField(max_length=200, blank=True, default="")
-    tiene_tv = models.BooleanField(default=False)
-    datas_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    precio = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    declarar_en_eta = models.BooleanField(default=True)
-    # Lo que se lleva quien vende un plan PYME, en % de `precio`. Solo tiene
+    name = models.CharField(max_length=150, db_column="nombre")
+    tariff = models.CharField(max_length=150, blank=True, default="", db_column="tarifa")
+    technology = models.CharField(max_length=10, choices=TECHNOLOGY_CHOICES, default="FTTH", db_column="tecnologia")
+    person_type = models.CharField(max_length=10, choices=PERSON_KIND_CHOICES, default="nat", db_column="tipo_persona")
+    reference = models.CharField(max_length=200, blank=True, default="", db_column="referencia")
+    has_tv = models.BooleanField(default=False, db_column="tiene_tv")
+    data_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0, db_column="datas_mbps")
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0, db_column="precio")
+    declare_in_eta = models.BooleanField(default=True, db_column="declarar_en_eta")
+    # Lo que se lleva quien vende un plan PYME, en % de `price`. Solo tiene
     # sentido en los PYME: un plan residencial se paga por tramos de cantidad
-    # de ventas (ver `services/comisiones`). Nulo es "sin definir": la venta
+    # de ventas (ver `services/commissions`). Nulo es "sin definir": la venta
     # sale en el informe de comisiones sin monto, para que se note.
-    comision_pyme_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    sme_commission_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, db_column="comision_pyme_pct")
     # Con que fila de los formularios de la reguladora se declara este plan.
     # Nulo no es un error de datos: un plan recien creado todavia no esta
     # agrupado, y hasta que lo este no se declara.
-    plan_regulador = models.ForeignKey(
-        PlanRegulador,
+    regulator_plan = models.ForeignKey(
+        RegulatoryPlan,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="planes",
+        related_name="plans", db_column="plan_regulador_id",
     )
 
-    creado_en = models.DateTimeField(auto_now_add=True)
-    actualizado_en = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_column="creado_en")
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "catalogo_planes"
@@ -252,15 +275,15 @@ class Plan(models.Model):
         # construyen un mapa por nombre y gana la ultima. Ordenar por tarifa
         # deja ganar a la variante con tarifa propia, que es la que ganaba en
         # `Planes.json` por venir despues en el fichero.
-        ordering = ["nombre", "tarifa"]
+        ordering = ["name", "tariff"]
         constraints = [
-            models.UniqueConstraint(fields=["nombre", "tarifa"], name="catalogo_plan_nombre_tarifa")
+            models.UniqueConstraint(fields=["name", "tariff"], name="catalogo_plan_nombre_tarifa")
         ]
         verbose_name = "plan"
         verbose_name_plural = "planes"
 
     def __str__(self):
-        return f"{self.nombre} ({self.tarifa})" if self.tarifa else self.nombre
+        return f"{self.name} ({self.tariff})" if self.tariff else self.name
 
     def to_fixture(self) -> dict[str, str]:
         """El plan con las claves que usaba `Planes.json`.
@@ -269,27 +292,27 @@ class Plan(models.Model):
         convierten los consumidores (`float(p.get("datas") or "0")`).
         """
         return {
-            "name": self.nombre,
-            "type": self.tecnologia,
-            "people": self.tipo_persona,
-            "ref": self.referencia,
-            "TV": "True" if self.tiene_tv else "False",
-            "datas": _numero(self.datas_mbps),
-            "price": _numero(self.precio),
-            "tarifa": self.tarifa,
-            "declarar_en_eta": self.declarar_en_eta,
+            "name": self.name,
+            "type": self.technology,
+            "people": self.person_type,
+            "ref": self.reference,
+            "TV": "True" if self.has_tv else "False",
+            "datas": _number(self.data_mbps),
+            "price": _number(self.price),
+            "tarifa": self.tariff,
+            "declarar_en_eta": self.declare_in_eta,
             # Nulo y no texto vacio: es "sin definir", y Comisiones lo distingue de 0.
             "comision_pyme_pct": (
-                float(self.comision_pyme_pct) if self.comision_pyme_pct is not None else None
+                float(self.sme_commission_pct) if self.sme_commission_pct is not None else None
             ),
             # El regulador viaja como el diccionario entero y no como su id:
             # el consumidor (`eta_report`) necesita sus campos, y `fixtures`
             # sirve diccionarios planos, no filas del ORM.
-            "regulador": self.plan_regulador.to_fixture() if self.plan_regulador_id else None,
+            "regulador": self.regulator_plan.to_fixture() if self.regulator_plan_id else None,
         }
 
 
-class ProductoIgnorado(models.Model):
+class IgnoredProduct(models.Model):
     """Nombre del export que nunca sera una fila del catalogo.
 
     Nacio para las lineas que nunca seran un plan (routers, instalaciones...)
@@ -302,31 +325,31 @@ class ProductoIgnorado(models.Model):
     aqui lo saca de la lista de candidatos sin meterlo en el catalogo, que es
     lo que evita que una instalacion bloquee cada importacion para siempre.
 
-    No confundirlo con `Plan.declarar_en_eta`: aquello es un plan de verdad que
+    No confundirlo con `Plan.declare_in_eta`: aquello es un plan de verdad que
     queda fuera del reporte de la reguladora y sigue contando como plan.
     """
 
-    nombre = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, db_column="nombre")
     # De que lista de "por registrar" sale el nombre. El mismo texto puede ser
     # un producto que no es plan y, a la vez, un vendedor que no se registra:
     # ignorarlo en un sitio no lo calla en el otro. Solo los de `productos`
-    # alimentan `fixtures.productos_ignorados()`.
-    area = models.CharField(max_length=16, choices=AREA_IGNORADO_CHOICES, default="productos")
-    nota = models.CharField(max_length=255, blank=True, default="")
-    creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    creado_en = models.DateTimeField(auto_now_add=True)
+    # alimentan `fixtures.ignored_products()`.
+    area = models.CharField(max_length=16, choices=IGNORED_AREA_CHOICES, default="productos")
+    note = models.CharField(max_length=255, blank=True, default="", db_column="nota")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_column="creado_por_id")
+    created_at = models.DateTimeField(auto_now_add=True, db_column="creado_en")
 
     class Meta:
         db_table = "catalogo_productos_ignorados"
-        ordering = ["area", "nombre"]
+        ordering = ["area", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["area", "nombre"], name="catalogo_ignorado_area_nombre"),
+            models.UniqueConstraint(fields=["area", "name"], name="catalogo_ignorado_area_nombre"),
         ]
         verbose_name = "nombre ignorado"
         verbose_name_plural = "nombres ignorados"
 
     def __str__(self):
-        return self.nombre
+        return self.name
 
 
 # --- Objetivos comerciales ---------------------------------------------------
@@ -336,7 +359,7 @@ class ProductoIgnorado(models.Model):
 # metricas calculadas sino aqui, y el cliente las aplica al pintar
 # (`frontend/src/features/subscriptions/lib/objetivos.ts`). Cambiar un objetivo se ve
 # al recargar la pagina, sin relanzar ningun mes. El color lo decide aparte el
-# semaforo, con umbrales fijos (`SemaforoObjetivos`).
+# semaforo, con umbrales fijos (`TargetThresholds`).
 #
 # Los niveles, de mas alto a mas bajo: sucursal, estado, site, coordinador,
 # zona y zona-sucursal (el nodo), con el general como respaldo. **Manda el nivel
@@ -346,7 +369,7 @@ class ProductoIgnorado(models.Model):
 # su coordinador ni el de su site, y el de un coordinador no mueve el del site.
 # La regla completa esta en el modulo del cliente, que es quien la aplica.
 
-NIVEL_OBJETIVO_CHOICES = [
+TARGET_LEVEL_CHOICES = [
     ("general", "General"),
     ("sucursal", "Sucursal"),
     ("estado", "Estado"),
@@ -358,48 +381,48 @@ NIVEL_OBJETIVO_CHOICES = [
 
 # La clave ajena de la entidad de cada nivel. El general no tiene; la sucursal
 # tampoco, porque no es un catalogo sino el texto que trae el export (`NETCOM`,
-# `NYC`...), y va en `sucursal`. Un nodo es su zona mas su sucursal.
-REFERENCIA_POR_NIVEL = {
-    "estado": "estado",
+# `NYC`...), y va en `branch`. Un nodo es su zona mas su sucursal.
+REFERENCE_BY_LEVEL = {
+    "estado": "state",
     "site": "site",
-    "coordinador": "coordinador",
-    "zona": "zona",
-    "zona_sucursal": "zona",
+    "coordinador": "coordinator",
+    "zona": "zone",
+    "zona_sucursal": "zone",
 }
-CAMPOS_REFERENCIA = ("estado", "site", "coordinador", "zona")
-NIVELES_CON_SUCURSAL = ("sucursal", "zona_sucursal")
+REFERENCE_FIELDS = ("state", "site", "coordinator", "zone")
+LEVELS_WITH_BRANCH = ("sucursal", "zona_sucursal")
 
 
-def _solo_referencia(nivel: str | None) -> models.Q:
+def _reference_only(level: str | None) -> models.Q:
     """La condicion "solo esta rellena la referencia de `nivel`" (None: el general).
 
     Ademas de las claves ajenas, la sucursal: obligatoria en los dos niveles
     que la usan y vacia en el resto.
     """
-    nivel = nivel or "general"
-    condicion = models.Q(
-        nivel=nivel,
-        **{f"{campo}__isnull": campo != REFERENCIA_POR_NIVEL.get(nivel) for campo in CAMPOS_REFERENCIA},
+    level = level or "general"
+    condition = models.Q(
+        level=level,
+        **{f"{field}__isnull": field != REFERENCE_BY_LEVEL.get(level) for field in REFERENCE_FIELDS},
     )
-    if nivel in NIVELES_CON_SUCURSAL:
-        return condicion & ~models.Q(sucursal="")
-    return condicion & models.Q(sucursal="")
+    if level in LEVELS_WITH_BRANCH:
+        return condition & ~models.Q(branch="")
+    return condition & models.Q(branch="")
 
 
-class ObjetivoComercial(models.Model):
-    """Un tramo de objetivo: a partir de `desde`, este nivel apunta a estos valores.
+class CommercialTarget(models.Model):
+    """Un tramo de objetivo: a partir de `since`, este nivel apunta a estos valores.
 
-    Mismo criterio que `HistorialDepartamento` en soporte: el tramo vale desde
-    su mes hasta que empieza el siguiente de la misma entidad, y `desde` nulo
+    Mismo criterio que `DepartmentHistory` en soporte: el tramo vale desde
+    su mes hasta que empieza el siguiente de la misma entidad, y `since` nulo
     significa "desde siempre". Asi cambiar un objetivo no reescribe los meses
-    que ya pasaron; quien quiera corregir un mes cerrado usa `ObjetivoMes`.
+    que ya pasaron; quien quiera corregir un mes cerrado usa `MonthTarget`.
 
     **El general es una sola fila, sin fecha.** Es el valor por defecto de la
     empresa, no una historia: lo que cambia en un mes concreto es una excepcion
-    de ese mes (`ObjetivoMes`), y lo que cambia desde un mes para una parte de
+    de ese mes (`MonthTarget`), y lo que cambia desde un mes para una parte de
     la red es un tramo de su zona, site, estado o coordinador.
 
-    `crecimiento_pct` y `churn_pct` son independientes y cualquiera de los dos
+    `growth_pct` y `churn_pct` son independientes y cualquiera de los dos
     puede quedar vacio. Cada metrica se resuelve por separado: gana el tramo
     mas reciente de la entidad que la fije, asi que un tramo que solo cambia el
     churn desde agosto conserva el crecimiento que la entidad ya tenia; si
@@ -411,28 +434,29 @@ class ObjetivoComercial(models.Model):
     significa nada.
     """
 
-    nivel = models.CharField(max_length=16, choices=NIVEL_OBJETIVO_CHOICES)
-    estado = models.ForeignKey(Estado, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
-    site = models.ForeignKey(Site, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
-    coordinador = models.ForeignKey(
-        Coordinador, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos"
+    level = models.CharField(max_length=16, choices=TARGET_LEVEL_CHOICES, db_column="nivel")
+    state = models.ForeignKey(State, on_delete=models.CASCADE, null=True, blank=True, related_name="targets", db_column="estado_id")
+    site = models.ForeignKey(Site, on_delete=models.CASCADE, null=True, blank=True, related_name="targets")
+    coordinator = models.ForeignKey(
+        Coordinator, on_delete=models.CASCADE, null=True, blank=True, related_name="targets",
+        db_column="coordinador_id",
     )
-    zona = models.ForeignKey(Zona, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
+    zone = models.ForeignKey(Zone, on_delete=models.CASCADE, null=True, blank=True, related_name="targets", db_column="zona_id")
     # El texto de la sucursal tal y como lo trae el export, en los niveles
     # `sucursal` y `zona_sucursal`; vacio en el resto.
-    sucursal = models.CharField(max_length=80, blank=True, default="")
+    branch = models.CharField(max_length=80, blank=True, default="", db_column="sucursal")
     # `YYYY-MM`, el mismo texto con el que empiezan los `periodo_reporte`: asi
     # se compara como cadena tanto aqui como en el cliente.
-    desde = models.CharField(max_length=7, null=True, blank=True)
-    crecimiento_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    since = models.CharField(max_length=7, null=True, blank=True, db_column="desde")
+    growth_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, db_column="crecimiento_pct")
     churn_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    nota = models.CharField(max_length=255, blank=True, default="")
-    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    actualizado_en = models.DateTimeField(auto_now=True)
+    note = models.CharField(max_length=255, blank=True, default="", db_column="nota")
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", db_column="actualizado_por_id")
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "catalogo_objetivos"
-        ordering = ["nivel", models.F("desde").asc(nulls_first=True), "id"]
+        ordering = ["level", models.F("since").asc(nulls_first=True), "id"]
         verbose_name = "objetivo comercial"
         verbose_name_plural = "objetivos comerciales"
         constraints = [
@@ -441,53 +465,53 @@ class ObjetivoComercial(models.Model):
             # los NULL como distintos— y la comprueba la vista al guardar.
             models.CheckConstraint(
                 condition=(
-                    _solo_referencia(None)
-                    | _solo_referencia("sucursal")
-                    | _solo_referencia("estado")
-                    | _solo_referencia("site")
-                    | _solo_referencia("coordinador")
-                    | _solo_referencia("zona")
-                    | _solo_referencia("zona_sucursal")
+                    _reference_only(None)
+                    | _reference_only("sucursal")
+                    | _reference_only("estado")
+                    | _reference_only("site")
+                    | _reference_only("coordinador")
+                    | _reference_only("zona")
+                    | _reference_only("zona_sucursal")
                 ),
                 name="objetivo_referencia_segun_nivel",
             ),
             models.CheckConstraint(
-                condition=models.Q(crecimiento_pct__isnull=False) | models.Q(churn_pct__isnull=False),
+                condition=models.Q(growth_pct__isnull=False) | models.Q(churn_pct__isnull=False),
                 name="objetivo_con_algun_valor",
             ),
             models.CheckConstraint(
-                condition=~models.Q(nivel="general") | models.Q(desde__isnull=True),
+                condition=~models.Q(level="general") | models.Q(since__isnull=True),
                 name="objetivo_general_sin_fecha",
             ),
         ]
 
     @property
-    def entidad(self):
+    def entity(self):
         """La fila de catalogo a la que apunta (la zona de un nodo), o None."""
-        campo = REFERENCIA_POR_NIVEL.get(self.nivel)
-        return getattr(self, campo) if campo else None
+        field = REFERENCE_BY_LEVEL.get(self.level)
+        return getattr(self, field) if field else None
 
     @property
-    def nombre_entidad(self) -> str:
+    def entity_name(self) -> str:
         """Como se llama lo que tiene el objetivo, con la clave que usan los nodos.
 
         Un nodo se escribe `"Zona - Sucursal"`, igual que el `valor` de la
         dimension `zona_sucursal`: es lo que el cliente cruza contra cada fila.
         """
-        if self.nivel == "sucursal":
-            return self.sucursal
-        entidad = self.entidad
-        if entidad is None:
+        if self.level == "sucursal":
+            return self.branch
+        entity = self.entity
+        if entity is None:
             return ""
-        if self.nivel == "zona_sucursal":
-            return f"{entidad.nombre} - {self.sucursal}"
-        return entidad.nombre
+        if self.level == "zona_sucursal":
+            return f"{entity.name} - {self.branch}"
+        return entity.name
 
     def __str__(self):
-        return f"{self.nivel}:{self.nombre_entidad or '-'} desde {self.desde or 'siempre'}"
+        return f"{self.level}:{self.entity_name or '-'} desde {self.since or 'siempre'}"
 
 
-class ObjetivoMes(models.Model):
+class MonthTarget(models.Model):
     """La excepcion de un mes concreto al objetivo general.
 
     Es la manera de corregir un mes ya calculado sin mover el general: vale
@@ -495,30 +519,30 @@ class ObjetivoMes(models.Model):
     propios de zonas, coordinadores, sites y estados siguen ganandole.
     """
 
-    periodo = models.CharField(max_length=7, unique=True)
-    crecimiento_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    period = models.CharField(max_length=7, unique=True, db_column="periodo")
+    growth_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, db_column="crecimiento_pct")
     churn_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    nota = models.CharField(max_length=255, blank=True, default="")
-    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    actualizado_en = models.DateTimeField(auto_now=True)
+    note = models.CharField(max_length=255, blank=True, default="", db_column="nota")
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", db_column="actualizado_por_id")
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "catalogo_objetivos_mes"
-        ordering = ["-periodo"]
+        ordering = ["-period"]
         verbose_name = "objetivo de un mes"
         verbose_name_plural = "objetivos de meses"
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(crecimiento_pct__isnull=False) | models.Q(churn_pct__isnull=False),
+                condition=models.Q(growth_pct__isnull=False) | models.Q(churn_pct__isnull=False),
                 name="objetivo_mes_con_algun_valor",
             ),
         ]
 
     def __str__(self):
-        return self.periodo
+        return self.period
 
 
-class ZonaSinObjetivo(models.Model):
+class ZoneWithoutTarget(models.Model):
     """Una zona que no se mide contra ningun objetivo durante un tramo de meses.
 
     Es para las zonas nuevas: sin base al empezar el mes, su meta es cero pero
@@ -531,39 +555,39 @@ class ZonaSinObjetivo(models.Model):
 
     Como los objetivos, no toca ningun analisis: se aplica al pintar
     (`lib/objetivos.ts`), y cambiarlo no obliga a relanzar ningun mes. La
-    vigencia es por mes (`desde`/`hasta`, ambos incluidos y opcionales) para que
+    vigencia es por mes (`since`/`until`, ambos incluidos y opcionales) para que
     apartarla hoy no reescriba los meses en que si tenia objetivo. Un tramo por
-    zona: cuando vuelva a medirse se le pone `hasta`.
+    zona: cuando vuelva a medirse se le pone `until`.
     """
 
-    zona = models.OneToOneField(Zona, on_delete=models.CASCADE, related_name="sin_objetivo")
-    desde = models.CharField(max_length=7, null=True, blank=True)
-    hasta = models.CharField(max_length=7, null=True, blank=True)
-    nota = models.CharField(max_length=255, blank=True, default="")
-    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    actualizado_en = models.DateTimeField(auto_now=True)
+    zone = models.OneToOneField(Zone, on_delete=models.CASCADE, related_name="without_target", db_column="zona_id")
+    since = models.CharField(max_length=7, null=True, blank=True, db_column="desde")
+    until = models.CharField(max_length=7, null=True, blank=True, db_column="hasta")
+    note = models.CharField(max_length=255, blank=True, default="", db_column="nota")
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", db_column="actualizado_por_id")
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "catalogo_zonas_sin_objetivo"
-        ordering = ["zona__nombre"]
+        ordering = ["zone__name"]
         verbose_name = "zona sin objetivo"
         verbose_name_plural = "zonas sin objetivo"
 
-    def vigente_en(self, mes: str) -> bool:
+    def effective_on(self, month: str) -> bool:
         """Si el tramo cubre `mes` (`YYYY-MM`).
 
-        >>> ZonaSinObjetivo(desde="2026-10", hasta=None).vigente_en("2026-09")
+        >>> ZoneWithoutTarget(since="2026-10", until=None).effective_on("2026-09")
         False
-        >>> ZonaSinObjetivo(desde="2026-10", hasta="2026-12").vigente_en("2026-12")
+        >>> ZoneWithoutTarget(since="2026-10", until="2026-12").effective_on("2026-12")
         True
         """
-        return (not self.desde or self.desde <= mes) and (not self.hasta or mes <= self.hasta)
+        return (not self.since or self.since <= month) and (not self.until or month <= self.until)
 
     def __str__(self):
-        return f"{self.zona} sin objetivo ({self.desde or 'siempre'} a {self.hasta or 'sin fin'})"
+        return f"{self.zone} sin objetivo ({self.since or 'siempre'} a {self.until or 'sin fin'})"
 
 
-class SemaforoObjetivos(models.Model):
+class TargetThresholds(models.Model):
     """Los umbrales de color, fijos e iguales para todo el modulo. Fila unica (pk=1).
 
     Son valores directos, no distancias al objetivo: "crecimiento verde desde
@@ -572,24 +596,24 @@ class SemaforoObjetivos(models.Model):
     pagina. Lo que si depende del objetivo es el cumplimiento, porque ya es un
     porcentaje de la meta.
 
-    - Crecimiento, mas es mejor: verde desde `crec_verde`, amarillo desde
-      `crec_amarillo`, rojo por debajo.
-    - Churn, menos es mejor: verde hasta `churn_verde`, amarillo hasta
-      `churn_amarillo`, rojo por encima.
-    - Cumplimiento (% de la meta): verde desde `cumpl_verde`, amarillo desde
-      `cumpl_amarillo`.
+    - Crecimiento, mas es mejor: verde desde `growth_green`, amarillo desde
+      `growth_yellow`, rojo por debajo.
+    - Churn, menos es mejor: verde hasta `churn_green`, amarillo hasta
+      `churn_yellow`, rojo por encima.
+    - Cumplimiento (% de la meta): verde desde `compliance_green`, amarillo desde
+      `compliance_yellow`.
 
     Los valores por defecto son los que los reportes tenian escritos a mano.
     """
 
-    cumpl_verde = models.DecimalField(max_digits=6, decimal_places=2, default=100)
-    cumpl_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=60)
-    crec_verde = models.DecimalField(max_digits=6, decimal_places=2, default=4)
-    crec_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=0)
-    churn_verde = models.DecimalField(max_digits=6, decimal_places=2, default=3)
-    churn_amarillo = models.DecimalField(max_digits=6, decimal_places=2, default=4)
-    actualizado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
-    actualizado_en = models.DateTimeField(auto_now=True)
+    compliance_green = models.DecimalField(max_digits=6, decimal_places=2, default=100, db_column="cumpl_verde")
+    compliance_yellow = models.DecimalField(max_digits=6, decimal_places=2, default=60, db_column="cumpl_amarillo")
+    growth_green = models.DecimalField(max_digits=6, decimal_places=2, default=4, db_column="crec_verde")
+    growth_yellow = models.DecimalField(max_digits=6, decimal_places=2, default=0, db_column="crec_amarillo")
+    churn_green = models.DecimalField(max_digits=6, decimal_places=2, default=3, db_column="churn_verde")
+    churn_yellow = models.DecimalField(max_digits=6, decimal_places=2, default=4, db_column="churn_amarillo")
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+", db_column="actualizado_por_id")
+    updated_at = models.DateTimeField(auto_now=True, db_column="actualizado_en")
 
     class Meta:
         db_table = "catalogo_objetivos_semaforo"
@@ -597,20 +621,20 @@ class SemaforoObjetivos(models.Model):
         verbose_name_plural = "semaforo de objetivos"
 
     @classmethod
-    def actual(cls) -> SemaforoObjetivos:
+    def current(cls) -> TargetThresholds:
         """La fila unica, creandola con los valores por defecto si falta."""
-        fila, _ = cls.objects.get_or_create(pk=1)
-        return fila
+        row, _ = cls.objects.get_or_create(pk=1)
+        return row
 
     def __str__(self):
         return "semaforo de objetivos"
 
 
-def _numero(valor) -> str:
+def _number(value) -> str:
     """Decimal a texto sin ceros de relleno: `60.00` -> `60`, `2.50` -> `2.5`."""
-    if valor is None:
+    if value is None:
         return ""
-    texto = f"{valor}"
-    if "." in texto:
-        texto = texto.rstrip("0").rstrip(".")
-    return texto or "0"
+    text = f"{value}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"

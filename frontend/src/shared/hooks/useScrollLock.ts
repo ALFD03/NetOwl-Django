@@ -8,18 +8,18 @@
 
 import { useEffect } from 'react';
 
-export function useScrollLock(activo: boolean): void {
+export function useScrollLock(active: boolean): void {
   useEffect(() => {
     // Inactivo no toca nada. Antes la limpieza corria igualmente, asi que en una
     // pantalla con varios modales montados (Configuracion tiene cinco) los
     // cerrados le quitaban el bloqueo al que si estaba abierto, en cada render.
     // Ese vaiven de `overflow` reajusta la barra de scroll, y un desplegable
     // nativo abierto se cierra solo cuando eso pasa.
-    if (!activo) return;
+    if (!active) return;
 
     const scroller = document.querySelector<HTMLElement>('[data-app-scroll]');
-    const bodyPrevio = document.body.style.overflow;
-    const scrollerPrevio = scroller?.style.overflow ?? '';
+    const previousBody = document.body.style.overflow;
+    const previousScroller = scroller?.style.overflow ?? '';
 
     document.body.style.overflow = 'hidden';
     if (scroller) scroller.style.overflow = 'hidden';
@@ -27,8 +27,8 @@ export function useScrollLock(activo: boolean): void {
     return () => {
       // Se restaura lo que hubiera, en vez de asumir 'auto': si hay un modal
       // encima del otro, el de abajo debe seguir bloqueando.
-      document.body.style.overflow = bodyPrevio;
-      if (scroller) scroller.style.overflow = scrollerPrevio;
+      document.body.style.overflow = previousBody;
+      if (scroller) scroller.style.overflow = previousScroller;
     };
-  }, [activo]);
+  }, [active]);
 }

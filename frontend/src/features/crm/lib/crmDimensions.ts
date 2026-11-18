@@ -2,12 +2,12 @@
 
 import type { CrmDimensionRow, CrmDimensionValue } from '../types';
 
-/** Hoists `metricas` to the top level so charts and tables read one flat row. */
+/** Hoists `metrics` to the top level so charts and tables read one flat row. */
 function flatten(row: CrmDimensionRow): CrmDimensionValue {
   return {
-    ...(row.metricas ?? {}),
-    valor: row.valor,
-    efectividad: row.efectividad ?? row.metricas?.efectividad ?? [],
+    ...(row.metrics ?? {}),
+    value: row.value,
+    effectiveness: row.effectiveness ?? row.metrics?.effectiveness ?? [],
   };
 }
 

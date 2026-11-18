@@ -15,28 +15,26 @@ periodo con estas mismas funciones.
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from psycopg2.extras import execute_values
+import pandas as pd
 
-from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
+from core.tables import replace
 from services.support.analytics.cohorts import PeriodCohort
 from services.support.analytics.config import (
-    DIM_GRUPO,
-    SUPPORT_DESGLOSES,
-    SUPPORT_DIMENSIONES,
+    GROUP_DIM,
+    SUPPORT_BREAKDOWNS,
+    SUPPORT_DIMENSIONS,
 )
 from services.support.analytics.metrics import compute_metrics_for_period
+from services.support.analytics.tables import DIMENSION_HISTORY
 
 logger = logging.getLogger(__name__)
 
-_INSERT_COLUMNS = ["periodo_reporte", "grupo_trabajo", "dimension", "valor", "metricas"]
 
-
-def build_dimension_rows(cohorte: PeriodCohort) -> list[dict[str, Any]]:
+def build_dimension_rows(cohort: PeriodCohort) -> list[dict[str, Any]]:
     """Las filas de dimensión de una cohorte.
 
     La forma de cada fila es la misma que devuelve `get_support_dimension_metrics`
@@ -45,56 +43,26 @@ def build_dimension_rows(cohorte: PeriodCohort) -> list[dict[str, Any]]:
     """
     rows: list[dict[str, Any]] = []
 
-    def fila(grupo: str, dimension: str, valor: str, sub: PeriodCohort) -> None:
+    def row(group: str, dimension: str, value: str, sub: PeriodCohort) -> None:
         rows.append({
-            "grupo_trabajo": grupo,
+            "grupo_trabajo": group,
             "dimension": dimension,
-            "valor": valor,
+            "valor": value,
             "metricas": compute_metrics_for_period(sub),
         })
 
-    for grupo, c_grupo in cohorte.desglosar(DIM_GRUPO):
-        fila(grupo, DIM_GRUPO, grupo, c_grupo)
+    for group, c_group in cohort.break_down(GROUP_DIM):
+        row(group, GROUP_DIM, group, c_group)
 
-        for dimension in (*SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES):
-            for valor, c_valor in c_grupo.desglosar(dimension):
-                fila(grupo, dimension, valor, c_valor)
+        for dimension in (*SUPPORT_DIMENSIONS, *SUPPORT_BREAKDOWNS):
+            for value, c_value in c_group.break_down(dimension):
+                row(group, dimension, value, c_value)
 
     return rows
 
 
-def save_support_dimensiones_periodo(
-    db: DBConnector, periodo: str, rows: list[dict[str, Any]]
-) -> None:
-    """
-    Reemplaza las filas dimensionales del periodo por las recién calculadas.
-
-    Un periodo son varios cientos de filas —cada grupo por sus seis ejes—, así
-    que se insertan en una sola sentencia con `execute_values` en vez de dar
-    otras tantas vueltas a la base.
-    """
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"DELETE FROM {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO} "
-                f"WHERE periodo_reporte = %s",
-                [periodo],
-            )
-            if rows:
-                execute_values(
-                    cur,
-                    f"""
-                    INSERT INTO {DB_SCHEMA}.{TableNames.SUPPORT_DIMENSIONES_HISTORICO}
-                    ({", ".join(_INSERT_COLUMNS)}, updated_at)
-                    VALUES %s
-                    """,
-                    [
-                        (
-                            periodo, r["grupo_trabajo"], r["dimension"], r["valor"],
-                            json.dumps(r["metricas"]),
-                        )
-                        for r in rows
-                    ],
-                    template="(%s, %s, %s, %s, %s, NOW())",
-                )
-        conn.commit()
+def save_dimensions(db: DBConnector, period: str, rows: list[dict[str, Any]]) -> None:
+    """Reemplaza las filas dimensionales del periodo por las recién calculadas."""
+    df = pd.DataFrame(rows, columns=["grupo_trabajo", "dimension", "valor", "metricas"])
+    with db.transaction() as cur:
+        replace(cur, DIMENSION_HISTORY, df, periodo_reporte=period)

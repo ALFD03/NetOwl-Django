@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Imports/Subscriptions` (`/imports/subscriptions/`).
+ * Página `/imports/subscriptions/`.
  *
  * Carga los exports del dominio y lanza el análisis mensual. Intercepta el
  * 409 de «producto sin catalogar» para enseñarlo como una decisión a tomar, no
@@ -11,15 +11,14 @@ import { useState } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { usePermissions } from '@/shared/hooks/usePermissions';
 import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
-import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { importsApi, type ImportResponse } from '@/shared/lib/api/imports';
-import { catalogosApi } from '@/shared/lib/api/catalogos';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
-import { CatalogoBloqueoModal } from '@/features/imports/components/CatalogoBloqueoModal';
+import { CatalogBlockModal } from '@/features/imports/components/CatalogBlockModal';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
+import { ImportTypePicker } from '@/features/imports/components/ImportTypePicker';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
-import { extractCatalogoBloqueo, type CatalogoBloqueo } from '@/features/imports/lib/catalogo';
-import type { CampoOdoo, GrupoCamposOdoo } from '@/features/imports/types';
+import { useCatalogBlock } from '@/features/imports/hooks/useCatalogBlock';
+import type { OdooField, OdooFieldGroup } from '@/features/imports/types';
 
 type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis' | 'facturas';
 
@@ -33,94 +32,37 @@ const IMPORT_TYPES: { value: SubscriptionImportType; label: string }[] = [
 const UPLOADERS: Record<SubscriptionImportType, (file: File) => Promise<ImportResponse>> = {
   subscriptions: (file) => importsApi.importSubscriptions(file),
   logs: (file) => importsApi.importLogs(file),
-  gratis: (file) => importsApi.importGratis(file),
-  facturas: (file) => importsApi.importFacturas(file),
+  gratis: (file) => importsApi.importFreePlans(file),
+  facturas: (file) => importsApi.importInvoices(file),
 };
 
 interface ImportSubscriptionsProps {
   /** Cabeceras de Odoo que lee cada importación, por tipo de export. */
-  camposOdoo?: Partial<Record<SubscriptionImportType, CampoOdoo[]>>;
+  odoo_fields?: Partial<Record<SubscriptionImportType, OdooField[]>>;
 }
 
-export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscriptionsProps) {
+export default function ImportSubscriptions({ odoo_fields = {} }: ImportSubscriptionsProps) {
   const [importType, setImportType] = useState<SubscriptionImportType>('subscriptions');
-  const [bloqueo, setBloqueo] = useState<CatalogoBloqueo | null>(null);
-  const [ignorando, setIgnorando] = useState<string | null>(null);
-  const [errorCatalogo, setErrorCatalogo] = useState<string | null>(null);
+  const catalogBlock = useCatalogBlock();
   const { canAny } = usePermissions();
 
-  const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.subs);
-  const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.subs);
-
-  const gruposCampos: GrupoCamposOdoo[] = IMPORT_TYPES.map((tipo) => ({
-    key: tipo.value,
-    label: tipo.label,
-    campos: camposOdoo[tipo.value] ?? [],
+  const fieldGroups: OdooFieldGroup[] = IMPORT_TYPES.map((importKind) => ({
+    key: importKind.value,
+    label: importKind.label,
+    fields: odoo_fields[importKind.value] ?? [],
   }));
-
-  /**
-   * Intercepta el 409 de "producto sin catalogar" y lo enseña como una
-   * decisión a tomar, no como un fallo. El error se vuelve a lanzar para que
-   * `CsvUploadCard` mantenga su propio mensaje de estado.
-   */
-  const subirArchivo = async (file: File) => {
-    try {
-      return await UPLOADERS[importType](file);
-    } catch (error) {
-      const encontrado = extractCatalogoBloqueo(error);
-      if (encontrado) {
-        setErrorCatalogo(null);
-        setBloqueo(encontrado);
-      }
-      throw error;
-    }
-  };
-
-  /** Saca un producto de la lista de bloqueo declarando que nunca será un plan. */
-  const ignorarProducto = async (nombre: string) => {
-    setIgnorando(nombre);
-    setErrorCatalogo(null);
-    try {
-      await catalogosApi.guardar('ignorados', { nombre, nota: '', area: 'productos' });
-      setBloqueo((previo) =>
-        previo
-          ? { ...previo, productos: previo.productos.filter((p) => p.nombre !== nombre) }
-          : previo,
-      );
-    } catch (error: unknown) {
-      setErrorCatalogo(getApiErrorMessage(error, 'No se pudo ignorar el producto.'));
-    } finally {
-      setIgnorando(null);
-    }
-  };
 
   return (
     <AppLayout>
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {canUpload && (
+        {canAny(IMPORT_ACTION_PERMISSIONS.subs) && (
           <CsvUploadCard
             title="Cargar Archivo CSV Subscriptions"
             submitLabel="Iniciar Carga"
             errorMessage="Error al procesar la importación."
-            onUpload={subirArchivo}
+            onUpload={catalogBlock.guard((file) => UPLOADERS[importType](file))}
           >
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {IMPORT_TYPES.map((option) => (
-                <label
-                  key={option.value}
-                  className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-slate-700 bg-surface-tertiary p-3 text-xs font-semibold text-slate-200"
-                >
-                  <input
-                    type="radio"
-                    name="importType"
-                    className="text-brand"
-                    checked={importType === option.value}
-                    onChange={() => setImportType(option.value)}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))}
-            </div>
+            <ImportTypePicker options={IMPORT_TYPES} value={importType} onChange={setImportType} />
           </CsvUploadCard>
         )}
 
@@ -135,13 +77,13 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
             <><strong>Planes Gratuitos:</strong> Export con tarifa, próxima fecha de factura y mensajes del chatter; detecta desde cuándo cada suscripción es gratuita.</>,
             <><strong>Facturas:</strong> Export global de facturas con su número, estado, estado del pago, fecha de creación y productos. Reemplaza las anteriores; Comisiones lo usa para saber qué primeras mensualidades se pagaron.</>,
           ]}
-          camposOdoo={gruposCampos}
-          grupoActivo={importType}
+          fieldGroups={fieldGroups}
+          activeGroup={importType}
           note="Tras cargar ambos archivos, selecciona el mes correspondiente y ejecuta el análisis en la sección inferior. El análisis calcula también las métricas de cada día del mes."
         />
       </div>
 
-      {canRunAnalysis && (
+      {canAny(ANALYSIS_ACTION_PERMISSIONS.subs) && (
         <AnalysisRunnerCard
           jobModule="subs_analysis"
           title="Ejecutar Análisis Mensual de Subscriptions (Churn)"
@@ -155,18 +97,18 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
           onRun={(month, onProgress) => importsApi.runSubscriptionsAnalysis(month, onProgress)}
           onRunBatch={(months) => importsApi.runSubscriptionsAnalysisBatch(months)}
           successMessage={(result, month) =>
-            `Análisis de Churn completado exitosamente para ${result.periodo_label || month}` +
-            (result.dias_calculados ? ` (${result.dias_calculados} días calculados).` : '.')}
+            `Análisis de Churn completado exitosamente para ${result.period_label || month}` +
+            (result.computed_days ? ` (${result.computed_days} días calculados).` : '.')}
           errorMessage="Error al ejecutar el análisis de Churn."
         />
       )}
 
-      <CatalogoBloqueoModal
-        bloqueo={bloqueo}
-        onClose={() => setBloqueo(null)}
-        onIgnore={ignorarProducto}
-        ignorando={ignorando}
-        error={errorCatalogo}
+      <CatalogBlockModal
+        block={catalogBlock.block}
+        onClose={catalogBlock.close}
+        onIgnore={catalogBlock.ignoreProduct}
+        ignoring={catalogBlock.ignoring}
+        error={catalogBlock.error}
       />
     </AppLayout>
   );

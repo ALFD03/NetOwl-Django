@@ -65,27 +65,6 @@ SUPPORT_CSV_COLUMN_ALIASES = {
     "reportado por": "creado_por",
 }
 
-# Columnas que el loader exige DESPUÉS de resolver el mapa y los alias. Van
-# aquí y no en `REQUIRED_SUPPORT_HEADERS` —que valida el CSV crudo, antes de
-# normalizar— para poder aceptar cualquiera de las variantes de arriba y aun
-# así fallar de forma visible cuando no viene ninguna. El valor es la etiqueta
-# canónica, que es la que se le nombra al usuario en el mensaje de error.
-SUPPORT_LOADER_REQUIRED_COLUMNS = {
-    "ticket_sequence": "Secuencia ID del ticket",
-    "asignado_a": "Asignado a",
-    "creado_por": "Creado por",
-}
-
-# Cabeceras mínimas obligatorias para validar la estructura del CSV. Sin estas
-# cinco no hay ni cohorte ni desenlace que medir.
-REQUIRED_SUPPORT_HEADERS = {
-    "Secuencia ID del ticket": "ticket_sequence",
-    "Etapa": "etapa",
-    "Equipo de soporte al cliente": "grupo_trabajo",
-    "Creado el": "creado_el",
-    "Última actualización de la etapa": "ultima_actualizacion_etapa",
-}
-
 # Columnas de texto del ticket. Todas se normalizan a "Sin Especificar" cuando
 # Odoo las exporta vacías, porque son claves de agrupación: un NULL partiría la
 # misma zona o el mismo técnico en dos filas distintas del reporte.
@@ -117,7 +96,7 @@ CANCELED_STAGES = {
 # Lo que se descarta es la fila incoherente —fecha ausente o tramo negativo—,
 # que no es un tiempo corto sino un tiempo desconocido.
 #
-# La condición, tramo a tramo (`metrics._tramos_validos`):
+# La condición, tramo a tramo (`metrics._valid_tiers`):
 #   · cierre     → las TRES fechas presentes y en orden: creación ≤ primera
 #                  asignación ≤ última actualización de la etapa.
 #   · asignación → creación presente; la asignación, si la hay, no anterior a
@@ -145,11 +124,11 @@ CANCELED_STAGES = {
 # suya. Así conviven en un mismo bloque sin necesidad de duplicarlo.
 #   ESCALADOS — de lo cerrado en el periodo, lo que ATC cerró escalándolo a
 #              Soporte. Es la población del tiempo hasta escalar.
-POB_CERRADOS = "cerrados_periodo"
-POB_RESUELTOS = "resueltos_periodo"
-POB_CANCELADOS = "cancelados_periodo"
-POB_CREADOS = "creados_periodo"
-POB_ESCALADOS = "escalados_periodo"
+POP_CLOSED = "cerrados_periodo"
+POP_RESOLVED = "resueltos_periodo"
+POP_CANCELLED = "cancelados_periodo"
+POP_CREATED = "creados_periodo"
+POP_ESCALATED = "escalados_periodo"
 
 
 # --- Medidas de tiempo ------------------------------------------------------
@@ -173,22 +152,22 @@ POB_ESCALADOS = "escalados_periodo"
 #                       justo a los que llevan más tiempo esperando, que son
 #                       los que la métrica existe para encontrar.
 TIME_MEASURE_SPECS = [
-    ("cierre_creado_resuelto", "duracion_total", POB_RESUELTOS),
-    ("cierre_creado_cancelado", "duracion_total", POB_CANCELADOS),
-    ("cierre_creado_cerrados", "duracion_total", POB_CERRADOS),
+    ("cierre_creado_resuelto", "duracion_total", POP_RESOLVED),
+    ("cierre_creado_cancelado", "duracion_total", POP_CANCELLED),
+    ("cierre_creado_cerrados", "duracion_total", POP_CLOSED),
 
-    ("cierre_asignado_resuelto", "asignado_a_cierre", POB_RESUELTOS),
-    ("cierre_asignado_cancelado", "asignado_a_cierre", POB_CANCELADOS),
-    ("cierre_asignado_cerrados", "asignado_a_cierre", POB_CERRADOS),
+    ("cierre_asignado_resuelto", "asignado_a_cierre", POP_RESOLVED),
+    ("cierre_asignado_cancelado", "asignado_a_cierre", POP_CANCELLED),
+    ("cierre_asignado_cerrados", "asignado_a_cierre", POP_CLOSED),
 
-    ("asignacion", "creado_a_asignacion", POB_CREADOS),
+    ("asignacion", "creado_a_asignacion", POP_CREATED),
 
     # Creación → escalamiento, sobre lo que ATC escaló en el mes. Sale de los
-    # logs de etapa: es el cierre de la copia de ATC (ver `escalamiento.py`).
-    ("escalamiento", "creado_a_cierre", POB_ESCALADOS),
+    # logs de etapa: es el cierre de la copia de ATC (ver `escalation.py`).
+    ("escalamiento", "creado_a_cierre", POP_ESCALATED),
 ]
 
-SUPPORT_TIME_MEASURES = [medida for medida, _, _ in TIME_MEASURE_SPECS]
+SUPPORT_TIME_MEASURES = [measure for measure, _, _ in TIME_MEASURE_SPECS]
 
 # Los nueve estadísticos que `_prefixed` emite por medida.
 TIME_STATS = ["medio", "mediana", "min", "p25", "p75", "max", "std"]
@@ -240,8 +219,8 @@ SUPPORT_RATE_FIELDS = [
 # las de ATC hasta el escalamiento; la fila de Soporte, las de Soporte desde
 # él. `muestra_composicion` son los cerrados con logs de etapa: sin logs no hay
 # reparto que hacer.
-TIPOS_COMPOSICION = ["cola", "pausa", "gestion", "sin_clasificar"]
-SUPPORT_COMPOSICION_FIELDS = [f"composicion_{t}_horas" for t in TIPOS_COMPOSICION]
+COMPOSITION_KINDS = ["cola", "pausa", "gestion", "sin_clasificar"]
+SUPPORT_COMPOSITION_FIELDS = [f"composicion_{t}_horas" for t in COMPOSITION_KINDS]
 
 
 # --- Dimensiones ------------------------------------------------------------
@@ -263,90 +242,59 @@ SUPPORT_COMPOSICION_FIELDS = [f"composicion_{t}_horas" for t in TIPOS_COMPOSICIO
 # decenas de miles de filas JSONB por periodo para algo que se consulta de una
 # en una. `queries.get_support_breakdown` lo calcula al vuelo sobre los tickets
 # del periodo, con las mismas funciones de métrica.
-DIM_GRUPO = "grupo_trabajo"
+GROUP_DIM = "grupo_trabajo"
 
-SUPPORT_DIMENSIONES = ["zona", "sucursal", "asignado_a", "creado_por"]
+SUPPORT_DIMENSIONS = ["zona", "sucursal", "asignado_a", "creado_por"]
 
 # Las dos dimensiones cuyo valor es una persona, y por tanto las unicas que el
 # directorio de `services/support/models.py` puede anotar con un departamento.
 # Se declaran aparte para que quien anada un eje de persona no tenga que
 # acordarse de tocar tambien la anotacion.
-SUPPORT_DIMENSIONES_PERSONA = ["asignado_a", "creado_por"]
-SUPPORT_DESGLOSES = ["tipo_solicitud", "razon_falla", "solucion_falla"]
+SUPPORT_DIMENSIONS_PERSON = ["asignado_a", "creado_por"]
+SUPPORT_BREAKDOWNS = ["tipo_solicitud", "razon_falla", "solucion_falla"]
 
-SUPPORT_DIMENSION_COLUMNS = [DIM_GRUPO, *SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES]
+SUPPORT_DIMENSION_COLUMNS = [GROUP_DIM, *SUPPORT_DIMENSIONS, *SUPPORT_BREAKDOWNS]
 
-
-# --- Logs de etapa ("Registros de tiempo") ---------------------------------
-#
-# Cada fila es un cambio de etapa de un ticket. El export sale del ticket o del
-# propio modelo de registros, asi que la cabecera puede llegar con el prefijo
-# `Registros de tiempo/` o sin el: `logs._resolver_columnas` lo quita antes de
-# comparar. `ID` es el del registro en Odoo, unico entre todos los logs de todos
-# los tickets: es la clave con la que cada log entra una sola vez aunque llegue
-# en dos lotes.
-LOGS_PREFIJO = "Registros de tiempo/"
-
-LOGS_CSV_COLUMN_MAP = {
-    "ID": "log_id",
-    "Ticket/Secuencia ID del ticket": "ticket_sequence",
-    "Creado el": "creado_el",
-    "Etapa anterior": "etapa_anterior",
-    "Nueva etapa": "etapa_nueva",
-    "Duración (horas)": "duracion_horas",
-}
-
-# Sin estas no hay secuencia que reconstruir. La duracion se guarda pero no se
-# usa para medir: los tramos salen de las fechas de los propios registros.
-LOGS_REQUIRED_COLUMNS = {
-    "log_id": "ID",
-    "ticket_sequence": "Ticket/Secuencia ID del ticket",
-    "creado_el": "Creado el",
-    "etapa_anterior": "Etapa anterior",
-    "etapa_nueva": "Nueva etapa",
-}
-
-LOGS_COLUMNS = ["log_id", "ticket_sequence", "creado_el", "etapa_anterior", "etapa_nueva", "duracion_horas"]
 
 # El escalamiento: entrar en esta etapa viniendo de una que no es de Soporte
 # (segun el catalogo de etapas). Un ticket que *nace* en ella -etapa anterior
 # vacia- no es un escalamiento: es un ticket de Soporte desde el principio.
-ETAPA_ESCALAMIENTO = "Nuevo - Soporte Técnico"
+ESCALATION_STAGE = "Nuevo - Soporte Técnico"
 
 # Los dos equipos de un tramo. Un tramo de una etapa `compartida` (o sin
 # clasificar) es de ATC antes del escalamiento y de Soporte despues; sin
 # escalamiento, del equipo en que nacio el ticket.
-EQUIPO_ATC = "atc"
-EQUIPO_SOPORTE = "soporte"
-EQUIPO_COMPARTIDA = "compartida"
+TEAM_ATC = "atc"
+TEAM_SUPPORT = "soporte"
+TEAM_SHARED = "compartida"
 
 # Que se hace en una etapa. `cola`: nadie lo ha tomado. `pausa`: espera algo de
 # fuera (el cliente, un pago, una falla masiva). `gestion`: alguien trabaja en
 # el. Las etapas de cierre no van en el catalogo: son RESOLVED_STAGES y
 # CANCELED_STAGES, las mismas de los tickets.
-TIPO_COLA = "cola"
-TIPO_PAUSA = "pausa"
-TIPO_GESTION = "gestion"
-TIPO_CIERRE = "cierre"
-TIPO_SIN_CLASIFICAR = "sin_clasificar"
+KIND_QUEUE = "cola"
+KIND_PAUSE = "pausa"
+KIND_HANDLING = "gestion"
+KIND_CLOSE = "cierre"
+KIND_UNCLASSIFIED = "sin_clasificar"
 
 # Los relojes de un ticket abierto se cierran contra la hora de Caracas: Odoo
 # exporta las fechas en la zona del usuario y se guardan sin zona.
-ZONA_HORARIA = "America/Caracas"
+TIME_ZONE = "America/Caracas"
 
 # El grupo de trabajo desde el que se escala. El export dice el grupo que el
 # ticket tiene HOY, así que un escalado figura sólo en el de Soporte
-# («Soporte Técnico Nivel 1»): `escalamiento.incorporar_escalamiento` le
+# («Soporte Técnico Nivel 1»): `escalation.add_escalation` le
 # devuelve a ATC su parte. Si Odoo renombra el equipo, es aquí donde se cambia.
-GRUPO_ATC = "Atención al cliente"
+GROUP_ATC = "Atención al cliente"
 
 # Qué figura en la copia de ATC de un escalado en los dos campos que el export
 # sólo sabe de Soporte: quién lo atiende hoy y cómo se solucionó.
-ASIGNADO_ESCALADO = "Escalado (sin asignado en ATC)"
-SOLUCION_ESCALADO = "Escalado a Soporte"
+ASSIGNED_ESCALATED = "Escalado (sin asignado en ATC)"
+ESCALATED_SOLUTION = "Escalado a Soporte"
 
 # Antiguedad de los tickets abiertos, en horas: [desde, hasta).
-TRAMOS_ANTIGUEDAD = [
+TENURE_TIERS = [
     ("< 1 día", 0, 24),
     ("1–3 días", 24, 72),
     ("3–7 días", 72, 168),

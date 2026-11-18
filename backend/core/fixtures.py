@@ -15,7 +15,7 @@ edicion. En su lugar se guarda **una sola instantanea coherente de todos los
 catalogos** con 60s de vigencia: coherente porque un analisis que consultara
 planes antes de una edicion y zonas despues mezclaria dos catalogos distintos.
 
-Las escrituras llaman a `reset_cache()`, y tambien lo hace `_ejecutar_con_turno`
+Las escrituras llaman a `reset_cache()`, y tambien lo hace `_run_with_turn`
 al empezar cada analisis, de modo que una ejecucion no cambia de catalogo a
 mitad de camino.
 """
@@ -28,40 +28,40 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from core.config import PLAN_CANCELADO
+from core.config import CANCELLED_PLAN
 
 logger = logging.getLogger(__name__)
 
 # Vigencia de la instantanea. Corta porque el catalogo se edita desde la web y
 # el worker tiene que enterarse; suficiente para que un analisis no vuelva a
 # consultar la base de datos en cada uno de los 31 cortes del mes.
-TTL_SEGUNDOS = 60
+TTL_SECONDS = 60
 
 
 @dataclass(frozen=True)
-class _Catalogo:
+class _Catalog:
     """Todos los catalogos leidos de una vez, ya en la forma que se sirve."""
 
-    planes: tuple[dict[str, Any], ...] = ()
-    reguladores: tuple[dict[str, Any], ...] = ()
-    zonas: tuple[dict[str, Any], ...] = ()
+    plans: tuple[dict[str, Any], ...] = ()
+    regulators: tuple[dict[str, Any], ...] = ()
+    zones: tuple[dict[str, Any], ...] = ()
     sites: tuple[str, ...] = ()
-    estados: tuple[str, ...] = ()
+    states: tuple[str, ...] = ()
     # Por area (`productos`, `estructura`, `ventas`): cada lista de pendientes
     # calla solo los suyos.
-    ignorados: dict[str, frozenset[str]] = field(default_factory=dict)
-    nombres_planes: frozenset[str] = frozenset()
-    zonas_indexadas: dict[str, dict[str, Any]] = field(default_factory=dict)
+    ignored_names: dict[str, frozenset[str]] = field(default_factory=dict)
+    plan_name_set: frozenset[str] = frozenset()
+    indexed_zones: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
-_VACIO = _Catalogo()
+_EMPTY = _Catalog()
 
 _lock = threading.Lock()
-_instantanea: _Catalogo | None = None
-_tomada_en: float = 0.0
+_snapshot: _Catalog | None = None
+_taken_on: float = 0.0
 
 
-def _leer() -> _Catalogo:
+def _read() -> _Catalog:
     """Una lectura completa de las tablas del catalogo.
 
     Los modelos se importan aqui dentro y no arriba: este modulo lo importan
@@ -70,84 +70,84 @@ def _leer() -> _Catalogo:
     `AppRegistryNotReady`.
     """
     from services.subscriptions.models import (
-        Estado,
+        IgnoredProduct,
         Plan,
-        PlanRegulador,
-        ProductoIgnorado,
+        RegulatoryPlan,
         Site,
-        Zona,
+        State,
+        Zone,
     )
 
     # `select_related` no es cosmetico: `Plan.to_fixture()` serializa el plan
     # regulador, y sin el son tantas consultas como planes tenga el catalogo.
-    planes = tuple(p.to_fixture() for p in Plan.objects.select_related("plan_regulador").all())
-    reguladores = tuple(r.to_fixture() for r in PlanRegulador.objects.all())
-    zonas = tuple(
+    plans = tuple(p.to_fixture() for p in Plan.objects.select_related("regulator_plan").all())
+    regulators = tuple(r.to_fixture() for r in RegulatoryPlan.objects.all())
+    zones = tuple(
         z.to_fixture()
-        for z in Zona.objects.select_related("site", "estado", "coordinador").all()
+        for z in Zone.objects.select_related("site", "state", "coordinator").all()
     )
-    sites = tuple(Site.objects.values_list("nombre", flat=True))
-    estados = tuple(Estado.objects.values_list("nombre", flat=True))
-    por_area: dict[str, set[str]] = {}
-    for area, nombre in ProductoIgnorado.objects.values_list("area", "nombre"):
-        por_area.setdefault(area, set()).add(nombre)
-    ignorados = {area: frozenset(nombres) for area, nombres in por_area.items()}
+    sites = tuple(Site.objects.values_list("name", flat=True))
+    states = tuple(State.objects.values_list("name", flat=True))
+    by_area: dict[str, set[str]] = {}
+    for area, name in IgnoredProduct.objects.values_list("area", "name"):
+        by_area.setdefault(area, set()).add(name)
+    ignored = {area: frozenset(names) for area, names in by_area.items()}
 
-    return _Catalogo(
-        planes=planes,
-        reguladores=reguladores,
-        zonas=zonas,
+    return _Catalog(
+        plans=plans,
+        regulators=regulators,
+        zones=zones,
         sites=sites,
-        estados=estados,
-        ignorados=ignorados,
-        nombres_planes=frozenset(p["name"] for p in planes if p.get("name")),
-        zonas_indexadas={
-            z["name"].strip().lower(): z for z in zonas if z.get("name")
+        states=states,
+        ignored_names=ignored,
+        plan_name_set=frozenset(p["name"] for p in plans if p.get("name")),
+        indexed_zones={
+            z["name"].strip().lower(): z for z in zones if z.get("name")
         },
     )
 
 
-def _catalogo() -> _Catalogo:
+def _catalog() -> _Catalog:
     """La instantanea vigente, releyendo si caduco.
 
     Un fallo de lectura degrada a catalogo vacio —igual que antes degradaba un
     fichero ausente— pero no se guarda: cachear el error dejaria al sistema sin
     catalogo durante un minuto por un corte de un segundo.
     """
-    global _instantanea, _tomada_en
+    global _snapshot, _taken_on
 
     with _lock:
-        if _instantanea is not None and (time.monotonic() - _tomada_en) < TTL_SEGUNDOS:
-            return _instantanea
+        if _snapshot is not None and (time.monotonic() - _taken_on) < TTL_SECONDS:
+            return _snapshot
 
         try:
-            catalogo = _leer()
+            catalog = _read()
         except Exception:
             logger.exception("No se pudo leer el catalogo: se continua con datos vacios.")
-            return _VACIO
+            return _EMPTY
 
-        _instantanea = catalogo
-        _tomada_en = time.monotonic()
-        return catalogo
+        _snapshot = catalog
+        _taken_on = time.monotonic()
+        return catalog
 
 
 def reset_cache() -> None:
     """Olvida la instantanea. La llaman las escrituras del catalogo y cada analisis."""
-    global _instantanea, _tomada_en
+    global _snapshot, _taken_on
 
     with _lock:
-        _instantanea = None
-        _tomada_en = 0.0
+        _snapshot = None
+        _taken_on = 0.0
 
 
 # --- Lo que consumen los analisis -------------------------------------------
 
-def planes() -> list[dict[str, Any]]:
+def plans() -> list[dict[str, Any]]:
     """Planes del catalogo, con las claves de `Planes.json`."""
-    return list(_catalogo().planes)
+    return list(_catalog().plans)
 
 
-def planes_reguladores() -> list[dict[str, Any]]:
+def regulatory_plans() -> list[dict[str, Any]]:
     """Los planes tal y como se declaran a la reguladora.
 
     Se sirven todos, tambien los que no tienen ningun plan comercial colgando:
@@ -155,34 +155,34 @@ def planes_reguladores() -> list[dict[str, Any]]:
     comercial sino de las excepciones por orden, y se emparejan con su
     regulador por velocidad.
     """
-    return list(_catalogo().reguladores)
+    return list(_catalog().regulators)
 
 
-def estados() -> list[str]:
+def states() -> list[str]:
     """Entidades federales del catalogo, en orden alfabetico.
 
     La reguladora pide la lista entera encadenada en cada fila del formulario,
     no las entidades en las que ese plan tiene suscriptores.
     """
-    return list(_catalogo().estados)
+    return list(_catalog().states)
 
 
-def zonas() -> list[dict[str, Any]]:
+def zones() -> list[dict[str, Any]]:
     """Zonas del catalogo, con las claves de `Zonas.json`."""
-    return list(_catalogo().zonas)
+    return list(_catalog().zones)
 
 
-def zonas_disponibles() -> bool:
+def available_zones() -> bool:
     """Si hay alguna zona registrada. Distingue "vacio" de "no configurado"."""
-    return bool(_catalogo().zonas)
+    return bool(_catalog().zones)
 
 
 def plan_names() -> frozenset[str]:
     """Que planes existen. No incluye `Cancelado`, que no es un plan."""
-    return _catalogo().nombres_planes
+    return _catalog().plan_name_set
 
 
-def nombres_reconocidos() -> frozenset[str]:
+def recognized_names() -> frozenset[str]:
     """Si una linea del export es un plan.
 
     `Cancelado` no esta en el catalogo —no es un producto contratable, es la
@@ -192,32 +192,32 @@ def nombres_reconocidos() -> frozenset[str]:
     producto editable y borrable, y dejandolo fuera todas esas suscripciones
     cuentan como productos sin registrar y bloquean cada importacion.
     """
-    return _catalogo().nombres_planes | {PLAN_CANCELADO}
+    return _catalog().plan_name_set | {CANCELLED_PLAN}
 
 
-def zonas_por_nombre() -> dict[str, dict[str, Any]]:
+def zones_by_name() -> dict[str, dict[str, Any]]:
     """Zonas indexadas por nombre en minusculas.
 
     Las tres lecturas de zonas que habia normalizaban la clave igual
     (`name.strip().lower()`), asi que el indice se construye una sola vez.
     """
-    return _catalogo().zonas_indexadas
+    return _catalog().indexed_zones
 
 
-def orden_sites() -> list[str]:
+def sites_order() -> list[str]:
     """Sites por relevancia comercial, no alfabeticamente.
 
     Sustituye a la constante `CUSTOM_SITE_ORDER`, que ahora solo es la semilla
     de la columna `Site.orden`. Lo que no este en el catalogo va al final.
     """
-    return list(_catalogo().sites)
+    return list(_catalog().sites)
 
 
-def ignorados(area: str) -> frozenset[str]:
+def ignored_names(area: str) -> frozenset[str]:
     """Los nombres que alguien decidio no registrar en el area indicada."""
-    return _catalogo().ignorados.get(area, frozenset())
+    return _catalog().ignored_names.get(area, frozenset())
 
 
-def productos_ignorados() -> frozenset[str]:
+def ignored_products() -> frozenset[str]:
     """Lineas del export que alguien declaro que nunca seran un plan."""
-    return ignorados("productos")
+    return ignored_names("productos")

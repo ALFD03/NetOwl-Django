@@ -1,58 +1,27 @@
 /**
- * Acceso centralizado a los permisos del usuario autenticado.
- *
- * Los componentes **nunca** leen `user.profile.can_*` directamente.
+ * Permisos de la cuenta actual. Los componentes nunca leen la matriz directamente.
  */
 
-import { usePage } from '@inertiajs/react';
-
+import { useAuth } from '@/shared/auth/AuthContext';
 import type { Permission } from '@/shared/types/auth';
-import type { AppPageProps } from '@/shared/types/inertia';
 
 export interface UsePermissionsReturn {
-  /** Returns true when the current user can perform the requested action. */
   can: (permission: Permission) => boolean;
-
-  /** Returns true when the current user has at least one requested permission. */
+  /** Al menos uno. */
   canAny: (permissions: readonly Permission[]) => boolean;
-
-  /** Returns true when the current user has every requested permission. */
+  /** Todos. */
   canAll: (permissions: readonly Permission[]) => boolean;
-
-  /** True when the current authenticated user is a Django superuser. */
   isSuperuser: boolean;
 }
 
-/**
- * Centralized permission access for the React application.
- *
- * Components and pages should never read `user.profile.can_*` directly.
- * Use `can()`, `canAny()` or `canAll()` instead.
- *
- * Superusers automatically receive access to every known permission.
- */
 export function usePermissions(): UsePermissionsReturn {
-  const { props } = usePage<AppPageProps>();
-  const user = props.auth?.user;
+  const { user } = useAuth();
   const isSuperuser = user?.is_superuser ?? false;
-
-  const can = (permission: Permission): boolean => {
-    if (!user) return false;
-    return isSuperuser || user.profile[permission];
-  };
-
-  const canAny = (permissions: readonly Permission[]): boolean => {
-    return permissions.some(can);
-  };
-
-  const canAll = (permissions: readonly Permission[]): boolean => {
-    return permissions.every(can);
-  };
-
+  const can = (permission: Permission) => Boolean(user && (isSuperuser || user.permissions[permission]));
   return {
     can,
-    canAny,
-    canAll,
+    canAny: (permissions) => permissions.some(can),
+    canAll: (permissions) => permissions.every(can),
     isSuperuser,
   };
 }

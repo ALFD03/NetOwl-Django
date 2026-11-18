@@ -11,8 +11,8 @@ el reporte mensual para la reguladora, sobre exports de Odoo cargados como CSV.
 | Capa | Tecnologia |
 |------|-----------|
 | Analitica | Python 3.11 — pandas, numpy, psycopg2 |
-| Web | Django 5 + Inertia.js (paginas renderizadas en servidor que hidratan a React) |
-| Interfaz | React 18 + TypeScript + Vite + Tailwind + Chart.js |
+| Web | Django 5.2: API JSON en `/api/` (sesion o token) |
+| Interfaz | SPA de React 18 + TypeScript + Vite + Tailwind + Chart.js (React Router, TanStack Query) |
 | Base de datos | PostgreSQL 15+ (SSL, un esquema por entorno) |
 | Cola de tareas | Celery sobre Redis (los analisis largos, fuera de la peticion) |
 | Secretos | HashiCorp Vault (KV v2, AppRole) |
@@ -21,9 +21,10 @@ el reporte mensual para la reguladora, sobre exports de Odoo cargados como CSV.
 La misma imagen sirve para dos contenedores: el que atiende HTTP y el worker que ejecuta
 los analisis. Solo cambia el comando de arranque.
 
-No hay REST separado ni SPA: cada vista devuelve una respuesta Inertia con sus
-props ya calculados, y React la hidrata. Los endpoints `api/` existen solo para
-lo que se pide despues de cargar la pagina.
+Django sirve la SPA en las rutas de pagina (`/modulo/pagina/`) y los datos en
+`/api/<modulo>/<servicio>/`. Esa misma API la usan otras aplicaciones con un token
+(`Authorization: Bearer`), que actua con los permisos de su cuenta y queda en
+auditoria.
 
 ## Estructura
 
@@ -35,7 +36,7 @@ backend/      Django (API, analitica y Celery)
   netowl_web/   settings, urls, wsgi, celery, middleware
   templates/    La unica plantilla Django (app.html)
   data/         Planes.json y Zonas.json: semilla de los catalogos
-                (`manage.py cargar_catalogos`).
+                (`manage.py load_catalogs`).
 
 frontend/     React + TypeScript + Vite
   src/          pages/ -> features/ -> shared/
@@ -168,7 +169,7 @@ el build no hay red hacia el.
 
 El despliegue es el `docker-compose.yml` de la raiz: cuatro contenedores,
 Postgres, Redis, la app y el worker. Los dos ultimos usan la misma imagen y solo
-cambian el comando de arranque. `manage.py verificar_entorno` revisa, sin cambiar
+cambian el comando de arranque. `manage.py check_env` revisa, sin cambiar
 nada, lo que el codigo no puede arreglar (TLS de la base, privilegios del rol,
 Redis sin contrasena, DEBUG).
 

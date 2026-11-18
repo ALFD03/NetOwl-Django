@@ -35,7 +35,7 @@ export type CrmDimensionKey = keyof typeof CRM_DIMENSION_LABELS;
  * them. Labels lead with the stage number because that is how the sales team
  * refers to them out loud.
  */
-export const CRM_ETAPA_LABELS = {
+export const CRM_STAGE_LABELS = {
   etapa_1_contacto: '1 · Contacto inicial',
   etapa_2_recepcion: '2 · Recepción de datos',
   etapa_3_factibilidad: '3 · Factibilidad',
@@ -50,7 +50,7 @@ export const CRM_ETAPA_LABELS = {
 } as const;
 
 /** Short form for column headers and chips, where the full label will not fit. */
-export const CRM_ETAPA_LABELS_CORTAS: Record<string, string> = {
+export const CRM_STAGE_SHORT_LABELS: Record<string, string> = {
   etapa_1_contacto: 'E1 Contacto',
   etapa_2_recepcion: 'E2 Recepción',
   etapa_3_factibilidad: 'E3 Factibilidad',
@@ -68,7 +68,7 @@ export const CRM_ETAPA_LABELS_CORTAS: Record<string, string> = {
  * The stages sales steers by — mirrors `ETAPAS_CLAVE_VENTAS` in
  * `crm_config.py`, which also flags each row with `es_clave`.
  */
-export const CRM_ETAPAS_CLAVE = [
+export const CRM_KEY_STAGES = [
   'etapa_1_contacto',
   'etapa_2_recepcion',
   'etapa_3_factibilidad',
@@ -77,5 +77,5 @@ export const CRM_ETAPAS_CLAVE = [
 ] as const;
 
 /** `etapa_5_gpi` -> `5 · GPI`, falling back to the raw key for a new stage. */
-export const crmEtapaLabel = (etapa: string): string =>
-  CRM_ETAPA_LABELS[etapa as keyof typeof CRM_ETAPA_LABELS] ?? etapa;
+export const crmStageLabel = (stage: string): string =>
+  CRM_STAGE_LABELS[stage as keyof typeof CRM_STAGE_LABELS] ?? stage;

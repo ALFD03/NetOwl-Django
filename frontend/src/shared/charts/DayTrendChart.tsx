@@ -22,23 +22,23 @@ interface Props {
   title: string;
   subtitle?: string;
   /** Los días calculados del mes: el eje X. */
-  dias: number[];
+  days: number[];
   series: DayTrendSeries[];
   /** Día del corte; se marca en la línea y es el que se resume en la cabecera. */
   selectedDay: number;
   /** `true` cuando los valores son porcentajes, para rotularlos como tales. */
-  esTasa?: boolean;
+  isRate?: boolean;
   className?: string;
 }
 
-const formatea = (valor: number, esTasa: boolean): string =>
-  esTasa ? `${formatTwoDecimals(valor)} %` : formatInteger(valor);
+const format = (value: number, isRate: boolean): string =>
+  isRate ? `${formatTwoDecimals(value)} %` : formatInteger(value);
 
 /**
  * Sin etiquetas por punto: treinta y un números encima de la línea no se leen.
  * El número del día elegido está en la cabecera y el resto, en el tooltip.
  */
-const opcionesBase: ChartOptions<'line'> = {
+const baseOptions: ChartOptions<'line'> = {
   responsive: true,
   maintainAspectRatio: false,
   interaction: { mode: 'index', intersect: false },
@@ -74,22 +74,22 @@ const opcionesBase: ChartOptions<'line'> = {
 export function DayTrendChart({
   title,
   subtitle,
-  dias,
+  days,
   series,
   selectedDay,
-  esTasa = false,
+  isRate: isRate = false,
   className = 'h-56 w-full',
 }: Props) {
-  const idx = dias.indexOf(selectedDay);
+  const idx = days.indexOf(selectedDay);
 
   const data = useMemo<ChartData<'line'>>(
     () => ({
-      labels: dias.map(String),
-      datasets: series.map((serie) => {
-        const chart = METRIC_CHART[serie.color];
+      labels: days.map(String),
+      datasets: series.map((points) => {
+        const chart = METRIC_CHART[points.color];
         return {
-          label: serie.label,
-          data: serie.values,
+          label: points.label,
+          data: points.values,
           borderColor: chart.line,
           backgroundColor: chart.fill,
           fill: series.length === 1,
@@ -97,15 +97,15 @@ export function DayTrendChart({
           tension: 0.35,
           // El día del corte es el único punto dibujado: marca dónde está la
           // barra sin llenar la línea de puntos que no dicen nada.
-          pointRadius: dias.map((_, i) => (i === idx ? 5 : 0)),
+          pointRadius: days.map((_, i) => (i === idx ? 5 : 0)),
           pointBackgroundColor: chart.line,
           pointBorderColor: CHART_CHROME.textStrong,
-          pointBorderWidth: dias.map((_, i) => (i === idx ? 2 : 0)),
+          pointBorderWidth: days.map((_, i) => (i === idx ? 2 : 0)),
           pointHoverRadius: 5,
         };
       }),
     }),
-    [dias, series, idx],
+    [days, series, idx],
   );
 
   return (
@@ -116,30 +116,30 @@ export function DayTrendChart({
       </div>
 
       <div className="mb-4 flex flex-wrap gap-4">
-        {series.map((serie) => {
-          const actual = idx >= 0 ? (serie.values[idx] ?? 0) : 0;
-          const anterior = idx > 0 ? (serie.values[idx - 1] ?? 0) : null;
-          const delta = anterior === null ? null : actual - anterior;
-          const sube = (delta ?? 0) >= 0;
+        {series.map((points) => {
+          const current = idx >= 0 ? (points.values[idx] ?? 0) : 0;
+          const previous = idx > 0 ? (points.values[idx - 1] ?? 0) : null;
+          const delta = previous === null ? null : current - previous;
+          const lift = (delta ?? 0) >= 0;
           // El color dice si la noticia es buena, no hacia dónde apunta: en la
           // misma gráfica, más instalados es verde y más perdidos es rojo.
-          const bueno = sube === ((serie.trendGoodWhen ?? 'up') === 'up');
+          const good = lift === ((points.trendGoodWhen ?? 'up') === 'up');
 
           return (
-            <div key={serie.label} className="flex flex-col">
+            <div key={points.label} className="flex flex-col">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                {serie.label}
+                {points.label}
               </span>
               <span className="flex items-baseline gap-2">
                 <span className="text-xl font-black text-white tabular-nums">
-                  {formatea(actual, esTasa)}
+                  {format(current, isRate)}
                 </span>
                 {delta !== null && (
                   <span
-                    className={`text-[11px] font-bold tabular-nums ${bueno ? 'text-emerald-400' : 'text-rose-400'}`}
+                    className={`text-[11px] font-bold tabular-nums ${good ? 'text-emerald-400' : 'text-rose-400'}`}
                     title="Contra el día calculado anterior"
                   >
-                    {sube ? '+' : ''}{formatea(delta, esTasa)}
+                    {lift ? '+' : ''}{format(delta, isRate)}
                   </span>
                 )}
               </span>
@@ -148,7 +148,7 @@ export function DayTrendChart({
         })}
       </div>
 
-      <LineChart data={data} options={opcionesBase} plugins={[]} className={className} />
+      <LineChart data={data} options={baseOptions} plugins={[]} className={className} />
     </div>
   );
 }

@@ -6,15 +6,15 @@ import { Activity, Table as TableIcon } from 'lucide-react';
 import { DataTable, Modal, NeonContainer, ToggleGroup } from '@/shared/ui';
 import { DIMENSION_CONFIG } from '@/shared/constants/labels';
 import { formatInteger } from '@/shared/utils/formatters';
-import { BajasExportButton } from '../reports/BajasExportButton';
+import { ChurnExportButton } from '../reports/ChurnExportButton';
 import { SubscriptionPeriodDetail } from './SubscriptionPeriodDetail';
-import { buildDimensionColumns, buildPeriodColumns, conCumplimiento } from './subscriptionResultsColumns';
-import { useObjetivos } from '../../hooks/useObjetivos';
+import { buildDimensionColumns, buildPeriodColumns, withComplianceData } from './subscriptionResultsColumns';
+import { useTargets } from '../../hooks/useTargets';
 import { useSubscriptionResults } from '../../hooks/useSubscriptionResults';
-import type { SubscriptionCierre } from '../../types';
+import type { SubscriptionClose } from '../../types';
 
 interface SubscriptionResultsViewProps {
-  periodos: SubscriptionCierre[];
+  periods: SubscriptionClose[];
 }
 
 const DIMENSION_OPTIONS = Object.entries(DIMENSION_CONFIG).map(([key, config]) => ({
@@ -23,14 +23,14 @@ const DIMENSION_OPTIONS = Object.entries(DIMENSION_CONFIG).map(([key, config]) =
   icon: config.icon,
 }));
 
-export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewProps) {
-  const [selectedRow, setSelectedRow] = useState<SubscriptionCierre | null>(null);
+export function SubscriptionResultsView({ periods }: SubscriptionResultsViewProps) {
+  const [selectedRow, setSelectedRow] = useState<SubscriptionClose | null>(null);
   const [activeDimension, setActiveDimension] = useState('zona');
-  const { data: details, loading } = useSubscriptionResults(selectedRow?.periodo_reporte ?? null);
-  const objetivos = useObjetivos();
-  const columnas = useMemo(() => buildPeriodColumns(objetivos.semaforo), [objetivos]);
-  const columnasDimension = useMemo(() => buildDimensionColumns(objetivos.semaforo), [objetivos]);
-  const filas = useMemo(() => conCumplimiento(periodos, objetivos), [periodos, objetivos]);
+  const { data: details, loading } = useSubscriptionResults(selectedRow?.report_period ?? null);
+  const targets = useTargets();
+  const columns = useMemo(() => buildPeriodColumns(targets.thresholds), [targets]);
+  const dimensionColumns = useMemo(() => buildDimensionColumns(targets.thresholds), [targets]);
+  const rows = useMemo(() => withComplianceData(periods, targets), [periods, targets]);
 
   const activeLabel = DIMENSION_CONFIG[activeDimension]?.label ?? activeDimension;
 
@@ -44,25 +44,25 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
         noPadding
       >
         <div className="h-[550px]">
-          <DataTable columns={columnas} data={filas} searchable onRowClick={setSelectedRow} />
+          <DataTable columns={columns} data={rows} searchable onRowClick={setSelectedRow} />
         </div>
       </NeonContainer>
 
       <Modal
         isOpen={Boolean(selectedRow)}
         onClose={() => setSelectedRow(null)}
-        title={`Detalle de Periodo: ${selectedRow?.periodo_reporte ?? ''}`}
+        title={`Detalle de Periodo: ${selectedRow?.report_period ?? ''}`}
         size="wide"
       >
         {selectedRow && (
           <div className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                {formatInteger(selectedRow.bajas)} bajas en el periodo
+                {formatInteger(selectedRow.churned)} bajas en el periodo
               </p>
-              <BajasExportButton
-                period={selectedRow.periodo_reporte}
-                alcance="del periodo"
+              <ChurnExportButton
+                period={selectedRow.report_period}
+                scope="del periodo"
                 label="Exportar bajas del periodo"
               />
             </div>
@@ -88,7 +88,7 @@ export function SubscriptionResultsView({ periodos }: SubscriptionResultsViewPro
 
               <div className="h-[420px] overflow-hidden rounded-2xl border border-slate-800">
                 <DataTable
-                  columns={columnasDimension}
+                  columns={dimensionColumns}
                   data={details?.dimensions[activeDimension] ?? []}
                   isLoading={loading}
                   searchable

@@ -112,8 +112,8 @@ class VaultDataStructure(BaseModel):
 class VaultSettings:
     """Autentica contra Vault, lee el secreto y expone la configuración validada."""
 
-    MAX_INTENTOS = 3
-    ESPERA_ENTRE_INTENTOS = 0.5  # segundos, se multiplica por el nº de intento
+    MAX_ATTEMPTS = 3
+    RETRY_WAIT = 0.5  # segundos, se multiplica por el nº de intento
 
     def __init__(self):
         self._vault_url = os.getenv("VAULT_URL")
@@ -123,7 +123,7 @@ class VaultSettings:
         self._secret_path = os.getenv("VAULT_PATH")
 
         if os.getenv("CONFIG_SIN_VAULT") == "1":
-            raw_secrets = self._leer_de_entorno()
+            raw_secrets = self._read_from_env()
         else:
             raw_secrets = self._fetch_from_vault()
 
@@ -134,20 +134,20 @@ class VaultSettings:
             # genera pydantic incluye el valor recibido (`input_value`), así
             # que nunca debe propagarse: acabaría en el log de gunicorn.
             # El `from None` corta el encadenado por el mismo motivo.
-            detalle = "; ".join(
+            detail = "; ".join(
                 f"{'.'.join(str(x) for x in err['loc'])}: {err['msg']}"
                 for err in e.errors()
             )
             raise VaultConfigError(
                 "Los secretos leídos de Vault no tienen la estructura esperada "
-                f"(se esperan las claves DJANGOCONFIG y DBCONFIG) -> {detalle}"
+                f"(se esperan las claves DJANGOCONFIG y DBCONFIG) -> {detail}"
             ) from None
 
         self.django = validated.DJANGOCONFIG
         self.db = validated.DBCONFIG
 
     @staticmethod
-    def _leer_de_entorno() -> dict:
+    def _read_from_env() -> dict:
         """Arma el secreto con variables de entorno, sin pasar por Vault.
 
         Solo con `CONFIG_SIN_VAULT=1`, pensado para un entorno (p. ej. QA) cuyo
@@ -155,15 +155,15 @@ class VaultSettings:
         pasa por la misma validacion; una variable que falte no se rellena, para
         que pydantic la reporte como requerida.
         """
-        def tomar(*nombres: str) -> dict:
-            return {n: v for n in nombres if (v := os.getenv(n)) is not None}
+        def take(*names: str) -> dict:
+            return {n: v for n in names if (v := os.getenv(n)) is not None}
 
         return {
-            "DJANGOCONFIG": tomar(
+            "DJANGOCONFIG": take(
                 "DJANGO_SECRET_KEY", "DJANGO_DEBUG", "DJANGO_SECURE_SSL",
                 "ALLOWED_HOSTS", "CSRF_TRUSTED_ORIGINS",
             ),
-            "DBCONFIG": tomar(
+            "DBCONFIG": take(
                 "DB_NAME", "DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT",
                 "DB_SSLMODE",
             ),
@@ -197,16 +197,16 @@ class VaultSettings:
         # en HA el token emitido por un nodo puede tardar en propagarse, y la
         # lectura inmediata lo rechaza con "invalid token". Sin reintento, un
         # arranque de cada ocho fallaba por este motivo.
-        for intento in range(1, self.MAX_INTENTOS + 1):
-            ultimo = intento == self.MAX_INTENTOS
+        for attempt in range(1, self.MAX_ATTEMPTS + 1):
+            last = attempt == self.MAX_ATTEMPTS
             try:
-                return self._login_y_leer()
+                return self._login_and_read()
             except VaultConfigError:
-                if ultimo:
+                if last:
                     raise
-                time.sleep(self.ESPERA_ENTRE_INTENTOS * intento)
+                time.sleep(self.RETRY_WAIT * attempt)
 
-    def _login_y_leer(self) -> dict:
+    def _login_and_read(self) -> dict:
         """Un intento: autenticar por AppRole y leer el secreto KV v2.
 
         Cada fallo se envuelve en `VaultConfigError` diciendo en cual de los dos

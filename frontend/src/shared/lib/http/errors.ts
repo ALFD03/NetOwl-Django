@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-/** Error body shape returned by the Django endpoints. */
+/** Cuerpo de error: `{error: {message, details}}` en `/api/`, `{message}` en los endpoints antiguos. */
 export interface ApiErrorPayload {
+  error?: { message?: string; details?: unknown };
   message?: string;
   log_output?: string;
 }
@@ -11,6 +12,10 @@ export interface ApiError {
   message: string;
   /** Server-side execution log, when the endpoint returned one. */
   logOutput?: string;
+  /** HTTP status, when the error came from a response. */
+  status?: number;
+  /** Detalle de validación de `/api/` (campo y mensaje). */
+  details?: unknown;
 }
 
 /**
@@ -57,8 +62,10 @@ export function extractApiError(error: unknown, fallback: string): ApiError {
   if (axios.isAxiosError<ApiErrorPayload>(error)) {
     const data = error.response?.data;
     return {
-      message: data?.message ?? error.message ?? fallback,
+      message: data?.error?.message ?? data?.message ?? error.message ?? fallback,
       logOutput: data?.log_output,
+      status: error.response?.status,
+      details: data?.error?.details,
     };
   }
 

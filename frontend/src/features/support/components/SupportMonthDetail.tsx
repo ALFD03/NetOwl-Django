@@ -1,0 +1,86 @@
+/**
+ * El detalle de un mes en tablas: cada valor de cada eje con todas sus columnas,
+ * la incidencia de cada zona y el desglose de un valor.
+ *
+ * Es lo que Analytics enseña en gráficos, para quien necesita leerlo fila a fila
+ * o exportarlo. Lee el cierre del mes —sin barra de días— con los mismos hooks
+ * que Analytics, así que las dos páginas no pueden dar cifras distintas.
+ */
+
+import { useState } from 'react';
+import { Layers } from 'lucide-react';
+
+import { EmptyState } from '@/shared/ui';
+import { useSupportAnalytics } from '../hooks/useSupportAnalytics';
+import type { SupportAnalyticsProps, SupportDimension } from '../types';
+import { SupportAnalyticsFilters } from './analytics/SupportAnalyticsFilters';
+import { SupportBreakdownModal } from './analytics/SupportBreakdownModal';
+import { SupportDimensionPanel } from './analytics/SupportDimensionPanel';
+import { SupportIncidenceTable } from './analytics/SupportIncidenceTable';
+import { useVisit } from '@/shared/page/PageData';
+
+interface Props {
+  analyticsData?: SupportAnalyticsProps['analyticsData'];
+  periods: string[];
+  selectedPeriod: string;
+}
+
+export function SupportMonthDetail({ analyticsData, periods, selectedPeriod }: Props) {
+  const visit = useVisit();
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [dimension, setDimension] = useState<SupportDimension>('zona');
+
+  const data = useSupportAnalytics({ analyticsData, periods, selectedPeriod }, selectedGroup, dimension);
+  const { period, activeGroupName, hasGroups, dimensionRows, zones, breakdown, openBreakdown, closeBreakdown } = data;
+
+  // El histórico de arriba no cambia con el mes: sólo se pide el detalle.
+  const changeMonth = (period: string) =>
+    visit({ period });
+
+  return (
+    <div className="space-y-6">
+      <SupportAnalyticsFilters
+        periods={periods}
+        selectedPeriod={period}
+        onPeriodChange={changeMonth}
+        groups={data.groupOptions}
+        selectedGroup={activeGroupName}
+        onGroupChange={setSelectedGroup}
+        selectedDimension={dimension}
+        onDimensionChange={setDimension}
+      />
+
+      {!hasGroups ? (
+        <EmptyState
+          title="No hay datos de análisis disponibles para el periodo."
+          description="Ejecuta el análisis del mes desde Importaciones para poblar las dimensiones de soporte."
+          icon={<Layers />}
+          bordered
+        />
+      ) : (
+        <>
+          {/* `key` remonta el panel al cambiar de eje, que es lo que descarta su
+              estado local —la vista por departamento y el departamento filtrado—. */}
+          <SupportDimensionPanel
+            key={dimension}
+            dimension={dimension}
+            rows={dimensionRows}
+            groupName={activeGroupName}
+            period={period}
+            onSelect={openBreakdown}
+          />
+
+          <SupportIncidenceTable rows={zones} groupName={activeGroupName} />
+
+          <SupportBreakdownModal
+            dimension={dimension}
+            breakdown={breakdown}
+            groupName={activeGroupName}
+            period={period}
+            onClose={closeBreakdown}
+          />
+        </>
+      )}
+    </div>
+  );
+}

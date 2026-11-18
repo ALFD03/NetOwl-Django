@@ -1,5 +1,5 @@
 /**
- * Página Inertia `CRM/Analytics` (`/crm/analytics/`).
+ * Página `/crm/analytics/`.
  *
  * Recibe todas las dimensiones del periodo: el selector de dimensión es de
  * cliente y no debe costar una vuelta al servidor.
@@ -17,11 +17,10 @@
  */
 
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import {
-  CampanasExportButton,
+  CampaignsExportButton,
   CRM_DAY_CARDS,
   CRM_DAY_CHARTS,
   CrmAnalyticsFilters,
@@ -34,26 +33,28 @@ import { useDayCuts } from '@/shared/hooks/useDayCuts';
 import { useDayPayload } from '@/shared/hooks/useDayPayload';
 import { CRM_DAY_METRICS_URL } from '@/shared/lib/api/crm';
 import { DayProgressBar, DaySummary } from '@/shared/ui';
+import { useVisit } from '@/shared/page/PageData';
 
 export default function CrmAnalytics(props: CrmAnalyticsProps) {
+  const visit = useVisit();
   const { periods = [], selectedPeriod = '', dayMetrics } = props;
   const [selectedDimension, setSelectedDimension] = useState<CrmDimensionKey>('sucursal');
 
   const { availableDays, totalDays, selectedDay, selectDay } = useDayCuts(dayMetrics);
 
-  const { payload, diaResuelto } = useDayPayload<CrmDayPayload>({
+  const { payload, resolvedDay } = useDayPayload<CrmDayPayload>({
     url: CRM_DAY_METRICS_URL,
     period: selectedPeriod,
-    dia: selectedDay,
-    dias: availableDays,
+    day: selectedDay,
+    days: availableDays,
     // El día que la vista ya resolvió llega en los props: sembrarlo evita pedir
     // de vuelta lo que acaba de llegar.
-    inicial: dayMetrics?.dia
+    initial: dayMetrics?.day
       ? {
-          dia: dayMetrics.dia,
+          day: dayMetrics.day,
           payload: {
             global: props.globalData ?? {},
-            dimensiones: props.dimensionsData ?? [],
+            dimensions: props.dimensionsData ?? [],
           },
         }
       : null,
@@ -61,7 +62,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
 
   // Lo que está en pantalla: el último día resuelto, o el cierre si el mes no
   // tiene cortes.
-  const dimensionsData = payload?.dimensiones ?? props.dimensionsData ?? [];
+  const dimensionsData = payload?.dimensions ?? props.dimensionsData ?? [];
 
   const { rows, globalData, healthCards, rankingCards } = useCrmAnalytics(
     {
@@ -74,7 +75,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
 
   /** Al cambiar de mes se suelta el día: el del mes anterior no significa nada aquí. */
   const handlePeriodChange = (period: string) =>
-    router.get('/crm/analytics/', { period }, { preserveState: true });
+    visit({ period });
 
   return (
     <AppLayout
@@ -91,7 +92,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                periodoMes={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.month}
                 daysInMonth={totalDays}
                 selectedDay={selectedDay}
                 onSelect={selectDay}
@@ -102,12 +103,12 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
       }
     >
       <div className="space-y-6">
-        <CampanasExportButton dimensiones={dimensionsData} periodo={selectedPeriod} dia={payload ? diaResuelto : 0} />
+        <CampaignsExportButton dimensions={dimensionsData} period={selectedPeriod} day={payload ? resolvedDay : 0} />
 
         <DaySummary
-          serie={dayMetrics?.serie}
-          dias={availableDays}
-          dia={selectedDay}
+          series={dayMetrics?.series}
+          days={availableDays}
+          day={selectedDay}
           cards={CRM_DAY_CARDS}
           charts={CRM_DAY_CHARTS}
         />

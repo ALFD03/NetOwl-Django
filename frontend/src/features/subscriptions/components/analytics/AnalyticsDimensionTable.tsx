@@ -6,7 +6,7 @@ import { Table as TableIcon } from 'lucide-react';
 import { DataTable, NeonContainer } from '@/shared/ui';
 import { DIMENSION_LABELS } from '@/shared/constants/labels';
 import type { DimensionVal } from '@/shared/types/domain';
-import { useObjetivosConfig } from '../../hooks/useObjetivos';
+import { useTargetsConfig } from '../../hooks/useTargets';
 import { buildAnalyticsDimensionColumns } from './analyticsDimensionColumns';
 
 export interface AnalyticsDimensionTableProps {
@@ -23,8 +23,8 @@ export interface AnalyticsDimensionTableProps {
  */
 export function AnalyticsDimensionTable({ rows, dimension, period }: AnalyticsDimensionTableProps) {
   const label = DIMENSION_LABELS[dimension as keyof typeof DIMENSION_LABELS] ?? dimension;
-  const { semaforo } = useObjetivosConfig();
-  const columnas = useMemo(() => buildAnalyticsDimensionColumns(semaforo), [semaforo]);
+  const { thresholds } = useTargetsConfig();
+  const columns = useMemo(() => buildAnalyticsDimensionColumns(thresholds), [thresholds]);
 
   return (
     <NeonContainer
@@ -40,7 +40,7 @@ export function AnalyticsDimensionTable({ rows, dimension, period }: AnalyticsDi
     >
       <div className="h-[550px]">
         <DataTable
-          columns={columnas}
+          columns={columns}
           data={rows}
           searchable
           searchPlaceholder={`Buscar ${label.toLowerCase()}...`}

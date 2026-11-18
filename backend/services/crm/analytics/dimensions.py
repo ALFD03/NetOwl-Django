@@ -2,71 +2,52 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-from core.config import DB_SCHEMA, TableNames
-from core.database import DBConnector
+import pandas as pd
 
-from .config import DIMENSIONES
-from .poblaciones import PoblacionesCrm
+from core.database import DBConnector
+from core.tables import replace
+
+from .config import DIMENSIONS
+from .populations import CrmPopulations
+from .tables import DIMENSION_HISTORY
 
 logger = logging.getLogger(__name__)
 
 
-def build_crm_dimension_rows(pob: PoblacionesCrm) -> list[dict[str, Any]]:
+def build_crm_dimension_rows(pop: CrmPopulations) -> list[dict[str, Any]]:
     """Las metricas de cada valor dimensional del periodo.
 
     Cada rebanada se calcula con la **misma** funcion que el total, asi que una
-    sucursal se mide exactamente igual que la empresa entera: `PoblacionesCrm`
+    sucursal se mide exactamente igual que la empresa entera: `CrmPopulations`
     se recorta y se vuelve a medir, sin una segunda definicion de nada.
 
-    La forma de cada fila es la que devuelve `get_crm_dimensiones`, de modo que
+    La forma de cada fila es la que devuelve `get_crm_dimensions`, de modo que
     la vista lee igual una fila persistida que una recien calculada para un dia.
     """
-    filas: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
-    for dim in DIMENSIONES:
-        for valor in pob.valores(dim):
-            rebanada = pob.filtrar(dim, valor)
-            if rebanada.vacio:
+    for dim in DIMENSIONS:
+        for value in pop.values(dim):
+            segment = pop.filter_by(dim, value)
+            if segment.empty:
                 continue
-            metricas = rebanada.metricas()
-            filas.append({
-                "periodo_reporte": pob.periodo,
+            metrics = segment.metrics()
+            rows.append({
+                "periodo_reporte": pop.period,
                 "dimension": dim,
-                "valor": valor,
-                "metricas": metricas,
-                "efectividad": metricas.get("efectividad", []),
+                "valor": value,
+                "metricas": metrics,
+                "efectividad": metrics.get("efectividad", []),
             })
 
-    return filas
+    return rows
 
 
-def save_crm_dimensiones_periodo(
-    db: DBConnector, periodo: str, filas: list[dict[str, Any]]
-) -> None:
-    """Reemplaza las filas dimensionales del periodo por las recien calculadas."""
-    with db.get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                f"DELETE FROM {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO} WHERE periodo_reporte = %s",
-                [periodo]
-            )
-            for fila in filas:
-                cur.execute(
-                    f"""
-                    INSERT INTO {DB_SCHEMA}.{TableNames.CRM_DIMENSIONES_HISTORICO}
-                    (periodo_reporte, dimension, valor, metricas, efectividad, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, NOW())
-                    """,
-                    [
-                        periodo,
-                        fila["dimension"],
-                        fila["valor"],
-                        json.dumps(fila["metricas"]),
-                        json.dumps(fila["efectividad"]),
-                    ],
-                )
-        conn.commit()
+def save_dimensions(db: DBConnector, period: str, rows: list[dict[str, Any]]) -> None:
+    """Reemplaza las filas dimensionales del periodo por las recién calculadas."""
+    df = pd.DataFrame(rows, columns=["dimension", "valor", "metricas", "efectividad"])
+    with db.transaction() as cur:
+        replace(cur, DIMENSION_HISTORY, df, periodo_reporte=period)

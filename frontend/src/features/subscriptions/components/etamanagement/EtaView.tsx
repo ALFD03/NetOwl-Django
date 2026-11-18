@@ -1,11 +1,11 @@
 /** Pantalla de parametrización ETA: pendientes y excepciones por suscripción. */
 
 import {
-  CheckCircle2, Edit3, EyeOff, Network, Plus, Settings2, ShieldAlert, Trash2,
+  AlertTriangle, CheckCircle2, Edit3, EyeOff, Network, Plus, Settings2, ShieldAlert, Trash2,
 } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
-import { DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
+import { ActionMessage, DataTable, EmptyState, Modal, NeonContainer, type Column } from '@/shared/ui';
 import { formatTwoDecimals } from '@/shared/utils/formatters';
 import { useEtaManagement } from '@/features/subscriptions/hooks/useEtaManagement';
 import type {
@@ -24,13 +24,13 @@ type Props = SubscriptionEtaManagementProps;
  * Es lo primero por lo que se filtra cuando se revisa el maestro, y no es un
  * campo sino la combinación de dos banderas, así que se resuelve una vez aquí.
  */
-const tipoDeclaracion = (sub: EtaSubscriptionConfig): string => {
-  if (sub.es_transporte) return 'Transporte';
-  if (sub.es_dedicado) return 'Dedicado';
+const declarationKind = (sub: EtaSubscriptionConfig): string => {
+  if (sub.is_transport) return 'Transporte';
+  if (sub.is_dedicated) return 'Dedicado';
   return 'Internet';
 };
 
-const textoOGuion = (valor?: string) => valor?.trim() || '—';
+const textOrDash = (value?: string) => value?.trim() || '—';
 
 /**
  * Parametrización del reporte ETA.
@@ -51,7 +51,7 @@ export function EtaManagementView({
   allKnownPlans = [],
 }: Props) {
   const {
-    isCustomProduct, setIsCustomProduct, isSaving, activeView, setActiveTab,
+    isCustomProduct, setIsCustomProduct, isSaving, error, activeView, setActiveTab,
     editingSub, setEditingSub, deletingItem, setDeletingItem,
     handleOpenEditSub, handleUpdateSub, handleQuickIgnoreSub, handleConfirmDelete,
     handleSelectPredefinedPlan,
@@ -60,45 +60,45 @@ export function EtaManagementView({
   const createSub = () => {
     setIsCustomProduct(false);
     setEditingSub({
-      orden: '',
-      cliente: '',
-      producto: allKnownPlans[0]?.name ?? allKnownPlans[0]?.plan_name ?? '',
-      tecnologia: 'FTTH',
-      tipo_persona: 'pyme',
-      datas_mbps: 100,
-      precio: 0,
-      reportar: true,
-      tiene_tv: false,
-      es_transporte: false,
-      es_dedicado: false,
+      order: '',
+      client: '',
+      product: allKnownPlans[0]?.name ?? allKnownPlans[0]?.plan_name ?? '',
+      technology: 'FTTH',
+      person_type: 'pyme',
+      data_mbps: 100,
+      price: 0,
+      report: true,
+      has_tv: false,
+      is_transport: false,
+      is_dedicated: false,
     });
   };
 
-  const botonIcono = (
+  const iconButton = (
     onClick: () => void,
-    titulo: string,
-    icono: React.ReactNode,
-    tono: string,
+    title: string,
+    icon: React.ReactNode,
+    tone: string,
   ) => (
-    <button type="button" onClick={onClick} title={titulo} className={`rounded-lg border p-2 ${tono}`}>
-      {icono}
+    <button type="button" onClick={onClick} title={title} className={`rounded-lg border p-2 ${tone}`}>
+      {icon}
     </button>
   );
 
-  const columnasPendientes: Column<EtaDiscoveredSubscription>[] = [
-    { header: 'Orden', accessor: 'orden', sortKey: 'orden', className: 'font-bold text-white' },
-    { header: 'Cliente', accessor: (row) => textoOGuion(row.cliente), sortKey: 'cliente' },
-    { header: 'Producto', accessor: (row) => textoOGuion(row.producto), sortKey: 'producto', filterable: true },
+  const pendingColumns: Column<EtaDiscoveredSubscription>[] = [
+    { header: 'Orden', accessor: 'order', sortKey: 'order', className: 'font-bold text-white' },
+    { header: 'Cliente', accessor: (row) => textOrDash(row.client), sortKey: 'client' },
+    { header: 'Producto', accessor: (row) => textOrDash(row.product), sortKey: 'product', filterable: true },
     {
       header: 'Sucursal',
-      accessor: (row) => textoOGuion(row.sucursal),
+      accessor: (row) => textOrDash(row.sucursal),
       sortKey: 'sucursal',
       filterable: true,
       filterValue: (row) => row.sucursal?.trim() || 'Sin sucursal',
     },
     {
       header: 'Zona',
-      accessor: (row) => textoOGuion(row.zona),
+      accessor: (row) => textOrDash(row.zona),
       sortKey: 'zona',
       filterable: true,
       filterValue: (row) => row.zona?.trim() || 'Sin zona',
@@ -108,58 +108,58 @@ export function EtaManagementView({
       align: 'right',
       accessor: (row) => (
         <div className="flex justify-end gap-2">
-          {botonIcono(() => handleOpenEditSub(row), 'Clasificar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
-          {botonIcono(() => handleQuickIgnoreSub(row), 'Ignorar', <EyeOff className="h-4 w-4" />, 'border-slate-700 text-slate-400 hover:bg-slate-700/30')}
+          {iconButton(() => handleOpenEditSub(row), 'Clasificar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
+          {iconButton(() => handleQuickIgnoreSub(row), 'Ignorar', <EyeOff className="h-4 w-4" />, 'border-slate-700 text-slate-400 hover:bg-slate-700/30')}
         </div>
       ),
     },
   ];
 
-  const columnasGuardadas: Column<EtaSubscriptionConfig>[] = [
-    { header: 'Orden', accessor: 'orden', sortKey: 'orden', className: 'font-bold text-white' },
-    { header: 'Cliente', accessor: (row) => textoOGuion(row.cliente), sortKey: 'cliente' },
-    { header: 'Producto', accessor: (row) => textoOGuion(row.producto), sortKey: 'producto', filterable: true },
+  const savedColumns: Column<EtaSubscriptionConfig>[] = [
+    { header: 'Orden', accessor: 'order', sortKey: 'order', className: 'font-bold text-white' },
+    { header: 'Cliente', accessor: (row) => textOrDash(row.client), sortKey: 'client' },
+    { header: 'Producto', accessor: (row) => textOrDash(row.product), sortKey: 'product', filterable: true },
     {
       header: 'Declaración',
-      accessor: tipoDeclaracion,
+      accessor: declarationKind,
       filterable: true,
-      filterValue: tipoDeclaracion,
+      filterValue: declarationKind,
     },
-    { header: 'Tecnología', accessor: (row) => textoOGuion(row.tecnologia), sortKey: 'tecnologia', filterable: true },
-    { header: 'Persona', accessor: (row) => textoOGuion(row.tipo_persona), sortKey: 'tipo_persona', filterable: true },
-    { header: 'Mbps', accessor: 'datas_mbps', align: 'right', sortKey: 'datas_mbps' },
+    { header: 'Tecnología', accessor: (row) => textOrDash(row.technology), sortKey: 'technology', filterable: true },
+    { header: 'Persona', accessor: (row) => textOrDash(row.person_type), sortKey: 'person_type', filterable: true },
+    { header: 'Mbps', accessor: 'data_mbps', align: 'right', sortKey: 'data_mbps' },
     {
       // La renta con la que se declara este enlace. El catálogo comercial no
       // puede darla —cada dedicado negocia la suya—, así que es el único sitio
       // donde se ve si falta.
       header: 'Renta',
-      accessor: (row) => (row.precio ? formatTwoDecimals(row.precio) : '— sin fijar'),
+      accessor: (row) => (row.price ? formatTwoDecimals(row.price) : '— sin fijar'),
       align: 'right',
-      sortKey: 'precio',
+      sortKey: 'price',
       filterable: true,
-      filterValue: (row) => (row.precio ? 'Con renta' : 'Sin renta'),
+      filterValue: (row) => (row.price ? 'Con renta' : 'Sin renta'),
     },
     {
       header: 'TV',
-      accessor: (row) => (row.tiene_tv ? 'Sí' : '—'),
+      accessor: (row) => (row.has_tv ? 'Sí' : '—'),
       filterable: true,
-      filterValue: (row) => (row.tiene_tv ? 'Sí' : 'No'),
+      filterValue: (row) => (row.has_tv ? 'Sí' : 'No'),
     },
     {
       header: 'Reportar',
-      accessor: (row) => (row.reportar === false
+      accessor: (row) => (row.report === false
         ? <EyeOff className="h-4 w-4 text-slate-500" />
         : <CheckCircle2 className="h-4 w-4 text-emerald-400" />),
       filterable: true,
-      filterValue: (row) => (row.reportar === false ? 'No se reporta' : 'Se reporta'),
+      filterValue: (row) => (row.report === false ? 'No se reporta' : 'Se reporta'),
     },
     {
       header: 'Acciones',
       align: 'right',
       accessor: (row) => (
         <div className="flex justify-end gap-2">
-          {botonIcono(() => handleOpenEditSub(row), 'Editar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
-          {botonIcono(() => setDeletingItem({ type: 'sub', id: row.orden }), 'Eliminar', <Trash2 className="h-4 w-4" />, 'border-rose-500/30 text-rose-400 hover:bg-rose-500/10')}
+          {iconButton(() => handleOpenEditSub(row), 'Editar', <Edit3 className="h-4 w-4" />, 'border-sky-500/30 text-sky-400 hover:bg-sky-500/10')}
+          {iconButton(() => setDeletingItem({ type: 'sub', id: row.order }), 'Eliminar', <Trash2 className="h-4 w-4" />, 'border-rose-500/30 text-rose-400 hover:bg-rose-500/10')}
         </div>
       ),
     },
@@ -167,7 +167,7 @@ export function EtaManagementView({
 
   return (
     <AppLayout
-      subpagina="Maestro de planes"
+      subpage="Maestro de planes"
       toolbar={
         <>
           <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
@@ -197,6 +197,7 @@ export function EtaManagementView({
         </>
       }
     >
+      <ActionMessage status={error ? { type: 'error', text: error } : null} className="mb-4" icon={<AlertTriangle />} />
       {activeView === 'discovered_plans' && (
         <NeonContainer title="Planes detectados" subtitle="Productos encontrados en los datos que todavía no están en el catálogo" icon={<ShieldAlert className="w-5 h-5" />} theme="yellow">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -205,7 +206,7 @@ export function EtaManagementView({
                 <div><div className="font-bold text-white">{plan}</div><div className="text-[10px] uppercase text-slate-500">Sin registrar en el catálogo</div></div>
                 {/* Enlace y no formulario: el plan se da de alta en el catálogo,
                     que es de donde ETA lee su clasificación. */}
-                <a href={`/catalogos/productos/?nuevo_plan=${encodeURIComponent(plan)}`} className="rounded-xl border border-amber-500/30 p-2 text-amber-400 hover:bg-amber-500/10" title="Crear en el catálogo"><Settings2 className="w-4 h-4" /></a>
+                <a href={`/catalogos/productos/?new_plan=${encodeURIComponent(plan)}`} className="rounded-xl border border-amber-500/30 p-2 text-amber-400 hover:bg-amber-500/10" title="Crear en el catálogo"><Settings2 className="w-4 h-4" /></a>
               </div>
             ))}
             {discoveredPlans.length === 0 && <div className="col-span-full py-10 text-center text-slate-500">No hay planes pendientes.</div>}
@@ -229,7 +230,7 @@ export function EtaManagementView({
             />
           ) : (
             <DataTable
-              columns={columnasPendientes}
+              columns={pendingColumns}
               data={discoveredSubs}
               searchable
               searchPlaceholder="Buscar por orden, cliente o producto..."
@@ -254,7 +255,7 @@ export function EtaManagementView({
             />
           ) : (
             <DataTable
-              columns={columnasGuardadas}
+              columns={savedColumns}
               data={individualConfigs}
               searchable
               searchPlaceholder="Buscar por orden, cliente o producto..."

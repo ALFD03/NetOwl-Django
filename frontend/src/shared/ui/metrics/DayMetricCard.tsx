@@ -13,7 +13,7 @@ interface DayMetricCardProps {
   kind: MetricKind;
   reading: DayReading;
   /** Día del corte, solo para rotular. */
-  dia: number;
+  day: number;
   color?: MetricColor;
   icon?: ReactNode;
   /** Qué es la métrica, en cuatro palabras. */
@@ -22,8 +22,8 @@ interface DayMetricCardProps {
   trendGoodWhen?: 'up' | 'down';
 }
 
-const formatea = (valor: number, kind: MetricKind): string =>
-  kind === 'tasa' ? `${formatTwoDecimals(valor)} %` : formatInteger(valor);
+const format = (value: number, kind: MetricKind): string =>
+  kind === 'tasa' ? `${formatTwoDecimals(value)} %` : formatInteger(value);
 
 /**
  * El número grande es **lo del día**: en un flujo, lo que ocurrió ese día; en un
@@ -36,31 +36,31 @@ export const DayMetricCard: FC<DayMetricCardProps> = ({
   label,
   kind,
   reading,
-  dia,
+  day,
   color = 'blue',
   icon,
   subValue,
   trendGoodWhen = 'up',
 }) => {
-  const { acumulado, delDia, previo, variacion, enPuntos } = reading;
+  const { accumulated, ofDay: dayData, previous: prev, variation, inPoints } = reading;
 
   const pie =
     kind === 'flujo'
-      ? `Acumulado del mes: ${formatea(acumulado, kind)}`
-      : previo === null
+      ? `Acumulado del mes: ${format(accumulated, kind)}`
+      : prev === null
         ? 'Primer día calculado'
-        : `Día anterior: ${formatea(previo, kind)}`;
+        : `Día anterior: ${format(prev, kind)}`;
 
   return (
     <MetricCard
       label={label}
-      value={formatea(delDia, kind)}
-      caption={kind === 'flujo' ? `En el día ${dia}` : `Al día ${dia}`}
+      value={format(dayData, kind)}
+      caption={kind === 'flujo' ? `En el día ${day}` : `Al día ${day}`}
       subValue={subValue}
       color={color}
       icon={icon}
-      trend={variacion ?? undefined}
-      trendSuffix={enPuntos ? ' %' : '%'}
+      trend={variation ?? undefined}
+      trendSuffix={inPoints ? ' %' : '%'}
       trendGoodWhen={trendGoodWhen}
     >
       <p className="truncate text-[10px] font-black uppercase tracking-wider text-slate-400" title={pie}>

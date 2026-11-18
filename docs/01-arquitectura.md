@@ -21,13 +21,13 @@ Odoo cargados como CSV:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  frontend/src                React + TypeScript (Inertia)             │
+│  frontend/src                React + TypeScript (SPA)                 │
 │  pages/ → features/ → shared/     (la dependencia va en un solo  │
 │                                    sentido, ver frontend/src/README)  │
 └───────────────▲──────────────────────────────────────────────────┘
-                │ props Inertia (render) + fetch JSON (endpoints api/)
+                │ JSON de /api/<modulo>/<servicio>/ (sesión o token)
 ┌───────────────┴──────────────────────────────────────────────────┐
-│  services/<dominio>/views*.py + urls.py        Capa HTTP          │
+│  services/<dominio>/views*.py + urls.py + api_urls.py  Capa HTTP  │
 │  Vistas finas: parsear petición → llamar a analytics → responder  │
 └───────────────▲──────────────────────────────────────────────────┘
                 │ (los views importan de analytics, nunca al revés)
@@ -61,9 +61,10 @@ Reglas que se mantienen en todo el repositorio:
 services/<dominio>/
 ├── analytics/
 │   ├── config.py       Constantes del dominio: cabeceras del CSV, vocabularios
-│   ├── loader.py       CSV o base de datos → DataFrame
+│   ├── tables.py       Las tablas del dominio, con sus tipos (core.tables)
+│   ├── loader.py       CSV (core.exports) o base de datos → DataFrame
 │   ├── dimensions.py   Desgloses por dimensión
-│   ├── analyzer.py     Calcula y persiste vía DBConnector.save_historico
+│   ├── analyzer.py     Calcula y persiste con core.tables.replace / upsert
 │   └── queries.py      Lo que leen las vistas de los resultados ya calculados
 ├── views.py            Capa HTTP
 └── urls.py
@@ -79,33 +80,31 @@ la disposición. `subscriptions` es el único que crece por encima de ese esquem
 |---|---|---|
 | **Quién lo usa** | Todo `services/*/analytics/` | Solo `services/config/models.py`, `services/imports/models.py` y `services/subscriptions/models.py` |
 | **Qué guarda** | Datos calculados y tablas cargadas del CSV | Usuarios, permisos, bitácora, trabajos de análisis, catálogos |
-| **Esquema** | Tablas creadas y alteradas al vuelo, **todas las columnas `text`** | Migraciones versionadas |
-| **Carga masiva** | `COPY` por encima de 1000 filas, `execute_values` por debajo | — |
+| **Esquema** | Tablas declaradas con tipos en `services/*/analytics/tables.py`; `migrate` las pone al día | Migraciones versionadas |
+| **Carga masiva** | `COPY` en la misma transacción que el borrado del periodo (`core.tables.replace`) | — |
 | **Esquema Postgres** | Cualificado con `DB_SCHEMA` | Depende del modelo (ver [02](02-configuracion.md)) |
 
 No es accidental: la analítica escribe tablas cuya forma cambia con cada métrica
-nueva, y modelarlas con el ORM obligaría a una migración por columna.
+nueva, y modelarlas con el ORM obligaría a una migración por columna. Con
+`core.tables` una métrica nueva es una línea en el `tables.py` del dominio.
 
 ## Ciclo de vida de una petición de lectura
 
-1. El navegador pide `/subscriptions/analytics/`.
-2. `netowl_web/urls.py` delega en `services/subscriptions/urls.py`.
-3. El decorador `@permission_required('can_view_subs_analytics')` comprueba el
-   perfil; si falla, redirige a la primera página que el usuario sí pueda abrir
-   (`LANDING_ROUTES`) o devuelve 403 JSON si la petición era de datos.
+1. El navegador pide `/subscriptions/analytics/`. Django
+   (`services/subscriptions/urls.py`) responde con `page("can_view_subs_analytics")`:
+   sin sesión, al login; sin permiso, a la primera página que el usuario sí pueda
+   abrir (`LANDING_ROUTES`); con él, la plantilla con la SPA.
+2. React Router (`frontend/src/app/routes.tsx`) monta la página con
+   `apiPage('/api/subscriptions/analytics/', …)`, que pide sus datos con los
+   parámetros de la URL.
+3. `@endpoint` (`services/config/api/endpoint.py`) comprueba de nuevo sesión o
+   token y permiso, y aplica el límite de peticiones.
 4. La vista llama a `analytics.queries.get_analytics_data(...)`, que lee las
    tablas ya calculadas con `DBConnector`.
-5. Los props pasan por `clean_json_props` (o `clean_json_nullable`) para que
+5. La respuesta pasa por `clean_json_props` (o `clean_json_nullable`) para que
    `JSON.parse` no se atragante con `NaN`/`Infinity`.
-6. `render_inertia(request, "Subscriptions/Analytics", props)` devuelve HTML con
-   los props embebidos; `InertiaShareMiddleware` añade el usuario y su matriz de
-   permisos.
-7. `frontend/src/app/main.tsx` resuelve la cadena `"Subscriptions/Analytics"` contra
-   `import.meta.glob('../pages/**/*.tsx')` y monta React.
-
-> **Contrato frágil:** el nombre que pasa la vista es la ruta del fichero bajo
-> `frontend/src/pages/`. Renombrar o mover una página rompe la vista en tiempo de
-> ejecución, sin error de compilación.
+6. La página recibe ese JSON como props. Cambiar de mes cambia la URL
+   (`useVisit`) y repite el paso 2 sin desmontar la página.
 
 ## Ciclo de vida de un análisis
 
@@ -115,7 +114,7 @@ los días escritos. Hoy corren en un worker de Celery.
 
 ```
 Navegador                Django (web)                 Redis          Worker Celery
-   │  POST api/run-analysis/  │                          │                  │
+   │  POST …/run/             │                          │                  │
    ├─────────────────────────►│ lanzar_analisis()        │                  │
    │                          │  · valida el mes         │                  │
    │                          │  · 409 si ya hay uno     │                  │
@@ -125,7 +124,7 @@ Navegador                Django (web)                 Redis          Worker Cele
    │ ◄── 202 {job} ───────────┤                          ├─ entrega ───────►│
    │                          │                          │      bloqueo_modulo()
    │                          │                          │      fixtures.reset_cache()
-   │  GET api/jobs/<uuid>/    │                          │      runner(job, consola)
+   │  GET …/jobs/<uuid>/      │                          │      runner(job, consola)
    ├─────────────────────────►│ lee la fila AnalysisJob ◄┼──── log + progreso cada 2 s
    │ ◄── estado, log, % ──────┤                          │                  │
    │        (cada 2 s)        │                          │      marcar_fin() + historial
@@ -133,11 +132,11 @@ Navegador                Django (web)                 Redis          Worker Cele
 
 Piezas clave:
 
-- **`services/imports/jobs.py`** — `lanzar_analisis()` (validar, rechazar el
-  duplicado exacto, crear la fila y encolar), `bloqueo_modulo()` (cerrojo Redis
-  por módulo y entorno) y `ConsolaJob` (buffer de stdout que vuelca el log a la
+- **`services/imports/jobs.py`** — `launch_analysis()` (validar, rechazar el
+  duplicado exacto, crear la fila y encolar), `module_lock()` (cerrojo Redis
+  por módulo y entorno) y `JobConsole` (buffer de stdout que vuelca el log a la
   fila cada 2 segundos).
-- **`services/imports/tasks.py`** — una sola tarea, `imports.ejecutar_analisis`,
+- **`services/imports/tasks.py`** — una sola tarea, `imports.run_analysis`,
   y un diccionario `RUNNERS` que la especializa por módulo. **Para añadir un
   análisis se registra su función en `RUNNERS`; no se escribe una segunda
   tarea.**
@@ -148,8 +147,9 @@ Concurrencia:
 
 - Varios análisis **de módulos distintos** corren en paralelo
   (`CELERY_WORKER_CONCURRENCY`, por defecto 2).
-- Dos del **mismo módulo** nunca se solapan: comparten tabla y `save_historico`
-  la crea y altera sobre la marcha. El que llega segundo hace
+- Dos del **mismo módulo** nunca se solapan: comparten tabla, reescribirían el
+  mismo periodo y la primera escritura de un proceso puede ajustarla
+  (`core.tables.ensure`). El que llega segundo hace
   `self.retry(countdown=20)` y libera el hueco del worker, quedándose visible
   como `pending`.
 - Solo se rechaza (409) el **duplicado exacto**: mismo módulo y mismo periodo ya
@@ -162,13 +162,13 @@ Concurrencia:
   captura con `capture_console()` (`core/utils.py`). No se debe escribir un
   `redirect_stdout` a mano.
 - **Pasos contables → barra de progreso.** `build_day_metrics()` recibe un
-  callback `progreso(hechos, total, etiqueta)`; es lo que mueve la barra de
+  callback `progress(done, total, label)`; es lo que mueve la barra de
   `AnalysisRunnerCard` y del aviso flotante `AnalysisQueueAlert`.
-- **Los endpoints de mutación llevan límite de peticiones**
-  (`@ratelimit(key='ip', ...)`): `2/m` para los que disparan un cálculo, `5/m`
-  para las cargas de CSV, `60/m` para el CRUD de catálogos. Los endpoints de
-  sondeo (`api/jobs/...`) van deliberadamente **sin** límite.
-- **Props JSON-safe.** Todo lo que venga de pandas pasa por `clean_json_props`
+- **Los endpoints de mutación llevan límite de peticiones** (`rate=` de
+  `@endpoint`): `2/m` para los que disparan un cálculo, `5/m` para las cargas de
+  CSV, `60/m` para el CRUD de catálogos. Los endpoints de sondeo
+  (`/api/imports/jobs/...`) van deliberadamente **sin** límite.
+- **Respuestas JSON-safe.** Todo lo que venga de pandas pasa por `clean_json_props`
   o, cuando `NaN` significa "sin valor" y no cero, por `clean_json_nullable`.
 
 ## Mapa rápido de ficheros
@@ -184,7 +184,7 @@ Concurrencia:
 | `services/support/` | Tickets de soporte |
 | `frontend/src/` | React |
 | `backend/templates/app.html` | La única plantilla Django |
-| `data/Planes.json`, `data/Zonas.json` | Semilla inicial de los catálogos (solo los lee `cargar_catalogos`) |
+| `data/Planes.json`, `data/Zonas.json` | Semilla inicial de los catálogos (solo los lee `load_catalogs`) |
 | `scripts/dev.sh` | Arranque de desarrollo |
 | `docker-compose.yml`, `Dockerfile`, `entrypoint.sh` | Empaquetado y despliegue |
 | `graphify-out/` | Grafo de conocimiento del repositorio (generado) |

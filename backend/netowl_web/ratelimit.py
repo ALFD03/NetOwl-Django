@@ -29,27 +29,27 @@ import ipaddress
 import json
 
 
-def ip_cliente(request) -> str:
+def client_ip(request) -> str:
     """La direccion del cliente segun el proxy, o `REMOTE_ADDR` si no hay."""
-    reenviada = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    for candidata in reversed([p.strip() for p in reenviada.split(",") if p.strip()]):
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    for candidate in reversed([p.strip() for p in forwarded.split(",") if p.strip()]):
         # Puede venir entre corchetes (IPv6) o con puerto; si no se puede
         # interpretar, se prueba con la siguiente en vez de romper la peticion.
-        limpia = candidata.strip("[]").rsplit("%", 1)[0]
+        clean = candidate.strip("[]").rsplit("%", 1)[0]
         try:
-            ipaddress.ip_address(limpia)
+            ipaddress.ip_address(clean)
         except ValueError:
             continue
-        return limpia
+        return clean
 
     return request.META.get("REMOTE_ADDR") or "0.0.0.0"
 
 
-def usuario_login(group, request) -> str:
+def user_login(group, request) -> str:
     """La cuenta que se intenta abrir, para contar los fallos por cuenta.
 
     Con `key='post:username'` la libreria lee `request.POST`, que llega vacio
-    cuando el formulario se envia como JSON -que es como lo envia Inertia-: la
+    cuando el formulario se envia como JSON -que es como lo envia la SPA-: la
     clave era la cadena vacia para todo el mundo, asi que los intentos de toda
     la empresa caian en un unico cubo. Cinco en cinco minutos, de quien fuera,
     dejaban sin poder entrar a todos, y el limite por cuenta no existia.
@@ -59,15 +59,15 @@ def usuario_login(group, request) -> str:
     cubo nuevo por cada variante. Sin nombre se cuenta por IP: devolver la
     cadena vacia volveria a crear el cubo comun.
     """
-    nombre = ""
+    name = ""
     if request.content_type == "application/json":
         try:
-            datos = json.loads(request.body or b"{}")
+            data = json.loads(request.body or b"{}")
         except (ValueError, UnicodeDecodeError):
-            datos = {}
-        if isinstance(datos, dict):
-            nombre = datos.get("username") or ""
+            data = {}
+        if isinstance(data, dict):
+            name = data.get("username") or ""
     else:
-        nombre = request.POST.get("username", "")
-    nombre = str(nombre).strip().casefold()
-    return f"usuario:{nombre}" if nombre else f"ip:{ip_cliente(request)}"
+        name = request.POST.get("username", "")
+    name = str(name).strip().casefold()
+    return f"usuario:{name}" if name else f"ip:{client_ip(request)}"

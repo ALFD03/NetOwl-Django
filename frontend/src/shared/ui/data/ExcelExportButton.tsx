@@ -57,7 +57,7 @@ export function ExcelExportButton<Row>({
       <ExportButton
         className={className}
         onClick={handleClick}
-        estado={state}
+        state={state}
         label={label}
         icon={<FileSpreadsheet className="h-4 w-4 text-brand" />}
         disabled={rows.length === 0}

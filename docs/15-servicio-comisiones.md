@@ -1,24 +1,24 @@
-# 15. `services/comisiones/` — Comisiones de la fuerza de ventas
+# 15. `services/commissions/` — Comisiones de la fuerza de ventas
 
 Calcula lo que cobra cada persona de ventas por las suscripciones que vendió.
 Se construye mes a mes, unos 15 días después de que termine el mes, cuando las
 primeras facturas de lo instalado ya deberían estar pagadas.
 
 ```
-services/comisiones/
+services/commissions/
 ├── models.py            Ventana de pago, periodos, revisiones, indicadores y lo congelado
 ├── views.py             Informe, ventana de pago y sus escrituras
 ├── urls.py
 └── analytics/
-    ├── reglas.py        Las reglas que deciden si una venta cuenta, como funciones puras (con doctests)
-    ├── pagos.py         El motor de pago por equipo y rol: cuánto se paga por una venta que ya cuenta (con doctests)
-    ├── calculo.py       Del periodo a las candidatas, su clasificación, sus personas, indicadores y pagos
-    ├── cierre.py        Cerrar (congelar) y reabrir un periodo
+    ├── rules.py        Las reglas que deciden si una venta cuenta, como funciones puras (con doctests)
+    ├── payments.py         El motor de pago por equipo y rol: cuánto se paga por una venta que ya cuenta (con doctests)
+    ├── calculation.py       Del periodo a las candidatas, su clasificación, sus personas, indicadores y pagos
+    ├── closing.py        Cerrar (congelar) y reabrir un periodo
     └── queries.py       Lo que leen las vistas
 ```
 
-Depende del directorio de ventas y de los equipos (`services/catalogos/`:
-`PersonaVentas`, `MembresiaEquipo`, `CondicionesEquipo` y `equipos.py`; ver el
+Depende del directorio de ventas y de los equipos (`services/catalogs/`:
+`SalesPerson`, `TeamMembership`, `TeamConditions` y `teams.py`; ver el
 capítulo 6 §8) y de tres columnas de la importación de suscripciones: `Medio`,
 `Oportunidad/Administrador` y `Estado de la factura`.
 
@@ -30,7 +30,7 @@ Un periodo de comisiones **no va del 1 al último día del mes**. Lo instalado e
 los *días promocionales* (normalmente desde el 25) no paga la mensualidad del
 mes siguiente sino la del otro, así que su comisión es, por norma, del periodo
 siguiente. El periodo de un mes va del inicio de los días promocionales del mes
-anterior **al fin del mes**, en tres tramos (`reglas.tramo`):
+anterior **al fin del mes**, en tres tramos (`rules.tramo`):
 
 | Tramo | 2026-09 | Qué cuenta |
 |---|---|---|
@@ -42,16 +42,16 @@ anterior **al fin del mes**, en tres tramos (`reglas.tramo`):
 primera mensualidad el 1/11, y su comisión es de octubre. Si la adelanta y la
 paga el 7/10, cuando se saca el informe de septiembre (hacia el 22/10) ya está
 pagada: entra en septiembre y, al cerrarlo, octubre ya no la cuenta (es una
-venta válida de un periodo cerrado). El corte es `ComisionPeriodo.corte_adelantos`,
-propuesto el día `CondicionesComision.dia_corte` (22) del mes siguiente y
+venta válida de un periodo cerrado). El corte es `CommissionPeriod.advance_cutoff`,
+propuesto el día `CommissionConditions.cutoff_day` (22) del mes siguiente y
 editable por periodo; lo pagado después del corte ya va al siguiente.
 
 **El corte es la ventana de pago de todo el periodo, no solo de los días
 promocionales.** Una venta de `regular` o de `promo_anterior` que no tiene la
 primera mensualidad pagada hasta el corte es **no pagada**, aunque el export
 traiga facturas de los meses siguientes pagadas: las facturas creadas después
-del corte ni se miran (`primera_mensualidad(..., hasta=corte)`) y una pagada
-después del corte es como si no se hubiera pagado (`clasificar(..., corte=)`).
+del corte ni se miran (`first_installment(..., hasta=corte)`) y una pagada
+después del corte es como si no se hubiera pagado (`classify(..., corte=)`).
 Ejemplo: SUB119892, instalada el 25/08, con la mensualidad del 05/09 cancelada a
 los 25 días y otra del 01/11; para septiembre (corte 22/10) la del 01/11 no
 existe, así que queda excluida por la cancelación, se pague o no la de noviembre.
@@ -59,7 +59,7 @@ existe, así que queda excluida por la cancelación, se pague o no la de noviemb
 **Cuándo se pagó** sale del export de facturas: la «Fecha del último pago». Si el
 export cargado no la trae, la «Última actualización el» (pagar la factura la
 actualiza, así que el pago no es posterior) y, si tampoco, el «Creado el», que es
-solo una aproximación; la página avisa (`reglas.fecha_del_pago`).
+solo una aproximación; la página avisa (`rules.payment_date`).
 
 **Lo del mes anterior.** Con el periodo anterior **cerrado**, lo que validó ya
 no cuenta (`Ya se pagó en …`) y no hay nada que decidir. Con el anterior **en
@@ -72,17 +72,17 @@ del mes del periodo). Lo que pagó después toca aquí sin más, y lo que otra r
 ya resolvió (no pagada, excluida, decidida en Revisión) no aparece. Cada una se
 decide `ya_pagada` (excluida) o `normal` (se clasifica por sus facturas): una a
 una, las marcadas con la casilla o todas las pendientes de una vez. Las
-decisiones van en `RevisionComision`; hasta que estén todas, no se cierra.
+decisiones van en `CommissionReview`; hasta que estén todas, no se cierra.
 
 Como los días promocionales se adelantan o se retrasan, **cada periodo guarda
-el inicio de los suyos** (`ComisionPeriodo.inicio_promo`) y el siguiente arranca
+el inicio de los suyos** (`CommissionPeriod.promo_start`) y el siguiente arranca
 en él. Al crear un periodo:
 
 1. Si el mes anterior tiene periodo, el inicio es su `inicio_promo` y no se
    pregunta.
 2. Si no, se pregunta dónde empezaron los días promocionales del mes anterior.
 3. Se confirma el inicio de los del mes, con el día habitual
-   (`CondicionesComision.dia_promocional`, 25) como propuesta, y el corte de
+   (`CommissionConditions.promo_day`, 25) como propuesta, y el corte de
    los adelantos (un día del mes siguiente).
 
 Cambiar el `inicio_promo` de un periodo mueve el inicio del siguiente, así que
@@ -94,7 +94,7 @@ pueden no estar pagadas aún.
 
 Las candidatas son las suscripciones con `fecha_inicio` dentro de la ventana,
 **menos** las que ya se pagaron en un periodo cerrado, **más** las agregadas a
-mano (`VentaManual`): una venta agregada a mano cuenta en el periodo se
+mano (`ManualSale`): una venta agregada a mano cuenta en el periodo se
 instalara cuando se instalara y digan lo que digan sus facturas, con una nota
 obligatoria; tiene que estar en suscripciones (de ahí sale quién cobra) y no se
 puede agregar si ya se pagó en otro periodo cerrado. Lo que paga la comisión es
@@ -102,7 +102,7 @@ la **primera mensualidad**, y sale del export de facturas (Importaciones ›
 Suscripciones › Facturas, tabla `subscriptions-facturas`, global y reemplazado
 en cada carga). Sin facturas importadas el informe no se calcula.
 
-**La primera mensualidad** (`reglas.primera_mensualidad`) es la primera factura,
+**La primera mensualidad** (`rules.first_installment`) es la primera factura,
 por `Creado el`, con una línea cuyo producto es un plan del catálogo (la de
 instalación o la del router no lo son; la referencia `[...]` que Odoo antepone
 al producto se ignora). **Las canceladas no cuentan**, sean del mes que sean: se
@@ -120,7 +120,7 @@ progreso no importa**: si la primera mensualidad está pagada, vale aunque hoy
 esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo
 último importado, pero lo que cuenta es lo pagado **hasta el corte**, no hasta el día en que se cierra.
 
-`reglas.clasificar`, en este orden:
+`rules.clasificar`, en este orden:
 
 | Caso | Clasificación |
 |---|---|
@@ -144,7 +144,7 @@ esté en pausa o cancelada. Hasta que se cierra, el informe se recalcula con lo
 log de archivado. Es el caso de la suscripción que pagó su instalación y pasó a
 plan gratuito: su mensualidad se cancela y no se paga comisión.
 
-**La revisión es manual** (`RevisionComision`): cada venta en revisión se cuenta
+**La revisión es manual** (`CommissionReview`): cada venta en revisión se cuenta
 en este periodo o no se cuenta. Una venta solo es candidata en el periodo en que
 se instaló, así que no contarla es que no se paga. **La decisión manda sobre lo
 que digan las facturas**, también si después cambian, hasta que se deshace; la
@@ -162,7 +162,7 @@ Las decisiones de revisión de los periodos sin cerrar se reiniciaron
 
 La venta lo dice todo y no se rellena nada: `Medio` es quien vendió,
 `Oportunidad/Administrador` su supervisor y `Vendedor` la coordinadora de oficina,
-cada uno contra su literal en el directorio (`PersonaVentas.medio`,
+cada uno contra su literal en el directorio (`SalesPerson.channel`,
 `.medio_supervisor`, `.usuario_odoo`). Un literal sin registrar es un problema de
 registro y se avisa; una venta sin `Vendedor` no paga a ninguna oficina.
 
@@ -170,7 +170,7 @@ registro y se avisa; una venta sin `Vendedor` no paga a ninguna oficina.
   luego el de su `Vendedor`). Quien está en varios equipos —el gerente de
   operaciones lo está en Aragua y La Victoria— se desempata con las demás personas de la venta.
 - **Las unidades de negocio de la venta** salen de la cadena supervisor → su
-  superior (`MembresiaEquipo.superior`): el coordinador de UN lleva una, los jefes y
+  superior (`TeamMembership.manager`): el coordinador de UN lleva una, los jefes y
   gerentes varias. Sin supervisor, las de quien vendió. Nada se deduce de la zona de la venta.
 - **Cualquier rol puede ocupar cualquier columna.** Una coordinadora de oficina o un
   coordinador de UN también vende (`Medio`) y supervisa. Cada persona cobra una venta
@@ -184,10 +184,10 @@ registro y se avisa; una venta sin `Vendedor` no paga a ninguna oficina.
 
 ## 4. Lo que cobra cada uno
 
-Los equipos y sus roles son código (`services/catalogos/equipos.py`); los valores
+Los equipos y sus roles son código (`services/catalogs/teams.py`); los valores
 se editan en Catálogos › Ventas › *equipo* › Condiciones de pago
-(`CondicionesEquipo`). Un rol sin fila paga con `PARAMETROS_DEFECTO`, que
-reproduce la política. El motor es `analytics/pagos.py:calcular_pagos`, una
+(`TeamConditions`). Un rol sin fila paga con `DEFAULT_PARAMETERS`, que
+reproduce la política. El motor es `analytics/payments.py:compute_payments`, una
 función pura con doctests.
 
 | Pieza | Qué paga |
@@ -220,8 +220,8 @@ por churn se lee en dólares.
 
 ### Los indicadores
 
-`calculo._indicadores` los resuelve y `cumplimiento_sites.indicadores_del_mes` los
-calcula en el servidor, con la misma regla que el cliente (`lib/objetivos.ts`,
+`calculation._indicators` los resuelve y `site_compliance.month_indicators` los
+calcula en el servidor, con la misma regla que el cliente (`lib/targets.ts`,
 `lib/commercial.ts`) para el total de un grupo —nodo a nodo, del nivel del grupo
 hacia arriba: en un site sucursal → estado → site, en una unidad además coordinador;
 sin las zonas sin objetivo; sin recortar—. **El cliente y el servidor tienen que decir lo mismo.**
@@ -232,7 +232,7 @@ sin las zonas sin objetivo; sin recortar—. **El cliente y el servidor tienen q
 - **Crecimiento y churn bruto** de la unidad del coordinador de UN; **% de ingresos**
   de cada unidad (jefe); **% de ventas de la empresa** (administradora).
 - Precedencia del factor y del crecimiento: lo escrito para la persona
-  (`IndicadorComision`) → lo calculado → ninguno (el factor paga como 100 % y
+  (`CommissionIndicator`) → lo calculado → ninguno (el factor paga como 100 % y
   bloquea el cierre). El resto no tiene valor a mano: sin el análisis del mes no se
   pagan y el cierre espera. **Nada se deduce de las ventas.**
 - La coordinadora de oficina ve además su % de ventas de oficina (sus ventas como
@@ -242,8 +242,8 @@ sin las zonas sin objetivo; sin recortar—. **El cliente y el servidor tienen q
 
 **Un borrador no guarda resultados**: el informe se recalcula cada vez que se
 abre (medio segundo para un mes de ~3.400 candidatas). **Cerrar lo congela**
-(`cierre.cerrar_periodo`): las ventas con su clasificación (`ComisionVenta`), lo
-que cobra cada persona (`ComisionPago`, con nombre y cargo copiados), las
+(`closing.close_period`): las ventas con su clasificación (`CommissionSale`), lo
+que cobra cada persona (`CommissionPayment`, con nombre y cargo copiados), las
 condiciones usadas y el resumen. Hace falta porque la tabla de suscripciones se
 trunca en cada importación y su estado es siempre el de hoy: recalcular un mes
 pasado daría otra cosa. Es el mismo razonamiento que el bloqueo del reporte ETA.
@@ -252,17 +252,17 @@ No se cierra con ventas en revisión sin decidir, supervisores o coordinadores
 de oficina sin cumplimiento, ni coordinadores de UN sin crecimiento conocido. Las
 ventas válidas de un periodo cerrado no vuelven a contar en ningún otro.
 Reabrir borra lo congelado y no se permite si el periodo siguiente está cerrado.
-Tiene permiso propio (`can_reopen_comisiones`), exige un motivo de al menos 10
+Tiene permiso propio (`can_reopen_commissions`), exige un motivo de al menos 10
 caracteres y el periodo escrito a mano, y **antes de borrar copia el cierre
 entero** —periodo, condiciones, resumen, cada venta y cada pago— en
-`ComisionCierreArchivado` (`comisiones_cierres_archivados`), con quién cerró,
+`ArchivedClose` (`comisiones_cierres_archivados`), con quién cerró,
 quién reabrió, cuándo y por qué. Copia y borrado van en una transacción con la
 fila del periodo bloqueada. Cada reapertura deja una versión más; las versiones
 no se editan ni se borran (el modelo lo impide y la FK es `PROTECT`), y desde el
 paso de cierre se descarga cada una como el mismo Excel de la nómina.
 
 **Borrar un informe** (`api/periodo/borrar/`) tiene también permiso propio
-(`can_delete_comisiones`, cerrado para todos). Solo vale para un borrador que
+(`can_delete_commissions`, cerrado para todos). Solo vale para un borrador que
 **nunca se cerró**: se lleva el periodo con sus revisiones, sus ventas a mano y
 sus indicadores, sin copia. El botón abre un modal que avisa de lo que se pierde
 y pide el periodo escrito a mano, que el servidor vuelve a comprobar. Un periodo
@@ -275,10 +275,10 @@ Las comisiones se calculan en dólares y se pagan el mes siguiente (las de
 septiembre, en octubre), así que el informe las pasa a bolívares con la **tasa
 CONATEL de ese mes siguiente**: el valor del bolívar oficial **el día 1**. Si el
 BCV no publicó ese día (fin de semana o feriado), la vigente: la última publicada
-antes, y la fuente lo dice (`bcv.consultar_tasa_vigente_el`). Es independiente
+antes, y la fuente lo dice (`bcv.fetch_rate_on`). Es independiente
 del reporte ETA, que declara con el primer día *publicado* del mes (hacia
 delante). Se consulta una vez y se guarda en el periodo
-(`ComisionPeriodo.tasa_conatel`, `tasa_conatel_publicada`): el valor de un día
+(`CommissionPeriod.conatel_rate`, `tasa_conatel_publicada`): el valor de un día
 pasado no cambia. Un mes que aún no empezó no tiene tasa, y un fallo del
 servicio se avisa sin romper el informe.
 
@@ -310,8 +310,8 @@ maquetadas celda a celda.
 
 | Página | Contenido | Permiso |
 |---|---|---|
-| `/comisiones/?periodo=` | El informe en cuatro pasos (revisión, indicadores, nómina por equipo, cierre), total a pagar y tasas, exportación a Excel. La revisión tiene cinco vistas: por decidir, días promocionales del mes anterior (qué se cobró allí; confirmación en el primer periodo), días promocionales del mes (quién adelantó el pago), agregadas a mano (con el formulario para agregar) y todas las ventas | `can_view_comisiones` (escribir: `can_manage_comisiones`) |
-| `/comisiones/condiciones/` | Solo la ventana de pago (día promocional, días de espera, día de corte de los adelantos) y los % de los planes PYME. Cuánto cobra cada rol de cada equipo se edita en **Catálogos › Ventas**. Se abre en lectura; «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_comisiones` |
+| `/comisiones/?period=` | El informe en cuatro pasos (revisión, indicadores, nómina por equipo, cierre), total a pagar y tasas, exportación a Excel. La revisión tiene cinco vistas: por decidir, días promocionales del mes anterior (qué se cobró allí; confirmación en el primer periodo), días promocionales del mes (quién adelantó el pago), agregadas a mano (con el formulario para agregar) y todas las ventas | `can_view_commissions` (escribir: `can_manage_commissions`) |
+| `/comisiones/condiciones/` | Solo la ventana de pago (día promocional, días de espera, día de corte de los adelantos) y los % de los planes PYME. Cuánto cobra cada rol de cada equipo se edita en **Catálogos › Ventas**. Se abre en lectura; «Editar» muestra los cambios pendientes y los errores antes de guardar | `can_manage_commissions` |
 
 El detalle venta a venta no viaja en los props —un mes son miles de filas—: lo
 pide la página a `api/ventas/` la primera vez que hace falta (desglose de una

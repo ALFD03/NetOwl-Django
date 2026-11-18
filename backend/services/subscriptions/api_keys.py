@@ -1,0 +1,151 @@
+"""Claves en inglés de `/api/subscriptions/` (ver `services/config/api/keys.py`).
+
+Las dimensiones (`zona`, `sucursal`, `municipio`, `campanna`, `producto`,
+`zona_sucursal`) no se traducen: son valores guardados en la columna
+`dimension` y el cliente indexa por ellas. Los códigos `react_*` tampoco: son
+el vocabulario del glosario.
+"""
+
+from services.config.api import KeyMap
+
+# Las cifras de un cierre, de un día o de un nodo.
+CHURN_KEYS = {
+    "activos_inicio": "active_start",
+    "activos_final": "active_end",
+    "nuevos": "new_subs",
+    "nuevos_mes": "new_in_month",
+    "ingresos": "inflows",
+    "bajas": "churned",
+    "crecimiento": "growth",
+    "churn_neto_pct": "net_churn_pct",
+    "churn_bruto_pct": "gross_churn_pct",
+    "reactivaciones": "reactivations",
+    "adiciones_netas": "net_adds",
+    "adiciones_brutas": "gross_adds",
+    "corte_impagado": "unpaid_cuts",
+    "porcentaje_suspensiones": "suspension_pct",
+    "indice_reemplazo_react_pct": "react_replacement_pct",
+    "tasa_aporte_react_pct": "react_contribution_pct",
+    "tasa_winback_pct": "winback_rate_pct",
+    "total_inactivos": "total_inactive",
+    "clientes_gratuitos": "free_clients",
+    "gratuitos_nuevos": "free_new",
+    "gratuitos_retornados": "free_returned",
+    "periodo_reporte": "report_period",
+}
+
+# Objetivos y semáforo (`get_targets_config`); Catálogos los edita con este mismo mapa.
+TARGET_KEYS = {
+    "objetivos": "targets",
+    "objetivo": "target",
+    "origen_objetivo": "target_source",
+    "meses": "months",
+    "estados": "states",
+    "coordinadores": "coordinators",
+    "zonas": "zones",
+    "sucursales": "branches",
+    "zonas_sucursal": "zone_branches",
+    "zonas_sin_objetivo": "zones_without_target",
+    "desde": "since",
+    "hasta": "until",
+    "semaforo": "thresholds",
+    "cumpl_verde": "compliance_green",
+    "cumpl_amarillo": "compliance_yellow",
+    "crec_verde": "growth_green",
+    "crec_amarillo": "growth_yellow",
+    "churn_verde": "churn_green",
+    "churn_amarillo": "churn_yellow",
+}
+
+SUBS_KEYS = KeyMap(CHURN_KEYS, TARGET_KEYS, {
+    "dimensiones": "dimensions",
+    "valor": "value",
+    "dia": "day",
+    "dias": "days",
+    "periodo": "period",
+    "periodo_mes": "month",
+    "selected_periodo": "selected_period",
+    "coordinador": "coordinator",
+    "coordinadorasOficina": "officeCoordinators",
+    "zonasConfig": "zonesConfig",
+    # Unidades de negocio de quien no las ve todas (`restrict_units`).
+    "alcance": "scope",
+    "ftth_consolidado": "ftth_totals",
+    "cierre": "close",
+    "estado": "state",
+    "nombre": "name",
+    "propias_dia": "own_by_day",
+    "oficina_dia": "office_by_day",
+    "total_nodos": "total_nodes",
+    # Lifetime.
+    "mes": "churn_month",
+    "fecha_corte": "cutoff_date",
+    "mes_en_curso": "in_progress",
+    "bajas_mes": "churned_in_month",
+    "bajas_reporte": "churned_reported",
+    "excluidas": "excluded",
+    "anteriores": "earlier",
+    "instaladas_desde": "installed_since",
+    "resumen": "summary",
+    "promedio": "mean",
+    "mediana": "median",
+    "tramo": "bucket",
+    "tramos": "buckets",
+    "pct_acumulado": "cumulative_pct",
+    "por_dimension": "by_dimension",
+    "dias_desde_instalacion": "days_since_install",
+    "estado_cierre": "close_status",
+    "f_ini": "start_date",
+    "f_baja": "churn_date",
+    # Ficha de las bajas.
+    "orden": "order",
+    "cliente": "client",
+    "cedula": "id_number",
+    "estado_suscripcion": "subscription_status",
+    "fecha_inicio": "since_date",
+    "tipo_servicio": "service_type",
+})
+
+# Configuración individual de una orden: también es el cuerpo de `orders/save/`.
+ORDER_CONFIG_KEYS = {
+    "orden": "order",
+    "cliente": "client",
+    "producto": "product",
+    "reportar": "report",
+    "tecnologia": "technology",
+    "tipo_persona": "person_type",
+    "tiene_tv": "has_tv",
+    "datas_mbps": "data_mbps",
+    "es_transporte": "is_transport",
+    "es_dedicado": "is_dedicated",
+    "precio": "price",
+}
+
+ETA_KEYS = KeyMap(ORDER_CONFIG_KEYS, {
+    "periodo": "period",
+    "esta_bloqueado": "is_locked",
+    "total_muestreado": "total_sampled",
+    "transporte_metrics": "transport_metrics",
+    "formularios": "forms",
+    "transporte": "transport",
+    "nombre": "name",
+    "tipo_suscriptor": "subscriber_type",
+    "entidades": "entities",
+    "suscriptores": "subscribers",
+    "tipo_servicio": "service_type",
+    "velocidad_promedio_kbps": "avg_speed_kbps",
+    "velocidad_kbps": "speed_kbps",
+    "consumo_promedio_mb": "avg_usage_mb",
+    "planes_sin_regulador": "plans_without_regulator",
+    "por_tecnologia": "by_technology",
+    "por_persona": "by_person",
+    "por_estado": "by_state",
+    "por_tecnologia_persona": "by_technology_person",
+    "por_estado_tecnologia": "by_state_technology",
+    "por_estado_persona": "by_state_person",
+    "por_estado_tecnologia_persona": "by_state_technology_person",
+    "tasa": "rate",
+    "tasa_bcv": "bcv_rate",
+    "tasa_bcv_fuente": "bcv_rate_source",
+    "tasa_bcv_aviso": "bcv_rate_warning",
+})

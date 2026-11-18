@@ -8,55 +8,55 @@ import type { MetricColor } from '@/shared/ui';
  * import site for anything CRM-shaped.
  */
 export type {
-  CrmCierre,
+  CrmClose,
   CrmDimensionRow,
   CrmDimensionValue,
-  CrmEfectividadRow,
-  CrmHistoricoRow,
-  CrmTiempoEtapaRow,
+  CrmEffectivenessRow,
+  CrmHistoryRow,
+  CrmStageTimeRow,
 } from '@/shared/types/crm';
 
-import type { CrmDimensionRow, CrmEfectividadRow, CrmHistoricoRow } from '@/shared/types/crm';
+import type { CrmDimensionRow, CrmEffectivenessRow, CrmHistoryRow } from '@/shared/types/crm';
 import type { DayCuts } from '@/shared/types/domain';
 
 export interface CrmDashboardProps {
   metrics?: {
-    historico_tendencias?: CrmHistoricoRow[];
-    efectividad?: CrmEfectividadRow[];
+    trend_history?: CrmHistoryRow[];
+    effectiveness?: CrmEffectivenessRow[];
   };
   periods?: string[];
 }
 
 export interface CrmGlobalStats {
-  total_oportunidades: number;
-  pct_instalacion: number;
-  pct_perdida: number;
-  pct_pendientes: number;
-  pct_devueltos_e8: number;
-  horas_promedio_inst: number;
-  horas_mediana_inst: number;
-  horas_p25_inst: number;
-  horas_p75_inst: number;
-  horas_min_inst: number;
-  horas_max_inst: number;
-  horas_std_inst: number;
-  pct_excede_prom_inst: number;
-  horas_promedio_perd: number;
-  horas_mediana_perd: number;
-  horas_p25_perd: number;
-  horas_p75_perd: number;
-  horas_min_perd: number;
-  horas_max_perd: number;
-  horas_std_perd: number;
-  pct_excede_prom_perd: number;
-  horas_promedio_cierre: number;
-  horas_mediana_cierre: number;
-  horas_p25_cierre: number;
-  horas_p75_cierre: number;
-  horas_min_cierre: number;
-  horas_max_cierre: number;
-  horas_std_cierre: number;
-  pct_excede_prom_cierre: number;
+  total_opportunities: number;
+  pct_installation: number;
+  pct_lost: number;
+  pct_pending: number;
+  pct_returned_e8: number;
+  hours_avg_inst: number;
+  hours_median_inst: number;
+  hours_p25_inst: number;
+  hours_p75_inst: number;
+  hours_min_inst: number;
+  hours_max_inst: number;
+  hours_std_inst: number;
+  pct_over_avg_inst: number;
+  hours_avg_lost: number;
+  hours_median_lost: number;
+  hours_p25_lost: number;
+  hours_p75_lost: number;
+  hours_min_lost: number;
+  hours_max_lost: number;
+  hours_std_lost: number;
+  pct_over_avg_lost: number;
+  hours_avg_close: number;
+  hours_median_close: number;
+  hours_p25_close: number;
+  hours_p75_close: number;
+  hours_min_close: number;
+  hours_max_close: number;
+  hours_std_close: number;
+  pct_over_avg_close: number;
 }
 
 export interface CrmTrendCard {
@@ -67,8 +67,8 @@ export interface CrmTrendCard {
   labels: string[];
   values: number[];
   unitLabel: string;
-  rateKey: keyof CrmHistoricoRow;
-  countKey: keyof CrmHistoricoRow;
+  rateKey: keyof CrmHistoryRow;
+  countKey: keyof CrmHistoryRow;
 }
 
 export interface CrmHealthCard {
@@ -86,7 +86,7 @@ export interface CrmAnalyticsProps {
   /** Every dimension of the selected period; the dimension filter is client-side. */
   dimensionsData?: CrmDimensionRow[];
   /** The cierre row of the selected period: global denominators and header stats. */
-  globalData?: CrmHistoricoRow;
+  globalData?: CrmHistoryRow;
   /**
    * Which days of the month have a cut computed, and which one is on screen.
    * The cut itself arrives in `dimensionsData` / `globalData`, already swapped
@@ -97,10 +97,10 @@ export interface CrmAnalyticsProps {
   selectedPeriod?: string;
 }
 
-/** El corte completo de un día, tal y como lo sirve `/crm/api/day-metrics/`. */
+/** El corte completo de un día, tal y como lo sirve `/api/crm/day-metrics/`. */
 export interface CrmDayPayload {
-  global: CrmHistoricoRow;
-  dimensiones: CrmDimensionRow[];
+  global: CrmHistoryRow;
+  dimensions: CrmDimensionRow[];
 }
 
 /** A single "who leads this measure" readout in the ranking section. */
@@ -108,7 +108,7 @@ export interface CrmRankingEntry {
   id: string;
   label: string;
   /** Winning dimension value, or `—` when the period has no data. */
-  valor: string;
+  winner: string;
   value: string;
   caption: string;
   color: MetricColor;

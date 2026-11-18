@@ -4,29 +4,28 @@ import { Calendar, Filter, Search, Wifi } from 'lucide-react';
 import {
   FilterField, FILTER_TRIGGER_CLASS, PeriodSelector, SearchInput, SelectMenu,
 } from '@/shared/ui';
-import type { FiltroMetrica, NivelFiltro } from '../../lib/filtroMetrica';
-import { FiltroMetricaField } from './FiltroMetricaField';
-
-type Technology = 'ALL' | 'FTTH' | 'RF';
+import type { TechnologyFilter } from '../../hooks/useCommercialReportFilters';
+import type { MetricFilter, FilterLevel } from '../../lib/metricFilter';
+import { MetricFilterField } from './MetricFilterField';
 
 interface Props {
   period: string;
   periods: string[];
   onPeriodChange: (period: string) => void;
-  selectedTech: Technology;
-  onTechChange: (technology: Technology) => void;
+  selectedTech: TechnologyFilter;
+  onTechChange: (technology: TechnologyFilter) => void;
   selectedBranch: string;
   branches: string[];
   onBranchChange: (branch: string) => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder: string;
-  filtroMetrica: FiltroMetrica;
-  onFiltroMetricaChange: (filtro: FiltroMetrica) => void;
+  metricFilter: MetricFilter;
+  onMetricFilterChange: (filter: MetricFilter) => void;
   /** Cómo se llaman en este reporte los dos niveles a los que se aplica el filtro por métrica. */
-  nivelesFiltro: Record<NivelFiltro, string>;
+  filterLevels: Record<FilterLevel, string>;
   /** Hay un día de corte: sin él no se puede filtrar por proyección. */
-  proyeccionDisponible: boolean;
+  projectionAvailable: boolean;
 }
 
 /**
@@ -49,10 +48,10 @@ export function SubscriptionReportFilters({
   searchTerm,
   onSearchChange,
   searchPlaceholder,
-  filtroMetrica,
-  onFiltroMetricaChange,
-  nivelesFiltro,
-  proyeccionDisponible,
+  metricFilter,
+  onMetricFilterChange,
+  filterLevels,
+  projectionAvailable,
 }: Props) {
   return (
     <div className="mb-8 flex flex-wrap items-center gap-4">
@@ -73,7 +72,7 @@ export function SubscriptionReportFilters({
             { value: 'FTTH', label: 'FTTH (Fibra)' },
             { value: 'RF', label: 'RF (Radio)' },
           ]}
-          onChange={(v) => onTechChange(v as Technology)}
+          onChange={(v) => onTechChange(v as TechnologyFilter)}
           panelWidth={180}
           className={FILTER_TRIGGER_CLASS}
         />
@@ -93,11 +92,11 @@ export function SubscriptionReportFilters({
         />
       </FilterField>
 
-      <FiltroMetricaField
-        filtro={filtroMetrica}
-        onChange={onFiltroMetricaChange}
-        niveles={nivelesFiltro}
-        proyeccionDisponible={proyeccionDisponible}
+      <MetricFilterField
+        filter={metricFilter}
+        onChange={onMetricFilterChange}
+        levels={filterLevels}
+        projectionAvailable={projectionAvailable}
       />
 
       <FilterField grow icon={<Search className="w-4 h-4" />}>

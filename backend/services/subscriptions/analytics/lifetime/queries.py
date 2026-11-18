@@ -15,14 +15,14 @@ import pandas as pd
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
-from core.models import Periodo
+from core.models import Period
 from core.utils import clean_json_nullable
 
-from .bajas_mes import DIMS_BAJAS, INSTALADAS_DESDE
+from .monthly_churn import CHURN_DIMS, INSTALLED_SINCE
 
 logger = logging.getLogger(__name__)
 
-# Solo se miden las bajas instaladas desde `INSTALADAS_DESDE`: los clientes
+# Solo se miden las bajas instaladas desde `INSTALLED_SINCE`: los clientes
 # captados desde la migracion de enero de 2026, que es lo que interesa. Las de
 # la base antigua siguen guardadas (y cuentan en el cuadre), pero no se leen.
 
@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 # del mismo ancho: con uno de 60 entre medias, ese parecia concentrar el doble
 # de bajas solo por ser el doble de largo. Cortan en 30 y en 90 dias, que es lo
 # que la pagina destaca.
-TRAMOS = [
-    *[(f"{desde}-{hasta} d", desde, hasta) for desde, hasta in [(0, 30), *((d, d + 29) for d in range(31, 361, 30))]],
+TIERS = [
+    *[(f"{since}-{until} d", since, until) for since, until in [(0, 30), *((d, d + 29) for d in range(31, 361, 30))]],
     ("+360 d", 361, None),
 ]
 
@@ -41,26 +41,26 @@ TRAMOS = [
 # campanas, casi entera instalada antes de 2026; "Exonerado" no paga, asi que su
 # baja no es la de un cliente. Siguen guardadas en la tabla, y por eso el
 # cuadre con el cierre mensual se hace con todas.
-CAMPANNAS_EXCLUIDAS = ("Sin campanna", "Exonerado")
+EXCLUDED_CAMPAIGNS = ("Sin campanna", "Exonerado")
 
-_MES = re.compile(r"^\d{4}-\d{2}$")
+_MONTH = re.compile(r"^\d{4}-\d{2}$")
 
 
-def get_meses_lifetime(db=None) -> list[str]:
+def get_lifetime_months(db=None) -> list[str]:
     """Los meses calculados, del mas reciente al mas antiguo (`YYYY-MM`)."""
     if db is None:
         db = DBConnector()
-    if not db.tabla_existe(TableNames.LIFETIME_BAJAS_MES):
+    if not db.table_exists(TableNames.LIFETIME_CHURNED):
         return []
     df = db.query(
-        f'SELECT DISTINCT periodo_reporte FROM "{DB_SCHEMA}"."{TableNames.LIFETIME_BAJAS_MES}"'
+        f'SELECT DISTINCT periodo_reporte FROM "{DB_SCHEMA}"."{TableNames.LIFETIME_CHURNED}"'
     )
-    return sorted((m for m in df["periodo_reporte"] if _MES.match(str(m))), reverse=True)
+    return sorted((m for m in df["periodo_reporte"] if _MONTH.match(str(m))), reverse=True)
 
 
-def _resumen(serie: pd.Series) -> dict[str, Any]:
+def _summary(series: pd.Series) -> dict[str, Any]:
     """Promedio, mediana, cuartiles y extremos de una duracion en dias."""
-    s = pd.to_numeric(serie, errors="coerce").dropna()
+    s = pd.to_numeric(series, errors="coerce").dropna()
     if s.empty:
         return {"n": 0, "promedio": None, "mediana": None, "p25": None, "p75": None, "min": None, "max": None}
     return {
@@ -74,89 +74,89 @@ def _resumen(serie: pd.Series) -> dict[str, Any]:
     }
 
 
-def _pct(parte: int, total: int) -> float:
-    return round(parte / total * 100, 1) if total else 0.0
+def _pct(part: int, total: int) -> float:
+    return round(part / total * 100, 1) if total else 0.0
 
 
-def _tramos(serie: pd.Series, tramos: list[tuple[str, int, int | None]]) -> list[dict[str, Any]]:
+def _tiers(series: pd.Series, tiers: list[tuple[str, int, int | None]]) -> list[dict[str, Any]]:
     """Cuantas bajas caen en cada tramo, su % y el % acumulado hasta ese tramo."""
-    s = serie.dropna()
-    filas = []
-    acumuladas = 0
-    for etiqueta, desde, hasta in tramos:
-        dentro = s >= desde
-        if hasta is not None:
-            dentro &= s <= hasta
-        n = int(dentro.sum())
-        acumuladas += n
-        filas.append({
-            "tramo": etiqueta,
-            "desde": desde,
-            "hasta": hasta,
+    s = series.dropna()
+    rows = []
+    accumulated = 0
+    for label, since, until in tiers:
+        inside = s >= since
+        if until is not None:
+            inside &= s <= until
+        n = int(inside.sum())
+        accumulated += n
+        rows.append({
+            "tramo": label,
+            "desde": since,
+            "hasta": until,
             "bajas": n,
             "pct": _pct(n, len(s)),
-            "pct_acumulado": _pct(acumuladas, len(s)),
+            "pct_acumulado": _pct(accumulated, len(s)),
         })
     # Los tramos vacios del final no dicen nada (nadie llego a durar tanto) y
     # le quitan sitio al grafico.
-    while len(filas) > 1 and filas[-1]["bajas"] == 0:
-        filas.pop()
-    return filas
+    while len(rows) > 1 and rows[-1]["bajas"] == 0:
+        rows.pop()
+    return rows
 
 
-def _por_dimension(df: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
+def _by_dimension(df: pd.DataFrame) -> dict[str, list[dict[str, Any]]]:
     """Por cada valor de cada dimension, la duracion de sus bajas.
 
     Los valores sin ninguna baja no aparecen. `pct_30`/`pct_90` son las que se
     fueron en su primer mes y en sus primeros tres meses.
     """
-    salida: dict[str, list[dict[str, Any]]] = {}
-    for dim in DIMS_BAJAS:
+    departure: dict[str, list[dict[str, Any]]] = {}
+    for dim in CHURN_DIMS:
         if dim not in df.columns:
             continue
-        filas = []
-        for valor, grp in df.groupby(dim, sort=False):
-            dias = grp["dias_desde_instalacion"]
-            resumen = _resumen(dias)
-            filas.append({
-                "valor": str(valor),
-                "bajas": resumen["n"],
-                "promedio": resumen["promedio"],
-                "mediana": resumen["mediana"],
-                "p25": resumen["p25"],
-                "p75": resumen["p75"],
-                "pct_30": _pct(int((dias <= 30).sum()), resumen["n"]),
-                "pct_90": _pct(int((dias <= 90).sum()), resumen["n"]),
+        rows = []
+        for value, grp in df.groupby(dim, sort=False):
+            days = grp["dias_desde_instalacion"]
+            summary = _summary(days)
+            rows.append({
+                "valor": str(value),
+                "bajas": summary["n"],
+                "promedio": summary["promedio"],
+                "mediana": summary["mediana"],
+                "p25": summary["p25"],
+                "p75": summary["p75"],
+                "pct_30": _pct(int((days <= 30).sum()), summary["n"]),
+                "pct_90": _pct(int((days <= 90).sum()), summary["n"]),
             })
-        salida[dim] = sorted(filas, key=lambda f: f["bajas"], reverse=True)
-    return salida
+        departure[dim] = sorted(rows, key=lambda f: f["bajas"], reverse=True)
+    return departure
 
 
-def _bajas_del_reporte(db, mes: str) -> int | None:
+def _report_churns(db, month: str) -> int | None:
     """Cuantas bajas tiene guardadas el cierre mensual de ese mes, si lo hay.
 
     Sirve para avisar cuando los dos calculos se hicieron con datos distintos:
     el lifetime lee el log de hoy, y el cierre, el que habia al correrlo.
     """
-    if not db.tabla_existe(TableNames.ANALYZER_BAJAS_DETALLADAS):
+    if not db.table_exists(TableNames.ANALYZER_CHURNED):
         return None
-    etiqueta = Periodo.build(f"{mes}-01").label()
+    label = Period.build(f"{month}-01").label()
     df = db.query(
-        f'SELECT count(*) AS n FROM "{DB_SCHEMA}"."{TableNames.ANALYZER_BAJAS_DETALLADAS}"'
+        f'SELECT count(*) AS n FROM "{DB_SCHEMA}"."{TableNames.ANALYZER_CHURNED}"'
         " WHERE periodo_reporte = %s",
-        [etiqueta],
+        [label],
     )
     return int(df["n"].iloc[0]) or None
 
 
-def _leer_mes(mes: str | None, db) -> pd.DataFrame:
+def _read_month(month: str | None, db) -> pd.DataFrame:
     """Las bajas guardadas de un mes, con las duraciones ya numericas."""
-    if not mes or not _MES.match(mes):
+    if not month or not _MONTH.match(month):
         return pd.DataFrame()
     try:
-        df = db.read_table_filtered(TableNames.LIFETIME_BAJAS_MES, "periodo_reporte", [mes])
+        df = db.read_table_filtered(TableNames.LIFETIME_CHURNED, "periodo_reporte", [month])
     except Exception:
-        logger.exception("Error leyendo el lifetime de %s", mes)
+        logger.exception("Error leyendo el lifetime de %s", month)
         return pd.DataFrame()
     if df.empty:
         return df
@@ -164,61 +164,61 @@ def _leer_mes(mes: str | None, db) -> pd.DataFrame:
     return df
 
 
-def _las_que_cuentan(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int], int]:
+def _counted(df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, int], int]:
     """Las bajas que mide el lifetime: fuera de las campanas excluidas e instaladas desde 2026.
 
     Devuelve tambien cuantas se quitaron de cada campana excluida y cuantas,
-    del resto, se instalaron antes de `INSTALADAS_DESDE`.
+    del resto, se instalaron antes de `INSTALLED_SINCE`.
     """
     if df.empty:
         return df, {}, 0
-    fuera = df["campanna"].isin(CAMPANNAS_EXCLUIDAS)
-    excluidas = {c: int(n) for c, n in df.loc[fuera, "campanna"].value_counts().items()}
-    resto = df[~fuera]
-    de_2026 = pd.to_datetime(resto["f_ini"], errors="coerce") >= INSTALADAS_DESDE
-    return resto[de_2026], excluidas, int((~de_2026).sum())
+    outside = df["campanna"].isin(EXCLUDED_CAMPAIGNS)
+    excluded = {c: int(n) for c, n in df.loc[outside, "campanna"].value_counts().items()}
+    rest = df[~outside]
+    from_2026 = pd.to_datetime(rest["f_ini"], errors="coerce") >= INSTALLED_SINCE
+    return rest[from_2026], excluded, int((~from_2026).sum())
 
 
-def get_lifetime_mes(mes: str | None, db=None) -> dict[str, Any] | None:
+def get_lifetime_month(month: str | None, db=None) -> dict[str, Any] | None:
     """El lifetime de las bajas de un mes, o `None` si ese mes no esta calculado.
 
     Sin el detalle por orden: son unas miles de filas que solo hacen falta al
-    exportar, y las pide `get_lifetime_detalle`.
+    exportar, y las pide `get_lifetime_detail`.
     """
     if db is None:
         db = DBConnector()
-    todas = _leer_mes(mes, db)
-    if todas.empty:
+    all_rows = _read_month(month, db)
+    if all_rows.empty:
         return None
-    df, excluidas, anteriores = _las_que_cuentan(todas)
+    df, excluded, previous = _counted(all_rows)
     return clean_json_nullable({
-        "mes": mes,
-        "fecha_corte": todas["fecha_corte"].iloc[0],
-        "mes_en_curso": str(todas["mes_en_curso"].iloc[0]).lower() == "true",
+        "mes": month,
+        "fecha_corte": all_rows["fecha_corte"].iloc[0],
+        "mes_en_curso": str(all_rows["mes_en_curso"].iloc[0]).lower() == "true",
         "bajas": int(len(df)),
         # Todas las bajas del mes, excluidas incluidas: es lo que se cuadra con
         # el cierre mensual.
-        "bajas_mes": int(len(todas)),
-        "excluidas": excluidas,
-        "anteriores": anteriores,
-        "bajas_reporte": _bajas_del_reporte(db, mes),
-        "instaladas_desde": INSTALADAS_DESDE.strftime("%Y-%m-%d"),
-        "resumen": _resumen(df["dias_desde_instalacion"]),
-        "tramos": _tramos(df["dias_desde_instalacion"], TRAMOS),
-        "por_dimension": _por_dimension(df),
+        "bajas_mes": int(len(all_rows)),
+        "excluidas": excluded,
+        "anteriores": previous,
+        "bajas_reporte": _report_churns(db, month),
+        "instaladas_desde": INSTALLED_SINCE.strftime("%Y-%m-%d"),
+        "resumen": _summary(df["dias_desde_instalacion"]),
+        "tramos": _tiers(df["dias_desde_instalacion"], TIERS),
+        "por_dimension": _by_dimension(df),
     })
 
 
-def get_lifetime_detalle(mes: str | None, db=None) -> list[dict[str, Any]]:
+def get_lifetime_detail(month: str | None, db=None) -> list[dict[str, Any]]:
     """Una fila por baja del mes que cuenta, para exportar. Vacia si el mes no esta calculado."""
     if db is None:
         db = DBConnector()
-    df, _, _ = _las_que_cuentan(_leer_mes(mes, db))
+    df, _, _ = _counted(_read_month(month, db))
     if df.empty:
         return []
-    columnas = [
+    columns = [
         "orden", "f_ini", "f_baja", "estado_cierre", "dias_desde_instalacion",
-        *[d for d in DIMS_BAJAS if d in df.columns],
+        *[d for d in CHURN_DIMS if d in df.columns],
     ]
-    detalle = df[columnas].sort_values("dias_desde_instalacion")
-    return clean_json_nullable(detalle.to_dict("records"))
+    detail = df[columns].sort_values("dias_desde_instalacion")
+    return clean_json_nullable(detail.to_dict("records"))

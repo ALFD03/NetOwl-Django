@@ -6,8 +6,8 @@ import type { SupportBreakdownResponse } from '../types';
 export interface SupportBreakdownRequest {
   period: string;
   dimension: string;
-  valor: string;
-  grupo?: string;
+  value: string;
+  group?: string;
 }
 
 /**
@@ -23,7 +23,7 @@ export async function fetchSupportBreakdown(
   request: SupportBreakdownRequest,
 ): Promise<SupportBreakdownResponse> {
   const { data } = await apiClient.get<SupportBreakdownResponse>(
-    '/support/api/breakdown/',
+    '/api/support/breakdown/',
     { params: request },
   );
   return data;

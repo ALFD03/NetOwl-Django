@@ -8,28 +8,29 @@
 
 import type { DimensionVal } from '@/shared/types/domain';
 
+import type { CommercialNode } from './commercial';
 import type { SalesReportSite, SalesReportNode } from '../hooks/useSalesReportData';
 import type { BusinessUnitGroup, BusinessUnitNode } from '../hooks/useBusinessUnitsData';
 
 /** Una zona del catalogo, tal y como la envia `get_zonas_config()`. */
-export interface ZonaConfig {
+export interface ZoneConfig {
   name: string;
   site: string;
   type: string;
-  coordinador?: string;
-  /** Para la herencia de objetivos (ver `lib/objetivos.ts`). */
-  estado?: string;
+  coordinator?: string;
+  /** Para la herencia de objetivos (ver `lib/targets.ts`). */
+  state?: string;
 }
 
-export interface ZonasConfig {
-  zonas: ZonaConfig[];
+export interface ZonesConfig {
+  zones: ZoneConfig[];
   /** Orden de presentacion de los sites; el backend es la unica fuente. */
   siteOrder: string[];
 }
 
-const SITE_DESCONOCIDO = 'Otros / Desconocido';
-const TIPO_POR_DEFECTO = 'FTTH';
-const GRUPO_RF = 'NODOS RADIOFRECUENCIA (RF)';
+const UNKNOWN_SITE = 'Otros / Desconocido';
+const DEFAULT_KIND = 'FTTH';
+const RF_GROUP = 'NODOS RADIOFRECUENCIA (RF)';
 
 /**
  * Reagrupa el desglose `zona_sucursal` de un dia en las estructuras que
@@ -45,59 +46,55 @@ const GRUPO_RF = 'NODOS RADIOFRECUENCIA (RF)';
  */
 
 /** "Zona - Sucursal" -> sus dos partes, con el mismo fallback que el backend. */
-const partirValor = (valor: string): { zona: string; sucursal: string } => {
-  const parts = String(valor).split(' - ');
+const splitValue = (value: string): { zona: string; sucursal: string } => {
+  const parts = String(value).split(' - ');
   return {
-    zona: (parts[0] ?? valor).trim(),
+    zona: (parts[0] ?? value).trim(),
     sucursal: parts.length > 1 ? (parts[1] ?? '').trim() : 'Sin Sucursal',
   };
 };
 
 const num = (value: number | undefined): number => Number(value ?? 0);
 
-const nodoBase = (row: DimensionVal) => {
-  const valor = String(row.valor ?? '');
-  const { zona, sucursal } = partirValor(valor);
+const baseNode = (row: DimensionVal) => {
+  const value = String(row.value ?? '');
+  const { zona: zone, sucursal: branch } = splitValue(value);
   return {
-    zona_sucursal: valor,
-    zona,
-    sucursal,
-    activos_inicio: num(row.activos_inicio),
-    activos_final: num(row.activos_final),
-    nuevos: num(row.nuevos),
-    bajas: num(row.bajas),
-    crecimiento: num(row.crecimiento),
-    churn_neto_pct: num(row.churn_neto_pct),
-    churn_bruto_pct: num(row.churn_bruto_pct),
+    zona_sucursal: value,
+    zona: zone,
+    sucursal: branch,
+    active_start: num(row.active_start),
+    active_end: num(row.active_end),
+    new_subs: num(row.new_subs),
+    churned: num(row.churned),
+    growth: num(row.growth),
+    gross_churn_pct: num(row.gross_churn_pct),
     // El backend expone la reactivacion valida como `react_val`.
-    reactivaciones: num(row.react_val),
-    adiciones_netas: num(row.adiciones_netas),
-    adiciones_brutas: num(row.adiciones_brutas),
-    corte_impagado: num(row.corte_impagado),
-  };
+    reactivations: num(row.react_val),
+  } satisfies CommercialNode;
 };
 
-const porActivosFinal = <T extends { activos_final?: number }>(a: T, b: T): number =>
-  num(b.activos_final) - num(a.activos_final);
+const byActiveAtEnd = <T extends { active_end?: number }>(a: T, b: T): number =>
+  num(b.active_end) - num(a.active_end);
 
 /** Ventas: site -> tecnologia -> nodos. */
 export function buildSalesSites(
   rows: DimensionVal[],
-  config: ZonasConfig | undefined,
+  config: ZonesConfig | undefined,
 ): SalesReportSite[] {
   if (!rows.length) return [];
 
   const zoneInfo = new Map<string, { site: string; type: string }>();
-  config?.zonas.forEach((zona) =>
-    zoneInfo.set(zona.name.toLowerCase(), { site: zona.site, type: zona.type }),
+  config?.zones.forEach((zone) =>
+    zoneInfo.set(zone.name.toLowerCase(), { site: zone.site, type: zone.type }),
   );
 
   const siteGroups = new Map<string, Map<string, SalesReportNode[]>>();
 
   rows.forEach((row) => {
-    const node = nodoBase(row);
+    const node = baseNode(row);
     const info = zoneInfo.get(node.zona.toLowerCase())
-      ?? { site: SITE_DESCONOCIDO, type: TIPO_POR_DEFECTO };
+      ?? { site: UNKNOWN_SITE, type: DEFAULT_KIND };
 
     const techs = siteGroups.get(info.site) ?? new Map<string, SalesReportNode[]>();
     siteGroups.set(info.site, techs);
@@ -120,7 +117,7 @@ export function buildSalesSites(
         .sort()
         .map((technology) => ({
           technology,
-          nodes: [...(siteGroups.get(site)?.get(technology) ?? [])].sort(porActivosFinal),
+          nodes: [...(siteGroups.get(site)?.get(technology) ?? [])].sort(byActiveAtEnd),
         })),
     }));
 }
@@ -128,31 +125,31 @@ export function buildSalesSites(
 /** Unidades de negocio: un grupo por coordinador, mas el bloque RF al final. */
 export function buildBusinessUnitGroups(
   rows: DimensionVal[],
-  config: ZonasConfig | undefined,
+  config: ZonesConfig | undefined,
 ): BusinessUnitGroup[] {
   if (!rows.length) return [];
 
   const coordMap = new Map<string, string>();
   const rfZones = new Set<string>();
 
-  config?.zonas.forEach((zona) => {
-    const key = zona.name.toLowerCase();
-    if (zona.coordinador) coordMap.set(key, zona.coordinador);
-    if (zona.type.toUpperCase() === 'RF') rfZones.add(key);
+  config?.zones.forEach((zone) => {
+    const key = zone.name.toLowerCase();
+    if (zone.coordinator) coordMap.set(key, zone.coordinator);
+    if (zone.type.toUpperCase() === 'RF') rfZones.add(key);
   });
 
   const coordGroups = new Map<string, BusinessUnitNode[]>();
   const rfNodes: BusinessUnitNode[] = [];
 
   rows.forEach((row) => {
-    const base = nodoBase(row);
+    const base = baseNode(row);
     const key = base.zona.toLowerCase();
     const node: BusinessUnitNode = { ...base, type: rfZones.has(key) ? 'RF' : 'FTTH' };
 
-    const coordinador = coordMap.get(key);
-    if (coordinador) {
-      const nodes = coordGroups.get(coordinador) ?? [];
-      coordGroups.set(coordinador, nodes);
+    const coordinator = coordMap.get(key);
+    if (coordinator) {
+      const nodes = coordGroups.get(coordinator) ?? [];
+      coordGroups.set(coordinator, nodes);
       nodes.push(node);
     }
     // Una zona RF entra ademas en el bloque consolidado, aunque tenga coordinador.
@@ -161,16 +158,16 @@ export function buildBusinessUnitGroups(
 
   const groups: BusinessUnitGroup[] = [...coordGroups.keys()]
     .sort()
-    .map((coordinador) => ({
-      coordinador,
-      nodes: [...(coordGroups.get(coordinador) ?? [])].sort(porActivosFinal),
+    .map((coordinator) => ({
+      coordinator,
+      nodes: [...(coordGroups.get(coordinator) ?? [])].sort(byActiveAtEnd),
       is_rf: false,
     }));
 
   if (rfNodes.length) {
     groups.push({
-      coordinador: GRUPO_RF,
-      nodes: [...rfNodes].sort(porActivosFinal),
+      coordinator: RF_GROUP,
+      nodes: [...rfNodes].sort(byActiveAtEnd),
       is_rf: true,
     });
   }

@@ -91,7 +91,7 @@ Vocabulario de negocio y de código, con el nombre exacto que usa el sistema.
 |---|---|
 | **ETA** | El reporte mensual que se declara a la reguladora |
 | **Alámbrico / Inalámbrico** | Las dos únicas tecnologías que distingue la reguladora. `TECH_MAP` colapsa FTTH y RF a ellas |
-| **Persona natural / jurídica** | La clasificación de titular; `PERSONA_MAP` la normaliza |
+| **Persona natural / jurídica** | La clasificación de titular; `PERSON_MAP` la normaliza |
 | **Excepción individual** | Parametrización por orden (`analyzer_eta_config_subs_individual`). Gana sobre el catálogo |
 | **`declarar_en_eta`** | Campo del plan: un plan **real** que queda fuera del reporte, pero que sigue contando como plan en todo lo demás |
 | **Transporte / Dedicado** | Dos planes concretos, no residenciales, con tratamiento aparte. Se identifican **por su nombre** |

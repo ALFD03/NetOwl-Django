@@ -25,17 +25,17 @@
 
 import type { DayCardSpec, DayChartSpec } from '@/shared/ui';
 
-import type { SemaforoObjetivos } from '../types';
-import { tonoChurn } from './objetivos';
+import type { TargetsTrafficLight } from '../types';
+import { churnTone } from './targets';
 
 /**
  * Las tarjetas del día. Una fábrica y no una constante porque el churn se pinta
  * con el semáforo del catálogo.
  */
-export const subsDayCards = (semaforo: SemaforoObjetivos): DayCardSpec[] => [
-  { key: 'nuevos_mes', label: 'Nuevos', kind: 'flujo', color: 'green', subValue: 'Altas de ese día' },
+export const subsDayCards = (trafficLight: TargetsTrafficLight): DayCardSpec[] => [
+  { key: 'new_in_month', label: 'Nuevos', kind: 'flujo', color: 'green', subValue: 'Altas de ese día' },
   {
-    key: 'bajas',
+    key: 'churned',
     label: 'Bajas',
     kind: 'stock',
     color: 'red',
@@ -57,20 +57,20 @@ export const subsDayCards = (semaforo: SemaforoObjetivos): DayCardSpec[] => [
     subValue: 'Recuperacion de clientes de meses anteriores',
   },
   {
-    key: 'corte_impagado',
+    key: 'unpaid_cuts',
     label: 'Corte Impago',
     kind: 'flujo',
     color: 'yellow',
     subValue: 'Cortados ese día',
     trendGoodWhen: 'down',
   },
-  { key: 'activos_final', label: 'Base Activa', kind: 'stock', color: 'slate', subValue: 'Activos a esa fecha' },
+  { key: 'active_end', label: 'Base Activa', kind: 'stock', color: 'slate', subValue: 'Activos a esa fecha' },
   {
-    key: 'churn_bruto_pct',
+    key: 'gross_churn_pct',
     label: 'Churn Bruto',
     kind: 'tasa',
     color: 'red',
-    colorFor: (valor) => tonoChurn(valor, semaforo),
+    colorFor: (value) => churnTone(value, trafficLight),
     subValue: 'Bajas / base inicial',
     trendGoodWhen: 'down',
   },
@@ -80,7 +80,7 @@ export const SUBS_DAY_CHARTS: DayChartSpec[] = [
   {
     title: 'Altas por día',
     subtitle: 'Cuántas entraron cada día del mes',
-    series: [{ key: 'nuevos_mes', label: 'Altas', kind: 'flujo', color: 'green' }],
+    series: [{ key: 'new_in_month', label: 'Altas', kind: 'flujo', color: 'green' }],
   },
   {
     // Las dos como nivel, que es lo único que las hace comparables: altas
@@ -88,8 +88,7 @@ export const SUBS_DAY_CHARTS: DayChartSpec[] = [
     title: 'Ingresos Reales',
     subtitle: 'Flujo de ingresos o perdida de cliente dia a dia',
     series: [
-      { key: 'adiciones_brutas', label: 'Ingresos Reales', kind: 'stock', color: 'purple' },
-      // { key: 'bajas', label: 'Bajas a esa fecha', kind: 'stock', color: 'red', trendGoodWhen: 'down' },
+      { key: 'gross_adds', label: 'Ingresos Reales', kind: 'stock', color: 'purple' },
     ],
   },
   {
@@ -97,8 +96,8 @@ export const SUBS_DAY_CHARTS: DayChartSpec[] = [
     subtitle: 'Cómo se asienta el mes corte a corte',
     // esTasa: true,
     series: [
-      { key: 'ingresos', label: 'Ingresos', kind: 'stock', color: 'green', trendGoodWhen: 'up' },
-      { key: 'bajas', label: 'Perdidas', kind: 'stock', color: 'red', trendGoodWhen: 'down' },
+      { key: 'inflows', label: 'Ingresos', kind: 'stock', color: 'green', trendGoodWhen: 'up' },
+      { key: 'churned', label: 'Perdidas', kind: 'stock', color: 'red', trendGoodWhen: 'down' },
     ],
   },
 ];

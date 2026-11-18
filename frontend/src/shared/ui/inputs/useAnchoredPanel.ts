@@ -43,7 +43,7 @@ export function useAnchoredPanel<T extends HTMLElement = HTMLDivElement>({
   const triggerRef = useRef<T>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const MARGEN = 8;
+  const MARGIN = 8;
 
   const reposition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -52,15 +52,15 @@ export function useAnchoredPanel<T extends HTMLElement = HTMLDivElement>({
     const r = trigger.getBoundingClientRect();
     // Nunca más ancho que la pantalla: en un teléfono un panel de 360px fijos
     // se salía por la derecha aunque `left` se recortara.
-    const ancho = Math.min(width ?? r.width, window.innerWidth - 2 * MARGEN);
+    const panelWidth = Math.min(width ?? r.width, window.innerWidth - 2 * MARGIN);
 
     // Si no cabe debajo pero si encima, se abre hacia arriba.
-    const cabeDebajo = r.bottom + MARGEN + estimatedHeight <= window.innerHeight;
-    const top = cabeDebajo ? r.bottom + MARGEN : Math.max(MARGEN, r.top - MARGEN - estimatedHeight);
+    const fitsBelow = r.bottom + MARGIN + estimatedHeight <= window.innerHeight;
+    const top = fitsBelow ? r.bottom + MARGIN : Math.max(MARGIN, r.top - MARGIN - estimatedHeight);
 
-    const left = Math.max(MARGEN, Math.min(r.left, window.innerWidth - ancho - MARGEN));
+    const left = Math.max(MARGIN, Math.min(r.left, window.innerWidth - panelWidth - MARGIN));
 
-    setCoords({ top, left, width: ancho });
+    setCoords({ top, left, width: panelWidth });
   }, [width, estimatedHeight]);
 
   const open = useCallback(() => {
@@ -96,17 +96,17 @@ export function useAnchoredPanel<T extends HTMLElement = HTMLDivElement>({
 
     // `true` en la captura para enterarse tambien del scroll de contenedores
     // internos, que es donde suelen vivir estos controles.
-    const seguir = () => reposition();
+    const follow = () => reposition();
 
     document.addEventListener('mousedown', handlePointerDown);
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('scroll', seguir, true);
-    window.addEventListener('resize', seguir);
+    window.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('scroll', seguir, true);
-      window.removeEventListener('resize', seguir);
+      window.removeEventListener('scroll', follow, true);
+      window.removeEventListener('resize', follow);
     };
   }, [isOpen, reposition]);
 

@@ -14,11 +14,11 @@
 
 import React, { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
-import { usePage } from '@inertiajs/react';
 import { ChevronRight } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
+import { useAuth } from '@/shared/auth/AuthContext';
 import { resolveLocation } from '@/shared/constants/navigation';
-import type { AuthenticatedPageProps } from '@/shared/types/inertia';
 import { AnalysisQueueAlert } from './AnalysisQueueAlert';
 import { MobileNavDrawer, MobileTopBar, Sidebar } from './Sidebar';
 
@@ -34,7 +34,7 @@ interface Props {
    * Tercer tramo de la ruta, para una subruta que cuelga de una página del
    * registro (el maestro de planes, dentro de Reporte ETA).
    */
-  subpagina?: string;
+  subpage?: string;
   /**
    * Filtros (periodo, dimension, dias). Van aqui y no dentro de `children`
    * porque esta zona queda fija arriba (desde `lg`): al bajar por la pantalla
@@ -44,43 +44,44 @@ interface Props {
 }
 
 /** Clave del sidebar plegado. Por navegador: es una comodidad, no un ajuste de la cuenta. */
-const CLAVE_PLEGADO = 'netowl-sidebar-plegado';
+const COLLAPSED_KEY = 'netowl-sidebar-plegado';
 
-function leerPlegado(): boolean {
+function readCollapsed(): boolean {
   try {
-    return localStorage.getItem(CLAVE_PLEGADO) === '1';
+    return localStorage.getItem(COLLAPSED_KEY) === '1';
   } catch {
     return false;
   }
 }
 
-export function AppLayout({ children, title, subpagina, toolbar }: Props) {
-  const { url, props } = usePage<AuthenticatedPageProps>();
-  const username = props.auth.user.username;
+export function AppLayout({ children, title, subpage, toolbar }: Props) {
+  const { pathname, search } = useLocation();
+  const url = pathname + search;
+  const username = useAuth().user?.username ?? '';
 
-  // Cada página monta su propio AppLayout, así que el estado se relee al
-  // navegar; leerlo en el inicializador evita un parpadeo del sidebar ancho.
-  const [plegado, setPlegado] = useState(leerPlegado);
-  const [menuAbierto, setMenuAbierto] = useState(false);
+  // Cada página monta su propio AppLayout: leerlo en el inicializador evita un
+  // parpadeo del sidebar ancho.
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const alternarPlegado = () => {
-    setPlegado((previo) => {
-      const nuevo = !previo;
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const newItem = !prev;
       try {
-        localStorage.setItem(CLAVE_PLEGADO, nuevo ? '1' : '0');
+        localStorage.setItem(COLLAPSED_KEY, newItem ? '1' : '0');
       } catch {
         // Sin almacenamiento (modo privado) el sidebar se pliega igual, solo que no se recuerda.
       }
-      return nuevo;
+      return newItem;
     });
   };
 
-  const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   // La ruta de migas sale de la URL, igual que la página marcada en el
   // sidebar: las páginas no declaran dónde están.
-  const ubicacion = resolveLocation(url);
-  const ModuloIcon = ubicacion?.item.icon;
+  const location = resolveLocation(url);
+  const ModuleIcon = location?.item.icon;
 
   return (
     // El scroll vive en <main>, no en la ventana: es lo que convierte a la
@@ -88,36 +89,36 @@ export function AppLayout({ children, title, subpagina, toolbar }: Props) {
     // `h-dvh` y no `h-screen`: en el móvil `100vh` incluye la barra de
     // direcciones del navegador y el final de la página quedaba debajo.
     <div className="flex h-dvh overflow-hidden bg-surface-primary text-slate-100">
-      <Sidebar url={url} username={username} collapsed={plegado} onToggleCollapsed={alternarPlegado} />
-      <MobileNavDrawer open={menuAbierto} onClose={cerrarMenu} url={url} username={username} />
+      <Sidebar url={url} username={username} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+      <MobileNavDrawer open={menuOpen} onClose={closeMenu} url={url} username={username} />
 
       {/* `min-w-0`: sin él, una tabla ancha estira <main> más allá de la
           pantalla en vez de hacer scroll dentro de su propio contenedor. */}
       <main data-app-scroll className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-        <MobileTopBar onOpenMenu={() => setMenuAbierto(true)} />
+        <MobileTopBar onOpenMenu={() => setMenuOpen(true)} />
 
-        {(title || toolbar || ubicacion) && (
+        {(title || toolbar || location) && (
           <div className="bg-surface-primary/95 px-4 pb-4 pt-4 sm:px-6 lg:sticky lg:top-0 lg:z-30 lg:px-8 lg:pt-6 lg:shadow-lg lg:shadow-surface-primary/50 lg:backdrop-blur">
             {/* Si la barra crece demasiado (filtros + barra de dias) hace
                 scroll interno en vez de comerse la pantalla. Solo cuando es
                 fija: suelta, crece con la pagina como todo lo demas. */}
             <div className="flex flex-col gap-4 lg:max-h-[55vh] lg:overflow-y-auto [&>*]:mb-0">
-              {ubicacion && ModuloIcon ? (
+              {location && ModuleIcon ? (
                 <nav
                   aria-label="Ubicación"
                   className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-bold tracking-tight sm:text-xl"
                 >
-                  <ModuloIcon className="h-5 w-5 shrink-0 text-brand" />
-                  <span className="text-slate-400">{ubicacion.item.name}</span>
+                  <ModuleIcon className="h-5 w-5 shrink-0 text-brand" />
+                  <span className="text-slate-400">{location.item.name}</span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
-                  {subpagina ? (
+                  {subpage ? (
                     <>
-                      <span className="text-slate-400">{ubicacion.page.label}</span>
+                      <span className="text-slate-400">{location.page.label}</span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
-                      <span aria-current="page" className="text-white">{subpagina}</span>
+                      <span aria-current="page" className="text-white">{subpage}</span>
                     </>
                   ) : (
-                    <span aria-current="page" className="text-white">{ubicacion.page.label}</span>
+                    <span aria-current="page" className="text-white">{location.page.label}</span>
                   )}
                 </nav>
               ) : (

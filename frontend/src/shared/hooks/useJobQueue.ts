@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { jobsApi, notificarJobEncolado, suscribirseAJobsEncolados, type AnalysisJob } from '@/shared/lib/api/jobs';
+import { notifyDataChanged } from '@/shared/lib/api/client';
+import { jobsApi, notifyJobQueued, subscribeToQueuedJobs, type AnalysisJob } from '@/shared/lib/api/jobs';
 
 /** Cadencia de sondeo: rápida mientras algo corre, lenta cuando no hay nada. */
-const INTERVALO_ACTIVO_MS = 4000;
-const INTERVALO_INACTIVO_MS = 20000;
+const ACTIVE_INTERVAL_MS = 4000;
+const IDLE_INTERVAL_MS = 20000;
 /** Cuánto se deja a la vista el desenlace de un análisis que acaba de terminar. */
-const AVISO_FINAL_MS = 10000;
+const FINAL_NOTICE_MS = 10000;
 
 export interface JobQueueState {
   /** En ejecución primero, después los que esperan turno. */
@@ -46,86 +47,88 @@ export function useJobQueue(): JobQueueState {
 
   // Ids vistos en el sondeo anterior: la diferencia con los actuales es lo que
   // acaba de terminar.
-  const previosRef = useRef<string[]>([]);
-  const temporizadorRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousRef = useRef<string[]>([]);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dismissFinished = useCallback(() => setFinished(null), []);
 
   const cancel = useCallback(async (id: string) => {
-    setCancelling((actual) => (actual.includes(id) ? actual : [...actual, id]));
+    setCancelling((current) => (current.includes(id) ? current : [...current, id]));
     try {
       await jobsApi.cancel(id);
     } catch {
       // No se pudo: se suelta la marca para que el botón se vuelva a ofrecer.
-      setCancelling((actual) => actual.filter((otro) => otro !== id));
+      setCancelling((current) => current.filter((another) => another !== id));
       return;
     }
     // La fila ya está cerrada: se consulta en el acto en vez de esperar al
     // siguiente sondeo, que es lo que hace que el aviso reaccione al clic.
-    notificarJobEncolado();
+    notifyJobQueued();
   }, []);
 
   useEffect(() => {
-    let vivo = true;
+    let alive = true;
 
-    const sondear = async () => {
+    const poll = async () => {
       // Con la pestaña en segundo plano no hay nadie mirando el aviso: se
       // reintenta al volver en vez de seguir pidiendo.
       if (typeof document !== 'undefined' && document.hidden) {
-        programar(INTERVALO_INACTIVO_MS);
+        schedule(IDLE_INTERVAL_MS);
         return;
       }
 
       try {
-        const cola = await jobsApi.queue();
-        if (!vivo) return;
+        const snapshot = await jobsApi.queue();
+        if (!alive) return;
 
-        setJobs(cola.jobs);
-        setRunning(cola.en_ejecucion);
-        setQueued(cola.en_cola);
+        setJobs(snapshot.jobs);
+        setRunning(snapshot.running);
+        setQueued(snapshot.queued);
 
-        const actuales = cola.jobs.map((job) => job.id);
-        setCancelling((marcados) => marcados.filter((id) => actuales.includes(id)));
-        const desaparecidos = previosRef.current.filter((id) => !actuales.includes(id));
-        previosRef.current = actuales;
+        const currentJobs = snapshot.jobs.map((job) => job.id);
+        setCancelling((marked) => marked.filter((id) => currentJobs.includes(id)));
+        const gone = previousRef.current.filter((id) => !currentJobs.includes(id));
+        previousRef.current = currentJobs;
 
-        if (desaparecidos.length > 0) {
-          const terminado = await jobsApi.fetch(desaparecidos[0]).catch(() => null);
-          if (vivo && terminado) {
-            setFinished(terminado);
-            setTimeout(() => vivo && setFinished(null), AVISO_FINAL_MS);
+        if (gone.length > 0) {
+          // Terminó algo, también si lo lanzó otra pestaña u otra persona: hay datos nuevos.
+          notifyDataChanged();
+          const ended = await jobsApi.fetch(gone[0]).catch(() => null);
+          if (alive && ended) {
+            setFinished(ended);
+            setTimeout(() => alive && setFinished(null), FINAL_NOTICE_MS);
           }
         }
 
-        programar(cola.jobs.length > 0 ? INTERVALO_ACTIVO_MS : INTERVALO_INACTIVO_MS);
+        schedule(snapshot.jobs.length > 0 ? ACTIVE_INTERVAL_MS : IDLE_INTERVAL_MS);
       } catch {
         // Un fallo de red o un despliegue en curso no deben dejar el aviso
         // sondeando en bucle: se espera el intervalo largo y se reintenta.
-        if (vivo) programar(INTERVALO_INACTIVO_MS);
+        if (alive) schedule(IDLE_INTERVAL_MS);
       }
     };
 
-    const programar = (ms: number) => {
-      if (!vivo) return;
-      if (temporizadorRef.current) clearTimeout(temporizadorRef.current);
-      temporizadorRef.current = setTimeout(sondear, ms);
+    const schedule = (ms: number) => {
+      if (!alive) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(poll, ms);
     };
 
     // Lanzar un analisis no espera al siguiente sondeo: la fila del job ya
     // existe cuando la peticion responde, asi que se consulta en el acto y el
     // aviso aparece a la vez que el trabajo, no hasta veinte segundos despues.
-    const desuscribir = suscribirseAJobsEncolados(() => {
-      if (!vivo) return;
-      if (temporizadorRef.current) clearTimeout(temporizadorRef.current);
-      void sondear();
+    const unsubscribe = subscribeToQueuedJobs(() => {
+      if (!alive) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      void poll();
     });
 
-    void sondear();
+    void poll();
 
     return () => {
-      vivo = false;
-      desuscribir();
-      if (temporizadorRef.current) clearTimeout(temporizadorRef.current);
+      alive = false;
+      unsubscribe();
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
 

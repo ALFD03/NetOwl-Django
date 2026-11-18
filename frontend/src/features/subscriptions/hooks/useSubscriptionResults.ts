@@ -10,7 +10,7 @@ import type { SubscriptionResultsResponse } from '@/features/subscriptions/types
  * anterior, y el efecto no tiene que vaciar ni marcar nada a mano.
  */
 export function useSubscriptionResults(period: string | null) {
-  const [resultado, setResultado] = useState<{
+  const [outcome, setResult] = useState<{
     period: string;
     data: SubscriptionResultsResponse | null;
   } | null>(null);
@@ -20,12 +20,12 @@ export function useSubscriptionResults(period: string | null) {
 
     let active = true;
     subscriptionsApi.getResultsDetails(period)
-      .then((result) => { if (active) setResultado({ period, data: result }); })
-      .catch(() => { if (active) setResultado({ period, data: null }); });
+      .then((result) => { if (active) setResult({ period, data: result }); })
+      .catch(() => { if (active) setResult({ period, data: null }); });
 
     return () => { active = false; };
   }, [period]);
 
-  const vigente = period && resultado?.period === period ? resultado : null;
-  return { data: vigente?.data ?? null, loading: Boolean(period) && !vigente };
+  const current = period && outcome?.period === period ? outcome : null;
+  return { data: current?.data ?? null, loading: Boolean(period) && !current };
 }

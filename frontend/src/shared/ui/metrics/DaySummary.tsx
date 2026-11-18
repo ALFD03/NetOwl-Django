@@ -6,7 +6,7 @@ import { CalendarClock } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { DayTrendChart, type DayTrendSeries } from '@/shared/charts';
-import { diasCalculados, leerDia, serieDe, type MetricKind } from '@/shared/lib/daySeries';
+import { computedDays, readDay, seriesOf, type MetricKind } from '@/shared/lib/daySeries';
 import type { DaySeries } from '@/shared/types/domain';
 import { NeonContainer } from '../surfaces/NeonContainer';
 import type { MetricColor, NeonTheme } from '../theme/types';
@@ -26,7 +26,7 @@ export interface DayCardSpec {
    * Color según el valor del día, en lugar del fijo `color`: para las métricas
    * con semáforo (el churn de Subscriptions, por ejemplo).
    */
-  colorFor?: (valor: number) => MetricColor;
+  colorFor?: (value: number) => MetricColor;
 }
 
 export interface DayChartSpec {
@@ -41,15 +41,15 @@ export interface DayChartSpec {
     /** De qué lado está lo bueno. En bajas o churn, subir es malo. */
     trendGoodWhen?: 'up' | 'down';
   }>;
-  esTasa?: boolean;
+  isRate?: boolean;
 }
 
 interface Props {
-  serie: DaySeries | undefined;
+  series: DaySeries | undefined;
   /** Los días con corte, ordenados. Puede haber más de los que trae `serie`. */
-  dias: number[];
+  days: number[];
   /** Día elegido en la barra. */
-  dia: number;
+  day: number;
   cards: DayCardSpec[];
   charts: DayChartSpec[];
   title?: string;
@@ -74,9 +74,9 @@ interface Props {
  * porque de eso depende que restar tenga sentido (ver `shared/lib/daySeries`).
  */
 export function DaySummary({
-  serie,
-  dias,
-  dia,
+  series,
+  days,
+  day,
   cards,
   charts,
   title = 'El día seleccionado',
@@ -87,20 +87,20 @@ export function DaySummary({
   // Los días de la barra y los de este bloque no son siempre los mismos: un mes
   // analizado antes de que su módulo guardara el bloque global tiene cortes
   // -el desglose se lee igual- pero nada que resumir aquí.
-  const diasSerie = useMemo(() => diasCalculados(serie), [serie]);
+  const seriesDays = useMemo(() => computedDays(series), [series]);
 
-  const diaActivo = useMemo(() => {
-    if (!diasSerie.length) return 0;
-    if (diasSerie.includes(dia)) return dia;
+  const activeDay = useMemo(() => {
+    if (!seriesDays.length) return 0;
+    if (seriesDays.includes(day)) return day;
     // Al día elegido le falta el bloque: se cae al último corte anterior que sí
     // lo tenga, que es el dato más cercano que no es mentira.
-    const anteriores = diasSerie.filter((d) => d < dia);
-    return anteriores.length ? anteriores[anteriores.length - 1] : diasSerie[0];
-  }, [dia, diasSerie]);
+    const previous = seriesDays.filter((d) => d < day);
+    return previous.length ? previous[previous.length - 1] : seriesDays[0];
+  }, [day, seriesDays]);
 
-  if (!dias.length) return null;
+  if (!days.length) return null;
 
-  if (!diasSerie.length) {
+  if (!seriesDays.length) {
     return (
       <NeonContainer
         theme={theme}
@@ -109,7 +109,7 @@ export function DaySummary({
         icon={<CalendarClock className="h-5 w-5" />}
       >
         <p className="text-sm font-semibold text-slate-400">
-          Los {dias.length} cortes del mes están calculados y el resto de la página
+          Los {days.length} cortes del mes están calculados y el resto de la página
           los lee, pero ninguno guarda el bloque global del que salen estas
           tarjetas. Vuelve a ejecutar el análisis del mes para verlas.
         </p>
@@ -126,14 +126,14 @@ export function DaySummary({
     >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
         {cards.map((card) => {
-          const reading = leerDia(serie, diasSerie, diaActivo, card.key, card.kind);
+          const reading = readDay(series, seriesDays, activeDay, card.key, card.kind);
           return (
             <DayMetricCard
               key={card.key}
               label={card.label}
               kind={card.kind}
-              dia={diaActivo}
-              color={card.colorFor ? card.colorFor(reading.delDia) : card.color}
+              day={activeDay}
+              color={card.colorFor ? card.colorFor(reading.ofDay) : card.color}
               icon={card.icon}
               subValue={card.subValue}
               trendGoodWhen={card.trendGoodWhen}
@@ -152,14 +152,14 @@ export function DaySummary({
               key={chart.title}
               title={chart.title}
               subtitle={chart.subtitle}
-              dias={diasSerie}
-              selectedDay={diaActivo}
-              esTasa={chart.esTasa}
+              days={seriesDays}
+              selectedDay={activeDay}
+              isRate={chart.isRate}
               series={chart.series.map<DayTrendSeries>((s) => ({
                 label: s.label,
                 color: s.color,
                 trendGoodWhen: s.trendGoodWhen,
-                values: serieDe(serie, diasSerie, s.key, s.kind),
+                values: seriesOf(series, seriesDays, s.key, s.kind),
               }))}
             />
           ))}

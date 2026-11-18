@@ -2,7 +2,7 @@
  * Analytics de soporte: el grupo de un vistazo y lo que empuja sus cifras.
  *
  * Todo en gráficos. Las tablas completas —cada valor de cada eje con todas sus
- * columnas, cada zona— viven en Results (`SupportDetalleMes`), adonde enlazan
+ * columnas, cada zona— viven en Results (`SupportMonthDetail`), adonde enlazan
  * los paneles.
  */
 
@@ -27,12 +27,12 @@ interface Props {
 /** Presentation only — every number arrives resolved from `useSupportAnalytics`. */
 export function SupportAnalyticsView({ data, dimension }: Props) {
   const {
-    periodo, activeGroupName, activeGroup, hasGroups, stats, sharePct,
-    dimensionRows, zonas, breakdown, openBreakdown, closeBreakdown,
+    period, activeGroupName, activeGroup, hasGroups, stats, sharePct,
+    dimensionRows, zones, breakdown, openBreakdown, closeBreakdown,
   } = data;
   const { can } = usePermissions();
-  const resultsHref = can(PERMISSIONS.VIEW_SUPPORT_RESULTS) && periodo
-    ? `/support/results/?period=${encodeURIComponent(periodo)}#detalle`
+  const resultsHref = can(PERMISSIONS.VIEW_SUPPORT_RESULTS) && period
+    ? `/support/results/?period=${encodeURIComponent(period)}#detalle`
     : undefined;
 
   if (!hasGroups) {
@@ -64,13 +64,13 @@ export function SupportAnalyticsView({ data, dimension }: Props) {
       {/* Cada uno en su fila: lado a lado, el más alto estiraba al otro y lo
           dejaba con media tarjeta vacía. */}
       <SupportDriversPanel group={activeGroup} />
-      <SupportIncidenceChart rows={zonas} groupName={activeGroupName} resultsHref={resultsHref} />
+      <SupportIncidenceChart rows={zones} groupName={activeGroupName} resultsHref={resultsHref} />
 
       <SupportBreakdownModal
         dimension={dimension}
         breakdown={breakdown}
         groupName={activeGroupName}
-        periodo={periodo}
+        period={period}
         onClose={closeBreakdown}
       />
     </div>

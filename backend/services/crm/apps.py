@@ -9,3 +9,7 @@ class CrmConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "services.crm"
     verbose_name = "CRM Analytics"
+
+    def ready(self):
+        # Registra sus tablas de la analitica para `migrate` (`core.tables.sync_all`).
+        from .analytics import tables  # noqa: F401

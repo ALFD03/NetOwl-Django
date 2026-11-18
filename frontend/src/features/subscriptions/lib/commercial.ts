@@ -1,7 +1,7 @@
-import { proyectar, type Proyeccion } from '@/shared/lib/proyeccion';
+import { project, type Projection } from '@/shared/lib/projection';
 
-import type { SemaforoObjetivos } from '../types';
-import { BARRA_TONO, TEXTO_TONO, tonoCumplimiento, type Meta, type OrigenObjetivo } from './objetivos';
+import type { TargetsTrafficLight } from '../types';
+import { TONE_BAR, TONE_TEXT, complianceTone, type Goal, type TargetSource } from './targets';
 
 /** The node/zone shape both the Sales and Business Units reports render. */
 export interface CommercialNode {
@@ -9,65 +9,65 @@ export interface CommercialNode {
   /** Solo la zona, sin la sucursal: es la clave con la que se acota el export de bajas. */
   zona?: string;
   zona_sucursal?: string;
-  activos_inicio?: number;
-  activos_final?: number;
-  nuevos?: number;
-  reactivaciones?: number;
-  bajas?: number;
-  crecimiento?: number;
-  churn_bruto_pct?: number;
+  active_start?: number;
+  active_end?: number;
+  new_subs?: number;
+  reactivations?: number;
+  churned?: number;
+  growth?: number;
+  gross_churn_pct?: number;
   /**
    * Meta de la fila, resuelta al nivel de zona por el hook del reporte (ver
-   * `lib/objetivos.ts`). Ausente solo si nadie la resolvió todavía.
+   * `lib/targets.ts`). Ausente solo si nadie la resolvió todavía.
    */
-  meta?: Meta;
+  goal?: Goal;
   /** Qué nivel fija el objetivo de crecimiento del nodo, para enseñarlo junto a él. */
-  origenObjetivo?: OrigenObjetivo;
+  targetSource?: TargetSource;
 }
 
 export interface CommercialMetrics {
   /** Active base the node is expected to close the month at. */
-  cierreEsperado: number;
+  expectedClose: number;
   /** Net additions required to hit the target. */
-  objetivo: number;
-  /** Shortfall against `cierreEsperado`. */
-  faltante: number;
+  target: number;
+  /** Shortfall against `expectedClose`. */
+  shortfall: number;
   /**
    * Cumplimiento de ingreso: el crecimiento neto (`final − inicio`) contra
    * `objetivo`, en %. Es el "Cumpl %" histórico de los dos reportes.
    */
-  tasaCumplimiento: number;
+  complianceRate: number;
   /** Cumplimiento de ventas: las instalaciones (`nuevos`) contra `objetivo`, en %. */
-  cumplimientoVentas: number;
-  /** Cumplimiento de cierre: la base final contra `cierreEsperado`, en %. */
-  cumplimientoCierre: number;
+  salesCompliance: number;
+  /** Cumplimiento de cierre: la base final contra `expectedClose`, en %. */
+  closeCompliance: number;
   /**
    * Las instalaciones a las que se llegaría al cierre si el resto del mes
-   * siguiera el ritmo de los días laborables transcurridos (`shared/lib/proyeccion`).
+   * siguiera el ritmo de los días laborables transcurridos (`shared/lib/projection`).
    * `null` sin un corte del que proyectar.
    */
-  instalacionesProyectadas: number | null;
+  projectedInstalls: number | null;
   /** El cumplimiento de ventas con esas instalaciones proyectadas, en %. */
-  cumplimientoVentasProyectado: number | null;
+  projectedSalesCompliance: number | null;
   /** Nada que medir: todas sus zonas están sin objetivo. Los cumplimientos se pintan «—». */
-  sinObjetivo: boolean;
+  withoutTarget: boolean;
 }
 
 export interface CalcCommercialOptions {
   /** Instalaciones del nodo o del grupo, para el cumplimiento de ventas. */
-  nuevos?: number;
+  new_subs?: number;
   /** Los días laborables del corte, para proyectar las instalaciones al cierre. */
-  proyeccion?: Proyeccion | null;
+  projection?: Projection | null;
 }
 
 /**
  * Commercial performance of a node against its growth target.
  *
- * `meta` is the node's or group's `Meta` (`lib/objetivos.ts`); its
- * `metaCrecimiento` is the absolute net growth required. The zones without
+ * `meta` is the node's or group's `Meta` (`lib/targets.ts`); its
+ * `growthGoal` is the absolute net growth required. The zones without
  * objective are already out of a group's `inicio`, `final` and `nuevos` (the
- * hooks sum them with `nodosMedidos`); a row that is itself without objective
- * comes back with `sinObjetivo`. A bare number is a plain meta.
+ * hooks sum them with `measuredNodes`); a row that is itself without objective
+ * comes back with `withoutTarget`. A bare number is a plain meta.
  *
  * The completions are never clamped: over 100% and below 0 are shown as they
  * are, in both reports (the user's choice; Sales Report used to clamp).
@@ -75,39 +75,39 @@ export interface CalcCommercialOptions {
  * Single implementation of what used to be two subtly different copies in
  * `useSalesReportData` and `useBusinessUnitsData`.
  */
-export function calcComercial(
-  inicio: number,
+export function calcCommercial(
+  start: number,
   final: number,
-  meta: Meta | number,
-  { nuevos = 0, proyeccion = null }: CalcCommercialOptions = {},
+  goal: Goal | number,
+  { new_subs: newSubs = 0, projection: projection = null }: CalcCommercialOptions = {},
 ): CommercialMetrics {
-  const { metaCrecimiento, sinObjetivo = false } = typeof meta === 'number'
-    ? { metaCrecimiento: meta, sinObjetivo: false }
-    : meta;
+  const { growthGoal, withoutTarget: withoutTarget = false } = typeof goal === 'number'
+    ? { growthGoal: goal, withoutTarget: false }
+    : goal;
 
-  const objetivo = metaCrecimiento;
-  const cierreEsperado = inicio + objetivo;
-  const rawFaltante = cierreEsperado - final;
-  const rawTasa = objetivo > 0 ? 100 - (rawFaltante / objetivo) * 100 : 0;
-  const rawVentas = objetivo > 0 ? (nuevos / objetivo) * 100 : 0;
-  const rawCierre = cierreEsperado > 0 ? (final / cierreEsperado) * 100 : 0;
-  const instalacionesProyectadas = proyeccion ? proyectar(nuevos, proyeccion) : null;
-  const rawVentasProyectado = instalacionesProyectadas !== null && objetivo > 0 && !sinObjetivo
-    ? (instalacionesProyectadas / objetivo) * 100
+  const target = growthGoal;
+  const expectedClose = start + target;
+  const rawShortfall = expectedClose - final;
+  const rawRate = target > 0 ? 100 - (rawShortfall / target) * 100 : 0;
+  const rawSales = target > 0 ? (newSubs / target) * 100 : 0;
+  const rawClose = expectedClose > 0 ? (final / expectedClose) * 100 : 0;
+  const projectedInstalls = projection ? project(newSubs, projection) : null;
+  const rawProjectedSales = projectedInstalls !== null && target > 0 && !withoutTarget
+    ? (projectedInstalls / target) * 100
     : null;
 
   return {
-    cierreEsperado,
-    objetivo,
-    faltante: rawFaltante,
+    expectedClose,
+    target,
+    shortfall: rawShortfall,
     // Sin recortar a [0, 100], en los dos reportes: a petición del usuario se
     // enseña el valor real, también por encima del 100 % y por debajo de 0.
-    tasaCumplimiento: rawTasa,
-    cumplimientoVentas: rawVentas,
-    cumplimientoCierre: rawCierre,
-    instalacionesProyectadas,
-    cumplimientoVentasProyectado: rawVentasProyectado,
-    sinObjetivo,
+    complianceRate: rawRate,
+    salesCompliance: rawSales,
+    closeCompliance: rawClose,
+    projectedInstalls,
+    projectedSalesCompliance: rawProjectedSales,
+    withoutTarget,
   };
 }
 
@@ -118,29 +118,29 @@ export function sumField<T extends CommercialNode>(nodes: T[], key: keyof T): nu
 
 /** Aggregate opening/closing figures for a set of nodes. */
 export function aggregateNodes<T extends CommercialNode>(nodes: T[]) {
-  const activosInicio = sumField(nodes, 'activos_inicio');
-  const activosFinal = sumField(nodes, 'activos_final');
-  const nuevos = sumField(nodes, 'nuevos');
-  const reactivaciones = sumField(nodes, 'reactivaciones');
-  const bajas = sumField(nodes, 'bajas');
+  const startActive = sumField(nodes, 'active_start');
+  const endActive = sumField(nodes, 'active_end');
+  const newSubs = sumField(nodes, 'new_subs');
+  const reactivations = sumField(nodes, 'reactivations');
+  const churns = sumField(nodes, 'churned');
 
   return {
-    activos_inicio: activosInicio,
-    activos_final: activosFinal,
-    nuevos,
-    reactivaciones,
-    bajas,
-    crecimiento: activosInicio > 0 ? ((activosFinal - activosInicio) / activosInicio) * 100 : 0,
-    churn_rate: activosInicio > 0 ? (bajas / activosInicio) * 100 : 0,
+    active_start: startActive,
+    active_end: endActive,
+    new_subs: newSubs,
+    reactivations,
+    churned: churns,
+    growth: startActive > 0 ? ((endActive - startActive) / startActive) * 100 : 0,
+    churn_rate: startActive > 0 ? (churns / startActive) * 100 : 0,
   };
 }
 
 /** Tailwind text colour for a completion rate, shared by both reports. */
-export function completionTone(tasaCumplimiento: number, semaforo: SemaforoObjetivos): string {
-  return TEXTO_TONO[tonoCumplimiento(tasaCumplimiento, semaforo)];
+export function completionTone(complianceRate: number, trafficLight: TargetsTrafficLight): string {
+  return TONE_TEXT[complianceTone(complianceRate, trafficLight)];
 }
 
 /** Tailwind background for the completion progress bar. */
-export function completionBar(tasaCumplimiento: number, semaforo: SemaforoObjetivos): string {
-  return BARRA_TONO[tonoCumplimiento(tasaCumplimiento, semaforo)];
+export function completionBar(complianceRate: number, trafficLight: TargetsTrafficLight): string {
+  return TONE_BAR[complianceTone(complianceRate, trafficLight)];
 }

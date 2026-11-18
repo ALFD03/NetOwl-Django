@@ -1,16 +1,16 @@
 import { useMemo } from 'react';
 import { toNumber } from '@/shared/utils/formatters';
-import { buildHealthCards } from '../lib/crmEfectividad';
+import { buildHealthCards } from '../lib/crmEffectiveness';
 import { selectCrmDimension } from '../lib/crmDimensions';
 import type {
   CrmAnalyticsProps,
   CrmDimensionValue,
   CrmHealthCard,
-  CrmHistoricoRow,
+  CrmHistoryRow,
   CrmRankingEntry,
 } from '../types';
 
-const EMPTY_GLOBAL: CrmHistoricoRow = {};
+const EMPTY_GLOBAL: CrmHistoryRow = {};
 
 /**
  * Picks the dimension value that leads `key`.
@@ -22,9 +22,9 @@ function leader(
   rows: CrmDimensionValue[],
   key: keyof CrmDimensionValue,
   { order = 'desc', excludeZero = false }: { order?: 'desc' | 'asc'; excludeZero?: boolean } = {},
-): { valor: string; value: number } | null {
+): { winner: string; value: number } | null {
   const candidates = rows
-    .map((row) => ({ valor: row.valor, value: toNumber(row[key] as number | undefined) }))
+    .map((row) => ({ winner: row.value, value: toNumber(row[key] as number | undefined) }))
     .filter((item) => !excludeZero || item.value !== 0);
 
   if (candidates.length === 0) return null;
@@ -58,52 +58,52 @@ export function useCrmAnalytics(
    * be counted in.
    */
   const healthCards = useMemo<CrmHealthCard[]>(
-    () => buildHealthCards(globalData.efectividad),
+    () => buildHealthCards(globalData.effectiveness),
     [globalData],
   );
 
   const rankingCards = useMemo<CrmRankingEntry[]>(() => {
-    const globalGanados = toNumber(globalData.ganados);
+    const globalWon = toNumber(globalData.won);
 
-    const topOportunidades = leader(rows, 'total_oportunidades');
-    const topInstalacion = leader(rows, 'pct_instalacion');
-    const topGanados = leader(rows, 'ganados');
-    const fastest = leader(rows, 'horas_promedio_inst', { order: 'asc', excludeZero: true });
-    const topPerdida = leader(rows, 'pct_perdida');
-    const topDevueltos = leader(rows, 'pct_devueltos_e8');
+    const topOpportunities = leader(rows, 'total_opportunities');
+    const topInstallation = leader(rows, 'pct_installation');
+    const topWon = leader(rows, 'won');
+    const fastest = leader(rows, 'hours_avg_inst', { order: 'asc', excludeZero: true });
+    const topLost = leader(rows, 'pct_lost');
+    const topReturned = leader(rows, 'pct_returned_e8');
 
-    const aportePct =
-      topGanados && globalGanados > 0 ? (topGanados.value / globalGanados) * 100 : 0;
+    const sharePct =
+      topWon && globalWon > 0 ? (topWon.value / globalWon) * 100 : 0;
 
     const entries: Array<CrmRankingEntry> = [
       {
-        id: 'oportunidades',
+        id: 'opportunities',
         label: 'Más Oportunidades',
-        valor: topOportunidades?.valor ?? '—',
-        value: topOportunidades ? topOportunidades.value.toLocaleString('en-US') : '—',
+        winner: topOpportunities?.winner ?? '—',
+        value: topOpportunities ? topOpportunities.value.toLocaleString('en-US') : '—',
         caption: 'Oportunidades creadas',
         color: 'slate',
       },
       {
         id: 'instalacion',
         label: 'Tasa de Instalación Más Alta',
-        valor: topInstalacion?.valor ?? '—',
-        value: topInstalacion ? `${topInstalacion.value.toFixed(2)}%` : '—',
+        winner: topInstallation?.winner ?? '—',
+        value: topInstallation ? `${topInstallation.value.toFixed(2)}%` : '—',
         caption: 'Ganados / creados',
         color: 'green',
       },
       {
         id: 'aporte',
         label: 'Mayor Aporte de Instalaciones',
-        valor: topGanados?.valor ?? '—',
-        value: topGanados ? `${aportePct.toFixed(2)}%` : '—',
-        caption: `${topGanados?.value.toLocaleString('en-US') ?? 0} de ${globalGanados.toLocaleString('en-US')} instalados`,
+        winner: topWon?.winner ?? '—',
+        value: topWon ? `${sharePct.toFixed(2)}%` : '—',
+        caption: `${topWon?.value.toLocaleString('en-US') ?? 0} de ${globalWon.toLocaleString('en-US')} instalados`,
         color: 'blue',
       },
       {
         id: 'tiempo',
         label: 'Tiempo de Instalación Más Bajo',
-        valor: fastest?.valor ?? '—',
+        winner: fastest?.winner ?? '—',
         value: fastest ? `${fastest.value.toFixed(1)} h` : '—',
         caption: 'Promedio hasta instalar',
         color: 'purple',
@@ -111,16 +111,16 @@ export function useCrmAnalytics(
       {
         id: 'perdida',
         label: 'Mayor Tasa de Pérdida',
-        valor: topPerdida?.valor ?? '—',
-        value: topPerdida ? `${topPerdida.value.toFixed(2)}%` : '—',
+        winner: topLost?.winner ?? '—',
+        value: topLost ? `${topLost.value.toFixed(2)}%` : '—',
         caption: 'Perdidos / creados',
         color: 'red',
       },
       {
         id: 'devueltos',
         label: 'Mayor Devolución a Etapa 8',
-        valor: topDevueltos?.valor ?? '—',
-        value: topDevueltos ? `${topDevueltos.value.toFixed(2)}%` : '—',
+        winner: topReturned?.winner ?? '—',
+        value: topReturned ? `${topReturned.value.toFixed(2)}%` : '—',
         caption: 'Entradas a Etapa 8',
         color: 'yellow',
       },

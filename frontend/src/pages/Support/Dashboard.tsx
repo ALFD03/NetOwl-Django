@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Support/Dashboard` (`/support/dashboard/`).
+ * Página `/support/dashboard/`.
  *
  * Además del promedio de los periodos trae, si la cuenta los puede ver, los
  * tickets abiertos ahora (de los logs de etapa).
@@ -14,7 +14,7 @@ export default function SupportDashboard(props: SupportDashboardProps) {
 
   return (
     <AppLayout>
-      <SupportDashboardView data={data} abiertos={props.abiertos} />
+      <SupportDashboardView data={data} open={props.open} />
     </AppLayout>
   );
 }

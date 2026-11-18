@@ -1,4 +1,4 @@
-/** El formulario de acceso y de alta del primer administrador. */
+/** Banner de error, campos y botón de envío de los formularios de acceso. */
 
 import { AlertCircle } from 'lucide-react';
 import type { FormEvent, ReactNode } from 'react';
@@ -14,7 +14,7 @@ export interface AuthFormProps {
   children: ReactNode;
 }
 
-/** Error banner + fields + submit button, shared by Login and Setup. */
+/** Banner de error + campos + botón. */
 export function AuthForm({ error, onSubmit, isSubmitting, submitLabel, children }: AuthFormProps) {
   return (
     <>

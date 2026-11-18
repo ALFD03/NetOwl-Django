@@ -17,38 +17,38 @@ import type { SubscriptionEtaReportResponse } from '@/features/subscriptions/typ
  */
 export function useSubscriptionEtaReport(initialData: SubscriptionEtaReportResponse | null, period: string) {
   const [data, setData] = useState<SubscriptionEtaReportResponse>(initialData ?? {} as SubscriptionEtaReportResponse);
-  const [forzando, setForzando] = useState(false);
-  const [fallido, setFallido] = useState<string | null>(null);
+  const [forcing, setForcing] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   // Ajuste en render: otro periodo olvida el fallo del anterior.
-  const [periodoVisto, setPeriodoVisto] = useState(period);
-  if (period !== periodoVisto) {
-    setPeriodoVisto(period);
-    setFallido(null);
+  const [viewedPeriod, setViewedPeriod] = useState(period);
+  if (period !== viewedPeriod) {
+    setViewedPeriod(period);
+    setFailed(null);
   }
 
   const fetchReport = useCallback(async (selectedPeriod: string, force = false) => {
     if (!selectedPeriod) return;
-    setForzando(true);
+    setForcing(true);
     try {
       const result = await subscriptionsApi.getEtaReport(selectedPeriod, force);
       setData(result);
     } finally {
-      setForzando(false);
+      setForcing(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!period || period === data.periodo) return;
+    if (!period || period === data.period) return;
 
-    let activo = true;
+    let active = true;
     subscriptionsApi.getEtaReport(period, false)
-      .then((result) => { if (activo) setData(result); })
-      .catch(() => { if (activo) setFallido(period); });
+      .then((result) => { if (active) setData(result); })
+      .catch(() => { if (active) setFailed(period); });
 
-    return () => { activo = false; };
-  }, [period, data.periodo]);
+    return () => { active = false; };
+  }, [period, data.period]);
 
-  const cambiandoDePeriodo = Boolean(period) && period !== data.periodo && fallido !== period;
-  return { data, loading: forzando || cambiandoDePeriodo, fetchReport, setData };
+  const changingPeriod = Boolean(period) && period !== data.period && failed !== period;
+  return { data, loading: forcing || changingPeriod, fetchReport, setData };
 }

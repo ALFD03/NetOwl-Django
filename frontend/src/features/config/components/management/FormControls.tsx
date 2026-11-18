@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { SelectMenu } from '@/shared/ui';
 import type { SelectOption } from '@/shared/ui';
 
-interface CampoSelectProps {
+interface SelectFieldProps {
   label: string;
   value: string;
   options: SelectOption[];
@@ -21,7 +21,7 @@ interface CampoSelectProps {
  * framer-motion anima con `scale`, el menu nativo salia desplazado y se cerraba
  * solo en cuanto algo reajustaba el layout.
  */
-export function CampoSelect({ label, value, options, onChange, hint }: CampoSelectProps) {
+export function SelectField({ label, value, options, onChange, hint }: SelectFieldProps) {
   return (
     <div>
       <span className="mb-1.5 block text-xs font-semibold text-slate-300">{label}</span>
@@ -37,18 +37,18 @@ export function CampoSelect({ label, value, options, onChange, hint }: CampoSele
   );
 }
 
-interface PieDeModalProps {
+interface ModalFooterProps {
   onCancel: () => void;
   /** Lo que se lee a la izquierda: el estado del formulario, no una instrucción. */
-  nota?: ReactNode;
+  note?: ReactNode;
   children: ReactNode;
 }
 
 /** La barra de acciones al pie de un modal: la nota a la izquierda, los botones a la derecha. */
-export function PieDeModal({ onCancel, nota, children }: PieDeModalProps) {
+export function ModalFooter({ onCancel, note, children }: ModalFooterProps) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-4">
-      <p className="text-[11px] text-slate-500">{nota}</p>
+      <p className="text-[11px] text-slate-500">{note}</p>
       <div className="flex items-center gap-2">
         <button
           type="button"

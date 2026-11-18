@@ -7,26 +7,23 @@ from .day_metrics import (
     build_crm_day_metrics,
     get_crm_day_payload,
     get_crm_day_series,
-    get_crm_periodos_con_dias,
+    get_crm_periods_with_days,
 )
-from .loader import campos_odoo_importacion, import_crm_csv
 from .queries import (
-    get_crm_cierre_historico,
-    get_crm_dimensiones,
+    get_crm_close_history,
+    get_crm_dimensions,
     get_crm_metric_totals,
-    get_crm_periodos,
+    get_crm_periods,
 )
 
 __all__ = [
-    "import_crm_csv",
-    "campos_odoo_importacion",
     "run_crm_analysis",
     "build_crm_day_metrics",
     "get_crm_day_payload",
     "get_crm_day_series",
-    "get_crm_periodos_con_dias",
-    "get_crm_periodos",
-    "get_crm_cierre_historico",
+    "get_crm_periods_with_days",
+    "get_crm_periods",
+    "get_crm_close_history",
     "get_crm_metric_totals",
     "get_crm_dimensiones",
 ]

@@ -10,14 +10,14 @@ import {
   MetricCard,
   Modal,
   NeonContainer,
-  Paginacion,
+  Pagination,
   ProgressBar,
   SparklineCard,
   METRIC_CHART,
-  usePaginacion,
+  usePagination,
 } from '@/shared/ui';
 import { LineChart } from '@/shared/charts';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils';
+import { formatInteger, formatPeriodLabel } from '@/shared/utils';
 import type { useCrmDashboard } from '../hooks/useCrmDashboard';
 
 interface CrmDashboardViewProps {
@@ -26,7 +26,7 @@ interface CrmDashboardViewProps {
 
 export function CrmDashboardView({ data }: CrmDashboardViewProps) {
   const {
-    historico,
+    history,
     stats,
     trendCards,
     healthCards,
@@ -37,16 +37,16 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
   } = data;
 
   const chartColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : undefined;
-  const paginacion = usePaginacion(historico);
+  const pagination = usePagination(history);
 
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <MetricCard label="Total Oportunidades" value={formatInteger(stats.total_oportunidades)} color="slate" subValue="Promedio mensual" icon={<Users className="w-4 h-4 text-slate-300" />} />
-        <MetricCard label="Tasa Instalados" value={`${stats.pct_instalacion}%`} color="green" subValue="Ganados / Creados" icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />} />
-        <MetricCard label="Tasa Pérdida" value={`${stats.pct_perdida}%`} color="red" subValue="Perdidos / Creados" icon={<XCircle className="w-4 h-4 text-rose-400" />} />
-        <MetricCard label="Tasa Pendiente" value={`${stats.pct_pendientes}%`} color="blue" subValue="Pipeline activo" icon={<Clock className="w-4 h-4 text-sky-400" />} />
-        <MetricCard label="Devueltos E8" value={`${stats.pct_devueltos_e8}%`} color="yellow" subValue="Riesgo mensual de devolución" icon={<AlertTriangle className="w-4 h-4 text-amber-400" />} />
+        <MetricCard label="Total Oportunidades" value={formatInteger(stats.total_opportunities)} color="slate" subValue="Promedio mensual" icon={<Users className="w-4 h-4 text-slate-300" />} />
+        <MetricCard label="Tasa Instalados" value={`${stats.pct_installation}%`} color="green" subValue="Ganados / Creados" icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />} />
+        <MetricCard label="Tasa Pérdida" value={`${stats.pct_lost}%`} color="red" subValue="Perdidos / Creados" icon={<XCircle className="w-4 h-4 text-rose-400" />} />
+        <MetricCard label="Tasa Pendiente" value={`${stats.pct_pending}%`} color="blue" subValue="Pipeline activo" icon={<Clock className="w-4 h-4 text-sky-400" />} />
+        <MetricCard label="Devueltos E8" value={`${stats.pct_returned_e8}%`} color="yellow" subValue="Riesgo mensual de devolución" icon={<AlertTriangle className="w-4 h-4 text-amber-400" />} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -54,27 +54,27 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
           title="Distribución Tiempo de Instalación"
           icon={<CheckCircle2 className="w-5 h-5" />}
           theme="green"
-          min={stats.horas_min_inst}
-          p25={stats.horas_p25_inst}
-          mediana={stats.horas_mediana_inst}
-          promedio={stats.horas_promedio_inst}
-          p75={stats.horas_p75_inst}
-          max={stats.horas_max_inst}
-          std={stats.horas_std_inst}
-          pctExcedeProm={stats.pct_excede_prom_inst}
+          min={stats.hours_min_inst}
+          p25={stats.hours_p25_inst}
+          median={stats.hours_median_inst}
+          average={stats.hours_avg_inst}
+          p75={stats.hours_p75_inst}
+          max={stats.hours_max_inst}
+          std={stats.hours_std_inst}
+          pctAboveAvg={stats.pct_over_avg_inst}
         />
         <EquidistantTimeline
           title="Distribución Tiempo para Pérdida"
           icon={<XCircle className="w-5 h-5" />}
           theme="red"
-          min={stats.horas_min_perd}
-          p25={stats.horas_p25_perd}
-          mediana={stats.horas_mediana_perd}
-          promedio={stats.horas_promedio_perd}
-          p75={stats.horas_p75_perd}
-          max={stats.horas_max_perd}
-          std={stats.horas_std_perd}
-          pctExcedeProm={stats.pct_excede_prom_perd}
+          min={stats.hours_min_lost}
+          p25={stats.hours_p25_lost}
+          median={stats.hours_median_lost}
+          average={stats.hours_avg_lost}
+          p75={stats.hours_p75_lost}
+          max={stats.hours_max_lost}
+          std={stats.hours_std_lost}
+          pctAboveAvg={stats.pct_over_avg_lost}
         />
         <div className="lg:col-span-2">
           <EquidistantTimeline
@@ -82,14 +82,14 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
             subtitle="Instalados + perdidos"
             icon={<Timer className="w-5 h-5" />}
             theme="purple"
-            min={stats.horas_min_cierre}
-            p25={stats.horas_p25_cierre}
-            mediana={stats.horas_mediana_cierre}
-            promedio={stats.horas_promedio_cierre}
-            p75={stats.horas_p75_cierre}
-            max={stats.horas_max_cierre}
-            std={stats.horas_std_cierre}
-            pctExcedeProm={stats.pct_excede_prom_cierre}
+            min={stats.hours_min_close}
+            p25={stats.hours_p25_close}
+            median={stats.hours_median_close}
+            average={stats.hours_avg_close}
+            p75={stats.hours_p75_close}
+            max={stats.hours_max_close}
+            std={stats.hours_std_close}
+            pctAboveAvg={stats.pct_over_avg_close}
           />
         </div>
       </div>
@@ -161,10 +161,10 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                   Desglose Numérico por Periodo
                 </span>
                 <span className="text-xs font-bold text-brand font-mono">
-                  {historico.length} periodos evaluados
+                  {history.length} periodos evaluados
                 </span>
               </div>
-              <Paginacion estado={paginacion} posicion="arriba" />
+              <Pagination state={pagination} position="arriba" />
               <div className="max-h-60 overflow-auto custom-scrollbar">
                 <table className={READONLY_TABLE}>
                   <thead className={READONLY_TABLE_HEAD_STICKY}>
@@ -176,13 +176,13 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                     </tr>
                   </thead>
                   <tbody className={READONLY_TABLE_BODY}>
-                    {paginacion.visibles.map((row, idx) => {
+                    {pagination.visible.map((row, idx) => {
                       const countVal = Number(row[selectedTrend.countKey]) || 0;
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
                       return (
                         <tr key={idx} className="hover:bg-white/5 transition-colors">
-                          <td className="p-4 font-bold text-white">{formatPeriodoLabel(String(row.periodo_reporte))}</td>
-                          <td className="p-4 text-right text-slate-400 font-mono">{formatInteger(row.total_oportunidades)}</td>
+                          <td className="p-4 font-bold text-white">{formatPeriodLabel(String(row.report_period))}</td>
+                          <td className="p-4 text-right text-slate-400 font-mono">{formatInteger(row.total_opportunities)}</td>
                           <td className="p-4 text-right font-black font-mono text-white">{formatInteger(countVal)}</td>
                           <td className="p-4 text-right font-black font-mono" style={{ color: chartColor }}>{rateVal}%</td>
                         </tr>
@@ -191,7 +191,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                   </tbody>
                 </table>
               </div>
-              <Paginacion estado={paginacion} />
+              <Pagination state={pagination} />
             </div>
           </div>
         )}

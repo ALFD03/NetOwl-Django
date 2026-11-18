@@ -16,7 +16,7 @@ reporte dice de cada equipo.
 
 from __future__ import annotations
 
-ETAPA_MAP = {
+STAGE_MAP = {
     "1. Contacto inicial, manejo de objeciones, presentación del servicio y envío de información": "etapa_1_contacto",
     "2. Recepción de datos y creación de ficha": "etapa_2_recepcion",
     "3. Evaluación de factibilidad específica (Inmediata, Adecuación Sencilla, Adecuación Intermedia, Adecuación Avanzada, Inspección)": "etapa_3_factibilidad",
@@ -30,21 +30,21 @@ ETAPA_MAP = {
     "Perdido": "perdido",
 }
 
-ETAPA_ORDER = [
+STAGE_ORDER = [
     "etapa_1_contacto", "etapa_2_recepcion", "etapa_3_factibilidad",
     "etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas",
     "etapa_7_instalados", "etapa_8_devueltos", "etapa_9_disponibles",
     "etapa_10_proyectos", "perdido"
 ]
 
-DIMENSIONES = ["campana", "sucursal", "vendedor"]
+DIMENSIONS = ["campana", "sucursal", "vendedor"]
 
 # --- Tiempo por etapa -------------------------------------------------------
 # El embudo lineal: las etapas por las que una oportunidad progresa hasta
-# instalar. Las etapas 8, 9 y 10 van después en `ETAPA_ORDER` pero no son un
+# instalar. Las etapas 8, 9 y 10 van después en `STAGE_ORDER` pero no son un
 # avance, así que el sentido de un movimiento se decide contra esta lista y no
 # contra el orden completo.
-ETAPA_FLUJO = [
+STAGE_FLOW = [
     "etapa_1_contacto", "etapa_2_recepcion", "etapa_3_factibilidad",
     "etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas",
     "etapa_7_instalados",
@@ -53,11 +53,11 @@ ETAPA_FLUJO = [
 # Etapas que no son cola de trabajo: nadie "espera" en ellas, así que su
 # duración de salida no mide gestión. La 7 es el final del embudo y `perdido`
 # es un estado terminal.
-ETAPAS_SIN_ESPERA = ["etapa_7_instalados", "perdido"]
+STAGES_WITHOUT_WAIT = ["etapa_7_instalados", "perdido"]
 
 # Las etapas que manda la venta. El reporte de tiempos las destaca y el resto
 # quedan como contexto.
-ETAPAS_CLAVE_VENTAS = [
+KEY_SALES_STAGES = [
     "etapa_1_contacto", "etapa_2_recepcion", "etapa_3_factibilidad",
     "etapa_5_gpi", "etapa_8_devueltos",
 ]
@@ -67,13 +67,13 @@ ETAPAS_CLAVE_VENTAS = [
 # día. El promedio ajustado recorta la muestra a este percentil (winsorización:
 # el caso extremo no se descarta, se cuenta como si valiera el corte) para que
 # el número represente la gestión típica sin perder los casos del conteo.
-TIEMPO_ETAPA_WINSOR_P = 0.95
+STAGE_TIME_WINSOR_P = 0.95
 
 # Un movimiento por debajo de este umbral es administrativo —una corrección de
 # etapa, una carga masiva—, no tiempo de gestión. Se cuenta igual en el promedio
 # (es tiempo real que la oportunidad pasó ahí), pero se reporta su peso aparte
 # para poder leer el promedio con esa reserva.
-TIEMPO_ETAPA_UMBRAL_INSTANTANEO_H = 0.5
+STAGE_TIME_INSTANT_THRESHOLD_H = 0.5
 
 # Duración mínima para que un movimiento sea una estancia y no un artefacto.
 # Un salto de duración exactamente 0 no es una etapa que se recorrió rápido:
@@ -81,11 +81,11 @@ TIEMPO_ETAPA_UMBRAL_INSTANTANEO_H = 0.5
 # rutina que la empuja a la 2, una corrección deshecha— y meterlo en el promedio
 # sólo añade ceros al numerador mientras infla el divisor. A partir de un minuto
 # de diferencia sí hubo una estancia, por corta que sea, y cuenta entera.
-TIEMPO_ETAPA_MIN_DURACION_H = 1 / 60
+STAGE_TIME_MIN_DURATION_H = 1 / 60
 
 # Muestra mínima para que el tiempo de una etapa (o de una rebanada dimensional)
 # se considere legible. Por debajo se sirve igual, marcado como poco fiable.
-TIEMPO_ETAPA_MIN_MUESTRA = 10
+STAGE_TIME_MIN_SAMPLE = 10
 
 
 # Reglas de efectividad por etapa.
@@ -100,7 +100,7 @@ TIEMPO_ETAPA_MIN_MUESTRA = 10
 #   term_map  -> desenlace que cierra el ciclo. Se mide por transición: si
 #                el cliente vuelve a la etapa, ese flujo falló, aunque más
 #                tarde acabe instalando en un ciclo posterior.
-EFECTIVIDAD_REGLAS = {
+EFFECTIVENESS_RULES = {
     "etapa_3_factibilidad": {
         "origen": ["etapa_3_factibilidad"],
         "forward": ["etapa_4_adecuaciones", "etapa_5_gpi", "etapa_6_contratistas", "etapa_7_instalados"],
@@ -149,10 +149,10 @@ EFECTIVIDAD_REGLAS = {
 }
 
 # Etapa de devolución de prospectos, origen de la atribución de etapa 8.
-ETAPA8_KEY = "etapa_8_devueltos"
+STAGE8_KEY = "etapa_8_devueltos"
 
 # Fila que recoge lo que ninguna etapa técnica explica.
-FILA_COMERCIAL = "ventas"
+COMMERCIAL_ROW = "ventas"
 
 # --- Atribución de pérdidas -------------------------------------------------
 # Una oportunidad perdida se queda en la etapa donde murió (`etapa_actual`) y
@@ -160,24 +160,24 @@ FILA_COMERCIAL = "ventas"
 # La etapa 6 no es una fila del reporte: quien mandó al cliente a contratistas
 # fue GPI, así que responde GPI. Las muertes en la etapa 8 no se resuelven aquí
 # sino por motivo (ver PERDIDA_ATRIBUCION_MOTIVO y ETAPA8_ATRIBUCION).
-PERDIDA_ATRIBUCION_POR_ETAPA = {
-    "etapa_1_contacto": FILA_COMERCIAL,
-    "etapa_2_recepcion": FILA_COMERCIAL,
+LOSS_ATTRIBUTION_BY_STAGE = {
+    "etapa_1_contacto": COMMERCIAL_ROW,
+    "etapa_2_recepcion": COMMERCIAL_ROW,
     "etapa_3_factibilidad": "etapa_3_factibilidad",
     "etapa_4_adecuaciones": "etapa_4_adecuaciones",
     "etapa_5_gpi": "etapa_5_gpi",
     "etapa_6_contratistas": "etapa_5_gpi",
-    "etapa_9_disponibles": FILA_COMERCIAL,
-    "etapa_10_proyectos": FILA_COMERCIAL,
+    "etapa_9_disponibles": COMMERCIAL_ROW,
+    "etapa_10_proyectos": COMMERCIAL_ROW,
     # Instalado y luego dado de baja: no es un fallo del embudo de venta.
     "etapa_7_instalados": None,
 }
 
 # Etapas cuya muerte se atribuye por motivo en lugar de por etapa.
-PERDIDA_POR_MOTIVO_ETAPAS = [ETAPA8_KEY]
+LOSS_BY_REASON_STAGES = [STAGE8_KEY]
 
 # Motivos de devolución ajenos a la gestión: no penalizan a ninguna etapa.
-ETAPA8_EXCEPTION_MOTIVOS = [
+STAGE8_EXCEPTION_REASONS = [
     "No responde llamadas y/o mensajes",
     "Cliente en espera del Router",
     "Cliente no atiende las llamadas por ninguno de los 2 numeros",
@@ -186,7 +186,7 @@ ETAPA8_EXCEPTION_MOTIVOS = [
 
 # Atribución de devueltos por motivo. El orden de la lista es el orden de
 # prioridad: gana la primera etapa cuyo motivo y destino de avance encajan.
-ETAPA8_ATRIBUCION = [
+STAGE8_ATTRIBUTION = [
     {
         "etapa": "etapa_3_factibilidad",
         "motivos": [
@@ -224,7 +224,7 @@ ETAPA8_ATRIBUCION = [
 
 # Fila de EFECTIVIDAD_REGLAS que se queda con los devueltos que no encajan en
 # ninguna regla de ETAPA8_ATRIBUCION.
-ETAPA8_ATRIBUCION_FALLBACK = FILA_COMERCIAL
+STAGE8_ATTRIBUTION_FALLBACK = COMMERCIAL_ROW
 
 # --- Motivos de pérdida -----------------------------------------------------
 # Catálogo propio: Odoo escribe el mismo motivo de negocio distinto en
@@ -232,7 +232,7 @@ ETAPA8_ATRIBUCION_FALLBACK = FILA_COMERCIAL
 # "No cuenta con el dinero, sin disponibilidad económica"), así que no se puede
 # reutilizar ETAPA8_ATRIBUCION tal cual. Donde la razón coincide se respeta la
 # fila que ya le asignaba la tabla de devoluciones.
-PERDIDA_ATRIBUCION_MOTIVO = [
+LOSS_ATTRIBUTION_REASON = [
     {
         "fila": "etapa_3_factibilidad",
         "motivos": [
@@ -256,7 +256,7 @@ PERDIDA_ATRIBUCION_MOTIVO = [
     },
     {
         # Calidad de la prospección y del cierre comercial.
-        "fila": FILA_COMERCIAL,
+        "fila": COMMERCIAL_ROW,
         "motivos": [
             "Prospecto repetido",
             "Cliente instaló con otro proveedor",
@@ -268,7 +268,7 @@ PERDIDA_ATRIBUCION_MOTIVO = [
 ]
 
 # Pérdidas ajenas a la gestión: no penalizan a ninguna fila.
-PERDIDA_EXCEPTION_MOTIVOS = [
+LOSS_EXCEPTION_REASONS = [
     "No responde llamadas y/o mensajes",
     "Cliente no atiende las llamadas por ninguno de los 2 numeros",
     "Cliente no contesta. Numero opcional no se encuentra con el cliente",
@@ -280,11 +280,11 @@ PERDIDA_EXCEPTION_MOTIVOS = [
 # reparten con la distribución observada en las que sí lo traen, condicionada a
 # la etapa de origen (que el log sí conserva siempre). Si un origen no llega a
 # esta muestra mínima se usa la distribución global.
-E8_IMPUTACION_MIN_MUESTRA = 30
+E8_IMPUTATION_MIN_SAMPLE = 30
 
 # Retornos que sí penalizan: el cliente ya había sido enviado hacia adelante
 # y volvió, así que la etapa no resolvió. Se compara contra `forward_key`.
-RETORNO_ATRIBUCION = [
+COMEBACK_ATTRIBUTION = [
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_4_adecuaciones"},
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_5_gpi"},
     {"etapa": "etapa_3_factibilidad", "forward_to": "etapa_6_contratistas"},
@@ -323,7 +323,7 @@ CSV_COLUMN_MAP = {
 CLIENT_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if not k.startswith("Entradas de Tiempo")]
 LOG_FIELDS = [v for k, v in CSV_COLUMN_MAP.items() if k.startswith("Entradas de Tiempo")]
 
-GANADO_STATES = {"perdido", "ganado", "pendiente"}
+WON_STATES = {"perdido", "ganado", "pendiente"}
 
 
 # --- Cabeceras minimas del export de Odoo ------------------------------------

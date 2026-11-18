@@ -19,7 +19,7 @@ import {
   type CrmAnalyticsMetricKey,
   type CrmMetricConfig,
 } from '../../lib/crmAnalyticsDistribution';
-import type { CrmDimensionValue, CrmHistoricoRow } from '../../types';
+import type { CrmDimensionValue, CrmHistoryRow } from '../../types';
 
 interface ChartDefinition {
   title: string;
@@ -29,13 +29,13 @@ interface ChartDefinition {
 }
 
 const CHARTS: ChartDefinition[] = [
-  { title: 'Concentración de Oportunidades', metric: 'oportunidades', type: 'doughnut', theme: 'blue' },
-  { title: 'Concentración de Instalados', metric: 'instalados', type: 'doughnut', theme: 'green' },
-  { title: 'Instalación Más Rápida (horas)', metric: 'tiempoInstalacion', type: 'bar', theme: 'purple' },
+  { title: 'Concentración de Oportunidades', metric: 'opportunities', type: 'doughnut', theme: 'blue' },
+  { title: 'Concentración de Instalados', metric: 'installed', type: 'doughnut', theme: 'green' },
+  { title: 'Instalación Más Rápida (horas)', metric: 'installTime', type: 'bar', theme: 'purple' },
 ];
 
 interface Props {
-  globalData: CrmHistoricoRow;
+  globalData: CrmHistoryRow;
   rows: CrmDimensionValue[];
   selectedDimension: string;
 }
@@ -61,7 +61,7 @@ export function CrmAnalyticsCharts({ globalData, rows, selectedDimension }: Prop
 }
 
 type CrmChartItemProps = ChartDefinition & {
-  globalData: CrmHistoricoRow;
+  globalData: CrmHistoryRow;
   rows: CrmDimensionValue[];
 };
 

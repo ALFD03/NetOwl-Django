@@ -5,9 +5,9 @@ import { toNumber } from '@/shared/utils';
 import { fetchSupportBreakdown } from '../lib/supportApi';
 import { emptyStats, flattenEntries, resolveStats, share } from '../lib/supportMetrics';
 import {
-  SUPPORT_DESGLOSES,
+  SUPPORT_BREAKDOWNS,
   type SupportAnalyticsProps,
-  type SupportDesglose,
+  type SupportBreakdown,
   type SupportDimension,
   type SupportDimensionRow,
   type SupportGroupOption,
@@ -18,25 +18,25 @@ import {
 /** The drill-down of one dimension value, fetched on demand. */
 export interface SupportBreakdownState {
   /** Which value is open; `null` closes the panel. */
-  valor: string | null;
+  value: string | null;
   loading: boolean;
   error: string;
   stats: SupportStats;
-  desgloses: Record<SupportDesglose, SupportDimensionRow[]>;
+  breakdowns: Record<SupportBreakdown, SupportDimensionRow[]>;
 }
 
-const EMPTY_DESGLOSES: Record<SupportDesglose, SupportDimensionRow[]> = {
+const EMPTY_BREAKDOWNS: Record<SupportBreakdown, SupportDimensionRow[]> = {
   tipo_solicitud: [],
   razon_falla: [],
   solucion_falla: [],
 };
 
 const CLOSED_BREAKDOWN: SupportBreakdownState = {
-  valor: null,
+  value: null,
   loading: false,
   error: '',
   stats: emptyStats(),
-  desgloses: EMPTY_DESGLOSES,
+  breakdowns: EMPTY_BREAKDOWNS,
 };
 
 /**
@@ -51,31 +51,31 @@ export function useSupportAnalytics(
   selectedGroup: string,
   selectedDimension: SupportDimension,
 ) {
-  const grupos = useMemo(() => props.analyticsData?.grupos ?? {}, [props.analyticsData]);
+  const groups = useMemo(() => props.analyticsData?.groups ?? {}, [props.analyticsData]);
 
-  const periodo = props.selectedPeriod ?? props.analyticsData?.periodo ?? '';
+  const period = props.selectedPeriod ?? props.analyticsData?.period ?? '';
 
   const groupOptions = useMemo<SupportGroupOption[]>(
     () =>
-      Object.entries(grupos)
+      Object.entries(groups)
         .map(([key, group]) => ({
           key,
           label: key,
-          totalTickets: toNumber(group.metricas?.total_tickets),
+          totalTickets: toNumber(group.metrics?.total_tickets),
         }))
         .sort((a, b) => b.totalTickets - a.totalTickets),
-    [grupos],
+    [groups],
   );
 
-  const activeGroupName = grupos[selectedGroup] ? selectedGroup : (groupOptions[0]?.key ?? '');
-  const activeGroup = grupos[activeGroupName];
+  const activeGroupName = groups[selectedGroup] ? selectedGroup : (groupOptions[0]?.key ?? '');
+  const activeGroup = groups[activeGroupName];
 
   const periodTotal = useMemo(
     () => groupOptions.reduce((acc, option) => acc + option.totalTickets, 0),
     [groupOptions],
   );
 
-  const stats = useMemo(() => resolveStats(activeGroup?.metricas), [activeGroup]);
+  const stats = useMemo(() => resolveStats(activeGroup?.metrics), [activeGroup]);
   const sharePct = share(stats.total_tickets, periodTotal);
 
   /** The values of the selected first-level axis, ranked by volume. */
@@ -85,14 +85,14 @@ export function useSupportAnalytics(
   );
 
   /** The three breakdowns at group level, before drilling into any value. */
-  const desgloseRows = useMemo(
+  const breakdownRows = useMemo(
     () =>
       Object.fromEntries(
-        SUPPORT_DESGLOSES.map((key) => [
+        SUPPORT_BREAKDOWNS.map((key) => [
           key,
           flattenEntries(activeGroup?.[key], stats.total_tickets),
         ]),
-      ) as Record<SupportDesglose, SupportDimensionRow[]>,
+      ) as Record<SupportBreakdown, SupportDimensionRow[]>,
     [activeGroup, stats.total_tickets],
   );
 
@@ -102,21 +102,21 @@ export function useSupportAnalytics(
    * Keyed by group server-side so switching teams costs no round-trip, and
    * read with the same `activeGroupName` fallback as the rest of the view.
    */
-  const zonas = useMemo<SupportZoneRow[]>(
+  const zones = useMemo<SupportZoneRow[]>(
     () =>
-      (props.analyticsData?.incidencia_zonas?.[activeGroupName] ?? []).map((entry) => {
-        const totalSuscriptores = toNumber(entry.total_suscriptores);
+      (props.analyticsData?.zone_incidence?.[activeGroupName] ?? []).map((entry) => {
+        const totalSubscribers = toNumber(entry.total_subscribers);
 
         return {
           zona: entry.zona,
           site: entry.site,
-          tecnologia: entry.tecnologia ?? '—',
+          technology: entry.technology ?? '—',
           totalTickets: toNumber(entry.total_tickets),
-          totalSuscriptores,
-          tasaIncidencia: toNumber(entry.tasa_incidencia_pct),
-          mttrPromedio: toNumber(entry.mttr_promedio),
-          pctResueltos: toNumber(entry.pct_resueltos),
-          sinPoblacion: totalSuscriptores <= 0,
+          totalSubscribers,
+          incidenceRate: toNumber(entry.incidence_rate_pct),
+          mttrAverage: toNumber(entry.mttr_avg),
+          pctResolved: toNumber(entry.pct_resolved),
+          withoutPopulation: totalSubscribers <= 0,
         };
       }),
     [props.analyticsData, activeGroupName],
@@ -127,46 +127,46 @@ export function useSupportAnalytics(
   const closeBreakdown = useCallback(() => setBreakdown(CLOSED_BREAKDOWN), []);
 
   const openBreakdown = useCallback(
-    async (valor: string) => {
-      if (!periodo) return;
+    async (value: string) => {
+      if (!period) return;
 
-      setBreakdown({ ...CLOSED_BREAKDOWN, valor, loading: true });
+      setBreakdown({ ...CLOSED_BREAKDOWN, value, loading: true });
 
       try {
         const data = await fetchSupportBreakdown({
-          period: periodo,
+          period,
           dimension: selectedDimension,
-          valor,
-          grupo: activeGroupName,
+          value,
+          group: activeGroupName,
         });
 
-        const resolved = resolveStats(data.metricas);
+        const resolved = resolveStats(data.metrics);
 
         setBreakdown({
-          valor,
+          value,
           loading: false,
           error: '',
           stats: resolved,
-          desgloses: Object.fromEntries(
-            SUPPORT_DESGLOSES.map((key) => [
+          breakdowns: Object.fromEntries(
+            SUPPORT_BREAKDOWNS.map((key) => [
               key,
-              flattenEntries(data.desgloses?.[key], resolved.total_tickets),
+              flattenEntries(data.breakdowns?.[key], resolved.total_tickets),
             ]),
-          ) as Record<SupportDesglose, SupportDimensionRow[]>,
+          ) as Record<SupportBreakdown, SupportDimensionRow[]>,
         });
       } catch (error) {
         setBreakdown({
           ...CLOSED_BREAKDOWN,
-          valor,
+          value,
           error: getApiErrorMessage(error, 'No se pudo calcular el desglose del valor seleccionado.'),
         });
       }
     },
-    [periodo, selectedDimension, activeGroupName],
+    [period, selectedDimension, activeGroupName],
   );
 
   return {
-    periodo,
+    period,
     groupOptions,
     activeGroupName,
     /** El bloque del grupo activo, con sus desgloses por tipo, razón y solución. */
@@ -175,8 +175,8 @@ export function useSupportAnalytics(
     stats,
     sharePct,
     dimensionRows,
-    desgloseRows,
-    zonas,
+    breakdownRows,
+    zones,
     breakdown,
     openBreakdown,
     closeBreakdown,

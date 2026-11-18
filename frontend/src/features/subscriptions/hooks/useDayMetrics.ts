@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { calcularProyeccion } from '@/shared/lib/proyeccion';
+import { computeProjection } from '@/shared/lib/projection';
 import type { DayMetrics } from '@/shared/types/domain';
 
-const daysInMonth = (periodoMes: string): number => {
-  const match = periodoMes.match(/^(\d{4})-(\d{2})/);
+const daysInMonth = (monthPeriod: string): number => {
+  const match = monthPeriod.match(/^(\d{4})-(\d{2})/);
   if (!match) return 31;
   return new Date(Number(match[1]), Number(match[2]), 0).getDate();
 };
@@ -17,7 +17,7 @@ const daysInMonth = (periodoMes: string): number => {
 export function useDayMetrics(dayMetrics: DayMetrics | undefined, selectedDay: number) {
   const availableDays = useMemo(
     () =>
-      Object.keys(dayMetrics?.dias ?? {})
+      Object.keys(dayMetrics?.days ?? {})
         .map(Number)
         .filter((day) => Number.isFinite(day))
         .sort((a, b) => a - b),
@@ -25,7 +25,7 @@ export function useDayMetrics(dayMetrics: DayMetrics | undefined, selectedDay: n
   );
 
   const totalDays = useMemo(
-    () => daysInMonth(dayMetrics?.periodo_mes ?? ''),
+    () => daysInMonth(dayMetrics?.month ?? ''),
     [dayMetrics],
   );
 
@@ -39,16 +39,16 @@ export function useDayMetrics(dayMetrics: DayMetrics | undefined, selectedDay: n
   );
 
   const dayData = useMemo(
-    () => (effectiveDay ? dayMetrics?.dias?.[String(effectiveDay)] : undefined),
+    () => (effectiveDay ? dayMetrics?.days?.[String(effectiveDay)] : undefined),
     [dayMetrics, effectiveDay],
   );
 
   // Los días laborables del corte, de los que sale la proyección al cierre. Sin
   // un día calculado se cae al cierre del mes y no hay corte que proyectar.
-  const proyeccion = useMemo(
-    () => (dayData ? calcularProyeccion(dayMetrics?.periodo_mes, effectiveDay) : null),
+  const projection = useMemo(
+    () => (dayData ? computeProjection(dayMetrics?.month, effectiveDay) : null),
     [dayData, dayMetrics, effectiveDay],
   );
 
-  return { availableDays, totalDays, effectiveDay, dayData, proyeccion };
+  return { availableDays, totalDays, effectiveDay, dayData, projection };
 }

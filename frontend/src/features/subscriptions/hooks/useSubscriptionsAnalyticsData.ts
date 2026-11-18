@@ -1,22 +1,22 @@
 /** Recorta a un periodo y una dimensión lo que ya llegó en los props. */
 
 import { useMemo } from 'react';
-import type { DimensionGroup, DimensionVal, Periodo } from '@/shared/types/domain';
+import type { DimensionGroup, DimensionVal, Period } from '@/shared/types/domain';
 
 export function useSubscriptionsAnalyticsData(
-  periodos: Periodo[],
-  dimensiones: DimensionGroup[],
+  periods: Period[],
+  dimensions: DimensionGroup[],
   selectedPeriod: string,
   selectedDim: string,
 ) {
   const globalData = useMemo(
-    () => periodos.find((period) => period.periodo_reporte === selectedPeriod) ?? { periodo_reporte: selectedPeriod },
-    [periodos, selectedPeriod],
+    () => periods.find((period) => period.report_period === selectedPeriod) ?? { report_period: selectedPeriod },
+    [periods, selectedPeriod],
   );
 
   const dimensionGroup = useMemo(
-    () => dimensiones.find((group) => group.periodo_reporte === selectedPeriod)?.dimensiones ?? {},
-    [dimensiones, selectedPeriod],
+    () => dimensions.find((group) => group.report_period === selectedPeriod)?.dimensions ?? {},
+    [dimensions, selectedPeriod],
   );
 
   const currentDimensionData = useMemo<DimensionVal[]>(

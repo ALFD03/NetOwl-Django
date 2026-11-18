@@ -9,38 +9,30 @@ from __future__ import annotations
 
 import pandas as pd
 
-from core.config import (
-    ACTIVO_FALSE_TOKENS,
-    ACTIVO_TRUE_TOKENS,
-    EXCLUDED_STATE,
-    SUBS_STATE_TO_LOG_MAP,
-)
+from core.config import EXCLUDED_STATE, SUBS_STATE_TO_LOG_MAP
+from core.tables import to_bool
 
 # OPTIMIZACIÓN Y REUTILIZACIÓN: Importamos la función de utilidades compartida del sistema
 from core.utils import normalize_text
 
 
-def parse_archivado(series: pd.Series) -> pd.Series:
+def parse_archived(series: pd.Series) -> pd.Series:
     """Marca de archivado (plan gratuito) a partir de la columna `activo`.
 
-    Un valor fuera de los dos vocabularios conocidos NO se asume archivado: eso
-    sacaria clientes de pago de la base activa sin dejar rastro. Se avisa por
-    consola (el log del calculo lo recoge) y se trata como activo.
+    Vacío es archivada. Un valor fuera de los vocabularios conocidos NO se da por
+    archivado: eso sacaría clientes de pago de la base activa sin dejar rastro.
+    Se avisa por consola (el log del cálculo lo recoge) y se trata como activo.
     """
-    limpio = series.astype(str).str.strip().str.lower()
-    es_true = limpio.isin(ACTIVO_TRUE_TOKENS)
-    es_false = limpio.isin(ACTIVO_FALSE_TOKENS)
-
-    desconocidos = limpio[~es_true & ~es_false]
-    if not desconocidos.empty:
-        muestra = sorted(desconocidos.unique())[:5]
+    active = to_bool(series)
+    unknown = active.isna()
+    if unknown.any():
+        sample = sorted(series[unknown].astype(str).unique())[:5]
         print(
-            f"AVISO: la columna 'activo' trae {len(desconocidos)} valores no"
-            f" reconocidos {muestra}; se cuentan como activos."
+            f"AVISO: la columna 'activo' trae {int(unknown.sum())} valores no"
+            f" reconocidos {sample}; se cuentan como activos."
             " Revisa el formato del export antes de fiarte de los gratuitos."
         )
-
-    return es_false
+    return active.eq(False).fillna(False).astype(bool)
 
 
 def _normalize_string_series(series: pd.Series) -> pd.Series:
@@ -79,7 +71,7 @@ def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
     de la suscripcion y calcula `estado_origen` con un desplazamiento por orden.
 
     **El frame de logs sale ordenado por `["orden", "f_dt"]`, y esa ordenacion es
-    una invariante**: de ella dependen `last_log_per_orden` y `EstadoAcumulado`.
+    una invariante**: de ella dependen `last_log_per_order` y `AccumulatedState`.
     """
     df = df_subs_raw.copy()
     df.columns = df.columns.str.lower()
@@ -91,7 +83,7 @@ def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
 
     # `activo` viene del export: false/vacio = suscripcion archivada.
     if "activo" in df.columns:
-        df["archivado"] = parse_archivado(df["activo"])
+        df["archivado"] = parse_archived(df["activo"])
     else:
         df["archivado"] = False
 

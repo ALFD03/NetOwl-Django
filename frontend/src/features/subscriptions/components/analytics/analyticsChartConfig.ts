@@ -4,8 +4,8 @@ import type { AnalyticsMetricConfig } from '../../lib/analyticsDistribution';
 
 export const ANALYTICS_METRICS = {
   churnNeto: {
-    dimensionKey: 'churn_neto_pct',
-    globalKey: 'churn_neto_pct',
+    dimensionKey: 'net_churn_pct',
+    globalKey: 'net_churn_pct',
     mode: 'ranking',
     unit: '%',
     direction: 'loss',
@@ -13,8 +13,8 @@ export const ANALYTICS_METRICS = {
   },
 
   churnBruto: {
-    dimensionKey: 'churn_bruto_pct',
-    globalKey: 'churn_bruto_pct',
+    dimensionKey: 'gross_churn_pct',
+    globalKey: 'gross_churn_pct',
     mode: 'ranking',
     unit: '%',
     direction: 'loss',
@@ -22,8 +22,8 @@ export const ANALYTICS_METRICS = {
   },
 
   suspensiones: {
-    dimensionKey: 'porcentaje_suspensiones',
-    globalKey: 'porcentaje_suspensiones',
+    dimensionKey: 'suspension_pct',
+    globalKey: 'suspension_pct',
     mode: 'ranking',
     unit: '%',
     direction: 'loss',
@@ -31,8 +31,8 @@ export const ANALYTICS_METRICS = {
   },
 
   nuevos: {
-    dimensionKey: 'nuevos',
-    globalKey: 'nuevos_mes',
+    dimensionKey: 'new_subs',
+    globalKey: 'new_in_month',
     mode: 'simple',
     unit: 'number',
     direction: 'growth',
@@ -40,8 +40,8 @@ export const ANALYTICS_METRICS = {
   },
 
   adicionesBrutas: {
-    dimensionKey: 'adiciones_brutas',
-    globalKey: 'adiciones_brutas',
+    dimensionKey: 'gross_adds',
+    globalKey: 'gross_adds',
     mode: 'ranking',
     unit: 'number',
     direction: 'growth',
@@ -49,8 +49,8 @@ export const ANALYTICS_METRICS = {
   },
 
   crecimiento: {
-    dimensionKey: 'crecimiento',
-    globalKey: 'crecimiento',
+    dimensionKey: 'growth',
+    globalKey: 'growth',
     mode: 'weighted',
     unit: '%',
     direction: 'growth',
@@ -58,8 +58,8 @@ export const ANALYTICS_METRICS = {
   },
 
   winback: {
-    dimensionKey: 'tasa_winback_pct',
-    globalKey: 'tasa_winback_pct',
+    dimensionKey: 'winback_rate_pct',
+    globalKey: 'winback_rate_pct',
     mode: 'weighted',
     unit: '%',
     direction: 'growth',
@@ -67,8 +67,8 @@ export const ANALYTICS_METRICS = {
   },
 
   aporteReactivacion: {
-    dimensionKey: 'tasa_aporte_react_pct',
-    globalKey: 'tasa_aporte_react_pct',
+    dimensionKey: 'react_contribution_pct',
+    globalKey: 'react_contribution_pct',
     mode: 'weighted',
     unit: '%',
     direction: 'growth',
@@ -76,8 +76,8 @@ export const ANALYTICS_METRICS = {
   },
 
   indiceReemplazo: {
-    dimensionKey: 'indice_reemplazo_react_pct',
-    globalKey: 'indice_reemplazo_react_pct',
+    dimensionKey: 'react_replacement_pct',
+    globalKey: 'react_replacement_pct',
     mode: 'ranking',
     unit: '%',
     direction: 'growth',

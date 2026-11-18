@@ -6,34 +6,34 @@
  */
 
 export interface SubscriptionResultDimensionRow {
-  valor: string;
-  activos_inicio: number;
-  activos_final: number;
-  nuevos: number;
-  crecimiento: number;
-  bajas: number;
-  churn_neto_pct: number;
-  churn_bruto_pct: number;
-  corte_impagado: number;
-  porcentaje_suspensiones: number;
-  total_inactivos: number;
-  reactivaciones: number;
+  value: string;
+  active_start: number;
+  active_end: number;
+  new_subs: number;
+  growth: number;
+  churned: number;
+  net_churn_pct: number;
+  gross_churn_pct: number;
+  unpaid_cuts: number;
+  suspension_pct: number;
+  total_inactive: number;
+  reactivations: number;
   react_6_churn: number;
   react_8_30days: number;
   react_4_paused: number;
   react_4_P: number;
   react_4_H: number;
-  tasa_winback_pct: number;
+  winback_rate_pct: number;
   total_billing: number;
   arpu: number;
   react_val: number;
-  tasa_aporte_react_pct: number;
-  indice_reemplazo_react_pct: number;
-  adiciones_netas: number;
-  adiciones_brutas: number;
-  clientes_gratuitos: number;
-  gratuitos_nuevos: number;
-  gratuitos_retornados: number;
+  react_contribution_pct: number;
+  react_replacement_pct: number;
+  net_adds: number;
+  gross_adds: number;
+  free_clients: number;
+  free_new: number;
+  free_returned: number;
   cumplimiento_ingresos: number;
   cumplimiento_ventas: number;
   cumplimiento_cierre: number;
@@ -49,45 +49,45 @@ export interface SubscriptionResultsResponse {
  * La ficha es la que la suscripción tiene **hoy**, no la que tenía el mes en
  * que se dio de baja: las tablas de origen se truncan en cada importación (el
  * mismo aviso que el reporte ETA lleva en `services/subscriptions/analytics/
- * bajas_detalle.py`).
+ * churn_detail.py`).
  */
-export interface BajaDetalle {
-  orden: string;
-  cliente: string;
-  cedula: string;
+export interface ChurnDetail {
+  order: string;
+  client: string;
+  id_number: string;
   sucursal: string;
   zona: string;
   campanna: string;
   producto: string;
-  tipo_servicio: string;
+  service_type: string;
   /** Número, para que la hoja lo pueda sumar; `null` cuando no hay dato. */
   subtotal: number | null;
-  fecha_inicio: string;
-  estado_suscripcion: string;
+  since_date: string;
+  subscription_status: string;
   phone1: string;
   phone2: string;
 }
 
-export interface BajasDetalleResponse {
+export interface ChurnDetailResponse {
   status?: 'success' | 'empty' | 'error';
   period?: string;
   periods?: string[];
   total?: number;
   message?: string;
-  bajas: BajaDetalle[];
+  churned: ChurnDetail[];
 }
 
 export type EtaStats = Record<string, number>;
 
 export interface EtaMetrics {
   total?: number;
-  por_tecnologia?: EtaStats;
-  por_persona?: EtaStats;
-  por_estado?: EtaStats;
-  por_tecnologia_persona?: EtaStats;
-  por_estado_tecnologia?: EtaStats;
-  por_estado_persona?: EtaStats;
-  por_estado_tecnologia_persona?: EtaStats;
+  by_technology?: EtaStats;
+  by_person?: EtaStats;
+  by_state?: EtaStats;
+  by_technology_person?: EtaStats;
+  by_state_technology?: EtaStats;
+  by_state_person?: EtaStats;
+  by_state_technology_person?: EtaStats;
   [key: string]: unknown;
 }
 
@@ -98,53 +98,53 @@ export interface EtaMetrics {
  * ese precio por la tasa del BCV, y la tasa se aplica al exportar para que un
  * periodo ya calculado no quede congelado a la tasa de aquel día.
  */
-export interface EtaFormularioInternet {
-  nombre: string;
-  tipo_suscriptor: string;
+export interface EtaInternetForm {
+  name: string;
+  subscriber_type: string;
   /** Todas las entidades federales del catálogo, encadenadas. */
-  entidades: string;
-  suscriptores: number;
-  precio: number;
-  tipo_servicio: string;
+  entities: string;
+  subscribers: number;
+  price: number;
+  service_type: string;
   uplink_kbps: number;
   downlink_kbps: number;
-  velocidad_promedio_kbps: number;
-  consumo_promedio_mb: number;
+  avg_speed_kbps: number;
+  avg_usage_mb: number;
 }
 
-export interface EtaFormularioTransporte {
-  nombre: string;
-  suscriptores: number;
-  precio: number;
-  velocidad_kbps: number;
+export interface EtaTransportForm {
+  name: string;
+  subscribers: number;
+  price: number;
+  speed_kbps: number;
 }
 
-export interface EtaFormularioTelevision {
-  nombre: string;
-  tipo_suscriptor: string;
-  entidades: string;
-  suscriptores: number;
-  precio: number;
+export interface EtaTelevisionForm {
+  name: string;
+  subscriber_type: string;
+  entities: string;
+  subscribers: number;
+  price: number;
 }
 
-export interface EtaFormularios {
-  internet: EtaFormularioInternet[];
-  transporte: EtaFormularioTransporte[];
-  television: EtaFormularioTelevision[];
-  entidades: string;
+export interface EtaForms {
+  internet: EtaInternetForm[];
+  transport: EtaTransportForm[];
+  television: EtaTelevisionForm[];
+  entities: string;
 }
 
 export interface SubscriptionEtaReportResponse {
   status?: string;
-  periodo?: string;
+  period?: string;
   periods?: string[];
-  esta_bloqueado?: boolean;
+  is_locked?: boolean;
   individual_configs?: unknown[];
   net_metrics?: EtaMetrics;
-  transporte_metrics?: number;
+  transport_metrics?: number;
   tv_metrics?: EtaMetrics;
   speed_metrics?: unknown;
-  total_muestreado?: number;
+  total_sampled?: number;
   unmapped_plans?: unknown[];
   unmapped_subs?: unknown[];
   /**
@@ -153,69 +153,69 @@ export interface SubscriptionEtaReportResponse {
    * Ausente en los periodos bloqueados antes de que existieran: hay que
    * recalcular el periodo para que aparezcan.
    */
-  formularios?: EtaFormularios;
+  forms?: EtaForms;
   /** Planes que cuentan en las matrices pero no tienen plan regulador asignado. */
-  planes_sin_regulador?: string[];
+  plans_without_regulator?: string[];
   /** Tasa del BCV fijada para el periodo. `0` = todavía sin fijar. */
-  tasa_bcv?: number;
+  bcv_rate?: number;
   /** De dónde salió: el día que publicó el BCV, o «Escrita a mano». */
-  tasa_bcv_fuente?: string;
+  bcv_rate_source?: string;
   /**
    * Por qué no hay tasa, cuando la consulta automática falló.
    *
    * No impide ver el reporte —las rentas salen vacías, como antes de que
    * hubiera consulta— pero hay que decirlo o parece que la tasa es cero.
    */
-  tasa_bcv_aviso?: string;
+  bcv_rate_warning?: string;
   [key: string]: unknown;
 }
 
-export interface PeriodoData {
-  periodo_reporte: string;
-  activos_inicio: number;
-  activos_final: number;
-  nuevos_mes: number;
-  ingresos: number,
-  bajas: number;
-  churn_neto_pct: number;
-  churn_bruto_pct: number;
+export interface PeriodData {
+  report_period: string;
+  active_start: number;
+  active_end: number;
+  new_in_month: number;
+  inflows: number,
+  churned: number;
+  net_churn_pct: number;
+  gross_churn_pct: number;
   react_4_P: number;
   react_val: number;
-  tasa_winback_pct: number;
-  tasa_aporte_react_pct: number;
-  indice_reemplazo_react_pct: number;
-  porcentaje_suspensiones: number;
+  winback_rate_pct: number;
+  react_contribution_pct: number;
+  react_replacement_pct: number;
+  suspension_pct: number;
   arpu: number;
-  corte_impagado: number;
-  reactivaciones: number;
+  unpaid_cuts: number;
+  reactivations: number;
 }
 
-export interface ZonaData {
-  valor: string;
-  bajas: number;
-  nuevos: number;
-  activos_inicio: number;
-  activos_final: number;
-  churn_bruto_pct: number;
-  crecimiento: number;
+export interface ZoneData {
+  value: string;
+  churned: number;
+  new_subs: number;
+  active_start: number;
+  active_end: number;
+  gross_churn_pct: number;
+  growth: number;
 }
 
 export interface SubscriptionDashboardProps {
-  periodos: PeriodoData[];
-  dimensiones?: Record<string, ZonaData[]>;
+  closings: PeriodData[];
+  dimensions?: Record<string, ZoneData[]>;
 }
 
 export interface EtaSubscriptionConfig {
-  orden: string;
-  cliente?: string;
-  producto?: string;
-  tecnologia?: string;
-  tipo_persona?: string;
-  datas_mbps?: number;
-  tiene_tv?: boolean;
-  reportar?: boolean;
-  es_transporte?: boolean;
-  es_dedicado?: boolean;
+  order: string;
+  client?: string;
+  product?: string;
+  technology?: string;
+  person_type?: string;
+  data_mbps?: number;
+  has_tv?: boolean;
+  report?: boolean;
+  is_transport?: boolean;
+  is_dedicated?: boolean;
   /**
    * La renta de este contrato, en divisa.
    *
@@ -224,25 +224,25 @@ export interface EtaSubscriptionConfig {
    * Las órdenes de la misma velocidad se declaran en una sola fila, con el
    * promedio de sus rentas.
    */
-  precio?: number;
+  price?: number;
 }
 
 export interface EtaPlanConfig {
   plan_name: string;
   name?: string;
-  tecnologia?: string;
-  tipo_persona?: string;
-  datas_mbps?: number;
-  tiene_tv?: boolean;
-  es_transporte?: boolean;
-  es_dedicado?: boolean;
+  technology?: string;
+  person_type?: string;
+  data_mbps?: number;
+  has_tv?: boolean;
+  is_transport?: boolean;
+  is_dedicated?: boolean;
   [key: string]: unknown;
 }
 
 export interface EtaDiscoveredSubscription extends EtaSubscriptionConfig {
-  orden: string;
-  cliente?: string;
-  producto?: string;
+  order: string;
+  client?: string;
+  product?: string;
   /** De dónde viene el contrato. Solo para localizarlo: no se declara. */
   sucursal?: string;
   zona?: string;
@@ -262,10 +262,10 @@ export interface SubscriptionEtaManagementProps {
 // que no son de las campañas excluidas.
 
 /** Estadísticos de una duración en días; null si no hay ninguna baja. */
-export interface LifetimeResumen {
+export interface LifetimeSummary {
   n: number;
-  promedio: number | null;
-  mediana: number | null;
+  mean: number | null;
+  median: number | null;
   p25: number | null;
   p75: number | null;
   min: number | null;
@@ -276,22 +276,22 @@ export interface LifetimeResumen {
  * Un tramo de duración (un mes de 30 días): cuántas bajas caen en él, su %
  * sobre las bajas que cuentan y el % acumulado hasta ese tramo.
  */
-export interface LifetimeTramo {
-  tramo: string;
-  desde: number;
+export interface LifetimeTier {
+  bucket: string;
+  since: number;
   /** Null en el último tramo, que no tiene tope. */
-  hasta: number | null;
-  bajas: number;
+  until: number | null;
+  churned: number;
   pct: number;
-  pct_acumulado: number;
+  cumulative_pct: number;
 }
 
 /** Un valor de una dimensión, con sus bajas que cuentan. */
-export interface LifetimeDimensionFila {
-  valor: string;
-  bajas: number;
-  promedio: number | null;
-  mediana: number | null;
+export interface LifetimeDimensionRow {
+  value: string;
+  churned: number;
+  mean: number | null;
+  median: number | null;
   p25: number | null;
   p75: number | null;
   /** % de esas bajas que se fue en sus primeros 30 / 90 días. */
@@ -299,36 +299,36 @@ export interface LifetimeDimensionFila {
   pct_90: number;
 }
 
-export interface LifetimeMes {
-  mes: string;
+export interface LifetimeMonth {
+  churn_month: string;
   /** Hasta dónde llegan los logs (YYYY-MM-DD). */
-  fecha_corte: string;
+  cutoff_date: string;
   /** El mes de la fecha de corte: sus bajas todavía pueden volver antes del cierre. */
-  mes_en_curso: boolean;
+  in_progress: boolean;
   /** Las bajas que cuentan: instaladas desde `instaladas_desde` y fuera de las campañas excluidas. */
-  bajas: number;
+  churned: number;
   /** Todas las bajas del mes, excluidas incluidas: es lo que cuadra con el cierre mensual. */
-  bajas_mes: number;
+  churned_in_month: number;
   /** Cuántas bajas se quitaron de cada campaña excluida ("Sin campanna", "Exonerado"). */
-  excluidas: Record<string, number>;
+  excluded: Record<string, number>;
   /** Del resto, cuántas se instalaron antes de `instaladas_desde` y no se miden. */
-  anteriores: number;
+  earlier: number;
   /** Las bajas del cierre mensual guardado; si difiere de `bajas_mes`, uno de los dos se hizo con otros datos. */
-  bajas_reporte: number | null;
+  churned_reported: number | null;
   /** Fecha (YYYY-MM-DD) de instalación desde la que se miden las bajas. */
-  instaladas_desde: string;
-  resumen: LifetimeResumen;
-  tramos: LifetimeTramo[];
-  por_dimension: Record<string, LifetimeDimensionFila[]>;
+  installed_since: string;
+  summary: LifetimeSummary;
+  buckets: LifetimeTier[];
+  by_dimension: Record<string, LifetimeDimensionRow[]>;
 }
 
 /** Una baja del mes, tal y como se exporta. */
-export interface LifetimeBaja {
-  orden: string;
-  f_ini: string | null;
-  f_baja: string | null;
-  estado_cierre: string;
-  dias_desde_instalacion: number | null;
+export interface LifetimeChurn {
+  order: string;
+  start_date: string | null;
+  churn_date: string | null;
+  close_status: string;
+  days_since_install: number | null;
   zona?: string;
   sucursal?: string;
   municipio?: string;
@@ -336,29 +336,29 @@ export interface LifetimeBaja {
   zona_sucursal?: string;
 }
 
-export interface LifetimeDetalleResponse {
+export interface LifetimeDetailResponse {
   period: string | null;
-  bajas: LifetimeBaja[];
+  churned: LifetimeChurn[];
 }
 
 // --- Catálogos de referencia -------------------------------------------------
 // Planes, zonas, sites, estados y coordinadores. Antes eran `Planes.json` y
 // `Zonas.json`; hoy son tablas que se editan en el módulo de Catálogos (`/catalogos/`).
 
-// --- Objetivos comerciales (ver features/subscriptions/lib/objetivos.ts) ---
+// --- Objetivos comerciales (ver features/subscriptions/lib/targets.ts) ---
 
 /**
  * Un tramo con vigencia: vale desde `desde` (`YYYY-MM`, nulo = siempre) hasta
  * que empieza el siguiente. Un valor nulo no fija esa métrica.
  */
-export interface TramoObjetivo {
-  desde: string | null;
-  crecimiento: number | null;
+export interface TargetTier {
+  since: string | null;
+  growth: number | null;
   churn: number | null;
 }
 
-export interface ValoresObjetivo {
-  crecimiento: number | null;
+export interface TargetValues {
+  growth: number | null;
   churn: number | null;
 }
 
@@ -368,42 +368,42 @@ export interface ValoresObjetivo {
  * No dependen del objetivo: el mismo churn se pinta igual en cualquier zona y
  * en cualquier página. El cumplimiento ya es un % de la meta.
  */
-export interface SemaforoObjetivos {
+export interface TargetsTrafficLight {
   /** Cumplimiento (% de la meta): verde desde / amarillo desde. */
-  cumpl_verde: number;
-  cumpl_amarillo: number;
+  compliance_green: number;
+  compliance_yellow: number;
   /** Crecimiento (%), más es mejor: verde desde / amarillo desde. */
-  crec_verde: number;
-  crec_amarillo: number;
+  growth_green: number;
+  growth_yellow: number;
   /** Churn (%), menos es mejor: verde hasta / amarillo hasta. */
-  churn_verde: number;
-  churn_amarillo: number;
+  churn_green: number;
+  churn_yellow: number;
 }
 
 /** Lo que envía `get_objetivos_config()`. Las entidades van por nombre. */
-export interface ObjetivosConfig {
+export interface TargetsConfig {
   /** El objetivo general: uno solo, sin fecha. */
-  general: { crecimiento: number; churn: number };
+  general: { growth: number; churn: number };
   /** Excepciones de un mes concreto, por `YYYY-MM`. Sustituyen al general. */
-  meses: Record<string, ValoresObjetivo>;
-  estados: Record<string, TramoObjetivo[]>;
-  sites: Record<string, TramoObjetivo[]>;
-  coordinadores: Record<string, TramoObjetivo[]>;
-  zonas: Record<string, TramoObjetivo[]>;
+  months: Record<string, TargetValues>;
+  states: Record<string, TargetTier[]>;
+  sites: Record<string, TargetTier[]>;
+  coordinators: Record<string, TargetTier[]>;
+  zones: Record<string, TargetTier[]>;
   /** Por sucursal tal y como la trae el export (`NETCOM`, `NYC`...). */
-  sucursales: Record<string, TramoObjetivo[]>;
+  branches: Record<string, TargetTier[]>;
   /** Por nodo, con la clave de la dimensión `zona_sucursal`: `"Guacara - NYC"`. */
-  zonas_sucursal: Record<string, TramoObjetivo[]>;
+  zone_branches: Record<string, TargetTier[]>;
   /**
    * Las zonas apartadas del cumplimiento, por nombre, con su tramo de meses
    * (ambos extremos incluidos; nulo es sin límite). Opcional: una página
    * servida antes de existir no lo trae.
    */
-  zonas_sin_objetivo?: Record<string, { desde: string | null; hasta: string | null }>;
-  semaforo: SemaforoObjetivos;
+  zones_without_target?: Record<string, { since: string | null; until: string | null }>;
+  thresholds: TargetsTrafficLight;
 }
 
-export type CatalogoTipo =
+export type CatalogKind =
   | 'personas'
   | 'membresias'
   | 'condiciones_equipo'
@@ -420,29 +420,29 @@ export type CatalogoTipo =
   | 'objetivos_mes'
   | 'semaforo';
 
-export interface CatalogoOption {
+export interface CatalogOption {
   value: string;
   label: string;
 }
 
-export interface CatalogoPlan {
+export interface CatalogPlan {
   id: number;
-  nombre: string;
+  name: string;
   /** Cuadro tarifario. Distingue dos filas con el mismo nombre de plan. */
-  tarifa: string;
-  tecnologia: string;
-  tipo_persona: string;
-  referencia: string;
-  tiene_tv: boolean;
-  datas_mbps: number;
-  precio: number;
+  tariff: string;
+  technology: string;
+  person_type: string;
+  reference: string;
+  has_tv: boolean;
+  data_mbps: number;
+  price: number;
   /** Si el plan se declara a la reguladora en el reporte ETA. */
-  declarar_en_eta: boolean;
+  declare_in_eta: boolean;
   /** % del precio que se lleva quien vende el plan, solo en los PYME. Nulo: sin definir. */
-  comision_pyme_pct: number | null;
+  sme_commission_pct: number | null;
   /** Con qué fila del formulario se declara. `null` = todavía sin agrupar. */
-  plan_regulador_id: number | null;
-  plan_regulador: string;
+  regulator_plan_id: number | null;
+  regulator_plan: string;
 }
 
 /**
@@ -453,84 +453,84 @@ export interface CatalogoPlan {
  * porque, cuando dos planes del grupo difieren en precio o velocidad, lo
  * declarado tiene que ser una decisión explícita.
  */
-export interface CatalogoPlanRegulador {
+export interface CatalogRegulatoryPlan {
   id: number;
-  nombre: string;
-  tecnologia: string;
-  tipo_persona: string;
-  datas_mbps: number;
+  name: string;
+  technology: string;
+  person_type: string;
+  data_mbps: number;
   /** En divisa. La conversión a bolívares se hace al exportar. */
-  precio: number;
-  tiene_tv: boolean;
+  price: number;
+  has_tv: boolean;
   /** Decide en qué hoja del libro cae la fila. */
-  es_transporte: boolean;
-  notas: string;
+  is_transport: boolean;
+  notes: string;
   /** Cuántos planes comerciales se declaran con él. */
-  planes: number;
+  plans: number;
 }
 
 /** Una zona apartada del cumplimiento durante un tramo de meses (`ZonaSinObjetivo`). */
-export interface CatalogoZonaSinObjetivo {
+export interface CatalogZoneWithoutTarget {
   id: number;
-  zona_id: number;
+  zone_id: number;
   zona: string;
   site: string;
-  coordinador: string;
+  coordinator: string;
   /** `YYYY-MM`; vacío es desde siempre. */
-  desde: string;
+  since: string;
   /** `YYYY-MM`, incluido; vacío es sin fin. */
-  hasta: string;
-  nota: string;
-  actualizado_por: string;
-  actualizado_en: string;
+  until: string;
+  note: string;
+  updated_by: string;
+  updated_at: string;
 }
 
-export interface CatalogoZona {
+export interface CatalogZone {
   id: number;
-  nombre: string;
+  name: string;
   site_id: number;
   site: string;
-  estado_id: number;
-  estado: string;
-  tecnologia: string;
-  coordinador_id: number | null;
-  coordinador: string;
+  state_id: number;
+  state: string;
+  technology: string;
+  coordinator_id: number | null;
+  coordinator: string;
 }
 
-export interface CatalogoSite {
+export interface CatalogSite {
   id: number;
-  nombre: string;
+  name: string;
   /** Orden de presentación comercial; lo consumen Sales Report y ETA. */
-  orden: number;
-  zonas: number;
+  order: number;
+  zones: number;
   /** Las zonas del site y los equipos de ventas que lo trabajan. */
-  zona_ids: number[];
-  equipo_ids: number[];
-  equipos: string[];
+  zone_ids: number[];
+  team_ids: number[];
+  teams: string[];
 }
 
 /** Estados y coordinadores: solo nombre y cuántas zonas dependen de ellos. */
-export interface CatalogoNombrado {
+export interface CatalogNamed {
   id: number;
-  nombre: string;
-  zonas: number;
+  name: string;
+  zones: number;
 }
 
 /** Las áreas del módulo de Catálogos con una lista de pendientes propia. */
-export type AreaCatalogo = 'productos' | 'estructura' | 'ventas';
+export type CatalogArea = 'productos' | 'estructura' | 'ventas';
 
 /** Un nombre de los datos que se decidió no registrar en su área. */
-export interface CatalogoProductoIgnorado {
+export interface CatalogIgnoredProduct {
   id: number;
-  nombre: string;
-  area: AreaCatalogo;
-  nota: string;
-  creado_por: string;
-  creado_en: string;
+  name: string;
+  area: CatalogArea;
+  note: string;
+  created_by: string;
+  created_at: string;
 }
 
 /** Nivel de un objetivo, de más alto a más bajo (el general es el respaldo). */
-export type NivelObjetivoCatalogo =
+export type CatalogTargetLevel =
   | 'general'
   | 'sucursal'
   | 'estado'
@@ -540,56 +540,56 @@ export type NivelObjetivoCatalogo =
   | 'zona_sucursal';
 
 /** Un nodo (zona - sucursal) que aparece en algún cierre calculado. */
-export interface NodoConocido {
+export interface KnownNode {
   /** `"Guacara - NYC"`. */
-  nodo: string;
+  node: string;
   zona: string;
   sucursal: string;
 }
 
 /** Un tramo de objetivo tal y como lo edita la pestaña de objetivos. */
-export interface CatalogoObjetivo {
+export interface CatalogTarget {
   id: number;
-  nivel: NivelObjetivoCatalogo;
+  level: CatalogTargetLevel;
   /** La fila de zona, site, estado o coordinador (la zona de un nodo). Nulo en el general y la sucursal. */
-  entidad_id: number | null;
+  entity_id: number | null;
   /** Nombre con el que se cruza: la sucursal tal cual, o `"Zona - Sucursal"` en un nodo. */
-  entidad: string;
+  entity: string;
   /** En los niveles `sucursal` y `zona_sucursal`; vacío en el resto. */
   sucursal: string;
   /** `YYYY-MM`, o vacío si vale desde siempre. */
-  desde: string;
+  since: string;
   /** Nulo: esa métrica se hereda. */
-  crecimiento_pct: number | null;
+  growth_pct: number | null;
   churn_pct: number | null;
-  nota: string;
-  actualizado_por: string;
-  actualizado_en: string;
+  note: string;
+  updated_by: string;
+  updated_at: string;
 }
 
 /** La excepción de un mes concreto al objetivo general. */
-export interface CatalogoObjetivoMes {
+export interface CatalogMonthTarget {
   id: number;
-  periodo: string;
-  crecimiento_pct: number | null;
+  period: string;
+  growth_pct: number | null;
   churn_pct: number | null;
-  nota: string;
-  actualizado_por: string;
-  actualizado_en: string;
+  note: string;
+  updated_by: string;
+  updated_at: string;
 }
 
-export interface CatalogoSemaforo extends SemaforoObjetivos {
+export interface CatalogTrafficLight extends TargetsTrafficLight {
   id: number;
 }
 
 /** Nombre ya importado que hoy no está en su catálogo (un producto, una zona…). */
-export interface ProductoPendiente {
-  nombre: string;
-  ordenes: number;
+export interface PendingProduct {
+  name: string;
+  orders: number;
 }
 
-/** El rol de una persona en un equipo de ventas (`services/catalogos/equipos.py`). */
-export type RolVentas =
+/** El rol de una persona en un equipo de ventas (`services/catalogs/teams.py`). */
+export type SalesRole =
   | 'jefe'
   | 'jefe_un'
   | 'coord_un'
@@ -602,84 +602,84 @@ export type RolVentas =
   | 'telemarketing';
 
 /** Las columnas del export que nombran a una persona de ventas. */
-export type ColumnaVentas = 'vendedor' | 'medio_supervisor' | 'medio';
+export type SalesColumn = 'seller' | 'supervisor_channel' | 'channel';
 
 /** Lo que un rol exige y admite en un equipo: la interfaz construye sus formularios con esto. */
-export interface CatalogoRolEquipo {
-  rol: RolVentas;
-  etiqueta: string;
+export interface CatalogTeamRole {
+  role: SalesRole;
+  role_label: string;
   /** `medio` se exige; `supervisor` (el literal de `Oportunidad/Administrador`) es opcional; `usuario` se exige. */
-  medio: boolean;
+  channel: boolean;
   supervisor: boolean;
-  usuario: boolean;
+  user: boolean;
   /** Si lleva un site (coordinadora de oficina). */
   site: boolean;
   /** Cuántas unidades de negocio lleva: una (coordinador de UN), varias (jefe, gerentes) o ninguna. */
-  unidades: '' | 'una' | 'varias';
+  units: '' | 'una' | 'varias';
   /** El rol al que responde, si es supervisor y su equipo tiene uno. */
-  superior: RolVentas | null;
+  manager: SalesRole | null;
   /** Las piezas de pago que admite (`PIEZAS_POR_ROL`). */
-  piezas: PiezaPago[];
+  pieces: PaymentPiece[];
 }
 
-export interface CatalogoEquipoVentas {
+export interface CatalogSalesTeam {
   id: number;
   slug: string;
-  nombre: string;
-  roles: CatalogoRolEquipo[];
+  name: string;
+  roles: CatalogTeamRole[];
 }
 
 /** Una persona del directorio de ventas, tal y como la escribe Odoo, con sus papeles en los equipos. */
-export interface CatalogoPersonaVentas {
+export interface CatalogSalesPerson {
   id: number;
-  nombre: string;
-  apellido: string;
+  name: string;
+  last_name: string;
   /** El literal de `Medio`. */
-  medio: string;
+  channel: string;
   /**
    * El de `Oportunidad/Administrador`, cuando Odoo lo escribe distinto que en `Medio`.
    * Vacío: el mismo que `medio`.
    */
-  medio_supervisor: string;
+  supervisor_channel: string;
   /** El literal de `Vendedor`, con `(User)`. */
-  usuario_odoo: string;
+  odoo_user: string;
   /** Otros nombres con los que Odoo escribe a la misma persona, por columna (con otra tilde, por ejemplo). */
-  alias_medio: string[];
-  alias_supervisor: string[];
-  alias_usuario: string[];
-  membresias: { id: number; equipo: string; rol: RolVentas; etiqueta: string }[];
+  channel_alias: string[];
+  supervisor_alias: string[];
+  user_alias: string[];
+  memberships: { id: number; equipo: string; role: SalesRole; role_label: string }[];
 }
 
 /** El papel de una persona en un equipo (`MembresiaEquipo`), con lo suyo ya resuelto. */
-export interface CatalogoMembresia {
+export interface CatalogMembership {
   id: number;
-  persona_id: number;
-  nombre: string;
-  apellido: string;
-  medio: string;
-  medio_supervisor: string;
-  usuario_odoo: string;
-  alias_medio: string[];
-  alias_supervisor: string[];
-  alias_usuario: string[];
-  equipo_id: number;
+  person_id: number;
+  name: string;
+  last_name: string;
+  channel: string;
+  supervisor_channel: string;
+  odoo_user: string;
+  channel_alias: string[];
+  supervisor_alias: string[];
+  user_alias: string[];
+  team_id: number;
   /** El slug del equipo. */
   equipo: string;
-  rol: RolVentas;
+  role: SalesRole;
   /** Los sites de una coordinadora de oficina (uno o varios). */
   site_ids: number[];
   sites: string[];
   /** La membresía a la que responde un supervisor. */
-  superior_id: number | null;
-  superior: string;
-  unidad_ids: number[];
-  unidades: string[];
+  manager_id: number | null;
+  manager: string;
+  unit_ids: number[];
+  units: string[];
 }
 
-export type AlcanceEquipo = 'supervisados' | 'equipo_completo' | 'unidades' | 'oficina';
-export type FactorCumplimiento = 'ninguno' | 'site' | 'unidad';
+export type TeamScope = 'supervisados' | 'equipo_completo' | 'unidades' | 'oficina';
+export type ComplianceFactor = 'ninguno' | 'site' | 'unidad';
 
-export type PiezaPago =
+export type PaymentPiece =
   | 'propia'
   | 'equipo'
   | 'factor'
@@ -691,168 +691,168 @@ export type PiezaPago =
   | 'bono_churn'
   | 'bono_empresa';
 
-export interface PiezaMonto {
+export interface AmountPiece {
   /** `monto`: dólares por venta; `pct_plan`: un % del precio del plan. */
-  tipo: 'monto' | 'pct_plan';
-  valor: number;
+  kind: 'monto' | 'pct_plan';
+  value: number;
 }
 
-export interface PiezaEquipo extends PiezaMonto {
-  alcance: AlcanceEquipo;
-  excluir_oficina: boolean;
+export interface TeamPiece extends AmountPiece {
+  scope: TeamScope;
+  exclude_office: boolean;
 }
 
-export interface TramoPago {
-  desde: number;
-  monto: number;
-  descontar?: number;
+export interface PaymentTier {
+  since: number;
+  amount: number;
+  deduct?: number;
 }
 
 /** Los valores de pago de un rol: solo las piezas que su rol admite. */
-export interface ParametrosPago {
-  propia?: PiezaMonto;
-  equipo?: PiezaEquipo;
-  factor?: FactorCumplimiento;
-  tramos_asesor?: TramoPago[];
-  bono_tramos?: TramoPago[];
-  bono_por_asesor?: TramoPago[];
-  bono_por_unidad?: { monto: number };
-  escalon_crecimiento?: { umbral_pct: number; alto: number; bajo: number };
-  bono_churn?: { max: number; monto: number }[];
-  bono_empresa?: { monto: number; excedente: number };
+export interface PaymentParameters {
+  propia?: AmountPiece;
+  equipo?: TeamPiece;
+  factor?: ComplianceFactor;
+  tramos_asesor?: PaymentTier[];
+  bono_tramos?: PaymentTier[];
+  bono_por_asesor?: PaymentTier[];
+  bono_por_unidad?: { amount: number };
+  escalon_crecimiento?: { threshold_pct: number; high: number; low: number };
+  bono_churn?: { max: number; amount: number }[];
+  bono_empresa?: { amount: number; surplus: number };
 }
 
 /** Las condiciones de pago de un rol de un equipo: las que valen y si alguien las cambió. */
-export interface CatalogoCondicionRol {
+export interface CatalogRoleCondition {
   /** Nulo si nadie las editó (paga con las de por defecto). */
   id: number | null;
-  equipo_id: number;
+  team_id: number;
   equipo: string;
-  rol: RolVentas;
-  etiqueta: string;
-  piezas: PiezaPago[];
-  parametros: ParametrosPago;
-  defecto: ParametrosPago;
-  personalizado: boolean;
+  role: SalesRole;
+  role_label: string;
+  pieces: PaymentPiece[];
+  params: PaymentParameters;
+  policy: PaymentParameters;
+  custom: boolean;
 }
 
 /**
  * Un tramo del objetivo de ventas de las coordinadoras de oficina: cuántas
  * ventas al mes. Sin persona es el general; con persona, el suyo, que manda.
  */
-export interface CatalogoObjetivoOficina {
+export interface CatalogOfficeTarget {
   id: number;
-  persona_id: number | null;
-  persona: string;
+  person_id: number | null;
+  person: string;
   /** `YYYY-MM`; vacío es "desde siempre". */
-  desde: string;
+  since: string;
   ventas: number;
-  nota: string;
-  actualizado_por: string;
-  actualizado_en: string;
+  note: string;
+  updated_by: string;
+  updated_at: string;
 }
 
 /** Una unidad de negocio (el `Coordinador` de las zonas), sus equipos y quienes la llevan. */
-export interface CatalogoUnidadNegocio extends CatalogoNombrado {
-  zona_ids: number[];
-  equipo_ids: number[];
-  equipos: string[];
-  responsables: { persona: string; rol: RolVentas; etiqueta: string; equipo: string }[];
+export interface CatalogBusinessUnit extends CatalogNamed {
+  zone_ids: number[];
+  team_ids: number[];
+  teams: string[];
+  owners: { person: string; role: SalesRole; role_label: string; equipo: string }[];
 }
 
 /** Un nombre de las suscripciones que el directorio de ventas no reconoce. */
-export interface PersonaPendiente {
-  nombre: string;
+export interface PendingPerson {
+  name: string;
   /** Órdenes por columna: no se suman, la venta directa de un supervisor está en dos. */
-  ordenes: Partial<Record<ColumnaVentas, number>>;
+  orders: Partial<Record<SalesColumn, number>>;
   /** El rol que se sugiere según la columna en que aparece. */
-  rol: RolVentas;
+  role: SalesRole;
 }
 
 /** Qué grupos del módulo de Catálogos administra el usuario: uno por permiso. */
-export interface CatalogosPermisos {
+export interface CatalogsPermissions {
   operacional: boolean;
   comercial: boolean;
   ventas: boolean;
 }
 
-interface CatalogosPaginaProps {
-  permisos: CatalogosPermisos;
+interface CatalogsPageProps {
+  permissions: CatalogsPermissions;
 }
 
 /** `Catalogos/Notificaciones`: lo pendiente de cada área y lo ignorado. */
-export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
+export interface CatalogsNotificationsProps extends CatalogsPageProps {
   /** `null` en las áreas que el usuario no administra; vacía es "todo registrado". */
-  pendientes: {
-    productos: ProductoPendiente[] | null;
-    estructura: ProductoPendiente[] | null;
-    ventas: PersonaPendiente[] | null;
+  pending: {
+    productos: PendingProduct[] | null;
+    estructura: PendingProduct[] | null;
+    ventas: PendingPerson[] | null;
   };
-  ignorados: CatalogoProductoIgnorado[];
+  ignored: CatalogIgnoredProduct[];
   /** Las áreas cuyos ignorados puede ver y deshacer. */
-  areas: CatalogoOption[];
+  areas: CatalogOption[];
   /**
    * Lo que piden los formularios de alta, que se abren aquí mismo. Vacías las
    * listas de las áreas que el usuario no administra.
    */
-  opciones: {
-    reguladores: CatalogoPlanRegulador[];
-    tiposPersona: CatalogoOption[];
-    tecnologias: CatalogoOption[];
+  options: {
+    regulators: CatalogRegulatoryPlan[];
+    personTypes: CatalogOption[];
+    technologies: CatalogOption[];
     /** También con el permiso de ventas: el alta de una coordinadora de oficina pide su site. */
-    sites: CatalogoSite[];
-    estados: CatalogoNombrado[];
-    coordinadores: CatalogoUnidadNegocio[];
-    equipos: CatalogoEquipoVentas[];
-    membresias: CatalogoMembresia[];
-    personas: CatalogoPersonaVentas[];
+    sites: CatalogSite[];
+    states: CatalogNamed[];
+    coordinators: CatalogBusinessUnit[];
+    teams: CatalogSalesTeam[];
+    memberships: CatalogMembership[];
+    people: CatalogSalesPerson[];
   };
 }
 
 /** `Catalogos/Productos`: planes y planes reguladores. */
-export interface CatalogosProductosProps extends CatalogosPaginaProps {
-  planes: CatalogoPlan[];
-  reguladores: CatalogoPlanRegulador[];
-  tecnologias: CatalogoOption[];
-  tiposPersona: CatalogoOption[];
-  /** `?nuevo_plan=` — abre el formulario de plan ya relleno con ese nombre. */
-  nuevoPlan: string;
+export interface CatalogsProductsProps extends CatalogsPageProps {
+  plans: CatalogPlan[];
+  regulators: CatalogRegulatoryPlan[];
+  technologies: CatalogOption[];
+  personTypes: CatalogOption[];
+  /** `?new_plan=` — abre el formulario de plan ya relleno con ese nombre. */
+  newPlan: string;
 }
 
 /** `Catalogos/Estructura`: zonas y estados. */
-export interface CatalogosEstructuraProps extends CatalogosPaginaProps {
-  zonas: CatalogoZona[];
+export interface CatalogsStructureProps extends CatalogsPageProps {
+  zones: CatalogZone[];
   /** Solo para elegir el de una zona: se administran en Ventas › Estructura de ventas. */
-  sites: CatalogoSite[];
-  estados: CatalogoNombrado[];
-  coordinadores: CatalogoNombrado[];
-  tecnologias: CatalogoOption[];
-  /** `?nueva_zona=` — abre el formulario de zona ya relleno con ese nombre. */
-  nuevaZona: string;
+  sites: CatalogSite[];
+  states: CatalogNamed[];
+  coordinators: CatalogNamed[];
+  technologies: CatalogOption[];
+  /** `?new_zone=` — abre el formulario de zona ya relleno con ese nombre. */
+  newZone: string;
 }
 
 /** `Catalogos/Ventas`: la estructura de ventas, los equipos con su gente y condiciones, y los objetivos. */
-export interface CatalogosVentasProps extends CatalogosPaginaProps {
-  equipos: CatalogoEquipoVentas[];
-  membresias: CatalogoMembresia[];
-  personas: CatalogoPersonaVentas[];
-  condiciones: CatalogoCondicionRol[];
-  /** `?nueva_persona=&equipo=&rol=` — abre el alta ya rellena con ese literal. */
-  nuevaPersona: { literal: string; equipo: string; rol: string };
-  coordinadores: CatalogoUnidadNegocio[];
-  objetivos: CatalogoObjetivo[];
+export interface CatalogsSalesProps extends CatalogsPageProps {
+  teams: CatalogSalesTeam[];
+  memberships: CatalogMembership[];
+  people: CatalogSalesPerson[];
+  conditions: CatalogRoleCondition[];
+  /** `?new_person=&team=&role=` — abre el alta ya rellena con ese literal. */
+  newPerson: { literal: string; equipo: string; role: string };
+  coordinators: CatalogBusinessUnit[];
+  targets: CatalogTarget[];
   /** Los tramos del objetivo de ventas de las coordinadoras de oficina. */
-  objetivosOficina: CatalogoObjetivoOficina[];
-  zonasSinObjetivo: CatalogoZonaSinObjetivo[];
-  objetivos_mes: CatalogoObjetivoMes[];
-  semaforo: CatalogoSemaforo;
-  objetivosConfig: ObjetivosConfig;
+  officeTargets: CatalogOfficeTarget[];
+  zonesWithoutTarget: CatalogZoneWithoutTarget[];
+  monthly_targets: CatalogMonthTarget[];
+  thresholds: CatalogTrafficLight;
+  targetsConfig: TargetsConfig;
   /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
-  periodosCalculados: string[];
+  computedPeriods: string[];
   /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
-  nodosConocidos: NodoConocido[];
+  knownNodes: KnownNode[];
   /** Las entidades a las que se les puede fijar un objetivo. */
-  zonas: CatalogoZona[];
-  sites: CatalogoSite[];
-  estados: CatalogoNombrado[];
+  zones: CatalogZone[];
+  sites: CatalogSite[];
+  states: CatalogNamed[];
 }

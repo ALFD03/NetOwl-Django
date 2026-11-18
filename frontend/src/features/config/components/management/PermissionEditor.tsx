@@ -19,69 +19,69 @@ interface Props {
    * los traía. Se ven apagados y no se pueden encender; el servidor los
    * rechaza igual (ver `permisos_fuera_de_alcance`).
    */
-  bloqueados?: ReadonlySet<string>;
+  blocked?: ReadonlySet<string>;
 }
 
 /** Los permisos visibles de una tarjeta, partidos en bloques y en orden de riesgo. */
-function porBloques(perms: PermissionCategory['perms']) {
+function byBlocks(perms: PermissionCategory['perms']) {
   return PERMISSION_SECTIONS.map((section) => ({
     section,
     perms: perms.filter((permission) => permission.section === section),
-  })).filter((bloque) => bloque.perms.length > 0);
+  })).filter((block) => block.perms.length > 0);
 }
 
 /** Cuántos de los permisos de una categoría están concedidos. */
-function contar(group: PermissionCategory, permissions: Record<string, boolean>) {
+function countItems(group: PermissionCategory, permissions: Record<string, boolean>) {
   return group.perms.filter((permission) => permissions[permission.key]).length;
 }
 
-export function PermissionEditor({ permissions, onChange, disabled = false, bloqueados }: Props) {
-  const [busqueda, setBusqueda] = useState('');
+export function PermissionEditor({ permissions, onChange, disabled = false, blocked }: Props) {
+  const [query, setQuery] = useState('');
   // Colapsadas y no expandidas: la matriz entera abierta es lo que hace falta
   // ver al llegar; plegar es la excepción.
-  const [plegadas, setPlegadas] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const termino = busqueda.trim().toLowerCase();
+  const term = query.trim().toLowerCase();
 
   /** Las categorías que la búsqueda deja en pie, con sus permisos ya filtrados. */
-  const visibles = useMemo(() => {
-    if (!termino) return PERMISSION_GROUPS.map((group) => ({ group, perms: group.perms }));
+  const visible = useMemo(() => {
+    if (!term) return PERMISSION_GROUPS.map((group) => ({ group, perms: group.perms }));
     return PERMISSION_GROUPS.map((group) => ({
       group,
       perms: group.perms.filter(
         (permission) =>
-          permission.label.toLowerCase().includes(termino) ||
-          group.category.toLowerCase().includes(termino),
+          permission.label.toLowerCase().includes(term) ||
+          group.category.toLowerCase().includes(term),
       ),
-    })).filter((entrada) => entrada.perms.length > 0);
-  }, [termino]);
+    })).filter((entry) => entry.perms.length > 0);
+  }, [term]);
 
-  const concedidos = useMemo(
-    () => PERMISSION_GROUPS.reduce((total, group) => total + contar(group, permissions), 0),
+  const grantedCount = useMemo(
+    () => PERMISSION_GROUPS.reduce((total, group) => total + countItems(group, permissions), 0),
     [permissions],
   );
 
-  const escribir = (cambios: Record<string, boolean>) => {
+  const write = (changes: Record<string, boolean>) => {
     if (disabled) return;
-    const permitidos = Object.fromEntries(
-      Object.entries(cambios).filter(([clave, valor]) => !(valor && bloqueados?.has(clave))),
+    const allowed = Object.fromEntries(
+      Object.entries(changes).filter(([permKey, on]) => !(on && blocked?.has(permKey))),
     );
-    onChange({ ...permissions, ...permitidos });
+    onChange({ ...permissions, ...allowed });
   };
 
-  const marcarTodos = (valor: boolean) => {
-    escribir(
+  const markAll = (on: boolean) => {
+    write(
       Object.fromEntries(
-        PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => [permission.key, valor])),
+        PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => [permission.key, on])),
       ),
     );
   };
 
-  const marcarCategoria = (group: PermissionCategory, valor: boolean) => {
-    escribir(Object.fromEntries(group.perms.map((permission) => [permission.key, valor])));
+  const markCategory = (group: PermissionCategory, on: boolean) => {
+    write(Object.fromEntries(group.perms.map((permission) => [permission.key, on])));
   };
 
-  const porcentaje = TOTAL_PERMISSIONS ? Math.round((concedidos / TOTAL_PERMISSIONS) * 100) : 0;
+  const percent = TOTAL_PERMISSIONS ? Math.round((grantedCount / TOTAL_PERMISSIONS) * 100) : 0;
 
   return (
     <div className="space-y-4">
@@ -101,7 +101,7 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
                 Matriz de permisos
               </p>
               <p className="text-sm font-bold text-white">
-                {concedidos} <span className="font-medium text-slate-400">de {TOTAL_PERMISSIONS} concedidos</span>
+                {grantedCount} <span className="font-medium text-slate-400">de {TOTAL_PERMISSIONS} concedidos</span>
               </p>
             </div>
           </div>
@@ -110,14 +110,14 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => marcarTodos(true)}
+                onClick={() => markAll(true)}
                 className="rounded-xl border border-emerald-500/30 bg-emerald-950/40 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-400 transition-colors hover:bg-emerald-950/70"
               >
                 Marcar todo
               </button>
               <button
                 type="button"
-                onClick={() => marcarTodos(false)}
+                onClick={() => markAll(false)}
                 className="rounded-xl border border-slate-700 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 transition-colors hover:text-white"
               >
                 Limpiar
@@ -129,11 +129,11 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
           <div
             className="h-full rounded-full bg-gradient-to-r from-sky-500 to-emerald-500 transition-all duration-300"
-            style={{ width: `${porcentaje}%` }}
+            style={{ width: `${percent}%` }}
           />
         </div>
 
-        {!disabled && bloqueados && bloqueados.size > 0 && (
+        {!disabled && blocked && blocked.size > 0 && (
           <p className="flex items-start gap-2 text-[11px] text-slate-500">
             <Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <span>Los permisos apagados con candado son los que tú no tienes: no puedes concederlos.</span>
@@ -141,9 +141,9 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
         )}
 
         <SearchInput
-          value={busqueda}
+          value={query}
           placeholder="Buscar un permiso..."
-          onChange={setBusqueda}
+          onChange={setQuery}
           className="w-full rounded-xl border bg-surface-deep"
         />
       </div>
@@ -151,10 +151,10 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
       {/* Una categoría por módulo, en columna. El scroll es vertical: a dos
           columnas había que leer en zigzag para saber qué abarcaba un módulo. */}
       <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1 custom-scrollbar">
-        {visibles.map(({ group, perms }) => {
-          const activos = contar(group, permissions);
-          const plegada = Boolean(plegadas[group.category]);
-          const Icono = group.icon;
+        {visible.map(({ group, perms }) => {
+          const active = countItems(group, permissions);
+          const isCollapsed = Boolean(collapsed[group.category]);
+          const IconComponent = group.icon;
 
           return (
             <section
@@ -163,12 +163,12 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
             >
               <header className="flex items-start gap-3 border-b border-slate-800/70 bg-slate-900/40 px-4 py-3">
                 <span className={cn('rounded-xl border p-2', METRIC_COMPACT[group.tone])}>
-                  <Icono className="h-4 w-4" />
+                  <IconComponent className="h-4 w-4" />
                 </span>
 
                 <button
                   type="button"
-                  onClick={() => setPlegadas({ ...plegadas, [group.category]: !plegada })}
+                  onClick={() => setCollapsed({ ...collapsed, [group.category]: !isCollapsed })}
                   className="min-w-0 flex-1 text-left"
                 >
                   <span className="flex items-center gap-2">
@@ -178,10 +178,10 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
                     <span
                       className={cn(
                         'flex-shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold',
-                        activos ? METRIC_COMPACT[group.tone] : 'border-slate-700 text-slate-500',
+                        active ? METRIC_COMPACT[group.tone] : 'border-slate-700 text-slate-500',
                       )}
                     >
-                      {activos}/{group.perms.length}
+                      {active}/{group.perms.length}
                     </span>
                   </span>
                   <span className="mt-0.5 block text-[10px] text-slate-500">{group.hint}</span>
@@ -191,23 +191,23 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
                   {!disabled && (
                     <button
                       type="button"
-                      onClick={() => marcarCategoria(group, activos < group.perms.length)}
+                      onClick={() => markCategory(group, active < group.perms.length)}
                       className={cn(
                         'rounded-lg border border-slate-700 px-2 py-1 text-[9px] font-black uppercase tracking-wider transition-colors hover:text-white',
-                        activos < group.perms.length ? METRIC_TEXT[group.tone] : 'text-slate-500',
+                        active < group.perms.length ? METRIC_TEXT[group.tone] : 'text-slate-500',
                       )}
-                      title={activos < group.perms.length ? 'Conceder toda la categoría' : 'Quitar toda la categoría'}
+                      title={active < group.perms.length ? 'Conceder toda la categoría' : 'Quitar toda la categoría'}
                     >
-                      {activos < group.perms.length ? 'Todo' : 'Nada'}
+                      {active < group.perms.length ? 'Todo' : 'Nada'}
                     </button>
                   )}
                   <button
                     type="button"
-                    onClick={() => setPlegadas({ ...plegadas, [group.category]: !plegada })}
-                    aria-label={plegada ? 'Desplegar categoría' : 'Plegar categoría'}
+                    onClick={() => setCollapsed({ ...collapsed, [group.category]: !isCollapsed })}
+                    aria-label={isCollapsed ? 'Desplegar categoría' : 'Plegar categoría'}
                     className="rounded-lg p-1 text-slate-500 transition-colors hover:text-white"
                   >
-                    <ChevronDown className={cn('h-4 w-4 transition-transform', plegada && '-rotate-90')} />
+                    <ChevronDown className={cn('h-4 w-4 transition-transform', isCollapsed && '-rotate-90')} />
                   </button>
                 </div>
               </header>
@@ -217,27 +217,27 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
               <div className="h-0.5 w-full bg-slate-800/60">
                 <div
                   className={cn('h-full transition-all duration-300', METRIC_BAR[group.tone])}
-                  style={{ width: `${(activos / group.perms.length) * 100}%` }}
+                  style={{ width: `${(active / group.perms.length) * 100}%` }}
                 />
               </div>
 
-              {!plegada && (
+              {!isCollapsed && (
                 <div className="space-y-3 p-3">
-                  {porBloques(perms).map((bloque) => (
-                    <div key={bloque.section}>
+                  {byBlocks(perms).map((block) => (
+                    <div key={block.section}>
                       <p className="mb-1.5 flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-slate-500">
-                        <span>{bloque.section}</span>
+                        <span>{block.section}</span>
                         <span className="h-px flex-1 bg-slate-800" />
                       </p>
                       <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
-                        {bloque.perms.map((permission) => (
+                        {block.perms.map((permission) => (
                           <Switch
                             key={permission.key}
                             checked={Boolean(permissions[permission.key])}
-                            onChange={(valor) => escribir({ [permission.key]: valor })}
+                            onChange={(on) => write({ [permission.key]: on })}
                             label={permission.label}
                             tone={group.tone}
-                            disabled={disabled || Boolean(bloqueados?.has(permission.key))}
+                            disabled={disabled || Boolean(blocked?.has(permission.key))}
                           />
                         ))}
                       </div>
@@ -249,11 +249,11 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
           );
         })}
 
-        {visibles.length === 0 && (
+        {visible.length === 0 && (
           <EmptyState
             icon={<SearchX />}
             title="Ningún permiso coincide"
-            description={`Nada en la matriz se llama «${busqueda.trim()}».`}
+            description={`Nada en la matriz se llama «${query.trim()}».`}
             size="md"
           />
         )}

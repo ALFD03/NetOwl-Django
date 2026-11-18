@@ -12,13 +12,13 @@ import {
   ProgressBar,
 } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals, toNumber } from '@/shared/utils/formatters';
-import type { CrmDimensionValue, CrmHealthCard, CrmHistoricoRow, CrmRankingEntry } from '../types';
+import type { CrmDimensionValue, CrmHealthCard, CrmHistoryRow, CrmRankingEntry } from '../types';
 import { CrmAnalyticsCharts } from './analytics/CrmAnalyticsCharts';
 import { CrmAnalyticsTable } from './analytics/CrmAnalyticsTable';
 import { CrmStageTimeSection } from './analytics/CrmStageTimeSection';
 
 interface CrmAnalyticsViewProps {
-  globalData: CrmHistoricoRow;
+  globalData: CrmHistoryRow;
   rows: CrmDimensionValue[];
   healthCards: CrmHealthCard[];
   rankingCards: CrmRankingEntry[];
@@ -34,17 +34,17 @@ export function CrmAnalyticsView({
   selectedDimension,
   selectedPeriod,
 }: CrmAnalyticsViewProps) {
-  const num = (key: keyof CrmHistoricoRow) => toNumber(globalData[key] as number | undefined);
-  const pct = (key: keyof CrmHistoricoRow) => `${formatTwoDecimals(globalData[key] as number | undefined)}%`;
+  const num = (key: keyof CrmHistoryRow) => toNumber(globalData[key] as number | undefined);
+  const pct = (key: keyof CrmHistoryRow) => `${formatTwoDecimals(globalData[key] as number | undefined)}%`;
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <MetricCard label="Total Oportunidades" value={formatInteger(num('total_oportunidades'))} color="slate" subValue="Creadas en el periodo" icon={<Users className="h-4 w-4 text-slate-300" />} />
-        <MetricCard label="Tasa Instalados" value={pct('pct_instalacion')} color="green" subValue="Ganados / Creados" icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />} />
-        <MetricCard label="Tasa Pérdida" value={pct('pct_perdida')} color="red" subValue="Perdidos / Creados" icon={<XCircle className="h-4 w-4 text-rose-400" />} />
-        <MetricCard label="Tasa Pendiente" value={pct('pct_pendientes')} color="blue" subValue="Pipeline activo" icon={<Clock className="h-4 w-4 text-sky-400" />} />
-        <MetricCard label="Devueltos E8" value={pct('pct_devueltos_e8')} color="yellow" subValue="Riesgo mensual de devolución" icon={<AlertTriangle className="h-4 w-4 text-amber-400" />} />
+        <MetricCard label="Total Oportunidades" value={formatInteger(num('total_opportunities'))} color="slate" subValue="Creadas en el periodo" icon={<Users className="h-4 w-4 text-slate-300" />} />
+        <MetricCard label="Tasa Instalados" value={pct('pct_installation')} color="green" subValue="Ganados / Creados" icon={<CheckCircle2 className="h-4 w-4 text-emerald-400" />} />
+        <MetricCard label="Tasa Pérdida" value={pct('pct_lost')} color="red" subValue="Perdidos / Creados" icon={<XCircle className="h-4 w-4 text-rose-400" />} />
+        <MetricCard label="Tasa Pendiente" value={pct('pct_pending')} color="blue" subValue="Pipeline activo" icon={<Clock className="h-4 w-4 text-sky-400" />} />
+        <MetricCard label="Devueltos E8" value={pct('pct_returned_e8')} color="yellow" subValue="Riesgo mensual de devolución" icon={<AlertTriangle className="h-4 w-4 text-amber-400" />} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -52,27 +52,27 @@ export function CrmAnalyticsView({
           title="Distribución Tiempo de Instalación"
           icon={<CheckCircle2 className="h-5 w-5" />}
           theme="green"
-          min={num('horas_min_inst')}
-          p25={num('horas_p25_inst')}
-          mediana={num('horas_mediana_inst')}
-          promedio={num('horas_promedio_inst')}
-          p75={num('horas_p75_inst')}
-          max={num('horas_max_inst')}
-          std={num('horas_std_inst')}
-          pctExcedeProm={num('pct_excede_prom_inst')}
+          min={num('hours_min_inst')}
+          p25={num('hours_p25_inst')}
+          median={num('hours_median_inst')}
+          average={num('hours_avg_inst')}
+          p75={num('hours_p75_inst')}
+          max={num('hours_max_inst')}
+          std={num('hours_std_inst')}
+          pctAboveAvg={num('pct_over_avg_inst')}
         />
         <EquidistantTimeline
           title="Distribución Tiempo para Pérdida"
           icon={<XCircle className="h-5 w-5" />}
           theme="red"
-          min={num('horas_min_perd')}
-          p25={num('horas_p25_perd')}
-          mediana={num('horas_mediana_perd')}
-          promedio={num('horas_promedio_perd')}
-          p75={num('horas_p75_perd')}
-          max={num('horas_max_perd')}
-          std={num('horas_std_perd')}
-          pctExcedeProm={num('pct_excede_prom_perd')}
+          min={num('hours_min_lost')}
+          p25={num('hours_p25_lost')}
+          median={num('hours_median_lost')}
+          average={num('hours_avg_lost')}
+          p75={num('hours_p75_lost')}
+          max={num('hours_max_lost')}
+          std={num('hours_std_lost')}
+          pctAboveAvg={num('pct_over_avg_lost')}
         />
         <div className="lg:col-span-2">
           <EquidistantTimeline
@@ -80,14 +80,14 @@ export function CrmAnalyticsView({
             subtitle="Instalados + perdidos"
             icon={<Timer className="h-5 w-5" />}
             theme="purple"
-            min={num('horas_min_cierre')}
-            p25={num('horas_p25_cierre')}
-            mediana={num('horas_mediana_cierre')}
-            promedio={num('horas_promedio_cierre')}
-            p75={num('horas_p75_cierre')}
-            max={num('horas_max_cierre')}
-            std={num('horas_std_cierre')}
-            pctExcedeProm={num('pct_excede_prom_cierre')}
+            min={num('hours_min_close')}
+            p25={num('hours_p25_close')}
+            median={num('hours_median_close')}
+            average={num('hours_avg_close')}
+            p75={num('hours_p75_close')}
+            max={num('hours_max_close')}
+            std={num('hours_std_close')}
+            pctAboveAvg={num('pct_over_avg_close')}
           />
         </div>
       </div>
@@ -144,8 +144,8 @@ export function CrmAnalyticsView({
               color={card.color}
               icon={<Award className="h-4 w-4 opacity-80" />}
             >
-              <p className="truncate text-sm font-black text-white" title={card.valor}>
-                {card.valor}
+              <p className="truncate text-sm font-black text-white" title={card.winner}>
+                {card.winner}
               </p>
             </MetricCard>
           ))}

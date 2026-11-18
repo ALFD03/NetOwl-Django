@@ -3,13 +3,13 @@
 export { SupportDashboardView } from './components/SupportDashboardView';
 export { SupportAnalyticsView } from './components/SupportAnalyticsView';
 export { SupportResultsView } from './components/SupportResultsView';
-export { SupportUsuariosView } from './components/usuarios/SupportUsuariosView';
-export { Seccion, SeccionesNav } from './components/Seccion';
-export { SupportEtapasView } from './components/flujo/SupportEtapasView';
+export { SupportUsersView } from './components/users/SupportUsersView';
+export { Section, SectionsNav } from './components/Section';
+export { SupportStagesView } from './components/flow/SupportStagesView';
 export { SupportAnalyticsFilters } from './components/analytics/SupportAnalyticsFilters';
 export { useSupportDashboard } from './hooks/useSupportDashboard';
 export { useSupportAnalytics } from './hooks/useSupportAnalytics';
-export { useSupportUsuarios } from './hooks/useSupportUsuarios';
+export { useSupportUsers } from './hooks/useSupportUsers';
 export * from './lib/supportDaySummary';
 export * from './lib/supportMetrics';
 export type * from './types';

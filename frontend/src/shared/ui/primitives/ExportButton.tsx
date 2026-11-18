@@ -6,11 +6,11 @@ import { AlertTriangle, Download, FileX2, Loader2 } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 
 /** En qué punto está la descarga. */
-export type ExportEstado = 'idle' | 'busy' | 'error' | 'empty';
+export type ExportState = 'idle' | 'busy' | 'error' | 'empty';
 
 export interface ExportButtonProps {
   onClick: () => void;
-  estado?: ExportEstado;
+  state?: ExportState;
   /** Qué se descarga. En reposo es la etiqueta del botón. */
   label: string;
   /** Qué se dice cuando falló o cuando no había nada. */
@@ -48,7 +48,7 @@ export interface ExportButtonProps {
  */
 export function ExportButton({
   onClick,
-  estado = 'idle',
+  state: state = 'idle',
   label,
   labelError = 'No se pudo exportar',
   labelEmpty = 'Nada que exportar',
@@ -59,22 +59,22 @@ export function ExportButton({
   seamless = false,
   className,
 }: ExportButtonProps) {
-  const iconoEstado = {
+  const stateIcon = {
     busy: <Loader2 className="h-4 w-4 animate-spin text-brand" />,
     error: <AlertTriangle className="h-4 w-4 text-rose-400" />,
     empty: <FileX2 className="h-4 w-4 text-amber-400" />,
     idle: icon ?? <Download className="h-4 w-4 text-brand" />,
-  }[estado];
+  }[state];
 
-  const etiqueta = { busy: label, error: labelError, empty: labelEmpty, idle: label }[estado];
+  const labelFor = { busy: label, error: labelError, empty: labelEmpty, idle: label }[state];
 
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled || estado === 'busy'}
+      disabled={disabled || state === 'busy'}
       title={title}
-      aria-label={iconOnly ? etiqueta : undefined}
+      aria-label={iconOnly ? labelFor : undefined}
       className={cn(
         'flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-200 transition-all',
         'hover:bg-brand/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
@@ -87,8 +87,8 @@ export function ExportButton({
         className,
       )}
     >
-      {iconoEstado}
-      {!iconOnly && etiqueta}
+      {stateIcon}
+      {!iconOnly && labelFor}
     </button>
   );
 }

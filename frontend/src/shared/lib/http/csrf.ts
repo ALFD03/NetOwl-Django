@@ -40,12 +40,8 @@ export const getCsrfToken = (): string | null =>
 /**
  * Configura una instancia de axios para que Django acepte sus peticiones.
  *
- * Habia dos instancias con estrategias distintas: la global que usa Inertia
- * ponia la cabecera con un interceptor, y `apiClient` se apoyaba en el
- * mecanismo `xsrfCookieName` interno de axios, que solo actua bajo ciertas
- * condiciones de origen y credenciales. Se unifican en la explicita: Django
- * exige la cabecera `X-CSRFToken` con esa capitalizacion exacta, y ponerla a
- * mano no depende de heuristicas del cliente.
+ * Django exige la cabecera `X-CSRFToken` con esa capitalizacion exacta: se pone
+ * a mano en un interceptor, sin depender de las heuristicas de axios.
  *
  * El token se lee en cada peticion, no al configurar: si la cookie rota
  * mientras la pestana sigue abierta, mandar el valor viejo da un 403.

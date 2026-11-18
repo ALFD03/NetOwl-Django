@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import { EmptyState, LoadingState, MetricCard, SectionHeading, StatGroup } from '@/shared/ui';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
+import { formatInteger, formatPeriodLabel } from '@/shared/utils/formatters';
 import { EtaSpeedTable } from './EtaSpeedTable';
 import type { EtaMetrics, SubscriptionEtaReportResponse } from '../../types';
 
@@ -21,15 +21,15 @@ interface EtaReportViewProps {
 function internetBreakdowns(metrics: EtaMetrics | undefined) {
   return {
     simple: [
-      { id: 'tecnologia', title: '1. Por Tecnología', icon: <Activity className="h-4 w-4" />, stats: metrics?.por_tecnologia },
-      { id: 'persona', title: '2. Por Tipo Persona', icon: <Users className="h-4 w-4" />, stats: metrics?.por_persona },
-      { id: 'estado', title: '3. Por Estado', icon: <MapPin className="h-4 w-4" />, stats: metrics?.por_estado },
-      { id: 'tec-persona', title: '4. Tecnología | Persona', icon: <Zap className="h-4 w-4" />, stats: metrics?.por_tecnologia_persona },
+      { id: 'tecnologia', title: '1. Por Tecnología', icon: <Activity className="h-4 w-4" />, stats: metrics?.by_technology },
+      { id: 'persona', title: '2. Por Tipo Persona', icon: <Users className="h-4 w-4" />, stats: metrics?.by_person },
+      { id: 'estado', title: '3. Por Estado', icon: <MapPin className="h-4 w-4" />, stats: metrics?.by_state },
+      { id: 'tec-persona', title: '4. Tecnología | Persona', icon: <Zap className="h-4 w-4" />, stats: metrics?.by_technology_person },
     ],
     complex: [
-      { id: 'estado-tec', title: '5. Estado | Tecnología', icon: <LayoutGrid className="h-4 w-4" />, stats: metrics?.por_estado_tecnologia },
-      { id: 'estado-persona', title: '6. Estado | Persona', icon: <Building2 className="h-4 w-4" />, stats: metrics?.por_estado_persona },
-      { id: 'matriz', title: '7. Matriz: Estado | Tec | Persona', icon: <Database className="h-4 w-4" />, stats: metrics?.por_estado_tecnologia_persona },
+      { id: 'estado-tec', title: '5. Estado | Tecnología', icon: <LayoutGrid className="h-4 w-4" />, stats: metrics?.by_state_technology },
+      { id: 'estado-persona', title: '6. Estado | Persona', icon: <Building2 className="h-4 w-4" />, stats: metrics?.by_state_person },
+      { id: 'matriz', title: '7. Matriz: Estado | Tec | Persona', icon: <Database className="h-4 w-4" />, stats: metrics?.by_state_technology_person },
     ],
   };
 }
@@ -44,7 +44,7 @@ export function EtaReportView({ data, loading, period, configLink }: EtaReportVi
     return (
       <EmptyState
         title="Clasificación Requerida"
-        description={`Se han detectado ${pending} servicios nuevos o corporativos sin categoría regulatoria para ${formatPeriodoLabel(period)}.`}
+        description={`Se han detectado ${pending} servicios nuevos o corporativos sin categoría regulatoria para ${formatPeriodLabel(period)}.`}
         icon={<Database />}
         tone="warning"
         size="lg"
@@ -59,7 +59,7 @@ export function EtaReportView({ data, loading, period, configLink }: EtaReportVi
     return (
       <EmptyState
         title="Información no disponible"
-        description={`No se encontró un cierre de activos para ${formatPeriodoLabel(period)}. Asegúrate de haber ejecutado el análisis mensual.`}
+        description={`No se encontró un cierre de activos para ${formatPeriodLabel(period)}. Asegúrate de haber ejecutado el análisis mensual.`}
         icon={<Database />}
         size="lg"
         bordered
@@ -73,9 +73,9 @@ export function EtaReportView({ data, loading, period, configLink }: EtaReportVi
     <div className="space-y-10 pb-20">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard label="Muestra Internet" value={formatInteger(data.net_metrics?.total)} color="blue" subValue="Conexiones fijas" icon={<Wifi className="h-4 w-4 text-sky-400" />} />
-        <MetricCard label="Transporte de Datos" value={formatInteger(data.transporte_metrics)} color="yellow" subValue="Circuitos L2 / P2P" icon={<Activity className="h-4 w-4 text-amber-400" />} />
+        <MetricCard label="Transporte de Datos" value={formatInteger(data.transport_metrics)} color="yellow" subValue="Circuitos L2 / P2P" icon={<Activity className="h-4 w-4 text-amber-400" />} />
         <MetricCard label="Muestra TV" value={formatInteger(data.tv_metrics?.total)} color="green" subValue="Suscripciones" icon={<Tv className="h-4 w-4 text-emerald-400" />} />
-        <MetricCard label="Universo Total" value={formatInteger(data.total_muestreado)} color="slate" subValue="Cierre auditado" icon={<Database className="h-4 w-4 text-slate-300" />} />
+        <MetricCard label="Universo Total" value={formatInteger(data.total_sampled)} color="slate" subValue="Cierre auditado" icon={<Database className="h-4 w-4 text-slate-300" />} />
         <MetricCard label="Especializados" value={formatInteger(data.individual_configs?.length)} color="purple" subValue="Maestro guardado" icon={<Zap className="h-4 w-4 text-purple-400" />} />
       </div>
 
@@ -102,11 +102,11 @@ export function EtaReportView({ data, loading, period, configLink }: EtaReportVi
         <section className="space-y-6">
           <SectionHeading title="Servicio de TV" icon={<Tv />} accent="green" />
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <StatGroup title="1. Por Estado" icon={<MapPin className="h-4 w-4" />} stats={data.tv_metrics?.por_estado} theme="green" />
-            <StatGroup title="2. Por Tipo Persona" icon={<Users className="h-4 w-4" />} stats={data.tv_metrics?.por_persona} theme="green" />
+            <StatGroup title="1. Por Estado" icon={<MapPin className="h-4 w-4" />} stats={data.tv_metrics?.by_state} theme="green" />
+            <StatGroup title="2. Por Tipo Persona" icon={<Users className="h-4 w-4" />} stats={data.tv_metrics?.by_person} theme="green" />
           </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-1">
-            <StatGroup title="3. Estado | Persona" icon={<LayoutGrid className="h-4 w-4" />} stats={data.tv_metrics?.por_estado_persona} theme="green" />
+            <StatGroup title="3. Estado | Persona" icon={<LayoutGrid className="h-4 w-4" />} stats={data.tv_metrics?.by_state_person} theme="green" />
           </div>
         </section>
 

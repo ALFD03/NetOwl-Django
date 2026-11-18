@@ -7,12 +7,11 @@ pertenece a un dominio concreto y todo estaba repetido en varios.
 
 from __future__ import annotations
 
-import csv
 import io
 import json
 import math
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from datetime import datetime
 from typing import Any
@@ -27,21 +26,21 @@ from .config import DATE_FORMATS
 # tablas de resultados; y en el reporte ETA llegaba a un `LIKE %s` construido
 # como f"{periodo}%", donde `?period=%` hacia que el informe agregase todos los
 # periodos calculados de golpe en vez de un mes.
-RE_PERIODO = re.compile(r"\d{4}-(?:0[1-9]|1[0-2])")
+RE_PERIOD = re.compile(r"\d{4}-(?:0[1-9]|1[0-2])")
 
 # Techo de la lista de periodos que admite una consulta. Las vistas la
 # construyen partiendo `?periods=` por comas sin ningun limite, y esa lista se
 # convierte en un `IN (...)` con un marcador por elemento: sin tope, una sola
 # peticion podia pedir cien mil.
-MAX_PERIODOS_POR_CONSULTA = 60
+MAX_PERIODS_PER_QUERY = 60
 
 
-def es_periodo(value: Any) -> bool:
+def is_period(value: Any) -> bool:
     """Si `value` tiene la forma "YYYY-MM" con un mes real."""
-    return isinstance(value, str) and RE_PERIODO.fullmatch(value.strip()) is not None
+    return isinstance(value, str) and RE_PERIOD.fullmatch(value.strip()) is not None
 
 
-def limpiar_periodos(crudo: str | None) -> list[str] | None:
+def clean_periods(raw: str | None) -> list[str] | None:
     """Convierte un `?periods=a,b,c` en una lista validada y acotada.
 
     Devuelve None cuando no se pidio ninguno, que es lo que las consultas
@@ -49,36 +48,36 @@ def limpiar_periodos(crudo: str | None) -> list[str] | None:
     periodo: el parametro lo escribe la interfaz, y un valor invalido es ruido,
     no algo que el usuario pueda corregir.
     """
-    if not crudo:
+    if not raw:
         return None
-    periodos = [p.strip() for p in crudo.split(",") if es_periodo(p)]
-    if not periodos:
+    periods = [p.strip() for p in raw.split(",") if is_period(p)]
+    if not periods:
         return None
-    return periodos[:MAX_PERIODOS_POR_CONSULTA]
+    return periods[:MAX_PERIODS_PER_QUERY]
 
 
-def entero_de_peticion(
-    request, clave: str, por_defecto: int | None = None,
-    minimo: int | None = None, maximo: int | None = None,
+def request_int(
+    request, key: str, default: int | None = None,
+    min_value: int | None = None, max_value: int | None = None,
 ) -> int | None:
     """Lee un entero de la query string sin reventar si no lo es.
 
-    `int(request.GET.get(...))` a pelo devolvia un 500 ante `?dia=abc`, y un
+    `int(request.GET.get(...))` a pelo devolvia un 500 ante `?day=abc`, y un
     `?limit=-1` llegaba hasta Postgres como `LIMIT -1`. Las vistas HTML ya lo
     hacian bien; eran sus gemelas JSON las que no.
     """
-    crudo = request.GET.get(clave)
-    if crudo in (None, ""):
-        return por_defecto
+    raw = request.GET.get(key)
+    if raw in (None, ""):
+        return default
     try:
-        valor = int(crudo)
+        value = int(raw)
     except (TypeError, ValueError):
-        return por_defecto
-    if minimo is not None:
-        valor = max(valor, minimo)
-    if maximo is not None:
-        valor = min(valor, maximo)
-    return valor
+        return default
+    if min_value is not None:
+        value = max(value, min_value)
+    if max_value is not None:
+        value = min(value, max_value)
+    return value
 
 
 def parse_date(value: Any) -> datetime | None:
@@ -129,46 +128,32 @@ def normalize_text(value: Any) -> str:
     
     return text
 
-def validate_csv_structure(file_path: str, required_headers: Iterable[str], delimiter: str = ",") -> tuple[bool, str | None]:
+def zero_nulls(df: pd.DataFrame) -> pd.DataFrame:
+    """Las columnas numéricas con los nulos en 0: un entero con algún NULL llega de Postgres como `NaN`."""
+    numeric = df.select_dtypes("number").columns
+    return df.fillna({c: 0 for c in numeric}) if len(numeric) else df
+
+
+def typed_records(
+    df: pd.DataFrame,
+    *,
+    texts: Iterable[str] = (),
+    ints: Iterable[str] = (),
+    floats: Iterable[str] = (),
+    rename: Mapping[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """Las filas de `df` como dicts, cada columna en su tipo y sin nulos.
+
+    Una columna que falta (un cierre viejo que no la calculaba) sale en `""` o
+    en 0. `rename` cambia la clave de salida de una columna.
     """
-    Verifica rápidamente si un archivo CSV tiene las columnas obligatorias.
-    Retorna (True, None) si es válido, o (False, "mensaje de error") si falla.
-    """
-    try:
-        # Abrimos con utf-8-sig para omitir automáticamente el BOM de Excel
-        with open(file_path, encoding="utf-8-sig", errors="ignore") as f:
-            # Leer solo los primeros 2048 bytes para analizar el formato sin cargar todo a memoria
-            sample = f.read(2048)
-            f.seek(0)
-            
-            if not sample.strip():
-                return False, "El archivo está vacío."
-            
-            # Detectar el delimitador automáticamente (soporta comas y punto y coma)
-            try:
-                dialect = csv.Sniffer().sniff(sample)
-                actual_delimiter = dialect.delimiter
-            except Exception:
-                actual_delimiter = delimiter
-                
-            reader = csv.reader(f, delimiter=actual_delimiter)
-            headers = next(reader, None)
-            
-            if not headers:
-                return False, "No se pudieron leer las cabeceras del archivo."
-            
-            # Normalizar cabeceras para una comparación segura (minúsculas y sin espacios)
-            normalized_headers = {h.strip().lower() for h in headers if h}
-            normalized_required = {r.strip().lower() for r in required_headers}
-            
-            missing = normalized_required - normalized_headers
-            if missing:
-                missing_original = [r for r in required_headers if r.strip().lower() in missing]
-                return False, f"Estructura inválida. Columnas faltantes: {', '.join(missing_original)}"
-            
-            return True, None
-    except Exception as e:
-        return False, f"No es un archivo CSV válido: {str(e)}"
+    out = pd.DataFrame(index=df.index)
+    for col in texts:
+        out[col] = df[col].astype(str) if col in df else ""
+    for col, kind in [*((c, "int") for c in ints), *((c, "float") for c in floats)]:
+        values = pd.to_numeric(df[col], errors="coerce").fillna(0) if col in df else 0
+        out[col] = pd.Series(values, index=df.index).astype(kind)
+    return out.rename(columns=dict(rename or {})).to_dict("records")
 
 
 def _clean_json(obj: Any, nan_value: Any) -> Any:
@@ -203,7 +188,7 @@ def clean_json_props(obj: Any) -> Any:
     """Reemplaza NaN/Inf por 0.0 en cualquier estructura destinada a JSON.
 
     `json.dumps` los emite como `NaN`/`Infinity`, que `JSON.parse` rechaza: el
-    payload de Inertia llega roto y la página se renderiza vacía.
+    JSON llega roto al cliente.
     """
     return _clean_json(obj, 0.0)
 
@@ -257,7 +242,7 @@ def capture_console(buffer=None):
         return JsonResponse({"log_output": salida.getvalue()})
 
     `buffer` permite pasar un StringIO propio. Lo usan las tareas de Celery con
-    `services.imports.jobs.ConsolaJob`, que ademas de acumular va volcando el
+    `services.imports.jobs.JobConsole`, que ademas de acumular va volcando el
     log a la fila del job para que la interfaz lo lea mientras corre.
     """
     buffer = io.StringIO() if buffer is None else buffer

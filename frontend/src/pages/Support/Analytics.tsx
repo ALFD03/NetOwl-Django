@@ -1,5 +1,5 @@
 /**
- * Página Inertia `Support/Analytics` (`/support/analytics/`).
+ * Página `/support/analytics/`.
  *
  * Moverse por los días no cuesta una consulta. Lo que cambia sale de dos sitios:
  *
@@ -22,89 +22,26 @@
  * Esta página es de gráficos; las tablas completas del mes están en Results.
  */
 
-import { useMemo, useState } from 'react';
-import { router } from '@inertiajs/react';
 import { CalendarDays, Layers } from 'lucide-react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import {
-  Seccion,
-  SeccionesNav,
+  Section,
+  SectionsNav,
   SUPPORT_DAY_CARDS,
   SUPPORT_DAY_CHARTS,
   SupportAnalyticsFilters,
   SupportAnalyticsView,
-  useSupportAnalytics,
 } from '@/features/support';
-import type {
-  SupportAnalyticsProps,
-  SupportDayPayload,
-  SupportDimension,
-} from '@/features/support/types';
-import { useDayCuts } from '@/shared/hooks/useDayCuts';
-import { useDayPayload } from '@/shared/hooks/useDayPayload';
-import { SUPPORT_DAY_METRICS_URL } from '@/shared/lib/api/support';
-import type { DaySeries } from '@/shared/types/domain';
+import { useSupportAnalyticsPage } from '@/features/support/hooks/useSupportAnalyticsPage';
+import type { SupportAnalyticsProps } from '@/features/support/types';
 import { DayProgressBar, DaySummary } from '@/shared/ui';
 
 export default function SupportAnalytics(props: SupportAnalyticsProps) {
-  const { periods = [], selectedPeriod = '', dayMetrics } = props;
-  const [selectedGroup, setSelectedGroup] = useState('');
-  const [dimension, setDimension] = useState<SupportDimension>('zona');
-
-  const { availableDays, totalDays, selectedDay, selectDay } = useDayCuts(dayMetrics);
-  const periodo = selectedPeriod || props.analyticsData?.periodo || '';
-
-  const { payload } = useDayPayload<SupportDayPayload>({
-    url: SUPPORT_DAY_METRICS_URL,
-    period: periodo,
-    dia: selectedDay,
-    dias: availableDays,
-    // El día que la vista ya resolvió llega dentro de `analyticsData`: sembrarlo
-    // evita pedir de vuelta lo que acaba de llegar.
-    inicial: dayMetrics?.dia
-      ? {
-          dia: dayMetrics.dia,
-          payload: {
-            grupos: props.analyticsData?.grupos ?? {},
-            incidencia_zonas: props.analyticsData?.incidencia_zonas ?? {},
-          },
-        }
-      : null,
-  });
-
-  const data = useSupportAnalytics(
-    {
-      ...props,
-      analyticsData: {
-        ...props.analyticsData,
-        grupos: payload?.grupos ?? props.analyticsData?.grupos,
-        incidencia_zonas: payload?.incidencia_zonas ?? props.analyticsData?.incidencia_zonas,
-      },
-    },
-    selectedGroup,
-    dimension,
-  );
-
-  /** The period is the only server-side filter; group and dimension are local. */
-  const reload = (period: string) =>
-    router.get('/support/analytics/', { period }, { preserveState: true });
-
-  // Las tarjetas del día siguen al selector de grupo, como el resto de la página.
-  // El mes trae la serie de cada equipo, así que cambiar de grupo no pide nada.
-  const serieDelGrupo = useMemo<DaySeries | undefined>(() => {
-    const porDia = dayMetrics?.serie_grupos;
-    if (!porDia || !data.activeGroupName) return undefined;
-
-    const salida: DaySeries = {};
-    for (const [dia, grupos] of Object.entries(porDia)) {
-      const bloque = grupos[data.activeGroupName];
-      if (bloque) salida[dia] = bloque;
-    }
-    // Un grupo aparece el día de su primer ticket y ya no desaparece: los días
-    // anteriores no son un hueco, es que ese equipo todavía no tenía nada.
-    return Object.keys(salida).length ? salida : undefined;
-  }, [dayMetrics, data.activeGroupName]);
+  const {
+    periods, period, reload, data, setSelectedGroup, dimension, setDimension,
+    availableDays, totalDays, selectedDay, selectDay, monthPeriod, series, groupSeries,
+  } = useSupportAnalyticsPage(props);
 
   return (
     <AppLayout
@@ -112,7 +49,7 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
         <>
           <SupportAnalyticsFilters
             periods={periods}
-            selectedPeriod={periodo}
+            selectedPeriod={period}
             onPeriodChange={reload}
             groups={data.groupOptions}
             selectedGroup={data.activeGroupName}
@@ -124,7 +61,7 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                periodoMes={dayMetrics?.periodo_mes}
+                monthPeriod={monthPeriod}
                 daysInMonth={totalDays}
                 selectedDay={selectedDay}
                 onSelect={selectDay}
@@ -135,41 +72,41 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
       }
     >
       <div className="space-y-10">
-        <SeccionesNav
-          secciones={[
-            { id: 'dia', titulo: 'El día', icon: <CalendarDays /> },
-            { id: 'grupo', titulo: 'El grupo', icon: <Layers /> },
+        <SectionsNav
+          sections={[
+            { id: 'dia', title: 'El día', icon: <CalendarDays /> },
+            { id: 'grupo', title: 'El grupo', icon: <Layers /> },
           ]}
         />
 
-        <Seccion
+        <Section
           id="dia"
-          titulo="El día"
-          descripcion="Lo de ese día, lo que va del mes y cómo se compara con el día anterior. Muévete con la barra de días."
-          alcance={
+          title="El día"
+          description="Lo de ese día, lo que va del mes y cómo se compara con el día anterior. Muévete con la barra de días."
+          scope={
             data.activeGroupName ? `${data.activeGroupName} · día ${selectedDay || '—'}` : undefined
           }
           icon={<CalendarDays />}
         >
           <DaySummary
-            serie={serieDelGrupo ?? dayMetrics?.serie}
-            dias={availableDays}
-            dia={selectedDay}
+            series={series}
+            days={availableDays}
+            day={selectedDay}
             cards={SUPPORT_DAY_CARDS}
             charts={SUPPORT_DAY_CHARTS}
             subtitle={
-              serieDelGrupo
+              groupSeries
                 ? `${data.activeGroupName} · lo de ese día, lo que va del mes y cómo se compara con el día anterior`
                 : 'Todos los grupos · este mes se analizó antes de que la serie se abriera por equipo'
             }
           />
-        </Seccion>
+        </Section>
 
-        <Seccion
+        <Section
           id="grupo"
-          titulo="El grupo"
-          descripcion="Cuánto entró y cómo terminó, en qué se fue el tiempo, dónde se concentra según la dimensión de la barra superior y qué lo empuja. Pulsa un valor para ver su desglose; las tablas completas están en Results."
-          alcance={
+          title="El grupo"
+          description="Cuánto entró y cómo terminó, en qué se fue el tiempo, dónde se concentra según la dimensión de la barra superior y qué lo empuja. Pulsa un valor para ver su desglose; las tablas completas están en Results."
+          scope={
             data.activeGroupName
               ? `${data.activeGroupName} · al día ${selectedDay || '—'}`
               : undefined
@@ -177,7 +114,7 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
           icon={<Layers />}
         >
           <SupportAnalyticsView data={data} dimension={dimension} />
-        </Seccion>
+        </Section>
 
       </div>
     </AppLayout>

@@ -13,9 +13,9 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Link } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Menu, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { cn } from '@/shared/lib/cn';
 import { usePermissions } from '@/shared/hooks/usePermissions';
@@ -27,33 +27,33 @@ import type { AppNavigationItem, NavigationPage } from '@/shared/types/navigatio
 import { UserMenu } from './UserMenu';
 
 /** Clave de los módulos desplegados. Por navegador, como el sidebar plegado. */
-const CLAVE_ABIERTOS = 'netowl-sidebar-abiertos';
+const OPEN_KEY = 'netowl-sidebar-abiertos';
 
-function leerAbiertos(): Set<string> {
+function readOpen(): Set<string> {
   try {
-    const guardado = JSON.parse(localStorage.getItem(CLAVE_ABIERTOS) ?? '[]');
-    return new Set(Array.isArray(guardado) ? guardado.filter((m) => typeof m === 'string') : []);
+    const saved = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]');
+    return new Set(Array.isArray(saved) ? saved.filter((m) => typeof m === 'string') : []);
   } catch {
     return new Set();
   }
 }
 
-function guardarAbiertos(abiertos: Set<string>) {
+function saveOpen(open: Set<string>) {
   try {
-    localStorage.setItem(CLAVE_ABIERTOS, JSON.stringify([...abiertos]));
+    localStorage.setItem(OPEN_KEY, JSON.stringify([...open]));
   } catch {
     // Sin almacenamiento el árbol funciona igual, solo que no se recuerda.
   }
 }
 
-interface PaginasProps {
+interface PagesProps {
   item: AppNavigationItem;
   activeHref?: string;
   onNavigate?: () => void;
 }
 
 /** Las páginas de un módulo, agrupadas por sección. Lo comparten el árbol y el panel flotante. */
-function Paginas({ item, activeHref, onNavigate }: PaginasProps) {
+function Pages({ item, activeHref, onNavigate }: PagesProps) {
   return (
     <>
       {groupBySection(item.pages).map((section) => (
@@ -64,7 +64,7 @@ function Paginas({ item, activeHref, onNavigate }: PaginasProps) {
             </p>
           )}
           {section.pages.map((page) => (
-            <EnlacePagina key={page.id} page={page} active={page.href === activeHref} onNavigate={onNavigate} />
+            <PageLink key={page.id} page={page} active={page.href === activeHref} onNavigate={onNavigate} />
           ))}
         </div>
       ))}
@@ -72,17 +72,17 @@ function Paginas({ item, activeHref, onNavigate }: PaginasProps) {
   );
 }
 
-interface EnlacePaginaProps {
+interface PageLinkProps {
   page: NavigationPage;
   active: boolean;
   onNavigate?: () => void;
 }
 
-function EnlacePagina({ page, active, onNavigate }: EnlacePaginaProps) {
+function PageLink({ page, active, onNavigate }: PageLinkProps) {
   const Icon = page.icon;
   return (
     <Link
-      href={page.href}
+      to={page.href}
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={cn(
@@ -98,24 +98,24 @@ function EnlacePagina({ page, active, onNavigate }: EnlacePaginaProps) {
   );
 }
 
-interface RamaProps extends PaginasProps {
-  abierto: boolean;
+interface BranchProps extends PagesProps {
+  isOpen: boolean;
   active: boolean;
   onToggle: () => void;
 }
 
 /** Un módulo en el sidebar ancho: su nombre despliega o recoge sus páginas. */
-function Rama({ item, abierto, active, onToggle, activeHref, onNavigate }: RamaProps) {
+function Branch({ item, isOpen, active, onToggle, activeHref, onNavigate }: BranchProps) {
   const Icon = item.icon;
-  const idPaginas = `nav-${item.module}`;
+  const pagesId = `nav-${item.module}`;
 
   return (
     <div>
       <button
         type="button"
         onClick={onToggle}
-        aria-expanded={abierto}
-        aria-controls={idPaginas}
+        aria-expanded={isOpen}
+        aria-controls={pagesId}
         className={cn(
           'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors',
           active ? 'text-white' : 'text-slate-400 hover:bg-surface-hover hover:text-white',
@@ -123,13 +123,13 @@ function Rama({ item, abierto, active, onToggle, activeHref, onNavigate }: RamaP
       >
         <Icon className={cn('h-5 w-5 shrink-0', active && 'text-brand')} />
         <span className="flex-1 truncate text-left">{item.name}</span>
-        <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', !abierto && '-rotate-90')} />
+        <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', !isOpen && '-rotate-90')} />
       </button>
 
       <AnimatePresence initial={false}>
-        {abierto && (
+        {isOpen && (
           <motion.div
-            id={idPaginas}
+            id={pagesId}
             className="overflow-hidden"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
@@ -137,7 +137,7 @@ function Rama({ item, abierto, active, onToggle, activeHref, onNavigate }: RamaP
             transition={{ duration: 0.18, ease: 'easeOut' }}
           >
             <div className="mb-2 ml-5 mt-1 border-l border-slate-800 pl-3">
-              <Paginas item={item} activeHref={activeHref} onNavigate={onNavigate} />
+              <Pages item={item} activeHref={activeHref} onNavigate={onNavigate} />
             </div>
           </motion.div>
         )}
@@ -146,7 +146,7 @@ function Rama({ item, abierto, active, onToggle, activeHref, onNavigate }: RamaP
   );
 }
 
-interface IconoModuloProps {
+interface ModuleIconViewProps {
   item: AppNavigationItem;
   active: boolean;
   activeHref?: string;
@@ -161,43 +161,43 @@ interface IconoModuloProps {
  * icono al panel no cuenta como salir; el `pl-2` del panel cubre el hueco
  * entre los dos para que el puntero no lo cruce en vacío.
  */
-function IconoModulo({ item, active, activeHref }: IconoModuloProps) {
+function ModuleIconView({ item, active, activeHref }: ModuleIconViewProps) {
   const Icon = item.icon;
   const ref = useRef<HTMLDivElement>(null);
-  const cierre = useRef<number | undefined>(undefined);
-  const [posicion, setPosicion] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const close = useRef<number | undefined>(undefined);
+  const [position, setPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
 
-  useEffect(() => () => window.clearTimeout(cierre.current), []);
+  useEffect(() => () => window.clearTimeout(close.current), []);
 
-  const abrir = () => {
-    window.clearTimeout(cierre.current);
+  const open = () => {
+    window.clearTimeout(close.current);
     const rect = ref.current?.getBoundingClientRect();
-    if (rect) setPosicion({ top: rect.top, left: rect.right, maxHeight: window.innerHeight - rect.top - 8 });
+    if (rect) setPosition({ top: rect.top, left: rect.right, maxHeight: window.innerHeight - rect.top - 8 });
   };
   // Un margen breve: sin él, rozar el borde al ir hacia el panel lo cerraba.
-  const cerrar = () => {
-    window.clearTimeout(cierre.current);
-    cierre.current = window.setTimeout(() => setPosicion(null), 120);
+  const closePeriod = () => {
+    window.clearTimeout(close.current);
+    close.current = window.setTimeout(() => setPosition(null), 120);
   };
 
   return (
     <div
       ref={ref}
-      onMouseEnter={abrir}
-      onMouseLeave={cerrar}
-      onFocus={abrir}
+      onMouseEnter={open}
+      onMouseLeave={closePeriod}
+      onFocus={open}
       onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) cerrar();
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) closePeriod();
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Escape') setPosicion(null);
+        if (e.key === 'Escape') setPosition(null);
       }}
     >
       <Link
-        href={item.pages[0].href}
+        to={item.pages[0].href}
         aria-label={item.name}
         aria-haspopup="true"
-        aria-expanded={posicion !== null}
+        aria-expanded={position !== null}
         className={cn(
           'flex items-center justify-center rounded-lg py-2.5 transition-colors',
           active
@@ -208,14 +208,14 @@ function IconoModulo({ item, active, activeHref }: IconoModuloProps) {
         <Icon className="h-5 w-5 shrink-0" />
       </Link>
 
-      {posicion && (
-        <div className="fixed z-50 pl-2" style={{ top: posicion.top, left: posicion.left }}>
+      {position && (
+        <div className="fixed z-50 pl-2" style={{ top: position.top, left: position.left }}>
           <div
             className="w-56 overflow-y-auto rounded-xl border border-slate-800 bg-surface-secondary p-2 shadow-2xl"
-            style={{ maxHeight: posicion.maxHeight }}
+            style={{ maxHeight: position.maxHeight }}
           >
             <p className="px-2 pb-2 pt-1 text-xs font-bold uppercase tracking-wider text-slate-300">{item.name}</p>
-            <Paginas item={item} activeHref={activeHref} onNavigate={() => setPosicion(null)} />
+            <Pages item={item} activeHref={activeHref} onNavigate={() => setPosition(null)} />
           </div>
         </div>
       )}
@@ -237,30 +237,29 @@ interface SidebarContentProps {
 function SidebarContent({ url, username, compact = false, onNavigate, onToggleCollapsed }: SidebarContentProps) {
   const { can } = usePermissions();
   const canViewUsers = can(PERMISSIONS.VIEW_USERS);
-  const { tema } = useTheme();
-  const sufijo = tema === 'claro' ? '_light' : '';
+  const { theme } = useTheme();
+  const suffix = theme === 'light' ? '_light' : '';
 
-  const modulos = visibleNavigation(can);
-  const ubicacion = resolveLocation(url);
-  const moduloActivo = ubicacion?.item.module;
-  const activeHref = ubicacion?.page.href;
+  const modules = visibleNavigation(can);
+  const location = resolveLocation(url);
+  const activeModule = location?.item.module;
+  const activeHref = location?.page.href;
 
-  // Cada página monta su propio AppLayout, así que esto se relee al navegar:
-  // el módulo de la página actual siempre llega desplegado, aunque se hubiera
-  // recogido antes, y los demás quedan como el usuario los dejó.
-  const [abiertos, setAbiertos] = useState(() => {
-    const iniciales = leerAbiertos();
-    if (moduloActivo) iniciales.add(moduloActivo);
-    return iniciales;
+  // Cada página monta su propio AppLayout: el módulo de la página actual
+  // siempre llega desplegado y los demás quedan como el usuario los dejó.
+  const [open, setOpenItems] = useState(() => {
+    const initials = readOpen();
+    if (activeModule) initials.add(activeModule);
+    return initials;
   });
 
-  const alternar = (modulo: string) => {
-    setAbiertos((previos) => {
-      const nuevos = new Set(previos);
-      if (nuevos.has(modulo)) nuevos.delete(modulo);
-      else nuevos.add(modulo);
-      guardarAbiertos(nuevos);
-      return nuevos;
+  const toggle = (module: string) => {
+    setOpenItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(module)) next.delete(module);
+      else next.add(module);
+      saveOpen(next);
+      return next;
     });
   };
 
@@ -278,9 +277,9 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
             compact ? 'justify-center' : 'justify-start',
           )}
         >
-          <Link href="/" onClick={onNavigate} className={cn('flex items-center', !compact && 'w-full')}>
+          <Link to="/" onClick={onNavigate} className={cn('flex items-center', !compact && 'w-full')}>
             <img
-              src={compact ? `/static/img/isotipo_sidebar${sufijo}.png` : `/static/img/logo_sidebar${sufijo}.png`}
+              src={compact ? `/static/img/isotipo_sidebar${suffix}.png` : `/static/img/logo_sidebar${suffix}.png`}
               alt="NetOwl"
               className={compact ? 'h-14 w-auto' : 'h-auto w-full'}
             />
@@ -288,21 +287,21 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
         </div>
 
         <nav className="space-y-1" aria-label="Navegación principal">
-          {modulos.map((item) =>
+          {modules.map((item) =>
             compact ? (
-              <IconoModulo
+              <ModuleIconView
                 key={item.module}
                 item={item}
-                active={item.module === moduloActivo}
+                active={item.module === activeModule}
                 activeHref={activeHref}
               />
             ) : (
-              <Rama
+              <Branch
                 key={item.module}
                 item={item}
-                abierto={abiertos.has(item.module)}
-                active={item.module === moduloActivo}
-                onToggle={() => alternar(item.module)}
+                isOpen={open.has(item.module)}
+                active={item.module === activeModule}
+                onToggle={() => toggle(item.module)}
                 activeHref={activeHref}
                 onNavigate={onNavigate}
               />
@@ -314,7 +313,8 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
       <UserMenu
         username={username}
         canViewUsers={canViewUsers}
-        isUsersPageActive={url.startsWith('/auth/users')}
+        canManageTokens={can(PERMISSIONS.MANAGE_API_TOKENS)}
+        url={url}
         compact={compact}
         onNavigate={onNavigate}
         onToggleCollapsed={onToggleCollapsed}
@@ -355,7 +355,7 @@ interface MobileTopBarProps {
 
 /** Barra superior del teléfono: la hamburguesa y el logo. Desaparece desde `lg`. */
 export function MobileTopBar({ onOpenMenu }: MobileTopBarProps) {
-  const { tema } = useTheme();
+  const { theme } = useTheme();
   return (
     <div className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-slate-800 bg-surface-secondary/95 px-3 backdrop-blur lg:hidden">
       <button
@@ -366,9 +366,9 @@ export function MobileTopBar({ onOpenMenu }: MobileTopBarProps) {
       >
         <Menu className="h-5 w-5" />
       </button>
-      <Link href="/" className="flex items-center">
+      <Link to="/" className="flex items-center">
         <img
-          src={tema === 'claro' ? '/static/img/logo_sidebar_light.png' : '/static/img/logo_sidebar.png'}
+          src={theme === 'light' ? '/static/img/logo_sidebar_light.png' : '/static/img/logo_sidebar.png'}
           alt="NetOwl"
           className="h-8 w-auto"
         />

@@ -1,6 +1,6 @@
 # Frontend architecture
 
-React + TypeScript + Inertia, served by Django. Tailwind for styling, Chart.js for charts.
+React + TypeScript SPA (React Router + TanStack Query) over `/api/`. Tailwind for styling, Chart.js for charts.
 
 > El inventario de esta capa —paginas, features, kit compartido y como llega el
 > dato— esta en `docs/09-frontend.md`. Este documento sigue siendo el normativo:
@@ -10,10 +10,12 @@ React + TypeScript + Inertia, served by Django. Tailwind for styling, Chart.js f
 
 ```
 src/
-├── app/          Bootstrap only: main.tsx, csrf
+├── app/          Bootstrap and routes: main.tsx, spa.tsx, routes.tsx, apiPage.tsx
 ├── shared/       Reusable across every module. Knows nothing about any feature.
 │   ├── ui/       The component kit, grouped by kind (see below)
 │   ├── layout/   AppLayout, Sidebar (the navigation tree), UserMenu
+│   ├── page/     PageData: usePageProps, useVisit
+│   ├── auth/     AuthProvider / useAuth (the account from /api/auth/me/)
 │   ├── charts/   Chart.js wrappers, shared options, registration
 │   ├── lib/      cn(), colour helpers, api client, http error handling, daySeries
 │   ├── hooks/    usePermissions, useAsyncAction, useJobQueue, useDayCuts, useDayPayload, useTheme
@@ -22,7 +24,7 @@ src/
 │   └── types/    cross-cutting types only
 ├── features/     Domain logic, one folder per module
 │   └── <module>/{components,hooks,types.ts,index.ts}
-└── pages/        Inertia entry points — thin shells, nothing else
+└── pages/        Page shells, one per route — nothing else
 ```
 
 ## The day bar
@@ -51,7 +53,7 @@ receives.
   neighbours are prefetched while the bar sits still, the last resolved day stays
   on screen while a new one travels, and the cache is capped because holding the
   whole month is the original problem. `shared/hooks/useDayCuts` owns the
-  selected day and writes `?dia=` into the URL with `replaceState`, so a reload
+  selected day and writes `?day=` into the URL with `replaceState`, so a reload
   lands where you were without costing a visit.
 
 Nothing on either half recomputes anything: every cut was written by the monthly
@@ -59,10 +61,14 @@ analysis. `shared/ui/inputs/DayProgressBar` is the same component in all three.
 
 ## The three rules
 
-**1. `pages/` is a contract with Django.**
-Django views name their component as a string (`inertia_render(request, "CRM/Dashboard")`),
-and `app/main.tsx` resolves it against `import.meta.glob('../pages/**/*.tsx')`. A page file's
-path is therefore fixed — renaming or moving one breaks the backend silently, at runtime.
+**1. `pages/` is only imported by `app/`.**
+Every page is registered in `app/routes.tsx` with the `/api/` endpoint that feeds it:
+`apiPage(endpoint, load)` fetches it with the URL's parameters and passes the JSON as
+props. Below the page, `usePageProps()` reads that data, `useVisit()` changes the URL's
+parameters (refetching without unmounting; `remount: true` starts the page afresh once
+the new data arrives). Nobody reloads by hand: every successful write, and every
+analysis that finishes, invalidates the query cache (`onDataChanged` in
+`shared/lib/api/client.ts`), so whatever is on screen refetches with its state kept.
 
 Pages hold no logic. A page picks a layout and a feature view. It has no title: the
 heading is the breadcrumb ("Module › Page"), derived from the URL, so the page declares
@@ -104,7 +110,8 @@ Concretely, these already exist — do not re-inline them:
 | Accent-ruled section title | `SectionHeading` |
 | "Nothing to show" / blocking state | `EmptyState` (`tone="warning"`) |
 | Pending region | `LoadingState` |
-| Form/action result banner | `StatusMessage` |
+| Result banner of a load or export | `StatusMessage` |
+| Result of a user write (save, delete…): shows inside the open modal, or inline without one; never `alert()` | `ActionMessage` |
 | Server execution log | `ConsoleOutput` |
 | Labelled input with leading icon | `TextField` |
 | Segmented view switch | `ToggleGroup` |
@@ -134,7 +141,7 @@ shape — the filter capsule, the brand-tinted icon — and the four states, sai
 the button itself: idle, writing, nothing to export, failed. Exporting used to be
 `Button variant="secondary"` in three places, which made the button that writes a
 file look like the one that opens a panel, and each copy drifted. `ExcelExportButton`
-(rows already on the page), `BajasExportButton` (fetches them, and has an icon-only
+(rows already on the page), `ChurnExportButton` (fetches them, and has an icon-only
 variant for table cells) and `EtaFormsExportButton` (with its rate selector welded
 to its right) are all the same button underneath. Mounting it inside another capsule
 takes `seamless`, so it doesn't draw a border of its own.
@@ -147,10 +154,10 @@ add `filterValue` when the cell is rendered by a function and the raw field is
 not what the reader would pick from a list (a boolean shown as `Sí`/`—` filters
 as `Sí`/`No`, not `true`/`false`).
 
-**Every table pages at 20 rows** (`FILAS_POR_PAGINA`). `DataTable` does it by
+**Every table pages at 20 rows** (`ROWS_PER_PAGE`). `DataTable` does it by
 default (`pageSize={0}` shows everything); the few hand-built read-only tables
 (the dashboards' history, `NodePerformanceTable`, `UsersTable`) use the same
-`usePaginacion` + `Paginacion` pair, so the pager is one component everywhere.
+`usePagination` + `Pagination` pair, so the pager is one component everywhere.
 **Every paginated table carries it twice, above and below** (`posicion="arriba"`
 and the default `abajo`, sharing one `estado`): at 20 rows, scrolling down to the
 foot to turn the page was the annoyance. It only appears past one page. Fixed matrices (the ETA speed grid, the
@@ -207,7 +214,7 @@ it will read in the light one.
   every `CHART_CHROME`/`SURFACE` value for its light pair; series colours are untouched.
   So keep using the tokens in chart options — a raw hex would not be translated — and go
   through the wrappers rather than `react-chartjs-2` directly. Colours resolved at draw
-  time (plugins, scriptable options) call `colorDelTema()`.
+  time (plugins, scriptable options) call `themeColor()`.
 - `SankeyChart` is the exception: it is SVG, not Chart.js, so its text and chrome are
   Tailwind classes (`fill-current` on a `text-slate-*`) and follow the theme like any
   markup. Only its node and band colours come in as values, and those are series colours.
@@ -280,8 +287,9 @@ prefer `dvh` to `vh`/`h-screen`: on a phone `100vh` includes the address bar.
    A page's sub-routes (`eta-report/config/`) hang from the page whose `href` is their
    longest prefix.
 2. Create `features/<module>/` with `types.ts`, `hooks/`, `components/`, `index.ts`.
-3. Create the page shells under `pages/<Module>/`, matching the names the Django
-   views pass to `inertia_render`.
+3. Create the page shells under `pages/<Module>/` and register them in `app/routes.tsx`
+   with their endpoint; on the Django side, a `page(...)` route in the module's `urls.py`
+   and the endpoint in its `api_urls.py`.
 
 ## Async actions
 
@@ -295,27 +303,27 @@ and the copy.
 
 ## The reference catalogues
 
-`pages/Catalogos/` is a module of its own, one page per group, each behind its own
-permission: **Productos** (plans and regulator plans; `can_manage_catalogo_operacional`),
-**Estructura** (zones, sites, states; `can_manage_catalogo_comercial`) and **Ventas**
-(business-unit coordinators and objectives; `can_manage_catalogo_ventas`). They edit the
+`pages/Catalogs/` is a module of its own, one page per group, each behind its own
+permission: **Productos** (plans and regulator plans; `can_manage_operational_catalog`),
+**Estructura** (zones, sites, states; `can_manage_commercial_catalog`) and **Ventas**
+(business-unit coordinators and objectives; `can_manage_sales_catalog`). They edit the
 tables that used to be `data/Planes.json` and `data/Zonas.json`, and Productos is the
 only place a plan is classified — the ETA screen no longer keeps a second, overriding
 copy of that classification, only its per-subscription exceptions.
 
-The components still live in `features/subscriptions/components/catalogos/`: the
-objectives tab leans on `features/subscriptions/lib/objetivos.ts` and the subscriptions
+The components still live in `features/subscriptions/components/catalogs/`: the
+objectives tab leans on `features/subscriptions/lib/targets.ts` and the subscriptions
 form controls, and pages may compose any feature, so moving them would only have meant
-promoting all of that to `shared/` for nothing. `CatalogoComun.tsx` holds what the four
-pages share (tab bar, action column, delete confirmation); `useCatalogos` serves all four.
+promoting all of that to `shared/` for nothing. `CatalogCommon.tsx` holds what the four
+pages share (tab bar, action column, delete confirmation); `useCatalogs` serves all four.
 
 **Notificaciones** is not a catalogue but what is *missing*: names already imported
 that no row recognises, per area (products, zones), plus the ones someone decided to
 ignore. Each pending row offers the two answers the server cannot tell apart — register
-it (a link to the right page with `?nuevo_plan=` / `?nueva_zona=`), or ignore it in its
+it (a link to the right page with `?new_plan=` / `?new_zone=`), or ignore it in its
 area. Pending products block an import or an analysis; pending zones do not.
 
-The same pair of answers appears in `CatalogoBloqueoModal`
+The same pair of answers appears in `CatalogBlockModal`
 (`features/imports/`), which opens when an upload comes back 409. Nothing was
 written when it does: the check runs before the truncate, so the previous data
 is intact and the file can be re-uploaded once the decisions are made.
@@ -323,27 +331,27 @@ is intact and the file can be re-uploaded once the decisions are made.
 
 ## Commissions
 
-`features/comisiones/` serves the three pages of the Comisiones module (report, supervisors' business units,
+`features/commissions/` serves the three pages of the Comisiones module (report, supervisors' business units,
 payment conditions). The report is calculated on the server; the client only edits what the server cannot know (the
 objective %, a business unit's growth when the month is not analysed, the review decisions) and reloads. The
-sale-by-sale detail is fetched from `api/ventas/` the first time it is needed and kept per period in
-`useInformeComisiones`. Condiciones opens read-only, explaining each rule with what it pays (who is paid what per
+sale-by-sale detail is fetched from `api/commissions/sales/` the first time it is needed and kept per period in
+`useCommissionsReport`. Condiciones opens read-only, explaining each rule with what it pays (who is paid what per
 sale, the advisor's tiers with their jumps and a simulator, the business-unit growth tiers, the period's dates), and
-switches to the forms on «Editar». `lib/condiciones.ts` mirrors `reglas.pago_asesor`, `reglas.monto_un` and the
-checks of `validar_tramos_*` / `api_condiciones_guardar` only to show the effect of an edit and flag errors in the
+switches to the forms on «Editar». `lib/conditions.ts` mirrors `rules.advisor_payment`, `payments._step` and the
+checks of `rules.validate_advisor_tiers` / `teams.validate_parameters` (`conditions_save`) only to show the effect of an edit and flag errors in the
 row that causes them before saving; the server validates again, and its figure is the one that counts.
 
-How the payroll is *laid out* is client work: `lib/nomina.ts` places each person once (unit → supervisor →
-advisors, offices apart) from the `equipos` rows, and explains each cut from `condiciones`; `lib/exportar.ts`
+How the payroll is *laid out* is client work: `lib/payroll.ts` places each person once (unit → supervisor →
+advisors, offices apart) from the `teams` rows, and explains each cut from `conditions`; `lib/export.ts`
 writes the same layout to Excel through `shared/lib/excel.downloadStyledWorkbook`. Neither computes a payment —
-every amount is the server's `neto`.
+every amount is the server's `net`.
 
 ## Commercial objectives are applied here, not stored
 
 The growth target and the maximum churn (6% / 3% by default) are catalogue data served in
-the `objetivos` prop of the subscriptions pages. `features/subscriptions/lib/objetivos.ts`
+the `targets` prop of the subscriptions pages. `features/subscriptions/lib/targets.ts`
 is the only place that resolves them — meta, completion and colour — and
-`hooks/useObjetivos` reads them from the page. Never hardcode a target or a colour threshold
+`hooks/useTargets` reads them from the page. Never hardcode a target or a colour threshold
 again: that is how the app ended up with the 6% written in eight files and three different
 "green" cut-offs.
 
@@ -357,17 +365,17 @@ components only paint.
 
 ## Completion is never clamped
 
-`features/subscriptions/lib/commercial.ts` holds the single `calcComercial`. It receives the
-absolute growth meta (`Meta.metaCrecimiento`) and returns the real completions — over 100% and
+`features/subscriptions/lib/commercial.ts` holds the single `calcCommercial`. It receives the
+absolute growth meta (`Goal.growthGoal`) and returns the real completions — over 100% and
 below 0 included — in both reports. Sales Report used to clamp them to `[0, 100]` (and
-`faltante` at 0) while Business Units did not; the user asked for the real value everywhere
+`shortfall` at 0) while Business Units did not; the user asked for the real value everywhere
 (November 2026), so the `clamp` option is gone. Don't bring it back. The node table shows the
 three completions — ingreso (net growth), ventas (installations) and cierre (final base against
 the expected one) — next to each row's objective. `CommercialSummaryStrip`, the headline row of
-both reports, shows installations and two of them: «% Ingresos» (`tasaCumplimiento`) and
-«% Ventas» (`cumplimientoVentas`). Only the bars' *width* stops at 100%, the number does not.
+both reports, shows installations and two of them: «% Ingresos» (`complianceRate`) and
+«% Ventas» (`salesCompliance`). Only the bars' *width* stops at 100%, the number does not.
 
-`calcComercial` takes the whole `Meta`. A zone without objective (`zonas_sin_objetivo`) stays in
+`calcCommercial` takes the whole `Goal`. A zone without objective (`zonas_sin_objetivo` in the catalogue) stays in
 its group's node table but out of the group's summary: the hooks sum the totals with
-`nodosMedidos`, `objetivos.meta` skips it and counts it in `Meta.zonasSinObjetivo`, and its own
-row comes back with `metrics.sinObjetivo`, which paints its completions as «—».
+`measuredNodes`, the resolver's `goal` skips it and counts it in `Goal.zonesWithoutTarget`, and its own
+row comes back with `metrics.withoutTarget`, which paints its completions as «—».

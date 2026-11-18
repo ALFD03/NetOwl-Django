@@ -1,61 +1,62 @@
 /** Pie del sidebar: acceso a configuración, tema, usuario de la sesión y salida. */
 
-import { LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Sun } from 'lucide-react';
+import { KeyRound, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, ShieldCheck, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Link, router } from '@inertiajs/react';
+import { Link } from 'react-router-dom';
 
-import { useTheme, type PreferenciaTema } from '@/shared/hooks/useTheme';
+import { useAuth } from '@/shared/auth/AuthContext';
+import { useTheme, type ThemePreference } from '@/shared/hooks/useTheme';
 import { cn } from '@/shared/lib/cn';
 
-const OPCIONES_TEMA: { valor: PreferenciaTema; etiqueta: string; Icono: LucideIcon }[] = [
-  { valor: 'claro', etiqueta: 'Claro', Icono: Sun },
-  { valor: 'oscuro', etiqueta: 'Oscuro', Icono: Moon },
-  { valor: 'sistema', etiqueta: 'Sistema', Icono: Monitor },
+const THEME_OPTIONS: { value: ThemePreference; label: string; Icon: LucideIcon }[] = [
+  { value: 'light', label: 'Claro', Icon: Sun },
+  { value: 'dark', label: 'Oscuro', Icon: Moon },
+  { value: 'system', label: 'Sistema', Icon: Monitor },
 ];
 
 /**
  * Desplegado, las tres opciones a la vista; plegado no caben, y un solo botón
  * las recorre en orden mostrando la que está puesta.
  */
-function SelectorTema({ compact }: { compact: boolean }) {
-  const { preferencia, setPreferencia } = useTheme();
+function ThemeSelector({ compact }: { compact: boolean }) {
+  const { preference, setPreference } = useTheme();
 
   if (compact) {
-    const actual = OPCIONES_TEMA.findIndex((opcion) => opcion.valor === preferencia);
-    const { etiqueta, Icono } = OPCIONES_TEMA[actual];
-    const siguiente = OPCIONES_TEMA[(actual + 1) % OPCIONES_TEMA.length];
+    const current = THEME_OPTIONS.findIndex((option) => option.value === preference);
+    const { label, Icon } = THEME_OPTIONS[current];
+    const next = THEME_OPTIONS[(current + 1) % THEME_OPTIONS.length];
     return (
       <button
         type="button"
-        onClick={() => setPreferencia(siguiente.valor)}
-        title={`Tema: ${etiqueta}. Cambiar a ${siguiente.etiqueta.toLowerCase()}`}
-        aria-label={`Tema: ${etiqueta}. Cambiar a ${siguiente.etiqueta.toLowerCase()}`}
+        onClick={() => setPreference(next.value)}
+        title={`Tema: ${label}. Cambiar a ${next.label.toLowerCase()}`}
+        aria-label={`Tema: ${label}. Cambiar a ${next.label.toLowerCase()}`}
         className="flex w-full justify-center rounded-lg border border-slate-700 py-2 text-slate-400 transition-colors hover:bg-surface-hover hover:text-white"
       >
-        <Icono className="h-4 w-4" />
+        <Icon className="h-4 w-4" />
       </button>
     );
   }
 
   return (
     <div role="radiogroup" aria-label="Tema" className="flex gap-1 rounded-lg bg-surface-tertiary p-1">
-      {OPCIONES_TEMA.map(({ valor, etiqueta, Icono }) => {
-        const activo = preferencia === valor;
+      {THEME_OPTIONS.map(({ value, label, Icon }) => {
+        const active = preference === value;
         return (
           <button
-            key={valor}
+            key={value}
             type="button"
             role="radio"
-            aria-checked={activo}
-            onClick={() => setPreferencia(valor)}
-            title={valor === 'sistema' ? 'Seguir el tema del sistema operativo' : `Tema ${etiqueta.toLowerCase()}`}
+            aria-checked={active}
+            onClick={() => setPreference(value)}
+            title={value === 'system' ? 'Seguir el tema del sistema operativo' : `Tema ${label.toLowerCase()}`}
             className={cn(
               'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[11px] font-semibold transition-colors',
-              activo ? 'bg-surface-secondary text-white shadow-sm' : 'text-slate-500 hover:text-slate-200',
+              active ? 'bg-surface-secondary text-white shadow-sm' : 'text-slate-500 hover:text-slate-200',
             )}
           >
-            <Icono className="h-3.5 w-3.5" />
-            {etiqueta}
+            <Icon className="h-3.5 w-3.5" />
+            {label}
           </button>
         );
       })}
@@ -67,7 +68,10 @@ interface UserMenuProps {
   username: string;
   /** `can_view_users`: abre la pantalla de usuarios y grupos. */
   canViewUsers: boolean;
-  isUsersPageActive: boolean;
+  /** `can_manage_api_tokens`: abre la pantalla de tokens de API. */
+  canManageTokens: boolean;
+  /** La ruta actual, para marcar el enlace activo. */
+  url: string;
   /** Solo iconos, para el sidebar plegado. */
   compact?: boolean;
   onNavigate?: () => void;
@@ -78,16 +82,23 @@ interface UserMenuProps {
 export function UserMenu({
   username,
   canViewUsers,
-  isUsersPageActive,
+  canManageTokens,
+  url,
   compact = false,
   onNavigate,
   onToggleCollapsed,
 }: UserMenuProps) {
+  const { logout } = useAuth();
+  const isUsersPageActive = url.startsWith('/auth/users');
+  const handleLogout = async () => {
+    await logout();
+    window.location.assign('/auth/login/');
+  };
   return (
     <div className="space-y-2 border-t border-slate-800 pt-4">
       {canViewUsers && (
         <Link
-          href="/auth/users/"
+          to="/auth/users/"
           onClick={onNavigate}
           title={compact ? 'Configuración' : undefined}
           aria-label={compact ? 'Configuración' : undefined}
@@ -105,7 +116,26 @@ export function UserMenu({
         </Link>
       )}
 
-      <SelectorTema compact={compact} />
+      {canManageTokens && (
+        <Link
+          to="/auth/tokens/"
+          onClick={onNavigate}
+          title={compact ? 'Tokens de API' : undefined}
+          aria-label={compact ? 'Tokens de API' : undefined}
+          className={cn(
+            'flex items-center gap-3 rounded-lg border py-2 text-xs font-semibold transition-colors',
+            compact ? 'justify-center px-0' : 'px-3',
+            url.startsWith('/auth/tokens')
+              ? 'border-brand bg-brand text-white'
+              : 'border-slate-700 text-slate-300 hover:bg-surface-hover hover:text-white',
+          )}
+        >
+          <KeyRound className={cn('h-4 w-4', !url.startsWith('/auth/tokens') && 'text-brand')} />
+          {!compact && <span>Tokens de API</span>}
+        </Link>
+      )}
+
+      <ThemeSelector compact={compact} />
 
       <div
         className={cn(
@@ -136,12 +166,10 @@ export function UserMenu({
           </div>
         )}
 
-        {/* POST y no enlace: por GET, cualquier `<img src="/auth/logout/">` en
-            una página ajena cerraba la sesión del visitante. El token CSRF lo
-            pone el interceptor de axios (shared/lib/http/csrf.ts). */}
+        {/* POST y no enlace: por GET, cualquier `<img>` ajena cerraría la sesión. */}
         <button
           type="button"
-          onClick={() => router.post('/auth/logout/')}
+          onClick={() => void handleLogout()}
           className="rounded-md p-1.5 text-red-400 transition-colors hover:bg-red-500/20"
           title="Cerrar Sesión"
           aria-label="Cerrar Sesión"

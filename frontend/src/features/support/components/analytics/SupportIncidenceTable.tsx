@@ -22,15 +22,15 @@ interface Props {
  * to the zone's total incidence.
  */
 export function SupportIncidenceTable({ rows, groupName }: Props) {
-  const sinPoblacion = rows.filter((row) => row.sinPoblacion).length;
+  const withoutPopulation = rows.filter((row) => row.withoutPopulation).length;
 
   return (
     <NeonContainer
       theme="yellow"
       title="Incidencia por Zona"
       subtitle={
-        sinPoblacion > 0
-          ? `${rows.length} zonas · ${groupName} · ${sinPoblacion} sin suscriptores activos registrados`
+        withoutPopulation > 0
+          ? `${rows.length} zonas · ${groupName} · ${withoutPopulation} sin suscriptores activos registrados`
           : `${rows.length} zonas · ${groupName} · tickets por cada 100 suscriptores activos de la zona`
       }
       icon={<Radio className="h-5 w-5" />}

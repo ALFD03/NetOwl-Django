@@ -50,11 +50,16 @@ export default tseslint.config(
         patterns: [
           {
             group: ['@/pages/*', '**/pages/*'],
-            message: 'pages/ es el contrato con Django: nadie importa de ahi.',
+            message: 'pages/ solo lo importan las rutas de app/.',
           },
         ],
       }],
     },
+  },
+  {
+    // app/ registra las rutas: es el único que importa páginas.
+    files: ['src/app/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-imports': 'off' },
   },
   {
     // `shared/` es la capa de abajo: no puede conocer los features.

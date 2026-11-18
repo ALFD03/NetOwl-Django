@@ -11,6 +11,10 @@ encuentra nada pendiente. Esquemas distintos no se esperan entre si.
 El cerrojo es de sesion y se toma en una conexion propia, no en la que usa la
 migracion: asi no queda dentro de ninguna de sus transacciones, y si el
 proceso muere Postgres lo suelta solo al cerrarse la conexion.
+
+Con el cerrojo aun tomado, pone al dia las tablas de la analitica declaradas
+en `services/*/analytics/tables.py` (`core.tables.sync_all`): crea las que
+faltan y ajusta columnas, tipos e indices.
 """
 
 from __future__ import annotations
@@ -21,8 +25,11 @@ import psycopg2
 from django.conf import settings
 from django.core.management.commands.migrate import Command as MigrateDjango
 
+from core.database import DBConnector
+from core.tables import sync_all
+
 # Lo maximo que se espera al otro antes de rendirse, en segundos.
-ESPERA_MAXIMA = 600
+MAX_WAIT = 600
 
 
 class Command(MigrateDjango):
@@ -34,29 +41,34 @@ class Command(MigrateDjango):
         if db["ENGINE"] != "django.db.backends.postgresql":
             return super().handle(*args, **options)
 
-        clave = f"netowl_migrate_{settings.DB_SCHEMA}"
-        conexion = psycopg2.connect(
+        key = f"netowl_migrate_{settings.DB_SCHEMA}"
+        conn = psycopg2.connect(
             dbname=db["NAME"], user=db["USER"], password=db["PASSWORD"],
             host=db["HOST"], port=db["PORT"] or None,
             application_name="netowl-migrate-lock",
             **{k: v for k, v in (db.get("OPTIONS") or {}).items() if k in ("sslmode", "sslrootcert", "connect_timeout")},
         )
-        conexion.autocommit = True
+        conn.autocommit = True
         try:
-            with conexion.cursor() as cur:
-                cur.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (clave,))
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (key,))
                 if not cur.fetchone()[0]:
                     self.stdout.write(f"Otro proceso esta migrando {settings.DB_SCHEMA}; esperando a que termine...")
-                    inicio = time.monotonic()
+                    start = time.monotonic()
                     while True:
-                        cur.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (clave,))
+                        cur.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (key,))
                         if cur.fetchone()[0]:
                             break
-                        if time.monotonic() - inicio > ESPERA_MAXIMA:
+                        if time.monotonic() - start > MAX_WAIT:
                             raise SystemExit(
-                                f"Se esperaron {ESPERA_MAXIMA} s al cerrojo de migracion de {settings.DB_SCHEMA}."
+                                f"Se esperaron {MAX_WAIT} s al cerrojo de migracion de {settings.DB_SCHEMA}."
                             )
                         time.sleep(2)
-            return super().handle(*args, **options)
+            result = super().handle(*args, **options)
+            if not (options.get("plan") or options.get("check_unapplied")):
+                synced = sync_all(DBConnector())
+                if options.get("verbosity", 1) >= 1:
+                    self.stdout.write(f"Tablas de la analitica al dia: {len(synced)}.")
+            return result
         finally:
-            conexion.close()  # suelta el cerrojo
+            conn.close()  # suelta el cerrojo

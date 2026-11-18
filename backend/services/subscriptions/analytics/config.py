@@ -11,8 +11,8 @@ from __future__ import annotations
 # --- Orden de presentacion de los sites -------------------------------------
 # Los sites no se ordenan alfabeticamente sino por relevancia comercial. Ese
 # orden vive ahora en la columna `Site.orden` del catalogo y se lee con
-# `fixtures.orden_sites()`; esta lista sobrevive solo como su semilla, y la usa
-# unicamente `manage.py cargar_catalogos`.
+# `fixtures.sites_order()`; esta lista sobrevive solo como su semilla, y la usa
+# unicamente `manage.py load_catalogs`.
 CUSTOM_SITE_ORDER = [
     "Valencia",
     "Naguanagua",
@@ -32,9 +32,9 @@ CUSTOM_SITE_ORDER = [
 # --- Planes con tratamiento especial en el reporte de la reguladora ---------
 # No son planes residenciales: se excluyen de los conteos por tecnologia y se
 # reportan en su propia categoria.
-PLAN_TRANSPORTE = "Transporte de Datos"
-PLAN_DEDICADO = "Internet Dedicado"
-PLANES_NO_RESIDENCIALES = [PLAN_TRANSPORTE, PLAN_DEDICADO]
+TRANSPORT_PLAN = "Transporte de Datos"
+DEDICATED_PLAN = "Internet Dedicado"
+NON_RESIDENTIAL_PLANS = [TRANSPORT_PLAN, DEDICATED_PLAN]
 
 # --- Vocabulario del reporte de la reguladora -------------------------------
 # La reguladora solo distingue alambrico / inalambrico, asi que las tecnologias
@@ -49,14 +49,14 @@ TECH_MAP = {
 }
 TECH_DEFAULT = "Alámbrico"
 
-PERSONA_MAP = {
+PERSON_MAP = {
     "nat": "Persona Natural",
     "pyme": "Persona Jurídica",
     "jur": "Persona Jurídica",
     "natural": "Persona Natural",
     "juridica": "Persona Jurídica",
 }
-PERSONA_DEFAULT = "Persona Natural"
+PERSON_DEFAULT = "Persona Natural"
 
 
 # --- Mapeo de columnas del export de Odoo ------------------------------------
@@ -83,8 +83,8 @@ SUBS_COLUMN_MAPPING = {
     "Cliente/Phone 1": "phone",
     "Cliente/Phone 2": "phone2",
     "Vendedor": "vendedor",
-    # Las tres que necesita Comisiones. Opcionales —no estan en
-    # `REQUIRED_SUBS_HEADERS`— para no romper la importacion con el export de
+    # Las tres que necesita Comisiones. Opcionales -no son obligatorias en
+    # `imports.SUBSCRIPTIONS_EXPORT`- para no romper la importacion con el export de
     # siempre; es Comisiones quien se niega a calcular sin ellas.
     # `Vendedor` es el coordinador de oficina, `Medio` quien hizo la venta
     # (asesor, o venta directa de otro cargo) y `Oportunidad/Administrador` su
@@ -96,42 +96,4 @@ SUBS_COLUMN_MAPPING = {
     "Medio": "medio",
     "Oportunidad/Administrador": "medio_supervisor",
     "Estado de la factura": "estado_factura",
-}
-
-# Odoo no siempre exporta la cabecera con la misma capitalizacion.
-# false/0 = suscripcion archivada (cliente en plan gratuito).
-SUBS_ACTIVO_ALIASES = {
-    "Activo": "activo",
-    "activo": "activo",
-    "Active": "activo",
-}
-
-
-# --- Cabeceras minimas que debe traer cada CSV -------------------------------
-# Se validan contra el fichero crudo, antes de renombrar nada. Vivian en el
-# modulo de vistas, desde donde `frontend/imports` las importaba cruzando de
-# una app a otra; support y planes gratuitos ya las tenian aqui, en su dominio.
-
-REQUIRED_SUBS_HEADERS = {
-    "Líneas de la orden/Referencia de la orden": "orden_producto",
-    "Líneas de la orden/Producto/Nombre": "producto",
-    "Líneas de la orden/Cliente": "cliente",
-    "Líneas de la orden/Cliente/CI/RIF": "ci",
-    "Sucursal": "sucursal",
-    "Zona": "zona",
-    "Líneas de la orden/Cliente/Municipio": "municipio",
-    "Tipo de Servicio": "tipo",
-    "Estado de la Suscripción": "estado",
-    "Campaña": "campanna",
-    "Próxima Fecha de Factura": "fecha_factura",
-    "Fecha de inicio": "fecha_inicio",
-    "Tarifa": "tarifa",
-    "Subtotal": "total",
-}
-
-REQUIRED_LOGS_HEADERS = {
-    "Logs de Cambios/Suscripción": "orden",
-    "Logs de Cambios/Fecha de Cambio": "fecha_log",
-    "Logs de Cambios/Nota": "log",
-    "Logs de Cambios/Estado Interno de Suscripción": "estado",
 }

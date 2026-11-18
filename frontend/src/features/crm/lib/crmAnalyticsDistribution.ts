@@ -10,10 +10,10 @@ import {
   type MetricWeightMode,
   type RankingOptions,
 } from '@/shared/utils/distribution';
-import type { CrmDimensionValue, CrmHistoricoRow } from '../types';
+import type { CrmDimensionValue, CrmHistoryRow } from '../types';
 
 /**
- * Keys whose value is a number. Both CRM row types also carry `efectividad`,
+ * Keys whose value is a number. Both CRM row types also carry `effectiveness`,
  * a list — pointing a chart at it would only fail once the data arrived.
  */
 type NumericKeys<T> = {
@@ -22,7 +22,7 @@ type NumericKeys<T> = {
 
 export interface CrmMetricConfig extends RankingOptions {
   dimensionKey: NumericKeys<CrmDimensionValue>;
-  globalKey: NumericKeys<CrmHistoricoRow>;
+  globalKey: NumericKeys<CrmHistoryRow>;
   mode: MetricWeightMode;
   unit?: '%' | 'h' | 'number';
   round?: number;
@@ -33,22 +33,22 @@ export interface CrmMetricConfig extends RankingOptions {
  * that installed 1 of its 2 leads is not a better performer than one that
  * installed 400 of 900.
  */
-const POPULATION_KEY: NumericKeys<CrmDimensionValue> = 'total_oportunidades';
+const POPULATION_KEY: NumericKeys<CrmDimensionValue> = 'total_opportunities';
 
 export const CRM_ANALYTICS_METRICS = {
   /** Share of the period's opportunities each dimension value opened. */
-  oportunidades: {
-    dimensionKey: 'total_oportunidades',
-    globalKey: 'total_oportunidades',
+  opportunities: {
+    dimensionKey: 'total_opportunities',
+    globalKey: 'total_opportunities',
     mode: 'simple',
     unit: 'number',
     round: 0,
   },
 
   /** Share of the period's installs each dimension value closed. */
-  instalados: {
-    dimensionKey: 'ganados',
-    globalKey: 'ganados',
+  installed: {
+    dimensionKey: 'won',
+    globalKey: 'won',
     mode: 'simple',
     unit: 'number',
     round: 0,
@@ -59,9 +59,9 @@ export const CRM_ANALYTICS_METRICS = {
    * with zeros dropped: a 0 means the value installed nothing this period, not
    * that it installed instantly.
    */
-  tiempoInstalacion: {
-    dimensionKey: 'horas_promedio_inst',
-    globalKey: 'horas_promedio_inst',
+  installTime: {
+    dimensionKey: 'hours_avg_inst',
+    globalKey: 'hours_avg_inst',
     mode: 'ranking',
     unit: 'h',
     order: 'asc',
@@ -74,7 +74,7 @@ export type CrmAnalyticsMetricKey = keyof typeof CRM_ANALYTICS_METRICS;
 
 export function getCrmChartDistribution(
   dimensions: CrmDimensionValue[],
-  globalData: CrmHistoricoRow,
+  globalData: CrmHistoryRow,
   metric: CrmMetricConfig,
 ): DistributionItem[] {
   if (metric.mode === 'ranking') {

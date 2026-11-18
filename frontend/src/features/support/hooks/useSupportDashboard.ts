@@ -3,10 +3,10 @@ import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 
 import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import { METRIC_CHART, type MetricColor } from '@/shared/ui';
-import { formatInteger, formatPeriodoLabel, toNumber } from '@/shared/utils';
+import { formatInteger, formatPeriodLabel, toNumber } from '@/shared/utils';
 import {
-  ASIGNACION,
-  CIERRE_TOTAL,
+  ASSIGNMENT,
+  CLOSE_TOTAL,
   averageField,
   emptyStats,
   resolveStats,
@@ -15,7 +15,7 @@ import {
 import type {
   SupportDashboardProps,
   SupportGroupCard,
-  SupportHistoricoRow,
+  SupportHistoryRow,
   SupportStats,
   SupportTrendCard,
 } from '../types';
@@ -50,25 +50,25 @@ const TREND_DEFS: Array<{
   id: string;
   title: string;
   statKey: keyof SupportStats;
-  rateKey: keyof SupportHistoricoRow;
-  countKey: keyof SupportHistoricoRow;
+  rateKey: keyof SupportHistoryRow;
+  countKey: keyof SupportHistoryRow;
   unitLabel: string;
   unit: SupportTrendCard['unit'];
   color: MetricColor;
 }> = [
-  { id: 'resueltos', title: 'Tasa Resolución', statKey: 'pct_resueltos', rateKey: 'pct_resueltos', countKey: 'tickets_resueltos', unitLabel: 'Tickets Resueltos', unit: 'tickets', color: 'green' },
-  { id: 'cancelados', title: 'Tasa Cancelación', statKey: 'pct_cancelados', rateKey: 'pct_cancelados', countKey: 'tickets_cancelados', unitLabel: 'Tickets Cancelados', unit: 'tickets', color: 'red' },
-  { id: 'escalados', title: 'Tasa de Escalamiento', statKey: 'pct_escalados', rateKey: 'pct_escalados', countKey: 'tickets_escalados', unitLabel: 'Tickets Escalados a Soporte', unit: 'tickets', color: 'yellow' },
-  { id: 'rezagados', title: 'Tasa de Rezago', statKey: 'pct_rezagados', rateKey: 'pct_rezagados', countKey: 'tickets_rezagados', unitLabel: 'Tickets Rezagados', unit: 'tickets', color: 'yellow' },
-  { id: 'cierre_total', title: 'Cierre Total (h)', statKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, rateKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, countKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'blue' },
-  { id: 'gestion', title: 'Gestión (h)', statKey: 'tiempo_medio_cierre_asignado_cerrados_horas', rateKey: 'tiempo_medio_cierre_asignado_cerrados_horas', countKey: 'tiempo_medio_cierre_asignado_cerrados_horas', unitLabel: 'Horas Asignación → Cierre', unit: 'horas', color: 'purple' },
-  { id: 'asignacion', title: 'Asignación (h)', statKey: `tiempo_medio_${ASIGNACION}_horas`, rateKey: `tiempo_medio_${ASIGNACION}_horas`, countKey: `tiempo_medio_${ASIGNACION}_horas`, unitLabel: 'Horas Creación → Asignación', unit: 'horas', color: 'slate' },
+  { id: 'resueltos', title: 'Tasa Resolución', statKey: 'pct_resolved', rateKey: 'pct_resolved', countKey: 'tickets_resolved', unitLabel: 'Tickets Resueltos', unit: 'tickets', color: 'green' },
+  { id: 'cancelados', title: 'Tasa Cancelación', statKey: 'pct_cancelled', rateKey: 'pct_cancelled', countKey: 'tickets_cancelled', unitLabel: 'Tickets Cancelados', unit: 'tickets', color: 'red' },
+  { id: 'escalados', title: 'Tasa de Escalamiento', statKey: 'pct_escalated', rateKey: 'pct_escalated', countKey: 'tickets_escalated', unitLabel: 'Tickets Escalados a Soporte', unit: 'tickets', color: 'yellow' },
+  { id: 'rezagados', title: 'Tasa de Rezago', statKey: 'pct_lagging', rateKey: 'pct_lagging', countKey: 'tickets_lagging', unitLabel: 'Tickets Rezagados', unit: 'tickets', color: 'yellow' },
+  { id: 'cierre_total', title: 'Cierre Total (h)', statKey: `time_mean_${CLOSE_TOTAL}_hours`, rateKey: `time_mean_${CLOSE_TOTAL}_hours`, countKey: `time_mean_${CLOSE_TOTAL}_hours`, unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'blue' },
+  { id: 'gestion', title: 'Gestión (h)', statKey: 'time_mean_close_assigned_closed_hours', rateKey: 'time_mean_close_assigned_closed_hours', countKey: 'time_mean_close_assigned_closed_hours', unitLabel: 'Horas Asignación → Cierre', unit: 'horas', color: 'purple' },
+  { id: 'assignment', title: 'Asignación (h)', statKey: `time_mean_${ASSIGNMENT}_hours`, rateKey: `time_mean_${ASSIGNMENT}_hours`, countKey: `time_mean_${ASSIGNMENT}_hours`, unitLabel: 'Horas Creación → Asignación', unit: 'horas', color: 'slate' },
 ];
 
 export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
-  const historico = useMemo(() => metrics.historico_tendencias ?? [], [metrics]);
-  const summary = useMemo(() => metrics.resumen_global ?? {}, [metrics]);
-  const grupos = useMemo(() => metrics.por_grupo_trabajo ?? {}, [metrics]);
+  const history = useMemo(() => metrics.trend_history ?? [], [metrics]);
+  const summary = useMemo(() => metrics.global_summary ?? {}, [metrics]);
+  const groups = useMemo(() => metrics.by_work_group ?? {}, [metrics]);
   const [selectedTrend, setSelectedTrend] = useState<SupportTrendCard | null>(null);
 
   /**
@@ -79,20 +79,20 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
    */
   const stats = useMemo<SupportStats>(() => {
     if (Object.keys(summary).length > 0) return resolveStats(summary);
-    if (historico.length === 0) return emptyStats();
+    if (history.length === 0) return emptyStats();
 
     const averaged = Object.fromEntries(
       (Object.keys(emptyStats()) as Array<keyof SupportStats>).map((key) => [
         key,
-        averageField(historico, key as keyof SupportHistoricoRow),
+        averageField(history, key as keyof SupportHistoryRow),
       ]),
     );
     return averaged as SupportStats;
-  }, [summary, historico]);
+  }, [summary, history]);
 
   const labels = useMemo(
-    () => historico.map((row) => formatPeriodoLabel(String(row.periodo_reporte ?? ''))),
-    [historico],
+    () => history.map((row) => formatPeriodLabel(String(row.report_period ?? ''))),
+    [history],
   );
 
   const trendCards = useMemo<SupportTrendCard[]>(
@@ -103,45 +103,45 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
         value: def.unit === 'horas' ? `${stats[def.statKey]} h` : `${stats[def.statKey]}%`,
         color: def.color,
         labels,
-        values: historico.map((row) => toNumber(row[def.rateKey] as number | undefined)),
+        values: history.map((row) => toNumber(row[def.rateKey] as number | undefined)),
         unitLabel: def.unitLabel,
         rateKey: def.rateKey,
         countKey: def.countKey,
         unit: def.unit,
       })),
-    [historico, labels, stats],
+    [history, labels, stats],
   );
 
   const groupCards = useMemo<SupportGroupCard[]>(() => {
-    const entries = Object.entries(grupos);
+    const entries = Object.entries(groups);
     const totalVolume = entries.reduce((acc, [, g]) => acc + toNumber(g.total_tickets), 0);
-    const globalMttr = stats[`tiempo_medio_${CIERRE_TOTAL}_horas`];
+    const globalMttr = stats[`time_mean_${CLOSE_TOTAL}_hours`];
 
     return entries
       .map(([name, raw]) => {
         const g = resolveStats(raw);
-        const mttr = g[`tiempo_medio_${CIERRE_TOTAL}_horas`];
+        const mttr = g[`time_mean_${CLOSE_TOTAL}_hours`];
 
         return {
           id: name,
           label: name,
-          color: resolutionColor(g.pct_resueltos),
+          color: resolutionColor(g.pct_resolved),
           totalTickets: g.total_tickets,
           sharePct: share(g.total_tickets, totalVolume),
-          pctResueltos: g.pct_resueltos,
-          pctCancelados: g.pct_cancelados,
-          pctRezagados: g.pct_rezagados,
-          pctEscalados: g.pct_escalados,
+          pctResolved: g.pct_resolved,
+          pctCancelled: g.pct_cancelled,
+          pctLagging: g.pct_lagging,
+          pctEscalated: g.pct_escalated,
           mttr,
-          mttrMediana: g[`tiempo_mediana_${CIERRE_TOTAL}_horas`],
+          mttrMedian: g[`time_median_${CLOSE_TOTAL}_hours`],
           mttrColor: mttrColor(mttr, globalMttr),
           mttrDelta: Number((mttr - globalMttr).toFixed(2)),
-          espera: g[`tiempo_medio_${ASIGNACION}_horas`],
-          pctExcedeProm: g[`pct_excede_promedio_${CIERRE_TOTAL}`],
+          wait: g[`time_mean_${ASSIGNMENT}_hours`],
+          pctAboveAvg: g[`pct_over_avg_${CLOSE_TOTAL}`],
         };
       })
       .sort((a, b) => b.totalTickets - a.totalTickets);
-  }, [grupos, stats]);
+  }, [groups, stats]);
 
   const modalChartData = useMemo<ChartData<'line'> | null>(() => {
     if (!selectedTrend) return null;
@@ -151,7 +151,7 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
       labels,
       datasets: [{
         label: selectedTrend.unitLabel,
-        data: historico.map((row) => toNumber(row[selectedTrend.countKey] as number | undefined)),
+        data: history.map((row) => toNumber(row[selectedTrend.countKey] as number | undefined)),
         borderColor: chart.line,
         backgroundColor: chart.fill.replace('0.1', '0.25'),
         fill: true,
@@ -164,7 +164,7 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
         tension: 0.35,
       }],
     };
-  }, [selectedTrend, historico, labels]);
+  }, [selectedTrend, history, labels]);
 
   const modalChartOptions: ChartOptions<'line'> = useMemo(() => {
     const lineColor = selectedTrend ? METRIC_CHART[selectedTrend.color].line : CHART_CHROME.textStrong;
@@ -205,8 +205,8 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
   }, [selectedTrend]);
 
   return {
-    periodosEvaluados: metrics.periodos_evaluados ?? historico.length,
-    historico,
+    evaluatedPeriods: metrics.evaluated_periods ?? history.length,
+    history,
     stats,
     trendCards,
     groupCards,

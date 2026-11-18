@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { formatPeriodoLabel } from '@/shared/utils';
+import { formatPeriodLabel } from '@/shared/utils';
 
 import { FilterField, FILTER_TRIGGER_CLASS } from './FilterField';
 import { SelectMenu } from './SelectMenu';
@@ -24,8 +24,8 @@ interface Props {
  * se dibuja en un portal anclado al boton.
  */
 export function PeriodSelector({ label = 'Mes', icon, value, options, onChange, className = '' }: Props) {
-  const opciones = useMemo(
-    () => options.map((p) => ({ value: p, label: formatPeriodoLabel(p) })),
+  const choices = useMemo(
+    () => options.map((p) => ({ value: p, label: formatPeriodLabel(p) })),
     [options],
   );
 
@@ -33,7 +33,7 @@ export function PeriodSelector({ label = 'Mes', icon, value, options, onChange, 
     <FilterField label={label} icon={icon} className={className}>
       <SelectMenu
         value={value}
-        options={opciones}
+        options={choices}
         onChange={onChange}
         placeholder="Sin periodos"
         aria-label={label}

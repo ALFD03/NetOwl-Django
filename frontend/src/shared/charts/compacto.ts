@@ -17,33 +17,33 @@
 
 import type { ChartOptions } from 'chart.js';
 
-const FUENTE_ETIQUETA = { weight: 'bold', size: 11 } as const;
-const LEYENDA = { font: { size: 10 }, boxWidth: 10, padding: 8 } as const;
+const SOURCE_LABEL = { weight: 'bold', size: 11 } as const;
+const LEGEND = { font: { size: 10 }, boxWidth: 10, padding: 8 } as const;
 
 /** La fuente de las etiquetas de valor, respetando la que traiga si no es una función. */
-function fuenteEtiqueta(actual: unknown) {
-  return typeof actual === 'object' && actual !== null
-    ? { ...actual, size: FUENTE_ETIQUETA.size }
-    : FUENTE_ETIQUETA;
+function sourceLabel(current: unknown) {
+  return typeof current === 'object' && current !== null
+    ? { ...current, size: SOURCE_LABEL.size }
+    : SOURCE_LABEL;
 }
 
-export function compactarCartesiana<T extends 'bar' | 'line'>(options: ChartOptions<T>): ChartOptions<T> {
-  const o = options as ChartOptions<'bar'>;
-  const x = o.scales?.x;
+export function compactCartesian<T extends 'bar' | 'line'>(options: ChartOptions<T>): ChartOptions<T> {
+  const other = options as ChartOptions<'bar'>;
+  const x = other.scales?.x;
 
-  const compacto: ChartOptions<'bar'> = {
-    ...o,
+  const compact: ChartOptions<'bar'> = {
+    ...other,
     plugins: {
-      ...o.plugins,
-      legend: { ...o.plugins?.legend, labels: { ...o.plugins?.legend?.labels, ...LEYENDA } },
-      datalabels: { ...o.plugins?.datalabels, font: fuenteEtiqueta(o.plugins?.datalabels?.font) },
+      ...other.plugins,
+      legend: { ...other.plugins?.legend, labels: { ...other.plugins?.legend?.labels, ...LEGEND } },
+      datalabels: { ...other.plugins?.datalabels, font: sourceLabel(other.plugins?.datalabels?.font) },
     },
-    scales: x ? { ...o.scales, x: { ...x, ticks: { ...x.ticks, maxRotation: 90 } } } : o.scales,
+    scales: x ? { ...other.scales, x: { ...x, ticks: { ...x.ticks, maxRotation: 90 } } } : other.scales,
   };
-  return compacto as ChartOptions<T>;
+  return compact as ChartOptions<T>;
 }
 
-export function compactarAnillo(options: ChartOptions<'doughnut'>): ChartOptions<'doughnut'> {
+export function compactRing(options: ChartOptions<'doughnut'>): ChartOptions<'doughnut'> {
   return {
     ...options,
     plugins: {
@@ -51,9 +51,9 @@ export function compactarAnillo(options: ChartOptions<'doughnut'>): ChartOptions
       legend: {
         ...options.plugins?.legend,
         position: 'bottom',
-        labels: { ...options.plugins?.legend?.labels, ...LEYENDA },
+        labels: { ...options.plugins?.legend?.labels, ...LEGEND },
       },
-      datalabels: { ...options.plugins?.datalabels, font: fuenteEtiqueta(options.plugins?.datalabels?.font) },
+      datalabels: { ...options.plugins?.datalabels, font: sourceLabel(options.plugins?.datalabels?.font) },
     },
   };
 }

@@ -30,32 +30,34 @@ export const PERMISSIONS = {
   VIEW_CRM_RESULTS: 'can_view_crm_results',
   VIEW_SUPPORT_ANALYTICS: 'can_view_support_analytics',
   VIEW_SUPPORT_RESULTS: 'can_view_support_results',
-  VIEW_SUPPORT_ABIERTOS: 'can_view_support_abiertos',
+  VIEW_SUPPORT_OPEN: 'can_view_support_open',
   VIEW_IMPORTS_SUBS: 'can_view_imports_subs',
   VIEW_IMPORTS_CRM: 'can_view_imports_crm',
   VIEW_IMPORTS_SUPPORT: 'can_view_imports_support',
   VIEW_IMPORT_HISTORY: 'can_view_import_history',
-  VIEW_COMISIONES: 'can_view_comisiones',
+  VIEW_COMMISSIONS: 'can_view_commissions',
   VIEW_ALL_PERIODS: 'can_view_all_periods',
   VIEW_ALL_BUSINESS_UNITS: 'can_view_all_business_units',
   VIEW_USERS: 'can_view_users',
-  VIEW_AUDITORIA: 'can_view_auditoria',
+  VIEW_AUDIT: 'can_view_audit',
+  USE_API: 'can_use_api',
   IMPORT_DATA: 'can_import_data',
   RUN_CALCULATIONS: 'can_run_calculations',
   RUN_LIFETIME: 'can_run_lifetime',
   MANAGE_ETA: 'can_manage_eta',
-  MANAGE_CATALOGO_COMERCIAL: 'can_manage_catalogo_comercial',
-  MANAGE_CATALOGO_OPERACIONAL: 'can_manage_catalogo_operacional',
-  MANAGE_CATALOGO_VENTAS: 'can_manage_catalogo_ventas',
+  MANAGE_COMMERCIAL_CATALOG: 'can_manage_commercial_catalog',
+  MANAGE_OPERATIONAL_CATALOG: 'can_manage_operational_catalog',
+  MANAGE_SALES_CATALOG: 'can_manage_sales_catalog',
   MANAGE_SUPPORT_USERS: 'can_manage_support_users',
-  MANAGE_COMISIONES: 'can_manage_comisiones',
-  REOPEN_COMISIONES: 'can_reopen_comisiones',
-  DELETE_COMISIONES: 'can_delete_comisiones',
+  MANAGE_COMMISSIONS: 'can_manage_commissions',
+  REOPEN_COMMISSIONS: 'can_reopen_commissions',
+  DELETE_COMMISSIONS: 'can_delete_commissions',
   CREATE_USERS: 'can_create_users',
   EDIT_USER_PERMISSIONS: 'can_edit_user_permissions',
   CHANGE_PASSWORDS: 'can_change_passwords',
   DELETE_USERS: 'can_delete_users',
   MANAGE_GROUPS: 'can_manage_groups',
+  MANAGE_API_TOKENS: 'can_manage_api_tokens',
   IMPORT_SUBS: 'can_import_subs',
   IMPORT_CRM: 'can_import_crm',
   IMPORT_SUPPORT: 'can_import_support',
@@ -89,7 +91,7 @@ export const DEFAULT_GROUP_PERMISSIONS = Object.fromEntries(
  * Matriz con la que se abre el formulario de "Nuevo Usuario": solo el modulo de
  * suscripciones y su dashboard.
  *
- * Es el espejo de `PERMISOS_INICIALES` en services/config/models.py, y hay que
+ * Es el espejo de `INITIAL_PERMISSIONS` en services/config/models.py, y hay que
  * mantener las dos listas de acuerdo (ver CLAUDE.md): el backend lo aplica a la
  * cuenta que crea la senal `create_user_profile`, pero el formulario manda la
  * matriz entera y `apply_permissions` escribe los campos ausentes como false,
@@ -162,9 +164,9 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     icon: BookMarked,
     tone: 'yellow',
     perms: [
-      { key: PERMISSIONS.MANAGE_CATALOGO_OPERACIONAL, label: 'Productos (planes, reguladores y sus pendientes)', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_COMERCIAL, label: 'Estructura (zonas, estados y sus pendientes)', section: 'Administrar' },
-      { key: PERMISSIONS.MANAGE_CATALOGO_VENTAS, label: 'Ventas (sites, unidades de negocio, equipos de ventas con sus condiciones de pago, y objetivos)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_OPERATIONAL_CATALOG, label: 'Productos (planes, reguladores y sus pendientes)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_COMMERCIAL_CATALOG, label: 'Estructura (zonas, estados y sus pendientes)', section: 'Administrar' },
+      { key: PERMISSIONS.MANAGE_SALES_CATALOG, label: 'Ventas (sites, unidades de negocio, equipos de ventas con sus condiciones de pago, y objetivos)', section: 'Administrar' },
     ],
   },
   {
@@ -192,7 +194,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
       { key: PERMISSIONS.VIEW_SUPPORT_DASHBOARD, label: 'Dashboard', section: 'Ver' },
       { key: PERMISSIONS.VIEW_SUPPORT_ANALYTICS, label: 'Support Analytics', section: 'Ver' },
       { key: PERMISSIONS.VIEW_SUPPORT_RESULTS, label: 'Support Results', section: 'Ver' },
-      { key: PERMISSIONS.VIEW_SUPPORT_ABIERTOS, label: 'Tickets abiertos (Dashboard)', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_SUPPORT_OPEN, label: 'Tickets abiertos (Dashboard)', section: 'Ver' },
       { key: PERMISSIONS.VIEW_IMPORTS_SUPPORT, label: 'Página de importación', section: 'Ver' },
       { key: PERMISSIONS.IMPORT_SUPPORT, label: 'Cargar el CSV de soporte', section: 'Cargar y calcular' },
       { key: PERMISSIONS.RUN_SUPPORT_ANALYSIS, label: 'Ejecutar el análisis de soporte', section: 'Cargar y calcular' },
@@ -205,10 +207,10 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     icon: HandCoins,
     tone: 'green',
     perms: [
-      { key: PERMISSIONS.VIEW_COMISIONES, label: 'Ver el informe de comisiones', section: 'Ver' },
-      { key: PERMISSIONS.MANAGE_COMISIONES, label: 'Calcular, revisar y cerrar periodos; ventana de pago y PYME', section: 'Administrar' },
-      { key: PERMISSIONS.REOPEN_COMISIONES, label: 'Reabrir un periodo cerrado (archiva el cierre)', section: 'Administrar' },
-      { key: PERMISSIONS.DELETE_COMISIONES, label: 'Borrar un informe en borrador (no se deshace)', section: 'Administrar' },
+      { key: PERMISSIONS.VIEW_COMMISSIONS, label: 'Ver el informe de comisiones', section: 'Ver' },
+      { key: PERMISSIONS.MANAGE_COMMISSIONS, label: 'Calcular, revisar y cerrar periodos; ventana de pago y PYME', section: 'Administrar' },
+      { key: PERMISSIONS.REOPEN_COMMISSIONS, label: 'Reabrir un periodo cerrado (archiva el cierre)', section: 'Administrar' },
+      { key: PERMISSIONS.DELETE_COMMISSIONS, label: 'Borrar un informe en borrador (no se deshace)', section: 'Administrar' },
     ],
   },
   {
@@ -244,6 +246,8 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
       { key: PERMISSIONS.CHANGE_PASSWORDS, label: 'Cambiar la contraseña de otro usuario', section: 'Administrar' },
       { key: PERMISSIONS.DELETE_USERS, label: 'Eliminar usuarios', section: 'Administrar' },
       { key: PERMISSIONS.MANAGE_GROUPS, label: 'Crear, editar y eliminar grupos de permisos', section: 'Administrar' },
+      { key: PERMISSIONS.USE_API, label: 'Usar la API con un token propio', section: 'Ver' },
+      { key: PERMISSIONS.MANAGE_API_TOKENS, label: 'Crear y revocar tokens de API de otras cuentas', section: 'Administrar' },
     ],
   },
   {
@@ -252,7 +256,7 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
     icon: ScrollText,
     tone: 'slate',
     perms: [
-      { key: PERMISSIONS.VIEW_AUDITORIA, label: 'Ver el registro de auditoría', section: 'Ver' },
+      { key: PERMISSIONS.VIEW_AUDIT, label: 'Ver el registro de auditoría', section: 'Ver' },
     ],
   },
 ];

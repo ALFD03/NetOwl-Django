@@ -7,27 +7,27 @@ export interface SupportAnalysisRequest { month: string | null; }
 export type SupportAnalysisResponse = ApiMessageResponse;
 
 /** Corte completo de un día; lo pide y cachea `useDayPayload`, no `supportApi`. */
-export const SUPPORT_DAY_METRICS_URL = '/support/api/day-metrics/';
+export const SUPPORT_DAY_METRICS_URL = '/api/support/day-metrics/';
 
 /**
  * Los dos catálogos del directorio de usuarios.
  *
- * Vive aquí y no en `shared/types` por lo mismo que `CatalogoPayload`: es la
+ * Vive aquí y no en `shared/types` por lo mismo que `CatalogPayload`: es la
  * forma de la petición, no un concepto del dominio.
  */
-export type DirectorioTipo = 'usuarios' | 'departamentos';
+export type DirectoryKind = 'usuarios' | 'departamentos';
 
 /** Una fila del directorio. Sin `id` es un alta. */
-export interface DirectorioPayload extends Record<string, unknown> {
+export interface DirectoryPayload extends Record<string, unknown> {
   id?: number | null;
 }
 
 /** Lo que le puede pasar a un usuario del directorio, además de editarlo. */
-export type MovimientoUsuario = 'cambiar_departamento' | 'deshacer_cambio' | 'baja' | 'reactivar';
+export type UserMove = 'cambiar_departamento' | 'deshacer_cambio' | 'baja' | 'reactivar';
 
 export const supportApi = {
   runAnalysis: async (request: SupportAnalysisRequest) =>
-    (await apiClient.post<SupportAnalysisResponse>('/imports/api/run-support-analysis/', request)).data,
+    (await apiClient.post<SupportAnalysisResponse>('/api/imports/support/run/', request)).data,
 
   /**
    * Alta o edición de un usuario del directorio o de un departamento.
@@ -35,26 +35,26 @@ export const supportApi = {
    * Un solo endpoint para los dos: lo que cambia entre ellos son los campos
    * del cuerpo, no la forma de la petición.
    */
-  saveDirectorio: async (tipo: DirectorioTipo, payload: DirectorioPayload) =>
-    (await apiClient.post('/support/api/usuarios/guardar/', { tipo, ...payload })).data,
+  saveDirectoryEntry: async (kind: DirectoryKind, payload: DirectoryPayload) =>
+    (await apiClient.post('/api/support/users/save/', { type: kind, ...payload })).data,
 
-  deleteDirectorio: async (tipo: DirectorioTipo, id: number) =>
-    (await apiClient.post('/support/api/usuarios/eliminar/', { tipo, id })).data,
+  deleteDirectoryEntry: async (kind: DirectoryKind, id: number) =>
+    (await apiClient.post('/api/support/users/delete/', { type: kind, id })).data,
 
   /**
    * Cambio de departamento, baja o reactivación. `fecha` la piden el cambio
    * (desde cuándo) y la baja (el egreso).
    */
-  moverUsuario: async (
-    accion: MovimientoUsuario,
+  moveUser: async (
+    action: UserMove,
     id: number,
-    extra: { departamento_id?: number | null; fecha?: string } = {},
-  ) => (await apiClient.post('/support/api/usuarios/movimiento/', { accion, id, ...extra })).data,
+    extra: { department_id?: number | null; date?: string } = {},
+  ) => (await apiClient.post('/api/support/users/move/', { action, id, ...extra })).data,
 
   /** Alta o edición de una etapa del catálogo. Sin `id` es un alta. */
-  saveEtapa: async (payload: { id?: number; nombre: string; equipo: string; tipo: string }) =>
-    (await apiClient.post<ApiMessageResponse>('/support/api/etapas/guardar/', payload)).data,
+  saveStage: async (payload: { id?: number; name: string; team: string; type: string }) =>
+    (await apiClient.post<ApiMessageResponse>('/api/support/stages/save/', payload)).data,
 
-  deleteEtapa: async (id: number) =>
-    (await apiClient.post<ApiMessageResponse>('/support/api/etapas/eliminar/', { id })).data,
+  deleteStage: async (id: number) =>
+    (await apiClient.post<ApiMessageResponse>('/api/support/stages/delete/', { id })).data,
 };

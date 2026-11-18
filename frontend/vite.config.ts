@@ -3,10 +3,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [react()],
   root: '.',
-  base: '/static/',
+  // En build los chunks viven en /static/dist/: con '/static/' las precargas darían 404.
+  base: command === 'build' ? '/static/dist/' : '/static/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -35,4 +36,4 @@ export default defineConfig({
     strictPort: true,
     cors: true,
   },
-});
+}));
