@@ -1,15 +1,15 @@
 /**
  * Agrega los nodos por coordinador, más el bloque de radiofrecuencia.
  *
- * Ojo: aquí `tasaCumplimiento` **no se recorta a 100**, a diferencia del Sales
+ * Ojo: aquí `complianceRate` **no se recorta a 100**, a diferencia del Sales
  * Report. Es una discrepancia intencionada (ver `lib/commercial.ts`).
  *
  * Las metas: cada nodo con el suyo (desde su nivel de nodo hacia arriba);
  * cada coordinador con el suyo, que la excepción de una zona o de un nodo no
  * mueve pero el de su site, su estado o su sucursal sí; el bloque RF y el
- * consolidado FTTH con el general del mes (ver `lib/objetivos.ts`).
+ * consolidado FTTH con el general del mes (ver `lib/targets.ts`).
  *
- * El filtro por métrica (`lib/filtroMetrica.ts`) se aplica a cada nodo o al
+ * El filtro por métrica (`lib/metricFilter.ts`) se aplica a cada nodo o al
  * coordinador entero, sobre los totales de los nodos que los otros filtros
  * dejaron. El consolidado FTTH lo sigue: suma solo los nodos que lo cumplen, o
  * los de los coordinadores que lo cumplen.
@@ -22,14 +22,14 @@
 import { useMemo } from 'react';
 
 import {
-  aggregateNodes, calcComercial, type CommercialMetrics, type CommercialNode,
+  aggregateNodes, calcCommercial, type CommercialMetrics, type CommercialNode,
 } from '../lib/commercial';
-import type { Proyeccion } from '@/shared/lib/proyeccion';
+import type { Proyeccion } from '@/shared/lib/projection';
 
 import {
-  cumpleFiltro, umbralFiltro, valoresMetrica, type FiltroMetrica,
-} from '../lib/filtroMetrica';
-import { nodosMedidos, type Meta, type ResolverObjetivos } from '../lib/objetivos';
+  matchesFilter, filterThreshold, metricValues, type MetricFilter,
+} from '../lib/metricFilter';
+import { measuredNodes, type Meta, type TargetsResolver } from '../lib/targets';
 
 export interface BusinessUnitNode extends CommercialNode {
   type?: 'FTTH' | 'RF' | string;
@@ -73,17 +73,17 @@ interface UseBusinessUnitsDataParams {
   selectedTech: 'ALL' | 'FTTH' | 'RF';
   /** El periodo del reporte: decide qué tramo de objetivo está vigente. */
   period: string;
-  objetivos: ResolverObjetivos;
+  objetivos: TargetsResolver;
   /** Los días laborables del corte elegido; el consolidado FTTH proyecta con ellos. */
-  proyeccion?: Proyeccion | null;
+  projection?: Proyeccion | null;
   /** El filtro por crecimiento, churn o proyección, por nodo o por coordinador. */
-  filtroMetrica: FiltroMetrica;
+  metricFilter: MetricFilter;
   /** El consolidado FTTH ya sumado, para quien no ve todas las unidades. */
-  ftthFijo?: FtthConsolidadoNodo | null;
+  ftthFijo?: FtthNodeTotals | null;
 }
 
 /** Un nodo con la suma de los nodos FTTH de toda la empresa en un corte. */
-export interface FtthConsolidadoNodo {
+export interface FtthNodeTotals {
   activos_inicio: number;
   activos_final: number;
   nuevos: number;
@@ -99,14 +99,14 @@ export function useBusinessUnitsData({
   selectedTech,
   period,
   objetivos,
-  proyeccion = null,
-  filtroMetrica,
+  projection: proyeccion = null,
+  metricFilter: filtroMetrica,
   ftthFijo = null,
 }: UseBusinessUnitsDataParams) {
   const normalizedSearch = searchTerm.trim().toLowerCase();
-  const umbral = umbralFiltro(filtroMetrica, proyeccion);
-  const filtraNodos = umbral !== null && filtroMetrica.nivel === 'zona';
-  const filtraGrupos = umbral !== null && filtroMetrica.nivel === 'grupo';
+  const umbral = filterThreshold(filtroMetrica, proyeccion);
+  const filtersNodes = umbral !== null && filtroMetrica.nivel === 'zona';
+  const filtersGroups = umbral !== null && filtroMetrica.nivel === 'grupo';
 
   const branchList = useMemo(() => {
     const branches = new Set<string>();
@@ -117,8 +117,8 @@ export function useBusinessUnitsData({
   }, [groups]);
 
   const filteredData = useMemo(() => {
-    const cumple = (cifras: Parameters<typeof valoresMetrica>[0], meta: Meta) =>
-      cumpleFiltro(valoresMetrica(cifras, meta, { proyeccion }), filtroMetrica, umbral);
+    const cumple = (cifras: Parameters<typeof metricValues>[0], meta: Meta) =>
+      matchesFilter(metricValues(cifras, meta, { projection: proyeccion }), filtroMetrica, umbral);
 
     return groups.flatMap((group) => {
       if (group.is_rf && selectedTech === 'FTTH') return [];
@@ -133,16 +133,16 @@ export function useBusinessUnitsData({
         ...node,
         meta: objetivos.meta(period, [node], 'zona_sucursal'),
         origenObjetivo: objetivos.origen(period, node, 'crecimiento'),
-      })).filter((node) => !filtraNodos || cumple({ ...node, churn: node.churn_bruto_pct }, node.meta));
+      })).filter((node) => !filtersNodes || cumple({ ...node, churn: node.churn_bruto_pct }, node.meta));
 
       if (filteredNodes.length === 0) return [];
 
       // La tabla lleva todos los nodos; el resumen, solo los que tienen objetivo.
-      const totals = aggregateNodes(nodosMedidos(objetivos, period, filteredNodes));
+      const totals = aggregateNodes(measuredNodes(objetivos, period, filteredNodes));
       // El bloque RF no es un coordinador: agrupa por tecnología a través de
       // sites y coordinadores, así que se mide contra el general.
       const meta = objetivos.meta(period, filteredNodes, group.is_rf ? 'general' : 'coordinador');
-      if (filtraGrupos && !cumple({ ...totals, churn: totals.churn_rate }, meta)) return [];
+      if (filtersGroups && !cumple({ ...totals, churn: totals.churn_rate }, meta)) return [];
 
       return [{
         ...group,
@@ -154,11 +154,11 @@ export function useBusinessUnitsData({
         },
       }];
     });
-  }, [groups, normalizedSearch, selectedBranch, selectedTech, period, objetivos, filtroMetrica, umbral, filtraNodos, filtraGrupos, proyeccion]);
+  }, [groups, normalizedSearch, selectedBranch, selectedTech, period, objetivos, filtroMetrica, umbral, filtersNodes, filtersGroups, proyeccion]);
 
   const dynamicFtthSummary = useMemo<FtthSummary>(() => {
     // Con el filtro por coordinador, solo cuentan los que lo cumplen.
-    const coordinadores = filtraGrupos ? new Set(filteredData.map((group) => group.coordinador)) : null;
+    const coordinadores = filtersGroups ? new Set(filteredData.map((group) => group.coordinador)) : null;
     const ftthNodes = ftthFijo ? [ftthFijo] : groups.flatMap((group) => {
       if (group.is_rf || (coordinadores && !coordinadores.has(group.coordinador))) return [];
       return group.nodes?.filter((node) => {
@@ -166,19 +166,19 @@ export function useBusinessUnitsData({
         const searchMatches = !normalizedSearch
           || String(node.zona_sucursal ?? '').toLowerCase().includes(normalizedSearch);
         if (node.type !== 'FTTH' || !branchMatches || !searchMatches) return false;
-        if (!filtraNodos) return true;
-        const valores = valoresMetrica(
+        if (!filtersNodes) return true;
+        const valores = metricValues(
           { ...node, churn: node.churn_bruto_pct },
           objetivos.meta(period, [node], 'zona_sucursal'),
-          { proyeccion },
+          { projection: proyeccion },
         );
-        return cumpleFiltro(valores, filtroMetrica, umbral);
+        return matchesFilter(valores, filtroMetrica, umbral);
       }) ?? [];
     });
 
     // El consolidado tampoco suma las zonas sin objetivo. El ya sumado que
     // recibe una cuenta restringida (`ftthFijo`) no se puede descomponer.
-    const totals = aggregateNodes(nodosMedidos(objetivos, period, ftthNodes));
+    const totals = aggregateNodes(measuredNodes(objetivos, period, ftthNodes));
     const meta = objetivos.meta(period, ftthNodes, 'general');
 
     return {
@@ -186,12 +186,12 @@ export function useBusinessUnitsData({
       adiciones_brutas: totals.nuevos + totals.reactivaciones - totals.bajas,
       total_nodos: ftthFijo ? ftthFijo.total_nodos : ftthNodes.length,
       meta,
-      ...calcComercial(totals.activos_inicio, totals.activos_final, meta, {
+      ...calcCommercial(totals.activos_inicio, totals.activos_final, meta, {
         nuevos: totals.nuevos,
-        proyeccion,
+        projection: proyeccion,
       }),
     };
-  }, [groups, selectedBranch, normalizedSearch, period, objetivos, proyeccion, filteredData, filtroMetrica, umbral, filtraNodos, filtraGrupos, ftthFijo]);
+  }, [groups, selectedBranch, normalizedSearch, period, objetivos, proyeccion, filteredData, filtroMetrica, umbral, filtersNodes, filtersGroups, ftthFijo]);
 
   return { branchList, filteredData, dynamicFtthSummary };
 }

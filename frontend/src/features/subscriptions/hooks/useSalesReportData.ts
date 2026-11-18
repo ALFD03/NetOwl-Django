@@ -6,21 +6,21 @@
  *
  * Aquí se resuelven también las metas: cada nodo con el suyo (desde su nivel
  * de nodo hacia arriba), y cada bloque de tecnología con el del **site**, que
- * ni el coordinador, ni la zona, ni el nodo mueven (ver `lib/objetivos.ts`).
+ * ni el coordinador, ni la zona, ni el nodo mueven (ver `lib/targets.ts`).
  *
- * El filtro por métrica (`lib/filtroMetrica.ts`) se aplica a cada nodo o al
+ * El filtro por métrica (`lib/metricFilter.ts`) se aplica a cada nodo o al
  * site entero, sobre los totales de los nodos que los otros filtros dejaron.
  */
 
 import { useMemo } from 'react';
 
-import type { Proyeccion } from '@/shared/lib/proyeccion';
+import type { Proyeccion } from '@/shared/lib/projection';
 
 import { aggregateNodes, type CommercialNode } from '../lib/commercial';
 import {
-  cumpleFiltro, umbralFiltro, valoresMetrica, type FiltroMetrica,
-} from '../lib/filtroMetrica';
-import { nodosMedidos, type Meta, type ResolverObjetivos } from '../lib/objetivos';
+  matchesFilter, filterThreshold, metricValues, type MetricFilter,
+} from '../lib/metricFilter';
+import { measuredNodes, type Meta, type TargetsResolver } from '../lib/targets';
 
 export type SalesReportNode = CommercialNode;
 
@@ -56,11 +56,11 @@ interface UseSalesReportDataParams {
   selectedTech: 'ALL' | 'FTTH' | 'RF';
   /** El periodo del reporte: decide qué tramo de objetivo está vigente. */
   period: string;
-  objetivos: ResolverObjetivos;
+  objetivos: TargetsResolver;
   /** El filtro por crecimiento, churn o proyección, por nodo o por site. */
-  filtroMetrica: FiltroMetrica;
+  metricFilter: MetricFilter;
   /** Los días laborables del corte elegido; sin ellos no se filtra por proyección. */
-  proyeccion?: Proyeccion | null;
+  projection?: Proyeccion | null;
 }
 
 export function useSalesReportData({
@@ -70,8 +70,8 @@ export function useSalesReportData({
   selectedTech,
   period,
   objetivos,
-  filtroMetrica,
-  proyeccion = null,
+  metricFilter: filtroMetrica,
+  projection: proyeccion = null,
 }: UseSalesReportDataParams) {
   const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -88,11 +88,11 @@ export function useSalesReportData({
   }, [sites]);
 
   const filteredData = useMemo(() => {
-    const umbral = umbralFiltro(filtroMetrica, proyeccion);
-    const filtraNodos = umbral !== null && filtroMetrica.nivel === 'zona';
+    const umbral = filterThreshold(filtroMetrica, proyeccion);
+    const filtersNodes = umbral !== null && filtroMetrica.nivel === 'zona';
     const filtraSites = umbral !== null && filtroMetrica.nivel === 'grupo';
-    const cumple = (cifras: Parameters<typeof valoresMetrica>[0], meta: Meta) =>
-      cumpleFiltro(valoresMetrica(cifras, meta, { proyeccion }), filtroMetrica, umbral);
+    const cumple = (cifras: Parameters<typeof metricValues>[0], meta: Meta) =>
+      matchesFilter(metricValues(cifras, meta, { projection: proyeccion }), filtroMetrica, umbral);
 
     return sites.flatMap((site) => {
       const siteMatchesSearch = String(site.site || '').toLowerCase().includes(normalizedSearch);
@@ -110,12 +110,12 @@ export function useSalesReportData({
           ...node,
           meta: objetivos.meta(period, [node], 'zona_sucursal'),
           origenObjetivo: objetivos.origen(period, node, 'crecimiento'),
-        })).filter((node) => !filtraNodos || cumple({ ...node, churn: node.churn_bruto_pct }, node.meta));
+        })).filter((node) => !filtersNodes || cumple({ ...node, churn: node.churn_bruto_pct }, node.meta));
 
         if (!nodes.length) return [];
 
         // La tabla lleva todos los nodos; el resumen, solo los que tienen objetivo.
-        const totals = aggregateNodes(nodosMedidos(objetivos, period, nodes));
+        const totals = aggregateNodes(measuredNodes(objetivos, period, nodes));
         return [{
           ...tech,
           nodes,
@@ -135,9 +135,9 @@ export function useSalesReportData({
       if (!technologies.length) return [];
       // La del site entero, para enseñarla junto a su botón de exportar bajas:
       // sobre los mismos nodos que la tabla tiene en pantalla.
-      const nodosSite = technologies.flatMap((tech) => tech.nodes ?? []);
-      const meta = objetivos.meta(period, nodosSite, 'site');
-      const totals = aggregateNodes(nodosMedidos(objetivos, period, nodosSite));
+      const siteNodes = technologies.flatMap((tech) => tech.nodes ?? []);
+      const meta = objetivos.meta(period, siteNodes, 'site');
+      const totals = aggregateNodes(measuredNodes(objetivos, period, siteNodes));
       if (filtraSites && !cumple({ ...totals, churn: totals.churn_rate }, meta)) return [];
       const totales = { activos_inicio: totals.activos_inicio, activos_final: totals.activos_final, nuevos: totals.nuevos };
       return [{ ...site, technologies, meta, totales }];

@@ -156,7 +156,7 @@ export interface SupportDashboardProps {
     historico_tendencias?: SupportHistoricoRow[];
   };
   /** Los tickets abiertos ahora; `null` sin el permiso o sin logs analizados. */
-  abiertos?: TicketsAbiertos | null;
+  abiertos?: OpenTickets | null;
 }
 
 /** A clickable sparkline: the cross-period average plus its per-period series. */
@@ -183,11 +183,11 @@ export interface SupportGroupCard {
   color: MetricColor;
   totalTickets: number;
   sharePct: number;
-  pctResueltos: number;
-  pctCancelados: number;
+  pctResolved: number;
+  pctCancelled: number;
   pctRezagados: number;
   /** Sólo el grupo que escala (ATC) lo tiene distinto de cero. */
-  pctEscalados: number;
+  pctEscalated: number;
   /** Mean hours from creation to closure, over resolved and cancelled alike. */
   mttr: number;
   mttrMediana: number;
@@ -214,19 +214,19 @@ export const SUPPORT_DIMENSIONS = ['zona', 'sucursal', 'asignado_a', 'creado_por
 export type SupportDimension = (typeof SUPPORT_DIMENSIONS)[number];
 
 /**
- * Los dos ejes cuyo valor es una persona, espejo de `SUPPORT_DIMENSIONES_PERSONA`
+ * Los dos ejes cuyo valor es una persona, espejo de `SUPPORT_PERSON_DIMENSIONS`
  * en `services/support/analytics/config.py`. Son los únicos que el servidor
  * anota con un departamento.
  */
-export const SUPPORT_DIMENSIONES_PERSONA = ['asignado_a', 'creado_por'] as const;
+export const SUPPORT_PERSON_DIMENSIONS = ['asignado_a', 'creado_por'] as const;
 
-export type SupportDimensionPersona = (typeof SUPPORT_DIMENSIONES_PERSONA)[number];
+export type SupportPersonDimension = (typeof SUPPORT_PERSON_DIMENSIONS)[number];
 
 /** Si ese eje lleva departamento, estrechando el tipo al comprobarlo. */
-export function esDimensionPersona(
+export function isPersonDimension(
   dimension: SupportDimension,
-): dimension is SupportDimensionPersona {
-  return (SUPPORT_DIMENSIONES_PERSONA as readonly string[]).includes(dimension);
+): dimension is SupportPersonDimension {
+  return (SUPPORT_PERSON_DIMENSIONS as readonly string[]).includes(dimension);
 }
 
 /** The three ways a dimension value is broken down. */
@@ -319,7 +319,7 @@ export interface SupportGroupOption {
 export interface SupportDimensionRow extends SupportMetrics {
   nombre: string;
   /** Share of the parent's ticket volume. */
-  pctDelPadre: number;
+  pctOfParent: number;
   /** Vacío salvo en los dos ejes de persona; ver `SupportDimensionEntry`. */
   departamento: string;
 }
@@ -338,7 +338,7 @@ export interface SupportDimensionRow extends SupportMetrics {
  * falta los tickets uno a uno. Salen en cero y la tabla de departamentos no los
  * enseña, en vez de inventar un promedio de medianas.
  */
-export interface SupportDepartamentoRow extends SupportDimensionRow {
+export interface SupportDepartmentRow extends SupportDimensionRow {
   /** Cuántas personas del eje caen en este departamento. */
   personas: number;
 }
@@ -350,11 +350,11 @@ export interface SupportZoneRow {
   tecnologia: string;
   totalTickets: number;
   totalSuscriptores: number;
-  tasaIncidencia: number;
-  mttrPromedio: number;
-  pctResueltos: number;
+  incidenceRate: number;
+  mttrAverage: number;
+  pctResolved: number;
   /** No active subscribers on record — the incidence rate is not computable. */
-  sinPoblacion: boolean;
+  withoutPopulation: boolean;
 }
 
 /** What `GET /support/api/breakdown/` returns for one dimension value. */
@@ -383,7 +383,7 @@ export interface SupportResultsProps {
 // el literal con el que la persona sale en las columnas `Asignado a` y
 // `Creado por` del export, sufijo `(User)` incluido.
 
-export interface UsuarioSoporte {
+export interface SupportUser {
   id: number;
   nombre_odoo: string;
   nombre: string;
@@ -398,11 +398,11 @@ export interface UsuarioSoporte {
   fecha_egreso: string | null;
   activo: boolean;
   /** Los departamentos por los que ha pasado, del ingreso a hoy. */
-  historial: PasoDepartamento[];
+  historial: DepartmentStep[];
 }
 
 /** Un tramo de la historia: «a partir de `desde`, en `departamento`». */
-export interface PasoDepartamento {
+export interface DepartmentStep {
   id: number;
   departamento_id: number;
   departamento: string;
@@ -411,7 +411,7 @@ export interface PasoDepartamento {
 }
 
 /** Un usuario dado de baja a cuyo nombre siguen entrando tickets. */
-export interface UsuarioTrasBaja {
+export interface UserAfterChurn {
   id: number;
   nombre_odoo: string;
   fecha_egreso: string;
@@ -423,7 +423,7 @@ export interface UsuarioTrasBaja {
   ultimo: string;
 }
 
-export interface DepartamentoSoporte {
+export interface SupportDepartment {
   id: number;
   nombre: string;
   /** Cuánta gente lo referencia: un departamento con usuarios no se borra. */
@@ -431,7 +431,7 @@ export interface DepartamentoSoporte {
 }
 
 /** Un nombre que ya firma o atiende tickets y que el directorio no reconoce. */
-export interface UsuarioPendiente {
+export interface PendingUser {
   /** Ya normalizado, con el sufijo puesto: es lo que se guardaría. */
   nombre_odoo: string;
   /** Tal y como lo escribe el export, por si difiere del normalizado. */
@@ -441,10 +441,10 @@ export interface UsuarioPendiente {
 }
 
 export interface SupportUsersProps {
-  usuarios: UsuarioSoporte[];
-  departamentos: DepartamentoSoporte[];
-  pendientes: UsuarioPendiente[];
-  trasBaja: UsuarioTrasBaja[];
+  usuarios: SupportUser[];
+  departamentos: SupportDepartment[];
+  pendientes: PendingUser[];
+  trasBaja: UserAfterChurn[];
   /** El sufijo que el servidor añade solo; se enseña como pista en el formulario. */
   sufijo: string;
   /** Nombre que llega en `?nuevo_usuario=`: abre el alta ya rellena. */
@@ -454,12 +454,12 @@ export interface SupportUsersProps {
 // --- Logs de etapa: abiertos y catálogo de etapas --------------------------
 
 /** Equipo de un tramo: el de su etapa, o el del momento si es compartida. */
-export type EquipoFlujo = 'atc' | 'soporte';
+export type FlowTeam = 'atc' | 'soporte';
 /** Qué se hace en una etapa. `cierre` y `sin_clasificar` no se editan en el catálogo. */
-export type TipoEtapa = 'cola' | 'pausa' | 'gestion' | 'cierre' | 'sin_clasificar';
+export type StageKind = 'cola' | 'pausa' | 'gestion' | 'cierre' | 'sin_clasificar';
 
 /** Los estadísticos de una serie de horas (los mismos de las demás medidas de soporte). */
-export interface EstadisticosHoras {
+export interface HourStats {
   medio: number;
   mediana: number;
   min: number;
@@ -472,10 +472,10 @@ export interface EstadisticosHoras {
 }
 
 /** Un grupo de tickets abiertos (por etapa, grupo, asignado…). */
-export interface AbiertosGrupo {
+export interface OpenGroup {
   etapa_actual?: string;
-  equipo_actual?: EquipoFlujo;
-  tipo_actual?: TipoEtapa;
+  equipo_actual?: FlowTeam;
+  tipo_actual?: StageKind;
   grupo_trabajo?: string;
   asignado_a?: string;
   tipo_solicitud?: string;
@@ -489,11 +489,11 @@ export interface AbiertosGrupo {
   escalados: number;
 }
 
-export interface TicketAbierto {
+export interface OpenTicket {
   ticket: string;
   etapa: string;
-  equipo: EquipoFlujo;
-  tipo: TipoEtapa;
+  equipo: FlowTeam;
+  tipo: StageKind;
   grupo_trabajo: string;
   asignado_a: string;
   tipo_solicitud: string;
@@ -504,7 +504,7 @@ export interface TicketAbierto {
   en_etapa_h: number | null;
 }
 
-export interface TicketsAbiertos {
+export interface OpenTickets {
   ahora: string;
   logs_hasta: string | null;
   resumen: {
@@ -512,27 +512,27 @@ export interface TicketsAbiertos {
     escalados: number;
     en_atc: number;
     en_soporte: number;
-    edad: EstadisticosHoras;
-    en_etapa: EstadisticosHoras;
-    en_soporte_desde_escalamiento: EstadisticosHoras;
+    edad: HourStats;
+    en_etapa: HourStats;
+    en_soporte_desde_escalamiento: HourStats;
     /** Abiertos según los logs pero cerrados en el export de tickets: les faltan logs. */
     desfasados: number;
   };
   antiguedad: { tramo: string; abiertos: number; pct: number }[];
-  por_etapa: AbiertosGrupo[];
-  por_grupo: AbiertosGrupo[];
-  por_asignado: AbiertosGrupo[];
-  por_tipo_solicitud: AbiertosGrupo[];
-  por_zona: AbiertosGrupo[];
-  lista: TicketAbierto[];
+  por_etapa: OpenGroup[];
+  por_grupo: OpenGroup[];
+  por_asignado: OpenGroup[];
+  por_tipo_solicitud: OpenGroup[];
+  por_zona: OpenGroup[];
+  lista: OpenTicket[];
   lista_limite: number;
 }
 
 /** Una etapa del catálogo. */
-export interface EtapaSoporte {
+export interface SupportStage {
   id: number;
   nombre: string;
-  equipo: EquipoFlujo | 'compartida';
+  equipo: FlowTeam | 'compartida';
   tipo: 'cola' | 'pausa' | 'gestion';
   /** Logs que entran en ella. */
   logs: number;
@@ -540,23 +540,23 @@ export interface EtapaSoporte {
 }
 
 /** Una etapa que aparece en los logs y que el catálogo no clasifica. */
-export interface EtapaPendiente {
+export interface PendingStage {
   etapa: string;
   logs: number;
   tickets: number;
   ultimo: string | null;
 }
 
-export interface OpcionCatalogo {
+export interface CatalogChoice {
   value: string;
   label: string;
 }
 
-export interface SupportEtapasProps {
-  etapas: EtapaSoporte[];
-  pendientes: EtapaPendiente[];
-  equipos: OpcionCatalogo[];
-  tipos: OpcionCatalogo[];
+export interface SupportStagesProps {
+  etapas: SupportStage[];
+  pendientes: PendingStage[];
+  equipos: CatalogChoice[];
+  tipos: CatalogChoice[];
   etapaEscalamiento: string;
   etapasCierre: string[];
   /** Nombre que llega en `?nueva_etapa=`: abre el alta ya rellena. */

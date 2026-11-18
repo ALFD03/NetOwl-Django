@@ -2,7 +2,7 @@
 
 import type { ExcelColumn } from '@/shared/lib/excel';
 import { toNumber } from '@/shared/utils';
-import type { SupportDepartamentoRow, SupportDimensionRow } from '../types';
+import type { SupportDepartmentRow, SupportDimensionRow } from '../types';
 
 const INT = '#,##0';
 const DEC = '0.00';
@@ -21,7 +21,7 @@ const num = (value: number | undefined) => toNumber(value);
  */
 export const SUPPORT_DIMENSION_EXCEL_COLUMNS: ExcelColumn<SupportDimensionRow>[] = [
   { header: 'Valor', value: (r) => r.nombre, width: 34 },
-  { header: '% del Total', value: (r) => num(r.pctDelPadre), format: DEC },
+  { header: '% del Total', value: (r) => num(r.pctOfParent), format: DEC },
 
   { header: 'Creados', value: (r) => num(r.tickets_creados), format: INT },
   { header: 'Cerrados', value: (r) => num(r.tickets_cerrados), format: INT },
@@ -69,12 +69,12 @@ export function supportExportFileName(partes: Array<string | undefined>): string
  * La tabla de departamentos como hoja de cálculo.
  *
  * Mismo criterio que la de personas —lo exportado es el cuadro de la pantalla—,
- * así que tampoco lleva la mediana: ver `SUPPORT_DEPARTAMENTO_COLUMNS`.
+ * así que tampoco lleva la mediana: ver `SUPPORT_DEPARTMENT_COLUMNS`.
  */
-export const SUPPORT_DEPARTAMENTO_EXCEL_COLUMNS: ExcelColumn<SupportDepartamentoRow>[] = [
+export const SUPPORT_DEPARTMENT_EXCEL_COLUMNS: ExcelColumn<SupportDepartmentRow>[] = [
   { header: 'Departamento', value: (r) => r.nombre, width: 34 },
   { header: 'Personas', value: (r) => num(r.personas), format: INT },
   ...SUPPORT_DIMENSION_EXCEL_COLUMNS.filter(
     (col) => col.header !== 'Valor' && col.header !== 'Cierre Total Mediana (h)',
   ),
-] as ExcelColumn<SupportDepartamentoRow>[];
+] as ExcelColumn<SupportDepartmentRow>[];

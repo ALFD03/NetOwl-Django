@@ -127,7 +127,7 @@ def _extract_msgs(raw: pd.DataFrame) -> pd.DataFrame:
 
 # --- Deteccion ---------------------------------------------------------------
 
-def _transiciones_tarifa(df_msgs: pd.DataFrame) -> pd.DataFrame:
+def _tariff_transitions(df_msgs: pd.DataFrame) -> pd.DataFrame:
     """Mensajes de cambio de tarifa, con el sentido de la transicion."""
     if df_msgs.empty:
         return pd.DataFrame(columns=["orden", "f_dt", "hacia_gratis"])
@@ -142,7 +142,7 @@ def _transiciones_tarifa(df_msgs: pd.DataFrame) -> pd.DataFrame:
     return df[df["hacia_gratis"] != df["desde_gratis"]]
 
 
-def _eventos_estado(df_logs: pd.DataFrame, df_msgs: pd.DataFrame) -> pd.DataFrame:
+def _state_events(df_logs: pd.DataFrame, df_msgs: pd.DataFrame) -> pd.DataFrame:
     """Linea de tiempo de entradas y salidas del servicio gratuito."""
     partes = []
     if not df_logs.empty:
@@ -152,7 +152,7 @@ def _eventos_estado(df_logs: pd.DataFrame, df_msgs: pd.DataFrame) -> pd.DataFram
         desarch["entra"], desarch["metodo"] = False, "log_desarchivada"
         partes += [arch, desarch]
 
-    trans = _transiciones_tarifa(df_msgs)
+    trans = _tariff_transitions(df_msgs)
     if not trans.empty:
         t = trans[["orden", "f_dt"]].copy()
         t["entra"] = trans["hacia_gratis"].to_numpy()
@@ -165,7 +165,7 @@ def _eventos_estado(df_logs: pd.DataFrame, df_msgs: pd.DataFrame) -> pd.DataFram
     return pd.concat(partes, ignore_index=True).sort_values(["orden", "f_dt"])
 
 
-def _primer_intento_cero(df_msgs: pd.DataFrame) -> pd.Series:
+def _first_zero_attempt(df_msgs: pd.DataFrame) -> pd.Series:
     """Primera factura por importe cero de cada suscripcion.
 
     Es una cota superior: en esa fecha la suscripcion ya era gratuita, aunque
@@ -193,31 +193,31 @@ def detect_free_start(
     df = df_subs.copy()
     df["orden_producto"] = df["orden_producto"].astype(str).str.strip()
     f_ini = pd.to_datetime(df["fecha_inicio"], errors="coerce")
-    prox_factura = pd.to_datetime(df.get("fecha_factura"), errors="coerce")
+    next_invoice = pd.to_datetime(df.get("fecha_factura"), errors="coerce")
 
     if corte is None:
         fechas = [s for s in (df_logs.get("f_dt"), df_msgs.get("f_dt")) if s is not None and len(s)]
         corte = max(s.max() for s in fechas) if fechas else pd.Timestamp.utcnow().normalize()
 
     # 1-2. Ultima entrada al servicio gratuito que no fue revertida.
-    eventos = _eventos_estado(df_logs, df_msgs)
-    entrada_fecha: dict[str, pd.Timestamp] = {}
-    entrada_metodo: dict[str, str] = {}
+    eventos = _state_events(df_logs, df_msgs)
+    entry_date: dict[str, pd.Timestamp] = {}
+    method_entry: dict[str, str] = {}
     for orden, f_dt, entra, metodo in eventos[["orden", "f_dt", "entra", "metodo"]].itertuples(index=False):
         if entra:
-            entrada_fecha[orden], entrada_metodo[orden] = f_dt, metodo
+            entry_date[orden], method_entry[orden] = f_dt, metodo
         else:
-            entrada_fecha.pop(orden, None)
-            entrada_metodo.pop(orden, None)
+            entry_date.pop(orden, None)
+            method_entry.pop(orden, None)
 
-    evento_fecha = df["orden_producto"].map(entrada_fecha)
-    evento_metodo = df["orden_producto"].map(entrada_metodo)
+    event_date = df["orden_producto"].map(entry_date)
+    evento_metodo = df["orden_producto"].map(method_entry)
 
     # 3. Primer intento de facturacion en cero.
-    cero = df["orden_producto"].map(_primer_intento_cero(df_msgs))
+    cero = df["orden_producto"].map(_first_zero_attempt(df_msgs))
 
     # 4. Facturacion congelada en el pasado.
-    congelada = prox_factura.where(prox_factura < corte)
+    congelada = next_invoice.where(next_invoice < corte)
 
     # 3 y 4 son cotas superiores: nos quedamos con la mas antigua de las dos.
     cota = pd.concat([cero, congelada], axis=1).min(axis=1)
@@ -227,7 +227,7 @@ def detect_free_start(
         "facturacion_detenida",
     )
 
-    fecha = evento_fecha.copy()
+    fecha = event_date.copy()
     metodo = evento_metodo.copy()
     usa_cota = fecha.isna() & cota.notna()
     fecha = fecha.mask(usa_cota, cota)

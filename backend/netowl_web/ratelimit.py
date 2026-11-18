@@ -45,7 +45,7 @@ def ip_cliente(request) -> str:
     return request.META.get("REMOTE_ADDR") or "0.0.0.0"
 
 
-def usuario_login(group, request) -> str:
+def user_login(group, request) -> str:
     """La cuenta que se intenta abrir, para contar los fallos por cuenta.
 
     Con `key='post:username'` la libreria lee `request.POST`, que llega vacio

@@ -92,7 +92,7 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 # `frontend/src/shared/constants/permissions.ts` repite esta lista: es el espejo que
 # abre el formulario de "Nuevo Usuario", y el formulario manda la matriz entera,
 # asi que las dos tienen que decir lo mismo (ver CLAUDE.md).
-PERMISOS_INICIALES = ['can_view_subscriptions', 'can_view_subs_dashboard']
+INITIAL_PERMISSIONS = ['can_view_subscriptions', 'can_view_subs_dashboard']
 
 
 class PermissionMatrix(models.Model):
@@ -229,7 +229,7 @@ class PermissionMatrix(models.Model):
 
 
 def default_permissions(full_access: bool = False) -> dict:
-    """Matriz inicial de una cuenta: `PERMISOS_INICIALES`, o todo con `full_access`.
+    """Matriz inicial de una cuenta: `INITIAL_PERMISSIONS`, o todo con `full_access`.
 
     Antes la lectura se concedia entera sin preguntar y solo las acciones
     dependian del rol. Ahora una cuenta nueva nace con un unico modulo —el de
@@ -237,7 +237,7 @@ def default_permissions(full_access: bool = False) -> dict:
     """
     if full_access:
         return {field: True for field in PERMISSION_FIELDS}
-    return {field: field in PERMISOS_INICIALES for field in PERMISSION_FIELDS}
+    return {field: field in INITIAL_PERMISSIONS for field in PERMISSION_FIELDS}
 
 
 class PermissionGroup(PermissionMatrix):
@@ -318,7 +318,7 @@ def create_user_profile(sender, instance, created, **kwargs):
     """Crea el perfil al dar de alta un usuario.
 
     **El primero del sistema queda como administrador con la matriz completa**;
-    el resto nacen como visualizadores con `PERMISOS_INICIALES`: el modulo de
+    el resto nacen como visualizadores con `INITIAL_PERMISSIONS`: el modulo de
     suscripciones y nada mas.
     """
     if created:

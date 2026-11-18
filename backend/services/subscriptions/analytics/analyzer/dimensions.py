@@ -151,17 +151,17 @@ def aggregate_dimensions(
 
         d_act_ini = cnt(act_ini)
         d_act_fin = cnt(act_fin)
-        d_nuevos = cnt(nuevos)
+        d_new = cnt(nuevos)
         # El detalle trae una fila por orden, pero se deduplica igual que el
         # corte impagado: el conteo es de ordenes, no de filas.
-        d_bajas = cnt(
+        d_churn = cnt(
             df_bajas.drop_duplicates(subset=["orden"])
             if df_bajas is not None and not df_bajas.empty
             else df_bajas
         )
         d_inact = cnt(df_inactivos)
         d_react = cnt(df_react_all)
-        d_corte = cnt(df_corte_impagado.drop_duplicates(subset=["orden"]))
+        d_cutoff = cnt(df_corte_impagado.drop_duplicates(subset=["orden"]))
         
         react_6_filtered = react_by_origin["6_churn"][~react_by_origin["6_churn"].isin(ini_ordens)]
         d_react_6 = cnt(pd.DataFrame({"orden": react_6_filtered}))
@@ -180,30 +180,30 @@ def aggregate_dimensions(
         d_react_4_P = cnt(pd.DataFrame({"orden": react_4_in_ini}))
         d_react_4_H = cnt(pd.DataFrame({"orden": react_4_not_in_ini}))
 
-        react_sin_series = df_react_all.loc[df_react_all["estado_origen"] == "reactivacion_sin_origen", "orden"] if not df_react_all.empty else pd.Series(dtype=str)
-        react_sin_not_ini = react_sin_series[~react_sin_series.isin(ini_ordens)] if not react_sin_series.empty else pd.Series(dtype=str)
-        d_react_sin = cnt(pd.DataFrame({"orden": react_sin_not_ini}))
+        react_without_series = df_react_all.loc[df_react_all["estado_origen"] == "reactivacion_sin_origen", "orden"] if not df_react_all.empty else pd.Series(dtype=str)
+        react_without_not_start = react_without_series[~react_without_series.isin(ini_ordens)] if not react_without_series.empty else pd.Series(dtype=str)
+        d_react_without = cnt(pd.DataFrame({"orden": react_without_not_start}))
         
         d_react_not_in_ini = cnt(df_react_not_in_ini) if df_react_not_in_ini is not None and not df_react_not_in_ini.empty else {}
 
         # Clientes gratuitos (archivados): no suman a activos ni a bajas.
         d_free = cnt(df_free_fin)
-        d_free_periodo = cnt(df_free_periodo)
+        d_free_period = cnt(df_free_periodo)
         d_free_retorno = cnt(df_free_retorno)
 
         valores = sorted(set(
-            list(d_act_ini.keys()) + list(d_act_fin.keys()) + list(d_nuevos.keys()) +
-            list(d_bajas.keys()) + list(d_inact.keys()) + list(d_react.keys()) +
-            list(d_corte.keys()) + list(d_react_6.keys()) + list(d_react_8.keys()) +
-            list(d_react_4_P.keys()) + list(d_react_4_H.keys()) + list(d_react_sin.keys()) +
+            list(d_act_ini.keys()) + list(d_act_fin.keys()) + list(d_new.keys()) +
+            list(d_churn.keys()) + list(d_inact.keys()) + list(d_react.keys()) +
+            list(d_cutoff.keys()) + list(d_react_6.keys()) + list(d_react_8.keys()) +
+            list(d_react_4_P.keys()) + list(d_react_4_H.keys()) + list(d_react_without.keys()) +
             list(d_free.keys())
         ))
 
         for val in valores:
             a_ini = d_act_ini.get(val, 0)
             a_fin = d_act_fin.get(val, 0)
-            nv = d_nuevos.get(val, 0)
-            bn = a_ini - (a_fin - nv - d_free_retorno.get(val, 0)) - d_free_periodo.get(val, 0)
+            nv = d_new.get(val, 0)
+            bn = a_ini - (a_fin - nv - d_free_retorno.get(val, 0)) - d_free_period.get(val, 0)
             # La baja bruta del nodo es el detalle contado, no un balance.
             #
             # Era `bn + d_react_not_in_ini`, y esa aritmetica no reproduce las
@@ -212,10 +212,10 @@ def aggregate_dimensions(
             # bajas de un nodo no daba el numero que la tabla mostraba al lado.
             # `bn` se conserva tal cual porque la baja **neta** si es un balance:
             # mide el saldo de la base, no quien se fue.
-            bb = d_bajas.get(val, 0)
+            bb = d_churn.get(val, 0)
             inac = d_inact.get(val, 0)
             reac = d_react.get(val, 0)
-            react_val = d_react_6.get(val, 0) + d_react_8.get(val, 0) + d_react_4_H.get(val, 0) + d_react_sin.get(val, 0)
+            react_val = d_react_6.get(val, 0) + d_react_8.get(val, 0) + d_react_4_H.get(val, 0) + d_react_without.get(val, 0)
 
             billing_val = billing_by_val.get(val, 0.0) if a_fin > 0 else 0.0
 
@@ -241,13 +241,13 @@ def aggregate_dimensions(
                 "indice_reemplazo_react_pct": round((react_val / bb) * 100, 4) if bb > 0 else 0.0,
                 "adiciones_netas": nv - bb,
                 "adiciones_brutas": (nv + d_react_not_in_ini.get(val, 0)) - bb,
-                "tasa_winback_pct": round((d_react_4_P.get(val, 0) / d_corte.get(val, 0)) * 100, 4) if d_corte.get(val, 0) > 0 else 0.0,
-                "corte_impagado": d_corte.get(val, 0),
-                "porcentaje_suspensiones": round((d_corte.get(val, 0) / a_ini) * 100, 4) if a_ini > 0 else 0.0,
+                "tasa_winback_pct": round((d_react_4_P.get(val, 0) / d_cutoff.get(val, 0)) * 100, 4) if d_cutoff.get(val, 0) > 0 else 0.0,
+                "corte_impagado": d_cutoff.get(val, 0),
+                "porcentaje_suspensiones": round((d_cutoff.get(val, 0) / a_ini) * 100, 4) if a_ini > 0 else 0.0,
                 "total_billing": billing_val,
                 "arpu": round(billing_val / a_fin, 2) if a_fin > 0 else 0.0,
                 "clientes_gratuitos": d_free.get(val, 0),
-                "gratuitos_nuevos": d_free_periodo.get(val, 0),
+                "gratuitos_nuevos": d_free_period.get(val, 0),
                 "gratuitos_retornados": d_free_retorno.get(val, 0),
             })
 

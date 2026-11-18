@@ -43,7 +43,7 @@ export const SUPPORT_DAY_CHARTS: DayChartSpec[] = [
   {
     title: 'Tasa de resolución acumulada',
     subtitle: 'Cómo se asienta el mes corte a corte',
-    esTasa: true,
+    isRate: true,
     series: [{ key: 'pct_resueltos', label: 'Resolución', kind: 'tasa', color: 'green' }],
   },
 ];

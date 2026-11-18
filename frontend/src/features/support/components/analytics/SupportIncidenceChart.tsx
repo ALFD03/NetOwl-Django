@@ -18,7 +18,7 @@ import {
   colorTecnologia,
   incidenciaData,
   incidenciaOptions,
-  zonasConTasa,
+  zonesWithRate,
 } from '../../lib/supportCharts';
 import type { SupportZoneRow } from '../../types';
 
@@ -29,16 +29,16 @@ interface Props {
 }
 
 export function SupportIncidenceChart({ rows, groupName, resultsHref }: Props) {
-  const visibles = zonasConTasa(rows);
-  const sinPoblacion = rows.filter((r) => r.sinPoblacion).length;
+  const visibles = zonesWithRate(rows);
+  const sinPoblacion = rows.filter((r) => r.withoutPopulation).length;
   const tecnologias = [...new Set(visibles.map((z) => z.tecnologia))];
-  const conTasa = rows.length - sinPoblacion;
+  const withRate = rows.length - sinPoblacion;
 
   return (
     <NeonContainer
       theme="yellow"
       title="Incidencia por zona"
-      subtitle={`${groupName} · tickets por cada 100 clientes activos de la zona · ${formatInteger(conTasa)} zonas con clientes${sinPoblacion ? `, ${formatInteger(sinPoblacion)} sin datos` : ''}`}
+      subtitle={`${groupName} · tickets por cada 100 clientes activos de la zona · ${formatInteger(withRate)} zonas con clientes${sinPoblacion ? `, ${formatInteger(sinPoblacion)} sin datos` : ''}`}
       icon={<Radio className="h-5 w-5" />}
     >
       {visibles.length === 0 ? (
@@ -59,8 +59,8 @@ export function SupportIncidenceChart({ rows, groupName, resultsHref }: Props) {
                   {t}
                 </span>
               ))}
-              {conTasa > visibles.length && (
-                <span>Las {visibles.length} de mayor incidencia de {formatInteger(conTasa)}.</span>
+              {withRate > visibles.length && (
+                <span>Las {visibles.length} de mayor incidencia de {formatInteger(withRate)}.</span>
               )}
             </span>
             {resultsHref && (

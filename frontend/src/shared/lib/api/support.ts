@@ -12,18 +12,18 @@ export const SUPPORT_DAY_METRICS_URL = '/api/support/day-metrics/';
 /**
  * Los dos catálogos del directorio de usuarios.
  *
- * Vive aquí y no en `shared/types` por lo mismo que `CatalogoPayload`: es la
+ * Vive aquí y no en `shared/types` por lo mismo que `CatalogPayload`: es la
  * forma de la petición, no un concepto del dominio.
  */
-export type DirectorioTipo = 'usuarios' | 'departamentos';
+export type DirectoryKind = 'usuarios' | 'departamentos';
 
 /** Una fila del directorio. Sin `id` es un alta. */
-export interface DirectorioPayload extends Record<string, unknown> {
+export interface DirectoryPayload extends Record<string, unknown> {
   id?: number | null;
 }
 
 /** Lo que le puede pasar a un usuario del directorio, además de editarlo. */
-export type MovimientoUsuario = 'cambiar_departamento' | 'deshacer_cambio' | 'baja' | 'reactivar';
+export type UserMove = 'cambiar_departamento' | 'deshacer_cambio' | 'baja' | 'reactivar';
 
 export const supportApi = {
   runAnalysis: async (request: SupportAnalysisRequest) =>
@@ -35,10 +35,10 @@ export const supportApi = {
    * Un solo endpoint para los dos: lo que cambia entre ellos son los campos
    * del cuerpo, no la forma de la petición.
    */
-  saveDirectorio: async (tipo: DirectorioTipo, payload: DirectorioPayload) =>
+  saveDirectorio: async (tipo: DirectoryKind, payload: DirectoryPayload) =>
     (await apiClient.post('/api/support/users/save/', { tipo, ...payload })).data,
 
-  deleteDirectorio: async (tipo: DirectorioTipo, id: number) =>
+  deleteDirectorio: async (tipo: DirectoryKind, id: number) =>
     (await apiClient.post('/api/support/users/delete/', { tipo, id })).data,
 
   /**
@@ -46,7 +46,7 @@ export const supportApi = {
    * (desde cuándo) y la baja (el egreso).
    */
   moverUsuario: async (
-    accion: MovimientoUsuario,
+    accion: UserMove,
     id: number,
     extra: { departamento_id?: number | null; fecha?: string } = {},
   ) => (await apiClient.post('/api/support/users/move/', { accion, id, ...extra })).data,

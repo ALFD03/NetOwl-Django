@@ -3,16 +3,16 @@
 import { History, Table as TableIcon } from 'lucide-react';
 
 import { DataTable, NeonContainer, type Column } from '@/shared/ui';
-import { formatInteger, formatOneDecimal, formatPeriodoLabel, formatTwoDecimals } from '@/shared/utils';
+import { formatInteger, formatOneDecimal, formatPeriodLabel, formatTwoDecimals } from '@/shared/utils';
 import type { SupportHistoricoRow, SupportResultsProps } from '../types';
 import { Seccion, SeccionesNav } from './Seccion';
-import { SupportDetalleMes } from './SupportDetalleMes';
+import { SupportMonthDetail } from './SupportMonthDetail';
 
 const dec = formatTwoDecimals;
 const hrs = formatOneDecimal;
 
 const COLUMNS: Column<SupportHistoricoRow>[] = [
-  { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodoLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
+  { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
   { header: 'Creados', accessor: (r) => formatInteger(r.tickets_creados), align: 'right', sortKey: 'tickets_creados' },
   { header: 'Cerrados', accessor: (r) => <span className="text-sky-400">{formatInteger(r.tickets_cerrados)}</span>, align: 'right', sortKey: 'tickets_cerrados' },
 
@@ -83,7 +83,7 @@ export function SupportResultsView({ historico = [], analyticsData, periods = []
         descripcion="Cada valor de la dimensión elegida con todas sus columnas, la incidencia de cada zona y el desglose de un valor al pulsarlo. Es el cierre del mes; los cortes por día están en Analytics."
         icon={<TableIcon />}
       >
-        <SupportDetalleMes analyticsData={analyticsData} periods={periods} selectedPeriod={selectedPeriod} />
+        <SupportMonthDetail analyticsData={analyticsData} periods={periods} selectedPeriod={selectedPeriod} />
       </Seccion>
     </div>
   );

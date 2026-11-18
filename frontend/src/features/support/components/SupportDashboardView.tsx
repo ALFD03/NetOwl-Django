@@ -50,34 +50,34 @@ import { usePermissions } from '@/shared/hooks/usePermissions';
 import {
   formatInteger,
   formatOneDecimal,
-  formatPeriodoLabel,
+  formatPeriodLabel,
   formatTwoDecimals,
 } from '@/shared/utils';
 import {
   ASIGNACION,
-  CIERRE_TOTAL,
-  ESCALAMIENTO,
+  CLOSE_TOTAL,
+  ESCALATION,
   TIME_MEASURE_META,
   distribution,
 } from '../lib/supportMetrics';
 import { MEASURE_ICONS } from '../lib/measureIcons';
 import { SUPPORT_TIME_MEASURES, type SupportDashboardProps } from '../types';
 import type { useSupportDashboard } from '../hooks/useSupportDashboard';
-import { TicketsAbiertosPanel } from './flujo/TicketsAbiertosPanel';
+import { OpenTicketsPanel } from './flow/OpenTicketsPanel';
 import { Seccion, SeccionesNav, type SeccionDef } from './Seccion';
 
 /**
  * `MetricCard`'s `trend` accessory is hardcoded to percentages and reads "up" as
  * good — neither holds for hours-to-close, so the gap is spelled out instead.
  */
-function mttrGapLabel(deltaHoras: number): string {
-  if (deltaHoras === 0) return 'En línea con el promedio global';
-  const faster = deltaHoras < 0;
-  return `${Math.abs(deltaHoras)} h ${faster ? 'más rápido' : 'más lento'} que el promedio global`;
+function mttrGapLabel(deltaHours: number): string {
+  if (deltaHours === 0) return 'En línea con el promedio global';
+  const faster = deltaHours < 0;
+  return `${Math.abs(deltaHours)} h ${faster ? 'más rápido' : 'más lento'} que el promedio global`;
 }
 
 /** De lo cerrado en el mes, cuánto nació en él y cuánto venía arrastrado. */
-function OrigenCierres({ stats }: { stats: ReturnType<typeof useSupportDashboard>['stats'] }) {
+function CloseSources({ stats }: { stats: ReturnType<typeof useSupportDashboard>['stats'] }) {
   return (
     <NeonContainer
       theme="slate"
@@ -190,7 +190,7 @@ interface SupportDashboardViewProps {
 
 export function SupportDashboardView({ data, abiertos = null }: SupportDashboardViewProps) {
   const { can } = usePermissions();
-  const verAbiertos = can(PERMISSIONS.VIEW_SUPPORT_ABIERTOS);
+  const showOpen = can(PERMISSIONS.VIEW_SUPPORT_ABIERTOS);
 
   const {
     periodosEvaluados,
@@ -208,14 +208,14 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
   const periodsLabel = `${periodosEvaluados} periodos evaluados`;
   const paginacion = usePaginacion(historico);
 
-  const cierreTotal = distribution(stats, CIERRE_TOTAL);
+  const closeTotal = distribution(stats, CLOSE_TOTAL);
   const asignacion = distribution(stats, ASIGNACION);
-  const escalamiento = distribution(stats, ESCALAMIENTO);
+  const escalamiento = distribution(stats, ESCALATION);
 
   const secciones: SeccionDef[] = [
     { id: 'volumen', titulo: 'Volumen y cierre', icon: <Layers /> },
     { id: 'tiempos', titulo: 'Tiempos', icon: <Timer /> },
-    ...(verAbiertos ? [{ id: 'abiertos', titulo: 'Abiertos ahora', icon: <FolderOpen /> }] : []),
+    ...(showOpen ? [{ id: 'abiertos', titulo: 'Abiertos ahora', icon: <FolderOpen /> }] : []),
     { id: 'tendencias', titulo: 'Tendencias y grupos', icon: <Activity /> },
   ];
 
@@ -275,7 +275,7 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
           />
         </div>
 
-        <OrigenCierres stats={stats} />
+        <CloseSources stats={stats} />
       </Seccion>
 
       <Seccion
@@ -305,17 +305,17 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <EquidistantTimeline
             title="Distribución Cierre Total"
-            subtitle={`Creación → cierre · ${formatInteger(cierreTotal.muestra)} tickets medidos`}
+            subtitle={`Creación → cierre · ${formatInteger(closeTotal.muestra)} tickets medidos`}
             icon={<Clock className="h-5 w-5" />}
             theme="blue"
-            min={cierreTotal.min}
-            p25={cierreTotal.p25}
-            mediana={cierreTotal.mediana}
-            promedio={cierreTotal.promedio}
-            p75={cierreTotal.p75}
-            max={cierreTotal.max}
-            std={cierreTotal.std}
-            pctExcedeProm={cierreTotal.pctExcedeProm}
+            min={closeTotal.min}
+            p25={closeTotal.p25}
+            mediana={closeTotal.mediana}
+            promedio={closeTotal.promedio}
+            p75={closeTotal.p75}
+            max={closeTotal.max}
+            std={closeTotal.std}
+            pctExcedeProm={closeTotal.pctExcedeProm}
           />
 
           <EquidistantTimeline
@@ -354,7 +354,7 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
         </div>
       </Seccion>
 
-      {verAbiertos && (
+      {showOpen && (
         <Seccion
           id="abiertos"
           titulo="Tickets abiertos ahora"
@@ -362,7 +362,7 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
           alcance="Hoy"
           icon={<FolderOpen />}
         >
-          <TicketsAbiertosPanel abiertos={abiertos} />
+          <OpenTicketsPanel abiertos={abiertos} />
         </Seccion>
       )}
 
@@ -409,28 +409,28 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
                   <Fragment key={card.id}>
                     <MetricCard
                       label={card.label}
-                      value={`${card.pctResueltos}%`}
+                      value={`${card.pctResolved}%`}
                       caption={`${formatInteger(card.totalTickets)} tickets/mes · ${card.sharePct}% del total`}
                       color={card.color}
                       indicator
                     >
                       <ProgressBar
                         label="Resueltos"
-                        percent={card.pctResueltos}
-                        valueLabel={`${card.pctResueltos}%`}
+                        percent={card.pctResolved}
+                        valueLabel={`${card.pctResolved}%`}
                         color="green"
                       />
                       <ProgressBar
                         label="Cancelados"
-                        percent={card.pctCancelados}
-                        valueLabel={`${card.pctCancelados}%`}
+                        percent={card.pctCancelled}
+                        valueLabel={`${card.pctCancelled}%`}
                         color="red"
                       />
-                      {card.pctEscalados > 0 && (
+                      {card.pctEscalated > 0 && (
                         <ProgressBar
                           label="Escalados a Soporte"
-                          percent={card.pctEscalados}
-                          valueLabel={`${card.pctEscalados}%`}
+                          percent={card.pctEscalated}
+                          valueLabel={`${card.pctEscalated}%`}
                           color="yellow"
                         />
                       )}
@@ -514,7 +514,7 @@ export function SupportDashboardView({ data, abiertos = null }: SupportDashboard
                           className="transition-colors hover:bg-white/5"
                         >
                           <td className="p-4 font-bold text-white">
-                            {formatPeriodoLabel(String(row.periodo_reporte))}
+                            {formatPeriodLabel(String(row.periodo_reporte))}
                           </td>
                           <td className="p-4 text-right font-mono text-slate-400">
                             {formatInteger(row.tickets_creados)}

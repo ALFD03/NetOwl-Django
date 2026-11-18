@@ -11,7 +11,7 @@ from __future__ import annotations
 # --- Orden de presentacion de los sites -------------------------------------
 # Los sites no se ordenan alfabeticamente sino por relevancia comercial. Ese
 # orden vive ahora en la columna `Site.orden` del catalogo y se lee con
-# `fixtures.orden_sites()`; esta lista sobrevive solo como su semilla, y la usa
+# `fixtures.sites_order()`; esta lista sobrevive solo como su semilla, y la usa
 # unicamente `manage.py cargar_catalogos`.
 CUSTOM_SITE_ORDER = [
     "Valencia",
@@ -34,7 +34,7 @@ CUSTOM_SITE_ORDER = [
 # reportan en su propia categoria.
 PLAN_TRANSPORTE = "Transporte de Datos"
 PLAN_DEDICADO = "Internet Dedicado"
-PLANES_NO_RESIDENCIALES = [PLAN_TRANSPORTE, PLAN_DEDICADO]
+NON_RESIDENTIAL_PLANS = [PLAN_TRANSPORTE, PLAN_DEDICADO]
 
 # --- Vocabulario del reporte de la reguladora -------------------------------
 # La reguladora solo distingue alambrico / inalambrico, asi que las tecnologias
@@ -49,14 +49,14 @@ TECH_MAP = {
 }
 TECH_DEFAULT = "Alámbrico"
 
-PERSONA_MAP = {
+PERSON_MAP = {
     "nat": "Persona Natural",
     "pyme": "Persona Jurídica",
     "jur": "Persona Jurídica",
     "natural": "Persona Natural",
     "juridica": "Persona Jurídica",
 }
-PERSONA_DEFAULT = "Persona Natural"
+PERSON_DEFAULT = "Persona Natural"
 
 
 # --- Mapeo de columnas del export de Odoo ------------------------------------

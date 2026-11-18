@@ -14,15 +14,15 @@ from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.tables import ensure_tables, upsert
 from services.support.analytics import tables
-from services.support.analytics.cohorts import build_cohort, periodos_disponibles
-from services.support.analytics.config import DIM_GRUPO
+from services.support.analytics.cohorts import available_periods, build_cohort
+from services.support.analytics.config import GROUP_DIM
 from services.support.analytics.day_metrics import build_support_day_metrics
 from services.support.analytics.dimensions import (
     build_dimension_rows,
     save_dimensions,
 )
-from services.support.analytics.escalamiento import cargar_tickets
-from services.support.analytics.flujo import run_flujo_analysis
+from services.support.analytics.escalation import load_tickets
+from services.support.analytics.flow import run_flow_analysis
 from services.support.analytics.metrics import average_blocks, compute_metrics_for_period
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ def _save_global(db: DBConnector, resumen: dict, por_grupo: dict, periodos: int)
 
 
 def run_support_analysis(
-    periodo_str: str | None = None,
+    period_str: str | None = None,
     progreso: Callable[[int, int, str], None] | None = None,
 ) -> dict:
     """
@@ -58,28 +58,28 @@ def run_support_analysis(
     alimenta la barra de la interfaz mientras los recorre.
 
     Lo primero es rehacer el recorrido de cada ticket desde sus logs de etapa
-    (`run_flujo_analysis`): de él sale cuándo se escaló cada uno, y con eso
-    `cargar_tickets` le devuelve a ATC lo que escaló (ver `escalamiento.py`).
+    (`run_flow_analysis`): de él sale cuándo se escaló cada uno, y con eso
+    `load_tickets` le devuelve a ATC lo que escaló (ver `escalation.py`).
     Sin logs cargados no hace nada y los tickets quedan como dice el export.
     """
     db = DBConnector()
     ensure_tables(db, *tables.ALL)
-    run_flujo_analysis(db=db)
+    run_flow_analysis(db=db)
 
-    df_all = cargar_tickets(db)
+    df_all = load_tickets(db)
 
     if df_all.empty:
         print("⚠️ No hay tickets de soporte para analizar.")
         return {"status": "empty", "message": "No hay tickets cargados."}
 
-    un_solo_mes = bool(periodo_str and len(periodo_str) == 7)
-    periodos_target = [periodo_str] if un_solo_mes else periodos_disponibles(df_all)
+    single_month = bool(period_str and len(period_str) == 7)
+    target_periods = [period_str] if single_month else available_periods(df_all)
 
-    print(f"\n📊 PROCESANDO SOPORTE TÉCNICO PARA {len(periodos_target)} PERIODO(S)...")
+    print(f"\n📊 PROCESANDO SOPORTE TÉCNICO PARA {len(target_periods)} PERIODO(S)...")
 
     resumenes: dict[str, dict] = {}
 
-    for periodo in periodos_target:
+    for periodo in target_periods:
         cohorte = build_cohort(df_all, periodo)
         metricas = compute_metrics_for_period(cohorte)
 
@@ -88,7 +88,7 @@ def run_support_analysis(
         # Solo del mes pedido: recorrer los dias de todo el historico son
         # treinta y un cortes por cada mes que haya, y nadie lanza un analisis
         # global esperando eso. El cierre de cada mes si se recalcula entero.
-        if un_solo_mes:
+        if single_month:
             build_support_day_metrics(periodo, db=db, df_all=df_all, progreso=progreso)
 
         resumenes[periodo] = metricas
@@ -113,7 +113,7 @@ def _recompute_global_average(db: DBConnector, df_all: pd.DataFrame) -> None:
     """
     df_hist = db.query(f"""
         SELECT periodo_reporte, metricas
-        FROM {DB_SCHEMA}.{TableNames.SUPPORT_CIERRE_HISTORICO}
+        FROM {DB_SCHEMA}.{TableNames.SUPPORT_CLOSE_HISTORY}
         ORDER BY periodo_reporte ASC
     """)
 
@@ -131,7 +131,7 @@ def _recompute_global_average(db: DBConnector, df_all: pd.DataFrame) -> None:
     acumulado: dict[str, list[dict]] = {}
     for periodo in periodos:
         cohorte = build_cohort(df_all, periodo)
-        for grupo, sub in cohorte.desglosar(DIM_GRUPO):
+        for grupo, sub in cohorte.desglosar(GROUP_DIM):
             acumulado.setdefault(grupo, []).append(compute_metrics_for_period(sub))
 
     por_grupo = {g: average_blocks(b) for g, b in acumulado.items()}

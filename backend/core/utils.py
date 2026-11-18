@@ -25,21 +25,21 @@ from .config import DATE_FORMATS
 # tablas de resultados; y en el reporte ETA llegaba a un `LIKE %s` construido
 # como f"{periodo}%", donde `?period=%` hacia que el informe agregase todos los
 # periodos calculados de golpe en vez de un mes.
-RE_PERIODO = re.compile(r"\d{4}-(?:0[1-9]|1[0-2])")
+RE_PERIOD = re.compile(r"\d{4}-(?:0[1-9]|1[0-2])")
 
 # Techo de la lista de periodos que admite una consulta. Las vistas la
 # construyen partiendo `?periods=` por comas sin ningun limite, y esa lista se
 # convierte en un `IN (...)` con un marcador por elemento: sin tope, una sola
 # peticion podia pedir cien mil.
-MAX_PERIODOS_POR_CONSULTA = 60
+MAX_PERIODS_PER_QUERY = 60
 
 
-def es_periodo(value: Any) -> bool:
+def is_period(value: Any) -> bool:
     """Si `value` tiene la forma "YYYY-MM" con un mes real."""
-    return isinstance(value, str) and RE_PERIODO.fullmatch(value.strip()) is not None
+    return isinstance(value, str) and RE_PERIOD.fullmatch(value.strip()) is not None
 
 
-def limpiar_periodos(crudo: str | None) -> list[str] | None:
+def clean_periods(crudo: str | None) -> list[str] | None:
     """Convierte un `?periods=a,b,c` en una lista validada y acotada.
 
     Devuelve None cuando no se pidio ninguno, que es lo que las consultas
@@ -49,14 +49,14 @@ def limpiar_periodos(crudo: str | None) -> list[str] | None:
     """
     if not crudo:
         return None
-    periodos = [p.strip() for p in crudo.split(",") if es_periodo(p)]
+    periodos = [p.strip() for p in crudo.split(",") if is_period(p)]
     if not periodos:
         return None
-    return periodos[:MAX_PERIODOS_POR_CONSULTA]
+    return periodos[:MAX_PERIODS_PER_QUERY]
 
 
-def entero_de_peticion(
-    request, clave: str, por_defecto: int | None = None,
+def request_int(
+    request, clave: str, default: int | None = None,
     minimo: int | None = None, maximo: int | None = None,
 ) -> int | None:
     """Lee un entero de la query string sin reventar si no lo es.
@@ -67,11 +67,11 @@ def entero_de_peticion(
     """
     crudo = request.GET.get(clave)
     if crudo in (None, ""):
-        return por_defecto
+        return default
     try:
         valor = int(crudo)
     except (TypeError, ValueError):
-        return por_defecto
+        return default
     if minimo is not None:
         valor = max(valor, minimo)
     if maximo is not None:
@@ -219,7 +219,7 @@ def capture_console(buffer=None):
         return JsonResponse({"log_output": salida.getvalue()})
 
     `buffer` permite pasar un StringIO propio. Lo usan las tareas de Celery con
-    `services.imports.jobs.ConsolaJob`, que ademas de acumular va volcando el
+    `services.imports.jobs.JobConsole`, que ademas de acumular va volcando el
     log a la fila del job para que la interfaz lo lea mientras corre.
     """
     buffer = io.StringIO() if buffer is None else buffer

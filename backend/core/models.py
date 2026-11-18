@@ -22,7 +22,7 @@ class Periodo:
     """
 
     fecha_inicio: datetime
-    fecha_final: datetime
+    end_date: datetime
 
     @classmethod
     def build(cls, ini_text: str, fin_text: str | None = None) -> Periodo:
@@ -57,12 +57,12 @@ class Periodo:
         """
         return (
             f"{self.fecha_inicio.strftime('%Y-%m-%d')}"
-            f" al {self.fecha_final.strftime('%Y-%m-%d')}"
+            f" al {self.end_date.strftime('%Y-%m-%d')}"
         )
 
     def fecha_corte(self) -> str:
         """Fecha de corte del snapshot (día hasta el que se calculó)."""
-        return self.fecha_final.strftime("%Y-%m-%d")
+        return self.end_date.strftime("%Y-%m-%d")
 
     def periodo_mes(self) -> str:
         """Mes al que pertenece el corte, en formato YYYY-MM."""

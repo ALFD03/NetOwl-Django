@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.utils import entero_de_peticion, limpiar_periodos
+from core.utils import clean_periods, request_int
 from services.config.api import ApiError, endpoint
 from services.config.periods import (
     clamp_requested,
@@ -13,12 +13,12 @@ from services.config.periods import (
     visible_periods,
 )
 from services.crm.analytics import (
-    get_crm_cierre_historico,
+    get_crm_close_history,
     get_crm_day_payload,
     get_crm_day_series,
     get_crm_dimensiones,
     get_crm_metric_totals,
-    get_crm_periodos,
+    get_crm_periods,
 )
 
 PERIOD_DENIED = "Acceso denegado. Solo puedes ver el último periodo evaluado."
@@ -36,8 +36,8 @@ def _metric_totals(request, period: str | None) -> dict:
 @endpoint(perms=["can_view_crm", "can_view_crm_dashboard"], require_all=True)
 def dashboard(request):
     """El promedio global y su serie histórica."""
-    periods = visible_periods(request, get_crm_periodos())
-    period = visible_period(request, request.GET.get("period"), get_crm_periodos)
+    periods = visible_periods(request, get_crm_periods())
+    period = visible_period(request, request.GET.get("period"), get_crm_periods)
     return {
         "metrics": _metric_totals(request, period),
         "periods": periods,
@@ -52,9 +52,9 @@ def analytics(request):
     Trae además la serie ligera del mes (el global de cada día): mover la barra
     de días solo pide el desglose a `day-metrics/`.
     """
-    periods = visible_periods(request, get_crm_periodos())
+    periods = visible_periods(request, get_crm_periods())
     period = visible_period(request, request.GET.get("period"), lambda: periods)
-    day = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    day = request_int(request, "dia", minimo=1, maximo=31)
     target = period or (periods[0] if periods else None)
 
     series = get_crm_day_series(target) if target else {}
@@ -67,7 +67,7 @@ def analytics(request):
     else:
         # Sin cortes diarios, el cierre del mes.
         dimensions = get_crm_dimensiones(periodos=[target] if target else None)
-        closing = get_crm_cierre_historico([target]) if target else []
+        closing = get_crm_close_history([target]) if target else []
         global_data = closing[0] if closing else {}
 
     return {
@@ -87,18 +87,18 @@ def analytics(request):
 @endpoint(perms=["can_view_crm_results"])
 def results(request):
     """Los cierres de los periodos pedidos (`?periods=a,b`)."""
-    periods = clamp_requested(request, limpiar_periodos(request.GET.get("periods")), get_crm_periodos)
-    return {"historico": get_crm_cierre_historico(periods) if periods != [] else []}
+    periods = clamp_requested(request, clean_periods(request.GET.get("periods")), get_crm_periods)
+    return {"historico": get_crm_close_history(periods) if periods != [] else []}
 
 
 @endpoint(perms=["can_view_crm_analytics"])
 def day_metrics(request):
     """El corte completo de un día: `{global, dimensiones}`. Lo escribe el análisis."""
     period = request.GET.get("period")
-    day = entero_de_peticion(request, "dia", minimo=1, maximo=31)
+    day = request_int(request, "dia", minimo=1, maximo=31)
     if not period or not day:
         raise ApiError("Se requieren period y dia.")
-    if month_denied(request, period, get_crm_periodos):
+    if month_denied(request, period, get_crm_periods):
         raise ApiError(PERIOD_DENIED, 403)
     cut = get_crm_day_payload(period, day)
     if cut is None:
@@ -110,9 +110,9 @@ def day_metrics(request):
 def dimension_metrics(request):
     """Las métricas de una dimensión y un periodo."""
     period = request.GET.get("period")
-    if period and period_denied(request, period, get_crm_periodos):
+    if period and period_denied(request, period, get_crm_periods):
         raise ApiError(PERIOD_DENIED, 403)
-    periods = clamp_requested(request, [period] if period else None, get_crm_periodos)
+    periods = clamp_requested(request, [period] if period else None, get_crm_periods)
     if periods == []:
         return {"dimensiones": []}
     return {"dimensiones": get_crm_dimensiones(periodos=periods, dimension=request.GET.get("dimension"))}

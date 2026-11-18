@@ -9,7 +9,7 @@ import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useTheme } from '@/shared/hooks/useTheme';
 import { compactarAnillo } from './compacto';
 import { centerTextPlugin } from './plugins';
-import { adaptarAlTema } from './tema';
+import { adaptToTheme } from './tema';
 
 interface DoughnutChartProps {
   data: ChartData<'doughnut'>;
@@ -35,10 +35,10 @@ export function DoughnutChart({
   const ancho = useBreakpoint('sm');
   const { tema } = useTheme();
   const resolvedOptions = useMemo(() => {
-    const enTema = adaptarAlTema(options, tema);
-    return ancho || !enTema ? enTema : compactarAnillo(enTema);
+    const themed = adaptToTheme(options, tema);
+    return ancho || !themed ? themed : compactarAnillo(themed);
   }, [options, ancho, tema]);
-  const resolvedData = useMemo(() => adaptarAlTema(data, tema), [data, tema]);
+  const resolvedData = useMemo(() => adaptToTheme(data, tema), [data, tema]);
 
   return (
     <div className={className}>

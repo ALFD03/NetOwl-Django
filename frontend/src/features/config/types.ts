@@ -1,10 +1,10 @@
 /** Tipos de la pantalla de usuarios, grupos y permisos. */
 
-import type { UnidadesSeleccion } from '@/shared/types/auth';
+import type { UnitsSelection } from '@/shared/types/auth';
 
-export type { UnidadesSeleccion };
+export type { UnitsSelection };
 
-export const SIN_UNIDADES: UnidadesSeleccion = { ids: [], rf: false };
+export const NO_UNITS: UnitsSelection = { ids: [], rf: false };
 
 export interface UnidadNegocio {
   id: number;
@@ -20,7 +20,7 @@ export interface UserData {
   group_name?: string | null;
   is_superuser: boolean;
   permissions: Record<string, boolean>;
-  unidades: UnidadesSeleccion;
+  unidades: UnitsSelection;
   /** Si quien mira tiene rango para tocar esta cuenta (no es la suya ni una con más permisos). */
   editable: boolean;
 }
@@ -41,7 +41,7 @@ export interface NewUserForm {
   role: string;
   group_id: number | string;
   permissions: Record<string, boolean>;
-  unidades: UnidadesSeleccion;
+  unidades: UnitsSelection;
 }
 
 export type EditableUser = Omit<UserData, 'group_id'> & {
@@ -49,7 +49,7 @@ export type EditableUser = Omit<UserData, 'group_id'> & {
   /** La matriz al abrir el editor: lo que ya tenía se puede quitar aunque quien edita no lo tenga. */
   previa?: Record<string, boolean>;
   /** Las unidades al abrir el editor, por la misma razón que `previa`. */
-  previaUnidades?: UnidadesSeleccion;
+  previousUnits?: UnitsSelection;
 };
 
 export interface PasswordForm {
@@ -77,5 +77,5 @@ export interface ConfigManagementProps {
   /** El catálogo de unidades de negocio. */
   unidadesNegocio: UnidadNegocio[];
   /** Las unidades que puede conceder quien mira; `null` si las ve todas. */
-  unidadesConcedibles: UnidadesSeleccion | null;
+  unidadesConcedibles: UnitsSelection | null;
 }

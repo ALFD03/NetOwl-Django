@@ -3,14 +3,14 @@
  *
  * Las tres medidas de tiempo miden cosas distintas —el ciclo completo, solo la
  * gestión del técnico y la espera hasta la asignación— y es lo que distinguen
- * `CIERRE_TOTAL`, `GESTION` y `ASIGNACION`.
+ * `CLOSE_TOTAL`, `HANDLING` y `ASIGNACION`.
  */
 
 import type { MetricColor } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals, toNumber } from '@/shared/utils';
 import {
   SUPPORT_TIME_MEASURES,
-  type SupportDepartamentoRow,
+  type SupportDepartmentRow,
   type SupportDimension,
   type SupportDimensionEntry,
   type SupportDimensionRow,
@@ -116,7 +116,7 @@ export function flattenEntries(
     .map((entry) => ({
       ...(entry.metricas ?? {}),
       nombre: entry.nombre,
-      pctDelPadre: share(toNumber(entry.metricas?.total_tickets), parentTotal),
+      pctOfParent: share(toNumber(entry.metricas?.total_tickets), parentTotal),
       departamento: entry.departamento ?? '',
     }))
     .sort((a, b) => toNumber(b.total_tickets) - toNumber(a.total_tickets));
@@ -125,7 +125,7 @@ export function flattenEntries(
 // --- Agrupación por departamento --------------------------------------------
 
 /** Cómo se llama en la tabla quien no está en el directorio de `/support/users/`. */
-export const SIN_DEPARTAMENTO = 'Sin departamento';
+export const NO_DEPARTMENT = 'Sin departamento';
 
 /** Los volúmenes: se suman sin más, porque las personas parten los tickets. */
 const VOLUME_KEYS = [
@@ -140,30 +140,30 @@ const VOLUME_KEYS = [
 /**
  * Suma las filas de un eje de persona por el departamento de cada una.
  *
- * Los tres porqués de cada familia de cifras están en `SupportDepartamentoRow`.
+ * Los tres porqués de cada familia de cifras están en `SupportDepartmentRow`.
  * `parentTotal` es el mismo denominador que usa la tabla de personas —el total
  * del grupo—, de modo que los dos `% del Total` se leen contra lo mismo.
  */
-export function agruparPorDepartamento(
+export function groupByDepartment(
   rows: SupportDimensionRow[],
   parentTotal: number,
-): SupportDepartamentoRow[] {
-  const acumulado = new Map<string, { row: SupportDepartamentoRow; pesos: Map<string, number> }>();
+): SupportDepartmentRow[] {
+  const acumulado = new Map<string, { row: SupportDepartmentRow; pesos: Map<string, number> }>();
 
   for (const row of rows) {
-    const nombre = row.departamento || SIN_DEPARTAMENTO;
-    let entrada = acumulado.get(nombre);
-    if (entrada === undefined) {
-      entrada = {
-        row: { ...emptyStats(), nombre, pctDelPadre: 0, departamento: nombre, personas: 0 },
+    const nombre = row.departamento || NO_DEPARTMENT;
+    let entry = acumulado.get(nombre);
+    if (entry === undefined) {
+      entry = {
+        row: { ...emptyStats(), nombre, pctOfParent: 0, departamento: nombre, personas: 0 },
         pesos: new Map(),
       };
-      acumulado.set(nombre, entrada);
+      acumulado.set(nombre, entry);
     }
 
-    entrada.row.personas += 1;
+    entry.row.personas += 1;
     for (const key of VOLUME_KEYS) {
-      entrada.row[key] = toNumber(entrada.row[key]) + toNumber(row[key]);
+      entry.row[key] = toNumber(entry.row[key]) + toNumber(row[key]);
     }
 
     // Media ponderada de los tiempos: se acumula suma(media × muestra) y la
@@ -173,8 +173,8 @@ export function agruparPorDepartamento(
       const muestra = toNumber(row[`muestra_${medida}`]);
       if (muestra <= 0) continue;
       const clave = `tiempo_medio_${medida}_horas` as const;
-      entrada.row[clave] = toNumber(entrada.row[clave]) + toNumber(row[clave]) * muestra;
-      entrada.pesos.set(medida, (entrada.pesos.get(medida) ?? 0) + muestra);
+      entry.row[clave] = toNumber(entry.row[clave]) + toNumber(row[clave]) * muestra;
+      entry.pesos.set(medida, (entry.pesos.get(medida) ?? 0) + muestra);
     }
   }
 
@@ -190,21 +190,21 @@ export function agruparPorDepartamento(
       // Las tasas se recalculan desde las sumas, nunca se promedian: cada una
       // trae fijado su denominador —lo cerrado en el mes, o lo creado— y
       // promediar porcentajes de personas con cargas distintas no da ninguno.
-      const cerrados = toNumber(row.tickets_cerrados);
+      const closedItems = toNumber(row.tickets_cerrados);
       const creados = toNumber(row.tickets_creados);
-      row.pct_resueltos = share(toNumber(row.tickets_resueltos), cerrados);
-      row.pct_resueltos_periodo = share(toNumber(row.tickets_resueltos_periodo), cerrados);
-      row.pct_resueltos_arrastre = share(toNumber(row.tickets_resueltos_arrastre), cerrados);
-      row.pct_cancelados = share(toNumber(row.tickets_cancelados), cerrados);
-      row.pct_cancelados_periodo = share(toNumber(row.tickets_cancelados_periodo), cerrados);
-      row.pct_cancelados_arrastre = share(toNumber(row.tickets_cancelados_arrastre), cerrados);
-      row.pct_escalados = share(toNumber(row.tickets_escalados), cerrados);
-      row.pct_escalados_periodo = share(toNumber(row.tickets_escalados_periodo), cerrados);
-      row.pct_escalados_arrastre = share(toNumber(row.tickets_escalados_arrastre), cerrados);
+      row.pct_resueltos = share(toNumber(row.tickets_resueltos), closedItems);
+      row.pct_resueltos_periodo = share(toNumber(row.tickets_resueltos_periodo), closedItems);
+      row.pct_resueltos_arrastre = share(toNumber(row.tickets_resueltos_arrastre), closedItems);
+      row.pct_cancelados = share(toNumber(row.tickets_cancelados), closedItems);
+      row.pct_cancelados_periodo = share(toNumber(row.tickets_cancelados_periodo), closedItems);
+      row.pct_cancelados_arrastre = share(toNumber(row.tickets_cancelados_arrastre), closedItems);
+      row.pct_escalados = share(toNumber(row.tickets_escalados), closedItems);
+      row.pct_escalados_periodo = share(toNumber(row.tickets_escalados_periodo), closedItems);
+      row.pct_escalados_arrastre = share(toNumber(row.tickets_escalados_arrastre), closedItems);
       row.pct_recibidos_escalados = share(toNumber(row.tickets_recibidos_escalados), creados);
       row.pct_rezagados = share(toNumber(row.tickets_rezagados), creados);
 
-      row.pctDelPadre = share(toNumber(row.total_tickets), parentTotal);
+      row.pctOfParent = share(toNumber(row.total_tickets), parentTotal);
       return row;
     })
     .sort((a, b) => toNumber(b.total_tickets) - toNumber(a.total_tickets));
@@ -249,7 +249,7 @@ const LEADER_SPECS: LeaderSpec[] = [
     id: 'volumen',
     label: '% del total más alto',
     color: 'blue',
-    pick: (r) => r.pctDelPadre,
+    pick: (r) => r.pctOfParent,
     format: (v) => `${formatTwoDecimals(v)}%`,
     caption: (r) => `${formatInteger(toNumber(r.total_tickets))} tickets`,
   },
@@ -354,10 +354,10 @@ export const TIME_MEASURE_META: Record<SupportTimeMeasure, TimeMeasureMeta> = {
 };
 
 /** The two clocks the summary panels lead with, one per formula. */
-export const CIERRE_TOTAL: SupportTimeMeasure = 'cierre_creado_cerrados';
-export const GESTION: SupportTimeMeasure = 'cierre_asignado_cerrados';
+export const CLOSE_TOTAL: SupportTimeMeasure = 'cierre_creado_cerrados';
+export const HANDLING: SupportTimeMeasure = 'cierre_asignado_cerrados';
 export const ASIGNACION: SupportTimeMeasure = 'asignacion';
-export const ESCALAMIENTO: SupportTimeMeasure = 'escalamiento';
+export const ESCALATION: SupportTimeMeasure = 'escalamiento';
 
 /**
  * El nombre de cada eje. `asignado_a` y `creado_por` se etiquetan con el

@@ -27,7 +27,7 @@ interface Props {
   /** Día del corte; se marca en la línea y es el que se resume en la cabecera. */
   selectedDay: number;
   /** `true` cuando los valores son porcentajes, para rotularlos como tales. */
-  esTasa?: boolean;
+  isRate?: boolean;
   className?: string;
 }
 
@@ -38,7 +38,7 @@ const formatea = (valor: number, esTasa: boolean): string =>
  * Sin etiquetas por punto: treinta y un números encima de la línea no se leen.
  * El número del día elegido está en la cabecera y el resto, en el tooltip.
  */
-const opcionesBase: ChartOptions<'line'> = {
+const baseOptions: ChartOptions<'line'> = {
   responsive: true,
   maintainAspectRatio: false,
   interaction: { mode: 'index', intersect: false },
@@ -77,7 +77,7 @@ export function DayTrendChart({
   dias,
   series,
   selectedDay,
-  esTasa = false,
+  isRate: esTasa = false,
   className = 'h-56 w-full',
 }: Props) {
   const idx = dias.indexOf(selectedDay);
@@ -117,9 +117,9 @@ export function DayTrendChart({
 
       <div className="mb-4 flex flex-wrap gap-4">
         {series.map((serie) => {
-          const actual = idx >= 0 ? (serie.values[idx] ?? 0) : 0;
+          const current = idx >= 0 ? (serie.values[idx] ?? 0) : 0;
           const anterior = idx > 0 ? (serie.values[idx - 1] ?? 0) : null;
-          const delta = anterior === null ? null : actual - anterior;
+          const delta = anterior === null ? null : current - anterior;
           const sube = (delta ?? 0) >= 0;
           // El color dice si la noticia es buena, no hacia dónde apunta: en la
           // misma gráfica, más instalados es verde y más perdidos es rojo.
@@ -132,7 +132,7 @@ export function DayTrendChart({
               </span>
               <span className="flex items-baseline gap-2">
                 <span className="text-xl font-black text-white tabular-nums">
-                  {formatea(actual, esTasa)}
+                  {formatea(current, esTasa)}
                 </span>
                 {delta !== null && (
                   <span
@@ -148,7 +148,7 @@ export function DayTrendChart({
         })}
       </div>
 
-      <LineChart data={data} options={opcionesBase} plugins={[]} className={className} />
+      <LineChart data={data} options={baseOptions} plugins={[]} className={className} />
     </div>
   );
 }

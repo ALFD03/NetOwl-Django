@@ -17,7 +17,7 @@ from core.exports import ExportSpec, iter_export
 from core.tables import FLOAT, TIMESTAMP, append, to_bool, truncate
 from core.utils import normalize_text
 
-from .config import CLIENT_FIELDS, CSV_COLUMN_MAP, ETAPA_MAP, GANADO_STATES, REQUIRED_CRM_HEADERS
+from .config import CLIENT_FIELDS, CSV_COLUMN_MAP, GANADO_STATES, REQUIRED_CRM_HEADERS, STAGE_MAP
 from .tables import CLIENTS, LOGS
 
 CRM_EXPORT = ExportSpec(
@@ -65,8 +65,8 @@ def canonical_stage(value: object) -> str:
     if value is None or pd.isna(value) or not str(value).strip():
         return "desconocido"
     text = str(value).strip()
-    if text in ETAPA_MAP:
-        return ETAPA_MAP[text]
+    if text in STAGE_MAP:
+        return STAGE_MAP[text]
     number = re.match(r"^(\d+)", text)
     if number and int(number.group(1)) in _STAGE_BY_NUMBER:
         return _STAGE_BY_NUMBER[int(number.group(1))]

@@ -37,7 +37,7 @@ export function CampoSelect({ label, value, options, onChange, hint }: CampoSele
   );
 }
 
-interface PieDeModalProps {
+interface ModalFooterProps {
   onCancel: () => void;
   /** Lo que se lee a la izquierda: el estado del formulario, no una instrucción. */
   nota?: ReactNode;
@@ -45,7 +45,7 @@ interface PieDeModalProps {
 }
 
 /** La barra de acciones al pie de un modal: la nota a la izquierda, los botones a la derecha. */
-export function PieDeModal({ onCancel, nota, children }: PieDeModalProps) {
+export function ModalFooter({ onCancel, nota, children }: ModalFooterProps) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/80 pt-4">
       <p className="text-[11px] text-slate-500">{nota}</p>

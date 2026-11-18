@@ -8,21 +8,21 @@ import type { MetricColor } from '@/shared/ui';
  * import site for anything CRM-shaped.
  */
 export type {
-  CrmCierre,
+  CrmClose,
   CrmDimensionRow,
   CrmDimensionValue,
-  CrmEfectividadRow,
+  CrmEffectivenessRow,
   CrmHistoricoRow,
-  CrmTiempoEtapaRow,
+  CrmStageTimeRow,
 } from '@/shared/types/crm';
 
-import type { CrmDimensionRow, CrmEfectividadRow, CrmHistoricoRow } from '@/shared/types/crm';
+import type { CrmDimensionRow, CrmEffectivenessRow, CrmHistoricoRow } from '@/shared/types/crm';
 import type { DayCuts } from '@/shared/types/domain';
 
 export interface CrmDashboardProps {
   metrics?: {
     historico_tendencias?: CrmHistoricoRow[];
-    efectividad?: CrmEfectividadRow[];
+    efectividad?: CrmEffectivenessRow[];
   };
   periods?: string[];
 }

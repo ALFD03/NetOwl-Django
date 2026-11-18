@@ -22,7 +22,7 @@ interface Props {
  * to the zone's total incidence.
  */
 export function SupportIncidenceTable({ rows, groupName }: Props) {
-  const sinPoblacion = rows.filter((row) => row.sinPoblacion).length;
+  const sinPoblacion = rows.filter((row) => row.withoutPopulation).length;
 
   return (
     <NeonContainer

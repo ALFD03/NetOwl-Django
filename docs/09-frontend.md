@@ -83,13 +83,13 @@ interceptor de `shared/lib/api/client.ts`.
 | `/subscriptions/eta-report/config/` | `/api/subscriptions/eta-report/config/` | `pages/Subscriptions/EtaManagement.tsx` |
 | `/crm/dashboard|analytics|results/` | `/api/crm/…` | `pages/CRM/*.tsx` |
 | `/support/dashboard|analytics|results|users/` | `/api/support/…` | `pages/Support/*.tsx` |
-| `/support/etapas/` | `/api/support/stages/` | `pages/Support/Etapas.tsx` |
+| `/support/etapas/` | `/api/support/stages/` | `pages/Support/Stages.tsx` |
 | `/imports/subscriptions|crm|support|history/` | `/api/imports/…` | `pages/Imports/*.tsx` |
-| `/catalogos/notificaciones|productos|estructura|ventas/` | `/api/catalogs/notifications|products|structure|sales/` | `pages/Catalogos/*.tsx` |
-| `/comisiones/` | `/api/commissions/report/` | `pages/Comisiones/Informe.tsx` |
-| `/comisiones/condiciones/` | `/api/commissions/conditions/` | `pages/Comisiones/Condiciones.tsx` |
-| `/auditoria/` | `/api/audit/logs/` | `pages/Auditoria/Registro.tsx` |
-| `/auditoria/monitoreo/` | `/api/audit/health/` y `/api/audit/stats/` (en la vista) | `pages/Auditoria/Monitoreo.tsx` |
+| `/catalogos/notificaciones|productos|estructura|ventas/` | `/api/catalogs/notifications|products|structure|sales/` | `pages/Catalogs/*.tsx` |
+| `/comisiones/` | `/api/commissions/report/` | `pages/Commissions/Report.tsx` |
+| `/comisiones/condiciones/` | `/api/commissions/conditions/` | `pages/Commissions/Conditions.tsx` |
+| `/auditoria/` | `/api/audit/logs/` | `pages/Audit/Log.tsx` |
+| `/auditoria/monitoreo/` | `/api/audit/health/` y `/api/audit/stats/` (en la vista) | `pages/Audit/Monitoring.tsx` |
 
 ---
 
@@ -197,7 +197,7 @@ porque `shared` no puede depender de un feature; los features los reexportan.
 | `navigation.ts` | `APP_NAVIGATION`: los módulos y sus páginas. `visibleNavigation(can)` filtra por permisos y oculta el módulo sin ninguna página visible (la misma resolución que hace `/imports/` en el servidor); `resolveLocation(url)` da el módulo y la página de una URL (gana el `href` que sea el prefijo más largo, así `eta-report/config/` cuelga de Reporte ETA) |
 | `permissions.ts` | `PERMISSIONS` — **espejo manual** de `PERMISSION_FIELDS` del backend. También `IMPORT_ACTION_PERMISSIONS` y `ANALYSIS_ACTION_PERMISSIONS`, los pares granular + comodín |
 | `design-tokens.json` | **La única fuente de color y de breakpoints** (`screens`), leída por `tailwind.config.js` (Node) y por `shared/constants/theme` y `breakpoints` (TS) |
-| `breakpoints.ts` | `BREAKPOINTS` y `mediaDesde(bp)`, con el papel de cada breakpoint. Lo usa `useBreakpoint(bp)` (`shared/hooks`) |
+| `breakpoints.ts` | `BREAKPOINTS` y `mediaFrom(bp)`, con el papel de cada breakpoint. Lo usa `useBreakpoint(bp)` (`shared/hooks`) |
 | `labels.ts` | Etiquetas legibles de dimensiones y etapas |
 
 Los tokens dan `surface.*`, `brand.*`, `metric.*` (slate, green, red, blue,
@@ -235,7 +235,7 @@ no solo en el banner de al lado. Se hizo componente porque exportar era un
 `Button variant="secondary"` repetido en tres sitios: el botón que escribe un
 archivo se veía igual que el que abre un panel, y cada copia lo reinterpretaba
 un poco distinto. Lo usan `ExcelExportButton` (filas de una tabla),
-`BajasExportButton` (las pide al servidor, y tiene variante de solo icono para
+`ChurnExportButton` (las pide al servidor, y tiene variante de solo icono para
 las celdas) y `EtaFormsExportButton`, que además lleva pegado el selector de
 tasa con el que convierte las rentas. Quien lo monta dentro de otra cápsula
 pasa `seamless` para que no ponga borde ni radio propios.
@@ -249,7 +249,7 @@ centraliza las opciones y `plugins.ts` el texto central del *doughnut*.
 `utils/distribution.ts` concentra el cálculo de distribuciones y rankings
 (simple, ponderada, agrupando los menores) y su conversión a datos de gráfico.
 `formatters/` tiene `toNumber`, `formatInteger`, `formatOneDecimal`,
-`formatTwoDecimals`, `formatPercentage` y `formatPeriodoLabel`.
+`formatTwoDecimals`, `formatPercentage` y `formatPeriodLabel`.
 
 `lib/excel.ts` exporta a `.xlsx` **en el navegador**: el libro se construye con
 las filas que la vista ya tiene, así que exportar no cuesta una vuelta al
@@ -268,10 +268,10 @@ servidor y siempre coincide con lo que hay en pantalla. El escritor se carga con
 | `AnalysisRunnerCard` | Selector de mes, botón, barra de progreso y consola. Usa `startAndFollow` y se reengancha a un job vivo con `jobsApi.active` |
 | `RequirementsCard` | El texto de requisitos del CSV |
 | `ImportHistoryView` | La tabla del historial |
-| `CatalogoBloqueoModal` | Se abre cuando la subida devuelve 409 de catálogo |
-| `lib/catalogo.ts` | `extractCatalogoBloqueo(error)` |
+| `CatalogBlockModal` | Se abre cuando la subida devuelve 409 de catálogo |
+| `lib/catalog.ts` | `extractCatalogBlock(error)` |
 
-`extractCatalogoBloqueo` mira **`status: 'catalogo'` en el cuerpo y no solo el
+`extractCatalogBlock` mira **`status: 'catalogo'` en el cuerpo y no solo el
 código HTTP**: un 409 también lo devuelve un catálogo vacío, que es un problema
 de configuración distinto y se enseña como un error normal.
 
@@ -291,11 +291,11 @@ bloques de `analytics/` y `dashboard/`.
 
 Hooks: `useSubscriptionDashboard`, `useSubscriptionsAnalyticsData`,
 `useSubscriptionResults`, `useSubscriptionEtaReport`, `useEtaManagement`,
-`useSalesReportData`, `useBusinessUnitsData`, `useDayMetrics`, `useCatalogos`.
+`useSalesReportData`, `useBusinessUnitsData`, `useDayMetrics`, `useCatalogs`.
 
 `lib/`:
 
-- **`commercial.ts`** — `calcComercial`. **Los cumplimientos no se recortan**:
+- **`commercial.ts`** — `calcCommercial`. **Los cumplimientos no se recortan**:
   Sales Report y Business Units enseñan el valor real, también por encima del
   100 % y por debajo de 0 (y el faltante negativo, que es lo que sobra). Sales
   Report los recortaba a `[0, 100]`; se quitó a petición del usuario. Solo el
@@ -309,7 +309,7 @@ Hooks: `useSubscriptionDashboard`, `useSubscriptionsAnalyticsData`,
 
 Vistas de dashboard, analytics (filtros, gráficos, tabla, sección de tiempos por
 etapa) y results. Hooks `useCrmDashboard`, `useCrmAnalytics`, `useCrmStageTime`,
-`useCrmPeriodDimensions`. En `lib/`, `crmTiempoEtapa.ts` es el más denso: compone
+`useCrmPeriodDimensions`. En `lib/`, `crmStageTime.ts` es el más denso: compone
 las tarjetas y las filas dimensionales de tiempo por etapa a partir del JSON que
 manda el backend.
 
@@ -318,7 +318,7 @@ manda el backend.
 Vistas de dashboard, analytics (filtros, panel dimensional, resumen por grupo,
 tabla de incidencia, modal de drill-down) y results. `lib/supportMetrics.ts`
 concentra la lectura de los bloques de métricas y las etiquetas de las medidas
-(`CIERRE_TOTAL`, `GESTION`, `ASIGNACION`).
+(`CLOSE_TOTAL`, `HANDLING`, `ASIGNACION`).
 
 ### `config`
 

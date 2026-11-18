@@ -3,7 +3,7 @@
 import { apiClient } from './client';
 import { startAndFollow, type AnalysisJob } from './jobs';
 import type {
-  BajasDetalleResponse, LifetimeDetalleResponse, SubscriptionResultsResponse,
+  ChurnDetailResponse, LifetimeDetailResponse, SubscriptionResultsResponse,
 } from '@/shared/types/subscriptions';
 
 export interface EtaReportResponse {
@@ -14,9 +14,9 @@ export interface EtaReportResponse {
 
 export interface EtaLockRequest { period: string; lock: boolean; }
 
-export interface EtaTasaRequest { period: string; tasa: number; }
+export interface EtaRateRequest { period: string; tasa: number; }
 
-export interface EtaTasaResponse {
+export interface EtaRateResponse {
   status: string;
   tasa_bcv: number;
   tasa_bcv_fuente: string;
@@ -62,7 +62,7 @@ export const subscriptionsApi = {
    * órdenes que los componen, así que el detalle es siempre el del cierre.
    */
   getBajasDetalle: async (period: string, nodos?: string[]) =>
-    (await apiClient.get<BajasDetalleResponse>('/api/subscriptions/churn/detail/', {
+    (await apiClient.get<ChurnDetailResponse>('/api/subscriptions/churn/detail/', {
       params: { period, nodo: nodos },
       // Axios serializa un array como `nodo[]=x`; Django lee `nodo=x&nodo=y`.
       paramsSerializer: { indexes: null },
@@ -81,8 +81,8 @@ export const subscriptionsApi = {
    * No recalcula nada: los formularios guardan el precio en divisa y la
    * conversión la hace el exportador, así que también vale en un mes bloqueado.
    */
-  setEtaTasa: async (request: EtaTasaRequest) =>
-    (await apiClient.post<EtaTasaResponse>('/api/subscriptions/eta-report/rate/', request)).data,
+  setEtaTasa: async (request: EtaRateRequest) =>
+    (await apiClient.post<EtaRateResponse>('/api/subscriptions/eta-report/rate/', request)).data,
 
   /**
    * Vuelve a pedirle al BCV la tasa del periodo, pisando la guardada.
@@ -92,7 +92,7 @@ export const subscriptionsApi = {
    * tasa a mano y quiere volver a la oficial.
    */
   consultarEtaTasa: async (period: string) =>
-    (await apiClient.post<EtaTasaResponse>('/api/subscriptions/eta-report/rate/fetch/', { period })).data,
+    (await apiClient.post<EtaRateResponse>('/api/subscriptions/eta-report/rate/fetch/', { period })).data,
 
   /**
    * La última tasa publicada por el BCV, la de hoy.
@@ -102,7 +102,7 @@ export const subscriptionsApi = {
    * a día de hoy. Por eso es un GET y no pisa nada.
    */
   getEtaTasaActual: async () =>
-    (await apiClient.get<EtaTasaResponse>('/api/subscriptions/eta-report/rate/current/')).data,
+    (await apiClient.get<EtaRateResponse>('/api/subscriptions/eta-report/rate/current/')).data,
 
   saveEtaSubConfig: async (request: EtaSubConfigRequest) =>
     (await apiClient.post('/api/subscriptions/eta-report/orders/save/', request)).data,
@@ -121,7 +121,7 @@ export const subscriptionsApi = {
 
   /** Las bajas de un mes con sus duraciones, una por orden, para exportar. */
   getLifetimeDetalle: async (period: string) =>
-    (await apiClient.get<LifetimeDetalleResponse>('/api/subscriptions/lifetime/detail/', {
+    (await apiClient.get<LifetimeDetailResponse>('/api/subscriptions/lifetime/detail/', {
       params: { period },
     })).data,
 };

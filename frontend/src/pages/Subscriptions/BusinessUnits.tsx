@@ -1,7 +1,7 @@
 /**
  * Página `/subscriptions/business-units/`.
  *
- * Agrupa por coordinador. Ojo: calcula `tasaCumplimiento` **sin recortar a 100**,
+ * Agrupa por coordinador. Ojo: calcula `complianceRate` **sin recortar a 100**,
  * a diferencia del Sales Report; es una discrepancia intencionada (ver
  * `features/subscriptions/lib/commercial.ts`).
  *
@@ -16,15 +16,15 @@ import { useMemo, useState } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { DayProgressBar } from '@/shared/ui';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
-import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
-import { buildBusinessUnitGroups, type ZonasConfig } from '@/features/subscriptions/lib/dayReports';
-import { FILTRO_METRICA_VACIO, type FiltroMetrica } from '@/features/subscriptions/lib/filtroMetrica';
+import { useTargets } from '@/features/subscriptions/hooks/useTargets';
+import { buildBusinessUnitGroups, type ZonesConfig } from '@/features/subscriptions/lib/dayReports';
+import { EMPTY_METRIC_FILTER, type MetricFilter } from '@/features/subscriptions/lib/metricFilter';
 import type { DayMetrics } from '@/shared/types/domain';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { BusinessUnitsView } from '@/features/subscriptions/components/reports/BusinessUnitsView';
-import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
+import { ProjectionNote } from '@/features/subscriptions/components/reports/ProjectionNote';
 import {
-  useBusinessUnitsData, type BusinessUnitGroup, type FtthConsolidadoNodo,
+  useBusinessUnitsData, type BusinessUnitGroup, type FtthNodeTotals,
 } from '@/features/subscriptions/hooks/useBusinessUnitsData';
 import { useVisit } from '@/shared/page/PageData';
 
@@ -36,10 +36,10 @@ interface BusinessUnitsProps {
     dia?: number | null;
     /** Solo para quien no ve todas las unidades. */
     alcance?: { coordinadores: string[]; rf: boolean };
-    ftth_consolidado?: { cierre: FtthConsolidadoNodo; dias: Record<string, FtthConsolidadoNodo> };
+    ftth_consolidado?: { cierre: FtthNodeTotals; dias: Record<string, FtthNodeTotals> };
   };
   dayMetrics?: DayMetrics;
-  zonasConfig?: ZonasConfig;
+  zonasConfig?: ZonesConfig;
 }
 
 export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: BusinessUnitsProps) {
@@ -48,7 +48,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
   const [selectedDay, setSelectedDay] = useState(buData.dia ?? 0);
-  const [filtroMetrica, setFiltroMetrica] = useState<FiltroMetrica>(FILTRO_METRICA_VACIO);
+  const [filtroMetrica, setMetricFilter] = useState<MetricFilter>(EMPTY_METRIC_FILTER);
   const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
 
   // Mismo criterio que en Ventas: el dia se resuelve en cliente sobre el mes
@@ -65,7 +65,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
 
   // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
   // site y estado pertenece cada zona, que es por donde se heredan.
-  const objetivos = useObjetivos(zonasConfig?.zonas);
+  const objetivos = useTargets(zonasConfig?.zonas);
 
   const { branchList, filteredData, dynamicFtthSummary } = useBusinessUnitsData({
     groups,
@@ -74,8 +74,8 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
     selectedTech,
     period: buData.period ?? '',
     objetivos,
-    proyeccion,
-    filtroMetrica,
+    projection: proyeccion,
+    metricFilter: filtroMetrica,
     ftthFijo,
   });
 
@@ -100,21 +100,21 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
             searchPlaceholder="Buscar Coordinador o Zona..."
-            filtroMetrica={filtroMetrica}
-            onFiltroMetricaChange={setFiltroMetrica}
-            nivelesFiltro={{ zona: 'Zonas', grupo: 'Coordinadores' }}
-            proyeccionDisponible={Boolean(proyeccion)}
+            metricFilter={filtroMetrica}
+            onMetricFilterChange={setMetricFilter}
+            filterLevels={{ zona: 'Zonas', grupo: 'Coordinadores' }}
+            projectionAvailable={Boolean(proyeccion)}
           />
           {availableDays.length > 0 && (
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                periodoMes={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.periodo_mes}
                 daysInMonth={totalDays}
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}
               />
-              <ProyeccionNota proyeccion={proyeccion} />
+              <ProjectionNote projection={proyeccion} />
             </div>
           )}
         </>
@@ -126,7 +126,7 @@ export default function BusinessUnits({ buData = {}, dayMetrics, zonasConfig }: 
         showFtthSummary={selectedTech !== 'RF'}
         period={buData.period ?? ''}
         diaSeleccionado={Boolean(dayData)}
-        proyeccion={proyeccion}
+        projection={proyeccion}
       />
     </AppLayout>
   );

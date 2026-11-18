@@ -4,7 +4,7 @@
  * Las unidades de negocio que ve una cuenta o un grupo sin el permiso de verlas
  * todas: ids de `Coordinador` y el bloque RF (ver `services/config/units.py`).
  */
-export interface UnidadesSeleccion {
+export interface UnitsSelection {
   ids: number[];
   rf: boolean;
 }

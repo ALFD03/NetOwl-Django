@@ -10,23 +10,23 @@ import { useMemo, useState } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { DayProgressBar } from '@/shared/ui';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
-import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
-import { buildSalesSites, type ZonasConfig } from '@/features/subscriptions/lib/dayReports';
-import { FILTRO_METRICA_VACIO, type FiltroMetrica } from '@/features/subscriptions/lib/filtroMetrica';
+import { useTargets } from '@/features/subscriptions/hooks/useTargets';
+import { buildSalesSites, type ZonesConfig } from '@/features/subscriptions/lib/dayReports';
+import { EMPTY_METRIC_FILTER, type MetricFilter } from '@/features/subscriptions/lib/metricFilter';
 import type { DayMetrics } from '@/shared/types/domain';
 import { SubscriptionReportFilters } from '@/features/subscriptions/components/reports/SubscriptionReportFilters';
 import { SalesReportView } from '@/features/subscriptions/components/reports/SalesReportView';
-import type { CoordinadoraOficina } from '@/features/subscriptions/components/reports/CoordinadorasOficinaBadges';
-import { ProyeccionNota } from '@/features/subscriptions/components/reports/ProyeccionNota';
+import type { OfficeCoordinator } from '@/features/subscriptions/components/reports/OfficeCoordinatorBadges';
+import { ProjectionNote } from '@/features/subscriptions/components/reports/ProjectionNote';
 import { useSalesReportData, type SalesReportSite } from '@/features/subscriptions/hooks/useSalesReportData';
 import { useVisit } from '@/shared/page/PageData';
 
 interface SalesReportProps {
   reportData?: { data?: SalesReportSite[]; periods?: string[]; period?: string; dia?: number | null };
   dayMetrics?: DayMetrics;
-  zonasConfig?: ZonasConfig;
+  zonasConfig?: ZonesConfig;
   /** Las coordinadoras de oficina de cada site, con sus ventas por día y su objetivo. */
-  coordinadorasOficina?: CoordinadoraOficina[];
+  coordinadorasOficina?: OfficeCoordinator[];
 }
 
 export default function SalesReport({
@@ -37,7 +37,7 @@ export default function SalesReport({
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState<'ALL' | 'FTTH' | 'RF'>('ALL');
   const [selectedDay, setSelectedDay] = useState(reportData.dia ?? 0);
-  const [filtroMetrica, setFiltroMetrica] = useState<FiltroMetrica>(FILTRO_METRICA_VACIO);
+  const [filtroMetrica, setMetricFilter] = useState<MetricFilter>(EMPTY_METRIC_FILTER);
   const { availableDays, totalDays, effectiveDay, dayData, proyeccion } = useDayMetrics(dayMetrics, selectedDay);
 
   const currentPeriod = reportData.period ?? '';
@@ -51,7 +51,7 @@ export default function SalesReport({
 
   // Los objetivos vienen en los props; `zonasConfig` dice a qué coordinador,
   // site y estado pertenece cada zona, que es por donde se heredan.
-  const objetivos = useObjetivos(zonasConfig?.zonas);
+  const objetivos = useTargets(zonasConfig?.zonas);
 
   const { branchList, filteredData } = useSalesReportData({
     sites,
@@ -60,8 +60,8 @@ export default function SalesReport({
     selectedTech,
     period: currentPeriod,
     objetivos,
-    filtroMetrica,
-    proyeccion,
+    metricFilter: filtroMetrica,
+    projection: proyeccion,
   });
 
   const changePeriod = (period: string) => {
@@ -85,21 +85,21 @@ export default function SalesReport({
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
             searchPlaceholder="Buscar por Sede o Zona..."
-            filtroMetrica={filtroMetrica}
-            onFiltroMetricaChange={setFiltroMetrica}
-            nivelesFiltro={{ zona: 'Zonas', grupo: 'Sites' }}
-            proyeccionDisponible={Boolean(proyeccion)}
+            metricFilter={filtroMetrica}
+            onMetricFilterChange={setMetricFilter}
+            filterLevels={{ zona: 'Zonas', grupo: 'Sites' }}
+            projectionAvailable={Boolean(proyeccion)}
           />
           {availableDays.length > 0 && (
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                periodoMes={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.periodo_mes}
                 daysInMonth={totalDays}
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}
               />
-              <ProyeccionNota proyeccion={proyeccion} />
+              <ProjectionNote projection={proyeccion} />
             </div>
           )}
         </>
@@ -109,10 +109,10 @@ export default function SalesReport({
         sites={filteredData}
         period={currentPeriod}
         diaSeleccionado={Boolean(dayData)}
-        proyeccion={proyeccion}
+        projection={proyeccion}
         coordinadoras={coordinadorasOficina}
         // Sin días calculados se pinta el cierre del mes, y sus ventas son las del mes entero.
-        diaCorte={dayData ? effectiveDay : null}
+        cutoffDay={dayData ? effectiveDay : null}
       />
     </AppLayout>
   );

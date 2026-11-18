@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
 
 import { cn } from '@/shared/lib/cn';
 import { Panel, ToggleGroup } from '@/shared/ui';
-import type { GrupoCamposOdoo } from '../types';
+import type { OdooFieldGroup } from '../types';
 
 export interface RequirementsCardProps {
   title: string;
@@ -17,9 +17,9 @@ export interface RequirementsCardProps {
    * Las cabeceras de Odoo que lee cada tipo de export. Llegan del servidor,
    * sacadas de los mismos mapeos que usa el importador.
    */
-  camposOdoo?: GrupoCamposOdoo[];
+  camposOdoo?: OdooFieldGroup[];
   /** Grupo de campos a mostrar; sigue al tipo de importación elegido. */
-  grupoActivo?: string;
+  activeGroup?: string;
   className?: string;
 }
 
@@ -27,10 +27,10 @@ export interface RequirementsCardProps {
  * Lista de cabeceras de Odoo de cada tipo de export.
  *
  * Tiene pestañas propias porque se puede consultar sin permiso de carga, pero
- * sigue a `grupoActivo` cuando cambia: lo normal es querer ver los campos del
+ * sigue a `activeGroup` cuando cambia: lo normal es querer ver los campos del
  * fichero que se va a subir.
  */
-function CamposOdoo({ grupos, grupoActivo }: { grupos: GrupoCamposOdoo[]; grupoActivo?: string }) {
+function CamposOdoo({ grupos, activeGroup: grupoActivo }: { grupos: OdooFieldGroup[]; activeGroup?: string }) {
   const [elegido, setElegido] = useState(grupoActivo ?? grupos[0]?.key);
   const [seguido, setSeguido] = useState(grupoActivo);
   if (grupoActivo !== seguido) {
@@ -99,10 +99,10 @@ export function RequirementsCard({
   requirements,
   note,
   camposOdoo,
-  grupoActivo,
+  activeGroup: grupoActivo,
   className,
 }: RequirementsCardProps) {
-  const gruposConCampos = camposOdoo?.filter((grupo) => grupo.campos.length > 0) ?? [];
+  const groupsWithFields = camposOdoo?.filter((grupo) => grupo.campos.length > 0) ?? [];
 
   return (
     <Panel title={title} stretch className={className}>
@@ -112,8 +112,8 @@ export function RequirementsCard({
         ))}
       </ul>
 
-      {gruposConCampos.length > 0 && (
-        <CamposOdoo grupos={gruposConCampos} grupoActivo={grupoActivo} />
+      {groupsWithFields.length > 0 && (
+        <CamposOdoo grupos={groupsWithFields} activeGroup={grupoActivo} />
       )}
 
       {note && (

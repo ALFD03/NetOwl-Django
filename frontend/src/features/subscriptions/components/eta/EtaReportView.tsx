@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import { EmptyState, LoadingState, MetricCard, SectionHeading, StatGroup } from '@/shared/ui';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
+import { formatInteger, formatPeriodLabel } from '@/shared/utils/formatters';
 import { EtaSpeedTable } from './EtaSpeedTable';
 import type { EtaMetrics, SubscriptionEtaReportResponse } from '../../types';
 
@@ -44,7 +44,7 @@ export function EtaReportView({ data, loading, period, configLink }: EtaReportVi
     return (
       <EmptyState
         title="Clasificación Requerida"
-        description={`Se han detectado ${pending} servicios nuevos o corporativos sin categoría regulatoria para ${formatPeriodoLabel(period)}.`}
+        description={`Se han detectado ${pending} servicios nuevos o corporativos sin categoría regulatoria para ${formatPeriodLabel(period)}.`}
         icon={<Database />}
         tone="warning"
         size="lg"
@@ -59,7 +59,7 @@ export function EtaReportView({ data, loading, period, configLink }: EtaReportVi
     return (
       <EmptyState
         title="Información no disponible"
-        description={`No se encontró un cierre de activos para ${formatPeriodoLabel(period)}. Asegúrate de haber ejecutado el análisis mensual.`}
+        description={`No se encontró un cierre de activos para ${formatPeriodLabel(period)}. Asegúrate de haber ejecutado el análisis mensual.`}
         icon={<Database />}
         size="lg"
         bordered

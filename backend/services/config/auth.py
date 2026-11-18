@@ -10,7 +10,7 @@ import logging
 from django.contrib.auth import authenticate, login
 from django_ratelimit.core import get_usage
 
-from netowl_web.ratelimit import ip_cliente, usuario_login
+from netowl_web.ratelimit import ip_cliente, user_login
 from services.audit.log import record
 from services.audit.models import AuditLog
 
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Solo cuentan los intentos fallidos.
 LOGIN_LIMITS = (
     # Por cuenta: ataque dirigido a un usuario.
-    {"group": "login-usuario", "key": usuario_login, "rate": "5/5m"},
+    {"group": "login-usuario", "key": user_login, "rate": "5/5m"},
     # Por IP: una contraseña común contra muchas cuentas.
     {"group": "login-ip", "key": "ip", "rate": "20/5m"},
 )

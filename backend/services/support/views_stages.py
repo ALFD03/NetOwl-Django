@@ -8,8 +8,8 @@ from __future__ import annotations
 from django.db import IntegrityError
 
 from services.config.api import ApiError, endpoint, json_body
-from services.support.analytics.config import CANCELED_STAGES, ETAPA_ESCALAMIENTO, RESOLVED_STAGES
-from services.support.analytics.flujo import etapas_por_clasificar, uso_de_etapas
+from services.support.analytics.config import CANCELED_STAGES, ESCALATION_STAGE, RESOLVED_STAGES
+from services.support.analytics.flow import stage_usage, stages_to_classify
 from services.support.models import EtapaSoporte
 
 TEAMS = dict(EtapaSoporte.EQUIPOS)
@@ -23,20 +23,20 @@ def _row(stage: EtapaSoporte, usage: dict[str, int]) -> dict:
         "equipo": stage.equipo,
         "tipo": stage.tipo,
         "logs": usage.get(stage.nombre.lower(), 0),
-        "es_escalamiento": stage.nombre.lower() == ETAPA_ESCALAMIENTO.lower(),
+        "es_escalamiento": stage.nombre.lower() == ESCALATION_STAGE.lower(),
     }
 
 
 @endpoint(perms=["can_manage_support_users"])
 def stages(request):
     """El catálogo, lo que falta clasificar y las reglas fijas."""
-    usage = uso_de_etapas()
+    usage = stage_usage()
     return {
         "etapas": [_row(s, usage) for s in EtapaSoporte.objects.all()],
-        "pendientes": etapas_por_clasificar(),
+        "pendientes": stages_to_classify(),
         "equipos": [{"value": k, "label": v} for k, v in EtapaSoporte.EQUIPOS],
         "tipos": [{"value": k, "label": v} for k, v in EtapaSoporte.TIPOS],
-        "etapaEscalamiento": ETAPA_ESCALAMIENTO,
+        "etapaEscalamiento": ESCALATION_STAGE,
         "etapasCierre": sorted({"Resuelto", "Cancelado"}),
         "nuevaEtapa": str(request.GET.get("nueva_etapa") or "")[:200],
     }

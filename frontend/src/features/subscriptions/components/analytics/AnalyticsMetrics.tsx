@@ -4,14 +4,14 @@ import { formatTwoDecimals } from '@/shared/utils/formatters/number';
 import type { ReactNode } from 'react';
 import { DollarSign, Gift, RefreshCw, TrendingDown, TrendingUp, Target, UserPlus, Landmark, Scale } from 'lucide-react';
 import { MetricCard } from '@/shared/ui';
-import type { Periodo } from '@/shared/types/domain';
-import { useObjetivos } from '../../hooks/useObjetivos';
+import type { Period } from '@/shared/types/domain';
+import { useTargets } from '../../hooks/useTargets';
 import {
-  cumplimientoDelPeriodo, formatObjetivo, tonoChurn, tonoCrecimiento, tonoCumplimiento,
-} from '../../lib/objetivos';
+  periodCompliance, formatTarget, tonoChurn, tonoCrecimiento, complianceTone,
+} from '../../lib/targets';
 
 interface Props {
-  data: Periodo;
+  data: Period;
   /**
    * El periodo elegido. Va aparte de `data` porque con un día seleccionado
    * `data` es el bloque global de ese corte, que no trae `periodo_reporte`; el
@@ -21,17 +21,17 @@ interface Props {
 }
 
 export function AnalyticsMetrics({ data, periodo }: Props) {
-  const objetivos = useObjetivos();
+  const objetivos = useTargets();
   const objetivo = objetivos.general(periodo);
   const { semaforo } = objetivos;
   const {
-    metaIngresos, metaVentas, metaCierre, cumplimientoIngresos, cumplimientoVentas, cumplimientoCierre,
-  } = cumplimientoDelPeriodo(data, objetivo);
+    metaIngresos, salesGoal: metaVentas, closeGoal: metaCierre, revenueCompliance: cumplimientoIngresos, salesCompliance: cumplimientoVentas, closeCompliance: cumplimientoCierre,
+  } = periodCompliance(data, objetivo);
 
-  const tonoIngresos = tonoCumplimiento(cumplimientoIngresos, semaforo);
-  const tonoVentas = tonoCumplimiento(cumplimientoVentas, semaforo);
-  const tonoCierre = tonoCumplimiento(cumplimientoCierre, semaforo);
-  const base = `Meta basada en el ${formatObjetivo(objetivo.crecimiento)}`;
+  const tonoIngresos = complianceTone(cumplimientoIngresos, semaforo);
+  const salesTone = complianceTone(cumplimientoVentas, semaforo);
+  const closeTone = complianceTone(cumplimientoCierre, semaforo);
+  const base = `Meta basada en el ${formatTarget(objetivo.crecimiento)}`;
 
   return (
     <div className="space-y-8 mb-10">
@@ -40,7 +40,7 @@ export function AnalyticsMetrics({ data, periodo }: Props) {
         <MetricCard
           label="Churn Bruto"
           value={`${(data.churn_bruto_pct || 0).toFixed(2)} %`}
-          subValue={`Objetivo ${formatObjetivo(objetivo.churn)}`}
+          subValue={`Objetivo ${formatTarget(objetivo.churn)}`}
           color={tonoChurn(data.churn_bruto_pct || 0, semaforo)}
         />
         <MetricCard label="Bajas" value={`${(data.bajas || 0)}`} color="red" />
@@ -55,18 +55,18 @@ export function AnalyticsMetrics({ data, periodo }: Props) {
         <MetricCard
           label="Crecimiento"
           value={`${(data.crecimiento || 0).toFixed(2)} %`}
-          subValue={`Objetivo ${formatObjetivo(objetivo.crecimiento)}`}
+          subValue={`Objetivo ${formatTarget(objetivo.crecimiento)}`}
           color={tonoCrecimiento(data.crecimiento || 0, semaforo)}
         />
       </MetricGroup>
 
       <MetricGroup title="Grupo de Objetivos" icon={<Target className="w-4 h-4" />} tone="text-amber-400" columns='md:grid-cols-3'>
         <MetricCard label="Meta Ingresos" subValue={base} icon={<UserPlus className="w-4 h-4" color={tonoIngresos} />} value={metaIngresos.toFixed(0)} color={tonoIngresos} />
-        <MetricCard label="Meta Ventas" subValue={base} icon={<Landmark className="w-4 h-4" color={tonoVentas} />} value={metaVentas.toFixed(0)} color={tonoVentas} />
-        <MetricCard label="Meta Cierre" subValue={base} icon={<Scale className="w-4 h-4" color={tonoCierre} />} value={metaCierre.toFixed(0)} color={tonoCierre} />
+        <MetricCard label="Meta Ventas" subValue={base} icon={<Landmark className="w-4 h-4" color={salesTone} />} value={metaVentas.toFixed(0)} color={salesTone} />
+        <MetricCard label="Meta Cierre" subValue={base} icon={<Scale className="w-4 h-4" color={closeTone} />} value={metaCierre.toFixed(0)} color={closeTone} />
         <MetricCard label="Cumplimiento Ingresos" subValue={base} icon={<UserPlus className="w-4 h-4" color={tonoIngresos} />} value={`${cumplimientoIngresos.toFixed(2)} %`} color={tonoIngresos} />
-        <MetricCard label="Cumplimiento Ventas" subValue={base} icon={<Landmark className="w-4 h-4" color={tonoVentas} />} value={`${cumplimientoVentas.toFixed(2)} %`} color={tonoVentas} />
-        <MetricCard label="Cumplimiento Cierre" subValue={base} icon={<Scale className="w-4 h-4" color={tonoCierre} />} value={`${cumplimientoCierre.toFixed(2)} %`} color={tonoCierre} />
+        <MetricCard label="Cumplimiento Ventas" subValue={base} icon={<Landmark className="w-4 h-4" color={salesTone} />} value={`${cumplimientoVentas.toFixed(2)} %`} color={salesTone} />
+        <MetricCard label="Cumplimiento Cierre" subValue={base} icon={<Scale className="w-4 h-4" color={closeTone} />} value={`${cumplimientoCierre.toFixed(2)} %`} color={closeTone} />
       </MetricGroup>
 
       <MetricGroup title="Grupo Retención" icon={<RefreshCw className="w-4 h-4" />} tone="text-blue-400" columns='md:grid-cols-2 lg:grid-cols-3'>

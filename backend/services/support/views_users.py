@@ -14,9 +14,9 @@ from typing import Any
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 
-from core.odoo_nombres import SUFIJO_USUARIOS, normalizar_nombre_odoo
+from core.odoo_names import USERS_SUFFIX, normalize_odoo_name
 from services.config.api import ApiError, endpoint, json_body
-from services.support.analytics.usuarios import tickets_tras_la_baja, usuarios_fuera_del_directorio
+from services.support.analytics.users import tickets_after_churn, users_outside_directory
 from services.support.models import Departamento, MovimientoInvalido, UsuarioSoporte
 
 logger = logging.getLogger(__name__)
@@ -82,9 +82,9 @@ def _department(d: Departamento) -> dict[str, Any]:
 
 
 def _apply_user(row: UsuarioSoporte, data: dict) -> None:
-    odoo_name = normalizar_nombre_odoo(_text(data, "nombre_odoo", required=True, max_length=200))
+    odoo_name = normalize_odoo_name(_text(data, "nombre_odoo", required=True, max_length=200))
     if not odoo_name:
-        raise ApiError(f"«{SUFIJO_USUARIOS}» no es un nombre de usuario.")
+        raise ApiError(f"«{USERS_SUFFIX}» no es un nombre de usuario.")
     row.nombre_odoo = odoo_name
     row.nombre = _text(data, "nombre", required=True, max_length=120)
     row.apellido = _text(data, "apellido", max_length=120)
@@ -159,17 +159,17 @@ def users(request):
     data = {
         "usuarios": _listing("usuarios"),
         "departamentos": _listing("departamentos"),
-        "sufijo": SUFIJO_USUARIOS,
+        "sufijo": USERS_SUFFIX,
         "nuevoUsuario": (request.GET.get("nuevo_usuario") or "").strip(),
     }
     # Sin tickets cargados todavía la pantalla sigue sirviendo para dar de alta.
     try:
-        data["pendientes"] = usuarios_fuera_del_directorio()
+        data["pendientes"] = users_outside_directory()
     except Exception:
         logger.exception("No se pudieron calcular los usuarios fuera del directorio")
         data["pendientes"] = []
     try:
-        data["trasBaja"] = tickets_tras_la_baja()
+        data["trasBaja"] = tickets_after_churn()
     except Exception:
         logger.exception("No se pudieron calcular los tickets posteriores a las bajas")
         data["trasBaja"] = []
@@ -229,12 +229,12 @@ def _change_department(user: UsuarioSoporte, data: dict) -> str:
 
 
 def _undo_change(user: UsuarioSoporte, data: dict) -> str:
-    user.deshacer_ultimo_cambio()
+    user.undo_last_change()
     return f"{user.nombre_completo} vuelve a {user.departamento.nombre}."
 
 
 def _deactivate(user: UsuarioSoporte, data: dict) -> str:
-    user.dar_de_baja(_date(data, "fecha", required=True))
+    user.deactivate(_date(data, "fecha", required=True))
     return f"{user.nombre_completo} queda dado de baja."
 
 

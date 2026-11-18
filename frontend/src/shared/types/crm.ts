@@ -61,9 +61,9 @@ export interface CrmHistoricoRow {
   horas_std_cierre?: number;
   pct_excede_prom_cierre?: number;
   /** Per-stage effectiveness of the period, stored as JSONB on the cierre row. */
-  efectividad?: CrmEfectividadRow[];
+  efectividad?: CrmEffectivenessRow[];
   /** Per-stage dwell time of the period, stored as JSONB on the cierre row. */
-  tiempo_por_etapa?: CrmTiempoEtapaRow[];
+  tiempo_por_etapa?: CrmStageTimeRow[];
 }
 
 /**
@@ -73,7 +73,7 @@ export interface CrmHistoricoRow {
  * `devolucion` ended in stage 8. They are disjoint but need not add up to the
  * stage total: an exit to stage 9, 10 or `perdido` is none of the three.
  */
-export interface CrmTiempoEtapaDesenlace {
+export interface CrmStageTimeOutcome {
   movimientos?: number;
   /** Share of the stage's exits, already in percent. */
   pct?: number;
@@ -87,7 +87,7 @@ export interface CrmTiempoEtapaDesenlace {
  * `cerradas_en_etapa` ended at the opportunity's closing date and never move
  * again; `abiertas` are measured against the clock, so they age between runs.
  */
-export interface CrmTiempoEtapaPermanencia {
+export interface CrmStageTimeStay {
   total?: number;
   abiertas?: number;
   cerradas_en_etapa?: number;
@@ -102,7 +102,7 @@ export interface CrmTiempoEtapaPermanencia {
  * Exits and open stays together — what the stage actually costs, with nothing
  * dropped for the sake of having finished.
  */
-export interface CrmTiempoEtapaCombinado {
+export interface CrmStageTimeCombined {
   total?: number;
   promedio_horas?: number;
   promedio_ajustado_horas?: number;
@@ -115,7 +115,7 @@ export interface CrmTiempoEtapaCombinado {
 }
 
 /** A row of `tiempo_por_etapa`: one stage's dwell-time distribution. */
-export interface CrmTiempoEtapaRow {
+export interface CrmStageTimeRow {
   etapa?: string;
   /** Set by the analysis for the stages sales steers by (1, 2, 3, 5 and 8). */
   es_clave?: boolean;
@@ -149,23 +149,23 @@ export interface CrmTiempoEtapaRow {
   /** Moves of exactly zero duration, left out of the mean on both sides. */
   movimientos_nulos?: number;
 
-  avance?: CrmTiempoEtapaDesenlace;
-  retorno?: CrmTiempoEtapaDesenlace;
-  devolucion?: CrmTiempoEtapaDesenlace;
+  avance?: CrmStageTimeOutcome;
+  retorno?: CrmStageTimeOutcome;
+  devolucion?: CrmStageTimeOutcome;
 
   /** Stays still open, or ended by the opportunity closing inside the stage. */
-  permanencia?: CrmTiempoEtapaPermanencia;
+  permanencia?: CrmStageTimeStay;
   /** The unbiased figure: exits plus open stays. Read this one. */
-  combinado?: CrmTiempoEtapaCombinado;
+  combinado?: CrmStageTimeCombined;
 }
 
 /**
  * A closed monthly cohort as sent to the Results page — the same fields as
  * `CrmHistoricoRow`, but the endpoint guarantees every one of them.
  */
-export type CrmCierre = Required<CrmHistoricoRow>;
+export type CrmClose = Required<CrmHistoricoRow>;
 
-export interface CrmEfectividadRow {
+export interface CrmEffectivenessRow {
   etapa?: string;
   efectividad_pct?: number;
   exitosos?: number;
@@ -179,24 +179,24 @@ export interface CrmEfectividadRow {
  * branch / campaign / seller — so it carries the same measures, minus the
  * period itself.
  */
-export type CrmMetricas = Omit<CrmHistoricoRow, 'periodo_reporte'>;
+export type CrmMetrics = Omit<CrmHistoricoRow, 'periodo_reporte'>;
 
 /** A row of `crm_dimensiones_historico`, as the analytics endpoint sends it. */
 export interface CrmDimensionRow {
   periodo_reporte: string;
   dimension: string;
   valor: string;
-  metricas: CrmMetricas;
-  efectividad: CrmEfectividadRow[];
+  metricas: CrmMetrics;
+  efectividad: CrmEffectivenessRow[];
 }
 
 /**
  * One dimension value with its metrics hoisted to the top level — the shape the
  * charts and the detail table read, so neither has to reach through `metricas`.
  */
-export type CrmDimensionValue = CrmMetricas & {
+export type CrmDimensionValue = CrmMetrics & {
   valor: string;
-  efectividad: CrmEfectividadRow[];
+  efectividad: CrmEffectivenessRow[];
 };
 
 /** Payload of `GET /crm/api/dimension-metrics/`. */

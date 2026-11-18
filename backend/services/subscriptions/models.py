@@ -26,7 +26,7 @@ TECNOLOGIA_CHOICES = [
     ("RF", "RF (radiofrecuencia)"),
 ]
 
-TIPO_PERSONA_CHOICES = [
+PERSON_KIND_CHOICES = [
     ("nat", "Persona natural"),
     ("PYME", "Persona juridica / PYME"),
 ]
@@ -34,7 +34,7 @@ TIPO_PERSONA_CHOICES = [
 
 # Las listas de "por registrar" que admiten un "ignorar": cada area del modulo
 # de catalogos detecta en los datos importados los nombres que no reconoce.
-AREA_IGNORADO_CHOICES = [
+IGNORED_AREA_CHOICES = [
     ("productos", "Productos"),
     ("estructura", "Estructura"),
     ("ventas", "Ventas"),
@@ -164,7 +164,7 @@ class PlanRegulador(models.Model):
 
     nombre = models.CharField(max_length=200, unique=True)
     tecnologia = models.CharField(max_length=10, choices=TECNOLOGIA_CHOICES, default="FTTH")
-    tipo_persona = models.CharField(max_length=10, choices=TIPO_PERSONA_CHOICES, default="nat")
+    tipo_persona = models.CharField(max_length=10, choices=PERSON_KIND_CHOICES, default="nat")
     datas_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # En divisa, igual que `Plan.precio`. La conversion a bolivares se hace al
     # exportar, con la tasa del dia: guardarla aqui congelaria el reporte a la
@@ -199,8 +199,8 @@ class PlanRegulador(models.Model):
             "type": self.tecnologia,
             "people": self.tipo_persona,
             "TV": "True" if self.tiene_tv else "False",
-            "datas": _numero(self.datas_mbps),
-            "price": _numero(self.precio),
+            "datas": _number(self.datas_mbps),
+            "price": _number(self.precio),
             "es_transporte": self.es_transporte,
         }
 
@@ -219,7 +219,7 @@ class Plan(models.Model):
     nombre = models.CharField(max_length=150)
     tarifa = models.CharField(max_length=150, blank=True, default="")
     tecnologia = models.CharField(max_length=10, choices=TECNOLOGIA_CHOICES, default="FTTH")
-    tipo_persona = models.CharField(max_length=10, choices=TIPO_PERSONA_CHOICES, default="nat")
+    tipo_persona = models.CharField(max_length=10, choices=PERSON_KIND_CHOICES, default="nat")
     referencia = models.CharField(max_length=200, blank=True, default="")
     tiene_tv = models.BooleanField(default=False)
     datas_mbps = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -227,7 +227,7 @@ class Plan(models.Model):
     declarar_en_eta = models.BooleanField(default=True)
     # Lo que se lleva quien vende un plan PYME, en % de `precio`. Solo tiene
     # sentido en los PYME: un plan residencial se paga por tramos de cantidad
-    # de ventas (ver `services/comisiones`). Nulo es "sin definir": la venta
+    # de ventas (ver `services/commissions`). Nulo es "sin definir": la venta
     # sale en el informe de comisiones sin monto, para que se note.
     comision_pyme_pct = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     # Con que fila de los formularios de la reguladora se declara este plan.
@@ -272,8 +272,8 @@ class Plan(models.Model):
             "people": self.tipo_persona,
             "ref": self.referencia,
             "TV": "True" if self.tiene_tv else "False",
-            "datas": _numero(self.datas_mbps),
-            "price": _numero(self.precio),
+            "datas": _number(self.datas_mbps),
+            "price": _number(self.precio),
             "tarifa": self.tarifa,
             "declarar_en_eta": self.declarar_en_eta,
             # Nulo y no texto vacio: es "sin definir", y Comisiones lo distingue de 0.
@@ -308,8 +308,8 @@ class ProductoIgnorado(models.Model):
     # De que lista de "por registrar" sale el nombre. El mismo texto puede ser
     # un producto que no es plan y, a la vez, un vendedor que no se registra:
     # ignorarlo en un sitio no lo calla en el otro. Solo los de `productos`
-    # alimentan `fixtures.productos_ignorados()`.
-    area = models.CharField(max_length=16, choices=AREA_IGNORADO_CHOICES, default="productos")
+    # alimentan `fixtures.ignored_products()`.
+    area = models.CharField(max_length=16, choices=IGNORED_AREA_CHOICES, default="productos")
     nota = models.CharField(max_length=255, blank=True, default="")
     creado_por = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -344,7 +344,7 @@ class ProductoIgnorado(models.Model):
 # su coordinador ni el de su site, y el de un coordinador no mueve el del site.
 # La regla completa esta en el modulo del cliente, que es quien la aplica.
 
-NIVEL_OBJETIVO_CHOICES = [
+TARGET_LEVEL_CHOICES = [
     ("general", "General"),
     ("sucursal", "Sucursal"),
     ("estado", "Estado"),
@@ -357,18 +357,18 @@ NIVEL_OBJETIVO_CHOICES = [
 # La clave ajena de la entidad de cada nivel. El general no tiene; la sucursal
 # tampoco, porque no es un catalogo sino el texto que trae el export (`NETCOM`,
 # `NYC`...), y va en `sucursal`. Un nodo es su zona mas su sucursal.
-REFERENCIA_POR_NIVEL = {
+REFERENCE_BY_LEVEL = {
     "estado": "estado",
     "site": "site",
     "coordinador": "coordinador",
     "zona": "zona",
     "zona_sucursal": "zona",
 }
-CAMPOS_REFERENCIA = ("estado", "site", "coordinador", "zona")
-NIVELES_CON_SUCURSAL = ("sucursal", "zona_sucursal")
+REFERENCE_FIELDS = ("estado", "site", "coordinador", "zona")
+LEVELS_WITH_BRANCH = ("sucursal", "zona_sucursal")
 
 
-def _solo_referencia(nivel: str | None) -> models.Q:
+def _reference_only(nivel: str | None) -> models.Q:
     """La condicion "solo esta rellena la referencia de `nivel`" (None: el general).
 
     Ademas de las claves ajenas, la sucursal: obligatoria en los dos niveles
@@ -377,9 +377,9 @@ def _solo_referencia(nivel: str | None) -> models.Q:
     nivel = nivel or "general"
     condicion = models.Q(
         nivel=nivel,
-        **{f"{campo}__isnull": campo != REFERENCIA_POR_NIVEL.get(nivel) for campo in CAMPOS_REFERENCIA},
+        **{f"{campo}__isnull": campo != REFERENCE_BY_LEVEL.get(nivel) for campo in REFERENCE_FIELDS},
     )
-    if nivel in NIVELES_CON_SUCURSAL:
+    if nivel in LEVELS_WITH_BRANCH:
         return condicion & ~models.Q(sucursal="")
     return condicion & models.Q(sucursal="")
 
@@ -409,7 +409,7 @@ class ObjetivoComercial(models.Model):
     significa nada.
     """
 
-    nivel = models.CharField(max_length=16, choices=NIVEL_OBJETIVO_CHOICES)
+    nivel = models.CharField(max_length=16, choices=TARGET_LEVEL_CHOICES)
     estado = models.ForeignKey(Estado, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
     site = models.ForeignKey(Site, on_delete=models.CASCADE, null=True, blank=True, related_name="objetivos")
     coordinador = models.ForeignKey(
@@ -439,13 +439,13 @@ class ObjetivoComercial(models.Model):
             # los NULL como distintos— y la comprueba la vista al guardar.
             models.CheckConstraint(
                 condition=(
-                    _solo_referencia(None)
-                    | _solo_referencia("sucursal")
-                    | _solo_referencia("estado")
-                    | _solo_referencia("site")
-                    | _solo_referencia("coordinador")
-                    | _solo_referencia("zona")
-                    | _solo_referencia("zona_sucursal")
+                    _reference_only(None)
+                    | _reference_only("sucursal")
+                    | _reference_only("estado")
+                    | _reference_only("site")
+                    | _reference_only("coordinador")
+                    | _reference_only("zona")
+                    | _reference_only("zona_sucursal")
                 ),
                 name="objetivo_referencia_segun_nivel",
             ),
@@ -462,11 +462,11 @@ class ObjetivoComercial(models.Model):
     @property
     def entidad(self):
         """La fila de catalogo a la que apunta (la zona de un nodo), o None."""
-        campo = REFERENCIA_POR_NIVEL.get(self.nivel)
+        campo = REFERENCE_BY_LEVEL.get(self.nivel)
         return getattr(self, campo) if campo else None
 
     @property
-    def nombre_entidad(self) -> str:
+    def entity_name(self) -> str:
         """Como se llama lo que tiene el objetivo, con la clave que usan los nodos.
 
         Un nodo se escribe `"Zona - Sucursal"`, igual que el `valor` de la
@@ -482,7 +482,7 @@ class ObjetivoComercial(models.Model):
         return entidad.nombre
 
     def __str__(self):
-        return f"{self.nivel}:{self.nombre_entidad or '-'} desde {self.desde or 'siempre'}"
+        return f"{self.nivel}:{self.entity_name or '-'} desde {self.desde or 'siempre'}"
 
 
 class ObjetivoMes(models.Model):
@@ -547,7 +547,7 @@ class ZonaSinObjetivo(models.Model):
         verbose_name = "zona sin objetivo"
         verbose_name_plural = "zonas sin objetivo"
 
-    def vigente_en(self, mes: str) -> bool:
+    def effective_on(self, mes: str) -> bool:
         """Si el tramo cubre `mes` (`YYYY-MM`).
 
         >>> ZonaSinObjetivo(desde="2026-10", hasta=None).vigente_en("2026-09")
@@ -604,7 +604,7 @@ class SemaforoObjetivos(models.Model):
         return "semaforo de objetivos"
 
 
-def _numero(valor) -> str:
+def _number(valor) -> str:
     """Decimal a texto sin ceros de relleno: `60.00` -> `60`, `2.50` -> `2.5`."""
     if valor is None:
         return ""

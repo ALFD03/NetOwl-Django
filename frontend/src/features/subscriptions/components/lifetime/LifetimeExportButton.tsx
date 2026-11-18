@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { downloadRowsAsExcel } from '@/shared/lib/excel';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { subscriptionsApi } from '@/shared/lib/api/subscriptions';
-import { ExportButton, StatusMessage, type ExportEstado } from '@/shared/ui';
+import { ExportButton, StatusMessage, type ExportState } from '@/shared/ui';
 import { LIFETIME_COLUMNS, lifetimeFileName } from '../../lib/lifetimeExport';
 
 /**
@@ -14,16 +14,16 @@ import { LIFETIME_COLUMNS, lifetimeFileName } from '../../lib/lifetimeExport';
  * para mostrar el resumen, y cargarlas en cada cambio de mes pesaba casi 1 MB.
  */
 export function LifetimeExportButton({ mes }: { mes: string }) {
-  const [estado, setEstado] = useState<ExportEstado>('idle');
+  const [estado, setState] = useState<ExportState>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const handleClick = async () => {
-    setEstado('busy');
+    setState('busy');
     setError(null);
     try {
       const data = await subscriptionsApi.getLifetimeDetalle(mes);
       if (!data.bajas?.length) {
-        setEstado('empty');
+        setState('empty');
         return;
       }
       await downloadRowsAsExcel({
@@ -32,11 +32,11 @@ export function LifetimeExportButton({ mes }: { mes: string }) {
         fileName: lifetimeFileName(mes),
         sheetName: 'Bajas',
       });
-      setEstado('idle');
+      setState('idle');
     } catch (err) {
       console.error('Fallo al exportar el lifetime del mes:', err);
       setError(getApiErrorMessage(err, 'No se pudo obtener el detalle de las bajas.'));
-      setEstado('error');
+      setState('error');
     }
   };
 

@@ -23,7 +23,7 @@ from django.db import models, transaction
 from django.db.models.functions import Lower
 
 # El sufijo y su normalizacion viven en `core`: los comparte el directorio de ventas.
-from core.odoo_nombres import normalizar_nombre_odoo
+from core.odoo_names import normalize_odoo_name
 
 
 class Departamento(models.Model):
@@ -68,7 +68,7 @@ class UsuarioSoporte(models.Model):
     # `HistorialDepartamento`, y esta columna es su ultima fila repetida: se
     # conserva porque es lo que filtra, ordena y cuenta el listado sin tener
     # que recorrer la historia. Solo la escriben `cambiar_departamento`,
-    # `deshacer_ultimo_cambio` y la correccion del alta.
+    # `undo_last_change` y la correccion del alta.
     #
     # Obligatorio y con PROTECT: un usuario sin departamento no agrupa por
     # nada, y borrar un departamento con gente dentro dejaria filas huerfanas.
@@ -84,7 +84,7 @@ class UsuarioSoporte(models.Model):
     # La baja. **No se borra a la persona**: sus tickets pasados siguen siendo
     # suyos y el directorio tiene que seguir reconociendola. Lo que cambia es
     # que a partir de esta fecha no deberia entrarle ningun ticket nuevo, y
-    # `tickets_tras_la_baja` avisa de los que entren.
+    # `tickets_after_churn` avisa de los que entren.
     fecha_egreso = models.DateField(null=True, blank=True)
 
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -134,7 +134,7 @@ class UsuarioSoporte(models.Model):
             self.save(update_fields=["departamento", "actualizado_en"])
         return paso
 
-    def deshacer_ultimo_cambio(self) -> None:
+    def undo_last_change(self) -> None:
         """Borra el ultimo cambio y devuelve a la persona al departamento anterior.
 
         Es la unica forma de corregir la historia. La fila inicial —la del
@@ -149,7 +149,7 @@ class UsuarioSoporte(models.Model):
             self.departamento = pasos[-2].departamento
             self.save(update_fields=["departamento", "actualizado_en"])
 
-    def dar_de_baja(self, fecha: date) -> None:
+    def deactivate(self, fecha: date) -> None:
         """Marca la salida. No toca la historia ni borra nada."""
         if not self.activo:
             raise MovimientoInvalido("El usuario ya está dado de baja.")
@@ -174,7 +174,7 @@ class UsuarioSoporte(models.Model):
         # La normalizacion vive aqui y no solo en la vista: cualquier alta
         # —una vista futura, un comando, el shell— tiene que dejar la misma
         # cadena, porque la unicidad se apoya en ella.
-        self.nombre_odoo = normalizar_nombre_odoo(self.nombre_odoo)
+        self.nombre_odoo = normalize_odoo_name(self.nombre_odoo)
         super().save(*args, **kwargs)
 
 

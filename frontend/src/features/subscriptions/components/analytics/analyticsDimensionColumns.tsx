@@ -1,8 +1,8 @@
 import { StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import type { DimensionVal } from '@/shared/types/domain';
-import { TEXTO_TONO, tonoChurn, tonoCrecimiento } from '../../lib/objetivos';
-import type { SemaforoObjetivos } from '../../types';
+import { TONE_TEXT, tonoChurn, tonoCrecimiento } from '../../lib/targets';
+import type { TargetsTrafficLight } from '../../types';
 
 const int = formatInteger;
 const dec = formatTwoDecimals;
@@ -17,7 +17,7 @@ const dec = formatTwoDecimals;
  * Una fábrica y no una constante: crecimiento y churn se pintan con el semáforo
  * del catálogo.
  */
-export const buildAnalyticsDimensionColumns = (s: SemaforoObjetivos): Column<DimensionVal>[] => [
+export const buildAnalyticsDimensionColumns = (s: TargetsTrafficLight): Column<DimensionVal>[] => [
   { header: 'Valor', accessor: (r) => <StickyLabel>{r.valor}</StickyLabel>, sortKey: 'valor', sticky: true },
 
   { header: 'Base Ini', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
@@ -26,11 +26,11 @@ export const buildAnalyticsDimensionColumns = (s: SemaforoObjetivos): Column<Dim
   { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{int(r.nuevos)}</span>, align: 'right', sortKey: 'nuevos' },
   { header: 'Adic. Net', accessor: (r) => <span className="text-emerald-500">{int(r.adiciones_netas)}</span>, align: 'right', sortKey: 'adiciones_netas' },
   { header: 'Adic. Bru', accessor: (r) => <span className="text-emerald-500">{int(r.adiciones_brutas)}</span>, align: 'right', sortKey: 'adiciones_brutas' },
-  { header: 'Crec %', accessor: (r) => <span className={`font-bold ${TEXTO_TONO[tonoCrecimiento(r.crecimiento ?? 0, s)]}`}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
+  { header: 'Crec %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoCrecimiento(r.crecimiento ?? 0, s)]}`}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
 
   { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
-  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TEXTO_TONO[tonoChurn(r.churn_neto_pct ?? 0, s)]}`}>{dec(r.churn_neto_pct)}%</span>, align: 'right', sortKey: 'churn_neto_pct' },
-  { header: 'C. Bruto %', accessor: (r) => <span className={TEXTO_TONO[tonoChurn(r.churn_bruto_pct ?? 0, s)]}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
+  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.churn_neto_pct ?? 0, s)]}`}>{dec(r.churn_neto_pct)}%</span>, align: 'right', sortKey: 'churn_neto_pct' },
+  { header: 'C. Bruto %', accessor: (r) => <span className={TONE_TEXT[tonoChurn(r.churn_bruto_pct ?? 0, s)]}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
   { header: 'Corte Imp', accessor: (r) => int(r.corte_impagado), align: 'right', sortKey: 'corte_impagado' },
   { header: 'Susp %', accessor: (r) => `${dec(r.porcentaje_suspensiones)}%`, align: 'right', sortKey: 'porcentaje_suspensiones' },
   { header: 'Gratuitos', accessor: (r) => <span className="text-purple-400">{int(r.clientes_gratuitos)}</span>, align: 'right', sortKey: 'clientes_gratuitos' },

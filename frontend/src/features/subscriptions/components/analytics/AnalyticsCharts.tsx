@@ -10,7 +10,7 @@ import {
 } from '@/shared/charts';
 import { METRIC_COLOR } from '@/shared/constants/theme';
 import { NeonContainer, type NeonTheme } from '@/shared/ui';
-import type { DimensionVal, Periodo } from '@/shared/types/domain';
+import type { DimensionVal, Period } from '@/shared/types/domain';
 import {
   getChartDistribution,
   toBarChartData,
@@ -22,7 +22,7 @@ import { ANALYTICS_CHART_SECTIONS } from './analyticsChartSections';
 import { AnalyticsSection } from './AnalyticsSection';
 
 interface Props {
-  globalData: Periodo;
+  globalData: Period;
   currentDimensionData: DimensionVal[];
   selectedDimension?: string;
 }
@@ -100,7 +100,7 @@ interface AnalyticsChartItemProps {
   metric: keyof typeof ANALYTICS_METRICS;
   type: 'bar' | 'doughnut';
   theme: NeonTheme;
-  globalData: Periodo;
+  globalData: Period;
   currentDimensionData: DimensionVal[];
 }
 

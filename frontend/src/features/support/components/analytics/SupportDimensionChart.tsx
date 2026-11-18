@@ -24,23 +24,23 @@ import { BarChart } from '@/shared/charts';
 import { EmptyState, NeonContainer, ToggleGroup } from '@/shared/ui';
 import { formatInteger } from '@/shared/utils';
 import {
-  TOPE_VALORES,
+  VALUES_CAP,
   altoBarras,
-  valoresConVelas,
+  valuesWithCandles,
   velasData,
   velasOptions,
-  volumenPorValorData,
-  volumenPorValorOptions,
+  volumeByValueData,
+  volumeByValueOptions,
 } from '../../lib/supportCharts';
 import {
-  CIERRE_TOTAL,
+  CLOSE_TOTAL,
   SUPPORT_DIMENSION_CAPTIONS,
   SUPPORT_DIMENSION_LABELS,
-  agruparPorDepartamento,
+  groupByDepartment,
 } from '../../lib/supportMetrics';
-import { esDimensionPersona, type SupportDimension, type SupportDimensionRow } from '../../types';
+import { isPersonDimension, type SupportDimension, type SupportDimensionRow } from '../../types';
 
-type Vista = 'volumen' | 'tiempos';
+type View = 'volumen' | 'tiempos';
 type Lectura = 'persona' | 'departamento';
 
 interface Props {
@@ -55,48 +55,48 @@ interface Props {
 
 export function SupportDimensionChart({ dimension, rows, groupName, onSelect, resultsHref }: Props) {
   const label = SUPPORT_DIMENSION_LABELS[dimension];
-  const esPersona = esDimensionPersona(dimension);
-  const [vista, setVista] = useState<Vista>('volumen');
+  const isPerson = isPersonDimension(dimension);
+  const [vista, setVista] = useState<View>('volumen');
   const [lectura, setLectura] = useState<Lectura>('persona');
 
-  const porDepartamento = esPersona && lectura === 'departamento';
-  const totalGrupo = useMemo(() => rows.reduce((acc, r) => acc + Number(r.total_tickets ?? 0), 0), [rows]);
+  const byDepartment = isPerson && lectura === 'departamento';
+  const groupTotal = useMemo(() => rows.reduce((acc, r) => acc + Number(r.total_tickets ?? 0), 0), [rows]);
   const filas = useMemo(
-    () => (porDepartamento ? agruparPorDepartamento(rows, totalGrupo) : rows),
-    [porDepartamento, rows, totalGrupo],
+    () => (byDepartment ? groupByDepartment(rows, groupTotal) : rows),
+    [byDepartment, rows, groupTotal],
   );
-  const seleccionar = porDepartamento ? undefined : onSelect;
+  const seleccionar = byDepartment ? undefined : onSelect;
 
   // Los departamentos no tienen distribución: sus medianas no se pueden sumar.
-  const vistaActiva: Vista = porDepartamento ? 'volumen' : vista;
-  const conVelas = valoresConVelas(filas, CIERRE_TOTAL);
-  const dibujadas = vistaActiva === 'volumen' ? Math.min(filas.length, TOPE_VALORES) : conVelas;
-  const resto = filas.length - Math.min(filas.length, TOPE_VALORES);
+  const activeView: View = byDepartment ? 'volumen' : vista;
+  const withCandles = valuesWithCandles(filas, CLOSE_TOTAL);
+  const dibujadas = activeView === 'volumen' ? Math.min(filas.length, VALUES_CAP) : withCandles;
+  const resto = filas.length - Math.min(filas.length, VALUES_CAP);
 
   const chart = useMemo(() => {
-    if (vistaActiva === 'volumen') {
+    if (activeView === 'volumen') {
       return {
-        data: volumenPorValorData(filas),
-        options: volumenPorValorOptions(filas, seleccionar ? (i) => seleccionar(filas[i].nombre) : undefined),
+        data: volumeByValueData(filas),
+        options: volumeByValueOptions(filas, seleccionar ? (i) => seleccionar(filas[i].nombre) : undefined),
       };
     }
-    return { data: velasData(filas, CIERRE_TOTAL), options: velasOptions(filas, CIERRE_TOTAL, seleccionar) };
-  }, [vistaActiva, filas, seleccionar]);
+    return { data: velasData(filas, CLOSE_TOTAL), options: velasOptions(filas, CLOSE_TOTAL, seleccionar) };
+  }, [activeView, filas, seleccionar]);
 
   const subtitulo =
-    vistaActiva === 'volumen'
+    activeView === 'volumen'
       ? `${SUPPORT_DIMENSION_CAPTIONS[dimension]} · cada barra partida por cómo terminó`
       : `${SUPPORT_DIMENSION_CAPTIONS[dimension]} · cierre total: mecha de mínimo a máximo, caja de la mitad central, marca en el promedio`;
 
   return (
     <NeonContainer
       theme="purple"
-      title={porDepartamento ? `${label} por departamento` : `${groupName} por ${label.toLowerCase()}`}
+      title={byDepartment ? `${label} por departamento` : `${groupName} por ${label.toLowerCase()}`}
       subtitle={subtitulo}
-      icon={vistaActiva === 'volumen' ? <BarChart3 className="h-5 w-5" /> : <CandlestickChart className="h-5 w-5" />}
+      icon={activeView === 'volumen' ? <BarChart3 className="h-5 w-5" /> : <CandlestickChart className="h-5 w-5" />}
       headerAction={
         <div className="flex flex-wrap items-center gap-3">
-          {esPersona && (
+          {isPerson && (
             <ToggleGroup
               activeKey={lectura}
               onChange={(key) => setLectura(key as Lectura)}
@@ -106,10 +106,10 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
               ]}
             />
           )}
-          {!porDepartamento && (
+          {!byDepartment && (
             <ToggleGroup
               activeKey={vista}
-              onChange={(key) => setVista(key as Vista)}
+              onChange={(key) => setVista(key as View)}
               options={[
                 { key: 'volumen', label: 'Volumen', icon: BarChart3 },
                 { key: 'tiempos', label: 'Tiempos', icon: CandlestickChart },
@@ -122,7 +122,7 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
       {dibujadas === 0 ? (
         <EmptyState
           title={
-            vistaActiva === 'tiempos'
+            activeView === 'tiempos'
               ? `Ningún valor de ${label.toLowerCase()} tiene cierres medibles en el corte.`
               : `El grupo no registra ninguna ${label.toLowerCase()} en el corte.`
           }
@@ -143,7 +143,7 @@ export function SupportDimensionChart({ dimension, rows, groupName, onSelect, re
               )}
               {resto > 0 && (
                 <span>
-                  Se ven los {TOPE_VALORES} con más tickets; quedan {formatInteger(resto)} más.
+                  Se ven los {VALUES_CAP} con más tickets; quedan {formatInteger(resto)} más.
                 </span>
               )}
             </span>

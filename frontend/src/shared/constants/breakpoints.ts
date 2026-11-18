@@ -33,4 +33,4 @@ export const BREAKPOINTS = Object.fromEntries(
 ) as Record<Breakpoint, number>;
 
 /** Media query de "desde este breakpoint", la misma que genera el prefijo de Tailwind. */
-export const mediaDesde = (bp: Breakpoint): string => `(min-width: ${tokens.screens[bp]})`;
+export const mediaFrom = (bp: Breakpoint): string => `(min-width: ${tokens.screens[bp]})`;

@@ -11,18 +11,18 @@ import type { Permission } from '@/shared/types/auth';
 import type { GroupData, UserData } from '@/features/config/types';
 
 /** Los módulos, por el permiso que abre cada uno. En el orden del sidebar. */
-export const MODULOS_ACCESO: readonly { permiso: Permission; label: string; icon: LucideIcon }[] = [
+export const ACCESS_MODULES: readonly { permiso: Permission; label: string; icon: LucideIcon }[] = [
   { permiso: PERMISSIONS.VIEW_SUBSCRIPTIONS, label: 'Suscripciones', icon: Layers },
   { permiso: PERMISSIONS.VIEW_CRM, label: 'CRM', icon: Users },
   { permiso: PERMISSIONS.VIEW_SUPPORT, label: 'Soporte técnico', icon: Headset },
   { permiso: PERMISSIONS.VIEW_IMPORTS, label: 'Importaciones', icon: CloudDownload },
 ];
 
-const CLAVES = PERMISSION_GROUPS.flatMap((group) => group.perms.map((perm) => perm.key));
+const KEYS = PERMISSION_GROUPS.flatMap((group) => group.perms.map((perm) => perm.key));
 
 /** Cuántos permisos de la matriz están concedidos. */
-export function contarPermisos(permisos: Record<string, boolean>): number {
-  return CLAVES.filter((clave) => permisos[clave]).length;
+export function countPermissions(permisos: Record<string, boolean>): number {
+  return KEYS.filter((clave) => permisos[clave]).length;
 }
 
 export { TOTAL_PERMISSIONS };
@@ -31,22 +31,22 @@ export { TOTAL_PERMISSIONS };
  * La matriz que de verdad rige para una cuenta: la del grupo si tiene uno (el
  * perfil le delega todo), la suya si no.
  */
-export function permisosEfectivos(user: UserData, grupos: GroupData[]): Record<string, boolean> {
+export function effectivePermissions(user: UserData, grupos: GroupData[]): Record<string, boolean> {
   if (user.group_id == null) return user.permissions;
   return grupos.find((grupo) => grupo.id === user.group_id)?.permissions ?? user.permissions;
 }
 
-interface ModulosProps {
+interface ModulesProps {
   permisos: Record<string, boolean>;
   /** Con nombre (tarjetas de grupo) o solo iconos (filas de la tabla). */
-  conEtiqueta?: boolean;
+  withLabel?: boolean;
 }
 
 /** Los cuatro módulos, encendidos los que la matriz abre. */
-export function ModulosConAcceso({ permisos, conEtiqueta = false }: ModulosProps) {
+export function ModulesWithAccess({ permisos, withLabel: conEtiqueta = false }: ModulesProps) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {MODULOS_ACCESO.map(({ permiso, label, icon: Icon }) => {
+      {ACCESS_MODULES.map(({ permiso, label, icon: Icon }) => {
         const abierto = Boolean(permisos[permiso]);
         return (
           <span
@@ -83,7 +83,7 @@ const TONOS_AVATAR = [
 ] as const;
 
 /** El mismo nombre da siempre el mismo color, así que una cuenta se reconoce en las dos vistas. */
-function tonoDe(nombre: string): string {
+function toneOf(nombre: string): string {
   let hash = 0;
   for (const letra of nombre) hash = (hash * 31 + letra.charCodeAt(0)) >>> 0;
   return TONOS_AVATAR[hash % TONOS_AVATAR.length];
@@ -102,7 +102,7 @@ export function Avatar({ nombre, size = 'md', className }: AvatarProps) {
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-full font-bold uppercase ring-1',
         size === 'md' ? 'h-9 w-9 text-sm' : 'h-7 w-7 text-[11px]',
-        tonoDe(nombre),
+        toneOf(nombre),
         className,
       )}
     >

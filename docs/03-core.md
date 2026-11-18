@@ -45,16 +45,16 @@ Constantes del dominio, leídas por los tres analizadores.
 | `VALID_REACT_ORIGINS` | los mismos tres | Estados desde los que una vuelta cuenta como reactivación |
 | `FREE_STATE` | `9_free` | Migrada a servicio gratuito: ni activa ni baja |
 | `EXCLUDED_STATE` | `0_other` | Cotización, instalación: fuera del cómputo |
-| `CORTE_IMPAGADO_EVENT` | `corte automatico por factura impaga` | Texto que identifica el corte en el log |
+| `UNPAID_CUT_EVENT` | `corte automatico por factura impaga` | Texto que identifica el corte en el log |
 | `ARCHIVED_EVENT` / `UNARCHIVED_EVENT` | `suscripcion archivada` / `desarchivada` | Abren y cierran el tramo gratuito |
-| `PLAN_CANCELADO` | `Cancelado` | **Marca, no plan**: lo que Odoo deja como producto de una baja |
+| `CANCELLED_PLAN` | `Cancelado` | **Marca, no plan**: lo que Odoo deja como producto de una baja |
 | `SUBS_STATE_TO_LOG_MAP` | — | Traduce el estado en texto del export al código interno |
 
 ### Otras constantes
 
 - `DATE_FORMATS` — nueve formatos que `parse_date` prueba en orden antes de
   ceder a `pd.to_datetime`.
-- `ACTIVO_TRUE_TOKENS` / `ACTIVO_FALSE_TOKENS` — vocabulario de la columna
+- `TRUE_TOKENS` / `FALSE_TOKENS` — vocabulario de la columna
   `Activo` del export. Odoo escribe el booleano como `"True"` o como **cadena
   vacía**: el `False` nunca viaja escrito. Los dos vocabularios se listan de
   forma explícita para poder **detectar** un valor desconocido en vez de que
@@ -70,7 +70,7 @@ Constantes del dominio, leídas por los tres analizadores.
 
 ## `core/models.py` — `Periodo`
 
-Dataclass con `fecha_inicio` y `fecha_final`. Es lo que todos los análisis usan
+Dataclass con `fecha_inicio` y `end_date`. Es lo que todos los análisis usan
 para hablar de un mes o de un corte dentro de él.
 
 | Método | Qué hace |
@@ -211,7 +211,7 @@ en suscripciones, el `YYYY-MM` en CRM y soporte, como en el resto de sus tablas.
 | `clean_json_props(obj)` | `NaN`/`Inf` → `0.0`, escalares de numpy → nativos, `Timestamp` → ISO 8601 |
 | `clean_json_nullable(obj)` | Igual, pero `NaN` → `null`. Para métricas donde 0 no significa «sin dato»: una mediana de supervivencia incalculable debe llegar como `null`, porque un 0 se leería como que todos se dieron de baja de inmediato |
 | `parse_jsonb(valor)` | Decodifica una columna JSONB que psycopg2 puede entregar ya parseada o como cadena |
-| `capture_console(buffer=None)` | Context manager que redirige `stdout` y `stderr`. **No se debe hacer a mano.** Las tareas de Celery le pasan un `ConsolaJob` |
+| `capture_console(buffer=None)` | Context manager que redirige `stdout` y `stderr`. **No se debe hacer a mano.** Las tareas de Celery le pasan un `JobConsole` |
 
 Detalle de `_clean_json`: comprueba los escalares de numpy **antes** que
 `float`, porque `np.float64` hereda de `float` y saldría sin convertir,
@@ -234,7 +234,7 @@ fichero que solo cambiaba al desplegar, pero ahora se edita en caliente y **el
 worker de Celery es otro proceso que jamás vería la edición**.
 
 En su lugar se guarda **una sola instantánea coherente de todos los catálogos**
-(`_Catalogo`, `frozen`) con **60 s de vigencia**, protegida por un `threading.Lock`:
+(`_Catalog`, `frozen`) con **60 s de vigencia**, protegida por un `threading.Lock`:
 
 - *Coherente* porque un análisis que consultara planes antes de una edición y
   zonas después mezclaría dos catálogos distintos.
@@ -242,7 +242,7 @@ En su lugar se guarda **una sola instantánea coherente de todos los catálogos*
   error dejaría al sistema sin catálogo durante un minuto por un corte de un
   segundo.
 - `reset_cache()` lo llaman todas las escrituras del catálogo
-  (`services/catalogos/views.py`) y también `_ejecutar_con_turno` al empezar cada
+  (`services/catalogs/views.py`) y también `_run_with_turn` al empezar cada
   análisis, de modo que una ejecución no cambia de catálogo a mitad de camino.
 
 ### API
@@ -250,14 +250,14 @@ En su lugar se guarda **una sola instantánea coherente de todos los catálogos*
 | Función | Devuelve |
 |---|---|
 | `planes()` / `zonas()` | Listas de diccionarios con las claves JSON |
-| `zonas_disponibles()` | Distingue «vacío» de «no configurado» |
+| `available_zones()` | Distingue «vacío» de «no configurado» |
 | `plan_names()` | Qué planes existen. **No incluye `Cancelado`** |
-| `nombres_reconocidos()` | `plan_names()` + `Cancelado`. Responde «¿esta línea del export es un plan?» |
-| `zonas_por_nombre()` | Zonas indexadas por nombre en minúsculas |
-| `orden_sites()` | Sites por relevancia comercial (columna `Site.orden`), no alfabéticamente |
-| `productos_ignorados()` | Nombres que alguien declaró que nunca serán un plan |
+| `recognized_names()` | `plan_names()` + `Cancelado`. Responde «¿esta línea del export es un plan?» |
+| `zones_by_name()` | Zonas indexadas por nombre en minúsculas |
+| `sites_order()` | Sites por relevancia comercial (columna `Site.orden`), no alfabéticamente |
+| `ignored_products()` | Nombres que alguien declaró que nunca serán un plan |
 
-### Por qué `plan_names()` y `nombres_reconocidos()` son distintas
+### Por qué `plan_names()` y `recognized_names()` son distintas
 
 `Cancelado` es la marca que Odoo deja como producto de una suscripción dada de
 baja, y lo llevan unas 22 000 suscripciones. Sin separar los dos conceptos el

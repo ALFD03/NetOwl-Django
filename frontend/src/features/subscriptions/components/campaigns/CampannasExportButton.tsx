@@ -4,13 +4,13 @@ import { useMemo } from 'react';
 
 import { ExcelExportButton } from '@/shared/ui';
 import type { DimensionVal } from '@/shared/types/domain';
-import { useObjetivosConfig } from '../../hooks/useObjetivos';
+import { useTargetsConfig } from '../../hooks/useTargets';
 import {
   CAMPANNAS_EXCEL_COLUMNS,
   campannasFileName,
-  construirReporteCampannas,
+  buildCampaignReport,
 } from '../../lib/campannasExport';
-import { formatObjetivo, objetivoGeneral } from '../../lib/objetivos';
+import { formatTarget, overallTarget } from '../../lib/targets';
 
 interface Props {
   /** Las filas `campanna` del corte: las del día elegido, o las del cierre si el día no las trae. */
@@ -27,17 +27,17 @@ interface Props {
  * descargarlo cambiaría también lo que se está mirando.
  */
 export function CampannasExportButton({ filas, periodo, dia }: Props) {
-  const config = useObjetivosConfig();
-  const objetivo = useMemo(() => objetivoGeneral(config, periodo), [config, periodo]);
-  const filasReporte = useMemo(() => construirReporteCampannas(filas, objetivo), [filas, objetivo]);
+  const config = useTargetsConfig();
+  const objetivo = useMemo(() => overallTarget(config, periodo), [config, periodo]);
+  const reportRows = useMemo(() => buildCampaignReport(filas, objetivo), [filas, objetivo]);
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
       <p className="text-xs text-slate-400">
-        {filasReporte.length} campañas · meta al {formatObjetivo(objetivo.crecimiento)} del objetivo general
+        {reportRows.length} campañas · meta al {formatTarget(objetivo.crecimiento)} del objetivo general
       </p>
       <ExcelExportButton
-        rows={filasReporte}
+        rows={reportRows}
         columns={CAMPANNAS_EXCEL_COLUMNS}
         fileName={campannasFileName(periodo, dia)}
         sheetName="Campañas"

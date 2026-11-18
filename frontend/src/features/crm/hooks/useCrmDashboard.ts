@@ -4,8 +4,8 @@ import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import { useMemo, useState } from 'react';
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 import { METRIC_CHART, type MetricColor } from '@/shared/ui';
-import { buildHealthCards } from '@/features/crm/lib/crmEfectividad';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils';
+import { buildHealthCards } from '@/features/crm/lib/crmEffectiveness';
+import { formatInteger, formatPeriodLabel } from '@/shared/utils';
 import type {
   CrmDashboardProps,
   CrmGlobalStats,
@@ -110,7 +110,7 @@ export function useCrmDashboard({ metrics = {} }: CrmDashboardProps) {
   }, [historico]);
 
   const labels = useMemo(
-    () => historico.map((row) => formatPeriodoLabel(String(row.periodo_reporte ?? ''))),
+    () => historico.map((row) => formatPeriodLabel(String(row.periodo_reporte ?? ''))),
     [historico],
   );
 

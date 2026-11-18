@@ -6,15 +6,15 @@
 
 import { Building2, Search } from 'lucide-react';
 
-import type { Proyeccion } from '@/shared/lib/proyeccion';
+import type { Proyeccion } from '@/shared/lib/projection';
 import { EmptyState, NeonContainer } from '@/shared/ui';
-import { formatPeriodoLabel } from '@/shared/utils/formatters';
-import { BajasExportButton } from './BajasExportButton';
-import { CommercialSummaryStrip, ResumenSencillo } from './CommercialSummaryStrip';
-import { CoordinadorasOficinaBadges, type CoordinadoraOficina } from './CoordinadorasOficinaBadges';
+import { formatPeriodLabel } from '@/shared/utils/formatters';
+import { ChurnExportButton } from './ChurnExportButton';
+import { CommercialSummaryStrip, SimpleSummary } from './CommercialSummaryStrip';
+import { OfficeCoordinatorBadges, type OfficeCoordinator } from './OfficeCoordinatorBadges';
 import { NodePerformanceTable } from './NodePerformanceTable';
-import { ObjetivoGrupo } from './ObjetivoGrupo';
-import { nodosDeGrupo } from '../../lib/bajasExport';
+import { TargetGroup } from './TargetGroup';
+import { groupNodes } from '../../lib/churnExport';
 import type { SalesReportSite, SalesReportTechnology } from '../../hooks/useSalesReportData';
 
 interface SalesReportViewProps {
@@ -27,22 +27,22 @@ interface SalesReportViewProps {
    */
   diaSeleccionado?: boolean;
   /** Los días laborables del corte elegido, para proyectar las instalaciones al cierre. */
-  proyeccion?: Proyeccion | null;
+  projection?: Proyeccion | null;
   /** Las coordinadoras de oficina con site; cada bloque enseña las suyas. */
-  coordinadoras?: CoordinadoraOficina[];
+  coordinadoras?: OfficeCoordinator[];
   /** El día del corte, hasta el que se suman sus ventas; nulo es el mes entero. */
-  diaCorte?: number | null;
+  cutoffDay?: number | null;
 }
 
-const claveSite = (nombre: string | undefined) => String(nombre ?? '').trim().toLowerCase();
+const siteKey = (nombre: string | undefined) => String(nombre ?? '').trim().toLowerCase();
 
 export function SalesReportView({
   sites,
   period,
   diaSeleccionado = false,
-  proyeccion = null,
+  projection: proyeccion = null,
   coordinadoras = [],
-  diaCorte = null,
+  cutoffDay: diaCorte = null,
 }: SalesReportViewProps) {
   if (sites.length === 0) {
     return (
@@ -62,37 +62,37 @@ export function SalesReportView({
           key={site.site}
           theme="blue"
           title={site.site}
-          subtitle={`Auditoría Regional de Cierre (${formatPeriodoLabel(period)})`}
+          subtitle={`Auditoría Regional de Cierre (${formatPeriodLabel(period)})`}
           icon={<Building2 className="h-5 w-5" />}
           headerAction={
             <div className="flex flex-wrap items-center justify-end gap-3">
-              <ObjetivoGrupo meta={site.meta} />
-              <BajasExportButton
+              <TargetGroup meta={site.meta} />
+              <ChurnExportButton
                 period={period}
                 // Los nodos que el site tiene en pantalla, no los del catálogo:
                 // los filtros de tecnología y sucursal ya recortaron la tabla.
-                nodos={nodosDeGrupo(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
+                nodos={groupNodes(site.technologies?.flatMap((tech) => tech.nodes ?? []))}
                 alcance={String(site.site ?? '')}
-                avisoDia={diaSeleccionado}
+                dayNotice={diaSeleccionado}
                 label="Exportar bajas del site"
               />
             </div>
           }
         >
           <div className="space-y-10">
-            <CoordinadorasOficinaBadges
-              coordinadoras={coordinadoras.filter((c) => claveSite(c.site) === claveSite(site.site))}
+            <OfficeCoordinatorBadges
+              coordinadoras={coordinadoras.filter((c) => siteKey(c.site) === siteKey(site.site))}
               dia={diaCorte}
               // Pegadas al resumen del site, no a diez de distancia.
               className="-mb-6"
             />
             {site.totales && site.meta && (
-              <ResumenSencillo
-                activosInicio={site.totales.activos_inicio}
-                activosFinal={site.totales.activos_final}
+              <SimpleSummary
+                activeAtStart={site.totales.activos_inicio}
+                activeAtEnd={site.totales.activos_final}
                 nuevos={site.totales.nuevos}
                 meta={site.meta}
-                proyeccion={proyeccion}
+                projection={proyeccion}
               />
             )}
             {site.technologies?.map((tech: SalesReportTechnology) => {
@@ -103,22 +103,22 @@ export function SalesReportView({
                   <CommercialSummaryStrip
                     leadLabel="Tecnología"
                     leadValue={String(tech.technology ?? '')}
-                    activosInicio={tech.dynamic.activos_inicio}
-                    activosFinal={tech.dynamic.activos_final}
+                    activeAtStart={tech.dynamic.activos_inicio}
+                    activeAtEnd={tech.dynamic.activos_final}
                     bajas={tech.dynamic.bajas}
                     crecimiento={tech.dynamic.crecimiento}
                     churnRate={tech.dynamic.churn_rate}
                     meta={tech.dynamic.meta}
                     nuevos={tech.dynamic.nuevos}
-                    proyeccion={proyeccion}
+                    projection={proyeccion}
                   />
 
                   <div className="flex justify-end">
-                    <BajasExportButton
+                    <ChurnExportButton
                       period={period}
-                      nodos={nodosDeGrupo(tech.nodes)}
+                      nodos={groupNodes(tech.nodes)}
                       alcance={`${site.site ?? ''} ${tech.technology ?? ''}`}
-                      avisoDia={diaSeleccionado}
+                      dayNotice={diaSeleccionado}
                       label={`Exportar bajas ${tech.technology ?? ''}`}
                     />
                   </div>
@@ -126,13 +126,13 @@ export function SalesReportView({
                   <NodePerformanceTable
                     nodes={tech.nodes ?? []}
                     labelHeader="Nodo / Zona"
-                    proyeccion={proyeccion}
+                    projection={proyeccion}
                     renderRowAction={(node) => (
-                      <BajasExportButton
+                      <ChurnExportButton
                         period={period}
-                        nodos={nodosDeGrupo([node])}
+                        nodos={groupNodes([node])}
                         alcance={node.zona_sucursal ?? node.zona ?? ''}
-                        avisoDia={diaSeleccionado}
+                        dayNotice={diaSeleccionado}
                         iconOnly
                       />
                     )}

@@ -3,7 +3,7 @@
  *
  * Analytics es para ver el mes de un vistazo y qué lo empuja; las tablas
  * completas viven en Results. Por eso cada eje se dibuja con sus valores más
- * grandes (`TOPE_VALORES`) y el resto se nombra, no se esconde.
+ * grandes (`VALUES_CAP`) y el resto se nombra, no se esconde.
  */
 
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
@@ -17,10 +17,10 @@ import type {
   SupportTimeMeasure,
   SupportZoneRow,
 } from '../types';
-import { COLOR_TIPO, ETIQUETA_TIPO, formatDuracion } from './flujoFormat';
+import { COLOR_TIPO, KIND_LABEL, formatDuration } from './flowFormat';
 
 /** Cuántos valores de un eje entran en un gráfico antes de pasar a «y N más». */
-export const TOPE_VALORES = 15;
+export const VALUES_CAP = 15;
 
 const TOOLTIP = {
   backgroundColor: CHART_CHROME.surfaceDeep,
@@ -51,11 +51,11 @@ const corto = (texto: string, max = 34) => (texto.length > max ? `${texto.slice(
 
 // --- En qué se va el tiempo -------------------------------------------------
 
-export const TIPOS_TIEMPO = ['cola', 'pausa', 'gestion', 'sin_clasificar'] as const;
-export type TipoTiempo = (typeof TIPOS_TIEMPO)[number];
+export const TIME_KINDS = ['cola', 'pausa', 'gestion', 'sin_clasificar'] as const;
+export type TimeKind = (typeof TIME_KINDS)[number];
 
-export interface ParteTiempo {
-  tipo: TipoTiempo;
+export interface TimePart {
+  tipo: TimeKind;
   label: string;
   horas: number;
   pct: number;
@@ -63,7 +63,7 @@ export interface ParteTiempo {
 }
 
 /** Qué se hace en cada tipo de etapa, para el pie de su tarjeta. */
-export const QUE_ES_TIPO: Record<TipoTiempo, string> = {
+export const QUE_ES_TIPO: Record<TimeKind, string> = {
   cola: 'Esperando a que alguien lo tome',
   pausa: 'Esperando algo de fuera: cliente, pago, falla masiva',
   gestion: 'Alguien trabajando en él',
@@ -71,12 +71,12 @@ export const QUE_ES_TIPO: Record<TipoTiempo, string> = {
 };
 
 /** Las cuatro partes del tiempo medio del grupo, de lo cerrado con logs. */
-export function partesDelTiempo(stats: SupportStats): { partes: ParteTiempo[]; total: number } {
-  const horas = (tipo: TipoTiempo) => toNumber(stats[`composicion_${tipo}_horas`]);
-  const total = TIPOS_TIEMPO.reduce((acc, tipo) => acc + horas(tipo), 0);
-  const partes = TIPOS_TIEMPO.map((tipo) => ({
+export function timeParts(stats: SupportStats): { partes: TimePart[]; total: number } {
+  const horas = (tipo: TimeKind) => toNumber(stats[`composicion_${tipo}_horas`]);
+  const total = TIME_KINDS.reduce((acc, tipo) => acc + horas(tipo), 0);
+  const partes = TIME_KINDS.map((tipo) => ({
     tipo,
-    label: ETIQUETA_TIPO[tipo],
+    label: KIND_LABEL[tipo],
     horas: horas(tipo),
     pct: total > 0 ? Number(((horas(tipo) / total) * 100).toFixed(1)) : 0,
     color: COLOR_TIPO[tipo],
@@ -84,7 +84,7 @@ export function partesDelTiempo(stats: SupportStats): { partes: ParteTiempo[]; t
   return { partes, total };
 }
 
-export function tiempoDonutData(partes: ParteTiempo[]): ChartData<'doughnut'> {
+export function timeDonutData(partes: TimePart[]): ChartData<'doughnut'> {
   return {
     labels: partes.map((p) => p.label),
     datasets: [
@@ -106,8 +106,8 @@ export function tiempoDonutData(partes: ParteTiempo[]): ChartData<'doughnut'> {
  * resueltos + cancelados + escalados son lo cerrado en el mes, y «sin cerrar»
  * lo que entró y a la fecha seguía abierto.
  */
-export function volumenPorValorData(rows: SupportDimensionRow[]): ChartData<'bar'> {
-  const visibles = rows.slice(0, TOPE_VALORES);
+export function volumeByValueData(rows: SupportDimensionRow[]): ChartData<'bar'> {
+  const visibles = rows.slice(0, VALUES_CAP);
   const serie = (label: string, color: string, valor: (r: SupportDimensionRow) => number) => ({
     label,
     data: visibles.map(valor),
@@ -118,14 +118,14 @@ export function volumenPorValorData(rows: SupportDimensionRow[]): ChartData<'bar
     stack: 'tickets',
     maxBarThickness: 22,
   });
-  const hayEscalados = visibles.some((r) => toNumber(r.tickets_escalados) > 0);
+  const hasEscalated = visibles.some((r) => toNumber(r.tickets_escalados) > 0);
 
   return {
     labels: visibles.map((r) => corto(r.nombre)),
     datasets: [
       serie('Resueltos', METRIC_COLOR.green, (r) => toNumber(r.tickets_resueltos)),
       serie('Cancelados', METRIC_COLOR.red, (r) => toNumber(r.tickets_cancelados)),
-      ...(hayEscalados
+      ...(hasEscalated
         ? [serie('Escalados a Soporte', METRIC_COLOR.yellow, (r) => toNumber(r.tickets_escalados))]
         : []),
       serie('Sin cerrar', METRIC_COLOR.slate, (r) =>
@@ -135,9 +135,9 @@ export function volumenPorValorData(rows: SupportDimensionRow[]): ChartData<'bar
   };
 }
 
-export function volumenPorValorOptions(
+export function volumeByValueOptions(
   rows: SupportDimensionRow[],
-  onSelect?: (indice: number) => void,
+  onSelect?: (index: number) => void,
 ): ChartOptions<'bar'> {
   return {
     indexAxis: 'y',
@@ -163,7 +163,7 @@ export function volumenPorValorOptions(
             const r = rows[items[0]?.dataIndex ?? 0];
             if (!r) return '';
             return [
-              `${formatInteger(toNumber(r.total_tickets))} tickets · ${formatTwoDecimals(r.pctDelPadre)}% del grupo`,
+              `${formatInteger(toNumber(r.total_tickets))} tickets · ${formatTwoDecimals(r.pctOfParent)}% del grupo`,
               `Resueltos ${formatTwoDecimals(toNumber(r.pct_resueltos))}% de lo cerrado`,
             ];
           },
@@ -197,7 +197,7 @@ interface Vela {
 
 function velas(rows: SupportDimensionRow[], medida: SupportTimeMeasure): Vela[] {
   return rows
-    .slice(0, TOPE_VALORES)
+    .slice(0, VALUES_CAP)
     .map((r) => ({
       nombre: r.nombre,
       min: toNumber(r[`tiempo_min_${medida}_horas`]),
@@ -301,9 +301,9 @@ export function velasOptions(
             const v = lista[items[0]?.dataIndex ?? 0];
             if (!v) return [];
             return [
-              `Promedio ${formatDuracion(v.promedio)} · mediana ${formatDuracion(v.mediana)}`,
-              `La mitad central: ${formatDuracion(v.p25)} – ${formatDuracion(v.p75)}`,
-              `Del más rápido al más lento: ${formatDuracion(v.min)} – ${formatDuracion(v.max)}`,
+              `Promedio ${formatDuration(v.promedio)} · mediana ${formatDuration(v.mediana)}`,
+              `La mitad central: ${formatDuration(v.p25)} – ${formatDuration(v.p75)}`,
+              `Del más rápido al más lento: ${formatDuration(v.min)} – ${formatDuration(v.max)}`,
               `${formatInteger(v.muestra)} tickets medidos`,
             ];
           },
@@ -319,7 +319,7 @@ export function velasOptions(
         ticks: {
           color: CHART_CHROME.textAxis,
           font: { size: 10 },
-          callback: (v: string | number) => formatDuracion(Number(v)),
+          callback: (v: string | number) => formatDuration(Number(v)),
         },
       },
       y: EJE_CATEGORIAS,
@@ -327,7 +327,7 @@ export function velasOptions(
   };
 }
 
-export const valoresConVelas = (rows: SupportDimensionRow[], medida: SupportTimeMeasure) =>
+export const valuesWithCandles = (rows: SupportDimensionRow[], medida: SupportTimeMeasure) =>
   velas(rows, medida).length;
 
 // --- Qué tipo de tickets entran ----------------------------------------------
@@ -335,8 +335,8 @@ export const valoresConVelas = (rows: SupportDimensionRow[], medida: SupportTime
 const COLORES_DESGLOSE = [2, 3, 6, 1, 5, 9, 7, 4, 8].map((i) => CHART_PALETTE[i]);
 
 /** Los valores más grandes de un desglose y el resto sumado en «Otros». */
-export function desgloseDonut(entradas: SupportDimensionEntry[] | undefined, tope = 6) {
-  const filas = (entradas ?? [])
+export function desgloseDonut(entries: SupportDimensionEntry[] | undefined, tope = 6) {
+  const filas = (entries ?? [])
     .map((e) => ({ nombre: e.nombre, tickets: toNumber(e.metricas?.total_tickets) }))
     .filter((f) => f.tickets > 0)
     .sort((a, b) => b.tickets - a.tickets);
@@ -348,7 +348,7 @@ export function desgloseDonut(entradas: SupportDimensionEntry[] | undefined, top
   const colores = partes.map((_, i) =>
     i === cabeza.length ? CHART_PALETTE[10] : COLORES_DESGLOSE[i % COLORES_DESGLOSE.length],
   );
-  const conPct = partes.map((p, i) => ({
+  const withPct = partes.map((p, i) => ({
     ...p,
     color: colores[i],
     pct: total > 0 ? Number(((p.tickets / total) * 100).toFixed(1)) : 0,
@@ -358,7 +358,7 @@ export function desgloseDonut(entradas: SupportDimensionEntry[] | undefined, top
     labels: partes.map((p) => corto(p.nombre, 28)),
     datasets: [
       {
-        data: conPct.map((p) => p.pct),
+        data: withPct.map((p) => p.pct),
         backgroundColor: colores.map((c) => `${c}CC`),
         borderColor: CHART_CHROME.surfaceDeep,
         borderWidth: 3,
@@ -366,7 +366,7 @@ export function desgloseDonut(entradas: SupportDimensionEntry[] | undefined, top
       },
     ],
   };
-  return { data, total, partes: conPct, valores: filas.length };
+  return { data, total, partes: withPct, valores: filas.length };
 }
 
 // --- Incidencia por zona -----------------------------------------------------
@@ -380,18 +380,18 @@ export const colorTecnologia = (tecnologia: string) =>
   COLOR_TECNOLOGIA[tecnologia.toUpperCase()] ?? CHART_PALETTE[10];
 
 /** Las zonas con más tickets por cada 100 clientes; sin población no hay tasa. */
-export function zonasConTasa(zonas: SupportZoneRow[]) {
-  return zonas.filter((z) => !z.sinPoblacion).slice(0, TOPE_VALORES);
+export function zonesWithRate(zonas: SupportZoneRow[]) {
+  return zonas.filter((z) => !z.withoutPopulation).slice(0, VALUES_CAP);
 }
 
 export function incidenciaData(zonas: SupportZoneRow[]): ChartData<'bar'> {
-  const visibles = zonasConTasa(zonas);
+  const visibles = zonesWithRate(zonas);
   return {
     labels: visibles.map((z) => corto(z.zona)),
     datasets: [
       {
         label: 'Tickets por cada 100 clientes',
-        data: visibles.map((z) => z.tasaIncidencia),
+        data: visibles.map((z) => z.incidenceRate),
         backgroundColor: visibles.map((z) => `${colorTecnologia(z.tecnologia)}CC`),
         borderColor: visibles.map((z) => colorTecnologia(z.tecnologia)),
         borderWidth: 1,
@@ -403,7 +403,7 @@ export function incidenciaData(zonas: SupportZoneRow[]): ChartData<'bar'> {
 }
 
 export function incidenciaOptions(zonas: SupportZoneRow[]): ChartOptions<'bar'> {
-  const visibles = zonasConTasa(zonas);
+  const visibles = zonesWithRate(zonas);
   return {
     indexAxis: 'y',
     responsive: true,
@@ -430,7 +430,7 @@ export function incidenciaOptions(zonas: SupportZoneRow[]): ChartOptions<'bar'> 
             if (!z) return [];
             return [
               `${formatInteger(z.totalTickets)} tickets · ${formatInteger(z.totalSuscriptores)} clientes activos`,
-              `Resueltos ${formatTwoDecimals(z.pctResueltos)}% · cierre medio ${formatOneDecimal(z.mttrPromedio)} h`,
+              `Resueltos ${formatTwoDecimals(z.pctResolved)}% · cierre medio ${formatOneDecimal(z.mttrAverage)} h`,
             ];
           },
         },

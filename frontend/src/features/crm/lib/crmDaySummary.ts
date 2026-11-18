@@ -42,7 +42,7 @@ export const CRM_DAY_CHARTS: DayChartSpec[] = [
   {
     title: 'Tasa de instalación acumulada',
     subtitle: 'Cómo se asienta el mes corte a corte',
-    esTasa: true,
+    isRate: true,
     series: [{ key: 'pct_instalacion', label: 'Instalación', kind: 'tasa', color: 'green' }],
   },
 ];

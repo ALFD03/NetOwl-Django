@@ -165,8 +165,8 @@ INSTALLED_APPS = [
     "services.crm",                 # CRM: efectividad y tiempos
     "services.support",             # Soporte: cohortes de tickets
     "services.imports",             # Carga de CSV y ejecucion de analisis
-    "services.catalogos",           # Catalogos de referencia (vistas; modelos en subscriptions)
-    "services.comisiones",          # Comisiones de la fuerza de ventas
+    "services.catalogs",           # Catalogos de referencia (vistas; modelos en subscriptions)
+    "services.commissions",          # Comisiones de la fuerza de ventas
     "services.config",              # Autenticacion y permisos
     "services.audit",               # Auditoría (label `auditoria`)
 ]
@@ -338,7 +338,7 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Cuantos analisis puede calcular el worker a la vez. Se puede lanzar churn, CRM
 # y soporte en paralelo en vez de esperar a que termine el anterior; dos del
-# mismo modulo siguen yendo en fila (ver `bloqueo_modulo` en imports/jobs.py),
+# mismo modulo siguen yendo en fila (ver `module_lock` en imports/jobs.py),
 # porque comparten tabla.
 #
 # Subirlo tiene un coste que no se ve en la interfaz: cada analisis carga en

@@ -53,7 +53,7 @@ function BotonCancelar({ job, onCancel, cancelando }: { job: AnalysisJob } & Acc
   );
 }
 
-function FilaEnCurso({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
+function RunningRow({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
   const pct = porcentaje(job);
 
   return (
@@ -88,7 +88,7 @@ function FilaEnCurso({ job, onCancel, cancelando }: { job: AnalysisJob } & Accio
   );
 }
 
-function FilaEnEspera({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
+function WaitingRow({ job, onCancel, cancelando }: { job: AnalysisJob } & AccionCancelar) {
   return (
     <div className="flex items-center gap-2 px-4 py-2">
       <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" />
@@ -105,7 +105,7 @@ const DESENLACES = {
   error: { icono: AlertTriangle, tono: METRIC_TEXT.red, titulo: 'El análisis falló' },
 } as const;
 
-function AvisoFinal({ job, onClose }: { job: AnalysisJob; onClose: () => void }) {
+function FinalNotice({ job, onClose }: { job: AnalysisJob; onClose: () => void }) {
   const desenlace =
     job.status === 'success' ? DESENLACES.success
     : job.status === 'cancelled' ? DESENLACES.cancelled
@@ -149,13 +149,13 @@ function AvisoFinal({ job, onClose }: { job: AnalysisJob; onClose: () => void })
  */
 export function AnalysisQueueAlert() {
   const { jobs, running, queued, finished, dismissFinished, cancel, cancelling } = useJobQueue();
-  const [abierto, setAbierto] = useState(true);
+  const [abierto, setOpen] = useState(true);
 
   const hayTrabajo = jobs.length > 0;
   if (!hayTrabajo && !finished) return null;
 
-  const enCurso = jobs.filter((job) => job.status === 'running');
-  const enEspera = jobs.filter((job) => job.status !== 'running');
+  const runningJobs = jobs.filter((job) => job.status === 'running');
+  const waitingJobs = jobs.filter((job) => job.status !== 'running');
 
   return (
     // En el teléfono ocupa el ancho de abajo; desde `sm`, la esquina.
@@ -172,7 +172,7 @@ export function AnalysisQueueAlert() {
           {hayTrabajo && (
             <button
               type="button"
-              onClick={() => setAbierto((v) => !v)}
+              onClick={() => setOpen((v) => !v)}
               className="flex w-full items-center gap-2 border-b border-slate-800 bg-surface-tertiary px-4 py-2.5 text-left transition-colors hover:bg-surface-hover"
             >
               <Loader2 className={cn('h-3.5 w-3.5 shrink-0 animate-spin', METRIC_TEXT.blue)} />
@@ -195,16 +195,16 @@ export function AnalysisQueueAlert() {
 
           {hayTrabajo && abierto && (
             <div className="divide-y divide-slate-800">
-              {enCurso.map((job) => (
-                <FilaEnCurso
+              {runningJobs.map((job) => (
+                <RunningRow
                   key={job.id}
                   job={job}
                   onCancel={cancel}
                   cancelando={cancelling.includes(job.id)}
                 />
               ))}
-              {enEspera.map((job) => (
-                <FilaEnEspera
+              {waitingJobs.map((job) => (
+                <WaitingRow
                   key={job.id}
                   job={job}
                   onCancel={cancel}
@@ -216,7 +216,7 @@ export function AnalysisQueueAlert() {
 
           {finished && (
             <div className={cn(hayTrabajo && 'border-t border-slate-800')}>
-              <AvisoFinal job={finished} onClose={dismissFinished} />
+              <FinalNotice job={finished} onClose={dismissFinished} />
             </div>
           )}
         </motion.div>

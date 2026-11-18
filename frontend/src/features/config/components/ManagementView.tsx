@@ -16,39 +16,39 @@ import { usePermissions } from '@/shared/hooks/usePermissions';
 import { UsersTable } from '@/features/config/components/management/UsersTable';
 import { GroupsGrid } from '@/features/config/components/management/GroupsGrid';
 import { PermissionEditor } from '@/features/config/components/management/PermissionEditor';
-import { UnidadesEditor } from '@/features/config/components/management/UnidadesEditor';
-import { CampoSelect, PieDeModal } from '@/features/config/components/management/FormControls';
+import { UnitsEditor } from '@/features/config/components/management/UnitsEditor';
+import { CampoSelect, ModalFooter } from '@/features/config/components/management/FormControls';
 
 import {
-  SIN_UNIDADES,
+  NO_UNITS,
   type ConfigManagementProps, type EditableGroup, type EditableUser, type NewUserForm, type PasswordForm,
   type UserData,
 } from '@/features/config/types';
 
-const TODOS_LOS_PERMISOS = PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => permission.key));
+const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => permission.key));
 
 export function ManagementView({
   users = [], groups = [], roles = [], concedibles = {}, unidadesNegocio = [], unidadesConcedibles = null,
 }: ConfigManagementProps) {
   const { can } = usePermissions();
-  const puedeCrear = can(PERMISSIONS.CREATE_USERS);
+  const canCreate = can(PERMISSIONS.CREATE_USERS);
   const puedeEditar = can(PERMISSIONS.EDIT_USER_PERMISSIONS);
-  const puedeCambiarClave = can(PERMISSIONS.CHANGE_PASSWORDS);
+  const canChangeKey = can(PERMISSIONS.CHANGE_PASSWORDS);
   const puedeEliminar = can(PERMISSIONS.DELETE_USERS);
-  const puedeGrupos = can(PERMISSIONS.MANAGE_GROUPS);
+  const canGroups = can(PERMISSIONS.MANAGE_GROUPS);
 
   /**
    * Lo que quien mira no tiene y la matriz editada no traía: no lo puede
    * conceder. Lo que ya estaba concedido sí se puede quitar.
    */
-  const bloqueadosPara = (previa: Record<string, boolean>) =>
-    new Set(TODOS_LOS_PERMISOS.filter((clave) => !concedibles[clave] && !previa[clave]));
+  const blockedFor = (previa: Record<string, boolean>) =>
+    new Set(ALL_PERMISSIONS.filter((clave) => !concedibles[clave] && !previa[clave]));
 
   /**
    * Si la cuenta ve todas las unidades: el interruptor es de la matriz, así
    * que con grupo lo dice el grupo (la lista sigue siendo del usuario).
    */
-  const todasLasUnidades = (groupId: number | string | null, permisos: Record<string, boolean>) => {
+  const allUnits = (groupId: number | string | null, permisos: Record<string, boolean>) => {
     const matriz = groupId ? groups.find((group) => group.id === Number(groupId))?.permissions : permisos;
     return Boolean(matriz?.[PERMISSIONS.VIEW_ALL_BUSINESS_UNITS]);
   };
@@ -65,8 +65,8 @@ export function ManagementView({
 
   const [status, setStatus] = useState<{ type: StatusTone; text: string } | null>(null);
   // Abrir un formulario empieza de cero: el aviso que hubiera es de la acción anterior.
-  const formularioAbierto = Boolean(userToCreate || userToEdit || userToChangePass || groupToEdit || deletingItem);
-  useOnOpen(formularioAbierto, () => setStatus(null));
+  const formOpen = Boolean(userToCreate || userToEdit || userToChangePass || groupToEdit || deletingItem);
+  useOnOpen(formOpen, () => setStatus(null));
 
   /** Ejecuta una escritura; si falla, el error queda en el modal abierto. */
   const run = async (action: () => Promise<unknown>, fallo: string) => {
@@ -148,7 +148,7 @@ export function ManagementView({
     return groups.filter((g) => [g.name, g.description].some((campo) => campo.toLowerCase().includes(termino)));
   }, [groups, termino]);
 
-  const nuevoGrupo = () => setGroupToEdit({
+  const newGroup = () => setGroupToEdit({
     name: '',
     description: '',
     permissions: { ...DEFAULT_GROUP_PERMISSIONS },
@@ -182,7 +182,7 @@ export function ManagementView({
               />
             </label>
 
-            {activeTab === 'users' ? puedeCrear && (
+            {activeTab === 'users' ? canCreate && (
               <Button
                 size="sm"
                 icon={<UserPlus className="h-4 w-4" />}
@@ -196,13 +196,13 @@ export function ManagementView({
                   role: 'viewer',
                   group_id: '',
                   permissions: { ...DEFAULT_USER_PERMISSIONS },
-                  unidades: SIN_UNIDADES,
+                  unidades: NO_UNITS,
                 })}
               >
                 Nuevo usuario
               </Button>
-            ) : puedeGrupos && (
-              <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={nuevoGrupo}>
+            ) : canGroups && (
+              <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={newGroup}>
                 Nuevo grupo
               </Button>
             )}
@@ -215,8 +215,8 @@ export function ManagementView({
         <UsersTable
           users={filteredUsers}
           groups={groups}
-          onEdit={puedeEditar ? (user) => setUserToEdit({ ...user, previa: { ...user.permissions }, previaUnidades: user.unidades }) : null}
-          onChangePassword={puedeCambiarClave
+          onEdit={puedeEditar ? (user) => setUserToEdit({ ...user, previa: { ...user.permissions }, previousUnits: user.unidades }) : null}
+          onChangePassword={canChangeKey
             ? (user) => setUserToChangePass({ user_id: user.id, username: user.username, password: '' })
             : null}
           onDelete={puedeEliminar ? (user) => setDeletingItem({ type: 'user', id: user.id, name: user.username }) : null}
@@ -228,9 +228,9 @@ export function ManagementView({
           groups={filteredGroups}
           users={users}
           filtrando={Boolean(termino)}
-          onCreate={puedeGrupos ? nuevoGrupo : null}
-          onEdit={puedeGrupos ? (group) => setGroupToEdit({ ...group, previa: { ...group.permissions } }) : null}
-          onDelete={puedeGrupos ? (group) => setDeletingItem({ type: 'group', id: group.id, name: group.name }) : null}
+          onCreate={canGroups ? newGroup : null}
+          onEdit={canGroups ? (group) => setGroupToEdit({ ...group, previa: { ...group.permissions } }) : null}
+          onDelete={canGroups ? (group) => setDeletingItem({ type: 'group', id: group.id, name: group.name }) : null}
         />
       )}
 
@@ -304,28 +304,28 @@ export function ManagementView({
               <PermissionEditor
                 permissions={userToCreate.permissions}
                 onChange={(permissions) => setUserToCreate({ ...userToCreate, permissions })}
-                bloqueados={bloqueadosPara(DEFAULT_USER_PERMISSIONS)}
+                bloqueados={blockedFor(DEFAULT_USER_PERMISSIONS)}
               />
             )}
 
             {/* Las unidades son del usuario, no del grupo: se eligen siempre aquí. */}
-            <UnidadesEditor
+            <UnitsEditor
               unidades={userToCreate.unidades}
               onChange={(unidades) => setUserToCreate({ ...userToCreate, unidades })}
               catalogo={unidadesNegocio}
-              todas={todasLasUnidades(userToCreate.group_id, userToCreate.permissions)}
+              todas={allUnits(userToCreate.group_id, userToCreate.permissions)}
               concedibles={unidadesConcedibles}
-              previa={SIN_UNIDADES}
+              previa={NO_UNITS}
             />
 
-            <PieDeModal
+            <ModalFooter
               onCancel={() => setUserToCreate(null)}
               nota="La contraseña se valida contra la política del servidor."
             >
               <Button type="submit" isLoading={saving} icon={<UserPlus className="h-4 w-4" />} size="sm">
                 {saving ? 'Creando...' : 'Crear Usuario'}
               </Button>
-            </PieDeModal>
+            </ModalFooter>
           </form>
         )}
       </Modal>
@@ -387,26 +387,26 @@ export function ManagementView({
               permissions={userToEdit.permissions}
               onChange={(permissions) => setUserToEdit({ ...userToEdit, permissions })}
               disabled={Boolean(userToEdit.group_id)}
-              bloqueados={bloqueadosPara(userToEdit.previa ?? {})}
+              bloqueados={blockedFor(userToEdit.previa ?? {})}
             />
             {/* Las unidades son del usuario, no del grupo: se editan aunque tenga uno. */}
-            <UnidadesEditor
+            <UnitsEditor
               unidades={userToEdit.unidades}
               onChange={(unidades) => setUserToEdit({ ...userToEdit, unidades })}
               catalogo={unidadesNegocio}
-              todas={todasLasUnidades(userToEdit.group_id, userToEdit.permissions)}
+              todas={allUnits(userToEdit.group_id, userToEdit.permissions)}
               concedibles={unidadesConcedibles}
-              previa={userToEdit.previaUnidades ?? SIN_UNIDADES}
+              previa={userToEdit.previousUnits ?? NO_UNITS}
             />
 
-            <PieDeModal
+            <ModalFooter
               onCancel={() => setUserToEdit(null)}
               nota={userToEdit.group_id ? 'Se guardarán el rol, el grupo y las unidades de negocio.' : 'Se guarda la matriz completa tal y como se ve.'}
             >
               <Button type="submit" isLoading={saving} icon={<ShieldCheck className="h-4 w-4" />} size="sm">
                 {saving ? 'Guardando...' : 'Guardar Cambios'}
               </Button>
-            </PieDeModal>
+            </ModalFooter>
           </form>
         )}
       </Modal>
@@ -435,7 +435,7 @@ export function ManagementView({
               value={userToChangePass.password}
               onChange={(e) => setUserToChangePass({ ...userToChangePass, password: e.target.value })}
             />
-            <PieDeModal onCancel={() => setUserToChangePass(null)}>
+            <ModalFooter onCancel={() => setUserToChangePass(null)}>
               <Button
                 type="submit"
                 isLoading={saving}
@@ -445,7 +445,7 @@ export function ManagementView({
               >
                 {saving ? 'Actualizando...' : 'Cambiar Contraseña'}
               </Button>
-            </PieDeModal>
+            </ModalFooter>
           </form>
         )}
       </Modal>
@@ -486,17 +486,17 @@ export function ManagementView({
             <PermissionEditor
               permissions={groupToEdit.permissions}
               onChange={(permissions) => setGroupToEdit({ ...groupToEdit, permissions })}
-              bloqueados={bloqueadosPara(groupToEdit.previa ?? {})}
+              bloqueados={blockedFor(groupToEdit.previa ?? {})}
             />
 
-            <PieDeModal
+            <ModalFooter
               onCancel={() => setGroupToEdit(null)}
               nota="Cada cuenta del grupo recibe esta matriz."
             >
               <Button type="submit" isLoading={saving} icon={<Shield className="h-4 w-4" />} size="sm">
                 {saving ? 'Guardando...' : 'Guardar Grupo'}
               </Button>
-            </PieDeModal>
+            </ModalFooter>
           </form>
         )}
       </Modal>
@@ -523,7 +523,7 @@ export function ManagementView({
                 ? 'Las cuentas que pertenezcan a él se quedan sin grupo, conservando la matriz que tuvieran.'
                 : 'La cuenta deja de poder entrar. Esta acción no se puede deshacer.'}
             </p>
-            <PieDeModal onCancel={() => setDeletingItem(null)}>
+            <ModalFooter onCancel={() => setDeletingItem(null)}>
               <Button
                 type="button"
                 variant="danger"
@@ -533,7 +533,7 @@ export function ManagementView({
               >
                 Eliminar
               </Button>
-            </PieDeModal>
+            </ModalFooter>
           </div>
         )}
       </Modal>

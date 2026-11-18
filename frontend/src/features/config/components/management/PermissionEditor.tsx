@@ -23,7 +23,7 @@ interface Props {
 }
 
 /** Los permisos visibles de una tarjeta, partidos en bloques y en orden de riesgo. */
-function porBloques(perms: PermissionCategory['perms']) {
+function byBlocks(perms: PermissionCategory['perms']) {
   return PERMISSION_SECTIONS.map((section) => ({
     section,
     perms: perms.filter((permission) => permission.section === section),
@@ -31,7 +31,7 @@ function porBloques(perms: PermissionCategory['perms']) {
 }
 
 /** Cuántos de los permisos de una categoría están concedidos. */
-function contar(group: PermissionCategory, permissions: Record<string, boolean>) {
+function countItems(group: PermissionCategory, permissions: Record<string, boolean>) {
   return group.perms.filter((permission) => permissions[permission.key]).length;
 }
 
@@ -53,11 +53,11 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
           permission.label.toLowerCase().includes(termino) ||
           group.category.toLowerCase().includes(termino),
       ),
-    })).filter((entrada) => entrada.perms.length > 0);
+    })).filter((entry) => entry.perms.length > 0);
   }, [termino]);
 
   const concedidos = useMemo(
-    () => PERMISSION_GROUPS.reduce((total, group) => total + contar(group, permissions), 0),
+    () => PERMISSION_GROUPS.reduce((total, group) => total + countItems(group, permissions), 0),
     [permissions],
   );
 
@@ -69,7 +69,7 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
     onChange({ ...permissions, ...permitidos });
   };
 
-  const marcarTodos = (valor: boolean) => {
+  const markAll = (valor: boolean) => {
     escribir(
       Object.fromEntries(
         PERMISSION_GROUPS.flatMap((group) => group.perms.map((permission) => [permission.key, valor])),
@@ -77,7 +77,7 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
     );
   };
 
-  const marcarCategoria = (group: PermissionCategory, valor: boolean) => {
+  const markCategory = (group: PermissionCategory, valor: boolean) => {
     escribir(Object.fromEntries(group.perms.map((permission) => [permission.key, valor])));
   };
 
@@ -110,14 +110,14 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => marcarTodos(true)}
+                onClick={() => markAll(true)}
                 className="rounded-xl border border-emerald-500/30 bg-emerald-950/40 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-400 transition-colors hover:bg-emerald-950/70"
               >
                 Marcar todo
               </button>
               <button
                 type="button"
-                onClick={() => marcarTodos(false)}
+                onClick={() => markAll(false)}
                 className="rounded-xl border border-slate-700 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400 transition-colors hover:text-white"
               >
                 Limpiar
@@ -152,7 +152,7 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
           columnas había que leer en zigzag para saber qué abarcaba un módulo. */}
       <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1 custom-scrollbar">
         {visibles.map(({ group, perms }) => {
-          const activos = contar(group, permissions);
+          const activos = countItems(group, permissions);
           const plegada = Boolean(plegadas[group.category]);
           const Icono = group.icon;
 
@@ -191,7 +191,7 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
                   {!disabled && (
                     <button
                       type="button"
-                      onClick={() => marcarCategoria(group, activos < group.perms.length)}
+                      onClick={() => markCategory(group, activos < group.perms.length)}
                       className={cn(
                         'rounded-lg border border-slate-700 px-2 py-1 text-[9px] font-black uppercase tracking-wider transition-colors hover:text-white',
                         activos < group.perms.length ? METRIC_TEXT[group.tone] : 'text-slate-500',
@@ -223,7 +223,7 @@ export function PermissionEditor({ permissions, onChange, disabled = false, bloq
 
               {!plegada && (
                 <div className="space-y-3 p-3">
-                  {porBloques(perms).map((bloque) => (
+                  {byBlocks(perms).map((bloque) => (
                     <div key={bloque.section}>
                       <p className="mb-1.5 flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-slate-500">
                         <span>{bloque.section}</span>

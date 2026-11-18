@@ -1,10 +1,10 @@
 /** Recorta a un periodo y una dimensión lo que ya llegó en los props. */
 
 import { useMemo } from 'react';
-import type { DimensionGroup, DimensionVal, Periodo } from '@/shared/types/domain';
+import type { DimensionGroup, DimensionVal, Period } from '@/shared/types/domain';
 
 export function useSubscriptionsAnalyticsData(
-  periodos: Periodo[],
+  periodos: Period[],
   dimensiones: DimensionGroup[],
   selectedPeriod: string,
   selectedDim: string,

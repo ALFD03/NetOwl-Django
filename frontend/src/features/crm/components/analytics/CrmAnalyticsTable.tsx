@@ -4,7 +4,7 @@ import { Table as TableIcon } from 'lucide-react';
 
 import { DataTable, NeonContainer } from '@/shared/ui';
 import { CRM_DIMENSION_LABELS } from '@/shared/constants/labels';
-import { formatPeriodoLabel } from '@/shared/utils';
+import { formatPeriodLabel } from '@/shared/utils';
 import type { CrmDimensionValue } from '../../types';
 import { CRM_ANALYTICS_COLUMNS } from './crmAnalyticsColumns';
 
@@ -30,7 +30,7 @@ export function CrmAnalyticsTable({ rows, dimension, period }: Props) {
       title={`Detalle por ${label}`}
       subtitle={
         period
-          ? `${rows.length} registros · Periodo ${formatPeriodoLabel(period)} · Valores sin ponderar`
+          ? `${rows.length} registros · Periodo ${formatPeriodLabel(period)} · Valores sin ponderar`
           : `${rows.length} registros · Valores sin ponderar`
       }
       icon={<TableIcon className="h-5 w-5" />}

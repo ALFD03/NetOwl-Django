@@ -7,19 +7,19 @@ import {
   DataTable, EmptyState, ExcelExportButton, MetricCard, NeonContainer, ToggleGroup,
 } from '@/shared/ui';
 import {
-  SUPPORT_DEPARTAMENTO_EXCEL_COLUMNS,
+  SUPPORT_DEPARTMENT_EXCEL_COLUMNS,
   SUPPORT_DIMENSION_EXCEL_COLUMNS,
   supportExportFileName,
 } from '../../lib/supportExport';
 import {
-  agruparPorDepartamento,
+  groupByDepartment,
   dimensionLeaders,
-  SIN_DEPARTAMENTO,
+  NO_DEPARTMENT,
   SUPPORT_DIMENSION_CAPTIONS,
   SUPPORT_DIMENSION_LABELS,
 } from '../../lib/supportMetrics';
-import { esDimensionPersona, type SupportDimension, type SupportDimensionRow } from '../../types';
-import { SUPPORT_DEPARTAMENTO_COLUMNS, SUPPORT_DIMENSION_COLUMNS } from './supportColumns';
+import { isPersonDimension, type SupportDimension, type SupportDimensionRow } from '../../types';
+import { SUPPORT_DEPARTMENT_COLUMNS, SUPPORT_DIMENSION_COLUMNS } from './supportColumns';
 
 interface Props {
   dimension: SupportDimension;
@@ -31,7 +31,7 @@ interface Props {
 }
 
 /** Las dos lecturas de un eje de persona. */
-type VistaPersona = 'persona' | 'departamento';
+type PersonView = 'persona' | 'departamento';
 
 /**
  * The values of the selected first-level axis inside the group.
@@ -52,54 +52,54 @@ type VistaPersona = 'persona' | 'departamento';
 export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onSelect }: Props) {
   const label = SUPPORT_DIMENSION_LABELS[dimension];
   const caption = SUPPORT_DIMENSION_CAPTIONS[dimension];
-  const esPersona = esDimensionPersona(dimension);
+  const isPerson = isPersonDimension(dimension);
 
-  const [vista, setVista] = useState<VistaPersona>('persona');
-  const [filtro, setFiltro] = useState<string | null>(null);
+  const [vista, setVista] = useState<PersonView>('persona');
+  const [filtro, setFilter] = useState<string | null>(null);
 
-  // El denominador es el del grupo, no el de lo que se ve: `pctDelPadre` ya
+  // El denominador es el del grupo, no el de lo que se ve: `pctOfParent` ya
   // viene calculado contra el total del grupo y los departamentos tienen que
   // leerse contra el mismo, o las dos vistas dejarían de cuadrar entre sí.
-  const totalGrupo = useMemo(
+  const groupTotal = useMemo(
     () => rows.reduce((acc, row) => acc + Number(row.total_tickets ?? 0), 0),
     [rows],
   );
 
   const departamentos = useMemo(
-    () => (esPersona ? agruparPorDepartamento(rows, totalGrupo) : []),
-    [esPersona, rows, totalGrupo],
+    () => (isPerson ? groupByDepartment(rows, groupTotal) : []),
+    [isPerson, rows, groupTotal],
   );
 
   const personas = useMemo(
-    () => (filtro === null ? rows : rows.filter((row) => (row.departamento || SIN_DEPARTAMENTO) === filtro)),
+    () => (filtro === null ? rows : rows.filter((row) => (row.departamento || NO_DEPARTMENT) === filtro)),
     [rows, filtro],
   );
 
-  const verDepartamentos = esPersona && vista === 'departamento';
-  const visibles = verDepartamentos ? departamentos : personas;
+  const showDepartments = isPerson && vista === 'departamento';
+  const visibles = showDepartments ? departamentos : personas;
   const leaders = dimensionLeaders(personas);
 
-  const elegirDepartamento = (nombre: string) => {
-    setFiltro(nombre);
+  const pickDepartment = (nombre: string) => {
+    setFilter(nombre);
     setVista('persona');
   };
 
-  const subtitulo = verDepartamentos
+  const subtitulo = showDepartments
     ? `${caption} · ${departamentos.length} departamentos · click en una fila para ver a su gente`
     : `${caption} · ${visibles.length} valores · click en una fila para ver su tipo, razón y solución`;
 
   return (
     <NeonContainer
       theme="purple"
-      title={verDepartamentos ? `${label} por departamento` : `Desglose por ${label}`}
+      title={showDepartments ? `${label} por departamento` : `Desglose por ${label}`}
       subtitle={subtitulo}
-      icon={verDepartamentos ? <Building2 className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
+      icon={showDepartments ? <Building2 className="h-5 w-5" /> : <MapPin className="h-5 w-5" />}
       headerAction={
         <div className="flex flex-wrap items-center gap-3">
-          {esPersona && (
+          {isPerson && (
             <ToggleGroup
               activeKey={vista}
-              onChange={(key) => setVista(key as VistaPersona)}
+              onChange={(key) => setVista(key as PersonView)}
               options={[
                 { key: 'persona', label: 'Por persona', icon: Users },
                 { key: 'departamento', label: 'Por departamento', icon: Building2 },
@@ -107,17 +107,17 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
             />
           )}
 
-          {!verDepartamentos && (
+          {!showDepartments && (
             <span className="flex items-center gap-2 rounded-full bg-brand/20 px-3 py-1 text-xs font-semibold text-brand">
               <MousePointerClick className="h-3.5 w-3.5" />
               Drill-down
             </span>
           )}
 
-          {verDepartamentos ? (
+          {showDepartments ? (
             <ExcelExportButton
               rows={departamentos}
-              columns={SUPPORT_DEPARTAMENTO_EXCEL_COLUMNS}
+              columns={SUPPORT_DEPARTMENT_EXCEL_COLUMNS}
               fileName={supportExportFileName([label, 'departamentos', groupName, periodo])}
               sheetName="Departamentos"
             />
@@ -136,10 +136,10 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
         Con un departamento elegido la tabla de personas deja de ser la del
         grupo entero, y eso tiene que verse: el chip dice cuál y lo quita.
       */}
-      {filtro !== null && !verDepartamentos && (
+      {filtro !== null && !showDepartments && (
         <button
           type="button"
-          onClick={() => setFiltro(null)}
+          onClick={() => setFilter(null)}
           className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/20"
         >
           <Building2 className="h-3.5 w-3.5" />
@@ -189,13 +189,13 @@ export function SupportDimensionPanel({ dimension, rows, groupName, periodo, onS
           </div>
 
           <div className="h-[480px]">
-            {verDepartamentos ? (
+            {showDepartments ? (
               <DataTable
-                columns={SUPPORT_DEPARTAMENTO_COLUMNS}
+                columns={SUPPORT_DEPARTMENT_COLUMNS}
                 data={departamentos}
                 searchable
                 searchPlaceholder="Buscar departamento..."
-                onRowClick={(row) => elegirDepartamento(row.nombre)}
+                onRowClick={(row) => pickDepartment(row.nombre)}
               />
             ) : (
               <DataTable

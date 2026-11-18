@@ -13,13 +13,13 @@ import { usePermissions } from '@/shared/hooks/usePermissions';
 import { ANALYSIS_ACTION_PERMISSIONS, IMPORT_ACTION_PERMISSIONS } from '@/shared/constants/permissions';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
 import { importsApi, type ImportResponse } from '@/shared/lib/api/imports';
-import { catalogosApi } from '@/shared/lib/api/catalogos';
+import { catalogsApi } from '@/shared/lib/api/catalogs';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
-import { CatalogoBloqueoModal } from '@/features/imports/components/CatalogoBloqueoModal';
+import { CatalogBlockModal } from '@/features/imports/components/CatalogBlockModal';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
-import { extractCatalogoBloqueo, type CatalogoBloqueo } from '@/features/imports/lib/catalogo';
-import type { CampoOdoo, GrupoCamposOdoo } from '@/features/imports/types';
+import { extractCatalogBlock, type CatalogBlock } from '@/features/imports/lib/catalog';
+import type { CampoOdoo, OdooFieldGroup } from '@/features/imports/types';
 
 type SubscriptionImportType = 'subscriptions' | 'logs' | 'gratis' | 'facturas';
 
@@ -44,15 +44,15 @@ interface ImportSubscriptionsProps {
 
 export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscriptionsProps) {
   const [importType, setImportType] = useState<SubscriptionImportType>('subscriptions');
-  const [bloqueo, setBloqueo] = useState<CatalogoBloqueo | null>(null);
+  const [bloqueo, setBloqueo] = useState<CatalogBlock | null>(null);
   const [ignorando, setIgnorando] = useState<string | null>(null);
-  const [errorCatalogo, setErrorCatalogo] = useState<string | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const { canAny } = usePermissions();
 
   const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.subs);
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.subs);
 
-  const gruposCampos: GrupoCamposOdoo[] = IMPORT_TYPES.map((tipo) => ({
+  const fieldGroups: OdooFieldGroup[] = IMPORT_TYPES.map((tipo) => ({
     key: tipo.value,
     label: tipo.label,
     campos: camposOdoo[tipo.value] ?? [],
@@ -63,14 +63,14 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
    * decisión a tomar, no como un fallo. El error se vuelve a lanzar para que
    * `CsvUploadCard` mantenga su propio mensaje de estado.
    */
-  const subirArchivo = async (file: File) => {
+  const uploadFile = async (file: File) => {
     try {
       return await UPLOADERS[importType](file);
     } catch (error) {
-      const encontrado = extractCatalogoBloqueo(error);
-      if (encontrado) {
-        setErrorCatalogo(null);
-        setBloqueo(encontrado);
+      const found = extractCatalogBlock(error);
+      if (found) {
+        setCatalogError(null);
+        setBloqueo(found);
       }
       throw error;
     }
@@ -79,16 +79,16 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
   /** Saca un producto de la lista de bloqueo declarando que nunca será un plan. */
   const ignorarProducto = async (nombre: string) => {
     setIgnorando(nombre);
-    setErrorCatalogo(null);
+    setCatalogError(null);
     try {
-      await catalogosApi.guardar('ignorados', { nombre, nota: '', area: 'productos' });
+      await catalogsApi.guardar('ignorados', { nombre, nota: '', area: 'productos' });
       setBloqueo((previo) =>
         previo
           ? { ...previo, productos: previo.productos.filter((p) => p.nombre !== nombre) }
           : previo,
       );
     } catch (error: unknown) {
-      setErrorCatalogo(getApiErrorMessage(error, 'No se pudo ignorar el producto.'));
+      setCatalogError(getApiErrorMessage(error, 'No se pudo ignorar el producto.'));
     } finally {
       setIgnorando(null);
     }
@@ -102,7 +102,7 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
             title="Cargar Archivo CSV Subscriptions"
             submitLabel="Iniciar Carga"
             errorMessage="Error al procesar la importación."
-            onUpload={subirArchivo}
+            onUpload={uploadFile}
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {IMPORT_TYPES.map((option) => (
@@ -135,8 +135,8 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
             <><strong>Planes Gratuitos:</strong> Export con tarifa, próxima fecha de factura y mensajes del chatter; detecta desde cuándo cada suscripción es gratuita.</>,
             <><strong>Facturas:</strong> Export global de facturas con su número, estado, estado del pago, fecha de creación y productos. Reemplaza las anteriores; Comisiones lo usa para saber qué primeras mensualidades se pagaron.</>,
           ]}
-          camposOdoo={gruposCampos}
-          grupoActivo={importType}
+          camposOdoo={fieldGroups}
+          activeGroup={importType}
           note="Tras cargar ambos archivos, selecciona el mes correspondiente y ejecuta el análisis en la sección inferior. El análisis calcula también las métricas de cada día del mes."
         />
       </div>
@@ -161,12 +161,12 @@ export default function ImportSubscriptions({ camposOdoo = {} }: ImportSubscript
         />
       )}
 
-      <CatalogoBloqueoModal
+      <CatalogBlockModal
         bloqueo={bloqueo}
         onClose={() => setBloqueo(null)}
         onIgnore={ignorarProducto}
         ignorando={ignorando}
-        error={errorCatalogo}
+        error={catalogError}
       />
     </AppLayout>
   );

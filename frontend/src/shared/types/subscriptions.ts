@@ -49,9 +49,9 @@ export interface SubscriptionResultsResponse {
  * La ficha es la que la suscripción tiene **hoy**, no la que tenía el mes en
  * que se dio de baja: las tablas de origen se truncan en cada importación (el
  * mismo aviso que el reporte ETA lleva en `services/subscriptions/analytics/
- * bajas_detalle.py`).
+ * churn_detail.py`).
  */
-export interface BajaDetalle {
+export interface ChurnDetail {
   orden: string;
   cliente: string;
   cedula: string;
@@ -68,13 +68,13 @@ export interface BajaDetalle {
   phone2: string;
 }
 
-export interface BajasDetalleResponse {
+export interface ChurnDetailResponse {
   status?: 'success' | 'empty' | 'error';
   period?: string;
   periods?: string[];
   total?: number;
   message?: string;
-  bajas: BajaDetalle[];
+  bajas: ChurnDetail[];
 }
 
 export type EtaStats = Record<string, number>;
@@ -127,7 +127,7 @@ export interface EtaFormularioTelevision {
   precio: number;
 }
 
-export interface EtaFormularios {
+export interface EtaForms {
   internet: EtaFormularioInternet[];
   transporte: EtaFormularioTransporte[];
   television: EtaFormularioTelevision[];
@@ -153,7 +153,7 @@ export interface SubscriptionEtaReportResponse {
    * Ausente en los periodos bloqueados antes de que existieran: hay que
    * recalcular el periodo para que aparezcan.
    */
-  formularios?: EtaFormularios;
+  formularios?: EtaForms;
   /** Planes que cuentan en las matrices pero no tienen plan regulador asignado. */
   planes_sin_regulador?: string[];
   /** Tasa del BCV fijada para el periodo. `0` = todavía sin fijar. */
@@ -170,7 +170,7 @@ export interface SubscriptionEtaReportResponse {
   [key: string]: unknown;
 }
 
-export interface PeriodoData {
+export interface PeriodData {
   periodo_reporte: string;
   activos_inicio: number;
   activos_final: number;
@@ -190,7 +190,7 @@ export interface PeriodoData {
   reactivaciones: number;
 }
 
-export interface ZonaData {
+export interface ZoneData {
   valor: string;
   bajas: number;
   nuevos: number;
@@ -201,8 +201,8 @@ export interface ZonaData {
 }
 
 export interface SubscriptionDashboardProps {
-  periodos: PeriodoData[];
-  dimensiones?: Record<string, ZonaData[]>;
+  periodos: PeriodData[];
+  dimensiones?: Record<string, ZoneData[]>;
 }
 
 export interface EtaSubscriptionConfig {
@@ -262,7 +262,7 @@ export interface SubscriptionEtaManagementProps {
 // que no son de las campañas excluidas.
 
 /** Estadísticos de una duración en días; null si no hay ninguna baja. */
-export interface LifetimeResumen {
+export interface LifetimeSummary {
   n: number;
   promedio: number | null;
   mediana: number | null;
@@ -276,7 +276,7 @@ export interface LifetimeResumen {
  * Un tramo de duración (un mes de 30 días): cuántas bajas caen en él, su %
  * sobre las bajas que cuentan y el % acumulado hasta ese tramo.
  */
-export interface LifetimeTramo {
+export interface LifetimeTier {
   tramo: string;
   desde: number;
   /** Null en el último tramo, que no tiene tope. */
@@ -287,7 +287,7 @@ export interface LifetimeTramo {
 }
 
 /** Un valor de una dimensión, con sus bajas que cuentan. */
-export interface LifetimeDimensionFila {
+export interface LifetimeDimensionRow {
   valor: string;
   bajas: number;
   promedio: number | null;
@@ -299,7 +299,7 @@ export interface LifetimeDimensionFila {
   pct_90: number;
 }
 
-export interface LifetimeMes {
+export interface LifetimeMonth {
   mes: string;
   /** Hasta dónde llegan los logs (YYYY-MM-DD). */
   fecha_corte: string;
@@ -317,13 +317,13 @@ export interface LifetimeMes {
   bajas_reporte: number | null;
   /** Fecha (YYYY-MM-DD) de instalación desde la que se miden las bajas. */
   instaladas_desde: string;
-  resumen: LifetimeResumen;
-  tramos: LifetimeTramo[];
-  por_dimension: Record<string, LifetimeDimensionFila[]>;
+  resumen: LifetimeSummary;
+  tramos: LifetimeTier[];
+  por_dimension: Record<string, LifetimeDimensionRow[]>;
 }
 
 /** Una baja del mes, tal y como se exporta. */
-export interface LifetimeBaja {
+export interface LifetimeChurn {
   orden: string;
   f_ini: string | null;
   f_baja: string | null;
@@ -336,28 +336,28 @@ export interface LifetimeBaja {
   zona_sucursal?: string;
 }
 
-export interface LifetimeDetalleResponse {
+export interface LifetimeDetailResponse {
   period: string | null;
-  bajas: LifetimeBaja[];
+  bajas: LifetimeChurn[];
 }
 
 // --- Catálogos de referencia -------------------------------------------------
 // Planes, zonas, sites, estados y coordinadores. Antes eran `Planes.json` y
 // `Zonas.json`; hoy son tablas que se editan en el módulo de Catálogos (`/catalogos/`).
 
-// --- Objetivos comerciales (ver features/subscriptions/lib/objetivos.ts) ---
+// --- Objetivos comerciales (ver features/subscriptions/lib/targets.ts) ---
 
 /**
  * Un tramo con vigencia: vale desde `desde` (`YYYY-MM`, nulo = siempre) hasta
  * que empieza el siguiente. Un valor nulo no fija esa métrica.
  */
-export interface TramoObjetivo {
+export interface TargetTier {
   desde: string | null;
   crecimiento: number | null;
   churn: number | null;
 }
 
-export interface ValoresObjetivo {
+export interface TargetValues {
   crecimiento: number | null;
   churn: number | null;
 }
@@ -368,7 +368,7 @@ export interface ValoresObjetivo {
  * No dependen del objetivo: el mismo churn se pinta igual en cualquier zona y
  * en cualquier página. El cumplimiento ya es un % de la meta.
  */
-export interface SemaforoObjetivos {
+export interface TargetsTrafficLight {
   /** Cumplimiento (% de la meta): verde desde / amarillo desde. */
   cumpl_verde: number;
   cumpl_amarillo: number;
@@ -381,29 +381,29 @@ export interface SemaforoObjetivos {
 }
 
 /** Lo que envía `get_objetivos_config()`. Las entidades van por nombre. */
-export interface ObjetivosConfig {
+export interface TargetsConfig {
   /** El objetivo general: uno solo, sin fecha. */
   general: { crecimiento: number; churn: number };
   /** Excepciones de un mes concreto, por `YYYY-MM`. Sustituyen al general. */
-  meses: Record<string, ValoresObjetivo>;
-  estados: Record<string, TramoObjetivo[]>;
-  sites: Record<string, TramoObjetivo[]>;
-  coordinadores: Record<string, TramoObjetivo[]>;
-  zonas: Record<string, TramoObjetivo[]>;
+  meses: Record<string, TargetValues>;
+  estados: Record<string, TargetTier[]>;
+  sites: Record<string, TargetTier[]>;
+  coordinadores: Record<string, TargetTier[]>;
+  zonas: Record<string, TargetTier[]>;
   /** Por sucursal tal y como la trae el export (`NETCOM`, `NYC`...). */
-  sucursales: Record<string, TramoObjetivo[]>;
+  sucursales: Record<string, TargetTier[]>;
   /** Por nodo, con la clave de la dimensión `zona_sucursal`: `"Guacara - NYC"`. */
-  zonas_sucursal: Record<string, TramoObjetivo[]>;
+  zonas_sucursal: Record<string, TargetTier[]>;
   /**
    * Las zonas apartadas del cumplimiento, por nombre, con su tramo de meses
    * (ambos extremos incluidos; nulo es sin límite). Opcional: una página
    * servida antes de existir no lo trae.
    */
   zonas_sin_objetivo?: Record<string, { desde: string | null; hasta: string | null }>;
-  semaforo: SemaforoObjetivos;
+  semaforo: TargetsTrafficLight;
 }
 
-export type CatalogoTipo =
+export type CatalogKind =
   | 'personas'
   | 'membresias'
   | 'condiciones_equipo'
@@ -420,12 +420,12 @@ export type CatalogoTipo =
   | 'objetivos_mes'
   | 'semaforo';
 
-export interface CatalogoOption {
+export interface CatalogOption {
   value: string;
   label: string;
 }
 
-export interface CatalogoPlan {
+export interface CatalogPlan {
   id: number;
   nombre: string;
   /** Cuadro tarifario. Distingue dos filas con el mismo nombre de plan. */
@@ -453,7 +453,7 @@ export interface CatalogoPlan {
  * porque, cuando dos planes del grupo difieren en precio o velocidad, lo
  * declarado tiene que ser una decisión explícita.
  */
-export interface CatalogoPlanRegulador {
+export interface CatalogRegulatoryPlan {
   id: number;
   nombre: string;
   tecnologia: string;
@@ -470,7 +470,7 @@ export interface CatalogoPlanRegulador {
 }
 
 /** Una zona apartada del cumplimiento durante un tramo de meses (`ZonaSinObjetivo`). */
-export interface CatalogoZonaSinObjetivo {
+export interface CatalogZoneWithoutTarget {
   id: number;
   zona_id: number;
   zona: string;
@@ -485,7 +485,7 @@ export interface CatalogoZonaSinObjetivo {
   actualizado_en: string;
 }
 
-export interface CatalogoZona {
+export interface CatalogZone {
   id: number;
   nombre: string;
   site_id: number;
@@ -497,7 +497,7 @@ export interface CatalogoZona {
   coordinador: string;
 }
 
-export interface CatalogoSite {
+export interface CatalogSite {
   id: number;
   nombre: string;
   /** Orden de presentación comercial; lo consumen Sales Report y ETA. */
@@ -510,27 +510,27 @@ export interface CatalogoSite {
 }
 
 /** Estados y coordinadores: solo nombre y cuántas zonas dependen de ellos. */
-export interface CatalogoNombrado {
+export interface CatalogNamed {
   id: number;
   nombre: string;
   zonas: number;
 }
 
 /** Las áreas del módulo de Catálogos con una lista de pendientes propia. */
-export type AreaCatalogo = 'productos' | 'estructura' | 'ventas';
+export type CatalogArea = 'productos' | 'estructura' | 'ventas';
 
 /** Un nombre de los datos que se decidió no registrar en su área. */
-export interface CatalogoProductoIgnorado {
+export interface CatalogIgnoredProduct {
   id: number;
   nombre: string;
-  area: AreaCatalogo;
+  area: CatalogArea;
   nota: string;
   creado_por: string;
   creado_en: string;
 }
 
 /** Nivel de un objetivo, de más alto a más bajo (el general es el respaldo). */
-export type NivelObjetivoCatalogo =
+export type CatalogTargetLevel =
   | 'general'
   | 'sucursal'
   | 'estado'
@@ -540,7 +540,7 @@ export type NivelObjetivoCatalogo =
   | 'zona_sucursal';
 
 /** Un nodo (zona - sucursal) que aparece en algún cierre calculado. */
-export interface NodoConocido {
+export interface KnownNode {
   /** `"Guacara - NYC"`. */
   nodo: string;
   zona: string;
@@ -548,9 +548,9 @@ export interface NodoConocido {
 }
 
 /** Un tramo de objetivo tal y como lo edita la pestaña de objetivos. */
-export interface CatalogoObjetivo {
+export interface CatalogTarget {
   id: number;
-  nivel: NivelObjetivoCatalogo;
+  nivel: CatalogTargetLevel;
   /** La fila de zona, site, estado o coordinador (la zona de un nodo). Nulo en el general y la sucursal. */
   entidad_id: number | null;
   /** Nombre con el que se cruza: la sucursal tal cual, o `"Zona - Sucursal"` en un nodo. */
@@ -568,7 +568,7 @@ export interface CatalogoObjetivo {
 }
 
 /** La excepción de un mes concreto al objetivo general. */
-export interface CatalogoObjetivoMes {
+export interface CatalogMonthTarget {
   id: number;
   periodo: string;
   crecimiento_pct: number | null;
@@ -578,7 +578,7 @@ export interface CatalogoObjetivoMes {
   actualizado_en: string;
 }
 
-export interface CatalogoSemaforo extends SemaforoObjetivos {
+export interface CatalogTrafficLight extends TargetsTrafficLight {
   id: number;
 }
 
@@ -588,8 +588,8 @@ export interface ProductoPendiente {
   ordenes: number;
 }
 
-/** El rol de una persona en un equipo de ventas (`services/catalogos/equipos.py`). */
-export type RolVentas =
+/** El rol de una persona en un equipo de ventas (`services/catalogs/teams.py`). */
+export type SalesRole =
   | 'jefe'
   | 'jefe_un'
   | 'coord_un'
@@ -602,11 +602,11 @@ export type RolVentas =
   | 'telemarketing';
 
 /** Las columnas del export que nombran a una persona de ventas. */
-export type ColumnaVentas = 'vendedor' | 'medio_supervisor' | 'medio';
+export type SalesColumn = 'vendedor' | 'medio_supervisor' | 'medio';
 
 /** Lo que un rol exige y admite en un equipo: la interfaz construye sus formularios con esto. */
-export interface CatalogoRolEquipo {
-  rol: RolVentas;
+export interface CatalogTeamRole {
+  rol: SalesRole;
   etiqueta: string;
   /** `medio` se exige; `supervisor` (el literal de `Oportunidad/Administrador`) es opcional; `usuario` se exige. */
   medio: boolean;
@@ -617,20 +617,20 @@ export interface CatalogoRolEquipo {
   /** Cuántas unidades de negocio lleva: una (coordinador de UN), varias (jefe, gerentes) o ninguna. */
   unidades: '' | 'una' | 'varias';
   /** El rol al que responde, si es supervisor y su equipo tiene uno. */
-  superior: RolVentas | null;
+  superior: SalesRole | null;
   /** Las piezas de pago que admite (`PIEZAS_POR_ROL`). */
-  piezas: PiezaPago[];
+  piezas: PaymentPiece[];
 }
 
-export interface CatalogoEquipoVentas {
+export interface CatalogSalesTeam {
   id: number;
   slug: string;
   nombre: string;
-  roles: CatalogoRolEquipo[];
+  roles: CatalogTeamRole[];
 }
 
 /** Una persona del directorio de ventas, tal y como la escribe Odoo, con sus papeles en los equipos. */
-export interface CatalogoPersonaVentas {
+export interface CatalogSalesPerson {
   id: number;
   nombre: string;
   apellido: string;
@@ -647,11 +647,11 @@ export interface CatalogoPersonaVentas {
   alias_medio: string[];
   alias_supervisor: string[];
   alias_usuario: string[];
-  membresias: { id: number; equipo: string; rol: RolVentas; etiqueta: string }[];
+  membresias: { id: number; equipo: string; rol: SalesRole; etiqueta: string }[];
 }
 
 /** El papel de una persona en un equipo (`MembresiaEquipo`), con lo suyo ya resuelto. */
-export interface CatalogoMembresia {
+export interface CatalogMembership {
   id: number;
   persona_id: number;
   nombre: string;
@@ -665,7 +665,7 @@ export interface CatalogoMembresia {
   equipo_id: number;
   /** El slug del equipo. */
   equipo: string;
-  rol: RolVentas;
+  rol: SalesRole;
   /** Los sites de una coordinadora de oficina (uno o varios). */
   site_ids: number[];
   sites: string[];
@@ -676,10 +676,10 @@ export interface CatalogoMembresia {
   unidades: string[];
 }
 
-export type AlcanceEquipo = 'supervisados' | 'equipo_completo' | 'unidades' | 'oficina';
-export type FactorCumplimiento = 'ninguno' | 'site' | 'unidad';
+export type TeamScope = 'supervisados' | 'equipo_completo' | 'unidades' | 'oficina';
+export type ComplianceFactor = 'ninguno' | 'site' | 'unidad';
 
-export type PiezaPago =
+export type PaymentPiece =
   | 'propia'
   | 'equipo'
   | 'factor'
@@ -691,31 +691,31 @@ export type PiezaPago =
   | 'bono_churn'
   | 'bono_empresa';
 
-export interface PiezaMonto {
+export interface AmountPiece {
   /** `monto`: dólares por venta; `pct_plan`: un % del precio del plan. */
   tipo: 'monto' | 'pct_plan';
   valor: number;
 }
 
-export interface PiezaEquipo extends PiezaMonto {
-  alcance: AlcanceEquipo;
+export interface TeamPiece extends AmountPiece {
+  alcance: TeamScope;
   excluir_oficina: boolean;
 }
 
-export interface TramoPago {
+export interface PaymentTier {
   desde: number;
   monto: number;
   descontar?: number;
 }
 
 /** Los valores de pago de un rol: solo las piezas que su rol admite. */
-export interface ParametrosPago {
-  propia?: PiezaMonto;
-  equipo?: PiezaEquipo;
-  factor?: FactorCumplimiento;
-  tramos_asesor?: TramoPago[];
-  bono_tramos?: TramoPago[];
-  bono_por_asesor?: TramoPago[];
+export interface PaymentParameters {
+  propia?: AmountPiece;
+  equipo?: TeamPiece;
+  factor?: ComplianceFactor;
+  tramos_asesor?: PaymentTier[];
+  bono_tramos?: PaymentTier[];
+  bono_por_asesor?: PaymentTier[];
   bono_por_unidad?: { monto: number };
   escalon_crecimiento?: { umbral_pct: number; alto: number; bajo: number };
   bono_churn?: { max: number; monto: number }[];
@@ -723,16 +723,16 @@ export interface ParametrosPago {
 }
 
 /** Las condiciones de pago de un rol de un equipo: las que valen y si alguien las cambió. */
-export interface CatalogoCondicionRol {
+export interface CatalogRoleCondition {
   /** Nulo si nadie las editó (paga con las de por defecto). */
   id: number | null;
   equipo_id: number;
   equipo: string;
-  rol: RolVentas;
+  rol: SalesRole;
   etiqueta: string;
-  piezas: PiezaPago[];
-  parametros: ParametrosPago;
-  defecto: ParametrosPago;
+  piezas: PaymentPiece[];
+  parametros: PaymentParameters;
+  defecto: PaymentParameters;
   personalizado: boolean;
 }
 
@@ -740,7 +740,7 @@ export interface CatalogoCondicionRol {
  * Un tramo del objetivo de ventas de las coordinadoras de oficina: cuántas
  * ventas al mes. Sin persona es el general; con persona, el suyo, que manda.
  */
-export interface CatalogoObjetivoOficina {
+export interface CatalogOfficeTarget {
   id: number;
   persona_id: number | null;
   persona: string;
@@ -753,106 +753,106 @@ export interface CatalogoObjetivoOficina {
 }
 
 /** Una unidad de negocio (el `Coordinador` de las zonas), sus equipos y quienes la llevan. */
-export interface CatalogoUnidadNegocio extends CatalogoNombrado {
+export interface CatalogBusinessUnit extends CatalogNamed {
   zona_ids: number[];
   equipo_ids: number[];
   equipos: string[];
-  responsables: { persona: string; rol: RolVentas; etiqueta: string; equipo: string }[];
+  responsables: { persona: string; rol: SalesRole; etiqueta: string; equipo: string }[];
 }
 
 /** Un nombre de las suscripciones que el directorio de ventas no reconoce. */
-export interface PersonaPendiente {
+export interface PendingPerson {
   nombre: string;
   /** Órdenes por columna: no se suman, la venta directa de un supervisor está en dos. */
-  ordenes: Partial<Record<ColumnaVentas, number>>;
+  ordenes: Partial<Record<SalesColumn, number>>;
   /** El rol que se sugiere según la columna en que aparece. */
-  rol: RolVentas;
+  rol: SalesRole;
 }
 
 /** Qué grupos del módulo de Catálogos administra el usuario: uno por permiso. */
-export interface CatalogosPermisos {
+export interface CatalogsPermissions {
   operacional: boolean;
   comercial: boolean;
   ventas: boolean;
 }
 
-interface CatalogosPaginaProps {
-  permisos: CatalogosPermisos;
+interface CatalogsPageProps {
+  permisos: CatalogsPermissions;
 }
 
 /** `Catalogos/Notificaciones`: lo pendiente de cada área y lo ignorado. */
-export interface CatalogosNotificacionesProps extends CatalogosPaginaProps {
+export interface CatalogsNotificationsProps extends CatalogsPageProps {
   /** `null` en las áreas que el usuario no administra; vacía es "todo registrado". */
   pendientes: {
     productos: ProductoPendiente[] | null;
     estructura: ProductoPendiente[] | null;
-    ventas: PersonaPendiente[] | null;
+    ventas: PendingPerson[] | null;
   };
-  ignorados: CatalogoProductoIgnorado[];
+  ignorados: CatalogIgnoredProduct[];
   /** Las áreas cuyos ignorados puede ver y deshacer. */
-  areas: CatalogoOption[];
+  areas: CatalogOption[];
   /**
    * Lo que piden los formularios de alta, que se abren aquí mismo. Vacías las
    * listas de las áreas que el usuario no administra.
    */
   opciones: {
-    reguladores: CatalogoPlanRegulador[];
-    tiposPersona: CatalogoOption[];
-    tecnologias: CatalogoOption[];
+    reguladores: CatalogRegulatoryPlan[];
+    tiposPersona: CatalogOption[];
+    tecnologias: CatalogOption[];
     /** También con el permiso de ventas: el alta de una coordinadora de oficina pide su site. */
-    sites: CatalogoSite[];
-    estados: CatalogoNombrado[];
-    coordinadores: CatalogoUnidadNegocio[];
-    equipos: CatalogoEquipoVentas[];
-    membresias: CatalogoMembresia[];
-    personas: CatalogoPersonaVentas[];
+    sites: CatalogSite[];
+    estados: CatalogNamed[];
+    coordinadores: CatalogBusinessUnit[];
+    equipos: CatalogSalesTeam[];
+    membresias: CatalogMembership[];
+    personas: CatalogSalesPerson[];
   };
 }
 
 /** `Catalogos/Productos`: planes y planes reguladores. */
-export interface CatalogosProductosProps extends CatalogosPaginaProps {
-  planes: CatalogoPlan[];
-  reguladores: CatalogoPlanRegulador[];
-  tecnologias: CatalogoOption[];
-  tiposPersona: CatalogoOption[];
+export interface CatalogsProductsProps extends CatalogsPageProps {
+  planes: CatalogPlan[];
+  reguladores: CatalogRegulatoryPlan[];
+  tecnologias: CatalogOption[];
+  tiposPersona: CatalogOption[];
   /** `?nuevo_plan=` — abre el formulario de plan ya relleno con ese nombre. */
   nuevoPlan: string;
 }
 
 /** `Catalogos/Estructura`: zonas y estados. */
-export interface CatalogosEstructuraProps extends CatalogosPaginaProps {
-  zonas: CatalogoZona[];
+export interface CatalogsStructureProps extends CatalogsPageProps {
+  zonas: CatalogZone[];
   /** Solo para elegir el de una zona: se administran en Ventas › Estructura de ventas. */
-  sites: CatalogoSite[];
-  estados: CatalogoNombrado[];
-  coordinadores: CatalogoNombrado[];
-  tecnologias: CatalogoOption[];
+  sites: CatalogSite[];
+  estados: CatalogNamed[];
+  coordinadores: CatalogNamed[];
+  tecnologias: CatalogOption[];
   /** `?nueva_zona=` — abre el formulario de zona ya relleno con ese nombre. */
   nuevaZona: string;
 }
 
 /** `Catalogos/Ventas`: la estructura de ventas, los equipos con su gente y condiciones, y los objetivos. */
-export interface CatalogosVentasProps extends CatalogosPaginaProps {
-  equipos: CatalogoEquipoVentas[];
-  membresias: CatalogoMembresia[];
-  personas: CatalogoPersonaVentas[];
-  condiciones: CatalogoCondicionRol[];
+export interface CatalogsSalesProps extends CatalogsPageProps {
+  equipos: CatalogSalesTeam[];
+  membresias: CatalogMembership[];
+  personas: CatalogSalesPerson[];
+  condiciones: CatalogRoleCondition[];
   /** `?nueva_persona=&equipo=&rol=` — abre el alta ya rellena con ese literal. */
   nuevaPersona: { literal: string; equipo: string; rol: string };
-  coordinadores: CatalogoUnidadNegocio[];
-  objetivos: CatalogoObjetivo[];
+  coordinadores: CatalogBusinessUnit[];
+  objetivos: CatalogTarget[];
   /** Los tramos del objetivo de ventas de las coordinadoras de oficina. */
-  objetivosOficina: CatalogoObjetivoOficina[];
-  zonasSinObjetivo: CatalogoZonaSinObjetivo[];
-  objetivos_mes: CatalogoObjetivoMes[];
-  semaforo: CatalogoSemaforo;
-  objetivosConfig: ObjetivosConfig;
+  objetivosOficina: CatalogOfficeTarget[];
+  zonasSinObjetivo: CatalogZoneWithoutTarget[];
+  objetivos_mes: CatalogMonthTarget[];
+  semaforo: CatalogTrafficLight;
+  objetivosConfig: TargetsConfig;
   /** Los meses con cierre calculado (`YYYY-MM`), del más reciente al más antiguo. */
   periodosCalculados: string[];
   /** Los nodos de los datos: de donde se eligen la sucursal y el nodo de un objetivo. */
-  nodosConocidos: NodoConocido[];
+  nodosConocidos: KnownNode[];
   /** Las entidades a las que se les puede fijar un objetivo. */
-  zonas: CatalogoZona[];
-  sites: CatalogoSite[];
-  estados: CatalogoNombrado[];
+  zonas: CatalogZone[];
+  sites: CatalogSite[];
+  estados: CatalogNamed[];
 }

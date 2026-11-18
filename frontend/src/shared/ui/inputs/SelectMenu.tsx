@@ -32,11 +32,11 @@ interface Props {
 /** A partir de cuantas opciones aparece el buscador si no se dice nada. */
 const UMBRAL_BUSQUEDA = 7;
 
-const ALTO_OPCION = 40;
+const OPTION_HEIGHT = 40;
 const ALTO_BUSCADOR = 52;
 
 /** Minusculas y sin tildes: «guacara» encuentra «Guácara». */
-const normalizar = (texto: string): string =>
+const normalize = (texto: string): string =>
   texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 /**
@@ -45,8 +45,8 @@ const normalizar = (texto: string): string =>
  * resaltar las letras equivocadas.
  */
 function Resaltado({ texto, consulta }: { texto: string; consulta: string }): ReactNode {
-  const q = normalizar(consulta.trim());
-  const base = normalizar(texto);
+  const q = normalize(consulta.trim());
+  const base = normalize(texto);
   const inicio = q ? base.indexOf(q) : -1;
   if (inicio < 0 || base.length !== texto.length) return texto;
   return (
@@ -89,27 +89,27 @@ export function SelectMenu({
   searchPlaceholder = 'Escribe para buscar...',
   'aria-label': ariaLabel,
 }: Props) {
-  const conBusqueda = searchable ?? options.length >= UMBRAL_BUSQUEDA;
-  const alto = Math.min(options.length * ALTO_OPCION + 16, 280) + (conBusqueda ? ALTO_BUSCADOR : 0);
+  const withSearch = searchable ?? options.length >= UMBRAL_BUSQUEDA;
+  const alto = Math.min(options.length * OPTION_HEIGHT + 16, 280) + (withSearch ? ALTO_BUSCADOR : 0);
   const { isOpen, coords, triggerRef, panelRef, open, close } =
     useAnchoredPanel<HTMLButtonElement>({ width: panelWidth, estimatedHeight: alto });
 
   const [consulta, setConsulta] = useState('');
   const [resaltada, setResaltada] = useState(0);
-  const listaRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const seleccionada = options.find((o) => o.value === value);
+  const seleccionada = options.find((other) => other.value === value);
 
   const filtradas = useMemo(() => {
-    const q = normalizar(consulta.trim());
-    if (!conBusqueda || !q) return options;
-    return options.filter((o) => normalizar(o.label).includes(q));
-  }, [options, consulta, conBusqueda]);
+    const q = normalize(consulta.trim());
+    if (!withSearch || !q) return options;
+    return options.filter((other) => normalize(other.label).includes(q));
+  }, [options, consulta, withSearch]);
 
   /** Abre la lista con la consulta dada y la opcion elegida resaltada. */
   const abrir = (inicial = '') => {
     setConsulta(inicial);
-    setResaltada(inicial ? 0 : Math.max(0, options.findIndex((o) => o.value === value)));
+    setResaltada(inicial ? 0 : Math.max(0, options.findIndex((other) => other.value === value)));
     open();
   };
 
@@ -125,16 +125,16 @@ export function SelectMenu({
   };
 
   /** Mueve la resaltada y la mantiene a la vista dentro de la lista. */
-  const mover = (indice: number) => {
+  const mover = (index: number) => {
     if (filtradas.length === 0) return;
-    const siguiente = (indice + filtradas.length) % filtradas.length;
-    setResaltada(siguiente);
-    listaRef.current
-      ?.querySelector<HTMLElement>(`[data-indice="${siguiente}"]`)
+    const next = (index + filtradas.length) % filtradas.length;
+    setResaltada(next);
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-indice="${next}"]`)
       ?.scrollIntoView({ block: 'nearest' });
   };
 
-  const teclaEnLista = (e: KeyboardEvent) => {
+  const onListKey = (e: KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       mover(resaltada + 1);
@@ -155,10 +155,10 @@ export function SelectMenu({
     }
   };
 
-  const teclaEnDisparador = (e: KeyboardEvent<HTMLButtonElement>) => {
+  const onTriggerKey = (e: KeyboardEvent<HTMLButtonElement>) => {
     if (disabled || isOpen) return;
     const imprimible = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && e.key !== ' ';
-    if (conBusqueda && imprimible) {
+    if (withSearch && imprimible) {
       e.preventDefault();
       abrir(e.key);
     } else if (e.key === 'ArrowDown') {
@@ -177,7 +177,7 @@ export function SelectMenu({
         aria-expanded={isOpen}
         aria-label={ariaLabel}
         onClick={() => !disabled && (isOpen ? cerrar() : abrir())}
-        onKeyDown={teclaEnDisparador}
+        onKeyDown={onTriggerKey}
         // La maquetacion la pone el componente; `className` solo aporta el
         // aspecto. Asi un disparador que hereda las clases pensadas para un
         // `<input>` no acaba con el texto centrado, que es como los alinea el
@@ -200,7 +200,7 @@ export function SelectMenu({
           style={{ top: coords.top, left: coords.left, minWidth: coords.width }}
           className="fixed z-[100] flex max-h-[340px] flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-surface-secondary shadow-2xl"
         >
-          {conBusqueda && (
+          {withSearch && (
             <div className="border-b border-slate-800 p-1.5">
               <div className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/60 px-2.5 py-1.5 focus-within:border-brand">
                 <Search className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
@@ -213,7 +213,7 @@ export function SelectMenu({
                     setConsulta(e.target.value);
                     setResaltada(0);
                   }}
-                  onKeyDown={teclaEnLista}
+                  onKeyDown={onListKey}
                   placeholder={searchPlaceholder}
                   aria-label={ariaLabel ? `Buscar en ${ariaLabel}` : 'Buscar'}
                   className="w-full bg-transparent text-xs text-white outline-none placeholder:text-slate-500"
@@ -227,23 +227,23 @@ export function SelectMenu({
             </div>
           )}
 
-          <div ref={listaRef} role="listbox" className="overflow-y-auto p-1.5 custom-scrollbar">
+          <div ref={listRef} role="listbox" className="overflow-y-auto p-1.5 custom-scrollbar">
             {filtradas.length === 0 && (
               <p className="px-3 py-2 text-xs text-slate-500">
                 {options.length === 0 ? 'Sin opciones' : `Sin coincidencias para «${consulta.trim()}»`}
               </p>
             )}
-            {filtradas.map((option, indice) => {
+            {filtradas.map((option, index) => {
               const activa = option.value === value;
-              const marcada = conBusqueda && indice === resaltada;
+              const marcada = withSearch && index === resaltada;
               return (
                 <button
                   key={option.value}
                   type="button"
                   role="option"
                   aria-selected={activa}
-                  data-indice={indice}
-                  onMouseEnter={() => setResaltada(indice)}
+                  data-indice={index}
+                  onMouseEnter={() => setResaltada(index)}
                   onClick={() => elegir(option)}
                   className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${
                     activa
@@ -254,7 +254,7 @@ export function SelectMenu({
                   }`}
                 >
                   <span className="truncate">
-                    <Resaltado texto={option.label} consulta={conBusqueda ? consulta : ''} />
+                    <Resaltado texto={option.label} consulta={withSearch ? consulta : ''} />
                   </span>
                   {activa && <Check className="h-3.5 w-3.5 flex-shrink-0" />}
                 </button>

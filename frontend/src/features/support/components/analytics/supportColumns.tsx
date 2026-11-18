@@ -2,7 +2,7 @@
 
 import { StickyLabel, type Column } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, formatTwoDecimals } from '@/shared/utils';
-import type { SupportDepartamentoRow, SupportDimensionRow, SupportZoneRow } from '../../types';
+import type { SupportDepartmentRow, SupportDimensionRow, SupportZoneRow } from '../../types';
 
 const int = formatInteger;
 const dec = formatTwoDecimals;
@@ -23,7 +23,7 @@ const hrs = formatOneDecimal;
  */
 export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
   { header: 'Valor', accessor: (r) => <StickyLabel>{r.nombre}</StickyLabel>, sortKey: 'nombre', sticky: true },
-  { header: '% del Total', accessor: (r) => <span className="font-bold text-brand">{dec(r.pctDelPadre)}%</span>, align: 'right', sortKey: 'pctDelPadre' },
+  { header: '% del Total', accessor: (r) => <span className="font-bold text-brand">{dec(r.pctOfParent)}%</span>, align: 'right', sortKey: 'pctOfParent' },
 
   { header: 'Creados', accessor: (r) => int(r.tickets_creados), align: 'right', sortKey: 'tickets_creados' },
   { header: 'Cerrados', accessor: (r) => <span className="text-sky-400">{int(r.tickets_cerrados)}</span>, align: 'right', sortKey: 'tickets_cerrados' },
@@ -73,29 +73,29 @@ export const SUPPORT_DIMENSION_COLUMNS: Column<SupportDimensionRow>[] = [
  * distribución completa de alguien, su fila sigue estando en la vista por
  * persona.
  */
-export const SUPPORT_DEPARTAMENTO_COLUMNS: Column<SupportDepartamentoRow>[] = [
+export const SUPPORT_DEPARTMENT_COLUMNS: Column<SupportDepartmentRow>[] = [
   { header: 'Departamento', accessor: (r) => <StickyLabel>{r.nombre}</StickyLabel>, sortKey: 'nombre', sticky: true },
   { header: 'Personas', accessor: (r) => int(r.personas), align: 'right', sortKey: 'personas' },
   ...SUPPORT_DIMENSION_COLUMNS.filter(
     (col) => col.header !== 'Valor' && !col.header.includes('Mediana (h)'),
   ),
-] as Column<SupportDepartamentoRow>[];
+] as Column<SupportDepartmentRow>[];
 
 export const SUPPORT_ZONE_COLUMNS: Column<SupportZoneRow>[] = [
   { header: 'Zona', accessor: (r) => <StickyLabel>{r.zona}</StickyLabel>, sortKey: 'zona', sticky: true },
   { header: 'Site', accessor: (r) => r.site, sortKey: 'site' },
   { header: 'Tecnología', accessor: (r) => <span className="text-slate-400">{r.tecnologia}</span>, sortKey: 'tecnologia' },
   { header: 'Tickets', accessor: (r) => int(r.totalTickets), align: 'right', sortKey: 'totalTickets' },
-  { header: 'Activos', accessor: (r) => (r.sinPoblacion ? <span className="text-slate-600">Sin datos</span> : int(r.totalSuscriptores)), align: 'right', sortKey: 'totalSuscriptores' },
+  { header: 'Activos', accessor: (r) => (r.withoutPopulation ? <span className="text-slate-600">Sin datos</span> : int(r.totalSuscriptores)), align: 'right', sortKey: 'totalSuscriptores' },
   {
     header: 'Incidencia %',
     accessor: (r) =>
-      r.sinPoblacion
+      r.withoutPopulation
         ? <span className="text-slate-600">—</span>
-        : <span className="font-bold text-amber-400">{dec(r.tasaIncidencia)}%</span>,
+        : <span className="font-bold text-amber-400">{dec(r.incidenceRate)}%</span>,
     align: 'right',
-    sortKey: 'tasaIncidencia',
+    sortKey: 'incidenceRate',
   },
-  { header: '% Resueltos', accessor: (r) => <span className="text-emerald-400">{dec(r.pctResueltos)}%</span>, align: 'right', sortKey: 'pctResueltos' },
-  { header: 'Cierre Total (h)', accessor: (r) => hrs(r.mttrPromedio), align: 'right', sortKey: 'mttrPromedio' },
+  { header: '% Resueltos', accessor: (r) => <span className="text-emerald-400">{dec(r.pctResolved)}%</span>, align: 'right', sortKey: 'pctResolved' },
+  { header: 'Cierre Total (h)', accessor: (r) => hrs(r.mttrAverage), align: 'right', sortKey: 'mttrAverage' },
 ];

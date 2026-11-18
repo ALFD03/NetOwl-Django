@@ -20,7 +20,7 @@ import { useState } from 'react';
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import {
-  CampanasExportButton,
+  CampaignsExportButton,
   CRM_DAY_CARDS,
   CRM_DAY_CHARTS,
   CrmAnalyticsFilters,
@@ -92,7 +92,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                periodoMes={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.periodo_mes}
                 daysInMonth={totalDays}
                 selectedDay={selectedDay}
                 onSelect={selectDay}
@@ -103,7 +103,7 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
       }
     >
       <div className="space-y-6">
-        <CampanasExportButton dimensiones={dimensionsData} periodo={selectedPeriod} dia={payload ? diaResuelto : 0} />
+        <CampaignsExportButton dimensiones={dimensionsData} periodo={selectedPeriod} dia={payload ? diaResuelto : 0} />
 
         <DaySummary
           serie={dayMetrics?.serie}

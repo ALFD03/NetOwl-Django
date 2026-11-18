@@ -7,7 +7,7 @@ import { Plus, Search, Settings2, Shield, Trash2 } from 'lucide-react';
 
 import { EmptyState } from '@/shared/ui';
 import type { GroupData, UserData } from '@/features/config/types';
-import { Avatar, ModulosConAcceso, TOTAL_PERMISSIONS, contarPermisos } from './acceso';
+import { Avatar, ModulesWithAccess, TOTAL_PERMISSIONS, countPermissions } from './acceso';
 
 interface Props {
   groups: GroupData[];
@@ -38,10 +38,10 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {groups.map((group) => {
-        const concedidos = contarPermisos(group.permissions);
+        const concedidos = countPermissions(group.permissions);
         const porcentaje = Math.round((concedidos / TOTAL_PERMISSIONS) * 100);
-        const miembros = users.filter((user) => user.group_id === group.id);
-        const sobrantes = group.members_count - Math.min(miembros.length, MAX_AVATARES);
+        const members = users.filter((user) => user.group_id === group.id);
+        const sobrantes = group.members_count - Math.min(members.length, MAX_AVATARES);
 
         return (
           <article
@@ -85,7 +85,7 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
             {/* `flex-1`: empuja el pie al fondo, así las tarjetas de una fila
                 alinean sus miembros aunque las descripciones midan distinto. */}
             <div className="mt-4 flex-1">
-              <ModulosConAcceso permisos={group.permissions} conEtiqueta />
+              <ModulesWithAccess permisos={group.permissions} withLabel />
             </div>
 
             <div className="mt-4">
@@ -104,7 +104,7 @@ export function GroupsGrid({ groups, users, onEdit, onDelete, onCreate, filtrand
               {group.members_count ? (
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
-                    {miembros.slice(0, MAX_AVATARES).map((user) => (
+                    {members.slice(0, MAX_AVATARES).map((user) => (
                       <span key={user.id} title={user.username}>
                         <Avatar nombre={user.username} size="sm" />
                       </span>

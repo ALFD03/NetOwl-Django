@@ -8,11 +8,11 @@ siempre en el otro sentido.
 
 from .config import (
     ACTIVE_STATE,
-    CORTE_IMPAGADO_EVENT,
     DATE_FORMATS,
     DB_SCHEMA,
     EXCLUDED_STATE,
     SUBS_STATE_TO_LOG_MAP,
+    UNPAID_CUT_EVENT,
     VALID_REACT_ORIGINS,
     TableNames,
 )
@@ -22,7 +22,7 @@ from .utils import parse_date
 
 __all__ = [
     "DB_SCHEMA", "DATE_FORMATS", "ACTIVE_STATE", "EXCLUDED_STATE",
-    "VALID_REACT_ORIGINS", "CORTE_IMPAGADO_EVENT",
+    "VALID_REACT_ORIGINS", "UNPAID_CUT_EVENT",
     "SUBS_STATE_TO_LOG_MAP", "TableNames",
     "DBConnector", "Periodo", "parse_date",
 ]

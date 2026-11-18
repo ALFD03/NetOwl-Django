@@ -4,14 +4,14 @@ import { RefreshCw, Target, TrendingDown, TrendingUp, Zap } from 'lucide-react';
 
 import { CompactMetric, MetricGroup } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
-import { useObjetivos } from '../../hooks/useObjetivos';
+import { useTargets } from '../../hooks/useTargets';
 import {
-  cumplimientoDelPeriodo, formatObjetivo, tonoChurn, tonoCrecimiento, tonoCumplimiento,
-} from '../../lib/objetivos';
-import type { SubscriptionCierre } from '../../types';
+  periodCompliance, formatTarget, tonoChurn, tonoCrecimiento, complianceTone,
+} from '../../lib/targets';
+import type { SubscriptionClose } from '../../types';
 
 interface SubscriptionPeriodDetailProps {
-  row: SubscriptionCierre;
+  row: SubscriptionClose;
 }
 
 const int = formatInteger;
@@ -20,15 +20,15 @@ const money = (value: number) => `$${formatTwoDecimals(value)}`;
 
 /** The four-quadrant executive summary for one closed subscription period. */
 export function SubscriptionPeriodDetail({ row }: SubscriptionPeriodDetailProps) {
-  const objetivos = useObjetivos();
+  const objetivos = useTargets();
   const objetivo = objetivos.general(row.periodo_reporte);
   const { semaforo } = objetivos;
   const {
-    metaIngresos, metaVentas, metaCierre, cumplimientoIngresos, cumplimientoVentas, cumplimientoCierre,
-  } = cumplimientoDelPeriodo(row, objetivo);
-  const tonoIngresos = tonoCumplimiento(cumplimientoIngresos, semaforo);
-  const tonoVentas = tonoCumplimiento(cumplimientoVentas, semaforo);
-  const tonoCierre = tonoCumplimiento(cumplimientoCierre, semaforo);
+    metaIngresos, salesGoal: metaVentas, closeGoal: metaCierre, revenueCompliance: cumplimientoIngresos, salesCompliance: cumplimientoVentas, closeCompliance: cumplimientoCierre,
+  } = periodCompliance(row, objetivo);
+  const tonoIngresos = complianceTone(cumplimientoIngresos, semaforo);
+  const salesTone = complianceTone(cumplimientoVentas, semaforo);
+  const closeTone = complianceTone(cumplimientoCierre, semaforo);
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -52,18 +52,18 @@ export function SubscriptionPeriodDetail({ row }: SubscriptionPeriodDetailProps)
       </MetricGroup>
 
       <MetricGroup
-        title={`Objetivos (${formatObjetivo(objetivo.crecimiento)} / churn ${formatObjetivo(objetivo.churn)})`}
+        title={`Objetivos (${formatTarget(objetivo.crecimiento)} / churn ${formatTarget(objetivo.churn)})`}
         tone="blue"
         icon={<Target className="h-3.5 w-3.5" />}
         columns={3}
       >
         <CompactMetric label="Meta de Ingresos" value={int(metaIngresos)} color={tonoIngresos} />
-        <CompactMetric label="Meta de Ventas" value={int(metaVentas)} color={tonoVentas} />
-        <CompactMetric label="Meta de Cierre" value={int(metaCierre)} color={tonoCierre} />
+        <CompactMetric label="Meta de Ventas" value={int(metaVentas)} color={salesTone} />
+        <CompactMetric label="Meta de Cierre" value={int(metaCierre)} color={closeTone} />
 
         <CompactMetric label="Cumplimiento de Ingresos" value={pct(cumplimientoIngresos)} color={tonoIngresos} />
-        <CompactMetric label="Cumplimiento de Ventas" value={pct(cumplimientoVentas)} color={tonoVentas} />
-        <CompactMetric label="Cumplimiento de Cierre" value={pct(cumplimientoCierre)} color={tonoCierre} />
+        <CompactMetric label="Cumplimiento de Ventas" value={pct(cumplimientoVentas)} color={salesTone} />
+        <CompactMetric label="Cumplimiento de Cierre" value={pct(cumplimientoCierre)} color={closeTone} />
       </MetricGroup>
 
 

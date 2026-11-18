@@ -41,7 +41,7 @@ _E8_COUNTS = [
 ]
 
 CLOSE_HISTORY = Table(
-    TableNames.CRM_CIERRE_HISTORICO,
+    TableNames.CRM_CLOSE_HISTORY,
     {
         "id": SERIAL, "periodo_reporte": TEXT, "total_oportunidades": INT32, "ganados": INT32, "perdidos": INT32,
         "pendientes": INT32, "pct_instalacion": NUMERIC, "pct_perdida": NUMERIC, "pct_pendientes": NUMERIC,
@@ -54,7 +54,7 @@ CLOSE_HISTORY = Table(
     defaults={"updated_at": "now()"},
 )
 GLOBAL_METRICS = Table(
-    TableNames.CRM_METRICAS_GLOBALES,
+    TableNames.CRM_GLOBAL_METRICS,
     {"id": INT32, "resumen_global": JSON, "tiempo_por_etapa": JSON, "efectividad": JSON, "updated_at": TIMESTAMP},
     primary_key=("id",),
     defaults={"id": "1", "updated_at": "now()"},

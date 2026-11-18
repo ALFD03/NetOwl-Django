@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { crmApi } from '@/shared/lib/api/crm';
 import type { CrmDimensionRow } from '@/features/crm/types';
 
-const SIN_FILAS: CrmDimensionRow[] = [];
+const NO_ROWS: CrmDimensionRow[] = [];
 
 /**
  * Dimension rows of one closed period, loaded when its Results modal opens.
@@ -29,6 +29,6 @@ export function useCrmPeriodDimensions(period: string | null) {
     return () => { active = false; };
   }, [period]);
 
-  const vigente = period && resultado?.period === period ? resultado : null;
-  return { rows: vigente?.rows ?? SIN_FILAS, loading: Boolean(period) && !vigente };
+  const current = period && resultado?.period === period ? resultado : null;
+  return { rows: current?.rows ?? NO_ROWS, loading: Boolean(period) && !current };
 }

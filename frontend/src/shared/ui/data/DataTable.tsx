@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Loader2, ChevronUp, ChevronDown, ChevronsUpDown, Filter, FilterX } from 'lucide-react';
 
 import { FilterField, FILTER_TRIGGER_CLASS, SearchInput, SelectMenu } from '../inputs';
-import { FILAS_POR_PAGINA, Paginacion, usePaginacion } from './Paginacion';
+import { ROWS_PER_PAGE, Paginacion, usePaginacion } from './Paginacion';
 
 export interface Column<T> {
   header: string;
@@ -116,7 +116,7 @@ export function DataTable<T>({
   isLoading = false,
   emptyMessage = 'No hay registros disponibles.',
   onRowClick,
-  pageSize = FILAS_POR_PAGINA,
+  pageSize = ROWS_PER_PAGE,
   scrollClassName = '',
   selection,
 }: DataTableProps<T>) {
@@ -131,17 +131,17 @@ export function DataTable<T>({
   // Cambiar lo que se busca o se filtra vuelve a la primera pagina y, salvo que
   // la seleccion se conserve, la vacia: lo seleccionado tiene que estar a la
   // vista, o una accion en bloque tocaria filas que el filtro ya escondio.
-  const alCambiarVista = () => {
+  const onViewChange = () => {
     paginacion.irA(0);
     if (selection && !selection.conservar && selection.selected.size > 0) selection.onChange(new Set());
   };
-  const buscar = (termino: string) => {
+  const search = (termino: string) => {
     setSearchTerm(termino);
-    alCambiarVista();
+    onViewChange();
   };
-  const filtrar = (siguiente: Record<string, string>) => {
-    setFilters(siguiente);
-    alCambiarVista();
+  const filterRows = (next: Record<string, string>) => {
+    setFilters(next);
+    onViewChange();
   };
 
   const filterColumns = useMemo(
@@ -150,7 +150,7 @@ export function DataTable<T>({
     [columns],
   );
 
-  const valorFiltro = (col: Column<T>, row: T): string => {
+  const filterValue = (col: Column<T>, row: T): string => {
     if (col.filterValue) return col.filterValue(row);
     const key = col.sortKey ?? (col.accessor as keyof T);
     return String((row as Record<string, unknown>)[String(key)] ?? '').trim();
@@ -164,16 +164,16 @@ export function DataTable<T>({
     filterColumns.forEach((col) => {
       const valores = new Set<string>();
       data.forEach((row) => {
-        const valor = valorFiltro(col, row);
+        const valor = filterValue(col, row);
         if (valor) valores.add(valor);
       });
       mapa[col.header] = [...valores].sort((a, b) => a.localeCompare(b, 'es'));
     });
     return mapa;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `valorFiltro` se recrea en cada render y solo lee de `col`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `filterValue` se recrea en cada render y solo lee de `col`.
   }, [data, filterColumns]);
 
-  const filtrosActivos = Object.values(filters).filter(Boolean).length;
+  const activeFilters = Object.values(filters).filter(Boolean).length;
 
   // Lógica de Ordenamiento y Filtrado combinada
   const processedData = useMemo(() => {
@@ -183,7 +183,7 @@ export function DataTable<T>({
     filterColumns.forEach((col) => {
       const elegido = filters[col.header];
       if (!elegido || elegido === TODOS) return;
-      filtered = filtered.filter((row) => valorFiltro(col, row) === elegido);
+      filtered = filtered.filter((row) => filterValue(col, row) === elegido);
     });
 
     // 2. Buscar
@@ -197,16 +197,16 @@ export function DataTable<T>({
     }
 
     // 3. Ordenar
-    const columnaOrden = sortConfig ? columns.find((col) => col.header === sortConfig.header) : undefined;
-    if (sortConfig && columnaOrden) {
-      const valorOrden = (row: T): unknown => {
-        if (columnaOrden.sortValue) return columnaOrden.sortValue(row);
-        const key = columnaOrden.sortKey ?? (columnaOrden.accessor as keyof T);
+    const sortColumn = sortConfig ? columns.find((col) => col.header === sortConfig.header) : undefined;
+    if (sortConfig && sortColumn) {
+      const sortValue = (row: T): unknown => {
+        if (sortColumn.sortValue) return sortColumn.sortValue(row);
+        const key = sortColumn.sortKey ?? (sortColumn.accessor as keyof T);
         return row[key];
       };
       filtered.sort((a: T, b: T) => {
-        const aVal = valorOrden(a);
-        const bVal = valorOrden(b);
+        const aVal = sortValue(a);
+        const bVal = sortValue(b);
 
         if (aVal === bVal) return 0;
         // Coerce to string/number for comparison
@@ -220,7 +220,7 @@ export function DataTable<T>({
     }
 
     return filtered;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `valorFiltro` se recrea en cada render y solo lee de `col`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `filterValue` se recrea en cada render y solo lee de `col`.
   }, [data, searchTerm, sortConfig, filters, filterColumns, columns]);
 
   const paginacion = usePaginacion(processedData, pageSize);
@@ -238,34 +238,34 @@ export function DataTable<T>({
 
   // La casilla de la cabecera actua sobre todas las filas filtradas, no solo
   // las de la pagina: filtrar y seleccionar todo es la forma de elegir en bloque.
-  const clavesFiltradas = selection ? processedData.map(selection.rowKey) : [];
-  const elegidasFiltradas = selection ? clavesFiltradas.filter((k) => selection.selected.has(k)).length : 0;
-  const estadoTodas = elegidasFiltradas === 0
+  const filteredKeys = selection ? processedData.map(selection.rowKey) : [];
+  const elegidasFiltradas = selection ? filteredKeys.filter((k) => selection.selected.has(k)).length : 0;
+  const allStatesKey = elegidasFiltradas === 0
     ? 'ninguna'
-    : elegidasFiltradas === clavesFiltradas.length ? 'todas' : 'algunas';
+    : elegidasFiltradas === filteredKeys.length ? 'todas' : 'algunas';
   const alternarTodas = () => {
     if (!selection) return;
     if (!selection.conservar) {
-      selection.onChange(estadoTodas === 'todas' ? new Set() : new Set(clavesFiltradas));
+      selection.onChange(allStatesKey === 'todas' ? new Set() : new Set(filteredKeys));
       return;
     }
     // Se suma o se resta solo lo filtrado: lo marcado fuera de la vista se queda.
-    const siguiente = new Set(selection.selected);
-    for (const clave of clavesFiltradas) {
-      if (estadoTodas === 'todas') siguiente.delete(clave);
-      else siguiente.add(clave);
+    const next = new Set(selection.selected);
+    for (const clave of filteredKeys) {
+      if (allStatesKey === 'todas') next.delete(clave);
+      else next.add(clave);
     }
-    selection.onChange(siguiente);
+    selection.onChange(next);
   };
-  const alternarFila = (row: T) => {
+  const toggleRow = (row: T) => {
     if (!selection) return;
     const clave = selection.rowKey(row);
-    const siguiente = new Set(selection.selected);
-    if (siguiente.has(clave)) siguiente.delete(clave);
-    else siguiente.add(clave);
-    selection.onChange(siguiente);
+    const next = new Set(selection.selected);
+    if (next.has(clave)) next.delete(clave);
+    else next.add(clave);
+    selection.onChange(next);
   };
-  const totalColumnas = columns.length + (selection ? 1 : 0);
+  const columnCount = columns.length + (selection ? 1 : 0);
 
   const alignMap = { left: 'text-left', center: 'text-center', right: 'text-right' };
 
@@ -292,7 +292,7 @@ export function DataTable<T>({
                   ...(filterOptions[col.header] ?? []).map((valor) => ({ value: valor, label: valor })),
                 ]}
                 onChange={(valor) =>
-                  filtrar({ ...filters, [col.header]: valor === TODOS ? '' : valor })
+                  filterRows({ ...filters, [col.header]: valor === TODOS ? '' : valor })
                 }
               />
             </FilterField>
@@ -303,16 +303,16 @@ export function DataTable<T>({
               <SearchInput
                 value={searchTerm}
                 placeholder={searchPlaceholder}
-                onChange={buscar}
+                onChange={search}
                 className="w-full bg-transparent px-0"
               />
             </FilterField>
           )}
 
-          {filtrosActivos > 0 && (
+          {activeFilters > 0 && (
             <button
               type="button"
-              onClick={() => filtrar({})}
+              onClick={() => filterRows({})}
               className="flex items-center gap-2 rounded-2xl border border-slate-700/50 bg-surface-secondary px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-400 shadow-2xl transition-colors hover:text-white"
               title="Quitar todos los filtros"
             >
@@ -322,7 +322,7 @@ export function DataTable<T>({
 
           {/* Cuántas filas quedan a la vista. Sin esto, un filtro que deja la
               tabla corta se confunde con una tabla que trae pocos datos. */}
-          {(filtrosActivos > 0 || searchTerm) && (
+          {(activeFilters > 0 || searchTerm) && (
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
               {processedData.length} de {data.length}
             </span>
@@ -338,7 +338,7 @@ export function DataTable<T>({
             <tr>
               {selection && (
                 <th className="w-10 border-b border-slate-800 p-3 text-center">
-                  <CasillaTodas estado={estadoTodas} onChange={alternarTodas} />
+                  <CasillaTodas estado={allStatesKey} onChange={alternarTodas} />
                 </th>
               )}
               {columns.map((col, idx) => (
@@ -367,9 +367,9 @@ export function DataTable<T>({
           </thead>
           <tbody className="divide-y divide-slate-800">
             {isLoading ? (
-              <tr><td colSpan={totalColumnas} className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-brand mx-auto" /></td></tr>
+              <tr><td colSpan={columnCount} className="p-10 text-center"><Loader2 className="w-6 h-6 animate-spin text-brand mx-auto" /></td></tr>
             ) : processedData.length === 0 ? (
-              <tr><td colSpan={totalColumnas} className="p-10 text-center text-slate-500">{emptyMessage}</td></tr>
+              <tr><td colSpan={columnCount} className="p-10 text-center text-slate-500">{emptyMessage}</td></tr>
             ) : (
               paginacion.visibles.map((row, rowIdx) => (
                 <tr
@@ -382,7 +382,7 @@ export function DataTable<T>({
                       <input
                         type="checkbox"
                         checked={selection.selected.has(selection.rowKey(row))}
-                        onChange={() => alternarFila(row)}
+                        onChange={() => toggleRow(row)}
                         onClick={(e) => e.stopPropagation()}
                         className="h-4 w-4 cursor-pointer accent-brand"
                         aria-label="Seleccionar fila"

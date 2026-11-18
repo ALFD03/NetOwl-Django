@@ -49,7 +49,7 @@ DIMENSIONES_ANALYTICS = ["zona", "sucursal", "municipio", "campanna", "producto"
 DIMENSIONES_DIARIAS = [DIMENSION_DIARIA, *DIMENSIONES_ANALYTICS]
 
 # Cada cuantos dias se vuelca el progreso a la base.
-FLUSH_CADA_N_DIAS = 5
+FLUSH_EVERY_N_DAYS = 5
 
 
 def _payload_dia(c: dict[str, Any], dim_rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -63,22 +63,22 @@ def _payload_dia(c: dict[str, Any], dim_rows: list[dict[str, Any]]) -> dict[str,
     summary.pop("periodo", None)
 
     plana: list[dict[str, Any]] = []
-    por_dim: dict[str, list[dict[str, Any]]] = {d: [] for d in DIMENSIONES_ANALYTICS}
+    by_dim: dict[str, list[dict[str, Any]]] = {d: [] for d in DIMENSIONES_ANALYTICS}
     for row in dim_rows:
         dim = row.get("dimension")
         limpia = {k: v for k, v in row.items() if k != "dimension"}
         if dim == DIMENSION_DIARIA:
             plana.append(limpia)
-        elif dim in por_dim:
-            por_dim[dim].append(limpia)
+        elif dim in by_dim:
+            by_dim[dim].append(limpia)
 
-    return {"global": summary, "dimensiones": plana, "dims": por_dim}
+    return {"global": summary, "dimensiones": plana, "dims": by_dim}
 
 
 def build_day_metrics(
     year_month: str,
     db: DBConnector | None = None,
-    hasta_dia: int | None = None,
+    until_day: int | None = None,
     analyzer: MetricsAnalyzer | None = None,
     progreso: Callable[[int, int, str], None] | None = None,
 ) -> dict[str, Any]:
@@ -97,7 +97,7 @@ def build_day_metrics(
     """
     db = db or DBConnector()
     anio, mes, _ = month_bounds(year_month)
-    tope = last_day_to_compute(year_month, hasta_dia)
+    tope = last_day_to_compute(year_month, until_day)
 
     if analyzer is None:
         analyzer = MetricsAnalyzer(db, Periodo.build(f"{year_month}-01"))
@@ -136,19 +136,19 @@ def build_day_metrics(
 
         # Volcado parcial: el upsert solo toca los dias enviados, asi que si la
         # ejecucion se corta el trabajo ya hecho queda guardado.
-        if len(pendientes) >= FLUSH_CADA_N_DIAS:
-            _guardar(db, label, activos_inicio, pendientes)
+        if len(pendientes) >= FLUSH_EVERY_N_DAYS:
+            _save(db, label, activos_inicio, pendientes)
             print(f"  -> guardados {len(pendientes)} dias")
             pendientes = {}
 
     if pendientes:
-        _guardar(db, label, activos_inicio, pendientes)
+        _save(db, label, activos_inicio, pendientes)
 
     print(f"\nMETRICAS DIARIAS GUARDADAS | {label} | {tope} dias")
     return {"periodo_reporte": label, "dias_calculados": tope}
 
 
-def _guardar(db: DBConnector, label: str, activos_inicio: int, dias: dict[str, Any]) -> None:
+def _save(db: DBConnector, label: str, activos_inicio: int, dias: dict[str, Any]) -> None:
     """Vuelca los dias pendientes a `analyzer_day_metrics`."""
     save_days(db, DAY_METRICS, label, dias, activos_inicio=activos_inicio)
 
@@ -162,6 +162,6 @@ def get_day_metrics(year_month: str) -> dict[str, Any]:
     return datos
 
 
-def get_periodos_con_dias() -> list[str]:
+def get_periods_with_days() -> list[str]:
     """Meses (YYYY-MM) que ya tienen metricas diarias calculadas."""
     return months_with_days(TableNames.ANALYZER_DAY_METRICS)

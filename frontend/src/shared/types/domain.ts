@@ -28,7 +28,7 @@ export interface DimensionVal {
 
 /** Metricas de un dia: globales del mes hasta ese corte + desglose por nodo. */
 export interface DayPayload {
-  global: Periodo;
+  global: Period;
   /** Desglose plano por `zona_sucursal` (Ventas y Unidades de Negocio). */
   dimensiones: DimensionVal[];
   /**
@@ -77,7 +77,7 @@ export interface DimensionGroup {
   dimensiones: Record<string, DimensionVal[]>;
 }
 
-export interface Periodo {
+export interface Period {
   periodo_reporte: string;
   activos_inicio?: number;
   activos_final?: number;

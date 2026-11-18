@@ -52,23 +52,23 @@ const pages: RouteObject[] = [
   { path: '/support/analytics/', lazy: apiPage('/api/support/analytics/', () => import('@/pages/Support/Analytics')) },
   { path: '/support/results/', lazy: apiPage('/api/support/results/', () => import('@/pages/Support/Results')) },
   { path: '/support/users/', lazy: apiPage('/api/support/users/', () => import('@/pages/Support/Users')) },
-  { path: '/support/etapas/', lazy: apiPage('/api/support/stages/', () => import('@/pages/Support/Etapas')) },
+  { path: '/support/etapas/', lazy: apiPage('/api/support/stages/', () => import('@/pages/Support/Stages')) },
 
   { path: '/imports/subscriptions/', lazy: apiPage('/api/imports/subscriptions/', () => import('@/pages/Imports/Subscriptions')) },
   { path: '/imports/crm/', lazy: apiPage('/api/imports/crm/', () => import('@/pages/Imports/Crm')) },
   { path: '/imports/support/', lazy: apiPage('/api/imports/support/', () => import('@/pages/Imports/Support')) },
   { path: '/imports/history/', lazy: apiPage('/api/imports/history/', () => import('@/pages/Imports/History')) },
 
-  { path: '/catalogos/notificaciones/', lazy: apiPage('/api/catalogs/notifications/', () => import('@/pages/Catalogos/Notificaciones')) },
-  { path: '/catalogos/productos/', lazy: apiPage('/api/catalogs/products/', () => import('@/pages/Catalogos/Productos')) },
-  { path: '/catalogos/estructura/', lazy: apiPage('/api/catalogs/structure/', () => import('@/pages/Catalogos/Estructura')) },
-  { path: '/catalogos/ventas/', lazy: apiPage('/api/catalogs/sales/', () => import('@/pages/Catalogos/Ventas')) },
+  { path: '/catalogos/notificaciones/', lazy: apiPage('/api/catalogs/notifications/', () => import('@/pages/Catalogs/Notifications')) },
+  { path: '/catalogos/productos/', lazy: apiPage('/api/catalogs/products/', () => import('@/pages/Catalogs/Products')) },
+  { path: '/catalogos/estructura/', lazy: apiPage('/api/catalogs/structure/', () => import('@/pages/Catalogs/Structure')) },
+  { path: '/catalogos/ventas/', lazy: apiPage('/api/catalogs/sales/', () => import('@/pages/Catalogs/Sales')) },
 
-  { path: '/comisiones/', lazy: apiPage('/api/commissions/report/', () => import('@/pages/Comisiones/Informe')) },
-  { path: '/comisiones/condiciones/', lazy: apiPage('/api/commissions/conditions/', () => import('@/pages/Comisiones/Condiciones')) },
+  { path: '/comisiones/', lazy: apiPage('/api/commissions/report/', () => import('@/pages/Commissions/Report')) },
+  { path: '/comisiones/condiciones/', lazy: apiPage('/api/commissions/conditions/', () => import('@/pages/Commissions/Conditions')) },
 
-  { path: '/auditoria/', lazy: apiPage('/api/audit/logs/', () => import('@/pages/Auditoria/Registro')) },
-  { path: '/auditoria/monitoreo/', lazy: page(() => import('@/pages/Auditoria/Monitoreo')) },
+  { path: '/auditoria/', lazy: apiPage('/api/audit/logs/', () => import('@/pages/Audit/Log')) },
+  { path: '/auditoria/monitoreo/', lazy: page(() => import('@/pages/Audit/Monitoring')) },
 
   { path: '*', element: <ServerRoute /> },
 ];

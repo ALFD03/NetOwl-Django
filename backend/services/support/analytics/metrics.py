@@ -17,7 +17,7 @@ import pandas as pd
 from core.utils import clean_json_props
 from services.support.analytics.cohorts import PeriodCohort
 from services.support.analytics.config import (
-    POB_CERRADOS,
+    POP_CLOSED,
     SUPPORT_COMPOSICION_FIELDS,
     SUPPORT_RATE_FIELDS,
     SUPPORT_TIME_MEASURES,
@@ -69,7 +69,7 @@ def _nan_series(df: pd.DataFrame) -> pd.Series:
     return pd.Series(float("nan"), index=df.index, dtype=float)
 
 
-def _fecha(df: pd.DataFrame, col: str) -> pd.Series:
+def _date(df: pd.DataFrame, col: str) -> pd.Series:
     """
     Una columna de fecha de la cohorte, sin volver a parsearla si ya lo está.
 
@@ -83,7 +83,7 @@ def _fecha(df: pd.DataFrame, col: str) -> pd.Series:
     return pd.to_datetime(serie, errors="coerce")
 
 
-def _hours_between(df: pd.DataFrame, col_inicio: str, col_fin: str) -> pd.Series:
+def _hours_between(df: pd.DataFrame, col_start: str, col_fin: str) -> pd.Series:
     """
     Diferencia en horas entre dos columnas de fecha, sin rellenos.
 
@@ -93,36 +93,36 @@ def _hours_between(df: pd.DataFrame, col_inicio: str, col_fin: str) -> pd.Series
     instantáneo, y también se descarta.
 
     El resultado conserva el índice de `df` incluso cuando falta una columna,
-    porque `_tramos_validos` cruza los dos tramos fila a fila.
+    porque `_valid_tiers` cruza los dos tramos fila a fila.
     """
-    if col_inicio not in df.columns or col_fin not in df.columns:
+    if col_start not in df.columns or col_fin not in df.columns:
         return _nan_series(df)
 
-    return (_fecha(df, col_fin) - _fecha(df, col_inicio)).dt.total_seconds() / 3600.0
+    return (_date(df, col_fin) - _date(df, col_start)).dt.total_seconds() / 3600.0
 
 
-def _horas_hasta(df: pd.DataFrame, col_inicio: str, instante: pd.Timestamp) -> pd.Series:
+def _hours_until(df: pd.DataFrame, col_start: str, instante: pd.Timestamp) -> pd.Series:
     """Horas entre una columna de fecha y un instante fijo: el reloj abierto."""
-    if col_inicio not in df.columns:
+    if col_start not in df.columns:
         return _nan_series(df)
-    return (instante - _fecha(df, col_inicio)).dt.total_seconds() / 3600.0
+    return (instante - _date(df, col_start)).dt.total_seconds() / 3600.0
 
 
-def _duracion_total(df: pd.DataFrame) -> pd.Series:
+def _total_duration(df: pd.DataFrame) -> pd.Series:
     """
     Duración creación → cierre tal y como la reporta Odoo.
 
     Se lee el campo en vez de restar las dos fechas porque ya viene calculado:
     promediarlo es sumar y dividir entre la muestra, sin una resta de fechas
     más por ticket. Quién entra en la medida no lo decide este campo sino
-    `_tramos_validos`, que mira si las tres fechas del ciclo son coherentes.
+    `_valid_tiers`, que mira si las tres fechas del ciclo son coherentes.
     """
     if "duracion_total_horas" not in df.columns:
         return _nan_series(df)
     return pd.to_numeric(df["duracion_total_horas"], errors="coerce")
 
 
-def _tramos_validos(espera: pd.Series, gestion: pd.Series) -> pd.Series:
+def _valid_tiers(espera: pd.Series, gestion: pd.Series) -> pd.Series:
     """
     Qué tickets tienen un ciclo de cierre medible: los de fechas coherentes.
 
@@ -140,7 +140,7 @@ def _tramos_validos(espera: pd.Series, gestion: pd.Series) -> pd.Series:
     return (espera >= 0) & (gestion >= 0)
 
 
-def _serie_asignacion(df: pd.DataFrame, corte: pd.Timestamp) -> pd.Series:
+def _assignment_series(df: pd.DataFrame, corte: pd.Timestamp) -> pd.Series:
     """
     La espera creación → asignación, censurada en el corte.
 
@@ -156,7 +156,7 @@ def _serie_asignacion(df: pd.DataFrame, corte: pd.Timestamp) -> pd.Series:
 
     El cerrado sin asignación nunca entra, ni por la espera real —que no tiene—
     ni por la censura: su espera no terminó, es que el dato está mal, y es lo
-    que `_tramos_validos` señala en las medidas de cierre.
+    que `_valid_tiers` señala en las medidas de cierre.
     """
     espera = _hours_between(df, "dt_creacion", "asignado_al_corte")
 
@@ -164,10 +164,10 @@ def _serie_asignacion(df: pd.DataFrame, corte: pd.Timestamp) -> pd.Series:
         return espera
 
     esperando = df["asignado_al_corte"].isna() & ~df["cerrado_al_corte"]
-    return espera.mask(esperando, _horas_hasta(df, "dt_creacion", corte))
+    return espera.mask(esperando, _hours_until(df, "dt_creacion", corte))
 
 
-def _serie_de_formula(
+def _formula_series(
     df: pd.DataFrame, formula: str, corte: pd.Timestamp
 ) -> pd.Series:
     """La serie de horas de una medida, segun como este definida."""
@@ -177,7 +177,7 @@ def _serie_de_formula(
     # La asignación es un tramo único y no depende del cierre: un ticket
     # abierto sigue teniendo espera que medir, y es la que se censura.
     if formula == "creado_a_asignacion":
-        return _serie_asignacion(df, corte)
+        return _assignment_series(df, corte)
 
     # Hasta escalar: el escalamiento ES el cierre de la copia de ATC, y no
     # exige asignación, porque escalar sin que nadie lo tomara también ocurre.
@@ -188,13 +188,13 @@ def _serie_de_formula(
     gestion = _hours_between(df, "asignado_al_corte", "dt_cierre")
 
     if formula == "duracion_total":
-        serie = _duracion_total(df)
+        serie = _total_duration(df)
     elif formula == "asignado_a_cierre":
         serie = gestion
     else:
         raise ValueError(f"Fórmula de tiempo desconocida: {formula!r}")
 
-    return serie.where(_tramos_validos(espera, gestion))
+    return serie.where(_valid_tiers(espera, gestion))
 
 
 def _prefixed(stats: dict[str, float], medida: str) -> dict[str, Any]:
@@ -215,7 +215,7 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
     El bloque completo de una cohorte: volúmenes, tasas, las ocho medidas y en
     qué se fue el tiempo.
 
-    En ATC lo escalado es una forma de cerrar (ver `escalamiento.py`): cuenta en
+    En ATC lo escalado es una forma de cerrar (ver `escalation.py`): cuenta en
     `tickets_cerrados` y no en resueltos ni cancelados, de modo que resolución,
     cancelación y escalamiento se reparten lo cerrado y suman 100 %.
 
@@ -232,7 +232,7 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
     total = len(df)
 
     if total == 0:
-        conteos = dict.fromkeys(
+        counts = dict.fromkeys(
             ["creados", "cerrados", "resueltos", "resueltos_periodo", "resueltos_arrastre",
              "cancelados", "cancelados_periodo", "cancelados_arrastre",
              "escalados", "escalados_periodo", "escalados_arrastre",
@@ -245,7 +245,7 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
         cancelado = cerrado & df["es_cancelado"]
         escalado = cerrado & _bandera(df, "es_escalado")
 
-        conteos = {
+        counts = {
             "creados": int(nacido.sum()),
             "cerrados": int(cerrado.sum()),
             "resueltos": int(resuelto.sum()),
@@ -261,33 +261,33 @@ def compute_metrics_for_period(cohorte: PeriodCohort) -> dict[str, Any]:
             "rezagados": int((nacido & df["es_rezagado"]).sum()),
         }
 
-    cerrados = conteos["cerrados"]
-    creados = conteos["creados"]
+    cerrados = counts["cerrados"]
+    creados = counts["creados"]
 
     metrics: dict[str, Any] = {
         "total_tickets": total,
         "tickets_creados": creados,
         "tickets_cerrados": cerrados,
-        **{f"tickets_{clave}": conteos[clave] for clave in (
+        **{f"tickets_{clave}": counts[clave] for clave in (
             "resueltos", "resueltos_periodo", "resueltos_arrastre",
             "cancelados", "cancelados_periodo", "cancelados_arrastre",
             "escalados", "escalados_periodo", "escalados_arrastre",
             "recibidos_escalados", "rezagados",
         )},
-        **{f"pct_{clave}": _pct(conteos[clave], cerrados) for clave in (
+        **{f"pct_{clave}": _pct(counts[clave], cerrados) for clave in (
             "resueltos", "resueltos_periodo", "resueltos_arrastre",
             "cancelados", "cancelados_periodo", "cancelados_arrastre",
             "escalados", "escalados_periodo", "escalados_arrastre",
         )},
-        "pct_recibidos_escalados": _pct(conteos["recibidos_escalados"], creados),
-        "pct_rezagados": _pct(conteos["rezagados"], creados),
+        "pct_recibidos_escalados": _pct(counts["recibidos_escalados"], creados),
+        "pct_rezagados": _pct(counts["rezagados"], creados),
     }
 
-    for medida, formula, poblacion in TIME_MEASURE_SPECS:
-        serie = _serie_de_formula(cohorte.poblacion(poblacion), formula, cohorte.corte)
+    for medida, formula, population in TIME_MEASURE_SPECS:
+        serie = _formula_series(cohorte.population(population), formula, cohorte.corte)
         metrics.update(_prefixed(_compute_stats_for_series(serie), medida))
 
-    metrics.update(_composicion(cohorte.poblacion(POB_CERRADOS)))
+    metrics.update(_composicion(cohorte.population(POP_CLOSED)))
 
     return clean_json_props(metrics)
 
@@ -306,15 +306,15 @@ def _composicion(cerrados: pd.DataFrame) -> dict[str, Any]:
     cerrados con logs de etapa (ver `SUPPORT_COMPOSICION_FIELDS`). Son
     promedios para que las cuatro partes sumen el tiempo medio.
     """
-    con_logs = cerrados[_bandera(cerrados, "con_recorrido")] if not cerrados.empty else cerrados
-    n = len(con_logs)
+    with_logs = cerrados[_bandera(cerrados, "con_recorrido")] if not cerrados.empty else cerrados
+    n = len(with_logs)
     bloque: dict[str, Any] = {"muestra_composicion": n}
     for tipo, campo in zip(TIPOS_COMPOSICION, SUPPORT_COMPOSICION_FIELDS):
         col = f"h_{tipo}"
-        if n == 0 or col not in con_logs.columns:
+        if n == 0 or col not in with_logs.columns:
             bloque[campo] = 0.0
             continue
-        horas = pd.to_numeric(con_logs[col], errors="coerce").fillna(0.0).clip(lower=0)
+        horas = pd.to_numeric(with_logs[col], errors="coerce").fillna(0.0).clip(lower=0)
         bloque[campo] = round(float(horas.mean()), 2)
     return bloque
 

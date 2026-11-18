@@ -37,11 +37,11 @@ import pandas as pd
 
 from services.support.analytics.config import (
     CANCELED_STAGES,
-    POB_CANCELADOS,
-    POB_CERRADOS,
-    POB_CREADOS,
-    POB_ESCALADOS,
-    POB_RESUELTOS,
+    POP_CANCELLED,
+    POP_CLOSED,
+    POP_CREATED,
+    POP_ESCALATED,
+    POP_RESOLVED,
     RESOLVED_STAGES,
 )
 
@@ -137,21 +137,21 @@ class PeriodCohort:
         """Si la cohorte no tiene ningun ticket."""
         return self.df.empty
 
-    def poblacion(self, clave: str) -> pd.DataFrame:
+    def population(self, clave: str) -> pd.DataFrame:
         """La sub-tabla sobre la que se mide una métrica."""
         if self.df.empty:
             return self.df
 
         cerrado = self.df["cerrado_en_periodo"]
-        if clave == POB_CERRADOS:
+        if clave == POP_CLOSED:
             return self.df[cerrado]
-        if clave == POB_RESUELTOS:
+        if clave == POP_RESOLVED:
             return self.df[cerrado & self.df["es_resuelto"]]
-        if clave == POB_CANCELADOS:
+        if clave == POP_CANCELLED:
             return self.df[cerrado & self.df["es_cancelado"]]
-        if clave == POB_CREADOS:
+        if clave == POP_CREATED:
             return self.df[self.df["nacido_en_periodo"]]
-        if clave == POB_ESCALADOS:
+        if clave == POP_ESCALATED:
             if "es_escalado" not in self.df.columns:
                 return self.df.iloc[0:0]
             return self.df[cerrado & self.df["es_escalado"]]
@@ -217,7 +217,7 @@ def build_cohort(
     return PeriodCohort(periodo, df, corte)
 
 
-def periodos_disponibles(df_all: pd.DataFrame) -> list[str]:
+def available_periods(df_all: pd.DataFrame) -> list[str]:
     """
     Todos los meses con actividad, de más reciente a más antiguo.
 

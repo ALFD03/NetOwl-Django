@@ -91,7 +91,7 @@ export const DEFAULT_GROUP_PERMISSIONS = Object.fromEntries(
  * Matriz con la que se abre el formulario de "Nuevo Usuario": solo el modulo de
  * suscripciones y su dashboard.
  *
- * Es el espejo de `PERMISOS_INICIALES` en services/config/models.py, y hay que
+ * Es el espejo de `INITIAL_PERMISSIONS` en services/config/models.py, y hay que
  * mantener las dos listas de acuerdo (ver CLAUDE.md): el backend lo aplica a la
  * cuenta que crea la senal `create_user_profile`, pero el formulario manda la
  * matriz entera y `apply_permissions` escribe los campos ausentes como false,

@@ -14,16 +14,16 @@ from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
 from core.utils import parse_jsonb
 
-from .metrics import promediar_cierres
+from .metrics import average_closes
 
 logger = logging.getLogger(__name__)
 
 
-def get_crm_periodos() -> list[str]:
+def get_crm_periods() -> list[str]:
     """Los periodos con cierre calculado, del mas reciente al mas antiguo."""
     db = DBConnector()
     try:
-        df = db.query(f"SELECT DISTINCT periodo_reporte FROM {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO} ORDER BY periodo_reporte DESC")
+        df = db.query(f"SELECT DISTINCT periodo_reporte FROM {DB_SCHEMA}.{TableNames.CRM_CLOSE_HISTORY} ORDER BY periodo_reporte DESC")
         if df.empty:
             return []
         return df["periodo_reporte"].tolist()
@@ -32,7 +32,7 @@ def get_crm_periodos() -> list[str]:
         return []
 
 
-def get_crm_cierre_historico(periodos: list[str] | None = None) -> list[dict[str, Any]]:
+def get_crm_close_history(periodos: list[str] | None = None) -> list[dict[str, Any]]:
     """Los cierres de los periodos pedidos, con el JSONB ya parseado."""
     db = DBConnector()
     try:
@@ -44,7 +44,7 @@ def get_crm_cierre_historico(periodos: list[str] | None = None) -> list[dict[str
             params = periodos
 
         df = db.query(f"""
-            SELECT * FROM {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO}
+            SELECT * FROM {DB_SCHEMA}.{TableNames.CRM_CLOSE_HISTORY}
             {where_clause}
             ORDER BY periodo_reporte DESC
         """, params=params)
@@ -78,10 +78,10 @@ def get_crm_metric_totals(
     dashboard de quien no ve todos los periodos (`services/config/periods.py`).
     """
     if solo:
-        return _metric_totals_de_un_periodo(solo)
+        return _period_metric_totals(solo)
     db = DBConnector()
     try:
-        df_mg = db.query(f"SELECT resumen_global, tiempo_por_etapa, efectividad FROM {DB_SCHEMA}.{TableNames.CRM_METRICAS_GLOBALES} WHERE id = 1")
+        df_mg = db.query(f"SELECT resumen_global, tiempo_por_etapa, efectividad FROM {DB_SCHEMA}.{TableNames.CRM_GLOBAL_METRICS} WHERE id = 1")
         
         resumen_global = {}
         tiempo_por_etapa = []
@@ -92,7 +92,7 @@ def get_crm_metric_totals(
             efectividad = parse_jsonb(df_mg.iloc[0]["efectividad"]) or []
 
         df_hist = db.query(f"""
-            SELECT * FROM {DB_SCHEMA}.{TableNames.CRM_CIERRE_HISTORICO}
+            SELECT * FROM {DB_SCHEMA}.{TableNames.CRM_CLOSE_HISTORY}
             ORDER BY periodo_reporte ASC
         """)
         # La efectividad y el tiempo por etapa de cada periodo se sirven desde la
@@ -116,18 +116,18 @@ def get_crm_metric_totals(
         return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
 
 
-def _metric_totals_de_un_periodo(periodo: str) -> dict[str, Any]:
+def _period_metric_totals(periodo: str) -> dict[str, Any]:
     """`get_crm_metric_totals` sobre un solo cierre, con la misma forma.
 
     El promedio de un periodo es el propio periodo, pero pasa por
-    `promediar_cierres` para que las claves sean exactamente las del global.
+    `average_closes` para que las claves sean exactamente las del global.
     """
-    cierres = get_crm_cierre_historico([periodo])
+    cierres = get_crm_close_history([periodo])
     if not cierres:
         return {"resumen_global": {}, "tiempo_por_etapa": [], "efectividad": [], "historico_tendencias": []}
     cierre = cierres[0]
     return {
-        "resumen_global": promediar_cierres(cierres),
+        "resumen_global": average_closes(cierres),
         "tiempo_por_etapa": cierre["tiempo_por_etapa"],
         "efectividad": cierre["efectividad"],
         "historico_tendencias": [

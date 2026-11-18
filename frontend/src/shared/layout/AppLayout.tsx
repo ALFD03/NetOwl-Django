@@ -44,11 +44,11 @@ interface Props {
 }
 
 /** Clave del sidebar plegado. Por navegador: es una comodidad, no un ajuste de la cuenta. */
-const CLAVE_PLEGADO = 'netowl-sidebar-plegado';
+const COLLAPSED_KEY = 'netowl-sidebar-plegado';
 
-function leerPlegado(): boolean {
+function readCollapsed(): boolean {
   try {
-    return localStorage.getItem(CLAVE_PLEGADO) === '1';
+    return localStorage.getItem(COLLAPSED_KEY) === '1';
   } catch {
     return false;
   }
@@ -61,27 +61,27 @@ export function AppLayout({ children, title, subpagina, toolbar }: Props) {
 
   // Cada página monta su propio AppLayout: leerlo en el inicializador evita un
   // parpadeo del sidebar ancho.
-  const [plegado, setPlegado] = useState(leerPlegado);
-  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [plegado, setPlegado] = useState(readCollapsed);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const alternarPlegado = () => {
     setPlegado((previo) => {
-      const nuevo = !previo;
+      const newItem = !previo;
       try {
-        localStorage.setItem(CLAVE_PLEGADO, nuevo ? '1' : '0');
+        localStorage.setItem(COLLAPSED_KEY, newItem ? '1' : '0');
       } catch {
         // Sin almacenamiento (modo privado) el sidebar se pliega igual, solo que no se recuerda.
       }
-      return nuevo;
+      return newItem;
     });
   };
 
-  const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
 
   // La ruta de migas sale de la URL, igual que la página marcada en el
   // sidebar: las páginas no declaran dónde están.
   const ubicacion = resolveLocation(url);
-  const ModuloIcon = ubicacion?.item.icon;
+  const ModuleIcon = ubicacion?.item.icon;
 
   return (
     // El scroll vive en <main>, no en la ventana: es lo que convierte a la
@@ -90,12 +90,12 @@ export function AppLayout({ children, title, subpagina, toolbar }: Props) {
     // direcciones del navegador y el final de la página quedaba debajo.
     <div className="flex h-dvh overflow-hidden bg-surface-primary text-slate-100">
       <Sidebar url={url} username={username} collapsed={plegado} onToggleCollapsed={alternarPlegado} />
-      <MobileNavDrawer open={menuAbierto} onClose={cerrarMenu} url={url} username={username} />
+      <MobileNavDrawer open={menuOpen} onClose={closeMenu} url={url} username={username} />
 
       {/* `min-w-0`: sin él, una tabla ancha estira <main> más allá de la
           pantalla en vez de hacer scroll dentro de su propio contenedor. */}
       <main data-app-scroll className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-        <MobileTopBar onOpenMenu={() => setMenuAbierto(true)} />
+        <MobileTopBar onOpenMenu={() => setMenuOpen(true)} />
 
         {(title || toolbar || ubicacion) && (
           <div className="bg-surface-primary/95 px-4 pb-4 pt-4 sm:px-6 lg:sticky lg:top-0 lg:z-30 lg:px-8 lg:pt-6 lg:shadow-lg lg:shadow-surface-primary/50 lg:backdrop-blur">
@@ -103,12 +103,12 @@ export function AppLayout({ children, title, subpagina, toolbar }: Props) {
                 scroll interno en vez de comerse la pantalla. Solo cuando es
                 fija: suelta, crece con la pagina como todo lo demas. */}
             <div className="flex flex-col gap-4 lg:max-h-[55vh] lg:overflow-y-auto [&>*]:mb-0">
-              {ubicacion && ModuloIcon ? (
+              {ubicacion && ModuleIcon ? (
                 <nav
                   aria-label="Ubicación"
                   className="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-bold tracking-tight sm:text-xl"
                 >
-                  <ModuloIcon className="h-5 w-5 shrink-0 text-brand" />
+                  <ModuleIcon className="h-5 w-5 shrink-0 text-brand" />
                   <span className="text-slate-400">{ubicacion.item.name}</span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
                   {subpagina ? (

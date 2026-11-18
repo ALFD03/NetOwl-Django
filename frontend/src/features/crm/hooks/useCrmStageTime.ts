@@ -1,18 +1,18 @@
 import { useMemo, useState } from 'react';
 
-import { CRM_ETAPAS_CLAVE } from '@/shared/constants/labels';
+import { CRM_KEY_STAGES } from '@/shared/constants/labels';
 import {
   buildStageTimeCards,
   buildStageTimeDimensionRows,
-  corteMedicion,
-  findEtapaTiempo,
+  measurementCutoff,
+  findStageTime,
   stageTimeLeaders,
-  tiempoEtapa,
-} from '../lib/crmTiempoEtapa';
-import type { CrmDimensionValue, CrmHistoricoRow, CrmTiempoEtapaRow } from '../types';
+  stageTime,
+} from '../lib/crmStageTime';
+import type { CrmDimensionValue, CrmHistoricoRow, CrmStageTimeRow } from '../types';
 
 /** Una sola lista vacía: un `[]` nuevo en cada render invalidaría todos los memos de abajo. */
-const SIN_ETAPAS: CrmTiempoEtapaRow[] = [];
+const NO_STAGES: CrmStageTimeRow[] = [];
 
 /**
  * Everything the stage-time section draws.
@@ -23,10 +23,10 @@ const SIN_ETAPAS: CrmTiempoEtapaRow[] = [];
  * stage", which only means something inside one axis at a time.
  */
 export function useCrmStageTime(globalData: CrmHistoricoRow, rows: CrmDimensionValue[]) {
-  const [etapaElegida, setSelectedEtapa] = useState<string>(CRM_ETAPAS_CLAVE[0]);
+  const [selectedStage, setSelectedEtapa] = useState<string>(CRM_KEY_STAGES[0]);
   const [verTodas, setVerTodas] = useState(false);
 
-  const tiempoPorEtapa = globalData.tiempo_por_etapa ?? SIN_ETAPAS;
+  const timeByStage = globalData.tiempo_por_etapa ?? NO_STAGES;
 
   /**
    * Which stages to show. `es_clave` comes from the analysis, so the full list
@@ -34,33 +34,33 @@ export function useCrmStageTime(globalData: CrmHistoricoRow, rows: CrmDimensionV
    * re-deriving it here.
    */
   const etapas = useMemo<string[]>(() => {
-    if (!verTodas) return [...CRM_ETAPAS_CLAVE];
+    if (!verTodas) return [...CRM_KEY_STAGES];
 
-    const delPeriodo = tiempoPorEtapa
+    const ofPeriod = timeByStage
       .map((row) => row.etapa)
       .filter((etapa): etapa is string => Boolean(etapa));
 
     // The key stages stay listed even with no movement in the period: their
     // absence is itself the reading.
-    const faltantes = CRM_ETAPAS_CLAVE.filter((etapa) => !delPeriodo.includes(etapa));
-    return [...delPeriodo, ...faltantes];
-  }, [tiempoPorEtapa, verTodas]);
+    const faltantes = CRM_KEY_STAGES.filter((etapa) => !ofPeriod.includes(etapa));
+    return [...ofPeriod, ...faltantes];
+  }, [timeByStage, verTodas]);
 
   const cards = useMemo(
-    () => buildStageTimeCards(tiempoPorEtapa, etapas),
-    [tiempoPorEtapa, etapas],
+    () => buildStageTimeCards(timeByStage, etapas),
+    [timeByStage, etapas],
   );
 
   /**
    * Collapsing the list back to the key stages can strand the selection on a
    * stage no longer offered, so the active one is derived rather than synced.
    */
-  const selectedEtapa = etapas.includes(etapaElegida) ? etapaElegida : etapas[0] ?? CRM_ETAPAS_CLAVE[0];
+  const selectedEtapa = etapas.includes(selectedStage) ? selectedStage : etapas[0] ?? CRM_KEY_STAGES[0];
 
   /** The period's time in the selected stage — the 100 % of the variations. */
   const baseline = useMemo(
-    () => tiempoEtapa(findEtapaTiempo(tiempoPorEtapa, selectedEtapa)),
-    [tiempoPorEtapa, selectedEtapa],
+    () => stageTime(findStageTime(timeByStage, selectedEtapa)),
+    [timeByStage, selectedEtapa],
   );
 
   const dimensionRows = useMemo(
@@ -75,10 +75,10 @@ export function useCrmStageTime(globalData: CrmHistoricoRow, rows: CrmDimensionV
    * no closing date are measured against the clock, so the figure moves between
    * runs and the reader needs to know which clock it was.
    */
-  const corte = useMemo(() => corteMedicion(tiempoPorEtapa), [tiempoPorEtapa]);
+  const corte = useMemo(() => measurementCutoff(timeByStage), [timeByStage]);
 
   /** No stage of the period carries a measurement — the section has nothing to say. */
-  const isEmpty = tiempoPorEtapa.length === 0;
+  const isEmpty = timeByStage.length === 0;
 
   return {
     cards,

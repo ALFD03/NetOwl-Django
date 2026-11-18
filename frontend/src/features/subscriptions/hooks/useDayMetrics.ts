@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { calcularProyeccion } from '@/shared/lib/proyeccion';
+import { computeProjection } from '@/shared/lib/projection';
 import type { DayMetrics } from '@/shared/types/domain';
 
 const daysInMonth = (periodoMes: string): number => {
@@ -46,7 +46,7 @@ export function useDayMetrics(dayMetrics: DayMetrics | undefined, selectedDay: n
   // Los días laborables del corte, de los que sale la proyección al cierre. Sin
   // un día calculado se cae al cierre del mes y no hay corte que proyectar.
   const proyeccion = useMemo(
-    () => (dayData ? calcularProyeccion(dayMetrics?.periodo_mes, effectiveDay) : null),
+    () => (dayData ? computeProjection(dayMetrics?.periodo_mes, effectiveDay) : null),
     [dayData, dayMetrics, effectiveDay],
   );
 

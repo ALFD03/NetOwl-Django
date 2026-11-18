@@ -31,7 +31,7 @@ URL = "https://ve.dolarapi.com/v1/historicos/dolares/oficial/{fecha}"
 # La ultima tasa publicada, sin pedir fecha. Es otra pregunta que la de arriba:
 # la del mes es la que se declara, esta es la que vale hoy —util para convertir
 # a precio de hoy lo que se exporta fuera de la declaracion.
-URL_ACTUAL = "https://ve.dolarapi.com/v1/dolares/oficial"
+CURRENT_URL = "https://ve.dolarapi.com/v1/dolares/oficial"
 
 # Conexion y lectura. Cortos a proposito: esto se consulta desde la peticion
 # que pinta el reporte, y un tercero caido no puede dejar la pagina colgada.
@@ -40,25 +40,25 @@ TIMEOUT = (5, 10)
 # Cuantos dias se avanza buscando el primero publicado. Siete cubre un puente
 # largo sin salirse del mes; mas alla, la tasa ya no representa al periodo y es
 # mejor decir que no hay que inventar una.
-DIAS_A_PROBAR = 7
+DAYS_TO_TRY = 7
 
 
-class TasaNoDisponible(RuntimeError):
+class RateUnavailable(RuntimeError):
     """No se pudo obtener la tasa. El mensaje explica por que, y se enseña."""
 
 
-def _fecha_api(dia: date) -> str:
+def _api_date(dia: date) -> str:
     """La fecha en el formato que pide la ruta: `YYYY/MM/DD`."""
     return dia.strftime("%Y/%m/%d")
 
 
-def primer_dia(periodo: str) -> date:
+def first_day(periodo: str) -> date:
     """El dia 1 del periodo `YYYY-MM`."""
     try:
         anio, mes = periodo.split("-")
         return date(int(anio), int(mes), 1)
     except (AttributeError, ValueError):
-        raise TasaNoDisponible(f"«{periodo}» no es un periodo valido (se espera YYYY-MM).") from None
+        raise RateUnavailable(f"«{periodo}» no es un periodo valido (se espera YYYY-MM).") from None
 
 
 def _promedio(datos: object) -> float | None:
@@ -75,28 +75,28 @@ def _promedio(datos: object) -> float | None:
     try:
         valor = float(promedio)
     except (TypeError, ValueError):
-        raise TasaNoDisponible(
+        raise RateUnavailable(
             f"El servicio de tasas devolvio un promedio no numerico: {promedio!r}."
         ) from None
 
     if valor <= 0:
-        raise TasaNoDisponible(f"El servicio de tasas devolvio una tasa invalida: {valor}.")
+        raise RateUnavailable(f"El servicio de tasas devolvio una tasa invalida: {valor}.")
 
     return valor
 
 
-def _consultar_dia(dia: date) -> float | None:
+def _fetch_day(dia: date) -> float | None:
     """La tasa publicada ese dia, o `None` si no hubo publicacion.
 
     Un 404 no es un error: es la respuesta correcta a preguntar por un sabado.
     Lo que si son errores —red caida, 500, JSON ilegible— suben como
-    `TasaNoDisponible`, porque reintentar al dia siguiente no los arregla y
+    `RateUnavailable`, porque reintentar al dia siguiente no los arregla y
     seguir probando solo retrasaria el mensaje siete veces.
     """
     try:
-        respuesta = requests.get(URL.format(fecha=_fecha_api(dia)), timeout=TIMEOUT)
+        respuesta = requests.get(URL.format(fecha=_api_date(dia)), timeout=TIMEOUT)
     except requests.RequestException as e:
-        raise TasaNoDisponible(
+        raise RateUnavailable(
             "No se pudo contactar con el servicio de tasas (ve.dolarapi.com)."
         ) from e
 
@@ -104,64 +104,64 @@ def _consultar_dia(dia: date) -> float | None:
         return None
 
     if not respuesta.ok:
-        raise TasaNoDisponible(
+        raise RateUnavailable(
             f"El servicio de tasas respondio {respuesta.status_code}."
         )
 
     try:
         datos = respuesta.json()
     except ValueError as e:
-        raise TasaNoDisponible("El servicio de tasas devolvio una respuesta ilegible.") from e
+        raise RateUnavailable("El servicio de tasas devolvio una respuesta ilegible.") from e
 
     # Cuerpo valido pero sin la cifra: mismo caso que un dia sin publicar.
     return _promedio(datos)
 
 
-def consultar_tasa_del_mes(periodo: str) -> tuple[float, str]:
+def fetch_month_rate(periodo: str) -> tuple[float, str]:
     """La tasa con que se declara el periodo, y de que dia salio.
 
     Devuelve `(tasa, descripcion)`. La descripcion es lo que se guarda junto a
     la cifra y se enseña: sin ella, una tasa a secas no dice si la puso alguien
     a mano o de que dia es.
     """
-    primero = primer_dia(periodo)
+    primero = first_day(periodo)
 
-    for salto in range(DIAS_A_PROBAR):
+    for salto in range(DAYS_TO_TRY):
         dia = primero + timedelta(days=salto)
         if dia.month != primero.month:
             break
 
-        tasa = _consultar_dia(dia)
+        tasa = _fetch_day(dia)
         if tasa is not None:
             return tasa, f"BCV {dia.isoformat()} (ve.dolarapi.com)"
 
-    raise TasaNoDisponible(
+    raise RateUnavailable(
         f"El BCV no publico tasa en los primeros dias de {periodo}. "
         "Escribela a mano si hace falta declarar ya."
     )
 
 
-def consultar_tasa_vigente_el(dia: date) -> tuple[float, date]:
+def fetch_rate_on(dia: date) -> tuple[float, date]:
     """El valor del bolivar oficial vigente ese dia, y de que publicacion salio.
 
     Si el BCV publico ese dia, es esa. Si no (fin de semana o feriado, la API
     responde 404), vale la ultima publicada antes: es la que estaba en vigor ese
-    dia. A diferencia de `consultar_tasa_del_mes`, que avanza al primer dia
+    dia. A diferencia de `fetch_month_rate`, que avanza al primer dia
     publicado del mes, esto retrocede, porque pregunta por el valor de un dia
     concreto y no por la primera tasa de un mes.
     """
-    for salto in range(DIAS_A_PROBAR):
+    for salto in range(DAYS_TO_TRY):
         publicada = dia - timedelta(days=salto)
-        tasa = _consultar_dia(publicada)
+        tasa = _fetch_day(publicada)
         if tasa is not None:
             return tasa, publicada
 
-    raise TasaNoDisponible(
-        f"El BCV no publico tasa en los {DIAS_A_PROBAR} dias hasta el {dia.strftime('%d/%m/%Y')}."
+    raise RateUnavailable(
+        f"El BCV no publico tasa en los {DAYS_TO_TRY} dias hasta el {dia.strftime('%d/%m/%Y')}."
     )
 
 
-def _fecha_publicacion(datos: object) -> str:
+def _publication_date(datos: object) -> str:
     """El dia que la fuente dice haber publicado, en `YYYY-MM-DD`.
 
     `fechaActualizacion` llega en ISO con huso (`2026-09-21T00:00:00-04:00`);
@@ -173,11 +173,11 @@ def _fecha_publicacion(datos: object) -> str:
     return str(fecha).split("T")[0] if fecha else ""
 
 
-def consultar_tasa_actual() -> tuple[float, str]:
+def fetch_current_rate() -> tuple[float, str]:
     """La ultima tasa oficial publicada, sea del dia que sea.
 
     Devuelve `(tasa, descripcion)` con la misma forma que
-    `consultar_tasa_del_mes`, para que las dos puedan usarse indistintamente al
+    `fetch_month_rate`, para que las dos puedan usarse indistintamente al
     exportar. La diferencia es cual se pregunta: **la del mes es la que se
     declara** —la reguladora la fija en el primer dia publicado del periodo— y
     esta es la que vale hoy, que es otra cifra y no la sustituye.
@@ -186,23 +186,23 @@ def consultar_tasa_actual() -> tuple[float, str]:
     que un dia concreto fuera habil.
     """
     try:
-        respuesta = requests.get(URL_ACTUAL, timeout=TIMEOUT)
+        respuesta = requests.get(CURRENT_URL, timeout=TIMEOUT)
     except requests.RequestException as e:
-        raise TasaNoDisponible(
+        raise RateUnavailable(
             "No se pudo contactar con el servicio de tasas (ve.dolarapi.com)."
         ) from e
 
     if not respuesta.ok:
-        raise TasaNoDisponible(f"El servicio de tasas respondio {respuesta.status_code}.")
+        raise RateUnavailable(f"El servicio de tasas respondio {respuesta.status_code}.")
 
     try:
         datos = respuesta.json()
     except ValueError as e:
-        raise TasaNoDisponible("El servicio de tasas devolvio una respuesta ilegible.") from e
+        raise RateUnavailable("El servicio de tasas devolvio una respuesta ilegible.") from e
 
     tasa = _promedio(datos)
     if tasa is None:
-        raise TasaNoDisponible("El servicio de tasas no devolvio la tasa vigente.")
+        raise RateUnavailable("El servicio de tasas no devolvio la tasa vigente.")
 
-    dia = _fecha_publicacion(datos)
+    dia = _publication_date(datos)
     return tasa, f"BCV {dia} (ve.dolarapi.com)" if dia else "BCV vigente (ve.dolarapi.com)"

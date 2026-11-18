@@ -11,8 +11,8 @@ services/crm/analytics/
 ├── analyzer.py    run_crm_analysis(): recorre periodos y persiste
 ├── metrics/
 │   ├── core.py         Compone el bloque de métricas de un periodo
-│   ├── efectividad.py  Quién responde por cada ciclo fallido
-│   ├── probabilidad.py Riesgo de caer a la etapa 8
+│   ├── effectiveness.py  Quién responde por cada ciclo fallido
+│   ├── probability.py Riesgo de caer a la etapa 8
 │   └── tiempo.py       Permanencia por etapa y tiempos de cierre
 └── queries.py     Lectura de lo calculado
 ```
@@ -21,7 +21,7 @@ services/crm/analytics/
 
 ## Las etapas
 
-`ETAPA_MAP` traduce el nombre largo de Odoo a una clave canónica:
+`STAGE_MAP` traduce el nombre largo de Odoo a una clave canónica:
 
 | Clave | Etapa |
 |---|---|
@@ -39,12 +39,12 @@ services/crm/analytics/
 
 Tres listas distinguen matices que el orden por sí solo no da:
 
-- `ETAPA_FLUJO` (1→7) — **el embudo lineal**. Las etapas 8, 9 y 10 van después en
-  `ETAPA_ORDER` pero no son un avance, así que el sentido de un movimiento se
+- `STAGE_FLOW` (1→7) — **el embudo lineal**. Las etapas 8, 9 y 10 van después en
+  `STAGE_ORDER` pero no son un avance, así que el sentido de un movimiento se
   decide contra esta lista.
-- `ETAPAS_SIN_ESPERA` (7 y `perdido`) — no son cola de trabajo: nadie «espera»
+- `STAGES_WITHOUT_WAIT` (7 y `perdido`) — no son cola de trabajo: nadie «espera»
   en ellas, así que su duración de salida no mide gestión.
-- `ETAPAS_CLAVE_VENTAS` — las que manda la venta; el reporte de tiempos las
+- `KEY_SALES_STAGES` — las que manda la venta; el reporte de tiempos las
   destaca.
 
 `loader.canonical_stage` tolera cómo escribe Odoo: primero el mapa literal, luego
@@ -68,7 +68,7 @@ Se lee **por trozos de 50 000 filas** y se lleva el último `client_id` válido 
 un trozo al siguiente. Vaciado y carga de todos los trozos van en una sola
 transacción (`core.tables.truncate` + `append`): un fallo a mitad deja las
 tablas como estaban. La columna `Activo` usa el mismo vocabulario que el
-loader de suscripciones (`ACTIVO_TRUE_TOKENS` / `ACTIVO_FALSE_TOKENS`), porque
+loader de suscripciones (`TRUE_TOKENS` / `FALSE_TOKENS`), porque
 es el mismo export de Odoo; lo que no esté en ninguno de los dos queda como
 nulo.
 
@@ -81,8 +81,8 @@ empezar (`core.tables.ensure_tables`). El cierre y la fila global se guardan con
 
 ## `run_crm_analysis(periodo=None, progreso=None)`
 
-Los pasos 1–5 los hace `poblaciones.preparar_datos(db)` y el 6,
-`poblaciones.construir_poblaciones(datos, periodo, hasta=None)`. Están en un
+Los pasos 1–5 los hace `populations.prepare_data(db)` y el 6,
+`populations.build_populations(datos, periodo, hasta=None)`. Están en un
 módulo aparte porque **el corte del mes y el corte de un día son la misma
 operación con distinto `hasta`**, y no puede haber dos definiciones de qué es
 una oportunidad ganada.
@@ -103,15 +103,15 @@ una oportunidad ganada.
 
    | Conjunto | Definición |
    |---|---|
-   | `df_creados` | Creadas en P |
+   | `df_created` | Creadas en P |
    | `df_ganados` | Creadas en P, `ganado`, etapa 7 y cierre en P |
    | `df_perdidos` | Creadas en P, `perdido` y cierre en P |
-   | `df_pendientes` | Creadas en P que no cerraron en P |
+   | `df_pending` | Creadas en P que no cerraron en P |
    | `df_logs_p` | Movimientos con fecha en P |
    | `df_logs_e8_p` | De esos, los que van a la etapa 8 |
-   | `df_en_riesgo` | **Todo lo que tuvo vida en P** (ver abajo) |
+   | `df_at_risk` | **Todo lo que tuvo vida en P** (ver abajo) |
    | `df_hist_p` | Historial completo de quienes se movieron en P |
-   | `df_perdidas_cierre` | Perdidas **con cierre en P**, se hayan creado cuando se hayan creado |
+   | `df_close_losses` | Perdidas **con cierre en P**, se hayan creado cuando se hayan creado |
    | `df_perm_p` | Estancias cuya entrada a la etapa cae en P |
 
 7. `compute_crm_metrics_for_period(...)` y persistencia en
@@ -122,7 +122,7 @@ una oportunidad ganada.
    histórico no es lo que nadie espera de ese botón.
 9. Al final, el promedio acumulado global en `crm_metricas_globales`.
 
-`_COLUMNAS_CIERRE` declara **una sola vez** las columnas escalares del cierre;
+`_CLOSE_COLUMNS` declara **una sola vez** las columnas escalares del cierre;
 el SQL (columnas, marcadores y valores) se construye a partir de ella. Se usa
 `m[c]` y no `.get`: una métrica declarada y no calculada debe reventar, no
 escribir un NULL silencioso en el histórico.
@@ -131,7 +131,7 @@ escribir un NULL silencioso en el histórico.
 
 ## Las métricas
 
-### Riesgo de devolución a la etapa 8 (`probabilidad.py`)
+### Riesgo de devolución a la etapa 8 (`probability.py`)
 
 **Es una tasa de riesgo mensual, no una probabilidad de cohorte:**
 
@@ -151,7 +151,7 @@ desenlace, es que **un mes cerrado no vuelve a cambiar**: numerador
 hechos ya escritos. Una métrica de cohorte obligaría a reprocesar el pasado cada
 vez que llegan datos nuevos.
 
-**No toda devolución es del embudo.** Los motivos de `ETAPA8_EXCEPTION_MOTIVOS`
+**No toda devolución es del embudo.** Los motivos de `STAGE8_EXCEPTION_REASONS`
 (el cliente no contesta, espera su router) son ajenos a la gestión y se excluyen.
 El problema es que el motivo solo es legible mientras la oportunidad siga en la
 etapa 8 —`devolver_oportunidad` se sobrescribe al moverse— y **dos tercios de las
@@ -170,7 +170,7 @@ count_devueltos_e8       = observadas de gestión + e8_devueltos_estimados
 count_devueltos_e8_bruto = e8_devueltos_con_motivo + e8_devueltos_sin_motivo
 ```
 
-### Efectividad (`efectividad.py`)
+### Efectividad (`effectiveness.py`)
 
 **La unidad es la transición, no el cliente.** Cada vez que una oportunidad sale
 de la etapa hacia adelante se abre un ciclo, y ese ciclo termina bien o mal. Un
@@ -198,17 +198,17 @@ Quién paga cada fallo:
 
 - El **retorno** lo paga la etapa que mandó al cliente hacia adelante
   (`RETORNO_ATRIBUCION`).
-- La **devolución** la paga la etapa que indica su motivo (`ETAPA8_ATRIBUCION`,
+- La **devolución** la paga la etapa que indica su motivo (`STAGE8_ATTRIBUTION`,
   en orden de prioridad: gana la primera etapa cuyo motivo y destino de avance
   encajan). Lo no legible se estima y viaja en `devoluciones_estimadas`.
-- La **pérdida** la paga la etapa donde murió (`PERDIDA_ATRIBUCION_POR_ETAPA`),
+- La **pérdida** la paga la etapa donde murió (`LOSS_ATTRIBUTION_BY_STAGE`),
   salvo si murió en la etapa 8, que no es de nadie y se resuelve por motivo
-  (`PERDIDA_ATRIBUCION_MOTIVO`). **Se cobra una sola vez, en el periodo de su
+  (`LOSS_ATTRIBUTION_REASON`). **Se cobra una sola vez, en el periodo de su
   `fecha_cierre`.** La etapa 6 no es una fila del reporte: quien mandó al
   cliente a contratistas fue GPI, así que responde GPI. Morir instalado no es un
   fallo del embudo de venta.
 
-Las filas del reporte son las cuatro de `EFECTIVIDAD_REGLAS`: factibilidad,
+Las filas del reporte son las cuatro de `EFFECTIVENESS_RULES`: factibilidad,
 adecuaciones, GPI y **`ventas`** (etapas 1 y 2), que tiene población propia, no
 es un duplicado de factibilidad, y recoge lo que ninguna etapa técnica explica.
 
@@ -222,13 +222,13 @@ fallidos      = retornos_penalizados + devoluciones_atribuidas
 
 ### Tiempos (`tiempo.py`)
 
-**`compute_tiempos_cierre(ganados, perdidos)`** devuelve tres distribuciones:
+**`compute_close_times(ganados, perdidos)`** devuelve tres distribuciones:
 `instalacion`, `perdida` y **`cierre`**, que es el universo cerrado (ganados y
 perdidos juntos) y **no el promedio de las otras dos**: una cohorte con muchas
 más pérdidas que instalaciones pesa hacia la pérdida, que es justo lo que hace
 comparable el dato entre periodos. Los pendientes quedan fuera.
 
-**`compute_tiempo_por_etapa(logs, permanencias, ahora)`** — cuánto tarda una
+**`compute_time_by_stage(logs, stays, ahora)`** — cuánto tarda una
 oportunidad en salir de cada etapa. La medida base son los movimientos agrupados
 por `etapa_anterior`, porque la duración que trae el log es el tiempo que la
 oportunidad pasó en la etapa de la que sale. Sobre eso:
@@ -236,7 +236,7 @@ oportunidad pasó en la etapa de la que sale. Sobre eso:
 - Se descartan los orígenes que no son cola de trabajo y las etapas fuera del
   catálogo.
 - Se descartan los movimientos de duración exactamente 0 (menos de un minuto,
-  `TIEMPO_ETAPA_MIN_DURACION_H`): son dos escrituras del mismo instante, no una
+  `STAGE_TIME_MIN_DURATION_H`): son dos escrituras del mismo instante, no una
   estancia, y solo inflan el divisor. Van a `movimientos_nulos`. Un movimiento
   corto pero real cuenta entero.
 - **Se deduplica por la clave del propio log (`id`), NO por `entrada_id`.**
@@ -244,13 +244,13 @@ oportunidad pasó en la etapa de la que sale. Sobre eso:
   repite en todos sus movimientos: deduplicar por él dejaría una sola transición
   por oportunidad.
 - Junto al promedio crudo se publica uno **winsorizado** al percentil 95
-  (`TIEMPO_ETAPA_WINSOR_P`), porque el crudo lo domina la cola de oportunidades
+  (`STAGE_TIME_WINSOR_P`), porque el crudo lo domina la cola de oportunidades
   olvidadas meses en una etapa. El caso extremo no se descarta: entra valiendo
   el corte, así que el promedio sigue estando sobre las N salidas reales.
 - Cada etapa se desglosa por desenlace: avanzar, volver atrás y acabar devuelto
   son tres cosas distintas, y mezclarlas es lo que hacía ilegible el número.
 
-**`compute_permanencias_en_etapa(clients, logs, ahora)`** — el log solo registra
+**`compute_stage_stays(clients, logs, ahora)`** — el log solo registra
 salidas, así que medir solo sobre él deja fuera exactamente los casos lentos: los
 que siguen ahí. Esta función mide la estancia en curso contra un corte:
 
@@ -316,8 +316,8 @@ ejecución se corta, lo ya hecho queda guardado.
 
 | Función | Devuelve |
 |---|---|
-| `get_crm_periodos()` | Los periodos con cierre calculado |
-| `get_crm_cierre_historico(periodos)` | Las filas del cierre, con `efectividad` y `tiempo_por_etapa` ya parseados a lista |
+| `get_crm_periods()` | Los periodos con cierre calculado |
+| `get_crm_close_history(periodos)` | Las filas del cierre, con `efectividad` y `tiempo_por_etapa` ya parseados a lista |
 | `get_crm_metric_totals(periodo)` | Promedio global + tiempos + efectividad + la serie histórica (sin los dos JSON por periodo, que nadie lee ahí) |
 | `get_crm_dimensiones(periodos, dimension)` | Las filas dimensionales con su JSONB parseado |
 | `get_crm_day_series(mes)` | La serie ligera: el bloque global de cada día, sin desgloses. Es lo que dice qué días hay calculados |

@@ -18,8 +18,8 @@ export function useScrollLock(activo: boolean): void {
     if (!activo) return;
 
     const scroller = document.querySelector<HTMLElement>('[data-app-scroll]');
-    const bodyPrevio = document.body.style.overflow;
-    const scrollerPrevio = scroller?.style.overflow ?? '';
+    const previousBody = document.body.style.overflow;
+    const previousScroller = scroller?.style.overflow ?? '';
 
     document.body.style.overflow = 'hidden';
     if (scroller) scroller.style.overflow = 'hidden';
@@ -27,8 +27,8 @@ export function useScrollLock(activo: boolean): void {
     return () => {
       // Se restaura lo que hubiera, en vez de asumir 'auto': si hay un modal
       // encima del otro, el de abajo debe seguir bloqueando.
-      document.body.style.overflow = bodyPrevio;
-      if (scroller) scroller.style.overflow = scrollerPrevio;
+      document.body.style.overflow = previousBody;
+      if (scroller) scroller.style.overflow = previousScroller;
     };
   }, [activo]);
 }

@@ -16,17 +16,17 @@ import {
   type SummaryStripItem,
 } from '@/shared/ui';
 import { formatInteger, formatOneDecimal, toNumber } from '@/shared/utils';
-import { buildHealthCards } from '../lib/crmEfectividad';
-import type { CrmCierre } from '../types';
+import { buildHealthCards } from '../lib/crmEffectiveness';
+import type { CrmClose } from '../types';
 
 interface CrmPeriodDetailProps {
-  row: CrmCierre;
+  row: CrmClose;
 }
 
 /** Keys of a cierre row that hold a plain number — the only ones an SLA reads. */
 type CrmNumericKey = {
-  [K in keyof CrmCierre]: CrmCierre[K] extends number ? K : never;
-}[keyof CrmCierre];
+  [K in keyof CrmClose]: CrmClose[K] extends number ? K : never;
+}[keyof CrmClose];
 
 /** One of the three time distributions of a cohort: installation, loss, or both. */
 interface SlaSection {

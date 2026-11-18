@@ -15,7 +15,7 @@ export * from '@/shared/types/subscriptions';
  * Carries the same measures as a dimension row, keyed by period instead of by
  * dimension value — hence the derivation rather than a second field list.
  */
-export type SubscriptionCierre =
+export type SubscriptionClose =
   Omit<SubscriptionResultDimensionRow, 'valor' | 'nuevos'> & {
     periodo_reporte: string;
     nuevos_mes: number;

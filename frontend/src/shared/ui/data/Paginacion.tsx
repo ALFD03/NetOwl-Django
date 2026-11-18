@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 /** Filas por página de todas las tablas de la aplicación. */
-export const FILAS_POR_PAGINA = 20;
+export const ROWS_PER_PAGE = 20;
 
-export interface EstadoPaginacion<T> {
+export interface PaginationState<T> {
   /** Índice desde 0, ya recortado al total. */
   pagina: number;
   totalPaginas: number;
@@ -23,14 +23,14 @@ export interface EstadoPaginacion<T> {
  * la tabla) la que estaba abierta puede no existir ya, y así nunca se ve una
  * página vacía ni un instante.
  */
-export function usePaginacion<T>(filas: T[], tamano: number = FILAS_POR_PAGINA): EstadoPaginacion<T> {
+export function usePaginacion<T>(filas: T[], tamano: number = ROWS_PER_PAGE): PaginationState<T> {
   const [pagina, setPagina] = useState(0);
   const totalPaginas = tamano > 0 ? Math.max(1, Math.ceil(filas.length / tamano)) : 1;
-  const actual = Math.min(pagina, totalPaginas - 1);
+  const current = Math.min(pagina, totalPaginas - 1);
   return {
-    pagina: actual,
+    pagina: current,
     totalPaginas,
-    visibles: tamano > 0 ? filas.slice(actual * tamano, (actual + 1) * tamano) : filas,
+    visibles: tamano > 0 ? filas.slice(current * tamano, (current + 1) * tamano) : filas,
     total: filas.length,
     tamano,
     irA: setPagina,
@@ -41,7 +41,7 @@ const BOTON =
   'rounded-lg border border-slate-700/50 p-1.5 text-slate-400 transition-colors hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent';
 
 interface PaginacionProps<T> {
-  estado: EstadoPaginacion<T>;
+  estado: PaginationState<T>;
   /** Encima o debajo de la tabla. Toda tabla paginada lleva las dos, con el mismo `estado`. */
   posicion?: 'arriba' | 'abajo';
   className?: string;

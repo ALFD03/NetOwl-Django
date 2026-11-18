@@ -6,31 +6,31 @@ import { AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { downloadSheetsAsExcel } from '@/shared/lib/excel';
 import { getApiErrorMessage } from '@/shared/lib/api/client';
-import { ExportButton, SelectMenu, StatusMessage, type ExportEstado } from '@/shared/ui';
+import { ExportButton, SelectMenu, StatusMessage, type ExportState } from '@/shared/ui';
 import {
   formularioEtaFileName,
   hojasFormularioEta,
-  totalFilasFormulario,
+  formRowCount,
 } from '../../lib/etaFormsExport';
-import type { EtaFormularios } from '@/shared/types/subscriptions';
+import type { EtaForms } from '@/shared/types/subscriptions';
 
 interface EtaFormsExportButtonProps {
   /** Las tres hojas ya calculadas. Ausentes hasta que el periodo se recalcule. */
-  formularios?: EtaFormularios;
+  formularios?: EtaForms;
   period: string;
   /** Tasa del BCV del periodo. `0` = sin fijar: las rentas salen vacías. */
   tasa: number;
   /** Última tasa publicada. `0` cuando no se pudo leer: no se ofrece. */
-  tasaActual?: number;
+  currentRate?: number;
   /** De qué día es esa tasa, para poder elegir a ciegas. */
-  tasaActualFuente?: string;
+  currentRateSource?: string;
   /** Planes que cuentan en el reporte pero no tienen plan regulador asignado. */
-  sinRegulador?: string[];
+  withoutRegulatory?: string[];
   className?: string;
 }
 
 /** Con qué tasa se valoran las rentas del libro. */
-type OrigenTasa = 'mes' | 'actual';
+type RateSource = 'mes' | 'actual';
 
 /**
  * Escribe el libro en el navegador, con lo que el reporte ya trae.
@@ -57,41 +57,41 @@ export function EtaFormsExportButton({
   formularios,
   period,
   tasa,
-  tasaActual = 0,
-  tasaActualFuente,
-  sinRegulador = [],
+  currentRate: tasaActual = 0,
+  currentRateSource: tasaActualFuente,
+  withoutRegulatory: sinRegulador = [],
   className,
 }: EtaFormsExportButtonProps) {
-  const [estado, setEstado] = useState<ExportEstado>('idle');
+  const [estado, setState] = useState<ExportState>('idle');
   const [error, setError] = useState<string | null>(null);
   // La del mes por defecto: es la que se declara. Exportar a la tasa de hoy es
   // la excepción, y tiene que costar un clic elegirla.
-  const [origen, setOrigen] = useState<OrigenTasa>('mes');
+  const [origen, setOrigen] = useState<RateSource>('mes');
 
   // Elegir «hoy» y que luego la consulta al BCV falle dejaría exportando a
   // cero sin decirlo; mientras no haya tasa vigente, la elección no existe.
   const puedeElegir = tasaActual > 0;
-  const usaActual = puedeElegir && origen === 'actual';
-  const tasaUsada = usaActual ? tasaActual : tasa;
+  const usesCurrent = puedeElegir && origen === 'actual';
+  const usedRate = usesCurrent ? tasaActual : tasa;
 
-  const filas = totalFilasFormulario(formularios);
+  const filas = formRowCount(formularios);
   // Un periodo bloqueado antes de que existieran los formularios sirve el JSON
   // que se guardó entonces, y ese no los trae: hay que recalcularlo.
-  const sinCalcular = !formularios;
+  const notComputed = !formularios;
 
   const handleClick = async () => {
     if (!formularios || filas === 0) {
-      setEstado('empty');
+      setState('empty');
       return;
     }
-    setEstado('busy');
+    setState('busy');
     setError(null);
     try {
       await downloadSheetsAsExcel(
-        hojasFormularioEta(formularios, tasaUsada),
-        formularioEtaFileName(period, usaActual ? 'tasa de hoy' : ''),
+        hojasFormularioEta(formularios, usedRate),
+        formularioEtaFileName(period, usesCurrent ? 'tasa de hoy' : ''),
       );
-      setEstado('idle');
+      setState('idle');
     } catch (err) {
       // El motivo se enseña, no solo se registra. «No se pudo exportar» a secas
       // obliga a abrir la consola para saber si el libro está mal formado o si
@@ -99,15 +99,15 @@ export function EtaFormsExportButton({
       // arregla distintos. La traza sigue yendo a la consola.
       console.error('Fallo al generar los formularios de la reguladora:', err);
       setError(getApiErrorMessage(err, 'El navegador no pudo escribir el libro.'));
-      setEstado('error');
+      setState('error');
     }
   };
 
   const avisos = [
-    sinCalcular
+    notComputed
       ? 'Este periodo se calculó antes de que existieran los formularios: recalcúlalo para poder exportarlos.'
       : '',
-    tasaUsada > 0
+    usedRate > 0
       ? ''
       : 'Sin tasa del BCV fijada: las columnas de renta básica saldrán vacías.',
     sinRegulador.length
@@ -115,7 +115,7 @@ export function EtaFormsExportButton({
       : '',
   ].filter(Boolean);
 
-  const bloqueado = !period || sinCalcular || filas === 0;
+  const bloqueado = !period || notComputed || filas === 0;
 
   return (
     <div className="flex flex-col items-start gap-2">
@@ -163,7 +163,7 @@ export function EtaFormsExportButton({
           }
         >
           <SelectMenu
-            value={usaActual ? 'actual' : 'mes'}
+            value={usesCurrent ? 'actual' : 'mes'}
             options={
               puedeElegir
                 ? [
@@ -172,13 +172,13 @@ export function EtaFormsExportButton({
                   ]
                 : [{ value: 'mes', label: 'Tasa del mes' }]
             }
-            onChange={(valor) => setOrigen(valor as OrigenTasa)}
+            onChange={(valor) => setOrigen(valor as RateSource)}
             disabled={!puedeElegir}
             aria-label="Tasa con la que se convierten las rentas"
             panelWidth={180}
             className={cn(
               'min-w-[132px] border-l border-slate-700/50 py-2.5 pl-4 pr-3 text-[10px] font-black uppercase tracking-wider outline-none transition-colors hover:bg-white/5 hover:text-white',
-              usaActual ? 'text-brand-light' : 'text-slate-400',
+              usesCurrent ? 'text-brand-light' : 'text-slate-400',
             )}
           />
         </div>

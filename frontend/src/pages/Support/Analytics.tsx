@@ -93,18 +93,18 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
 
   // Las tarjetas del día siguen al selector de grupo, como el resto de la página.
   // El mes trae la serie de cada equipo, así que cambiar de grupo no pide nada.
-  const serieDelGrupo = useMemo<DaySeries | undefined>(() => {
-    const porDia = dayMetrics?.serie_grupos;
-    if (!porDia || !data.activeGroupName) return undefined;
+  const groupSeries = useMemo<DaySeries | undefined>(() => {
+    const byDay = dayMetrics?.serie_grupos;
+    if (!byDay || !data.activeGroupName) return undefined;
 
-    const salida: DaySeries = {};
-    for (const [dia, grupos] of Object.entries(porDia)) {
+    const exit: DaySeries = {};
+    for (const [dia, grupos] of Object.entries(byDay)) {
       const bloque = grupos[data.activeGroupName];
-      if (bloque) salida[dia] = bloque;
+      if (bloque) exit[dia] = bloque;
     }
     // Un grupo aparece el día de su primer ticket y ya no desaparece: los días
     // anteriores no son un hueco, es que ese equipo todavía no tenía nada.
-    return Object.keys(salida).length ? salida : undefined;
+    return Object.keys(exit).length ? exit : undefined;
   }, [dayMetrics, data.activeGroupName]);
 
   return (
@@ -125,7 +125,7 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                periodoMes={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.periodo_mes}
                 daysInMonth={totalDays}
                 selectedDay={selectedDay}
                 onSelect={selectDay}
@@ -153,13 +153,13 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
           icon={<CalendarDays />}
         >
           <DaySummary
-            serie={serieDelGrupo ?? dayMetrics?.serie}
+            serie={groupSeries ?? dayMetrics?.serie}
             dias={availableDays}
             dia={selectedDay}
             cards={SUPPORT_DAY_CARDS}
             charts={SUPPORT_DAY_CHARTS}
             subtitle={
-              serieDelGrupo
+              groupSeries
                 ? `${data.activeGroupName} · lo de ese día, lo que va del mes y cómo se compara con el día anterior`
                 : 'Todos los grupos · este mes se analizó antes de que la serie se abriera por equipo'
             }

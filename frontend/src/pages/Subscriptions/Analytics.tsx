@@ -8,19 +8,19 @@
 import { useMemo, useState } from 'react';
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { useSubscriptionsAnalyticsData } from '@/features/subscriptions/hooks/useSubscriptionsAnalyticsData';
-import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, ProyeccionCierre, type DimensionKey } from '@/features/subscriptions/components/analytics';
+import { AnalyticsCharts, AnalyticsDimensionTable, AnalyticsFilters, AnalyticsMetrics, CloseProjection, type DimensionKey } from '@/features/subscriptions/components/analytics';
 import { CampannasExportButton } from '@/features/subscriptions/components/campaigns/CampannasExportButton';
 import { useDayMetrics } from '@/features/subscriptions/hooks/useDayMetrics';
 import { SUBS_DAY_CHARTS, subsDayCards } from '@/features/subscriptions/lib/subsDaySummary';
-import { useObjetivos } from '@/features/subscriptions/hooks/useObjetivos';
-import { cumplimientoDelPeriodo, tonoCumplimiento } from '@/features/subscriptions/lib/objetivos';
-import { proyectar } from '@/shared/lib/proyeccion';
+import { useTargets } from '@/features/subscriptions/hooks/useTargets';
+import { periodCompliance, complianceTone } from '@/features/subscriptions/lib/targets';
+import { proyectar } from '@/shared/lib/projection';
 import { DayProgressBar, DaySummary } from '@/shared/ui';
-import type { DayMetrics, DaySeries, DimensionGroup, Periodo } from '@/shared/types/domain';
+import type { DayMetrics, DaySeries, DimensionGroup, Period } from '@/shared/types/domain';
 import { useVisit } from '@/shared/page/PageData';
 
 interface Props {
-  periodos: Periodo[];
+  periodos: Period[];
   dimensiones: DimensionGroup[];
   dayMetrics?: DayMetrics;
 }
@@ -40,9 +40,9 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   );
 
   // El churn del día se pinta con el semáforo del catálogo.
-  const objetivos = useObjetivos();
+  const objetivos = useTargets();
   const { semaforo } = objetivos;
-  const diaCards = useMemo(() => subsDayCards(semaforo), [semaforo]);
+  const dayCards = useMemo(() => subsDayCards(semaforo), [semaforo]);
 
   // La serie ligera que CRM y Soporte reciben aparte, aqui se saca del mes que
   // ya viajo entero: es el mismo bloque global, dia a dia.
@@ -63,25 +63,25 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
   const globalData = dayData?.global ?? monthData;
   // La proyección sale de las instalaciones acumuladas al corte elegido; un día
   // calculado antes de guardar el bloque global no tiene de dónde sacarlas.
-  const instaladasAlCorte = dayData?.global?.nuevos_mes;
+  const installedAtCutoff = dayData?.global?.nuevos_mes;
   // El cumplimiento de ventas que darían las instalaciones proyectadas, contra
   // la misma meta y sin recorte, como la tarjeta de Cumplimiento de Ventas.
   // Sin base inicial no hay meta y la franja no habla del objetivo.
-  const cumplimientoProyectado = useMemo(() => {
-    if (!proyeccion || instaladasAlCorte === undefined) return null;
-    const proyectadas = proyectar(Number(instaladasAlCorte), proyeccion);
-    const { metaVentas, cumplimientoVentas } = cumplimientoDelPeriodo(
+  const projectedCompliance = useMemo(() => {
+    if (!proyeccion || installedAtCutoff === undefined) return null;
+    const proyectadas = proyectar(Number(installedAtCutoff), proyeccion);
+    const { salesGoal: metaVentas, salesCompliance: cumplimientoVentas } = periodCompliance(
       { activos_inicio: globalData.activos_inicio, nuevos_mes: proyectadas },
       objetivos.general(selectedPeriod),
     );
     if (metaVentas <= 0) return null;
-    return { valor: cumplimientoVentas, objetivo: metaVentas, tono: tonoCumplimiento(cumplimientoVentas, semaforo) };
-  }, [proyeccion, instaladasAlCorte, globalData.activos_inicio, objetivos, selectedPeriod, semaforo]);
+    return { valor: cumplimientoVentas, objetivo: metaVentas, tono: complianceTone(cumplimientoVentas, semaforo) };
+  }, [proyeccion, installedAtCutoff, globalData.activos_inicio, objetivos, selectedPeriod, semaforo]);
   const currentDimensionData = dayData?.dims?.[selectedDim] ?? monthDimensionData;
   // El reporte de campañas sigue la misma regla, pero siempre sobre `campanna`;
   // si cae al cierre, el archivo no debe decir que es el corte de un día.
-  const campannasDelDia = dayData?.dims?.campanna;
-  const campannas = campannasDelDia ?? monthDimensions.campanna ?? [];
+  const dayCampaigns = dayData?.dims?.campanna;
+  const campannas = dayCampaigns ?? monthDimensions.campanna ?? [];
 
   // El mes se elige en cliente, pero la barra de dias vive en los props:
   // se recarga solo esa prop al cambiar de periodo.
@@ -106,7 +106,7 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
             <div className="mb-8">
               <DayProgressBar
                 availableDays={availableDays}
-                periodoMes={dayMetrics?.periodo_mes}
+                monthPeriod={dayMetrics?.periodo_mes}
                 daysInMonth={totalDays}
                 selectedDay={effectiveDay}
                 onSelect={setSelectedDay}
@@ -117,21 +117,21 @@ export default function SubscriptionsAnalytics({ periodos = [], dimensiones = []
       }
     >
       <div className="mb-6">
-        <CampannasExportButton filas={campannas} periodo={selectedPeriod} dia={campannasDelDia ? effectiveDay : 0} />
+        <CampannasExportButton filas={campannas} periodo={selectedPeriod} dia={dayCampaigns ? effectiveDay : 0} />
       </div>
 
       <DaySummary
         serie={serie}
         dias={availableDays}
         dia={effectiveDay}
-        cards={diaCards}
+        cards={dayCards}
         charts={SUBS_DAY_CHARTS}
       >
-        {proyeccion && instaladasAlCorte !== undefined && (
-          <ProyeccionCierre
-            instalaciones={Number(instaladasAlCorte)}
-            proyeccion={proyeccion}
-            cumplimiento={cumplimientoProyectado}
+        {proyeccion && installedAtCutoff !== undefined && (
+          <CloseProjection
+            instalaciones={Number(installedAtCutoff)}
+            projection={proyeccion}
+            cumplimiento={projectedCompliance}
           />
         )}
       </DaySummary>

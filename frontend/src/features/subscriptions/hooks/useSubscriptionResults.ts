@@ -26,6 +26,6 @@ export function useSubscriptionResults(period: string | null) {
     return () => { active = false; };
   }, [period]);
 
-  const vigente = period && resultado?.period === period ? resultado : null;
-  return { data: vigente?.data ?? null, loading: Boolean(period) && !vigente };
+  const current = period && resultado?.period === period ? resultado : null;
+  return { data: current?.data ?? null, loading: Boolean(period) && !current };
 }

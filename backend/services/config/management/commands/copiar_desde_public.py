@@ -50,7 +50,7 @@ EXCLUIDAS = {
 # Orden en que se recrean las restricciones: las foraneas al final, cuando ya
 # existen las claves primarias y unicas a las que apuntan. 'n' (NOT NULL, desde
 # Postgres 18) no aparece: `LIKE` ya las copia.
-ORDEN_RESTRICCIONES = ("p", "u", "x", "c", "f")
+CONSTRAINT_ORDER = ("p", "u", "x", "c", "f")
 
 IDENTIFICADOR = re.compile(r"^[a-z_][a-z0-9_]*$")
 
@@ -110,14 +110,14 @@ class Command(BaseCommand):
                 )
 
             for tabla in tablas:
-                self._crear_tabla(cur, esquema, tabla)
+                self._create_table(cur, esquema, tabla)
             for tabla in tablas:
-                self._copiar_filas(cur, esquema, tabla)
-            for tipo in ORDEN_RESTRICCIONES:
+                self._copy_rows(cur, esquema, tabla)
+            for tipo in CONSTRAINT_ORDER:
                 for tabla in tablas:
-                    self._crear_restricciones(cur, esquema, tabla, tipo)
+                    self._create_constraints(cur, esquema, tabla, tipo)
             for tabla in tablas:
-                self._crear_indices(cur, esquema, tabla)
+                self._create_indexes(cur, esquema, tabla)
                 self._ajustar_secuencias(cur, esquema, tabla)
 
             resumen = self._verificar(cur, esquema, tablas)
@@ -148,7 +148,7 @@ class Command(BaseCommand):
         )
         return [r[0] for r in cur.fetchall() if r[0] not in EXCLUIDAS]
 
-    def _crear_tabla(self, cur, esquema: str, tabla: str) -> None:
+    def _create_table(self, cur, esquema: str, tabla: str) -> None:
         """Crea la tabla con las columnas, defaults e identidades del origen.
 
         Las restricciones y los indices se anaden despues, con su nombre
@@ -181,7 +181,7 @@ class Command(BaseCommand):
                 [f"{esquema}.{nombre}"],
             )
 
-    def _copiar_filas(self, cur, esquema: str, tabla: str) -> None:
+    def _copy_rows(self, cur, esquema: str, tabla: str) -> None:
         """Copia las filas tal cual, ids incluidos."""
         # `LIKE` conserva el orden de las columnas, asi que `SELECT *` encaja.
         # OVERRIDING SYSTEM VALUE conserva los ids aunque la identidad sea ALWAYS.
@@ -190,7 +190,7 @@ class Command(BaseCommand):
             f"SELECT * FROM {_q(ORIGEN)}.{_q(tabla)}"
         )
 
-    def _crear_restricciones(self, cur, esquema: str, tabla: str, tipo: str) -> None:
+    def _create_constraints(self, cur, esquema: str, tabla: str, tipo: str) -> None:
         """Recrea las restricciones de un tipo con su nombre original."""
         cur.execute(
             "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint "
@@ -199,12 +199,12 @@ class Command(BaseCommand):
         )
         for nombre, definicion in cur.fetchall():
             if tipo == "f":
-                definicion = self._redirigir_referencia(definicion, esquema, nombre)
+                definicion = self._redirect_reference(definicion, esquema, nombre)
             cur.execute(
                 f"ALTER TABLE {_q(esquema)}.{_q(tabla)} ADD CONSTRAINT {_q(nombre)} {definicion}"
             )
 
-    def _redirigir_referencia(self, definicion: str, esquema: str, nombre: str) -> str:
+    def _redirect_reference(self, definicion: str, esquema: str, nombre: str) -> str:
         """Hace que una clave foranea apunte a la tabla del destino, no a la de `public`."""
         nueva, cambios = re.subn(
             r"REFERENCES public\.", f"REFERENCES {_q(esquema)}.", definicion
@@ -215,7 +215,7 @@ class Command(BaseCommand):
             )
         return nueva
 
-    def _crear_indices(self, cur, esquema: str, tabla: str) -> None:
+    def _create_indexes(self, cur, esquema: str, tabla: str) -> None:
         """Recrea los indices que no respaldan una restriccion (esos ya existen)."""
         cur.execute(
             "SELECT pg_get_indexdef(i.indexrelid) FROM pg_index i "

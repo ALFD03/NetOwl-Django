@@ -17,7 +17,7 @@ import {
   usePaginacion,
 } from '@/shared/ui';
 import { LineChart } from '@/shared/charts';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils';
+import { formatInteger, formatPeriodLabel } from '@/shared/utils';
 import type { useCrmDashboard } from '../hooks/useCrmDashboard';
 
 interface CrmDashboardViewProps {
@@ -181,7 +181,7 @@ export function CrmDashboardView({ data }: CrmDashboardViewProps) {
                       const rateVal = Number(row[selectedTrend.rateKey]) || 0;
                       return (
                         <tr key={idx} className="hover:bg-white/5 transition-colors">
-                          <td className="p-4 font-bold text-white">{formatPeriodoLabel(String(row.periodo_reporte))}</td>
+                          <td className="p-4 font-bold text-white">{formatPeriodLabel(String(row.periodo_reporte))}</td>
                           <td className="p-4 text-right text-slate-400 font-mono">{formatInteger(row.total_oportunidades)}</td>
                           <td className="p-4 text-right font-black font-mono text-white">{formatInteger(countVal)}</td>
                           <td className="p-4 text-right font-black font-mono" style={{ color: chartColor }}>{rateVal}%</td>

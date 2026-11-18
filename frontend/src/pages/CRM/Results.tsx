@@ -2,10 +2,10 @@
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { CrmResultsView } from '@/features/crm';
-import type { CrmCierre } from '@/features/crm/types';
+import type { CrmClose } from '@/features/crm/types';
 
 interface CrmResultsProps {
-  historico?: CrmCierre[];
+  historico?: CrmClose[];
 }
 
 export default function CrmResults({ historico = [] }: CrmResultsProps) {

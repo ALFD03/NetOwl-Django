@@ -2,7 +2,7 @@
  * Analytics de soporte: el grupo de un vistazo y lo que empuja sus cifras.
  *
  * Todo en gráficos. Las tablas completas —cada valor de cada eje con todas sus
- * columnas, cada zona— viven en Results (`SupportDetalleMes`), adonde enlazan
+ * columnas, cada zona— viven en Results (`SupportMonthDetail`), adonde enlazan
  * los paneles.
  */
 

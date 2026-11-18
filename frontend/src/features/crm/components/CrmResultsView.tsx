@@ -4,20 +4,20 @@ import { useState } from 'react';
 import { Activity, Table as TableIcon } from 'lucide-react';
 
 import { DataTable, Modal, NeonContainer, StickyLabel, type Column } from '@/shared/ui';
-import { formatInteger, formatPeriodoLabel } from '@/shared/utils/formatters';
+import { formatInteger, formatPeriodLabel } from '@/shared/utils/formatters';
 import { CrmPeriodDetail } from './CrmPeriodDetail';
 import { CrmPeriodDimensions } from './CrmPeriodDimensions';
-import type { CrmCierre } from '../types';
+import type { CrmClose } from '../types';
 
 interface CrmResultsViewProps {
-  historico: CrmCierre[];
+  historico: CrmClose[];
 }
 
-const COLUMNS: Column<CrmCierre>[] = [
+const COLUMNS: Column<CrmClose>[] = [
   {
     header: 'Periodo',
     accessor: (r) => (
-      <StickyLabel minWidth="120px">{formatPeriodoLabel(r.periodo_reporte)}</StickyLabel>
+      <StickyLabel minWidth="120px">{formatPeriodLabel(r.periodo_reporte)}</StickyLabel>
     ),
     sortKey: 'periodo_reporte',
     sticky: true,
@@ -36,7 +36,7 @@ const COLUMNS: Column<CrmCierre>[] = [
 ];
 
 export function CrmResultsView({ historico }: CrmResultsViewProps) {
-  const [selectedRow, setSelectedRow] = useState<CrmCierre | null>(null);
+  const [selectedRow, setSelectedRow] = useState<CrmClose | null>(null);
 
   return (
     <>
@@ -61,7 +61,7 @@ export function CrmResultsView({ historico }: CrmResultsViewProps) {
       <Modal
         isOpen={Boolean(selectedRow)}
         onClose={() => setSelectedRow(null)}
-        title={`Auditoría de Periodo: ${selectedRow ? formatPeriodoLabel(selectedRow.periodo_reporte) : ''}`}
+        title={`Auditoría de Periodo: ${selectedRow ? formatPeriodLabel(selectedRow.periodo_reporte) : ''}`}
         subtitle="Conversión del embudo, efectividad por etapa, tiempos y desglose dimensional"
         theme="blue"
         icon={<Activity className="h-5 w-5 text-brand" />}

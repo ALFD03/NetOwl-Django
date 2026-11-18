@@ -11,17 +11,17 @@ from core.database import DBConnector
 from core.tables import replace
 
 from .config import DIMENSIONES
-from .poblaciones import PoblacionesCrm
+from .populations import CrmPopulations
 from .tables import DIMENSION_HISTORY
 
 logger = logging.getLogger(__name__)
 
 
-def build_crm_dimension_rows(pob: PoblacionesCrm) -> list[dict[str, Any]]:
+def build_crm_dimension_rows(pob: CrmPopulations) -> list[dict[str, Any]]:
     """Las metricas de cada valor dimensional del periodo.
 
     Cada rebanada se calcula con la **misma** funcion que el total, asi que una
-    sucursal se mide exactamente igual que la empresa entera: `PoblacionesCrm`
+    sucursal se mide exactamente igual que la empresa entera: `CrmPopulations`
     se recorta y se vuelve a medir, sin una segunda definicion de nada.
 
     La forma de cada fila es la que devuelve `get_crm_dimensiones`, de modo que

@@ -9,7 +9,7 @@ import { cn } from '@/shared/lib/cn';
 import { EmptyState, Paginacion, usePaginacion } from '@/shared/ui';
 import type { GroupData, UserData } from '@/features/config/types';
 import {
-  Avatar, ModulosConAcceso, TOTAL_PERMISSIONS, contarPermisos, permisosEfectivos,
+  Avatar, ModulesWithAccess, TOTAL_PERMISSIONS, countPermissions, effectivePermissions,
 } from './acceso';
 
 interface Props {
@@ -59,7 +59,7 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
           </thead>
           <tbody className="divide-y divide-slate-800/70">
             {paginacion.visibles.map((user) => {
-              const permisos = permisosEfectivos(user, groups);
+              const permisos = effectivePermissions(user, groups);
               return (
                 <tr key={user.id} className="group transition-colors hover:bg-white/[0.03]">
                   <td className="px-5 py-3">
@@ -95,12 +95,12 @@ export function UsersTable({ users, groups, onEdit, onChangePassword, onDelete }
                       </span>
                     )}
                     <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
-                      {contarPermisos(permisos)} de {TOTAL_PERMISSIONS}
+                      {countPermissions(permisos)} de {TOTAL_PERMISSIONS}
                     </p>
                   </td>
 
                   <td className="px-5 py-3">
-                    <ModulosConAcceso permisos={permisos} />
+                    <ModulesWithAccess permisos={permisos} />
                   </td>
 
                   <td className="px-5 py-3">

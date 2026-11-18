@@ -8,7 +8,7 @@ import { useBreakpoint } from '@/shared/hooks/useBreakpoint';
 import { useTheme } from '@/shared/hooks/useTheme';
 import { seriesDatalabelColor } from './chartOptions';
 import { compactarCartesiana } from './compacto';
-import { adaptarAlTema } from './tema';
+import { adaptToTheme } from './tema';
 
 interface BarChartProps {
   data: ChartData<'bar'>;
@@ -42,10 +42,10 @@ export function BarChart({ data, options, plugins = DEFAULT_PLUGINS, className =
   const ancho = useBreakpoint('sm');
   const { tema } = useTheme();
   const resolvedOptions = useMemo(() => {
-    const conColor = withSeriesLabelColor(adaptarAlTema(options, tema));
-    return ancho ? conColor : compactarCartesiana(conColor);
+    const withColor = withSeriesLabelColor(adaptToTheme(options, tema));
+    return ancho ? withColor : compactarCartesiana(withColor);
   }, [options, ancho, tema]);
-  const resolvedData = useMemo(() => adaptarAlTema(data, tema), [data, tema]);
+  const resolvedData = useMemo(() => adaptToTheme(data, tema), [data, tema]);
 
   return <div className={className}><Bar data={resolvedData} options={resolvedOptions} plugins={plugins} /></div>;
 }

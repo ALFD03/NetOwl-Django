@@ -22,7 +22,7 @@ from services.support.analytics import loader as support_loader
 from services.support.analytics import logs as support_logs
 
 from .history import register_import_log
-from .jobs import bloqueo_modulos, cancelar_job, job_en_curso, jobs_abiertos, lanzar_analisis
+from .jobs import cancelar_job, launch_analysis, module_locks, open_jobs, running_job
 from .models import AnalysisJob, ImportActionLog
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ def _import(
     """
     upload = request.FILES.get("csv_file")
     file_name = upload.name if upload else "Desconocido"
-    with bloqueo_modulos(analyses) as (turn, busy):
+    with module_locks(analyses) as (turn, busy):
         if turn is None:
             raise ApiError(
                 f"Hay un análisis de {ANALYSIS_LABELS.get(busy, busy)} en curso (o una importación de los "
@@ -257,29 +257,29 @@ def import_support_logs(request):
 @endpoint(methods=["POST"], perms=["can_run_subs_analysis", "can_run_calculations"], rate="2/m")
 def run_subscriptions(request):
     """Encola el análisis mensual de churn."""
-    return lanzar_analisis(request, "subs_analysis")
+    return launch_analysis(request, "subs_analysis")
 
 
 @endpoint(methods=["POST"], perms=["can_run_crm_analysis", "can_run_calculations"], rate="2/m")
 def run_crm(request):
     """Encola el análisis mensual de CRM."""
-    return lanzar_analisis(request, "crm_analysis")
+    return launch_analysis(request, "crm_analysis")
 
 
 @endpoint(methods=["POST"], perms=["can_run_support_analysis", "can_run_calculations"], rate="2/m")
 def run_support(request):
     """Encola el análisis mensual de soporte."""
-    return lanzar_analisis(request, "support_analysis")
+    return launch_analysis(request, "support_analysis")
 
 
-def _job_visible(request, job) -> bool:
+def _job_is_visible(request, job) -> bool:
     """Quien lo lanzó, quien ve el historial y los superusuarios."""
     return job.user_id == request.user.id or has_permission(request.user, "can_view_import_history")
 
 
 def _visible_job(request, job_id) -> AnalysisJob:
     job = AnalysisJob.objects.filter(pk=job_id).first()
-    if job is None or not _job_visible(request, job):
+    if job is None or not _job_is_visible(request, job):
         raise ApiError("Ejecución no encontrada.", 404)
     return job
 
@@ -299,7 +299,7 @@ def job_cancel(request, job_id):
     job = _visible_job(request, job_id)
     if job.user_id != request.user.id and not has_permission(request.user, "can_run_calculations"):
         raise ApiError("No tienes permiso para cancelar esta ejecución.", 403)
-    if not job.esta_abierto:
+    if not job.is_open:
         return {
             "status": "error",
             "message": f"La ejecución ya terminó ({job.get_status_display()}).",
@@ -319,10 +319,10 @@ def job_cancel(request, job_id):
 @endpoint()
 def job_queue(request):
     """Lo que calcula o espera turno, para el aviso flotante. Sin límite: se sondea."""
-    visible = [job for job in jobs_abiertos() if _job_visible(request, job)]
+    visible = [job for job in open_jobs() if _job_is_visible(request, job)]
     return {
         "jobs": [job.to_dict() for job in visible],
-        "en_ejecucion": sum(1 for j in visible if j.status == AnalysisJob.EN_CURSO),
+        "en_ejecucion": sum(1 for j in visible if j.status == AnalysisJob.RUNNING),
         "en_cola": sum(1 for j in visible if j.status == AnalysisJob.PENDIENTE),
     }
 
@@ -333,5 +333,5 @@ def job_active(request):
     module = request.GET.get("module") or ""
     if module not in dict(ImportActionLog.MODULE_CHOICES):
         raise ApiError("Módulo inválido.")
-    job = job_en_curso(module)
-    return {"job": job.to_dict() if job is not None and _job_visible(request, job) else None}
+    job = running_job(module)
+    return {"job": job.to_dict() if job is not None and _job_is_visible(request, job) else None}

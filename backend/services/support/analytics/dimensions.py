@@ -24,7 +24,7 @@ from core.database import DBConnector
 from core.tables import replace
 from services.support.analytics.cohorts import PeriodCohort
 from services.support.analytics.config import (
-    DIM_GRUPO,
+    GROUP_DIM,
     SUPPORT_DESGLOSES,
     SUPPORT_DIMENSIONES,
 )
@@ -51,12 +51,12 @@ def build_dimension_rows(cohorte: PeriodCohort) -> list[dict[str, Any]]:
             "metricas": compute_metrics_for_period(sub),
         })
 
-    for grupo, c_grupo in cohorte.desglosar(DIM_GRUPO):
-        fila(grupo, DIM_GRUPO, grupo, c_grupo)
+    for grupo, c_group in cohorte.desglosar(GROUP_DIM):
+        fila(grupo, GROUP_DIM, grupo, c_group)
 
         for dimension in (*SUPPORT_DIMENSIONES, *SUPPORT_DESGLOSES):
-            for valor, c_valor in c_grupo.desglosar(dimension):
-                fila(grupo, dimension, valor, c_valor)
+            for valor, c_value in c_group.desglosar(dimension):
+                fila(grupo, dimension, valor, c_value)
 
     return rows
 

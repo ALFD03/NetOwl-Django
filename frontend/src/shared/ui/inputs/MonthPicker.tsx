@@ -81,9 +81,9 @@ export function MonthPicker({
 
   // Un valor nuevo desde fuera lleva el panel a su año. Ajuste en render, no en
   // efecto: así no hay un render intermedio con el año viejo.
-  const [valorVisto, setValorVisto] = useState(value);
-  if (value !== valorVisto) {
-    setValorVisto(value);
+  const [viewedValue, setViewedValue] = useState(value);
+  if (value !== viewedValue) {
+    setViewedValue(value);
     if (value) setDisplayYear(parseInt(value.split('-')[0], 10));
   }
 

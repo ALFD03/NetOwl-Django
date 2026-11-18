@@ -34,27 +34,27 @@ Todas viven en el esquema del entorno (`DB_SCHEMA`): la conexión fija
 | `catalogo_estados` | `Estado` | Entidad federal |
 | `catalogo_sites` | `Site` | Sede regional + `orden` comercial |
 | `catalogo_coordinadores` | `Coordinador` | Unidad de negocio: el grupo de zonas por el que agrupa Unidades de negocio. `equipos` (M2M a `catalogo_equipos_ventas`) son los equipos que la trabajan. Quien la lleva no se guarda aquí: es la membresía que la tiene en `unidades` |
-| `catalogo_personas_ventas` | `catalogos.PersonaVentas` | La **identidad** de una persona de ventas: nombre, apellido y los literales de Odoo, todos opcionales —`medio` (`Medio`), `medio_supervisor` (`Oportunidad/Administrador` cuando Odoo lo escribe distinto; vacío es el mismo que `medio`) y `usuario_odoo` (`Vendedor`, con `(User)`)—. Cada uno es único sin distinguir mayúsculas y solo si no está vacío. Lo que cada rol exige lo valida `catalogos/equipos.py:ROLES` |
+| `catalogo_personas_ventas` | `catalogos.PersonaVentas` | La **identidad** de una persona de ventas: nombre, apellido y los literales de Odoo, todos opcionales —`medio` (`Medio`), `medio_supervisor` (`Oportunidad/Administrador` cuando Odoo lo escribe distinto; vacío es el mismo que `medio`) y `usuario_odoo` (`Vendedor`, con `(User)`)—. Cada uno es único sin distinguir mayúsculas y solo si no está vacío. Lo que cada rol exige lo valida `catalogos/teams.py:ROLES` |
 | `catalogo_equipos_ventas` | `catalogos.EquipoVentas` | Los cinco equipos (Verticalización, Carabobo, Nacional, Aragua, La Victoria), sembrados por `catalogos/0006` con su `slug`. No se crean ni se borran desde la web |
 | `catalogo_alias_persona` | `catalogos.AliasPersona` | Otros nombres con los que Odoo escribe a una persona en una columna (`medio`, `supervisor`, `usuario`): la misma persona con y sin tilde. Únicos por (columna, nombre en minúsculas); entre personas lo comprueba la vista. Escribe la vista de personas, lee el cálculo de comisiones, el reporte de coordinadoras y Notificaciones |
 | `catalogo_membresias_equipo` | `catalogos.MembresiaEquipo` | El papel de una persona en un equipo (`persona`, `equipo`, `rol`; única por persona y equipo). `sites` (M2M a `catalogo_sites`: los de una coordinadora de oficina; la vista no deja borrar un site que alguna lleve), `superior` (a quién responde un supervisor) y `unidades` (M2M a `catalogo_coordinadores`: las que lleva un coordinador de UN, un jefe o un gerente) |
-| `catalogo_condiciones_equipo` | `catalogos.CondicionesEquipo` | Los valores de pago de un rol de un equipo (`parametros`, JSON validado por `equipos.validar_parametros`). Solo hay fila si alguien las editó: sin ella el rol paga con `PARAMETROS_DEFECTO` |
+| `catalogo_condiciones_equipo` | `catalogos.CondicionesEquipo` | Los valores de pago de un rol de un equipo (`parametros`, JSON validado por `teams.validate_parameters`). Solo hay fila si alguien las editó: sin ella el rol paga con `DEFAULT_PARAMETERS` |
 | `catalogo_objetivos_ventas_oficina` | `catalogos.ObjetivoVentasOficina` | Objetivo de ventas de las coordinadoras de oficina: `persona` (FK `CASCADE` nullable a un `coord_oficina`; nula es el **general**), `desde` (`YYYY-MM`, nulo = desde siempre), `ventas` (cantidad al mes), `nota`. Manda el individual vigente sobre el general vigente; la unicidad de (persona, desde) la comprueba la vista |
 | `catalogo_zonas` | `Zona` | Nodo de red: site, estado, tecnología, coordinador |
 | `catalogo_planes` | `Plan` | Producto contratable; único por `(nombre, tarifa)`. `plan_regulador` (FK, nullable) dice con qué fila se declara |
 | `catalogo_planes_reguladores` | `PlanRegulador` | Producto **declarado** a la reguladora: nombre, tecnología, persona, Mbps, precio, TV y `es_transporte`. Varios planes comerciales colapsan en uno |
 | `catalogo_productos_ignorados` | `ProductoIgnorado` | Nombres del export que no se registrarán, por `area` (`productos`, `estructura`, `ventas`); únicos por `(area, nombre)` |
-| `catalogo_objetivos` | `ObjetivoComercial` | Objetivos por nivel (general, sucursal, estado, site, coordinador, zona, zona-sucursal); `sucursal` es el texto del export en los niveles que la usan: `desde` (`YYYY-MM`, nulo = siempre; el general es una sola fila y siempre nulo), `crecimiento_pct` y `churn_pct` (nulo = se hereda). Lo escribe la pestaña Objetivos del catálogo; lo lee `analytics/objetivos.py` y lo aplica el cliente |
+| `catalogo_objetivos` | `ObjetivoComercial` | Objetivos por nivel (general, sucursal, estado, site, coordinador, zona, zona-sucursal); `sucursal` es el texto del export en los niveles que la usan: `desde` (`YYYY-MM`, nulo = siempre; el general es una sola fila y siempre nulo), `crecimiento_pct` y `churn_pct` (nulo = se hereda). Lo escribe la pestaña Objetivos del catálogo; lo lee `analytics/targets.py` y lo aplica el cliente |
 | `catalogo_objetivos_mes` | `ObjetivoMes` | Excepción de un mes concreto al objetivo general |
-| `catalogo_zonas_sin_objetivo` | `ZonaSinObjetivo` | Zonas apartadas del cumplimiento (las nuevas): `zona` (uno a uno, `CASCADE`), `desde`/`hasta` (`YYYY-MM`, incluidos, nulos = sin límite), `nota`. Lo aplica el cliente al pintar (`lib/objetivos.ts`) |
-| `catalogo_objetivos_semaforo` | `SemaforoObjetivos` | Fila única con los umbrales de color, fijos: crecimiento y cumplimiento "verde desde", churn "verde hasta" |
+| `catalogo_zonas_sin_objetivo` | `ZonaSinObjetivo` | Zonas apartadas del cumplimiento (las nuevas): `zona` (uno a uno, `CASCADE`), `desde`/`hasta` (`YYYY-MM`, incluidos, nulos = sin límite), `nota`. Lo aplica el cliente al pintar (`lib/targets.ts`) |
+| `catalogo_objetivos_semaforo` | `TargetsTrafficLight` | Fila única con los umbrales de color, fijos: crecimiento y cumplimiento "verde desde", churn "verde hasta" |
 | `catalogo_departamentos` | `Departamento` | Área a la que pertenece un usuario de soporte |
-| `catalogo_usuarios_soporte` | `UsuarioSoporte` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
+| `catalogo_usuarios_soporte` | `SupportUser` | Directorio de soporte: `nombre_odoo` (el literal exacto del export, con el sufijo `(User)`), nombre, apellido, departamento vigente (FK obligatoria, `PROTECT`), `fecha_ingreso` y `fecha_egreso` (la baja: no se borra a nadie) |
 | `catalogo_usuarios_soporte_historial` | `HistorialDepartamento` | Departamentos por los que ha pasado cada usuario: `desde` (nulo = desde el ingreso) y departamento. Decide el departamento de una persona en cada mes |
-| `comisiones_condiciones` | `CondicionesComision` | Fila única: la **ventana de pago** —día promocional habitual, días de espera y `dia_corte` (el día del mes siguiente que se propone como corte de los pagos adelantados)—. Lo que cobra cada rol está en `catalogo_condiciones_equipo` |
+| `comisiones_condiciones` | `CommissionConditions` | Fila única: la **ventana de pago** —día promocional habitual, días de espera y `dia_corte` (el día del mes siguiente que se propone como corte de los pagos adelantados)—. Lo que cobra cada rol está en `catalogo_condiciones_equipo` |
 | `comisiones_periodos` | `ComisionPeriodo` | Un mes de comisiones: `inicio` e `inicio_promo` (la ventana llega al fin de mes; desde `inicio_promo` solo cuenta lo adelantado), `corte_adelantos` (nulo: el `dia_corte` habitual), `estado` (borrador/cerrado), `tasa_conatel` y `tasa_conatel_publicada` (el bolívar oficial del día 1 del mes siguiente, con que se paga) y, al cerrar, `condiciones` y `resumen` congelados |
 | `comisiones_revisiones` | `RevisionComision` | Decisión sobre una venta en revisión: contarla en su periodo o no contarla (no se paga). En el primer periodo, también si lo instalado en los días promocionales del mes anterior ya se cobró allí (`ya_pagada`) o toca aquí (`normal`). Única por `(orden, periodo_origen)` |
-| `comisiones_ventas_manuales` | `VentaManual` | Una venta agregada a mano a un periodo, con su nota: cuenta en él se instalara cuando se instalara. Única por `(orden, periodo)` |
+| `comisiones_ventas_manuales` | `ManualSale` | Una venta agregada a mano a un periodo, con su nota: cuenta en él se instalara cuando se instalara. Única por `(orden, periodo)` |
 | `comisiones_indicadores` | `IndicadorComision` | Por periodo y persona: `cumplimiento_pct` propio (supervisor, coord. de oficina; sustituye al general) y `crecimiento_pct` a mano (coord. de UN) |
 | `comisiones_ventas` | `ComisionVenta` | Las ventas de un periodo cerrado con su clasificación (`orden`, `clasificacion` y el resto en `datos`). Incluye las `diferida` (días promocionales sin adelanto), solo informativas |
 | `comisiones_pagos` | `ComisionPago` | Lo que cobró cada persona en un periodo cerrado, con nombre y rol copiados (el equipo, en `datos`) |
@@ -127,7 +127,7 @@ transición por oportunidad.
 `razon_falla`, `solucion_falla`, `creado_el`, `primera_fecha_asignada`,
 `ultima_actualizacion_etapa`, `duracion_total_horas`. Es el export tal cual: lo
 que ATC escaló dice el grupo de Soporte, y el reparto entre los dos grupos se hace
-al leer (`escalamiento.incorporar_escalamiento`), no se guarda.
+al leer (`escalation.add_escalation`), no se guarda.
 
 `support_ticket_logs`: `log_id` (PK, el
 ID del registro en Odoo, único entre todos los tickets), `ticket_sequence`,
@@ -181,7 +181,7 @@ Escritas con `metodo_calculo = "lifetime"`.
 
 | Tabla | Contenido |
 |---|---|
-| `crm_cierre_historico` | Una fila por `periodo_reporte` (`YYYY-MM`, único) con los escalares declarados en `_COLUMNAS_CIERRE` más `efectividad` y `tiempo_por_etapa` como JSONB |
+| `crm_cierre_historico` | Una fila por `periodo_reporte` (`YYYY-MM`, único) con los escalares declarados en `_CLOSE_COLUMNS` más `efectividad` y `tiempo_por_etapa` como JSONB |
 | `crm_dimensiones_historico` | `periodo_reporte`, `dimension`, `valor`, `metricas` (JSONB), `efectividad` (JSONB) |
 | `crm_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `tiempo_por_etapa`, `efectividad` |
 | `crm_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (`jsonb`). Cada día es `{"global": {...}, "dimensiones": [...]}`: el corte acumulado del mes hasta ese día, con la misma forma que el cierre y sus dimensiones. `global` se lee aparte de los 31 días a la vez (`-> 'global'` en SQL) para la barra de días |
@@ -211,8 +211,8 @@ dimensiones.
 | `support_cierre_historico` | `periodo_reporte` (`YYYY-MM`, único) y **todo el bloque como un único JSONB `metricas`** |
 | `support_dimensiones_historico` | `periodo_reporte`, `grupo_trabajo`, `dimension`, `valor`, `metricas` (JSONB) |
 | `support_metricas_globales` | Fila única (`id = 1`): `resumen_global`, `por_grupo_trabajo`, `periodos_evaluados` |
-| `support_ticket_flujo` | Una fila por ticket con logs, **rehecha entera** en cada análisis (`flujo._persistir_flujo`): `creado` (su primer log), `completa` (el primer log es la creación), `origen` (`atc`/`soporte`), `escalado_el`, `ultimo_log`, `etapa_actual`/`equipo_actual`/`tipo_actual`, `primer_cierre`, `reaperturas`, `transferencia_sin_escalar`, entrada y salida de la cola de cada equipo y `h_<equipo>_<tipo>`: horas en cola, pausa, gestión y sin clasificar de ATC y de Soporte. Lo leen las cohortes (de aquí sale cuándo escaló cada ticket) y los tickets abiertos |
-| `catalogo_etapas_soporte` | ORM (`EtapaSoporte`): `nombre` (único sin caja), `equipo` (`atc`/`soporte`/`compartida`), `tipo` (`cola`/`pausa`/`gestion`). Las de cierre no van aquí |
+| `support_ticket_flujo` | Una fila por ticket con logs, **rehecha entera** en cada análisis (`flow._persist_flow`): `creado` (su primer log), `completa` (el primer log es la creación), `origen` (`atc`/`soporte`), `escalado_el`, `ultimo_log`, `etapa_actual`/`equipo_actual`/`tipo_actual`, `primer_cierre`, `reaperturas`, `transferencia_sin_escalar`, entrada y salida de la cola de cada equipo y `h_<equipo>_<tipo>`: horas en cola, pausa, gestión y sin clasificar de ATC y de Soporte. Lo leen las cohortes (de aquí sale cuándo escaló cada ticket) y los tickets abiertos |
+| `catalogo_etapas_soporte` | ORM (`SupportStage`): `nombre` (único sin caja), `equipo` (`atc`/`soporte`/`compartida`), `tipo` (`cola`/`pausa`/`gestion`). Las de cierre no van aquí |
 | `support_day_metrics` | `periodo_reporte` (`YYYY-MM`, único) y `dia1`…`dia31` (`jsonb`). Cada día es `{"global": {...}, "global_grupos": {...}, "grupos": {...}, "incidencia_zonas": {...}}`: el corte acumulado del mes hasta ese día. `grupos` e `incidencia_zonas` tienen la forma del bloque del periodo; `global` (la cohorte completa) y `global_grupos` (la misma por equipo) se leen aparte de los 31 días a la vez para las tarjetas del día |
 
 Dentro del JSONB, las claves siguen `SUPPORT_VOLUME_FIELDS`,
@@ -222,7 +222,7 @@ Dentro del JSONB, las claves siguen `SUPPORT_VOLUME_FIELDS`,
 (`composicion_<tipo>_horas` y `muestra_composicion`). Los volúmenes y tasas
 incluyen el escalamiento (`tickets_escalados[_periodo|_arrastre]`,
 `tickets_recibidos_escalados`, `pct_escalados*`, `pct_recibidos_escalados`) y las
-medidas de tiempo, `escalamiento`. `queries.get_support_cierre_historico` las
+medidas de tiempo, `escalamiento`. `queries.get_support_close_history` las
 aplana antes de servirlas.
 
 ---
@@ -241,10 +241,10 @@ aplana antes de servirlas.
 | `crm_*` | Importación CRM + `run_crm_analysis` | Páginas de CRM |
 | `support_*` | Importación de soporte + `run_support_analysis` | Páginas de soporte |
 | `catalogo_*` (planes, zonas, sites…) | Módulo de Catálogos, `cargar_catalogos` | **Solo `core/fixtures.py`** |
-| `catalogo_personas_ventas` | Catálogos › Ventas | `personas_fuera_del_directorio` (Notificaciones), Comisiones |
-| `catalogo_objetivos_ventas_oficina` | Catálogos › Ventas › Objetivos | Sales Report (`coordinadoras_oficina.get_coordinadoras_oficina`) |
+| `catalogo_personas_ventas` | Catálogos › Ventas | `people_outside_directory` (Notificaciones), Comisiones |
+| `catalogo_objetivos_ventas_oficina` | Catálogos › Ventas › Objetivos | Sales Report (`office_coordinators.get_office_coordinators`) |
 | `comisiones_*` | Módulo de Comisiones | Módulo de Comisiones |
-| `catalogo_departamentos`, `catalogo_usuarios_soporte`, `catalogo_usuarios_soporte_historial` | Pantalla `/support/users/` | `usuarios_fuera_del_directorio`, `tickets_tras_la_baja`, `anotar_departamentos` |
+| `catalogo_departamentos`, `catalogo_usuarios_soporte`, `catalogo_usuarios_soporte_historial` | Pantalla `/support/users/` | `users_outside_directory`, `tickets_after_churn`, `annotate_departments` |
 | `analysis_jobs` | Vistas de lanzamiento y worker | Sondeo de la interfaz |
 | `import_action_logs` | `register_import_log` | Página de historial |
 

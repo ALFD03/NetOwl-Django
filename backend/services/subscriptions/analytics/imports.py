@@ -21,10 +21,10 @@ from core.database import DBConnector
 from core.exports import ExportSpec, read_export
 from core.fixtures import (
     ignorados,
-    nombres_reconocidos,
+    ignored_products,
     plan_names,
-    productos_ignorados,
-    zonas_por_nombre,
+    recognized_names,
+    zones_by_name,
 )
 from core.tables import DATE, FLOAT, TIMESTAMP, replace, to_bool
 
@@ -103,10 +103,10 @@ def _check_catalog(lines: pd.DataFrame) -> None:
             "El catalogo de planes esta vacio. Cargalo desde Catalogos -> Productos antes de importar."
         )
     products = lines[["orden_producto", "producto"]].dropna(subset=["producto"])
-    recognized = nombres_reconocidos()
+    recognized = recognized_names()
     with_plan = set(products.loc[products["producto"].isin(recognized), "orden_producto"])
     orphan = products[~products["orden_producto"].isin(with_plan)]
-    candidates = orphan[~orphan["producto"].isin(productos_ignorados())]
+    candidates = orphan[~orphan["producto"].isin(ignored_products())]
     if candidates.empty:
         return
     counts = candidates.groupby("producto")["orden_producto"].nunique().sort_values(ascending=False)
@@ -120,7 +120,7 @@ def _consolidate(lines: pd.DataFrame) -> pd.DataFrame:
     """Una fila por orden: el primer valor de cada campo y, de producto, la primera línea catalogada."""
     fields = [c for c in _ORDER_FIELDS if c in lines.columns]
     orders = lines.groupby("orden_producto", as_index=False)[fields].first()
-    recognized = nombres_reconocidos()
+    recognized = recognized_names()
     plans = lines[lines["producto"].isin(recognized)].groupby("orden_producto")["producto"].first()
     orders["producto"] = orders["orden_producto"].map(plans)
     return orders
@@ -187,7 +187,7 @@ def products_outside_catalog() -> list[dict[str, Any]]:
         GROUP BY producto
         """
     )
-    known = nombres_reconocidos() | productos_ignorados()
+    known = recognized_names() | ignored_products()
     outside = df[~df["producto"].isin(known)]
     return [{"nombre": str(r.producto), "ordenes": int(r.ordenes)} for r in outside.itertuples()]
 
@@ -197,7 +197,7 @@ def zones_outside_catalog() -> list[dict[str, Any]]:
 
     No bloquea nada: sus órdenes se analizan igual, pero se quedan sin site,
     estado ni coordinador. Se compara sin espacios de sobra y sin caja, como
-    lo hacen los análisis (`zonas_por_nombre`).
+    lo hacen los análisis (`zones_by_name`).
     """
     db = DBConnector()
     if not db.table_exists(TableNames.SUBSCRIPTIONS):
@@ -212,7 +212,7 @@ def zones_outside_catalog() -> list[dict[str, Any]]:
     )
     if df.empty:
         return []
-    cataloged = zonas_por_nombre()
+    cataloged = zones_by_name()
     muted = {n.strip().lower() for n in ignorados("estructura")}
     key = df["zona"].astype(str).str.strip().str.lower()
     outside = df[~key.isin(cataloged) & ~key.isin(muted)].sort_values("ordenes", ascending=False)

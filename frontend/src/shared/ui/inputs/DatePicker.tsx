@@ -25,17 +25,17 @@ interface DatePickerProps {
   containerClassName?: string;
 }
 
-const MESES = [
+const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
-const DIAS_SEMANA = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
+const WEEKDAYS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
 
 const dos = (n: number) => String(n).padStart(2, '0');
 const iso = (anio: number, mes: number, dia: number) => `${anio}-${dos(mes + 1)}-${dos(dia)}`;
 
 /** Hoy en `YYYY-MM-DD`, en hora local: `toISOString` daría el día UTC. */
-function hoyIso(): string {
+function todayIso(): string {
   const d = new Date();
   return iso(d.getFullYear(), d.getMonth(), d.getDate());
 }
@@ -81,33 +81,33 @@ export function DatePicker({
   // El mes que se enseña al abrir: el de la fecha elegida, o el de hoy. Se
   // fija al abrir y no con un efecto, para que navegar no lo pise.
   const [vista, setVista] = useState<{ anio: number; mes: number; modo: 'dias' | 'meses' }>(() =>
-    mesDe(value || hoyIso()),
+    monthOf(value || todayIso()),
   );
 
   const abrir = () => {
     if (disabled) return;
-    if (!isOpen) setVista(mesDe(value || hoyIso()));
+    if (!isOpen) setVista(monthOf(value || todayIso()));
     toggle();
   };
 
-  const fueraDeRango = (fecha: string) => Boolean((min && fecha < min) || (max && fecha > max));
+  const outOfRange = (fecha: string) => Boolean((min && fecha < min) || (max && fecha > max));
 
   const elegir = (fecha: string) => {
-    if (fueraDeRango(fecha)) return;
+    if (outOfRange(fecha)) return;
     onChange(fecha);
     close();
   };
 
-  const moverMes = (delta: number) =>
+  const shiftMonth = (delta: number) =>
     setVista((v) => {
       const total = v.anio * 12 + v.mes + delta;
       return { ...v, anio: Math.floor(total / 12), mes: total % 12 };
     });
 
-  const hoy = hoyIso();
+  const today = todayIso();
   // Lunes primero: `getDay` da 0 al domingo.
   const hueco = (new Date(vista.anio, vista.mes, 1).getDay() + 6) % 7;
-  const diasDelMes = new Date(vista.anio, vista.mes + 1, 0).getDate();
+  const daysOfMonth = new Date(vista.anio, vista.mes + 1, 0).getDate();
 
   const botonNav = 'rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white';
 
@@ -146,7 +146,7 @@ export function DatePicker({
             <div className="mb-3 flex items-center justify-between border-b border-slate-800 pb-3">
               <button
                 type="button"
-                onClick={() => (vista.modo === 'dias' ? moverMes(-1) : moverMes(-12))}
+                onClick={() => (vista.modo === 'dias' ? shiftMonth(-1) : shiftMonth(-12))}
                 className={botonNav}
                 aria-label={vista.modo === 'dias' ? 'Mes anterior' : 'Año anterior'}
               >
@@ -158,11 +158,11 @@ export function DatePicker({
                 className="rounded-lg px-2 py-1 text-sm font-black tracking-wide text-white hover:bg-slate-800"
                 title={vista.modo === 'dias' ? 'Elegir mes y año' : 'Volver a los días'}
               >
-                {vista.modo === 'dias' ? `${MESES[vista.mes]} ${vista.anio}` : vista.anio}
+                {vista.modo === 'dias' ? `${MONTHS[vista.mes]} ${vista.anio}` : vista.anio}
               </button>
               <button
                 type="button"
-                onClick={() => (vista.modo === 'dias' ? moverMes(1) : moverMes(12))}
+                onClick={() => (vista.modo === 'dias' ? shiftMonth(1) : shiftMonth(12))}
                 className={botonNav}
                 aria-label={vista.modo === 'dias' ? 'Mes siguiente' : 'Año siguiente'}
               >
@@ -172,7 +172,7 @@ export function DatePicker({
 
             {vista.modo === 'meses' ? (
               <div className="grid grid-cols-3 gap-2">
-                {MESES.map((nombre, mes) => (
+                {MONTHS.map((nombre, mes) => (
                   <button
                     key={nombre}
                     type="button"
@@ -190,7 +190,7 @@ export function DatePicker({
               </div>
             ) : (
               <div className="grid grid-cols-7 gap-1 text-center">
-                {DIAS_SEMANA.map((d) => (
+                {WEEKDAYS.map((d) => (
                   <span key={d} className="pb-1 text-[10px] font-bold uppercase text-slate-500">
                     {d}
                   </span>
@@ -198,10 +198,10 @@ export function DatePicker({
                 {Array.from({ length: hueco }, (_, i) => (
                   <span key={`hueco-${i}`} />
                 ))}
-                {Array.from({ length: diasDelMes }, (_, i) => {
+                {Array.from({ length: daysOfMonth }, (_, i) => {
                   const fecha = iso(vista.anio, vista.mes, i + 1);
                   const elegido = fecha === value;
-                  const bloqueado = fueraDeRango(fecha);
+                  const bloqueado = outOfRange(fecha);
                   return (
                     <button
                       key={fecha}
@@ -212,7 +212,7 @@ export function DatePicker({
                         'h-8 rounded-lg text-xs font-semibold transition-all',
                         elegido && 'bg-brand font-black text-white shadow-lg shadow-brand/30',
                         !elegido && !bloqueado && 'text-slate-300 hover:bg-slate-800/80 hover:text-white',
-                        !elegido && fecha === hoy && 'ring-1 ring-brand/60',
+                        !elegido && fecha === today && 'ring-1 ring-brand/60',
                         bloqueado && 'cursor-not-allowed text-slate-700',
                       )}
                     >
@@ -240,8 +240,8 @@ export function DatePicker({
               )}
               <button
                 type="button"
-                onClick={() => elegir(hoy)}
-                disabled={fueraDeRango(hoy)}
+                onClick={() => elegir(today)}
+                disabled={outOfRange(today)}
                 className="text-brand transition-colors hover:text-brand-hover disabled:cursor-not-allowed disabled:text-slate-700"
               >
                 Hoy
@@ -254,6 +254,6 @@ export function DatePicker({
   );
 }
 
-function mesDe(fecha: string): { anio: number; mes: number; modo: 'dias' } {
+function monthOf(fecha: string): { anio: number; mes: number; modo: 'dias' } {
   return { anio: Number(fecha.slice(0, 4)), mes: Number(fecha.slice(5, 7)) - 1, modo: 'dias' };
 }

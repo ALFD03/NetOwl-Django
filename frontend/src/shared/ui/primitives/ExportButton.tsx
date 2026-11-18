@@ -6,11 +6,11 @@ import { AlertTriangle, Download, FileX2, Loader2 } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 
 /** En qué punto está la descarga. */
-export type ExportEstado = 'idle' | 'busy' | 'error' | 'empty';
+export type ExportState = 'idle' | 'busy' | 'error' | 'empty';
 
 export interface ExportButtonProps {
   onClick: () => void;
-  estado?: ExportEstado;
+  estado?: ExportState;
   /** Qué se descarga. En reposo es la etiqueta del botón. */
   label: string;
   /** Qué se dice cuando falló o cuando no había nada. */
@@ -59,7 +59,7 @@ export function ExportButton({
   seamless = false,
   className,
 }: ExportButtonProps) {
-  const iconoEstado = {
+  const stateIcon = {
     busy: <Loader2 className="h-4 w-4 animate-spin text-brand" />,
     error: <AlertTriangle className="h-4 w-4 text-rose-400" />,
     empty: <FileX2 className="h-4 w-4 text-amber-400" />,
@@ -87,7 +87,7 @@ export function ExportButton({
         className,
       )}
     >
-      {iconoEstado}
+      {stateIcon}
       {!iconOnly && etiqueta}
     </button>
   );

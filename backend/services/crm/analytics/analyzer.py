@@ -4,7 +4,7 @@ Por cada mes construye las cuatro poblaciones (creadas, ganadas, perdidas y
 pendientes), la poblacion en riesgo y los movimientos, llama al calculo de
 metricas y guarda el resultado. Al final recalcula el promedio global.
 
-Quien parte la base en esas poblaciones es `poblaciones.py`, compartido con las
+Quien parte la base en esas poblaciones es `populations.py`, compartido con las
 metricas diarias: el corte del mes y el corte del dia N tienen que significar lo
 mismo, y para eso no puede haber dos definiciones de que es una ganada.
 """
@@ -20,8 +20,8 @@ from core.tables import upsert
 from . import tables
 from .day_metrics import build_crm_day_metrics
 from .dimensions import build_crm_dimension_rows, save_dimensions
-from .metrics import promediar_cierres
-from .poblaciones import construir_poblaciones, preparar_datos
+from .metrics import average_closes
+from .populations import build_populations, prepare_data
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # valores— y cada métrica nueva obligaba a cuadrar los tres; aquí se declara una
 # vez y el SQL se construye a partir de ella. El nombre de la columna es la
 # clave de la métrica.
-_COLUMNAS_CIERRE = (
+_CLOSE_COLUMNS = (
     "total_oportunidades", "ganados", "perdidos", "pendientes",
     "pct_instalacion", "pct_perdida", "pct_pendientes",
 
@@ -53,7 +53,7 @@ _COLUMNAS_CIERRE = (
 )
 
 # Columnas JSONB: una fila por etapa, no caben como escalar.
-_COLUMNAS_CIERRE_JSON = ("efectividad", "tiempo_por_etapa")
+_CLOSE_JSON_COLUMNS = ("efectividad", "tiempo_por_etapa")
 
 
 def _save_close(db: DBConnector, periodo: str, m: dict) -> None:
@@ -64,8 +64,8 @@ def _save_close(db: DBConnector, periodo: str, m: dict) -> None:
     """
     row = {
         "periodo_reporte": periodo,
-        **{c: m[c] for c in _COLUMNAS_CIERRE},
-        **{c: m.get(c, []) for c in _COLUMNAS_CIERRE_JSON},
+        **{c: m[c] for c in _CLOSE_COLUMNS},
+        **{c: m.get(c, []) for c in _CLOSE_JSON_COLUMNS},
     }
     with db.transaction() as cur:
         upsert(cur, tables.CLOSE_HISTORY, [row])
@@ -79,7 +79,7 @@ def _save_global(db: DBConnector, resumen_global: dict, tiempo_por_etapa: list, 
 
 
 def run_crm_analysis(
-    periodo_str: str | None = None,
+    period_str: str | None = None,
     progreso: Callable[[int, int, str], None] | None = None,
 ) -> dict:
     """Recalcula CRM: un periodo concreto, o todos los que tengan oportunidades.
@@ -94,20 +94,20 @@ def run_crm_analysis(
     es lo que alimenta la barra de la interfaz mientras los recorre.
     """
     db = DBConnector()
-    datos = preparar_datos(db)
+    datos = prepare_data(db)
 
     if datos.vacio:
         print("⚠️ No hay oportunidades de CRM para analizar.")
         return {"status": "empty", "message": "No hay datos cargados."}
 
-    un_solo_mes = bool(periodo_str and len(periodo_str) == 7)
-    periodos_target = [periodo_str] if un_solo_mes else datos.periodos()
+    single_month = bool(period_str and len(period_str) == 7)
+    target_periods = [period_str] if single_month else datos.periodos()
 
-    print(f"\n📊 PROCESANDO CRM ANALYTICS PARA {len(periodos_target)} PERIODO(S)...")
+    print(f"\n📊 PROCESANDO CRM ANALYTICS PARA {len(target_periods)} PERIODO(S)...")
     all_summaries = {}
 
-    for p in periodos_target:
-        pob = construir_poblaciones(datos, p)
+    for p in target_periods:
+        pob = build_populations(datos, p)
         if pob is None:
             continue
 
@@ -118,22 +118,22 @@ def run_crm_analysis(
         # Solo del mes pedido: recorrer los dias de todo el historico son
         # treinta y un cortes por cada mes que haya, y nadie lanza un analisis
         # global esperando eso. El cierre de cada mes si se recalcula entero.
-        if un_solo_mes:
+        if single_month:
             build_crm_day_metrics(p, db=db, datos=datos, progreso=progreso)
 
         all_summaries[p] = m
 
     # 4. Calcular promedio acumulado global
     if all_summaries:
-        resumen_global_avg = promediar_cierres(list(all_summaries.values()))
+        global_avg_summary = average_closes(list(all_summaries.values()))
 
         # Último conjunto de efectividad y tiempos por etapa
-        ultimo_resumen = list(all_summaries.values())[0]
+        last_summary = list(all_summaries.values())[0]
         _save_global(
             db,
-            resumen_global_avg,
-            ultimo_resumen.get("tiempo_por_etapa", []),
-            ultimo_resumen.get("efectividad", [])
+            global_avg_summary,
+            last_summary.get("tiempo_por_etapa", []),
+            last_summary.get("efectividad", [])
         )
 
     print("✅ ANÁLISIS DE CRM COMPLETADO CON ÉXITO.\n")

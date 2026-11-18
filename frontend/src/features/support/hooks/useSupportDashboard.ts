@@ -3,10 +3,10 @@ import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 
 import { CHART_CHROME, SURFACE } from '@/shared/constants/theme';
 import { METRIC_CHART, type MetricColor } from '@/shared/ui';
-import { formatInteger, formatPeriodoLabel, toNumber } from '@/shared/utils';
+import { formatInteger, formatPeriodLabel, toNumber } from '@/shared/utils';
 import {
   ASIGNACION,
-  CIERRE_TOTAL,
+  CLOSE_TOTAL,
   averageField,
   emptyStats,
   resolveStats,
@@ -60,7 +60,7 @@ const TREND_DEFS: Array<{
   { id: 'cancelados', title: 'Tasa Cancelación', statKey: 'pct_cancelados', rateKey: 'pct_cancelados', countKey: 'tickets_cancelados', unitLabel: 'Tickets Cancelados', unit: 'tickets', color: 'red' },
   { id: 'escalados', title: 'Tasa de Escalamiento', statKey: 'pct_escalados', rateKey: 'pct_escalados', countKey: 'tickets_escalados', unitLabel: 'Tickets Escalados a Soporte', unit: 'tickets', color: 'yellow' },
   { id: 'rezagados', title: 'Tasa de Rezago', statKey: 'pct_rezagados', rateKey: 'pct_rezagados', countKey: 'tickets_rezagados', unitLabel: 'Tickets Rezagados', unit: 'tickets', color: 'yellow' },
-  { id: 'cierre_total', title: 'Cierre Total (h)', statKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, rateKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, countKey: `tiempo_medio_${CIERRE_TOTAL}_horas`, unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'blue' },
+  { id: 'cierre_total', title: 'Cierre Total (h)', statKey: `tiempo_medio_${CLOSE_TOTAL}_horas`, rateKey: `tiempo_medio_${CLOSE_TOTAL}_horas`, countKey: `tiempo_medio_${CLOSE_TOTAL}_horas`, unitLabel: 'Horas Creación → Cierre', unit: 'horas', color: 'blue' },
   { id: 'gestion', title: 'Gestión (h)', statKey: 'tiempo_medio_cierre_asignado_cerrados_horas', rateKey: 'tiempo_medio_cierre_asignado_cerrados_horas', countKey: 'tiempo_medio_cierre_asignado_cerrados_horas', unitLabel: 'Horas Asignación → Cierre', unit: 'horas', color: 'purple' },
   { id: 'asignacion', title: 'Asignación (h)', statKey: `tiempo_medio_${ASIGNACION}_horas`, rateKey: `tiempo_medio_${ASIGNACION}_horas`, countKey: `tiempo_medio_${ASIGNACION}_horas`, unitLabel: 'Horas Creación → Asignación', unit: 'horas', color: 'slate' },
 ];
@@ -91,7 +91,7 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
   }, [summary, historico]);
 
   const labels = useMemo(
-    () => historico.map((row) => formatPeriodoLabel(String(row.periodo_reporte ?? ''))),
+    () => historico.map((row) => formatPeriodLabel(String(row.periodo_reporte ?? ''))),
     [historico],
   );
 
@@ -115,12 +115,12 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
   const groupCards = useMemo<SupportGroupCard[]>(() => {
     const entries = Object.entries(grupos);
     const totalVolume = entries.reduce((acc, [, g]) => acc + toNumber(g.total_tickets), 0);
-    const globalMttr = stats[`tiempo_medio_${CIERRE_TOTAL}_horas`];
+    const globalMttr = stats[`tiempo_medio_${CLOSE_TOTAL}_horas`];
 
     return entries
       .map(([name, raw]) => {
         const g = resolveStats(raw);
-        const mttr = g[`tiempo_medio_${CIERRE_TOTAL}_horas`];
+        const mttr = g[`tiempo_medio_${CLOSE_TOTAL}_horas`];
 
         return {
           id: name,
@@ -128,16 +128,16 @@ export function useSupportDashboard({ metrics = {} }: SupportDashboardProps) {
           color: resolutionColor(g.pct_resueltos),
           totalTickets: g.total_tickets,
           sharePct: share(g.total_tickets, totalVolume),
-          pctResueltos: g.pct_resueltos,
-          pctCancelados: g.pct_cancelados,
+          pctResolved: g.pct_resueltos,
+          pctCancelled: g.pct_cancelados,
           pctRezagados: g.pct_rezagados,
-          pctEscalados: g.pct_escalados,
+          pctEscalated: g.pct_escalados,
           mttr,
-          mttrMediana: g[`tiempo_mediana_${CIERRE_TOTAL}_horas`],
+          mttrMediana: g[`tiempo_mediana_${CLOSE_TOTAL}_horas`],
           mttrColor: mttrColor(mttr, globalMttr),
           mttrDelta: Number((mttr - globalMttr).toFixed(2)),
           espera: g[`tiempo_medio_${ASIGNACION}_horas`],
-          pctExcedeProm: g[`pct_excede_promedio_${CIERRE_TOTAL}`],
+          pctExcedeProm: g[`pct_excede_promedio_${CLOSE_TOTAL}`],
         };
       })
       .sort((a, b) => b.totalTickets - a.totalTickets);

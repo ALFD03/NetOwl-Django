@@ -18,7 +18,7 @@ import { Panel } from '@/shared/ui';
 import { AnalysisRunnerCard } from '@/features/imports/components/AnalysisRunnerCard';
 import { CsvUploadCard } from '@/features/imports/components/CsvUploadCard';
 import { RequirementsCard } from '@/features/imports/components/RequirementsCard';
-import type { CampoOdoo, GrupoCamposOdoo } from '@/features/imports/types';
+import type { CampoOdoo, OdooFieldGroup } from '@/features/imports/types';
 
 type SupportImportType = 'tickets' | 'logs';
 
@@ -44,7 +44,7 @@ interface ImportSupportProps {
 }
 
 /** Los meses de logs que ya hay: la carga es por lotes y lo que falta no avisa solo. */
-function LogsCargadosPanel({ cargados }: { cargados: LogsCargados }) {
+function LoadedLogsPanel({ cargados }: { cargados: LogsCargados }) {
   const maximo = Math.max(1, ...cargados.por_mes.map((m) => m.logs));
   return (
     <Panel title="Logs de etapa cargados">
@@ -82,17 +82,17 @@ export default function ImportSupport({ camposOdoo = [], camposOdooLogs = [], lo
   const canUpload = canAny(IMPORT_ACTION_PERMISSIONS.support);
   const canRunAnalysis = canAny(ANALYSIS_ACTION_PERMISSIONS.support);
 
-  const gruposCampos: GrupoCamposOdoo[] = [
+  const fieldGroups: OdooFieldGroup[] = [
     { key: 'tickets', label: 'Tickets', campos: camposOdoo },
     { key: 'logs', label: 'Logs de etapa', campos: camposOdooLogs },
   ];
 
   const subir = async (file: File): Promise<ImportResponse> => {
     if (importType === 'tickets') return importsApi.importSupport(file);
-    const respuesta = await importsApi.importSupportLogs(file);
-    const nuevos = (respuesta as ImportResponse & { cargados?: LogsCargados }).cargados;
+    const response = await importsApi.importSupportLogs(file);
+    const nuevos = (response as ImportResponse & { cargados?: LogsCargados }).cargados;
     if (nuevos) setCargados(nuevos);
-    return respuesta;
+    return response;
   };
 
   return (
@@ -134,15 +134,15 @@ export default function ImportSupport({ camposOdoo = [], camposOdooLogs = [], lo
             <><strong>Tickets:</strong> Export de tickets de soporte de Odoo, una fila por ticket. Reemplaza los anteriores. Las cabeceras se comparan sin distinguir acentos ni mayúsculas.</>,
             <><strong>Logs de etapa:</strong> «Registros de tiempo» de los tickets, un log por fila. <strong>No reemplaza</strong>: cada lote se suma y un log que ya estaba no se duplica, así que se pueden subir mes a mes —los de los tickets creados en el mes y los de los que cambiaron de etapa por última vez en el mes— y repetir o solapar lotes sin miedo.</>,
           ]}
-          camposOdoo={gruposCampos}
-          grupoActivo={importType}
+          camposOdoo={fieldGroups}
+          activeGroup={importType}
           note="Tras importar, selecciona el mes en la sección inferior y ejecuta el análisis. Calcula también el corte de cada día del mes y, si hay logs cargados, reparte lo escalado entre ATC (como cerrado) y Soporte (como creado ese día)."
         />
       </div>
 
       {cargados && (
         <div className="mb-6">
-          <LogsCargadosPanel cargados={cargados} />
+          <LoadedLogsPanel cargados={cargados} />
         </div>
       )}
 

@@ -113,7 +113,7 @@ class VaultSettings:
     """Autentica contra Vault, lee el secreto y expone la configuración validada."""
 
     MAX_INTENTOS = 3
-    ESPERA_ENTRE_INTENTOS = 0.5  # segundos, se multiplica por el nº de intento
+    RETRY_WAIT = 0.5  # segundos, se multiplica por el nº de intento
 
     def __init__(self):
         self._vault_url = os.getenv("VAULT_URL")
@@ -123,7 +123,7 @@ class VaultSettings:
         self._secret_path = os.getenv("VAULT_PATH")
 
         if os.getenv("CONFIG_SIN_VAULT") == "1":
-            raw_secrets = self._leer_de_entorno()
+            raw_secrets = self._read_from_env()
         else:
             raw_secrets = self._fetch_from_vault()
 
@@ -147,7 +147,7 @@ class VaultSettings:
         self.db = validated.DBCONFIG
 
     @staticmethod
-    def _leer_de_entorno() -> dict:
+    def _read_from_env() -> dict:
         """Arma el secreto con variables de entorno, sin pasar por Vault.
 
         Solo con `CONFIG_SIN_VAULT=1`, pensado para un entorno (p. ej. QA) cuyo
@@ -200,13 +200,13 @@ class VaultSettings:
         for intento in range(1, self.MAX_INTENTOS + 1):
             ultimo = intento == self.MAX_INTENTOS
             try:
-                return self._login_y_leer()
+                return self._login_and_read()
             except VaultConfigError:
                 if ultimo:
                     raise
-                time.sleep(self.ESPERA_ENTRE_INTENTOS * intento)
+                time.sleep(self.RETRY_WAIT * intento)
 
-    def _login_y_leer(self) -> dict:
+    def _login_and_read(self) -> dict:
         """Un intento: autenticar por AppRole y leer el secreto KV v2.
 
         Cada fallo se envuelve en `VaultConfigError` diciendo en cual de los dos

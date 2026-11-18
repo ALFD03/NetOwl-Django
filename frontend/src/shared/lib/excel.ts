@@ -65,7 +65,7 @@ export async function downloadRowsAsExcel<Row>({
     // The header row stays visible while scrolling the hundreds of values a
     // dimension can have.
     stickyRowsCount: 1,
-    columns: aColumnasDelEscritor(columns),
+    columns: toWriterColumns(columns),
   }).toFile(`${safeFileName(fileName)}.xlsx`);
 }
 
@@ -76,7 +76,7 @@ export async function downloadRowsAsExcel<Row>({
  * aparte porque duplicarlo dejaría dos reglas distintas sobre cuándo una celda
  * sale como número.
  */
-const aColumnasDelEscritor = <Row>(columns: ExcelColumn<Row>[]) =>
+const toWriterColumns = <Row>(columns: ExcelColumn<Row>[]) =>
   columns.map((column) => ({
     header: { value: column.header, fontWeight: 'bold' as const, align: 'center' as const },
     width: column.width ?? Math.max(12, column.header.length + 4),
@@ -122,7 +122,7 @@ export async function downloadSheetsAsExcel(
 
   await writeXlsxFile(
     sheets.map((sheet) => ({
-      data: getSheetData(sheet.rows, aColumnasDelEscritor(sheet.columns)),
+      data: getSheetData(sheet.rows, toWriterColumns(sheet.columns)),
       sheet: safeSheetName(sheet.sheetName),
       stickyRowsCount: 1,
       // Aquí `columns` ya solo lleva anchos: las cabeceras y las celdas se

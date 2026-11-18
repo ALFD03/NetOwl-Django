@@ -1,6 +1,6 @@
 /** Distribuciones de una dimensión para la página de Analytics. */
 
-import type { DimensionVal, Periodo } from '@/shared/types/domain';
+import type { DimensionVal, Period } from '@/shared/types/domain';
 import { toNumber } from '@/shared/utils/formatters';
 import {
   getRankingDistribution,
@@ -27,7 +27,7 @@ export type MetricDirection = 'growth' | 'loss';
 
 export interface AnalyticsMetricConfig extends RankingOptions {
   dimensionKey: keyof DimensionVal;
-  globalKey: keyof Periodo;
+  globalKey: keyof Period;
   mode: MetricWeightMode;
   unit?: '%' | '$' | 'number';
   /** Defaults to `growth` where unset. */
@@ -47,7 +47,7 @@ const POPULATION_KEY: keyof DimensionVal = 'activos_inicio';
  */
 export function getMetricDistribution(
   dimensions: DimensionVal[],
-  globalData: Periodo,
+  globalData: Period,
   config: AnalyticsMetricConfig,
 ): DistributionItem[] {
   if (config.mode === 'ranking') {
@@ -67,7 +67,7 @@ export function getMetricDistribution(
 
 export function getChartDistribution(
   dimensions: DimensionVal[],
-  globalData: Periodo,
+  globalData: Period,
   metric: AnalyticsMetricConfig,
 ): DistributionItem[] {
   const distribution = getMetricDistribution(dimensions, globalData, metric);

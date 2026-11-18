@@ -52,21 +52,21 @@ function useCuentas(habilitado: boolean) {
   });
 }
 
-function NuevoToken({ onClose }: { onClose: () => void }) {
+function NewToken({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const { can } = usePermissions();
   const cuentas = useCuentas(can('can_view_users'));
   const [cuenta, setCuenta] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [vigencia, setVigencia] = useState('90');
-  const [creado, setCreado] = useState<string | null>(null);
+  const [nombre, setName] = useState('');
+  const [validity, setValidity] = useState('90');
+  const [creado, setCreated] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
 
-  const crear = useMutation({
+  const create = useMutation({
     mutationFn: () =>
-      tokensApi.create({ user_id: Number(cuenta), name: nombre.trim(), expires_in_days: vigencia ? Number(vigencia) : null }),
+      tokensApi.create({ user_id: Number(cuenta), name: nombre.trim(), expires_in_days: validity ? Number(validity) : null }),
     onSuccess: (token) => {
-      setCreado(token.token);
+      setCreated(token.token);
       void queryClient.invalidateQueries({ queryKey: TOKENS_KEY });
     },
   });
@@ -99,7 +99,7 @@ function NuevoToken({ onClose }: { onClose: () => void }) {
           className="space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            crear.mutate();
+            create.mutate();
           }}
         >
           <div className="space-y-1.5">
@@ -129,21 +129,21 @@ function NuevoToken({ onClose }: { onClose: () => void }) {
             placeholder="Para qué aplicación es"
             maxLength={80}
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
             required
           />
           <div className="space-y-1.5">
             <p className="text-xs font-semibold text-slate-300">Caducidad</p>
-            <SelectMenu value={vigencia} onChange={setVigencia} options={VIGENCIAS} />
+            <SelectMenu value={validity} onChange={setValidity} options={VIGENCIAS} />
           </div>
-          {crear.isError && (
-            <StatusMessage status={{ type: 'error', text: getApiErrorMessage(crear.error, 'No se pudo crear el token.') }} />
+          {create.isError && (
+            <StatusMessage status={{ type: 'error', text: getApiErrorMessage(create.error, 'No se pudo crear el token.') }} />
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" isLoading={crear.isPending} disabled={!cuenta || !nombre.trim()}>
+            <Button type="submit" isLoading={create.isPending} disabled={!cuenta || !nombre.trim()}>
               Crear token
             </Button>
           </div>
@@ -156,16 +156,16 @@ function NuevoToken({ onClose }: { onClose: () => void }) {
 export function TokensView() {
   const queryClient = useQueryClient();
   const [creando, setCreando] = useState(false);
-  const [aviso, setAviso] = useState<{ type: StatusTone; text: string } | null>(null);
+  const [aviso, setNotice] = useState<{ type: StatusTone; text: string } | null>(null);
   const tokens = useQuery({ queryKey: TOKENS_KEY, queryFn: tokensApi.list });
 
   const revocar = useMutation({
     mutationFn: tokensApi.revoke,
     onSuccess: (token) => {
-      setAviso({ type: 'success', text: `Token «${token.name}» revocado.` });
+      setNotice({ type: 'success', text: `Token «${token.name}» revocado.` });
       void queryClient.invalidateQueries({ queryKey: TOKENS_KEY });
     },
-    onError: (error) => setAviso({ type: 'error', text: getApiErrorMessage(error, 'No se pudo revocar el token.') }),
+    onError: (error) => setNotice({ type: 'error', text: getApiErrorMessage(error, 'No se pudo revocar el token.') }),
   });
 
   return (
@@ -237,7 +237,7 @@ export function TokensView() {
           )}
         </Panel>
       </div>
-      {creando && <NuevoToken onClose={() => setCreando(false)} />}
+      {creando && <NewToken onClose={() => setCreando(false)} />}
     </AppLayout>
   );
 }

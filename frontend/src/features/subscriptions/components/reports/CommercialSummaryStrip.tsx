@@ -1,20 +1,20 @@
 /** La franja de cifras de cabecera de un grupo de nodos. */
 
-import type { Proyeccion } from '@/shared/lib/proyeccion';
+import type { Proyeccion } from '@/shared/lib/projection';
 import { SummaryStrip, type SummaryStripItem } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
-import { useObjetivosConfig } from '../../hooks/useObjetivos';
-import { calcComercial } from '../../lib/commercial';
+import { useTargetsConfig } from '../../hooks/useTargets';
+import { calcCommercial } from '../../lib/commercial';
 import {
-  formatObjetivo, tonoChurn, tonoCrecimiento, tonoCumplimiento, type Meta,
-} from '../../lib/objetivos';
+  formatTarget, tonoChurn, tonoCrecimiento, complianceTone, type Meta,
+} from '../../lib/targets';
 
 export interface CommercialSummaryStripProps {
   /** First cell — the technology for Sales Report, the status for Business Units. */
   leadLabel: string;
   leadValue: string;
-  activosInicio: number;
-  activosFinal: number;
+  activeAtStart: number;
+  activeAtEnd: number;
   crecimiento: number;
   churnRate: number;
   bajas: number;
@@ -24,7 +24,7 @@ export interface CommercialSummaryStripProps {
   /** Instalaciones del grupo, de las que sale la proyección. */
   nuevos?: number;
   /** Los días laborables del corte; sin ellos no hay celda de proyección. */
-  proyeccion?: Proyeccion | null;
+  projection?: Proyeccion | null;
 }
 
 
@@ -38,24 +38,24 @@ export interface CommercialSummaryStripProps {
 export function CommercialSummaryStrip({
   leadLabel,
   leadValue,
-  activosInicio,
-  activosFinal,
+  activeAtStart: activosInicio,
+  activeAtEnd: activosFinal,
   crecimiento,
   churnRate,
   bajas,
   meta,
   mono = false,
   nuevos = 0,
-  proyeccion = null,
+  projection: proyeccion = null,
 }: CommercialSummaryStripProps) {
-  const { semaforo } = useObjetivosConfig();
-  const metrics = calcComercial(activosInicio, activosFinal, meta, {
+  const { semaforo } = useTargetsConfig();
+  const metrics = calcCommercial(activosInicio, activosFinal, meta, {
     nuevos,
-    proyeccion,
+    projection: proyeccion,
   });
 
-  const completionColor = tonoCumplimiento(metrics.tasaCumplimiento, semaforo);
-  const ventasColor = tonoCumplimiento(metrics.cumplimientoVentas, semaforo);
+  const completionColor = complianceTone(metrics.complianceRate, semaforo);
+  const salesColor = complianceTone(metrics.salesCompliance, semaforo);
   const growthColor = tonoCrecimiento(crecimiento, semaforo);
   const churnColor = tonoChurn(churnRate, semaforo);
 
@@ -63,12 +63,12 @@ export function CommercialSummaryStrip({
     id: 'proyeccion',
     label: 'Proyección Inst.',
     value: formatInteger(metrics.instalacionesProyectadas),
-    caption: metrics.cumplimientoVentasProyectado === null
+    caption: metrics.projectedSalesCompliance === null
       ? undefined
-      : `${formatTwoDecimals(metrics.cumplimientoVentasProyectado)}% del objetivo`,
-    tone: metrics.cumplimientoVentasProyectado === null
+      : `${formatTwoDecimals(metrics.projectedSalesCompliance)}% del objetivo`,
+    tone: metrics.projectedSalesCompliance === null
       ? 'white'
-      : tonoCumplimiento(metrics.cumplimientoVentasProyectado, semaforo),
+      : complianceTone(metrics.projectedSalesCompliance, semaforo),
   }];
 
   return (
@@ -78,34 +78,34 @@ export function CommercialSummaryStrip({
       items={[
         { id: 'lead', label: leadLabel, value: leadValue, tone: 'brand' },
         { id: 'inicio', label: 'Base Inicio', value: formatInteger(activosInicio) },
-        metrics.sinObjetivo
+        metrics.withoutTarget
           ? { id: 'objetivo', label: 'Objetivo', value: 'Sin objetivo', caption: 'Todas sus zonas están sin objetivo' }
           : {
             id: 'objetivo',
-            label: `Objetivo (${formatObjetivo(meta.crecimientoPct)})`,
+            label: `Objetivo (${formatTarget(meta.growthPct)})`,
             value: `+${formatInteger(metrics.objetivo)}`,
             // Las zonas sin objetivo no entran en este resumen: se dice cuántas quedaron fuera.
             caption: meta.zonasSinObjetivo
               ? `${meta.zonasSinObjetivo} ${meta.zonasSinObjetivo === 1 ? 'zona' : 'zonas'} sin objetivo fuera`
               : undefined,
           },
-        { id: 'esperado', label: 'Cierre Esperado', value: formatInteger(metrics.cierreEsperado) },
+        { id: 'esperado', label: 'Cierre Esperado', value: formatInteger(metrics.expectedClose) },
         { id: 'bajas', label: 'Bajas', value: formatInteger(bajas), tone: 'red' },
         { id: 'nuevos', label: 'Instalaciones', value: formatInteger(nuevos) },
         {
           // Cumplimiento de ingreso: el crecimiento neto contra la meta.
           id: 'cumplimiento',
           label: '% Ingresos',
-          value: metrics.sinObjetivo ? '—' : `${formatTwoDecimals(metrics.tasaCumplimiento)}%`,
-          tone: metrics.sinObjetivo ? 'white' : completionColor,
+          value: metrics.withoutTarget ? '—' : `${formatTwoDecimals(metrics.complianceRate)}%`,
+          tone: metrics.withoutTarget ? 'white' : completionColor,
           divided: true,
         },
         {
           // Cumplimiento de ventas: las instalaciones contra la misma meta.
           id: 'cumplimiento_ventas',
           label: '% Ventas',
-          value: metrics.sinObjetivo ? '—' : `${formatTwoDecimals(metrics.cumplimientoVentas)}%`,
-          tone: metrics.sinObjetivo ? 'white' : ventasColor,
+          value: metrics.withoutTarget ? '—' : `${formatTwoDecimals(metrics.salesCompliance)}%`,
+          tone: metrics.withoutTarget ? 'white' : salesColor,
         },
         {
           id: 'crecimiento',
@@ -115,7 +115,7 @@ export function CommercialSummaryStrip({
         },
         {
           id: 'churn',
-          label: `Churn (obj. ${formatObjetivo(meta.churnPct)})`,
+          label: `Churn (obj. ${formatTarget(meta.churnPct)})`,
           value: `${formatTwoDecimals(churnRate)}%`,
           tone: churnColor,
         },
@@ -125,31 +125,31 @@ export function CommercialSummaryStrip({
   );
 }
 
-export interface ResumenSencilloProps {
-  activosInicio: number;
-  activosFinal: number;
+export interface SimpleSummaryProps {
+  activeAtStart: number;
+  activeAtEnd: number;
   nuevos: number;
   meta: Meta;
   /** Los días laborables del corte; sin ellos la proyección sale «—». */
-  proyeccion?: Proyeccion | null;
+  projection?: Proyeccion | null;
   className?: string;
 }
 
 /**
  * El resumen sencillo de un site entero, todas sus tecnologías juntas:
  * instalaciones, objetivo, los dos cumplimientos y la proyección. Las zonas sin
- * objetivo ya vienen fuera de las cifras (`nodosMedidos`).
+ * objetivo ya vienen fuera de las cifras (`measuredNodes`).
  *
  * Su «% Ventas» es el mismo número con que Comisiones paga a supervisores y
  * coordinadoras de oficina (`subscriptions/analytics/cumplimiento_sites.py`).
  */
-export function ResumenSencillo({
-  activosInicio, activosFinal, nuevos, meta, proyeccion = null, className,
-}: ResumenSencilloProps) {
-  const { semaforo } = useObjetivosConfig();
-  const m = calcComercial(activosInicio, activosFinal, meta, { nuevos, proyeccion });
-  const pct = (valor: number) => (m.sinObjetivo ? '—' : `${formatTwoDecimals(valor)}%`);
-  const tono = (valor: number) => (m.sinObjetivo ? 'white' as const : tonoCumplimiento(valor, semaforo));
+export function SimpleSummary({
+  activeAtStart: activosInicio, activeAtEnd: activosFinal, nuevos, meta, projection: proyeccion = null, className,
+}: SimpleSummaryProps) {
+  const { semaforo } = useTargetsConfig();
+  const m = calcCommercial(activosInicio, activosFinal, meta, { nuevos, projection: proyeccion });
+  const pct = (valor: number) => (m.withoutTarget ? '—' : `${formatTwoDecimals(valor)}%`);
+  const tono = (valor: number) => (m.withoutTarget ? 'white' as const : complianceTone(valor, semaforo));
 
   return (
     <SummaryStrip
@@ -158,26 +158,26 @@ export function ResumenSencillo({
       className={className}
       items={[
         { id: 'nuevos', label: 'Instalaciones', value: formatInteger(nuevos), tone: 'brand' },
-        m.sinObjetivo
+        m.withoutTarget
           ? { id: 'objetivo', label: 'Objetivo', value: 'Sin objetivo' }
           : {
             id: 'objetivo',
-            label: `Objetivo (${formatObjetivo(meta.crecimientoPct)})`,
+            label: `Objetivo (${formatTarget(meta.growthPct)})`,
             value: `+${formatInteger(m.objetivo)}`,
             caption: meta.zonasSinObjetivo
               ? `${meta.zonasSinObjetivo} ${meta.zonasSinObjetivo === 1 ? 'zona' : 'zonas'} sin objetivo fuera`
               : undefined,
           },
-        { id: 'ingresos', label: '% Ingresos', value: pct(m.tasaCumplimiento), tone: tono(m.tasaCumplimiento) },
-        { id: 'ventas', label: '% Ventas', value: pct(m.cumplimientoVentas), tone: tono(m.cumplimientoVentas) },
+        { id: 'ingresos', label: '% Ingresos', value: pct(m.complianceRate), tone: tono(m.complianceRate) },
+        { id: 'ventas', label: '% Ventas', value: pct(m.salesCompliance), tone: tono(m.salesCompliance) },
         {
           id: 'proyeccion',
           label: 'Proyección',
           value: m.instalacionesProyectadas === null ? '—' : formatInteger(m.instalacionesProyectadas),
-          caption: m.cumplimientoVentasProyectado === null
+          caption: m.projectedSalesCompliance === null
             ? (m.instalacionesProyectadas === null ? 'Sin corte del que proyectar' : undefined)
-            : `${formatTwoDecimals(m.cumplimientoVentasProyectado)}% del objetivo`,
-          tone: m.cumplimientoVentasProyectado === null ? 'white' : tonoCumplimiento(m.cumplimientoVentasProyectado, semaforo),
+            : `${formatTwoDecimals(m.projectedSalesCompliance)}% del objetivo`,
+          tone: m.projectedSalesCompliance === null ? 'white' : complianceTone(m.projectedSalesCompliance, semaforo),
         },
       ]}
     />

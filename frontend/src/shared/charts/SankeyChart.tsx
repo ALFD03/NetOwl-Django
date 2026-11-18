@@ -16,7 +16,7 @@ import { useMemo, useState } from 'react';
 
 import { cn } from '@/shared/lib/cn';
 
-export interface SankeyNodo {
+export interface SankeyNode {
   id: string;
   label: string;
   /** Color del nodo; las bandas toman el del origen. */
@@ -32,10 +32,10 @@ export interface SankeyEnlace {
 }
 
 interface Props {
-  origenes: SankeyNodo[];
-  destinos: SankeyNodo[];
+  origenes: SankeyNode[];
+  targets: SankeyNode[];
   enlaces: SankeyEnlace[];
-  formatValor?: (valor: number) => string;
+  formatValue?: (valor: number) => string;
   /** Alto del dibujo en unidades del viewBox (el ancho es 1000). */
   alto?: number;
   className?: string;
@@ -43,38 +43,38 @@ interface Props {
 
 const ANCHO = 1000;
 const X_ORIGEN = 250;
-const X_DESTINO = 735;
-const NODO = 16;
+const X_TARGET = 735;
+const NODE = 16;
 const HUECO = 28;
 /**
  * Alto mínimo que ocupa un nodo en su columna: el de sus dos líneas de texto.
  * Un nodo fino (el arrastre, lo que quedó abierto) se dibuja centrado en ese
  * hueco, así que su etiqueta ni pisa la del vecino ni se sale del dibujo.
  */
-const ETIQUETA = 56;
+const LABEL = 56;
 /** Con `caption` la etiqueta lleva una tercera línea. */
-const ETIQUETA_CON_NOTA = 80;
+const LABEL_WITH_NOTE = 80;
 const MARGEN = 12;
 
-interface NodoColocado extends SankeyNodo {
+interface PlacedNode extends SankeyNode {
   valor: number;
   y: number;
   h: number;
 }
 
-interface Columna {
-  nodos: NodoColocado[];
+interface Column {
+  nodos: PlacedNode[];
   alto: number;
 }
 
-function colocar(nodos: SankeyNodo[], valores: Map<string, number>, escala: number): Columna {
+function colocar(nodos: SankeyNode[], valores: Map<string, number>, escala: number): Column {
   let y = 0;
   const colocados = nodos
     .filter((n) => (valores.get(n.id) ?? 0) > 0)
     .map((n) => {
       const valor = valores.get(n.id) ?? 0;
       const h = Math.max(2, valor * escala);
-      const hueco = Math.max(h, n.caption ? ETIQUETA_CON_NOTA : ETIQUETA);
+      const hueco = Math.max(h, n.caption ? LABEL_WITH_NOTE : LABEL);
       const colocado = { ...n, valor, y: y + (hueco - h) / 2, h };
       y += hueco + HUECO;
       return colocado;
@@ -84,64 +84,64 @@ function colocar(nodos: SankeyNodo[], valores: Map<string, number>, escala: numb
 
 export function SankeyChart({
   origenes,
-  destinos,
+  targets: destinos,
   enlaces,
-  formatValor = (v) => v.toLocaleString('es-VE'),
+  formatValue: formatValor = (v) => v.toLocaleString('es-VE'),
   alto = 300,
   className,
 }: Props) {
-  const [activo, setActivo] = useState<number | null>(null);
+  const [activo, setActive] = useState<number | null>(null);
 
   const dibujo = useMemo(() => {
     const validos = enlaces.filter((e) => e.valor > 0);
-    const suma = (clave: 'origen' | 'destino') => {
+    const sumBy = (clave: 'origen' | 'destino') => {
       const m = new Map<string, number>();
       for (const e of validos) m.set(e[clave], (m.get(e[clave]) ?? 0) + e.valor);
       return m;
     };
-    const salidas = suma('origen');
-    const entradas = suma('destino');
-    const total = Math.max(1, ...[salidas, entradas].map((m) => [...m.values()].reduce((a, b) => a + b, 0)));
-    const nVisibles = (nodos: SankeyNodo[], m: Map<string, number>) => nodos.filter((n) => (m.get(n.id) ?? 0) > 0).length;
-    const huecos = Math.max(nVisibles(origenes, salidas), nVisibles(destinos, entradas)) - 1;
+    const exits = sumBy('origen');
+    const entries = sumBy('destino');
+    const total = Math.max(1, ...[exits, entries].map((m) => [...m.values()].reduce((a, b) => a + b, 0)));
+    const nVisible = (nodos: SankeyNode[], m: Map<string, number>) => nodos.filter((n) => (m.get(n.id) ?? 0) > 0).length;
+    const huecos = Math.max(nVisible(origenes, exits), nVisible(destinos, entries)) - 1;
     const escala = (alto - Math.max(0, huecos) * HUECO) / total;
 
-    const columnaIzq = colocar(origenes, salidas, escala);
-    const columnaDer = colocar(destinos, entradas, escala);
+    const leftColumn = colocar(origenes, exits, escala);
+    const rightColumn = colocar(destinos, entries, escala);
     // Centra la columna más corta respecto de la más alta.
-    const H = Math.max(columnaIzq.alto, columnaDer.alto);
-    for (const c of [columnaIzq, columnaDer]) {
+    const H = Math.max(leftColumn.alto, rightColumn.alto);
+    for (const c of [leftColumn, rightColumn]) {
       const d = (H - c.alto) / 2;
       for (const n of c.nodos) n.y += d;
     }
-    const izq = columnaIzq.nodos;
-    const der = columnaDer.nodos;
+    const izq = leftColumn.nodos;
+    const der = rightColumn.nodos;
 
-    const porId = (c: NodoColocado[]) => new Map(c.map((n) => [n.id, n]));
-    const mIzq = porId(izq);
-    const mDer = porId(der);
-    const desplSalida = new Map<string, number>();
-    const desplEntrada = new Map<string, number>();
-    const ordenDestino = new Map(der.map((n, i) => [n.id, i]));
-    const ordenOrigen = new Map(izq.map((n, i) => [n.id, i]));
+    const byId = (c: PlacedNode[]) => new Map(c.map((n) => [n.id, n]));
+    const mIzq = byId(izq);
+    const mDer = byId(der);
+    const exitOffset = new Map<string, number>();
+    const enterOffset = new Map<string, number>();
+    const targetOrder = new Map(der.map((n, i) => [n.id, i]));
+    const sourceOrder = new Map(izq.map((n, i) => [n.id, i]));
 
     const bandas = [...validos]
       .sort(
         (a, b) =>
-          (ordenOrigen.get(a.origen) ?? 0) - (ordenOrigen.get(b.origen) ?? 0) ||
-          (ordenDestino.get(a.destino) ?? 0) - (ordenDestino.get(b.destino) ?? 0),
+          (sourceOrder.get(a.origen) ?? 0) - (sourceOrder.get(b.origen) ?? 0) ||
+          (targetOrder.get(a.destino) ?? 0) - (targetOrder.get(b.destino) ?? 0),
       )
       .flatMap((e) => {
-        const o = mIzq.get(e.origen);
+        const other = mIzq.get(e.origen);
         const d = mDer.get(e.destino);
-        if (!o || !d) return [];
+        if (!other || !d) return [];
         const h = e.valor * escala;
-        const y0 = o.y + (desplSalida.get(o.id) ?? 0);
-        const y1 = d.y + (desplEntrada.get(d.id) ?? 0);
-        desplSalida.set(o.id, (desplSalida.get(o.id) ?? 0) + h);
-        desplEntrada.set(d.id, (desplEntrada.get(d.id) ?? 0) + h);
-        const xa = X_ORIGEN + NODO;
-        const xb = X_DESTINO;
+        const y0 = other.y + (exitOffset.get(other.id) ?? 0);
+        const y1 = d.y + (enterOffset.get(d.id) ?? 0);
+        exitOffset.set(other.id, (exitOffset.get(other.id) ?? 0) + h);
+        enterOffset.set(d.id, (enterOffset.get(d.id) ?? 0) + h);
+        const xa = X_ORIGEN + NODE;
+        const xb = X_TARGET;
         const xm = (xa + xb) / 2;
         const path = [
           `M ${xa} ${y0}`,
@@ -150,10 +150,10 @@ export function SankeyChart({
           `C ${xm} ${y1 + h}, ${xm} ${y0 + h}, ${xa} ${y0 + h}`,
           'Z',
         ].join(' ');
-        return [{ ...e, path, color: o.color, origenLabel: o.label, destinoLabel: d.label }];
+        return [{ ...e, path, color: other.color, origenLabel: other.label, destinoLabel: d.label }];
       });
 
-    return { izq, der, bandas, H, total: [...salidas.values()].reduce((a, b) => a + b, 0) };
+    return { izq, der, bandas, H, total: [...exits.values()].reduce((a, b) => a + b, 0) };
   }, [origenes, destinos, enlaces, alto]);
 
   const pct = (v: number) => (dibujo.total > 0 ? `${((v / dibujo.total) * 100).toFixed(1)}%` : '');
@@ -174,8 +174,8 @@ export function SankeyChart({
               d={b.path}
               fill={b.color}
               fillOpacity={activo === null ? 0.32 : activo === i ? 0.6 : 0.12}
-              onMouseEnter={() => setActivo(i)}
-              onMouseLeave={() => setActivo(null)}
+              onMouseEnter={() => setActive(i)}
+              onMouseLeave={() => setActive(null)}
               className="cursor-default transition-[fill-opacity] duration-150"
             >
               <title>{`${b.origenLabel} → ${b.destinoLabel}: ${formatValor(b.valor)}`}</title>
@@ -188,7 +188,7 @@ export function SankeyChart({
             const sube = n.caption ? 22 : 11;
             return (
               <g key={n.id}>
-                <rect x={X_ORIGEN} y={n.y} width={NODO} height={n.h} rx={4} fill={n.color} />
+                <rect x={X_ORIGEN} y={n.y} width={NODE} height={n.h} rx={4} fill={n.color} />
                 <text x={X_ORIGEN - 14} y={n.y + n.h / 2 - sube} textAnchor="end" dominantBaseline="middle" className="fill-current text-[19px] font-bold">
                   {n.label}
                 </text>
@@ -206,11 +206,11 @@ export function SankeyChart({
 
           {dibujo.der.map((n) => (
             <g key={n.id}>
-              <rect x={X_DESTINO} y={n.y} width={NODO} height={n.h} rx={4} fill={n.color} />
-              <text x={X_DESTINO + NODO + 14} y={n.y + n.h / 2 - 11} dominantBaseline="middle" className="fill-current text-[19px] font-bold">
+              <rect x={X_TARGET} y={n.y} width={NODE} height={n.h} rx={4} fill={n.color} />
+              <text x={X_TARGET + NODE + 14} y={n.y + n.h / 2 - 11} dominantBaseline="middle" className="fill-current text-[19px] font-bold">
                 {n.label}
               </text>
-              <text x={X_DESTINO + NODO + 14} y={n.y + n.h / 2 + 13} dominantBaseline="middle" className="fill-current font-mono text-[17px] opacity-80">
+              <text x={X_TARGET + NODE + 14} y={n.y + n.h / 2 + 13} dominantBaseline="middle" className="fill-current font-mono text-[17px] opacity-80">
                 {formatValor(n.valor)} · {pct(n.valor)}
               </text>
             </g>

@@ -16,12 +16,12 @@ interface Props {
   selectedDay: number;
   onSelect: (day: number) => void;
   /** Mes del corte en formato YYYY-MM. Habilita la fecha legible. */
-  periodoMes?: string;
+  monthPeriod?: string;
   label?: string;
   className?: string;
 }
 
-const parseMes = (periodoMes?: string): { year: number; month: number } | null => {
+const parseMonth = (periodoMes?: string): { year: number; month: number } | null => {
   const match = periodoMes?.match(/^(\d{4})-(\d{2})/);
   return match ? { year: Number(match[1]), month: Number(match[2]) } : null;
 };
@@ -41,11 +41,11 @@ export function DayProgressBar({
   daysInMonth,
   selectedDay,
   onSelect,
-  periodoMes,
+  monthPeriod: periodoMes,
   label = 'Fecha de corte',
 }: Props) {
   const available = useMemo(() => new Set(availableDays), [availableDays]);
-  const mes = useMemo(() => parseMes(periodoMes), [periodoMes]);
+  const mes = useMemo(() => parseMonth(periodoMes), [periodoMes]);
 
   const ticks = useMemo(() => {
     const marks = new Set<number>([1, daysInMonth]);
@@ -72,9 +72,9 @@ export function DayProgressBar({
     if (nearest !== selectedDay) onSelect(nearest);
   };
 
-  const ultimoCalculado = availableDays[availableDays.length - 1] ?? 1;
-  const tieneDatos = available.has(selectedDay);
-  const fechaLegible = !tieneDatos
+  const lastComputed = availableDays[availableDays.length - 1] ?? 1;
+  const hasData = available.has(selectedDay);
+  const readableDate = !hasData
     ? 'Sin datos'
     : mes
       ? `${selectedDay} ${MONTH_NAMES[mes.month - 1]} ${mes.year}`
@@ -88,7 +88,7 @@ export function DayProgressBar({
         <div className="flex shrink-0 items-baseline justify-between gap-3 sm:block">
           <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p>
           <p className="whitespace-nowrap text-sm font-bold tabular-nums text-white">
-            {fechaLegible}
+            {readableDate}
             <span className="ml-2 text-[11px] font-semibold text-slate-500">
               {availableDays.length}/{daysInMonth} días
             </span>
@@ -102,12 +102,12 @@ export function DayProgressBar({
             {/* Tramo ya calculado. */}
             <div
               className="absolute h-1.5 rounded-full bg-brand/25"
-              style={{ width: posOf(ultimoCalculado) }}
+              style={{ width: posOf(lastComputed) }}
             />
             {/* Tramo hasta el corte seleccionado. */}
             <div
               className="absolute h-1.5 rounded-full bg-brand transition-[width]"
-              style={{ width: tieneDatos ? posOf(selectedDay) : 0 }}
+              style={{ width: hasData ? posOf(selectedDay) : 0 }}
             />
             {ticks.map((day) => (
               <span
@@ -127,7 +127,7 @@ export function DayProgressBar({
               onChange={(e) => snap(Number(e.target.value))}
               disabled={!availableDays.length}
               aria-label={label}
-              aria-valuetext={fechaLegible}
+              aria-valuetext={readableDate}
               className="day-slider absolute h-4 w-full disabled:cursor-not-allowed disabled:opacity-40"
             />
           </div>

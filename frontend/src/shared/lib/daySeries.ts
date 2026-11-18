@@ -39,73 +39,73 @@ export interface DayReading {
   /** El acumulado del mes hasta el día elegido. */
   acumulado: number;
   /** Lo ocurrido ese día (`flujo`) o el nivel de ese día (`stock`, `tasa`). */
-  delDia: number;
-  /** El mismo `delDia` del día calculado anterior; `null` si no hay. */
-  previo: number | null;
+  ofDay: number;
+  /** El mismo `ofDay` del día calculado anterior; `null` si no hay. */
+  previous: number | null;
   /** Cambio frente al día anterior, o `null` si no es medible. */
   variacion: number | null;
   /** `true` cuando `variacion` son puntos porcentuales y no un porcentaje. */
-  enPuntos: boolean;
+  inPoints: boolean;
 }
 
-const VACIO: DayReading = {
+const EMPTY: DayReading = {
   acumulado: 0,
-  delDia: 0,
-  previo: null,
+  ofDay: 0,
+  previous: null,
   variacion: null,
-  enPuntos: false,
+  inPoints: false,
 };
 
 /** Los días con corte, ordenados. Es el eje de todo lo demás. */
-export function diasCalculados(serie: DaySeries | undefined): number[] {
+export function computedDays(serie: DaySeries | undefined): number[] {
   return Object.keys(serie ?? {})
     .map(Number)
     .filter((dia) => Number.isFinite(dia))
     .sort((a, b) => a - b);
 }
 
-const valorEn = (serie: DaySeries, dia: number, key: string): number => {
+const valueAt = (serie: DaySeries, dia: number, key: string): number => {
   const bruto = serie[String(dia)]?.[key];
   return typeof bruto === 'number' && Number.isFinite(bruto) ? bruto : 0;
 };
 
 /** El día calculado inmediatamente anterior a `dia`, o `null` si es el primero. */
-const diaAnterior = (dias: number[], dia: number): number | null => {
+const previousDay = (dias: number[], dia: number): number | null => {
   const idx = dias.indexOf(dia);
   return idx > 0 ? dias[idx - 1] : null;
 };
 
 /** El valor propio de un día: la diferencia en un flujo, el nivel en lo demás. */
-function propioDe(
+function ownOf(
   serie: DaySeries,
   dias: number[],
   dia: number,
   key: string,
   kind: MetricKind,
 ): number {
-  const acumulado = valorEn(serie, dia, key);
+  const acumulado = valueAt(serie, dia, key);
   if (kind !== 'flujo') return acumulado;
 
-  const previo = diaAnterior(dias, dia);
+  const previo = previousDay(dias, dia);
   // El primer día calculado no tiene nada que restar: su acumulado ya es lo suyo.
-  return previo === null ? acumulado : acumulado - valorEn(serie, previo, key);
+  return previo === null ? acumulado : acumulado - valueAt(serie, previo, key);
 }
 
 /** Todo lo que una tarjeta necesita de una métrica en un día. */
-export function leerDia(
+export function readDay(
   serie: DaySeries | undefined,
   dias: number[],
   dia: number,
   key: string,
   kind: MetricKind,
 ): DayReading {
-  if (!serie || !dia || !dias.includes(dia)) return VACIO;
+  if (!serie || !dia || !dias.includes(dia)) return EMPTY;
 
-  const acumulado = valorEn(serie, dia, key);
-  const delDia = propioDe(serie, dias, dia, key, kind);
+  const acumulado = valueAt(serie, dia, key);
+  const delDia = ownOf(serie, dias, dia, key, kind);
 
-  const anterior = diaAnterior(dias, dia);
-  const previo = anterior === null ? null : propioDe(serie, dias, anterior, key, kind);
+  const anterior = previousDay(dias, dia);
+  const previo = anterior === null ? null : ownOf(serie, dias, anterior, key, kind);
 
   // Una tasa se compara en puntos: el 40 % que pasa a 42 % subió dos puntos, no
   // un 5 %, y decir lo segundo invita a leerlo como cinco puntos.
@@ -117,16 +117,16 @@ export function leerDia(
     else if (previo !== 0) variacion = Number((((delDia - previo) / Math.abs(previo)) * 100).toFixed(1));
   }
 
-  return { acumulado, delDia, previo, variacion, enPuntos };
+  return { acumulado, ofDay: delDia, previous: previo, variacion, inPoints: enPuntos };
 }
 
 /** La serie de una métrica a lo largo del mes, lista para una gráfica de línea. */
-export function serieDe(
+export function seriesOf(
   serie: DaySeries | undefined,
   dias: number[],
   key: string,
   kind: MetricKind,
 ): number[] {
   if (!serie) return [];
-  return dias.map((dia) => propioDe(serie, dias, dia, key, kind));
+  return dias.map((dia) => ownOf(serie, dias, dia, key, kind));
 }

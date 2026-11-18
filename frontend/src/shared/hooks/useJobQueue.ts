@@ -6,10 +6,10 @@ import { notifyDataChanged } from '@/shared/lib/api/client';
 import { jobsApi, notificarJobEncolado, suscribirseAJobsEncolados, type AnalysisJob } from '@/shared/lib/api/jobs';
 
 /** Cadencia de sondeo: rápida mientras algo corre, lenta cuando no hay nada. */
-const INTERVALO_ACTIVO_MS = 4000;
+const ACTIVE_INTERVAL_MS = 4000;
 const INTERVALO_INACTIVO_MS = 20000;
 /** Cuánto se deja a la vista el desenlace de un análisis que acaba de terminar. */
-const AVISO_FINAL_MS = 10000;
+const FINAL_NOTICE_MS = 10000;
 
 export interface JobQueueState {
   /** En ejecución primero, después los que esperan turno. */
@@ -53,12 +53,12 @@ export function useJobQueue(): JobQueueState {
   const dismissFinished = useCallback(() => setFinished(null), []);
 
   const cancel = useCallback(async (id: string) => {
-    setCancelling((actual) => (actual.includes(id) ? actual : [...actual, id]));
+    setCancelling((current) => (current.includes(id) ? current : [...current, id]));
     try {
       await jobsApi.cancel(id);
     } catch {
       // No se pudo: se suelta la marca para que el botón se vuelva a ofrecer.
-      setCancelling((actual) => actual.filter((otro) => otro !== id));
+      setCancelling((current) => current.filter((another) => another !== id));
       return;
     }
     // La fila ya está cerrada: se consulta en el acto en vez de esperar al
@@ -96,11 +96,11 @@ export function useJobQueue(): JobQueueState {
           const terminado = await jobsApi.fetch(desaparecidos[0]).catch(() => null);
           if (vivo && terminado) {
             setFinished(terminado);
-            setTimeout(() => vivo && setFinished(null), AVISO_FINAL_MS);
+            setTimeout(() => vivo && setFinished(null), FINAL_NOTICE_MS);
           }
         }
 
-        programar(cola.jobs.length > 0 ? INTERVALO_ACTIVO_MS : INTERVALO_INACTIVO_MS);
+        programar(cola.jobs.length > 0 ? ACTIVE_INTERVAL_MS : INTERVALO_INACTIVO_MS);
       } catch {
         // Un fallo de red o un despliegue en curso no deben dejar el aviso
         // sondeando en bucle: se espera el intervalo largo y se reintenta.

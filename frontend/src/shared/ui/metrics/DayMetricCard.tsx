@@ -42,7 +42,7 @@ export const DayMetricCard: FC<DayMetricCardProps> = ({
   subValue,
   trendGoodWhen = 'up',
 }) => {
-  const { acumulado, delDia, previo, variacion, enPuntos } = reading;
+  const { acumulado, ofDay: delDia, previous: previo, variacion, inPoints: enPuntos } = reading;
 
   const pie =
     kind === 'flujo'

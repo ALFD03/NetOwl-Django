@@ -18,10 +18,10 @@ from ..analyzer import loader as analyzer_loader
 
 
 def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, set[str]]:
-    """Devuelve `(suscripciones, logs, ordenes_con_actividad)`.
+    """Devuelve `(suscripciones, logs, orders_with_activity_set)`.
 
     Los logs salen ordenados por `["orden", "f_dt"]`, que es la invariante de la
-    que depende `metrics_calc.EstadoAcumulado`. `ordenes_con_actividad` son las
+    que depende `metrics_calc.AccumulatedState`. `orders_with_activity_set` son las
     que alguna vez estuvieron activas: el mismo filtro que usa el mensual para
     contar un alta.
     """
@@ -30,5 +30,5 @@ def load_data(db=None) -> tuple[pd.DataFrame, pd.DataFrame, set[str]]:
     df_subs_raw, df_logs, df_logs_v15, df_free_raw = analyzer_loader.load_data(db)
     df_free_meta = cleaner.build_free_meta(df_free_raw)
     subs, logs = cleaner.build_clean_data(df_subs_raw, df_logs, df_logs_v15)
-    logs, ordenes_con_actividad = rules.apply_log_rules(logs, subs, df_free_meta)
-    return subs, logs, ordenes_con_actividad
+    logs, orders_with_activity_set = rules.apply_log_rules(logs, subs, df_free_meta)
+    return subs, logs, orders_with_activity_set

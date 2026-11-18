@@ -17,7 +17,7 @@ import { formatInteger } from '@/shared/utils';
 import { desgloseDonut } from '../../lib/supportCharts';
 import { SUPPORT_DESGLOSE_LABELS } from '../../lib/supportMetrics';
 import { SUPPORT_DESGLOSES, type SupportDesglose, type SupportGroup } from '../../types';
-import { AnilloConCentro } from './AnilloConCentro';
+import { CenteredRing } from './CenteredRing';
 
 interface Props {
   group: SupportGroup | undefined;
@@ -37,10 +37,10 @@ function Desglose({ group, desglose }: { group: SupportGroup | undefined; desglo
         <EmptyState title="Sin tickets en el corte." icon={<Lightbulb />} size="sm" />
       ) : (
         <>
-          <AnilloConCentro
+          <CenteredRing
             data={data}
             centro={{ title: 'Tickets', value: formatInteger(total) }}
-            alPasar={(i) => ({
+            onHover={(i) => ({
               title: partes[i]?.nombre ?? '',
               value: `${formatInteger(partes[i]?.tickets ?? 0)} · ${partes[i]?.pct ?? 0}%`,
             })}

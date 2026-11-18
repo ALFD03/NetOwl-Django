@@ -36,7 +36,7 @@ FREE_PLANS = Table(
     },
 )
 INVOICES = Table(
-    TableNames.SUBSCRIPTIONS_FACTURAS,
+    TableNames.SUBSCRIPTIONS_INVOICES,
     {
         "orden": TEXT, "numero": TEXT, "estado_factura_sub": TEXT, "estado": TEXT, "estado_pago": TEXT,
         "creado_el": TIMESTAMP, "fecha_pago": TIMESTAMP, "actualizado_el": TIMESTAMP, "producto": TEXT,
@@ -50,7 +50,7 @@ INVOICES = Table(
 _BY_PERIOD = (("periodo_reporte",),)
 
 ACTIVE_AT_CLOSE = Table(
-    TableNames.ANALYZER_ACTIVOS_CIERRE,
+    TableNames.ANALYZER_ACTIVE_AT_CLOSE,
     {"orden": TEXT, "f_dt": TIMESTAMP, "estado": TEXT, "periodo_reporte": TEXT},
     indexes=_BY_PERIOD,
 )
@@ -60,22 +60,22 @@ REACTIVATIONS = Table(
     indexes=_BY_PERIOD,
 )
 CHURNED = Table(
-    TableNames.ANALYZER_BAJAS_DETALLADAS,
+    TableNames.ANALYZER_CHURNED,
     {"orden": TEXT, "f_ini_dt": DATE, "estado": TEXT, "periodo_reporte": TEXT},
     indexes=_BY_PERIOD,
 )
 UNPAID_CUTS = Table(
-    TableNames.ANALYZER_CORTE_IMPAGADO,
+    TableNames.ANALYZER_UNPAID_CUTS,
     {"orden": TEXT, "fecha_corte": TIMESTAMP, "motivo_corte": TEXT, "periodo_reporte": TEXT},
     indexes=_BY_PERIOD,
 )
 FREE_CLIENTS = Table(
-    TableNames.ANALYZER_CLIENTES_GRATUITOS,
+    TableNames.ANALYZER_FREE_CLIENTS,
     {"orden": TEXT, "fecha_archivado": TIMESTAMP, "estado": TEXT, "periodo_reporte": TEXT},
     indexes=_BY_PERIOD,
 )
 INACTIVE = Table(
-    TableNames.ANALYZER_INACTIVOS_DETALLADOS,
+    TableNames.ANALYZER_INACTIVE,
     {"orden": TEXT, "fecha_evento": TIMESTAMP, "estado_inactivo": TEXT, "periodo_reporte": TEXT},
     indexes=_BY_PERIOD,
 )
@@ -92,7 +92,7 @@ _RATES = [
 ]
 
 CLOSE_HISTORY = Table(
-    TableNames.ANALYZER_CIERRE_HISTORICO,
+    TableNames.ANALYZER_CLOSE_HISTORY,
     {
         "periodo": TEXT, "nuevos_mes": INT, "ingresos": INT,
         **{c: INT for c in _COUNTS}, **{c: FLOAT for c in _RATES},
@@ -117,7 +117,7 @@ DAY_METRICS = Table(
 )
 
 LIFETIME_CHURNED = Table(
-    TableNames.LIFETIME_BAJAS_MES,
+    TableNames.LIFETIME_CHURNED,
     {
         "orden": TEXT, "f_ini": DATE, "f_ultima_activacion": DATE, "f_baja": DATE, "estado_cierre": TEXT,
         "dias_desde_instalacion": INT, "dias_ultimo_tramo": INT, "tramo_supuesto": BOOL, "zona": TEXT,
@@ -143,7 +143,7 @@ ETA_ORDER_CONFIG = Table(
     },
 )
 ETA_MONTHLY_REPORT = Table(
-    TableNames.ANALYZER_ETA_REPORTE_MENSUAL,
+    TableNames.ANALYZER_ETA_MONTHLY_REPORT,
     {
         "periodo_reporte": TEXT, "reporte_data": JSON, "esta_bloqueado": BOOL, "fecha_calculo": TIMESTAMP,
         "tasa_bcv": NUMERIC, "tasa_fuente": TEXT,

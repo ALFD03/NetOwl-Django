@@ -61,27 +61,27 @@ from core.utils import clean_json_props
 
 from .cohorts import build_cohort
 from .dimensions import build_dimension_rows
-from .escalamiento import cargar_tickets
+from .escalation import load_tickets
 from .metrics import compute_metrics_for_period
 from .queries import (
     contexto_incidencia,
-    estructurar_grupos,
-    get_incidencia_por_zona,
+    get_incidence_by_zone,
+    structure_groups,
 )
 from .tables import DAY_METRICS
-from .usuarios import anotar_departamentos
+from .users import annotate_departments
 
 logger = logging.getLogger(__name__)
 
 # Cada cuantos dias se vuelca el progreso a la base.
-FLUSH_CADA_N_DIAS = 5
+FLUSH_EVERY_N_DAYS = 5
 
 
 def build_support_day_metrics(
     year_month: str,
     db: DBConnector | None = None,
     df_all: pd.DataFrame | None = None,
-    hasta_dia: int | None = None,
+    until_day: int | None = None,
     progreso: Callable[[int, int, str], None] | None = None,
 ) -> dict[str, Any]:
     """Calcula y guarda el corte de cada dia del mes.
@@ -95,14 +95,14 @@ def build_support_day_metrics(
     """
     db = db or DBConnector()
     if df_all is None:
-        df_all = cargar_tickets(db)
+        df_all = load_tickets(db)
     if df_all.empty:
         return {"periodo_reporte": year_month, "dias_calculados": 0}
 
-    tope = last_day_to_compute(year_month, hasta_dia)
+    tope = last_day_to_compute(year_month, until_day)
     # Las zonas y los activos del mes son los mismos para los treinta y un
     # cortes: se leen una vez y se comparten.
-    zone_info, activos_map = contexto_incidencia(db, year_month)
+    zone_info, active_map = contexto_incidencia(db, year_month)
 
     pendientes: dict[str, Any] = {}
     calculados = 0
@@ -112,15 +112,15 @@ def build_support_day_metrics(
         # Un dia sin un solo ticket no deja columna: la barra lo pinta como hueco
         # en vez de como un corte de ceros, que se leeria como un dato.
         if not cohorte.empty:
-            grupos = estructurar_grupos(build_dimension_rows(cohorte))
+            grupos = structure_groups(build_dimension_rows(cohorte))
             pendientes[f"dia{dia}"] = clean_json_props({
                 "global": compute_metrics_for_period(cohorte),
                 # Reaprovechadas de las filas dimensionales: la metrica de cada
                 # grupo ya se calculo para su fila `grupo_trabajo`.
                 "global_grupos": {g: b["metricas"] for g, b in grupos.items()},
                 "grupos": grupos,
-                "incidencia_zonas": get_incidencia_por_zona(
-                    db, cohorte, zone_info=zone_info, activos_map=activos_map
+                "incidencia_zonas": get_incidence_by_zone(
+                    db, cohorte, zone_info=zone_info, active_map=active_map
                 ),
             })
             calculados += 1
@@ -130,19 +130,19 @@ def build_support_day_metrics(
 
         # Volcado parcial: el upsert solo toca los dias enviados, asi que si la
         # ejecucion se corta el trabajo ya hecho queda guardado.
-        if len(pendientes) >= FLUSH_CADA_N_DIAS:
-            _guardar(db, year_month, pendientes)
+        if len(pendientes) >= FLUSH_EVERY_N_DAYS:
+            _save(db, year_month, pendientes)
             print(f"  -> guardados {len(pendientes)} dias")
             pendientes = {}
 
     if pendientes:
-        _guardar(db, year_month, pendientes)
+        _save(db, year_month, pendientes)
 
     print(f"\nMETRICAS DIARIAS DE SOPORTE GUARDADAS | {year_month} | {calculados} dias")
     return {"periodo_reporte": year_month, "dias_calculados": calculados}
 
 
-def _guardar(db: DBConnector, label: str, dias: dict[str, Any]) -> None:
+def _save(db: DBConnector, label: str, dias: dict[str, Any]) -> None:
     """Vuelca los dias pendientes a `support_day_metrics`."""
     save_days(db, DAY_METRICS, label, dias)
 
@@ -159,7 +159,7 @@ def get_support_day_payload(year_month: str, dia: int) -> dict[str, Any] | None:
     """
     payload = read_day(TableNames.SUPPORT_DAY_METRICS, year_month, dia, key=year_month)
     if payload:
-        anotar_departamentos(payload.get("grupos") or {}, cutoff_date(year_month, dia))
+        annotate_departments(payload.get("grupos") or {}, cutoff_date(year_month, dia))
     return payload
 
 
@@ -182,6 +182,6 @@ def get_support_day_series(year_month: str) -> dict[str, Any]:
     return {**serie, "serie_grupos": por_grupo.get("serie", {})}
 
 
-def get_support_periodos_con_dias() -> list[str]:
+def get_support_periods_with_days() -> list[str]:
     """Meses (`YYYY-MM`) que ya tienen cortes diarios calculados."""
     return months_with_days(TableNames.SUPPORT_DAY_METRICS)

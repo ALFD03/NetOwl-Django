@@ -60,7 +60,7 @@ se aplica en el servidor, no solo en el selector:
 - Los endpoints JSON de un periodo concreto (detalle de resultados, dimensiones, drill-down, cortes diarios,
   tickets, detalle de lifetime) responden 403 si se pide otro (`period_denied`, `month_denied`).
 - Los dashboards de CRM y Soporte, que promedian todos los periodos, se construyen con el último y nada más,
-  con las mismas funciones de promedio que el análisis (`crm.analytics.metrics.promediar_cierres`,
+  con las mismas funciones de promedio que el análisis (`crm.analytics.metrics.average_closes`,
   `support.analytics.metrics.average_blocks`), para que la forma del bloque no cambie.
 - El reporte ETA y Comisiones no se restringen: son de quien administra, no de lectura.
 
@@ -77,7 +77,7 @@ permiso; la lista se elige siempre por persona y el grupo ni la lleva ni la sinc
 
 - **Solo restringe la página Unidades de negocio** (y su `/api/subscriptions/business-units/`). El Reporte de ventas, que
   tiene su propio permiso, no cambia.
-- El recorte es del servidor (`subscriptions.analytics.queries.restringir_unidades`): el cliente reagrupa cada
+- El recorte es del servidor (`subscriptions.analytics.queries.restrict_units`): el cliente reagrupa cada
   día desde `dayMetrics` y `zonasConfig`, así que los dos llegan recortados a las zonas visibles.
 - **El consolidado FTTH se ve siempre**, el de toda la empresa. Como sus nodos ya no llegan, viaja sumado en
   `buData.ftth_consolidado` (un nodo por corte) y no sigue los filtros de sucursal, búsqueda o métrica.

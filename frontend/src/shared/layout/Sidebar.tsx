@@ -27,20 +27,20 @@ import type { AppNavigationItem, NavigationPage } from '@/shared/types/navigatio
 import { UserMenu } from './UserMenu';
 
 /** Clave de los módulos desplegados. Por navegador, como el sidebar plegado. */
-const CLAVE_ABIERTOS = 'netowl-sidebar-abiertos';
+const OPEN_KEY = 'netowl-sidebar-abiertos';
 
-function leerAbiertos(): Set<string> {
+function readOpen(): Set<string> {
   try {
-    const guardado = JSON.parse(localStorage.getItem(CLAVE_ABIERTOS) ?? '[]');
+    const guardado = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '[]');
     return new Set(Array.isArray(guardado) ? guardado.filter((m) => typeof m === 'string') : []);
   } catch {
     return new Set();
   }
 }
 
-function guardarAbiertos(abiertos: Set<string>) {
+function saveOpen(abiertos: Set<string>) {
   try {
-    localStorage.setItem(CLAVE_ABIERTOS, JSON.stringify([...abiertos]));
+    localStorage.setItem(OPEN_KEY, JSON.stringify([...abiertos]));
   } catch {
     // Sin almacenamiento el árbol funciona igual, solo que no se recuerda.
   }
@@ -146,7 +146,7 @@ function Rama({ item, abierto, active, onToggle, activeHref, onNavigate }: RamaP
   );
 }
 
-interface IconoModuloProps {
+interface ModuleIconViewProps {
   item: AppNavigationItem;
   active: boolean;
   activeHref?: string;
@@ -161,7 +161,7 @@ interface IconoModuloProps {
  * icono al panel no cuenta como salir; el `pl-2` del panel cubre el hueco
  * entre los dos para que el puntero no lo cruce en vacío.
  */
-function IconoModulo({ item, active, activeHref }: IconoModuloProps) {
+function ModuleIconView({ item, active, activeHref }: ModuleIconViewProps) {
   const Icon = item.icon;
   const ref = useRef<HTMLDivElement>(null);
   const cierre = useRef<number | undefined>(undefined);
@@ -242,23 +242,23 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
 
   const modulos = visibleNavigation(can);
   const ubicacion = resolveLocation(url);
-  const moduloActivo = ubicacion?.item.module;
+  const activeModule = ubicacion?.item.module;
   const activeHref = ubicacion?.page.href;
 
   // Cada página monta su propio AppLayout: el módulo de la página actual
   // siempre llega desplegado y los demás quedan como el usuario los dejó.
-  const [abiertos, setAbiertos] = useState(() => {
-    const iniciales = leerAbiertos();
-    if (moduloActivo) iniciales.add(moduloActivo);
-    return iniciales;
+  const [abiertos, setOpenItems] = useState(() => {
+    const initials = readOpen();
+    if (activeModule) initials.add(activeModule);
+    return initials;
   });
 
   const alternar = (modulo: string) => {
-    setAbiertos((previos) => {
+    setOpenItems((previos) => {
       const nuevos = new Set(previos);
       if (nuevos.has(modulo)) nuevos.delete(modulo);
       else nuevos.add(modulo);
-      guardarAbiertos(nuevos);
+      saveOpen(nuevos);
       return nuevos;
     });
   };
@@ -289,10 +289,10 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
         <nav className="space-y-1" aria-label="Navegación principal">
           {modulos.map((item) =>
             compact ? (
-              <IconoModulo
+              <ModuleIconView
                 key={item.module}
                 item={item}
-                active={item.module === moduloActivo}
+                active={item.module === activeModule}
                 activeHref={activeHref}
               />
             ) : (
@@ -300,7 +300,7 @@ function SidebarContent({ url, username, compact = false, onNavigate, onToggleCo
                 key={item.module}
                 item={item}
                 abierto={abiertos.has(item.module)}
-                active={item.module === moduloActivo}
+                active={item.module === activeModule}
                 onToggle={() => alternar(item.module)}
                 activeHref={activeHref}
                 onNavigate={onNavigate}

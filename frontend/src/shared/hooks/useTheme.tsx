@@ -17,15 +17,15 @@ import type { ReactNode } from 'react';
 export type PreferenciaTema = 'sistema' | 'claro' | 'oscuro';
 export type Tema = 'claro' | 'oscuro';
 
-const CLAVE_TEMA = 'netowl-tema';
+const THEME_KEY = 'netowl-tema';
 /** La versión anterior escribía `dark` aquí sin que nadie lo eligiera; no vale como elección. */
-const CLAVE_ANTIGUA = 'netowl-theme';
+const LEGACY_KEY = 'netowl-theme';
 const CONSULTA_CLARO = '(prefers-color-scheme: light)';
 
-function leerPreferencia(): PreferenciaTema {
+function readPreference(): PreferenciaTema {
   try {
-    localStorage.removeItem(CLAVE_ANTIGUA);
-    const guardada = localStorage.getItem(CLAVE_TEMA);
+    localStorage.removeItem(LEGACY_KEY);
+    const guardada = localStorage.getItem(THEME_KEY);
     if (guardada === 'claro' || guardada === 'oscuro') return guardada;
   } catch {
     // Sin almacenamiento (modo privado) se sigue al sistema.
@@ -56,7 +56,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preferencia, setPreferenciaState] = useState(leerPreferencia);
+  const [preferencia, setPreferenciaState] = useState(readPreference);
   const sistemaClaro = useSistemaClaro();
   const tema: Tema = preferencia === 'sistema' ? (sistemaClaro ? 'claro' : 'oscuro') : preferencia;
 
@@ -69,18 +69,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   // Otra pestaña cambió el tema: se sigue, para no tener dos pestañas distintas.
   useEffect(() => {
-    const alCambiar = (evento: StorageEvent) => {
-      if (evento.key === CLAVE_TEMA || evento.key === null) setPreferenciaState(leerPreferencia());
+    const onChangeValue = (evento: StorageEvent) => {
+      if (evento.key === THEME_KEY || evento.key === null) setPreferenciaState(readPreference());
     };
-    window.addEventListener('storage', alCambiar);
-    return () => window.removeEventListener('storage', alCambiar);
+    window.addEventListener('storage', onChangeValue);
+    return () => window.removeEventListener('storage', onChangeValue);
   }, []);
 
   const setPreferencia = useCallback((nueva: PreferenciaTema) => {
     setPreferenciaState(nueva);
     try {
-      if (nueva === 'sistema') localStorage.removeItem(CLAVE_TEMA);
-      else localStorage.setItem(CLAVE_TEMA, nueva);
+      if (nueva === 'sistema') localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, nueva);
     } catch {
       // Sin almacenamiento el tema cambia igual, solo que no se recuerda.
     }

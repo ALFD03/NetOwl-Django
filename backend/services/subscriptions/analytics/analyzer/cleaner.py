@@ -71,7 +71,7 @@ def build_clean_data(df_subs_raw, df_logs, df_logs_v15):
     de la suscripcion y calcula `estado_origen` con un desplazamiento por orden.
 
     **El frame de logs sale ordenado por `["orden", "f_dt"]`, y esa ordenacion es
-    una invariante**: de ella dependen `last_log_per_orden` y `EstadoAcumulado`.
+    una invariante**: de ella dependen `last_log_per_order` y `AccumulatedState`.
     """
     df = df_subs_raw.copy()
     df.columns = df.columns.str.lower()

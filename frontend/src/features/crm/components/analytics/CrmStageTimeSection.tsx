@@ -15,18 +15,18 @@ import {
 } from '@/shared/ui';
 import {
   CRM_DIMENSION_LABELS,
-  CRM_ETAPA_LABELS_CORTAS,
-  crmEtapaLabel,
+  CRM_STAGE_SHORT_LABELS,
+  crmStageLabel,
 } from '@/shared/constants/labels';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils/formatters';
 import { useCrmStageTime } from '../../hooks/useCrmStageTime';
 import {
-  formatHoras,
+  formatHours,
   formatVariacion,
   variacionColor,
   type CrmStageTimeCard,
   type CrmStageTimeDimensionRow,
-} from '../../lib/crmTiempoEtapa';
+} from '../../lib/crmStageTime';
 import type { CrmDimensionValue, CrmHistoricoRow } from '../../types';
 
 interface Props {
@@ -35,7 +35,7 @@ interface Props {
   selectedDimension: string;
 }
 
-const VISTA_OPTIONS = [
+const VIEW_OPTIONS = [
   { key: 'clave', label: 'Etapas de venta' },
   { key: 'todas', label: 'Todas' },
 ];
@@ -76,9 +76,9 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
     CRM_DIMENSION_LABELS[selectedDimension as keyof typeof CRM_DIMENSION_LABELS] ??
     selectedDimension;
 
-  const etapaOptions = cards.map((card) => ({
+  const stageOptions = cards.map((card) => ({
     key: card.etapa,
-    label: CRM_ETAPA_LABELS_CORTAS[card.etapa] ?? card.label,
+    label: CRM_STAGE_SHORT_LABELS[card.etapa] ?? card.label,
   }));
 
   return (
@@ -88,13 +88,13 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
         title="Tiempo por Etapa"
         subtitle={
           corte
-            ? `Suma de horas ÷ transiciones que salieron de la etapa · lo atascado se lista aparte, medido hasta ${formatCorte(corte)}`
+            ? `Suma de horas ÷ transiciones que salieron de la etapa · lo atascado se lista aparte, medido hasta ${formatCutoff(corte)}`
             : 'Suma de horas ÷ transiciones que salieron de la etapa'
         }
         icon={<Hourglass className="h-5 w-5" />}
         headerAction={
           <ToggleGroup
-            options={VISTA_OPTIONS}
+            options={VIEW_OPTIONS}
             activeKey={verTodas ? 'todas' : 'clave'}
             onChange={(key) => setVerTodas(key === 'todas')}
           />
@@ -117,13 +117,13 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
       {!isEmpty && (
         <NeonContainer
           theme="purple"
-          title={`${crmEtapaLabel(selectedEtapa)} por ${dimensionLabel}`}
-          subtitle={`Referencia del periodo: ${formatHoras(baseline)} · la variación se mide contra ella · cada oportunidad va a su dimensión por Iniciativa/ID`}
+          title={`${crmStageLabel(selectedEtapa)} por ${dimensionLabel}`}
+          subtitle={`Referencia del periodo: ${formatHours(baseline)} · la variación se mide contra ella · cada oportunidad va a su dimensión por Iniciativa/ID`}
           icon={<Gauge className="h-5 w-5" />}
           headerAction={
             <ToggleGroup
               className="lg:justify-end"
-              options={etapaOptions}
+              options={stageOptions}
               activeKey={selectedEtapa}
               onChange={setSelectedEtapa}
             />
@@ -168,7 +168,7 @@ export function CrmStageTimeSection({ globalData, rows, selectedDimension }: Pro
 }
 
 /** `2026-08-28T12:00` -> `28/08 12:00`, enough to date the open stays. */
-function formatCorte(iso: string): string {
+function formatCutoff(iso: string): string {
   const fecha = new Date(iso);
   if (Number.isNaN(fecha.getTime())) return iso;
 
@@ -208,38 +208,38 @@ function StageTimeCard({ card }: { card: CrmStageTimeCard }) {
   return (
     <MetricCard
       label={card.label}
-      value={formatHoras(card.promedio)}
+      value={formatHours(card.promedio)}
       color={card.accent}
-      subValue={`Mediana ${formatHoras(card.mediana)} · P75 ${formatHoras(card.p75)}`}
+      subValue={`Mediana ${formatHours(card.mediana)} · P75 ${formatHours(card.p75)}`}
       caption={
         card.fiable
-          ? `${formatHoras(card.sumaHoras)} ÷ ${formatInteger(card.muestra)} salidas`
+          ? `${formatHours(card.hoursTotal)} ÷ ${formatInteger(card.muestra)} salidas`
           : `Muestra corta: ${formatInteger(card.muestra)} salidas`
       }
       indicator={card.fiable}
     >
-      {card.sinSalida > 0 && (
+      {card.noExit > 0 && (
         <>
           <p className="text-[9px] font-bold uppercase text-amber-500/80">
-            Fuera del promedio: {formatInteger(card.sinSalida)} sin salir
+            Fuera del promedio: {formatInteger(card.noExit)} sin salir
           </p>
           <p className="text-[9px] font-bold uppercase text-slate-500">
-            Llevan {formatHoras(card.horasSinSalida)} ·{' '}
-            {formatInteger(card.sinSalidaAbiertas)} abiertas ·{' '}
-            {formatInteger(card.sinSalidaCerradas)} cerradas aquí
+            Llevan {formatHours(card.noExitHours)} ·{' '}
+            {formatInteger(card.noExitOpen)} abiertas ·{' '}
+            {formatInteger(card.noExitClosed)} cerradas aquí
           </p>
         </>
       )}
 
       <p className="pt-1 text-[9px] font-bold uppercase text-slate-500">Destino de las salidas</p>
       <ProgressBar
-        label={`Avanzaron (${formatHoras(card.horasAvance)})`}
+        label={`Avanzaron (${formatHours(card.advanceHours)})`}
         percent={card.pctAvance}
         valueLabel={`${formatTwoDecimals(card.pctAvance)}%`}
         color="green"
       />
       <ProgressBar
-        label={`Devueltos a E8 (${formatHoras(card.horasDevolucion)})`}
+        label={`Devueltos a E8 (${formatHours(card.returnHours)})`}
         percent={card.pctDevolucion}
         valueLabel={`${formatTwoDecimals(card.pctDevolucion)}%`}
         color="red"
@@ -273,7 +273,7 @@ function LeaderTile({
         value={row ? row.valor : '—'}
         caption={
           row
-            ? `${formatHoras(row.promedio)} · ${formatVariacion(row.variacionPct)} vs. el periodo · ${formatInteger(row.muestra)} medidas`
+            ? `${formatHours(row.promedio)} · ${formatVariacion(row.variacionPct)} vs. el periodo · ${formatInteger(row.muestra)} medidas`
             : emptyMessage
         }
         size="md"
@@ -299,7 +299,7 @@ const STAGE_TIME_COLUMNS: Column<CrmStageTimeDimensionRow>[] = [
   },
   {
     header: 'Promedio',
-    accessor: (r) => <span className="font-bold text-white">{formatHoras(r.promedio)}</span>,
+    accessor: (r) => <span className="font-bold text-white">{formatHours(r.promedio)}</span>,
     align: 'right',
     sortKey: 'promedio',
   },
@@ -313,13 +313,13 @@ const STAGE_TIME_COLUMNS: Column<CrmStageTimeDimensionRow>[] = [
     align: 'right',
     sortKey: 'variacionPct',
   },
-  { header: 'Mediana', accessor: (r) => formatHoras(r.mediana), align: 'right', sortKey: 'mediana' },
-  { header: 'P75', accessor: (r) => formatHoras(r.p75), align: 'right', sortKey: 'p75' },
+  { header: 'Mediana', accessor: (r) => formatHours(r.mediana), align: 'right', sortKey: 'mediana' },
+  { header: 'P75', accessor: (r) => formatHours(r.p75), align: 'right', sortKey: 'p75' },
   {
     header: 'Horas totales',
-    accessor: (r) => formatHoras(r.sumaHoras),
+    accessor: (r) => formatHours(r.hoursTotal),
     align: 'right',
-    sortKey: 'sumaHoras',
+    sortKey: 'hoursTotal',
   },
   {
     header: 'Salidas',
@@ -329,15 +329,15 @@ const STAGE_TIME_COLUMNS: Column<CrmStageTimeDimensionRow>[] = [
   },
   {
     header: 'Sin salir (fuera)',
-    accessor: (r) => <span className="text-amber-400">{formatInteger(r.sinSalida)}</span>,
+    accessor: (r) => <span className="text-amber-400">{formatInteger(r.noExit)}</span>,
     align: 'right',
-    sortKey: 'sinSalida',
+    sortKey: 'noExit',
   },
   {
     header: 'Sin salir %',
-    accessor: (r) => <span className="text-amber-400">{formatTwoDecimals(r.pctSinSalida)}%</span>,
+    accessor: (r) => <span className="text-amber-400">{formatTwoDecimals(r.pctNoExit)}%</span>,
     align: 'right',
-    sortKey: 'pctSinSalida',
+    sortKey: 'pctNoExit',
   },
   // The three below share a different denominator — the exits alone — so the
   // header carries it: read against `Medidas` they do not add up to anything.
@@ -355,8 +355,8 @@ const STAGE_TIME_COLUMNS: Column<CrmStageTimeDimensionRow>[] = [
   },
   {
     header: 'Otras % (salidas)',
-    accessor: (r) => <span className="text-slate-400">{formatTwoDecimals(r.pctOtro)}%</span>,
+    accessor: (r) => <span className="text-slate-400">{formatTwoDecimals(r.pctOther)}%</span>,
     align: 'right',
-    sortKey: 'pctOtro',
+    sortKey: 'pctOther',
   },
 ];

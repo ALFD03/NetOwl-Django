@@ -32,11 +32,11 @@ from __future__ import annotations
 from typing import Any
 
 # Etiquetas con que la reguladora nombra lo que el catalogo guarda como codigo.
-PERSONA_FORMULARIO = {"nat": "Persona Natural", "PYME": "Persona Jurídica"}
+PERSON_FORM = {"nat": "Persona Natural", "PYME": "Persona Jurídica"}
 SERVICIO_FORMULARIO = {"FTTH": "Fibra", "RF": "Inalámbrico"}
 
 PERSONA_POR_DEFECTO = "Persona Natural"
-SERVICIO_POR_DEFECTO = "Inalámbrico"
+DEFAULT_SERVICE = "Inalámbrico"
 
 # Prefijos de las filas que no salen del catalogo comercial sino de las
 # excepciones por orden, agrupadas por velocidad.
@@ -46,17 +46,17 @@ PREFIJO_TRANSPORTE = "Transporte de Datos"
 # La reguladora no pide el consumo medido sino el **teorico**: lo que ese plan
 # moveria saturado durante un trimestre. La formula es suya, no nuestra:
 #   (Mbps -> Kbps) / 8000 -> MB/s, x3600 -> MB/h, x24 -> MB/dia, x90 -> MB/trimestre
-SEGUNDOS_POR_HORA = 3600
-HORAS_POR_DIA = 24
-DIAS_DECLARADOS = 90
+SECONDS_PER_HOUR = 3600
+HOURS_PER_DAY = 24
+DECLARED_DAYS = 90
 
 # Cuanto de la velocidad contratada se declara como velocidad promedio real.
 # Son dos numeros distintos porque la radio comparte el medio y la fibra no.
-FACTOR_PROMEDIO = {"RF": 0.5, "FTTH": 0.2}
-FACTOR_PROMEDIO_POR_DEFECTO = 0.5
+AVERAGE_FACTOR = {"RF": 0.5, "FTTH": 0.2}
+DEFAULT_AVERAGE_FACTOR = 0.5
 
 
-def mbps_texto(mbps: float) -> str:
+def mbps_text(mbps: float) -> str:
     """`10.0` -> `10`, `2.5` -> `2.5`. Es lo que va en el nombre sintetizado."""
     return f"{mbps:g}"
 
@@ -67,19 +67,19 @@ def _kbps(mbps: float) -> int:
 
 def _consumo_trimestral_mb(mbps: float, suscriptores: int) -> float:
     """El consumo teorico del plan en MB, por todos sus suscriptores."""
-    mb_por_segundo = (mbps * 1000) / 8000
-    return mb_por_segundo * SEGUNDOS_POR_HORA * HORAS_POR_DIA * DIAS_DECLARADOS * suscriptores
+    mb_per_second = (mbps * 1000) / 8000
+    return mb_per_second * SECONDS_PER_HOUR * HOURS_PER_DAY * DECLARED_DAYS * suscriptores
 
 
-def _velocidad_promedio_kbps(mbps: float, tecnologia: str) -> int:
-    factor = FACTOR_PROMEDIO.get(tecnologia, FACTOR_PROMEDIO_POR_DEFECTO)
+def _average_speed_kbps(mbps: float, tecnologia: str) -> int:
+    factor = AVERAGE_FACTOR.get(tecnologia, DEFAULT_AVERAGE_FACTOR)
     return int(round(mbps * factor * 1000))
 
 
-def nombre_sintetizado(mbps: float, *, es_transporte: bool) -> str:
+def synthesized_name(mbps: float, *, es_transporte: bool) -> str:
     """El nombre con que se declara un grupo de enlaces de la misma velocidad."""
     prefijo = PREFIJO_TRANSPORTE if es_transporte else PREFIJO_DEDICADO
-    return f"{prefijo} {mbps_texto(mbps)} Mbps"
+    return f"{prefijo} {mbps_text(mbps)} Mbps"
 
 
 def _agregar(filas: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -118,13 +118,13 @@ def _agregar(filas: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         grupo["_precios"].append(float(regulador.get("precio") or 0.0))
 
     for grupo in grupos.values():
-        precios = grupo.pop("_precios")
-        grupo["precio"] = round(sum(precios) / len(precios), 2) if precios else 0.0
+        prices = grupo.pop("_precios")
+        grupo["precio"] = round(sum(prices) / len(prices), 2) if prices else 0.0
 
     return grupos
 
 
-def construir_formularios(
+def build_forms(
     filas: list[dict[str, Any]],
     entidades: list[str],
 ) -> dict[str, Any]:
@@ -149,8 +149,8 @@ def construir_formularios(
         mbps = grupo["datas_mbps"]
         suscriptores = grupo["suscriptores"]
         tecnologia = grupo["tecnologia"]
-        persona = PERSONA_FORMULARIO.get(grupo["tipo_persona"], PERSONA_POR_DEFECTO)
-        servicio = SERVICIO_FORMULARIO.get(tecnologia, SERVICIO_POR_DEFECTO)
+        persona = PERSON_FORM.get(grupo["tipo_persona"], PERSONA_POR_DEFECTO)
+        servicio = SERVICIO_FORMULARIO.get(tecnologia, DEFAULT_SERVICE)
 
         if grupo["es_transporte"]:
             transporte.append({
@@ -172,7 +172,7 @@ def construir_formularios(
             "tipo_servicio": servicio,
             "uplink_kbps": _kbps(mbps),
             "downlink_kbps": _kbps(mbps),
-            "velocidad_promedio_kbps": _velocidad_promedio_kbps(mbps, tecnologia),
+            "velocidad_promedio_kbps": _average_speed_kbps(mbps, tecnologia),
             "consumo_promedio_mb": round(_consumo_trimestral_mb(mbps, suscriptores), 2),
         })
 

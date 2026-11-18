@@ -39,12 +39,12 @@ export default function EtaReport({ etaData }: EtaReportProps) {
    * actualiza el estado local en vez de volver a pedir el periodo entero, que
    * en un mes sin bloquear es el pipeline completo.
    */
-  const cambiarTasa = async (tasa: number) => {
-    const respuesta = await subscriptionsApi.setEtaTasa({ period: selectedPeriod, tasa });
+  const changeRate = async (tasa: number) => {
+    const response = await subscriptionsApi.setEtaTasa({ period: selectedPeriod, tasa });
     setData({
       ...data,
-      tasa_bcv: respuesta.tasa_bcv,
-      tasa_bcv_fuente: respuesta.tasa_bcv_fuente,
+      tasa_bcv: response.tasa_bcv,
+      tasa_bcv_fuente: response.tasa_bcv_fuente,
       tasa_bcv_aviso: '',
     });
   };
@@ -57,13 +57,13 @@ export default function EtaReport({ etaData }: EtaReportProps) {
    * contactar, o el BCV no publicó esos días— es lo que dice si hay que
    * reintentar o escribirla a mano.
    */
-  const consultarTasa = async () => {
+  const fetchRate = async () => {
     try {
-      const respuesta = await subscriptionsApi.consultarEtaTasa(selectedPeriod);
+      const response = await subscriptionsApi.consultarEtaTasa(selectedPeriod);
       setData({
         ...data,
-        tasa_bcv: respuesta.tasa_bcv,
-        tasa_bcv_fuente: respuesta.tasa_bcv_fuente,
+        tasa_bcv: response.tasa_bcv,
+        tasa_bcv_fuente: response.tasa_bcv_fuente,
         tasa_bcv_aviso: '',
       });
     } catch (error) {
@@ -87,12 +87,12 @@ export default function EtaReport({ etaData }: EtaReportProps) {
             isSaving={saving}
             onToggleLock={toggleLock}
             formularios={data.formularios}
-            sinRegulador={data.planes_sin_regulador}
+            withoutRegulatory={data.planes_sin_regulador}
             tasa={data.tasa_bcv ?? 0}
-            tasaFuente={data.tasa_bcv_fuente}
-            tasaAviso={data.tasa_bcv_aviso}
-            onTasaChange={cambiarTasa}
-            onTasaConsultar={consultarTasa}
+            rateSource={data.tasa_bcv_fuente}
+            rateNotice={data.tasa_bcv_aviso}
+            onRateChange={changeRate}
+            onRateFetch={fetchRate}
           />
         </>
       }

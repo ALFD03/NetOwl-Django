@@ -13,7 +13,7 @@ Todas las tareas comparten el mismo esqueleto (`ejecutar_analisis`) y solo se
 diferencian en la funcion de calculo, registrada en `RUNNERS`.
 
 El worker corre varias a la vez (`CELERY_WORKER_CONCURRENCY`), pero nunca dos
-del mismo modulo: eso lo garantiza `bloqueo_modulo`, porque los analisis de un
+del mismo modulo: eso lo garantiza `module_lock`, porque los analisis de un
 mismo modulo comparten tabla. Asi se puede lanzar churn, CRM y soporte a la vez
 y encolar de paso tres meses de churn, que iran uno detras de otro.
 """
@@ -36,11 +36,11 @@ from services.audit.models import AuditLog
 
 from .history import register_import_log
 from .jobs import (
-    AnalisisCancelado,
-    ConsolaJob,
-    bloqueo_modulo,
-    marcar_fin,
-    marcar_inicio,
+    AnalysisCancelled,
+    JobConsole,
+    mark_finished,
+    mark_started,
+    module_lock,
 )
 from .models import AnalysisJob
 
@@ -56,7 +56,7 @@ ESPERA_TURNO_SEGUNDOS = 20
 # El resultado es lo que la vista devolvia antes en el JSON final y lo que la
 # interfaz usa para componer el mensaje de exito.
 
-def _correr_subscriptions(job: AnalysisJob, consola: ConsolaJob):
+def _run_subscriptions(job: AnalysisJob, consola: JobConsole):
     """Analisis mensual de churn mas las metricas de cada dia del mes.
 
     Comprueba el catalogo **antes** de calcular y reutiliza el mismo analyzer para
@@ -100,7 +100,7 @@ def _correr_subscriptions(job: AnalysisJob, consola: ConsolaJob):
     return mensaje, {"periodo_label": periodo_label, "dias_calculados": dias}
 
 
-def _correr_crm(job: AnalysisJob, consola: ConsolaJob):
+def _run_crm(job: AnalysisJob, consola: JobConsole):
     """Analisis del embudo de CRM para un mes, mas el corte de cada dia.
 
     El recorrido de los dias lo hace el propio analisis sobre la base que ya
@@ -117,7 +117,7 @@ def _correr_crm(job: AnalysisJob, consola: ConsolaJob):
     return mensaje, {"periodo_label": job.periodo, "dias_calculados": dias}
 
 
-def _correr_support(job: AnalysisJob, consola: ConsolaJob):
+def _run_support(job: AnalysisJob, consola: JobConsole):
     """Analisis de las cohortes de soporte para un mes, mas el corte de cada dia."""
     from services.support.analytics import get_support_day_series, run_support_analysis
 
@@ -130,11 +130,11 @@ def _correr_support(job: AnalysisJob, consola: ConsolaJob):
     return mensaje, {"periodo_label": job.periodo, "dias_calculados": dias}
 
 
-def _correr_lifetime(job: AnalysisJob, consola: ConsolaJob):
+def _run_lifetime(job: AnalysisJob, consola: JobConsole):
     """Lifetime de las bajas de cada mes, desde enero de 2026.
 
     Calcula todos los meses de una vez; la pagina lee despues el que se elija
-    con `get_lifetime_mes`. El job solo guarda el resumen escalar.
+    con `get_lifetime_month`. El job solo guarda el resumen escalar.
     """
     from services.subscriptions.analytics.lifetime import run_lifetime_analysis
 
@@ -146,11 +146,11 @@ def _correr_lifetime(job: AnalysisJob, consola: ConsolaJob):
     return mensaje, resumen
 
 
-RUNNERS: dict[str, Callable[[AnalysisJob, ConsolaJob], tuple[str, dict]]] = {
-    'subs_analysis': _correr_subscriptions,
-    'crm_analysis': _correr_crm,
-    'support_analysis': _correr_support,
-    'subs_lifetime': _correr_lifetime,
+RUNNERS: dict[str, Callable[[AnalysisJob, JobConsole], tuple[str, dict]]] = {
+    'subs_analysis': _run_subscriptions,
+    'crm_analysis': _run_crm,
+    'support_analysis': _run_support,
+    'subs_lifetime': _run_lifetime,
 }
 
 
@@ -181,33 +181,33 @@ def ejecutar_analisis(self, job_id: str) -> None:
     # Reentrega tras un reinicio del worker, o analisis cancelado mientras
     # esperaba turno: el mensaje sigue en la cola pero la fila ya esta cerrada.
     # Repetirlo reescribiria el periodo entero.
-    if not job.esta_abierto:
+    if not job.is_open:
         logger.warning("Job %s ya cerrado (%s); no se ejecuta", job_id, job.status)
         return
 
-    with bloqueo_modulo(job.module) as turno:
+    with module_lock(job.module) as turno:
         if turno is None:
             # `countdown` y no espera activa: el hueco del worker queda libre
             # para un analisis de otro modulo, que es justo lo que se busca.
             raise self.retry(countdown=ESPERA_TURNO_SEGUNDOS)
-        _ejecutar_con_turno(self, job)
+        _run_with_turn(self, job)
 
 
-def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
+def _run_with_turn(celery_task, job: AnalysisJob) -> None:
     """Cuerpo del analisis, ya con el turno del modulo tomado."""
     # El catalogo se lee cacheado durante 60s. Olvidarlo al empezar garantiza
     # que la ejecucion arranca con lo ultimo que se guardo y, sobre todo, que
     # no cambia de catalogo a mitad de un calculo que dura minutos.
     fixtures.reset_cache()
-    marcar_inicio(job, getattr(tarea.request, 'id', ''))
-    consola = ConsolaJob(job)
+    mark_started(job, getattr(celery_task.request, 'id', ''))
+    consola = JobConsole(job)
     runner = RUNNERS[job.module]
     etiqueta = f"Periodo {job.periodo}" if job.periodo else "Global"
 
     try:
         with capture_console(consola):
             mensaje, resultado = runner(job, consola)
-    except AnalisisCancelado:
+    except AnalysisCancelled:
         # Lo pidio alguien desde la interfaz: la fila ya esta en `cancelled` y con
         # su mensaje. Aqui solo se cierra -vuelca el log parcial, que es lo que
         # dice hasta donde llego- y se deja constancia en el historial.
@@ -217,7 +217,7 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
             .first()
             or "Análisis cancelado."
         )
-        marcar_fin(job, consola, AnalysisJob.CANCELADO, texto)
+        mark_finished(job, consola, AnalysisJob.CANCELLED_STATE, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'warning', texto, job.log)
         _auditar(job, 'analisis_cancelado', AuditLog.REJECTED, texto)
         return
@@ -226,7 +226,7 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
             "El análisis superó el tiempo máximo de ejecución y fue detenido."
             " Revise el volumen de datos o divida el periodo."
         )
-        marcar_fin(job, consola, AnalysisJob.ERROR, texto)
+        mark_finished(job, consola, AnalysisJob.ERROR, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'error', texto, job.log)
         _auditar(job, 'analisis_fallido', AuditLog.ERROR, texto)
         return
@@ -239,13 +239,13 @@ def _ejecutar_con_turno(tarea, job: AnalysisJob) -> None:
             "Fallo en la ejecución del análisis."
             " Consulte el registro de la aplicación para ver el detalle."
         )
-        marcar_fin(job, consola, AnalysisJob.ERROR, texto)
+        mark_finished(job, consola, AnalysisJob.ERROR, texto)
         register_import_log(job.user, job.module, etiqueta, 0, 'error', texto, job.log)
         _auditar(job, 'analisis_fallido', AuditLog.ERROR, texto)
         return
 
     filas = int(resultado.get("dias_calculados") or 0)
-    marcar_fin(job, consola, AnalysisJob.EXITO, mensaje, resultado)
+    mark_finished(job, consola, AnalysisJob.EXITO, mensaje, resultado)
     register_import_log(job.user, job.module, etiqueta, filas, 'success', mensaje, job.log)
     _auditar(job, 'analisis_terminado', AuditLog.OK, mensaje)
 

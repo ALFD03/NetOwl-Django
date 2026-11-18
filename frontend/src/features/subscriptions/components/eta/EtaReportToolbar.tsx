@@ -9,8 +9,8 @@ import {
 import { cn } from '@/shared/lib/cn';
 import { FilterField, PeriodSelector, StatusMessage } from '@/shared/ui';
 import { EtaFormsExportButton } from './EtaFormsExportButton';
-import { useTasaBcvActual } from '../../hooks/useTasaBcvActual';
-import type { EtaFormularios } from '@/shared/types/subscriptions';
+import { useCurrentBcvRate } from '../../hooks/useCurrentBcvRate';
+import type { EtaForms } from '@/shared/types/subscriptions';
 
 interface EtaReportToolbarProps {
   period: string;
@@ -22,18 +22,18 @@ interface EtaReportToolbarProps {
   isSaving: boolean;
   onToggleLock: () => void;
   /** Las tres hojas del formulario de la reguladora, si el periodo las trae. */
-  formularios?: EtaFormularios;
+  formularios?: EtaForms;
   /** Planes que cuentan en el reporte pero todavía no se declaran. */
-  sinRegulador?: string[];
+  withoutRegulatory?: string[];
   /** Tasa guardada para el periodo. `0` = todavía sin fijar. */
   tasa: number;
   /** De dónde salió: el día que publicó el BCV, o «Escrita a mano». */
-  tasaFuente?: string;
+  rateSource?: string;
   /** Por qué no hay tasa, cuando la consulta automática falló. */
-  tasaAviso?: string;
-  onTasaChange: (tasa: number) => void;
+  rateNotice?: string;
+  onRateChange: (tasa: number) => void;
   /** Vuelve a pedirle la tasa al BCV, pisando la guardada. */
-  onTasaConsultar: () => Promise<void>;
+  onRateFetch: () => Promise<void>;
 }
 
 /**
@@ -49,41 +49,41 @@ interface EtaReportToolbarProps {
  * escritura, y guardar «3», «36», «36,5» de camino a «36,50» dejaría en la base
  * de datos tres tasas que nadie quiso.
  */
-function TasaBcvField({
+function BcvRateField({
   tasa,
-  tasaFuente,
-  onTasaChange,
-  onTasaConsultar,
+  rateSource: tasaFuente,
+  onRateChange: onTasaChange,
+  onRateFetch: onTasaConsultar,
 }: {
   tasa: number;
-  tasaFuente?: string;
-  onTasaChange: (tasa: number) => void;
-  onTasaConsultar: () => Promise<void>;
+  rateSource?: string;
+  onRateChange: (tasa: number) => void;
+  onRateFetch: () => Promise<void>;
 }) {
-  const [texto, setTexto] = useState(tasa ? String(tasa) : '');
+  const [texto, setText] = useState(tasa ? String(tasa) : '');
   const [consultando, setConsultando] = useState(false);
 
   // El periodo cambia y con él su tasa: el campo tiene que seguir al reporte,
   // no quedarse con lo que se tecleó para el mes anterior. Se ajusta durante
   // el renderizado y no en un efecto, que provocaría una pintada de más con el
   // valor viejo antes de corregirse.
-  const [tasaVista, setTasaVista] = useState(tasa);
-  if (tasa !== tasaVista) {
-    setTasaVista(tasa);
-    setTexto(tasa ? String(tasa) : '');
+  const [viewedRate, setViewedRate] = useState(tasa);
+  if (tasa !== viewedRate) {
+    setViewedRate(tasa);
+    setText(tasa ? String(tasa) : '');
   }
 
   const confirmar = () => {
     // La coma es lo que se teclea en español y `Number` no la entiende.
     const valor = Number(texto.replace(',', '.'));
     if (!Number.isFinite(valor) || valor < 0) {
-      setTexto(tasa ? String(tasa) : '');
+      setText(tasa ? String(tasa) : '');
       return;
     }
     if (valor !== tasa) onTasaChange(valor);
   };
 
-  const consultar = async () => {
+  const fetchData = async () => {
     setConsultando(true);
     try {
       await onTasaConsultar();
@@ -107,14 +107,14 @@ function TasaBcvField({
         aria-label="Tasa del BCV"
         value={texto}
         placeholder="Sin fijar"
-        onChange={(event) => setTexto(event.target.value)}
+        onChange={(event) => setText(event.target.value)}
         onBlur={confirmar}
         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
         className="w-24 min-w-0 flex-1 bg-transparent px-4 py-2.5 text-xs font-bold text-white placeholder-slate-500 outline-none sm:flex-none"
       />
       <button
         type="button"
-        onClick={consultar}
+        onClick={fetchData}
         disabled={consultando}
         title="Volver a consultar la tasa del BCV para este mes"
         aria-label="Volver a consultar la tasa del BCV"
@@ -135,7 +135,7 @@ function TasaBcvField({
  * para dos cosas: comparar de un vistazo cuánto se ha movido desde que se
  * declaró, y exportar el formulario valorado a día de hoy.
  */
-function TasaActualField({
+function CurrentRateField({
   tasa,
   fuente,
   cargando,
@@ -182,16 +182,16 @@ export function EtaReportToolbar({
   isSaving,
   onToggleLock,
   formularios,
-  sinRegulador,
+  withoutRegulatory: sinRegulador,
   tasa,
-  tasaFuente,
-  tasaAviso,
-  onTasaChange,
-  onTasaConsultar,
+  rateSource: tasaFuente,
+  rateNotice: tasaAviso,
+  onRateChange: onTasaChange,
+  onRateFetch: onTasaConsultar,
 }: EtaReportToolbarProps) {
   // La tasa vigente no se guarda en ninguna parte: no es un dato del periodo,
   // cambia cada día y su sitio es la pantalla, no la tabla del reporte.
-  const tasaActual = useTasaBcvActual();
+  const tasaActual = useCurrentBcvRate();
 
   return (
     <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
@@ -204,14 +204,14 @@ export function EtaReportToolbar({
           onChange={onPeriodChange}
         />
 
-        <TasaBcvField
+        <BcvRateField
           tasa={tasa}
-          tasaFuente={tasaFuente}
-          onTasaChange={onTasaChange}
-          onTasaConsultar={onTasaConsultar}
+          rateSource={tasaFuente}
+          onRateChange={onTasaChange}
+          onRateFetch={onTasaConsultar}
         />
 
-        <TasaActualField
+        <CurrentRateField
           tasa={tasaActual.tasa}
           fuente={tasaActual.fuente}
           cargando={tasaActual.cargando}
@@ -232,9 +232,9 @@ export function EtaReportToolbar({
             formularios={formularios}
             period={period}
             tasa={tasa}
-            tasaActual={tasaActual.tasa}
-            tasaActualFuente={tasaActual.fuente}
-            sinRegulador={sinRegulador}
+            currentRate={tasaActual.tasa}
+            currentRateSource={tasaActual.fuente}
+            withoutRegulatory={sinRegulador}
           />
         )}
 

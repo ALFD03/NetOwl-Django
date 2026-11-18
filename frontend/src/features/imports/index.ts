@@ -4,6 +4,6 @@ export { CsvUploadCard } from './components/CsvUploadCard';
 export { RequirementsCard } from './components/RequirementsCard';
 export { AnalysisRunnerCard } from './components/AnalysisRunnerCard';
 export { ImportHistoryView } from './components/ImportHistoryView';
-export { CatalogoBloqueoModal } from './components/CatalogoBloqueoModal';
-export * from './lib/catalogo';
+export { CatalogBlockModal } from './components/CatalogBlockModal';
+export * from './lib/catalog';
 export type * from './types';

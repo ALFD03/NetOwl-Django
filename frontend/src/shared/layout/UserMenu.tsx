@@ -8,7 +8,7 @@ import { useAuth } from '@/shared/auth/AuthContext';
 import { useTheme, type PreferenciaTema } from '@/shared/hooks/useTheme';
 import { cn } from '@/shared/lib/cn';
 
-const OPCIONES_TEMA: { valor: PreferenciaTema; etiqueta: string; Icono: LucideIcon }[] = [
+const THEME_OPTIONS: { valor: PreferenciaTema; etiqueta: string; Icono: LucideIcon }[] = [
   { valor: 'claro', etiqueta: 'Claro', Icono: Sun },
   { valor: 'oscuro', etiqueta: 'Oscuro', Icono: Moon },
   { valor: 'sistema', etiqueta: 'Sistema', Icono: Monitor },
@@ -22,15 +22,15 @@ function SelectorTema({ compact }: { compact: boolean }) {
   const { preferencia, setPreferencia } = useTheme();
 
   if (compact) {
-    const actual = OPCIONES_TEMA.findIndex((opcion) => opcion.valor === preferencia);
-    const { etiqueta, Icono } = OPCIONES_TEMA[actual];
-    const siguiente = OPCIONES_TEMA[(actual + 1) % OPCIONES_TEMA.length];
+    const current = THEME_OPTIONS.findIndex((option) => option.valor === preferencia);
+    const { etiqueta, Icono } = THEME_OPTIONS[current];
+    const next = THEME_OPTIONS[(current + 1) % THEME_OPTIONS.length];
     return (
       <button
         type="button"
-        onClick={() => setPreferencia(siguiente.valor)}
-        title={`Tema: ${etiqueta}. Cambiar a ${siguiente.etiqueta.toLowerCase()}`}
-        aria-label={`Tema: ${etiqueta}. Cambiar a ${siguiente.etiqueta.toLowerCase()}`}
+        onClick={() => setPreferencia(next.valor)}
+        title={`Tema: ${etiqueta}. Cambiar a ${next.etiqueta.toLowerCase()}`}
+        aria-label={`Tema: ${etiqueta}. Cambiar a ${next.etiqueta.toLowerCase()}`}
         className="flex w-full justify-center rounded-lg border border-slate-700 py-2 text-slate-400 transition-colors hover:bg-surface-hover hover:text-white"
       >
         <Icono className="h-4 w-4" />
@@ -40,7 +40,7 @@ function SelectorTema({ compact }: { compact: boolean }) {
 
   return (
     <div role="radiogroup" aria-label="Tema" className="flex gap-1 rounded-lg bg-surface-tertiary p-1">
-      {OPCIONES_TEMA.map(({ valor, etiqueta, Icono }) => {
+      {THEME_OPTIONS.map(({ valor, etiqueta, Icono }) => {
         const activo = preferencia === valor;
         return (
           <button

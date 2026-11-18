@@ -12,24 +12,24 @@ import type { SalesReportSite, SalesReportNode } from '../hooks/useSalesReportDa
 import type { BusinessUnitGroup, BusinessUnitNode } from '../hooks/useBusinessUnitsData';
 
 /** Una zona del catalogo, tal y como la envia `get_zonas_config()`. */
-export interface ZonaConfig {
+export interface ZoneConfig {
   name: string;
   site: string;
   type: string;
   coordinador?: string;
-  /** Para la herencia de objetivos (ver `lib/objetivos.ts`). */
+  /** Para la herencia de objetivos (ver `lib/targets.ts`). */
   estado?: string;
 }
 
-export interface ZonasConfig {
-  zonas: ZonaConfig[];
+export interface ZonesConfig {
+  zonas: ZoneConfig[];
   /** Orden de presentacion de los sites; el backend es la unica fuente. */
   siteOrder: string[];
 }
 
 const SITE_DESCONOCIDO = 'Otros / Desconocido';
-const TIPO_POR_DEFECTO = 'FTTH';
-const GRUPO_RF = 'NODOS RADIOFRECUENCIA (RF)';
+const DEFAULT_KIND = 'FTTH';
+const RF_GROUP = 'NODOS RADIOFRECUENCIA (RF)';
 
 /**
  * Reagrupa el desglose `zona_sucursal` de un dia en las estructuras que
@@ -45,7 +45,7 @@ const GRUPO_RF = 'NODOS RADIOFRECUENCIA (RF)';
  */
 
 /** "Zona - Sucursal" -> sus dos partes, con el mismo fallback que el backend. */
-const partirValor = (valor: string): { zona: string; sucursal: string } => {
+const splitValue = (valor: string): { zona: string; sucursal: string } => {
   const parts = String(valor).split(' - ');
   return {
     zona: (parts[0] ?? valor).trim(),
@@ -55,9 +55,9 @@ const partirValor = (valor: string): { zona: string; sucursal: string } => {
 
 const num = (value: number | undefined): number => Number(value ?? 0);
 
-const nodoBase = (row: DimensionVal) => {
+const baseNode = (row: DimensionVal) => {
   const valor = String(row.valor ?? '');
-  const { zona, sucursal } = partirValor(valor);
+  const { zona, sucursal } = splitValue(valor);
   return {
     zona_sucursal: valor,
     zona,
@@ -77,13 +77,13 @@ const nodoBase = (row: DimensionVal) => {
   };
 };
 
-const porActivosFinal = <T extends { activos_final?: number }>(a: T, b: T): number =>
+const byActiveAtEnd = <T extends { activos_final?: number }>(a: T, b: T): number =>
   num(b.activos_final) - num(a.activos_final);
 
 /** Ventas: site -> tecnologia -> nodos. */
 export function buildSalesSites(
   rows: DimensionVal[],
-  config: ZonasConfig | undefined,
+  config: ZonesConfig | undefined,
 ): SalesReportSite[] {
   if (!rows.length) return [];
 
@@ -95,9 +95,9 @@ export function buildSalesSites(
   const siteGroups = new Map<string, Map<string, SalesReportNode[]>>();
 
   rows.forEach((row) => {
-    const node = nodoBase(row);
+    const node = baseNode(row);
     const info = zoneInfo.get(node.zona.toLowerCase())
-      ?? { site: SITE_DESCONOCIDO, type: TIPO_POR_DEFECTO };
+      ?? { site: SITE_DESCONOCIDO, type: DEFAULT_KIND };
 
     const techs = siteGroups.get(info.site) ?? new Map<string, SalesReportNode[]>();
     siteGroups.set(info.site, techs);
@@ -120,7 +120,7 @@ export function buildSalesSites(
         .sort()
         .map((technology) => ({
           technology,
-          nodes: [...(siteGroups.get(site)?.get(technology) ?? [])].sort(porActivosFinal),
+          nodes: [...(siteGroups.get(site)?.get(technology) ?? [])].sort(byActiveAtEnd),
         })),
     }));
 }
@@ -128,7 +128,7 @@ export function buildSalesSites(
 /** Unidades de negocio: un grupo por coordinador, mas el bloque RF al final. */
 export function buildBusinessUnitGroups(
   rows: DimensionVal[],
-  config: ZonasConfig | undefined,
+  config: ZonesConfig | undefined,
 ): BusinessUnitGroup[] {
   if (!rows.length) return [];
 
@@ -145,7 +145,7 @@ export function buildBusinessUnitGroups(
   const rfNodes: BusinessUnitNode[] = [];
 
   rows.forEach((row) => {
-    const base = nodoBase(row);
+    const base = baseNode(row);
     const key = base.zona.toLowerCase();
     const node: BusinessUnitNode = { ...base, type: rfZones.has(key) ? 'RF' : 'FTTH' };
 
@@ -163,14 +163,14 @@ export function buildBusinessUnitGroups(
     .sort()
     .map((coordinador) => ({
       coordinador,
-      nodes: [...(coordGroups.get(coordinador) ?? [])].sort(porActivosFinal),
+      nodes: [...(coordGroups.get(coordinador) ?? [])].sort(byActiveAtEnd),
       is_rf: false,
     }));
 
   if (rfNodes.length) {
     groups.push({
-      coordinador: GRUPO_RF,
-      nodes: [...rfNodes].sort(porActivosFinal),
+      coordinador: RF_GROUP,
+      nodes: [...rfNodes].sort(byActiveAtEnd),
       is_rf: true,
     });
   }

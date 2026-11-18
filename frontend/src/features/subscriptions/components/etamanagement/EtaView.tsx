@@ -30,7 +30,7 @@ const tipoDeclaracion = (sub: EtaSubscriptionConfig): string => {
   return 'Internet';
 };
 
-const textoOGuion = (valor?: string) => valor?.trim() || '—';
+const textOrDash = (valor?: string) => valor?.trim() || '—';
 
 /**
  * Parametrización del reporte ETA.
@@ -85,20 +85,20 @@ export function EtaManagementView({
     </button>
   );
 
-  const columnasPendientes: Column<EtaDiscoveredSubscription>[] = [
+  const pendingColumns: Column<EtaDiscoveredSubscription>[] = [
     { header: 'Orden', accessor: 'orden', sortKey: 'orden', className: 'font-bold text-white' },
-    { header: 'Cliente', accessor: (row) => textoOGuion(row.cliente), sortKey: 'cliente' },
-    { header: 'Producto', accessor: (row) => textoOGuion(row.producto), sortKey: 'producto', filterable: true },
+    { header: 'Cliente', accessor: (row) => textOrDash(row.cliente), sortKey: 'cliente' },
+    { header: 'Producto', accessor: (row) => textOrDash(row.producto), sortKey: 'producto', filterable: true },
     {
       header: 'Sucursal',
-      accessor: (row) => textoOGuion(row.sucursal),
+      accessor: (row) => textOrDash(row.sucursal),
       sortKey: 'sucursal',
       filterable: true,
       filterValue: (row) => row.sucursal?.trim() || 'Sin sucursal',
     },
     {
       header: 'Zona',
-      accessor: (row) => textoOGuion(row.zona),
+      accessor: (row) => textOrDash(row.zona),
       sortKey: 'zona',
       filterable: true,
       filterValue: (row) => row.zona?.trim() || 'Sin zona',
@@ -115,18 +115,18 @@ export function EtaManagementView({
     },
   ];
 
-  const columnasGuardadas: Column<EtaSubscriptionConfig>[] = [
+  const savedColumns: Column<EtaSubscriptionConfig>[] = [
     { header: 'Orden', accessor: 'orden', sortKey: 'orden', className: 'font-bold text-white' },
-    { header: 'Cliente', accessor: (row) => textoOGuion(row.cliente), sortKey: 'cliente' },
-    { header: 'Producto', accessor: (row) => textoOGuion(row.producto), sortKey: 'producto', filterable: true },
+    { header: 'Cliente', accessor: (row) => textOrDash(row.cliente), sortKey: 'cliente' },
+    { header: 'Producto', accessor: (row) => textOrDash(row.producto), sortKey: 'producto', filterable: true },
     {
       header: 'Declaración',
       accessor: tipoDeclaracion,
       filterable: true,
       filterValue: tipoDeclaracion,
     },
-    { header: 'Tecnología', accessor: (row) => textoOGuion(row.tecnologia), sortKey: 'tecnologia', filterable: true },
-    { header: 'Persona', accessor: (row) => textoOGuion(row.tipo_persona), sortKey: 'tipo_persona', filterable: true },
+    { header: 'Tecnología', accessor: (row) => textOrDash(row.tecnologia), sortKey: 'tecnologia', filterable: true },
+    { header: 'Persona', accessor: (row) => textOrDash(row.tipo_persona), sortKey: 'tipo_persona', filterable: true },
     { header: 'Mbps', accessor: 'datas_mbps', align: 'right', sortKey: 'datas_mbps' },
     {
       // La renta con la que se declara este enlace. El catálogo comercial no
@@ -230,7 +230,7 @@ export function EtaManagementView({
             />
           ) : (
             <DataTable
-              columns={columnasPendientes}
+              columns={pendingColumns}
               data={discoveredSubs}
               searchable
               searchPlaceholder="Buscar por orden, cliente o producto..."
@@ -255,7 +255,7 @@ export function EtaManagementView({
             />
           ) : (
             <DataTable
-              columns={columnasGuardadas}
+              columns={savedColumns}
               data={individualConfigs}
               searchable
               searchPlaceholder="Buscar por orden, cliente o producto..."

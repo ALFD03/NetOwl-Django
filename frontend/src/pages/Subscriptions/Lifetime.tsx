@@ -2,12 +2,12 @@
 
 import { AppLayout } from '@/shared/layout/AppLayout';
 import { LifetimeView } from '@/features/subscriptions/components/lifetime/LifetimeView';
-import type { LifetimeMes } from '@/features/subscriptions/types';
+import type { LifetimeMonth } from '@/features/subscriptions/types';
 
 interface SubscriptionsLifetimeProps {
   meses?: string[];
   periodo?: string | null;
-  lifetime?: LifetimeMes | null;
+  lifetime?: LifetimeMonth | null;
 }
 
 export default function SubscriptionsLifetime({ meses = [], periodo = null, lifetime = null }: SubscriptionsLifetimeProps) {

@@ -46,17 +46,17 @@ const POLL_INTERVAL_MS = 2000;
  * la pantalla no refleja nada de lo que se acaba de pedir. Esto le da la señal
  * para consultar en el acto, sin bajar el intervalo de todos los demás sondeos.
  */
-type OyenteDeCola = () => void;
-const oyentesDeCola = new Set<OyenteDeCola>();
+type QueueListener = () => void;
+const queueListeners = new Set<QueueListener>();
 
 export function notificarJobEncolado(): void {
-  oyentesDeCola.forEach((oyente) => oyente());
+  queueListeners.forEach((oyente) => oyente());
 }
 
-export function suscribirseAJobsEncolados(oyente: OyenteDeCola): () => void {
-  oyentesDeCola.add(oyente);
+export function suscribirseAJobsEncolados(oyente: QueueListener): () => void {
+  queueListeners.add(oyente);
   return () => {
-    oyentesDeCola.delete(oyente);
+    queueListeners.delete(oyente);
   };
 }
 
@@ -159,7 +159,7 @@ function extractRunningJob(error: unknown): StartJobResponse | null {
 }
 
 /** Lo que responde el lanzamiento de un lote de meses (`jobs._lanzar_lote`). */
-export interface LoteJobs {
+export interface BatchJobs {
   message: string;
   /** Los jobs creados ahora, uno por mes. */
   jobs: AnalysisJob[];
@@ -174,16 +174,16 @@ export interface LoteJobs {
  * endpoints de cálculo. Si todos ya estaban en la cola el servidor responde
  * 409 con ellos en `omitidos`, y se tratan igual: se siguen.
  */
-export async function startBatch(path: string, months: string[]): Promise<LoteJobs> {
+export async function startBatch(path: string, months: string[]): Promise<BatchJobs> {
   try {
-    const lote = (await apiClient.post<LoteJobs>(path, { months })).data;
+    const batch = (await apiClient.post<BatchJobs>(path, { months })).data;
     notificarJobEncolado();
-    return lote;
+    return batch;
   } catch (error) {
-    const respuesta = (error as { response?: { status?: number; data?: LoteJobs } })?.response;
-    if (respuesta?.status === 409 && respuesta.data?.omitidos) {
+    const response = (error as { response?: { status?: number; data?: BatchJobs } })?.response;
+    if (response?.status === 409 && response.data?.omitidos) {
       notificarJobEncolado();
-      return respuesta.data;
+      return response.data;
     }
     throw error;
   }

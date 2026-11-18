@@ -63,7 +63,7 @@ Cada medida aporta once columnas: siete estadísticos (`medio`, `mediana`, `min`
 **No hay umbral de duración.** Un ciclo de treinta segundos es un ciclo de
 treinta segundos, y descartarlo por corto era tirar dato bueno para protegerse
 del malo. Lo único que deja fuera a un ticket es que sus fechas no sirvan
-(`_tramos_validos`):
+(`_valid_tiers`):
 
 | Medida | Condición |
 |---|---|
@@ -190,7 +190,7 @@ las columnas booleanas y `filter(columna, valor)` recorta esa misma tabla al
 bajar de nivel dimensional. `poblacion(nombre)` devuelve la sub-tabla sobre la
 que se mide cada métrica.
 
-`periodos_disponibles` une los meses de creación y los de cierre: **un mes en el
+`available_periods` une los meses de creación y los de cierre: **un mes en el
 que no nació nada pero sí se cerró arrastre sigue teniendo un reporte que dar**.
 
 `build_cohort(df_all, periodo, hasta=None)` acepta un día de corte: con `hasta`
@@ -220,10 +220,10 @@ una de las cientos de sub-cohortes de un corte.
 
 1. `ensure_tables(db, *tables.ALL)` — idempotente, no pierde nada en una
    instalación con datos.
-2. Si hay logs de etapa cargados, `flujo.run_flujo_analysis` rehace
+2. Si hay logs de etapa cargados, `flow.run_flow_analysis` rehace
    `support_ticket_flujo` (ver «Logs de etapa y escalamiento»). Va **primero**
    porque de él sale cuándo escaló cada ticket. Sin logs, lo dice y no hace nada.
-3. Lee, clasifica y reparte el escalamiento (`escalamiento.cargar_tickets`).
+3. Lee, clasifica y reparte el escalamiento (`escalation.load_tickets`).
 4. Para cada periodo objetivo: construye la cohorte, calcula el bloque con
    `compute_metrics_for_period` y guarda:
    - `support_cierre_historico` — el bloque completo como JSONB, con *upsert*
@@ -254,18 +254,18 @@ de ticket.
 
 | Función | Qué devuelve |
 |---|---|
-| `get_support_periodos()` | Los periodos con cierre |
-| `get_support_cierre_historico(periodos)` | El histórico con las métricas del JSONB **ya aplanadas**: las tablas y las sparklines leen los escalares por nombre, y el JSONB es un detalle de almacenamiento |
+| `get_support_periods()` | Los periodos con cierre |
+| `get_support_close_history(periodos)` | El histórico con las métricas del JSONB **ya aplanadas**: las tablas y las sparklines leen los escalares por nombre, y el JSONB es un detalle de almacenamiento |
 | `get_support_metric_totals()` | El dashboard de empresa: promedio de todos los periodos más su serie |
 | `get_support_dimension_metrics(periodo)` | Las filas dimensionales persistidas |
 | `get_support_analytics_structured(periodo)` | **Todo lo que la vista de periodo necesita en una sola carga** |
 | `get_support_breakdown(periodo, dimension, valor, grupo)` | El drill-down de un valor: sus tipos, razones y soluciones, calculado al vuelo |
-| `get_incidencia_por_zona(...)` | Tickets por cada 100 clientes de la zona |
+| `get_incidence_by_zone(...)` | Tickets por cada 100 clientes de la zona |
 | `get_support_tickets_list(limit, grupo, periodo)` | Listado crudo de tickets |
 | `get_support_day_series(mes)` | La serie ligera: el bloque global de cada día, sin desgloses. Es lo que dice qué días hay calculados |
 | `get_support_day_payload(mes, dia)` | El corte completo de un día: `{global, grupos, incidencia_zonas}` |
 
-`estructurar_grupos(filas)` agrupa las filas dimensionales por grupo de trabajo,
+`structure_groups(filas)` agrupa las filas dimensionales por grupo de trabajo,
 y la usan por igual las persistidas del mes y las que un corte diario trae ya
 calculadas: el front recibe exactamente lo mismo en los dos casos.
 
@@ -291,7 +291,7 @@ incidencia = tickets del grupo en la zona / suscriptores activos de la zona × 1
   el periodo pedido aún no está calculado en suscripciones, se usa el más
   reciente disponible.
 - **Es la única dependencia entre dominios**: soporte lee un resultado de
-  suscripciones. Además, `_load_zone_info` usa `fixtures.zonas_por_nombre()`
+  suscripciones. Además, `_load_zone_info` usa `fixtures.zones_by_name()`
   para el site y la tecnología de cada zona.
 
 Se devuelven **todos los grupos** en un mapa, no solo el seleccionado, porque el
@@ -355,17 +355,17 @@ El export identifica a una persona por el literal de `Asignado a` y
 técnico: el mismo nombre escrito de dos maneras son dos técnicos distintos en
 el reporte y nada avisa.
 
-`services/support/models.py` registra la forma buena. `UsuarioSoporte.nombre_odoo`
+`services/support/models.py` registra la forma buena. `SupportUser.nombre_odoo`
 es la clave —**el nombre exacto tal y como Odoo lo exporta, sufijo `(User)`
 incluido**—. Es `(User)` en singular, que es lo que dicen los tickets ya
 cargados: de los 329 nombres distintos de `asignado_a` y `creado_por`, todos
 menos cuatro lo escriben así, cuatro lo escriben `(user)`, y solo `OdooBot` y el
-relleno `Sin Especificar` no lo llevan. `normalizar_nombre_odoo` deja siempre esa
+relleno `Sin Especificar` no lo llevan. `normalize_odoo_name` deja siempre esa
 forma, y vive en `save()` y no solo en la vista porque la unicidad se apoya en
 ella.
 
-**La coincidencia no mira ni el sufijo ni las mayúsculas** (`nombre_base` +
-`casefold`, en `analytics/usuarios.py:_clave`). Las dos renuncias las pide el
+**La coincidencia no mira ni el sufijo ni las mayúsculas** (`base_name` +
+`casefold`, en `analytics/users.py:_key`). Las dos renuncias las pide el
 dato: el mismo export escribe `(User)`, `(user)` y nada, y el directorio se
 rellena copiando el literal pero nada impide teclearlo luego con otra caja. Todo
 eso es una sola persona.
@@ -384,7 +384,7 @@ suscripciones: cada entorno tiene su propio directorio.
 
 ### La pestaña «Por registrar»
 
-`analytics/usuarios.py:usuarios_fuera_del_directorio()` cruza el directorio con
+`analytics/users.py:users_outside_directory()` cruza el directorio con
 `support_tickets`: agrupa las dos columnas de persona, normaliza cada literal y
 devuelve los que nadie ha registrado, con cuántos tickets tiene asignados y
 cuántos ha creado por separado —son dos papeles distintos del mismo directorio—.
@@ -403,17 +403,17 @@ En los dos ejes de persona, el panel de dimensión ofrece una segunda lectura:
 las mismas cifras sumadas por el departamento al que pertenece cada quien.
 
 **El departamento se resuelve al leer, no al calcular.**
-`usuarios.anotar_departamentos` cuelga un `departamento` de cada valor de
+`users.annotate_departments` cuelga un `departamento` de cada valor de
 `asignado_a` y `creado_por`, y lo llaman `get_support_analytics_structured` y
 `get_support_day_payload`. Deliberadamente **no** se llama desde
-`estructurar_grupos`, que comparten la lectura del mes y la *escritura* de los
+`structure_groups`, que comparten la lectura del mes y la *escritura* de los
 cortes diarios: anotar ahí dejaría el departamento grabado dentro del JSON del
 día. Resolverlo al leer es lo que hace que corregir a quién pertenece alguien se
 vea en todos los meses, también en los ya analizados, sin reejecutar nada.
 
 **La suma la hace el cliente, y solo porque es exacta.** Dentro de un grupo de
 trabajo cada ticket tiene un solo asignado y un solo creador, así que las
-personas parten el conjunto: `agruparPorDepartamento`
+personas parten el conjunto: `groupByDepartment`
 (`frontend/src/features/support/lib/supportMetrics.ts`) suma los volúmenes sin contar
 nada dos veces, recalcula las tasas desde esas sumas —nunca promedia
 porcentajes, cada uno trae fijado su denominador— y pondera los tiempos medios
@@ -421,7 +421,7 @@ por su `muestra_*`, que da exactamente la media del conjunto.
 
 **Lo que no se puede reconstruir son las medianas, los percentiles, la
 desviación y el `pct_excede_promedio`**: hacen falta los tickets uno a uno. Salen
-en cero, y la tabla de departamentos no los enseña —`SUPPORT_DEPARTAMENTO_COLUMNS`
+en cero, y la tabla de departamentos no los enseña —`SUPPORT_DEPARTMENT_COLUMNS`
 quita la columna de mediana y añade «Personas»— en vez de enseñar un promedio de
 medianas. Para la distribución de alguien concreto, su fila sigue estando en la
 vista por persona.
@@ -432,7 +432,7 @@ que es donde el drill-down sí existe.
 
 ---
 
-## Logs de etapa y escalamiento (`logs.py`, `flujo.py`)
+## Logs de etapa y escalamiento (`logs.py`, `flow.py`)
 
 El export de tickets da un estado y una `duracion_total_horas`, que Odoo cuenta
 desde la creación también en un ticket escalado: suma el tiempo de ATC y el de
@@ -453,7 +453,7 @@ logs eran nuevos y cuántos ya estaban. Las cabeceras se aceptan con o sin el
 prefijo `Registros de tiempo/`. La página de importación muestra los logs por
 mes, para ver qué lote falta.
 
-### El catálogo de etapas (`EtapaSoporte`, `/support/etapas/`)
+### El catálogo de etapas (`SupportStage`, `/support/etapas/`)
 
 El sufijo `- Soporte Técnico` no basta para saber de quién es una etapa (hay
 pausas de Soporte sin sufijo), así que cada etapa declara su **equipo** (ATC,
@@ -477,21 +477,21 @@ ejecutar el análisis, en todos los meses.
   creación): de los demás no se sabe qué pasó antes del primer log.
 - Ahora es la hora de Caracas (UTC-4).
 
-`_crear_tramos` arma los tramos con funciones de ventana en una tabla temporal y
-`_persistir_flujo` rehace `support_ticket_flujo`: una fila por ticket con su
+`_build_segments` arma los tramos con funciones de ventana en una tabla temporal y
+`_persist_flow` rehace `support_ticket_flujo`: una fila por ticket con su
 `escalado_el`, la salida de la cola de cada equipo y las horas `h_<equipo>_<tipo>`.
 No hay un bloque mensual aparte: lo que de esto importa entra en las cohortes de
 los grupos.
 
-### El escalamiento dentro de los grupos (`escalamiento.py`)
+### El escalamiento dentro de los grupos (`escalation.py`)
 
 El export de tickets solo conoce el grupo de hoy: un ticket que ATC escaló dice
 `Soporte Técnico Nivel 1`, con la fecha de creación de ATC, y ATC no lo ve en
-ninguna parte. `incorporar_escalamiento` lo parte en dos filas con los logs:
+ninguna parte. `add_escalation` lo parte en dos filas con los logs:
 
 | | Copia de ATC (`es_escalado`) | Fila de Soporte (`llego_escalado`) |
 |---|---|---|
-| Grupo | `Atención al cliente` (`GRUPO_ATC`) | el del export |
+| Grupo | `Atención al cliente` (`GROUP_ATC`) | el del export |
 | Creación | la del ticket | **el escalamiento** |
 | Asignación | la del export si es anterior al escalamiento; si no, la salida de la cola de ATC | la salida de la cola de Soporte; si no, la del export si es posterior al escalamiento |
 | Cierre | el escalamiento: **cerrado**, ni resuelto ni cancelado | el del export |
@@ -509,9 +509,9 @@ ninguna parte. `incorporar_escalamiento` lo parte en dos filas con los logs:
 - Un ticket sin logs queda como dice el export: el análisis funciona igual sin
   logs, solo que sin escalamiento.
 
-Lo usan el análisis (`cargar_tickets`), los cortes por día (sobre el mismo frame)
+Lo usan el análisis (`load_tickets`), los cortes por día (sobre el mismo frame)
 y el drill-down (`queries._load_period_cohort`, que suma a los tickets del mes
-los escalados en él con `escalados_entre`).
+los escalados en él con `escalated_between`).
 
 ### Dónde se ve
 
@@ -523,7 +523,7 @@ resueltos, cancelados, escalados y sin cerrar). «En qué se va el tiempo» repa
 las horas promedio de lo cerrado en cola, pausa y gestión, con el promedio para
 escalar y qué parte de los escalados pasa de él.
 
-### Tickets abiertos (`get_tickets_abiertos`)
+### Tickets abiertos (`get_open_tickets`)
 
 Se calcula al leer, contra la hora actual, desde `support_ticket_flujo`: depende
 del último análisis y de los lotes cargados. Un ticket abierto según los logs y

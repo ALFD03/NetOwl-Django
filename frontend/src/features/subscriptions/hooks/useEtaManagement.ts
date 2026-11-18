@@ -22,8 +22,8 @@ export function useEtaManagement({ allKnownPlans = [], discoveredPlans = [], dis
   };
   const [error, setError] = useState<string | null>(null);
   // Abrir un formulario empieza de cero: el error que hubiera es de la acción anterior.
-  const formularioAbierto = Boolean(editingSub || deletingItem);
-  useOnOpen(formularioAbierto, () => setError(null));
+  const formOpen = Boolean(editingSub || deletingItem);
+  useOnOpen(formOpen, () => setError(null));
 
   /** Ejecuta una escritura; si falla, el error queda en el modal abierto o en la página. */
   const run = async (action: () => Promise<unknown>, fallo: string) => {

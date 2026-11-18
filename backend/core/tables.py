@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 from psycopg2 import sql
 
-from .config import ACTIVO_FALSE_TOKENS, ACTIVO_TRUE_TOKENS, DATE_FORMATS, DB_SCHEMA
+from .config import DATE_FORMATS, DB_SCHEMA, FALSE_TOKENS, TRUE_TOKENS
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +126,8 @@ def to_bool(series: pd.Series, unknown: bool | None = None) -> pd.Series:
         return series.astype("boolean")
     text = series.astype("string").str.strip().str.lower().fillna("")
     out = pd.Series(unknown, index=series.index, dtype="boolean")
-    out[text.isin(ACTIVO_TRUE_TOKENS)] = True
-    out[text.isin(ACTIVO_FALSE_TOKENS)] = False
+    out[text.isin(TRUE_TOKENS)] = True
+    out[text.isin(FALSE_TOKENS)] = False
     return out
 
 
@@ -227,7 +227,7 @@ def _cast(column: str, current: str, target: str) -> sql.Composable:
         return sql.SQL(
             "CASE WHEN lower(btrim({c})) = ANY({yes}) THEN true"
             " WHEN lower(btrim({c})) = ANY({no}) THEN false END"
-        ).format(c=c, yes=sql.Literal(sorted(ACTIVO_TRUE_TOKENS)), no=sql.Literal(sorted(ACTIVO_FALSE_TOKENS)))
+        ).format(c=c, yes=sql.Literal(sorted(TRUE_TOKENS)), no=sql.Literal(sorted(FALSE_TOKENS)))
     if target == JSON:
         return sql.SQL("CASE WHEN btrim({c}) IN ('', 'None', 'null') THEN NULL ELSE {c}::jsonb END").format(c=c)
     return sql.SQL("{}::{}").format(c, sql.SQL(target))

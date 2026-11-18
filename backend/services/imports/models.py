@@ -96,26 +96,26 @@ class AnalysisJob(models.Model):
     `status` y ya esta: no hace falta una bandera aparte porque la fila ya es la
     fuente de verdad. Un job en cola deja de estar abierto, asi que la tarea lo
     descarta al recogerlo (ver `ejecutar_analisis`); uno en curso lo ve en su
-    siguiente punto de control y se detiene solo (ver `ConsolaJob`). El estado
+    siguiente punto de control y se detiene solo (ver `JobConsole`). El estado
     tampoco lleva CHECK en Postgres -Django no lo genera para `choices`-, asi que
     anadir el valor no toca la tabla.
     """
 
     PENDIENTE = 'pending'
-    EN_CURSO = 'running'
+    RUNNING = 'running'
     EXITO = 'success'
     ERROR = 'error'
-    CANCELADO = 'cancelled'
+    CANCELLED_STATE = 'cancelled'
 
     STATUS_CHOICES = [
         (PENDIENTE, 'En cola'),
-        (EN_CURSO, 'En ejecucion'),
+        (RUNNING, 'En ejecucion'),
         (EXITO, 'Completado'),
         (ERROR, 'Error'),
-        (CANCELADO, 'Cancelado'),
+        (CANCELLED_STATE, 'Cancelado'),
     ]
 
-    ESTADOS_ABIERTOS = (PENDIENTE, EN_CURSO)
+    OPEN_STATES = (PENDIENTE, RUNNING)
 
     # UUID y no autoincremental: el id viaja al navegador y se sondea sin sesion
     # de por medio; un entero correlativo deja adivinar ejecuciones ajenas.
@@ -159,9 +159,9 @@ class AnalysisJob(models.Model):
         return f"{self.get_module_display()} | {self.periodo or 'global'} | {self.status}"
 
     @property
-    def esta_abierto(self):
+    def is_open(self):
         """Si la ejecucion sigue viva: encolada o calculando."""
-        return self.status in self.ESTADOS_ABIERTOS
+        return self.status in self.OPEN_STATES
 
     @property
     def esta_muerto(self):
@@ -171,7 +171,7 @@ class AnalysisJob(models.Model):
         `running` para siempre y bloquearia cualquier ejecucion posterior del
         mismo modulo. Pasado el margen se le deja de tener en cuenta.
         """
-        if not self.esta_abierto:
+        if not self.is_open:
             return False
         margen = getattr(settings, 'ANALYSIS_JOB_STALE_SECONDS', 15 * 60)
         return (timezone.now() - self.updated_at).total_seconds() > margen

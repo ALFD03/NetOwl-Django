@@ -4,8 +4,8 @@ import { Calendar, Filter, Search, Wifi } from 'lucide-react';
 import {
   FilterField, FILTER_TRIGGER_CLASS, PeriodSelector, SearchInput, SelectMenu,
 } from '@/shared/ui';
-import type { FiltroMetrica, NivelFiltro } from '../../lib/filtroMetrica';
-import { FiltroMetricaField } from './FiltroMetricaField';
+import type { MetricFilter, FilterLevel } from '../../lib/metricFilter';
+import { MetricFilterField } from './MetricFilterField';
 
 type Technology = 'ALL' | 'FTTH' | 'RF';
 
@@ -21,12 +21,12 @@ interface Props {
   searchTerm: string;
   onSearchChange: (value: string) => void;
   searchPlaceholder: string;
-  filtroMetrica: FiltroMetrica;
-  onFiltroMetricaChange: (filtro: FiltroMetrica) => void;
+  metricFilter: MetricFilter;
+  onMetricFilterChange: (filtro: MetricFilter) => void;
   /** Cómo se llaman en este reporte los dos niveles a los que se aplica el filtro por métrica. */
-  nivelesFiltro: Record<NivelFiltro, string>;
+  filterLevels: Record<FilterLevel, string>;
   /** Hay un día de corte: sin él no se puede filtrar por proyección. */
-  proyeccionDisponible: boolean;
+  projectionAvailable: boolean;
 }
 
 /**
@@ -49,10 +49,10 @@ export function SubscriptionReportFilters({
   searchTerm,
   onSearchChange,
   searchPlaceholder,
-  filtroMetrica,
-  onFiltroMetricaChange,
-  nivelesFiltro,
-  proyeccionDisponible,
+  metricFilter: filtroMetrica,
+  onMetricFilterChange: onFiltroMetricaChange,
+  filterLevels: nivelesFiltro,
+  projectionAvailable: proyeccionDisponible,
 }: Props) {
   return (
     <div className="mb-8 flex flex-wrap items-center gap-4">
@@ -93,11 +93,11 @@ export function SubscriptionReportFilters({
         />
       </FilterField>
 
-      <FiltroMetricaField
+      <MetricFilterField
         filtro={filtroMetrica}
         onChange={onFiltroMetricaChange}
         niveles={nivelesFiltro}
-        proyeccionDisponible={proyeccionDisponible}
+        projectionAvailable={proyeccionDisponible}
       />
 
       <FilterField grow icon={<Search className="w-4 h-4" />}>

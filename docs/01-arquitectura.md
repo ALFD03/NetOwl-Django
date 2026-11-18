@@ -132,9 +132,9 @@ Navegador                Django (web)                 Redis          Worker Cele
 
 Piezas clave:
 
-- **`services/imports/jobs.py`** — `lanzar_analisis()` (validar, rechazar el
-  duplicado exacto, crear la fila y encolar), `bloqueo_modulo()` (cerrojo Redis
-  por módulo y entorno) y `ConsolaJob` (buffer de stdout que vuelca el log a la
+- **`services/imports/jobs.py`** — `launch_analysis()` (validar, rechazar el
+  duplicado exacto, crear la fila y encolar), `module_lock()` (cerrojo Redis
+  por módulo y entorno) y `JobConsole` (buffer de stdout que vuelca el log a la
   fila cada 2 segundos).
 - **`services/imports/tasks.py`** — una sola tarea, `imports.ejecutar_analisis`,
   y un diccionario `RUNNERS` que la especializa por módulo. **Para añadir un

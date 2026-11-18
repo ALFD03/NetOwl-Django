@@ -23,7 +23,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection
 
-ESQUEMAS_DEL_SISTEMA = ("pg_catalog", "information_schema", "pg_toast")
+SYSTEM_SCHEMAS = ("pg_catalog", "information_schema", "pg_toast")
 
 
 class Command(BaseCommand):
@@ -34,7 +34,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.avisos = 0
-        self._base_de_datos()
+        self._database()
         self._redis()
         self._django()
         if self.avisos:
@@ -47,11 +47,11 @@ class Command(BaseCommand):
     def _ok(self, texto):
         self.stdout.write(self.style.SUCCESS(f"  OK     {texto}"))
 
-    def _aviso(self, texto):
+    def _warning(self, texto):
         self.avisos += 1
         self.stdout.write(self.style.WARNING(f"  AVISO  {texto}"))
 
-    def _base_de_datos(self):
+    def _database(self):
         self.stdout.write("Postgres")
         with connection.cursor() as cur:
             cur.execute("SELECT ssl, version FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
@@ -59,18 +59,18 @@ class Command(BaseCommand):
             if fila and fila[0]:
                 self._ok(f"conexion cifrada ({fila[1]})")
             else:
-                self._aviso("la conexion NO va cifrada: las credenciales y los datos viajan en claro. "
+                self._warning("la conexion NO va cifrada: las credenciales y los datos viajan en claro. "
                             "Se activa con ssl=on en el servidor y sslmode=require en DBCONFIG.")
 
             cur.execute("SELECT current_user, rolsuper, rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname = current_user")
-            usuario, superusuario, crea_roles, crea_bases = cur.fetchone()
+            usuario, superusuario, creates_roles, crea_bases = cur.fetchone()
             if superusuario:
-                self._aviso(f"el rol {usuario} es SUPERUSUARIO de Postgres: puede leer y borrar todo el servidor.")
+                self._warning(f"el rol {usuario} es SUPERUSUARIO de Postgres: puede leer y borrar todo el servidor.")
             else:
                 self._ok(f"el rol {usuario} no es superusuario")
-            if crea_roles or crea_bases:
-                self._aviso(f"el rol {usuario} puede crear {'roles' if crea_roles else ''}"
-                            f"{' y ' if crea_roles and crea_bases else ''}{'bases' if crea_bases else ''}.")
+            if creates_roles or crea_bases:
+                self._warning(f"el rol {usuario} puede crear {'roles' if creates_roles else ''}"
+                            f"{' y ' if creates_roles and crea_bases else ''}{'bases' if crea_bases else ''}.")
 
             cur.execute(
                 """
@@ -80,11 +80,11 @@ class Command(BaseCommand):
                   AND has_schema_privilege(current_user, nspname, 'USAGE')
                 ORDER BY nspname
                 """,
-                (ESQUEMAS_DEL_SISTEMA, settings.DB_SCHEMA),
+                (SYSTEM_SCHEMAS, settings.DB_SCHEMA),
             )
             otros = [f[0] for f in cur.fetchall()]
             if otros:
-                self._aviso(f"el rol entra tambien en otros esquemas: {', '.join(otros)}. "
+                self._warning(f"el rol entra tambien en otros esquemas: {', '.join(otros)}. "
                             "Un rol por entorno, con permisos solo sobre su esquema, impide que "
                             "desarrollo toque produccion.")
             else:
@@ -96,39 +96,39 @@ class Command(BaseCommand):
         if url.scheme == "rediss":
             self._ok("conexion por TLS")
         else:
-            self._aviso("Redis va sin TLS (redis://).")
+            self._warning("Redis va sin TLS (redis://).")
         try:
             import redis
         except ImportError:
-            self._aviso("no se pudo importar el cliente de Redis.")
+            self._warning("no se pudo importar el cliente de Redis.")
             return
-        sin_credenciales = url._replace(netloc=f"{url.hostname}:{url.port or 6379}").geturl()
+        without_credentials = url._replace(netloc=f"{url.hostname}:{url.port or 6379}").geturl()
         try:
-            redis.Redis.from_url(sin_credenciales, socket_connect_timeout=3).ping()
+            redis.Redis.from_url(without_credentials, socket_connect_timeout=3).ping()
         except redis.AuthenticationError:
             self._ok("Redis exige contrasena")
         except redis.ResponseError as e:
             if "NOAUTH" in str(e):
                 self._ok("Redis exige contrasena")
             else:
-                self._aviso(f"respuesta inesperada de Redis: {e}")
+                self._warning(f"respuesta inesperada de Redis: {e}")
         except redis.ConnectionError:
-            self._aviso(f"no se pudo conectar a Redis en {url.hostname}:{url.port or 6379} (¿tunel cerrado?).")
+            self._warning(f"no se pudo conectar a Redis en {url.hostname}:{url.port or 6379} (¿tunel cerrado?).")
         else:
-            self._aviso("Redis acepta ordenes SIN contrasena: cualquiera que llegue al puerto puede leer la "
+            self._warning("Redis acepta ordenes SIN contrasena: cualquiera que llegue al puerto puede leer la "
                         "cola, los cerrojos y los contadores de intentos. Se activa con requirepass y "
                         "la contrasena en REDIS_URL.")
             if url.password is None:
-                self._aviso("REDIS_URL no lleva contrasena.")
+                self._warning("REDIS_URL no lleva contrasena.")
 
     def _django(self):
         self.stdout.write("Django")
         if settings.DEBUG:
-            self._aviso("DEBUG esta activo: un error muestra el codigo y la configuracion a quien lo provoque.")
+            self._warning("DEBUG esta activo: un error muestra el codigo y la configuracion a quien lo provoque.")
         else:
             self._ok("DEBUG desactivado")
         for nombre in ("SESSION_COOKIE_SECURE", "CSRF_COOKIE_SECURE"):
             if getattr(settings, nombre, False):
                 self._ok(f"{nombre} activo")
             else:
-                self._aviso(f"{nombre} desactivado: la cookie viaja tambien por HTTP sin cifrar.")
+                self._warning(f"{nombre} desactivado: la cookie viaja tambien por HTTP sin cifrar.")

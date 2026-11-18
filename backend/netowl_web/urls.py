@@ -18,8 +18,8 @@ api_patterns = [
     path("crm/", include("services.crm.api_urls")),
     path("support/", include("services.support.api_urls")),
     path("imports/", include("services.imports.api_urls")),
-    path("catalogs/", include("services.catalogos.api_urls")),
-    path("commissions/", include("services.comisiones.api_urls")),
+    path("catalogs/", include("services.catalogs.api_urls")),
+    path("commissions/", include("services.commissions.api_urls")),
     re_path(r"^.*$", api_not_found, name="not_found"),
 ]
 
@@ -31,7 +31,7 @@ urlpatterns = [
     path("auth/", include("services.config.urls")),
     path("imports/", include("services.imports.urls")),
     path("support/", include("services.support.urls")),
-    path("catalogos/", include("services.catalogos.urls")),
-    path("comisiones/", include("services.comisiones.urls")),
+    path("catalogos/", include("services.catalogs.urls")),
+    path("comisiones/", include("services.commissions.urls")),
     path("auditoria/", include("services.audit.urls")),
 ]

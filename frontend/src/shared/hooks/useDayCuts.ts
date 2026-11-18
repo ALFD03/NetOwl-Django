@@ -15,7 +15,7 @@ const daysInMonth = (periodoMes: string): number => {
  * compartir el enlace debe caer en el mismo día. `replaceState` hace justo eso y
  * nada más; pedirlo con la página volvería a calcularla entera.
  */
-function anotarEnUrl(dia: number): void {
+function writeToUrl(dia: number): void {
   if (typeof window === 'undefined') return;
   const url = new URL(window.location.href);
   url.searchParams.set('dia', String(dia));
@@ -43,20 +43,20 @@ export function useDayCuts(dayMetrics: DayCuts | undefined) {
   );
 
   // El servidor ya resolvió a qué día cayó: sin `?dia=`, al último calculado.
-  const diaServidor = dayMetrics?.dia ?? 0;
-  const [selectedDay, setSelectedDay] = useState(diaServidor);
-  const [visto, setVisto] = useState(diaServidor);
+  const serverDay = dayMetrics?.dia ?? 0;
+  const [selectedDay, setSelectedDay] = useState(serverDay);
+  const [visto, setVisto] = useState(serverDay);
 
   // Ajuste en render, no en efecto: al cambiar de mes —que sí es una visita— la
   // barra vuelve a lo que diga el servidor.
-  if (diaServidor !== visto) {
-    setVisto(diaServidor);
-    setSelectedDay(diaServidor);
+  if (serverDay !== visto) {
+    setVisto(serverDay);
+    setSelectedDay(serverDay);
   }
 
   const selectDay = useCallback((dia: number) => {
     setSelectedDay(dia);
-    anotarEnUrl(dia);
+    writeToUrl(dia);
   }, []);
 
   return { availableDays, totalDays, selectedDay, selectDay };

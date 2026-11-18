@@ -91,18 +91,18 @@ def import_invoices(csv_path: str) -> int:
 def invoices_imported_at() -> datetime | None:
     """Cuándo se cargó el export de facturas que hay en la base; None si no hay ninguno."""
     db = DBConnector()
-    if not db.table_exists(TableNames.SUBSCRIPTIONS_FACTURAS):
+    if not db.table_exists(TableNames.SUBSCRIPTIONS_INVOICES):
         return None
-    value = db.query(f'SELECT MAX(importado_el) AS at FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_FACTURAS}"')["at"].iloc[0]
+    value = db.query(f'SELECT MAX(importado_el) AS at FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_INVOICES}"')["at"].iloc[0]
     return None if pd.isna(value) else pd.Timestamp(value).to_pydatetime()
 
 
 def invoices_have_payment_dates() -> bool:
     """Si el export cargado trae la fecha del pago (los antiguos no la traían)."""
     db = DBConnector()
-    if not db.table_exists(TableNames.SUBSCRIPTIONS_FACTURAS):
+    if not db.table_exists(TableNames.SUBSCRIPTIONS_INVOICES):
         return False
-    table = f'"{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_FACTURAS}"'
+    table = f'"{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_INVOICES}"'
     return bool(db.query(f"SELECT EXISTS (SELECT 1 FROM {table} WHERE fecha_pago IS NOT NULL) AS has")["has"].iloc[0])
 
 
@@ -118,12 +118,12 @@ def read_invoices(orders: list[str]) -> dict[str, list[dict[str, Any]]]:
     if not orders:
         return {}
     db = DBConnector()
-    if not db.table_exists(TableNames.SUBSCRIPTIONS_FACTURAS):
+    if not db.table_exists(TableNames.SUBSCRIPTIONS_INVOICES):
         return {}
     df = db.query(
         f"""
         SELECT orden, numero, estado, estado_pago, creado_el, producto, fecha_pago, actualizado_el
-        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_FACTURAS}"
+        FROM "{DB_SCHEMA}"."{TableNames.SUBSCRIPTIONS_INVOICES}"
         WHERE orden = ANY(%s)
         """,
         params=[orders],

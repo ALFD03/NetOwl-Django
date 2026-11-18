@@ -1,7 +1,7 @@
 """Las tablas de soporte: las que llena la importación y las del análisis.
 
 `support_ticket_flujo` no está aquí: la rehace entera una consulta
-(`CREATE TABLE … AS`) en cada análisis (ver `flujo.py`).
+(`CREATE TABLE … AS`) en cada análisis (ver `flow.py`).
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ TICKET_LOGS = Table(
     defaults={"importado_en": "now()"},
 )
 CLOSE_HISTORY = Table(
-    TableNames.SUPPORT_CIERRE_HISTORICO,
+    TableNames.SUPPORT_CLOSE_HISTORY,
     {"id": SERIAL, "periodo_reporte": TEXT, "metricas": JSON, "updated_at": TIMESTAMP},
     primary_key=("id",),
     unique=("periodo_reporte",),
@@ -49,7 +49,7 @@ DIMENSION_HISTORY = Table(
     defaults={"updated_at": "now()"},
 )
 GLOBAL_METRICS = Table(
-    TableNames.SUPPORT_METRICAS_GLOBALES,
+    TableNames.SUPPORT_GLOBAL_METRICS,
     {
         "id": INT32, "resumen_global": JSON, "por_grupo_trabajo": JSON, "periodos_evaluados": INT32,
         "updated_at": TIMESTAMP,

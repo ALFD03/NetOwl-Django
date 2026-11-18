@@ -32,7 +32,7 @@ export interface CampoOdoo {
 }
 
 /** Los campos de un tipo de export, para listarlos junto a sus requisitos. */
-export interface GrupoCamposOdoo {
+export interface OdooFieldGroup {
   key: string;
   label: string;
   campos: CampoOdoo[];

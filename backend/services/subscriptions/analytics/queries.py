@@ -17,7 +17,7 @@ from typing import Any
 
 from core.config import DB_SCHEMA, TableNames
 from core.database import DBConnector
-from core.fixtures import orden_sites, zonas, zonas_disponibles
+from core.fixtures import available_zones, sites_order, zonas
 from core.utils import zero_nulls
 
 logger = logging.getLogger(__name__)
@@ -29,13 +29,13 @@ def get_site_sort_index(site_name: str) -> int:
     El orden ya no es una lista en el codigo sino la columna `Site.orden`; lo
     que no este dado de alta se va al final, igual que antes.
     """
-    orden = orden_sites()
+    orden = sites_order()
     try:
         return orden.index(site_name)
     except ValueError:
         return len(orden)
 
-def get_cierre_churn(
+def get_churn_close(
     periodos: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Los cierres mensuales, del mas reciente al mas antiguo.
@@ -44,7 +44,7 @@ def get_cierre_churn(
     """
     db = DBConnector()
     try:
-        df = zero_nulls(db.read_table_filtered(TableNames.ANALYZER_CIERRE_HISTORICO, "periodo_reporte", periodos))
+        df = zero_nulls(db.read_table_filtered(TableNames.ANALYZER_CLOSE_HISTORY, "periodo_reporte", periodos))
         if df.empty:
             return []
         result: list[dict[str, Any]] = []
@@ -137,11 +137,11 @@ def get_dimensiones(
         logger.exception("Error getting churn dimensiones")
         return []
 
-def get_periodos() -> list[str]:
+def get_periods() -> list[str]:
     """Las etiquetas de periodo que tienen cierre calculado."""
     db = DBConnector()
     try:
-        df = db.read_table(TableNames.ANALYZER_CIERRE_HISTORICO)
+        df = db.read_table(TableNames.ANALYZER_CLOSE_HISTORY)
         if df.empty:
             return []
         return sorted(df["periodo_reporte"].unique().tolist(), reverse=True)
@@ -154,13 +154,13 @@ def get_analytics_data(
 ) -> dict[str, Any]:
     """Cierres y dimensiones de los periodos pedidos, para la pagina de Analytics."""
     return {
-        "periodos": get_cierre_churn(periodos),
+        "periodos": get_churn_close(periodos),
         "dimensiones": get_dimensiones(periodos),
     }
 
 
 
-def get_zonas_config() -> dict[str, Any]:
+def get_zones_config() -> dict[str, Any]:
     """Mapa de zonas para que el cliente agrupe los reportes sin ir al servidor.
 
     Es la misma fuente (el catalogo) que usan `get_sales_report_data` y
@@ -168,22 +168,22 @@ def get_zonas_config() -> dict[str, Any]:
     la barra de corte sea una reagrupacion en memoria y no un round-trip.
     `siteOrder` viaja aparte para no duplicar el orden en TypeScript.
     """
-    if not zonas_disponibles():
-        return {"zonas": [], "siteOrder": orden_sites()}
-    zonas_catalogo = [
+    if not available_zones():
+        return {"zonas": [], "siteOrder": sites_order()}
+    catalog_zones = [
         {
             "name": str(z.get("name", "")).strip(),
             "site": str(z.get("Site", "Valencia")).strip(),
             "type": str(z.get("Type", "FTTH")).strip(),
             "coordinador": str(z.get("Coordinador") or "").strip(),
             # Para la herencia de objetivos: una zona sin objetivo propio toma
-            # el de su coordinador, su site o su estado (ver `objetivos.py`).
+            # el de su coordinador, su site o su estado (ver `targets.py`).
             "estado": str(z.get("Estado") or "").strip(),
         }
         for z in zonas()
         if str(z.get("name", "")).strip()
     ]
-    return {"zonas": zonas_catalogo, "siteOrder": orden_sites()}
+    return {"zonas": catalog_zones, "siteOrder": sites_order()}
 
 
 def _dimension_df(db: DBConnector, target_period: str, dia: int | None):
@@ -228,8 +228,8 @@ def calculate_aggregation_totals(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     # Fórmulas de agregación consistentes
     crecimiento = round(((act_fin - act_ini) / act_ini * 100), 2) if act_ini > 0 else 0.0
     
-    bajas_netas_calc = max(0, act_ini - (act_fin - nuevos))
-    churn_neto = round((bajas_netas_calc / act_ini * 100), 2) if act_ini > 0 else 0.0
+    net_churn_calc = max(0, act_ini - (act_fin - nuevos))
+    churn_neto = round((net_churn_calc / act_ini * 100), 2) if act_ini > 0 else 0.0
     churn_bruto = round((bajas / act_ini * 100), 2) if act_ini > 0 else 0.0
 
     return {
@@ -256,13 +256,13 @@ def get_sales_report_data(
     """
     db = DBConnector()
     try:
-        available_periods = get_periodos()
+        available_periods = get_periods()
         if not available_periods:
             return {"status": "empty", "message": "No hay periodos calculados"}
         
         target_period = periodo_reporte or available_periods[0]
         
-        if not zonas_disponibles():
+        if not available_zones():
             return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Catálogos → Estructura."}
 
         # Mapeamos zonas a su respectivo Site y Type (Tecnología)
@@ -291,12 +291,12 @@ def get_sales_report_data(
         for _, row in df.iterrows():
             val_str = str(row["valor"])
             parts = val_str.split(" - ")
-            zona_name = parts[0].strip() if len(parts) > 0 else val_str
-            sucursal_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
+            zone_name = parts[0].strip() if len(parts) > 0 else val_str
+            branch_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
             
             # Zona que no esta en el catalogo: se agrupa aparte, con la
             # tecnologia por defecto del catalogo.
-            z_data = zone_info.get(zona_name.lower(), {"site": "Otros / Desconocido", "type": "FTTH"})
+            z_data = zone_info.get(zone_name.lower(), {"site": "Otros / Desconocido", "type": "FTTH"})
             site = z_data["site"]
             tech_type = z_data["type"]
             
@@ -305,8 +305,8 @@ def get_sales_report_data(
             
             site_groups[site][tech_type].append({
                 "zona_sucursal": val_str,
-                "zona": zona_name,
-                "sucursal": sucursal_name,
+                "zona": zone_name,
+                "sucursal": branch_name,
                 "activos_inicio": int(row.get("activos_inicio") or 0),
                 "activos_final": int(row.get("activos_final") or 0),
                 "nuevos": int(row.get("nuevos") or 0),
@@ -362,7 +362,7 @@ def get_sales_report_data(
         }
     except Exception:
         # `traceback.print_exc()` escribia a stdout, y dentro de la tarea de
-        # Celery stdout esta redirigido a `ConsolaJob`: la traza entera —rutas
+        # Celery stdout esta redirigido a `JobConsole`: la traza entera —rutas
         # de fichero, nombres de funcion, fragmentos de SQL— acababa en
         # `AnalysisJob.log` y de ahi al navegador. El detalle va al log del
         # servidor y al cliente solo le llega que fallo.
@@ -384,13 +384,13 @@ def get_business_units_data(
     """
     db = DBConnector()
     try:
-        available_periods = get_periodos()
+        available_periods = get_periods()
         if not available_periods:
             return {"status": "empty", "message": "No hay periodos calculados"}
         
         target_period = periodo_reporte or available_periods[0]
         
-        if not zonas_disponibles():
+        if not available_zones():
             return {"status": "error", "message": "El catálogo de zonas está vacío. Configúralo en Catálogos → Estructura."}
 
         # 1. Indexar zonas por Coordinador, RF y FTTH
@@ -433,16 +433,16 @@ def get_business_units_data(
         for _, row in df.iterrows():
             val_str = str(row["valor"])
             parts = val_str.split(" - ")
-            zona_name = parts[0].strip() if len(parts) > 0 else val_str
-            sucursal_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
+            zone_name = parts[0].strip() if len(parts) > 0 else val_str
+            branch_name = parts[1].strip() if len(parts) > 1 else "Sin Sucursal"
             
-            z_key = zona_name.lower()
+            z_key = zone_name.lower()
             z_type = "RF" if z_key in rf_zones_set else "FTTH"
 
             node_data = {
                 "zona_sucursal": val_str,
-                "zona": zona_name,
-                "sucursal": sucursal_name,
+                "zona": zone_name,
+                "sucursal": branch_name,
                 "type": z_type,  # 👈 2. AÑADIDO: Tipo de servicio (FTTH o RF)
                 "activos_inicio": int(row.get("activos_inicio") or 0),
                 "activos_final": int(row.get("activos_final") or 0),
@@ -511,7 +511,7 @@ def get_business_units_data(
         }
     except Exception:
         # `traceback.print_exc()` escribia a stdout, y dentro de la tarea de
-        # Celery stdout esta redirigido a `ConsolaJob`: la traza entera —rutas
+        # Celery stdout esta redirigido a `JobConsole`: la traza entera —rutas
         # de fichero, nombres de funcion, fragmentos de SQL— acababa en
         # `AnalysisJob.log` y de ahi al navegador. El detalle va al log del
         # servidor y al cliente solo le llega que fallo.
@@ -522,10 +522,10 @@ def get_business_units_data(
         }
 
 
-def restringir_unidades(
+def restrict_units(
     bu_data: dict[str, Any],
     day_metrics: dict[str, Any],
-    zonas_config: dict[str, Any],
+    zones_config: dict[str, Any],
     unidades: frozenset[str],
     rf: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -533,7 +533,7 @@ def restringir_unidades(
 
     Deja solo las unidades de `unidades` (por nombre de coordinador) y el bloque
     RF si `rf`. El recorte es del servidor, no del selector: el cliente reagrupa
-    cada dia a partir de `day_metrics` y `zonas_config`, asi que esos dos se
+    cada dia a partir de `day_metrics` y `zones_config`, asi que esos dos se
     recortan tambien a las zonas visibles, y `dims` (solo de Analytics) se quita.
 
     El **consolidado FTTH se ve siempre**, y es el de toda la empresa. El
@@ -543,14 +543,14 @@ def restringir_unidades(
     nodo con la suma da exactamente lo mismo que sumar los nodos, y su meta es
     la general, que tampoco depende del reparto por zonas.
     """
-    zonas = zonas_config.get("zonas", [])
-    coordinador_de = {z["name"].lower(): z["coordinador"] for z in zonas if z.get("coordinador")}
-    zonas_rf = {z["name"].lower() for z in zonas if str(z.get("type", "")).upper() == "RF"}
-    visibles = {zona for zona, c in coordinador_de.items() if c in unidades}
+    zonas = zones_config.get("zonas", [])
+    coordinator_of = {z["name"].lower(): z["coordinador"] for z in zonas if z.get("coordinador")}
+    rf_zones = {z["name"].lower() for z in zonas if str(z.get("type", "")).upper() == "RF"}
+    visibles = {zona for zona, c in coordinator_of.items() if c in unidades}
     if rf:
-        visibles |= zonas_rf
+        visibles |= rf_zones
 
-    def zona_de(valor: Any) -> str:
+    def zone_of(valor: Any) -> str:
         return str(valor).split(" - ")[0].strip().lower()
 
     def consolidado(nodos: list[dict[str, Any]], reactivaciones: str) -> dict[str, int]:
@@ -565,16 +565,16 @@ def restringir_unidades(
     # Lo mismo que suma el cliente: los nodos FTTH de las unidades (no del
     # bloque RF, que agrupa por tecnologia).
     grupos = bu_data.get("data") or []
-    ftth_cierre = [
+    ftth_close = [
         nodo for g in grupos if not g.get("is_rf")
         for nodo in g.get("nodes", []) if nodo.get("type") == "FTTH"
     ]
     dias = (day_metrics or {}).get("dias") or {}
-    ftth_dias = {
+    ftth_days = {
         dia: consolidado([
             fila for fila in corte.get("dimensiones", [])
-            if zona_de(fila.get("valor")) in coordinador_de
-            and zona_de(fila.get("valor")) not in zonas_rf
+            if zone_of(fila.get("valor")) in coordinator_of
+            and zone_of(fila.get("valor")) not in rf_zones
         ], "react_val")
         for dia, corte in dias.items()
     }
@@ -586,8 +586,8 @@ def restringir_unidades(
             if (rf if g.get("is_rf") else g.get("coordinador") in unidades)
         ]
     bu["ftth_consolidado"] = {
-        "cierre": consolidado(ftth_cierre, "reactivaciones"),
-        "dias": ftth_dias,
+        "cierre": consolidado(ftth_close, "reactivaciones"),
+        "dias": ftth_days,
     }
     bu["alcance"] = {"coordinadores": sorted(unidades), "rf": rf}
 
@@ -598,11 +598,11 @@ def restringir_unidades(
                 "global": corte.get("global", {}),
                 "dimensiones": [
                     fila for fila in corte.get("dimensiones", [])
-                    if zona_de(fila.get("valor")) in visibles
+                    if zone_of(fila.get("valor")) in visibles
                 ],
             }
             for dia, corte in dias.items()
         }
 
-    zc = {**zonas_config, "zonas": [z for z in zonas if z["name"].lower() in visibles]}
+    zc = {**zones_config, "zonas": [z for z in zonas if z["name"].lower() in visibles]}
     return bu, dm, zc

@@ -19,16 +19,16 @@ import {
 } from '@/shared/ui';
 import { useAsyncAction } from '@/shared/hooks/useAsyncAction';
 import { formatInteger } from '@/shared/utils/formatters';
-import { colorTramo } from '../../charts/lifetimeChart';
-import type { LifetimeDimensionFila, LifetimeMes, LifetimeResumen } from '../../types';
+import { tierColor } from '../../charts/lifetimeChart';
+import type { LifetimeDimensionRow, LifetimeMonth, LifetimeSummary } from '../../types';
 import { LifetimeExportButton } from './LifetimeExportButton';
-import { LifetimeTramosPanel } from './LifetimeTramosPanel';
+import { LifetimeTiersPanel } from './LifetimeTiersPanel';
 import { useVisit } from '@/shared/page/PageData';
 
 interface LifetimeViewProps {
   meses: string[];
   periodo: string | null;
-  lifetime: LifetimeMes | null;
+  lifetime: LifetimeMonth | null;
 }
 
 // El producto no se desglosa: el export guarda el plan de hoy, y el de casi
@@ -38,7 +38,7 @@ const DIMENSION_OPTIONS = Object.entries(DIMENSION_CONFIG)
   .filter(([key]) => key !== 'producto')
   .map(([key, config]) => ({ key, label: config.label, icon: config.icon }));
 
-const formatDias = (value: number | null | undefined): string =>
+const formatDays = (value: number | null | undefined): string =>
   value === null || value === undefined ? '—' : `${formatInteger(value)} d`;
 
 /**
@@ -47,7 +47,7 @@ const formatDias = (value: number | null | undefined): string =>
  */
 function PctTemprano({ pct }: { pct: number }) {
   // Un valor alto es malo: se fueron pronto. Se usa la rampa de los tramos al revés.
-  const color = colorTramo(Math.round((1 - Math.min(pct, 100) / 100) * 4), 5);
+  const color = tierColor(Math.round((1 - Math.min(pct, 100) / 100) * 4), 5);
   return (
     <div className="flex items-center justify-end gap-2">
       <div className="hidden h-1.5 w-14 overflow-hidden rounded-full bg-slate-800 xl:block">
@@ -58,7 +58,7 @@ function PctTemprano({ pct }: { pct: number }) {
   );
 }
 
-const DIMENSION_COLUMNS: Column<LifetimeDimensionFila>[] = [
+const DIMENSION_COLUMNS: Column<LifetimeDimensionRow>[] = [
   {
     header: 'Etiqueta',
     accessor: (r) => (
@@ -70,14 +70,14 @@ const DIMENSION_COLUMNS: Column<LifetimeDimensionFila>[] = [
   { header: 'Bajas', accessor: (r) => formatInteger(r.bajas), align: 'right', sortKey: 'bajas' },
   {
     header: 'Mediana',
-    accessor: (r) => <span className="font-black text-amber-400">{formatDias(r.mediana)}</span>,
+    accessor: (r) => <span className="font-black text-amber-400">{formatDays(r.mediana)}</span>,
     align: 'right',
     sortKey: 'mediana',
   },
-  { header: 'Promedio', accessor: (r) => formatDias(r.promedio), align: 'right', sortKey: 'promedio' },
+  { header: 'Promedio', accessor: (r) => formatDays(r.promedio), align: 'right', sortKey: 'promedio' },
   {
     header: 'P25 – P75',
-    accessor: (r) => <span className="text-slate-400">{formatDias(r.p25)} – {formatDias(r.p75)}</span>,
+    accessor: (r) => <span className="text-slate-400">{formatDays(r.p25)} – {formatDays(r.p75)}</span>,
     align: 'right',
     sortKey: 'p25',
   },
@@ -85,20 +85,20 @@ const DIMENSION_COLUMNS: Column<LifetimeDimensionFila>[] = [
   { header: 'Se fueron ≤ 90 d', accessor: (r) => <PctTemprano pct={r.pct_90} />, align: 'right', sortKey: 'pct_90' },
 ];
 
-function ResumenMedida({ resumen, color }: { resumen: LifetimeResumen; color: 'blue' }) {
+function MeasureSummary({ resumen, color }: { resumen: LifetimeSummary; color: 'blue' }) {
   return (
     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-      <MetricCard label="Promedio" value={formatDias(resumen.promedio)} color={color} />
-      <MetricCard label="Mediana" value={formatDias(resumen.mediana)} color={color} subValue="La mitad duró menos" />
+      <MetricCard label="Promedio" value={formatDays(resumen.promedio)} color={color} />
+      <MetricCard label="Mediana" value={formatDays(resumen.mediana)} color={color} subValue="La mitad duró menos" />
       <MetricCard
         label="P25 – P75"
-        value={`${formatDias(resumen.p25)} – ${formatDias(resumen.p75)}`}
+        value={`${formatDays(resumen.p25)} – ${formatDays(resumen.p75)}`}
         color="slate"
         subValue="La mitad central"
       />
       <MetricCard
         label="Mínimo – Máximo"
-        value={`${formatDias(resumen.min)} – ${formatDias(resumen.max)}`}
+        value={`${formatDays(resumen.min)} – ${formatDays(resumen.max)}`}
         color="slate"
       />
     </div>
@@ -118,7 +118,7 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
   // Al terminar el job los datos de la página se vuelven a pedir solos.
   const handleRun = () => void recompute.run();
 
-  const cambiarMes = (mes: string) =>
+  const changeMonth = (mes: string) =>
     visit({ period: mes });
 
   const toolbar = (
@@ -128,7 +128,7 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
         icon={<Calendar className="h-4 w-4 text-brand" />}
         value={periodo ?? ''}
         options={meses}
-        onChange={cambiarMes}
+        onChange={changeMonth}
       />
       {lifetime && <LifetimeExportButton mes={lifetime.mes} />}
       <div className="flex flex-col items-start gap-2">
@@ -172,10 +172,10 @@ export function LifetimeView({ meses, periodo, lifetime }: LifetimeViewProps) {
         subtitle={`De la fecha de instalación a la baja, de las ${formatInteger(lifetime.bajas)} bajas instaladas desde ${lifetime.instaladas_desde}.`}
         icon={<Clock className="h-5 w-5" />}
       >
-        <ResumenMedida resumen={lifetime.resumen} color="blue" />
+        <MeasureSummary resumen={lifetime.resumen} color="blue" />
       </NeonContainer>
 
-      <LifetimeTramosPanel lifetime={lifetime} />
+      <LifetimeTiersPanel lifetime={lifetime} />
 
       <NeonContainer
         theme="slate"

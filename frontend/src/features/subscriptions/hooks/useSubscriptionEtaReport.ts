@@ -21,9 +21,9 @@ export function useSubscriptionEtaReport(initialData: SubscriptionEtaReportRespo
   const [fallido, setFallido] = useState<string | null>(null);
 
   // Ajuste en render: otro periodo olvida el fallo del anterior.
-  const [periodoVisto, setPeriodoVisto] = useState(period);
-  if (period !== periodoVisto) {
-    setPeriodoVisto(period);
+  const [viewedPeriod, setViewedPeriod] = useState(period);
+  if (period !== viewedPeriod) {
+    setViewedPeriod(period);
     setFallido(null);
   }
 
@@ -49,6 +49,6 @@ export function useSubscriptionEtaReport(initialData: SubscriptionEtaReportRespo
     return () => { activo = false; };
   }, [period, data.periodo]);
 
-  const cambiandoDePeriodo = Boolean(period) && period !== data.periodo && fallido !== period;
-  return { data, loading: forzando || cambiandoDePeriodo, fetchReport, setData };
+  const changingPeriod = Boolean(period) && period !== data.periodo && fallido !== period;
+  return { data, loading: forzando || changingPeriod, fetchReport, setData };
 }

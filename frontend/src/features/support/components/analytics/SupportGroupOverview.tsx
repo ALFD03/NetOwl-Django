@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 import { SankeyChart } from '@/shared/charts';
-import type { SankeyEnlace, SankeyNodo } from '@/shared/charts';
+import type { SankeyEnlace, SankeyNode } from '@/shared/charts';
 import { METRIC_COLOR } from '@/shared/constants/theme';
 import {
   EmptyState,
@@ -33,15 +33,15 @@ import {
   type NeonTheme,
 } from '@/shared/ui';
 import { formatInteger, formatTwoDecimals } from '@/shared/utils';
-import { formatDuracion } from '../../lib/flujoFormat';
+import { formatDuration } from '../../lib/flowFormat';
 import { MEASURE_ICONS } from '../../lib/measureIcons';
-import { QUE_ES_TIPO, partesDelTiempo, tiempoDonutData } from '../../lib/supportCharts';
-import { AnilloConCentro } from './AnilloConCentro';
+import { QUE_ES_TIPO, timeParts, timeDonutData } from '../../lib/supportCharts';
+import { CenteredRing } from './CenteredRing';
 import {
   ASIGNACION,
-  CIERRE_TOTAL,
-  ESCALAMIENTO,
-  GESTION,
+  CLOSE_TOTAL,
+  ESCALATION,
+  HANDLING,
   TIME_MEASURE_META,
   distribution,
 } from '../../lib/supportMetrics';
@@ -120,8 +120,8 @@ function TimingPanel({
  * nacido y cerrado en él. El arrastre sólo alimenta desenlaces: lo que entra de
  * meses anteriores y sigue abierto no está en la cohorte del mes.
  */
-function RecorridoDelMes({ groupName, stats }: { groupName: string; stats: SupportStats }) {
-  const delMes = {
+function MonthPath({ groupName, stats }: { groupName: string; stats: SupportStats }) {
+  const ofMonth = {
     resueltos: stats.tickets_resueltos_periodo,
     cancelados: stats.tickets_cancelados_periodo,
     escalados: stats.tickets_escalados_periodo,
@@ -131,13 +131,13 @@ function RecorridoDelMes({ groupName, stats }: { groupName: string; stats: Suppo
     cancelados: stats.tickets_cancelados_arrastre,
     escalados: stats.tickets_escalados_arrastre,
   };
-  const sinCerrar = Math.max(
+  const notClosed = Math.max(
     0,
-    stats.tickets_creados - delMes.resueltos - delMes.cancelados - delMes.escalados,
+    stats.tickets_creados - ofMonth.resueltos - ofMonth.cancelados - ofMonth.escalados,
   );
   const recibidos = stats.tickets_recibidos_escalados;
 
-  const origenes: SankeyNodo[] = [
+  const origenes: SankeyNode[] = [
     {
       id: 'creados',
       label: 'Creados en el mes',
@@ -146,17 +146,17 @@ function RecorridoDelMes({ groupName, stats }: { groupName: string; stats: Suppo
     },
     { id: 'arrastre', label: 'De meses anteriores', color: METRIC_COLOR.purple },
   ];
-  const destinos: SankeyNodo[] = [
+  const destinos: SankeyNode[] = [
     { id: 'resueltos', label: 'Resueltos', color: METRIC_COLOR.green },
     { id: 'cancelados', label: 'Cancelados', color: METRIC_COLOR.red },
     { id: 'escalados', label: 'Escalados a Soporte', color: METRIC_COLOR.yellow },
     { id: 'abiertos', label: 'Sin cerrar en el mes', color: METRIC_COLOR.slate },
   ];
   const enlaces: SankeyEnlace[] = [
-    { origen: 'creados', destino: 'resueltos', valor: delMes.resueltos },
-    { origen: 'creados', destino: 'cancelados', valor: delMes.cancelados },
-    { origen: 'creados', destino: 'escalados', valor: delMes.escalados },
-    { origen: 'creados', destino: 'abiertos', valor: sinCerrar },
+    { origen: 'creados', destino: 'resueltos', valor: ofMonth.resueltos },
+    { origen: 'creados', destino: 'cancelados', valor: ofMonth.cancelados },
+    { origen: 'creados', destino: 'escalados', valor: ofMonth.escalados },
+    { origen: 'creados', destino: 'abiertos', valor: notClosed },
     { origen: 'arrastre', destino: 'resueltos', valor: arrastre.resueltos },
     { origen: 'arrastre', destino: 'cancelados', valor: arrastre.cancelados },
     { origen: 'arrastre', destino: 'escalados', valor: arrastre.escalados },
@@ -174,7 +174,7 @@ function RecorridoDelMes({ groupName, stats }: { groupName: string; stats: Suppo
       {vacio ? (
         <EmptyState title="El grupo no tiene tickets en el corte." icon={<GitBranch />} />
       ) : (
-        <SankeyChart origenes={origenes} destinos={destinos} enlaces={enlaces} formatValor={formatInteger} />
+        <SankeyChart origenes={origenes} targets={destinos} enlaces={enlaces} formatValue={formatInteger} />
       )}
     </NeonContainer>
   );
@@ -185,9 +185,9 @@ function RecorridoDelMes({ groupName, stats }: { groupName: string; stats: Suppo
  * de los logs de etapa. Al lado, el tiempo hasta escalar, que es lo que ATC
  * tarda en decidir que un ticket no es suyo.
  */
-function EnQueSeVaElTiempo({ stats }: { stats: SupportStats }) {
-  const { partes, total } = partesDelTiempo(stats);
-  const escalar = distribution(stats, ESCALAMIENTO);
+function WhereTimeGoes({ stats }: { stats: SupportStats }) {
+  const { partes, total } = timeParts(stats);
+  const escalar = distribution(stats, ESCALATION);
   const muestra = stats.muestra_composicion;
 
   return (
@@ -210,12 +210,12 @@ function EnQueSeVaElTiempo({ stats }: { stats: SupportStats }) {
         />
       ) : (
         <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-          <AnilloConCentro
-            data={tiempoDonutData(partes)}
-            centro={{ title: 'Promedio', value: formatDuracion(total) }}
-            alPasar={(i) => ({
+          <CenteredRing
+            data={timeDonutData(partes)}
+            centro={{ title: 'Promedio', value: formatDuration(total) }}
+            onHover={(i) => ({
               title: partes[i]?.label ?? '',
-              value: `${formatDuracion(partes[i]?.horas ?? 0)} · ${partes[i]?.pct ?? 0}%`,
+              value: `${formatDuration(partes[i]?.horas ?? 0)} · ${partes[i]?.pct ?? 0}%`,
             })}
             className="mx-auto aspect-square w-full max-w-[20rem]"
           />
@@ -228,7 +228,7 @@ function EnQueSeVaElTiempo({ stats }: { stats: SupportStats }) {
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-bold text-white">{p.label}</span>
                     <span className="font-mono text-sm font-black text-white">
-                      {formatDuracion(p.horas)}
+                      {formatDuration(p.horas)}
                       <span className="ml-2 text-xs font-semibold text-slate-400">{p.pct}%</span>
                     </span>
                   </div>
@@ -241,8 +241,8 @@ function EnQueSeVaElTiempo({ stats }: { stats: SupportStats }) {
               <div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-800 pt-4">
                 <StatTile
                   label="Promedio para escalar"
-                  value={formatDuracion(escalar.promedio)}
-                  caption={`${formatInteger(escalar.muestra)} escalados · mediana ${formatDuracion(escalar.mediana)}`}
+                  value={formatDuration(escalar.promedio)}
+                  caption={`${formatInteger(escalar.muestra)} escalados · mediana ${formatDuration(escalar.mediana)}`}
                   tone="yellow"
                   variant="boxed"
                   mono
@@ -250,7 +250,7 @@ function EnQueSeVaElTiempo({ stats }: { stats: SupportStats }) {
                 <StatTile
                   label="Tardan más que el promedio"
                   value={pct(escalar.pctExcedeProm)}
-                  caption={`de los escalados pasan de ${formatDuracion(escalar.promedio)}`}
+                  caption={`de los escalados pasan de ${formatDuration(escalar.promedio)}`}
                   tone="yellow"
                   variant="boxed"
                   mono
@@ -274,7 +274,7 @@ function EnQueSeVaElTiempo({ stats }: { stats: SupportStats }) {
 export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
   const escala = stats.tickets_escalados > 0 || stats.muestra_escalamiento > 0;
   const recibe = stats.tickets_recibidos_escalados > 0;
-  const medidas = SUPPORT_TIME_MEASURES.filter((m) => m !== ESCALAMIENTO || escala);
+  const medidas = SUPPORT_TIME_MEASURES.filter((m) => m !== ESCALATION || escala);
 
   return (
     <>
@@ -371,8 +371,8 @@ export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
       </NeonContainer>
 
       <div className="grid grid-cols-1 gap-6 2xl:grid-cols-2">
-        <RecorridoDelMes groupName={groupName} stats={stats} />
-        <EnQueSeVaElTiempo stats={stats} />
+        <MonthPath groupName={groupName} stats={stats} />
+        <WhereTimeGoes stats={stats} />
       </div>
 
       <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 ${medidas.length > 7 ? '2xl:grid-cols-8' : '2xl:grid-cols-7'}`}>
@@ -384,11 +384,11 @@ export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
             <MetricCard
               key={medida}
               label={meta.label}
-              value={formatDuracion(stats[`tiempo_medio_${medida}_horas`])}
+              value={formatDuration(stats[`tiempo_medio_${medida}_horas`])}
               color={meta.color}
               subValue={
                 muestraMedida > 0
-                  ? `promedio de ${formatInteger(muestraMedida)} · mediana ${formatDuracion(stats[`tiempo_mediana_${medida}_horas`])}`
+                  ? `promedio de ${formatInteger(muestraMedida)} · mediana ${formatDuration(stats[`tiempo_mediana_${medida}_horas`])}`
                   : 'sin tickets medidos'
               }
               icon={MEASURE_ICONS[meta.color]}
@@ -398,13 +398,13 @@ export function SupportGroupOverview({ groupName, stats, sharePct }: Props) {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <TimingPanel medida={CIERRE_TOTAL} theme="blue" icon={<Clock className="h-5 w-5" />} dist={distribution(stats, CIERRE_TOTAL)} />
-        <TimingPanel medida={GESTION} theme="purple" icon={<Timer className="h-5 w-5" />} dist={distribution(stats, GESTION)} />
+        <TimingPanel medida={CLOSE_TOTAL} theme="blue" icon={<Clock className="h-5 w-5" />} dist={distribution(stats, CLOSE_TOTAL)} />
+        <TimingPanel medida={HANDLING} theme="purple" icon={<Timer className="h-5 w-5" />} dist={distribution(stats, HANDLING)} />
         <div className={escala ? '' : 'lg:col-span-2'}>
           <TimingPanel medida={ASIGNACION} theme="slate" icon={<Hourglass className="h-5 w-5" />} dist={distribution(stats, ASIGNACION)} />
         </div>
         {escala && (
-          <TimingPanel medida={ESCALAMIENTO} theme="yellow" icon={<ArrowRightLeft className="h-5 w-5" />} dist={distribution(stats, ESCALAMIENTO)} />
+          <TimingPanel medida={ESCALATION} theme="yellow" icon={<ArrowRightLeft className="h-5 w-5" />} dist={distribution(stats, ESCALATION)} />
         )}
       </div>
     </>

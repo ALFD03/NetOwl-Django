@@ -1,7 +1,7 @@
 /** Plugins propios de Chart.js, empezando por el texto central del *doughnut*. */
 
 import { CHART_CHROME } from '@/shared/constants/theme';
-import { colorDelTema } from './tema';
+import { themeColor } from './tema';
 import type { ArcElement, Chart, Plugin } from 'chart.js';
 
 export interface CenterTextConfig {
@@ -87,14 +87,14 @@ export const centerTextPlugin: Plugin<'doughnut'> = {
 
     if (title) {
       ctx.font = `700 ${titleSize}px Inter, sans-serif`;
-      ctx.fillStyle = colorDelTema(customText.titleColor ?? TITLE_COLOR);
+      ctx.fillStyle = themeColor(customText.titleColor ?? TITLE_COLOR);
       ctx.fillText(title, x, cursor + titleSize / 2);
       cursor += titleSize + gap;
     }
 
     if (value) {
       ctx.font = `700 ${valueSize}px Inter, sans-serif`;
-      ctx.fillStyle = colorDelTema(customText.color ?? VALUE_COLOR);
+      ctx.fillStyle = themeColor(customText.color ?? VALUE_COLOR);
       ctx.fillText(value, x, cursor + valueSize / 2);
     }
 

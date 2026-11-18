@@ -1,16 +1,16 @@
 /** Las columnas de las tablas de resultados y de sus dimensiones. */
 
 import { StickyLabel, type Column } from '@/shared/ui';
-import { formatInteger, formatPeriodoLabel, formatTwoDecimals } from '@/shared/utils/formatters';
+import { formatInteger, formatPeriodLabel, formatTwoDecimals } from '@/shared/utils/formatters';
 import {
-  TEXTO_TONO,
-  cumplimientoDelPeriodo,
+  TONE_TEXT,
+  periodCompliance,
   tonoChurn,
   tonoCrecimiento,
-  tonoCumplimiento,
-  type ResolverObjetivos,
-} from '../../lib/objetivos';
-import type { SemaforoObjetivos, SubscriptionCierre, SubscriptionResultDimensionRow } from '../../types';
+  complianceTone,
+  type TargetsResolver,
+} from '../../lib/targets';
+import type { TargetsTrafficLight, SubscriptionClose, SubscriptionResultDimensionRow } from '../../types';
 
 const int = formatInteger;
 const dec = formatTwoDecimals;
@@ -20,21 +20,21 @@ const dec = formatTwoDecimals;
  *
  * Una fábrica y no una constante: churn, crecimiento y cumplimiento se pintan
  * con el semáforo del catálogo. Los `cumplimiento_*` los añade a cada fila
- * `conCumplimiento`, con el objetivo de su mes; por eso las columnas pueden
+ * `withComplianceData`, con el objetivo de su mes; por eso las columnas pueden
  * ordenarse por ellos.
  */
-export function buildPeriodColumns(semaforo: SemaforoObjetivos): Column<SubscriptionCierre>[] {
+export function buildPeriodColumns(semaforo: TargetsTrafficLight): Column<SubscriptionClose>[] {
   const cumplimiento = (valor: number) => (
-    <span className={`font-semibold ${TEXTO_TONO[tonoCumplimiento(valor, semaforo)]}`}>{dec(valor)} %</span>
+    <span className={`font-semibold ${TONE_TEXT[complianceTone(valor, semaforo)]}`}>{dec(valor)} %</span>
   );
   return [
-    { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodoLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
+    { header: 'Periodo', accessor: (r) => <span className="font-bold text-white">{formatPeriodLabel(r.periodo_reporte)}</span>, sortKey: 'periodo_reporte' },
     { header: 'Inicio', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
     { header: 'Final', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
     { header: 'Instalaciones', accessor: (r) => <span className="font-semibold text-emerald-400">+{int(r.nuevos_mes)}</span>, align: 'right', sortKey: 'nuevos_mes' },
     { header: 'Bajas', accessor: (r) => <span className="font-semibold text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
-    { header: 'Churn Rate', accessor: (r) => <span className={`font-bold ${TEXTO_TONO[tonoChurn(r.churn_bruto_pct, semaforo)]}`}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
-    { header: 'Crecimiento', accessor: (r) => <span className={`font-bold ${TEXTO_TONO[tonoCrecimiento(r.crecimiento, semaforo)]}`}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
+    { header: 'Churn Rate', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.churn_bruto_pct, semaforo)]}`}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
+    { header: 'Crecimiento', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoCrecimiento(r.crecimiento, semaforo)]}`}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
     { header: 'Cumpli. Ingresos', accessor: (r) => cumplimiento(r.cumplimiento_ingresos), align: 'right', sortKey: 'cumplimiento_ingresos' },
     { header: 'Cumpli. Ventas', accessor: (r) => cumplimiento(r.cumplimiento_ventas), align: 'right', sortKey: 'cumplimiento_ventas' },
     { header: 'Cumpli. Cierre', accessor: (r) => cumplimiento(r.cumplimiento_cierre), align: 'right', sortKey: 'cumplimiento_cierre' },
@@ -45,33 +45,33 @@ export function buildPeriodColumns(semaforo: SemaforoObjetivos): Column<Subscrip
  * Las filas de cierres con su cumplimiento, cada una contra el objetivo de su
  * mes. El backend no los envía: son objetivos, no métricas del análisis.
  */
-export function conCumplimiento(
-  periodos: SubscriptionCierre[],
-  objetivos: ResolverObjetivos,
-): SubscriptionCierre[] {
+export function withComplianceData(
+  periodos: SubscriptionClose[],
+  objetivos: TargetsResolver,
+): SubscriptionClose[] {
   return periodos.map((periodo) => {
-    const c = cumplimientoDelPeriodo(periodo, objetivos.general(periodo.periodo_reporte));
+    const c = periodCompliance(periodo, objetivos.general(periodo.periodo_reporte));
     return {
       ...periodo,
-      cumplimiento_ingresos: c.cumplimientoIngresos,
-      cumplimiento_ventas: c.cumplimientoVentas,
-      cumplimiento_cierre: c.cumplimientoCierre,
+      cumplimiento_ingresos: c.revenueCompliance,
+      cumplimiento_ventas: c.salesCompliance,
+      cumplimiento_cierre: c.closeCompliance,
     };
   });
 }
 
 /** Full dimensional breakdown shown inside the period modal, con el semáforo en churn y crecimiento. */
-export const buildDimensionColumns = (s: SemaforoObjetivos): Column<SubscriptionResultDimensionRow>[] => [
+export const buildDimensionColumns = (s: TargetsTrafficLight): Column<SubscriptionResultDimensionRow>[] => [
   { header: 'Etiqueta', accessor: (r) => <StickyLabel minWidth="160px">{r.valor}</StickyLabel>, sortKey: 'valor', sticky: true },
   { header: 'Base Ini', accessor: (r) => int(r.activos_inicio), align: 'right', sortKey: 'activos_inicio' },
   { header: 'Base Fin', accessor: (r) => int(r.activos_final), align: 'right', sortKey: 'activos_final' },
   { header: 'Nuevos', accessor: (r) => <span className="text-emerald-400">+{int(r.nuevos)}</span>, align: 'right', sortKey: 'nuevos' },
   { header: 'Adic. Net', accessor: (r) => <span className="text-emerald-500">{int(r.adiciones_netas)}</span>, align: 'right', sortKey: 'adiciones_netas' },
   { header: 'Adic. Bru', accessor: (r) => <span className="text-emerald-500">{int(r.adiciones_brutas)}</span>, align: 'right', sortKey: 'adiciones_brutas' },
-  { header: 'Crec %', accessor: (r) => <span className={TEXTO_TONO[tonoCrecimiento(r.crecimiento, s)]}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
+  { header: 'Crec %', accessor: (r) => <span className={TONE_TEXT[tonoCrecimiento(r.crecimiento, s)]}>{dec(r.crecimiento)}%</span>, align: 'right', sortKey: 'crecimiento' },
   { header: 'Bajas', accessor: (r) => <span className="text-rose-400">-{int(r.bajas)}</span>, align: 'right', sortKey: 'bajas' },
-  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TEXTO_TONO[tonoChurn(r.churn_neto_pct, s)]}`}>{dec(r.churn_neto_pct)}%</span>, align: 'right', sortKey: 'churn_neto_pct' },
-  { header: 'C. Bruto %', accessor: (r) => <span className={TEXTO_TONO[tonoChurn(r.churn_bruto_pct, s)]}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
+  { header: 'C. Neto %', accessor: (r) => <span className={`font-bold ${TONE_TEXT[tonoChurn(r.churn_neto_pct, s)]}`}>{dec(r.churn_neto_pct)}%</span>, align: 'right', sortKey: 'churn_neto_pct' },
+  { header: 'C. Bruto %', accessor: (r) => <span className={TONE_TEXT[tonoChurn(r.churn_bruto_pct, s)]}>{dec(r.churn_bruto_pct)}%</span>, align: 'right', sortKey: 'churn_bruto_pct' },
   { header: 'Corte Imp', accessor: (r) => int(r.corte_impagado), align: 'right', sortKey: 'corte_impagado' },
   { header: 'Susp %', accessor: (r) => `${dec(r.porcentaje_suspensiones)}%`, align: 'right', sortKey: 'porcentaje_suspensiones' },
   { header: 'Gratuitos', accessor: (r) => <span className="text-purple-400">{int(r.clientes_gratuitos)}</span>, align: 'right', sortKey: 'clientes_gratuitos' },

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { toNumber } from '@/shared/utils/formatters';
-import { buildHealthCards } from '../lib/crmEfectividad';
+import { buildHealthCards } from '../lib/crmEffectiveness';
 import { selectCrmDimension } from '../lib/crmDimensions';
 import type {
   CrmAnalyticsProps,
@@ -65,7 +65,7 @@ export function useCrmAnalytics(
   const rankingCards = useMemo<CrmRankingEntry[]>(() => {
     const globalGanados = toNumber(globalData.ganados);
 
-    const topOportunidades = leader(rows, 'total_oportunidades');
+    const topOpportunities = leader(rows, 'total_oportunidades');
     const topInstalacion = leader(rows, 'pct_instalacion');
     const topGanados = leader(rows, 'ganados');
     const fastest = leader(rows, 'horas_promedio_inst', { order: 'asc', excludeZero: true });
@@ -79,8 +79,8 @@ export function useCrmAnalytics(
       {
         id: 'oportunidades',
         label: 'Más Oportunidades',
-        valor: topOportunidades?.valor ?? '—',
-        value: topOportunidades ? topOportunidades.value.toLocaleString('en-US') : '—',
+        valor: topOpportunities?.valor ?? '—',
+        value: topOpportunities ? topOpportunities.value.toLocaleString('en-US') : '—',
         caption: 'Oportunidades creadas',
         color: 'slate',
       },
