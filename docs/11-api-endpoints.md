@@ -176,6 +176,21 @@ slugs de equipo, áreas y piezas de pago (`propia`, `equipo`, `factor`, `bono_*`
 | GET | `/api/commissions/conditions/` | `can_manage_commissions` | — | La ventana de pago y los % PYME de cada plan. |
 | POST | `/api/commissions/conditions/save/` | `can_manage_commissions` | 30/m | Guarda la ventana de pago. Solo afecta a lo que se calcule después. |
 
+### `/api/surveys/`
+
+| Método | Ruta | Permiso | Límite | Qué hace |
+|---|---|---|---|---|
+| GET | `/api/surveys/installed/`, `/api/surveys/churned/` | `can_view_surveys` | — | La encuesta de un mes (`?period=YYYY-MM`; sin él, el último cerrado): avance por mes, preguntas activas y permisos. |
+| GET | `/api/surveys/settings/` | `can_manage_surveys` | — | Las preguntas y opciones de las dos encuestas, con lo desactivado y sus conteos. |
+| GET | `/api/surveys/respondents/` | `can_view_surveys` | — | La lista de un mes (`?survey=&period=`) y sus resultados. Se audita. |
+| GET | `/api/surveys/answers/` | `can_view_surveys` | — | Lo que contestó un encuestado (`?id=`). |
+| POST | `/api/surveys/periods/open/` | `can_answer_surveys` | 10/m | Abre o actualiza la lista del mes desde Suscripciones. 409 si el mes no cerró o no hay lista. |
+| POST | `/api/surveys/periods/delete/` | `can_delete_surveys` | 10/m | Borra un mes con sus respuestas. Exige `confirmation` (el mes escrito a mano). |
+| POST | `/api/surveys/answers/save/` | `can_answer_surveys` | 120/m | Guarda las respuestas de un cliente y lo da por completado. 400 si faltan obligatorias. |
+| POST | `/api/surveys/status/save/` | `can_answer_surveys` | 120/m | Pendiente, «no contesta» o «rechazó». |
+| POST | `/api/surveys/questions/save/`, `…/delete/`, `…/move/` | `can_manage_surveys` | 60/m | Alta, edición, baja y orden de preguntas. Con respuestas no se borra (409). |
+| POST | `/api/surveys/options/save/`, `…/delete/`, `…/move/` | `can_manage_surveys` | 60/m | Lo mismo para las opciones. |
+
 ---
 
 ## Rutas de página
@@ -221,4 +236,7 @@ página que la cuenta sí puede abrir (`LANDING_ROUTES`).
 | `/catalogos/ventas/` | `can_manage_sales_catalog` |
 | `/comisiones/` | `can_view_commissions` |
 | `/comisiones/condiciones/` | `can_manage_commissions` |
+| `/encuestas/` | Redirige a la primera página permitida del módulo |
+| `/encuestas/instalados/`, `/encuestas/bajas/` | `can_view_surveys` |
+| `/encuestas/configuracion/` | `can_manage_surveys` |
 | `/auditoria/`, `/auditoria/monitoreo/` | `can_view_audit` |

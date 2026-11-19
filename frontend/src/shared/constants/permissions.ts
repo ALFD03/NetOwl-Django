@@ -6,7 +6,7 @@
  * backend hay que añadirlo también aquí.
  */
 
-import { BookMarked, CloudDownload, HandCoins, Headset, KeyRound, Layers, ScrollText, UserCog, Users } from 'lucide-react';
+import { BookMarked, ClipboardList, CloudDownload, HandCoins, Headset, KeyRound, Layers, ScrollText, UserCog, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import type { Permission } from '@/shared/types/auth';
@@ -36,6 +36,7 @@ export const PERMISSIONS = {
   VIEW_IMPORTS_SUPPORT: 'can_view_imports_support',
   VIEW_IMPORT_HISTORY: 'can_view_import_history',
   VIEW_COMMISSIONS: 'can_view_commissions',
+  VIEW_SURVEYS: 'can_view_surveys',
   VIEW_ALL_PERIODS: 'can_view_all_periods',
   VIEW_ALL_BUSINESS_UNITS: 'can_view_all_business_units',
   VIEW_USERS: 'can_view_users',
@@ -52,6 +53,9 @@ export const PERMISSIONS = {
   MANAGE_COMMISSIONS: 'can_manage_commissions',
   REOPEN_COMMISSIONS: 'can_reopen_commissions',
   DELETE_COMMISSIONS: 'can_delete_commissions',
+  ANSWER_SURVEYS: 'can_answer_surveys',
+  MANAGE_SURVEYS: 'can_manage_surveys',
+  DELETE_SURVEYS: 'can_delete_surveys',
   CREATE_USERS: 'can_create_users',
   EDIT_USER_PERMISSIONS: 'can_edit_user_permissions',
   CHANGE_PASSWORDS: 'can_change_passwords',
@@ -211,6 +215,18 @@ export const PERMISSION_GROUPS: readonly PermissionCategory[] = [
       { key: PERMISSIONS.MANAGE_COMMISSIONS, label: 'Calcular, revisar y cerrar periodos; ventana de pago y PYME', section: 'Administrar' },
       { key: PERMISSIONS.REOPEN_COMMISSIONS, label: 'Reabrir un periodo cerrado (archiva el cierre)', section: 'Administrar' },
       { key: PERMISSIONS.DELETE_COMMISSIONS, label: 'Borrar un informe en borrador (no se deshace)', section: 'Administrar' },
+    ],
+  },
+  {
+    category: 'Encuestas',
+    hint: 'Las encuestas de satisfacción (instalados) y de bajas del mes cerrado.',
+    icon: ClipboardList,
+    tone: 'blue',
+    perms: [
+      { key: PERMISSIONS.VIEW_SURVEYS, label: 'Ver las encuestas y sus resultados', section: 'Ver' },
+      { key: PERMISSIONS.ANSWER_SURVEYS, label: 'Abrir el mes y registrar lo que contesta cada cliente', section: 'Atender' },
+      { key: PERMISSIONS.MANAGE_SURVEYS, label: 'Editar preguntas y opciones de las encuestas', section: 'Administrar' },
+      { key: PERMISSIONS.DELETE_SURVEYS, label: 'Borrar un mes de una encuesta con sus respuestas (no se deshace)', section: 'Administrar' },
     ],
   },
   {

@@ -31,6 +31,7 @@ repositorio:
 | 12 | [Operación](12-operacion.md) | `make`, `dev.sh`, Docker, comandos de gestión, logs y diagnóstico de fallos. |
 | 13 | [Glosario](13-glosario.md) | Vocabulario de negocio: churn neto/bruto, reactivación, cohorte, ETA, winsorización… |
 | 15 | [`services/commissions/`](15-servicio-comisiones.md) | Comisiones de la fuerza de ventas: periodos por días promocionales, clasificación de ventas, reglas de pago, revisión y cierre. |
+| 16 | [`services/surveys/`](16-servicio-encuestas.md) | Encuestas de instalados y de bajas sobre el mes cerrado: lista copiada de Suscripciones, preguntas editables, condiciones y resultados. |
 
 ## Convenciones
 

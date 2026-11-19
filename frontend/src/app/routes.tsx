@@ -67,6 +67,10 @@ const pages: RouteObject[] = [
   { path: '/comisiones/', lazy: apiPage('/api/commissions/report/', () => import('@/pages/Commissions/Report')) },
   { path: '/comisiones/condiciones/', lazy: apiPage('/api/commissions/conditions/', () => import('@/pages/Commissions/Conditions')) },
 
+  { path: '/encuestas/instalados/', lazy: apiPage('/api/surveys/installed/', () => import('@/pages/Surveys/Survey')) },
+  { path: '/encuestas/bajas/', lazy: apiPage('/api/surveys/churned/', () => import('@/pages/Surveys/Survey')) },
+  { path: '/encuestas/configuracion/', lazy: apiPage('/api/surveys/settings/', () => import('@/pages/Surveys/Settings')) },
+
   { path: '/auditoria/', lazy: apiPage('/api/audit/logs/', () => import('@/pages/Audit/Log')) },
   { path: '/auditoria/monitoreo/', lazy: page(() => import('@/pages/Audit/Monitoring')) },
 

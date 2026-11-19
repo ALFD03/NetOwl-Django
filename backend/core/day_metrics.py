@@ -46,6 +46,12 @@ def month_bounds(year_month: str) -> tuple[int, int, int]:
     return year, month, calendar.monthrange(year, month)[1]
 
 
+def previous_month(year_month: str) -> str:
+    """El `YYYY-MM` anterior a `year_month`."""
+    year, month = int(year_month[:4]), int(year_month[5:7])
+    return f"{year - 1:04d}-12" if month == 1 else f"{year:04d}-{month - 1:02d}"
+
+
 def month_label(year_month: str) -> str:
     """Etiqueta del mes completo, la misma clave que usan las demás tablas."""
     return Period.build(f"{year_month}-01").label()

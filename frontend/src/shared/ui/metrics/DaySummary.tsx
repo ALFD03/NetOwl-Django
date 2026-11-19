@@ -6,7 +6,7 @@ import { CalendarClock } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { DayTrendChart, type DayTrendSeries } from '@/shared/charts';
-import { computedDays, readDay, seriesOf, type MetricKind } from '@/shared/lib/daySeries';
+import { computedDays, readDay, readReference, seriesOf, type MetricKind } from '@/shared/lib/daySeries';
 import type { DaySeries } from '@/shared/types/domain';
 import { NeonContainer } from '../surfaces/NeonContainer';
 import type { MetricColor, NeonTheme } from '../theme/types';
@@ -56,6 +56,11 @@ interface Props {
   subtitle?: string;
   theme?: NeonTheme;
   /**
+   * La serie ligera del mes anterior (`YYYY-MM`): cada tarjeta enseña cómo
+   * estaba la métrica ese mismo día. Sin ella, no hay referencia.
+   */
+  previous?: { month: string; series: DaySeries | undefined };
+  /**
    * Lo que un módulo añade entre las tarjetas y las líneas, p. ej. la
    * proyección al cierre de Subscriptions.
    */
@@ -82,6 +87,7 @@ export function DaySummary({
   title = 'El día seleccionado',
   subtitle = 'Lo ocurrido ese día, lo que va del mes y cómo se compara con el día anterior',
   theme = 'purple',
+  previous,
   children,
 }: Props) {
   // Los días de la barra y los de este bloque no son siempre los mismos: un mes
@@ -97,6 +103,13 @@ export function DaySummary({
     const previous = seriesDays.filter((d) => d < day);
     return previous.length ? previous[previous.length - 1] : seriesDays[0];
   }, [day, seriesDays]);
+
+  const previousMonth = previous?.month;
+  const previousLabel = useMemo(() => {
+    if (!previousMonth) return null;
+    const [year, month] = previousMonth.split('-').map(Number);
+    return month ? new Date(year, month - 1, 1).toLocaleDateString('es-VE', { month: 'short', year: 'numeric' }) : null;
+  }, [previousMonth]);
 
   if (!days.length) return null;
 
@@ -127,6 +140,7 @@ export function DaySummary({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
         {cards.map((card) => {
           const reading = readDay(series, seriesDays, activeDay, card.key, card.kind);
+          const reference = previous ? readReference(previous.series, activeDay, card.key) : null;
           return (
             <DayMetricCard
               key={card.key}
@@ -138,6 +152,7 @@ export function DaySummary({
               subValue={card.subValue}
               trendGoodWhen={card.trendGoodWhen}
               reading={reading}
+              reference={reference && previousLabel ? { ...reference, month: previousLabel } : null}
             />
           );
         })}

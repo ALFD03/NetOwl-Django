@@ -29,6 +29,7 @@ from core.day_metrics import (
     month_label,
     months_with_days,
     read_month,
+    read_series,
     save_days,
 )
 from core.models import Period
@@ -160,6 +161,11 @@ def get_day_metrics(year_month: str) -> dict[str, Any]:
         return {}
     data["activos_inicio"] = int(data.get("activos_inicio") or 0)
     return data
+
+
+def get_day_series(year_month: str) -> dict[str, Any]:
+    """Solo el bloque global de cada día del mes (ver `core.day_metrics.read_series`)."""
+    return read_series(TableNames.ANALYZER_DAY_METRICS, year_month)
 
 
 def get_periods_with_days() -> list[str]:

@@ -4,3 +4,5 @@ export { NeonContainer } from './NeonContainer';
 export { Panel, type PanelProps } from './Panel';
 export { Modal } from './Modal';
 export { AuthCard, type AuthCardProps } from './AuthCard';
+export { ActionBar, type ActionBarProps } from './ActionBar';
+export { ConfirmModal, type ConfirmModalProps } from './ConfirmModal';

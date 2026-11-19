@@ -40,7 +40,7 @@ import { DayProgressBar, DaySummary } from '@/shared/ui';
 export default function SupportAnalytics(props: SupportAnalyticsProps) {
   const {
     periods, period, reload, data, setSelectedGroup, dimension, setDimension,
-    availableDays, totalDays, selectedDay, selectDay, monthPeriod, series, groupSeries,
+    availableDays, totalDays, selectedDay, selectDay, monthPeriod, series, groupSeries, previous,
   } = useSupportAnalyticsPage(props);
 
   return (
@@ -94,6 +94,7 @@ export default function SupportAnalytics(props: SupportAnalyticsProps) {
             day={selectedDay}
             cards={SUPPORT_DAY_CARDS}
             charts={SUPPORT_DAY_CHARTS}
+            previous={previous}
             subtitle={
               groupSeries
                 ? `${data.activeGroupName} · lo de ese día, lo que va del mes y cómo se compara con el día anterior`

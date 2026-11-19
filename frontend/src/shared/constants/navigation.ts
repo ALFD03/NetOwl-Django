@@ -7,7 +7,7 @@
  */
 
 import {
-  Activity, BarChart3, Bell, BookMarked, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitBranch,
+  Activity, BarChart3, Bell, BookMarked, ClipboardCheck, ClipboardList, Clock, CloudDownload, Contact, FileSpreadsheet, Gauge, GitBranch,
   HandCoins, Headset, Layers, Lock, Network, Package, ScrollText, SlidersHorizontal, Table, TrendingUp,
   UserCheck, Users,
 } from 'lucide-react';
@@ -90,6 +90,18 @@ export const APP_NAVIGATION: AppNavigationItem[] = [
     pages: [
       { id: 'informe', label: 'Informe', href: '/comisiones/', icon: FileSpreadsheet, permission: PERMISSIONS.VIEW_COMMISSIONS },
       { id: 'condiciones', label: 'Ventana de pago y PYME', href: '/comisiones/condiciones/', icon: SlidersHorizontal, permission: PERMISSIONS.MANAGE_COMMISSIONS, section: SETTINGS },
+    ],
+  },
+  {
+    module: 'encuestas',
+    name: 'Encuestas',
+    icon: ClipboardList,
+    pathPrefix: '/encuestas',
+    permission: [PERMISSIONS.VIEW_SURVEYS, PERMISSIONS.MANAGE_SURVEYS],
+    pages: [
+      { id: 'instalados', label: 'Instalados', href: '/encuestas/instalados/', icon: ClipboardCheck, permission: PERMISSIONS.VIEW_SURVEYS },
+      { id: 'bajas', label: 'Bajas', href: '/encuestas/bajas/', icon: ClipboardList, permission: PERMISSIONS.VIEW_SURVEYS },
+      { id: 'configuracion', label: 'Preguntas', href: '/encuestas/configuracion/', icon: SlidersHorizontal, permission: PERMISSIONS.MANAGE_SURVEYS, section: SETTINGS },
     ],
   },
   {

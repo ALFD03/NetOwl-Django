@@ -43,6 +43,7 @@ PERMISSION_FIELDS = VIEW_PERMISSION_FIELDS + ACTION_PERMISSION_FIELDS
 | `can_view_support_analytics` / `can_view_support_results` | Páginas de soporte |
 | `can_view_imports_subs` / `_crm` / `_support` / `can_view_import_history` | Una por pestaña de importaciones |
 | `can_view_commissions` | El informe de comisiones |
+| `can_view_surveys` | Las encuestas de instalados y de bajas, y sus resultados |
 | `can_view_all_periods` | Todos los periodos evaluados de Suscripciones, CRM y Soporte. Sin él, solo el **último periodo calculado** de cada módulo (ver abajo). `config/0013` lo concedió a todas las cuentas existentes; una cuenta nueva nace sin él |
 | `can_view_all_business_units` | Todas las unidades de negocio. Sin él, la página Unidades de negocio enseña solo las de `business_units` y el bloque RF si `rf_unit` (ver abajo). `config/0014` lo concedió a todas las cuentas existentes |
 | `can_view_users` | La pantalla de usuarios y grupos (solo verla) |
@@ -106,6 +107,9 @@ permiso; la lista se elige siempre por persona y el grupo ni la lleva ni la sinc
 | `can_manage_commissions` | Comisiones: crear y cerrar periodos, revisar ventas, escribir cumplimientos; supervisores por UN y condiciones de pago |
 | `can_reopen_commissions` | Reabrir un periodo de comisiones cerrado (archiva el cierre) |
 | `can_delete_commissions` | Borrar un informe de comisiones en borrador, con lo decidido en él (no se deshace; `config/0019`, cerrado para todos) |
+| `can_answer_surveys` | Encuestas: abrir la lista del mes y registrar lo que contesta cada cliente |
+| `can_manage_surveys` | Encuestas: editar preguntas y opciones |
+| `can_delete_surveys` | Borrar un mes de una encuesta con sus respuestas (no se deshace; `config/0022`, cerrado para todos) |
 
 ### Administración de cuentas: un permiso por acción y un techo
 

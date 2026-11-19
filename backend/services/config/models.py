@@ -52,6 +52,7 @@ VIEW_PERMISSION_FIELDS = [
     'can_view_imports_subs', 'can_view_imports_crm', 'can_view_imports_support',
     'can_view_import_history',
     'can_view_commissions',
+    'can_view_surveys',
     # Profundidad historica: todos los periodos evaluados o solo el ultimo.
     'can_view_all_periods',
     # Unidades de negocio: todas, o solo las de `business_units` (+ RF).
@@ -71,6 +72,7 @@ ACTION_PERMISSION_FIELDS = [
     'can_manage_sales_catalog',
     'can_manage_support_users',
     'can_manage_commissions', 'can_reopen_commissions', 'can_delete_commissions',
+    'can_answer_surveys', 'can_manage_surveys', 'can_delete_surveys',
     # Administracion de cuentas, un permiso por accion (antes `can_manage_users`).
     'can_create_users', 'can_edit_user_permissions', 'can_change_passwords',
     'can_delete_users', 'can_manage_groups',
@@ -171,6 +173,16 @@ class PermissionMatrix(models.Model):
     # Borrar un informe en borrador con todo lo decidido en el (revisiones,
     # ventas a mano, indicadores). Aparte de gestionar: no se deshace.
     can_delete_commissions = models.BooleanField(default=False, db_column="can_delete_comisiones")
+
+    # --- Encuestas ---
+    # Ver las encuestas y sus resultados. Abrir el mes y registrar lo que
+    # contesta cada cliente es `can_answer_surveys`; editar preguntas y opciones,
+    # `can_manage_surveys`: quien llama no decide qué se pregunta. Borrar un mes
+    # con sus respuestas va aparte porque no se deshace.
+    can_view_surveys = models.BooleanField(default=False)
+    can_answer_surveys = models.BooleanField(default=False)
+    can_manage_surveys = models.BooleanField(default=False)
+    can_delete_surveys = models.BooleanField(default=False)
 
     # --- Administracion de cuentas ---
     # `can_manage_users` era un solo interruptor para todo: ver, crear, borrar,

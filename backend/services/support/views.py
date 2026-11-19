@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.day_metrics import previous_month
 from core.utils import clean_periods, request_int
 from services.config.api import ApiError, endpoint
 from services.config.auth import has_permission
@@ -44,9 +45,25 @@ def dashboard(request):
     return {"metrics": _metric_totals(request), "abiertos": open_tickets}
 
 
+def _previous_series(request, month: str) -> dict:
+    """La serie ligera del mes anterior (total y por grupo), si la cuenta puede ver más de un periodo."""
+    if not month or not sees_all_periods(request):
+        return {}
+    previous = previous_month(month)
+    series = get_support_day_series(previous)
+    return {
+        "previous_month": previous,
+        "previous_series": series.get("serie", {}),
+        "previous_group_series": series.get("serie_grupos", {}),
+    }
+
+
 @endpoint(perms=["can_view_support_analytics"], keys=SUPPORT_KEYS)
 def analytics(request):
-    """El bloque de un periodo al corte `?day=` (o al último) y la serie ligera del mes."""
+    """El bloque de un periodo al corte `?day=` (o al último) y la serie ligera del mes.
+
+    Con `can_view_all_periods` lleva también la del mes anterior: la referencia del mismo día.
+    """
     periods = visible_periods(request, get_support_periods())
     data = get_support_analytics_structured(visible_period(request, request.GET.get("period"), lambda: periods))
     period = data.get("periodo", "")
@@ -67,6 +84,7 @@ def analytics(request):
             "dia": active_day,
             "serie": series.get("serie", {}),
             "serie_grupos": series.get("serie_grupos", {}),
+            **_previous_series(request, period),
         },
         "periods": periods,
         "selectedPeriod": period,

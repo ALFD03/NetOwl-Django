@@ -40,7 +40,11 @@ accumulated up to it, and how it compares with the previous computed day. Each
 module declares its metrics in a `*DaySummary.ts` spec, and the `kind` there
 (`flujo`, `stock`, `tasa`) is load-bearing — it says whether subtracting two days
 means anything. Subscriptions builds the same series out of the month it already
-receives.
+receives. With `can_view_all_periods` the payload also carries the previous month's
+light series (`previous_month`, `previous_series`; Support adds `previous_group_series`),
+and `DaySummary previous=` puts on each card how the metric stood on the same day of
+that month (`readReference`): month-to-date for a `flujo`, the day's value otherwise,
+falling back to that month's last cut before the day when it is shorter.
 
 **The heavy half — the dimensional breakdown.**
 
@@ -101,6 +105,10 @@ Concretely, these already exist — do not re-inline them:
 | Need | Use |
 | --- | --- |
 | Framed neutral box | `Panel` |
+| Top bar of a management page (pickers left, actions right) | `ActionBar` |
+| Confirm an irreversible action; never `window.confirm` | `ConfirmModal` |
+| Icon-only action in a row or card | `IconButton` |
+| Short pill label (kind, state, count) | `Badge` |
 | Accent/gradient dashboard card | `NeonContainer` |
 | Full-screen auth card | `AuthCard` |
 | Label + value readout | `StatTile` |
@@ -113,7 +121,9 @@ Concretely, these already exist — do not re-inline them:
 | Result banner of a load or export | `StatusMessage` |
 | Result of a user write (save, delete…): shows inside the open modal, or inline without one; never `alert()` | `ActionMessage` |
 | Server execution log | `ConsoleOutput` |
-| Labelled input with leading icon | `TextField` |
+| Labelled input with leading icon | `TextField` (`hideLabel` inside a row) |
+| Multi-line text input | `TextArea` |
+| Pick one or several answers as chips | `ChoiceChips` |
 | Segmented view switch | `ToggleGroup` |
 | On/off boolean, labelled | `Switch` |
 | Filter capsule (label cap + control) | `FilterField` |

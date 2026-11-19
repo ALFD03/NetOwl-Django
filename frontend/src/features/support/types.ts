@@ -300,6 +300,8 @@ export interface SupportAnalyticsProps {
 export interface SupportDayCuts extends DayCuts {
   /** `{ día: { grupo: métricas } }`. Ausente en meses analizados antes. */
   group_series?: Record<string, Record<string, DaySeries[string]>>;
+  /** Lo mismo del mes anterior, para la referencia del mismo día. */
+  previous_group_series?: Record<string, Record<string, DaySeries[string]>>;
 }
 
 /** El corte completo de un día, tal y como lo sirve `/api/support/day-metrics/`. */

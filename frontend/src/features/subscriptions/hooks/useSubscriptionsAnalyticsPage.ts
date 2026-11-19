@@ -114,6 +114,9 @@ export function useSubscriptionsAnalyticsPage({
     effectiveDay,
     setSelectedDay,
     series,
+    previousMonth: dayMetrics?.previous_month
+      ? { month: dayMetrics.previous_month, series: dayMetrics.previous_series }
+      : undefined,
     dayCards,
     dayCharts: SUBS_DAY_CHARTS,
     projection,

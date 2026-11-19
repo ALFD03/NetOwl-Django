@@ -8,7 +8,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Edit3, Plus, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-import { ActionMessage, Button, Modal, ToggleGroup, type Column } from '@/shared/ui';
+import { ActionBar, ActionMessage, Button, ConfirmModal, ToggleGroup, type Column } from '@/shared/ui';
 import type { useCatalogs } from '@/features/subscriptions/hooks/useCatalogs';
 
 export type CatalogsState = ReturnType<typeof useCatalogs>;
@@ -62,14 +62,17 @@ interface CatalogBarProps {
 /** Las pestañas de la página y, a la derecha, el alta de la que está abierta. */
 export function CatalogBar({ tabs, active, onChange, create }: CatalogBarProps) {
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-800 bg-surface-secondary p-4 shadow-xl">
+    <ActionBar
+      actions={
+        create && (
+          <Button icon={<Plus className="h-4 w-4" />} onClick={create.onClick}>
+            {create.label}
+          </Button>
+        )
+      }
+    >
       <ToggleGroup activeKey={active} onChange={onChange} options={tabs} />
-      {create && (
-        <Button icon={<Plus className="h-4 w-4" />} onClick={create.onClick}>
-          {create.label}
-        </Button>
-      )}
-    </div>
+    </ActionBar>
   );
 }
 
@@ -96,29 +99,18 @@ export function CatalogErrorView({ c, withNotice = false }: { c: CatalogsState; 
 /** Confirmación de borrado de la fila que el hook tiene marcada. */
 export function ConfirmDelete({ c, children }: { c: CatalogsState; children?: ReactNode }) {
   return (
-    <Modal
+    <ConfirmModal
       isOpen={Boolean(c.deleting)}
       onClose={() => c.setDeleting(null)}
-      title="Confirmar eliminación"
-      subtitle="Esta acción no se puede deshacer"
-      icon={<Trash2 className="h-5 w-5 text-rose-400" />}
-      theme="red"
-      size="sm"
-    >
-      <div className="space-y-5">
-        <p className="text-sm text-slate-300">
+      onConfirm={c.confirmDelete}
+      isLoading={c.saving}
+      message={
+        <p>
           ¿Eliminar <strong className="text-white">{c.deleting?.name}</strong> del catálogo?
         </p>
-        {children}
-        <div className="flex justify-end gap-3">
-          <Button variant="outline" onClick={() => c.setDeleting(null)}>
-            Cancelar
-          </Button>
-          <Button variant="danger" isLoading={c.saving} onClick={c.confirmDelete}>
-            Eliminar
-          </Button>
-        </div>
-      </div>
-    </Modal>
+      }
+    >
+      {children}
+    </ConfirmModal>
   );
 }

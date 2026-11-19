@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from core.day_metrics import previous_month
 from core.utils import clean_periods, request_int
 from services.config.api import ApiError, endpoint
 from services.config.periods import (
@@ -22,6 +23,7 @@ from services.subscriptions.analytics import (
     get_churn_close,
     get_churn_detail,
     get_day_metrics,
+    get_day_series,
     get_dimensions,
     get_periods,
     get_sales_report_data,
@@ -63,9 +65,21 @@ def dashboard(request):
     return {"closings": closings, "dimensiones": {"zona": zones}, "objetivos": get_targets_config()}
 
 
+def _day_metrics_with_previous(request, month: str) -> dict:
+    """El mes de métricas diarias y, con `can_view_all_periods`, la serie ligera del anterior."""
+    data = get_day_metrics(month)
+    if data and sees_all_periods(request):
+        previous = previous_month(month)
+        data = {**data, "previous_month": previous, "previous_series": get_day_series(previous).get("serie", {})}
+    return data
+
+
 @endpoint(perms=["can_view_subs_analytics"], keys=SUBS_KEYS)
 def analytics(request):
-    """Cierres, dimensiones y el mes completo de métricas diarias (`?period=YYYY-MM`)."""
+    """Cierres, dimensiones y el mes completo de métricas diarias (`?period=YYYY-MM`).
+
+    El mes anterior viaja solo en su serie ligera: es la referencia del mismo día.
+    """
     periods = clamp_requested(request, clean_periods(request.GET.get("periods")), get_periods)
     data = get_analytics_data(periods) if periods != [] else {}
     month = (request.GET.get("period") or "")[:7] if sees_all_periods(request) else ""
@@ -75,7 +89,7 @@ def analytics(request):
     return {
         "closings": data.get("periodos", []),
         "dimensiones": data.get("dimensiones", []),
-        "dayMetrics": get_day_metrics(month),
+        "dayMetrics": _day_metrics_with_previous(request, month),
         "objetivos": get_targets_config(),
     }
 

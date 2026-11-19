@@ -12,6 +12,7 @@ MODULES = {
     "support": "Soporte técnico",
     "catalogs": "Catálogos",
     "commissions": "Comisiones",
+    "surveys": "Encuestas",
     "audit": "Auditoría",
     "analisis": "Análisis (worker)",
     "api": "API",
@@ -83,6 +84,17 @@ ACTIONS = {
     "manual_remove": "Quitar venta a mano",
     "indicator_save": "Indicador de cumplimiento",
     "conditions_save": "Condiciones de pago",
+    # surveys
+    "respondents": "Consultar encuestados",
+    "period_open": "Abrir encuesta del mes",
+    "answers_save": "Guardar respuestas de encuesta",
+    "status_save": "Cambiar estado de encuestado",
+    "question_save": "Guardar pregunta de encuesta",
+    "question_delete": "Eliminar pregunta de encuesta",
+    "question_move": "Mover pregunta de encuesta",
+    "option_save": "Guardar opción de encuesta",
+    "option_delete": "Eliminar opción de encuesta",
+    "option_move": "Mover opción de encuesta",
 }
 
 

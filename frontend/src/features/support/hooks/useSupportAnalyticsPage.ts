@@ -12,8 +12,27 @@ import { SUPPORT_DAY_METRICS_URL } from '@/shared/lib/api/support';
 import { useVisit } from '@/shared/page/PageData';
 import type { DaySeries } from '@/shared/types/domain';
 
-import type { SupportAnalyticsProps, SupportDayPayload, SupportDimension } from '../types';
+import type { SupportAnalyticsProps, SupportDayCuts, SupportDayPayload, SupportDimension } from '../types';
 import { useSupportAnalytics } from './useSupportAnalytics';
+
+/**
+ * La serie de un equipo, sacada de la del mes abierta por grupo.
+ *
+ * Un grupo aparece el día de su primer ticket y ya no desaparece: los días
+ * anteriores no son un hueco, es que ese equipo todavía no tenía nada.
+ */
+function seriesOfGroup(
+  byDay: SupportDayCuts['group_series'],
+  group: string | null | undefined,
+): DaySeries | undefined {
+  if (!byDay || !group) return undefined;
+  const exit: DaySeries = {};
+  for (const [day, groups] of Object.entries(byDay)) {
+    const block = groups[group];
+    if (block) exit[day] = block;
+  }
+  return Object.keys(exit).length ? exit : undefined;
+}
 
 export function useSupportAnalyticsPage(props: SupportAnalyticsProps) {
   const visit = useVisit();
@@ -60,19 +79,20 @@ export function useSupportAnalyticsPage(props: SupportAnalyticsProps) {
 
   // Las tarjetas del día siguen al selector de grupo, como el resto de la página.
   // El mes trae la serie de cada equipo, así que cambiar de grupo no pide nada.
-  const groupSeries = useMemo<DaySeries | undefined>(() => {
-    const byDay = dayMetrics?.group_series;
-    if (!byDay || !data.activeGroupName) return undefined;
+  const groupSeries = useMemo(
+    () => seriesOfGroup(dayMetrics?.group_series, data.activeGroupName),
+    [dayMetrics, data.activeGroupName],
+  );
 
-    const exit: DaySeries = {};
-    for (const [day, groups] of Object.entries(byDay)) {
-      const block = groups[data.activeGroupName];
-      if (block) exit[day] = block;
-    }
-    // Un grupo aparece el día de su primer ticket y ya no desaparece: los días
-    // anteriores no son un hueco, es que ese equipo todavía no tenía nada.
-    return Object.keys(exit).length ? exit : undefined;
-  }, [dayMetrics, data.activeGroupName]);
+  // La referencia del mes anterior se lee igual que el mes: por grupo si el mes
+  // va por grupo, el total si no.
+  const previous = useMemo(() => {
+    if (!dayMetrics?.previous_month) return undefined;
+    const series = groupSeries
+      ? seriesOfGroup(dayMetrics.previous_group_series, data.activeGroupName)
+      : dayMetrics.previous_series;
+    return { month: dayMetrics.previous_month, series };
+  }, [dayMetrics, groupSeries, data.activeGroupName]);
 
   return {
     periods: props.periods ?? [],
@@ -89,5 +109,6 @@ export function useSupportAnalyticsPage(props: SupportAnalyticsProps) {
     monthPeriod: dayMetrics?.month,
     series: groupSeries ?? dayMetrics?.series,
     groupSeries,
+    previous,
   };
 }

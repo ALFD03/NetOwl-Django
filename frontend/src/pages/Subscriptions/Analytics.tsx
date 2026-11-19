@@ -51,6 +51,7 @@ export default function SubscriptionsAnalytics(props: SubscriptionsAnalyticsProp
         day={a.effectiveDay}
         cards={a.dayCards}
         charts={a.dayCharts}
+        previous={a.previousMonth}
       >
         {a.projection && a.installedAtCutoff !== undefined && (
           <CloseProjection

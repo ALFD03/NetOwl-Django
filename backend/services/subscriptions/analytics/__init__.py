@@ -4,6 +4,7 @@ from .churn_detail import clean_nodes, get_churn_detail
 from .day_metrics import (
     build_day_metrics,
     get_day_metrics,
+    get_day_series,
     get_periods_with_days,
 )
 from .eta_report import ETAReportManager
@@ -27,5 +28,5 @@ __all__ = [
     "get_analytics_data", "get_sales_report_data",
     "get_business_units_data", "get_zones_config", "restrict_units", "get_targets_config", "ETAReportManager",
     "load_free_subs", "summarize_detection",
-    "build_day_metrics", "get_day_metrics", "get_periods_with_days",
+    "build_day_metrics", "get_day_metrics", "get_day_series", "get_periods_with_days",
 ]

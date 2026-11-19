@@ -43,6 +43,8 @@ LANDING_ROUTES = [
     ("support:usuarios", ("can_manage_support_users",)),
     ("comisiones:informe", ("can_view_commissions",)),
     ("comisiones:condiciones", ("can_manage_commissions",)),
+    ("encuestas:instalados", ("can_view_surveys",)),
+    ("encuestas:configuracion", ("can_manage_surveys",)),
     ("config:user_management", ("can_view_users",)),
     ("auditoria:registro", ("can_view_audit",)),
 ]

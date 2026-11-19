@@ -21,6 +21,7 @@ AUDITED_READS = frozenset({
     ("subscriptions", "churn_detail"),
     ("commissions", "sales"),
     ("commissions", "archive_detail"),
+    ("surveys", "respondents"),
 })
 
 # Por encima de este tamaño la respuesta es un listado, no un mensaje.

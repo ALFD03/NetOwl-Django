@@ -20,6 +20,7 @@ api_patterns = [
     path("imports/", include("services.imports.api_urls")),
     path("catalogs/", include("services.catalogs.api_urls")),
     path("commissions/", include("services.commissions.api_urls")),
+    path("surveys/", include("services.surveys.api_urls")),
     re_path(r"^.*$", api_not_found, name="not_found"),
 ]
 
@@ -33,5 +34,6 @@ urlpatterns = [
     path("support/", include("services.support.urls")),
     path("catalogos/", include("services.catalogs.urls")),
     path("comisiones/", include("services.commissions.urls")),
+    path("encuestas/", include("services.surveys.urls")),
     path("auditoria/", include("services.audit.urls")),
 ]

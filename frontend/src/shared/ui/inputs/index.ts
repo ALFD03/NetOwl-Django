@@ -12,3 +12,5 @@ export { DayProgressBar } from './DayProgressBar';
 export { ToggleGroup, type ToggleGroupProps, type ToggleOption } from './ToggleGroup';
 export { FileUploadZone } from './FileUploadZone';
 export { Switch, type SwitchProps } from './Switch';
+export { TextArea, type TextAreaProps } from './TextArea';
+export { ChoiceChips, type ChoiceChipsProps, type ChoiceOption } from './ChoiceChips';

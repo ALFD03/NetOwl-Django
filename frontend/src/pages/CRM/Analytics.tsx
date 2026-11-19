@@ -111,6 +111,11 @@ export default function CrmAnalytics(props: CrmAnalyticsProps) {
           day={selectedDay}
           cards={CRM_DAY_CARDS}
           charts={CRM_DAY_CHARTS}
+          previous={
+            dayMetrics?.previous_month
+              ? { month: dayMetrics.previous_month, series: dayMetrics.previous_series }
+              : undefined
+          }
         />
 
         <CrmAnalyticsView

@@ -11,6 +11,8 @@ export interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Field-level error; renders under the input and reddens the border. */
   error?: string;
   containerClassName?: string;
+  /** La etiqueta solo para lectores de pantalla: para un campo dentro de una fila. */
+  hideLabel?: boolean;
   /** Muestra el boton de ojo para revelar la contraseña (solo aplica a type="password"). */
   revealable?: boolean;
 }
@@ -25,6 +27,7 @@ export function TextField({
   id,
   type = 'text',
   revealable = true,
+  hideLabel = false,
   ...props
 }: TextFieldProps) {
   const inputId = id ?? `field-${label.toLowerCase().replace(/\s+/g, '-')}`;
@@ -35,7 +38,7 @@ export function TextField({
 
   return (
     <div className={containerClassName}>
-      <label htmlFor={inputId} className="mb-1.5 block text-xs font-semibold text-slate-300">
+      <label htmlFor={inputId} className={hideLabel ? 'sr-only' : 'mb-1.5 block text-xs font-semibold text-slate-300'}>
         {label}
       </label>
       <div className="relative">

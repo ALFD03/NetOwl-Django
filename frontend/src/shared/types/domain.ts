@@ -62,6 +62,9 @@ export interface DayCuts {
   /** Dia que resolvio el servidor; 0 cuando el mes no tiene cortes. */
   day: number;
   series?: DaySeries;
+  /** El mes anterior y su serie ligera: la referencia del mismo día. Solo con `can_view_all_periods`. */
+  previous_month?: string;
+  previous_series?: DaySeries;
 }
 
 /** Fila de analyzer_day_metrics: un mes completo, indexado por dia. */
@@ -70,6 +73,9 @@ export interface DayMetrics {
   month: string;
   active_start: number;
   days: Record<string, DayPayload>;
+  /** El mes anterior y su serie ligera: la referencia del mismo día. Solo con `can_view_all_periods`. */
+  previous_month?: string;
+  previous_series?: DaySeries;
 }
 
 export interface DimensionGroup {

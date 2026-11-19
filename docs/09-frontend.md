@@ -88,6 +88,8 @@ interceptor de `shared/lib/api/client.ts`.
 | `/catalogos/notificaciones|productos|estructura|ventas/` | `/api/catalogs/notifications|products|structure|sales/` | `pages/Catalogs/*.tsx` |
 | `/comisiones/` | `/api/commissions/report/` | `pages/Commissions/Report.tsx` |
 | `/comisiones/condiciones/` | `/api/commissions/conditions/` | `pages/Commissions/Conditions.tsx` |
+| `/encuestas/instalados/`, `/encuestas/bajas/` | `/api/surveys/installed/`, `/api/surveys/churned/` | `pages/Surveys/Survey.tsx` |
+| `/encuestas/configuracion/` | `/api/surveys/settings/` | `pages/Surveys/Settings.tsx` |
 | `/auditoria/` | `/api/audit/logs/` | `pages/Audit/Log.tsx` |
 | `/auditoria/monitoreo/` | `/api/audit/health/` y `/api/audit/stats/` (en la vista) | `pages/Audit/Monitoring.tsx` |
 

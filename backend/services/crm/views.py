@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from core.day_metrics import previous_month
 from core.utils import clean_periods, request_int
 from services.config.api import ApiError, endpoint
 from services.config.periods import (
@@ -46,12 +47,21 @@ def dashboard(request):
     }
 
 
+def _previous_series(request, month: str | None) -> dict:
+    """La serie ligera del mes anterior, si la cuenta puede ver más de un periodo."""
+    if not month or not sees_all_periods(request):
+        return {}
+    previous = previous_month(month)
+    return {"previous_month": previous, "previous_series": get_crm_day_series(previous).get("serie", {})}
+
+
 @endpoint(perms=["can_view_crm_analytics"], keys=CRM_KEYS)
 def analytics(request):
     """Las dimensiones del periodo y su global, al corte `?day=` o al último calculado.
 
     Trae además la serie ligera del mes (el global de cada día): mover la barra
-    de días solo pide el desglose a `day-metrics/`.
+    de días solo pide el desglose a `day-metrics/`. Con `can_view_all_periods`,
+    también la del mes anterior, que es la referencia del mismo día.
     """
     periods = visible_periods(request, get_crm_periods())
     period = visible_period(request, request.GET.get("period"), lambda: periods)
@@ -79,6 +89,7 @@ def analytics(request):
             "dias_disponibles": available,
             "dia": active_day,
             "serie": series.get("serie", {}),
+            **_previous_series(request, target),
         },
         "periods": periods,
         "selectedPeriod": target or "",

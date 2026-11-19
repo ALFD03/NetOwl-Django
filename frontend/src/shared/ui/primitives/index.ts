@@ -5,3 +5,5 @@ export { ExportButton, type ExportButtonProps, type ExportState } from './Export
 export { ProgressBar } from './ProgressBar';
 export { PulseDot } from './PulseDot';
 export { SectionHeading, type SectionHeadingProps, type SectionAccent } from './SectionHeading';
+export { IconButton, type IconButtonProps } from './IconButton';
+export { Badge, type BadgeTone } from './Badge';

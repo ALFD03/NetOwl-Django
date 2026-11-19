@@ -167,6 +167,7 @@ INSTALLED_APPS = [
     "services.imports",             # Carga de CSV y ejecucion de analisis
     "services.catalogs",           # Catalogos de referencia (vistas; modelos en subscriptions)
     "services.commissions",          # Comisiones de la fuerza de ventas
+    "services.surveys",             # Encuestas de instalados y de bajas
     "services.config",              # Autenticacion y permisos
     "services.audit",               # Auditoría (label `auditoria`)
 ]
@@ -379,7 +380,7 @@ CACHES = {
 # defecto (REMOTE_ADDR) todos los usuarios comparten cubo detras de Nginx, y el
 # limite de 2/m de los calculos se convertia en un 2/m para toda la empresa.
 # El porque de una funcion y no de `"HTTP_X_FORWARDED_FOR"` esta en el modulo.
-RATELIMIT_IP_META_KEY = "netowl_web.ratelimit.ip_cliente"
+RATELIMIT_IP_META_KEY = "netowl_web.ratelimit.client_ip"
 
 # --- Campos auto-generados ---
 # Tipo de campo por defecto para claves primarias auto-generadas

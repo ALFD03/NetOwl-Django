@@ -130,3 +130,26 @@ export function seriesOf(
   if (!series) return [];
   return days.map((day) => ownOf(series, days, day, key, kind));
 }
+
+export interface DayReference {
+  /** El día del otro mes que se leyó: el mismo o, si ese mes no llega, su último corte anterior. */
+  day: number;
+  /** El acumulado al corte en un `flujo`; el nivel de ese día en lo demás. */
+  value: number;
+}
+
+/**
+ * Cómo estaba la métrica el mismo día de otro mes (el anterior, como referencia).
+ *
+ * En un `flujo` se lee el acumulado al corte —lo que llevaba el mes a esa
+ * altura—, que es lo comparable con el acumulado de hoy; en un nivel o una tasa,
+ * el valor de ese día. Si ese mes no tiene el día (febrero frente a un 31, o un
+ * hueco), vale su último corte anterior; sin ninguno, `null`.
+ */
+export function readReference(series: DaySeries | undefined, day: number, key: string): DayReference | null {
+  if (!series || !day) return null;
+  const earlier = computedDays(series).filter((d) => d <= day);
+  if (!earlier.length) return null;
+  const refDay = earlier[earlier.length - 1];
+  return { day: refDay, value: valueAt(series, refDay, key) };
+}
