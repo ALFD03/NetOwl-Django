@@ -220,6 +220,10 @@ CSP_POLICY = {
     "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", *_VITE],
     "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
     "img-src": ["'self'", "data:", "blob:"],
+    # El escritor de .xlsx comprime los archivos grandes en un Web Worker que crea
+    # desde un blob; sin esto cae a `script-src`, el worker se bloquea y la
+    # exportación congela la pestaña. Un blob solo lo crea el código de la página.
+    "worker-src": ["'self'", "blob:"],
     "connect-src": ["'self'", *_VITE, *(["ws://localhost:5173"] if _VITE else [])],
     "object-src": ["'none'"],
     "base-uri": ["'self'"],
